@@ -2,32 +2,24 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const createSebraeDashboard = require("../../static/js/features/sebrae-dashboard.js");
 
-const { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, totalPreenchimentos,
+const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
-  lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho } = createSebraeDashboard.puro;
+  lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = createSebraeDashboard.puro;
+
+test("camposFaltando lista A, Status em FINALIZADO, J e a descrição (R é opcional) que faltam para finalizar", () => {
+  const completo = { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T10:10" };
+  assert.deepEqual(camposFaltando(completo, "Troquei o teclado."), []);
+  assert.deepEqual(camposFaltando({ ...completo, D: "EM ABERTO" }, "ok"), ["Status (D) em FINALIZADO (está EM ABERTO)"]);
+  assert.deepEqual(camposFaltando({ ...completo, D: "" }, "ok"), ["Status (D) em FINALIZADO"]);
+  assert.deepEqual(camposFaltando({ ...completo, R: "  " }, "ok"), []); // R vazio não bloqueia: o SoftExpert grava o horário
+  assert.deepEqual(camposFaltando(completo, "   "), ["Descrição para Finalizar o Chamado"]);
+  assert.deepEqual(camposFaltando(undefined, ""), ["Responsável (A)", "Status (D) em FINALIZADO", "Tipo do chamado (J)", "Descrição para Finalizar o Chamado"]);
+});
 
 test("converte o campo de data e hora para dd/MM/aaaa HH:mm e ignora valor inválido", () => {
   assert.equal(formatarEncerramento("2026-10-28T14:30"), "28/10/2026 14:30");
   assert.equal(formatarEncerramento(""), "");
   assert.equal(formatarEncerramento("ontem"), "");
-});
-
-test("chamado só está pronto com Responsável, Status e Tipo", () => {
-  assert.equal(chamadoPronto({ A: "CLIENTE", D: "EM ABERTO", J: "INCIDENTE" }), true);
-  assert.equal(chamadoPronto({ A: "CLIENTE", D: "EM ABERTO", J: "" }), false);
-  assert.equal(chamadoPronto({ A: "  ", D: "EM ABERTO", J: "INCIDENTE" }), false);
-  assert.equal(chamadoPronto(undefined), false);
-});
-
-test("a exportação leva só os prontos, com a data de encerramento formatada", () => {
-  const formulario = [{ numero: "UTIC-2026-1" }, { numero: "UTIC-2026-2" }];
-  const valores = {
-    "UTIC-2026-1": { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T09:05", B: "OUTRO" },
-    "UTIC-2026-2": { A: "CLIENTE" },
-  };
-  assert.deepEqual(payloadExportacao(formulario, valores), [
-    { numero: "UTIC-2026-1", A: "CLIENTE", B: "OUTRO", D: "FINALIZADO", J: "INCIDENTE", R: "28/10/2026 09:05", S: "" },
-  ]);
 });
 
 test("a atualização leva todos os chamados novos, com vazios em branco e a data formatada", () => {
@@ -42,8 +34,6 @@ test("a atualização leva todos os chamados novos, com vazios em branco e a dat
     { numero: "UTIC-2026-3", A: "", B: "", D: "", J: "", R: "", S: "" },
   ]);
   assert.deepEqual(payloadAtualizacao([], valores), []);
-  // Exportar continua exigindo A, D e J.
-  assert.deepEqual(payloadExportacao(formulario, valores).map(l => l.numero), ["UTIC-2026-1"]);
 });
 
 test("a data guardada no Dashboard volta para o campo de data e hora", () => {
@@ -76,6 +66,30 @@ test("chamado antigo sem UTIC mostra o texto da coluna C e a linha; o botão con
   assert.equal(tituloAntigo({ numero: "UTIC-2026-2" }), "UTIC-2026-2");
   assert.equal(totalPreenchimentos([{ automaticos_sugeridos: { K: "ABC" } }, { automaticos_sugeridos: {} }, {}]), 1);
   assert.equal(totalPreenchimentos(undefined), 0);
+});
+
+test("dadosAntigo: o Dashboard manda; título e solicitante vazios usam a leitura do SoftExpert", () => {
+  const leitura = { titulo: " Monitor sem imagem ", solicitante: "Bruna", descricao: "Sem imagem.", atendimento: "", habilitada_em: "20/10/2026 09:15" };
+  assert.deepEqual(dadosAntigo({ titulo: "", usuario: "", leitura_softexpert: leitura }),
+    { lido: true, titulo: "Monitor sem imagem", solicitante: "Bruna", descricao: "Sem imagem.", atendimento: "", abertura: "20/10/2026 09:15" });
+  const comDashboard = dadosAntigo({ titulo: "Do Dashboard", usuario: "Camila", leitura_softexpert: leitura });
+  assert.equal(comDashboard.titulo, "Do Dashboard");
+  assert.equal(comDashboard.solicitante, "Camila");
+  assert.deepEqual(dadosAntigo({ titulo: "T", usuario: "U", leitura_softexpert: null }),
+    { lido: false, titulo: "T", solicitante: "U", descricao: "", atendimento: "", abertura: "" });
+});
+
+test("resumoLeituraAntigos: andamento com X de Y, resultado completo e interrompido", () => {
+  assert.match(resumoLeituraAntigos(null, true), /^Lendo chamados antigos no SoftExpert… Para parar, use Cancelar execução\.$/);
+  const parcial = { em: "novo", total: 5, lidos: ["a", "b"], falhas: { c: "x" } };
+  assert.match(resumoLeituraAntigos(parcial, true, "", "velho"), /… 3 de 5\./);
+  assert.doesNotMatch(resumoLeituraAntigos(parcial, true, "", "novo"), /de 5/); // resultado da execução anterior não é andamento
+  const feito = { concluido: true, lidos: ["a"], falhas: {}, sem_utic: 2, ja_lidos: 3 };
+  assert.equal(resumoLeituraAntigos(feito, false, "28/10/2026 10:40"),
+    "Leitura dos antigos de 28/10/2026 10:40: 1 lido(s), 0 com falha, 3 já lido(s) antes, 2 sem UTIC (não dá para ler).");
+  assert.equal(resumoLeituraAntigos({ ...feito, concluido: false, ja_lidos: 0, sem_utic: 0 }, false),
+    "Leitura dos antigos interrompida: 1 lido(s), 0 com falha. Ler de novo continua de onde parou.");
+  assert.equal(resumoLeituraAntigos(null, false), "");
 });
 
 test("avisos de nome: mais de uma pessoa na descrição não preenche; uma só liga pelo nome citado", () => {

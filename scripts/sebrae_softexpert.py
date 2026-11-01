@@ -1071,7 +1071,7 @@ ACHAR_CONTROLE_JS = r"""
   const SEL = 'select,textarea,input:not([type=hidden]),[role=combobox],.select2-container';
   const todos = Array.from(document.querySelectorAll(SEL)).filter((c) =>
     visivel(c) && !(c.parentElement && c.parentElement.closest('.select2-container')));
-  const candidatos = todos.filter((c) => quer === 'checkbox' ? ehCheckbox(c) : (!ehCheckbox(c) && !c.readOnly && !c.disabled));
+  const candidatos = todos.filter((c) => quer === 'checkbox' ? (ehCheckbox(c) && !c.disabled) : (!ehCheckbox(c) && !c.readOnly && !c.disabled));
   for (const el of rotulos) {
     let c = el.control || (el.getAttribute('for') ? document.getElementById(el.getAttribute('for')) : null);
     if (c && quer === 'campo' && c.tagName === 'SELECT' && !visivel(c)) {
@@ -1081,6 +1081,15 @@ ACHAR_CONTROLE_JS = r"""
     if (!c && quer === 'checkbox') {
       const ant = el.previousElementSibling;
       if (ant && ehCheckbox(ant)) c = ant;
+    }
+    if (!c && quer === 'checkbox') {
+      // No SoftExpert a caixa vem ANTES do rótulo, no mesmo bloco: sobe até achar um bloco com exatamente uma caixa
+      // editável (nunca a seguinte, que é de outro campo, como "Realizar mudança (GMUD)").
+      for (let p = el.parentElement, n = 0; p && n < 4 && !c; p = p.parentElement, n++) {
+        const dentro = candidatos.filter((x) => p.contains(x));
+        if (dentro.length > 1) break;
+        if (dentro.length === 1) c = dentro[0];
+      }
     }
     if (!c) {
       // Campo: o PRIMEIRO controle depois do rótulo; se ele for somente leitura, o rótulo é de outro campo.
@@ -1145,7 +1154,7 @@ def _ir_para_menu(page: "Page", nome: "re.Pattern[str]", descricao: str) -> None
 
 def _ler_controle(locator: "Locator", tipo: str) -> Any:
     if tipo == "checkbox":
-        return locator.is_checked()
+        return _ler_caixa(locator)
     if tipo in ("textarea", "input"):
         return locator.input_value()
     if tipo == "select":
@@ -1191,19 +1200,44 @@ def _normaliza_quebras(texto: str) -> str:
     return texto.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+# O checkbox do SoftExpert não usa ``input.checked`` (fica sempre falso): o estado vai no atributo ``value`` e na
+# classe do <span> irmão, e só o clique nesse <span> alterna. ``null`` = checkbox comum.
+ESTADO_CAIXA_JS = r"""
+(e) => {
+  const s = e.nextElementSibling;
+  const c = s ? s.className : '';
+  if (/_checked_/.test(c)) return true;
+  if (/_unchecked_/.test(c)) return false;
+  return null;
+}
+"""
+
+
+def _ler_caixa(caixa: "Locator") -> bool:
+    """Estado real do checkbox (o do app, não o ``checked`` do input)."""
+    estilizada = caixa.evaluate(ESTADO_CAIXA_JS)
+    return caixa.is_checked() if estilizada is None else bool(estilizada)
+
+
 def _marcar_caixa(caixa: "Locator", marcado: bool) -> None:
-    """Marca/desmarca o checkbox; ``set_checked`` age no próprio input e nunca passa por ``clicar`` (o rótulo contém "Enviar")."""
-    try:
-        caixa.set_checked(marcado, timeout=3000)
-    except Exception:
-        # Checkbox estilizado: um <span> sobre o input intercepta o ponteiro. O clique forçado cai no span
-        # (parte do controle) e ``set_checked`` ainda confere o estado final.
+    """Marca/desmarca o checkbox e confere o estado final; nunca passa por ``clicar`` (o rótulo contém "Enviar")."""
+    if _ler_caixa(caixa) == marcado:
+        return
+    if caixa.evaluate(ESTADO_CAIXA_JS) is None:
+        caixa.set_checked(marcado, force=True, timeout=5000)
+    else:
+        # Um único clique no <span> (parte do controle, cobre o input); clicar duas vezes desfaria a marcação.
+        sinal = caixa.locator("xpath=following-sibling::span[1]")
         try:
-            caixa.set_checked(marcado, force=True, timeout=5000)
+            sinal.click(timeout=3000)
         except Exception:
-            caixa.evaluate("(e, m) => { if (e.checked !== m) e.click(); }", marcado)
-            if caixa.is_checked() != marcado:
-                raise SoftExpertErro("Não consegui marcar 'Enviar Detalhes por e-mail ao solicitante'.")
+            sinal.click(force=True, timeout=3000)
+        for _ in range(10):
+            if _ler_caixa(caixa) == marcado:
+                return
+            caixa.page.wait_for_timeout(300)
+    if _ler_caixa(caixa) != marcado:
+        raise SoftExpertErro(f"Não consegui {'marcar' if marcado else 'desmarcar'} {ROTULO_EMAIL!r}.")
 
 
 def _preencher_atendimento(page: "Page", descricao: str, enviar_email: bool) -> None:

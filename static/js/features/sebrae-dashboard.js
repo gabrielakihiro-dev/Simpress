@@ -1,4 +1,4 @@
-/** Automação → "Chamados novos do SoftExpert": importa o Dashboard, lista os novos, exporta as linhas para colar
+/** Automação → "Chamados novos do SoftExpert": importa o Dashboard, lista os novos
  *  e baixa uma cópia atualizada do Dashboard (chamados novos e alterações nos antigos em aberto). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
@@ -12,7 +12,6 @@
   const CAMPOS_PREENCHIDOS = Object.freeze([["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"]]); // do antigo: vazios são preenchidos pelo site
   const STATUS_CHAMADO =Object.freeze(["EM ABERTO", "FINALIZADO"]);
   const TIPOS_CHAMADO = Object.freeze(["INCIDENTE", "SOLICITAÇÃO"]);
-  const OBRIGATORIOS = Object.freeze(["A", "D", "J"]);
   const AVISO_CRUZAMENTO = Object.freeze({
     ausente: "Série, modelo e cidade vazios: nenhum equipamento encontrado para este solicitante.",
     ambiguo: "Série, modelo e cidade vazios: mais de um equipamento encontrado para este solicitante.",
@@ -32,11 +31,6 @@
   function formatarEncerramento(valor) {
     const partes = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(String(valor || ""));
     return partes ? `${partes[3]}/${partes[2]}/${partes[1]} ${partes[4]}` : "";
-  }
-
-  /** Só os chamados com A, D e J preenchidos entram na exportação. */
-  function chamadoPronto(valores) {
-    return OBRIGATORIOS.every(letra => String(valores?.[letra] || "").trim() !== "");
   }
 
   /** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). */
@@ -66,6 +60,34 @@
     return linha ? `${item.chamado || "Sem chamado"} (linha ${linha[1]})` : item.chamado || item.numero;
   }
 
+  /** O que mostrar do antigo: o Dashboard manda; título e solicitante vazios usam a leitura do SoftExpert (botão Ler chamados antigos). */
+  function dadosAntigo(item) {
+    const leitura = item.leitura_softexpert || null;
+    const texto = valor => String(valor ?? "").trim();
+    return {
+      lido: Boolean(leitura),
+      titulo: texto(item.titulo) || texto(leitura?.titulo),
+      solicitante: texto(item.usuario) || texto(leitura?.solicitante),
+      descricao: texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
+    };
+  }
+
+  /** Texto da leitura dos antigos: andamento (X de Y), resultado ou interrupção. `anteriorEm` ignora o resultado da execução anterior. */
+  function resumoLeituraAntigos(resultado, emAndamento, quando = "", anteriorEm = null) {
+    const contar = lista => Object.keys(lista || {}).length;
+    if (emAndamento) {
+      const atual = resultado && resultado.em !== anteriorEm ? resultado : null;
+      const feitos = atual ? (atual.lidos || []).length + contar(atual.falhas) : 0;
+      return `Lendo chamados antigos no SoftExpert…${atual?.total ? ` ${feitos} de ${atual.total}.` : ""} Para parar, use Cancelar execução.`;
+    }
+    if (!resultado) return "";
+    const extras = [
+      [resultado.ja_lidos, "já lido(s) antes"], [resultado.sem_utic, "sem UTIC (não dá para ler)"],
+    ].filter(([n]) => n > 0).map(([n, texto]) => `, ${n} ${texto}`).join("");
+    const inicio = `Leitura dos antigos${resultado.concluido ? "" : " interrompida"}${quando ? ` de ${quando}` : ""}`;
+    return `${inicio}: ${(resultado.lidos || []).length} lido(s), ${contar(resultado.falhas)} com falha${extras}.${resultado.concluido ? "" : " Ler de novo continua de onde parou."}`;
+  }
+
   /** Quantos antigos em aberto o site preencheria (Série, Modelo, Cidade ou OS vazios). */
   function totalPreenchimentos(abertos) {
     return (abertos || []).filter(item => Object.keys(item.automaticos_sugeridos || {}).length > 0).length;
@@ -73,10 +95,6 @@
 
   function linhaChamado(item, v) {
     return { numero: item.numero, A: v.A || "", B: v.B || "", D: v.D || "", J: v.J || "", R: formatarEncerramento(v.R), S: v.S || "" };
-  }
-
-  function payloadExportacao(formulario, valores) {
-    return formulario.filter(item => chamadoPronto(valores[item.numero])).map(item => linhaChamado(item, valores[item.numero]));
   }
 
   /** Atualizar Dashboard grava TODOS os chamados novos, mesmo sem A, D e J (vazios viram ""). */
@@ -117,6 +135,21 @@
   /** Botão por chamado: precisa de descrição, nenhuma rotina rodando e o chamado ainda não finalizado. */
   function podeFinalizar(descricao, finalizacao, emAndamento) {
     return String(descricao || "").trim() !== "" && !emAndamento && !STATUS_DESFEITOS.includes(finalizacao?.status);
+  }
+
+  /** Rótulos dos campos que precisam estar preenchidos para finalizar (B, R e S ficam opcionais: o horário do SoftExpert substitui o R manual). */
+  const ROTULOS_FALTA = Object.freeze({ A: "Responsável (A)", J: "Tipo do chamado (J)" });
+
+  /** O que falta preencher antes de finalizar no SoftExpert: A, J, Status (D) em FINALIZADO e a descrição. */
+  function camposFaltando(valores, descricao) {
+    const vazio = valor => String(valor || "").trim() === "";
+    const faltas = [];
+    if (vazio(valores?.A)) faltas.push(ROTULOS_FALTA.A);
+    const status = String(valores?.D || "").trim().toUpperCase();
+    if (status !== "FINALIZADO") faltas.push(status ? "Status (D) em FINALIZADO (está EM ABERTO)" : "Status (D) em FINALIZADO");
+    if (vazio(valores?.J)) faltas.push(ROTULOS_FALTA.J);
+    if (vazio(descricao)) faltas.push("Descrição para Finalizar o Chamado");
+    return faltas;
   }
 
   /** O que "Atualizar Dashboard" finalizaria de verdade: D virando FINALIZADO, número UTIC, com descrição, ainda não finalizado. */
@@ -225,8 +258,9 @@
     const armazenamento = (() => { try { return window.localStorage || null; } catch (_erro) { return null; } })();
     const estado = {
       formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", descartar: false,
-      soft: {}, refs: new Map(), temporizadores: {}, salvando: {},
-      fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0 },
+      soft: {}, refs: new Map(), temporizadores: {}, salvando: {}, finalizados: new Set(),
+      fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
+      antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
     };
 
     const el = id => document.getElementById(id);
@@ -287,9 +321,23 @@
       controle.dataset.sebraeNumero = numero;
       controle.dataset.sebraeCampo = letra;
       controle.dataset.sebraeAlvo = alvo;
+      destacarFinalizado(controle);
       controle.addEventListener("input", aoEditar);
       controle.addEventListener("change", aoEditar);
       return controle;
+    }
+
+    /** Status (D) em FINALIZADO fica verde, para ver de relance quais ainda faltam finalizar. */
+    function destacarFinalizado(controle) {
+      if (controle.dataset.sebraeCampo === "D") controle.classList.toggle("sebrae-status--finalizado", controle.value === "FINALIZADO");
+    }
+
+    /** Valores que valem agora para o chamado: do formulário (novo) ou do Dashboard com as edições não vazias (antigo). */
+    function valoresEfetivos(numero) {
+      if (estado.soft[numero]?.novo) return estado.valores[numero] || {};
+      const efetivos = { ...(estado.abertos.find(item => item.numero === numero)?.valores || {}) };
+      Object.entries(estado.edicoes[numero] || {}).forEach(([letra, valor]) => { if (String(valor || "").trim()) efetivos[letra] = valor; });
+      return efetivos;
     }
 
     const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
@@ -299,16 +347,122 @@
       R: "Encerramento (R)", S: "Tipo SLA (S)",
     });
 
+    /** Cartão do chamado como está na tela agora, guardado no servidor para reaparecer em "Chamados finalizados". */
+    function montarFicha(numero) {
+      const antigo = estado.abertos.find(item => item.numero === numero);
+      const novo = estado.formulario.find(item => item.numero === numero);
+      const cortar = texto => String(texto || "").slice(0, 4000);
+      let titulo, solicitante, fatos, detalhes = [];
+      if (antigo) {
+        const dados = dadosAntigo(antigo);
+        [titulo, solicitante] = [dados.titulo, dados.solicitante];
+        fatos = [["Solicitante", dados.solicitante], ["Abertura", dados.abertura],
+          ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [rotulo, antigo.automaticos?.[letra] || antigo.automaticos_sugeridos?.[letra]])];
+        detalhes = [["Descrição", dados.descricao], ["Atendimento realizado", dados.atendimento]];
+      } else if (novo) {
+        [titulo, solicitante] = [novo.linha.G, novo.linha.I];
+        fatos = CAMPOS_AUTOMATICOS.map(([letra, rotulo]) => [rotulo, novo.linha[letra]]);
+        detalhes = [["Descrição", novo.linha.H], ["Atendimento realizado", novo.linha.F]];
+      } else return null;
+      const efetivos = valoresEfetivos(numero);
+      const manuais = Object.fromEntries(["A", "B", "D", "J", "S"].map(letra => [letra, String(efetivos[letra] || "").slice(0, 80)])); // R vem do SoftExpert
+      const limpar = lista => lista.filter(([, valor]) => String(valor || "").trim()).map(([rotulo, valor]) => [rotulo, cortar(valor)]);
+      return { titulo: cortar(titulo), solicitante: cortar(solicitante), fatos: limpar(fatos), detalhes: limpar(detalhes), manuais };
+    }
+
+    /** Falha aqui só deixa o cartão finalizado sem a ficha completa; nunca impede a finalização. */
+    async function guardarFicha(numero) {
+      const ficha = montarFicha(numero);
+      if (!ficha) return;
+      try {
+        await app.apiFetch(urlChamado(numero, "ficha"), {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ficha }),
+          errorMessage: "Não foi possível guardar a ficha do chamado.",
+        });
+      } catch (_erro) {
+        // o cartão finalizado mostra então só número, encerramento e descrição
+      }
+    }
+
+    function controleLeitura(letra, valor) {
+      const controle = document.createElement("input");
+      controle.type = "text";
+      controle.className = "ck-entrada ck-entrada--sm";
+      controle.value = valor || "";
+      controle.disabled = true;
+      controle.dataset.sebraeCampo = letra;
+      destacarFinalizado(controle);
+      return controle;
+    }
+
+    /** Mesmo layout do chamado, só leitura, recolhido: o resumo diz número, título, pessoa e encerramento. */
+    function textoFinalizado(item) {
+      const ficha = item.ficha || {};
+      const li = document.createElement("li");
+      const detalhe = document.createElement("details");
+      detalhe.className = "sebrae-finalizado";
+      detalhe.dataset.numero = item.numero;
+      const encerramento = item.encerrado_em ? `encerrado em ${item.encerrado_em}` : "";
+      detalhe.appendChild(dom.createTextElement("summary", "sebrae-finalizado__resumo", [item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · ")));
+      const artigo = document.createElement("article");
+      artigo.className = "sebrae-chamado";
+      const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
+      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
+      artigo.appendChild(titulo);
+      if ((ficha.fatos || []).length) {
+        const fatos = document.createElement("dl");
+        fatos.className = "ck-fatos sebrae-chamado__auto";
+        ficha.fatos.forEach(([rotulo, valor]) => {
+          const linha = document.createElement("div");
+          linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", valor));
+          fatos.appendChild(linha);
+        });
+        artigo.appendChild(fatos);
+      }
+      (ficha.detalhes || []).forEach(([rotulo, texto]) => artigo.appendChild(blocoDetalhe(rotulo, texto)));
+      const manuais = document.createElement("div");
+      manuais.className = "sebrae-chamado__manuais";
+      ["A", "B", "D", "J", "R", "S"].forEach(letra => {
+        const valor = letra === "R" ? item.encerrado_em : letra === "D" ? "FINALIZADO" : ficha.manuais?.[letra];
+        manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleLeitura(letra, valor)));
+      });
+      artigo.appendChild(manuais);
+      const descricao = document.createElement("textarea");
+      descricao.className = "ck-entrada";
+      descricao.rows = 3;
+      descricao.readOnly = true;
+      descricao.value = item.descricao || "";
+      artigo.appendChild(campo("Descrição para Finalizar o Chamado", descricao));
+      if (item.pdf) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__pdf", `PDF anexado: ${item.pdf}`));
+      const quando = formatarDataHora(item.em);
+      const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", `${textoResultado({ status: "ok", encerrado_em: item.encerrado_em })}${quando ? ` · ${quando}` : ""}`);
+      resultado.dataset.estado = "ok";
+      artigo.appendChild(resultado);
+      detalhe.appendChild(artigo);
+      li.appendChild(detalhe);
+      return li;
+    }
+
+    /** Bloco recolhido "Descrição" / "Atendimento realizado" (novo, antigo lido e finalizado). */
+    function blocoDetalhe(rotulo, texto) {
+      const detalhe = document.createElement("details");
+      detalhe.className = "sebrae-chamado__texto";
+      detalhe.append(dom.createTextElement("summary", "", rotulo), dom.createTextElement("p", "", texto || "Vazio"));
+      return detalhe;
+    }
+
     function blocoAntigo(item) {
+      const dados = dadosAntigo(item);
       const artigo = document.createElement("article");
       artigo.className = "sebrae-chamado";
       artigo.dataset.numero = item.numero;
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", tituloAntigo(item));
-      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.titulo || "Sem título"));
+      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", dados.titulo || "Sem título"));
       const fatos = document.createElement("dl");
       fatos.className = "ck-fatos sebrae-chamado__auto";
-      [["I", "Solicitante", item.usuario], ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])].forEach(([letra, rotulo, atual]) => {
-        const sugerido = item.automaticos_sugeridos?.[letra];
+      [["I", "Solicitante", dados.solicitante], ["", "Abertura", dados.abertura],
+        ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])].forEach(([letra, rotulo, atual]) => {
+        const sugerido = letra ? item.automaticos_sugeridos?.[letra] : "";
         if (!atual && !sugerido) return;
         const linha = document.createElement("div");
         linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
@@ -318,8 +472,16 @@
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra, "antigo"))));
       artigo.append(titulo, fatos);
-      const outra = avisoOutraPessoa(item) || avisoNomeDaDescricao(item);
+      const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
       if (outra) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
+      if (dados.lido) {
+        artigo.appendChild(blocoDetalhe("Descrição", dados.descricao));
+        artigo.appendChild(blocoDetalhe("Atendimento realizado", dados.atendimento));
+      } else if (NUMERO_UTIC.test(item.numero)) {
+        const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
+        dica.dataset.leitura = "pendente";
+        artigo.appendChild(dica);
+      }
       artigo.appendChild(manuais);
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
       return artigo;
@@ -341,12 +503,7 @@
       artigo.append(titulo, fatos);
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
-      [["H", "Descrição"], ["F", "Atendimento realizado"]].forEach(([letra, rotulo]) => {
-        const detalhe = document.createElement("details");
-        detalhe.className = "sebrae-chamado__texto";
-        detalhe.append(dom.createTextElement("summary", "", rotulo), dom.createTextElement("p", "", item.linha[letra] || "Vazio"));
-        artigo.appendChild(detalhe);
-      });
+      [["H", "Descrição"], ["F", "Atendimento realizado"]].forEach(([letra, rotulo]) => artigo.appendChild(blocoDetalhe(rotulo, item.linha[letra])));
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
@@ -400,6 +557,15 @@
       botao.className = "ck-btn ck-btn--primario ck-btn--sm";
       botao.textContent = "Finalizar no SoftExpert";
       botao.dataset.sebraeFinalizar = numero;
+      const cancelar = document.createElement("button");
+      cancelar.type = "button";
+      cancelar.className = "ck-btn ck-btn--secundario ck-btn--sm";
+      cancelar.textContent = "Cancelar";
+      cancelar.hidden = true;
+      cancelar.dataset.sebraeCancelarFinalizar = numero;
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-chamado__acoes";
+      acoes.append(botao, cancelar);
       const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", "");
       resultado.setAttribute("role", "status");
       const pdfLinha = document.createElement("div");
@@ -408,9 +574,9 @@
       area.append(
         campo("Descrição para Finalizar o Chamado", texto), feedbackDescricao,
         campo("Anexo PDF (opcional)", arquivo), pdfLinha, feedbackPdf,
-        botao, resultado,
+        acoes, resultado,
       );
-      estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, feedbackPdf, botao, resultado });
+      estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, feedbackPdf, botao, cancelar, resultado });
       texto.addEventListener("input", () => {
         window.clearTimeout(estado.temporizadores[numero]);
         estado.temporizadores[numero] = window.setTimeout(() => salvarDescricao(numero), 800);
@@ -421,6 +587,7 @@
       arquivo.addEventListener("change", () => enviarPdf(numero));
       remover.addEventListener("click", () => removerPdf(numero));
       botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
+      cancelar.addEventListener("click", () => cancelarFinalizacao(numero));
       atualizarFinalizar(numero);
       return area;
     }
@@ -429,14 +596,16 @@
       const ref = estado.refs.get(numero);
       const soft = estado.soft[numero];
       if (!ref || !soft) return;
-      ref.botao.disabled = !podeFinalizar(ref.texto.value, soft.finalizacao, estado.fechar.emAndamento);
-      ref.botao.title = ref.botao.disabled && !String(ref.texto.value).trim() ? "Preencha a descrição para finalizar o chamado." : "";
+      // Fica clicável com campos faltando: o clique avisa na tela o que preencher (descrição, A, D, J e R).
+      ref.botao.disabled = estado.fechar.emAndamento || STATUS_DESFEITOS.includes(soft.finalizacao?.status);
+      ref.cancelar.hidden = !soft.processando;
       ref.infoPdf.textContent = soft.pdf ? `PDF anexado: ${soft.pdf.nome} (${formatarTamanho(soft.pdf.tamanho)})` : "Nenhum PDF anexado.";
       ref.remover.hidden = !soft.pdf;
       const quando = formatarDataHora(soft.finalizacao?.em);
       ref.resultado.textContent = soft.processando ? "Finalizando no SoftExpert…"
+        : soft.cancelado && !soft.finalizacao ? "Finalização cancelada."
         : soft.finalizacao ? `${textoResultado(soft.finalizacao)}${quando ? ` · ${quando}` : ""}` : "";
-      ref.resultado.dataset.estado = soft.processando ? "andamento" : soft.finalizacao?.status || "";
+      ref.resultado.dataset.estado = soft.processando ? "andamento" : soft.finalizacao?.status || (soft.cancelado ? "cancelado" : "");
     }
 
     function atualizarTodosFinalizar() {
@@ -509,10 +678,23 @@
       }
     }
 
+    /** A cópia de saída é refeita da importada: vão o próprio chamado (se novo, mesmo sem campos) e os outros novos que o usuário trabalhou
+     * (campo diferente do padrão D/S), nunca novos em branco; edições dos antigos só com campo mudado. */
+    function manuaisDoChamado(numero) {
+      const trabalhado = item => item.numero === numero
+        || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== PADROES_MANUAIS[letra]; });
+      return { chamados: payloadAtualizacao(estado.formulario.filter(trabalhado), estado.valores), edicoes: payloadEdicoes(estado.abertos, estado.edicoes) };
+    }
+
     async function finalizarNoSoftExpert(numero) {
       const ref = estado.refs.get(numero);
       const soft = estado.soft[numero];
       if (!ref || ref.botao.disabled) return;
+      const faltas = camposFaltando(valoresEfetivos(numero), ref.texto.value);
+      if (faltas.length) {
+        app.showToast(`${numero}: antes de finalizar, preencha ${faltas.join(", ")}.`, "warning");
+        return;
+      }
       const confirmado = await app.confirmarAcao({
         titulo: "Finalizar no SoftExpert",
         mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
@@ -527,9 +709,11 @@
         atualizarFinalizar(numero);
         return;
       }
+      await guardarFicha(numero);
       try {
         await app.apiFetch("/api/sebrae/finalizar-softexpert", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numero, confirmado: true }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numero, confirmado: true, ...manuaisDoChamado(numero) }),
           errorMessage: "Não foi possível iniciar a finalização no SoftExpert.",
         });
       } catch (error) {
@@ -541,6 +725,21 @@
       acompanharFechar([numero]);
     }
 
+    /** Para a rotina em andamento (mesmo cancelamento da tela Automação); o acompanhamento mostra o resultado quando ela termina. */
+    async function cancelarFinalizacao(numero) {
+      const ref = estado.refs.get(numero);
+      if (!ref || ref.cancelar.disabled) return;
+      ref.cancelar.disabled = true;
+      try {
+        await app.apiFetch("/api/automacao/cancelar", { method: "POST", errorMessage: "Não foi possível cancelar a finalização." });
+        app.showToast("Cancelamento pedido. A finalização para no próximo passo; confira no SoftExpert se o chamado ficou aberto.", "warning");
+      } catch (error) {
+        app.showToast(error.message, "error");
+      } finally {
+        ref.cancelar.disabled = false;
+      }
+    }
+
     function renderizarFechar() {
       const host = el("sebrae-fechar");
       if (!host) return;
@@ -548,15 +747,17 @@
       const res = f.resultado;
       const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
       const pulados = f.pulados.length ? f.pulados : res?.pulados || [];
+      // Os finalizados saem daqui na hora (vão para "Chamados finalizados"); sobram só avisos, erros e pulados.
+      const restantes = (res?.resultados || []).filter(r => r.status !== "ok");
       let status = "";
       if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
       else if (f.mensagemInicio) status = f.mensagemInicio;
-      else if (res) status = resumoResultado(res);
+      else if (res && (restantes.length || pulados.length || !(res.resultados || []).length)) status = resumoResultado({ ...res, resultados: restantes });
       host.hidden = !status;
       definirTexto("sebrae-fechar-status", status);
       host.setAttribute("aria-busy", f.emAndamento ? "true" : "false");
       const itens = [
-        ...(f.emAndamento && !aoVivo ? [] : (res?.resultados || []).map(r => ({ status: r.status, texto: `${r.numero}: ${textoResultado(r)}` }))),
+        ...(f.emAndamento && !aoVivo ? [] : restantes.map(r => ({ status: r.status, texto: `${[r.numero, identificacaoChamado(r.numero)].filter(Boolean).join(" · ")}: ${textoResultado(r)}` }))),
         ...pulados.map(p => ({ status: "pulado", texto: textoPulado(p) })),
       ];
       el("sebrae-fechar-lista")?.replaceChildren(...itens.map(item => {
@@ -602,6 +803,24 @@
     }
 
     /** Aplica o que o GET trouxe: estado da rotina, resultado por chamado (também nos cartões) e aviso do SharePoint. */
+    /** O horário gravado pelo SoftExpert substitui o Encerramento (R) digitado: a tela já mostra o valor que o Dashboard terá. */
+    function mostrarEncerramentoSoftExpert(r) {
+      const valor = r.status === "ok" ? encerramentoParaCampo(r.encerrado_em) : "";
+      if (!valor) return;
+      [estado.valores, estado.edicoes].forEach(guardados => { if (guardados[r.numero] && "R" in guardados[r.numero]) guardados[r.numero].R = valor; });
+      document.querySelectorAll(`[data-sebrae-campo="R"][data-sebrae-numero="${CSS.escape(r.numero)}"]`).forEach(controle => { controle.value = valor; });
+    }
+
+    /** Título e solicitante (nome completo) do chamado, para o resultado da finalização dizer de qual se trata. */
+    function identificacaoChamado(numero) {
+      const antigo = estado.abertos.find(item => item.numero === numero);
+      const novo = estado.formulario.find(item => item.numero === numero);
+      const dadosDoAntigo = antigo ? dadosAntigo(antigo) : null;
+      const titulo = dadosDoAntigo ? dadosDoAntigo.titulo : novo?.linha?.G;
+      const solicitante = dadosDoAntigo ? dadosDoAntigo.solicitante : novo?.linha?.I;
+      return [titulo, solicitante].map(parte => String(parte || "").trim()).filter(Boolean).join(" · ");
+    }
+
     function aplicarFechar(dados) {
       const f = estado.fechar;
       f.emAndamento = Boolean(dados?.em_andamento);
@@ -612,11 +831,26 @@
         if (!soft) return;
         soft.finalizacao = { status: r.status, em: r.em, encerrado_em: r.encerrado_em, mensagem: r.mensagem };
         soft.processando = false;
+        mostrarEncerramentoSoftExpert(r);
       });
-      if (!f.emAndamento) Object.values(estado.soft).forEach(soft => { soft.processando = false; });
+      if (!f.emAndamento) Object.values(estado.soft).forEach(soft => {
+        if (soft.processando && f.resultado?.cancelado) soft.cancelado = true;
+        soft.processando = false;
+      });
       renderizarFechar();
       renderizarSharepoint();
       atualizarTodosFinalizar();
+      moverFinalizados(f);
+    }
+
+    /** Todo chamado `ok` sai da lista de abertos e aparece em "Chamados finalizados" assim que o SoftExpert confirma (uma recarga por novo `ok`). */
+    function moverFinalizados(f) {
+      const oks = (f.resultado?.resultados || []).filter(r => r.status === "ok");
+      const chave = `${f.resultado?.iniciado_em || ""}:${oks.length}`;
+      if (!oks.length || f.recarregado === chave) return;
+      f.recarregado = chave;
+      app.showToast(`${oks.length} chamado(s) finalizado(s) no SoftExpert. Veja em Chamados finalizados.`, "success");
+      carregarNovosSebrae();
     }
 
     /** Consulta a rotina até terminar; erros passageiros de rede não derrubam o acompanhamento. */
@@ -626,7 +860,7 @@
       const anterior = f.resultado?.iniciado_em;
       f.emAndamento = true;
       f.numeros = numeros;
-      numeros.forEach(numero => { if (estado.soft[numero]) estado.soft[numero].processando = true; });
+      numeros.forEach(numero => { if (estado.soft[numero]) Object.assign(estado.soft[numero], { processando: true, cancelado: false }); });
       renderizarFechar();
       renderizarSharepoint();
       atualizarTodosFinalizar();
@@ -671,6 +905,100 @@
       }
     }
 
+    // ---- Ler chamados antigos: o POST inicia a rotina `antigos`; o GET acompanha e guarda o último resultado ----
+
+    function renderizarAntigos() {
+      const a = estado.antigos;
+      definirTexto("sebrae-antigos-leitura-status", a.mensagem || resumoLeituraAntigos(a.resultado, a.emAndamento, formatarDataHora(a.resultado?.em), a.anteriorEm));
+      const lista = el("sebrae-antigos-leitura-falhas");
+      if (lista) {
+        const falhas = a.emAndamento ? [] : Object.entries(a.resultado?.falhas || {});
+        lista.replaceChildren(...falhas.map(([numero, motivo]) => dom.createTextElement("li", "", `${numero}: ${motivo}`)));
+        lista.hidden = falhas.length === 0;
+      }
+      const botao = el("btn-sebrae-ler-antigos");
+      if (botao) a.emAndamento ? botao.setAttribute("aria-busy", "true") : botao.removeAttribute("aria-busy");
+    }
+
+    function aplicarAntigos(dados) {
+      const a = estado.antigos;
+      a.emAndamento = Boolean(dados?.em_andamento);
+      a.resultado = dados?.resultado || null;
+      a.mensagem = "";
+      renderizarAntigos();
+    }
+
+    /** Consulta a leitura até terminar; erros passageiros de rede não derrubam o acompanhamento. Ao fim recarrega a lista. */
+    async function acompanharAntigos() {
+      const a = estado.antigos;
+      const token = ++a.token;
+      a.anteriorEm = a.resultado?.em ?? null;
+      a.emAndamento = true;
+      a.mensagem = "";
+      renderizarAntigos();
+      let visto = false;
+      let esperas = 0;
+      let falhas = 0;
+      while (token === a.token) {
+        await esperar(INTERVALO_FECHAR_MS);
+        if (token !== a.token) return;
+        let dados;
+        try {
+          dados = await app.apiFetch("/api/sebrae/antigos/ler", { errorMessage: "Não foi possível consultar a leitura dos chamados antigos." });
+          falhas = 0;
+        } catch (error) {
+          if (++falhas < 5) continue;
+          a.emAndamento = false;
+          a.mensagem = `Não foi possível acompanhar a leitura dos chamados antigos: ${error.message}`;
+          renderizarAntigos();
+          return;
+        }
+        visto = visto || Boolean(dados.em_andamento);
+        const comecou = visto || (dados.resultado?.em ?? null) !== a.anteriorEm;
+        if (!dados.em_andamento && !comecou && ++esperas < 4) continue; // a rotina ainda não começou a responder
+        aplicarAntigos(dados);
+        if (dados.em_andamento) continue;
+        if (comecou && dados.resultado) {
+          const limpa = dados.resultado.concluido && !Object.keys(dados.resultado.falhas || {}).length;
+          app.showToast(resumoLeituraAntigos(dados.resultado, false), limpa ? "success" : "warning");
+        }
+        carregarNovosSebrae();
+        return;
+      }
+    }
+
+    /** Uma consulta ao abrir a lista: pega leitura em andamento e o último resultado. */
+    async function carregarAntigos() {
+      const a = estado.antigos;
+      try {
+        const dados = await app.apiFetch("/api/sebrae/antigos/ler", { errorMessage: "Não foi possível consultar a leitura dos chamados antigos." });
+        if (a.emAndamento) return; // o acompanhamento em curso já atualiza a tela
+        aplicarAntigos(dados);
+        if (dados.em_andamento) acompanharAntigos();
+      } catch (_erro) {
+        // Sem o resultado a lista segue funcionando; a próxima consulta traz o texto de volta.
+      }
+    }
+
+    async function lerAntigosSebrae() {
+      const a = estado.antigos;
+      if (a.emAndamento) return;
+      const botao = el("btn-sebrae-ler-antigos");
+      botao?.setAttribute("aria-busy", "true");
+      try {
+        await app.apiFetch("/api/sebrae/antigos/ler", { method: "POST", errorMessage: "Não foi possível iniciar a leitura dos chamados antigos." });
+      } catch (error) {
+        // 409 = outra rotina em andamento (aviso); 503 sem runner e 422 sem Dashboard importado são erros.
+        a.mensagem = error.message;
+        renderizarAntigos();
+        app.showToast(error.message, error.status === 409 ? "warning" : "error");
+        return;
+      }
+      app.showToast("Leitura dos chamados antigos iniciada.", "success");
+      app.atualizarEstadoAutomacao?.(); // habilita o Cancelar execução sem esperar a próxima consulta da Automação
+      acompanharAntigos();
+    }
+
     async function reenviarPendente() {
       const botao = el("btn-sebrae-reenviar");
       if (botao) botao.disabled = true;
@@ -705,8 +1033,9 @@
       const { sebraeNumero, sebraeCampo, sebraeAlvo } = event.currentTarget.dataset;
       const guardados = valoresDe(sebraeAlvo);
       guardados[sebraeNumero] = { ...(guardados[sebraeNumero] || {}), [sebraeCampo]: event.currentTarget.value };
+      destacarFinalizado(event.currentTarget);
       salvarRascunho();
-      atualizarExportacao();
+      atualizarBotaoAtualizar();
     }
 
     function mostrarRascunho(texto) {
@@ -736,23 +1065,15 @@
       }
     }
 
-    function atualizarExportacao() {
-      const prontos = payloadExportacao(estado.formulario, estado.valores).length;
-      const botao = el("btn-sebrae-exportar");
-      if (botao) botao.disabled = prontos === 0;
-      const total = estado.formulario.length;
-      definirTexto("sebrae-exportacao-status", total ? `${prontos} de ${total} chamado(s) com Responsável, Status e Tipo preenchidos.` : "");
-      atualizarBotaoAtualizar();
-    }
-
     function atualizarBotaoAtualizar() {
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;
       const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length;
       const preenchimentos = totalPreenchimentos(estado.abertos);
       botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
-      definirTexto("sebrae-antigos-resumo", estado.abertos.length
-        ? `${estado.abertos.length} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
+      const visiveis = estado.abertos.filter(item => !estado.finalizados.has(item.numero)).length;
+      definirTexto("sebrae-antigos-resumo", visiveis
+        ? `${visiveis} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
         : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
     }
 
@@ -791,9 +1112,16 @@
       mostrarRascunho(estado.descartar ? "Rascunho descartado." : rascunho.restaurado ? `Rascunho restaurado${salvoEm ? ` (salvo em ${salvoEm})` : ""}. Passe por Atualizar Dashboard para gravar no arquivo.` : "");
       estado.soft = {};
       estado.refs.clear();
-      el("sebrae-antigos-lista")?.replaceChildren(...estado.abertos.map(blocoAntigo));
+      const finalizados = importado?.finalizados || [];
+      estado.finalizados = new Set(finalizados.map(item => item.numero));
+      const emAberto = item => !estado.finalizados.has(item.numero); // os `ok` seguem em estado.abertos/formulario só para não perder A, B, J e S no Atualizar
+      el("sebrae-antigos-lista")?.replaceChildren(...estado.abertos.filter(emAberto).map(blocoAntigo));
       const painelAntigos = el("sebrae-antigos");
       if (painelAntigos) painelAntigos.hidden = !importado;
+      el("sebrae-finalizados-lista")?.replaceChildren(...finalizados.map(textoFinalizado));
+      const painelFinalizados = el("sebrae-finalizados");
+      if (painelFinalizados) painelFinalizados.hidden = !finalizados.length;
+      definirTexto("sebrae-finalizados-resumo", `${finalizados.length} chamado(s) finalizado(s) no SoftExpert.`);
       definirTexto("sebrae-dashboard-status", importado
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
         : "Nenhum Dashboard importado.");
@@ -801,18 +1129,21 @@
       if (importado && !importado.saida_pronta) definirTexto("sebrae-atualizar-status", "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
       estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
-      lista?.replaceChildren(...estado.formulario.map(blocoChamado));
+      lista?.replaceChildren(...estado.formulario.filter(emAberto).map(blocoChamado));
       renderizarAvisos(novos);
       if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard para buscar os chamados novos.");
       else if (!novos) definirTexto("sebrae-novos-resumo", "Nenhuma busca feita ainda. Use Buscar chamados novos.");
       else {
         const quando = formatarDataHora(novos.lidos_em);
         definirTexto("sebrae-novos-resumo",
-          `${quando ? `Busca de ${quando}: ` : ""}${estado.formulario.length} novo(s), ${novos.ignorados} já no Dashboard, ${(novos.pendentes || []).length} pendente(s).`);
+          `${quando ? `Busca de ${quando}: ` : ""}${estado.formulario.filter(emAberto).length} novo(s), ${novos.ignorados} já no Dashboard, ${(novos.pendentes || []).length} pendente(s).`);
       }
-      atualizarExportacao();
+      if (estado.fechar.emAndamento) estado.fechar.numeros.forEach(numero => { if (estado.soft[numero]) estado.soft[numero].processando = true; });
+      atualizarTodosFinalizar();
+      atualizarBotaoAtualizar();
       app.carregarResumoHistoricoSebrae?.();
       carregarFechar();
+      carregarAntigos();
     }
 
     async function carregarNovosSebrae() {
@@ -858,40 +1189,6 @@
       }
     }
 
-    async function exportarChamadosSebrae() {
-      const chamados = payloadExportacao(estado.formulario, estado.valores);
-      if (!chamados.length) return;
-      const botao = el("btn-sebrae-exportar");
-      botao.disabled = true;
-      botao.setAttribute("aria-busy", "true");
-      try {
-        const dados = await app.apiFetch("/api/sebrae/exportar", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados }),
-          errorMessage: "Não foi possível exportar as linhas.",
-        });
-        el("sebrae-bloco-a-p").value = dados.bloco_a_p;
-        el("sebrae-bloco-r-s").value = dados.bloco_r_s;
-        el("sebrae-exportacao-blocos").hidden = false;
-        try {
-          await app.copiarTextoParaAreaTransferencia(dados.bloco_a_p);
-        } catch (_erro) {
-          // O usuário ainda pode copiar pelos botões abaixo dos blocos.
-        }
-        definirTexto("sebrae-exportacao-status", dados.mensagem);
-      } catch (error) {
-        definirTexto("sebrae-exportacao-status", error.message);
-        app.showToast(error.message, "error");
-      } finally {
-        botao.removeAttribute("aria-busy");
-        atualizarBotaoExportar();
-      }
-    }
-
-    function atualizarBotaoExportar() {
-      const botao = el("btn-sebrae-exportar");
-      if (botao) botao.disabled = payloadExportacao(estado.formulario, estado.valores).length === 0;
-    }
-
     function baixarArquivo(nome, base64) {
       const bytes = Uint8Array.from(atob(base64), caractere => caractere.charCodeAt(0));
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -924,6 +1221,17 @@
             + "Só atualizar: atualiza o Dashboard e NÃO finaliza nada no SoftExpert.",
           confirmar: "Atualizar e finalizar", cancelar: "Só atualizar",
         });
+        // Só a finalização em massa exige A e J (a descrição e o Status FINALIZADO já filtraram os candidatos): avisa e não envia nada.
+        const incompletos = finalizarSoftExpert
+          ? finalizar.map(numero => [numero, camposFaltando(valoresEfetivos(numero), estado.soft[numero]?.descricao)]).filter(([, faltas]) => faltas.length)
+          : [];
+        if (incompletos.length) {
+          const aviso = `Para finalizar no SoftExpert, preencha: ${incompletos.map(([numero, faltas]) => `${numero} (${faltas.join(", ")})`).join("; ")}. Nada foi enviado.`;
+          definirTexto("sebrae-atualizar-status", aviso);
+          app.showToast(aviso, "warning");
+          return;
+        }
+        if (finalizarSoftExpert) await Promise.all(finalizar.map(guardarFicha));
         const dados = await app.apiFetch("/api/sebrae/dashboard/atualizar", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes, finalizar_softexpert: finalizarSoftExpert }),
           errorMessage: "Não foi possível atualizar o Dashboard.",
@@ -946,21 +1254,10 @@
       }
     }
 
-    async function copiarBlocoSebrae(bloco) {
-      const campoBloco = el(bloco === "r_s" ? "sebrae-bloco-r-s" : "sebrae-bloco-a-p");
-      if (!campoBloco?.value) return;
-      try {
-        await app.copiarTextoParaAreaTransferencia(campoBloco.value);
-        app.showToast("Bloco copiado.", "success");
-      } catch (error) {
-        app.showToast(error.message, "error");
-      }
-    }
-
-    return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae, descartarRascunhoSebrae };
+    return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, totalPreenchimentos,
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando,
     formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
     lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;

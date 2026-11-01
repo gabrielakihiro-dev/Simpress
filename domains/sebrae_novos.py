@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from core.integrity import lock_paths
 from domains import sebrae_cruzamento, sebrae_vinculos
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
 from domains.sebrae_dashboard import (
@@ -34,6 +35,7 @@ STATUS_ABERTO = "EM ABERTO"
 STATUS_FINALIZADO = "FINALIZADO"
 TIPOS_CHAMADO = ("INCIDENTE", "SOLICITAÇÃO")
 MAX_CAMPO_MANUAL = 80
+MAX_CAMPO_ANTIGO = 4000  # per text field of an old ticket read from SoftExpert (same cut as the finalization text)
 _FORMATO_ENCERRAMENTO = "%d/%m/%Y %H:%M"
 MENSAGEM_EXPORTADA = "Planilha Exportada com Sucesso!"
 
@@ -69,6 +71,16 @@ def caminho_saida(caminhos: Caminhos, nome: str) -> Path:
 def caminho_arquivo(caminhos: Caminhos) -> Path:
     """Archive of the tickets that left the open list (domains/sebrae_arquivo.py), next to the import state."""
     return caminhos.existentes.with_name("sebrae_chamados_encerrados.json")
+
+
+def caminho_antigos(caminhos: Caminhos) -> Path:
+    """Cache of the old open tickets read from SoftExpert (``salvar_antigo``), next to the import state."""
+    return caminhos.existentes.with_name("sebrae_antigos_softexpert.json")
+
+
+def caminho_resultado_antigos(caminhos: Caminhos) -> Path:
+    """Summary of the last "ler antigos" run (read, failed, skipped), next to the import state."""
+    return caminhos.existentes.with_name("sebrae_antigos_resultado.json")
 
 
 def _gravar(caminho: Path, dados: Mapping[str, Any]) -> None:
@@ -160,6 +172,15 @@ def _seguro(texto: Any) -> str:
     return mascarar_cpfs(omitir_credenciais(texto))
 
 
+def _campos_seguros(c: ChamadoSoftExpert, limite: Optional[int] = None) -> Dict[str, str]:
+    """The ticket fields the screen shows, with CPF and passwords already masked (and cut to ``limite``, if given)."""
+    campos = {
+        "titulo": _seguro(c.titulo), "descricao": _seguro(c.descricao), "solicitante": _seguro(c.solicitante),
+        "habilitada_em": c.habilitada_em, "atendimento": _seguro(c.detalhes_atendimento_realizado),
+    }
+    return {k: v[:limite] for k, v in campos.items()} if limite else campos
+
+
 def salvar_novos(
     caminho: Path,
     chamados: Sequence[ChamadoSoftExpert],
@@ -174,11 +195,7 @@ def salvar_novos(
         "pendentes": [{"numero": n, "motivo": m} for n, m in pendentes],
         "erros": {str(n): str(m)[:200] for n, m in erros.items()},
         "chamados": [
-            {
-                "numero": c.numero, "titulo": _seguro(c.titulo), "descricao": _seguro(c.descricao),
-                "solicitante": _seguro(c.solicitante), "habilitada_em": c.habilitada_em,
-                "atendimento": _seguro(c.detalhes_atendimento_realizado),
-            }
+            {"numero": c.numero, **_campos_seguros(c)}
             for c in chamados
         ],
     })
@@ -203,6 +220,43 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
     pendentes = [p for p in dados.get("pendentes") or [] if isinstance(p, dict) and p.get("numero") not in lancados]
     return {"lidos_em": str(dados.get("lidos_em") or ""), "ignorados": int(dados.get("ignorados") or 0),
             "pendentes": pendentes, "erros": dados.get("erros") or {}, "chamados": chamados}
+
+
+def ler_antigos(caminho: Path) -> Dict[str, Dict[str, str]]:
+    """``{numero: registro}`` of the old open tickets already read from SoftExpert; missing or broken file: ``{}``."""
+    dados = _ler(caminho) or {}
+    return {
+        str(n): {k: str(r.get(k) or "") for k in ("titulo", "descricao", "solicitante", "habilitada_em", "atendimento", "lido_em")}
+        for n, r in dados.items() if isinstance(r, dict)
+    }
+
+
+def salvar_resultado_antigos(caminhos: Caminhos, resultado: Mapping[str, Any]) -> None:
+    _gravar(caminho_resultado_antigos(caminhos), resultado)
+
+
+def ler_resultado_antigos(caminhos: Caminhos) -> Optional[Dict[str, Any]]:
+    return _ler(caminho_resultado_antigos(caminhos))
+
+
+def salvar_antigo(caminho: Path, chamado: ChamadoSoftExpert, lido_em: str = "") -> None:
+    """Adds (or replaces) one old ticket in the cache, masked; atomic and under lock like the other state files."""
+    with lock_paths([caminho]):
+        todos = ler_antigos(caminho)
+        todos[chamado.numero] = {**_campos_seguros(chamado, MAX_CAMPO_ANTIGO), "lido_em": lido_em or agora_iso()}
+        _gravar(caminho, todos)
+
+
+def complementar_antigos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]]) -> List[Mapping[str, Any]]:
+    """Old open tickets with the SoftExpert description and requester filling what the Dashboard row has empty (H, I).
+    Feeds the same name cross-reference the new tickets get; the Dashboard values win when present."""
+    resultado: List[Mapping[str, Any]] = []
+    for aberto in abertos:
+        lido = antigos.get(str(aberto.get("numero") or ""))
+        resultado.append(aberto if not lido else {
+            **aberto, "descricao": aberto.get("descricao") or lido["descricao"], "usuario": aberto.get("usuario") or lido["solicitante"],
+        })
+    return resultado
 
 
 # ---------------------------------------------------------------------------- rows

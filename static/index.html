@@ -782,9 +782,14 @@ Horário disponível para atendimento:</textarea>
               <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-buscar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Buscar chamados novos</span></button>
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-automatico" data-automacao-rotina="dashboard" data-on-click="iniciarRotinaAutomacao" data-args='["dashboard"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Baixar, importar e buscar</span></button>
             </div>
+            <div class="ck-grupo-botoes" role="group" aria-label="Chamados antigos">
+              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
+            </div>
           </form>
           <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
           <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <p id="sebrae-antigos-leitura-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <ul id="sebrae-antigos-leitura-falhas" class="ck-cartao__meta" hidden></ul>
           <div id="sebrae-historico-resumo" class="sebrae-historico-resumo"></div>
           <div id="sebrae-novos-avisos"></div>
           <div class="ck-grupo-botoes"><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span></button></div>
@@ -796,7 +801,7 @@ Horário disponível para atendimento:</textarea>
         <div class="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
           <label class="ck-campo"><span class="ck-campo__rotulo">De</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio"></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Até</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim"></label>
-          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Chamados novos Sebrae</option><option value="dashboard">Dashboard + chamados novos Sebrae</option></select></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Chamados novos Sebrae</option><option value="antigos">Chamados antigos Sebrae</option><option value="dashboard">Dashboard + chamados novos Sebrae</option></select></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Status</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
           <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar</button>
           <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar</button>
@@ -1011,11 +1016,15 @@ Horário disponível para atendimento:</textarea>
               <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
               <div id="sebrae-antigos-lista"></div>
             </details>
+            <details id="sebrae-finalizados" class="sebrae-antigos" hidden>
+              <summary>Chamados finalizados</summary>
+              <p id="sebrae-finalizados-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-finalizados-lista" class="sebrae-avisos"></ul>
+            </details>
             <datalist id="sebrae-sugestoes-a"><option value="CLIENTE"></option><option value="SIMPRESS"></option></datalist>
             <datalist id="sebrae-sugestoes-b"><option value="AVARIA FÍSICA"></option><option value="DESLIGAMENTO"></option><option value="ENDPOINT CENTER"></option><option value="ERRO SOFTWARE"></option><option value="FALHA BATERIA"></option><option value="FALHA NO DOMÍNIO"></option><option value="FORMATAÇÃO"></option><option value="HARDWARE"></option><option value="INSTALAÇÃO"></option><option value="LENTIDÃO"></option><option value="NOVO USUÁRIO"></option><option value="NÃO LIGA"></option><option value="OUTRO"></option><option value="PERIFÉRICO"></option><option value="SOL. EQUIPAMENTO"></option></datalist>
             <datalist id="sebrae-sugestoes-s"><option value="DISPONIBILIDADE"></option></datalist>
-            <div class="ck-grupo-botoes" role="group" aria-label="Exportação das linhas">
-              <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-exportar" data-on-click="exportarChamadosSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar linhas</span></button>
+            <div class="ck-grupo-botoes" role="group" aria-label="Ações do Dashboard">
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
             </div>
@@ -1023,19 +1032,12 @@ Horário disponível para atendimento:</textarea>
               <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
               <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
             </div>
-            <p id="sebrae-exportacao-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
             <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
             <div id="sebrae-fechar" class="sebrae-fechar" hidden>
               <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
               <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
             </div>
             <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
-            <div id="sebrae-exportacao-blocos" class="sebrae-blocos" hidden>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Colar em A:P (primeira linha livre da tabela)</span><textarea class="ck-entrada" id="sebrae-bloco-a-p" rows="4" readonly></textarea></label>
-              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["a_p"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar A:P</button>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Colar em R:S (mesma linha, deixando Q fora)</span><textarea class="ck-entrada" id="sebrae-bloco-r-s" rows="4" readonly></textarea></label>
-              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["r_s"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar R:S</button>
-            </div>
           </div>
         </section>
 
