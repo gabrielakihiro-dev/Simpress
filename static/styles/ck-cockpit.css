@@ -1453,3 +1453,229 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (prefers-reduced-motion: reduce) {
   .ck-chamados-triagem__botao, .ck-chamados-anotacao .annotation-field { transition: none; }
 }
+
+/* =====================================================================
+   OS (F6) · painel [data-cockpit-tool-panel="chamados"] · camada de redesign
+   Onde cabe: static/styles/ck-cockpit.css, no FIM do arquivo (depois da linha 1456),
+   ou arquivo novo carregado depois dele. Nada do CSS atual é removido: esta camada
+   só sobrepõe, com seletores do painel (P) ou dos IDs #cockpit-tickets-*.
+   Só tokens existentes (ck-tokens.css). Sem cor, fonte ou ícone novo.
+   Transições de 180 ms (--duracao), desligadas com prefers-reduced-motion.
+   Faixas: compacto <768 · médio 768–1199 (cartões) · amplo ≥1200 (2560 sem rolagem horizontal).
+   Textos gerados por CSS (content:) estão marcados com [TEXTO NOVO]; precisam de aprovação.
+   P = .ck-ferr-painel[data-cockpit-tool-panel="chamados"]
+   ===================================================================== */
+
+/* ---------- 1. Painel: margens de página e caixas com a mesma moldura ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] { width: 100%; max-width: 1920px; margin-inline: auto; padding: 16px 20px 28px; gap: 12px; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-chamados-bloco { margin: 0; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-kpis,
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-triage,
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr {
+  border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+}
+@media (min-width: 1200px) {
+  /* triagem (fila de trabalho) à esquerda, relação entre as fontes à direita; sem triagem, os KPIs ocupam a linha */
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); align-content: start; column-gap: 12px; }
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] > * { grid-column: 1 / -1; }
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] > #cockpit-tickets-triage { grid-column: 1; grid-row: 1; }
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] > #cockpit-tickets-kpis { grid-column: 2; grid-row: 1; }
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"]:has(> #cockpit-tickets-triage[hidden]) > #cockpit-tickets-kpis,
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"]:has(> #cockpit-tickets-kpis[hidden]) > #cockpit-tickets-triage { grid-column: 1 / -1; }
+}
+
+/* ---------- 2. Fila de trabalho (triagem): o número é o destaque ---------- */
+@media (max-width: 1199.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] > #cockpit-tickets-triage { order: -1; }
+}
+#cockpit-tickets-triage .ckp-triagem__cab { padding: 10px 12px; gap: 2px 12px; }
+#cockpit-tickets-triage .ckp-triagem__nums { border-bottom: 0; }
+#cockpit-tickets-triage .ck-chamados-triagem__botao { justify-content: center; padding: 10px 12px; }
+#cockpit-tickets-triage .ck-chamados-triagem__valor { font-size: var(--fs-kpi); }
+@media (max-width: 767.98px) {
+  #cockpit-tickets-triage .ckp-triagem__nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #cockpit-tickets-triage .ckp-triagem__num:nth-child(odd) { border-left: 0; }
+  #cockpit-tickets-triage .ckp-triagem__num:nth-child(n+3) { border-top: 1px solid var(--cor-borda-suave); }
+}
+
+/* ---------- 3. Relação entre as fontes (KPIs): legenda discreta, mesma altura da triagem ---------- */
+#cockpit-tickets-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: auto 1fr; overflow: hidden; }
+#cockpit-tickets-kpis:empty { display: none; }
+#cockpit-tickets-kpis::before {
+  content: "Relação entre as fontes"; /* [TEXTO NOVO] */
+  grid-column: 1 / -1; padding: 10px 12px; border-bottom: 1px solid var(--cor-borda-suave);
+  font-size: var(--fs-base); font-weight: var(--peso-medio); line-height: 1.45;
+}
+#cockpit-tickets-kpis .ck-kpi { justify-content: center; padding: 8px 12px; border-bottom: 0; }
+#cockpit-tickets-kpis .ck-kpi:last-child { border-right: 0; }
+#cockpit-tickets-kpis .ck-kpi__valor { font-size: var(--fs-xl); }
+#cockpit-tickets-kpis .ck-kpi__rotulo { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+/* ordem fixa em renderTicketKpis: Séries, Conferidas, Divergentes, Só Simpress, Só Oracle; o ponto repete as cores das etiquetas das linhas */
+#cockpit-tickets-kpis .ck-kpi:nth-child(n+2) .ck-kpi__rotulo::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ponto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(2) { --ponto: var(--cor-ok-texto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(3) { --ponto: var(--cor-erro-texto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(4), #cockpit-tickets-kpis .ck-kpi:nth-child(5) { --ponto: var(--cor-alerta-texto); }
+@media (max-width: 767.98px) {
+  #cockpit-tickets-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto; }
+  #cockpit-tickets-kpis .ck-kpi:nth-child(3n) { border-right: 0; }
+  #cockpit-tickets-kpis .ck-kpi:nth-child(n+4) { border-top: 1px solid var(--cor-borda-suave); }
+}
+
+/* ---------- 4. Barra de ferramentas: filtros à esquerda, ações à direita ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr { padding: 10px 12px; gap: 8px; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr .ckp-alternar { order: 1; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-clear { order: 2; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-export { order: 3; margin-left: auto; }
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-manage { order: 4; }
+@media (min-width: 768px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr .ck-campo { flex: 0 1 240px; }
+}
+@media (max-width: 767.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] { padding: 12px 12px 24px; }
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] #cockpit-tickets-export { margin-left: 0; }
+}
+
+/* ---------- 5. Importação e versões ---------- */
+#cockpit-tickets-manage-panel > summary .ckp-recolher__meta { padding: 2px 8px; border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); }
+
+/* ---------- 6. Cartão da tabela de OS ---------- */
+#cockpit-tickets-os { margin-top: 0; }
+#cockpit-tickets-os .ck-os { overflow: visible; }
+#cockpit-tickets-os .ck-os > .ck-cartao__cab { padding: 10px 12px; min-height: 0; }
+#cockpit-tickets-os .ck-os .ticket-summary-status { margin-left: auto; color: var(--cor-texto); font-variant-numeric: tabular-nums; white-space: normal; text-align: right; }
+#cockpit-tickets-os .ck-os[aria-busy="true"] .ck-os__corpo { opacity: .5; pointer-events: none; transition: opacity var(--duracao) var(--curva); }
+#cockpit-tickets-os .ck-os[aria-busy="true"] .ticket-summary-status { color: var(--cor-destaque-texto); }
+/* depende de section.dataset.estado = carregando | vazio | erro | pronto (3 linhas em renderTicketSummary / refreshTicketSummary) */
+#cockpit-tickets-os .ck-os[data-estado="erro"] { border-color: var(--cor-erro-texto); }
+#cockpit-tickets-os .ck-os[data-estado="erro"] .ticket-summary-status { color: var(--cor-erro-texto); }
+#cockpit-tickets-os .ck-os[data-estado="vazio"] .ticket-summary-status { color: var(--cor-texto-mudo); }
+#cockpit-tickets-os .ck-os__corpo { padding: 0 0 4px; }
+#cockpit-tickets-os .ck-os__corpo:empty { padding: 28px 12px 32px; text-align: center; }
+#cockpit-tickets-os .ck-os__corpo:empty::before {
+  content: "Nenhuma OS importada. Use Importar e gerenciar para enviar as planilhas Simpress e Oracle."; /* [TEXTO NOVO] */
+  font-size: var(--fs-md); color: var(--cor-texto-mudo);
+}
+/* filtros que escondem todas as linhas */
+#cockpit-tickets-os .ck-os__corpo:has(tbody):not(:has(tbody tr[data-serial]:not([hidden])))::after {
+  content: "Nenhuma OS corresponde aos filtros. Use Limpar filtros."; /* [TEXTO NOVO] */
+  display: block; padding: 24px 12px 28px; text-align: center; font-size: var(--fs-md); color: var(--cor-texto-mudo);
+}
+
+/* ---------- 7. Tabela (≥1200px): colunas reequilibradas, cabeçalho fixo, faixa de atenção ---------- */
+@media (min-width: 1200px) {
+  #cockpit-tickets-os .ck-os .ck-col-fonte { width: 8%; }
+  #cockpit-tickets-os .ck-os .ck-col-serie { width: 14%; }
+  #cockpit-tickets-os .ck-os .ck-col-os { width: 10%; }
+  #cockpit-tickets-os .ck-os .ck-col-usuario { width: 13%; }
+  #cockpit-tickets-os .ck-os .ck-col-host { width: 13%; }
+  #cockpit-tickets-os .ck-os .ck-col-chamado { width: 23%; }
+  #cockpit-tickets-os .ck-os .ck-tabela thead th { position: sticky; top: 0; z-index: 2; background: var(--cor-superficie); border-bottom: 0; box-shadow: 0 1px 0 var(--cor-borda); }
+}
+#cockpit-tickets-os .ck-os .ck-tabela th { padding: 9px 10px; }
+#cockpit-tickets-os .ck-os tbody tr[data-serial] { transition: background-color var(--duracao) var(--curva); }
+#cockpit-tickets-os .ck-os tbody tr[data-serial]:hover { background: var(--cor-superficie-funda); }
+/* Hostname vem do Endpoint: texto de apoio */
+#cockpit-tickets-os .ck-os tbody td[data-label="Hostname"] { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+
+/* Sinais da linha, sem JavaScript: faixa à esquerda (3+ dias e Sem data) e etiquetas geradas dos data-* que a tabela já grava */
+#cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] > td:first-child,
+#cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] > td:first-child { box-shadow: inset 3px 0 0 var(--cor-alerta-texto); }
+#cockpit-tickets-os .ck-os tbody td[data-label="Série"]::after,
+#cockpit-tickets-os .ck-os tbody td[data-label="OS"]::after {
+  display: none; align-items: center; align-self: flex-start; width: max-content; max-width: 100%; height: 20px; margin-top: 4px; padding: 0 7px;
+  border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto);
+  font: var(--peso-medio) var(--fs-xs)/1 var(--fonte-corpo);
+}
+#cockpit-tickets-os .ck-os tbody tr[data-relacao="conferida"] td[data-label="Série"]::after { content: "Conferida"; display: flex; background: var(--cor-ok-fundo); color: var(--cor-ok-texto); } /* [TEXTO NOVO]: confirmar com relationLabels */
+#cockpit-tickets-os .ck-os tbody tr[data-relacao="divergente"] td[data-label="Série"]::after { content: "Divergente"; display: flex; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+#cockpit-tickets-os .ck-os tbody tr[data-relacao="somente_simpress"] td[data-label="Série"]::after { content: "Só Simpress"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+#cockpit-tickets-os .ck-os tbody tr[data-relacao="somente_oracle"] td[data-label="Série"]::after { content: "Só Oracle"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+#cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] td[data-label="OS"]::after { content: "3+ dias"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+#cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] td[data-label="OS"]::after { content: "Sem data"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+
+/* ---------- 8. Manual × automático ---------- */
+/* Tudo na tabela vem das importações (Oracle, Simpress, Endpoint). A coluna Chamado é preenchimento manual. */
+#cockpit-tickets-os .ck-os thead th:nth-child(6)::after {
+  content: "Manual"; /* [TEXTO NOVO] */
+  display: inline-flex; align-items: center; height: 16px; margin-left: 6px; padding: 0 5px; vertical-align: 1px;
+  border: 1px solid var(--cor-destaque); border-radius: var(--raio-sm); color: var(--cor-destaque-texto);
+  font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase;
+}
+#cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { background: var(--cor-campo); }
+#cockpit-tickets-os .ck-os .ticket-os-link-controls { flex-wrap: wrap; gap: 6px; }
+/* vazio: campo tracejado, ações escondidas até o foco */
+#cockpit-tickets-os .ck-os .ticket-os-link-input { flex: 0 0 5rem; border-style: dashed; background: var(--cor-superficie); }
+#cockpit-tickets-os .ck-os .ticket-os-link-input:focus { border-style: solid; }
+#cockpit-tickets-os .ck-os .ticket-os-link-save,
+#cockpit-tickets-os .ck-os .ticket-os-link-remove { display: none; }
+#cockpit-tickets-os .ck-os .ticket-os-link-form:focus-within .ticket-os-link-save,
+#cockpit-tickets-os .ck-os .ticket-os-link-form:focus-within .ticket-os-link-remove,
+#cockpit-tickets-os .ck-os tr:hover .ticket-os-link-remove { display: inline-flex; }
+@media (hover: none) {
+  #cockpit-tickets-os .ck-os .ticket-os-link-save,
+  #cockpit-tickets-os .ck-os .ticket-os-link-remove { display: inline-flex; }
+}
+/* salvo (existe "Remover vínculo"): valor travado visualmente em verde */
+#cockpit-tickets-os .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
+  border-style: solid; border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); font-weight: var(--peso-medio);
+}
+#cockpit-tickets-os .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-ok-texto); }
+#cockpit-tickets-os .ck-os .ticket-os-link-remove:hover { color: var(--cor-erro-texto); }
+#cockpit-tickets-os .ck-os .ticket-os-link-input[aria-invalid="true"] { border-style: solid; border-color: var(--cor-erro-texto); background: var(--cor-erro-fundo); }
+#cockpit-tickets-os .ck-os .ticket-os-link-save[aria-busy="true"] { opacity: .6; cursor: progress; }
+/* vindo do Dashboard (precisa de data-origem="dashboard" em .ticket-os-link-editor; o manual vence) */
+#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
+  border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto);
+}
+#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-destaque-texto); }
+#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"]::after {
+  content: "Automático · Dashboard"; /* [TEXTO NOVO] */
+  display: block; margin-top: 4px; font-size: var(--fs-xs); color: var(--cor-destaque-texto);
+}
+
+/* ---------- 9. Andamento: botão com seta e painel em duas colunas ---------- */
+#cockpit-tickets-os .ck-os__andamento-btn { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: var(--fs-xs); }
+#cockpit-tickets-os .ck-os__andamento-btn::before {
+  content: ""; flex: none; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--duracao) var(--curva);
+}
+#cockpit-tickets-os .ck-os__andamento-btn[aria-expanded="true"]::before { transform: rotate(45deg); }
+#cockpit-tickets-os .ck-os tbody tr[data-andamento] > td.ck-td--largo { background: var(--cor-superficie-funda); box-shadow: inset 3px 0 0 var(--cor-destaque); }
+#cockpit-tickets-os .ck-os-andamento { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px 28px; }
+#cockpit-tickets-os .ck-os-andamento > * { min-width: 0; margin-top: 0; }
+#cockpit-tickets-os .ck-os-andamento__dados { display: flex; flex-direction: column; gap: 12px; }
+#cockpit-tickets-os .ck-os-andamento__dados > * { margin-top: 0; }
+@media (min-width: 1200px) {
+  #cockpit-tickets-os .ck-os-andamento__tempo { padding-left: 28px; border-left: 1px solid var(--cor-borda-suave); }
+}
+@media (max-width: 1199.98px) {
+  #cockpit-tickets-os .ck-os-andamento { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- 10. Cartões (<1200px): Série e OS no topo, Fonte em linha ---------- */
+@media (max-width: 1199.98px) {
+  #cockpit-tickets-os .ck-os__corpo { padding: 8px 8px 4px; }
+  #cockpit-tickets-os .ck-os tbody td[data-label] { order: 5; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Série"] { order: 1; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="OS"] { order: 2; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Fonte"] { order: 3; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Fonte"]::before { margin-right: 2px; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { order: 6; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Descrição"] { order: 7; }
+  #cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"],
+  #cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] { box-shadow: inset 3px 0 0 var(--cor-alerta-texto); }
+  #cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] > td:first-child,
+  #cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] > td:first-child { box-shadow: none; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { background: transparent; }
+  #cockpit-tickets-os .ck-os tbody tr[data-andamento] { padding: 0; border: 0; }
+}
+@media (max-width: 767.98px) {
+  #cockpit-tickets-os .ck-os > .ck-cartao__cab { align-items: flex-start; }
+  #cockpit-tickets-os .ck-os .ticket-summary-status { flex: 1 1 100%; margin-left: 0; text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #cockpit-tickets-os .ck-os tbody tr[data-serial],
+  #cockpit-tickets-os .ck-os__andamento-btn::before,
+  #cockpit-tickets-os .ck-os[aria-busy="true"] .ck-os__corpo { transition: none; }
+}

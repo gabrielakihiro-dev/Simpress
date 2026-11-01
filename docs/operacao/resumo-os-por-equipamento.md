@@ -16,6 +16,7 @@ Exibir na aba Resumo os registros da importação atual da aba OS, associados ao
 - Salvar o número associado à chave fonte + série normalizada + número da OS em arquivo local dentro de `data/state`, de forma atômica, sem inserir o dado nas planilhas nem no histórico importado.
 - Carregar ao abrir Resumo e atualizar após nova importação de chamados, alteração do usuário/hostname ou recarga explícita da aba. Não deixar uma resposta antiga substituir dados de atualização mais recente.
 - Diferenciar carregamento, falta de OS, chamado não informado, dados de usuário/hostname ausentes ou ambíguos e falha de consulta.
+- A aba OS (F6) ganhou nova apresentação visual em 01/11/2026 (triagem e relação entre as fontes lado a lado, etiquetas por linha, Andamento em duas colunas); nenhuma regra deste documento muda.
 
 ## Verificação
 

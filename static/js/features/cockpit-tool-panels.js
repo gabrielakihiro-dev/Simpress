@@ -263,7 +263,13 @@
     timeline.append(element("h3", "", "Andamento registrado"));
     const events = element("div", "");
     timeline.append(events);
-    target.replaceChildren(relation, fields, note, timeline);
+    const dados = element("div", "ck-os-andamento__dados");
+    dados.append(relation, fields, note);
+    const tempo = element("div", "ck-os-andamento__tempo");
+    tempo.append(timeline);
+    const painel = element("div", "ck-os-andamento");
+    painel.append(dados, tempo);
+    target.replaceChildren(painel);
     loadTicketTimeline(record, events);
   }
 
