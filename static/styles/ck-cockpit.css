@@ -753,6 +753,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-abertos__sebrae:first-child { border-top: 0; }
 .ck-abertos__rotulo { font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto); }
 .ck-abertos__ver { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--cor-destaque-texto); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-decoration: underline; }
+.ck-aberto__link { padding: 0; border: 0; background: none; color: var(--cor-destaque-texto); text-align: left; cursor: pointer; text-decoration: underline; }
+.ck-aberto__link:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-abertos__ver:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-abertos__vazio { padding: 12px; font-size: var(--fs-md); color: var(--cor-texto-mudo); }
 @media (min-width: 1200px) {

@@ -263,12 +263,29 @@
     const alvo = normalizarFiltroChamados(serial);
     const finalizados = new Set((dados?.importado?.finalizados || []).map(item => item.numero));
     const antigos = (dados?.importado?.abertos || []).map(item => ({
-      numero: item.numero, titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K, chamado: item.chamado,
+      chave: item.numero, numero: item.numero, titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K, chamado: item.chamado,
     }));
-    const novos = (dados?.novos?.formulario || []).map(item => ({ numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }));
+    const novos = (dados?.novos?.formulario || []).map(item => ({ chave: item.numero, numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }));
     return [...antigos, ...novos]
       .filter(item => !finalizados.has(item.numero) && item.serie && normalizarFiltroChamados(item.serie) === alvo)
       .map(item => ({ ...item, numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero }));
+  }
+
+  // Abre a aba Chamados (F5), expande os blocos recolhidos que guardam o chamado e o destaca.
+  async function abrirChamadoSebraeNoF5(chave) {
+    await app.abrirPainelCockpit?.("sebrae-chamados");
+    const alvo = [...document.querySelectorAll('[data-cockpit-tool-panel="sebrae-chamados"] article[data-numero]')]
+      .find(artigo => artigo.dataset.numero === String(chave));
+    for (let pai = alvo?.parentElement?.closest("details"); pai; pai = pai.parentElement?.closest("details")) pai.open = true;
+    app.destacarLinhaCockpit?.(alvo);
+  }
+
+  function botaoLinkHome(classe, texto, rotuloAria, aoClicar) {
+    const botao = createTextElement("button", `${classe} ck-aberto__link`, texto);
+    botao.type = "button";
+    botao.setAttribute("aria-label", rotuloAria);
+    botao.addEventListener("click", aoClicar);
+    return botao;
   }
 
   function renderizarChamadosSebraeHome(chamados) {
@@ -281,13 +298,16 @@
     abrir.addEventListener("click", () => document.getElementById("btn-sebrae-chamados-aba")?.click());
     section.append(
       createTextElement("p", "ck-abertos__rotulo", `${chamados.length} ${chamados.length === 1 ? "chamado" : "chamados"} na aba Chamados (F5)`),
-      ...chamados.map(item => createTextElement("p", "ck-aberto__meta", [item.numero, item.titulo].filter(Boolean).join(" · "))),
+      ...chamados.map(item => {
+        const texto = [item.numero, item.titulo].filter(Boolean).join(" · ");
+        return botaoLinkHome("ck-aberto__meta", texto, `Abrir na aba Chamados (F5): ${texto}`, () => abrirChamadoSebraeNoF5(item.chave));
+      }),
       abrir,
     );
     return section;
   }
 
-  function renderizarChamadosAbertosHome(abertos, sebrae = []) {
+  function renderizarChamadosAbertosHome(abertos, sebrae = [], serie = "") {
     const body = document.getElementById("home-open-tickets-body");
     const count = document.getElementById("home-open-tickets-count");
     const total = abertos.length + sebrae.length;
@@ -303,7 +323,9 @@
       const item = document.createElement("li");
       item.className = "ck-aberto";
       item.append(
-        createTextElement("strong", "ck-aberto__numero", ticket.solicitacao || "Sem solicitação"),
+        ticket.ordem_servico
+          ? botaoLinkHome("ck-aberto__numero", String(ticket.ordem_servico), `Abrir a OS ${ticket.ordem_servico} da série ${serie} em Chamados`, () => app.abrirChamadoDaOs?.([], serie, ticket.ordem_servico))
+          : createTextElement("strong", "ck-aberto__numero", "Sem OS"),
         createTextElement("span", "ck-badge", [ticket.status, ticket.sub_status].filter(Boolean).join(" · ") || "Status não informado"),
         createTextElement("p", "ck-aberto__titulo", ticket.fila || "Fila não informada"),
         createTextElement("p", "ck-aberto__meta", ticket.nome_filial || ticket.cidade || "Unidade não informada"),
@@ -336,7 +358,7 @@
       const record = chamados.find(item => normalizarFiltroChamados(item.serie) === normalizarFiltroChamados(serial));
       const abertos = (record?.oracle || []).filter(ticket => !idadeAtualizacaoChamado(ticket).encerrado)
         .sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
-      renderizarChamadosAbertosHome(abertos, sebrae);
+      renderizarChamadosAbertosHome(abertos, sebrae, record?.serie || serial);
     } catch (error) {
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       body.setAttribute("aria-busy", "false");
