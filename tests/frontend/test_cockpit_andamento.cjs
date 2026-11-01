@@ -132,3 +132,22 @@ test("linha do tempo mostra as mudanças e a anotação de até 2000 caracteres 
     assert.equal(campo.value, "Acompanhar parceiro");
   } finally { restaurar(); }
 });
+
+test("Andamento separa dados e linha do tempo em duas colunas (.ck-os-andamento)", async () => {
+  const { celulas, restaurar } = await abrirAndamento([
+    { serie: "SN-COLUNAS", relacao: "conferida", oracle: [], simpress: { pedidos: ["1"], ordens_servico: ["2"], status: ["Pedido entregue"] } },
+  ]);
+  try {
+    const celula = celulas["SN-COLUNAS"];
+    assert.equal(celula.children.length, 1, "a célula tem um único filho: o wrapper");
+    const painel = celula.children[0];
+    assert.match(painel.className, /\bck-os-andamento\b/);
+    const [dados, tempo] = painel.children;
+    assert.match(dados.className, /\bck-os-andamento__dados\b/);
+    assert.match(tempo.className, /\bck-os-andamento__tempo\b/);
+    assert.match(dados.textContent, /Ordens no Oracle/);
+    assert.equal(dados.querySelectorAll(".ck-det-bloco").length, 0, "a linha do tempo não fica na coluna de dados");
+    assert.equal(tempo.querySelectorAll(".ck-det-bloco").length, 1);
+    assert.match(tempo.textContent, /Andamento registrado/);
+  } finally { restaurar(); }
+});

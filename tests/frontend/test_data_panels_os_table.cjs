@@ -14,6 +14,9 @@ const report = {
 // install() é de módulo único (install.done): uma instalação serve a todos os testes deste arquivo.
 const doc = createFakeDocument();
 const requests = [];
+// Ajustáveis por teste: vínculos devolvidos por /vinculos-os e falha de rede.
+let vinculos = [];
+let falhar = false;
 const win = {
   document: doc,
   MutationObserver: class { observe() {} },
@@ -22,8 +25,9 @@ const win = {
   console: { warn() {} },
   fetch: async (url, options = {}) => {
     requests.push([options.method || "GET", url]);
+    if (falhar) throw new Error("Failed to fetch");
     const json = url === "/api/operacoes/chamados" ? report
-      : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos: [] }
+      : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
       : url === "/api/equipamentos/usuarios-logados" ? { usuarios: {} }
       : null;
     return { ok: json !== null, json: async () => json || {} };
@@ -182,4 +186,43 @@ test("triagem e atenção usam o grupo da série (grupoSerie) e combinam com a r
   assert.deepEqual(visiveis(section), [], "triagem, atenção e relação se combinam");
   panels.filtrarTabelaOs({ triagem: "", atencao: false, relacao: "" });
   assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+});
+
+test("o cartão grava data-estado (carregando, pronto, vazio, erro) para o CSS da aba OS", async () => {
+  const { section } = await montar({ semBusca: true });
+  assert.equal(section.dataset.estado, "pronto");
+  const chamados = report.chamados;
+  try {
+    const recarga = panels.atualizarTabelaOs(true);
+    assert.equal(section.dataset.estado, "carregando");
+    await recarga;
+    await waitFor(() => section.dataset.estado === "pronto");
+    report.chamados = [];
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "vazio");
+    report.chamados = chamados;
+    falhar = true;
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "erro");
+  } finally { report.chamados = chamados; falhar = false; }
+  await panels.atualizarTabelaOs(true);
+  await waitFor(() => section.dataset.estado === "pronto");
+});
+
+test("data-origem marca o vínculo do Dashboard e aria-invalid o número inválido do campo UTIC", async () => {
+  vinculos = [{ fonte: "oracle", serie: "SN-SOR", os: "9002", ano: 2026, numero: "3290", origem: "dashboard" }];
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    const linha = serie => section.querySelector(`tbody tr[data-serial="${serie}"]`);
+    assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-editor").dataset.origem, "dashboard");
+    assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-editor").dataset.origem, undefined, "sem vínculo, sem origem");
+
+    const input = linha("SN-CONF").querySelector(".ticket-os-link-input");
+    input.value = "";
+    linha("SN-CONF").querySelector(".ticket-os-link-form").dispatchEvent({ type: "submit", preventDefault() {} });
+    assert.equal(input.getAttribute("aria-invalid"), "true");
+    assert.equal(status.textContent, "Digite os números depois do prefixo UTIC.", "a mensagem continua no status do cabeçalho");
+    input.dispatchEvent({ type: "input" });
+    assert.equal(input.hasAttribute("aria-invalid"), false, "digitar limpa a marca de erro");
+  } finally { vinculos = []; }
 });

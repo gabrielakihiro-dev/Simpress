@@ -469,6 +469,7 @@
 
     function renderTicketOsLinkEditor(record, saved, canSave, statusMessage) {
       const editor = el("div", "ticket-os-link-editor");
+      if (saved?.origem) editor.dataset.origem = String(saved.origem);
       if (!canSave) {
         editor.append(el("span", "ticket-os-link-value", saved?.chamado || "Não informado"));
         return editor;
@@ -498,11 +499,13 @@
         controls.append(remove);
       }
       form.append(label, controls);
+      input.addEventListener("input", () => input.removeAttribute("aria-invalid"));
       form.addEventListener("submit", event => {
         event.preventDefault();
         const numero = input.value.trim();
         if (!/^\d{1,24}$/.test(numero)) {
           statusMessage.textContent = "Digite os números depois do prefixo UTIC.";
+          input.setAttribute("aria-invalid", "true");
           input.focus();
           return;
         }
@@ -539,6 +542,7 @@
       if (!records.length) {
         status.textContent = "Nenhuma OS vinculada por série na importação atual.";
         section.setAttribute("aria-busy", "false");
+        section.dataset.estado = "vazio";
         section.querySelector(".ticket-summary-content")?.remove();
         section.append(content);
         return;
@@ -616,6 +620,7 @@
       section.querySelector(".ticket-summary-content")?.remove();
       section.append(content);
       section.setAttribute("aria-busy", "false");
+      section.dataset.estado = "pronto";
       idLivre(table, "ck-os-tabela");
       // Salvar um vínculo recria a tabela: reabre as linhas de andamento que estavam abertas.
       externa?.abertas.forEach(serie => {
@@ -671,6 +676,7 @@
       alvos.forEach(section => {
         osSerie.set(section, serial);
         section.setAttribute("aria-busy", "true");
+        section.dataset.estado = "carregando";
         section.querySelector(".ticket-summary-status").textContent = "Carregando OS…";
       });
       try {
@@ -709,6 +715,7 @@
         vivos().forEach(section => {
           section.querySelector(".ticket-summary-content")?.remove();
           section.setAttribute("aria-busy", "false");
+          section.dataset.estado = "erro";
           const st = osExternas.get(section);
           if (st) st.renderizada = false;
           section.querySelector(".ticket-summary-status").textContent = error.message === "Failed to fetch"
