@@ -38,6 +38,14 @@ class ParseCsvTests(unittest.TestCase):
         parsed = entra_users.parse_csv(csv_bytes(line))
         self.assertEqual(parsed["users"], {"jose": "José Ção"})
 
+    def test_export_with_hard_delete_protection_column_is_read(self):
+        header = "id,displayName,userPrincipalName,userType,onPremisesSyncEnabled,identities,companyName,creationType,isHardDeleteProtectionEnabled"
+        line = '1,"Ana Lima",ana.lima@pr.sebrae.com.br,Member,True,"[{""signInType"":""userPrincipalName""}]",Sebrae PR,,'
+        parsed = entra_users.parse_csv(csv_bytes(line, header=header))
+        self.assertEqual(parsed["users"], {"ana.lima": "Ana Lima"})
+        with self.assertRaises(entra_users.EntraImportError):
+            entra_users.parse_csv(csv_bytes(line + ",x", header=header))
+
     def test_malformed_foreign_row_does_not_block_import(self):
         parsed = entra_users.parse_csv(csv_bytes('broken "row,ba.sebrae.com.br', row("Ana", "ana@pr.sebrae.com.br")))
         self.assertEqual(list(parsed["users"]), ["ana"])
