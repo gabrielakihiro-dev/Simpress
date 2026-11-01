@@ -21,23 +21,40 @@ async function abrirPainel(page, request, extra = "", antigos = "") {
   return { cartao, painel };
 }
 
+// Cada antigo é um `details.sebrae-antigo` recolhido (resumo + cartão): abre o do cartão `antigo` se ainda estiver fechado.
+async function abrirItemAntigo(antigo) {
+  const item = antigo.locator("xpath=..");
+  if (!(await item.evaluate(no => no.open))) await item.locator("> summary").click();
+  await expect(antigo).toBeVisible();
+}
+
+// A seção "Chamados antigos em aberto" também fecha a cada recarga da lista: abre só se ainda estiver fechada.
+async function abrirSecaoAntigos(painel) {
+  const secao = painel.locator("#sebrae-antigos");
+  if (!(await secao.evaluate(no => no.open))) await secao.locator("> summary").click();
+  await expect(painel.locator("#sebrae-antigos-lista")).toBeVisible();
+}
+
 test("Chamados novos mostra o Dashboard importado, os formulários e os avisos de pendência e erro", async ({ page, request }) => {
   const cartao = await abrirCartao(page, request);
   await expect(cartao.locator("#sebrae-dashboard-status")).toContainText("331 chamados já lançados");
   await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("2 novo(s), 36 já no Dashboard, 1 pendente(s)");
   await expect(cartao.locator("#sebrae-novos-avisos")).toContainText("UTIC-2026-1387: pendente");
   await expect(cartao.locator("#sebrae-novos-avisos")).toContainText("UTIC-2026-1457: não foi lido");
-  // O cartão não lista mais os chamados: só o botão que abre o painel.
-  await expect(cartao.locator("#sebrae-novos-lista, #btn-sebrae-atualizar")).toHaveCount(0);
+  // O cartão não lista mais os chamados: só o botão que abre o painel. Ler chamados antigos (botão, status e falhas) também mora no painel F5.
+  await expect(cartao.locator("#sebrae-novos-lista, #btn-sebrae-atualizar, #btn-sebrae-ler-antigos, #sebrae-antigos-leitura-status, #sebrae-antigos-leitura-falhas")).toHaveCount(0);
   await expect(cartao.locator("#btn-sebrae-abrir-chamados")).toHaveText("Chamados");
   await cartao.locator("#btn-sebrae-abrir-chamados").click();
   await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados");
   const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
+  for (const id of ["btn-sebrae-ler-antigos", "sebrae-antigos-leitura-status", "sebrae-antigos-leitura-falhas"]) await expect(painel.locator(`#${id}`)).toHaveCount(1);
+  await expect(page.locator("#btn-sebrae-ler-antigos, #sebrae-antigos-leitura-status, #sebrae-antigos-leitura-falhas")).toHaveCount(3); // e em nenhum outro lugar da página
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado")).toHaveCount(2);
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado").first()).toContainText("DEMO0001");
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado").nth(1)).toContainText("mais de um equipamento");
   await expect(painel.locator("#btn-sebrae-exportar")).toHaveCount(0); // Exportar linhas foi removido
   await expect(painel.locator("#sebrae-atualizar-status")).toContainText("Gere o Dashboard atualizado antes de enviar");
+  await expect(painel.locator("#sebrae-atualizar-status")).toHaveAttribute("data-estado", "alerta"); // o CSS pinta o aviso
 });
 
 test("Chamados novos: campos manuais com padrão, sem botão de exportar", async ({ page, request }) => {
@@ -78,6 +95,7 @@ test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos anti
   await cartao.locator("#sebrae-antigos > summary").click();
   const antigo = cartao.locator("#sebrae-antigos-lista .sebrae-chamado");
   await expect(antigo).toHaveCount(1);
+  await abrirItemAntigo(antigo);
   await expect(antigo.locator('[data-sebrae-campo="A"]')).toHaveValue("SIMPRESS");
   // O que o Atualizar Dashboard vai preencher aparece como prévia, sem virar campo editável.
   await expect(antigo.locator(".sebrae-chamado__auto")).toContainText("Camila Vitoria Lopes de Oliveira");
@@ -90,6 +108,7 @@ test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos anti
   const [download] = await Promise.all([page.waitForEvent("download"), atualizar.click()]);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("2 novo(s) e 1 alterado(s)");
+  await expect(cartao.locator("#sebrae-atualizar-status")).toHaveAttribute("data-estado", "ok");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("importe a versão atual antes");
 });
 
@@ -123,6 +142,7 @@ test("Chamados abre pela barra ou pelo menu Ferramentas, sem recarregar a lista,
   // Abrir o painel de novo não pode zerar o que foi preenchido nos chamados antigos.
   await painel.locator("#sebrae-antigos > summary").click();
   const antigo = painel.locator("#sebrae-antigos-lista .sebrae-chamado");
+  await abrirItemAntigo(antigo);
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
   await abrirChamadosPelaNavegacao(page);
   await expect(antigo.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
@@ -160,9 +180,10 @@ const BOTAO_REENVIAR = "Tentar substituir de novo";
 
 async function abrirAntigo(page, request, extra = "") {
   const { painel } = await abrirPainel(page, request, extra);
-  await painel.locator("#sebrae-antigos > summary").click();
+  await abrirSecaoAntigos(painel);
   const antigo = painel.locator("#sebrae-antigos-lista .sebrae-chamado");
   await expect(antigo).toHaveCount(1);
+  await abrirItemAntigo(antigo);
   return { painel, antigo };
 }
 
@@ -311,7 +332,11 @@ test("Cancelar aparece ao lado de Finalizar só enquanto a rotina roda e interro
   await expect(cancelar).toHaveText("Cancelar");
   const posicaoBotao = await botao.boundingBox();
   const posicaoCancelar = await cancelar.boundingBox();
-  expect(posicaoCancelar.x).toBeGreaterThan(posicaoBotao.x); // à direita do Finalizar
+  if (page.viewportSize().width >= 768) expect(posicaoCancelar.x).toBeGreaterThan(posicaoBotao.x); // à direita do Finalizar
+  else { // abaixo de 768px os botões ocupam a largura toda, empilhados com o Finalizar por último (ao alcance do polegar)
+    expect(posicaoCancelar.y).toBeLessThan(posicaoBotao.y);
+    expect(Math.abs(posicaoCancelar.x - posicaoBotao.x)).toBeLessThan(1);
+  }
   await cancelar.click();
   await expect(antigo.locator(".sebrae-chamado__resultado")).toContainText("Finalização cancelada.", { timeout: 10000 });
   await expect(cancelar).toBeHidden();
@@ -462,6 +487,7 @@ test("Rascunho: o que foi selecionado sobrevive a recarregar a página, sem Atua
   await primeiro.locator('[data-sebrae-campo="J"]').selectOption("INCIDENTE");
   await expect(painel.locator("#sebrae-rascunho-status")).toContainText("Rascunho salvo automaticamente neste navegador");
   await painel.locator("#sebrae-antigos > summary").click();
+  await abrirItemAntigo(painel.locator("#sebrae-antigos-lista .sebrae-chamado"));
   await painel.locator("#sebrae-antigos-lista .sebrae-chamado").locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
   const posts = [];
   page.on("request", r => { if (r.method() === "POST") posts.push(r.url()); });
@@ -472,6 +498,7 @@ test("Rascunho: o que foi selecionado sobrevive a recarregar a página, sem Atua
   await expect(novo.locator('[data-sebrae-campo="J"]')).toHaveValue("INCIDENTE");
   await expect(depois.locator("#sebrae-rascunho-status")).toContainText("Rascunho restaurado");
   await depois.locator("#sebrae-antigos > summary").click();
+  await expect(depois.locator("#sebrae-antigos-lista details.sebrae-antigo")).not.toHaveJSProperty("open", true); // restaurar o rascunho não reabre o antigo
   await expect(depois.locator("#sebrae-antigos-lista .sebrae-chamado").locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
   expect(posts.filter(url => url.includes("/api/sebrae/dashboard/atualizar") || url.includes("/finalizar-softexpert"))).toHaveLength(0); // restaurar nunca atualiza nem finaliza sozinho
   await depois.locator("#btn-sebrae-descartar-rascunho").click();
@@ -488,10 +515,9 @@ test("Rascunho: o que foi selecionado sobrevive a recarregar a página, sem Atua
 
 // Ler chamados antigos: botão próprio (rotina `antigos`); a fixture simula POST/GET /api/sebrae/antigos/ler (1.º GET andando, 2.º concluído).
 test("Ler chamados antigos dispara o POST, mostra andamento e resultado e o antigo passa a ter a leitura do SoftExpert", async ({ page, request }) => {
-  const cartao = await abrirCartao(page, request, "", "leitura");
-  await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-  const botao = cartao.locator("#btn-sebrae-ler-antigos");
-  const status = cartao.locator("#sebrae-antigos-leitura-status");
+  const { painel } = await abrirPainel(page, request, "", "leitura"); // o botão mora no topo do painel Chamados (F5), não no cartão da Automação (F4)
+  const botao = painel.locator("#btn-sebrae-ler-antigos");
+  const status = painel.locator("#sebrae-antigos-leitura-status");
   await expect(botao).toHaveText("Ler chamados antigos");
   await expect(botao).toBeEnabled();
   const posts = [];
@@ -502,11 +528,10 @@ test("Ler chamados antigos dispara o POST, mostra andamento e resultado e o anti
   await expect(status).toContainText("1 lido(s), 0 com falha, 1 já lido(s) antes, 1 sem UTIC (não dá para ler).", { timeout: 10000 });
   expect(posts).toHaveLength(1);
   await expect(page.locator(TOAST).filter({ hasText: "Leitura dos antigos: 1 lido(s)" })).toHaveAttribute("data-status", "ok");
-  await cartao.locator("#btn-sebrae-abrir-chamados").click();
-  const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
-  await painel.locator("#sebrae-antigos > summary").click();
+  await abrirSecaoAntigos(painel); // a lista recarregou com a leitura e os antigos voltam recolhidos
   const lido = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1211"]');
   await expect(lido.locator(".sebrae-chamado__assunto")).toHaveText("Notebook não liga");
+  await expect(painel.locator('#sebrae-antigos-lista details.sebrae-antigo:has(.sebrae-chamado[data-numero="UTIC-2026-1211"]) > summary .sebrae-selo:not(.sebrae-selo--auto)')).toHaveText("Lido"); // agora lido: o selo do resumo muda
   await expect(lido.locator("[data-leitura='pendente']")).toHaveCount(0);
   await expect(lido.locator(".sebrae-chamado__auto")).toContainText("Diego Martins Costa");
 });
@@ -516,6 +541,13 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await painel.locator("#sebrae-antigos > summary").click();
   const lista = painel.locator("#sebrae-antigos-lista");
   const lido = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1210"]');
+  const resumoDe = numero => lista.locator(`details.sebrae-antigo:has(.sebrae-chamado[data-numero="${numero}"]) > summary.sebrae-antigo__resumo`);
+  const seloLeitura = numero => resumoDe(numero).locator(".sebrae-selo:not(.sebrae-selo--auto)");
+  await expect(resumoDe("UTIC-2026-1210")).toContainText("UTIC-2026-1210");
+  await expect(resumoDe("UTIC-2026-1210")).toContainText("Monitor sem imagem");
+  await expect(resumoDe("UTIC-2026-1210")).toContainText("Bruna Alves Teixeira");
+  await expect(seloLeitura("UTIC-2026-1210")).toHaveText("Lido");
+  await abrirItemAntigo(lido);
   await expect(lido.locator(".sebrae-chamado__assunto")).toHaveText("Monitor sem imagem"); // o Dashboard não trouxe título
   await expect(lido.locator(".sebrae-chamado__auto")).toContainText("Bruna Alves Teixeira");
   await expect(lido.locator(".sebrae-chamado__auto")).toContainText("20/10/2026 09:15");
@@ -528,19 +560,118 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(atendimento.locator("p")).toHaveText("Cabo HDMI trocado <b>hoje</b>."); // texto escapado, nunca HTML
   await expect(atendimento.locator("b")).toHaveCount(0);
   const naoLido = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1211"]');
+  await expect(seloLeitura("UTIC-2026-1211")).toHaveText("Não lido");
   await expect(naoLido.locator(".sebrae-chamado__assunto")).toHaveText("Sem título");
   await expect(naoLido.locator("[data-leitura='pendente']")).toContainText("Ler chamados antigos");
   await expect(naoLido.locator("details.sebrae-chamado__texto")).toHaveCount(0);
   const semUtic = lista.locator('.sebrae-chamado[data-numero="linha:27"]'); // sem UTIC não há leitura: nada é prometido
+  await expect(seloLeitura("linha:27")).toHaveCount(0);
   await expect(semUtic.locator(".sebrae-chamado__assunto")).toHaveText("Impressora offline");
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
 });
 
 test("Ler chamados antigos com outra rotina em andamento (409) vira aviso e não acompanha nada", async ({ page, request }) => {
-  const cartao = await abrirCartao(page, request, "", "conflito");
-  await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-  await cartao.locator("#btn-sebrae-ler-antigos").click();
+  const { painel } = await abrirPainel(page, request, "", "conflito");
+  await painel.locator("#btn-sebrae-ler-antigos").click();
   await expect(page.locator(TOAST).filter({ hasText: "Já há uma rotina em andamento" })).toHaveAttribute("data-status", "alerta");
-  await expect(cartao.locator("#sebrae-antigos-leitura-status")).toContainText("Já há uma rotina em andamento");
-  await expect(cartao.locator("#btn-sebrae-ler-antigos")).not.toHaveAttribute("aria-busy", "true");
+  await expect(painel.locator("#sebrae-antigos-leitura-status")).toContainText("Já há uma rotina em andamento");
+  await expect(painel.locator("#btn-sebrae-ler-antigos")).not.toHaveAttribute("aria-busy", "true");
+});
+
+// ---- Redesenho visual do painel Chamados (01/11/2026): zonas, pendências, selos e lista vazia; só apresentação ----
+
+test("o cartão tem três zonas e as pendências acendem ao escolher A, D FINALIZADO, J e digitar a descrição", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request);
+  const novo = painel.locator("#sebrae-novos-lista .sebrae-chamado").first();
+  await expect(novo.locator(".sebrae-zona__titulo")).toHaveText(["Solicitação", "Classificação operacional", "Finalização no SoftExpert"]);
+  await expect(novo.locator(".sebrae-zona__selo")).toHaveText(["Somente leitura", "Preenchimento manual", "Irreversível"]);
+  await expect(novo.locator(".sebrae-zona--finalizacao .sebrae-zona__aviso")).toHaveText("Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada.");
+  await expect(novo.locator(".sebrae-pendencias__rotulo")).toHaveText("Para finalizar:");
+  await expect(novo.locator("li.sebrae-pend[data-req]")).toHaveCount(4);
+  await expect(novo.locator(".sebrae-pend--opcional")).toHaveText("Encerramento (R): opcional");
+  // Quem decide pendente/ok é o CSS (:has nos campos); o ícone visível de cada requisito troca de "falta" para "ok".
+  const ok = req => novo.locator(`li.sebrae-pend[data-req="${req}"] svg.sebrae-pend__ok`);
+  const falta = req => novo.locator(`li.sebrae-pend[data-req="${req}"] svg.sebrae-pend__falta`);
+  const situacao = async (req, cumprido) => {
+    await (cumprido ? expect(ok(req)).toBeVisible() : expect(ok(req)).toBeHidden());
+    await (cumprido ? expect(falta(req)).toBeHidden() : expect(falta(req)).toBeVisible());
+  };
+  await situacao("A", false); await situacao("D", false); await situacao("J", false); await situacao("DESC", false); // D vem EM ABERTO nos novos
+  await novo.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE");
+  await situacao("A", true); await situacao("D", false); await situacao("J", false); await situacao("DESC", false);
+  await novo.locator('[data-sebrae-campo="J"]').selectOption("INCIDENTE");
+  await situacao("J", true); await situacao("D", false); await situacao("DESC", false);
+  await novo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
+  await situacao("D", true); await situacao("DESC", false);
+  const descricao = novo.getByLabel(ROTULO_DESCRICAO);
+  const feedback = novo.locator(".sebrae-chamado__feedback").first();
+  await descricao.fill("Troquei o teclado.");
+  await situacao("DESC", true);
+  await expect(feedback).toHaveText("Alteração ainda não salva…");
+  await expect(feedback).toHaveAttribute("data-estado", "pendente");
+  // (a fixture só grava a descrição dos antigos; o "ok" do feedback é conferido nos testes dos antigos.)
+  // Desfazer volta a pendência (nenhum estado fica guardado no JS).
+  await novo.locator('[data-sebrae-campo="D"]').selectOption("EM ABERTO");
+  await situacao("D", false);
+  await descricao.fill("");
+  await situacao("DESC", false);
+  await novo.locator('[data-sebrae-campo="A"]').selectOption("");
+  await situacao("A", false);
+  await situacao("J", true); // J continua escolhido
+});
+
+test("o antigo nasce recolhido e o resumo acende D: FINALIZADO e Pronto para finalizar sozinho", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request);
+  await painel.locator("#sebrae-antigos > summary").click();
+  const item = painel.locator("#sebrae-antigos-lista details.sebrae-antigo");
+  await expect(item).toHaveCount(1);
+  await expect(item).not.toHaveJSProperty("open", true);
+  const resumo = item.locator("> summary.sebrae-antigo__resumo");
+  await expect(resumo).toContainText("UTIC-2026-1200");
+  const selo = sufixo => resumo.locator(`.sebrae-selo--${sufixo}`);
+  for (const sufixo of ["d", "pronto", "andamento", "atencao", "erro"]) await expect(selo(sufixo)).toBeHidden(); // escondidos por padrão
+  const antigo = item.locator(".sebrae-chamado");
+  await expect(antigo).toBeHidden(); // recolhido: o cartão não aparece
+  await resumo.click();
+  await expect(antigo).toBeVisible();
+  await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
+  await expect(selo("d")).toBeVisible();
+  await expect(selo("d")).toHaveText("D: FINALIZADO");
+  await expect(selo("pronto")).toBeHidden(); // falta a descrição (A e J já vêm preenchidos)
+  await antigo.getByLabel(ROTULO_DESCRICAO).fill("Troquei o teclado.");
+  await expect(selo("pronto")).toBeVisible();
+  await expect(selo("pronto")).toHaveText("Pronto para finalizar");
+  await expect(selo("d")).toBeHidden(); // as quatro condições valem: o selo "pronto" ocupa o lugar
+  await resumo.click(); // recolhido, o selo continua no resumo
+  await expect(antigo).toBeHidden();
+  await expect(selo("pronto")).toBeVisible();
+  await resumo.click();
+  await antigo.locator('[data-sebrae-campo="D"]').selectOption("EM ABERTO");
+  await expect(selo("pronto")).toBeHidden();
+  await expect(selo("d")).toBeHidden();
+});
+
+test("Chamados novos mostra o carregamento (aria-busy) e, vazio, o texto gerado por CSS", async ({ page, request }) => {
+  await request.get("/__fixture_automacao?quantidade=0&sebrae=padrao&run=&antigos=");
+  let liberar;
+  const portao = new Promise(resolver => { liberar = resolver; });
+  await page.route("**/api/sebrae/novos", async rota => {
+    const resposta = await rota.fetch();
+    const corpo = await resposta.json();
+    await portao;
+    await rota.fulfill({ response: resposta, json: { ...corpo, novos: { ...corpo.novos, formulario: [] } } });
+  });
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await abrirChamadosPelaNavegacao(page);
+  const lista = page.locator('[data-cockpit-tool-panel="sebrae-chamados"] #sebrae-novos-lista');
+  await expect(lista).toBeVisible();
+  await expect(lista).toHaveAttribute("aria-busy", "true");
+  const pseudo = (nome) => lista.evaluate((no, alvo) => getComputedStyle(no, alvo).content, nome);
+  expect(await pseudo("::before")).not.toContain("Nenhum chamado novo"); // ocupado: esqueleto, sem o texto de vazio
+  liberar();
+  await expect(lista).not.toHaveAttribute("aria-busy", /.*/);
+  await expect(lista).toBeEmpty();
+  expect(await pseudo("::before")).toBe('"Nenhum chamado novo na lista."');
+  expect(await pseudo("::after")).toBe('"A importação do Dashboard e a busca ficam na aba Automação (F4)."');
 });
