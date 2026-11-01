@@ -1005,45 +1005,280 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 
 /* ---------- Automação: chamados novos do SoftExpert ---------- */
 #sebrae-novos-painel .sebrae-importar { display: flex; flex-direction: column; gap: 8px; }
-.sebrae-chamado { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
-.sebrae-chamado__titulo { font-size: var(--fs-md); font-weight: var(--peso-medio); overflow-wrap: anywhere; }
-.sebrae-chamado__assunto { font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
-.sebrae-chamado__auto dd { overflow-wrap: anywhere; }
-.sebrae-chamado__texto summary { cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
-.sebrae-chamado__texto p { margin: 4px 0 0; max-height: 9em; overflow: auto; font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
-.sebrae-chamado__manuais { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-.sebrae-avisos { margin: 4px 0 0; padding-left: 18px; }
-.sebrae-chamado__finalizar { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cor-borda-suave); }
-.sebrae-chamado__finalizar .ck-campo, .sebrae-chamado__finalizar textarea { width: 100%; }
-.sebrae-chamado__finalizar p { margin: 0; overflow-wrap: anywhere; }
-.sebrae-chamado__pdf-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.sebrae-chamado__pdf-linha .ck-btn[hidden] { display: none; }
-.sebrae-chamado__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.sebrae-chamado__acoes .ck-btn[hidden] { display: none; }
-.ck-entrada.sebrae-status--finalizado { border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); font-weight: 600; }
-@media (prefers-reduced-motion: no-preference) { .sebrae-chamado__manuais .ck-entrada { transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease; } }
-.sebrae-chamado__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
-.sebrae-chamado__feedback[data-estado="erro"], .sebrae-chamado__resultado[data-estado="erro"] { color: var(--cor-erro-texto); }
-.sebrae-chamado__resultado[data-estado="ok"], .sebrae-chamado__resultado[data-estado="ja_finalizado"] { color: var(--cor-ok-texto); }
-.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"] { color: var(--cor-alerta-texto); }
-.sebrae-fechar { margin-top: 8px; }
-.sebrae-fechar[hidden], .sebrae-sharepoint[hidden], .sebrae-rascunho[hidden] { display: none; }
-.sebrae-rascunho { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.sebrae-rascunho > p { margin: 0; overflow-wrap: anywhere; }
+/* =====================================================================
+   CHAMADOS (F5) · REDESENHO VISUAL · 01/11/2026
+   Arquivo: static/styles/ck-cockpit.css
+   Substitui as linhas 1008–1046: de `.sebrae-chamado { display: flex; …` até
+   `.sebrae-finalizado[open] > summary { margin-bottom: 8px; }`.
+   Mantém como estão: a linha 1007 (`#sebrae-novos-painel .sebrae-importar`, F4),
+   o bloco "histórico do Dashboard Sebrae" (1048+) e `@keyframes sebrae-historico-entrada`.
+   ck-pendencias.css: sem mudanças (não há regra .sebrae-* nele).
+   Só tokens existentes de ck-tokens.css. Nenhum hex, fonte ou ícone novo.
+   Breakpoints do projeto: compacto ≤767.98px · médio 768–1199.98px · amplo ≥1200px.
+   ===================================================================== */
+
+/* ---------- 1. Topo de ações (sticky) ---------- */
+/* Só a barra de botões fica fixa; status, rotina e alerta rolam logo abaixo dela (display: contents os põe no fluxo de .ck-det__corpo). */
+.sebrae-topo { display: contents; }
+.sebrae-topo__acoes { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: -14px -16px 0; padding: 10px 16px; background: var(--cor-fundo); border-bottom: 1px solid var(--cor-borda-suave); }
+.sebrae-topo > :not(.sebrae-topo__acoes) { margin-top: -8px; }
+.sebrae-topo__passos { align-items: center; gap: 6px; }
+.sebrae-topo__seta { color: var(--cor-texto-apagado); }
+.sebrae-topo > .ck-cartao__meta { overflow-wrap: anywhere; }
+.sebrae-topo > .ck-cartao__meta:empty { display: none; }
+.sebrae-topo > ul.ck-cartao__meta { padding-left: 18px; }
+.sebrae-topo > [data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-topo > [data-estado="alerta"] { color: var(--cor-alerta-texto); }
+.sebrae-topo > [data-estado="erro"] { color: var(--cor-erro-texto); }
+/* Botão ocupado: o JS já marca aria-busy em Atualizar Dashboard e Ler chamados antigos. */
+.sebrae-topo .ck-btn[aria-busy="true"] { cursor: progress; }
+.sebrae-topo .ck-btn[aria-busy="true"] > .ck-ico { display: none; }
+.sebrae-topo .ck-btn[aria-busy="true"]::before { content: ""; flex: none; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ck-girar .8s linear infinite; }
+/* Rotina de finalização rodando: filete de progresso na borda do topo. */
+.sebrae-topo:has(#sebrae-fechar[aria-busy="true"]) > .sebrae-topo__acoes { border-bottom-color: transparent; }
+.sebrae-topo:has(#sebrae-fechar[aria-busy="true"]) > .sebrae-topo__acoes::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; background: linear-gradient(90deg, transparent, var(--cor-destaque), transparent) no-repeat; background-size: 40% 100%; animation: sebrae-varredura 1.2s var(--curva) infinite; }
+/* Falha no SharePoint: o botão Enviar avisa mesmo com o topo rolado. */
+.sebrae-topo:has(#sebrae-sharepoint-aviso:not([hidden])) #btn-sebrae-enviar { border-color: var(--cor-erro-texto); color: var(--cor-erro-texto); }
+
+.sebrae-rascunho { display: flex; flex: 0 1 auto; align-items: center; gap: 4px 8px; min-height: var(--altura-controle-sm); margin: 0 0 0 auto; padding: 0 3px 0 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); }
+.sebrae-rascunho[hidden] { display: none; }
+.sebrae-rascunho > p { display: flex; align-items: center; gap: 7px; margin: 0; padding: 3px 0; font-size: var(--fs-sm); color: var(--cor-texto-suave); overflow-wrap: anywhere; }
+.sebrae-rascunho > p::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cor-destaque); }
+.sebrae-rascunho[data-estado="ok"] > p::before { background: var(--cor-ok-texto); }
+
+.sebrae-fechar { position: relative; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); overflow: hidden; }
+.sebrae-fechar[hidden], .sebrae-sharepoint[hidden] { display: none; }
+.sebrae-fechar > p { margin: 0; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+.sebrae-fechar[aria-busy="true"]::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--cor-destaque), transparent) no-repeat; background-size: 40% 100%; animation: sebrae-varredura 1.2s var(--curva) infinite; }
+.sebrae-fechar .sebrae-avisos { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.sebrae-fechar__item { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-sm); color: var(--cor-texto-suave); overflow-wrap: anywhere; }
+.sebrae-fechar__item::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--cor-texto-apagado); transform: translateY(-1px); }
 .sebrae-fechar__item[data-status="erro"] { color: var(--cor-erro-texto); }
+.sebrae-fechar__item[data-status="erro"]::before { background: var(--cor-erro-texto); }
 .sebrae-fechar__item[data-status="nao_encontrado"] { color: var(--cor-alerta-texto); }
-.sebrae-fechar__item { overflow-wrap: anywhere; }
-.sebrae-sharepoint { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid var(--cor-erro-texto); border-radius: var(--raio-md); background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sebrae-fechar__item[data-status="nao_encontrado"]::before { background: var(--cor-alerta-texto); }
+
+.sebrae-sharepoint { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--cor-erro-texto); border-radius: var(--raio-md); background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sebrae-sharepoint > strong { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); font-weight: var(--peso-marca); }
+.sebrae-sharepoint > strong::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--cor-erro-texto); color: var(--cor-erro-fundo); font-size: var(--fs-2xs); line-height: 1; }
 .sebrae-sharepoint p, .sebrae-sharepoint ol { margin: 0; }
 .sebrae-sharepoint ol { padding-left: 20px; }
+.sebrae-sharepoint code { padding: 1px 5px; border: 1px solid currentColor; border-radius: var(--raio-sm); font-family: var(--fonte-mono); font-size: var(--fs-xs); }
+.sebrae-sharepoint .ck-campo__ajuda { color: inherit; }
+
+/* ---------- 2. Seções e listas ---------- */
+.sebrae-secao { display: flex; flex-direction: column; gap: 10px; }
+.sebrae-secao__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto-suave); }
+#sebrae-novos-lista, #sebrae-antigos-lista { display: flex; flex-direction: column; gap: 12px; }
+#sebrae-novos-lista:empty:not([aria-busy="true"]) { padding: 22px 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); text-align: center; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+#sebrae-novos-lista:empty:not([aria-busy="true"])::before { content: "Nenhum chamado novo na lista."; display: block; font-weight: var(--peso-medio); color: var(--cor-texto); }
+#sebrae-novos-lista:empty:not([aria-busy="true"])::after { content: "A importação do Dashboard e a busca ficam na aba Automação (F4)."; display: block; margin-top: 2px; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+#sebrae-novos-lista:empty[aria-busy="true"] { min-height: 132px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: linear-gradient(90deg, var(--cor-superficie) 0%, var(--cor-superficie-funda) 50%, var(--cor-superficie) 100%) 0 0 / 200% 100%; animation: sebrae-brilho 1.4s linear infinite; }
+
+.sebrae-antigos { margin: 0; }
+.sebrae-antigos > summary { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); cursor: pointer; list-style: none; font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto); transition: background-color var(--duracao) var(--curva); }
+.sebrae-antigos > summary:hover { background: var(--cor-superficie-funda); }
+.sebrae-antigos[open] > summary { margin-bottom: 10px; }
+.sebrae-antigos > p { margin: 0 0 10px; }
+#sebrae-finalizados-lista { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+/* Chevron comum a todos os recolhíveis (sem ícone novo). */
+:is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) > summary { list-style: none; }
+:is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) > summary::-webkit-details-marker { display: none; }
+:is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) > summary::before { content: ""; flex: none; width: 6px; height: 6px; margin: 0 4px 2px 2px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform var(--duracao) var(--curva), margin var(--duracao) var(--curva); }
+:is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto)[open] > summary::before { margin-bottom: 4px; transform: rotate(45deg); }
+
+/* ---------- 3. Cartão minimizado (antigos e finalizados) ---------- */
+.sebrae-antigo, .sebrae-finalizado { min-width: 0; margin: 0; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); overflow: hidden; }
+.sebrae-antigo > summary, .sebrae-finalizado > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; min-height: 40px; margin: 0; padding: 6px 12px; cursor: pointer; font-size: var(--fs-md); line-height: 1.35; color: var(--cor-texto); overflow-wrap: anywhere; transition: background-color var(--duracao) var(--curva); }
+.sebrae-antigo > summary:hover, .sebrae-finalizado > summary:hover, .sebrae-antigo[open] > summary, .sebrae-finalizado[open] > summary { background: var(--cor-superficie-funda); }
+.sebrae-antigo[open] > summary, .sebrae-finalizado[open] > summary { margin: 0; border-bottom: 1px solid var(--cor-borda-suave); }
+.sebrae-antigo__texto { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 10px; min-width: 0; }
+.sebrae-antigo__num { font-family: var(--fonte-mono); font-weight: var(--peso-medio); white-space: nowrap; }
+.sebrae-antigo__quem { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.sebrae-antigo__selos { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.sebrae-selo--auto { display: none; }
+.sebrae-finalizado > summary::after { content: "Finalizado"; display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--raio-sm); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); font-size: var(--fs-xs); font-weight: var(--peso-medio); white-space: nowrap; }
+:is(.sebrae-antigo, .sebrae-finalizado) .sebrae-chamado { border: 0; border-radius: 0; box-shadow: none; }
+:is(.sebrae-antigo, .sebrae-finalizado) .sebrae-chamado__cab { display: none; }
+/* Selos que se acendem sozinhos conforme o que a pessoa preenche ou o resultado da rotina (sem JS). */
+.sebrae-antigo:has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked) .sebrae-selo--d { display: inline-flex; }
+.sebrae-antigo:has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-selo--pronto { display: inline-flex; }
+.sebrae-antigo:has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-selo--d { display: none; }
+.sebrae-antigo:has(.sebrae-chamado__resultado[data-estado="andamento"]) .sebrae-selo--andamento { display: inline-flex; }
+.sebrae-antigo:has(.sebrae-chamado__resultado:is([data-estado="nao_encontrado"], [data-estado="sem_descricao"], [data-estado="cancelado"])) .sebrae-selo--atencao { display: inline-flex; }
+.sebrae-antigo:has(.sebrae-chamado__resultado[data-estado="erro"]) .sebrae-selo--erro { display: inline-flex; }
+
+/* ---------- 4. Cartão do chamado em três zonas ---------- */
+.sebrae-chamado { counter-reset: zona; display: flex; flex-direction: column; gap: 0; min-width: 0; margin: 0; padding: 0; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); overflow: hidden; }
+.sebrae-chamado__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 14px; }
+.sebrae-chamado__titulo { flex: 1 1 260px; min-width: 0; margin: 0; font-family: var(--fonte-mono); font-size: var(--fs-base); font-weight: var(--peso-medio); overflow-wrap: anywhere; }
+.sebrae-chamado__assunto { font-family: var(--fonte-corpo); font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
+
+.sebrae-zona { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px 14px; border-top: 1px solid var(--cor-borda-suave); }
+.sebrae-zona--solicitacao { background: var(--cor-superficie-funda); }
+.sebrae-zona__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.sebrae-zona__titulo { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto); }
+.sebrae-zona__titulo::before { counter-increment: zona; content: counter(zona); display: grid; place-items: center; flex: none; width: 18px; height: 18px; border: 1px solid var(--cor-borda); border-radius: 50%; font-size: var(--fs-xs); font-weight: var(--peso-medio); line-height: 1; color: var(--cor-texto-suave); }
+.sebrae-zona__selo { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); font-size: var(--fs-xs); color: var(--cor-texto-suave); white-space: nowrap; }
+
+/* Zona 1 · Solicitação (somente leitura) */
+.sebrae-chamado__auto { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 16px; }
+.sebrae-chamado__auto > div { min-width: 0; }
+.sebrae-chamado__auto dd { overflow-wrap: anywhere; }
+.sebrae-chamado__aviso { align-items: flex-start; gap: 8px; margin: 0; padding: 7px 10px; border-radius: var(--raio-sm); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.sebrae-chamado__aviso::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: var(--fs-2xs); font-weight: var(--peso-marca); line-height: 1; }
+.sebrae-chamado__dica { margin: 0; color: var(--cor-texto-mudo); font-size: var(--fs-sm); }
+.sebrae-chamado__detalhes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; gap: 8px; }
+.sebrae-chamado__texto { min-width: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); }
+.sebrae-chamado__texto > summary { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: var(--raio-sm); cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-suave); transition: background-color var(--duracao) var(--curva); }
+.sebrae-chamado__texto > summary:hover { background: var(--cor-neutro-fundo); }
+.sebrae-chamado__texto p { max-height: 9em; margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--cor-borda-suave); overflow: auto; font-size: var(--fs-sm); line-height: 1.5; color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Zona 2 · Classificação operacional */
+.sebrae-chamado__manuais { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; }
+.sebrae-chamado__manuais .ck-campo__rotulo { position: relative; color: var(--cor-texto-suave); }
+.sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="B"], [data-sebrae-campo="R"], [data-sebrae-campo="S"])) .ck-campo__rotulo { color: var(--cor-texto-mudo); }
+.sebrae-chamado__manuais .ck-entrada { height: var(--altura-controle); }
+/* Obrigatório vazio (A e J): contorno âmbar. D só é cobrado na zona 3, pois EM ABERTO é um valor válido. */
+.sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-entrada { border-color: var(--cor-alerta-texto); }
+.sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-campo__rotulo { color: var(--cor-alerta-texto); }
+/* Célula travada (antigo já preenchido, finalizado): tracejada, chata e com cadeado desenhado em CSS. */
+.sebrae-chamado :is(input, select, textarea):is(:disabled, [readonly]) { border-style: dashed; border-color: var(--cor-borda); background: var(--cor-superficie-funda); color: var(--cor-texto-suave); -webkit-text-fill-color: var(--cor-texto-suave); opacity: 1; cursor: not-allowed; }
+.sebrae-chamado .ck-campo:has(> :is(input, select, textarea):is(:disabled, [readonly])) > .ck-campo__rotulo { padding-left: 14px; }
+.sebrae-chamado .ck-campo:has(> :is(input, select, textarea):is(:disabled, [readonly])) > .ck-campo__rotulo::before { content: ""; position: absolute; left: 1px; top: 5px; width: 8px; height: 6px; border-radius: 1.5px; background: currentColor; }
+.sebrae-chamado .ck-campo:has(> :is(input, select, textarea):is(:disabled, [readonly])) > .ck-campo__rotulo::after { content: ""; position: absolute; left: 2.5px; top: 1px; width: 5px; height: 5px; border: 1.5px solid currentColor; border-bottom: 0; border-radius: 3px 3px 0 0; }
+/* D FINALIZADO verde (vence a regra de travada). */
+.ck-entrada.sebrae-status--finalizado, .sebrae-chamado .ck-entrada.sebrae-status--finalizado:is(:disabled, [readonly]) { border-style: solid; border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); -webkit-text-fill-color: var(--cor-ok-texto); font-weight: var(--peso-marca); }
+.sebrae-chamado__manuais .ck-entrada { transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+
+/* Zona 3 · Finalização no SoftExpert (irreversível) */
+.sebrae-zona--finalizacao { gap: 0; padding: 0; }
+.sebrae-zona__cab--aviso { gap: 4px 10px; padding: 8px 14px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+.sebrae-zona__cab--aviso .sebrae-zona__titulo { color: inherit; }
+.sebrae-zona__cab--aviso .sebrae-zona__titulo::before { border-color: currentColor; color: inherit; }
+.sebrae-zona__cab--aviso .sebrae-zona__selo { border-color: currentColor; color: inherit; font-weight: var(--peso-medio); }
+.sebrae-zona__aviso { flex: 1 1 280px; margin: 0; font-size: var(--fs-sm); line-height: 1.4; }
+.sebrae-final__corpo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-areas: "pend pend" "texto anexo" "rodape rodape"; gap: 12px 16px; padding: 12px 14px 14px; }
+.sebrae-pendencias { grid-area: pend; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sebrae-pendencias__rotulo { margin-right: 2px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+.sebrae-pend { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 0 8px 0 6px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-xs); font-weight: var(--peso-medio); transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.sebrae-pend--opcional { border-style: dashed; font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
+.sebrae-pend .sebrae-pend__ok { display: none; }
+/* Pendente (valor ausente, detectado pelo próprio controle) */
+.sebrae-chamado:has([data-sebrae-campo="A"] > option[value=""]:checked) .sebrae-pend[data-req="A"],
+.sebrae-chamado:has([data-sebrae-campo="J"] > option[value=""]:checked) .sebrae-pend[data-req="J"],
+.sebrae-chamado:has([data-sebrae-campo="D"] > option:not([value="FINALIZADO"]):checked) .sebrae-pend[data-req="D"],
+.sebrae-chamado:has(textarea[data-sebrae-descricao]:placeholder-shown) .sebrae-pend[data-req="DESC"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+/* Cumprido */
+.sebrae-chamado:has([data-sebrae-campo="A"] > option:not([value=""]):checked) .sebrae-pend[data-req="A"],
+.sebrae-chamado:has([data-sebrae-campo="J"] > option:not([value=""]):checked) .sebrae-pend[data-req="J"],
+.sebrae-chamado:has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked) .sebrae-pend[data-req="D"],
+.sebrae-chamado:has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-pend[data-req="DESC"] { border-color: transparent; background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
+.sebrae-chamado:has([data-sebrae-campo="A"] > option:not([value=""]):checked) .sebrae-pend[data-req="A"] .sebrae-pend__ok,
+.sebrae-chamado:has([data-sebrae-campo="J"] > option:not([value=""]):checked) .sebrae-pend[data-req="J"] .sebrae-pend__ok,
+.sebrae-chamado:has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked) .sebrae-pend[data-req="D"] .sebrae-pend__ok,
+.sebrae-chamado:has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-pend[data-req="DESC"] .sebrae-pend__ok { display: block; }
+.sebrae-chamado:has([data-sebrae-campo="A"] > option:not([value=""]):checked) .sebrae-pend[data-req="A"] .sebrae-pend__falta,
+.sebrae-chamado:has([data-sebrae-campo="J"] > option:not([value=""]):checked) .sebrae-pend[data-req="J"] .sebrae-pend__falta,
+.sebrae-chamado:has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked) .sebrae-pend[data-req="D"] .sebrae-pend__falta,
+.sebrae-chamado:has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-pend[data-req="DESC"] .sebrae-pend__falta { display: none; }
+
+.sebrae-final__texto { grid-area: texto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sebrae-final__anexo { grid-area: anexo; display: flex; flex-direction: column; align-content: start; gap: 6px; min-width: 0; }
+.sebrae-final__rodape { grid-area: rodape; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sebrae-chamado__finalizar .ck-campo, .sebrae-chamado__finalizar textarea { width: 100%; }
+.sebrae-chamado__finalizar p { margin: 0; overflow-wrap: anywhere; }
+.sebrae-chamado__finalizar input[type="file"] { width: 100%; min-height: var(--altura-controle); padding: 3px 6px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-suave); font-size: var(--fs-ui); cursor: pointer; transition: border-color var(--duracao) var(--curva); }
+.sebrae-chamado__finalizar input[type="file"]:hover { border-color: var(--cor-destaque); }
+.sebrae-chamado__finalizar input[type="file"]::file-selector-button { height: var(--altura-controle-sm); margin-right: 8px; padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-superficie-elevada); color: var(--cor-texto-forte); font: var(--peso-medio) var(--fs-ui)/1 var(--fonte-corpo); cursor: pointer; }
+.sebrae-chamado__pdf-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: var(--altura-controle-sm); }
+.sebrae-chamado__pdf-linha:has(.ck-btn:not([hidden])) { justify-content: space-between; padding: 0 3px 0 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie-funda); }
+.sebrae-chamado__pdf-linha .ck-btn[hidden] { display: none; }
+[data-sebrae-pdf-remover]:hover { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+/* Ajudas e feedback: neutros por padrão (antes herdavam o âmbar de .ck-campo__ajuda). */
+.sebrae-chamado__feedback, .sebrae-chamado__pdf { min-height: 16px; color: var(--cor-texto-mudo); }
+.sebrae-chamado__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-chamado__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-chamado__feedback[data-estado="pendente"] { color: var(--cor-alerta-texto); }
+.sebrae-chamado__feedback[data-estado="salvando"]::before { content: ""; width: 9px; height: 9px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ck-girar .8s linear infinite; }
+.sebrae-chamado__feedback[data-estado="ok"]::before { content: "✓"; }
+.sebrae-chamado__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
+
+/* Ações: Finalizar não é botão de sucesso (nem verde, nem o violeta primário) */
+.sebrae-chamado__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sebrae-chamado__acoes .ck-btn[hidden] { display: none; }
+[data-sebrae-finalizar] { height: var(--altura-controle); border-color: var(--cor-alerta-texto); background: var(--cor-superficie-elevada); color: var(--cor-alerta-texto); }
+[data-sebrae-finalizar]:hover { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+[data-sebrae-finalizar]:active { background: var(--cor-alerta-fundo); border-color: var(--cor-alerta-texto); }
+.sebrae-chamado:has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) [data-sebrae-finalizar]:not(:disabled) { background: var(--cor-alerta-fundo); font-weight: var(--peso-marca); box-shadow: inset 0 0 0 1px var(--cor-alerta-texto); }
+[data-sebrae-cancelar-finalizar] { height: var(--altura-controle); }
+
+/* Resultado da finalização: a faixa muda de tom; o texto vem do JS e não ganha filhos. */
+.sebrae-chamado__resultado { --tom: var(--cor-neutro-texto); --fundo: var(--cor-neutro-fundo); display: flex; flex: 1 1 260px; align-items: flex-start; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: var(--raio-sm); background: var(--fundo); color: var(--tom); font-size: var(--fs-md); line-height: 1.4; }
+.sebrae-chamado__resultado:empty { display: none; }
+.sebrae-chamado__resultado::before { content: "–"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: var(--tom); color: var(--fundo); font-size: var(--fs-xs); font-weight: var(--peso-marca); line-height: 1; }
+.sebrae-chamado__resultado[data-estado="ok"], .sebrae-chamado__resultado[data-estado="ja_finalizado"] { --tom: var(--cor-ok-texto); --fundo: var(--cor-ok-fundo); }
+.sebrae-chamado__resultado[data-estado="ok"]::before, .sebrae-chamado__resultado[data-estado="ja_finalizado"]::before { content: "✓"; }
+.sebrae-chamado__resultado[data-estado="erro"] { --tom: var(--cor-erro-texto); --fundo: var(--cor-erro-fundo); }
+.sebrae-chamado__resultado[data-estado="erro"]::before { content: "×"; font-size: var(--fs-base); }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"] { --tom: var(--cor-alerta-texto); --fundo: var(--cor-alerta-fundo); }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"]::before, .sebrae-chamado__resultado[data-estado="sem_descricao"]::before { content: "!"; }
+.sebrae-chamado__resultado[data-estado="pronto"], .sebrae-chamado__resultado[data-estado="andamento"] { --tom: var(--cor-destaque-texto); --fundo: var(--cor-destaque-fundo); }
+.sebrae-chamado__resultado[data-estado="pronto"]::before { content: "i"; }
+.sebrae-chamado__resultado[data-estado="andamento"]::before { content: ""; width: 14px; height: 14px; margin-top: 2px; border: 2px solid var(--tom); border-right-color: transparent; background: transparent; animation: ck-girar .8s linear infinite; }
+
+/* Finalizado: mesma zona 3, em tom concluído e só leitura. */
+.sebrae-chamado--finalizado .sebrae-zona__cab--aviso { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
+.sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto anexo" "rodape rodape"; }
+
+/* ---------- 5. Animações ---------- */
 @media (prefers-reduced-motion: no-preference) {
   .sebrae-chamado__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+  @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
+    :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) { interpolate-size: allow-keywords; }
+    :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto)::details-content { height: 0; overflow: clip; transition: height var(--duracao-lenta) var(--curva), content-visibility var(--duracao-lenta) allow-discrete; }
+    :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto)[open]::details-content { height: auto; }
+  }
 }
-.sebrae-antigos { margin-top: 10px; }
-.sebrae-antigos > summary { cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
-.sebrae-finalizado { margin: 6px 0; }
-.sebrae-finalizado > summary { cursor: pointer; overflow-wrap: anywhere; }
-.sebrae-finalizado[open] > summary { margin-bottom: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .sebrae-topo:has(#sebrae-fechar[aria-busy="true"]) > .sebrae-topo__acoes::after, .sebrae-fechar[aria-busy="true"]::before { background: var(--cor-destaque); background-size: 100% 100%; opacity: .5; animation: none; }
+  #sebrae-novos-lista:empty[aria-busy="true"] { animation: none; background: var(--cor-superficie-funda); }
+}
+@keyframes sebrae-varredura { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@keyframes sebrae-brilho { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---------- 6. Disposição por faixa (só layout) ---------- */
+@media (max-width: 767.98px) {
+  .sebrae-topo__acoes { position: static; margin: 0; padding: 0; border: 0; }
+  .sebrae-topo__passos { flex: 1 1 100%; flex-direction: column; align-items: stretch; }
+  .sebrae-topo__seta { display: none; }
+  .sebrae-topo__acoes > .ck-grupo-botoes:not(.sebrae-topo__passos) { flex: 1 1 100%; }
+  .sebrae-topo__acoes > .ck-grupo-botoes:not(.sebrae-topo__passos) .ck-btn { flex: 1 1 100%; }
+  .sebrae-rascunho { flex: 1 1 100%; margin-left: 0; }
+  .sebrae-chamado__cab, .sebrae-zona { padding-left: 12px; padding-right: 12px; }
+  .sebrae-zona--finalizacao { padding: 0; }
+  .sebrae-zona__cab--aviso { padding: 8px 12px; }
+  .sebrae-chamado__manuais { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]) { grid-column: 1 / -1; }
+  .sebrae-final__corpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pend" "texto" "anexo" "rodape"; padding: 12px; }
+  .sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto" "anexo" "rodape"; }
+  .sebrae-final__rodape { flex-direction: column; align-items: stretch; }
+  .sebrae-chamado__acoes { flex-direction: column-reverse; align-items: stretch; }
+  .sebrae-chamado__acoes .ck-btn { width: 100%; }
+  .sebrae-antigo > summary, .sebrae-finalizado > summary { grid-template-columns: auto minmax(0, 1fr); }
+  .sebrae-antigo__selos, .sebrae-finalizado > summary::after { grid-column: 2; justify-content: flex-start; justify-self: start; }
+}
+@media (max-width: 479.98px) {
+  .sebrae-chamado__auto { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sebrae-chamado__detalhes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse) {
+  .sebrae-topo .ck-btn, .sebrae-chamado .ck-btn, .sebrae-rascunho .ck-btn { min-height: 44px; }
+  .sebrae-chamado .ck-entrada, .sebrae-chamado__finalizar input[type="file"] { min-height: 44px; }
+  .sebrae-chamado__finalizar input[type="file"]::file-selector-button { height: 34px; }
+  .sebrae-antigos > summary, .sebrae-antigo > summary, .sebrae-finalizado > summary, .sebrae-chamado__texto > summary { min-height: 44px; }
+}
 
 /* ---------- Automação: histórico do Dashboard Sebrae ---------- */
 .sebrae-historico-resumo { margin-top: 4px; }

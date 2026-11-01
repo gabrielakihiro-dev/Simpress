@@ -218,13 +218,22 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.match(botao, /<span>Chamados<\/span>/);
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="sebrae-chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
   const cartao = html.match(/<section[^>]*id="sebrae-novos-painel"[\s\S]*?\n      <\/section>/)?.[0] || "";
-  for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-finalizados", "sebrae-finalizados-lista", "sebrae-finalizados-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-atualizar", "sebrae-atualizar-status"]) {
+  for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-finalizados", "sebrae-finalizados-lista", "sebrae-finalizados-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-atualizar", "sebrae-atualizar-status", "btn-sebrae-ler-antigos", "sebrae-antigos-leitura-status", "sebrae-antigos-leitura-falhas"]) {
     assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
     assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
   }
   for (const id of ["sebrae-dashboard-file", "btn-sebrae-importar", "btn-sebrae-buscar", "sebrae-dashboard-status", "sebrae-novos-resumo", "sebrae-novos-avisos", "sebrae-historico-resumo"]) {
     assert.match(cartao, new RegExp(`id="${id}"`), `${id} no cartão`);
   }
+  // Redesenho de 01/11/2026: o topo do painel (ações, status) vem antes das listas, Atualizar Dashboard antes de Enviar ao SharePoint e a seção de novos antes dos antigos.
+  const ordem = ['class="sebrae-topo"', 'id="btn-sebrae-atualizar"', 'id="btn-sebrae-enviar"', 'id="btn-sebrae-ler-antigos"', 'id="sebrae-atualizar-status"', 'id="sebrae-antigos-leitura-status"',
+    'id="sebrae-sharepoint-aviso"', 'id="sebrae-novos-secao"', 'id="sebrae-novos-lista"', 'id="sebrae-antigos"', 'id="sebrae-finalizados"'].map(marca => painel.indexOf(marca));
+  assert.ok(ordem.every(posicao => posicao >= 0), `marcas do painel presentes: ${ordem}`);
+  assert.deepEqual([...ordem].sort((a, b) => a - b), ordem, "topo, ações, status, lista de novos, antigos e finalizados nesta ordem");
+  assert.match(painel, /<button[^>]*class="ck-btn ck-btn--primario[^"]*"[^>]*id="btn-sebrae-atualizar"/, "Atualizar Dashboard é o botão primário");
+  assert.doesNotMatch(painel, /<details id="sebrae-(antigos|finalizados)"[^>]*\bopen\b/, "antigos e finalizados nascem recolhidos");
+  assert.match(css, /#sebrae-novos-lista:empty:not\(\[aria-busy="true"\]\)::before \{ content: "Nenhum chamado novo na lista\."/);
+  assert.match(css, /#sebrae-novos-lista:empty:not\(\[aria-busy="true"\]\)::after \{ content: "A importação do Dashboard e a busca ficam na aba Automação \(F4\)\."/);
   assert.doesNotMatch(html, /btn-sebrae-historico|data-cockpit-tool-panel="sebrae-historico"|sebrae-historico-(kpis|lista|detalhe|filtro|status)/);
   assert.match(html, /\.sebrae-chamado\b/.source ? /id="sebrae-novos-lista"/ : /x/);
   assert.match(css, /^\.sebrae-chamado \{/m);
