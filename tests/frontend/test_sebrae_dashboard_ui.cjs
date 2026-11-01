@@ -217,3 +217,114 @@ test("aplicar o rascunho mantém só chamados que ainda existem e campos de anti
   assert.equal(aplicado.restaurado, true);
   assert.equal(aplicarRascunho({ valores: {}, edicoes: {}, salvoEm: "" }, [], abertos).restaurado, false);
 });
+
+// ---- Estrutura do cartão pelo DOM falso (redesenho de 01/11/2026): zonas, pendências, selos e ordem dos feedbacks ----
+
+const { createFakeDocument } = require("./support/fake-dom.cjs");
+
+const CARGA_CARTOES = {
+  importado: {
+    arquivo: "Dashboard.xlsx", importado_em: "2026-10-28T10:00:00-03:00", total: 3, atualizavel: true, saida_pronta: false,
+    listas: { A: ["CLIENTE", "SIMPRESS"], B: ["REDE"] },
+    abertos: [
+      { numero: "UTIC-2026-1200", titulo: "Teclado sem resposta", chamado: "UTIC-2026-1200", usuario: "Camila", automaticos: {}, automaticos_sugeridos: {},
+        valores: { A: "SIMPRESS", B: "", D: "EM ABERTO", J: "INCIDENTE", R: "", S: "" }, leitura_softexpert: null, softexpert: { descricao_finalizacao: "", pdf: null, finalizacao: null } },
+      { numero: "linha:27", titulo: "Impressora offline", chamado: "Sem UTIC", usuario: "Paulo", automaticos: {}, automaticos_sugeridos: {},
+        valores: { A: "", B: "", D: "EM ABERTO", J: "", R: "", S: "" }, leitura_softexpert: null },
+    ],
+    finalizados: [{ numero: "UTIC-2026-1100", encerrado_em: "27/10/2026 14:05", em: "2026-10-27T14:06:00-03:00", descricao: "Teclado trocado.", pdf: null, ficha: { titulo: "Teclado", solicitante: "Ana", fatos: [["Solicitante", "Ana"]], detalhes: [], manuais: { A: "CLIENTE" } } }],
+  },
+  novos: {
+    lidos_em: "2026-10-28T10:05:00-03:00", ignorados: 1, pendentes: [], erros: {},
+    formulario: [{ numero: "UTIC-2026-1378", cruzamento: { status: "unico", candidatos: 1 }, linha: { C: "UTIC-2026-1378", G: "Computador travando", H: "Travando.", I: "Camila", F: "", K: "", L: "", N: "" } }],
+  },
+};
+
+async function renderizarCartoes(carga = CARGA_CARTOES) {
+  const doc = createFakeDocument();
+  // O DOM falso não tem classList; só o `toggle` é usado (cor verde do Status FINALIZADO).
+  const criar = doc.createElement;
+  doc.createElement = tag => {
+    const no = criar(tag);
+    no.classList = { toggle(nome, forcar) { const outras = no.className.split(/\s+/).filter(c => c && c !== nome); no.className = (forcar ? [...outras, nome] : outras).join(" "); } };
+    return no;
+  };
+  global.document = doc;
+  global.window = { setTimeout: () => 0, clearTimeout() {}, localStorage: null };
+  const ids = [["sebrae-novos-lista", "div"], ["sebrae-antigos-lista", "div"], ["sebrae-antigos", "details"], ["sebrae-finalizados-lista", "ul"], ["sebrae-finalizados", "details"],
+    ["sebrae-atualizar-status", "p"], ["sebrae-novos-resumo", "p"], ["sebrae-dashboard-status", "p"], ["btn-sebrae-atualizar", "button"]];
+  const el = {};
+  for (const [id, tag] of ids) { el[id] = doc.createElement(tag); el[id].setAttribute("id", id); doc.body.append(el[id]); }
+  el["sebrae-novos-lista"].setAttribute("aria-busy", "true");
+  const app = { apiFetch: async () => carga, showToast() {}, confirmarAcao: async () => true };
+  const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
+  await createSebraeDashboard({ app, dom }).carregarNovosSebrae();
+  return { doc, el };
+}
+
+test("o cartão novo tem as três zonas na ordem, as quatro pendências e o R opcional", async () => {
+  const { el } = await renderizarCartoes();
+  const cartao = el["sebrae-novos-lista"].querySelector("article.sebrae-chamado--novo");
+  assert.ok(cartao, "cartão novo renderizado");
+  assert.equal(cartao.querySelector(".sebrae-chamado__selo").textContent, "Novo");
+  assert.deepEqual(cartao.querySelectorAll(".sebrae-zona__titulo").map(no => no.textContent), ["Solicitação", "Classificação operacional", "Finalização no SoftExpert"]);
+  assert.deepEqual(cartao.querySelectorAll(".sebrae-zona__selo").map(no => no.textContent), ["Somente leitura", "Preenchimento manual", "Irreversível"]);
+  assert.match(cartao.querySelector(".sebrae-zona__aviso").textContent, /^Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada\.$/);
+  assert.deepEqual(cartao.querySelectorAll("li.sebrae-pend[data-req]").map(no => no.dataset.req), ["A", "D", "J", "DESC"]);
+  assert.equal(cartao.querySelector("li.sebrae-pendencias__rotulo").textContent, "Para finalizar:");
+  assert.equal(cartao.querySelector("li.sebrae-pend--opcional").textContent, "Encerramento (R): opcional");
+  // Cada requisito traz os dois ícones (o CSS mostra um) e o texto para leitor de tela.
+  const itemA = cartao.querySelector('li.sebrae-pend[data-req="A"]');
+  const icones = itemA.children.filter(no => no.tagName === "SVG").map(no => no.getAttribute("class"));
+  assert.equal(icones.filter(classe => /\bsebrae-pend__falta\b/.test(classe)).length, 1);
+  assert.equal(icones.filter(classe => /\bsebrae-pend__ok\b/.test(classe)).length, 1);
+  assert.deepEqual(itemA.querySelectorAll("span.sebrae-pend__falta, span.sebrae-pend__ok").map(no => no.textContent), [": pendente", ": ok"]);
+});
+
+test("a descrição nasce com placeholder vazio, e os dois feedbacks mantêm a ordem descrição, PDF", async () => {
+  const { el } = await renderizarCartoes();
+  const cartao = el["sebrae-novos-lista"].querySelector("article.sebrae-chamado--novo");
+  const descricao = cartao.querySelector("textarea[data-sebrae-descricao]");
+  assert.equal(descricao.placeholder, " ", "o CSS usa :placeholder-shown para saber se a descrição está vazia");
+  assert.equal(cartao.querySelectorAll(".sebrae-chamado__feedback").length, 2);
+  const [primeiro, segundo] = cartao.querySelectorAll(".sebrae-chamado__feedback");
+  assert.ok(primeiro.parentNode.querySelector("textarea[data-sebrae-descricao]"), "o primeiro feedback é o da descrição");
+  assert.ok(segundo.parentNode.querySelector("[data-sebrae-pdf]"), "o segundo feedback é o do PDF");
+});
+
+test("a lista carregada solta o aria-busy e o antigo vira details recolhido com os selos automáticos escondidos pelo CSS", async () => {
+  const { el } = await renderizarCartoes();
+  assert.equal(el["sebrae-novos-lista"].hasAttribute("aria-busy"), false);
+  const itens = el["sebrae-antigos-lista"].querySelectorAll("details.sebrae-antigo");
+  assert.equal(itens.length, 2);
+  for (const item of itens) {
+    assert.equal(item.hasAttribute("open"), false, "nasce recolhido");
+    assert.equal(item.children[0].tagName, "SUMMARY");
+    assert.equal(item.children[0].className, "sebrae-antigo__resumo");
+    assert.equal(item.children[1].tagName, "ARTICLE");
+    assert.deepEqual(item.querySelectorAll(".sebrae-selo--auto").map(no => no.textContent), ["D: FINALIZADO", "Pronto para finalizar", "Finalizando…", "Ver resultado", "Falhou"]);
+  }
+  const [comUtic, semUtic] = itens;
+  const seloLeitura = item => item.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo").filter(no => !no.className.includes("sebrae-selo--auto"));
+  assert.deepEqual(seloLeitura(comUtic).map(no => no.textContent), ["Não lido"]);
+  assert.deepEqual(seloLeitura(semUtic), [], "sem UTIC nada é prometido");
+  assert.equal(semUtic.querySelectorAll("li.sebrae-pend[data-req]").length, 0, "sem UTIC não há seção de finalizar");
+  assert.equal(comUtic.querySelector(".sebrae-chamado__selo").textContent, "Em aberto");
+});
+
+test("o finalizado é só leitura, com a zona Concluída e sem pendências", async () => {
+  const { el } = await renderizarCartoes();
+  const cartao = el["sebrae-finalizados-lista"].querySelector("article.sebrae-chamado--finalizado");
+  assert.ok(cartao);
+  assert.equal(cartao.querySelector(".sebrae-chamado__selo").textContent, "Finalizado");
+  assert.equal(cartao.querySelector(".sebrae-zona--finalizacao .sebrae-zona__selo").textContent, "Concluída");
+  assert.equal(cartao.querySelectorAll("li.sebrae-pend").length, 0);
+  assert.equal(cartao.querySelector("textarea").readOnly, true);
+  assert.equal(cartao.querySelector("textarea").placeholder, " ");
+});
+
+test("a falta de saída pronta avisa em Atualizar Dashboard com data-estado alerta", async () => {
+  const { el } = await renderizarCartoes();
+  assert.equal(el["sebrae-atualizar-status"].textContent, "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
+  assert.equal(el["sebrae-atualizar-status"].dataset.estado, "alerta");
+});
