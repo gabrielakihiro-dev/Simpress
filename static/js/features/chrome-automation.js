@@ -12,6 +12,7 @@
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
     sebrae: "Chamados novos Sebrae",
+    antigos: "Chamados antigos Sebrae",
     dashboard: "Dashboard + chamados novos Sebrae",
     enviar: "Enviar Dashboard atualizado ao SharePoint",
   });

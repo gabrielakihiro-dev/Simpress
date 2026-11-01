@@ -214,7 +214,9 @@ li[role=option]{padding:6px;cursor:pointer;border:1px solid #ccc;width:288px}
 <div><label>Selecione a Solução</label><div id="d-solucao" class="select2-container" role="combobox" tabindex="0">Selecione</div>
 <ul id="o-solucao" role="listbox" class="oculto"></ul></div>
 <div><label>Detalhes do Atendimento Realizado</label><textarea id="f_detalhes"></textarea></div>
-<div><input type="checkbox" id="f_email"><label for="f_email">Enviar Detalhes por e-mail ao solicitante</label></div>
+<div style="display:inline-flex"><div style="position:relative;display:inline-flex"><input type="checkbox" id="f_email" value="false" style="position:absolute;opacity:0;width:18px;height:18px;left:0;top:0">
+<span id="f_email_sinal" class="newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y" style="display:inline-block;position:relative;width:18px;height:18px;border:1px solid #888"></span></div><span>Enviar Detalhes por e-mail ao solicitante</span></div>
+<div style="display:inline-flex"><div style="position:relative;display:inline-flex"><input type="checkbox" id="f_gmud" value="false" style="position:absolute;opacity:0;width:18px;height:18px;left:0;top:0"><span class="newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y" style="display:inline-block;position:relative;width:18px;height:18px;border:1px solid #888"></span></div><span>Realizar mudança (GMUD)</span></div>
 <div class="espaco"></div>
 <h3>Alterar Equipe de Atendimento</h3>
 <div><label for="f_equipe">Selecione a Equipe</label><select id="f_equipe">
@@ -273,11 +275,17 @@ $('enviar-anexo').addEventListener('click', async () => {
 document.querySelectorAll('.proibido').forEach((el) => el.addEventListener('click', () => {
   fetch('/api/proibido?acao=' + encodeURIComponent(el.textContent), {method: 'POST'});
 }));
+// Como no SoftExpert real: o <input> nunca recebe .checked; o estado fica no atributo value e na classe do <span>, e só o clique no <span> alterna.
+const defineEmail = (v) => {
+  $('f_email').setAttribute('value', String(v));
+  $('f_email_sinal').className = 'newCheckboxStyle_checkboxSign_x ' + (v ? 'newCheckboxStyle_checked_y' : 'newCheckboxStyle_unchecked_y');
+};
+$('f_email_sinal').addEventListener('click', () => defineEmail($('f_email').getAttribute('value') !== 'true'));
 const concluir = async () => {
   await fetch('/api/finalizar?numero=' + D.numero, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({categoria: estado.categoria, solucao: estado.solucao, detalhes: $('f_detalhes').value,
-      email: $('f_email').checked, equipe: $('f_equipe').value}),
+      email: $('f_email').getAttribute('value') === 'true', equipe: $('f_equipe').value}),
   });
   if (D.finalizar_falha) return;
   if (D.abertura === 'popup') window.close(); else location.href = '/softexpert/workspace';
@@ -296,7 +304,7 @@ const mostrar = () => {
   $('f_numero').value = D.numero_form; $('f_titulo').value = D.titulo_form;
   $('f_solicitante').value = D.solicitante; $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
   $('f_descricao').value = D.descricao;
-  $('f_email').checked = D.email_marcado_inicial;
+  defineEmail(D.email_marcado_inicial);
 };
 $('sim').addEventListener('click', async () => { await associar(); $('dlg').classList.add('oculto'); mostrar(); });
 setTimeout(() => { $('car').classList.add('oculto'); $('dlg').classList.remove('oculto'); }, 400);
@@ -761,6 +769,59 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertTrue(caixa.is_checked())
         se._marcar_caixa(caixa, False)
         self.assertFalse(caixa.is_checked())
+
+    def test_marcar_caixa_do_softexpert_so_o_span_alterna_e_o_estado_vem_da_classe(self):
+        page = self.context.new_page()
+        page.set_content(
+            "<div style='position:relative;display:inline-flex'>"
+            "<input type='checkbox' id='c' value='false' style='position:absolute;opacity:0;width:18px;height:18px;left:0;top:0'>"
+            "<span id='s' class='newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y' style='display:inline-block;position:relative;width:18px;height:18px'></span></div>"
+            "<script>const c=document.getElementById('c'),s=document.getElementById('s');window.cliques=0;"
+            "s.addEventListener('click',()=>{window.cliques++;const v=c.getAttribute('value')!=='true';c.setAttribute('value',String(v));"
+            "s.className='newCheckboxStyle_checkboxSign_x '+(v?'newCheckboxStyle_checked_y':'newCheckboxStyle_unchecked_y');});</script>"
+        )
+        caixa = page.locator("#c")
+        self.assertFalse(se._ler_caixa(caixa))
+        se._marcar_caixa(caixa, True)
+        self.assertTrue(se._ler_caixa(caixa))
+        se._marcar_caixa(caixa, True)  # já marcada: não clica de novo
+        self.assertEqual(page.evaluate("window.cliques"), 1)
+        se._marcar_caixa(caixa, False)
+        self.assertFalse(se._ler_caixa(caixa))
+        self.assertEqual(page.evaluate("window.cliques"), 2)
+
+    def test_achar_controle_da_caixa_com_rotulo_depois_nao_pega_a_caixa_seguinte(self):
+        page = self.context.new_page()
+        caixa = lambda i, t: (
+            f"<div style='display:inline-flex'><div style='position:relative;display:inline-flex'><input type='checkbox' id='{i}' value='false'>"
+            f"<span class='newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y'>&nbsp;</span></div><span>{t}</span></div>"
+        )
+        page.set_content(caixa("a", "Enviar Detalhes por e-mail ao solicitante") + caixa("b", "Realizar mudança (GMUD)"))
+        _frame, controle, tipo = se._achar_controle(page, se.ROTULO_EMAIL, "alvo_teste", "checkbox")
+        self.assertEqual(tipo, "checkbox")
+        self.assertEqual(controle.get_attribute("id"), "a")
+
+    def test_achar_controle_da_caixa_ignora_a_caixa_desabilitada_do_atendimento_anterior(self):
+        page = self.context.new_page()
+        caixa = lambda i, t, extra="": (
+            f"<div style='display:inline-flex'><div style='position:relative;display:inline-flex'><input type='checkbox' id='{i}' value='false' {extra}>"
+            f"<span class='newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y'>&nbsp;</span></div><span>{t}</span></div>"
+        )
+        rotulo = "Enviar Detalhes por e-mail ao solicitante"
+        page.set_content(caixa("velha", rotulo, "disabled checked") + caixa("nova", rotulo))
+        _frame, controle, _tipo = se._achar_controle(page, se.ROTULO_EMAIL, "alvo_teste", "checkbox")
+        self.assertEqual(controle.get_attribute("id"), "nova")
+
+    def test_marcar_caixa_que_o_app_nao_altera_levanta_erro_sem_clicar_de_novo(self):
+        page = self.context.new_page()
+        page.set_content(
+            "<input type='checkbox' id='c' value='false' style='position:absolute;opacity:0;width:18px;height:18px'>"
+            "<span id='s' class='newCheckboxStyle_checkboxSign_x newCheckboxStyle_unchecked_y' style='display:inline-block;position:relative;width:18px;height:18px'></span>"
+            "<script>window.cliques=0;document.getElementById('s').addEventListener('click',()=>window.cliques++);</script>"
+        )
+        with self.assertRaises(se.SoftExpertErro):
+            se._marcar_caixa(page.locator("#c"), True)
+        self.assertEqual(page.evaluate("window.cliques"), 1)
 
     # ------------------------------------------------------------------ lista
 

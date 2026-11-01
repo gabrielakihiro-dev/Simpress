@@ -200,6 +200,105 @@ class LeituraTest(unittest.TestCase):
         with self.assertRaisesRegex(Rotinas.RotinaErro, "Login não concluído"):
             sebrae_leitura.executar(None, self.rotinas, state_dir=self.dir, modulo=mod)
 
+    def preparar_antigos(self, *numeros):
+        sebrae_novos.salvar_existentes(
+            self.caminhos.existentes, [], "d.xlsx", abertos=[{"numero": n, "titulo": ""} for n in numeros],
+        )
+
+    def rodar_antigos(self, leituras):
+        mod = modulo([], leituras, self.aba)
+        codigo = sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod)
+        return codigo, mod
+
+    def antigos(self):
+        return sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(self.caminhos))
+
+    def test_novos_nao_leem_antigos(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        codigo, mod = self.rodar([], {})
+        self.assertEqual((codigo, mod.chamadas), (0, []))
+        self.assertEqual(self.antigos(), {})
+
+    def test_antigos_le_so_utic_sem_cache_e_pula_linha_e_legado(self):
+        self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011", "linha:4", "21697")
+        sebrae_novos.salvar_antigo(
+            sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert("UTIC-2026-0011", titulo="Já lido"), "ontem",
+        )
+        leituras = {"UTIC-2026-0010": ChamadoSoftExpert(
+            "UTIC-2026-0010", titulo="Mouse", descricao="d", solicitante="Ana", habilitada_em="26/10/2026",
+            detalhes_atendimento_realizado="feito")}
+        codigo, mod = self.rodar_antigos(leituras)
+        self.assertEqual((codigo, mod.chamadas), (0, ["UTIC-2026-0010"]))
+        antigos = self.antigos()
+        self.assertEqual(set(antigos), {"UTIC-2026-0010", "UTIC-2026-0011"})
+        self.assertEqual(antigos["UTIC-2026-0011"]["titulo"], "Já lido")  # not read again
+        self.assertEqual(
+            {k: v for k, v in antigos["UTIC-2026-0010"].items() if k != "lido_em"},
+            {"titulo": "Mouse", "descricao": "d", "solicitante": "Ana", "habilitada_em": "26/10/2026", "atendimento": "feito"},
+        )
+        self.assertEqual(antigos["UTIC-2026-0010"]["lido_em"], "agora")
+        resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
+        self.assertEqual(
+            {k: resultado[k] for k in ("concluido", "lidos", "falhas", "sem_utic", "ja_lidos")},
+            {"concluido": True, "lidos": ["UTIC-2026-0010"], "falhas": {}, "sem_utic": 2, "ja_lidos": 1},
+        )
+        self.assertTrue(self.aba.fechada)
+
+    def test_antigos_segunda_execucao_nao_abre_o_softexpert_nem_rele(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        self.rodar_antigos({"UTIC-2026-0010": ChamadoSoftExpert("UTIC-2026-0010")})
+        codigo, mod = self.rodar_antigos({})
+        self.assertEqual((codigo, mod.chamadas), (0, []))
+
+    def test_falha_de_um_antigo_nao_derruba_os_outros_e_fica_sem_cache(self):
+        self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011", "UTIC-2026-0012")
+        leituras = {
+            "UTIC-2026-0010": ChamadoNaoEncontrado("não achei"),
+            "UTIC-2026-0011": RuntimeError("inesperado"),
+            "UTIC-2026-0012": ChamadoSoftExpert("UTIC-2026-0012", titulo="Ok"),
+        }
+        codigo, _ = self.rodar_antigos(leituras)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(set(self.antigos()), {"UTIC-2026-0012"})
+        resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
+        self.assertEqual(resultado["falhas"], {"UTIC-2026-0010": "não achei", "UTIC-2026-0011": "RuntimeError"})
+
+    def test_antigos_cancelamento_mantem_o_que_ja_foi_lido(self):
+        self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011")
+        self.rotinas.cancelar_em = "UTIC-2026-0011"
+        leituras = {n: ChamadoSoftExpert(n) for n in ("UTIC-2026-0010", "UTIC-2026-0011")}
+        with self.assertRaises(KeyboardInterrupt):
+            self.rodar_antigos(leituras)
+        self.assertEqual(set(self.antigos()), {"UTIC-2026-0010"})
+        self.assertFalse(sebrae_novos.ler_resultado_antigos(self.caminhos)["concluido"])
+        self.assertTrue(self.aba.fechada)
+
+    def test_antigos_mascara_cpf_e_senha_no_arquivo(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        leitura = ChamadoSoftExpert(
+            "UTIC-2026-0010", titulo="CPF 123.456.789-09", descricao="CPF 123.456.789-09 senha: Segredo123",
+            detalhes_atendimento_realizado="CPF 987.654.321-00")
+        self.rodar_antigos({"UTIC-2026-0010": leitura})
+        texto = sebrae_novos.caminho_antigos(self.caminhos).read_text(encoding="utf-8")
+        for sensivel in ("123.456.789-09", "987.654.321-00", "Segredo123"):
+            self.assertNotIn(sensivel, texto)
+        self.assertIn("***.***.***-**", texto)
+
+    def test_antigos_sem_dashboard_importado_recusa(self):
+        with self.assertRaisesRegex(Rotinas.RotinaErro, "Importe o Dashboard"):
+            self.rodar_antigos({})
+
+    def test_antigos_login_nao_concluido_pede_login(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        mod = modulo([], {}, self.aba)
+
+        def cai(contexto):
+            raise SessaoExpirada("login")
+
+        mod.abrir_softexpert = cai
+        with self.assertRaisesRegex(Rotinas.RotinaErro, "Login não concluído"):
+            sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod)
+
 
 if __name__ == "__main__":
     unittest.main()

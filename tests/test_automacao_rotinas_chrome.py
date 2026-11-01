@@ -993,6 +993,27 @@ class EnviarDashboardTests(unittest.TestCase):
                 sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(mudado).hexdigest())
                 automacao.conferir_dashboard_do_sharepoint(baixado)
 
+    def test_precheck_accepts_the_sharepoint_resave_of_the_last_upload(self):
+        from domains import sebrae_finalizacao
+
+        enviado = self._dashboard([("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>")])
+        resalvo = self._dashboard([("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>")], regravado=True)
+        self.assertNotEqual(enviado, resalvo)  # o SharePoint reserializa: hash novo, valores iguais ao que subiu
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(resalvo)
+            self._estado(Path(pasta), self._dashboard())  # importado: antes do envio, valores diferentes
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+                sebrae_finalizacao.gravar_enviado(Path(pasta), "0" * 64, enviado)  # hash e cópia não batem: cópia ignorada
+                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+                import hashlib
+
+                sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(enviado).hexdigest(), enviado)
+                automacao.conferir_dashboard_do_sharepoint(baixado)
+
     def _rodar_enviar(self, pasta: str, falha_no_envio: bool):
         arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
         arquivo.write_bytes(b"conteudo novo")

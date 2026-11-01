@@ -213,6 +213,7 @@ SEBRAE_NOVOS_FIXTURE = {
         "atualizavel": True, "listas": {"A": ["CLIENTE", "SIMPRESS"], "B": ["LENTIDÃO", "REDE"]},
         "abertos": [{"numero": "UTIC-2026-1200", "titulo": "Teclado sem resposta", "chamado": "UTIC-2026-1200", "usuario": "Camila Vitoria Lopes de Oliveira", "automaticos": {"E": ""}, "automaticos_sugeridos": {"K": "DEMO0001", "L": "Dell Latitude", "N": "Curitiba", "E": "7303022"}, "valores": {
             "A": "SIMPRESS", "B": "", "D": "EM ABERTO", "J": "INCIDENTE", "R": "", "S": "DISPONIBILIDADE"}}],
+        "finalizados": [{"numero": "UTIC-2026-1100", "encerrado_em": "27/10/2026 14:05", "em": "2026-10-27T14:06:00-03:00", "descricao": "Teclado trocado."}],
     },
     "novos": {
         "lidos_em": "2026-10-28T10:05:00-03:00", "ignorados": 36,
@@ -247,17 +248,75 @@ finalizar_state = {}
 def reset_finalizar(sharepoint_falha=False):
     finalizar_state.clear()
     finalizar_state.update(descricao="", pdf=None, finalizacao=None, polls=0, rodando=False, acao="finalizar",
-                           numeros=[], resultado=None, sharepoint=None, sharepoint_falha=sharepoint_falha)
+                           numeros=[], resultado=None, sharepoint=None, sharepoint_falha=sharepoint_falha,
+                           ficha=None, manuais=None)
 
 
 reset_finalizar()
 
 
+# Ler chamados antigos (rotina `antigos`): fictional; the scenarios come from /__fixture_automacao?antigos=...
+# "leitura" adds old tickets (one already read, one unread, one without UTIC); "conflito" makes the POST answer 409.
+ANTIGOS_CENARIOS = ("", "leitura", "conflito")
+ANTIGOS_VALORES = {"A": "", "B": "", "D": "EM ABERTO", "J": "", "R": "", "S": ""}
+ANTIGOS_LEITURA_1210 = {
+    "titulo": "Monitor sem imagem", "descricao": "O monitor da sala 3 ficou sem imagem.", "solicitante": "Bruna Alves Teixeira",
+    "habilitada_em": "20/10/2026 09:15", "atendimento": "Cabo HDMI trocado <b>hoje</b>.", "lido_em": "2026-10-28T10:30:00-03:00",
+}
+ANTIGOS_LEITURA_1211 = {
+    "titulo": "Notebook não liga", "descricao": "O notebook não liga mesmo na tomada.", "solicitante": "Diego Martins Costa",
+    "habilitada_em": "21/10/2026 14:02", "atendimento": "Aguardando retirada do equipamento.", "lido_em": "2026-10-28T10:40:00-03:00",
+}
+ANTIGOS_EXTRAS = [
+    {"numero": "UTIC-2026-1210", "titulo": "", "chamado": "UTIC-2026-1210", "usuario": "", "automaticos": {}, "automaticos_sugeridos": {"N": "Londrina"},
+     "valores": dict(ANTIGOS_VALORES), "leitura_softexpert": ANTIGOS_LEITURA_1210},
+    {"numero": "UTIC-2026-1211", "titulo": "", "chamado": "UTIC-2026-1211", "usuario": "", "automaticos": {}, "automaticos_sugeridos": {},
+     "valores": dict(ANTIGOS_VALORES), "leitura_softexpert": None},
+    {"numero": "linha:27", "titulo": "Impressora offline", "chamado": "Chamado antigo sem UTIC", "usuario": "Paulo Ribeiro", "automaticos": {},
+     "automaticos_sugeridos": {}, "valores": dict(ANTIGOS_VALORES), "leitura_softexpert": None},
+]
+antigos_state = {}
+
+
+def reset_antigos(cenario=""):
+    antigos_state.clear()
+    antigos_state.update(cenario=cenario if cenario in ANTIGOS_CENARIOS else "", rodando=False, polls=0, resultado=None, lido=False)
+
+
+reset_antigos()
+
+
+def antigos_resultado(concluido, lidos):
+    return {"em": "2026-10-28T10:40:00-03:00", "concluido": concluido, "total": 1, "lidos": lidos, "falhas": {}, "sem_utic": 1, "ja_lidos": 1}
+
+
+def antigos_consulta():
+    """First poll: still running; second poll: finished (UTIC-2026-1211 read) and the runner is free again."""
+    st = antigos_state
+    if st["rodando"]:
+        st["polls"] += 1
+        if st["polls"] < 2:
+            return {"em_andamento": True, "resultado": antigos_resultado(False, [])}
+        st.update(rodando=False, lido=True, resultado=antigos_resultado(True, ["UTIC-2026-1211"]))
+        globals()["automation_run"] = None
+    return {"em_andamento": st["rodando"], "resultado": st["resultado"]}
+
+
 def sebrae_novos_payload():
     dados = json.loads(json.dumps(SEBRAE_NOVOS_FIXTURE))
+    if antigos_state["cenario"] == "leitura":
+        dados["importado"]["abertos"] += json.loads(json.dumps(ANTIGOS_EXTRAS))
+        if antigos_state["lido"]:
+            dados["importado"]["abertos"][2]["leitura_softexpert"] = ANTIGOS_LEITURA_1211
     for item in dados["importado"]["abertos"]:
+        item.setdefault("leitura_softexpert", None)
         item["softexpert"] = {"descricao_finalizacao": finalizar_state["descricao"], "pdf": finalizar_state["pdf"],
                               "finalizacao": finalizar_state["finalizacao"]}
+    if (finalizar_state["finalizacao"] or {}).get("status") == "ok":  # o servidor real lista todo `ok` em finalizados, mesmo antes da próxima importação
+        pdf = finalizar_state["pdf"]
+        dados["importado"]["finalizados"].insert(0, {
+            "numero": FINALIZAR_NUMERO, "encerrado_em": finalizar_state["finalizacao"]["encerrado_em"], "em": finalizar_state["finalizacao"]["em"],
+            "descricao": finalizar_state["descricao"], "ficha": finalizar_state["ficha"], "pdf": pdf["nome"] if pdf else None})
     return dados
 
 
@@ -463,6 +522,7 @@ class Handler(BaseHTTPRequestHandler):
                     "inicio": "2026-10-24T09:00:00-03:00",
                 }
             reset_finalizar(query.get("sharepoint_falha", ["0"])[0] == "1")
+            reset_antigos(query.get("antigos", [""])[0])
             scenario = query.get("sebrae", ["padrao"])[0]
             sebrae_state.update(scenario=scenario if scenario in SEBRAE_SCENARIOS else "padrao", ativo=False)
             self.send({"estado": "livre"})
@@ -470,6 +530,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send(sebrae_novos_payload())
         elif path == "/api/sebrae/finalizar-softexpert":
             self.send(finalizar_consulta())
+        elif path == "/api/sebrae/antigos/ler":
+            self.send(antigos_consulta())
         elif path == "/api/sebrae/historico":
             self.send(sebrae_historico_lista(parse_qs(url.query).get("tipo", [""])[0]))
         elif path.startswith("/api/sebrae/historico/"):
@@ -628,6 +690,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"numero": FINALIZAR_NUMERO, "descricao_finalizacao": finalizar_state["descricao"],
                        "pdf": finalizar_state["pdf"], "finalizacao": finalizar_state["finalizacao"]})
             return
+        if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/ficha":
+            size = int(self.headers.get("Content-Length", "0"))
+            finalizar_state["ficha"] = json.loads(self.rfile.read(size) or b"{}").get("ficha")
+            self.send({"numero": FINALIZAR_NUMERO})
+            return
         if path == "/api/automacao/sebrae/agendamento":
             size = int(self.headers.get("Content-Length", "0"))
             ativo = bool(json.loads(self.rfile.read(size) or b"{}").get("ativo"))
@@ -694,6 +761,7 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             corpo = json.loads(self.rfile.read(size) or b"{}")
             numero = corpo.get("numero")
+            finalizar_state["manuais"] = {"chamados": corpo.get("chamados") or [], "edicoes": corpo.get("edicoes") or []}
             if not corpo.get("confirmado"):
                 self.send({"detail": "Confirme a finalização no SoftExpert antes de enviar."}, 422)
             elif not finalizar_state["descricao"].strip():
@@ -703,6 +771,14 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 iniciar_finalizar("finalizar", [numero])
                 self.send({"iniciado": True, "numeros": [numero]}, 202)
+            return
+        if path == "/api/sebrae/antigos/ler":
+            if antigos_state["cenario"] == "conflito" or automation_run or antigos_state["rodando"]:
+                self.send({"detail": "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."}, 409)
+            else:
+                antigos_state.update(rodando=True, polls=0)
+                globals()["automation_run"] = {"rotina": "antigos", "inicio": "2026-10-28T10:40:00-03:00"}
+                self.send({"iniciado": True}, 202)
             return
         if path == "/api/sebrae/dashboard/pendente/reenviar":
             if not finalizar_state["sharepoint"]:
@@ -782,6 +858,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(automation_state(), 202)
             return
         if path == "/api/automacao/cancelar":
+            if finalizar_state["rodando"]:  # a rotina fechar roda no mesmo runner da tela Automação
+                finalizar_state.update(rodando=False, resultado={
+                    "acao": finalizar_state["acao"], "iniciado_em": "2026-10-28T10:15:00-03:00", "em_andamento": False,
+                    "cancelado": True, "resultados": [], "pulados": []})
+                self.send({"metodo": "processo", "mensagem": "Rotina encerrada. O Chrome de automação continua aberto.", "estado": automation_state()}, 202)
+                return
+            if antigos_state["rodando"]:  # a rotina antigos também roda no runner da tela Automação; cancelar mantém o que já foi lido
+                antigos_state.update(rodando=False, resultado=antigos_resultado(False, []))
             if not automation_run:
                 self.send({"detail": "Nenhuma rotina em andamento para cancelar."}, 409)
                 return

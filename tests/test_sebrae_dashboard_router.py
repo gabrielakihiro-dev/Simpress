@@ -300,6 +300,40 @@ class ArquivoRotasTest(RotasBase):
         self.assertEqual(itens["UTIC-2026-0001"]["ciclos"][0]["motivo"], "finalizado")
         self.assertEqual(len(itens["UTIC-2026-0002"]["ciclos"]), 1)
 
+    def test_finalizado_no_softexpert_vai_para_finalizados_na_hora_com_a_ficha(self):
+        from domains import sebrae_finalizacao as fin
+        self.importar(montar())
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/ficha", json={"ficha": {"titulo": "T"}}).status_code, 200)
+        fin.registrar_finalizacao(fin.pasta_estado(self.caminhos.existentes), "UTIC-2026-0001", fin.STATUS_OK, "30/10/2026 14:05")
+        depois = self.cliente.get("/api/sebrae/novos").json()["importado"]  # D ainda EM ABERTO no Dashboard importado
+        self.assertEqual([f["numero"] for f in depois["finalizados"]], ["UTIC-2026-0001"])
+        self.assertEqual(depois["finalizados"][0]["ficha"], {"titulo": "T"})
+
+    def test_abertos_trazem_leitura_softexpert_e_cruzam_pelo_que_ela_leu(self):
+        self.importar(montar())
+        antes = self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]
+        self.assertTrue(antes)
+        self.assertTrue(all(a["leitura_softexpert"] is None for a in antes))
+        alvo = antes[0]["numero"]
+        sebrae_novos.salvar_antigo(
+            sebrae_novos.caminho_antigos(self.caminhos),
+            ChamadoSoftExpert(alvo, titulo="Travando", descricao="Notebook de Camila Lopes", solicitante="API SEBRAE"), "agora",
+        )
+        depois = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertEqual(depois[alvo]["leitura_softexpert"], {
+            "titulo": "Travando", "descricao": "Notebook de Camila Lopes", "solicitante": "API SEBRAE",
+            "habilitada_em": "", "atendimento": "", "lido_em": "agora",
+        })
+        self.assertEqual(depois[alvo]["automaticos_sugeridos"].get("K"), "ABC123")
+        self.assertEqual(depois[alvo]["nome_da_descricao"], "Camila Lopes")
+        self.assertEqual(depois[alvo]["titulo"], antes[0]["titulo"])  # o título do Dashboard não é sobrescrito
+        self.assertEqual(depois[alvo]["descricao"], antes[0]["descricao"])
+        self.assertIn("softexpert", depois[alvo])  # estado de finalização, inalterado
+
+    def test_ficha_recusa_corpo_invalido(self):
+        self.importar(montar())
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/ficha", json={"ficha": "texto"}).status_code, 422)
+
     def test_falha_do_arquivo_bloqueia_a_importacao_e_mantem_o_dashboard_anterior(self):
         self.importar(montar())
         antes = self.caminhos.existentes.read_bytes()

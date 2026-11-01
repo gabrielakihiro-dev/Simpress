@@ -146,9 +146,39 @@ class FinalizarUmTest(FinalizarBase):
         job = self.job()
         self.assertEqual((job["acao"], job["numeros"], job["confirmar_final"]), (fin.ACAO_FINALIZAR, [A], True))
 
+    def test_campos_manuais_do_chamado_entram_na_copia_de_saida_antes_da_rotina(self):
+        self.descrever(A)
+        manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
+        for valor in ("CLIENTE", "REDE", "FINALIZADO", "INCIDENTE"):
+            self.assertIn(valor, linha_xml(saida, 2))
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+
+    def test_edicoes_de_outros_chamados_seguem_na_copia_e_o_horario_do_softexpert_substitui_o_r_manual(self):
+        self.descrever(A)
+        manuais = [
+            {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "01/01/2026 09:00"},
+            {"numero": B, "A": "OUTRO CLIENTE", "D": "EM ABERTO", "J": "INCIDENTE"},
+        ]
+        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": manuais})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
+        self.assertIn("OUTRO CLIENTE", linha_xml(saida, 3))
+        self.assertIn("46023.375", linha_xml(saida, 2))  # 01/01/2026 09:00; a rotina fechar troca o R depois, aqui só a cópia antes dela
+
+    def test_campos_manuais_invalidos_recusam_sem_disparar(self):
+        self.descrever(A)
+        invalido = {"numero": A, "A": "CLIENTE", "D": "TALVEZ", "J": "INCIDENTE"}
+        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [invalido]})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+
     def test_sem_confirmado_nada_e_disparado(self):
         self.descrever(A)
-        for corpo in ({"numero": A}, {"numero": A, "confirmado": False}):
+        for corpo in ({"numero": A},{"numero": A, "confirmado": False}):
             resposta = self.cliente.post(FINALIZAR, json=corpo)
             self.assertEqual(resposta.status_code, 422, resposta.text)
             self.assertIn("Confirme", resposta.json()["detail"])
@@ -187,6 +217,31 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(resposta.status_code, 409)
         self.assertEqual(self.job()["numeros"], [B])
         self.assertEqual(self.runner.iniciadas, [])
+
+    def test_rotina_em_andamento_recusa_com_409_antes_de_refazer_a_copia_de_saida(self):
+        self.descrever(A)
+        self.assertEqual(self.cliente.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+        antes = saida.read_bytes()
+        self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
+        manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
+        self.assertEqual(resposta.status_code, 409, resposta.text)
+        self.assertIn("rotina", resposta.json()["detail"])
+        self.assertEqual(saida.read_bytes(), antes)
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_pedido_pendente_recusa_com_409_antes_de_refazer_a_copia_de_saida(self):
+        self.descrever(A, B)
+        self.assertEqual(self.cliente.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+        antes = saida.read_bytes()
+        fin.gravar_job(self.dir, [B])
+        manuais = {"numero": A, "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]}).status_code, 409)
+        self.assertEqual(saida.read_bytes(), antes)
+        self.assertEqual(self.job()["numeros"], [B])
 
     def test_pedido_velho_nao_trava_um_novo(self):
         self.descrever(A)
@@ -234,6 +289,26 @@ class ChamadoNovoTest(FinalizarBase):
         resposta = self.cliente.post(ATUALIZAR, json={"chamados": [novo], "finalizar_softexpert": True})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(resposta.json()["fechar"]["numeros"], [self.N])
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+
+
+    def test_atualizar_com_dois_novos_e_depois_finalizar_um_antigo_deixa_os_tres_na_saida(self):
+        outro = "UTIC-2026-1379"
+        sebrae_novos.salvar_novos(self.caminhos.novos, [
+            ChamadoSoftExpert(self.N, titulo="Travando", descricao="Meu notebook trava", solicitante="Camila Lopes", habilitada_em="26/10/2026, 17:25:23"),
+            ChamadoSoftExpert(outro, titulo="Sem rede", descricao="Sem internet", solicitante="Camila Lopes", habilitada_em="26/10/2026, 17:30:00"),
+        ], [], 0, {})
+        novos = [{"numero": n, "A": "NOVO CLIENTE", "B": "REDE", "D": "EM ABERTO", "J": "INCIDENTE"} for n in (self.N, outro)]
+        resposta = self.cliente.post(ATUALIZAR, json={"chamados": novos})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.descrever(A)
+        terceiro = {"numero": A, "A": "TERCEIRO", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "chamados": novos, "edicoes": [terceiro]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
+        self.assertIn("TERCEIRO", linha_xml(saida, 2))
+        self.assertIn(self.N, linha_xml(saida, 5))
+        self.assertIn(outro, linha_xml(saida, 6))
         self.assertEqual(self.runner.iniciadas, ["fechar"])
 
 
@@ -369,6 +444,44 @@ class ResultadoEReenvioTest(FinalizarBase):
         self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
         self.assertEqual(self.cliente.post(REENVIAR).status_code, 409)
         self.assertFalse(fin.caminho_job(self.dir).exists())
+
+
+ANTIGOS = "/api/sebrae/antigos/ler"
+
+
+class LerAntigosTest(FinalizarBase):
+    def test_dispara_a_rotina_antigos_com_202(self):
+        self.importar()
+        resposta = self.cliente.post(ANTIGOS)
+        self.assertEqual((resposta.status_code, resposta.json()), (202, {"iniciado": True}))
+        self.assertEqual(self.runner.iniciadas, ["antigos"])
+
+    def test_rotina_ocupada_responde_409(self):
+        self.importar()
+        self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
+        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 409)
+
+    def test_sem_dashboard_importado_responde_422_sem_iniciar(self):
+        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 422)
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_estado_traz_em_andamento_e_o_resumo_da_ultima_leitura(self):
+        self.assertEqual(self.cliente.get(ANTIGOS).json(), {"em_andamento": False, "resultado": None})
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"concluido": True, "lidos": ["UTIC-2026-0001"], "falhas": {}})
+        self.runner.estado = {"estado": "em_andamento", "rotina": "antigos"}
+        corpo = self.cliente.get(ANTIGOS).json()
+        self.assertTrue(corpo["em_andamento"])
+        self.assertEqual(corpo["resultado"]["lidos"], ["UTIC-2026-0001"])
+        self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
+        self.assertFalse(self.cliente.get(ANTIGOS).json()["em_andamento"])
+
+
+class LerAntigosSemRunnerTest(FinalizarBase):
+    com_runner = False
+
+    def test_sem_runner_responde_503(self):
+        self.importar()
+        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 503)
 
 
 if __name__ == "__main__":
