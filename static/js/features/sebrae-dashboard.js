@@ -270,6 +270,13 @@
       if (elemento) elemento.textContent = texto;
     }
 
+    /** Texto do resultado de Atualizar Dashboard; `situacao` (ok, alerta, erro) vai para `data-estado` e o CSS pinta a cor. */
+    function definirStatusAtualizar(texto, situacao = "") {
+      definirTexto("sebrae-atualizar-status", texto);
+      const elemento = el("sebrae-atualizar-status");
+      if (elemento) elemento.dataset.estado = situacao;
+    }
+
     function formatarDataHora(iso) {
       const data = new Date(iso);
       return Number.isNaN(data.getTime()) ? "" : data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -395,6 +402,112 @@
       return controle;
     }
 
+    // ---- Layout do cartão em três zonas: Solicitação (só leitura), Classificação operacional (manual) e Finalização no SoftExpert ----
+
+    /** Zona do cartão: `div` agrupado com título e selo. `destaque` = faixa de aviso da finalização; `aviso` = frase sob o título. */
+    function criarZona(sufixo, titulo, selo, { destaque = false, aviso = "", classe = "" } = {}) {
+      const zona = document.createElement("div");
+      zona.className = `sebrae-zona sebrae-zona--${sufixo}${classe ? ` ${classe}` : ""}`;
+      zona.setAttribute("role", "group");
+      zona.setAttribute("aria-label", titulo);
+      const cab = document.createElement("div");
+      cab.className = `sebrae-zona__cab${destaque ? " sebrae-zona__cab--aviso" : ""}`;
+      cab.append(dom.createTextElement("h4", "sebrae-zona__titulo", titulo), dom.createTextElement("span", "sebrae-zona__selo", selo));
+      if (aviso) cab.appendChild(dom.createTextElement("p", "sebrae-zona__aviso", aviso));
+      zona.appendChild(cab);
+      return zona;
+    }
+
+    /** Cabeçalho do cartão: título (número · assunto) e selo de situação (`data-status`: info = Novo, vazio = Em aberto, ok = Finalizado). */
+    function cabecalhoChamado(titulo, seloTexto, seloStatus) {
+      const cab = document.createElement("header");
+      cab.className = "sebrae-chamado__cab";
+      const selo = dom.createTextElement("span", "ck-badge sebrae-chamado__selo", seloTexto);
+      selo.dataset.status = seloStatus;
+      cab.append(titulo, selo);
+      return cab;
+    }
+
+    /** Cartão vazio: `article.sebrae-chamado--novo|antigo|finalizado` com o cabeçalho; as zonas são acrescentadas por quem chama. */
+    function cartaoChamado(numero, tipo, titulo, seloTexto, seloStatus) {
+      const artigo = document.createElement("article");
+      artigo.className = `sebrae-chamado sebrae-chamado--${tipo}`;
+      artigo.dataset.numero = numero;
+      artigo.appendChild(cabecalhoChamado(titulo, seloTexto, seloStatus));
+      return artigo;
+    }
+
+    /** Zona 1: fatos, avisos e blocos de texto (Descrição, Atendimento), tudo só leitura. */
+    function zonaSolicitacao(fatos, notas, detalhes) {
+      const zona = criarZona("solicitacao", "Solicitação", "Somente leitura");
+      zona.append(...[fatos, ...notas].filter(Boolean));
+      if (detalhes.length) {
+        const bloco = document.createElement("div");
+        bloco.className = "sebrae-chamado__detalhes";
+        bloco.append(...detalhes);
+        zona.appendChild(bloco);
+      }
+      return zona;
+    }
+
+    /** Zona 2: os seis campos manuais (A, B, D, J, R, S). */
+    function zonaClassificacao(manuais) {
+      const zona = criarZona("classificacao", "Classificação operacional", "Preenchimento manual");
+      zona.appendChild(manuais);
+      return zona;
+    }
+
+    function listaFatos(pares) {
+      const fatos = document.createElement("dl");
+      fatos.className = "ck-fatos sebrae-chamado__auto";
+      pares.forEach(([rotulo, valor]) => {
+        const linha = document.createElement("div");
+        linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", valor));
+        fatos.appendChild(linha);
+      });
+      return fatos;
+    }
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+
+    /** Ícone do sprite da página (`#i-pendente`, `#i-ok`); o CSS mostra um ou outro conforme o campo esteja preenchido. */
+    function iconePendencia(id, classe) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("class", `ck-ico ck-ico--xs ${classe}`);
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      const uso = document.createElementNS(SVG_NS, "use");
+      uso.setAttribute("href", `#${id}`);
+      svg.appendChild(uso);
+      return svg;
+    }
+
+    /** Selo "o que falta": quem decide pendente/ok é só o CSS (`:has` nos campos do cartão); o JS não guarda esse estado. */
+    function pendenciaItem(requisito, rotulo) {
+      const li = document.createElement("li");
+      li.className = "sebrae-pend";
+      li.dataset.req = requisito;
+      li.append(
+        iconePendencia("i-pendente", "sebrae-pend__falta"), iconePendencia("i-ok", "sebrae-pend__ok"), rotulo,
+        dom.createTextElement("span", "ck-sr sebrae-pend__falta", ": pendente"), dom.createTextElement("span", "ck-sr sebrae-pend__ok", ": ok"),
+      );
+      return li;
+    }
+
+    function listaPendencias() {
+      const lista = document.createElement("ul");
+      lista.className = "sebrae-pendencias";
+      lista.setAttribute("aria-label", "O que falta para finalizar");
+      const opcional = dom.createTextElement("li", "sebrae-pend sebrae-pend--opcional", "Encerramento (R): opcional");
+      opcional.title = "O horário do SoftExpert substitui o Encerramento (R) digitado";
+      lista.append(
+        dom.createTextElement("li", "sebrae-pendencias__rotulo", "Para finalizar:"),
+        pendenciaItem("A", ROTULOS_FALTA.A), pendenciaItem("D", "Status (D) em FINALIZADO"), pendenciaItem("J", ROTULOS_FALTA.J), pendenciaItem("DESC", "Descrição"),
+        opcional,
+      );
+      return lista;
+    }
+
     /** Mesmo layout do chamado, só leitura, recolhido: o resumo diz número, título, pessoa e encerramento. */
     function textoFinalizado(item) {
       const ficha = item.ficha || {};
@@ -404,40 +517,44 @@
       detalhe.dataset.numero = item.numero;
       const encerramento = item.encerrado_em ? `encerrado em ${item.encerrado_em}` : "";
       detalhe.appendChild(dom.createTextElement("summary", "sebrae-finalizado__resumo", [item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · ")));
-      const artigo = document.createElement("article");
-      artigo.className = "sebrae-chamado";
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
-      artigo.appendChild(titulo);
-      if ((ficha.fatos || []).length) {
-        const fatos = document.createElement("dl");
-        fatos.className = "ck-fatos sebrae-chamado__auto";
-        ficha.fatos.forEach(([rotulo, valor]) => {
-          const linha = document.createElement("div");
-          linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", valor));
-          fatos.appendChild(linha);
-        });
-        artigo.appendChild(fatos);
-      }
-      (ficha.detalhes || []).forEach(([rotulo, texto]) => artigo.appendChild(blocoDetalhe(rotulo, texto)));
+      const artigo = cartaoChamado(item.numero, "finalizado", titulo, "Finalizado", "ok");
+      artigo.appendChild(zonaSolicitacao((ficha.fatos || []).length ? listaFatos(ficha.fatos) : null, [],
+        (ficha.detalhes || []).map(([rotulo, texto]) => blocoDetalhe(rotulo, texto))));
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => {
         const valor = letra === "R" ? item.encerrado_em : letra === "D" ? "FINALIZADO" : ficha.manuais?.[letra];
         manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleLeitura(letra, valor)));
       });
-      artigo.appendChild(manuais);
+      artigo.appendChild(zonaClassificacao(manuais));
+      // Zona 3 concluída: sem pendências nem botões, só a descrição enviada, o PDF e o resultado.
+      const zonaFinal = criarZona("finalizacao", "Finalização no SoftExpert", "Concluída", { destaque: true });
       const descricao = document.createElement("textarea");
       descricao.className = "ck-entrada";
       descricao.rows = 3;
       descricao.readOnly = true;
+      descricao.placeholder = " ";
+      descricao.dataset.sebraeDescricao = item.numero;
       descricao.value = item.descricao || "";
-      artigo.appendChild(campo("Descrição para Finalizar o Chamado", descricao));
-      if (item.pdf) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__pdf", `PDF anexado: ${item.pdf}`));
+      const colTexto = document.createElement("div");
+      colTexto.className = "sebrae-final__texto";
+      colTexto.appendChild(campo("Descrição para Finalizar o Chamado", descricao));
+      const colAnexo = document.createElement("div");
+      colAnexo.className = "sebrae-final__anexo";
+      colAnexo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__pdf", item.pdf ? `PDF anexado: ${item.pdf}` : "Nenhum PDF anexado."));
       const quando = formatarDataHora(item.em);
       const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", `${textoResultado({ status: "ok", encerrado_em: item.encerrado_em })}${quando ? ` · ${quando}` : ""}`);
       resultado.dataset.estado = "ok";
-      artigo.appendChild(resultado);
+      const rodape = document.createElement("div");
+      rodape.className = "sebrae-final__rodape";
+      rodape.appendChild(resultado);
+      const corpo = document.createElement("div");
+      corpo.className = "sebrae-final__corpo";
+      corpo.append(colTexto, colAnexo, rodape);
+      zonaFinal.appendChild(corpo);
+      artigo.appendChild(zonaFinal);
       detalhe.appendChild(artigo);
       li.appendChild(detalhe);
       return li;
@@ -451,17 +568,37 @@
       return detalhe;
     }
 
+    /** Selo de leitura do resumo: só chamado com UTIC pode ser lido no SoftExpert; sem UTIC nada é prometido. */
+    function seloLeitura(item, dados) {
+      if (!NUMERO_UTIC.test(item.numero)) return null;
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo", dados.lido ? "Lido" : "Não lido");
+      selo.dataset.status = dados.lido ? "info" : "";
+      return selo;
+    }
+
+    /** Selos automáticos do resumo: ficam escondidos e o CSS mostra o que vale agora (D FINALIZADO, pronto, andamento, atenção, erro). */
+    function selosAutomaticos() {
+      return [
+        ["d", "ok", "D: FINALIZADO"], ["pronto", "info", "Pronto para finalizar"], ["andamento", "info", "Finalizando…"],
+        ["atencao", "alerta", "Ver resultado"], ["erro", "erro", "Falhou"],
+      ].map(([sufixo, status, texto]) => {
+        const selo = dom.createTextElement("span", `ck-badge sebrae-selo sebrae-selo--auto sebrae-selo--${sufixo}`, texto);
+        selo.dataset.status = status;
+        return selo;
+      });
+    }
+
+    /** Item da lista de antigos: `details` recolhido; o resumo mostra número, assunto, pessoa e selos, e o cartão fica dentro. */
     function blocoAntigo(item) {
       const dados = dadosAntigo(item);
-      const artigo = document.createElement("article");
-      artigo.className = "sebrae-chamado";
-      artigo.dataset.numero = item.numero;
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", tituloAntigo(item));
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", dados.titulo || "Sem título"));
+      const artigo = cartaoChamado(item.numero, "antigo", titulo, "Em aberto", "");
+      const pares = [["I", "Solicitante", dados.solicitante], ["", "Abertura", dados.abertura],
+        ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])];
       const fatos = document.createElement("dl");
       fatos.className = "ck-fatos sebrae-chamado__auto";
-      [["I", "Solicitante", dados.solicitante], ["", "Abertura", dados.abertura],
-        ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])].forEach(([letra, rotulo, atual]) => {
+      pares.forEach(([letra, rotulo, atual]) => {
         const sugerido = letra ? item.automaticos_sugeridos?.[letra] : "";
         if (!atual && !sugerido) return;
         const linha = document.createElement("div");
@@ -471,43 +608,47 @@
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra, "antigo"))));
-      artigo.append(titulo, fatos);
+      const notas = [];
       const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
-      if (outra) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
-      if (dados.lido) {
-        artigo.appendChild(blocoDetalhe("Descrição", dados.descricao));
-        artigo.appendChild(blocoDetalhe("Atendimento realizado", dados.atendimento));
-      } else if (NUMERO_UTIC.test(item.numero)) {
+      if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
+      let detalhes = [];
+      if (dados.lido) detalhes = [blocoDetalhe("Descrição", dados.descricao), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      else if (NUMERO_UTIC.test(item.numero)) {
         const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
         dica.dataset.leitura = "pendente";
-        artigo.appendChild(dica);
+        notas.push(dica);
       }
-      artigo.appendChild(manuais);
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
-      return artigo;
+      const detalhe = document.createElement("details");
+      detalhe.className = "sebrae-antigo";
+      const texto = document.createElement("span");
+      texto.className = "sebrae-antigo__texto";
+      texto.append(dom.createTextElement("span", "sebrae-antigo__num", tituloAntigo(item)), dom.createTextElement("span", "sebrae-antigo__assunto", dados.titulo || "Sem título"));
+      if (dados.solicitante) texto.appendChild(dom.createTextElement("span", "sebrae-antigo__quem", dados.solicitante));
+      const selos = document.createElement("span");
+      selos.className = "sebrae-antigo__selos";
+      selos.append(...[seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
+      const resumo = document.createElement("summary");
+      resumo.className = "sebrae-antigo__resumo";
+      resumo.append(texto, selos);
+      detalhe.append(resumo, artigo);
+      return detalhe;
     }
 
     function blocoChamado(item) {
-      const artigo = document.createElement("article");
-      artigo.className = "sebrae-chamado";
-      artigo.dataset.numero = item.numero;
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.linha.G || "Sem título"));
-      const fatos = document.createElement("dl");
-      fatos.className = "ck-fatos sebrae-chamado__auto";
-      CAMPOS_AUTOMATICOS.forEach(([letra, rotulo]) => {
-        const linha = document.createElement("div");
-        linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", item.linha[letra] || "—"));
-        fatos.appendChild(linha);
-      });
-      artigo.append(titulo, fatos);
+      const artigo = cartaoChamado(item.numero, "novo", titulo, "Novo", "info");
+      const fatos = listaFatos(CAMPOS_AUTOMATICOS.map(([letra, rotulo]) => [rotulo, item.linha[letra] || "—"]));
+      const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
-      if (aviso) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
-      [["H", "Descrição"], ["F", "Atendimento realizado"]].forEach(([letra, rotulo]) => artigo.appendChild(blocoDetalhe(rotulo, item.linha[letra])));
+      if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
+      const detalhes = [["H", "Descrição"], ["F", "Atendimento realizado"]].map(([letra, rotulo]) => blocoDetalhe(rotulo, item.linha[letra]));
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
-      artigo.appendChild(manuais);
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
       return artigo;
     }
@@ -530,11 +671,14 @@
         descricao: guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
         pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
       };
-      const area = document.createElement("div");
-      area.className = "sebrae-chamado__finalizar";
+      const area = criarZona("finalizacao", "Finalização no SoftExpert", "Irreversível", {
+        destaque: true, classe: "sebrae-chamado__finalizar",
+        aviso: "Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada.",
+      });
       const texto = document.createElement("textarea");
       texto.className = "ck-entrada";
       texto.rows = 4;
+      texto.placeholder = " "; // o CSS usa :placeholder-shown para saber se a descrição está vazia (pendência e botão "pronto")
       texto.maxLength = MAX_DESCRICAO;
       texto.value = soft.descricao;
       texto.dataset.sebraeDescricao = numero;
@@ -571,16 +715,25 @@
       const pdfLinha = document.createElement("div");
       pdfLinha.className = "sebrae-chamado__pdf-linha";
       pdfLinha.append(infoPdf, remover);
-      area.append(
-        campo("Descrição para Finalizar o Chamado", texto), feedbackDescricao,
-        campo("Anexo PDF (opcional)", arquivo), pdfLinha, feedbackPdf,
-        acoes, resultado,
-      );
+      // A ordem no DOM dos dois `.sebrae-chamado__feedback` (descrição primeiro, PDF depois) precisa ser mantida.
+      const colTexto = document.createElement("div");
+      colTexto.className = "sebrae-final__texto";
+      colTexto.append(campo("Descrição para Finalizar o Chamado", texto), feedbackDescricao);
+      const colAnexo = document.createElement("div");
+      colAnexo.className = "sebrae-final__anexo";
+      colAnexo.append(campo("Anexo PDF (opcional)", arquivo), pdfLinha, feedbackPdf);
+      const rodape = document.createElement("div");
+      rodape.className = "sebrae-final__rodape";
+      rodape.append(acoes, resultado);
+      const corpo = document.createElement("div");
+      corpo.className = "sebrae-final__corpo";
+      corpo.append(listaPendencias(), colTexto, colAnexo, rodape);
+      area.appendChild(corpo);
       estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, feedbackPdf, botao, cancelar, resultado });
       texto.addEventListener("input", () => {
         window.clearTimeout(estado.temporizadores[numero]);
         estado.temporizadores[numero] = window.setTimeout(() => salvarDescricao(numero), 800);
-        definirFeedback(feedbackDescricao, "Alteração ainda não salva…");
+        definirFeedback(feedbackDescricao, "Alteração ainda não salva…", "pendente");
         atualizarFinalizar(numero);
       });
       texto.addEventListener("change", () => salvarDescricao(numero));
@@ -626,7 +779,7 @@
       if (!ref || !soft) return true;
       const texto = ref.texto.value;
       if (texto === soft.enviado) return true;
-      definirFeedback(ref.feedbackDescricao, "Salvando…");
+      definirFeedback(ref.feedbackDescricao, "Salvando…", "salvando");
       try {
         const dados = await app.apiFetch(urlChamado(numero, "finalizacao"), {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao_finalizacao: texto }),
@@ -650,7 +803,7 @@
       if (!arquivo) return;
       const corpo = new FormData();
       corpo.append("file", arquivo);
-      definirFeedback(ref.feedbackPdf, "Enviando PDF…");
+      definirFeedback(ref.feedbackPdf, "Enviando PDF…", "salvando");
       try {
         const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "POST", body: corpo, errorMessage: "Não foi possível enviar o PDF." });
         estado.soft[numero].pdf = dados.pdf || null;
@@ -666,7 +819,7 @@
     async function removerPdf(numero) {
       const ref = estado.refs.get(numero);
       if (!ref) return;
-      definirFeedback(ref.feedbackPdf, "Removendo PDF…");
+      definirFeedback(ref.feedbackPdf, "Removendo PDF…", "salvando");
       try {
         const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "DELETE", errorMessage: "Não foi possível remover o PDF." });
         estado.soft[numero].pdf = dados.pdf || null;
@@ -1038,15 +1191,18 @@
       atualizarBotaoAtualizar();
     }
 
-    function mostrarRascunho(texto) {
+    /** `situacao` vai para `data-estado` do bloco (o CSS pinta a bolinha): "ok" = salvo agora; vazio = restaurado/descartado. */
+    function mostrarRascunho(texto, situacao = "") {
       definirTexto("sebrae-rascunho-status", texto);
       const bloco = el("sebrae-rascunho");
-      if (bloco) bloco.hidden = !texto;
+      if (!bloco) return;
+      bloco.hidden = !texto;
+      bloco.dataset.estado = situacao;
     }
 
     function salvarRascunho() {
       if (!gravarRascunho(armazenamento, estado.importadoEm, estado.valores, estado.edicoes)) return;
-      mostrarRascunho(`Rascunho salvo automaticamente neste navegador às ${new Date().toLocaleTimeString("pt-BR")}.`);
+      mostrarRascunho(`Rascunho salvo automaticamente neste navegador às ${new Date().toLocaleTimeString("pt-BR")}.`, "ok");
     }
 
     /** Volta ao que o Dashboard importado traz: apaga o rascunho e refaz a tela (se a consulta falhar, nada muda). */
@@ -1126,10 +1282,11 @@
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
         : "Nenhum Dashboard importado.");
       // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
-      if (importado && !importado.saida_pronta) definirTexto("sebrae-atualizar-status", "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
+      if (importado && !importado.saida_pronta) definirStatusAtualizar("Gere o Dashboard atualizado antes de enviar ao SharePoint.", "alerta");
       estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
       lista?.replaceChildren(...estado.formulario.filter(emAberto).map(blocoChamado));
+      lista?.removeAttribute("aria-busy"); // a lista já está pronta (também vale para a importação, que chama renderizar direto)
       renderizarAvisos(novos);
       if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard para buscar os chamados novos.");
       else if (!novos) definirTexto("sebrae-novos-resumo", "Nenhuma busca feita ainda. Use Buscar chamados novos.");
@@ -1147,13 +1304,18 @@
     }
 
     async function carregarNovosSebrae() {
-      if (!el("sebrae-novos-painel")) return;
+      if (!el("sebrae-novos-painel") && !el("sebrae-novos-lista")) return; // vale com só o cartão F4 ou só o painel F5 montado
       const consulta = ++estado.consulta;
+      const lista = el("sebrae-novos-lista");
+      lista?.setAttribute("aria-busy", "true"); // o CSS mostra o esqueleto de carregamento enquanto a lista está vazia
       try {
         const dados = await app.apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados novos." });
         if (consulta === estado.consulta) renderizar(dados);
       } catch (error) {
         if (consulta === estado.consulta) definirTexto("sebrae-dashboard-status", error.message);
+      } finally {
+        // Só a consulta mais recente solta o "ocupado"; se outra a substituiu, ela mesma solta ao terminar.
+        if (consulta === estado.consulta) lista?.removeAttribute("aria-busy");
       }
     }
 
@@ -1227,7 +1389,7 @@
           : [];
         if (incompletos.length) {
           const aviso = `Para finalizar no SoftExpert, preencha: ${incompletos.map(([numero, faltas]) => `${numero} (${faltas.join(", ")})`).join("; ")}. Nada foi enviado.`;
-          definirTexto("sebrae-atualizar-status", aviso);
+          definirStatusAtualizar(aviso, "alerta");
           app.showToast(aviso, "warning");
           return;
         }
@@ -1239,14 +1401,14 @@
         baixarArquivo(dados.arquivo, dados.conteudo_base64);
         const novos = dados.linhas.filter(linha => linha.tipo === "novo").length;
         const quando = formatarDataHora(dados.base?.importado_em);
-        definirTexto("sebrae-atualizar-status",
+        definirStatusAtualizar(
           `Baixado "${dados.arquivo}": ${novos} novo(s) e ${dados.linhas.length - novos} alterado(s). `
           + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`
-          + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : ""));
+          + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : ""), "ok");
         app.showToast("Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success");
         tratarFechar(dados.fechar);
       } catch (error) {
-        definirTexto("sebrae-atualizar-status", error.message);
+        definirStatusAtualizar(error.message, "erro");
         app.showToast(error.message, "error");
       } finally {
         botao.removeAttribute("aria-busy");
