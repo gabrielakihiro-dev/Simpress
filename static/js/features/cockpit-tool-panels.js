@@ -1466,6 +1466,11 @@
     const findRow = () => [...host.querySelectorAll("tbody tr[data-serial]")]
       .find(row => row.dataset.serial === String(serie) && (!os || row.dataset.os === String(os)));
     let row = findRow();
+    // Aberta agora pela Home, a tabela ainda está carregando: espera a linha aparecer (até ~3 s).
+    for (let tentativa = 0; !row && tentativa < 30; tentativa += 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      row = findRow();
+    }
     if (row?.hidden) {
       clearTicketFilters();
       row = findRow();

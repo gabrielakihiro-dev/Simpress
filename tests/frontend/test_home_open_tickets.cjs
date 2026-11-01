@@ -25,9 +25,10 @@ test("Home lists only open Oracle tickets of the selected series, newest order f
   const body = harness.element("home-open-tickets-body");
   const shown = texts(body);
   assert.equal(calls.filter(url => url === "/api/operacoes/chamados").length, 1, "the latest import is read once and reused");
-  assert.ok(shown.indexOf("SR-2") < shown.indexOf("SR-1"), "higher service order comes first");
-  assert.ok(!shown.includes("SR-3"), "closed tickets stay out");
-  assert.ok(!shown.includes("SR-OUTRA"), "other series stay out");
+  assert.ok(shown.indexOf("200") < shown.indexOf("100"), "higher service order comes first");
+  assert.ok(!shown.includes("300"), "closed tickets stay out");
+  assert.ok(!shown.includes("9"), "other series stay out");
+  assert.ok(!shown.includes("SR-1"), "the request number is replaced by the service order number");
   assert.ok(shown.includes("Aguardando · Laudo pendente"));
   assert.equal(harness.element("home-open-tickets-count").textContent, "2 abertos");
   assert.equal(body.attributes.get("aria-busy"), "false");
@@ -58,12 +59,37 @@ test("Home also lists the series' unfinished tickets from the Chamados tab (F5)"
   assert.equal(harness.element("home-open-tickets-count").textContent, "3 abertos");
 });
 
+test("Home service order number opens that order in the Chamados tab for the record's series", async () => {
+  const harness = createAppHarness(() => Promise.resolve(apiResponse({
+    chamados: [{ serie: "5CG6051BVN", oracle: [{ solicitacao: "SR-1", ordem_servico: "100", status: "Em atendimento" }] }],
+  })));
+  await harness.run('atualizarChamadosAbertosHome("5cg6051bvn")');
+  const button = harness.element("home-open-tickets-body").children[0].children[0].children[0];
+  assert.equal(button.textContent, "100");
+  harness.run("abrirChamadoDaOs = (fontes, serie, os) => { workflowEffects.opened = [serie, os]; }");
+  button.dispatchEvent("click");
+  assert.deepEqual([...harness.effects.opened], ["5CG6051BVN", "100"]);
+});
+
+test("Home F5 ticket line opens the Chamados tab (F5)", async () => {
+  const harness = createAppHarness(url => Promise.resolve(apiResponse(url === "/api/sebrae/novos"
+    ? { importado: { finalizados: [], abertos: [{ numero: "UTIC-2026-1", titulo: "Notebook lento", automaticos: { K: "S1" } }] } }
+    : { chamados: [] })));
+  await harness.run('atualizarChamadosAbertosHome("S1")');
+  harness.run("abrirPainelCockpit = async tool => { workflowEffects.painel = tool; }");
+  const [rotulo, linha] = harness.element("home-open-tickets-body").children[0].children;
+  assert.equal(linha.textContent, "UTIC-2026-1 · Notebook lento");
+  linha.dispatchEvent("click");
+  await Promise.resolve();
+  assert.equal(harness.effects.painel, "sebrae-chamados");
+});
+
 test("Home keeps the Oracle list when the Chamados tab query fails", async () => {
   const harness = createAppHarness(url => url === "/api/sebrae/novos"
     ? Promise.reject(new Error("falha"))
     : Promise.resolve(apiResponse({ chamados: [{ serie: "S1", oracle: [{ solicitacao: "SR-1", ordem_servico: "1", status: "Em atendimento" }] }] })));
   await harness.run('atualizarChamadosAbertosHome("S1")');
-  assert.ok(texts(harness.element("home-open-tickets-body")).includes("SR-1"));
+  assert.ok(texts(harness.element("home-open-tickets-body")).includes("1"));
 });
 
 test("Home shows the empty message for a series without open tickets", async () => {

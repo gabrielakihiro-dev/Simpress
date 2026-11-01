@@ -252,8 +252,8 @@ test("Home ignora a resposta tardia de uma série trocada e mostra só os chamad
     // cada chamada pede /api/sebrae/novos (0 e 2) e depois /api/operacoes/chamados (1 e 3)
     pendentes[2]({}); pendentes[3](relatorio); await atual;
     pendentes[0]({}); pendentes[1](relatorio); await antiga;
-    assert.match(corpo.textContent, /R-B/);
-    assert.doesNotMatch(corpo.textContent, /R-A/);
+    assert.match(corpo.textContent, /^2Aberto/);
+    assert.doesNotMatch(corpo.textContent, /1Aberto/);
     assert.equal(contagem.textContent, "1 aberto");
   } finally { delete global.document; }
 });
