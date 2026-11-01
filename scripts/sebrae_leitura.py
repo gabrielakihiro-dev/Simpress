@@ -3,6 +3,8 @@
 Só leitura, com uma exceção: a confirmação de associar o chamado ao usuário (botão Sim) que o SoftExpert
 pede ao abrir o formulário é aceita por ``sebrae_softexpert.extrair_chamado``. Entrada: ``data/state/sebrae_dashboard_existentes.json`` (coluna C do Dashboard importado no site).
 Saída: ``data/state/sebrae_novos.json`` (CPF e senhas já mascarados), que a tela do site mostra como formulário.
+Depois dos novos, lê também os antigos em aberto com UTIC que ainda não estão em ``sebrae_antigos_softexpert.json``
+(cache incremental, mascarado; título, descrição etc. para a tela Chamados).
 Nada mais é gravado no SoftExpert nem no Excel; o chamado de cada leitura é fechado sem salvar. Ver
 docs/operacao/sincronizar-chamados-sebrae.md ("Tela no site").
 
@@ -21,7 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from domains import sebrae_historico, sebrae_novos  # noqa: E402
-from domains.sebrae_chamados import ChamadoSoftExpert  # noqa: E402
+from domains.sebrae_chamados import ChamadoSoftExpert, chave_do_numero  # noqa: E402
 from domains.sebrae_dashboard import triar_novos  # noqa: E402
 from scripts import sebrae_softexpert  # noqa: E402
 
@@ -74,6 +76,23 @@ def _registrar_busca(historico: Path, triagem: Any, lidos: List[ChamadoSoftExper
         log(f"Histórico não gravado ({type(erro).__name__}).")
 
 
+def _antigos_a_ler(existentes: Any, cache: Any) -> "tuple[List[str], int, int]":
+    """(UTIC still without cache, rows without UTIC, already cached); ``linha:<n>`` and legacy numbers have no UTIC."""
+    chaves: List[str] = []
+    sem_utic = ja_lidos = 0
+    for aberto in existentes["abertos"]:
+        try:
+            chave = chave_do_numero(str(aberto.get("numero") or ""))
+        except ValueError:
+            sem_utic += 1
+            continue
+        if chave in cache:
+            ja_lidos += 1
+        elif chave not in chaves:
+            chaves.append(chave)
+    return chaves, sem_utic, ja_lidos
+
+
 def executar(
     context: "BrowserContext",
     rotinas: Any,
@@ -123,6 +142,65 @@ def executar(
         "\n[SUCESSO] Chamados novos lidos; abra a tela Automação para preencher e exportar."
         if not erros
         else f"\n[SUCESSO] {len(lidos)} chamado(s) lido(s); {len(erros)} não puderam ser lidos (veja o log).",
+        flush=True,
+    )
+    return 0
+
+
+def executar_antigos(
+    context: "BrowserContext",
+    rotinas: Any,
+    *,
+    state_dir: Path = STATE_DIR,
+    modulo: Any = sebrae_softexpert,
+) -> int:
+    """Rotina ``antigos``: reads in SoftExpert the old open tickets (with UTIC) that are not in the cache yet.
+
+    Incremental: a ticket already in ``sebrae_antigos_softexpert.json`` is never read again. One ticket failing never
+    stops the others; a cancel keeps what was read. The summary goes to ``sebrae_antigos_resultado.json``."""
+    caminhos = sebrae_novos.caminhos_padrao(state_dir)
+    existentes = sebrae_novos.ler_existentes(caminhos.existentes)
+    print(f"\n=== LER CHAMADOS ANTIGOS DO SOFTEXPERT (início {rotinas.agora_iso()}) ===", flush=True)
+    if existentes is None:
+        raise rotinas.RotinaErro("Importe o Dashboard no site antes de ler os chamados antigos.")
+    log = lambda texto: rotinas.log("Sebrae", texto)  # noqa: E731
+    destino = sebrae_novos.caminho_antigos(caminhos)
+    a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, sebrae_novos.ler_antigos(destino))
+    resultado: Dict[str, Any] = {
+        "em": rotinas.agora_iso(), "concluido": False, "total": len(a_ler), "lidos": [], "falhas": {},
+        "sem_utic": sem_utic, "ja_lidos": ja_lidos,
+    }
+    salvar = lambda: sebrae_novos.salvar_resultado_antigos(caminhos, resultado)  # noqa: E731
+    log(f"Antigos em aberto: {len(a_ler)} para ler, {ja_lidos} já lidos, {sem_utic} sem UTIC.")
+    pagina: Optional["Page"] = None
+    try:
+        if a_ler:
+            try:
+                pagina = modulo.abrir_softexpert(context)
+            except modulo.SessaoExpirada:
+                raise rotinas.RotinaErro(f"{MARCA_LOGIN_NAO_CONCLUIDO}: entre no SoftExpert e execute de novo.") from None
+        for numero in a_ler:
+            rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
+            try:
+                lido = _ler_chamado(context, pagina, numero, rotinas, modulo)
+                if isinstance(lido, str):
+                    resultado["falhas"][numero] = lido[:200]
+                    log(f"{numero}: antigo não lido ({lido}).")
+                else:
+                    sebrae_novos.salvar_antigo(destino, lido, rotinas.agora_iso())
+                    resultado["lidos"].append(numero)
+                    log(f"{numero}: antigo lido.")
+            except Exception as erro:  # noqa: BLE001 - one old ticket never stops the others; log only the type
+                resultado["falhas"][numero] = type(erro).__name__
+                log(f"{numero}: antigo não lido ({type(erro).__name__}).")
+            salvar()
+        resultado["concluido"] = True
+    finally:
+        _fechar_aba(pagina)
+        salvar()
+    log(f"Concluído: {len(resultado['lidos'])} lido(s), {len(resultado['falhas'])} com falha.")
+    print(
+        f"\n[SUCESSO] {len(resultado['lidos'])} chamado(s) antigo(s) lido(s); {len(resultado['falhas'])} não puderam ser lidos (veja o log).",
         flush=True,
     )
     return 0

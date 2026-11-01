@@ -6,7 +6,7 @@ são lidos do estado no momento da execução). Saída: ``data/state/sebrae_fech
 chamado (``ok``, ``nao_encontrado``, ``erro``, ``sem_descricao`` e ``pronto`` no modo ``--sem-finalizar``).
 
 Depois de finalizar, a data/hora do encerramento vai para a coluna R do Dashboard (linha achada pelo número na
-coluna C, só se R estiver vazia) e o arquivo é enviado ao SharePoint pela rotina ``enviar``. Se o envio falhar,
+coluna C; o horário do SoftExpert substitui um R digitado à mão) e o arquivo é enviado ao SharePoint pela rotina ``enviar``. Se o envio falhar,
 fica uma cópia pendente em ``data/state/sebrae_dashboard_pendente`` e o resultado traz o aviso para a tela.
 
 As utilidades do runner (log, cancelamento, abas, envio) entram por ``rotinas``, como em ``sebrae_leitura``;
@@ -29,7 +29,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.integrity import atomic_write_bytes, lock_paths  # noqa: E402
-from core.xlsx_safety import validate_xlsx_archive  # noqa: E402
 from domains import sebrae_dashboard_gravacao as gravacao  # noqa: E402
 from domains import sebrae_finalizacao as fin  # noqa: E402
 from domains import sebrae_novos  # noqa: E402
@@ -53,9 +52,11 @@ def _fechar_aba(pagina: Optional["Page"]) -> None:
 
 
 def _validar_xlsx(conteudo: bytes) -> None:
-    """O Dashboard que vai ao SharePoint precisa abrir como .xlsx e manter a coluna C."""
+    """O Dashboard que vai ao SharePoint precisa abrir como .xlsx e manter a coluna C.
+
+    Sem ``validate_xlsx_archive``: o Dashboard real tem abas com linhas formatadas até o fim da planilha e passaria do limite de linhas.
+    """
     with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
-        validate_xlsx_archive(arquivo)
         if arquivo.testzip() is not None:
             raise ValueError("o arquivo está corrompido")
     ler_coluna_c(conteudo)

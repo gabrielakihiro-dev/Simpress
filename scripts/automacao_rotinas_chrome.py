@@ -19,6 +19,7 @@ Rotinas:
   Oracle); depois espera o usuário.
 - ``dashboard``: baixa uma cópia do Dashboard Operacional_SEBRAE no Excel Online (só leitura),
   importa no site local e roda a busca de chamados novos (``sebrae``).
+- ``antigos``: lê no SoftExpert (só leitura) os chamados antigos em aberto com UTIC que ainda não foram lidos.
 
 Cada exportação é clicada uma única vez; o arquivo é capturado pelo evento de
 download do Playwright e gravado na pasta de Downloads com o nome original.
@@ -1541,6 +1542,13 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
     return sebrae_leitura.executar(context, sys.modules[__name__])
 
 
+def rodar_rotina_antigos(context: "BrowserContext") -> int:
+    # Só leitura do SoftExpert: lê os chamados antigos em aberto (com UTIC) que ainda não estão em data/state/sebrae_antigos_softexpert.json.
+    from scripts import sebrae_leitura
+
+    return sebrae_leitura.executar_antigos(context, sys.modules[__name__])
+
+
 def rodar_rotina_fechar(context: "BrowserContext", sem_finalizar: bool = False) -> int:
     # Única rotina que ESCREVE no SoftExpert: finaliza só os chamados do pedido gravado pelo site (data/state/sebrae_fechar_job.json).
     from scripts import sebrae_fechar
@@ -1742,9 +1750,16 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
     # Segundo envio em diante: o SharePoint já tem o arquivo que o próprio site enviou, e não o importado.
     if hash_baixado == sebrae_finalizacao.ler_enviado(DASHBOARD_SAIDA_DIR.parent):
         return
-    importada = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
+    # O SharePoint reserializa o xlsx depois do envio (hash novo, valores iguais): compara com a cópia do último envio e, sem ela, com a importada.
+    referencias = [
+        ref for ref in (sebrae_finalizacao.ler_copia_enviada(DASHBOARD_SAIDA_DIR.parent), sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"]))
+        if ref is not None
+    ]
+    if not referencias:
+        raise RotinaErro(MSG_SHAREPOINT_MUDOU)
     try:
-        igual = importada is not None and valores_dos_chamados(conteudo) == valores_dos_chamados(importada)
+        valores = valores_dos_chamados(conteudo)
+        igual = any(valores_dos_chamados(ref) == valores for ref in referencias)
     except DashboardInvalido as erro:
         raise RotinaErro(f"Não consegui conferir o Dashboard do SharePoint: {erro}") from erro
     if not igual:
@@ -1841,7 +1856,8 @@ def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None
         # Guarda o hash do que subiu: o próximo envio reconhece esse arquivo no SharePoint como "sem mudança de terceiros".
         # Falha aqui não desfaz o envio: o SharePoint já aceitou; o próximo envio só cai na comparação de valores.
         try:
-            sebrae_finalizacao.gravar_enviado(DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(arquivo.read_bytes()).hexdigest())
+            enviado = arquivo.read_bytes()
+            sebrae_finalizacao.gravar_enviado(DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado)
         except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
             log("Dashboard", f"Não consegui guardar o hash do arquivo enviado ({erro}); o próximo envio usará só a comparação de valores.")
         if do_site:  # o arquivo do site é mais novo que qualquer cópia pendente: reenviá-la depois desfaria este envio
@@ -1971,6 +1987,8 @@ def executar(rotina: str, sem_finalizar: bool = False) -> int:
                     return rodar_rotina_sebrae(context)
                 if rotina == "fechar":
                     return rodar_rotina_fechar(context, sem_finalizar)
+                if rotina == "antigos":
+                    return rodar_rotina_antigos(context)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -2011,7 +2029,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"], default="os")
     parser.add_argument(
         "--sem-finalizar", action="store_true",
         help="só com --rotina fechar: preenche e confere o formulário, mas não clica em Finalizar nem altera o Dashboard",
