@@ -1571,6 +1571,12 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-tickets-os .ck-os .ck-col-chamado { width: 23%; }
   #cockpit-tickets-os .ck-os .ck-tabela thead th { position: sticky; top: 0; z-index: 2; background: var(--cor-superficie); border-bottom: 0; box-shadow: 0 1px 0 var(--cor-borda); }
 }
+/* Série e OS: primeira linha com a mesma altura (série + "Andamento" na mesma linha; OS no mesmo nível), etiqueta embaixo; vale em tabela e em cartões */
+#cockpit-tickets-os .ck-os tbody td[data-label="Série"],
+#cockpit-tickets-os .ck-os tbody td[data-label="OS"] { line-height: 20px; }
+/* O min-height global (40px) de botão deixava a linha mais alta e empurrava o texto da série para baixo */
+#cockpit-tickets-os .ck-os tbody td[data-label="Série"] .ck-os__andamento-btn { min-height: 0; margin-top: 0; margin-left: 2px; vertical-align: baseline; align-self: baseline; line-height: 20px; }
+#cockpit-tickets-os .ck-os tbody td[data-label="OS"] .ticket-summary-order-link { min-height: 0; line-height: 20px; }
 #cockpit-tickets-os .ck-os .ck-tabela th { padding: 9px 10px; }
 #cockpit-tickets-os .ck-os tbody tr[data-serial] { transition: background-color var(--duracao) var(--curva); }
 #cockpit-tickets-os .ck-os tbody tr[data-serial]:hover { background: var(--cor-superficie-funda); }
