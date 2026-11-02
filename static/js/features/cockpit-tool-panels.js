@@ -548,12 +548,13 @@
   }
 
   // Empties the result area (and the export button) while a result loads or is unavailable.
-  function clearComparisonResult(message) {
+  function clearComparisonResult(message, estado = "vazio") {
     byId("comparacao-planilhas-fontes").textContent = "";
     const exportButton = byId("btn-exportar-resultado-comparacao");
     exportButton.dataset.historyDate = "";
     exportButton.disabled = true;
     renderEmpty(byId("comparacao-planilhas-conteudo"), message);
+    byId("comparacao-planilhas-conteudo").dataset.estado = estado;
   }
 
   // keepContent: a freshly generated result is already on screen; this load only swaps in the saved event (it has evento_id).
@@ -564,7 +565,7 @@
       if (!keepContent) clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
       return updateComparisonStatus();
     }
-    if (!keepContent) clearComparisonResult("Carregando comparação…");
+    if (!keepContent) clearComparisonResult("Carregando comparação…", "carregando");
     try {
       const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(eventId)}`, { errorMessage: "Não foi possível abrir esta comparação." });
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
@@ -576,7 +577,10 @@
       updateComparisonStatus();
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
-      if (!keepContent) renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
+      if (!keepContent) {
+        renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
+        byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
+      }
       byId("cockpit-comparison-status").textContent = error.message || "Não foi possível abrir a comparação.";
     }
   }
@@ -591,7 +595,7 @@
     selectedComparison = null;
     byId("cockpit-comparison-event").disabled = true;
     if (fresh) app.renderizarResultadoComparacao(fresh, pendingComparisonTarget);
-    else clearComparisonResult("Carregando histórico local…");
+    else clearComparisonResult("Carregando histórico local…", "carregando");
     try {
       const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de comparações." });
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
@@ -605,7 +609,10 @@
     } catch (error) {
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
       status.textContent = error.message || "Não foi possível carregar o histórico.";
-      if (!fresh) renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
+      if (!fresh) {
+        renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
+        byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
+      }
     }
   }
 
