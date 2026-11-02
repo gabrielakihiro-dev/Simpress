@@ -488,7 +488,6 @@
           </details>
         </section>` : "";
     return `
-        ${barra}
         ${comparison.historico_salvo === false
         ? `<p class="notice notice-warn">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
         : comparison.historico_salvo === true
@@ -509,6 +508,7 @@
           ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais")}
           ${secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : ""}
         </div>
+        ${barra}
         ${secaoMudancasUsuarios}
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-fg-muted">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>

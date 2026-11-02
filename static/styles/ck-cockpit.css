@@ -1685,3 +1685,211 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-tickets-os .ck-os__andamento-btn::before,
   #cockpit-tickets-os .ck-os[aria-busy="true"] .ck-os__corpo { transition: none; }
 }
+
+/* =====================================================================
+   Comparação (F7) · painel [data-cockpit-tool-panel="comparacao"] · camada de redesign
+   Onde cabe: static/styles/ck-cockpit.css, no FIM do arquivo, ou arquivo novo carregado
+   depois dele (e depois de ck-pendencias.css). Nada do CSS atual é removido: esta camada
+   só sobrepõe, com seletores do painel (P) ou do resultado (R).
+   Só tokens existentes (ck-tokens.css, mais --annotated-mark e --result-card-* do app).
+   Sem texto novo gerado por CSS. Transições de 180 ms (--duracao), desligadas com prefers-reduced-motion.
+   Faixas: compacto <768 · médio 768–1199 · amplo ≥1200 (cartões no lugar de tabelas abaixo de 1024, como hoje).
+   P = .ck-ferr-painel[data-cockpit-tool-panel="comparacao"]
+   R = #comparacao-planilhas-conteudo
+   ===================================================================== */
+
+/* ---------- 1. Painel: margens de página, barra e linha de fontes ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] { width: 100%; max-width: 1920px; margin-inline: auto; padding: 16px 20px 28px; gap: 12px; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .ck-barra-ferr {
+  padding: 10px 12px; gap: 8px; align-items: flex-end;
+  border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+}
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > #comparacao-planilhas-fontes { padding: 0 2px; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > #comparacao-planilhas-conteudo { padding: 0; gap: 12px; }
+
+/* ---------- 2. Barra: qual comparação à esquerda, ações à direita ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { order: 1; flex: 0 1 340px; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > #cockpit-comparison-status {
+  order: 2; flex: 1 1 0; min-width: 140px; align-self: flex-end; display: flex; align-items: center; min-height: var(--altura-controle); margin: 0;
+  font-size: var(--fs-ui); line-height: 1.25; color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums;
+}
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-new { order: 3; margin-left: auto; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #btn-exportar-resultado-comparacao { order: 4; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #btn-exportar-equipamentos { order: 5; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy { order: 6; }
+/* Exportar é a única ação principal; "Histórico e ações completas" é navegação e fica com o visual secundário (a classe no HTML não muda). */
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy { border-color: var(--cor-borda); background: var(--cor-superficie-elevada); color: var(--cor-texto-forte); }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy:hover { border-color: var(--cor-texto-apagado); background: var(--cor-superficie-elevada); color: var(--cor-texto); }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy:active { border-color: var(--cor-destaque-forte); background: var(--cor-destaque-fundo); }
+@media (max-width: 767.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] { padding: 12px 12px 24px; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 100%; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > #cockpit-comparison-status { flex: 1 1 100%; min-height: 0; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-btn { flex: 1 1 auto; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-new { margin-left: 0; }
+}
+
+/* ---------- 3. Resultado: avisos, resumo (triagem), filtros, seções ---------- */
+/* A ordem visual é avisos > resumo > filtros > seções com linhas > seções sem linhas > nota final. O DOM não muda. */
+#comparacao-planilhas-conteudo > * { order: 3; }
+#comparacao-planilhas-conteudo > .notice { order: 0; }
+#comparacao-planilhas-conteudo > .grid { order: 1; }
+#comparacao-planilhas-conteudo > .history-filter-bar { order: 2; }
+#comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) { order: 4; }
+#comparacao-planilhas-conteudo > p:not(.notice) { order: 5; padding: 0 2px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+#comparacao-planilhas-conteudo > .notice { padding: 6px 12px; border-radius: var(--raio-md); font-size: var(--fs-ui); line-height: 1.45; }
+/* carregando, histórico vazio e erro (mensagens que a aba já mostra) */
+#comparacao-planilhas-conteudo > .ck-lista__vazio { padding: 32px 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); color: var(--cor-texto-mudo); font-size: var(--fs-md); text-align: center; }
+#comparacao-planilhas-conteudo > .ck-nota--erro { padding: 14px 16px; border: 1px solid var(--cor-erro-texto); border-radius: var(--raio-md); font-size: var(--fs-md); }
+/* depende de data-estado em #comparacao-planilhas-conteudo = carregando | vazio | erro | pronto (JS opcional, antes-depois.md §2) */
+#comparacao-planilhas-conteudo[data-estado="carregando"] > .ck-lista__vazio::before {
+  content: ""; display: block; width: 14px; height: 14px; margin: 0 auto 10px; border: 2px solid var(--cor-borda); border-top-color: var(--cor-destaque); border-radius: 50%; animation: ck-girar 900ms linear infinite;
+}
+
+/* 3.1 Resumo: cartões viram uma faixa compacta, o número em destaque, cor só quando há o que conferir */
+#comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+#comparacao-planilhas-conteudo > .grid > * {
+  --tom: var(--cor-neutro-texto);
+  display: grid; grid-template-columns: 4rem minmax(0, 1fr); grid-template-areas: "num lab"; align-items: center; column-gap: 8px;
+  min-height: 52px; padding: 8px 12px; border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+  border-left-width: 3px; transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), box-shadow var(--duracao) var(--curva);
+}
+#comparacao-planilhas-conteudo > .grid > [data-metric-tone="amber"] { --tom: var(--cor-alerta-texto); }
+#comparacao-planilhas-conteudo > .grid > [data-metric-tone="rose"] { --tom: var(--cor-erro-texto); }
+#comparacao-planilhas-conteudo > .grid > [data-metric-tone="emerald"] { --tom: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo > .grid > * > p:first-child { grid-area: lab; margin: 0; font-size: var(--fs-xs); line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--cor-texto-suave); }
+#comparacao-planilhas-conteudo > .grid > * > p:last-child { grid-area: num; min-width: 2ch; margin: 0; font-size: var(--fs-kpi); font-weight: var(--peso-marca); line-height: 1; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
+/* com itens: botão que leva à seção; o número usa o tom */
+#comparacao-planilhas-conteudo > .grid > button[data-comparison-section-target] > p:last-child { color: var(--tom); }
+#comparacao-planilhas-conteudo > .grid > button[data-comparison-section-target]:hover:not(:focus-visible) { border-top-color: var(--tom); border-right-color: var(--tom); border-bottom-color: var(--tom); }
+/* sem itens: caixa recuada e número apagado */
+#comparacao-planilhas-conteudo > .grid > div[data-metric-tone]:not([data-metric-tone=""]) { background: var(--cor-superficie-funda); box-shadow: none; }
+#comparacao-planilhas-conteudo > .grid > div[data-metric-tone]:not([data-metric-tone=""]) > p { color: var(--cor-texto-mudo); }
+
+/* 3.2 Filtros: uma linha só, estado ativo visível */
+#comparacao-planilhas-conteudo > .history-filter-bar {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 16px; padding: 10px 12px;
+  border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+  transition: border-color var(--duracao) var(--curva), box-shadow var(--duracao) var(--curva);
+}
+#comparacao-planilhas-conteudo > .history-filter-bar:has(input[type="search"]:not(:placeholder-shown), input[type="checkbox"]:checked, select:has(option:checked:not([value=""]))) {
+  border-color: var(--cor-destaque); box-shadow: inset 3px 0 0 var(--cor-destaque), var(--sombra-sm);
+}
+#comparacao-planilhas-conteudo .history-filter-controls { grid-template-columns: minmax(0, 1.5fr) minmax(12rem, .7fr); gap: 8px 12px; }
+#comparacao-planilhas-conteudo .history-filter-search-label,
+#comparacao-planilhas-conteudo .history-filter-category-label { gap: 3px; font-size: var(--fs-xs); font-weight: var(--peso-medio); color: var(--cor-texto-sutil); }
+#comparacao-planilhas-conteudo .history-filter-search-label input,
+#comparacao-planilhas-conteudo .history-filter-category-label select {
+  min-height: var(--altura-controle); padding: 0 9px; border-color: var(--cor-borda); border-radius: var(--raio-sm); background-color: var(--cor-campo); color: var(--cor-texto); font-size: var(--fs-md);
+}
+#comparacao-planilhas-conteudo .history-filter-category-label select { padding-right: 2.25rem; }
+#comparacao-planilhas-conteudo .history-filter-search-label input:focus,
+#comparacao-planilhas-conteudo .history-filter-category-label select:focus { border-color: var(--cor-destaque); box-shadow: none; }
+#comparacao-planilhas-conteudo .history-filter-footer { flex-wrap: nowrap; gap: 6px 16px; min-height: var(--altura-controle); margin: 0; }
+#comparacao-planilhas-conteudo .history-filter-annotated { gap: 6px; font-size: var(--fs-ui); color: var(--cor-texto-suave); white-space: nowrap; }
+#comparacao-planilhas-conteudo .history-filter-footer [data-history-filter-count] { font-size: var(--fs-ui); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
+
+/* 3.3 Seções: cada uma é uma caixa; sem linhas, a caixa encolhe e desce */
+#comparacao-planilhas-conteudo > [data-history-filter-section] {
+  padding: 14px 16px 16px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+}
+#comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) { padding: 10px 16px 12px; box-shadow: none; background: var(--cor-superficie-funda); }
+#comparacao-planilhas-conteudo h4 { gap: 8px; color: var(--cor-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); line-height: 1.3; }
+#comparacao-planilhas-conteudo [data-history-filter-section] > div:first-child > p { max-width: 80ch; margin-top: 2px; font-size: var(--fs-ui); line-height: 1.5; color: var(--cor-texto-mudo); }
+#comparacao-planilhas-conteudo [data-history-filter-group] + [data-history-filter-group] { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cor-borda-suave); }
+#comparacao-planilhas-conteudo [data-history-filter-group] > h5 { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-forte); }
+#comparacao-planilhas-conteudo [tabindex="-1"] { scroll-margin-top: 16px; }
+/* "Nenhuma divergência…" : uma linha, ponto verde, sem a faixa alta centralizada */
+#comparacao-planilhas-conteudo [role="status"].text-center {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md);
+  background: var(--cor-superficie-funda); color: var(--cor-texto-mudo); font-size: var(--fs-ui); text-align: left;
+}
+#comparacao-planilhas-conteudo [role="status"].text-center::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) [role="status"].text-center { background: transparent; border-color: var(--cor-borda-suave); }
+#comparacao-planilhas-conteudo details[data-user-change-details] > summary {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; list-style: none; color: var(--cor-texto-suave); font-size: var(--fs-ui); font-weight: var(--peso-medio);
+}
+#comparacao-planilhas-conteudo details[data-user-change-details] > summary:hover { color: var(--cor-texto); }
+#comparacao-planilhas-conteudo details[data-user-change-details] > summary::-webkit-details-marker { display: none; }
+#comparacao-planilhas-conteudo details[data-user-change-details] > summary::before {
+  content: ""; flex: none; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--duracao) var(--curva);
+}
+#comparacao-planilhas-conteudo details[data-user-change-details][open] > summary::before { transform: rotate(45deg); }
+#comparacao-planilhas-conteudo [data-user-change-counts] { font-variant-numeric: tabular-nums; }
+
+/* ---------- 4. Tabela (≥1024px): cabeçalho calmo, hover, faixa de estado ---------- */
+#comparacao-planilhas-conteudo .comparison-desktop-table { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); overflow-y: hidden; }
+#comparacao-planilhas-conteudo .comparison-desktop-table [data-comparison-annotation] { min-width: 260px; }
+#comparacao-planilhas-conteudo .comparison-desktop-table thead { background: var(--cor-superficie-funda); }
+#comparacao-planilhas-conteudo .comparison-desktop-table th { padding: 8px 12px; border-bottom: 1px solid var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); letter-spacing: .01em; color: var(--cor-texto-sutil); }
+#comparacao-planilhas-conteudo .comparison-desktop-table td { padding: 9px 12px; font-size: var(--fs-ui); color: var(--cor-texto-suave); }
+#comparacao-planilhas-conteudo .comparison-desktop-table td.text-white { color: var(--cor-texto); font-weight: var(--peso-medio); }
+#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td { transition: background-color var(--duracao) var(--curva); }
+#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr:hover > td { background: var(--cor-superficie-funda); }
+
+/* Estado da linha, sem JavaScript: faixa à esquerda no tom da seção (âmbar = conferir, vermelho = decidir, verde = aplicado ou resolvido) */
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category] { --tom: var(--cor-alerta-texto); }
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category="correspondencias_ambiguas"],
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category="registros_ambiguos"],
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category="divergencias_apelidos_manuais"] { --tom: var(--cor-erro-texto); }
+#comparacao-planilhas-conteudo tr[data-comparison-category][data-user-change="novo_endpoint"],
+#comparacao-planilhas-conteudo tr[data-comparison-category][data-user-change="alterado_endpoint"] { --tom: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo tr[data-comparison-category][data-user-change="manual_voltou"] { --tom: var(--cor-erro-texto); }
+/* cartões não têm data-user-change: mudança de usuário sem botão (já aplicada) fica neutra; com botão, aguarda decisão */
+#comparacao-planilhas-conteudo .comparison-mobile-card[data-comparison-category="mudancas_usuarios"] { --tom: var(--cor-neutro-texto); }
+#comparacao-planilhas-conteudo .comparison-mobile-card[data-comparison-category="mudancas_usuarios"]:has([data-user-hold]) { --tom: var(--cor-alerta-texto); }
+/* decisão já tomada: apelido manual sem botões; usuário com o aviso de decisão visível */
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category]:has([data-manual-alias-status]):not(:has([data-manual-alias-actions])),
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category]:has([data-user-hold-status]:not([hidden])) { --tom: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo tr[data-comparison-category] > td:first-child { box-shadow: inset 3px 0 0 var(--tom); }
+/* a anotação já existente continua marcada: segunda faixa ao lado da primeira */
+#comparacao-planilhas-conteudo tr.history-row-annotated[data-comparison-category] > td:first-child { box-shadow: inset 3px 0 0 var(--tom), inset 6px 0 0 var(--annotated-mark); }
+/* Situação do apelido manual: ponto e cor, além do texto */
+#comparacao-planilhas-conteudo [data-manual-alias-status] { font-weight: var(--peso-medio); color: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo [data-manual-alias-status]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+#comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card):has([data-manual-alias-actions]) [data-manual-alias-status] { color: var(--cor-erro-texto); }
+/* hostname duplicado já removido: apagado e riscado até "Desfazer" */
+#comparacao-planilhas-conteudo li[data-hostname-item]:has([data-hostname-removed]:not([hidden])) > .font-mono { color: var(--cor-texto-mudo); text-decoration: line-through; }
+#comparacao-planilhas-conteudo [data-manual-alias-actions], #comparacao-planilhas-conteudo [data-user-hold] { gap: 6px; }
+/* anotações */
+#comparacao-planilhas-conteudo .annotation-field { min-height: 44px; border-color: var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); font-size: var(--fs-ui); transition: border-color var(--duracao) var(--curva); }
+#comparacao-planilhas-conteudo .annotation-field:focus { border-color: var(--cor-destaque); box-shadow: none; }
+#comparacao-planilhas-conteudo .annotation-status:empty { display: none; }
+
+/* ---------- 5. Cartões (<1024px, e telas de toque): estado na borda, rótulos calmos ---------- */
+#comparacao-planilhas-conteudo .comparison-mobile-card { padding: 12px 14px; border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: none; }
+#comparacao-planilhas-conteudo .comparison-mobile-card.history-row-annotated { border-color: var(--annotated-card-border); background: var(--annotated-card-bg); }
+#comparacao-planilhas-conteudo .comparison-mobile-card[data-comparison-category] { box-shadow: inset 3px 0 0 var(--tom); }
+#comparacao-planilhas-conteudo .comparison-mobile-card.history-row-annotated[data-comparison-category] { box-shadow: inset 3px 0 0 var(--tom), inset 6px 0 0 var(--annotated-mark); }
+#comparacao-planilhas-conteudo .comparison-mobile-card-title { color: var(--cor-texto); font-size: var(--fs-base); }
+#comparacao-planilhas-conteudo .comparison-mobile-card-field dt { font-size: var(--fs-xs); font-weight: var(--peso-medio); letter-spacing: 0; color: var(--cor-texto-sutil); }
+#comparacao-planilhas-conteudo .comparison-mobile-card-field dd { font-size: var(--fs-ui); }
+
+/* ---------- 6. Larguras ---------- */
+@media (max-width: 1199.98px) {
+  /* abaixo de 1200 px a nota de estado desce para uma linha própria e as ações ficam juntas ao lado do seletor */
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > #cockpit-comparison-status { order: 7; flex: 1 1 100%; min-height: 0; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 260px; }
+  #comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #comparacao-planilhas-conteudo > .history-filter-bar { grid-template-columns: minmax(0, 1fr); }
+  #comparacao-planilhas-conteudo .history-filter-footer { flex-wrap: wrap; min-height: 0; }
+}
+@media (max-width: 767.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 100%; }
+  #comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #comparacao-planilhas-conteudo > .grid > * { grid-template-columns: minmax(0, 1fr); grid-template-areas: "num" "lab"; row-gap: 4px; align-items: start; }
+  #comparacao-planilhas-conteudo .history-filter-controls { grid-template-columns: minmax(0, 1fr); }
+  #comparacao-planilhas-conteudo > [data-history-filter-section] { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #comparacao-planilhas-conteudo > .grid > *,
+  #comparacao-planilhas-conteudo > .history-filter-bar,
+  #comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td,
+  #comparacao-planilhas-conteudo details[data-user-change-details] > summary::before,
+  #comparacao-planilhas-conteudo .annotation-field { transition: none; }
+  #comparacao-planilhas-conteudo[data-estado="carregando"] > .ck-lista__vazio::before { animation: none; }
+}
+
+/* Usuário e Nome em linhas separadas: o .logged-user-row do app é inline-flex e as duas linhas ficavam lado a lado ("Usuário: xNome: y") */
+#comparacao-planilhas-conteudo .logged-user > .logged-user-row { display: flex; }
+#comparacao-planilhas-conteudo .logged-user > .logged-user-row + .logged-user-row { margin-top: 2px; }

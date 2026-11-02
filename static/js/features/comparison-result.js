@@ -32,6 +32,7 @@
     content.innerHTML = comparison.somente_anotacoes_sincronizadas
       ? renderer.conteudoAnotacoesSincronizadas(comparison, colunas)
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
+    content.dataset.estado = "pronto";
     const navigationHeading = navigationTarget?.section
       ? encontrarTituloSecaoComparacao(content, navigationTarget.section)
       : null;
