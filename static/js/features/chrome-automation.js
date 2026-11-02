@@ -192,7 +192,8 @@
       const cartao = botao.closest("[data-rotina]");
       // A rotina em andamento vira "Acompanhar": o botão fica livre e leva ao console.
       const acompanhar = Boolean(cartao) && estado.emAndamento && botao.dataset.automacaoRotina === estado.rotinaAtiva;
-      const bloqueado = estado.ocupado || (estado.emAndamento && !acompanhar);
+      // data-sem-saida: "Enviar ao SharePoint" sem arquivo gerado por Atualizar Dashboard (definido em sebrae-dashboard.js)
+      const bloqueado = estado.ocupado || (estado.emAndamento && !acompanhar) || botao.dataset.semSaida === "true";
       botao.disabled = bloqueado;
       botao.setAttribute("aria-disabled", String(bloqueado));
       if (!cartao) return;

@@ -277,6 +277,21 @@
       if (elemento) elemento.dataset.estado = situacao;
     }
 
+    /** "Enviar ao SharePoint" só vale com o arquivo gerado por Atualizar Dashboard; sem ele a rotina falharia com "Não achei...". */
+    function definirEnvioDisponivel(pronto) {
+      const botao = el("btn-sebrae-enviar");
+      if (!botao) return;
+      botao.dataset.semSaida = String(!pronto);
+      botao.title = pronto ? "" : "Gere o Dashboard atualizado (Atualizar Dashboard) antes de enviar.";
+      if (!pronto) {
+        botao.disabled = true;
+        botao.setAttribute("aria-disabled", "true");
+      } else if (botao.disabled && !botao.hasAttribute("aria-busy")) {
+        botao.disabled = false;
+        botao.setAttribute("aria-disabled", "false");
+      }
+    }
+
     function formatarDataHora(iso) {
       const data = new Date(iso);
       return Number.isNaN(data.getTime()) ? "" : data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -1282,6 +1297,7 @@
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
         : "Nenhum Dashboard importado.");
       // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
+      definirEnvioDisponivel(Boolean(importado?.saida_pronta));
       if (importado && !importado.saida_pronta) definirStatusAtualizar("Gere o Dashboard atualizado antes de enviar ao SharePoint.", "alerta");
       estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
@@ -1405,6 +1421,7 @@
           `Baixado "${dados.arquivo}": ${novos} novo(s) e ${dados.linhas.length - novos} alterado(s). `
           + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`
           + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : ""), "ok");
+        definirEnvioDisponivel(true);
         app.showToast("Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success");
         tratarFechar(dados.fechar);
       } catch (error) {
