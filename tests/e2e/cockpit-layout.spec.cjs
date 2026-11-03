@@ -61,27 +61,41 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
   }
 });
 
-test("Home status badges are buttons that open Comparação and Resumo without opening the equipment", async ({ page, request }) => {
+test("Home exposes status actions outside its listbox and keyboard activation opens the correct panels", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   try {
     await page.goto("/");
     const equipmentRequests = [];
     page.on("request", req => { if (new URL(req.url()).pathname.startsWith("/api/equipamento/")) equipmentRequests.push(req.url()); });
     const row = page.locator("#home-equipment-list [role=option]").first();
-    await expect(row.locator("button.ck-status--link")).toHaveCount(2);
+    await expect(row).toContainText("Divergente");
+    await expect(row.locator("button")).toHaveCount(0);
 
-    const divergent = row.locator('button.ck-status--link[data-destino="comparacao"]');
-    const stale = row.locator('button.ck-status--link[data-destino="resumo"]');
+    const list = page.locator("#home-equipment-list");
+    await list.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(list).toHaveAttribute("aria-activedescendant", await row.getAttribute("id"));
+    const actions = page.locator("#home-equipment-actions");
+    await expect(actions).toHaveAccessibleName("Ações de LENTO");
+    const divergent = actions.locator('button[data-destino="comparacao"]');
+    const stale = actions.locator('button[data-destino="resumo"]');
     await expect(divergent).toHaveAccessibleName(/Divergente: abrir LENTO/);
     await expect(stale).toHaveAccessibleName(/abrir LENTO na aba Resumo/);
 
-    await stale.click();
+    await page.keyboard.press("Tab");
+    await expect(stale).toBeFocused();
+    await page.keyboard.press("Enter");
     await expect(page.locator("#tab-resumo")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]')).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#cockpit-summary-rows tr.ck-linha-destaque")).toHaveCount(1);
 
     await page.locator("#tab-home").click();
-    await divergent.click();
+    await list.focus();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(divergent).toBeFocused();
+    await page.keyboard.press("Space");
     // A série abre na aba Comparação já posicionada na linha dela dentro do resultado completo.
     await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
     const target = page.locator('#comparacao-planilhas-conteudo [data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
@@ -93,6 +107,92 @@ test("Home status badges are buttons that open Comparação and Resumo without o
     await request.get("/__fixture_cockpit?comparacao=0");
   }
 });
+
+test("Home updates the external status actions when keyboard navigation or selection changes equipment", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.route("**/api/buscar-expandida?*", async route => {
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, items: [...data.items, { serial: "SEM-SELOS", modelo: "Notebook", usuarios_logados: "Usuário" }], total: 2 } });
+    });
+    await page.goto("/");
+    const list = page.locator("#home-equipment-list");
+    const actions = page.locator("#home-equipment-actions");
+    await expect(list.locator("[role=option]")).toHaveCount(2);
+    await expect(list.locator("[role=option]").first()).toContainText("Divergente");
+    await list.focus();
+    await page.keyboard.press("Home");
+    await expect(actions).toHaveAccessibleName("Ações de LENTO");
+    await expect(actions.locator("button")).toHaveCount(2);
+    await page.keyboard.press("End");
+    await expect(actions).toBeHidden();
+    await page.keyboard.press("ArrowUp");
+    await expect(actions).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#card-serial")).toHaveText("LENTO");
+    await expect(list.locator('[aria-selected="true"]')).toHaveAttribute("data-serial", "LENTO");
+    await expect(actions).toHaveAccessibleName("Ações de LENTO");
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+for (const completion of ["pagination", "late selection"]) {
+  test(`Home preserves real keyboard focus when ${completion} finishes with unchanged status actions`, async ({ page, request }) => {
+    await request.get("/__fixture_cockpit?comparacao=1");
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    try {
+      if (completion === "pagination") {
+        await page.route("**/api/buscar-expandida?*", async route => {
+          const params = new URL(route.request().url()).searchParams;
+          const response = await route.fetch();
+          const data = await response.json();
+          const nextPage = Number(params.get("offset")) > 0;
+          if (nextPage) await held;
+          await route.fulfill({ response, json: { ...data, items: nextPage ? [{ serial: "SEGUNDO", usuarios_logados: "Usuário" }] : data.items, total: 2, has_more: !nextPage } });
+        });
+      } else {
+        await page.route("**/api/equipamento/LENTO", async route => {
+          const response = await route.fetch();
+          await held;
+          await route.fulfill({ response });
+        });
+      }
+      await page.goto("/");
+      const list = page.locator("#home-equipment-list");
+      await expect(list.locator("[role=option]").first()).toContainText("Divergente");
+      if (completion === "pagination") {
+        await list.locator("[role=option]").first().click();
+        await expect(page.locator("#card-serial")).toHaveText("LENTO");
+        await expect(list.locator('[aria-selected="true"]')).toHaveAttribute("data-serial", "LENTO");
+      }
+      const inFlight = page.waitForRequest(req => completion === "pagination"
+        ? new URL(req.url()).searchParams.get("offset") === "1"
+        : new URL(req.url()).pathname === "/api/equipamento/LENTO");
+      if (completion === "pagination") {
+        await list.focus();
+        await page.keyboard.press("Home");
+        await page.locator("#btn-home-list-more").click();
+      } else await list.locator("[role=option]").first().click();
+      await inFlight;
+      const action = page.locator('#home-equipment-actions button[data-destino="resumo"]');
+      await action.focus();
+      const originalAction = completion === "pagination" ? await action.elementHandle() : null;
+      release();
+      if (completion === "pagination") {
+        await expect(list.locator("[role=option]")).toHaveCount(2);
+        expect(await originalAction.evaluate(element => element.isConnected && document.activeElement === element)).toBe(true);
+      }
+      else await expect(page.locator("#card-serial")).toHaveText("LENTO");
+      await expect(action).toBeFocused();
+    } finally {
+      release();
+      await request.get("/__fixture_cockpit?comparacao=0");
+    }
+  });
+}
 
 test("Home filters are an equal-width segmented control and the footer has no Lista sem usuário link", async ({ page }) => {
   await page.goto("/");
