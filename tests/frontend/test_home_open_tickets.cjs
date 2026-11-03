@@ -90,6 +90,20 @@ test("Home keeps the Oracle list when the Chamados tab query fails", async () =>
     : Promise.resolve(apiResponse({ chamados: [{ serie: "S1", oracle: [{ solicitacao: "SR-1", ordem_servico: "1", status: "Em atendimento" }] }] })));
   await harness.run('atualizarChamadosAbertosHome("S1")');
   assert.ok(texts(harness.element("home-open-tickets-body")).includes("1"));
+  const warning = harness.element("home-open-tickets-body").children.find(child => child.attributes.get("role") === "alert");
+  assert.equal(warning?.textContent, "Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
+  assert.equal(harness.element("home-open-tickets-count").textContent, "1 aberto · consulta parcial");
+});
+
+test("Home does not announce an empty result when only the Sebrae query fails", async () => {
+  const harness = createAppHarness(url => url === "/api/sebrae/novos"
+    ? Promise.reject(new Error("falha"))
+    : Promise.resolve(apiResponse({ chamados: [] })));
+  await harness.run('atualizarChamadosAbertosHome("S1")');
+  const body = harness.element("home-open-tickets-body");
+  assert.deepEqual(texts(body), ["Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados."]);
+  assert.equal(body.children[0].attributes.get("role"), "alert");
+  assert.equal(harness.element("home-open-tickets-count").textContent, "Consulta parcial");
 });
 
 test("Home shows the empty message for a series without open tickets", async () => {
