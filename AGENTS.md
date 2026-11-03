@@ -43,6 +43,10 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 - A seleção da Home (`aria-selected`) acompanha somente o equipamento carregado: iniciar outra busca limpa a seleção anterior, inclusive em caso de falha. Preserve separadamente o item ativo (`aria-activedescendant`) e suas ações.
 - Home (02/11/2026): ao reduzir a busca a um caractere, cancele/invalide a consulta da lista e mantenha `Digite ao menos 2 caracteres para filtrar a lista.` mesmo se uma resposta antiga chegar depois. Preserve o `listbox` e sua navegação por setas/Home/End; os selos dentro de `option` são indicadores, e as ações `Sem acesso`/`Divergente` ficam em `#home-equipment-actions`, fora da lista, para o equipamento ativo/selecionado, acessíveis por Tab, Enter e Espaço. Somente consulta/navegação, sem escrita em dados locais ou sistemas externos.
 
+## Importação de nomes do Microsoft Entra
+
+- Se o POST de importação concluir e a consulta complementar do equipamento selecionado falhar, mantenha explícito o sucesso da importação, avise a falha separadamente e não afirme que a tela do equipamento foi atualizada. Falha no próprio POST continua sendo apresentada como erro de importação.
+
 ## Dados operacionais
 
 - Preserve planilhas operacionais, históricos, anotações, backups e estado local (`data/planilhas_entrada`, `data/state`, `.transactions`) fora do Git, salvo pedido explícito.
@@ -132,6 +136,10 @@ O chat flutuante do assistente (ícone no topbar, F10) roda só com esta pasta: 
 - Uma conversa por vez (trava; segunda chamada recebe 409). Testes usam cliente OpenRouter falso, sem rede.
 
 ## Documentação de mudanças em qualquer aba
+- As estatísticas da Home aplicam somente a resposta ou erro da consulta mais recente; chamadas anteriores são canceladas e descartadas. A consulta não grava nem apaga dados.
+
+- O helper compartilhado `apiFetch` aceita resposta de sucesso JSON ou corpo vazio; corpo não vazio com JSON inválido gera erro. Em erros HTTP, corpo não JSON usa a mensagem alternativa; downloads usam `responseType: "response"` e cancelamentos continuam propagados.
+
 
 Vale para todas as abas do site (Home, Transporte, Resumo, Automação e as que vierem). Ao mudar uma aba (tela, comportamento, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança), faça no mesmo trabalho:
 

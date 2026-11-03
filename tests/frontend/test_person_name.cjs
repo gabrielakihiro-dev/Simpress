@@ -149,6 +149,153 @@ test("resumoNomesEntra avisa dos logins ignorados por nomes conflitantes ou dado
   }
 });
 
+async function importarEntraSimulado({ apiFetch, equipamento }) {
+  const { elementos, eventos } = instalarDocumento();
+  const input = document.getElementById("entra-csv-file");
+  input.files = [{ name: "usuarios-ficticios.csv" }];
+  input.value = "usuarios-ficticios.csv";
+  input.dispatchEvent = evento => eventos.push(evento.type);
+  document.getElementById("btn-exportar-nomes-entra").disabled = true;
+  const toasts = [];
+  const aplicados = [];
+  const atualizados = [];
+  const appState = { currentEquipamento: equipamento };
+  const app = {
+    apiFetch,
+    showToast: (mensagem, tipo) => toasts.push([mensagem, tipo]),
+    definirEquipamentoAtual: atual => { appState.currentEquipamento = atual; aplicados.push(atual); },
+    atualizarUsuarioLogadoCard: atual => atualizados.push(atual),
+    carregarProntidao: () => atualizados.push("prontidao"),
+  };
+  const feature = createEntraUsers({ app, appState });
+  const promise = feature.importarNomesEntra({ preventDefault() {} });
+  const button = document.getElementById("btn-importar-nomes-entra");
+  const occupied = button.disabled && button.attrs["aria-busy"] === "true";
+  await promise;
+  return { appState, button, elementos, eventos, toasts, aplicados, atualizados, occupied };
+}
+
+test("importa nomes Entra mesmo quando falha a consulta complementar do equipamento selecionado", async () => {
+  const equipamento = { serial: "SERIE-FICTICIA" };
+  const chamadas = [];
+  const falha = await importarEntraSimulado({
+    equipamento,
+    apiFetch: async (url, options) => {
+      chamadas.push(url);
+      if (options?.method === "POST") return { users: 2, logins_ignorados: 0 };
+      throw new Error("consulta complementar indisponível");
+    },
+  });
+
+  assert.deepEqual(chamadas, ["/api/usuarios-entra/importar", "/api/equipamento/SERIE-FICTICIA"]);
+  assert.equal(falha.elementos.get("entra-import-status").textContent, "2 nomes PR importados. Não foi possível atualizar o equipamento selecionado: consulta complementar indisponível");
+  assert.deepEqual(falha.toasts, [["Nomes do Entra importados, mas não foi possível atualizar o equipamento selecionado.", "warning"]]);
+  assert.equal(falha.appState.currentEquipamento, equipamento);
+  assert.deepEqual(falha.aplicados, []);
+  assert.deepEqual(falha.atualizados, ["prontidao"]);
+  assert.equal(falha.elementos.get("entra-csv-file").value, "");
+  assert.deepEqual(falha.eventos, ["change"]);
+  assert.equal(falha.elementos.get("btn-exportar-nomes-entra").disabled, false);
+  assert.equal(falha.occupied, true);
+  assert.equal(falha.button.disabled, false);
+  assert.equal(falha.button.attrs["aria-busy"], undefined);
+});
+
+test("importa nomes Entra e atualiza o equipamento selecionado quando ambas as consultas têm sucesso", async () => {
+  const equipamento = { serial: "SERIE-FICTICIA-2" };
+  const atualizado = { serial: equipamento.serial, nome_pessoa: "Nome Fictício" };
+  const chamadas = [];
+  const sucesso = await importarEntraSimulado({
+    equipamento,
+    apiFetch: async (url, options) => {
+      chamadas.push(url);
+      if (options?.method === "POST") return { users: 1, logins_ignorados: 0 };
+      return atualizado;
+    },
+  });
+
+  assert.deepEqual(chamadas, ["/api/usuarios-entra/importar", "/api/equipamento/SERIE-FICTICIA-2"]);
+  assert.equal(sucesso.elementos.get("entra-import-status").textContent, "1 nomes PR importados.");
+  assert.deepEqual(sucesso.toasts, [["Nomes do Entra atualizados.", "success"]]);
+  assert.equal(sucesso.appState.currentEquipamento, atualizado);
+  assert.deepEqual(sucesso.aplicados, [atualizado]);
+  assert.deepEqual(sucesso.atualizados, [atualizado, "prontidao"]);
+  assert.equal(sucesso.elementos.get("entra-csv-file").value, "");
+  assert.deepEqual(sucesso.eventos, ["change"]);
+  assert.equal(sucesso.elementos.get("btn-exportar-nomes-entra").disabled, false);
+  assert.equal(sucesso.button.disabled, false);
+  assert.equal(sucesso.button.attrs["aria-busy"], undefined);
+});
+
+test("falha na importação Entra preserva o CSV, a seleção e o aviso de erro existente", async () => {
+  const equipamento = { serial: "SERIE-FICTICIA-3" };
+  const chamadas = [];
+  const falha = await importarEntraSimulado({
+    equipamento,
+    apiFetch: async url => {
+      chamadas.push(url);
+      throw new Error("CSV inválido");
+    },
+  });
+
+  assert.deepEqual(chamadas, ["/api/usuarios-entra/importar"]);
+  assert.equal(falha.elementos.get("entra-import-status").textContent, "CSV inválido");
+  assert.deepEqual(falha.toasts, [["CSV inválido", "error"]]);
+  assert.equal(falha.appState.currentEquipamento, equipamento);
+  assert.deepEqual(falha.aplicados, []);
+  assert.deepEqual(falha.atualizados, []);
+  assert.equal(falha.elementos.get("entra-csv-file").value, "usuarios-ficticios.csv");
+  assert.deepEqual(falha.eventos, []);
+  assert.equal(falha.elementos.get("btn-exportar-nomes-entra").disabled, true);
+  assert.equal(falha.button.disabled, false);
+  assert.equal(falha.button.attrs["aria-busy"], undefined);
+});
+
+test("ignora a consulta Entra atrasada quando a revisão da seleção muda e mantém a mesma série", async () => {
+  const { elementos } = instalarDocumento();
+  const equipamentoInicial = { serial: "SERIE-FICTICIA-4", nome_pessoa: "Nome anterior" };
+  const equipamentoMaisNovo = { serial: equipamentoInicial.serial, nome_pessoa: "Nome mais novo" };
+  const aplicados = [];
+  const atualizados = [];
+  const toasts = [];
+  const appState = { currentEquipamento: equipamentoInicial, equipamentoSelectionRevision: 1 };
+  let concluirConsulta;
+  let marcarConsultaIniciada;
+  const consultaIniciada = new Promise(resolve => { marcarConsultaIniciada = resolve; });
+  const app = {
+    apiFetch: async url => {
+      if (url === "/api/usuarios-entra/importar") return { users: 1, logins_ignorados: 0 };
+      marcarConsultaIniciada();
+      return new Promise(resolve => { concluirConsulta = resolve; });
+    },
+    showToast: (mensagem, tipo) => toasts.push([mensagem, tipo]),
+    definirEquipamentoAtual: equipamento => { appState.currentEquipamento = equipamento; aplicados.push(equipamento); },
+    atualizarUsuarioLogadoCard: equipamento => atualizados.push(equipamento),
+    carregarProntidao: () => atualizados.push("prontidao"),
+  };
+  const input = document.getElementById("entra-csv-file");
+  input.files = [{ name: "usuarios-ficticios.csv" }];
+  input.value = "usuarios-ficticios.csv";
+  input.dispatchEvent = () => {};
+
+  try {
+    const feature = createEntraUsers({ app, appState });
+    const importacao = feature.importarNomesEntra({ preventDefault() {} });
+    await consultaIniciada;
+    appState.currentEquipamento = equipamentoMaisNovo;
+    appState.equipamentoSelectionRevision += 1;
+    concluirConsulta({ serial: equipamentoInicial.serial, nome_pessoa: "Nome Entra antigo" });
+    await importacao;
+
+    assert.equal(appState.currentEquipamento, equipamentoMaisNovo);
+    assert.deepEqual(aplicados, []);
+    assert.deepEqual(atualizados, ["prontidao"]);
+    assert.deepEqual(toasts, [["Nomes do Entra atualizados.", "success"]]);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
 async function salvarNome({ apiFetch, atual }) {
   const { elementos, eventos } = instalarDocumento();
   const toasts = [];

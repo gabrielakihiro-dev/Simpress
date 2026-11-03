@@ -72,6 +72,18 @@ test("empty successful body resolves to an empty object", async t => {
   assert.deepEqual(await apiFetch("/api/historico-comparacoes/1", { method: "DELETE" }), {});
 });
 
+test("a malformed nonempty successful JSON response rejects", async t => {
+  mockFetch(t, async () => new Response("<html>unexpected</html>", { status: 200 }));
+  await assert.rejects(apiFetch("/api/stats", { errorMessage: "Falha ao consultar." }), {
+    message: "Falha ao consultar.",
+  });
+});
+
+test("an empty successful 200 body remains allowed", async t => {
+  mockFetch(t, async () => new Response("", { status: 200 }));
+  assert.deepEqual(await apiFetch("/api/exemplo"), {});
+});
+
 test("uses a default message when the caller gives none", async t => {
   mockFetch(t, async () => new Response("", { status: 503 }));
   await assert.rejects(apiFetch("/api/stats"), { message: "Não foi possível concluir a solicitação.", status: 503 });
@@ -118,6 +130,18 @@ test("cancellation while reading the body is not swallowed as an empty body", as
     json: async () => { throw new DOMException("The operation was aborted.", "AbortError"); },
   }));
   await assert.rejects(apiFetch("/api/operacoes/chamados"), { name: "AbortError" });
+});
+
+test("cancellation while reading text propagates for both success and HTTP errors", async t => {
+  for (const ok of [true, false]) {
+    mockFetch(t, async () => ({
+      ok,
+      status: ok ? 200 : 500,
+      json: async () => ({}),
+      text: async () => { throw new DOMException("The operation was aborted.", "AbortError"); },
+    }));
+    await assert.rejects(apiFetch("/api/exemplo"), { name: "AbortError" });
+  }
 });
 
 test("network failures propagate unchanged without an HTTP status", async t => {

@@ -43,6 +43,8 @@ Pílulas que quebram linha (`flex-wrap:wrap`):
 
 Os números vêm dos dados reais (API `/api/stats` ou cálculo local). O filtro ativo recebe o estado ativo (`accent-900`/`accent-100`/`accent-700`).
 
+Consultas simultâneas de estatísticas aplicam somente a resposta ou o erro da consulta mais recente, inclusive para a visibilidade da exportação. A leitura não grava nem apaga dados locais ou externos.
+
 #### Lista de itens
 
 Cada linha mostra:
