@@ -219,6 +219,7 @@ from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dash
 from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
+from domains.dashboard_agendamento import AgendadorDashboard
 from domains import endpoint_removals
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
@@ -2557,8 +2558,19 @@ def get_sebrae_scheduler() -> AgendadorSebrae:
         return _sebrae_scheduler
 
 
+_dashboard_scheduler = AgendadorDashboard(
+    STATE_DIR / "dashboard_agendamento.json", lambda rotina: get_chrome_automation_runner().start(rotina),
+    impedimento=lambda: "Dashboard atualizado aguardando envio; a importação automática foi impedida para preservar suas alterações."
+    if sebrae_novos.dashboard_saida_pendente(sebrae_novos.caminhos_padrao(STATE_DIR)) else "",
+)
+
+
+def get_dashboard_scheduler() -> AgendadorDashboard:
+    return _dashboard_scheduler
+
+
 app.include_router(create_automation_router(AutomationRouteServices(
-    runner=get_chrome_automation_runner, sebrae=get_sebrae_scheduler,
+    runner=get_chrome_automation_runner, sebrae=get_sebrae_scheduler, dashboard=get_dashboard_scheduler,
 )))
 
 app.include_router(create_assistant_router(AssistantRouteServices(
@@ -2586,6 +2598,10 @@ async def _sebrae_scheduler_worker() -> None:
             await asyncio.to_thread(get_sebrae_scheduler().verificar)
         except Exception as error:
             logger.warning("A verificação do agendamento Sebrae falhou (erro=%s).", type(error).__name__)
+        try:
+            await asyncio.to_thread(get_dashboard_scheduler().verificar)
+        except Exception as error:
+            logger.warning("A verificação do agendamento Dashboard falhou (erro=%s).", type(error).__name__)
         await asyncio.sleep(SEBRAE_SCHEDULER_CHECK_SECONDS)
 
 

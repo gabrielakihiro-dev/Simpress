@@ -87,3 +87,28 @@ test("Esc and Cancelar close the regional representative dialog without saving",
   await expect(dialog).toBeHidden();
   await expect(page.locator("#entrega-representante option[value='Toledo']")).toHaveText("Fernanda da Costa Goldacker — Toledo");
 });
+
+test("keeps a hand-typed field when the dialog changes it and warns which one was kept", async ({ page }) => {
+  await page.goto("/");
+  await openTransferTab(page);
+  await page.locator("#retirada-representante").selectOption("Londrina");
+  await page.locator("#retirada-telefone").fill("(43) 90000-0000");
+  await page.locator("#btn-editar-representante-retirada").click();
+  await page.locator("#representante-regional-nome").fill("Renata Editada");
+  await page.locator("#representante-regional-telefone").fill("(43) 98888-7777");
+  await page.locator("#btn-salvar-representante-regional").click();
+  await expect(page.locator("#retirada-contato")).toHaveValue("Renata Editada");
+  await expect(page.locator("#retirada-telefone")).toHaveValue("(43) 90000-0000");
+  await expect(page.locator("#toast-container")).toContainText("O campo Celular de Londrina (Retirada) foi mantido porque foi editado à mão.");
+});
+
+test("when the defaults cannot be loaded the selectors stay empty, a toast explains and the page keeps working", async ({ page }) => {
+  await page.route("**/api/config/representantes-regionais", route => route.abort());
+  await page.goto("/");
+  await openTransferTab(page);
+  await expect(page.locator("#toast-container")).toContainText("Não foi possível carregar os representantes regionais. Recarregue a página.");
+  await expect(page.locator("#retirada-representante option")).toHaveCount(1);
+  await expect(page.locator("#btn-editar-representante-retirada")).toBeDisabled();
+  await page.locator("#retirada-contato").fill("Contato digitado");
+  await expect(page.locator("#retirada-contato")).toHaveValue("Contato digitado");
+});

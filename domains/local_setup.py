@@ -180,17 +180,16 @@ def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> 
     atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})
 
 
-# Mirror of REPRESENTANTES_REGIONAIS_PR (static/js/features/regional-contacts.js): the code keeps the
-# defaults, the git-ignored config/representantes_regionais.json keeps only per-city overrides.
-# tests/test_regional_representatives.py fails if the two city lists diverge.
+# Single source of the 22 regional representatives' defaults: the front end loads them from
+# GET /api/config/representantes-regionais (`padroes`); the git-ignored config/representantes_regionais.json
+# keeps only per-city overrides.
 REGIONAL_REPRESENTATIVE_CITIES = (
     "Cascavel", "Londrina", "Maringá", "Pato Branco", "Ponta Grossa", "Foz do Iguaçu", "Paranaguá",
     "Toledo", "Guarapuava", "Porecatu", "Irati", "Cornélio Procópio", "Apucarana", "Arapongas",
     "Cerro Azul", "Cianorte", "Francisco Beltrão", "Ivaiporã", "Jacarezinho", "Laranjeiras do Sul",
     "Paranavaí", "Campo Mourão",
 )
-# Defaults of each city (same values as the front-end list; the overrides saved in the local file win over them).
-# tests/test_assistant.py compares this table with the JS list field by field.
+# Defaults of each city (the overrides saved in the local file win over them).
 REGIONAL_REPRESENTATIVE_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
 REGIONAL_REPRESENTATIVE_DEFAULTS = {
     row[0]: dict(zip(REGIONAL_REPRESENTATIVE_FIELDS, row[1:])) for row in (
@@ -218,7 +217,18 @@ REGIONAL_REPRESENTATIVE_DEFAULTS = {
         ("Campo Mourão", "Sandro Nasser Santi", "ssanti@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
     )
 }
+# Option text the selectors show while a city's default name is empty (display only, not an editable field).
+REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS = {"Arapongas": "Não definido ainda"}
 _regional_representatives_lock = threading.Lock()
+
+
+def regional_representative_defaults() -> list[dict]:
+    """The defaults in display order: city, the six fields and, when set, `nomeOpcao` (text for an empty name)."""
+    return [
+        {"cidade": city, **REGIONAL_REPRESENTATIVE_DEFAULTS[city],
+         **({"nomeOpcao": REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS[city]} if city in REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS else {})}
+        for city in REGIONAL_REPRESENTATIVE_CITIES
+    ]
 
 
 def load_regional_representatives(path: Path) -> tuple[dict, bool]:
@@ -228,12 +238,24 @@ def load_regional_representatives(path: Path) -> tuple[dict, bool]:
 
 
 def save_regional_representative(path: Path, city: str, values: dict) -> None:
-    """Write the already validated override for one city, keeping the others."""
+    """Write the already validated override for one city, keeping the others.
+
+    Only the fields that differ from the default are stored; when none differs the city is dropped
+    (same as "Restaurar padrão"), so a default changed in the code reaches every city not edited on that field.
+    """
     target = Path(path)
+    default = REGIONAL_REPRESENTATIVE_DEFAULTS[city]
+    changed = {f: values[f] for f in REGIONAL_REPRESENTATIVE_FIELDS if f in values and values[f] != default[f]}
     with _regional_representatives_lock:
         current, _ = load_regional_representatives(target)
+        if changed:
+            current[city] = changed
+        elif city in current:
+            del current[city]
+        else:
+            return  # nothing differs and nothing was saved: leave the file (or its absence) alone
         target.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(target, {**current, city: values})
+        atomic_write_json(target, current)
 
 
 def remove_regional_representative(path: Path, city: str) -> bool:
