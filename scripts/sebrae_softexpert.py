@@ -62,10 +62,18 @@ SOFTEXPERT_URL = "https://sebraepr.softexpert.app/softexpert/workspace?page=task
 # dentro; os demais seletores são hipóteses da bancada.
 SEL_LISTA = "[data-test-selector='rctCardBase'], [role='grid'], [role='treegrid'], table.task-list, #taskCenterList"
 SEL_LINHA = "[data-test-selector='rctCardBase'], tbody tr, [role='row']:has([role='gridcell'])"
+# Filtro da própria Central de Tarefas: o campo "Pesquisar" da barra com o botão Filtros. Não é o `GeneralSearchInput`
+# ("Pesquisar em tudo", busca global da barra superior, que abre outra página), e há um "Pesquisar" fora da tela
+# num menu lateral; por isso o campo vem do ancestral mais próximo do botão Filtros.
+SEL_BUSCA_LISTA = (
+    "xpath=//*[@data-test-selector='rctAddFilterBtn']/ancestor::div[.//input[@placeholder='Pesquisar']][1]"
+    "//input[@placeholder='Pesquisar']"
+)
 SEL_CARREGANDO = ".carregando, .loading, .spinner, [aria-busy='true']"
 SEL_LISTA_VAZIA = ".sem-registros, .empty-list, [data-empty='true']"
 TEXTO_LISTA_VAZIA = re.compile(r"nenhum (registro|resultado|item|tarefa)", re.IGNORECASE)
 NOME_PROXIMA = re.compile(r"^\s*(pr[óo]xima( p[áa]gina)?|next)\s*$", re.IGNORECASE)
+NOME_ANTERIOR = re.compile(r"^\s*(anterior( p[áa]gina)?|previous)\s*$", re.IGNORECASE)
 
 # Tela de login / sessão expirada.
 SEL_CAMPO_SENHA = "input[type='password']"
@@ -117,6 +125,7 @@ ESPERA_ESTAVEL_MS = 6_000
 INTERVALO_MS = 250
 RELEITURAS_CAMPOS = 3
 ESPERA_RELEITURA_MS = 2_000
+ESPERA_RESULTADO_ESTAVEL_MS = 800  # resultado da pesquisa sem mudar, antes de aceitá-lo
 MAX_RODADAS_LISTA = 1_000
 RODADAS_SEM_NOVIDADE = 3
 GRACA_CONFIRMACAO_S = 5
@@ -313,6 +322,7 @@ class ItemLista:
 
     numero: str
     texto: str
+    ocorrencias: int = 1
 
 
 # ---------------------------------------------------------------------------------------------
@@ -469,7 +479,8 @@ def _aguardar_lista(page: "Page") -> None:
     lista = page.locator(SEL_LISTA)
 
     def pronta() -> bool:
-        return tela_de_login(page) or (_visivel(lista) and not _visivel(page.locator(SEL_CARREGANDO)))
+        vazia = not _textos_linhas(page) and _lista_declarada_vazia(page)
+        return tela_de_login(page) or ((_visivel(lista) or vazia) and not _visivel(page.locator(SEL_CARREGANDO)))
 
     if not _esperar(page, pronta, ESPERA_LISTA_MS):
         raise SoftExpertErro(f"A central de tarefas não carregou em {ESPERA_LISTA_MS // 1000} s.")
@@ -496,14 +507,22 @@ def _proxima_disponivel(botao: "Locator") -> bool:
         return False
 
 
-def _ler_pagina(page: "Page", itens: Dict[str, ItemLista]) -> int:
+def _ler_pagina(page: "Page", itens: Dict[str, ItemLista], *, acumular: bool = False) -> int:
     """Acrescenta as linhas visíveis; usa o primeiro número da linha (o identificador) e devolve os novos."""
     novos = 0
+    por_numero: Dict[str, List[str]] = {}
     for texto in _textos_linhas(page):
         numeros = extrair_numeros(texto)
-        if numeros and numeros[0] not in itens:
-            itens[numeros[0]] = ItemLista(numeros[0], texto)
+        if numeros:
+            por_numero.setdefault(numeros[0], []).append(texto)
+    for numero, textos in por_numero.items():
+        anterior = itens.get(numero)
+        if anterior is None:
+            itens[numero] = ItemLista(numero, textos[0], len(textos))
             novos += 1
+        else:
+            quantidade = anterior.ocorrencias + len(textos) if acumular else max(anterior.ocorrencias, len(textos))
+            itens[numero] = ItemLista(numero, anterior.texto, quantidade)
     return novos
 
 
@@ -521,10 +540,10 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
     sem_novidade = 0
     for _ in range(MAX_RODADAS_LISTA):
         _cancelamento()
-        novos = _ler_pagina(page, itens)
+        botao = _botao_proxima(page)
+        novos = _ler_pagina(page, itens, acumular=botao is not None)
         if parar_em is not None and parar_em in itens:
             return list(itens.values())
-        botao = _botao_proxima(page)
         if botao is not None:  # paginação: avança até o botão ficar desabilitado
             if not _proxima_disponivel(botao):
                 break
@@ -551,6 +570,66 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
 
 def _lista_declarada_vazia(page: "Page") -> bool:
     return _visivel(page.locator(SEL_LISTA_VAZIA)) or _visivel(page.get_by_text(TEXTO_LISTA_VAZIA))
+
+
+def _localizar_chamado(page: "Page", numero: str) -> Optional[tuple[ItemLista, "Locator"]]:
+    """Procura na lista completa e, se faltar, pesquisa o UTIC no filtro da Central de Tarefas."""
+    item = next((i for i in listar_chamados(page) if i.numero == numero), None)
+    if item is None:
+        busca = page.locator(SEL_BUSCA_LISTA).filter(visible=True)
+        if busca.count() != 1:
+            raise SoftExpertErro(f"{numero}: não consegui identificar o campo de pesquisa da central de tarefas.")
+        _log(f"{numero}: ausente da lista; pesquisando o número pelo filtro do SoftExpert.")
+        antes = _textos_linhas(page)
+        busca.fill(numero)
+        busca.press("Enter")
+        ultimo: tuple = ()
+        desde = time.monotonic()
+
+        def pesquisa_respondeu() -> bool:
+            # O SoftExpert esvazia a lista por ~0,4 s antes de mostrar o resultado (sem spinner): só vale um estado
+            # que mudou em relação à lista anterior, é lista com cartões ou "vazia" declarada, e se manteve estável.
+            nonlocal ultimo, desde
+            if tela_de_login(page):
+                raise SessaoExpirada("O SoftExpert voltou para o login durante a pesquisa do chamado.")
+            textos = _textos_linhas(page)
+            estado = (tuple(textos), bool(textos) or _lista_declarada_vazia(page), _visivel(page.locator(SEL_CARREGANDO)))
+            if estado != ultimo:
+                ultimo, desde = estado, time.monotonic()
+                return False
+            mudou = textos != antes if textos else estado[1]
+            return mudou and not estado[2] and (time.monotonic() - desde) * 1000 >= ESPERA_RESULTADO_ESTAVEL_MS
+
+        if not _esperar(page, pesquisa_respondeu, ESPERA_LISTA_MS):
+            raise SoftExpertErro(f"{numero}: a pesquisa pelo filtro do SoftExpert não mostrou uma resposta confirmável.")
+        if not _textos_linhas(page) and _lista_declarada_vazia(page):
+            return None
+        item = next((i for i in listar_chamados(page) if i.numero == numero), None)
+    if item is None:
+        return None
+    if item.ocorrencias != 1:
+        raise SoftExpertErro(f"{numero}: há mais de uma atividade com esse número; nenhuma foi aberta.")
+    # O prefixo aceita o rótulo colado ao UTIC no cartão, mas impede outro UTIC antes do identificador.
+    identidade = re.compile(rf"^(?:(?!UTIC-\d{{4}}-\d+).)*{re.escape(numero)}(?!\d)", re.IGNORECASE | re.DOTALL)
+    linha = page.locator(SEL_LINHA).filter(visible=True).filter(has_text=identidade)
+    for _ in range(MAX_RODADAS_LISTA):
+        if linha.count():
+            _conferir_linha(linha, numero)
+            return item, linha
+        anterior = page.get_by_role("button", name=NOME_ANTERIOR).or_(page.get_by_role("link", name=NOME_ANTERIOR)).filter(visible=True)
+        if not anterior.count() or not _proxima_disponivel(anterior.first):
+            break
+        antes = _textos_linhas(page)
+        clicar(anterior, "Página anterior")
+        if not _esperar(page, lambda: _textos_linhas(page) != antes, ESPERA_PAGINA_MS):
+            break
+        _aguardar_sem_carregamento(page, ESPERA_PAGINA_MS)
+    raise SoftExpertErro(f"{numero}: o cartão mudou depois da pesquisa; nenhuma atividade foi aberta.")
+
+
+def _conferir_linha(linha: "Locator", numero: str) -> None:
+    if linha.count() != 1 or extrair_numeros(linha.inner_text())[:1] != [numero]:
+        raise SoftExpertErro(f"{numero}: a identidade da atividade mudou; nenhum clique foi realizado.")
 
 
 def coletar_numeros(page: "Page") -> List[str]:
@@ -815,6 +894,7 @@ def _clicar_icone_executar(page: "Page", linha: "Locator", numero: str) -> None:
     dica = page.get_by_text(NOME_EXECUTAR).filter(visible=True)
     if not _esperar(page, lambda: dica.count(), ESPERA_BOTAO_MS):
         raise SoftExpertErro(f"{numero}: o ícone da linha não mostrou a dica Executar; nada foi clicado.")
+    _conferir_linha(linha, numero)
     clicar(botao, "Executar")
 
 
@@ -831,6 +911,7 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
     context.on("page", nova_janela)
     page.on("dialog", tratar)
     try:
+        _conferir_linha(linha, numero)
         if linha.locator(SEL_GRUPO_ACOES).count():
             _clicar_icone_executar(page, linha, numero)  # interface atual: o ✓ já abre o formulário
         else:
@@ -838,10 +919,12 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
             executar = page.get_by_role("button", name=NOME_EXECUTAR).filter(visible=True)
             if not _esperar(page, lambda: executar.count() and executar.first.is_enabled(), ESPERA_ABERTURA_MS):
                 raise SoftExpertErro(f"{numero}: o botão Executar não ficou disponível depois de selecionar a linha.")
+            _conferir_linha(linha, numero)
             clicar(executar, "Executar")
             item = page.get_by_role("menuitem", name=NOME_REGISTRO).or_(page.get_by_text(NOME_REGISTRO)).filter(visible=True)
             if not _esperar(page, lambda: item.count(), ESPERA_ABERTURA_MS):
                 raise SoftExpertErro(f"{numero}: o item Registro de Chamados não apareceu no menu Executar.")
+            _conferir_linha(linha, numero)
             clicar(item, "Registro de Chamados")
 
         def formulario() -> Optional["Page"]:
@@ -953,13 +1036,10 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
     _log(f"{numero}: abrindo o chamado.")
     page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
     _aguardar_lista(page)
-    encontrados = listar_chamados(page, parar_em=numero)
-    item = next((i for i in encontrados if i.numero == numero), None)
-    if item is None:
+    localizado = _localizar_chamado(page, numero)
+    if localizado is None:
         raise ChamadoNaoEncontrado(f"{numero}: não está na lista da central de tarefas.")
-    # Sem âncora à esquerda: o texto bruto do cartão cola o título ao rótulo anterior ("atividadeUTIC-…").
-    padrao = re.compile(rf"{re.escape(numero)}(?!\d)", re.IGNORECASE)
-    linha = page.locator(SEL_LINHA).filter(visible=True).filter(has_text=padrao).first
+    item, linha = localizado
     formulario: Optional["Page"] = None
     try:
         formulario = _abrir_formulario(context, page, linha, numero)
@@ -1497,7 +1577,7 @@ def _cartao_na_lista(page: "Page", numero: str) -> bool:
     for tentativa in range(2):
         page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
         _aguardar_lista(page)
-        if all(i.numero != numero for i in listar_chamados(page)):
+        if _localizar_chamado(page, numero) is None:
             return False
         if tentativa == 0:
             page.wait_for_timeout(ESPERA_RELEITURA_MS)
@@ -1512,15 +1592,14 @@ def _finalizar(
     _log(f"{numero}: abrindo para finalizar.")
     page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
     _aguardar_lista(page)
-    item = next((i for i in listar_chamados(page, parar_em=numero) if i.numero == numero), None)
-    if item is None:
+    localizado = _localizar_chamado(page, numero)
+    if localizado is None:
         _log(f"{numero}: fora da central de tarefas; nada foi feito.")
         return _resultado(
             numero, STATUS_NAO_ENCONTRADO,
             mensagem="Não está na central de tarefas (já finalizado ou sem tarefa pendente); confira no SoftExpert.",
         )
-    padrao = re.compile(rf"{re.escape(numero)}(?!\d)", re.IGNORECASE)
-    linha = page.locator(SEL_LINHA).filter(visible=True).filter(has_text=padrao).first
+    item, linha = localizado
     formulario: Optional["Page"] = None
     try:
         formulario = _abrir_formulario(context, page, linha, numero)
