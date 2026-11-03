@@ -24,6 +24,7 @@
   let homeListHasMore = false;
   let homeListTotal = 0;
   let homeListQuery = "";
+  let homeListActiveSerial = "";
   let homeListSerials = new Map();
   let homeComparisonFilters = { "7-dias": null, divergentes: null };
   let homeCountsLoaded = false;
@@ -43,6 +44,7 @@
 
   function limparSelecaoEquipamento() {
     app.definirEquipamentoAtual(null);
+    highlightHomeListItem(null);
     appState.retiradaCidadeSelecionada = "";
     document.getElementById("card-equipamento")?.classList.add("hidden");
     document.getElementById("home-detail-empty")?.classList.remove("hidden");
@@ -140,8 +142,7 @@
     const term = val.trim();
     if (term.length < 2) {
       app.fecharAutocomplete();
-      if (!term) void carregarListaHome({ query: "", reset: true });
-      else limparListaHome("Digite ao menos 2 caracteres para filtrar a lista.");
+      void carregarListaHome({ query: term, reset: true });
       return;
     }
 
@@ -574,12 +575,13 @@
     list.querySelectorAll('.ck-item[aria-selected="true"]').forEach(el => {
       el.setAttribute("aria-selected", "false");
     });
-    if (!serial) return;
-    const target = list.querySelector(`[data-serial="${CSS.escape(String(serial).toUpperCase())}"]`);
+    const target = serial ? list.querySelector(`[data-serial="${CSS.escape(String(serial).toUpperCase())}"]`) : null;
     if (target) {
       target.setAttribute("aria-selected", "true");
       target.scrollIntoView({ block: "nearest", behavior: "auto" });
     }
+    const active = [...list.querySelectorAll('[role="option"]')].find(option => option.id === list.getAttribute("aria-activedescendant"));
+    atualizarAcoesListaHome(active?.dataset.serial || (target ? serial : ""));
   }
 
   function serialDeComparacao(item) {
@@ -680,6 +682,7 @@
   }
 
   function limparListaHome(message) {
+    atualizarAcoesListaHome("");
     const list = document.getElementById("home-equipment-list");
     if (list) {
       list.replaceChildren();
@@ -714,10 +717,9 @@
     return statuses.length ? statuses : [{ tone: "ok", icon: "i-ok", label: "Sincronizado" }];
   }
 
-  function criarStatusListaHome(status, serial) {
-    // Selos de Divergente/Sem acesso viram botões (mesma cor) que levam ao painel de origem do dado.
-    const el = status.destino ? document.createElement("button") : document.createElement("span");
-    el.className = status.destino ? "ck-status ck-status--link" : "ck-status";
+  function criarStatusListaHome(status, serial, interativo = false) {
+    const el = document.createElement(interativo ? "button" : "span");
+    el.className = interativo ? "ck-status ck-status--link" : "ck-status";
     el.dataset.status = status.tone;
     el.append(status.label);
     const svgNs = "http://www.w3.org/2000/svg";
@@ -729,10 +731,8 @@
     use.setAttribute("href", `#${status.icon}`);
     icon.append(use);
     el.prepend(icon);
-    if (status.destino) {
+    if (interativo) {
       el.type = "button";
-      // Fora da ordem de Tab: o item da lista já é navegável pelo teclado (listbox) e botão dentro de option é aninhamento interativo.
-      el.tabIndex = -1;
       el.dataset.destino = status.destino;
       el.setAttribute("aria-label", status.destino === "resumo"
         ? `${status.label}: abrir ${serial} na aba Resumo`
@@ -744,6 +744,28 @@
       el.addEventListener("keydown", event => event.stopPropagation());
     }
     return el;
+  }
+
+  function atualizarAcoesListaHome(serial) {
+    homeListActiveSerial = String(serial || "").trim();
+    const actions = document.getElementById("home-equipment-actions");
+    if (!actions) return;
+    const statuses = homeListActiveSerial ? statusDaLinhaHome({ serial: homeListActiveSerial }).filter(status => status.destino) : [];
+    const signature = JSON.stringify([homeListActiveSerial, statuses]);
+    if (actions.dataset.signature === signature) return;
+    const focused = document.activeElement;
+    const focusedDestination = actions.dataset.serial === homeListActiveSerial && actions.contains?.(focused) ? focused.dataset.destino : "";
+    actions.dataset.signature = signature;
+    actions.dataset.serial = homeListActiveSerial;
+    actions.hidden = !statuses.length;
+    actions.replaceChildren();
+    if (!statuses.length) return;
+    actions.setAttribute("aria-label", `Ações de ${homeListActiveSerial}`);
+    actions.append(
+      createTextElement("span", "ck-lista__info", `Ações de ${homeListActiveSerial}`),
+      ...statuses.map(status => criarStatusListaHome(status, homeListActiveSerial, true)),
+    );
+    if (focusedDestination) actions.querySelector(`[data-destino="${CSS.escape(focusedDestination)}"]`)?.focus({ preventScroll: true });
   }
 
   async function abrirDestinoStatusHome(destino, serial) {
@@ -778,7 +800,13 @@
       createTextElement("span", "ck-item__sub", detail || "Sem modelo ou usuário"),
       criarPilhaStatusHome(statuses, serial),
     );
-    li.addEventListener("click", () => app.selecionarItemAutocomplete(item));
+    li.addEventListener("click", () => {
+      const list = document.getElementById("home-equipment-list");
+      list.setAttribute("aria-activedescendant", li.id);
+      list.querySelectorAll('[role="option"]').forEach(option => option.classList.toggle("is-focused", option === li));
+      atualizarAcoesListaHome(serial);
+      app.selecionarItemAutocomplete(item);
+    });
     return li;
   }
 
@@ -796,6 +824,7 @@
     });
     const selected = String(appState.currentEquipamento?.serial || "").trim();
     if (selected) highlightHomeListItem(selected);
+    else if (homeListActiveSerial && !list.querySelector(`[data-serial="${CSS.escape(homeListActiveSerial.toUpperCase())}"]`)) atualizarAcoesListaHome("");
   }
 
   async function carregarListaHome({ query = homeListQuery, reset = true } = {}) {
@@ -803,12 +832,15 @@
     if (!list) return;
     homeListQuery = String(query || "").trim();
     if (homeListQuery.length === 1) {
+      homeListRequestGate.invalidate();
+      homeListHasMore = false;
       limparListaHome("Digite ao menos 2 caracteres para filtrar a lista.");
       return;
     }
     const request = homeListRequestGate.begin();
     const offset = reset ? 0 : homeListOffset;
     if (reset) {
+      atualizarAcoesListaHome("");
       homeListOffset = 0;
       homeListTotal = 0;
       homeListHasMore = false;
@@ -913,6 +945,7 @@
       } else return;
       event.preventDefault();
       list.setAttribute("aria-activedescendant", options[index].id);
+      atualizarAcoesListaHome(options[index].dataset.serial);
       options.forEach((option, optionIndex) => option.classList.toggle("is-focused", optionIndex === index));
       options[index].scrollIntoView({ block: "nearest", behavior: "auto" });
     });

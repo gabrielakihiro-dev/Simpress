@@ -15,6 +15,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -231,37 +232,116 @@ class ChromeDaBancada:
         regras = f"MAP {UX_HOST} 127.0.0.1,MAP {ENDPOINT_HOST} 127.0.0.1"
         # Os sites reais usam HTTPS; a bancada usa HTTP e o Chrome seguraria o download como inseguro.
         seguras = f"http://{UX_HOST}:{porta_site},http://{ENDPOINT_HOST}:{porta_site}"
-        self.processo = subprocess.Popen(
-            [
-                str(executavel), *([] if os.environ.get("SIMPRESS_TESTE_COM_JANELA") == "1" else ["--headless=new"]),
-                "--remote-debugging-port=0",
-                f"--user-data-dir={self.perfil}", "--no-first-run", "--no-default-browser-check",
-                f"--window-size={largura},{altura}", f"--force-device-scale-factor={escala}",
-                "--no-proxy-server", f"--host-resolver-rules={regras}",
-                f"--unsafely-treat-insecure-origin-as-secure={seguras}", "about:blank",
-            ],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        self.log_chrome = self.perfil / "chrome.log"
+        with self.log_chrome.open("wb") as arquivo_log_chrome:
+            self.processo = subprocess.Popen(
+                [
+                    str(executavel), *([] if os.environ.get("SIMPRESS_TESTE_COM_JANELA") == "1" else ["--headless=new"]),
+                    "--remote-debugging-port=0",
+                    f"--user-data-dir={self.perfil}", "--no-first-run", "--no-default-browser-check",
+                    f"--window-size={largura},{altura}", f"--force-device-scale-factor={escala}",
+                    "--no-proxy-server", f"--host-resolver-rules={regras}",
+                    f"--unsafely-treat-insecure-origin-as-secure={seguras}", "about:blank",
+                ],
+                stdout=arquivo_log_chrome, stderr=subprocess.STDOUT,
+            )
+        try:
+            limite = time.time() + 30
+            codigo_saida = None
+            while time.time() < limite:
+                codigo_saida = self.processo.poll()
+                if codigo_saida is not None:
+                    break
+                try:
+                    self.porta = int(
+                        (self.perfil / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()[0]
+                    )
+                    self.url = f"http://127.0.0.1:{self.porta}"
+                    with urllib.request.urlopen(f"{self.url}/json/version", timeout=1):
+                        return
+                except (OSError, ValueError, IndexError):
+                    time.sleep(0.3)
+            if codigo_saida is None:
+                codigo_saida = self.processo.poll()
+            motivo = "o processo encerrou antes de abrir a porta" if codigo_saida is not None else "o prazo de 30 s expirou"
+            self.fechar()
+            raise RuntimeError(self._diagnostico_inicio(motivo, codigo_saida))
+        except BaseException:
+            self.fechar()
+            raise
+
+    @staticmethod
+    def _texto_seguro(dados: bytes) -> str:
+        texto = dados.decode("utf-8", errors="replace")
+        texto = "".join(caractere if caractere.isprintable() or caractere in "\r\n" else "�" for caractere in texto)
+        return re.sub(
+            r"\bwss?://[^\s\"'<>]*/devtools/browser/[^\s\"'<>]+",
+            "<URL CDP redigida>",
+            texto,
+            flags=re.IGNORECASE,
         )
-        limite = time.time() + 30
-        while time.time() < limite:
-            try:
-                self.porta = int(
-                    (self.perfil / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()[0]
-                )
-                self.url = f"http://127.0.0.1:{self.porta}"
-                with urllib.request.urlopen(f"{self.url}/json/version", timeout=1):
-                    return
-            except (OSError, ValueError, IndexError):
-                time.sleep(0.3)
-        self.fechar()
-        raise RuntimeError("O Chrome da bancada não abriu a porta CDP.")
+
+    def _diagnostico_inicio(self, motivo: str, codigo_saida: int | None) -> str:
+        arquivo_porta = self.perfil / "DevToolsActivePort"
+        try:
+            with arquivo_porta.open("rb") as arquivo:
+                dados_porta = arquivo.read(513)
+        except FileNotFoundError:
+            estado_porta = "ausente"
+        except OSError as erro:
+            estado_porta = f"indisponível ({type(erro).__name__})"
+        else:
+            primeira_linha, separador, restante = dados_porta.partition(b"\n")
+            primeira_linha = primeira_linha.removesuffix(b"\r")
+            porta = "inválida"
+            if primeira_linha.isdigit() and 1 <= int(primeira_linha) <= 65535:
+                porta = str(int(primeira_linha))
+            segunda_linha = "sim" if separador and restante else "não"
+            estado_porta = f"presente; porta numérica: {porta}; segunda linha: {segunda_linha}"
+
+        try:
+            with self.log_chrome.open("rb") as arquivo:
+                arquivo.seek(0, os.SEEK_END)
+                tamanho_log = arquivo.tell()
+                inicio_cauda = max(0, tamanho_log - 8192)
+                comeca_no_meio = False
+                if inicio_cauda:
+                    arquivo.seek(inicio_cauda - 1)
+                    comeca_no_meio = arquivo.read(1) != b"\n"
+                arquivo.seek(inicio_cauda)
+                cauda_log = arquivo.read(8192)
+        except OSError as erro:
+            saida = f"indisponível ({type(erro).__name__})"
+        else:
+            if tamanho_log > 8192 and comeca_no_meio:
+                if b"\n" not in cauda_log:
+                    cauda_log = b""
+                else:
+                    cauda_log = cauda_log.split(b"\n", 1)[1]
+            saida = self._texto_seguro(cauda_log)
+            if tamanho_log > 8192 and cauda_log:
+                saida = "[somente os últimos 8192 bytes]\n" + saida
+            if not saida:
+                saida = "<vazio>"
+
+        codigo = "indisponível (processo ainda estava em execução)" if codigo_saida is None else str(codigo_saida)
+        return (
+            "O Chrome da bancada não abriu a porta CDP; "
+            f"{motivo}. Código de saída: {codigo}. "
+            f"DevToolsActivePort: {estado_porta}. Cauda de chrome.log (máximo 8192 bytes):\n{saida}"
+        )
 
     def fechar(self) -> None:
-        self.processo.terminate()
-        try:
-            self.processo.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self.processo.kill()
+        if self.processo.poll() is None:
+            try:
+                self.processo.terminate()
+            except OSError:
+                pass
+            try:
+                self.processo.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.processo.kill()
+                self.processo.wait()
 
 
 class ChromeDaBancadaStartupTests(unittest.TestCase):
@@ -274,7 +354,9 @@ class ChromeDaBancadaStartupTests(unittest.TestCase):
             (perfil / "DevToolsActivePort").write_text(
                 f"{porta}\n/devtools/browser/test", encoding="utf-8"
             )
-            return MagicMock()
+            processo = MagicMock()
+            processo.poll.return_value = None
+            return processo
 
         with (
             tempfile.TemporaryDirectory() as temp,
@@ -297,6 +379,44 @@ def conexao_extra(url_cdp: str) -> None:
         "with sync_playwright() as p:\n    b = p.chromium.connect_over_cdp(sys.argv[1])\n    b.contexts[0].pages\n"
     )
     subprocess.run([sys.executable, "-c", codigo, url_cdp], check=True, timeout=60, capture_output=True)
+
+
+class ChromeDaBancadaTests(unittest.TestCase):
+    def test_texto_seguro_redige_url_websocket_de_debug(self):
+        token = "token-sentinela-nao-imprimir"
+        for esquema in ("ws", "wss"):
+            with self.subTest(esquema=esquema):
+                texto = f"DevTools listening on {esquema}://127.0.0.1:9222/devtools/browser/{token}"
+                seguro = ChromeDaBancada._texto_seguro(texto.encode("utf-8"))
+                self.assertNotIn(token, seguro)
+                self.assertIn("<URL CDP redigida>", seguro)
+
+    def test_diagnostico_descarta_linha_parcial_da_cauda_do_log(self):
+        token = b"token-sentinela-nao-imprimir"
+        url = b"ws://127.0.0.1:9222/devtools/browser/" + token + b"\n"
+        posterior = b"linha posterior preservada\n"
+        corte_url = 5
+        preenchimento = b"x" * (8192 - (len(url) - corte_url) - len(posterior))
+
+        with tempfile.TemporaryDirectory() as pasta:
+            chrome = ChromeDaBancada.__new__(ChromeDaBancada)
+            chrome.perfil = Path(pasta)
+            chrome.log_chrome = chrome.perfil / "chrome.log"
+            chrome.log_chrome.write_bytes(b"inicio" + url + posterior + preenchimento)
+            diagnostico = chrome._diagnostico_inicio("teste", 0)
+            self.assertNotIn(token.decode(), diagnostico)
+            self.assertIn(posterior.decode().strip(), diagnostico)
+
+            chrome.log_chrome.write_bytes(b"x" * 9000)
+            diagnostico = chrome._diagnostico_inicio("teste", 0)
+            self.assertIn("<vazio>", diagnostico)
+            self.assertNotIn("x" * 8, diagnostico)
+
+            linha_completa = b"linha completa sem newline final "
+            cauda_completa = linha_completa + b"y" * (8192 - len(linha_completa))
+            chrome.log_chrome.write_bytes(b"linha anterior\n" + cauda_completa)
+            diagnostico = chrome._diagnostico_inicio("teste", 0)
+            self.assertIn(linha_completa.decode().strip(), diagnostico)
 
 
 @unittest.skipUnless(PLAYWRIGHT_AVAILABLE, "playwright não está instalado")
