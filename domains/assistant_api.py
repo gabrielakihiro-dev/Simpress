@@ -24,6 +24,8 @@ from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial
+from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
+from routers.local_setup import RepresentanteRegionalPayload
 from routers.transfers import TransferenciaPayload, formatar_telefone_brasileiro
 
 logger = logging.getLogger(__name__)
@@ -622,6 +624,74 @@ def montar_contato_origem(atual: Dict[str, Any], contato: Any, email: Any, telef
         corpo[chave] = final
     if not mudancas:
         raise ValueError("Nenhum valor novo: informe nome, e-mail ou celular diferente do atual. Nada a alterar.")
+    return corpo, mudancas
+
+
+# Regional representative of a city: (body field, tool argument, name on the card as on the screen, limit as in RepresentanteRegionalPayload).
+_CAMPOS_REPRESENTANTE = (
+    ("nome", "nome", "Nome", 160), ("email", "email", "E-mail", 254), ("telefone", "telefone", "Celular", 64),
+    ("horario", "horario", "Expediente", 64), ("almoco", "almoco", "Almoço", 64), ("pausaDuracao", "pausa", "Pausa", 16),
+)
+_ALMOCO_NAO_FECHA = "Escritório não fecha"
+
+
+def _chave_cidade(texto: Any) -> str:
+    sem_acento = "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
+    return " ".join(sem_acento.casefold().split())
+
+
+def resolver_cidade_representante(cidade: Any) -> str:
+    """The known city (with accents) the text points at, ignoring accent and case; ValueError (pt-BR) otherwise."""
+    chave = _chave_cidade(cidade)
+    for conhecida in REGIONAL_REPRESENTATIVE_CITIES:
+        if chave and _chave_cidade(conhecida) == chave:
+            return conhecida
+    raise ValueError(f"Cidade sem representante regional: informe uma destas: {', '.join(REGIONAL_REPRESENTATIVE_CITIES)}.")
+
+
+def representante_efetivo(cidade: str, salvos: Dict[str, Any]) -> Tuple[Dict[str, str], bool]:
+    """(default merged with the saved change of the city, whether a change is saved)."""
+    salvo, padrao = _dict(salvos.get(cidade)), REGIONAL_REPRESENTATIVE_DEFAULTS[cidade]
+    return {c: salvo[c] if isinstance(salvo.get(c), str) else padrao[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}, bool(salvo)
+
+
+def diferencas_representante(antes: Dict[str, str], depois: Dict[str, str]) -> List[Tuple[str, str, str]]:
+    """[(label, before, after)] of the fields that differ, with the labels of the screen."""
+    return [(rotulo, antes.get(c, ""), depois.get(c, "")) for c, _, rotulo, _ in _CAMPOS_REPRESENTANTE if antes.get(c, "") != depois.get(c, "")]
+
+
+def montar_representante_regional(
+    efetivo: Dict[str, str], nome: Any, email: Any, telefone: Any, horario: Any, almoco: Any, pausa: Any,
+) -> Tuple[Dict[str, str], List[Tuple[str, str, str]]]:
+    """(body of the PUT route with the 6 fields, [(label, current, new)] that change); ValueError (pt-BR) when the route would refuse.
+
+    A field that is None keeps the current value; an empty text clears it (name, e-mail, phone, pause)."""
+    novos = {"nome": nome, "email": email, "telefone": telefone, "horario": horario, "almoco": almoco, "pausaDuracao": pausa}
+    corpo: Dict[str, str] = {}
+    for campo, _, rotulo, limite in _CAMPOS_REPRESENTANTE:
+        valor = novos[campo]
+        if valor is None:
+            corpo[campo] = str(efetivo.get(campo) or "").strip()
+            continue
+        valor = str(valor).strip()
+        if campo in ("nome", "email", "telefone") and "OCULTADO]" in valor:
+            raise ValueError(f"{rotulo} digitado no chat é ocultado do modelo (LGPD). Peça ao usuário para usar o botão Editar, ao lado do representante regional, na tela de Transferência.")
+        if len(valor) > limite:
+            raise ValueError(f"{rotulo} longo demais (máximo {limite} caracteres).")
+        if valor and campo == "email":
+            valor = TransferenciaPayload.validate_email(valor)
+        elif valor and campo == "telefone":
+            valor = formatar_telefone_brasileiro(TransferenciaPayload.validate_phone(valor))
+        corpo[campo] = valor
+    mudancas = diferencas_representante({c: str(efetivo.get(c) or "").strip() for c in corpo}, corpo)
+    if not mudancas:
+        raise ValueError("Nenhum valor novo: informe algum campo diferente do atual. Nada a alterar.")
+    try:
+        RepresentanteRegionalPayload(**corpo)
+    except ValidationError as erro:
+        raise ValueError(str(erro.errors()[0]["msg"]).removeprefix("Value error, ")) from None
+    if corpo["almoco"] != _ALMOCO_NAO_FECHA and not corpo["pausaDuracao"]:  # same rule as the screen
+        raise ValueError('Preencha a pausa, por exemplo 1h30, ou use almoço "Escritório não fecha".')
     return corpo, mudancas
 
 
@@ -1820,6 +1890,62 @@ class SimpressApi:
         if not ok:
             return {"sucesso": False, "erro": dados}
         return {"sucesso": True, "mensagem": f"Contato de origem atualizado ({', '.join(m[0] for m in mudancas)})."}
+
+    def _representantes_salvos(self) -> Tuple[Dict[str, Any], bool]:
+        """(changes saved by city, whether the file is unreadable); ValueError when the route fails."""
+        ok, dados = self._chamar("GET", "/api/config/representantes-regionais")
+        if not ok:
+            raise ValueError(dados)
+        dados = _dict(dados)
+        return _dict(dados.get("alteracoes")), bool(dados.get("arquivo_invalido"))
+
+    def representante_regional_atual(self, cidade: Any) -> Tuple[str, Dict[str, str], bool]:
+        """(city, effective values, whether a change is saved); real values: only for the card and the merge. ValueError (pt-BR)."""
+        cidade = resolver_cidade_representante(cidade)
+        return (cidade, *representante_efetivo(cidade, self._representantes_salvos()[0]))
+
+    def ver_representantes_regionais(self, cidade: Any = None) -> Dict[str, Any]:
+        """Values go out under sensitive keys (nome, email, retirada_telefone), so the conversation's mask turns them into markers."""
+        try:
+            cidade = resolver_cidade_representante(cidade) if str(cidade or "").strip() else None
+            salvos, invalido = self._representantes_salvos()
+        except ValueError as falha:
+            return {"erro": str(falha)}
+        if cidade is None:
+            return {"cidades": [{"cidade": c, "alterada": isinstance(salvos.get(c), dict)} for c in REGIONAL_REPRESENTATIVE_CITIES], "arquivo_invalido": invalido}
+        valores, alterada = representante_efetivo(cidade, salvos)
+        return {
+            "cidade": cidade, "nome": valores["nome"], "email": valores["email"], "retirada_telefone": valores["telefone"],
+            "horario": valores["horario"], "almoco": valores["almoco"], "pausa": valores["pausaDuracao"],
+            "alterada": alterada, "arquivo_invalido": invalido,
+        }
+
+    def montar_alteracao_representante(self, cidade: Any, *novos: Any) -> Tuple[str, Dict[str, str], List[Tuple[str, str, str]]]:
+        """(city, body for the route, changes) of `alterar_representante_regional`; ValueError (pt-BR) when it cannot run."""
+        cidade, efetivo, _ = self.representante_regional_atual(cidade)
+        return (cidade, *montar_representante_regional(efetivo, *novos))
+
+    def alterar_representante_regional(self, cidade: Any, nome: Any, email: Any, telefone: Any, horario: Any, almoco: Any, pausa: Any) -> Dict[str, Any]:
+        try:
+            cidade, corpo, mudancas = self.montar_alteracao_representante(cidade, nome, email, telefone, horario, almoco, pausa)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        ok, dados = self._chamar("PUT", f"/api/config/representantes-regionais/{cidade}", corpo=corpo)
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        return {"sucesso": True, "mensagem": f"Representante regional de {cidade} atualizado ({', '.join(m[0] for m in mudancas)})."}
+
+    def restaurar_representante_regional(self, cidade: Any) -> Dict[str, Any]:
+        try:
+            cidade, _, alterado = self.representante_regional_atual(cidade)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        if not alterado:
+            return {"sucesso": False, "erro": "Esta cidade não tem alteração salva. Nada a restaurar."}
+        ok, dados = self._chamar("DELETE", f"/api/config/representantes-regionais/{cidade}")
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        return {"sucesso": True, "mensagem": f"Representante regional de {cidade} restaurado ao padrão."}
 
     def decidir_pendencia_usuario(self, pendencia_id: str, decisao: str) -> Dict[str, Any]:
         pendencia_id, decisao = str(pendencia_id).strip(), decisao.strip().lower()

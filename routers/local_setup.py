@@ -4,16 +4,21 @@ import asyncio
 import io
 import logging
 import re
+import unicodedata
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 from core.async_workers import await_worker_completion
 from core.config import format_size_limit
-from domains.local_setup import load_origin_contact, save_origin_contact, validate_local_model
+from domains.local_setup import (
+    REGIONAL_REPRESENTATIVE_CITIES, load_origin_contact, load_regional_representatives,
+    remove_regional_representative, save_origin_contact, save_regional_representative, validate_local_model,
+)
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
 from routers.transfers import TransferenciaPayload
@@ -44,13 +49,60 @@ class ContatoOrigemPayload(BaseModel):
         return TransferenciaPayload.validate_phone(value)
 
 
-def create_local_setup_router(*, model_path, transaction_root, backups_directory,
-                              max_upload_bytes, parser_admission, export_dependency_paths, validate_export,
-                              origin_contact_file=None):
+class RepresentanteRegionalPayload(BaseModel):
+    """Edited regional representative of one city; the JSON keys match the front-end list."""
+    nome: str = Field("", max_length=160)
+    email: str = Field("", max_length=254)
+    telefone: str = Field("", max_length=64)
+    horario: str = ""
+    almoco: str = ""
+    pausaDuracao: str = ""
+
+    @field_validator("nome", "horario", "almoco", "pausaDuracao")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return TransferenciaPayload.validate_email(value)
+
+    @field_validator("telefone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        return TransferenciaPayload.validate_phone(value)
+
+    @field_validator("horario")
+    @classmethod
+    def validate_schedule(cls, value: str) -> str:
+        if not re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", value):
+            raise ValueError("Informe o expediente no formato 08:00:00 às 18:00:00.")
+        return value
+
+    @field_validator("almoco")
+    @classmethod
+    def validate_lunch(cls, value: str) -> str:
+        if value != "Escritório não fecha" and not re.fullmatch(r"\d{2}:\d{2}:\d{2}", value):
+            raise ValueError('Informe o almoço como 12:00:00 ou "Escritório não fecha".')
+        return value
+
+    @field_validator("pausaDuracao")
+    @classmethod
+    def validate_break(cls, value: str) -> str:
+        if value and not re.fullmatch(r"\d{1,2}h(\d{2})?", value):
+            raise ValueError("Informe a pausa como 1h, 1h30 ou 2h, ou deixe em branco.")
+        return value
+
+
+def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups_directory: Any,
+                              max_upload_bytes: Any, parser_admission: Any, export_dependency_paths: Any,
+                              validate_export: Any, origin_contact_file: Any = None,
+                              regional_representatives_file: Any = None) -> Any:
     router = APIRouter()
 
     @router.put("/api/config/transferencia/contato-origem")
-    def save_transfer_origin_contact(payload: ContatoOrigemPayload):
+    def save_transfer_origin_contact(payload: ContatoOrigemPayload) -> Any:
         if origin_contact_file is None:
             raise HTTPException(404, "Configuração do contato de origem indisponível.")
         path = origin_contact_file()
@@ -72,7 +124,48 @@ def create_local_setup_router(*, model_path, transaction_root, backups_directory
             raise HTTPException(500, "Não foi possível gravar o contato de origem.") from error
         return load_origin_contact(path)
 
-    def commit_model(kind, data):
+    def regional_representatives_path() -> Any:
+        if regional_representatives_file is None:
+            raise HTTPException(404, "Configuração dos representantes regionais indisponível.")
+        return regional_representatives_file()
+
+    def known_city(city: str) -> str:
+        city = unicodedata.normalize("NFC", city)
+        if city not in REGIONAL_REPRESENTATIVE_CITIES:
+            raise HTTPException(404, "Cidade não encontrada.")
+        return city
+
+    def regional_representatives_state(path: Any) -> dict[str, Any]:
+        changes, invalid_file = load_regional_representatives(path)
+        return {"alteracoes": changes, "arquivo_invalido": invalid_file}
+
+    @router.get("/api/config/representantes-regionais")
+    def get_regional_representatives() -> dict[str, Any]:
+        return regional_representatives_state(regional_representatives_path())
+
+    @router.put("/api/config/representantes-regionais/{cidade}")
+    def save_regional_representative_route(cidade: str, payload: RepresentanteRegionalPayload) -> dict[str, Any]:
+        path, cidade = regional_representatives_path(), known_city(cidade)
+        try:
+            save_regional_representative(path, cidade, payload.model_dump())
+        except (OSError, FileTransactionError, FileBusyError) as error:
+            logger.warning("Falha ao gravar representante regional (erro=%s).", type(error).__name__)
+            raise HTTPException(500, "Não foi possível gravar o representante regional.") from error
+        return regional_representatives_state(path)
+
+    @router.delete("/api/config/representantes-regionais/{cidade}")
+    def restore_regional_representative(cidade: str) -> dict[str, Any]:
+        path, cidade = regional_representatives_path(), known_city(cidade)
+        try:
+            removed = remove_regional_representative(path, cidade)
+        except (OSError, FileTransactionError, FileBusyError) as error:
+            logger.warning("Falha ao restaurar representante regional (erro=%s).", type(error).__name__)
+            raise HTTPException(500, "Não foi possível restaurar o representante regional.") from error
+        if not removed:
+            raise HTTPException(404, "Esta cidade não tem alteração salva.")
+        return regional_representatives_state(path)
+
+    def commit_model(kind: str, data: bytes) -> dict[str, Any]:
         try:
             validate_local_model(io.BytesIO(data), kind)
         except (WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
@@ -97,7 +190,7 @@ def create_local_setup_router(*, model_path, transaction_root, backups_directory
         return {"sucesso": True, "mensagem": "Modelo validado e importado.", "arquivo": target.name}
 
     @router.post("/api/modelos/{tipo}/importar")
-    async def import_model(tipo: str, file: UploadFile = File(...)):
+    async def import_model(tipo: str, file: UploadFile = File(...)) -> Any:
         admission = None
         try:
             if tipo not in {"transferencia", "exportacao"}:

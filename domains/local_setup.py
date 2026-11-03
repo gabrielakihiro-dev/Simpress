@@ -6,6 +6,7 @@ import logging
 import lzma
 import os
 import re
+import threading
 import unicodedata
 import zipfile
 import zlib
@@ -134,17 +135,17 @@ ORIGIN_CONTACT_FIELDS = (
 )
 
 
-def _read_origin_contact_file(path: Path) -> tuple[dict, bool]:
+def _read_origin_contact_file(path: Path, label: str = "contato de origem") -> tuple[dict, bool]:
     """Return the stored values and whether the file exists but could not be used."""
     try:
         stored = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
         return {}, False
     except (OSError, ValueError):
-        logger.warning("Arquivo de contato de origem ilegível; os campos ficam vazios.")
+        logger.warning("Arquivo de %s ilegível; os campos ficam vazios.", label)
         return {}, True
     if not isinstance(stored, dict):
-        logger.warning("Arquivo de contato de origem sem objeto JSON; os campos ficam vazios.")
+        logger.warning("Arquivo de %s sem objeto JSON; os campos ficam vazios.", label)
         return {}, True
     return stored, False
 
@@ -177,3 +178,71 @@ def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})
+
+
+# Mirror of REPRESENTANTES_REGIONAIS_PR (static/js/features/regional-contacts.js): the code keeps the
+# defaults, the git-ignored config/representantes_regionais.json keeps only per-city overrides.
+# tests/test_regional_representatives.py fails if the two city lists diverge.
+REGIONAL_REPRESENTATIVE_CITIES = (
+    "Cascavel", "Londrina", "Maringá", "Pato Branco", "Ponta Grossa", "Foz do Iguaçu", "Paranaguá",
+    "Toledo", "Guarapuava", "Porecatu", "Irati", "Cornélio Procópio", "Apucarana", "Arapongas",
+    "Cerro Azul", "Cianorte", "Francisco Beltrão", "Ivaiporã", "Jacarezinho", "Laranjeiras do Sul",
+    "Paranavaí", "Campo Mourão",
+)
+# Defaults of each city (same values as the front-end list; the overrides saved in the local file win over them).
+# tests/test_assistant.py compares this table with the JS list field by field.
+REGIONAL_REPRESENTATIVE_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
+REGIONAL_REPRESENTATIVE_DEFAULTS = {
+    row[0]: dict(zip(REGIONAL_REPRESENTATIVE_FIELDS, row[1:])) for row in (
+        ("Cascavel", "Fernanda Colla Borretto", "fcolla@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Londrina", "Renata Custodio de Oliveira Varasquim", "rvarasquim@pr.sebrae.com.br", "(43) 99643-8754", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Maringá", "Tatiane Matsuguma Sanches", "tmatsuguma@pr.sebrae.com.br", "(44) 99810-1371", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Pato Branco", "Kelen Simone Moreira", "kmoreira@pr.sebrae.com.br", "(46) 99102-7523", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
+        ("Ponta Grossa", "Gislaine Pratka dos Santos", "gpratka@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Foz do Iguaçu", "Marinez Martins", "moliveira@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
+        ("Paranaguá", "Carolina Nunes Pereira Voi", "cnunes@pr.sebrae.com.br", "", "08:30:00 às 17:30:00", "12:00:00", "1h"),
+        ("Toledo", "Fernanda da Costa Goldacker", "fgoldacker@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
+        ("Guarapuava", "Chrislaine Caroline de Souza", "chsouza@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Porecatu", "Sandra de Souza Alves", "ssalves@pr.sebrae.com.br", "(43) 99818-0708", "08:00:00 às 17:00:00", "12:00:00", "2h"),
+        ("Irati", "Melany Evelyn Fernandes Ovando", "movando@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Cornélio Procópio", "Eloah Bueno Rocha", "erocha@pr.sebrae.com.br", "", "08:00:00 às 17:30:00", "12:00:00", "1h30"),
+        ("Apucarana", "Tiago Correia da Cunha", "tcorreia@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Arapongas", "", "", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Cerro Azul", "Ivan Silva Evangelista", "ievangelista@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "1h"),
+        ("Cianorte", "Valtemar Sartorelli", "vSartorelli@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "2h"),
+        ("Francisco Beltrão", "Claudineia Cabral", "cprzysiesny@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
+        ("Ivaiporã", "Joelma Barbosa", "jbarbosa@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Jacarezinho", "Erika Cristina de Faria Possette", "epossette@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Laranjeiras do Sul", "Thaís Cristina da Costa", "tcosta@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Paranavaí", "Claudia Roberta Molocny Ferro", "cmolocny@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Campo Mourão", "Sandro Nasser Santi", "ssanti@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+    )
+}
+_regional_representatives_lock = threading.Lock()
+
+
+def load_regional_representatives(path: Path) -> tuple[dict, bool]:
+    """Return the saved overrides by city and whether the file exists but could not be used."""
+    stored, invalid_file = _read_origin_contact_file(path, "representantes regionais")
+    return {c: v for c, v in stored.items() if c in REGIONAL_REPRESENTATIVE_CITIES and isinstance(v, dict)}, invalid_file
+
+
+def save_regional_representative(path: Path, city: str, values: dict) -> None:
+    """Write the already validated override for one city, keeping the others."""
+    target = Path(path)
+    with _regional_representatives_lock:
+        current, _ = load_regional_representatives(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(target, {**current, city: values})
+
+
+def remove_regional_representative(path: Path, city: str) -> bool:
+    """Drop the override of one city (back to the default); False when none was saved."""
+    target = Path(path)
+    with _regional_representatives_lock:
+        current, _ = load_regional_representatives(target)
+        if city not in current:
+            return False
+        del current[city]
+        atomic_write_json(target, current)
+        return True

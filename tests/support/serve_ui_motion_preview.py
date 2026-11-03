@@ -96,6 +96,19 @@ def origin_contact_config():
             "contato_origem_arquivo_invalido": False}
 
 
+# Regional representatives edited by the user, in memory only (GET/PUT/DELETE /api/config/representantes-regionais).
+regional_changes = {}
+REGIONAL_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
+
+
+def regional_config():
+    return {"alteracoes": regional_changes, "arquivo_invalido": False}
+
+
+def regional_error(message):
+    return {"detail": [{"type": "value_error", "loc": ["body"], "msg": f"Value error, {message}"}]}
+
+
 # Stale base alert: fresh by default so other tests keep the Home layout; e2e switches it per test.
 BASE_FRESHNESS = {
     "atualizada": {"estado": "atualizada", "limite_dias": 7, "dias_sem_atualizacao": 2,
@@ -572,6 +585,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send([])
         elif path == "/api/config/transferencia":
             self.send(origin_contact_config())
+        elif path == "/api/config/representantes-regionais":
+            self.send(regional_config())
+        elif path == "/__fixture_representantes":
+            regional_changes.clear()
+            self.send({"ok": True})
         elif path == "/api/historico-comparacoes":
             events = [DEMO_EVENT, PREVIOUS_EVENT]
             if cockpit_comparison_enabled:
@@ -705,6 +723,17 @@ class Handler(BaseHTTPRequestHandler):
                 sebrae_state["ativo"] = ativo
                 self.send(sebrae_summary())
             return
+        if path.startswith("/api/config/representantes-regionais/"):
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            if not re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", str(payload.get("horario", ""))):
+                self.send(regional_error("Informe o expediente no formato 08:00:00 às 18:00:00."), 422)
+            elif payload.get("email") and "@" not in payload["email"]:
+                self.send(regional_error("Informe um e-mail válido."), 422)
+            else:
+                regional_changes[unquote(path.rsplit("/", 1)[-1])] = {key: str(payload.get(key, "")) for key in REGIONAL_FIELDS}
+                self.send(regional_config())
+            return
         if path == "/api/config/transferencia/contato-origem":
             size = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(size) or b"{}")
@@ -738,7 +767,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"detail": "JSON inválido"}, 400)
 
     def do_DELETE(self):
-        if urlsplit(self.path).path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
+        if urlsplit(self.path).path.startswith("/api/config/representantes-regionais/"):
+            if regional_changes.pop(unquote(urlsplit(self.path).path.rsplit("/", 1)[-1]), None) is None:
+                self.send({"detail": "Esta cidade não tem alteração salva."}, 404)
+            else:
+                self.send(regional_config())
+        elif urlsplit(self.path).path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
             finalizar_state["pdf"] = None
             self.send({"numero": FINALIZAR_NUMERO, "pdf": None})
         elif urlsplit(self.path).path == "/api/operacoes/chamados/historico/antigas":

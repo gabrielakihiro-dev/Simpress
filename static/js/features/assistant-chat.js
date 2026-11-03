@@ -1030,6 +1030,7 @@
     if (texto || ferramentas.length || arquivos.length || buscas.length) adicionarMensagem("assistente", texto, ferramentas, arquivos, buscas);
     byId("assistente-anuncio").textContent = texto;
     if (!byId("assistente-lembretes").hidden && ferramentas.some(nome => nome.includes("lembrete"))) void carregarLembretes();
+    if (ferramentas.some(nome => nome.endsWith("_representante_regional"))) void context.app.carregarRepresentantesRegionais?.(true);
     mostrarPendente(dados?.pendente ? String(dados.pendente.descricao ?? "") || PENDENTE_SEM_DESCRICAO : null);
     statusPronto();
     falar(texto);
