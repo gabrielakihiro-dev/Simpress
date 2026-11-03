@@ -6,6 +6,7 @@ from domains.assistant_api import SimpressApi
 from domains.assistant_chat import MAX_CARACTERES_RESPOSTA, SYSTEM_PROMPT, AssistantConversation
 from domains.assistant_notas import NotasStore
 from domains.assistant_rascunhos import LIMITE_ITENS, TIPOS, montar_rascunho
+from domains.local_setup import REGIONAL_REPRESENTATIVE_DEFAULTS
 from domains.assistant_tools import QUERY_TOOLS, TOOLS
 from tests.test_assistant import CPF, FakeModel, abrir, call, calls, temp_json, text
 
@@ -149,16 +150,18 @@ class RascunhoNoChatTests(unittest.TestCase):
         self.assertIn("sem mudar séries, hostnames, números nem datas", SYSTEM_PROMPT)
 
     def test_hostnames_are_masked_for_the_model_and_restored_on_screen(self) -> None:
+        # Default representative names are registered first (LGPD mask), so the first hostname marker comes after them.
+        marcador = f"[PESSOA_{sum(1 for r in REGIONAL_REPRESENTATIVE_DEFAULTS.values() if r['nome']) + 1}]"
         model = FakeModel(
             calls(call("montar_rascunho", tipo="sem_acesso_7_dias")),
-            text("Olá! Segue a lista:\n- AAA111 ([PESSOA_1]) — 9 dias sem verificação\nObrigado."),
+            text(f"Olá! Segue a lista:\n- AAA111 ({marcador}) — 9 dias sem verificação\nObrigado."),
         )
         conversa = AssistantConversation(model, SimpressApi(FakeTransport()), "modelo-teste", lambda: "", NotasStore(temp_json()))  # type: ignore[arg-type]
         resposta = conversa.enviar_mensagem("escreve a cobrança dos equipamentos sem acesso há 7 dias")
         enviado = json.dumps(model.sent[1], ensure_ascii=False)
         self.assertNotIn("PRNOTE01", enviado)
         self.assertNotIn("PRNOTE02", enviado)
-        self.assertIn("[PESSOA_1]", enviado)
+        self.assertIn(marcador, enviado)
         self.assertIn("AAA111", enviado)  # serials are not names
         self.assertIn("AAA111 (PRNOTE01) — 9 dias sem verificação", resposta.texto)
         self.assertNotIn("PESSOA_", resposta.texto)

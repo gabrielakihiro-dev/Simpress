@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 STATIC = Path(__file__).resolve().parents[2] / "static"
 sys.path.insert(0, str(STATIC.parent))
 from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
+from domains.local_setup import regional_representative_defaults
 EQUIPMENT = {"serial": "LENTO", "modelo": "Notebook de demonstração", "tipo": "Notebook",
              "apelido": "DEMO-001", "retirada_cidade": "Curitiba", "retirada_endereco": "Endereço fictício"}
 DEMO_EVENT_ID = "fixture-event-001"
@@ -101,8 +102,10 @@ regional_changes = {}
 REGIONAL_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
 
 
-def regional_config():
-    return {"alteracoes": regional_changes, "arquivo_invalido": False}
+def regional_config(with_defaults=False):
+    # Like the real API: the defaults (single source: the backend) come only on GET.
+    return {"alteracoes": regional_changes, "arquivo_invalido": False,
+            **({"padroes": regional_representative_defaults()} if with_defaults else {})}
 
 
 def regional_error(message):
@@ -586,7 +589,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/config/transferencia":
             self.send(origin_contact_config())
         elif path == "/api/config/representantes-regionais":
-            self.send(regional_config())
+            self.send(regional_config(with_defaults=True))
         elif path == "/__fixture_representantes":
             regional_changes.clear()
             self.send({"ok": True})
