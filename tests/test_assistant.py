@@ -130,7 +130,7 @@ class ToolCatalogTests(unittest.TestCase):
         self.assertIn("dashboard", tool.properties["rotina"]["enum"])
         self.assertIn("Baixar, importar e buscar", tool.description)
         self.assertIn("Baixar, importar e buscar", tool.describe({"rotina": "dashboard"}))  # type: ignore[misc]
-        self.assertEqual(tool.describe({"rotina": "os"}), "Executar a rotina 'os' de automação no Chrome.")  # type: ignore[misc]
+        self.assertTrue(tool.describe({"rotina": "os"}).startswith("Executar a rotina 'os' no Chrome de automação: "))  # type: ignore[misc]
 
     def test_confirmation_text_is_built_by_the_program(self) -> None:
         api = SimpressApi(FakeSimpress())  # no "apelido" in the row and no /api/unidades: the card keeps the plain text
