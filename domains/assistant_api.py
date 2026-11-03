@@ -19,7 +19,9 @@ from urllib.parse import quote, urlencode
 
 from pydantic import ValidationError
 
+from domains import sebrae_finalizacao as fin
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
+from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
@@ -270,6 +272,288 @@ def _aparar(dados: Any) -> Any:
     return dados
 
 
+# --- automação: só campos estruturados vão ao modelo ---------------------------------------------
+# Log lines, messages, paths, URLs and capture names never leave here: a failure becomes `motivo_codigo`,
+# derived from the `[FALHA]` texts written by scripts/automacao_rotinas_chrome.py (and the scripts it calls).
+
+NOTA_LOG = (
+    "O texto do log não é enviado à IA. O operador pode ler o log completo na tela de Automação do Cockpit (F4), "
+    "no histórico de execuções."
+)
+NOTA_ETAPA = "O programa não registra a etapa atual da rotina; o único dado confiável de andamento é se ela está aguardando login."
+_SITUACAO_FINAL = {
+    "concluido": ("concluida", "Concluída."),
+    "falha": ("falhou", "Falhou."),
+    "cancelado": ("cancelada", "Cancelada."),
+    "interrompido": (
+        "interrompida",
+        "Interrompida: o servidor do Simpress foi reiniciado durante a execução e o resultado final não foi registrado "
+        "(não é falha confirmada nem cancelamento).",
+    ),
+    "ocupada": ("ocupada", "Não rodou: outra execução da automação já estava em andamento (não é falha da rotina nem cancelamento)."),
+}
+# (regex over the text without accents and in lower case, code). Specific first; the generic "não foi concluída" last.
+_MOTIVOS: Tuple[Tuple["re.Pattern[str]", str], ...] = tuple((re.compile(p), c) for p, c in (
+    (r"login nao concluido", "login_nao_concluido"),
+    (r"google chrome nao encontrado", "chrome_nao_encontrado"),
+    (r"chrome nao abriu a porta|nao expos nenhum contexto", "chrome_sem_conexao"),
+    (r"playwright", "playwright_ausente"),
+    (r"nao vi o aviso de envio concluido", "envio_sharepoint_nao_confirmado"),
+    (r"mudou depois da importacao|nao consegui conferir o dashboard do sharepoint", "dashboard_sharepoint_mudou"),
+    (r"duplicata", "duplicata_nao_criada"),
+    (r"keep both", "sharepoint_so_manter_ambos"),
+    (r"em uso ou bloqueado", "dashboard_em_uso_no_sharepoint"),
+    (r"importe o dashboard no site antes|nao tem um dashboard importado", "dashboard_nao_importado"),
+    (r"recusou o dashboard", "dashboard_recusado_pelo_site"),
+    (r"nao achei .* na pasta dashboard sebrae", "dashboard_nao_encontrado_no_sharepoint"),
+    (r"nao achei .* gerado pelo site", "dashboard_gerado_ausente"),
+    (r"nao um \.xlsx", "arquivo_baixado_invalido"),
+    (r"copia pendente", "copia_pendente_ausente"),
+    (r"pedido de finalizacao valido", "pedido_finalizacao_invalido"),
+    (r"servidor simpress nao respondeu", "servidor_simpress_sem_resposta"),
+    (r"\bdownload (?:falhou|de .* chegou vazio|nao comecou)", "download_falhou"),  # not "Downloads" in a path
+    (r"contrato", "contrato_nao_confere"),
+    (r"xlsx do endpoint|todos os computadores|formato xlsx ou declaracao", "exportacao_endpoint_invalida"),
+    (r"abrir a gestao de solicitacoes", "oracle_menu_indisponivel"),
+    (r"grade do endpoint|detalhe do computador|sistema > usuarios|caixa de filtro|link do detalhe|coluna '.*' nao esta visivel",
+     "endpoint_tela_inesperada"),
+    (r"nao ficou pronta em|nao foi processado em|nao comecou em|timeouterror|timeout", "timeout"),
+    (r"nao foi concluida", "rotina_nao_concluida"),
+))
+MOTIVOS_AUTOMACAO: Dict[str, str] = {
+    "login_nao_concluido": "O login não foi concluído no tempo de espera (o login é sempre manual).",
+    "chrome_nao_encontrado": "O Google Chrome não foi encontrado no computador.",
+    "chrome_sem_conexao": "O Chrome de automação não abriu ou não aceitou a conexão da rotina.",
+    "playwright_ausente": "O pacote Playwright não está instalado no ambiente Python do projeto.",
+    "envio_sharepoint_nao_confirmado": "O aviso de envio concluído não apareceu; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.",
+    "dashboard_sharepoint_mudou": "O Dashboard no SharePoint mudou depois da importação; é preciso importar de novo.",
+    "duplicata_nao_criada": "A cópia de segurança (Duplicata) não apareceu no SharePoint; o Dashboard não foi substituído.",
+    "sharepoint_so_manter_ambos": "O SharePoint só ofereceu manter os dois arquivos; nada foi enviado.",
+    "dashboard_em_uso_no_sharepoint": "O Dashboard estava em uso ou bloqueado no SharePoint.",
+    "dashboard_nao_importado": "Não há Dashboard importado no site.",
+    "dashboard_recusado_pelo_site": "O site recusou o Dashboard baixado.",
+    "dashboard_nao_encontrado_no_sharepoint": "O Dashboard não foi encontrado na pasta DASHBOARD SEBRAE do SharePoint.",
+    "dashboard_gerado_ausente": "Não há Dashboard gerado pelo site para enviar (falta usar Atualizar Dashboard).",
+    "arquivo_baixado_invalido": "O arquivo baixado não era um .xlsx.",
+    "copia_pendente_ausente": "Não há cópia pendente do Dashboard para enviar.",
+    "pedido_finalizacao_invalido": "Não há pedido de finalização válido; é preciso pedir de novo pelo site.",
+    "servidor_simpress_sem_resposta": "O servidor local do Simpress não respondeu à rotina.",
+    "download_falhou": "O download de um arquivo falhou, chegou vazio ou não começou.",
+    "contrato_nao_confere": "O contrato selecionado no UX Simpress ou no Oracle não conferiu.",
+    "exportacao_endpoint_invalida": "A exportação do Endpoint Central não veio como esperado.",
+    "oracle_menu_indisponivel": "A Gestão de Solicitações do Oracle não abriu pelo menu.",
+    "endpoint_tela_inesperada": "Uma tela do Endpoint Central não carregou ou não foi confirmada; nada foi decidido.",
+    "timeout": "Uma tela ou etapa não respondeu no tempo de espera.",
+    "rotina_nao_concluida": "A rotina terminou sem concluir, sem um motivo específico reconhecido.",
+    "cancelada_pelo_operador": "A rotina foi cancelada pelo operador.",
+    "servidor_reiniciado": "O servidor foi reiniciado durante a execução; o resultado final não foi registrado.",
+    "outra_execucao_em_andamento": "Outra execução da automação já estava em andamento.",
+    "desconhecido": "Motivo não reconhecido pelo programa. " + NOTA_LOG,
+}
+_ID_EXECUCAO = re.compile(r"^(?!\.+$)[A-Za-z0-9_.() -]{1,120}$")  # log file stems, e.g. "20261102_101500_os (1)"
+_STATUS_LOTE = re.compile(r"^[a-z_]{1,30}$")
+# Error bodies reach the model: besides the LGPD mask, drop what it does not cover (URLs, tokens, cookies, local paths). Free names stay uncovered.
+_SEGREDO_NO_ERRO = re.compile(
+    r"(?i)(?:https?://\S+|bearer\s+[\w.~+/=-]+|eyJ[\w-]{5,}\.[\w.-]+|(?:cookie|set-cookie|authorization)\s*[:=]\s*[^\n;]+"
+    r"|(?:token|access_token|api[_-]?key|secret|sessao|session)\s*[=:]\s*[^\s&;,]+|sk-[\w-]{8,}"
+    r"|[A-Za-z]:\\[^\s\"']+|\\\\[^\s\"']+|\?[^\s\"']*=[^\s\"']*)"
+)
+
+
+def _texto_erro_seguro(texto: Any) -> str:
+    return _SEGREDO_NO_ERRO.sub("[OMITIDO]", limpar_texto_sensivel(texto))[:300]
+
+
+# --- Sebrae: leitura dos antigos e aviso da cópia pendente (allowlist, só contagens e códigos) -------------
+ORIENTACAO_SHAREPOINT = (
+    "O envio manual ao SharePoint (Enviar ao SharePoint / Tentar substituir de novo) é feito por você na tela Chamados; "
+    "o Assistente não dispara esse envio. Já a finalização de um chamado (finalizar_chamado_softexpert), quando dá certo, "
+    "grava no Dashboard e o substitui no SharePoint, ou deixa uma cópia pendente se o envio falhar."
+)
+_DATA_HORA_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?$")
+
+
+def _contagem(valor: Any) -> Optional[int]:
+    """A count only: a non-negative int, or the size of a list/dict (``lidos`` is a list of numbers, ``falhas`` a dict)."""
+    if isinstance(valor, (list, dict)):
+        return len(valor)
+    return valor if isinstance(valor, int) and not isinstance(valor, bool) and valor >= 0 else None
+
+
+def _leitura_antigos_segura(dados: Dict[str, Any]) -> Dict[str, Any]:
+    """GET /api/sebrae/antigos/ler reduced to the current state plus counts of the last read (sebrae_antigos_resultado.json)."""
+    rodando = bool(dados.get("em_andamento"))
+    resposta: Dict[str, Any] = {"em_andamento_agora": rodando, "fonte_em_andamento": "estado_atual"}
+    resultado = dados.get("resultado")
+    if not isinstance(resultado, dict):
+        resposta["ultima_leitura"] = None
+        resposta["mensagem"] = ("Nenhuma leitura dos chamados antigos registrada ainda." if not rodando else
+                                "A primeira leitura dos chamados antigos está em andamento; ainda não há resultado registrado.")
+        return resposta
+    ultima: Dict[str, Any] = {"fonte": "ultima_leitura_registrada", "concluida": resultado.get("concluido") is True}
+    for chave in ("total", "lidos", "falhas", "sem_utic", "ja_lidos"):
+        ultima[chave] = _contagem(resultado.get(chave))
+    em = resultado.get("em")
+    ultima["iniciada_em"] = em if isinstance(em, str) and _DATA_HORA_ISO.fullmatch(em) else None
+    resposta["ultima_leitura"] = ultima
+    if rodando:
+        resposta["mensagem"] = ("Há uma leitura dos antigos em andamento agora; as contagens podem ser parciais desta leitura "
+                                "ou ainda da anterior.")
+    elif ultima["concluida"]:
+        resposta["mensagem"] = "Última leitura dos antigos concluída (histórico, não é o estado de agora)."
+    else:
+        resposta["mensagem"] = "A última leitura dos antigos não terminou (cancelada, com falha ou servidor reiniciado); as contagens são parciais."
+    return resposta
+
+
+def _aviso_pendente_seguro(aviso: Any) -> Optional[Dict[str, Any]]:
+    """The pending-copy notice without its local path, free-text reason or suggestions; ``None`` when nothing is pending."""
+    if not isinstance(aviso, dict) or not aviso:
+        return None
+    return {
+        "pendente": True,
+        "copia_no_sharepoint": aviso.get("copia_sharepoint") is True,
+        "motivo_codigo": _motivo_codigo("falha", None, [str(aviso.get("motivo") or "")]),
+        "orientacao": "O Dashboard não foi substituído no SharePoint e há uma cópia pendente. " + ORIENTACAO_SHAREPOINT,
+    }
+
+
+_STATUS_FINALIZACAO = frozenset({fin.STATUS_OK, fin.STATUS_JA_FINALIZADO, fin.STATUS_NAO_ENCONTRADO, fin.STATUS_ERRO,
+                                 fin.STATUS_SEM_DESCRICAO, fin.STATUS_PRONTO})
+# Codes `sebrae_fechar`/`sebrae_softexpert` write in `motivo` (scripts/sebrae_softexpert.py MOTIVO_*); anything else is matched as text.
+_MOTIVOS_FINALIZACAO = frozenset({"numero_nao_confere", "titulo_nao_confere", "nao_encontrado_na_lista", "formulario_indisponivel",
+                                  "confirmacao_inesperada", "erro_inesperado", "softexpert_indisponivel", "sessao_expirada"})
+_ENCERRADO_EM = re.compile(r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$")
+
+
+def _resultado_finalizacao_seguro(item: Dict[str, Any]) -> Dict[str, Any]:
+    """One item of the last `fechar` run, allowlisted: UTIC number, known status, reason code; no free text."""
+    numero = str(item.get("numero") or "")
+    status = str(item.get("status") or "")
+    status = status if status in _STATUS_FINALIZACAO else "desconhecido"
+    motivo_codigo: Optional[str] = None
+    if status == fin.STATUS_ERRO:
+        motivo = str(item.get("motivo") or "")
+        motivo_codigo = motivo if motivo in _MOTIVOS_FINALIZACAO else _motivo_codigo("falha", None, [motivo, str(item.get("mensagem") or "")])
+    encerrado = str(item.get("encerrado_em") or "")
+    return {
+        "numero": numero if re.fullmatch(r"UTIC-\d{4}-\d{1,24}", numero) else None,
+        "status": status,
+        "motivo_codigo": motivo_codigo,
+        "encerrado_em": encerrado if _ENCERRADO_EM.fullmatch(encerrado) else None,
+    }
+
+
+def _motivo_codigo(status: str, codigo: Any, textos: List[str]) -> Optional[str]:
+    """Enumerated reason of a finished run (None when it did not fail). Texts are only matched, never returned."""
+    if status == "cancelado":
+        return "cancelada_pelo_operador"
+    if status == "interrompido":
+        return "servidor_reiniciado"
+    if status == "ocupada":
+        return "outra_execucao_em_andamento"
+    if status != "falha":
+        return None
+    segmentos = [_sem_acento_minusculo(s) for t in textos for s in str(t or "").split(" | ") if s.strip()]
+    for padrao, codigo_motivo in _MOTIVOS:
+        if any(padrao.search(s) for s in segmentos):
+            return codigo_motivo
+    return "playwright_ausente" if codigo == 3 else "desconhecido"
+
+
+def _sem_acento_minusculo(texto: str) -> str:  # same as assistant_tools._sem_acento (that module imports this one)
+    return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn").lower()
+
+
+def _data_iso(valor: Any) -> Optional[str]:
+    try:
+        return datetime.fromisoformat(str(valor)).isoformat(timespec="seconds") if valor else None
+    except ValueError:
+        return None
+
+
+def _rotina_segura(valor: Any) -> Tuple[str, str]:
+    rotina = str(valor or "")
+    if rotina in ROUTINES:
+        return rotina, ROUTINE_LABELS.get(rotina, rotina)
+    return "desconhecida", "Rotina não identificada"
+
+
+def _execucao_segura(entrada: Any, textos_extra: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """Allowlist of one history entry: id, routine, situation, times, exit code, batch and capture counts, reason code."""
+    if not isinstance(entrada, dict):
+        return None
+    status = str(entrada.get("status") or "")
+    rotina, rotulo = _rotina_segura(entrada.get("rotina"))
+    situacao, texto = _SITUACAO_FINAL.get(status, ("em_andamento", "Sem resultado final registrado.") if status == "em_andamento" else ("desconhecida", "Situação não registrada."))
+    inicio, fim = _data_iso(entrada.get("inicio")), _data_iso(entrada.get("fim"))
+    codigo = entrada.get("codigo") if isinstance(entrada.get("codigo"), int) and not isinstance(entrada.get("codigo"), bool) else None
+    lotes = [lote for lote in entrada.get("lotes") or [] if isinstance(lote, dict)]
+    por_status = Counter(s if _STATUS_LOTE.fullmatch(s := str(lote.get("status") or "")) else "desconhecido" for lote in lotes)
+    item: Dict[str, Any] = {
+        "id": str(entrada.get("id")) if _ID_EXECUCAO.fullmatch(str(entrada.get("id") or "")) else None,
+        "rotina": rotina, "rotina_nome": rotulo,
+        "origem": entrada.get("origem") if entrada.get("origem") in ("site", "externo") else None,
+        "situacao": situacao, "situacao_texto": texto,
+        "inicio": inicio, "fim": fim, "codigo_saida": codigo,
+        "lotes": {"total": len(lotes), "por_status": dict(por_status)},
+        "capturas_de_tela": len(entrada.get("capturas") or []) if isinstance(entrada.get("capturas"), list) else 0,
+    }
+    if inicio and fim:
+        try:
+            item["duracao_segundos"] = max(0, int((datetime.fromisoformat(fim) - datetime.fromisoformat(inicio)).total_seconds()))
+        except (ValueError, TypeError):  # one side with timezone and the other without: no duration
+            pass
+    motivo = _motivo_codigo(status, codigo, [str(entrada.get("mensagem") or ""), *(textos_extra or [])])
+    if motivo:
+        item["motivo_codigo"], item["motivo_texto"] = motivo, MOTIVOS_AUTOMACAO[motivo]
+    return item
+
+
+def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
+    """Current state (from /api/automacao/estado) without the log chunk, pid or login source."""
+    executando = dados.get("estado") == "em_andamento"
+    aguardando = executando and bool(dados.get("aguardando_login"))
+    cancelando = executando and bool(dados.get("cancelamento_pedido"))
+    situacao = "cancelamento_solicitado" if cancelando else "aguardando_login" if aguardando else "em_andamento" if executando else "livre"
+    rotina, rotulo = _rotina_segura(dados.get("rotina")) if executando else ("nenhuma", "Nenhuma rotina em andamento")
+    resposta: Dict[str, Any] = {
+        "fonte": "estado_atual",
+        "situacao": situacao,
+        "situacao_texto": {
+            "livre": "Nenhuma rotina em andamento.",
+            "em_andamento": "Rotina em andamento.",
+            "aguardando_login": "Rotina em andamento, aguardando o login manual do operador no Chrome de automação.",
+            "cancelamento_solicitado": "Cancelamento solicitado; a rotina ainda não terminou.",
+        }[situacao],
+        "executando": executando, "aguardando_login": aguardando, "cancelamento_pedido": cancelando,
+        "rotina": rotina, "rotina_nome": rotulo,
+        "inicio": _data_iso(dados.get("inicio")) if executando else None,
+        "origem": dados.get("origem") if executando and dados.get("origem") in ("site", "externo") else None,
+    }
+    if aguardando:
+        resposta["etapa"] = "aguardando_login"
+    elif executando:
+        resposta["etapa"], resposta["nota_etapa"] = "indisponível", NOTA_ETAPA
+    ultima = dados.get("ultima")
+    if not isinstance(ultima, dict):
+        resposta["ultima_execucao"] = None
+        resposta["nota_ultima"] = "Nenhuma execução registrada no histórico."
+        return resposta
+    segura = _execucao_segura(ultima)
+    if segura is None:
+        resposta["ultima_execucao"] = None
+        resposta["nota_ultima"] = "Nenhuma execução registrada no histórico."
+        return resposta
+    segura["fonte"] = "historico"
+    if ultima.get("status") == "em_andamento" and not executando:
+        segura["situacao_texto"] = "Resultado não registrado: a execução não aparece mais em andamento e não tem resultado final no histórico."
+    resposta["ultima_execucao"] = segura
+    if segura.get("motivo_codigo") == "desconhecido":
+        resposta["nota"] = NOTA_LOG
+    return resposta
+
+
 def e_macbook(equip: Dict[str, Any]) -> bool:
     """Same test as Simpress (categorize_equipment): 'MACBOOK' in the type or the model."""
     texto = " ".join(str(equip.get(k) or "") for k in ("categoria", "tipo", "modelo")).upper()
@@ -491,7 +775,7 @@ class SimpressApi:
         if isinstance(detalhe, list):
             detalhe = "; ".join(str(d.get("msg", d)) if isinstance(d, dict) else str(d) for d in detalhe)
         texto = detalhe if isinstance(detalhe, str) else (dados[:200] if isinstance(dados, str) else "")
-        return f"Erro {status} do Simpress: {limpar_texto_sensivel(texto)}"
+        return f"Erro {status} do Simpress: {_texto_erro_seguro(texto)}"
 
     def _leitura(self, caminho: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         ok, dados = self._chamar("GET", caminho, params=params)
@@ -618,15 +902,7 @@ class SimpressApi:
         ok, dados = self._chamar("GET", "/api/automacao/estado")
         if not ok:
             return {"erro": dados}
-        dados = _dict(dados)
-        return {
-            "executando": dados.get("estado") == "em_andamento",
-            "rotina": dados.get("rotina") or "nenhuma",
-            "estado": dados.get("estado", "livre"),
-            "inicio": dados.get("inicio", ""),
-            "aguardando_login": bool(dados.get("aguardando_login")),
-            "cancelamento_pedido": bool(dados.get("cancelamento_pedido")),
-        }
+        return _aparar(_status_automacao(_dict(dados)))
 
     def consultar_ultima_comparacao(self) -> Dict[str, Any]:
         ok, dados = self._chamar("GET", "/api/historico-comparacoes")
@@ -684,7 +960,38 @@ class SimpressApi:
         return self._leitura("/api/relatorio-mensal/dados", params={"mes": mes})
 
     def listar_historico_automacao(self) -> Dict[str, Any]:
-        return self._leitura("/api/automacao/historico")
+        ok, dados = self._chamar("GET", "/api/automacao/historico")
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        execucoes = [e for e in (_execucao_segura(x) for x in dados.get("execucoes") or []) if e][:MAX_ITENS_LISTA]
+        return _aparar({"fonte": "historico", "total": dados.get("total") if isinstance(dados.get("total"), int) else len(execucoes),
+                        "execucoes": execucoes, "nota": NOTA_LOG})
+
+    def resultado_ultima_automacao(self) -> Dict[str, Any]:
+        """Last finished run (history) plus whether a routine is running right now."""
+        ok, estado = self._chamar("GET", "/api/automacao/estado")
+        if not ok:
+            return {"erro": estado}
+        ok, dados = self._chamar("GET", "/api/automacao/historico", params={"limite": 10})
+        if not ok:
+            return {"erro": dados}
+        atual = _status_automacao(_dict(estado))
+        finalizada = next((e for e in _dict(dados).get("execucoes") or []
+                           if _dict(e).get("status") in _SITUACAO_FINAL and _dict(e).get("status") != "ocupada"), None)  # "ocupada" never ran: it must not hide the real last run
+        resposta: Dict[str, Any] = {"fonte": "historico", "situacao_atual": atual["situacao"]}
+        if atual["situacao"] != "livre":
+            resposta["aviso_execucao_atual"] = (
+                f"A rotina '{atual['rotina']}' está em andamento agora e ainda não terminou; "
+                "o resultado abaixo é da última execução já finalizada."
+            )
+        if finalizada is None:
+            resposta["mensagem"] = "Nenhuma execução finalizada registrada no histórico recente."
+            return resposta
+        resposta["ultima_finalizada"] = _execucao_segura(finalizada)
+        if resposta["ultima_finalizada"].get("motivo_codigo") == "desconhecido":
+            resposta["nota"] = NOTA_LOG
+        return _aparar(resposta)
 
     def resumo_sebrae(self) -> Dict[str, Any]:
         return self._leitura("/api/automacao/sebrae/resumo")
@@ -1134,13 +1441,13 @@ class SimpressApi:
             if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
                 continue
             se = _dict(a.get("softexpert"))
-            fin = _dict(se.get("finalizacao"))
+            status_fin = str(_dict(se.get("finalizacao")).get("status") or "")
             itens.append({
                 "numero": numero,
                 "titulo": limpar_texto_sensivel(a.get("titulo"))[:MAX_TEXTO_CHAMADO],
                 "tem_descricao": bool(str(se.get("descricao_finalizacao") or "").strip()),
                 "pdf": _dict(se.get("pdf")).get("nome") or "",
-                "resultado_softexpert": str(fin.get("status") or ""),
+                "resultado_softexpert": status_fin if not status_fin or status_fin in _STATUS_FINALIZACAO else "desconhecido",
             })
         ok, dados = self._chamar("GET", "/api/sebrae/finalizar-softexpert")
         ultima: Dict[str, Any] = {}
@@ -1150,10 +1457,9 @@ class SimpressApi:
             ultima = {
                 "em_andamento": bool(dados.get("em_andamento")),
                 "resultados": [
-                    {k: limpar_texto_sensivel(r.get(k)) for k in ("numero", "status", "mensagem", "motivo", "encerrado_em")}
-                    for r in resultado.get("resultados") or [] if isinstance(r, dict)
+                    _resultado_finalizacao_seguro(r) for r in resultado.get("resultados") or [] if isinstance(r, dict)
                 ][:MAX_ITENS_LISTA],
-                "aviso_sharepoint": _dict(dados.get("sharepoint")) or None,
+                "aviso_sharepoint": _aviso_pendente_seguro(dados.get("sharepoint")),
             }
         return _aparar({
             "chamados_abertos_com_utic": len(itens),
@@ -1161,6 +1467,13 @@ class SimpressApi:
             "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
             "ultima_finalizacao": ultima,
         })
+
+    def status_leitura_antigos_sebrae(self) -> Dict[str, Any]:
+        """Whether the old-tickets read runs now, plus the counts of the last one (allowlist: no numbers, names or texts)."""
+        ok, dados = self._chamar("GET", "/api/sebrae/antigos/ler")
+        if not ok:
+            return {"erro": dados}
+        return _leitura_antigos_segura(_dict(dados))
 
     def chamado_para_finalizar(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
         """The data the card and the action use. ValueError (shown to the user) when the ticket cannot be finalized."""
@@ -1367,9 +1680,9 @@ class SimpressApi:
         return resultado
 
     def log_execucao_automacao(self, execucao_id: str = "") -> Dict[str, Any]:
-        """Last lines of a routine log (default: the latest failure), without e-mails and phones."""
+        """Reason of a run (default: the latest failure) read from its log; the log text itself never leaves here."""
         execucao_id = str(execucao_id or "").strip()
-        if "/" in execucao_id or "\\" in execucao_id:
+        if execucao_id and not _ID_EXECUCAO.fullmatch(execucao_id):
             return {"erro": "Identificador da execução inválido."}
         if not execucao_id:
             ok, hist = self._chamar("GET", "/api/automacao/historico", params={"limite": 1, "status": "falha"})
@@ -1383,13 +1696,18 @@ class SimpressApi:
         if not ok:
             return {"erro": dados}
         dados = _dict(dados)
-        linhas = [limpar_texto_sensivel(linha)[:MAX_TEXTO_CHAMADO] for linha in (dados.get("linhas") or [])[-MAX_LINHAS_LOG:]]
-        execucao = _dict(dados.get("execucao"))
-        return {
-            "execucao": _aparar({k: v for k, v in execucao.items() if k not in ("log", "capturas")}),
-            "detalhes": linhas,  # free-text key of the mask: known names become markers
+        falhas = [str(linha).split("[FALHA]", 1)[1].strip() for linha in dados.get("linhas") or []
+                  if isinstance(linha, str) and "[FALHA]" in linha]
+        execucao = _execucao_segura(_dict(dados.get("execucao")), falhas)
+        return _aparar({
+            "fonte": "historico",
+            "execucao": execucao,
+            "motivo_codigo": (execucao or {}).get("motivo_codigo"),
+            "motivo_texto": (execucao or {}).get("motivo_texto"),
+            "linhas_de_falha": len(falhas),
             "limitado": bool(dados.get("limitado")),
-        }
+            "nota": NOTA_LOG,
+        })
 
     # --- actions that change data (only after the user confirms) -----------
 
@@ -1408,7 +1726,40 @@ class SimpressApi:
             if "Erro 409" in str(dados):
                 return {"sucesso": False, "erro": "Já existe uma automação em andamento. Aguarde o término ou cancele."}
             return {"sucesso": False, "erro": dados}
-        return {"sucesso": True, "rotina": rotina_clean, "mensagem": f"Rotina '{rotina_clean}' disparada pelo servidor Simpress."}
+        mensagem = (f"Rotina '{rotina_clean}' iniciada pelo servidor Simpress. Iniciar não é concluir: para saber se terminou, "
+                    "use consultar_status_automacao (andamento) ou resultado_ultima_automacao (resultado final).")
+        ok, estado = self._chamar("GET", "/api/automacao/estado")  # one read, no polling
+        if not ok:
+            return {"sucesso": True, "rotina": rotina_clean, "estado_apos_iniciar": None,
+                    "mensagem": mensagem + " O estado logo após iniciar não pôde ser confirmado."}
+        atual = _status_automacao(_dict(estado))
+        for chave in ("ultima_execucao", "nota_ultima", "nota"):  # the history belongs to the previous run, not this one
+            atual.pop(chave, None)
+        if atual["situacao"] == "livre":
+            mensagem += " Se já estiver livre, a rotina pode ter terminado logo: use resultado_ultima_automacao."
+        return _aparar({"sucesso": True, "rotina": rotina_clean, "estado_apos_iniciar": atual,
+                        "mensagem": f"{mensagem} Estado logo após iniciar: {atual['situacao_texto']}"})
+
+    def ler_chamados_antigos_softexpert(self) -> Dict[str, Any]:
+        """Starts the ``antigos`` routine (read only in SoftExpert) by the site's button route, never /api/automacao/executar."""
+        ok, dados = self._chamar("POST", "/api/sebrae/antigos/ler", corpo={})
+        if not ok:
+            erro = str(dados)
+            if erro.startswith("Erro 409"):
+                erro = "Outra rotina de automação já está em andamento; a leitura dos antigos não foi iniciada. Aguarde o término ou cancele."
+            elif erro.startswith("Erro 422"):
+                erro = "Não há Dashboard importado: importe o Dashboard antes (aba Automação, F4). A leitura dos antigos não foi iniciada."
+            elif erro.startswith("Erro 503"):
+                erro = "A automação não está disponível neste servidor; a leitura dos antigos não foi iniciada."
+            return {"sucesso": False, "erro": erro}
+        mensagem = ("Leitura dos chamados antigos iniciada pelo servidor Simpress. Iniciar não é terminar: para saber o "
+                    "resultado, use status_leitura_antigos_sebrae.")
+        ok, estado = self._chamar("GET", "/api/sebrae/antigos/ler")  # one read, no polling; its counts may be from the previous run
+        if not ok:
+            return {"sucesso": True, "em_andamento": None, "mensagem": mensagem + " O estado logo após iniciar não pôde ser confirmado."}
+        rodando = bool(_dict(estado).get("em_andamento"))
+        situacao = "em andamento" if rodando else "já não aparece em andamento (pode ter terminado de imediato ou falhado)"
+        return {"sucesso": True, "em_andamento": rodando, "mensagem": f"{mensagem} Estado logo após iniciar: {situacao}."}
 
     def finalizar_chamado_softexpert(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
         """Finalize ONE ticket in SoftExpert (irreversible), the same call as the site's button; only after the card is confirmed."""
@@ -1429,11 +1780,27 @@ class SimpressApi:
             return {"sucesso": False, "erro": dados}
         return {
             "sucesso": True,
-            "mensagem": f"Finalização de {alvo['numero']} disparada no Chrome de automação. Use situacao_finalizacao_sebrae para ver o resultado.",
+            "mensagem": f"Finalização de {alvo['numero']} pedida ao Chrome de automação; o resultado ainda não está confirmado. Use situacao_finalizacao_sebrae para ver o resultado.",
         }
 
     def cancelar_automacao(self) -> Dict[str, Any]:
-        return self._acao("/api/automacao/cancelar", None, "Cancelamento solicitado ao servidor Simpress.")
+        """Asking is not cancelling: only a free state whose last run is 'cancelado' confirms it."""
+        ok, dados = self._chamar("POST", "/api/automacao/cancelar", corpo={})
+        if not ok:
+            if "Nenhuma rotina em andamento" in str(dados):
+                return {"sucesso": False, "erro": "Não há rotina de automação em andamento; nada foi cancelado."}
+            return {"sucesso": False, "erro": dados}  # 409 "iniciada fora do site" keeps the server's instruction
+        ok, estado = self._chamar("GET", "/api/automacao/estado")  # one read, no polling
+        atual = _status_automacao(_dict(estado)) if ok else None
+        ultima = (atual or {}).get("ultima_execucao") or {}
+        if atual and atual["situacao"] == "livre" and ultima.get("situacao") == "cancelada":
+            return {"sucesso": True, "cancelada": True, "mensagem": "Rotina cancelada: o estado atual está livre e a última execução aparece como cancelada."}
+        mensagem = "Cancelamento solicitado ao servidor Simpress. A rotina pode levar alguns instantes para parar; confirme com consultar_status_automacao."
+        if atual is None:
+            mensagem += " O estado logo após o pedido não pôde ser lido."
+        else:
+            mensagem += f" Estado logo após o pedido: {atual['situacao_texto']}"
+        return _aparar({"sucesso": True, "cancelada": False, "situacao_apos_pedido": (atual or {}).get("situacao"), "mensagem": mensagem})
 
     def atualizar_apelido(self, serial: str, apelido: str) -> Dict[str, Any]:
         serial, apelido = serial.strip().upper(), apelido.strip()
