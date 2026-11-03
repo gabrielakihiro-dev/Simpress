@@ -95,7 +95,7 @@ class LeituraTest(unittest.TestCase):
             sebrae_leitura.executar(None, self.rotinas, state_dir=self.dir, modulo=mod)
         self.assertFalse(getattr(self.aba, "fechada", False))
 
-    def test_le_so_os_novos_e_registra_alertas_ignorados_e_erros(self):
+    def test_le_os_novos_inclusive_alertas_do_endpoint_e_registra_ignorados_e_erros(self):
         sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
         itens = [
             item("UTIC-2026-0001", "Já lançado"),
@@ -105,13 +105,14 @@ class LeituraTest(unittest.TestCase):
         ]
         leituras = {
             "UTIC-2026-0002": ChamadoSoftExpert("UTIC-2026-0002", titulo="Teclado", solicitante="Ana"),
+            "UTIC-2026-0003": ChamadoSoftExpert("UTIC-2026-0003", titulo="Endpoint Central - Computer(s) Added"),
             "UTIC-2026-0004": ChamadoNaoEncontrado("não achei"),
         }
         codigo, mod = self.rodar(itens, leituras)
-        self.assertEqual((codigo, mod.chamadas), (0, ["UTIC-2026-0002", "UTIC-2026-0004"]))
+        self.assertEqual((codigo, mod.chamadas), (0, ["UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0004"]))
         salvo = sebrae_novos.ler_novos(self.caminhos.novos)
-        self.assertEqual([c.numero for c in salvo["chamados"]], ["UTIC-2026-0002"])
-        self.assertEqual((salvo["ignorados"], [p["numero"] for p in salvo["pendentes"]]), (1, ["UTIC-2026-0003"]))
+        self.assertEqual([c.numero for c in salvo["chamados"]], ["UTIC-2026-0002", "UTIC-2026-0003"])
+        self.assertEqual((salvo["ignorados"], salvo["pendentes"]), (1, []))
         self.assertEqual(salvo["erros"], {"UTIC-2026-0004": "não achei"})
         self.assertTrue(self.aba.fechada)
 
@@ -150,14 +151,15 @@ class LeituraTest(unittest.TestCase):
         ]
         leituras = {
             "UTIC-2026-0002": ChamadoSoftExpert("UTIC-2026-0002", titulo="Teclado", solicitante="Ana"),
+            "UTIC-2026-0003": ChamadoSoftExpert("UTIC-2026-0003", titulo="Endpoint Central - Computer(s) Added"),
             "UTIC-2026-0004": ChamadoNaoEncontrado("não achei"),
         }
         self.rodar(itens, leituras)
         (busca,) = self.buscas()
-        self.assertEqual((busca["n_lidos"], busca["ignorados"], busca["n_pendentes"], busca["n_erros"]), (1, 1, 1, 1))
+        self.assertEqual((busca["n_lidos"], busca["ignorados"], busca["n_pendentes"], busca["n_erros"]), (2, 1, 0, 1))
         detalhe = sebrae_historico.obter(self.caminhos.historico, busca["id"])
         self.assertEqual((detalhe["lidos"], detalhe["pendentes"], detalhe["erros"]),
-                         (["UTIC-2026-0002"], ["UTIC-2026-0003"], ["UTIC-2026-0004"]))
+                         (["UTIC-2026-0002", "UTIC-2026-0003"], [], ["UTIC-2026-0004"]))
         texto = self.caminhos.historico.read_text(encoding="utf-8")
         self.assertNotIn("Teclado", texto)
         self.assertNotIn("não achei", texto)

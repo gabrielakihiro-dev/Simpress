@@ -47,9 +47,6 @@ MANUAIS = ("A", "B", "D", "J", "R", "S")
 FORMULAS = ("Q", "T", "U", "V")  # the site never writes them: a paste would erase the formula
 INTOCADAS = ("W",)
 
-MOTIVO_ALERTA_ENDPOINT = "Alerta automático do Endpoint; fica pendente até o usuário classificar."
-_ALERTA_ENDPOINT = re.compile(r"endpoint\s+central\s*-", re.IGNORECASE)
-
 CRUZ_UNICO = "unico"
 CRUZ_AUSENTE = "ausente"
 CRUZ_AMBIGUO = "ambiguo"
@@ -200,16 +197,10 @@ class NovosChamados:
 
 
 def triar_novos(titulos_softexpert: Mapping[str, str], existentes: Iterable[str]) -> NovosChamados:
-    """SoftExpert tickets minus column C; known Endpoint alerts (by list or by title) stay pending."""
+    """SoftExpert tickets minus column C: every other ticket is new (Endpoint alerts included); nothing stays pending."""
     resultado = triagem(titulos_softexpert.keys(), existentes)
-    novos: List[str] = []
-    pendentes = list(resultado.pendentes)
-    for numero in resultado.a_extrair:
-        if _ALERTA_ENDPOINT.search(titulos_softexpert.get(numero, "")):
-            pendentes.append((numero, MOTIVO_ALERTA_ENDPOINT))
-        else:
-            novos.append(numero)
-    return NovosChamados(tuple(novos), tuple(pendentes), resultado.ignorados)
+    novos = (*resultado.a_extrair, *(numero for numero, _ in resultado.pendentes))
+    return NovosChamados(novos, (), resultado.ignorados)
 
 
 # ---------------------------------------------------------------------------- cross-reference by name
