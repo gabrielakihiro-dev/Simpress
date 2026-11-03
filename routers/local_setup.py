@@ -17,7 +17,7 @@ from core.async_workers import await_worker_completion
 from core.config import format_size_limit
 from domains.local_setup import (
     REGIONAL_REPRESENTATIVE_CITIES, load_origin_contact, load_regional_representatives,
-    remove_regional_representative, save_origin_contact, save_regional_representative, validate_local_model,
+    regional_representative_defaults, remove_regional_representative, save_origin_contact, save_regional_representative, validate_local_model,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
@@ -49,6 +49,15 @@ class ContatoOrigemPayload(BaseModel):
         return TransferenciaPayload.validate_phone(value)
 
 
+def _valid_time(value: str) -> bool:
+    """True for a real HH:MM:SS (the regex alone accepts 99:99:99)."""
+    try:
+        datetime.strptime(value, "%H:%M:%S")
+    except ValueError:
+        return False
+    return True
+
+
 class RepresentanteRegionalPayload(BaseModel):
     """Edited regional representative of one city; the JSON keys match the front-end list."""
     nome: str = Field("", max_length=160)
@@ -76,21 +85,21 @@ class RepresentanteRegionalPayload(BaseModel):
     @field_validator("horario")
     @classmethod
     def validate_schedule(cls, value: str) -> str:
-        if not re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", value):
+        if not (re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", value) and all(map(_valid_time, value.split(" às ")))):
             raise ValueError("Informe o expediente no formato 08:00:00 às 18:00:00.")
         return value
 
     @field_validator("almoco")
     @classmethod
     def validate_lunch(cls, value: str) -> str:
-        if value != "Escritório não fecha" and not re.fullmatch(r"\d{2}:\d{2}:\d{2}", value):
+        if value != "Escritório não fecha" and not (re.fullmatch(r"\d{2}:\d{2}:\d{2}", value) and _valid_time(value)):
             raise ValueError('Informe o almoço como 12:00:00 ou "Escritório não fecha".')
         return value
 
     @field_validator("pausaDuracao")
     @classmethod
     def validate_break(cls, value: str) -> str:
-        if value and not re.fullmatch(r"\d{1,2}h(\d{2})?", value):
+        if value and not (re.fullmatch(r"\d{1,2}h(\d{2})?", value) and int(value.partition("h")[2] or 0) < 60):
             raise ValueError("Informe a pausa como 1h, 1h30 ou 2h, ou deixe em branco.")
         return value
 
@@ -141,7 +150,8 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
 
     @router.get("/api/config/representantes-regionais")
     def get_regional_representatives() -> dict[str, Any]:
-        return regional_representatives_state(regional_representatives_path())
+        # `padroes` (the single source of the defaults) comes only on GET; PUT/DELETE answer with the changes alone.
+        return {**regional_representatives_state(regional_representatives_path()), "padroes": regional_representative_defaults()}
 
     @router.put("/api/config/representantes-regionais/{cidade}")
     def save_regional_representative_route(cidade: str, payload: RepresentanteRegionalPayload) -> dict[str, Any]:

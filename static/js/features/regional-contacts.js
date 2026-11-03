@@ -11,34 +11,6 @@
     return transferUtils.formatBrazilPhone(valor);
   }
 
-  const REPRESENTANTES_REGIONAIS_PR = [
-    { cidade: "Cascavel", nome: "Fernanda Colla Borretto", email: "fcolla@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-    { cidade: "Londrina", nome: "Renata Custodio de Oliveira Varasquim", email: "rvarasquim@pr.sebrae.com.br", telefone: "(43) 99643-8754", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-    { cidade: "Maringá", nome: "Tatiane Matsuguma Sanches", email: "tmatsuguma@pr.sebrae.com.br", telefone: "(44) 99810-1371", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-    { cidade: "Pato Branco", nome: "Kelen Simone Moreira", email: "kmoreira@pr.sebrae.com.br", telefone: "(46) 99102-7523", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-    { cidade: "Ponta Grossa", nome: "Gislaine Pratka dos Santos", email: "gpratka@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-    { cidade: "Foz do Iguaçu", nome: "Marinez Martins", email: "moliveira@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-    { cidade: "Paranaguá", nome: "Carolina Nunes Pereira Voi", email: "cnunes@pr.sebrae.com.br", telefone: "", horario: "08:30:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h" },
-    { cidade: "Toledo", nome: "Fernanda da Costa Goldacker", email: "fgoldacker@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-    { cidade: "Guarapuava", nome: "Chrislaine Caroline de Souza", email: "chsouza@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Porecatu", nome: "Sandra de Souza Alves", email: "ssalves@pr.sebrae.com.br", telefone: "(43) 99818-0708", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Irati", nome: "Melany Evelyn Fernandes Ovando", email: "movando@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Cornélio Procópio", nome: "Eloah Bueno Rocha", email: "erocha@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-    { cidade: "Apucarana", nome: "Tiago Correia da Cunha", email: "tcorreia@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Arapongas", nome: "", nomeOpcao: "Não definido ainda", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Cerro Azul", nome: "Ivan Silva Evangelista", email: "ievangelista@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h" },
-    { cidade: "Cianorte", nome: "Valtemar Sartorelli", email: "vSartorelli@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Francisco Beltrão", nome: "Claudineia Cabral", email: "cprzysiesny@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-    { cidade: "Ivaiporã", nome: "Joelma Barbosa", email: "jbarbosa@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possette", email: "epossette@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Laranjeiras do Sul", nome: "Thaís Cristina da Costa", email: "tcosta@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "cmolocny@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-    { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "ssanti@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
-  ];
-  // The list above is the immutable default; edits saved on this computer are merged over it per city.
-  REPRESENTANTES_REGIONAIS_PR.forEach(Object.freeze);
-  Object.freeze(REPRESENTANTES_REGIONAIS_PR);
-
   const CAMPOS_CONTATO_REGIONAL = {
     retirada: {
       selectId: "retirada-representante",
@@ -189,16 +161,21 @@
     }
   }
 
-  // Regional representatives edited on this computer (config/representantes_regionais.json), by city.
+  // The 22 defaults come only from the backend (`padroes` of GET /api/config/representantes-regionais); the edits
+  // saved on this computer (config/representantes_regionais.json) are merged over them per city.
+  // Until the first load succeeds the list is empty: the selectors hold only the empty option and the fills asked
+  // for meanwhile (pendentes, by form type) are replayed when the defaults arrive.
   const CAMPOS_REPRESENTANTE_EDITAVEIS = ["nome", "email", "telefone", "horario", "almoco", "pausaDuracao"];
   const ALMOCO_NAO_FECHA = "Escritório não fecha";
   const ID_MODAL_REPRESENTANTE = "modal-representante-regional";
+  let padroesRepresentantes = [];
   let alteracoesRepresentantes = {};
+  const pendentes = {};
   let cidadeEdicaoRepresentante = "";
   let salvandoRepresentante = false;
 
   function representantesRegionais() {
-    return REPRESENTANTES_REGIONAIS_PR.map((padrao) => {
+    return padroesRepresentantes.map((padrao) => {
       const alteracao = alteracoesRepresentantes[padrao.cidade];
       if (!alteracao) return padrao;
       const mesclado = { ...padrao };
@@ -216,6 +193,7 @@
   }
 
   // Rebuilds both selectors keeping each chosen city; re-fills only the forms showing the edited city.
+  // Fields the user typed by hand are kept (a warning toast names them); the others follow the representative.
   function aplicarAlteracoesRepresentantes(resultado, cidadeEditada = "") {
     const alteracoes = resultado?.alteracoes;
     alteracoesRepresentantes = alteracoes && typeof alteracoes === "object" ? alteracoes : {};
@@ -225,8 +203,11 @@
     escolhidas.forEach(([tipo, selectId, cidade]) => {
       const seletor = document.getElementById(selectId);
       if (seletor) seletor.value = cidade;
-      if (cidadeEditada && cidade === cidadeEditada) app.preencherRepresentanteRegional(tipo, cidade, true);
-      else atualizarBotaoEditarRepresentante(tipo);
+      if (cidadeEditada && cidade === cidadeEditada) {
+        const mantidos = [];
+        app.preencherRepresentanteRegional(tipo, cidade, true, mantidos);
+        avisarCamposMantidos(cidade, tipo, mantidos);
+      } else atualizarBotaoEditarRepresentante(tipo);
     });
   }
 
@@ -234,17 +215,24 @@
   async function carregarRepresentantesRegionais(refazerFormularios = false) {
     try {
       const response = await fetch("/api/config/representantes-regionais", { cache: "no-store" });
-      if (!response.ok) throw new Error("Falha ao carregar os representantes regionais editados.");
+      if (!response.ok) throw new Error("Falha ao carregar os representantes regionais.");
       const antes = alteracoesRepresentantes;
       const resultado = await response.json();
+      const primeiraCarga = !padroesRepresentantes.length;
+      if (Array.isArray(resultado?.padroes) && resultado.padroes.length) {
+        padroesRepresentantes = resultado.padroes.map((padrao) => Object.freeze({ ...padrao }));
+      } else if (primeiraCarga) throw new Error("A resposta não trouxe os padrões dos representantes regionais.");
       aplicarAlteracoesRepresentantes(resultado);
-      if (refazerFormularios === true) {
+      if (primeiraCarga) {
+        Object.entries(pendentes).forEach(([tipo, { cidade, forcar }]) => app.preencherRepresentanteRegional(tipo, cidade, forcar));
+      } else if (refazerFormularios === true) {
         Object.keys({ ...antes, ...alteracoesRepresentantes })
           .filter((cidade) => JSON.stringify(antes[cidade]) !== JSON.stringify(alteracoesRepresentantes[cidade]))
           .forEach((cidade) => aplicarAlteracoesRepresentantes(resultado, cidade));
       }
     } catch (error) {
-      console.warn("Não foi possível carregar os representantes regionais editados; usando o padrão:", error);
+      console.warn("Não foi possível carregar os representantes regionais:", error);
+      if (!padroesRepresentantes.length) app.showToast("Não foi possível carregar os representantes regionais. Recarregue a página.", "warning");
     }
   }
 
@@ -425,9 +413,26 @@
     });
   }
 
-  function atualizarCampoContatoRegional(campo, valorNovo, valorPadrao, forcar, limparQuandoVazio = false) {
+  function avisarCamposMantidos(cidade, tipo, rotulos) {
+    if (!rotulos.length) return;
+    const lista = rotulos.length > 1 ? `${rotulos.slice(0, -1).join(", ")} e ${rotulos.at(-1)}` : rotulos[0];
+    const lugar = `${cidade} (${tipo === "retirada" ? "Retirada" : "Entrega"})`;
+    app.showToast(rotulos.length > 1
+      ? `Os campos ${lista} de ${lugar} foram mantidos porque foram editados à mão.`
+      : `O campo ${lista} de ${lugar} foi mantido porque foi editado à mão.`, "warning");
+  }
+
+  // Returns true when a hand-edited value was kept although the representative's value for the field changed.
+  // "Edited by hand" = non-empty value that is neither what the screen last filled from the representative
+  // (dataset.representanteAutoValue) nor the form default. Only checked when preservarEditados is set.
+  function atualizarCampoContatoRegional(campo, valorNovo, valorPadrao, forcar, limparQuandoVazio = false, preservarEditados = false) {
     const valorAtual = campo.value.trim();
     const valorAutoAnterior = campo.dataset.representanteAutoValue || "";
+    if (preservarEditados && valorAtual && valorAtual !== valorAutoAnterior && valorAtual !== valorPadrao) {
+      const mudou = (valorNovo || "") !== valorAutoAnterior && (valorNovo || (limparQuandoVazio ? "" : valorPadrao)) !== valorAtual;
+      campo.dataset.representanteAutoValue = valorNovo || "";
+      return mudou;
+    }
     const podeAtualizar = forcar
       || !valorAtual
       || valorAtual === valorAutoAnterior
@@ -441,12 +446,12 @@
   // Fields filled from a representative, in order. Contact fields are forced whenever a representative matches
   // and clear only for a named one; schedule fields are forced only by their own value and clear for any match.
   const CAMPOS_PREENCHIDOS_POR_REPRESENTANTE = [
-    { campo: "contato", chave: "nome", forcarPorValor: false, limparSe: null },
-    { campo: "email", chave: "email", forcarPorValor: false, limparSe: "nome" },
-    { campo: "telefone", chave: "telefone", forcarPorValor: false, limparSe: "nome" },
-    { campo: "horario", chave: "horario", forcarPorValor: true, limparSe: "representante" },
-    { campo: "almoco", chave: "almoco", forcarPorValor: true, limparSe: "representante" },
-    { campo: "pausaDuracao", chave: "pausaDuracao", forcarPorValor: true, limparSe: "representante" },
+    { campo: "contato", chave: "nome", rotulo: "Nome", forcarPorValor: false, limparSe: null },
+    { campo: "email", chave: "email", rotulo: "E-mail", forcarPorValor: false, limparSe: "nome" },
+    { campo: "telefone", chave: "telefone", rotulo: "Celular", forcarPorValor: false, limparSe: "nome" },
+    { campo: "horario", chave: "horario", rotulo: "Expediente", forcarPorValor: true, limparSe: "representante" },
+    { campo: "almoco", chave: "almoco", rotulo: "Almoço", forcarPorValor: true, limparSe: "representante" },
+    { campo: "pausaDuracao", chave: "pausaDuracao", rotulo: "Pausa", forcarPorValor: true, limparSe: "representante" },
   ];
 
   function valorDoRepresentante(representante, chave) {
@@ -463,10 +468,14 @@
     return elegivel && Object.prototype.hasOwnProperty.call(representante, regra.chave) && !valor;
   }
 
-  function preencherRepresentanteRegional(tipo, cidade, forcar = false) {
+  // mantidos (array opcional): preserva o que o usuário digitou à mão e acrescenta ali o rótulo de cada campo mantido.
+  function preencherRepresentanteRegional(tipo, cidade, forcar = false, mantidos = null) {
     const campos = CAMPOS_CONTATO_REGIONAL[tipo];
     if (!campos) return null;
 
+    if (!padroesRepresentantes.length) {
+      if (cidade) pendentes[tipo] = { cidade, forcar }; else delete pendentes[tipo];
+    }
     const representante = obterRepresentanteRegional(cidade);
     const seletor = document.getElementById(campos.selectId);
     if (seletor) seletor.value = representante?.cidade || "";
@@ -474,13 +483,15 @@
       const campo = document.getElementById(campos[`${regra.campo}Id`]);
       if (!campo) return;
       const valor = valorDoRepresentante(representante, regra.chave);
-      atualizarCampoContatoRegional(
+      const manteve = atualizarCampoContatoRegional(
         campo,
         valor,
         campos[`${regra.campo}Padrao`],
         forcar && Boolean(regra.forcarPorValor ? valor : representante),
-        deveLimparCampoRegional(representante, regra, valor)
+        deveLimparCampoRegional(representante, regra, valor),
+        Array.isArray(mantidos)
       );
+      if (manteve) mantidos.push(regra.rotulo);
     });
     if (tipo === "entrega") app.atualizarObrigatoriedadeDuracaoPausaEntrega();
     atualizarBotaoEditarRepresentante(tipo);

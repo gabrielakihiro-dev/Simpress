@@ -60,9 +60,15 @@ class FinalizarBase(unittest.TestCase):
         )))
         self.cliente = TestClient(app)
 
+    def post(self, url, **kwargs):
+        if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert") and isinstance(kwargs.get("json"), dict):
+            atual = sebrae_novos.ler_existentes(self.caminhos.existentes)
+            kwargs["json"].setdefault("versao_importacao", atual["versao"] if atual else "")
+        return self.cliente.post(url, **kwargs)
+
     def importar(self, conteudo=None):
         conteudo = montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")) if conteudo is None else conteudo
-        resposta = self.cliente.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", conteudo, "application/octet-stream")})
+        resposta = self.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", conteudo, "application/octet-stream")})
         self.assertEqual(resposta.status_code, 200, resposta.text)
 
     def descrever(self, *numeros):
@@ -100,7 +106,7 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(fin.ler_estado(self.dir), {})
 
     def anexo(self, nome="laudo.pdf", dados=PDF, numero=A):
-        return self.cliente.post(f"/api/sebrae/chamados/{numero}/anexo", files={"file": (nome, dados, "application/pdf")})
+        return self.post(f"/api/sebrae/chamados/{numero}/anexo", files={"file": (nome, dados, "application/pdf")})
 
     def test_anexo_pdf_e_guardado_substituido_e_removido(self):
         resposta = self.anexo()
@@ -139,7 +145,7 @@ class FinalizarUmTest(FinalizarBase):
 
     def test_dispara_a_rotina_fechar_com_o_pedido_de_um_chamado(self):
         self.descrever(A)
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         self.assertEqual(resposta.json(), {"iniciado": True, "numeros": [A]})
         self.assertEqual(self.runner.iniciadas, ["fechar"])
@@ -149,7 +155,7 @@ class FinalizarUmTest(FinalizarBase):
     def test_campos_manuais_do_chamado_entram_na_copia_de_saida_antes_da_rotina(self):
         self.descrever(A)
         manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
         for valor in ("CLIENTE", "REDE", "FINALIZADO", "INCIDENTE"):
@@ -162,7 +168,7 @@ class FinalizarUmTest(FinalizarBase):
             {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "01/01/2026 09:00"},
             {"numero": B, "A": "OUTRO CLIENTE", "D": "EM ABERTO", "J": "INCIDENTE"},
         ]
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": manuais})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": manuais})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
         self.assertIn("OUTRO CLIENTE", linha_xml(saida, 3))
@@ -171,7 +177,7 @@ class FinalizarUmTest(FinalizarBase):
     def test_campos_manuais_invalidos_recusam_sem_disparar(self):
         self.descrever(A)
         invalido = {"numero": A, "A": "CLIENTE", "D": "TALVEZ", "J": "INCIDENTE"}
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [invalido]})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [invalido]})
         self.assertEqual(resposta.status_code, 422, resposta.text)
         self.assertEqual(self.runner.iniciadas, [])
         self.assertIsNone(self.job())
@@ -179,33 +185,33 @@ class FinalizarUmTest(FinalizarBase):
     def test_sem_confirmado_nada_e_disparado(self):
         self.descrever(A)
         for corpo in ({"numero": A},{"numero": A, "confirmado": False}):
-            resposta = self.cliente.post(FINALIZAR, json=corpo)
+            resposta = self.post(FINALIZAR, json=corpo)
             self.assertEqual(resposta.status_code, 422, resposta.text)
             self.assertIn("Confirme", resposta.json()["detail"])
         self.assertEqual(self.runner.iniciadas, [])
         self.assertIsNone(self.job())
 
     def test_recusa_sem_descricao_chamado_fechado_numero_ruim_e_campo_extra_sem_disparar(self):
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 422)  # no description
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 422)  # no description
         self.descrever(C)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": C, "confirmado": True}).status_code, 422)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": "linha:2", "confirmado": True}).status_code, 422)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "forcar": True}).status_code, 422)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={}).status_code, 422)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": C, "confirmado": True}).status_code, 422)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": "linha:2", "confirmado": True}).status_code, 422)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True, "forcar": True}).status_code, 422)
+        self.assertEqual(self.post(FINALIZAR, json={}).status_code, 422)
         self.assertEqual(self.runner.iniciadas, [])
         self.assertIsNone(self.job())
 
     def test_chamado_ja_finalizado_responde_409_sem_disparar(self):
         self.descrever(A)
         fin.registrar_finalizacao(self.dir, A, fin.STATUS_OK, "30/10/2026 14:05")
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
         self.assertEqual(resposta.status_code, 409)
         self.assertEqual(self.runner.iniciadas, [])
 
     def test_rotina_em_andamento_responde_409_e_o_pedido_nao_fica_guardado(self):
         self.descrever(A)
         self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
         self.assertEqual(resposta.status_code, 409)
         self.assertIn("rotina", resposta.json()["detail"])
         self.assertFalse(fin.caminho_job(self.dir).exists())
@@ -213,19 +219,19 @@ class FinalizarUmTest(FinalizarBase):
     def test_pedido_anterior_ainda_nao_consumido_responde_409_e_nao_e_sobrescrito(self):
         self.descrever(A, B)
         fin.gravar_job(self.dir, [B])
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
         self.assertEqual(resposta.status_code, 409)
         self.assertEqual(self.job()["numeros"], [B])
         self.assertEqual(self.runner.iniciadas, [])
 
     def test_rotina_em_andamento_recusa_com_409_antes_de_refazer_a_copia_de_saida(self):
         self.descrever(A)
-        self.assertEqual(self.cliente.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
+        self.assertEqual(self.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
         antes = saida.read_bytes()
         self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
         manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
         self.assertEqual(resposta.status_code, 409, resposta.text)
         self.assertIn("rotina", resposta.json()["detail"])
         self.assertEqual(saida.read_bytes(), antes)
@@ -234,12 +240,12 @@ class FinalizarUmTest(FinalizarBase):
 
     def test_pedido_pendente_recusa_com_409_antes_de_refazer_a_copia_de_saida(self):
         self.descrever(A, B)
-        self.assertEqual(self.cliente.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
+        self.assertEqual(self.post(ATUALIZAR, json={"edicoes": [{"numero": B, "A": "ANTES", "D": "EM ABERTO", "J": "INCIDENTE"}]}).status_code, 200)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
         antes = saida.read_bytes()
         fin.gravar_job(self.dir, [B])
         manuais = {"numero": A, "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]}).status_code, 409)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]}).status_code, 409)
         self.assertEqual(saida.read_bytes(), antes)
         self.assertEqual(self.job()["numeros"], [B])
 
@@ -249,7 +255,7 @@ class FinalizarUmTest(FinalizarBase):
         fin.caminho_job(self.dir).write_text(json.dumps({
             "criado_em": antigo, "acao": fin.ACAO_FINALIZAR, "numeros": [B], "confirmar_final": True, "pulados": [],
         }), encoding="utf-8")
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
         self.assertEqual(self.job()["numeros"], [A])
 
 
@@ -274,19 +280,19 @@ class ChamadoNovoTest(FinalizarBase):
         self.assertEqual(item["softexpert"]["descricao_finalizacao"], "Troquei o cabo")
 
     def test_anexo_e_finalizacao_individual_aceitam_chamado_novo_e_numero_desconhecido_segue_recusado(self):
-        anexo = self.cliente.post(f"/api/sebrae/chamados/{self.N}/anexo", files={"file": ("laudo.pdf", PDF, "application/pdf")})
+        anexo = self.post(f"/api/sebrae/chamados/{self.N}/anexo", files={"file": ("laudo.pdf", PDF, "application/pdf")})
         self.assertEqual(anexo.status_code, 200, anexo.text)
         self.descrever(self.N)
-        resposta = self.cliente.post(FINALIZAR, json={"numero": self.N, "confirmado": True})
+        resposta = self.post(FINALIZAR, json={"numero": self.N, "confirmado": True})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         self.assertEqual(self.job()["numeros"], [self.N])
         self.assertEqual(self.put("UTIC-2026-9999", "x").status_code, 422)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": "UTIC-2026-9999", "confirmado": True}).status_code, 422)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": "UTIC-2026-9999", "confirmado": True}).status_code, 422)
 
     def test_em_massa_chamado_novo_marcado_finalizado_com_descricao_vai_para_a_rotina(self):
         self.descrever(self.N)
         novo = {"numero": self.N, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        resposta = self.cliente.post(ATUALIZAR, json={"chamados": [novo], "finalizar_softexpert": True})
+        resposta = self.post(ATUALIZAR, json={"chamados": [novo], "finalizar_softexpert": True})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(resposta.json()["fechar"]["numeros"], [self.N])
         self.assertEqual(self.runner.iniciadas, ["fechar"])
@@ -299,11 +305,11 @@ class ChamadoNovoTest(FinalizarBase):
             ChamadoSoftExpert(outro, titulo="Sem rede", descricao="Sem internet", solicitante="Camila Lopes", habilitada_em="26/10/2026, 17:30:00"),
         ], [], 0, {})
         novos = [{"numero": n, "A": "NOVO CLIENTE", "B": "REDE", "D": "EM ABERTO", "J": "INCIDENTE"} for n in (self.N, outro)]
-        resposta = self.cliente.post(ATUALIZAR, json={"chamados": novos})
+        resposta = self.post(ATUALIZAR, json={"chamados": novos})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.descrever(A)
         terceiro = {"numero": A, "A": "TERCEIRO", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        resposta = self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True, "chamados": novos, "edicoes": [terceiro]})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "chamados": novos, "edicoes": [terceiro]})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
         self.assertIn("TERCEIRO", linha_xml(saida, 2))
@@ -318,7 +324,7 @@ class SemRunnerTest(FinalizarBase):
     def test_sem_automacao_no_servidor_responde_503_e_nao_deixa_pedido(self):
         self.importar()
         self.descrever(A)
-        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 503)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 503)
         self.assertFalse(fin.caminho_job(self.dir).exists())
 
 
@@ -331,7 +337,7 @@ class AtualizarDispara(FinalizarBase):
         return {"numero": numero, "A": "CLIENTE", "B": "REDE", "D": d, "J": "INCIDENTE", **extra}
 
     def atualizar(self, *edicoes, finalizar_softexpert=True):
-        resposta = self.cliente.post(ATUALIZAR, json={"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert})
+        resposta = self.post(ATUALIZAR, json={"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         return resposta.json()
 
@@ -348,7 +354,7 @@ class AtualizarDispara(FinalizarBase):
     def test_sem_finalizar_softexpert_atualiza_o_dashboard_mas_nao_dispara_a_rotina(self):
         self.descrever(A)
         for corpo in ({"edicoes": [self.edicao(A)]}, {"edicoes": [self.edicao(A)], "finalizar_softexpert": False}):
-            resposta = self.cliente.post(ATUALIZAR, json=corpo)
+            resposta = self.post(ATUALIZAR, json=corpo)
             self.assertEqual(resposta.status_code, 200, resposta.text)
             self.assertEqual(resposta.json()["fechar"], {
                 "iniciado": False, "motivo": "finalização no SoftExpert não confirmada", "numeros": [], "pulados": [],
@@ -429,12 +435,12 @@ class ResultadoEReenvioTest(FinalizarBase):
         self.assertTrue(estado["sharepoint"]["falhou"])
 
     def test_reenviar_sem_copia_pendente_responde_422(self):
-        self.assertEqual(self.cliente.post(REENVIAR).status_code, 422)
+        self.assertEqual(self.post(REENVIAR).status_code, 422)
         self.assertEqual(self.runner.iniciadas, [])
 
     def test_reenviar_grava_pedido_de_reenvio_e_dispara_a_rotina(self):
         self.pendente()
-        resposta = self.cliente.post(REENVIAR)
+        resposta = self.post(REENVIAR)
         self.assertEqual((resposta.status_code, resposta.json()), (202, {"iniciado": True}))
         self.assertEqual(self.runner.iniciadas, ["fechar"])
         self.assertEqual(self.job()["acao"], fin.ACAO_REENVIAR)
@@ -442,7 +448,7 @@ class ResultadoEReenvioTest(FinalizarBase):
     def test_reenviar_com_rotina_ocupada_responde_409(self):
         self.pendente()
         self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
-        self.assertEqual(self.cliente.post(REENVIAR).status_code, 409)
+        self.assertEqual(self.post(REENVIAR).status_code, 409)
         self.assertFalse(fin.caminho_job(self.dir).exists())
 
 
@@ -452,17 +458,17 @@ ANTIGOS = "/api/sebrae/antigos/ler"
 class LerAntigosTest(FinalizarBase):
     def test_dispara_a_rotina_antigos_com_202(self):
         self.importar()
-        resposta = self.cliente.post(ANTIGOS)
+        resposta = self.post(ANTIGOS)
         self.assertEqual((resposta.status_code, resposta.json()), (202, {"iniciado": True}))
         self.assertEqual(self.runner.iniciadas, ["antigos"])
 
     def test_rotina_ocupada_responde_409(self):
         self.importar()
         self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
-        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 409)
+        self.assertEqual(self.post(ANTIGOS).status_code, 409)
 
     def test_sem_dashboard_importado_responde_422_sem_iniciar(self):
-        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 422)
+        self.assertEqual(self.post(ANTIGOS).status_code, 422)
         self.assertEqual(self.runner.iniciadas, [])
 
     def test_estado_traz_em_andamento_e_o_resumo_da_ultima_leitura(self):
@@ -481,7 +487,7 @@ class LerAntigosSemRunnerTest(FinalizarBase):
 
     def test_sem_runner_responde_503(self):
         self.importar()
-        self.assertEqual(self.cliente.post(ANTIGOS).status_code, 503)
+        self.assertEqual(self.post(ANTIGOS).status_code, 503)
 
 
 if __name__ == "__main__":
