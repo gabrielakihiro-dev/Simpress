@@ -95,6 +95,8 @@ SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBR
 # SIMPRESS_TRANSFER_ORIGIN_* environment variables or, field by field, from this git-ignored
 # file (see config/contato_origem.exemplo.json); missing values stay empty.
 TRANSFER_ORIGIN_CONTACT_FILE = BASE_DIR / "config" / "contato_origem.json"
+# Per-city overrides of the SEBRAE/PR regional representatives (the defaults live in the front end).
+REGIONAL_REPRESENTATIVES_FILE = BASE_DIR / "config" / "representantes_regionais.json"
 
 
 def resolve_history_annotations_dir(base_dir: Path, environment: Mapping[str, str] | None = None) -> tuple[Path, bool]:

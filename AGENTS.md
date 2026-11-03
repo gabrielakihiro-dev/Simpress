@@ -109,6 +109,16 @@ Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere 
 - O modal `#modal-historico-apelidos` (e `abrirModalHistoricoApelidos`) foi removido em 31/10/2026 por pedido do usuário: o painel F8 (`data-cockpit-tool-panel="apelidos"`, em `static/js/features/cockpit-tool-panels.js`) é o histórico completo. As ações de restaurar/excluir ficam em `static/js/features/alias-history.js` (`acoesEventoHistorico`, `desfazerEventoHistoricoApelidos`, `excluirRegistroHistorico`). Não recrie o modal; a API `/api/historico-alteracoes` não mudou.
 - O menu Ferramentas não tem mais o grupo "Planilhas": `Atualizar planilhas` (`#btn-atualizar-planilhas`) saiu (o modal abre por **Nova comparação** na aba Comparação, pelo `Importar` da Home e pelo alerta `Atualizar base`) e `Exportar Excel` (`#btn-exportar-equipamentos`, exportação do modelo com Apelido/IdCliente) passou para a barra da aba Comparação, com a mesma lógica de exibição (`static/js/features/dashboard.js`) e o rótulo visível `Exportar Excel`.
 
+## Representantes regionais SEBRAE/PR (Transferência)
+
+Edição por cidade dos 22 representantes (tela Transferência, F2; autorizada pelo usuário em 03/11/2026).
+
+- O padrão fica no código (`REPRESENTANTES_REGIONAIS_PR` em `static/js/features/regional-contacts.js`, com espelho `REGIONAL_REPRESENTATIVE_DEFAULTS` em `domains/local_setup.py`); o teste de paridade JS↔Python (`tests/test_regional_representatives.py`) confere a lista de cidades; mude os dois lados juntos (nomes, contatos e horários também).
+- Só a alteração por cidade é gravada, em `config/representantes_regionais.json` (local, fora do Git, `REGIONAL_REPRESENTATIVES_FILE`; ignorado em `.gitignore`). Rotas `GET /api/config/representantes-regionais`, `PUT` e `DELETE /api/config/representantes-regionais/{cidade}` (veja `docs/arquitetura/CONTRATOS_API_BACKEND.md`).
+- Rótulos aprovados, exatamente: `Editar` (`#btn-editar-representante-retirada`, `#btn-editar-representante-entrega`) e `Restaurar padrão` (no modal `#modal-representante-regional`, com `Salvar` e `Cancelar`). `Restaurar padrão` pede confirmação e apaga só a cidade escolhida do arquivo.
+- Assistente: `ver_representantes_regionais(cidade?)` (consulta), `alterar_representante_regional(...)` e `restaurar_representante_regional(cidade)` (as duas últimas passam pelo cartão de confirmação). Limitação conhecida: a máscara só cobre nomes da base de usuários ou já vistos na conversa; um nome novo digitado no chat fora da base não é mascarado (mesma limitação do contato de origem).
+- Escreve apenas esse arquivo local; nada em SoftExpert, SharePoint ou outro sistema externo.
+
 ## Arquitetura local
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
@@ -145,6 +155,7 @@ Vale para todas as abas do site (Home, Transporte, Resumo, Automação e as que 
 
 - Atualizar o `.md` da aba: em `AGENTS.md` (regra) e no documento específico em `docs/` (ex.: `docs/operacao/*.md`; contratos de API em `docs/arquitetura/CONTRATOS_API_BACKEND.md`). Se a aba não tiver documento, criar um.
 - Manter a integração coerente: backend, front-end (`static/js/features/`), testes (Python, `tests/frontend`, `tests/e2e`) e rótulos aprovados, que se propagam para interface, validação e testes.
+- Regra permanente do usuário (03/11/2026): toda mudança de funcionalidade deve manter o assistente de IA alinhado (ferramentas, descrições, cartão de confirmação, máscara de dados e `Assistente (OpenRouter)` acima) e testado de verdade: além dos testes unitários com cliente falso, peça a mudança ao assistente real no servidor local e confira o resultado na tela.
 - Registrar o que a mudança escreve ou apaga em sistemas externos ou em dados locais, e a autorização do usuário com a data. Escrita nova em SoftExpert, SharePoint ou outro sistema externo não entra sem autorização explícita.
 - No relatório final, informar quais `.md` foram atualizados.
 

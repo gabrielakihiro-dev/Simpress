@@ -164,3 +164,5 @@ __pycache__/
 
 # Local transfer origin contact (personal data); only the example is versioned.
 /config/contato_origem.json
+# Local per-city edits of the regional representatives (names, e-mails, phones).
+/config/representantes_regionais.json

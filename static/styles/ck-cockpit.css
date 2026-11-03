@@ -91,6 +91,9 @@
 /* ---------- 2.3 Campos ---------- */
 .ck-campo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ck-campo__rotulo { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.ck-campo__linha { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ck-campo__linha > .ck-btn { flex: none; min-height: 0; height: var(--altura-controle); }
+.ck-campo__linha > .ck-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ck-entrada {
   width: 100%; min-width: 0; height: var(--altura-controle); padding: 0 9px;
   border: 1px solid var(--cor-borda); border-radius: var(--raio-sm);
@@ -983,6 +986,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-veu > .ck-dialogo :is(input, select):not([type="checkbox"], [type="radio"], [type="file"]) { min-height: var(--altura-controle); }
 .ck-veu > .ck-dialogo label { color: var(--cor-texto-sutil); font-size: var(--fs-xs); }
 .ck-veu > .ck-dialogo .ck-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ck-veu > .ck-dialogo fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.ck-veu > .ck-dialogo input[type="checkbox"] { width: 14px; height: 14px; }
 .ck-veu > .ck-dialogo .confirm-action-ok.ck-btn[data-variant="danger"] { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); border-color: var(--cor-erro-texto); }
 .ck-veu > .ck-dialogo .confirm-action-ok.ck-btn[data-variant="primary"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque); }
 .ck-veu > .ck-dialogo .history-modal-scroll { max-height: none; }

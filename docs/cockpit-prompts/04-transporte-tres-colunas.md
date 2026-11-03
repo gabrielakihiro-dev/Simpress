@@ -55,6 +55,7 @@ O `#tab-panel-retirada-entrega` vira um grid de 3 colunas:
 - Tipo de acesso (`#retirada-tipo-acesso`) — 2 colunas
 - Voltagem (`#retirada-voltagem`) — 1 coluna
 - Representante regional (`#retirada-representante`) — select ocupando a linha toda, preenchido automaticamente pela cidade. Mesmo `data-on-change`.
+- Botão `Editar` (`#btn-editar-representante-retirada`) ao lado do select: abre o modal `#modal-representante-regional` (`Salvar`, `Restaurar padrão`, `Cancelar`) e grava só a alteração da cidade em `config/representantes_regionais.json` (local, fora do Git). Mesmo botão na Entrega: `#btn-editar-representante-entrega`.
 - Nome (`#retirada-contato`) — obrigatório (*)
 - E-mail (`#retirada-email`) — obrigatório (*)
 - Celular (`#retirada-telefone`) — obrigatório (*), font-mono
