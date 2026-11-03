@@ -112,3 +112,25 @@ A IA pode juntar dados de várias ferramentas **de consulta** no mesmo turno (um
 - Prompt: regra 6a (pergunta composta): uma linha dizendo o que vai consultar, consultas independentes em lote na mesma rodada, sem repetir consulta idêntica, uma resposta final citando a ferramenta de cada número e o que NÃO conseguiu obter.
 - Painel: a linha de ferramentas da resposta mostra, com 3 ou mais chamadas, `Ferramentas (5 chamadas): a, b ×2, c` (cada nome uma vez, `×n` quando repetido); com 1 ou 2, continua `Ferramentas: a, b`. É `textContent` na mesma linha pequena de antes, com quebra de palavra: sem rolagem horizontal em 360 px.
 - Testes: `AutonomiaTests` em `tests/test_assistant.py` (cliente falso, relógio falso, sem rede) e `Consultas encadeadas` em `tests/e2e/assistente.spec.cjs`.
+
+## Automação e Sebrae pelo chat
+
+O que o usuário diz e o que o Assistente faz agora. Toda ação passa pelo cartão `Confirmar e executar` / `Cancelar`; nada roda antes do clique. O texto do cartão é montado pelo programa e descreve o que a rotina faz.
+
+| Frase de exemplo | O que acontece |
+| --- | --- |
+| "Roda a automação de chamados do Sebrae." | Cartão de `executar_automacao_chrome('sebrae')`: lê no SoftExpert (só leitura) os chamados novos que ainda não estão no Dashboard importado e os antigos em aberto com a UTIC; o resultado fica no Simpress local. Depois do clique o Assistente diz "iniciada" (só após resposta 2xx), não "concluída". |
+| "Baixa o Dashboard do SharePoint e atualiza." | Cartão de `executar_automacao_chrome('dashboard')`, o botão `Baixar, importar e buscar`: baixa o Dashboard da pasta DASHBOARD SEBRAE, importa no site e busca os chamados novos. **Não** atualiza a cópia local e **não** envia ao SharePoint; o Assistente explica esse limite e onde o usuário clica (`Atualizar Dashboard`, `Enviar ao SharePoint`). |
+| "Confere os usuários logados." | Cartão de `executar_automacao_chrome('usuarios')`: confere no Endpoint Central as pendências de usuário logado e registra as decisões e anotações no Simpress local. |
+| "Para a automação atual." | Cartão de `cancelar_automacao_chrome`. Pedir não é cancelar: a resposta diz "cancelamento solicitado" até `consultar_status_automacao` mostrar `cancelada`. |
+| "Em que etapa a automação está?" | `consultar_status_automacao` (estado atual): `situacao` = `livre`, `em_andamento`, `aguardando_login` ou `cancelamento_solicitado`. A etapa só existe quando aguarda login; nos outros casos o Assistente diz que o programa não registra a etapa. |
+| "A rotina terminou ou falhou?" | `resultado_ultima_automacao` (histórico): `concluida`, `falhou`, `cancelada`, `interrompida` ou `ocupada`, com `motivo_codigo` se falhou. Se há rotina rodando agora, diz que ela ainda não terminou. |
+| "Lê os chamados antigos do Sebrae." | Cartão de `ler_chamados_antigos_softexpert` (mesma rota do botão `Ler chamados antigos`): só lê no SoftExpert e grava só o resultado local; exige Dashboard importado. `status_leitura_antigos_sebrae` mostra o andamento e as contagens (lidos, falhas, sem UTIC, já lidos). |
+
+- Sempre se diz se o dado é do estado atual (`fonte` = estado atual) ou do histórico (`ultima_execucao`).
+- Allowlist: `listar_historico_automacao` e `log_execucao_automacao` não mandam ao modelo texto de log, caminho, URL nem mensagem de erro. A falha vira `motivo_codigo` (tabela `MOTIVOS_AUTOMACAO` em `domains/assistant_api.py`); `desconhecido` manda ler o log na tela de Automação do Cockpit (F4). `situacao_finalizacao_sebrae` aplica o mesmo filtro ao aviso de cópia pendente do SharePoint e aos resultados.
+- Capacidade não é execução: "você consegue executar a rotina de OS?" recebe uma explicação, sem chamar ferramenta de ação. Só um pedido ("executa", "roda") gera cartão.
+- Limites (decisão de escopo): o Assistente não dispara o envio manual ao SharePoint, não reenvia a cópia pendente, não atualiza a cópia local do Dashboard (os rascunhos vivem só no navegador) e não finaliza em lote; a finalização individual (`finalizar_chamado_softexpert`) segue com cartão. `fechar`, `enviar` e `antigos` não são rotinas válidas do Assistente.
+- Grava localmente: rotinas do cartão de automação, `ler_chamados_antigos_softexpert` e `cancelar_automacao_chrome`. Grava fora do computador só `finalizar_chamado_softexpert` (SoftExpert, irreversível, um chamado); quando dá certo, a rotina `fechar` também substitui o Dashboard no SharePoint (ou deixa cópia pendente), e o Assistente não leva os rascunhos do navegador (A, B, J, S) nesse envio; o cartão avisa isso.
+- Limite conhecido (não corrigido): "anote na linha do tempo" casa só com o grupo `historico` em `schemas_para_mensagem`, mas `anotar_linha_do_tempo` está no grupo `chamados`.
+- Testes: `tests/test_assistant_automacao.py`, `tests/test_assistant_sebrae_automacao.py` e `tests/test_assistant_prompt_automacao.py`.
