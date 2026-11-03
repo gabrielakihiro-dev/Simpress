@@ -309,13 +309,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     @router.post("/api/sebrae/dashboard/atualizar")
     def atualizar_dashboard(payload: AtualizarPayload):
+        """Cópia do Dashboard importado com os chamados novos e as edições; o original e a cópia guardada ficam intactos.
+
+        Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). Série, Modelo, Cidade e OS vazios dos
+        antigos em aberto são preenchidos pelo nome da coluna I. 422 se não houver importação válida, se um Status/Tipo
+        preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
-            """Cópia do Dashboard importado com os chamados novos e as edições; o original e a cópia guardada ficam intactos.
-
-            Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). Série, Modelo, Cidade e OS vazios dos
-            antigos em aberto são preenchidos pelo nome da coluna I. 422 se não houver importação válida, se um Status/Tipo
-            preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
             importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload)
             return JSONResponse({
                 "arquivo": NOME_ATUALIZADO,
@@ -487,9 +487,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
     def finalizar_softexpert(payload: FinalizarPayload):
+        """Finaliza UM chamado no SoftExpert (botão por chamado). Irreversível: só antigos em aberto ou novos da busca, com descrição."""
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
-            """Finaliza UM chamado no SoftExpert (botão por chamado). Irreversível: só antigos em aberto ou novos da busca, com descrição."""
             if not payload.confirmado:
                 raise DomainValidationError("Confirme a finalização no SoftExpert antes de enviar.", status_code=422)
             numero = _exigir_finalizavel(payload.numero)
