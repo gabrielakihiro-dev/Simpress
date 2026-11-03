@@ -87,6 +87,9 @@ class RepresentanteRegionalPayload(BaseModel):
     def validate_schedule(cls, value: str) -> str:
         if not (re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", value) and all(map(_valid_time, value.split(" às ")))):
             raise ValueError("Informe o expediente no formato 08:00:00 às 18:00:00.")
+        inicio, fim = value.split(" às ")
+        if inicio >= fim:  # zero-padded HH:MM:SS, already validated: text order is time order
+            raise ValueError("O expediente precisa começar antes de terminar: o início deve ser anterior ao fim, como 08:00:00 às 18:00:00.")
         return value
 
     @field_validator("almoco")

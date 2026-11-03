@@ -26,7 +26,8 @@ const PADROES = [
 ];
 
 // Boots the feature with a fake DOM and a fetch stub; `saved` is the server-side edit store.
-function setup({ saved = {}, fetchImpl } = {}) {
+// `manualTimers`: the retry delay waits for `env.timers.shift().fn()`; otherwise it fires at once (no real 2 s wait).
+function setup({ saved = {}, fetchImpl, manualTimers = false } = {}) {
   const elements = new Map();
   const get = id => { if (!elements.has(id)) elements.set(id, fakeElement()); return elements.get(id); };
   const toasts = [];
@@ -39,13 +40,15 @@ function setup({ saved = {}, fetchImpl } = {}) {
     showToast: (message, kind) => toasts.push([message, kind]),
     confirmarAcao: async () => true,
   };
-  const previous = { document: global.document, fetch: global.fetch };
+  const timers = [];
+  const previous = { document: global.document, fetch: global.fetch, setTimeout: global.setTimeout };
+  global.setTimeout = (fn, ms) => { timers.push({ fn, ms }); if (!manualTimers) queueMicrotask(() => timers.shift().fn()); };
   global.document = { getElementById: get, createElement: fakeElement };
   global.fetch = fetchImpl || (async () => ({ ok: true, json: async () => ({ alteracoes: saved, padroes: PADROES, arquivo_invalido: false }) }));
   const feature = createRegionalContacts({ app, transferUtils });
   Object.assign(app, feature);
-  const restore = () => { global.document = previous.document; global.fetch = previous.fetch; };
-  return { feature, get, toasts, calls, restore };
+  const restore = () => { global.document = previous.document; global.fetch = previous.fetch; global.setTimeout = previous.setTimeout; };
+  return { feature, get, toasts, calls, timers, restore };
 }
 
 const nomeNaLista = (select, cidade) => select.options.find(o => o.value === cidade)?.textContent;
@@ -164,13 +167,13 @@ function quietWarn(t) {
   return warnings;
 }
 
-test("a failed first load leaves the selectors empty, warns once and does not break the form", async t => {
+test("a failed first load leaves the selectors empty, shows one toast and does not break the form", async t => {
   const env = setup({ fetchImpl: async () => { throw new TypeError("Failed to fetch"); } });
   const warnings = quietWarn(t);
   t.after(env.restore);
   env.feature.popularSeletoresRepresentantesRegionais();
   await env.feature.carregarRepresentantesRegionais();
-  assert.equal(warnings.length, 1);
+  assert.equal(warnings.length, 2, "first attempt and the single retry");
   assert.deepEqual(env.toasts, [["Não foi possível carregar os representantes regionais. Recarregue a página.", "warning"]]);
   assert.deepEqual(env.get("retirada-representante").options.map(o => o.value), [""]);
   assert.equal(env.feature.preencherRepresentanteRegional("retirada", "Londrina", true), null);
@@ -185,9 +188,54 @@ test("a first answer without the defaults counts as a failed load", async t => {
   const warnings = quietWarn(t);
   t.after(env.restore);
   await env.feature.carregarRepresentantesRegionais();
-  assert.equal(warnings.length, 1);
+  assert.equal(warnings.length, 2);
   assert.equal(env.toasts.length, 1);
   assert.equal(env.feature.preencherRepresentanteRegional("retirada", "Londrina", true), null);
+});
+
+test("a failed first load is retried once after 2 s; the second success shows no toast and replays pendentes", async t => {
+  const answers = [async () => { throw new TypeError("Failed to fetch"); }, async () => ({ ok: true, json: async () => ({ alteracoes: {}, padroes: PADROES, arquivo_invalido: false }) })];
+  let requests = 0;
+  const env = setup({ manualTimers: true, fetchImpl: () => answers[requests++]() });
+  const warnings = quietWarn(t);
+  t.after(env.restore);
+  env.feature.preencherRepresentanteRegional("retirada", "Londrina");
+  const carga = env.feature.carregarRepresentantesRegionais();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests, 1);
+  assert.deepEqual(env.timers.map(timer => timer.ms), [2000]);
+  assert.equal(env.feature.carregarRepresentantesRegionais(), carga, "a load in progress is reused, not duplicated");
+  assert.equal(requests, 1);
+  assert.deepEqual(env.toasts, []);
+  env.timers.shift().fn();
+  await carga;
+  assert.equal(requests, 2);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(env.toasts, []);
+  assert.equal(env.get("retirada-representante").value, "Londrina");
+  assert.equal(env.get("retirada-contato").value, "Renata Custodio de Oliveira Varasquim");
+  assert.equal(env.get("btn-editar-representante-retirada").disabled, false);
+});
+
+test("two failed attempts show the toast only once and make no third request", async t => {
+  let requests = 0;
+  const env = setup({ fetchImpl: async () => { requests += 1; return { ok: false, json: async () => ({}) }; } });
+  quietWarn(t);
+  t.after(env.restore);
+  await env.feature.carregarRepresentantesRegionais();
+  assert.equal(requests, 2);
+  assert.deepEqual(env.toasts, [["Não foi possível carregar os representantes regionais. Recarregue a página.", "warning"]]);
+  assert.deepEqual(env.timers, []);
+});
+
+test("a successful first load makes a single request and sets no timer", async t => {
+  let requests = 0;
+  const env = setup({ fetchImpl: async () => { requests += 1; return { ok: true, json: async () => ({ alteracoes: {}, padroes: PADROES, arquivo_invalido: false }) }; } });
+  t.after(env.restore);
+  await env.feature.carregarRepresentantesRegionais();
+  assert.equal(requests, 1);
+  assert.deepEqual(env.timers, []);
+  assert.deepEqual(env.toasts, []);
 });
 
 test("a later failed reload keeps the loaded defaults and only warns", async t => {
