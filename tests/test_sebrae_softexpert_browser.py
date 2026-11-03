@@ -1053,6 +1053,21 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(descricao_do_chamado(lido), "Impressora 1 não imprime")
         self.assertEqual(self.abas_do_registro(), [])
 
+    def test_chamado_da_api_com_descricao_vazia_nao_e_relido(self):
+        self.bancada.chamados = [chamado(1, descricao="", solicitante="API SEBRAE")]
+        page = self.abrir_lista()
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+        self.assertEqual((lido.solicitante, lido.descricao), ("API SEBRAE", ""))
+        self.assertFalse(any("relendo campos vazios" in m for m in self.mensagens), self.mensagens)
+
+    def test_chamado_da_api_com_descricao_preenchida_e_lido(self):
+        # A bancada abre o formulário na interface antiga (sem wf_gen_instance): não exercita a espera curta
+        # do Registro (coberta em AbrirAbaRegistroTests); aqui só se prova que a descrição preenchida não se perde.
+        self.bancada.chamados = [chamado(1, descricao="Alerta do Endpoint: disco cheio.", solicitante="API SEBRAE")]
+        page = self.abrir_lista()
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+        self.assertEqual((lido.solicitante, lido.descricao), ("API SEBRAE", "Alerta do Endpoint: disco cheio."))
+
     def test_consulta_sempre_atendimento_e_mantem_os_textos_separados(self):
         self.bancada.chamados = [chamado(
             1,
@@ -1467,6 +1482,35 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         page = self.abrir_lista()
         se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
         self.assertIsNone(se._ESCRITA_LIBERADA)
+
+
+class AbrirAbaRegistroTests(unittest.TestCase):
+    """O Registro em branco do chamado da API não pode custar a espera de abertura (60 s) a cada leitura."""
+
+    def abrir(self, solicitante_do_cabecalho):
+        formulario = MagicMock(url="https://x/wf_gen_instance?a=1")
+        esperas = []
+
+        def esperar(_pagina, condicao, timeout_ms, intervalo_ms=None):
+            esperas.append(timeout_ms)
+            return True
+
+        with patch.object(se, "_esperar", esperar), \
+                patch.object(se, "_janela_de_execucao", return_value=True), \
+                patch.object(se, "_registro", return_value={"numero": ""}), \
+                patch.object(se, "_cabecalho", return_value={"solicitante": solicitante_do_cabecalho}), \
+                patch.object(se, "clicar"), patch.object(se, "_aguardar_estavel"):
+            se._abrir_aba_registro(formulario)
+        return esperas
+
+    def test_chamado_da_api_espera_pouco_pelo_numero_do_registro(self):
+        esperas = self.abrir("API SEBRAE")
+        # janela de execução + localizar a aba + espera curta pelo número.
+        self.assertEqual(esperas, [se.ESPERA_ABERTURA_MS, se.ESPERA_ABERTURA_MS, se.ESPERA_REGISTRO_API_MS])
+
+    def test_outro_solicitante_continua_esperando_o_numero_do_registro(self):
+        esperas = self.abrir("Maria da Silva")
+        self.assertEqual(esperas, [se.ESPERA_ABERTURA_MS] * 3)
 
 
 if __name__ == "__main__":

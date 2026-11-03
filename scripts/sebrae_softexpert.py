@@ -120,6 +120,7 @@ ESPERA_PAGINA_MS = 15_000
 ESPERA_ROLAGEM_MS = 3_000
 ESPERA_PRIMEIRAS_LINHAS_MS = 20_000
 ESPERA_ABERTURA_MS = 60_000
+ESPERA_REGISTRO_API_MS = 5_000  # espera pelo número do Registro quando o solicitante é "API SEBRAE"
 ESPERA_BOTAO_MS = 5_000
 ESPERA_ESTAVEL_MS = 6_000
 INTERVALO_MS = 250
@@ -745,7 +746,9 @@ def _abrir_aba_registro(formulario: "Page") -> None:
     aba = formulario.get_by_text(NOME_REGISTRO).filter(visible=True)
     if _esperar(formulario, lambda: aba.count() == 1, ESPERA_ABERTURA_MS):
         clicar(aba, "aba Registro de Chamados")
-        _esperar(formulario, numero_lido, ESPERA_ABERTURA_MS)
+        # Chamado da API costuma vir com o Registro em branco: espera curta pelo número, para não custar ESPERA_ABERTURA_MS à toa.
+        api = _sem_acentos(_cabecalho(formulario)["solicitante"]) == SOLICITANTE_SEM_EMAIL
+        _esperar(formulario, numero_lido, ESPERA_REGISTRO_API_MS if api else ESPERA_ABERTURA_MS)
         _aguardar_estavel(formulario)
 
 
@@ -1052,7 +1055,9 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
         campos["habilitada_em"] = campos["habilitada_em"] or habilitada_da_lista(item.texto)
         campos["solicitante"] = campos["solicitante"] or _cabecalho(formulario)["solicitante"]
         for tentativa in range(1, RELEITURAS_CAMPOS + 1):
-            if all(campos.values()):
+            # Chamado criado pela API vem com o Registro em branco: descrição vazia é o normal, não vale reler.
+            sem_registro = _sem_acentos(campos["solicitante"]) == SOLICITANTE_SEM_EMAIL
+            if all(valor for chave, valor in campos.items() if not (sem_registro and chave == "descricao")):
                 break
             formulario.wait_for_timeout(ESPERA_RELEITURA_MS)
             _aguardar_estavel(formulario)
