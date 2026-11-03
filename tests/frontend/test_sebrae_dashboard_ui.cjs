@@ -163,10 +163,10 @@ test("tamanho do PDF aparece em B, KB ou MB", () => {
 
 function armazenamentoFalso(inicial = {}) {
   const dados = { ...inicial };
-  return { dados, getItem: k => (k in dados ? dados[k] : null), setItem: (k, v) => { dados[k] = String(v); }, removeItem: k => { delete dados[k]; } };
+  return { dados, get length() { return Object.keys(dados).length; }, key: i => Object.keys(dados)[i] ?? null, getItem: k => (k in dados ? dados[k] : null), setItem: (k, v) => { dados[k] = String(v); }, removeItem: k => { delete dados[k]; } };
 }
 
-test("rascunho grava e lê só para o mesmo Dashboard importado", () => {
+test("rascunho mantém UTIC estável após reimportação", () => {
   const disco = armazenamentoFalso();
   const valores = { "UTIC-2026-7": { A: "CLIENTE", J: "INCIDENTE" } };
   const edicoes = { "UTIC-2026-1": { D: "FINALIZADO", R: "2026-10-28T09:05" } };
@@ -174,7 +174,7 @@ test("rascunho grava e lê só para o mesmo Dashboard importado", () => {
   const lido = lerRascunho(disco, "2026-10-28T10:00");
   assert.deepEqual(lido.valores, valores);
   assert.deepEqual(lido.edicoes, edicoes);
-  assert.deepEqual(lerRascunho(disco, "2026-10-29T08:00").valores, {}); // outro Dashboard importado: rascunho velho não vale
+  assert.deepEqual(lerRascunho(disco, "2026-10-29T08:00").valores, valores);
   assert.deepEqual(lerRascunho(disco, "").edicoes, {});
   apagarRascunho(disco);
   assert.deepEqual(lerRascunho(disco, "2026-10-28T10:00").valores, {});
@@ -213,7 +213,7 @@ test("aplicar o rascunho mantém só chamados que ainda existem e campos de anti
   const abertos = [{ numero: "UTIC-2026-1", valores: { A: "CLIENTE", D: "EM ABERTO" } }];
   const aplicado = aplicarRascunho(rascunho, [{ numero: "UTIC-2026-7" }], abertos);
   assert.deepEqual(aplicado.valores, { "UTIC-2026-7": { A: "CLIENTE" } }); // o 8 saiu do formulário
-  assert.deepEqual(aplicado.edicoes, { "UTIC-2026-1": { D: "FINALIZADO", S: "DISPONIBILIDADE" } }); // A já preenchido no Dashboard não é sobrescrito; o 9 não está em aberto
+  assert.deepEqual(aplicado.edicoes, { "UTIC-2026-1": { S: "DISPONIBILIDADE" } }); // A já preenchido no Dashboard não é sobrescrito; o 9 não está em aberto
   assert.equal(aplicado.restaurado, true);
   assert.equal(aplicarRascunho({ valores: {}, edicoes: {}, salvoEm: "" }, [], abertos).restaurado, false);
 });
@@ -240,7 +240,7 @@ const CARGA_CARTOES = {
   },
 };
 
-async function renderizarCartoes(carga = CARGA_CARTOES) {
+async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null) {
   const doc = createFakeDocument();
   // O DOM falso não tem classList; só o `toggle` é usado (cor verde do Status FINALIZADO).
   const criar = doc.createElement;
@@ -250,7 +250,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES) {
     return no;
   };
   global.document = doc;
-  global.window = { setTimeout: () => 0, clearTimeout() {}, localStorage: null };
+  global.window = { setTimeout: () => 0, clearTimeout() {}, localStorage: armazenamento };
   const ids = [["sebrae-novos-lista", "div"], ["sebrae-antigos-lista", "div"], ["sebrae-antigos", "details"], ["sebrae-finalizados-lista", "ul"], ["sebrae-finalizados", "details"],
     ["sebrae-atualizar-status", "p"], ["sebrae-novos-resumo", "p"], ["sebrae-dashboard-status", "p"], ["btn-sebrae-atualizar", "button"]];
   const el = {};
@@ -258,8 +258,9 @@ async function renderizarCartoes(carga = CARGA_CARTOES) {
   el["sebrae-novos-lista"].setAttribute("aria-busy", "true");
   const app = { apiFetch: async () => carga, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  await createSebraeDashboard({ app, dom }).carregarNovosSebrae();
-  return { doc, el };
+  const feature = createSebraeDashboard({ app, dom });
+  await feature.carregarNovosSebrae();
+  return { doc, el, feature };
 }
 
 test("o cartão novo tem as três zonas na ordem, as quatro pendências e o R opcional", async () => {
@@ -327,4 +328,72 @@ test("a falta de saída pronta avisa em Atualizar Dashboard com data-estado aler
   const { el } = await renderizarCartoes();
   assert.equal(el["sebrae-atualizar-status"].textContent, "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
   assert.equal(el["sebrae-atualizar-status"].dataset.estado, "alerta");
+});
+
+const { gravarCampoRascunho } = createSebraeDashboard.puro;
+test("campos de duas abas sobrevivem à reimportação e novos migram para antigos", () => {
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, "antes", "UTIC-2026-1", "A", "MANUAL", "novo");
+  gravarCampoRascunho(disco, "antes", "UTIC-2026-1", "J", "INCIDENTE", "novo");
+  gravarCampoRascunho(disco, "antes", "linha:4", "A", "OUTRA LINHA", "antigo");
+  const lido = lerRascunho(disco, "depois");
+  assert.deepEqual(lido.valores["UTIC-2026-1"], { A: "MANUAL", J: "INCIDENTE" });
+  assert.equal(lido.edicoes["linha:4"], undefined);
+  const aplicado = aplicarRascunho(lido, [], [{ numero: "UTIC-2026-1", valores: { A: "DA PLANILHA" } }]);
+  assert.deepEqual(aplicado.edicoes["UTIC-2026-1"], { J: "INCIDENTE" });
+  assert.equal(aplicado.conflitos.length, 1);
+  assert.match(aplicado.conflitos[0], /MANUAL.*DA PLANILHA/);
+  assert.equal(Object.keys(disco.dados).length, 3); // até a linha sem identidade está preservada
+  apagarRascunho(disco);
+  assert.equal(Object.keys(disco.dados).length, 0);
+});
+
+test("status divergente da nova importação não reaplica FINALIZADO e preserva conflito", () => {
+  const rascunho = { valores: {}, edicoes: { "UTIC-2026-1": { D: "FINALIZADO" } }, salvoEm: "" };
+  const aplicado = aplicarRascunho(rascunho, [], [{ numero: "UTIC-2026-1", valores: { D: "EM ABERTO" } }]);
+  assert.equal(aplicado.edicoes["UTIC-2026-1"], undefined);
+  assert.match(aplicado.conflitos[0], /FINALIZADO.*EM ABERTO/);
+  assert.equal(rascunho.edicoes["UTIC-2026-1"].D, "FINALIZADO");
+});
+
+test("gravar campo após falha remove valor antigo mantido apenas em memória", async () => {
+  const disco = armazenamentoFalso();
+  const salvar = disco.setItem;
+  disco.setItem = () => { throw new Error("quota cheia"); };
+  const { el, feature } = await renderizarCartoes(CARGA_CARTOES, disco);
+  let campo = el["sebrae-novos-lista"].querySelector('[data-sebrae-campo="A"]');
+  campo.value = "FALHOU";
+  campo.dispatchEvent({ type: "input", currentTarget: campo });
+  disco.setItem = salvar;
+  campo.value = "SALVO AGORA";
+  campo.dispatchEvent({ type: "input", currentTarget: campo });
+  await feature.carregarNovosSebrae();
+  campo = el["sebrae-novos-lista"].querySelector('[data-sebrae-campo="A"]');
+  assert.equal(campo.value, "SALVO AGORA");
+});
+
+test("Status manual continua editável na mesma versão da importação", () => {
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, "versao-atual", "UTIC-2026-1", "D", "FINALIZADO", "antigo");
+  const original = [{ numero: "UTIC-2026-1", valores: { D: "EM ABERTO" } }];
+  const mesma = aplicarRascunho(lerRascunho(disco, "versao-atual"), [], original, "versao-atual");
+  assert.equal(mesma.edicoes["UTIC-2026-1"].D, "FINALIZADO");
+  assert.equal(mesma.conflitos.length, 0);
+  const outra = aplicarRascunho(lerRascunho(disco, "nova-versao"), [], original, "nova-versao");
+  assert.equal(outra.edicoes["UTIC-2026-1"], undefined);
+  assert.equal(outra.conflitos.length, 1);
+});
+
+test("rascunho de antigo migra para novo e divergências entre os dois ficam explícitas", () => {
+  const numero = "UTIC-2026-1";
+  const rascunho = { valores: {}, edicoes: { [numero]: { A: "MANUAL", J: "INCIDENTE" } }, salvoEm: "" };
+  const novo = aplicarRascunho(rascunho, [{ numero }], []);
+  assert.deepEqual(novo.valores[numero], { A: "MANUAL", J: "INCIDENTE" });
+  assert.equal(novo.pendentes.length, 0);
+  rascunho.valores[numero] = { A: "OUTRO" };
+  const conflito = aplicarRascunho(rascunho, [{ numero }], []);
+  assert.equal(conflito.valores[numero].A, undefined);
+  assert.match(conflito.conflitos[0], /MANUAL.*OUTRO/);
+  assert.equal(rascunho.edicoes[numero].A, "MANUAL");
+  assert.equal(rascunho.valores[numero].A, "OUTRO");
 });

@@ -43,9 +43,15 @@ class RotasBase(unittest.TestCase):
         )))
         self.cliente = TestClient(app)
 
+    def post(self, url, **kwargs):
+        if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert") and isinstance(kwargs.get("json"), dict):
+            atual = sebrae_novos.ler_existentes(self.caminhos.existentes)
+            kwargs["json"].setdefault("versao_importacao", atual["versao"] if atual else "")
+        return self.cliente.post(url, **kwargs)
+
     def importar(self, conteudo=None, nome="Dashboard.xlsx"):
         conteudo = planilha() if conteudo is None else conteudo
-        return self.cliente.post("/api/sebrae/dashboard", files={"file": (nome, conteudo, "application/octet-stream")})
+        return self.post("/api/sebrae/dashboard", files={"file": (nome, conteudo, "application/octet-stream")})
 
 
 class RotasSebraeTest(RotasBase):
@@ -86,7 +92,7 @@ class RotasSebraeTest(RotasBase):
 
     def test_exportar_devolve_blocos_e_a_mensagem_aprovada(self):
         self.preparar_novos()
-        resposta = self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL]})
+        resposta = self.post("/api/sebrae/exportar", json={"chamados": [MANUAL]})
         self.assertEqual(resposta.status_code, 200)
         corpo = resposta.json()
         self.assertEqual(corpo["mensagem"], "Planilha Exportada com Sucesso!")
@@ -95,20 +101,20 @@ class RotasSebraeTest(RotasBase):
 
     def test_exportar_recusa_manual_invalido_chamado_desconhecido_e_campo_extra(self):
         self.preparar_novos()
-        invalido = self.cliente.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "D": ""}]})
+        invalido = self.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "D": ""}]})
         self.assertEqual(invalido.status_code, 422)
         self.assertIn("STATUS", invalido.json()["detail"])
-        desconhecido = self.cliente.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
+        desconhecido = self.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
         self.assertEqual(desconhecido.status_code, 422)
-        extra = self.cliente.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "Z": "x"}]})
+        extra = self.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "Z": "x"}]})
         self.assertEqual(extra.status_code, 422)
-        repetido = self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL, MANUAL]})
+        repetido = self.post("/api/sebrae/exportar", json={"chamados": [MANUAL, MANUAL]})
         self.assertEqual(repetido.status_code, 422)
 
     def test_exportar_sem_dashboard_ou_sem_busca_responde_422(self):
-        self.assertEqual(self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
+        self.assertEqual(self.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
         self.importar()
-        self.assertEqual(self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
+        self.assertEqual(self.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
 
     def test_importar_guarda_copia_listas_e_chamados_em_aberto(self):
         estado = self.importar(montar()).json()["importado"]
@@ -125,7 +131,7 @@ class RotasSebraeTest(RotasBase):
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
         guardada = sebrae_novos.caminho_planilha(self.caminhos).read_bytes()
         edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL], "edicoes": [edicao]})
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL], "edicoes": [edicao]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         corpo = resposta.json()
         self.assertEqual(corpo["arquivo"], "Dashboard Operacional_SEBRAE.xlsx")
@@ -140,7 +146,7 @@ class RotasSebraeTest(RotasBase):
         self.assertEqual(self.importar(montar()).status_code, 200)  # sem saída anterior: não dá erro
         self.assertFalse(saida.exists())
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
-        self.assertEqual(self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL]}).status_code, 200)
+        self.assertEqual(self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL]}).status_code, 200)
         self.assertTrue(saida.exists())
         self.assertTrue(self.cliente.get("/api/sebrae/novos").json()["importado"]["saida_pronta"])
         nova = self.importar(montar()).json()["importado"]
@@ -154,21 +160,21 @@ class RotasSebraeTest(RotasBase):
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
         url = "/api/sebrae/dashboard/atualizar"
         em_branco = {"numero": "UTIC-2026-1378", "A": "", "D": "", "J": ""}
-        resposta = self.cliente.post(url, json={"chamados": [em_branco]})
+        resposta = self.post(url, json={"chamados": [em_branco]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         corpo = resposta.json()
         self.assertEqual([(g["numero"], g["tipo"]) for g in corpo["linhas"]], [("UTIC-2026-1378", "novo")])
         self.assertIn("UTIC-2026-1378", [c.numero for c in G.chamados_para_editar(base64.b64decode(corpo["conteudo_base64"]))])
-        invalido = self.cliente.post(url, json={"chamados": [{**em_branco, "D": "TALVEZ"}]})
+        invalido = self.post(url, json={"chamados": [{**em_branco, "D": "TALVEZ"}]})
         self.assertEqual(invalido.status_code, 422)
         self.assertIn("STATUS", invalido.json()["detail"])
-        sem_campos = self.cliente.post("/api/sebrae/exportar", json={"chamados": [em_branco]})
+        sem_campos = self.post("/api/sebrae/exportar", json={"chamados": [em_branco]})
         self.assertEqual(sem_campos.status_code, 422)
 
     def test_atualizar_edita_so_b_de_chamado_antigo_com_d_vazio(self):
         self.importar(montar(("UTIC-2026-0001",), status=("",)))
         url = "/api/sebrae/dashboard/atualizar"
-        resposta = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]})
+        resposta = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["B"])])
 
@@ -177,28 +183,28 @@ class RotasSebraeTest(RotasBase):
         estado = self.importar(base).json()["importado"]
         self.assertEqual([(a["numero"], a["chamado"], a["usuario"]) for a in estado["abertos"]], [("linha:2", "Sem chamado", "Camila Lopes")])
         self.assertEqual(estado["abertos"][0]["automaticos_sugeridos"], {"K": "ABC123", "L": "Dell", "N": "Curitiba", "E": "7303022"})
-        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={})
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("linha:2", "alterado", ["E", "K", "L", "N"])])
         nada = self.importar(montar())  # no name in column I: nothing to fill, nothing sent
         self.assertEqual(nada.json()["importado"]["abertos"][0]["automaticos_sugeridos"], {})
-        self.assertEqual(self.cliente.post("/api/sebrae/dashboard/atualizar", json={}).status_code, 422)
+        self.assertEqual(self.post("/api/sebrae/dashboard/atualizar", json={}).status_code, 422)
 
     def test_atualizar_edita_chamado_de_c_composto(self):
         self.importar(montar(("27371 / UTIC-2026-0094",), status=("EM ABERTO",)))
         edicao = {"numero": "UTIC-2026-0094", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "28/10/2026 14:30"}
-        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual([(g["numero"], g["tipo"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0094", "alterado")])
 
     def test_atualizar_recusa_pedido_vazio_sem_importacao_e_copia_adulterada(self):
-        vazio = self.cliente.post("/api/sebrae/dashboard/atualizar", json={})
+        vazio = self.post("/api/sebrae/dashboard/atualizar", json={})
         self.assertEqual(vazio.status_code, 422)
         edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        self.assertIn("Importe", self.cliente.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]}).json()["detail"])
+        self.assertIn("Importe", self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]}).json()["detail"])
         self.importar(montar())
         sebrae_novos.caminho_planilha(self.caminhos).write_bytes(b"outro conteudo")
-        adulterada = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
+        adulterada = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
         self.assertEqual(adulterada.status_code, 422)
         self.assertIn("importe o Dashboard de novo", adulterada.json()["detail"])
 
@@ -206,12 +212,12 @@ class RotasSebraeTest(RotasBase):
         self.importar(montar())
         url = "/api/sebrae/dashboard/atualizar"
         # A, D and J may stay blank after merging (the stored ticket has no J); a filled invalid value is still refused
-        sem_j = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO"}]})
+        sem_j = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO"}]})
         self.assertEqual(sem_j.status_code, 200, sem_j.text)
-        j_invalido = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "J": "OUTRO"}]})
+        j_invalido = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "J": "OUTRO"}]})
         self.assertEqual(j_invalido.status_code, 422)
         self.assertIn("UTIC-2026-0001", j_invalido.json()["detail"])
-        finalizado = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0002", "A": "CLIENTE", "D": "X", "J": "INCIDENTE"}]})
+        finalizado = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0002", "A": "CLIENTE", "D": "X", "J": "INCIDENTE"}]})
         self.assertEqual(finalizado.status_code, 422)
         self.assertIn("EM ABERTO", finalizado.json()["detail"])
         dados = sebrae_novos.ler_existentes(self.caminhos.existentes)
@@ -219,16 +225,16 @@ class RotasSebraeTest(RotasBase):
             self.caminhos.existentes, dados["numeros"], dados["arquivo"], sha256=dados["sha256"],
             listas={"A": ["CLIENTE"], "B": ["REDE"]}, abertos=dados["abertos"],
         )
-        fora = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "OUTRO", "D": "FINALIZADO", "J": "INCIDENTE"}]})
+        fora = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "OUTRO", "D": "FINALIZADO", "J": "INCIDENTE"}]})
         self.assertEqual(fora.status_code, 422)
         self.assertIn("lista do Dashboard", fora.json()["detail"])
         repetido = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE"}
-        self.assertEqual(self.cliente.post(url, json={"edicoes": [repetido, repetido]}).status_code, 422)
+        self.assertEqual(self.post(url, json={"edicoes": [repetido, repetido]}).status_code, 422)
 
     def test_atualizar_recusa_novo_que_nao_esta_na_lista_de_novos(self):
         self.importar(montar())
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
-        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
         self.assertEqual(resposta.status_code, 422)
         self.assertIn("não está entre os chamados novos", resposta.json()["detail"])
 
@@ -351,6 +357,14 @@ class ArquivoRotasTest(RotasBase):
         self.assertNotIn("123.456.789-09", guardado)
         self.assertNotIn("Segredo123", guardado)
         self.assertIn("Camila Lopes", guardado)
+
+
+class DescricaoOpenApiTest(RotasBase):
+    def test_rotas_de_gravacao_mantem_descricao_no_openapi(self):
+        caminhos = self.cliente.app.openapi()["paths"]
+        for url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert"):
+            with self.subTest(url=url):
+                self.assertTrue(caminhos[url]["post"].get("description"))
 
 
 if __name__ == "__main__":

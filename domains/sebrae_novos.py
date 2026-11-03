@@ -8,6 +8,8 @@ form per new ticket and returns the rows to paste. Beside the first file sits a 
 
 from __future__ import annotations
 
+import uuid
+
 import hashlib
 import json
 import os
@@ -130,8 +132,11 @@ def salvar_existentes(
     ordenados = sorted(set(numeros))
     # names stay (the match by name needs them); CPF and passwords never reach the file
     seguros = [{**a, **{k: _seguro(a[k]) for k in ("titulo", "descricao", "usuario") if k in a}} for a in abertos]
+    anterior = _ler(caminho) or {}
+    # same file bytes: keep the version, so a screen left open does not get a false 409 after the 30 min import
+    igual = bool(sha256) and anterior.get("sha256") == sha256 and bool(anterior.get("versao"))
     _gravar(caminho, {
-        "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
+        "versao": str(anterior["versao"]) if igual else uuid.uuid4().hex, "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
         "sha256": sha256, "listas": {k: list(v) for k, v in (listas or {}).items()}, "abertos": seguros,
     })
     return len(ordenados)
@@ -145,7 +150,7 @@ def ler_existentes(caminho: Path) -> Optional[Dict[str, Any]]:
     abertos = dados.get("abertos")
     listas = listas if isinstance(listas, dict) else {}
     abertos = abertos if isinstance(abertos, list) else []
-    return {"arquivo": str(dados.get("arquivo") or ""), "importado_em": str(dados.get("importado_em") or ""),
+    return {"versao": str(dados.get("versao") or dados.get("sha256") or ""), "arquivo": str(dados.get("arquivo") or ""), "importado_em": str(dados.get("importado_em") or ""),
             "numeros": frozenset(str(n) for n in dados["numeros"]), "sha256": str(dados.get("sha256") or ""),
             "listas": {str(k): [str(i) for i in v] for k, v in listas.items() if isinstance(v, list)},
             "abertos": [a for a in abertos if isinstance(a, dict)]}
@@ -398,3 +403,12 @@ def exportar(
     linhas = linhas_completas(chamados, manuais_por_numero, registros, relatorio, listas, vinculos=vinculos)
     bloco_ap, bloco_rs = linhas_para_colar(linhas)
     return {"quantidade": len(linhas), "bloco_a_p": bloco_ap, "bloco_r_s": bloco_rs, "mensagem": MENSAGEM_EXPORTADA}
+
+
+def dashboard_saida_pendente(caminhos: Caminhos) -> bool:
+    """An updated output stays pending until its exact bytes are confirmed sent."""
+    from domains.sebrae_finalizacao import ler_enviado
+    saida = caminho_saida(caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+    if not saida.is_file():
+        return False
+    return hashlib.sha256(saida.read_bytes()).hexdigest() != ler_enviado(caminhos.existentes.parent)

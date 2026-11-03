@@ -233,7 +233,7 @@ class AvisoPendenteTests(unittest.TestCase):
 class _AlvoFalso:
     @staticmethod
     def chamado_para_finalizar(numero: Any, descricao: Any) -> Dict[str, Any]:
-        return {"numero": "UTIC-2026-1", "descricao": "Feito.", "pdf": None}
+        return {"numero": "UTIC-2026-1", "descricao": "Feito.", "pdf": None, "versao_importacao": "fixture-v1"}
 
 
 class NenhumEnvioAoSharePointTests(unittest.TestCase):
@@ -246,7 +246,9 @@ class NenhumEnvioAoSharePointTests(unittest.TestCase):
             self.assertNotIn(rotina, ROTINAS_VALIDAS)
 
     def test_finalization_card_warns_about_sharepoint_and_browser_drafts(self) -> None:
-        cartao = assistant_tools._describe_finalizar_softexpert(_AlvoFalso(), {})  # type: ignore[arg-type]
+        args: Dict[str, Any] = {}
+        cartao = assistant_tools._describe_finalizar_softexpert(_AlvoFalso(), args)  # type: ignore[arg-type]
+        self.assertEqual(args["_versao_importacao"], "fixture-v1")
         self.assertIn("substitui o arquivo no SharePoint", cartao)
         self.assertIn("Rascunhos que estão só no navegador (A, B, J, S) não vão nesse envio", cartao)
 

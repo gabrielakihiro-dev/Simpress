@@ -223,6 +223,7 @@ def _describe_vincular_os(api: SimpressApi, args: Args) -> str:
 
 def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
     alvo = api.chamado_para_finalizar(args.get("numero"), args.get("descricao"))
+    args["_versao_importacao"] = alvo["versao_importacao"]
     pdf = f" Anexa o PDF \"{alvo['pdf']}\" (enviado de verdade)." if alvo["pdf"] else " Sem PDF anexado."
     return (
         f"FINALIZAR {alvo['numero']} NO SOFTEXPERT. É irreversível. No Chrome de automação: Atendimento - Chamados TI, "
@@ -528,6 +529,11 @@ QUERY_TOOLS: List[Tool] = [
         "listar_chamados_abertos",
         "Chamados técnicos e ordens de serviço (OS) em andamento, conferidos ou com divergência.",
         lambda c, a: c.listar_chamados_abertos(),
+    ),
+    _read(
+        "consultar_agendamento_dashboard",
+        "Consulta se Baixar, importar e buscar está agendado a cada 30 minutos no servidor local e a próxima tentativa.",
+        lambda c, a: c.consultar_agendamento_dashboard(),
     ),
     _read(
         "consultar_status_automacao",
@@ -888,6 +894,18 @@ QUERY_TOOLS: List[Tool] = [
 
 CHANGE_TOOLS: List[Tool] = [
     _change(
+        "definir_agendamento_dashboard",
+        "Ativa ou pausa a repetição de Baixar, importar e buscar a cada 30 minutos, todos os dias e horários. "
+        "Somente mediante pedido explícito de agendamento; primeira tentativa em 30 minutos. Login manual. "
+        "Não envia ao SharePoint nem finaliza chamados. Precisa do computador e servidor ligados.",
+        lambda c, a: c.definir_agendamento_dashboard(a.get("ativo")),
+        lambda a: ("Ativar" if a.get("ativo") is True else "Pausar") + " a repetição de Baixar, importar e buscar a cada 30 minutos. "
+                  "Primeira tentativa em 30 minutos após ativar. Lê SharePoint e SoftExpert e substitui a base local importada; "
+                  "rascunhos manuais ficam preservados no navegador. Não envia ao SharePoint nem finaliza chamados. "
+                  "Computador e servidor precisam estar ligados; senha e MFA são manuais.",
+        {"ativo": {"type": "boolean", "description": "true para ativar; false para pausar."}}, ["ativo"],
+    ),
+    _change(
         "atualizar_apelido",
         "Altera o apelido de um equipamento. O usuário confirma antes.",
         lambda c, a: c.atualizar_apelido(str(a.get("serial", "")), str(a.get("apelido", ""))),
@@ -995,7 +1013,7 @@ CHANGE_TOOLS: List[Tool] = [
         "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
         "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "
         "(\"Atualizar Dashboard\"). O usuário confirma antes.",
-        lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao")),
+        lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao"), a.get("_versao_importacao")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},
             "descricao": {"type": "string", "maxLength": 4000, "description": "Texto de Detalhes do Atendimento Realizado (opcional se já salvo no chamado)."},
@@ -1284,13 +1302,13 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
          "ver_representantes_regionais", "alterar_representante_regional", "restaurar_representante_regional"),
     ),
     "automacao": (
-        r"\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel"
+        r"\bagend|\b30 minutos|\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel"
         r"|\brobo\b|\brobozinho\b"
         r"|\b(?:por que|pq) (?:falhou|parou|travou|deu erro)\b"
         r"|\b(?:o |a )?(?:robo\w*|rotina|automa\w+|chrome) *(?:falhou|parou|travou|deu erro)\b"
         r"|\b(?:falhou|falha|travou|parou|deu erro) (?:n[ao] |no |na )?(?:robo\w*|rotina|automa\w+|chrome)\b"
         r"|\b(?:confer|verifi[cq])\w* (?:os |as )?usuarios logad",  # the 'usuarios' routine, not a plain lookup of logged users
-        ("consultar_status_automacao", "resultado_ultima_automacao", "listar_historico_automacao", "log_execucao_automacao",
+        ("consultar_agendamento_dashboard", "definir_agendamento_dashboard", "consultar_status_automacao", "resultado_ultima_automacao", "listar_historico_automacao", "log_execucao_automacao",
          "executar_automacao_chrome", "cancelar_automacao_chrome"),
     ),
     "usuarios": (

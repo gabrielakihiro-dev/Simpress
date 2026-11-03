@@ -206,17 +206,57 @@
     return saida;
   }
 
-  /** Rascunho salvo para ESTE Dashboard importado; outro arquivo importado, armazenamento indisponível ou texto corrompido dão rascunho vazio. */
+  const PREFIXO_CAMPO = `${CHAVE_RASCUNHO}:campo:`;
+
+  /** Eventos separados por campo evitam que uma aba substitua o rascunho inteiro de outra. */
   function lerRascunho(armazenamento, importadoEm) {
     const vazio = { valores: {}, edicoes: {}, salvoEm: "" };
     if (!importadoEm) return vazio;
     try {
-      const bruto = JSON.parse(armazenamento?.getItem(CHAVE_RASCUNHO) || "null");
-      if (!bruto || bruto.importado_em !== importadoEm) return vazio;
-      return { valores: limparValoresRascunho(bruto.valores), edicoes: limparValoresRascunho(bruto.edicoes), salvoEm: String(bruto.salvo_em || "") };
-    } catch (_erro) {
-      return vazio;
-    }
+      let bruto = null;
+      try { bruto = JSON.parse(armazenamento?.getItem(CHAVE_RASCUNHO) || "null"); } catch (_erro) { /* registros por campo ainda podem ser lidos */ }
+      const migrar = campos => Object.fromEntries(Object.entries(limparValoresRascunho(campos))
+        .filter(([numero]) => bruto?.importado_em === importadoEm || NUMERO_UTIC.test(numero)));
+      const saida = { valores: migrar(bruto?.valores), edicoes: migrar(bruto?.edicoes), salvoEm: String(bruto?.salvo_em || ""), origens: {} };
+      ["valores", "edicoes"].forEach(tipo => Object.entries(saida[tipo]).forEach(([numero, campos]) => {
+        saida.origens[numero] = { ...saida.origens[numero], ...Object.fromEntries(Object.keys(campos).map(campo => [campo, bruto?.importado_em])) };
+      }));
+      const registros = [];
+      for (let i = 0; i < (armazenamento?.length || 0); i++) {
+        const chave = armazenamento.key(i);
+        if (!chave?.startsWith(PREFIXO_CAMPO)) continue;
+        try {
+          const registro = JSON.parse(armazenamento.getItem(chave));
+          if (!registro || typeof registro.em !== "string") continue;
+          registros.push({ ...registro, chave });
+        } catch (_erro) { /* um registro danificado não oculta os demais */ }
+      }
+      registros.sort((a, b) => a.em.localeCompare(b.em) || (Number(a.instante) || 0) - (Number(b.instante) || 0) || a.chave.localeCompare(b.chave));
+      registros.forEach(registro => {
+        if (registro.importado_em !== importadoEm && !NUMERO_UTIC.test(registro.numero)) return;
+        const campos = limparValoresRascunho({ [registro.numero]: { [registro.campo]: registro.valor } });
+        if (!campos[registro.numero]) return;
+        const alvo = registro.alvo === "antigo" ? "edicoes" : "valores";
+        // Um chamado pode ter passado de novo para antigo na reimportação.
+        ["valores", "edicoes"].forEach(tipo => {
+          if (saida[tipo][registro.numero]) delete saida[tipo][registro.numero][registro.campo];
+        });
+        saida[alvo][registro.numero] = { ...saida[alvo][registro.numero], ...campos[registro.numero] };
+        saida.origens[registro.numero] = { ...saida.origens[registro.numero], [registro.campo]: registro.importado_em };
+        saida.salvoEm = registro.em;
+      });
+      return saida;
+    } catch (_erro) { return vazio; }
+  }
+
+  function gravarCampoRascunho(armazenamento, importadoEm, numero, campo, valor, alvo) {
+    if (!armazenamento || !importadoEm) return false;
+    try {
+      const em = new Date().toISOString();
+      const chave = `${PREFIXO_CAMPO}${em}:${Math.random().toString(36).slice(2)}`;
+      armazenamento.setItem(chave, JSON.stringify({ importado_em: importadoEm, numero, campo, valor, alvo, em, instante: performance.timeOrigin + performance.now() }));
+      return true;
+    } catch (_erro) { return false; }
   }
 
   /** `true` só se gravou; sem armazenamento (janela privada, cota cheia) a tela segue funcionando sem rascunho. */
@@ -232,6 +272,12 @@
 
   function apagarRascunho(armazenamento) {
     try {
+      const chaves = [];
+      for (let i = 0; i < (armazenamento?.length || 0); i++) {
+        const chave = armazenamento.key(i);
+        if (chave?.startsWith(PREFIXO_CAMPO)) chaves.push(chave);
+      }
+      chaves.forEach(chave => armazenamento.removeItem(chave));
       armazenamento?.removeItem(CHAVE_RASCUNHO);
     } catch (_erro) {
       // sem armazenamento não há rascunho a apagar
@@ -239,29 +285,56 @@
   }
 
   /** Só o que ainda vale: chamados novos que continuam no formulário e campos de antigos ainda vazios no Dashboard (D sempre pode ir a FINALIZADO). */
-  function aplicarRascunho(rascunho, formulario, abertos) {
+  function aplicarRascunho(rascunho, formulario, abertos, importadoEm = "") {
     const novos = new Set((formulario || []).map(item => item.numero));
+    const conhecidos = new Set([...novos, ...(abertos || []).map(item => item.numero)]);
     const valores = {};
-    Object.entries(rascunho.valores).forEach(([numero, campos]) => { if (novos.has(numero)) valores[numero] = campos; });
+    const conflitos = [];
+    novos.forEach(numero => {
+      const antigos = rascunho.edicoes[numero] || {};
+      const recentes = rascunho.valores[numero] || {};
+      const campos = {};
+      new Set([...Object.keys(antigos), ...Object.keys(recentes)]).forEach(letra => {
+        if (letra in antigos && letra in recentes && antigos[letra] !== recentes[letra]) {
+          conflitos.push(`${numero} (${letra}): rascunho antigo ${antigos[letra]}; rascunho novo ${recentes[letra]}`);
+        } else campos[letra] = recentes[letra] ?? antigos[letra];
+      });
+      if (Object.keys(campos).length) valores[numero] = campos;
+    });
     const edicoes = {};
     (abertos || []).forEach(item => {
-      const campos = rascunho.edicoes[item.numero];
+      const campos = { ...rascunho.valores[item.numero], ...rascunho.edicoes[item.numero] };
       if (!campos) return;
-      const livres = Object.fromEntries(Object.entries(campos).filter(([letra]) => letra === "D" || !String(item.valores?.[letra] || "").trim()));
+      const livres = Object.fromEntries(Object.entries(campos).filter(([letra, valor]) => !String(item.valores?.[letra] || "").trim() || (letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)));
       if (Object.keys(livres).length) edicoes[item.numero] = livres;
     });
-    return { valores, edicoes, restaurado: Object.keys(valores).length + Object.keys(edicoes).length > 0, salvoEm: rascunho.salvoEm };
+    (abertos || []).forEach(item => {
+      const campos = { ...rascunho.valores[item.numero], ...rascunho.edicoes[item.numero] };
+      Object.entries(campos).forEach(([letra, valor]) => {
+        const atual = letra === "R" ? encerramentoParaCampo(item.valores?.R) : String(item.valores?.[letra] || "");
+        if (atual.trim() && atual !== valor && !(letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)) conflitos.push(`${item.numero} (${letra}): rascunho ${valor}; Dashboard ${atual}`);
+      });
+    });
+    const pendentes = Object.entries({ ...rascunho.valores, ...rascunho.edicoes }).filter(([numero]) => !conhecidos.has(numero));
+    return { valores, edicoes, conflitos, pendentes, restaurado: Object.keys(valores).length + Object.keys(edicoes).length > 0, salvoEm: rascunho.salvoEm };
   }
 
   function createSebraeDashboard(context) {
     const { app, dom } = context;
     const armazenamento = (() => { try { return window.localStorage || null; } catch (_erro) { return null; } })();
     const estado = {
-      formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", descartar: false,
+      naoSalvos: { valores: {}, edicoes: {} }, rascunhoExterno: false, formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", versaoImportacao: "", descartar: false,
       soft: {}, refs: new Map(), temporizadores: {}, salvando: {}, finalizados: new Set(),
       fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
       antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
     };
+
+    if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
+      if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
+        estado.rascunhoExterno = true;
+        mostrarRascunho("O rascunho mudou em outra aba. Suas edições foram preservadas; recarregue para conferir a versão mais recente antes de atualizar o Dashboard.", "alerta");
+      }
+    });
 
     const el = id => document.getElementById(id);
 
@@ -881,7 +954,7 @@
       try {
         await app.apiFetch("/api/sebrae/finalizar-softexpert", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numero, confirmado: true, ...manuaisDoChamado(numero) }),
+          body: JSON.stringify({ numero, confirmado: true, versao_importacao: estado.versaoImportacao, ...manuaisDoChamado(numero) }),
           errorMessage: "Não foi possível iniciar a finalização no SoftExpert.",
         });
       } catch (error) {
@@ -1202,7 +1275,18 @@
       const guardados = valoresDe(sebraeAlvo);
       guardados[sebraeNumero] = { ...(guardados[sebraeNumero] || {}), [sebraeCampo]: event.currentTarget.value };
       destacarFinalizado(event.currentTarget);
-      salvarRascunho();
+      if (gravarCampoRascunho(armazenamento, estado.importadoEm, sebraeNumero, sebraeCampo, event.currentTarget.value, sebraeAlvo)) {
+        const tipo = sebraeAlvo === "antigo" ? "edicoes" : "valores";
+        if (estado.naoSalvos[tipo][sebraeNumero]) {
+          delete estado.naoSalvos[tipo][sebraeNumero][sebraeCampo];
+          if (!Object.keys(estado.naoSalvos[tipo][sebraeNumero]).length) delete estado.naoSalvos[tipo][sebraeNumero];
+        }
+        mostrarRascunho("Rascunho salvo automaticamente neste navegador.", "ok");
+      } else {
+        const tipo = sebraeAlvo === "antigo" ? "edicoes" : "valores";
+        estado.naoSalvos[tipo][sebraeNumero] = { ...estado.naoSalvos[tipo][sebraeNumero], [sebraeCampo]: event.currentTarget.value };
+        mostrarRascunho("Não foi possível salvar o rascunho. Mantenha esta aba aberta e copie suas edições antes de recarregar.", "erro");
+      }
       atualizarBotaoAtualizar();
     }
 
@@ -1213,11 +1297,6 @@
       if (!bloco) return;
       bloco.hidden = !texto;
       bloco.dataset.estado = situacao;
-    }
-
-    function salvarRascunho() {
-      if (!gravarRascunho(armazenamento, estado.importadoEm, estado.valores, estado.edicoes)) return;
-      mostrarRascunho(`Rascunho salvo automaticamente neste navegador às ${new Date().toLocaleTimeString("pt-BR")}.`, "ok");
     }
 
     /** Volta ao que o Dashboard importado traz: apaga o rascunho e refaz a tela (se a consulta falhar, nada muda). */
@@ -1266,21 +1345,31 @@
     }
 
     function renderizar(dados) {
+      estado.rascunhoExterno = false;
       const importado = dados.importado;
       estado.listas = importado?.listas || {};
       estado.abertos = importado?.abertos || [];
       estado.atualizavel = Boolean(importado?.atualizavel);
-      estado.importadoEm = importado?.importado_em || "";
+      estado.importadoEm = importado?.versao || importado?.importado_em || "";
+      estado.versaoImportacao = importado?.versao || "";
       if (estado.descartar) {
         apagarRascunho(armazenamento);
         estado.valores = {};
+        estado.naoSalvos = { valores: {}, edicoes: {} };
       }
       const novos = dados.novos;
-      const rascunho = aplicarRascunho(lerRascunho(armazenamento, estado.importadoEm), novos?.formulario, estado.abertos);
+      const guardado = lerRascunho(armazenamento, estado.importadoEm);
+      ["valores", "edicoes"].forEach(tipo => Object.entries(estado.naoSalvos[tipo]).forEach(([numero, campos]) => {
+        guardado[tipo][numero] = { ...guardado[tipo][numero], ...campos };
+      }));
+      const rascunho = aplicarRascunho(guardado, novos?.formulario, estado.abertos, estado.importadoEm);
       estado.edicoes = rascunho.edicoes;
-      Object.entries(rascunho.valores).forEach(([numero, campos]) => { estado.valores[numero] = { ...campos, ...estado.valores[numero] }; });
+      estado.valores = rascunho.valores;
       const salvoEm = formatarDataHora(rascunho.salvoEm);
       mostrarRascunho(estado.descartar ? "Rascunho descartado." : rascunho.restaurado ? `Rascunho restaurado${salvoEm ? ` (salvo em ${salvoEm})` : ""}. Passe por Atualizar Dashboard para gravar no arquivo.` : "");
+      if (rascunho.conflitos.length) mostrarRascunho(`Rascunho preservado com divergências; o arquivo importado prevalece nos campos já preenchidos. Confira: ${rascunho.conflitos.join("; ")}`, "alerta");
+      if (rascunho.pendentes.length) mostrarRascunho(`Rascunhos preservados sem correspondência nesta importação: ${rascunho.pendentes.map(([numero, campos]) => `${numero}: ${JSON.stringify(campos)}`).join("; ")}. ${rascunho.conflitos.join("; ")}`, "alerta");
+      if (Object.values(estado.naoSalvos).some(itens => Object.keys(itens).length)) mostrarRascunho("Há edições preservadas apenas nesta aba porque o navegador não conseguiu salvá-las. Copie os valores antes de recarregar.", "erro");
       estado.soft = {};
       estado.refs.clear();
       const finalizados = importado?.finalizados || [];
@@ -1355,6 +1444,7 @@
         });
         estado.consulta += 1;
         renderizar(dados);
+        if (dados.saida_anterior_preservada) definirTexto("sebrae-dashboard-status", "Dashboard importado. A cópia atualizada anterior foi preservada em data/state/sebrae_dashboard_saida/preservados; confira essa cópia antes de enviar outra versão.");
         entrada.value = "";
         entrada.dispatchEvent(new Event("change", { bubbles: true }));
         app.showToast("Dashboard importado.", "success");
@@ -1381,6 +1471,10 @@
     }
 
     async function atualizarDashboardSebrae() {
+      if (estado.rascunhoExterno) {
+        app.showToast("O rascunho mudou em outra aba. Recarregue e confira os campos antes de atualizar o Dashboard.", "warning");
+        return;
+      }
       const chamados = payloadAtualizacao(estado.formulario, estado.valores);
       const edicoes = payloadEdicoes(estado.abertos, estado.edicoes);
       if (!estado.atualizavel || (!chamados.length && !edicoes.length && !totalPreenchimentos(estado.abertos))) return;
@@ -1411,7 +1505,7 @@
         }
         if (finalizarSoftExpert) await Promise.all(finalizar.map(guardarFicha));
         const dados = await app.apiFetch("/api/sebrae/dashboard/atualizar", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes, finalizar_softexpert: finalizarSoftExpert }),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes, versao_importacao: estado.versaoImportacao, finalizar_softexpert: finalizarSoftExpert }),
           errorMessage: "Não foi possível atualizar o Dashboard.",
         });
         baixarArquivo(dados.arquivo, dados.conteudo_base64);
@@ -1438,6 +1532,6 @@
 
   createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando,
     formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
-    lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho };
+    lerRascunho, gravarRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;
 })());

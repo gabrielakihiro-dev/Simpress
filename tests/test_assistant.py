@@ -1345,7 +1345,7 @@ class FinalizeSimpress(FakeSimpress):
     def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         if path == "/api/sebrae/novos":
             self.calls.append((method, path, params, body))
-            return 200, {"importado": {"arquivo": "d.xlsx", "abertos": self.abertos}}
+            return 200, {"importado": {"versao": "fixture-v1", "arquivo": "d.xlsx", "abertos": self.abertos}}
         if path == "/api/sebrae/finalizar-softexpert":
             self.calls.append((method, path, params, body))
             if method == "GET":
@@ -1375,7 +1375,7 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertEqual(simpress.writes(), [
             ("PUT", "/api/sebrae/chamados/UTIC-2026-1253/finalizacao"), ("POST", "/api/sebrae/finalizar-softexpert"),
         ])
-        self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True})
+        self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True, "versao_importacao": "fixture-v1"})
         self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao_finalizacao": "Notebook verificado"})
 
     def test_saved_description_and_pdf_are_used_without_a_new_put(self) -> None:
@@ -1402,9 +1402,17 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
 
     def test_conflict_from_the_server_is_reported_as_not_finalized(self) -> None:
         api = SimpressApi(FinalizeSimpress(finalizacao_post=409))
-        resposta = api.finalizar_chamado_softexpert("UTIC-2026-1254")
+        resposta = api.finalizar_chamado_softexpert("UTIC-2026-1254", versao_importacao="fixture-v1")
         self.assertFalse(resposta["sucesso"])
         self.assertIn("Nada foi finalizado", resposta["erro"])
+
+    def test_changed_import_after_card_prevents_all_finalization_writes(self) -> None:
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Verificado")), text("ok"))
+        conversation, simpress = make_conversation(model, FinalizeSimpress())
+        conversation.enviar_mensagem("finalize")
+        conversation._pendente["args"]["_versao_importacao"] = "versao-anterior"
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [])
 
     def test_state_tool_lists_only_utic_tickets_and_the_last_run(self) -> None:
         dados = SimpressApi(FinalizeSimpress()).situacao_finalizacao_sebrae()

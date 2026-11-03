@@ -898,6 +898,27 @@ class SimpressApi:
             "chamados": [sanitizar_chamado(ch) for ch in chamados[:MAX_ITENS_LISTA]],
         }
 
+    def consultar_agendamento_dashboard(self) -> Dict[str, Any]:
+        ok, dados = self._chamar("GET", "/api/automacao/dashboard/agendamento")
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        ultimo = _dict(dados.get("ultimo_disparo"))
+        return {"ativo": dados.get("ativo") is True, "intervalo_minutos": 30,
+                "proxima_execucao": str(dados.get("proxima_execucao") or ""),
+                "ultimo_resultado": ultimo.get("resultado") if ultimo.get("resultado") in (
+                    "iniciada", "pulado: ocupada", "pulado: horário perdido", "pulado: saída pendente", "erro ao iniciar") else "",
+                "saida_pendente": bool(dados.get("bloqueio")), "login": "Senha e MFA manuais; não envia ao SharePoint nem finaliza chamados."}
+
+    def definir_agendamento_dashboard(self, ativo: Any) -> Dict[str, Any]:
+        if not isinstance(ativo, bool):
+            return {"erro": "Informe ativo como verdadeiro ou falso."}
+        ok, dados = self._chamar("PUT", "/api/automacao/dashboard/agendamento", corpo={"ativo": ativo})
+        if not ok:
+            return {"erro": dados}
+        return {"ativo": _dict(dados).get("ativo") is True, "intervalo_minutos": 30,
+                "mensagem": "Agendamento alterado; nenhuma rotina foi iniciada agora."}
+
     def consultar_status_automacao(self) -> Dict[str, Any]:
         ok, dados = self._chamar("GET", "/api/automacao/estado")
         if not ok:
@@ -1428,7 +1449,7 @@ class SimpressApi:
         importado = _dict(dados).get("importado")
         if not isinstance(importado, dict):
             return [], None
-        return [a for a in importado.get("abertos") or [] if isinstance(a, dict)], None
+        return [{**a, "_versao_importacao": str(importado.get("versao") or "")} for a in importado.get("abertos") or [] if isinstance(a, dict)], None
 
     def situacao_finalizacao_sebrae(self) -> Dict[str, Any]:
         """Open tickets with a UTIC number: description saved, PDF and SoftExpert result; plus the last `fechar` run. Read only."""
@@ -1497,7 +1518,7 @@ class SimpressApi:
         if re.search(r"\[(?:PESSOA_\d+|E-MAIL OCULTADO|TELEFONE OCULTADO|DADO SENSÍVEL OMITIDO)\]", texto):
             raise ValueError("A descrição tem dado ocultado pela privacidade (nome, e-mail ou telefone); peça ao usuário para escrevê-la no campo do chamado, na tela Chamados.")
         return {
-            "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
+            "versao_importacao": item.get("_versao_importacao", ""), "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
             "pdf": str(_dict(se.get("pdf")).get("nome") or ""),
         }
 
@@ -1761,19 +1782,21 @@ class SimpressApi:
         situacao = "em andamento" if rodando else "já não aparece em andamento (pode ter terminado de imediato ou falhado)"
         return {"sucesso": True, "em_andamento": rodando, "mensagem": f"{mensagem} Estado logo após iniciar: {situacao}."}
 
-    def finalizar_chamado_softexpert(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+    def finalizar_chamado_softexpert(self, numero: Any, descricao: Any = "", versao_importacao: Any = "") -> Dict[str, Any]:
         """Finalize ONE ticket in SoftExpert (irreversible), the same call as the site's button; only after the card is confirmed."""
         try:
             alvo = self.chamado_para_finalizar(numero, descricao)
         except ValueError as falha:
             return {"sucesso": False, "erro": str(falha)}
+        if not versao_importacao or versao_importacao != alvo["versao_importacao"]:
+            return {"sucesso": False, "erro": "O Dashboard mudou desde o cartão. Consulte e confirme novamente; nada foi finalizado."}
         if alvo["nova"]:
             ok, dados = self._chamar(
                 "PUT", f"/api/sebrae/chamados/{alvo['numero']}/finalizacao", corpo={"descricao_finalizacao": alvo["descricao"]},
             )
             if not ok:
                 return {"sucesso": False, "erro": dados, "mensagem": "A descrição não foi salva; nada foi finalizado."}
-        ok, dados = self._chamar("POST", "/api/sebrae/finalizar-softexpert", corpo={"numero": alvo["numero"], "confirmado": True})
+        ok, dados = self._chamar("POST", "/api/sebrae/finalizar-softexpert", corpo={"numero": alvo["numero"], "confirmado": True, "versao_importacao": versao_importacao})
         if not ok:
             if "Erro 409" in str(dados):
                 return {"sucesso": False, "erro": "Já existe uma automação em andamento, ou o chamado já foi finalizado. Nada foi finalizado agora."}

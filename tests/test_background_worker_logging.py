@@ -89,6 +89,35 @@ class LifespanWorkerLoggingTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(0)
 
 
+class SebraeSchedulerWorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_scheduler_failures_are_isolated_and_next_cycle_still_runs(self):
+        for failing in ("sebrae", "dashboard"):
+            with self.subTest(failing=failing):
+                sebrae, dashboard = Mock(), Mock()
+                schedulers = {"sebrae": sebrae, "dashboard": dashboard}
+                schedulers[failing].verificar.side_effect = RuntimeError("falha simulada")
+
+                async def run_inline(function):
+                    return function()
+
+                with patch.object(main, "get_sebrae_scheduler", return_value=sebrae), \
+                        patch.object(main, "get_dashboard_scheduler", return_value=dashboard), \
+                        patch.object(main.asyncio, "to_thread", new=run_inline), \
+                        patch.object(main.asyncio, "sleep", side_effect=[None, asyncio.CancelledError]) as sleep, \
+                        self.assertLogs("main", "WARNING") as captured:
+                    with self.assertRaises(asyncio.CancelledError):
+                        await main._sebrae_scheduler_worker()
+
+                self.assertEqual(sebrae.verificar.call_count, 2)
+                self.assertEqual(dashboard.verificar.call_count, 2)
+                self.assertEqual(sleep.call_count, 2)
+                sleep.assert_called_with(main.SEBRAE_SCHEDULER_CHECK_SECONDS)
+                self.assertEqual(len(captured.output), 2)
+                for message in captured.output:
+                    self.assertIn("Sebrae" if failing == "sebrae" else "Dashboard", message)
+                    self.assertIn("RuntimeError", message)
+
+
 class MonthlyReportWorkerTests(unittest.TestCase):
     def test_recovery_check_failure_is_logged_and_does_not_stop_the_worker(self):
         with patch.object(main, "get_transaction_recovery_block", side_effect=OSError("disco indisponível")), \

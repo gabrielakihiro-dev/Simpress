@@ -25,6 +25,14 @@ class EstadoTest(unittest.TestCase):
         lido = novos.ler_existentes(self.caminhos.existentes)
         self.assertEqual((lido["arquivo"], lido["numeros"]), ("d.xlsx", frozenset({"UTIC-2026-1", "UTIC-2026-2"})))
 
+    def test_versao_so_muda_quando_o_conteudo_do_dashboard_muda(self):
+        def importar(arquivo, sha):
+            novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-1"], arquivo, sha256=sha)
+            return novos.ler_existentes(self.caminhos.existentes)["versao"]
+        primeira = importar("a.xlsx", "aa" * 32)
+        self.assertEqual(importar("b.xlsx", "aa" * 32), primeira)
+        self.assertNotEqual(importar("c.xlsx", "bb" * 32), primeira)
+
     def test_novos_gravam_texto_ja_mascarado_e_somem_depois_de_lancados(self):
         novos.salvar_novos(self.caminhos.novos, [CHAMADO], [("UTIC-2026-1387", "alerta")], 3, {"UTIC-2026-9": "erro"})
         bruto = self.caminhos.novos.read_text(encoding="utf-8")
