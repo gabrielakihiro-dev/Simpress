@@ -165,6 +165,7 @@ class AssistantConversation:
         self._relogio = relogio
         self._agora = agora
         self._nomes_base_carregados = False
+        self._nomes_usuarios: List[str] = []
         self._lock = threading.Lock()
         self._mensagens: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         self._pendente: Optional[Dict[str, Any]] = None
@@ -266,17 +267,18 @@ class AssistantConversation:
     # --- internals ------------------------------------------------------
 
     def _carregar_nomes_base(self) -> None:
-        """First message only: load the base names so what the user types is masked too.
+        """Load the base names (users once, representatives every message) so what the user types is masked too.
 
         Done here, not at start-up, because nothing reaches the model before the first
         message and because it tries again if Simpress was not ready yet.
         """
-        if self._nomes_base_carregados:
-            return
-        nomes = self._api.listar_nomes_usuarios()
-        if nomes is not None:
-            self._mascara.registrar_base(nomes)
-            self._nomes_base_carregados = True
+        if not self._nomes_base_carregados:
+            nomes = self._api.listar_nomes_usuarios()
+            if nomes is not None:
+                self._nomes_usuarios = nomes
+                self._nomes_base_carregados = True
+        # Representatives are re-read each message (they can be edited meanwhile); users come first so their markers keep their numbers.
+        self._mascara.registrar_base(self._nomes_usuarios + self._api.listar_nomes_representantes())
 
     def _atualizar_prompt(self) -> None:
         """Rebuild the system prompt with the saved instructions, so edits apply from the next message."""

@@ -22,7 +22,7 @@ from core.config import MAX_ASSISTANT_ATTACHMENT_BYTES
 from domains.assistant_anexos import (
     MAX_ANEXOS, MAX_IMAGEM_BYTES, MSG_TIPO, PAGINA, Anexo, AnexoRecusado, AnexoStore, analisar, limpar_nome,
 )
-from domains.assistant_api import ROTINAS_VALIDAS, SimpressApi, asgi_transport
+from domains.assistant_api import ROTINAS_VALIDAS, SimpressApi, asgi_transport, representante_efetivo
 from domains.assistant_chat import (
     MAX_CARACTERES_RESPOSTA, MAX_CHAMADAS_CONSULTA, MAX_RODADAS, MSG_OCUPADO, MSG_SEM_CHAVE, SYSTEM_PROMPT, AssistantBusy, AssistantConversation,
 )
@@ -1582,7 +1582,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
 
     def test_invalid_hidden_unchanged_or_incomplete_input_never_reaches_a_card_or_the_route(self) -> None:
         casos = (
-            {"email": "sem-arroba"}, {"telefone": "123"}, {"horario": "8h às 18h"}, {"almoco": "meio-dia"}, {"pausa": "uma hora"},
+            {"email": "sem-arroba"}, {"telefone": "123"}, {"horario": "8h às 18h"}, {"horario": "20:00:00 às 08:00:00"}, {"horario": "09:00:00 às 09:00:00"}, {"almoco": "meio-dia"}, {"pausa": "uma hora"},
             {"nome": "x" * 161}, {"nome": "[PESSOA_1 OCULTADO]"}, {"email": "[E-MAIL OCULTADO]"}, {"telefone": "[TELEFONE OCULTADO]"},
             {}, {"nome": "Renata Custodio de Oliveira Varasquim"}, {"almoco": "12:00:00"},  # no pause for a lunch that closes the office
         )
@@ -1594,6 +1594,14 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         erro = SimpressApi(RepresentativesSimpress()).alterar_representante_regional("Londrina", "[PESSOA_1 OCULTADO]", None, None, None, None, None)["erro"]
         self.assertIn("Editar", erro)
         self.assertIn("Transferência", erro)
+
+    def test_inverted_schedule_is_explained_before_any_card_or_route_call(self) -> None:
+        simpress = RepresentativesSimpress()
+        erro = SimpressApi(simpress).alterar_representante_regional("Londrina", None, None, None, "20:00:00 às 08:00:00", None, None)["erro"]
+        self.assertIn("começar antes de terminar", erro)
+        self.assertNotIn("Value error", erro)
+        self.assertEqual(simpress.writes(), [])
+        self.assertIn("início precisa ser antes do fim", TOOLS["alterar_representante_regional"].properties["horario"]["description"])
 
     def test_restore_sends_one_delete_after_the_card_shows_saved_and_default(self) -> None:
         simpress = RepresentativesSimpress()
@@ -1613,6 +1621,42 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         self.assertEqual(simpress.writes(), [])
         self.assertIn("não tem alteração salva", SimpressApi(simpress).restaurar_representante_regional("Londrina")["erro"])
 
+    def test_representative_names_typed_in_the_chat_are_masked_and_come_back_readable(self) -> None:
+        simpress = RepresentativesSimpress()
+        model = FakeModel(text("ok"), text("ok"), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem("a Tatiane Matsuguma Sanches foi substituída por Representante Fictício?")
+        enviado = json.dumps(model.sent[0], ensure_ascii=False)  # default name and saved name
+        for real in ("Tatiane", "Matsuguma", "Representante Fictício", "Fictício"):
+            self.assertNotIn(real, enviado)
+        self.assertIn("Maria Souza", conversation._mascara._por_valor)  # the users of the base are still there
+        marcador = conversation._mascara._por_valor["Tatiane Matsuguma Sanches"]
+        model.replies.insert(0, text(f"Sobre {marcador}: nada a fazer."))
+        self.assertEqual(conversation.enviar_mensagem("e ela?").texto, "Sobre Tatiane Matsuguma Sanches: nada a fazer.")
+        # A name edited meanwhile (screen or assistant) is masked from the next message; the cache of the users does not hide it.
+        simpress.salvos["Londrina"] = {"nome": "Pessoa Inventada"}
+        conversation.enviar_mensagem("fale da Pessoa Inventada")
+        self.assertNotIn("Inventada", json.dumps(model.sent[-1], ensure_ascii=False))
+        nomes = SimpressApi(simpress).listar_nomes_representantes()
+        self.assertEqual(len(nomes), 21 + 2)  # 21 defaults (Arapongas has none) + the 2 saved names; the replaced ones stay masked
+        self.assertIn("Pessoa Inventada", nomes)
+        self.assertIn("Renata Custodio de Oliveira Varasquim", nomes)  # Londrina was edited, the default name is still personal data
+
+    def test_card_of_a_change_shows_the_real_names_even_though_the_model_only_sees_markers(self) -> None:
+        simpress = RepresentativesSimpress()
+        model = FakeModel(text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem("oi")
+        marcador = conversation._mascara._por_valor["Tatiane Matsuguma Sanches"]
+        model.replies.extend([calls(call("alterar_representante_regional", cidade="Londrina", nome=marcador)), text("feito")])
+        pendente = conversation.enviar_mensagem("coloque a Tatiane Matsuguma Sanches em Londrina").pendente
+        self.assertIn("Tatiane Matsuguma Sanches", pendente["descricao"])  # type: ignore[index]
+        self.assertIn("Renata Custodio de Oliveira Varasquim", pendente["descricao"])  # type: ignore[index]
+        self.assertNotIn("PESSOA_", pendente["descricao"])  # type: ignore[index]
+        self.assertNotIn("Tatiane", json.dumps(model.sent, ensure_ascii=False))
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.calls[-1][3]["nome"], "Tatiane Matsuguma Sanches")  # type: ignore[index]
+
     def test_route_failure_is_reported_without_claiming_success(self) -> None:
         def falha(method: str, path: str, params: Any, body: Any) -> Tuple[int, Any]:
             return (200, {"alteracoes": {}, "arquivo_invalido": False}) if method == "GET" else (500, {"detail": "Não foi possível gravar o representante regional."})
@@ -1627,15 +1671,12 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         for texto in ("troque o representante regional de Londrina", "quem é o representante de Maringá?"):
             self.assertIn("transferencia", grupos_da_mensagem(texto), texto)
 
-    def test_defaults_mirror_the_front_end_list(self) -> None:
-        fonte = (Path(__file__).resolve().parent.parent / "static" / "js" / "features" / "regional-contacts.js").read_text(encoding="utf-8")
-        bloco = fonte.split("const REPRESENTANTES_REGIONAIS_PR = [", 1)[1].split("];", 1)[0]
-        js = {}
-        for linha in re.findall(r"\{ cidade: .*? \}", bloco):
-            campos = dict(re.findall(r'(\w+): "([^"]*)"', linha))  # nomeOpcao (label of the empty name) is not a saved field
-            js[campos["cidade"]] = {c: campos[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}
-        self.assertEqual(js, REGIONAL_REPRESENTATIVE_DEFAULTS)
-        self.assertEqual(tuple(js), REGIONAL_REPRESENTATIVE_CITIES)
+    def test_assistant_reads_the_defaults_from_the_backend_single_source(self) -> None:
+        self.assertEqual(len(REGIONAL_REPRESENTATIVE_CITIES), 22)
+        self.assertEqual(tuple(REGIONAL_REPRESENTATIVE_DEFAULTS), REGIONAL_REPRESENTATIVE_CITIES)
+        for cidade, padrao in REGIONAL_REPRESENTATIVE_DEFAULTS.items():
+            self.assertEqual(tuple(padrao), REGIONAL_REPRESENTATIVE_FIELDS, cidade)
+            self.assertEqual(representante_efetivo(cidade, {})[0], padrao, cidade)
 
     def test_real_route_round_trip_with_accented_and_spaced_city_names(self) -> None:
         with tempfile.TemporaryDirectory() as pasta:
@@ -1656,6 +1697,13 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
             self.assertTrue(simpress.restaurar_representante_regional("Foz do Iguaçu")["sucesso"])
             self.assertEqual(simpress.ver_representantes_regionais("Foz do Iguaçu")["nome"], "Marinez Martins")
             self.assertFalse(simpress.restaurar_representante_regional("Foz do Iguaçu")["sucesso"])
+            # Editing back to the default is stored as no change at all (only differences are saved).
+            self.assertTrue(simpress.alterar_representante_regional("Londrina", "Ana Souza", None, None, None, None, None)["sucesso"])
+            self.assertTrue(simpress.alterar_representante_regional("Londrina", "Renata Custodio de Oliveira Varasquim", None, None, None, None, None)["sucesso"])
+            londrina = simpress.ver_representantes_regionais("Londrina")
+            self.assertEqual((londrina["alterada"], londrina["nome"]), (False, "Renata Custodio de Oliveira Varasquim"))
+            self.assertIn("não tem alteração salva", simpress.restaurar_representante_regional("Londrina")["erro"])
+            self.assertEqual(json.loads((raiz / "config" / "representantes_regionais.json").read_text(encoding="utf-8")), {"Maringá": {"nome": "Ana Souza"}})
 
 
 class DestructiveSimpress(FakeSimpress):

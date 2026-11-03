@@ -871,6 +871,19 @@ class SimpressApi:
             offset += len(itens)
         return sorted(nomes)
 
+    def listar_nomes_representantes(self) -> List[str]:
+        """Names of the regional representatives, default and edited, so the mask recognises them in the chat.
+
+        The saved edits are read on every call: a name edited on the screen mid-conversation is masked from the next message.
+        """
+        try:
+            salvos = self._representantes_salvos()[0]
+        except ValueError:
+            salvos = {}  # route down: the defaults still go in
+        padrao = [REGIONAL_REPRESENTATIVE_DEFAULTS[c]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
+        editados = [representante_efetivo(c, salvos)[0]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
+        return list(dict.fromkeys(n for n in padrao + editados if n))
+
     def obter_totais_inventario(self) -> Dict[str, Any]:
         ok, stats = self._chamar("GET", "/api/stats")
         if not ok:
