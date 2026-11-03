@@ -54,7 +54,7 @@ Cada linha mostra:
 - Rótulo de status alinhado à direita ("Sincronizado", "Sem acesso 9 d", "Endpoint: Toledo", "Sem usuário", "Sem correspondência")
 - Desvio aprovado (etapa B): equipamento com mais de um status mostra todos empilhados à direita, abaixo da cidade (`.ck-item__status`, coluna, gap 2px), com o mesmo tamanho e cores. Ordem: Sem acesso, Divergente, Sem usuário; "Sincronizado" só quando não há outro status.
 
-- Desvio aprovado (etapa D): os selos "Divergente" e "Sem acesso" da lista são botões com aparência de link (mesma cor; `stopPropagation`, não abrem o equipamento). "Divergente" abre a aba Comparação no evento mais recente, na categoria real da série (Localidade, Só Simpress, Só Endpoint ou Usuário), com rolagem e destaque de ~1,5 s na linha. "Sem acesso" abre a aba Resumo com o KPI "Sem acesso há 7+ dias" ativo e destaca a série. O destaque respeita `prefers-reduced-motion`.
+- Desvio aprovado (etapa D), acessibilidade corrigida em 02/11/2026: os selos "Divergente" e "Sem acesso" dentro de cada `option` são indicadores sem controles aninhados. As mesmas ações ficam em botões com aparência de link, na área `#home-equipment-actions` fora do `listbox`, identificada como `Ações de <série>` para o equipamento ativo/selecionado. Setas/Home/End e a seleção atualizam essa área; Tab alcança os botões, Enter/Espaço acionam o destino sem abrir o equipamento. "Divergente" abre a aba Comparação no evento mais recente, na categoria real da série (Localidade, Só Simpress, Só Endpoint ou Usuário), com rolagem e destaque de ~1,5 s na linha. "Sem acesso" abre a aba Resumo com o KPI "Sem acesso há 7+ dias" ativo e destaca a série. O destaque respeita `prefers-reduced-motion`.
 - Desvio aprovado (etapa D): os filtros Todos / Sem usuário / 7+ dias / Divergentes formam um controle segmentado de colunas iguais, com a altura de `--altura-pilula` e o ativo com `--cor-destaque-fundo`. `#btn-listar-sem-usuario` ("Lista sem usuário") foi removido em 31/10/2026 a pedido do usuário ("não faz mais sentido ter"): o rodapé da lista mostra só "N equipamentos" e "Carregar mais"; o filtro "Sem usuário" da lista e o selo nos cards continuam.
 
 A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left: 2px solid var(--color-accent)`).
@@ -62,7 +62,9 @@ A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left:
 #### Comportamento
 
 - Clicar numa linha seleciona o equipamento e mostra o detalhe à direita.
+- Ao iniciar a busca de outro equipamento, limpe `aria-selected` da seleção anterior; se a busca falhar, nenhuma opção permanece selecionada. O item ativo (`aria-activedescendant`) e suas ações continuam disponíveis, independentemente da seleção carregada.
 - A busca global (`#input-serial`) filtra esta lista.
+- Com um único caractere, invalida e cancela a requisição anterior da lista e mostra `Digite ao menos 2 caracteres para filtrar a lista.`; uma resposta atrasada não altera a lista, a contagem nem a paginação. Limpar a busca volta a listar o inventário.
 - Mantenha o autocomplete (`#autocomplete-box`) funcionando — ele pode aparecer sobre a lista ou como dropdown da busca.
 - Os dados vêm da mesma fonte atual (API de equipamentos). Use o JS existente em `equipment-search.js` e adapte a renderização.
 
@@ -152,6 +154,8 @@ Lista compacta com:
 - Badge de status: Sem resposta = erro, Aguardando técnico = alerta, Em atendimento = info, Concluído = ok
 
 Os dados vêm do acompanhamento de chamados (API existente, `/api/operacoes/chamados`, sempre a importação mais recente, mesmo que outra versão esteja aberta no painel Chamados). Mostre só os chamados Oracle da série selecionada que não estão encerrados, do número de OS maior para o menor. Se não houver dados, mostre "Nenhum chamado aberto para esta série."
+
+O cartão também consulta `GET /api/sebrae/novos` para os chamados abertos da série na aba Chamados (F5). Se essa consulta falhar, preserve as OS do Oracle e mostre `Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.` como alerta, com a contagem marcada `consulta parcial` (`Consulta parcial` sem OS). Nesse caso, não mostre a mensagem de lista vazia. Estas correções de 02/11/2026 não escrevem nem apagam dados operacionais ou dados externos.
 
 ---
 

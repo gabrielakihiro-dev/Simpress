@@ -20,6 +20,8 @@ A tabela de OS sempre mostra a importação mais recente (é a fonte operacional
 
 Mesmas APIs de antes (`/api/operacoes/chamados`, `/snapshot/{id}`, `/evolucao`, `/historico/antigas`, `/importar`, `/exportar`, `/linha-do-tempo/...`). Importar atualiza tabela, KPIs, triagem, Home (cartão de chamados abertos) e prontidão, e mostra o aviso `Acompanhamento de chamados atualizado.`. Exportar usa `Planilha Exportada com Sucesso!`. O modal antigo continua acessível só por `abrirChamadoDaOs` até ser removido no passo seguinte.
 
+Correção na Home (02/11/2026): o cartão `Chamados abertos` combina as OS do Oracle com os chamados da série obtidos em `GET /api/sebrae/novos`. Uma falha apenas do Sebrae preserva as OS e mostra o alerta `Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.`; a contagem recebe `consulta parcial` (`Consulta parcial` sem OS). A mensagem `Nenhum chamado aberto para esta série.` exige consulta bem-sucedida às duas fontes. A correção é somente de consulta e apresentação, sem escrita ou exclusão de dados locais/externos.
+
 ---
 
 # Histórico: prompt 7 original

@@ -307,13 +307,14 @@
     return section;
   }
 
-  function renderizarChamadosAbertosHome(abertos, sebrae = [], serie = "") {
+  function renderizarChamadosAbertosHome(abertos, sebrae = [], serie = "", falhaSebrae = false) {
     const body = document.getElementById("home-open-tickets-body");
     const count = document.getElementById("home-open-tickets-count");
     const total = abertos.length + sebrae.length;
     body.setAttribute("aria-busy", "false");
     count.textContent = total ? `${total} ${total === 1 ? "aberto" : "abertos"}` : "";
-    if (!total) {
+    if (falhaSebrae) count.textContent = total ? `${count.textContent} · consulta parcial` : "Consulta parcial";
+    if (!total && !falhaSebrae) {
       body.replaceChildren(createTextElement("p", "ck-abertos__vazio", "Nenhum chamado aberto para esta série."));
       return;
     }
@@ -334,6 +335,11 @@
       list.append(item);
     });
     body.replaceChildren(...(abertos.length ? [list] : []), ...(sebrae.length ? [renderizarChamadosSebraeHome(sebrae)] : []));
+    if (falhaSebrae) {
+      const warning = createTextElement("p", "ck-abertos__vazio", "Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
+      warning.setAttribute("role", "alert");
+      body.append(warning);
+    }
   }
 
   // Home: chamados Oracle ainda abertos da série selecionada, sempre da importação mais recente (mesma API da aba Chamados).
@@ -346,19 +352,21 @@
     document.getElementById("home-open-tickets-count").textContent = "";
     try {
       // Os chamados do F5 são um complemento: se a consulta falhar, a lista de OS continua aparecendo.
-      const sebraePedido = app.apiFetch("/api/sebrae/novos", { signal: request.signal, errorMessage: "Não foi possível consultar os chamados do Sebrae." }).catch(() => null);
+      const sebraePedido = app.apiFetch("/api/sebrae/novos", { signal: request.signal, errorMessage: "Não foi possível consultar os chamados do Sebrae." })
+        .then(dados => ({ dados, falhou: false }), () => ({ dados: null, falhou: true }));
       if (!chamadosRecentesHome) {
         const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar os chamados." });
         if (!homeTicketsRequestGate.isCurrent(request.id)) return;
         chamadosRecentesHome = data;
       }
-      const sebrae = chamadosSebraeDaSerie(await sebraePedido, serial);
+      const resultadoSebrae = await sebraePedido;
+      const sebrae = chamadosSebraeDaSerie(resultadoSebrae.dados, serial);
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       const chamados = Array.isArray(chamadosRecentesHome.chamados) ? chamadosRecentesHome.chamados : [];
       const record = chamados.find(item => normalizarFiltroChamados(item.serie) === normalizarFiltroChamados(serial));
       const abertos = (record?.oracle || []).filter(ticket => !idadeAtualizacaoChamado(ticket).encerrado)
         .sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
-      renderizarChamadosAbertosHome(abertos, sebrae, record?.serie || serial);
+      renderizarChamadosAbertosHome(abertos, sebrae, record?.serie || serial, resultadoSebrae.falhou);
     } catch (error) {
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       body.setAttribute("aria-busy", "false");

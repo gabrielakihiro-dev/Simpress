@@ -318,6 +318,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-item__local { font-size: var(--fs-sm); color: var(--cor-texto-suave); text-align: right; white-space: nowrap; }
 .ck-item__sub { min-width: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ck-item .ck-status { justify-self: end; }
+.ck-lista__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--cor-borda-suave); font-size: var(--fs-sm); }
 .ck-lista__rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 14px; border-top: 1px solid var(--cor-borda-suave); font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-lista__rodape > span, .ck-lista__info > * { white-space: nowrap; }
 .ck-lista__info { display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; }
