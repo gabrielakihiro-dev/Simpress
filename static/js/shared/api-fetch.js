@@ -69,7 +69,15 @@
   async function apiFetch(url, options = {}) {
     const { errorMessage = DEFAULT_ERROR_MESSAGE, responseType = "json", ...init } = options;
     // Resolved per call so tests and harnesses can replace the global fetch.
-    const response = await globalThis.fetch(url, init);
+    let response;
+    try {
+      response = await globalThis.fetch(url, init);
+    } catch (networkError) {
+      if (!isAbortError(networkError) && typeof root?.dispatchEvent === "function" && typeof root.CustomEvent === "function") {
+        root.dispatchEvent(new root.CustomEvent("simpress:servidor-offline", { detail: { url, error: networkError } }));
+      }
+      throw networkError;
+    }
     if (!response.ok) {
       const data = await readJson(response, true, errorMessage);
       const detail = data && typeof data === "object" ? /** @type {{ detail?: unknown }} */ (data).detail : undefined;
