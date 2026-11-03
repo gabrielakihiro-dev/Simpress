@@ -240,7 +240,7 @@ const CARGA_CARTOES = {
   },
 };
 
-async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null) {
+async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, chamadas = null) {
   const doc = createFakeDocument();
   // O DOM falso não tem classList; só o `toggle` é usado (cor verde do Status FINALIZADO).
   const criar = doc.createElement;
@@ -256,7 +256,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null) {
   const el = {};
   for (const [id, tag] of ids) { el[id] = doc.createElement(tag); el[id].setAttribute("id", id); doc.body.append(el[id]); }
   el["sebrae-novos-lista"].setAttribute("aria-busy", "true");
-  const app = { apiFetch: async () => carga, showToast() {}, confirmarAcao: async () => true };
+  const app = { apiFetch: async (url, opcoes = {}) => { chamadas?.push({ url, metodo: opcoes.method || "GET", corpo: opcoes.body }); return carga; }, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
   const feature = createSebraeDashboard({ app, dom });
   await feature.carregarNovosSebrae();
@@ -396,4 +396,130 @@ test("rascunho de antigo migra para novo e divergências entre os dois ficam exp
   assert.match(conflito.conflitos[0], /MANUAL.*OUTRO/);
   assert.equal(rascunho.edicoes[numero].A, "MANUAL");
   assert.equal(rascunho.valores[numero].A, "OUTRO");
+});
+
+// ---- Padrões do API SEBRAE nos chamados novos (03/11/2026) ----
+
+const { ehApiSebrae, padroesManuais } = createSebraeDashboard.puro;
+const esvaziarFila = () => new Promise(resolver => setImmediate(resolver));
+
+test("API SEBRAE é reconhecido sem acento, em qualquer caixa e com espaços extras; os padrões são por chamado", () => {
+  ["API SEBRAE", "api sebrae", "  Api   Sébrae "].forEach(nome => assert.equal(ehApiSebrae(nome), true, nome));
+  ["Camila", "", undefined, "API SEBRAE 2", "SEBRAE"].forEach(nome => assert.equal(ehApiSebrae(nome), false, String(nome)));
+  assert.deepEqual({ ...padroesManuais("API SEBRAE") }, { A: "CLIENTE", B: "OUTRO", D: "EM ABERTO", J: "INCIDENTE", S: "DISPONIBILIDADE" });
+  assert.deepEqual({ ...padroesManuais({ linha: { I: "api sebrae" } }) }, { A: "CLIENTE", B: "OUTRO", D: "EM ABERTO", J: "INCIDENTE", S: "DISPONIBILIDADE" });
+  assert.deepEqual({ ...padroesManuais("Camila") }, { D: "EM ABERTO", S: "DISPONIBILIDADE" });
+  assert.deepEqual({ ...padroesManuais(undefined) }, { D: "EM ABERTO", S: "DISPONIBILIDADE" });
+});
+
+const softexpertVazio = definida => ({ descricao_finalizacao: "", descricao_definida: definida, pdf: null, finalizacao: null });
+const novoDe = (numero, solicitante, softexpert) => ({
+  numero, softexpert, cruzamento: { status: "unico", candidatos: 1 },
+  linha: { C: numero, G: "Computador travando", H: "Travando.", I: solicitante, F: "", K: "", L: "", N: "" },
+});
+const cargaCom = formulario => ({ ...CARGA_CARTOES, novos: { ...CARGA_CARTOES.novos, formulario } });
+const valorDe = (cartao, letra) => cartao.querySelector(`[data-sebrae-campo="${letra}"]`).value;
+const cartaoDe = (el, numero) => el["sebrae-novos-lista"].querySelectorAll("article.sebrae-chamado--novo").find(no => no.querySelector(`[data-sebrae-numero="${numero}"]`));
+const puts = chamadas => chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/finalizacao"));
+
+test("chamado novo do API SEBRAE nasce com A, B, D, J e S padrão, R vazio e a descrição Revisado. salva; os demais só com D e S", async () => {
+  const chamadas = [];
+  const carga = cargaCom([
+    novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false)),
+    novoDe("UTIC-2026-1501", "Camila", softexpertVazio(false)),
+  ]);
+  const { el } = await renderizarCartoes(carga, null, chamadas);
+  await esvaziarFila();
+  const api = cartaoDe(el, "UTIC-2026-1500");
+  assert.deepEqual(["A", "B", "D", "J", "R", "S"].map(letra => valorDe(api, letra)), ["CLIENTE", "OUTRO", "EM ABERTO", "INCIDENTE", "", "DISPONIBILIDADE"]);
+  assert.equal(api.querySelector("textarea[data-sebrae-descricao]").value, "Revisado.");
+  const outro = cartaoDe(el, "UTIC-2026-1501");
+  assert.deepEqual(["A", "B", "D", "J", "R", "S"].map(letra => valorDe(outro, letra)), ["", "", "EM ABERTO", "", "", "DISPONIBILIDADE"]);
+  assert.equal(outro.querySelector("textarea[data-sebrae-descricao]").value, "");
+  // "Revisado." é salvo pelo mesmo PUT do autosave, só no API SEBRAE; nada chama a finalização
+  assert.deepEqual(puts(chamadas).map(c => [c.url, JSON.parse(c.corpo)]), [["/api/sebrae/chamados/UTIC-2026-1500/finalizacao", { descricao_finalizacao: "Revisado." }]]);
+  assert.equal(chamadas.some(c => c.metodo !== "GET" && c.url.includes("finalizar-softexpert")), false);
+});
+
+test("Revisado. não volta depois que a descrição foi guardada, nem se o usuário a apagou", async () => {
+  const chamadas = [];
+  const carga = cargaCom([
+    novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(true)), // apagada: "" guardado
+    novoDe("UTIC-2026-1502", "API SEBRAE", { ...softexpertVazio(true), descricao_finalizacao: "Troquei o cabo" }),
+  ]);
+  const { el } = await renderizarCartoes(carga, null, chamadas);
+  await esvaziarFila();
+  assert.equal(cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "");
+  assert.equal(cartaoDe(el, "UTIC-2026-1502").querySelector("textarea[data-sebrae-descricao]").value, "Troquei o cabo");
+  assert.equal(puts(chamadas).length, 0);
+  // servidor antigo, sem o campo novo: não presume "ausente"
+  const semCampo = cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", { descricao_finalizacao: "", pdf: null, finalizacao: null })]);
+  const outras = [];
+  const { el: el2 } = await renderizarCartoes(semCampo, null, outras);
+  await esvaziarFila();
+  assert.equal(cartaoDe(el2, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "");
+  assert.equal(puts(outras).length, 0);
+});
+
+test("o rascunho do usuário vence o padrão do API SEBRAE e campo apagado não é preenchido de novo", async () => {
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, "2026-10-28T10:00:00-03:00", "UTIC-2026-1500", "A", "SIMPRESS", "novo");
+  gravarCampoRascunho(disco, "2026-10-28T10:00:00-03:00", "UTIC-2026-1500", "B", "", "novo");
+  const { el } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(true))]), disco);
+  const api = cartaoDe(el, "UTIC-2026-1500");
+  assert.deepEqual(["A", "B", "J"].map(letra => valorDe(api, letra)), ["SIMPRESS", "", "INCIDENTE"]);
+});
+
+test("o API SEBRAE só com padrões não é tratado como trabalhado e finalizar continua sendo clique do usuário", async () => {
+  const chamadas = [];
+  const carga = cargaCom([
+    novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false)),
+    novoDe("UTIC-2026-1501", "Camila", softexpertVazio(true)),
+  ]);
+  const { el } = await renderizarCartoes(carga, null, chamadas);
+  await esvaziarFila();
+  const botao = (cartao) => cartao.querySelector("button[data-sebrae-finalizar]");
+  // clicar com D em EM ABERTO só avisa o que falta (nenhuma chamada de finalização)
+  botao(cartaoDe(el, "UTIC-2026-1500")).dispatchEvent({ type: "click", currentTarget: botao(cartaoDe(el, "UTIC-2026-1500")) });
+  await esvaziarFila();
+  assert.equal(chamadas.some(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert")), false);
+  // o usuário finaliza o 1501 à mão; o 1500, que só tem os padrões, não vai no corpo
+  const outro = cartaoDe(el, "UTIC-2026-1501");
+  const editar = (letra, valor) => { const campo = outro.querySelector(`[data-sebrae-campo="${letra}"]`); campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  editar("A", "CLIENTE"); editar("J", "INCIDENTE"); editar("D", "FINALIZADO");
+  const texto = outro.querySelector("textarea[data-sebrae-descricao]");
+  texto.value = "Feito.";
+  texto.dispatchEvent({ type: "change", currentTarget: texto });
+  await esvaziarFila();
+  botao(outro).dispatchEvent({ type: "click", currentTarget: botao(outro) });
+  for (let i = 0; i < 20 && !chamadas.some(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert")); i++) await esvaziarFila();
+  const envio = chamadas.filter(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert"));
+  assert.equal(envio.length, 1);
+  const corpo = JSON.parse(envio[0].corpo);
+  assert.equal(corpo.numero, "UTIC-2026-1501");
+  assert.deepEqual(corpo.chamados.map(c => c.numero), ["UTIC-2026-1501"]);
+});
+
+test("API SEBRAE: trocar só D para FINALIZADO e clicar leva A, B, J e S padrão no corpo; recarregar com a descrição guardada não reaplica nem duplica o PUT", async () => {
+  const chamadas = [];
+  const { el } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]), null, chamadas);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const d = cartao.querySelector('[data-sebrae-campo="D"]');
+  d.value = "FINALIZADO";
+  d.dispatchEvent({ type: "input", currentTarget: d });
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  const envios = () => chamadas.filter(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert"));
+  for (let i = 0; i < 20 && !envios().length; i++) await esvaziarFila();
+  assert.equal(envios().length, 1);
+  const corpo = JSON.parse(envios()[0].corpo);
+  assert.deepEqual(corpo.chamados, [{ numero: "UTIC-2026-1500", A: "CLIENTE", B: "OUTRO", D: "FINALIZADO", J: "INCIDENTE", R: "", S: "DISPONIBILIDADE" }]);
+  assert.equal(puts(chamadas).length, 1); // só o "Revisado." inicial; salvar de novo no clique não repete o mesmo texto
+  // nova carga já com "Revisado." guardado no servidor: nada é reaplicado nem reenviado
+  const outras = [];
+  const { el: el2 } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", { ...softexpertVazio(true), descricao_finalizacao: "Revisado." })]), null, outras);
+  await esvaziarFila();
+  assert.equal(cartaoDe(el2, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "Revisado.");
+  assert.equal(puts(outras).length, 0);
 });

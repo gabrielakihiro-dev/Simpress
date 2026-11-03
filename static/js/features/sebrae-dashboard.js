@@ -12,6 +12,22 @@
   const CAMPOS_PREENCHIDOS = Object.freeze([["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"]]); // do antigo: vazios são preenchidos pelo site
   const STATUS_CHAMADO =Object.freeze(["EM ABERTO", "FINALIZADO"]);
   const TIPOS_CHAMADO = Object.freeze(["INCIDENTE", "SOLICITAÇÃO"]);
+  const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
+  // Chamados criados pela API: classificação habitual (A, B, J) mais os padrões de todos; a descrição "Revisado." entra uma vez só (secaoFinalizar)
+  const PADROES_API_SEBRAE = Object.freeze({ A: "CLIENTE", B: "OUTRO", D: "EM ABERTO", J: "INCIDENTE", S: "DISPONIBILIDADE" });
+  const DESCRICAO_API_SEBRAE = "Revisado.";
+  const SOLICITANTE_API_SEBRAE = "api sebrae"; // mesma comparação de SOLICITANTE_SEM_EMAIL (scripts/sebrae_softexpert.py): sem acento, maiúsculas e espaços extras
+
+  function ehApiSebrae(solicitante) {
+    const limpo = String(solicitante || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+    return limpo === SOLICITANTE_API_SEBRAE;
+  }
+
+  /** Padrões de um chamado novo; recebe o solicitante (coluna I) ou o item do formulário. */
+  function padroesManuais(origem) {
+    const solicitante = origem && typeof origem === "object" ? origem.linha?.I : origem;
+    return ehApiSebrae(solicitante) ? PADROES_API_SEBRAE : PADROES_MANUAIS;
+  }
   const AVISO_CRUZAMENTO = Object.freeze({
     ausente: "Série, modelo e cidade vazios: nenhum equipamento encontrado para este solicitante.",
     ambiguo: "Série, modelo e cidade vazios: mais de um equipamento encontrado para este solicitante.",
@@ -409,7 +425,7 @@
         }
       }
       controle.className = "ck-entrada ck-entrada--sm";
-      const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : PADROES_MANUAIS[letra] ?? "";
+      const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : padroesManuais(estado.formulario.find(item => item.numero === numero))[letra] ?? "";
       controle.value = valores[letra] ?? inicial;
       if (antigo && atual && letra !== "D") controle.disabled = true; // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO
       if (!antigo && !(letra in valores) && controle.value) guardados[numero] = { ...valores, [letra]: controle.value };
@@ -434,8 +450,6 @@
       Object.entries(estado.edicoes[numero] || {}).forEach(([letra, valor]) => { if (String(valor || "").trim()) efetivos[letra] = valor; });
       return efetivos;
     }
-
-    const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
 
     const ROTULOS_MANUAIS = Object.freeze({
       A: "Responsável (A) *", B: "Categoria (B)", D: "Status (D) *", J: "Tipo do chamado (J) *",
@@ -755,8 +769,10 @@
     function secaoFinalizar(item, novo = false) {
       const numero = item.numero;
       const guardado = item.softexpert || {};
+      // "Revisado." só entra se o servidor nunca guardou descrição (campo ausente); apagada depois, vira "" guardado e não volta
+      const aplicarRevisado = novo && ehApiSebrae(item.linha?.I) && guardado.descricao_definida === false;
       const soft = estado.soft[numero] = {
-        descricao: guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
+        descricao: aplicarRevisado ? DESCRICAO_API_SEBRAE : guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
         pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
       };
       const area = criarZona("finalizacao", "Finalização no SoftExpert", "Irreversível", {
@@ -830,6 +846,7 @@
       botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
       cancelar.addEventListener("click", () => cancelarFinalizacao(numero));
       atualizarFinalizar(numero);
+      if (aplicarRevisado) salvarDescricao(numero); // só salva; finalizar continua sendo clique do usuário
       return area;
     }
 
@@ -920,10 +937,10 @@
     }
 
     /** A cópia de saída é refeita da importada: vão o próprio chamado (se novo, mesmo sem campos) e os outros novos que o usuário trabalhou
-     * (campo diferente do padrão D/S), nunca novos em branco; edições dos antigos só com campo mudado. */
+     * (campo diferente do padrão do próprio chamado: D/S, e também A/B/J no API SEBRAE), nunca novos em branco; edições dos antigos só com campo mudado. */
     function manuaisDoChamado(numero) {
       const trabalhado = item => item.numero === numero
-        || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== PADROES_MANUAIS[letra]; });
+        || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== padroesManuais(item)[letra]; });
       return { chamados: payloadAtualizacao(estado.formulario.filter(trabalhado), estado.valores), edicoes: payloadEdicoes(estado.abertos, estado.edicoes) };
     }
 
@@ -1530,7 +1547,7 @@
     return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando,
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando, ehApiSebrae, padroesManuais,
     formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
     lerRascunho, gravarRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;
