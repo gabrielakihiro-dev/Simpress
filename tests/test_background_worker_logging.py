@@ -19,6 +19,7 @@ WORKER_NAMES = (
     "_automatic_ticket_import_worker",
     "_external_change_reload_worker",
     "_monthly_report_worker",
+    "_sebrae_scheduler_worker",
 )
 
 
@@ -65,6 +66,17 @@ class LifespanWorkerLoggingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(record.exc_info)
         self.assertIs(record.exc_info[0], RuntimeError)
         self.assertEqual(len(captured.records), 1)
+
+    async def test_lifespan_starts_the_schedulers_worker(self):
+        started = asyncio.Event()
+
+        async def scheduler_worker():
+            started.set()
+            await asyncio.Event().wait()
+
+        self.use_workers(_sebrae_scheduler_worker=scheduler_worker)
+        async with main.lifespan(main.app):
+            await asyncio.wait_for(started.wait(), 2)
 
     async def test_failure_raised_while_cancelling_a_worker_is_logged(self):
         async def worker_failing_on_shutdown():

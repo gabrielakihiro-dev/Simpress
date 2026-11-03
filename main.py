@@ -980,6 +980,7 @@ async def lifespan(app: FastAPI):
             _automatic_entra_import_worker,
             _external_change_reload_worker,
             _monthly_report_worker,
+            _sebrae_scheduler_worker,
         ):
             task = asyncio.create_task(worker(), name=worker.__name__)
             task.add_done_callback(_log_background_task_failure)
