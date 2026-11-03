@@ -107,6 +107,10 @@ from routers.monthly_report import (
     create_monthly_report_router,
     generate_previous_month_report,
 )
+from routers.inventory_update import (
+    InventoryUpdateRouteServices,
+    create_inventory_update_router,
+)
 from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
@@ -1976,7 +1980,6 @@ def exportar_equipamentos():
     )
 
 
-@app.post("/api/recarregar-base")
 def recarregar_base():
     """Recarrega a planilha válida mais recente da pasta de entrada e informa arquivo e total."""
     if not load_database():
@@ -2092,14 +2095,6 @@ async def previsualizar_planilhas(endpoint_file: UploadFile, details_file: Uploa
     return await preview_inventory_files(endpoint_file, details_file, services=_inventory_update_services)
 
 
-@app.post("/api/planilhas/previsualizar")
-async def previsualizar_planilhas_endpoint(
-    endpoint_file: UploadFile = File(...),
-    details_file: UploadFile = File(...),
-):
-    return await previsualizar_planilhas(endpoint_file, details_file)
-
-
 async def atualizar_planilhas(
     endpoint_file: UploadFile,
     details_file: UploadFile,
@@ -2117,13 +2112,14 @@ async def atualizar_planilhas(
     return result
 
 
-@app.post("/api/planilhas/atualizar")
-async def atualizar_planilhas_endpoint(
-    endpoint_file: UploadFile = File(...),
-    details_file: UploadFile = File(...),
-    preview_token: str = Form(..., min_length=66, max_length=90),
-):
-    return await atualizar_planilhas(endpoint_file, details_file, preview_token=preview_token)
+inventory_update_router, _inventory_update_exports = create_inventory_update_router(
+    InventoryUpdateRouteServices(
+        preview=previsualizar_planilhas,
+        update=atualizar_planilhas,
+        reload_base=recarregar_base,
+    )
+)
+app.include_router(inventory_update_router)
 
 
 

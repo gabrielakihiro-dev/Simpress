@@ -347,6 +347,19 @@
     }
   }
 
+  function marcarServidorOffline() {
+    const panel = document.getElementById("readiness-panel");
+    const summary = document.getElementById("readiness-summary");
+    const dot = document.getElementById("stat-base-dot");
+    if (!panel) return;
+    panel.dataset.state = "error";
+    if (dot) dot.dataset.state = "empty";
+    if (summary) summary.textContent = "Servidor desconectado. Abra iniciar_servidor.bat para continuar.";
+    definirResumoCurto("Offline");
+    const trigger = panel.querySelector("summary");
+    if (trigger) trigger.title = "Servidor desconectado. Verifique se iniciar_servidor.bat está em execução.";
+  }
+
   function inicializarProntidao() {
     document.getElementById("readiness-fechar")?.addEventListener("click", () => {
       const panel = document.getElementById("readiness-panel");
@@ -354,6 +367,20 @@
       panel.open = false;
       panel.querySelector("summary")?.focus();
     });
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", () => {
+        carregarProntidao();
+      });
+      window.addEventListener("simpress:servidor-offline", () => {
+        marcarServidorOffline();
+      });
+      if (typeof window.setInterval === "function") {
+        window.setInterval(() => {
+          if (!document.hidden) carregarProntidao();
+        }, 45000);
+      }
+    }
   }
 
   // ---------- Alerta de base desatualizada (docs/operacao/alerta-base-desatualizada.md) ----------
