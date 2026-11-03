@@ -85,6 +85,7 @@ from core.config import (
     SUPPORTED_CONTRACT,
     SUPPORTED_CONTRACT_LEGAL_NAME,
     TRANSFER_ORIGIN_CONTACT_FILE,
+    REGIONAL_REPRESENTATIVES_FILE,
 )
 from routers.inventory_history import (
     ComparisonAnnotationPayload,
@@ -2346,6 +2347,7 @@ local_setup_router, importar_modelo_local = create_local_setup_router(
     export_dependency_paths=lambda: [*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE],
     validate_export=_check_imported_export,
     origin_contact_file=lambda: TRANSFER_ORIGIN_CONTACT_FILE,
+    regional_representatives_file=lambda: REGIONAL_REPRESENTATIVES_FILE,
 )
 app.include_router(local_setup_router)
 

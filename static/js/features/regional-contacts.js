@@ -35,6 +35,9 @@
     { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "cmolocny@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
     { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "ssanti@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
   ];
+  // The list above is the immutable default; edits saved on this computer are merged over it per city.
+  REPRESENTANTES_REGIONAIS_PR.forEach(Object.freeze);
+  Object.freeze(REPRESENTANTES_REGIONAIS_PR);
 
   const CAMPOS_CONTATO_REGIONAL = {
     retirada: {
@@ -186,6 +189,185 @@
     }
   }
 
+  // Regional representatives edited on this computer (config/representantes_regionais.json), by city.
+  const CAMPOS_REPRESENTANTE_EDITAVEIS = ["nome", "email", "telefone", "horario", "almoco", "pausaDuracao"];
+  const ALMOCO_NAO_FECHA = "Escritório não fecha";
+  const ID_MODAL_REPRESENTANTE = "modal-representante-regional";
+  let alteracoesRepresentantes = {};
+  let cidadeEdicaoRepresentante = "";
+  let salvandoRepresentante = false;
+
+  function representantesRegionais() {
+    return REPRESENTANTES_REGIONAIS_PR.map((padrao) => {
+      const alteracao = alteracoesRepresentantes[padrao.cidade];
+      if (!alteracao) return padrao;
+      const mesclado = { ...padrao };
+      CAMPOS_REPRESENTANTE_EDITAVEIS.forEach((campo) => {
+        if (typeof alteracao[campo] === "string") mesclado[campo] = alteracao[campo];
+      });
+      return mesclado;
+    });
+  }
+
+  function atualizarBotaoEditarRepresentante(tipo) {
+    const botao = document.getElementById(`btn-editar-representante-${tipo}`);
+    const seletor = document.getElementById(CAMPOS_CONTATO_REGIONAL[tipo]?.selectId);
+    if (botao) botao.disabled = !seletor?.value;
+  }
+
+  // Rebuilds both selectors keeping each chosen city; re-fills only the forms showing the edited city.
+  function aplicarAlteracoesRepresentantes(resultado, cidadeEditada = "") {
+    const alteracoes = resultado?.alteracoes;
+    alteracoesRepresentantes = alteracoes && typeof alteracoes === "object" ? alteracoes : {};
+    const escolhidas = Object.entries(CAMPOS_CONTATO_REGIONAL)
+      .map(([tipo, { selectId }]) => [tipo, selectId, document.getElementById(selectId)?.value || ""]);
+    app.popularSeletoresRepresentantesRegionais();
+    escolhidas.forEach(([tipo, selectId, cidade]) => {
+      const seletor = document.getElementById(selectId);
+      if (seletor) seletor.value = cidade;
+      if (cidadeEditada && cidade === cidadeEditada) app.preencherRepresentanteRegional(tipo, cidade, true);
+      else atualizarBotaoEditarRepresentante(tipo);
+    });
+  }
+
+  // refazerFormularios: o assistente mudou o arquivo por fora; refaz os campos só das cidades que mudaram.
+  async function carregarRepresentantesRegionais(refazerFormularios = false) {
+    try {
+      const response = await fetch("/api/config/representantes-regionais", { cache: "no-store" });
+      if (!response.ok) throw new Error("Falha ao carregar os representantes regionais editados.");
+      const antes = alteracoesRepresentantes;
+      const resultado = await response.json();
+      aplicarAlteracoesRepresentantes(resultado);
+      if (refazerFormularios === true) {
+        Object.keys({ ...antes, ...alteracoesRepresentantes })
+          .filter((cidade) => JSON.stringify(antes[cidade]) !== JSON.stringify(alteracoesRepresentantes[cidade]))
+          .forEach((cidade) => aplicarAlteracoesRepresentantes(resultado, cidade));
+      }
+    } catch (error) {
+      console.warn("Não foi possível carregar os representantes regionais editados; usando o padrão:", error);
+    }
+  }
+
+  // The API reports validation errors as "Value error, <message>"; show only the message.
+  function mensagemErroRepresentante(detail, fallback) {
+    return app.createApiError(detail, fallback).message.replace(/(^|; )Value error, /g, "$1");
+  }
+
+  const horaCompleta = (valor) => (/^\d{2}:\d{2}$/.test(valor) ? `${valor}:00` : valor);
+  const campoRepresentante = (sufixo) => document.getElementById(`representante-regional-${sufixo}`);
+
+  function alternarAlmocoRepresentanteRegional() {
+    const naoFecha = campoRepresentante("almoco-nao-fecha").checked;
+    const almoco = campoRepresentante("almoco");
+    almoco.disabled = naoFecha;
+    if (naoFecha) almoco.value = "";
+    campoRepresentante("pausa-obrigatorio")?.classList.toggle("hidden", naoFecha);
+  }
+
+  function atualizarBotoesRepresentante(ocupado) {
+    document.getElementById("btn-salvar-representante-regional").disabled = ocupado;
+    document.getElementById("btn-cancelar-representante-regional").disabled = ocupado;
+    document.getElementById("btn-restaurar-representante-regional").disabled = ocupado || !alteracoesRepresentantes[cidadeEdicaoRepresentante];
+  }
+
+  function abrirEdicaoRepresentanteRegional(tipo) {
+    if (salvandoRepresentante) return;
+    const representante = obterRepresentanteRegional(document.getElementById(CAMPOS_CONTATO_REGIONAL[tipo]?.selectId)?.value);
+    if (!representante) return;
+    cidadeEdicaoRepresentante = representante.cidade;
+    const [inicio = "", fim = ""] = (representante.horario || "").split(" às ");
+    const naoFecha = representante.almoco === ALMOCO_NAO_FECHA;
+    campoRepresentante("cidade").textContent = representante.cidade;
+    campoRepresentante("nome").value = representante.nome || "";
+    campoRepresentante("email").value = representante.email || "";
+    campoRepresentante("telefone").value = app.formatarTelefoneBrasileiro(representante.telefone || "");
+    campoRepresentante("inicio").value = inicio;
+    campoRepresentante("fim").value = fim;
+    campoRepresentante("almoco-nao-fecha").checked = naoFecha;
+    campoRepresentante("almoco").value = naoFecha ? "" : (representante.almoco || "");
+    campoRepresentante("pausa").value = representante.pausaDuracao || "";
+    alternarAlmocoRepresentanteRegional();
+    const status = document.getElementById("status-representante-regional");
+    status.setAttribute("role", "status");
+    status.textContent = "";
+    atualizarBotoesRepresentante(false);
+    app.abrirModalAcessivel(ID_MODAL_REPRESENTANTE, "#representante-regional-nome", "fecharEdicaoRepresentanteRegional");
+  }
+
+  function fecharEdicaoRepresentanteRegional() {
+    if (!salvandoRepresentante) app.fecharModalAcessivel(ID_MODAL_REPRESENTANTE);
+  }
+
+  async function enviarRepresentanteRegional(metodo, corpo, textoStatus, fallback, toast) {
+    const modal = document.getElementById(ID_MODAL_REPRESENTANTE);
+    const status = document.getElementById("status-representante-regional");
+    salvandoRepresentante = true;
+    atualizarBotoesRepresentante(true);
+    modal.setAttribute("aria-busy", "true");
+    status.setAttribute("role", "status");
+    status.textContent = textoStatus;
+    try {
+      const response = await fetch(`/api/config/representantes-regionais/${encodeURIComponent(cidadeEdicaoRepresentante)}`, {
+        method: metodo,
+        ...(corpo ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) } : {}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(mensagemErroRepresentante(result.detail, fallback));
+      aplicarAlteracoesRepresentantes(result, cidadeEdicaoRepresentante);
+      salvandoRepresentante = false;
+      app.fecharModalAcessivel(ID_MODAL_REPRESENTANTE);
+      app.showToast(toast, "success");
+    } catch (error) {
+      status.setAttribute("role", "alert");
+      status.textContent = error.message || fallback;
+    } finally {
+      salvandoRepresentante = false;
+      atualizarBotoesRepresentante(false);
+      modal.removeAttribute("aria-busy");
+    }
+  }
+
+  // Builds the PUT body from the dialog; the expediente is "HH:MM:SS às HH:MM:SS".
+  function lerRepresentanteRegional() {
+    const valor = (sufixo) => campoRepresentante(sufixo).value.trim();
+    const naoFecha = campoRepresentante("almoco-nao-fecha").checked;
+    const [inicio, fim] = [horaCompleta(valor("inicio")), horaCompleta(valor("fim"))];
+    const erro = (!inicio || !fim) ? ["inicio", "Preencha o início e o fim do expediente."]
+      : (!naoFecha && !valor("almoco")) ? ["almoco", 'Preencha o horário do almoço ou marque "Escritório não fecha".']
+        : (!naoFecha && !valor("pausa")) ? ["pausa", "Preencha a pausa, por exemplo 1h30."] : null;
+    if (erro) return { erro };
+    return {
+      corpo: {
+        nome: valor("nome"), email: valor("email"), telefone: valor("telefone"),
+        horario: `${inicio} às ${fim}`, almoco: naoFecha ? ALMOCO_NAO_FECHA : horaCompleta(valor("almoco")), pausaDuracao: valor("pausa"),
+      },
+    };
+  }
+
+  async function salvarRepresentanteRegional() {
+    if (salvandoRepresentante) return;
+    const { corpo, erro } = lerRepresentanteRegional();
+    if (erro) {
+      const status = document.getElementById("status-representante-regional");
+      status.setAttribute("role", "alert");
+      status.textContent = erro[1];
+      campoRepresentante(erro[0]).focus();
+      return;
+    }
+    await enviarRepresentanteRegional("PUT", corpo, "Salvando o representante…", "Não foi possível salvar o representante.", "Representante salvo.");
+  }
+
+  async function restaurarRepresentanteRegional() {
+    if (salvandoRepresentante || !alteracoesRepresentantes[cidadeEdicaoRepresentante]) return;
+    const confirmado = await app.confirmarAcao({
+      titulo: "Restaurar padrão?",
+      mensagem: `Descartar a edição salva de ${cidadeEdicaoRepresentante} e voltar ao representante padrão?`,
+      confirmar: "Restaurar padrão",
+      destrutiva: false,
+    });
+    if (confirmado && !salvandoRepresentante) await enviarRepresentanteRegional("DELETE", null, "Restaurando o padrão…", "Não foi possível restaurar o padrão.", "Padrão restaurado.");
+  }
+
   function normalizarCidadeRegional(cidade) {
     return String(cidade || "")
       .normalize("NFD")
@@ -214,7 +396,7 @@
     const cidadeNormalizada = normalizarCidadeRegional(cidade);
     if (!cidadeNormalizada) return null;
 
-    return REPRESENTANTES_REGIONAIS_PR.find((representante) => {
+    return representantesRegionais().find((representante) => {
       const nomeCidade = normalizarCidadeRegional(representante.cidade);
       return cidadeNormalizada === nomeCidade
         || cidadeNormalizada.startsWith(`${nomeCidade} `)
@@ -233,7 +415,7 @@
       opcaoVazia.textContent = "-- Sem representante correspondente --";
       select.replaceChildren(opcaoVazia);
 
-      REPRESENTANTES_REGIONAIS_PR.forEach((representante) => {
+      representantesRegionais().forEach((representante) => {
         const opcao = document.createElement("option");
         opcao.value = representante.cidade;
         const nomeExibicao = representante.nome || representante.nomeOpcao || "Representante não informado";
@@ -301,6 +483,7 @@
       );
     });
     if (tipo === "entrega") app.atualizarObrigatoriedadeDuracaoPausaEntrega();
+    atualizarBotaoEditarRepresentante(tipo);
     return representante;
   }
 
@@ -326,7 +509,7 @@
   }
 
   function inicializarMascarasTelefone() {
-    ["retirada-telefone", "entrega-telefone"].forEach((id) => {
+    ["retirada-telefone", "entrega-telefone", "representante-regional-telefone"].forEach((id) => {
       const input = document.getElementById(id);
       if (!input) return;
       input.value = app.formatarTelefoneBrasileiro(input.value);
@@ -341,5 +524,7 @@
     abrirConfiguracaoContatoOrigem, fecharConfiguracaoContatoOrigem, salvarConfiguracaoContatoOrigem,
     atualizarObrigatoriedadeDuracaoPausaEntrega, popularSeletoresRepresentantesRegionais,
     preencherRepresentanteRegional, handleRepresentanteRegionalChange, inicializarMascarasTelefone,
+    carregarRepresentantesRegionais, abrirEdicaoRepresentanteRegional, fecharEdicaoRepresentanteRegional,
+    salvarRepresentanteRegional, restaurarRepresentanteRegional, alternarAlmocoRepresentanteRegional,
   };
 });

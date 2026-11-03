@@ -103,6 +103,7 @@
     lucide.createIcons();
     app.carregarConfiguracaoTransferencia();
     app.popularSeletoresRepresentantesRegionais();
+    app.carregarRepresentantesRegionais();
     app.associarRotulosAcessiveis();
     app.inicializarMascarasTelefone();
     app.inicializarExportacaoAutomaticaHistorico();

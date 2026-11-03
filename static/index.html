@@ -531,9 +531,12 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo" for="retirada-voltagem"><span class="ck-campo__rotulo">Voltagem</span>
               <input type="text" id="retirada-voltagem" value="Bivolt" class="ck-entrada" />
             </label>
-            <label class="ck-campo ck-span-3" for="retirada-representante"><span class="ck-campo__rotulo">Representante regional</span>
-              <select id="retirada-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]' class="ck-entrada" aria-label="Representante regional do ponto de retirada"></select>
-            </label>
+            <div class="ck-campo ck-span-3"><label class="ck-campo__rotulo" for="retirada-representante">Representante regional</label>
+              <div class="ck-campo__linha">
+                <select id="retirada-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]' class="ck-entrada" aria-label="Representante regional do ponto de retirada"></select>
+                <button type="button" id="btn-editar-representante-retirada" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-representante-regional" aria-label="Editar representante regional do ponto de retirada" disabled data-on-click="abrirEdicaoRepresentanteRegional" data-args='["retirada"]'>Editar</button>
+              </div>
+            </div>
             <label class="ck-campo" for="retirada-contato"><span class="ck-campo__rotulo">Nome <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="retirada-contato" required class="ck-entrada" autocomplete="name" />
             </label>
@@ -583,9 +586,12 @@ Horário disponível para atendimento:</textarea>
             </span>
           </div>
           <div class="ck-grade">
-            <label class="ck-campo ck-span-3" for="entrega-representante"><span class="ck-campo__rotulo">Representante regional</span>
-              <select id="entrega-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]' class="ck-entrada" aria-label="Representante regional da unidade de entrega"></select>
-            </label>
+            <div class="ck-campo ck-span-3"><label class="ck-campo__rotulo" for="entrega-representante">Representante regional</label>
+              <div class="ck-campo__linha">
+                <select id="entrega-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]' class="ck-entrada" aria-label="Representante regional da unidade de entrega"></select>
+                <button type="button" id="btn-editar-representante-entrega" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-representante-regional" aria-label="Editar representante regional da unidade de entrega" disabled data-on-click="abrirEdicaoRepresentanteRegional" data-args='["entrega"]'>Editar</button>
+              </div>
+            </div>
             <label class="ck-campo" for="entrega-contato"><span class="ck-campo__rotulo">Destinatário <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="entrega-contato" required class="ck-entrada" placeholder="Nome do destinatário" />
             </label>
@@ -1559,6 +1565,58 @@ Horário disponível para atendimento:</textarea>
       </div>
       <p id="status-contato-origem" role="status" aria-live="polite" aria-atomic="true"></p>
       <button id="btn-salvar-contato-origem" type="button" class="readiness-import" data-on-click="salvarConfiguracaoContatoOrigem">Salvar contato</button>
+    </div>
+  </div>
+
+  <div id="modal-representante-regional" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
+      <div class="local-setup-heading">
+        <h3 id="titulo-representante-regional">Editar representante regional</h3>
+        <button type="button" class="readiness-import" data-on-click="fecharEdicaoRepresentanteRegional" aria-label="Fechar edição do representante regional" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p>Cidade: <strong id="representante-regional-cidade"></strong>. A alteração fica salva somente neste computador, em config/representantes_regionais.json.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2">
+          <label for="representante-regional-nome" class="block text-xs text-fg-subtle mb-1">Nome completo:</label>
+          <input type="text" id="representante-regional-nome" maxlength="160" autocomplete="off" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="representante-regional-email" class="block text-xs text-fg-subtle mb-1">E-mail:</label>
+          <input type="email" id="representante-regional-email" maxlength="254" autocomplete="off" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="representante-regional-telefone" class="block text-xs text-fg-subtle mb-1">Celular:</label>
+          <input type="text" id="representante-regional-telefone" maxlength="64" inputmode="tel" autocomplete="off" placeholder="(00) 9xxxx-xxxx" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+        </div>
+        <fieldset class="sm:col-span-2 grid grid-cols-2 gap-3">
+          <legend class="block text-xs text-fg-subtle mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></legend>
+          <div>
+            <label for="representante-regional-inicio" class="block text-xs text-fg-subtle mb-1">Início</label>
+            <input type="time" step="1" id="representante-regional-inicio" required class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          </div>
+          <div>
+            <label for="representante-regional-fim" class="block text-xs text-fg-subtle mb-1">Fim</label>
+            <input type="time" step="1" id="representante-regional-fim" required class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          </div>
+        </fieldset>
+        <div>
+          <label for="representante-regional-almoco" class="block text-xs text-fg-subtle mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="time" step="1" id="representante-regional-almoco" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          <label for="representante-regional-almoco-nao-fecha" class="flex items-center gap-2 mt-2"><input type="checkbox" id="representante-regional-almoco-nao-fecha" data-on-change="alternarAlmocoRepresentanteRegional" /><span>Escritório não fecha</span></label>
+        </div>
+        <div>
+          <label for="representante-regional-pausa" class="block text-xs text-fg-subtle mb-1">Pausa: <span id="representante-regional-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="representante-regional-pausa" maxlength="16" autocomplete="off" placeholder="Ex.: 1h30" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+      </div>
+      <p id="status-representante-regional" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="flex flex-wrap justify-end gap-2">
+        <button id="btn-restaurar-representante-regional" type="button" class="ck-btn ck-btn--secundario" data-on-click="restaurarRepresentanteRegional">Restaurar padrão</button>
+        <button id="btn-cancelar-representante-regional" type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharEdicaoRepresentanteRegional">Cancelar</button>
+        <button id="btn-salvar-representante-regional" type="button" class="ck-btn ck-btn--primario" data-on-click="salvarRepresentanteRegional">Salvar</button>
+      </div>
     </div>
   </div>
 
