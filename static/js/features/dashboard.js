@@ -8,6 +8,7 @@
   const { pluralize } = context.dom;
 
   const readinessRequestGate = transferUtils.createRequestGate();
+  const statsRequestGate = transferUtils.createRequestGate();
   let ultimoRelatorioProntidao = null;
   let totalRegionais = null;
 
@@ -53,12 +54,14 @@
 
   // Load statistics from API
   async function carregarEstatisticas() {
+    const request = statsRequestGate.begin();
     try {
-      const res = await fetch("/api/stats");
+      const res = await fetch("/api/stats", { signal: request.signal });
       // 409: an import holds the files; keep the last numbers until the next poll.
       if (res.status === 409) return;
       if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
       const stats = await res.json();
+      if (!statsRequestGate.isCurrent(request.id)) return;
       definirEstatistica("stat-equipamentos", stats.total_equipamentos);
       definirEstadoBase(stats.total_equipamentos);
       const rotuloEquipamentos = document.getElementById("stat-equipamentos-rotulo");
@@ -79,6 +82,7 @@
           : `Contagem indisponível: ${stats.exportacao_motivo || "clique para verificar a exportação"}`;
       }
     } catch (err) {
+      if (!statsRequestGate.isCurrent(request.id)) return;
       console.warn("Não foi possível carregar estatísticas:", err);
       definirEstatistica("stat-equipamentos", null);
       definirEstadoBase(null);
