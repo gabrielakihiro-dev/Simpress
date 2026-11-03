@@ -17,7 +17,6 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -28,7 +27,7 @@ import urllib.request
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scripts import automacao_rotinas_chrome as automacao
 
@@ -219,17 +218,11 @@ def localizar_navegador() -> Path | None:
         return None
 
 
-def porta_livre() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 class ChromeDaBancada:
     """Chrome com porta CDP e perfil próprios, como o Chrome de automação da rotina."""
 
     def __init__(self, executavel: Path, pasta: Path, largura: int, altura: int, escala: float, porta_site: int) -> None:
-        self.porta = porta_livre()
+        self.porta = 0
         self.perfil = pasta / "perfil"
         self.downloads_chrome = pasta / "downloads_chrome"
         self.downloads_chrome.mkdir(parents=True)
@@ -244,7 +237,7 @@ class ChromeDaBancada:
             self.processo = subprocess.Popen(
                 [
                     str(executavel), *([] if os.environ.get("SIMPRESS_TESTE_COM_JANELA") == "1" else ["--headless=new"]),
-                    f"--remote-debugging-port={self.porta}",
+                    "--remote-debugging-port=0",
                     f"--user-data-dir={self.perfil}", "--no-first-run", "--no-default-browser-check",
                     f"--window-size={largura},{altura}", f"--force-device-scale-factor={escala}",
                     "--no-proxy-server", f"--host-resolver-rules={regras}",
@@ -253,7 +246,6 @@ class ChromeDaBancada:
                 stdout=arquivo_log_chrome, stderr=subprocess.STDOUT,
             )
         try:
-            self.url = f"http://127.0.0.1:{self.porta}"
             limite = time.time() + 30
             codigo_saida = None
             while time.time() < limite:
@@ -261,9 +253,13 @@ class ChromeDaBancada:
                 if codigo_saida is not None:
                     break
                 try:
+                    self.porta = int(
+                        (self.perfil / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()[0]
+                    )
+                    self.url = f"http://127.0.0.1:{self.porta}"
                     with urllib.request.urlopen(f"{self.url}/json/version", timeout=1):
                         return
-                except OSError:
+                except (OSError, ValueError, IndexError):
                     time.sleep(0.3)
             if codigo_saida is None:
                 codigo_saida = self.processo.poll()
@@ -346,6 +342,34 @@ class ChromeDaBancada:
             except subprocess.TimeoutExpired:
                 self.processo.kill()
                 self.processo.wait()
+
+
+class ChromeDaBancadaStartupTests(unittest.TestCase):
+    def test_uses_port_published_by_chrome(self):
+        porta = 43210
+
+        def iniciar(args, **_kwargs):
+            argumento_perfil = next(arg for arg in args if arg.startswith("--user-data-dir="))
+            perfil = Path(argumento_perfil.split("=", 1)[1])
+            (perfil / "DevToolsActivePort").write_text(
+                f"{porta}\n/devtools/browser/test", encoding="utf-8"
+            )
+            processo = MagicMock()
+            processo.poll.return_value = None
+            return processo
+
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(subprocess, "Popen", side_effect=iniciar) as iniciar_chrome,
+            patch.object(urllib.request, "urlopen", return_value=MagicMock()) as abrir_cdp,
+        ):
+            chrome = ChromeDaBancada(Path("chrome"), Path(temp), 640, 480, 1, 8080)
+
+        argumentos = iniciar_chrome.call_args.args[0]
+        self.assertIn("--remote-debugging-port=0", argumentos)
+        self.assertEqual(chrome.porta, porta)
+        self.assertEqual(chrome.url, f"http://127.0.0.1:{porta}")
+        abrir_cdp.assert_called_once_with(f"{chrome.url}/json/version", timeout=1)
 
 
 def conexao_extra(url_cdp: str) -> None:
