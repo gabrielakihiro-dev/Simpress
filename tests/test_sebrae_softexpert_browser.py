@@ -1014,6 +1014,16 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertTrue(se.softexpert_logado(page), "a aba deve voltar para a central de tarefas")
         self.assertSemEscrita()
 
+    def test_extrai_chamado_criado_pela_api_com_registro_em_branco_pelo_cabecalho(self):
+        self.bancada.chamados = [
+            chamado(1, finalizacao=True, numero_form="", titulo_form="", solicitante="", iniciador="API SEBRAE",
+                    solicitante_cabecalho="API SEBRAE"),
+        ]
+        page = self.abrir_lista()
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+        self.assertEqual((lido.numero, lido.solicitante), ("UTIC-2026-0001", "API SEBRAE"))
+        self.assertSemEscrita()
+
     def test_confirmacao_nativa_de_associar_e_aceita(self):
         self.bancada.chamados = [chamado(1, confirmacao="nativa")]
         page = self.abrir_lista()
