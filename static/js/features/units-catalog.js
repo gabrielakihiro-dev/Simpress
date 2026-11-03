@@ -11,6 +11,7 @@
   async function carregarUnidades() {
     try {
       const res = await fetch("/api/unidades");
+      if (!res.ok) throw new Error("Falha ao consultar o catálogo de unidades.");
       if (res.ok) {
         appState.unidadesList = await res.json();
         const select = document.getElementById("select-unidade-destino");
