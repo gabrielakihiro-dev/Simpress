@@ -133,6 +133,8 @@ Sem dados, a aba **Transporte** mostra um aviso com o botão **Configurar contat
 Copy-Item config\contato_origem.exemplo.json config\contato_origem.json
 ```
 
+Os 22 representantes regionais do SEBRAE/PR têm padrão no código; o botão **Editar** (Retirada e Entrega) grava só as alterações por cidade em `config/representantes_regionais.json`, local e ignorado pelo Git, sem reiniciar o servidor. **Restaurar padrão** no modal remove a alteração da cidade. O assistente (F10) também consulta, altera e restaura essas cidades, com cartão de confirmação.
+
 As variáveis de ambiente têm prioridade sobre o arquivo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
 
 ```powershell

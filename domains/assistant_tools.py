@@ -12,8 +12,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains.assistant_anexos import AnexoStore, ler_pagina
 from domains.assistant_api import (
-    ACOES_APELIDO_MANUAL, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, ROTINAS_VALIDAS, SimpressApi, montar_contato_origem, validar_anotacao,
-    validar_transferencia, validar_vinculo_os,
+    ACOES_APELIDO_MANUAL, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, ROTINAS_VALIDAS, SimpressApi, diferencas_representante, montar_contato_origem,
+    validar_anotacao, validar_transferencia, validar_vinculo_os,
 )
 from domains.assistant_busca_web import LIMITE_CONSULTA
 from domains.assistant_lgpd import limpar_texto_sensivel
@@ -22,6 +22,7 @@ from domains.assistant_rascunhos import DESCRICAO_TIPOS, LIMITE_COMPLEMENTO, mon
 from domains.assistant_relatorios import (
     DATA_PATTERN, FORMATOS, MES_PATTERN, MSG_PLANILHA_EXPORTADA, PLANILHAS, TIPOS, GeradorRelatorios, RelatorioRecusado,
 )
+from domains.local_setup import REGIONAL_REPRESENTATIVE_DEFAULTS
 
 Args = Dict[str, Any]
 
@@ -237,6 +238,26 @@ def _describe_contato_origem(api: SimpressApi, args: Args) -> str:
     _, mudancas = montar_contato_origem(api.contato_origem_atual(), args.get("contato"), args.get("email"), args.get("telefone"))
     linhas = "; ".join(f'{rotulo}: "{antigo or "(vazio)"}" → "{novo}"' for rotulo, antigo, novo in mudancas)
     return f"Alterar o contato de origem da transferência. {linhas}. Os campos não citados ficam como estão."
+
+
+def _linhas_representante(mudancas: List[Tuple[str, str, str]]) -> str:
+    return "; ".join(f'{rotulo}: "{antigo or "(vazio)"}" → "{novo or "(vazio)"}"' for rotulo, antigo, novo in mudancas)
+
+
+def _describe_representante_regional(api: SimpressApi, args: Args) -> str:
+    # Screen only (never the model): real values.
+    cidade, _, mudancas = api.montar_alteracao_representante(
+        args.get("cidade"), args.get("nome"), args.get("email"), args.get("telefone"), args.get("horario"), args.get("almoco"), args.get("pausa"),
+    )
+    return f"Alterar o representante regional de {cidade} (SEBRAE/PR), salvo só neste computador. {_linhas_representante(mudancas)}. Os campos não citados ficam como estão."
+
+
+def _describe_restaurar_representante(api: SimpressApi, args: Args) -> str:
+    cidade, efetivo, alterado = api.representante_regional_atual(args.get("cidade"))
+    if not alterado:
+        raise ValueError("Esta cidade não tem alteração salva. Nada a restaurar.")
+    linhas = _linhas_representante(diferencas_representante(efetivo, REGIONAL_REPRESENTATIVE_DEFAULTS[cidade])) or "os valores já são iguais ao padrão"
+    return f"Restaurar o representante regional de {cidade} (SEBRAE/PR) ao padrão do sistema; a alteração salva é descartada. {linhas}."
 
 _TIPOS_ALTERACAO = {"": "apelido", "apelido": "apelido", "usuario": "usuário logado", "aviso_endpoint": "aviso do Endpoint"}
 
@@ -471,6 +492,13 @@ QUERY_TOOLS: List[Tool] = [
         "ver_contato_origem_transferencia",
         "Mostra o contato de origem da transferência (nome, e-mail, celular, se está completo e de onde vem cada valor). Os dados pessoais aparecem como marcadores.",
         lambda c, a: c.ver_contato_origem(),
+    ),
+    _read(
+        "ver_representantes_regionais",
+        "Mostra os representantes regionais do SEBRAE/PR da tela Transferência. Sem cidade: lista as cidades e quais têm alteração salva. "
+        "Com cidade: nome, e-mail, celular, expediente, almoço e pausa vigentes (padrão com a alteração salva). Os dados pessoais aparecem como marcadores.",
+        lambda c, a: c.ver_representantes_regionais(a.get("cidade")),
+        {"cidade": {"type": "string", "description": "Cidade (ex.: 'Londrina', 'Foz do Iguaçu'; opcional)."}},
     ),
     _read(
         "consultar_equipamento",
@@ -993,6 +1021,37 @@ CHANGE_TOOLS: List[Tool] = [
         describe_com_api=True,
     ),
     Tool(
+        "alterar_representante_regional",
+        "Altera o representante regional do SEBRAE/PR de uma cidade (nome, e-mail, celular, expediente, almoço, pausa), salvo só neste computador. "
+        "Informe só o que muda; use ver_representantes_regionais antes. Texto vazio apaga nome, e-mail, celular ou pausa. "
+        "Nome, e-mail e celular digitados no chat são ocultados do modelo (LGPD): para eles, oriente o usuário a usar o botão Editar da tela de Transferência. O usuário confirma antes.",
+        lambda c, a: c.alterar_representante_regional(a.get("cidade"), a.get("nome"), a.get("email"), a.get("telefone"), a.get("horario"), a.get("almoco"), a.get("pausa")),
+        {
+            "cidade": {"type": "string", "description": "Cidade do representante (ex.: 'Londrina')."},
+            "nome": {"type": "string", "description": "Nome completo (opcional)."},
+            "email": {"type": "string", "description": "E-mail (opcional)."},
+            "telefone": {"type": "string", "description": "Celular com DDD (opcional)."},
+            "horario": {"type": "string", "description": "Expediente no formato '08:00:00 às 18:00:00' (opcional)."},
+            "almoco": {"type": "string", "description": "Almoço '12:00:00' ou 'Escritório não fecha' (opcional)."},
+            "pausa": {"type": "string", "description": "Duração da pausa, como '1h', '1h30' ou '2h' (obrigatória quando há horário de almoço; opcional)."},
+        },
+        ["cidade"],
+        changes_data=True,
+        describe=_describe_representante_regional,
+        describe_com_api=True,
+    ),
+    Tool(
+        "restaurar_representante_regional",
+        "Descarta a alteração salva do representante regional de uma cidade e volta ao padrão do sistema (igual ao botão Restaurar padrão). "
+        "Use ver_representantes_regionais antes para saber se a cidade tem alteração. O usuário confirma antes.",
+        lambda c, a: c.restaurar_representante_regional(a.get("cidade")),
+        {"cidade": {"type": "string", "description": "Cidade do representante (ex.: 'Londrina')."}},
+        ["cidade"],
+        changes_data=True,
+        describe=_describe_restaurar_representante,
+        describe_com_api=True,
+    ),
+    Tool(
         "anotar_linha_historico",
         "Grava (ou substitui) a anotação de uma linha do Histórico de Planilhas. evento_id e item_id vêm de listar_anotacoes_historico; "
         f"anotação com até {MAX_ANOTACAO} caracteres, nas palavras do usuário; vazia apaga. O usuário confirma antes.",
@@ -1220,8 +1279,9 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
          "listar_historico_alteracoes", "desfazer_apelido", "excluir_evento_alteracao", "resolver_apelido_manual"),
     ),
     "transferencia": (
-        r"\btransfer|\bentrega|\bcontato",
-        ("listar_transferencias", "ver_contato_origem_transferencia", "alterar_contato_origem_transferencia", "registrar_transferencia"),
+        r"\btransfer|\bentrega|\bcontato|\brepresentante|\bregional",
+        ("listar_transferencias", "ver_contato_origem_transferencia", "alterar_contato_origem_transferencia", "registrar_transferencia",
+         "ver_representantes_regionais", "alterar_representante_regional", "restaurar_representante_regional"),
     ),
     "automacao": (
         r"\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel"
