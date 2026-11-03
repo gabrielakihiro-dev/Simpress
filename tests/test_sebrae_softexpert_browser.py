@@ -48,6 +48,9 @@ tr.sel{background:#cde}
 
 PAGINA_LISTA = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Central de tarefas</title>
 <style>%(estilo)s</style></head><body>
+<input data-test-selector="GeneralSearchInput" type="text" placeholder="Pesquisar em tudo">
+<ul><li style="position:absolute;left:-500px"><input type="text" placeholder="Pesquisar"></li></ul>
+<div><div><input id="filtro" type="text" placeholder="Pesquisar"></div><button data-test-selector="rctAddFilterBtn">Filtros</button></div>
 <div id="car" class="carregando">Carregando...</div>
 <div id="area" class="oculto"><table role="grid" id="taskCenterList"><thead><tr role="row">
 <th role="columnheader">Processo</th><th role="columnheader">Título</th></tr></thead><tbody id="corpo"></tbody></table></div>
@@ -58,6 +61,7 @@ PAGINA_LISTA = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
 <li role="menuitem" class="proibido">Reatribuir</li><li role="menuitem" class="proibido">Finalizar workflow</li></ul></div>
 <script>
 const D = %(dados)s;
+const itensIniciais = D.itens;
 const area = document.getElementById('area');
 // Layout "cartoes": como a Central de tarefas real (cartões soltos, sem tabela nem role=grid).
 if (D.layout === 'cartoes') area.innerHTML = '';
@@ -69,8 +73,13 @@ const linha = (i) => {
     card.setAttribute('data-test-selector', 'rctCardBase');
     card.style.padding = '28px 8px';
     card.innerHTML = '<div data-test-selector="task-title"><span>Execução de atividade</span><div></div></div>'
-      + '<div data-test-selector="task-main-extra-info">Atividade</div>';
+      + '<div data-test-selector="task-main-extra-info">Atividade</div>'
+      + '<div data-test-selector="rctButtonGroup"><button aria-label="Executar">✓</button></div>';
     card.querySelector('div > div').textContent = i.numero + ' - ' + i.titulo;
+    card.querySelector('button').addEventListener('click', () => {
+      fetch('/api/abrir?numero=' + i.numero, {method: 'POST'});
+      window.open('/softexpert/php/registro.php?numero=' + i.numero, '_blank');
+    });
     return card;
   }
   const tr = document.createElement('tr');
@@ -103,6 +112,27 @@ setTimeout(() => {
   }
   if (D.itens.length === 0) { area.insertAdjacentHTML('beforeend', '<p class="sem-registros">Nenhum registro encontrado.</p>'); }
 }, 400);
+document.querySelector('[data-test-selector="GeneralSearchInput"]').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') fetch('/api/pesquisar_global?termo=' + encodeURIComponent(event.target.value), {method: 'POST'});
+});
+document.getElementById('filtro').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const termo = event.target.value.trim();
+  fetch('/api/pesquisar?termo=' + encodeURIComponent(termo), {method: 'POST'});
+  // Como o SoftExpert real: a lista esvazia (sem mensagem) antes de o resultado chegar.
+  document.querySelectorAll('.sem-registros').forEach((el) => el.remove());
+  corpo.replaceChildren(); area.querySelectorAll('[data-test-selector="rctCardBase"]').forEach((el) => el.remove());
+  if (!D.buscaSemSpinner) document.getElementById('car').classList.remove('oculto');
+  setTimeout(() => {
+    D.itens = termo ? D.itensBusca.filter((i) => (i.numero + ' ' + i.titulo).includes(termo)) : itensIniciais;
+    pagina = 0; carregados = 0; selecionada = null;
+    document.querySelectorAll('.sem-registros').forEach((el) => el.remove());
+    corpo.replaceChildren();
+    if (D.modo === 'paginas') renderPagina(); else maisLinhas();
+    if (D.itens.length === 0) area.insertAdjacentHTML('beforeend', '<p class="sem-registros">Nenhum registro encontrado.</p>');
+    document.getElementById('car').classList.add('oculto');
+  }, 400);
+});
 document.getElementById('proxima').addEventListener('click', () => { pagina++; renderPagina(); });
 document.getElementById('anterior').addEventListener('click', () => { pagina--; renderPagina(); });
 document.getElementById('executar').addEventListener('click', () => document.getElementById('menu').classList.toggle('oculto'));
@@ -352,6 +382,9 @@ class Bancada:
         self.sso_clicks: list[str] = []
         self.eventos: list[str] = []
         self.finalizados: list[dict] = []
+        self.pesquisas: list[str] = []
+        self.pesquisas_globais: list[str] = []
+        self.busca_sem_spinner = False
 
     def por_numero(self, numero: str) -> dict:
         return next(c for c in self.chamados if c["numero"] == numero)
@@ -377,10 +410,12 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
             if caminho == "/softexpert/workspace":
                 if not bancada.logado:
                     return self.responder(PAGINA_LOGIN % {"chave": "logado"})
-                itens = [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados]
+                itens = [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados if not c.get("somente_filtro")]
                 dados = {
                     "modo": bancada.modo_lista, "abertura": bancada.abertura,
                     "tamanho": bancada.tamanho, "itens": itens, "layout": bancada.layout,
+                    "itensBusca": [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados],
+                    "buscaSemSpinner": bancada.busca_sem_spinner,
                 }
                 return self.responder(PAGINA_LISTA % {"estilo": ESTILO, "dados": json.dumps(dados)})
             if caminho == "/softexpert/php/registro.php":
@@ -416,6 +451,10 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
             consulta = self.consulta()
             if caminho == "/api/associar":
                 bancada.associados.append(consulta["numero"])
+            elif caminho == "/api/pesquisar":
+                bancada.pesquisas.append(consulta["termo"])
+            elif caminho == "/api/pesquisar_global":
+                bancada.pesquisas_globais.append(consulta["termo"])
             elif caminho == "/api/abrir":
                 bancada.abertos.append(consulta["numero"])
             elif caminho == "/api/consultou_atendimento":
@@ -1224,6 +1263,99 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.bancada.abertos, [])
         self.assertEqual(self.bancada.finalizados, [])
         self.assertSemEscrita()
+
+    def test_finalizacao_localiza_no_filtro_o_chamado_ausente_da_lista(self):
+        self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(self.bancada.abertos, ["UTIC-2026-1566"])
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertEqual(self.bancada.pesquisas, ["UTIC-2026-1566", "UTIC-2026-1566"])
+        self.assertEqual(self.bancada.pesquisas_globais, [])
+        self.assertSemEscrita()
+
+    def test_leitura_localiza_no_filtro_o_chamado_ausente_da_lista(self):
+        self.bancada.chamados = [chamado(1566, somente_filtro=True)]
+        page = self.abrir_lista()
+        resultado = se.extrair_chamado(self.context, page, "UTIC-2026-1566")
+        self.assertEqual(resultado.numero, "UTIC-2026-1566")
+        self.assertEqual(self.bancada.pesquisas, ["UTIC-2026-1566"])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertSemEscrita()
+
+    def test_filtro_nao_abre_numero_com_mesmo_prefixo(self):
+        self.bancada.chamados = [chamado(2), chamado(15660, finalizacao=True, somente_filtro=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_NAO_ENCONTRADO, resultado)
+        self.assertEqual(self.bancada.pesquisas, ["UTIC-2026-1566"])
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertSemEscrita()
+
+    def test_filtro_ambiguo_nao_abre_nem_finaliza(self):
+        self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True),
+                                 chamado(1566, finalizacao=True, somente_filtro=True, titulo="Outra atividade")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertSemEscrita()
+
+    def test_filtro_pos_finalizacao_nao_confunde_cartao_oculto_com_sucesso(self):
+        self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True, finalizar_falha=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertIn("continua na central", resultado["detalhes"]["mensagem"])
+        self.assertSemEscrita()
+
+    def test_filtro_vazio_sem_spinner_confirma_ausencia_sem_timeout(self):
+        self.bancada.busca_sem_spinner = True
+        page = self.abrir_lista()
+        with patch.object(se, "ESPERA_LISTA_MS", 4_000):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_NAO_ENCONTRADO, resultado)
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.associados, [])
+
+    def test_filtro_duplicado_na_segunda_pagina_nao_abre_atividade(self):
+        self.bancada.tamanho = 1
+        self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True),
+                                 chamado(1566, finalizacao=True, somente_filtro=True, titulo="Outra atividade")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL, confirmar_final=False)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.associados, [])
+
+    def test_reordenacao_antes_do_clique_mantem_a_identidade_do_chamado(self):
+        self.bancada.chamados = [chamado(1566, finalizacao=True), chamado(2, finalizacao=True)]
+        page = self.abrir_lista()
+        abrir = se._abrir_formulario
+
+        def reordenar(contexto, pagina, linha, numero):
+            pagina.evaluate("document.querySelector('#corpo').prepend(document.querySelector('#corpo').lastElementChild)")
+            return abrir(contexto, pagina, linha, numero)
+
+        with patch.object(se, "_abrir_formulario", side_effect=reordenar):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL, confirmar_final=False)
+        self.assertEqual(resultado["status"], "pronto", resultado)
+        self.assertEqual(self.bancada.abertos, ["UTIC-2026-1566"])
+        self.assertEqual(self.bancada.associados, ["UTIC-2026-1566"])
+
+    def test_filtro_abre_cartao_real_rctcardbase_pelo_icone(self):
+        self.bancada.layout = "cartoes"
+        self.bancada.modo_lista = "rolagem"
+        self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL, confirmar_final=False)
+        self.assertEqual(resultado["status"], "pronto", resultado)
+        self.assertEqual(self.bancada.abertos, ["UTIC-2026-1566"])
+        self.assertEqual(self.bancada.associados, ["UTIC-2026-1566"])
 
     def test_solicitante_ilegivel_nao_preenche_nada(self):
         self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="")]
