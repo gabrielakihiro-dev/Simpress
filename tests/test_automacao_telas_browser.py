@@ -223,52 +223,69 @@ class ChromeDaBancada:
 
     def __init__(self, executavel: Path, pasta: Path, largura: int, altura: int, escala: float, porta_site: int) -> None:
         self.porta = 0
-        self.perfil = pasta / "perfil"
-        self.downloads_chrome = pasta / "downloads_chrome"
-        self.downloads_chrome.mkdir(parents=True)
-        (self.perfil / "Default").mkdir(parents=True)
-        preferencias = {"download": {"default_directory": str(self.downloads_chrome), "prompt_for_download": False}}
-        (self.perfil / "Default" / "Preferences").write_text(json.dumps(preferencias), encoding="utf-8")
         regras = f"MAP {UX_HOST} 127.0.0.1,MAP {ENDPOINT_HOST} 127.0.0.1"
         # Os sites reais usam HTTPS; a bancada usa HTTP e o Chrome seguraria o download como inseguro.
         seguras = f"http://{UX_HOST}:{porta_site},http://{ENDPOINT_HOST}:{porta_site}"
-        self.log_chrome = self.perfil / "chrome.log"
-        with self.log_chrome.open("wb") as arquivo_log_chrome:
-            self.processo = subprocess.Popen(
-                [
-                    str(executavel), *([] if os.environ.get("SIMPRESS_TESTE_COM_JANELA") == "1" else ["--headless=new"]),
-                    "--remote-debugging-port=0",
-                    f"--user-data-dir={self.perfil}", "--no-first-run", "--no-default-browser-check",
-                    f"--window-size={largura},{altura}", f"--force-device-scale-factor={escala}",
-                    "--no-proxy-server", f"--host-resolver-rules={regras}",
-                    f"--unsafely-treat-insecure-origin-as-secure={seguras}", "about:blank",
-                ],
-                stdout=arquivo_log_chrome, stderr=subprocess.STDOUT,
-            )
-        try:
-            limite = time.time() + 30
-            codigo_saida = None
-            while time.time() < limite:
-                codigo_saida = self.processo.poll()
-                if codigo_saida is not None:
-                    break
-                try:
-                    self.porta = int(
-                        (self.perfil / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()[0]
+        diagnosticos = []
+        for tentativa in (1, 2):
+            self.processo = None
+            try:
+                pasta_tentativa = pasta / f"tentativa-{tentativa}"
+                self.perfil = pasta_tentativa / "perfil"
+                self.downloads_chrome = pasta_tentativa / "downloads_chrome"
+                self.downloads_chrome.mkdir(parents=True)
+                (self.perfil / "Default").mkdir(parents=True)
+                preferencias = {"download": {"default_directory": str(self.downloads_chrome), "prompt_for_download": False}}
+                (self.perfil / "Default" / "Preferences").write_text(json.dumps(preferencias), encoding="utf-8")
+                self.log_chrome = self.perfil / "chrome.log"
+                with self.log_chrome.open("wb") as arquivo_log_chrome:
+                    self.processo = subprocess.Popen(
+                        [
+                            str(executavel), *([] if os.environ.get("SIMPRESS_TESTE_COM_JANELA") == "1" else ["--headless=new"]),
+                            "--remote-debugging-port=0",
+                            f"--user-data-dir={self.perfil}", "--no-first-run", "--no-default-browser-check",
+                            f"--window-size={largura},{altura}", f"--force-device-scale-factor={escala}",
+                            "--no-proxy-server", f"--host-resolver-rules={regras}",
+                            f"--unsafely-treat-insecure-origin-as-secure={seguras}", "about:blank",
+                        ],
+                        stdout=arquivo_log_chrome, stderr=subprocess.STDOUT,
                     )
-                    self.url = f"http://127.0.0.1:{self.porta}"
-                    with urllib.request.urlopen(f"{self.url}/json/version", timeout=1):
-                        return
-                except (OSError, ValueError, IndexError):
-                    time.sleep(0.3)
-            if codigo_saida is None:
+                limite = time.monotonic() + 30
+                while time.monotonic() < limite:
+                    if self.processo.poll() is not None:
+                        break
+                    try:
+                        self.porta = int(
+                            (self.perfil / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()[0]
+                        )
+                        self.url = f"http://127.0.0.1:{self.porta}"
+                        with urllib.request.urlopen(f"{self.url}/json/version", timeout=1):
+                            return
+                    except (OSError, ValueError, IndexError):
+                        time.sleep(0.3)
                 codigo_saida = self.processo.poll()
+                try:
+                    (self.perfil / "DevToolsActivePort").stat()
+                except FileNotFoundError:
+                    porta_ausente = True
+                except OSError:
+                    porta_ausente = False
+                else:
+                    porta_ausente = False
+            except BaseException as erro:
+                self.fechar()
+                if diagnosticos and isinstance(erro, Exception):
+                    raise RuntimeError("\n\n".join([*diagnosticos, f"Tentativa {tentativa}: {erro}"])) from erro
+                raise
             motivo = "o processo encerrou antes de abrir a porta" if codigo_saida is not None else "o prazo de 30 s expirou"
+            diagnosticos.append(f"Tentativa {tentativa}: " + self._diagnostico_inicio(motivo, codigo_saida))
             self.fechar()
-            raise RuntimeError(self._diagnostico_inicio(motivo, codigo_saida))
-        except BaseException:
-            self.fechar()
-            raise
+            if tentativa == 2 or codigo_saida is not None or not porta_ausente:
+                raise RuntimeError("\n\n".join(diagnosticos))
+            print(
+                diagnosticos[-1] + "\nReiniciando o Chrome da bancada com perfil novo (tentativa 2 de 2).",
+                file=sys.stderr, flush=True,
+            )
 
     @staticmethod
     def _texto_seguro(dados: bytes) -> str:
@@ -332,7 +349,7 @@ class ChromeDaBancada:
         )
 
     def fechar(self) -> None:
-        if self.processo.poll() is None:
+        if self.processo is not None and self.processo.poll() is None:
             try:
                 self.processo.terminate()
             except OSError:
@@ -345,6 +362,164 @@ class ChromeDaBancada:
 
 
 class ChromeDaBancadaStartupTests(unittest.TestCase):
+    def test_retries_live_process_without_port_with_new_profile(self):
+        instante = [0.0]
+        perfis = []
+        processos = []
+        eventos = []
+
+        def iniciar(args, **_kwargs):
+            perfil = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--user-data-dir=")))
+            perfis.append(perfil)
+            processo = MagicMock()
+            processo.poll.return_value = None
+            processo.terminate.side_effect = lambda: eventos.append("terminate")
+            processo.wait.side_effect = lambda **_kwargs: eventos.append("wait")
+            processos.append(processo)
+            if len(perfis) == 2:
+                self.assertEqual(eventos, ["terminate", "wait"])
+                self.assertNotEqual(perfis[0], perfil)
+                (perfil / "DevToolsActivePort").write_text("43210\n/devtools/browser/test", encoding="utf-8")
+            return processo
+
+        def avancar(_segundos):
+            instante[0] += 10
+
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(subprocess, "Popen", side_effect=iniciar),
+            patch.object(time, "time", side_effect=AssertionError("O prazo deve usar monotonic")),
+            patch.object(time, "monotonic", side_effect=lambda: instante[0]),
+            patch.object(time, "sleep", side_effect=avancar),
+            patch.object(urllib.request, "urlopen", return_value=MagicMock()) as abrir_cdp,
+            patch.object(sys, "stderr", new_callable=io.StringIO) as registro,
+        ):
+            try:
+                chrome = ChromeDaBancada(Path("chrome"), Path(temp), 640, 480, 1, 8080)
+            except RuntimeError as erro:
+                self.fail(f"A inicialização deveria tentar um perfil novo após o timeout: {erro}")
+            self.assertEqual(chrome.porta, 43210)
+            self.assertEqual(chrome.perfil, perfis[1])
+            self.assertIs(chrome.processo, processos[1])
+            self.assertTrue((perfis[0] / "chrome.log").is_file())
+            self.assertIn("tentativa 2", registro.getvalue())
+            abrir_cdp.assert_called_once_with("http://127.0.0.1:43210/json/version", timeout=1)
+            chrome.fechar()
+
+    def test_failed_retry_reports_both_attempts_and_stops(self):
+        for falha in ("timeout", "exited", "spawn"):
+            with self.subTest(falha=falha):
+                instante = [0.0]
+                processos = []
+
+                def iniciar(args, **_kwargs):
+                    if len(processos) == 2:
+                        self.fail("Não deve haver uma terceira tentativa")
+                    if processos and falha == "spawn":
+                        raise OSError("falha ao iniciar segunda instância")
+                    perfil = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--user-data-dir=")))
+                    (perfil / "chrome.log").write_text(f"log da tentativa {len(processos) + 1}", encoding="utf-8")
+                    processo = MagicMock()
+                    processo.poll.return_value = 23 if processos and falha == "exited" else None
+                    processos.append(processo)
+                    return processo
+
+                def avancar(_segundos):
+                    instante[0] += 10
+
+                with (
+                    tempfile.TemporaryDirectory() as temp,
+                    patch.object(subprocess, "Popen", side_effect=iniciar) as iniciar_chrome,
+                    patch.object(time, "monotonic", side_effect=lambda: instante[0]),
+                    patch.object(time, "sleep", side_effect=avancar),
+                    patch.object(sys, "stderr", new_callable=io.StringIO),
+                    self.assertRaises(RuntimeError) as erro,
+                ):
+                    ChromeDaBancada(Path("chrome"), Path(temp), 640, 480, 1, 8080)
+
+                diagnostico = str(erro.exception)
+                self.assertEqual(iniciar_chrome.call_count, 2)
+                self.assertIn("Tentativa 1:", diagnostico)
+                self.assertIn("log da tentativa 1", diagnostico)
+                self.assertIn("Tentativa 2:", diagnostico)
+                self.assertIn("falha ao iniciar segunda instância" if falha == "spawn" else "log da tentativa 2", diagnostico)
+                for processo in processos:
+                    if processo.poll.return_value is None:
+                        processo.terminate.assert_called_once()
+                        processo.wait.assert_called_once_with(timeout=10)
+
+    def test_profile_preparation_failure_on_retry_reports_both_attempts_without_starting_chrome(self):
+        instante = [0.0]
+        processos = []
+        escrever_texto_original = Path.write_text
+
+        def falhar_preferences_da_tentativa_2(caminho, dados, *args, **kwargs):
+            if caminho.name == "Preferences" and "tentativa-2" in caminho.parts:
+                raise OSError("falha ao preparar Preferences da tentativa 2")
+            return escrever_texto_original(caminho, dados, *args, **kwargs)
+
+        def iniciar(_args, **_kwargs):
+            processo = MagicMock()
+            processo.poll.return_value = None
+            processos.append(processo)
+            return processo
+
+        def avancar(_segundos):
+            instante[0] += 10
+
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(subprocess, "Popen", side_effect=iniciar) as iniciar_chrome,
+            patch.object(Path, "write_text", autospec=True, side_effect=falhar_preferences_da_tentativa_2),
+            patch.object(time, "monotonic", side_effect=lambda: instante[0]),
+            patch.object(time, "sleep", side_effect=avancar),
+            patch.object(sys, "stderr", new_callable=io.StringIO),
+            self.assertRaises(RuntimeError) as erro,
+        ):
+            ChromeDaBancada(Path("chrome"), Path(temp), 640, 480, 1, 8080)
+
+        diagnostico = str(erro.exception)
+        self.assertIn("Tentativa 1:", diagnostico)
+        self.assertIn("o prazo de 30 s expirou", diagnostico)
+        self.assertIn("DevToolsActivePort: ausente", diagnostico)
+        self.assertIn("Tentativa 2: falha ao preparar Preferences da tentativa 2", diagnostico)
+        iniciar_chrome.assert_called_once()
+        processos[0].terminate.assert_called_once()
+        processos[0].wait.assert_called_once_with(timeout=10)
+
+    def test_does_not_retry_exited_process_or_existing_port_file(self):
+        for falha in ("exited", "endpoint", "invalid_port"):
+            with self.subTest(falha=falha):
+                instante = [0.0]
+
+                def iniciar(args, **_kwargs):
+                    perfil = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--user-data-dir=")))
+                    if falha != "exited":
+                        (perfil / "DevToolsActivePort").write_text(
+                            "43210\n/devtools/browser/test" if falha == "endpoint" else "inválida", encoding="utf-8"
+                        )
+                    processo = MagicMock()
+                    processo.poll.return_value = 7 if falha == "exited" else None
+                    return processo
+
+                def avancar(_segundos):
+                    instante[0] += 10
+
+                with (
+                    tempfile.TemporaryDirectory() as temp,
+                    patch.object(subprocess, "Popen", side_effect=iniciar) as iniciar_chrome,
+                    patch.object(time, "monotonic", side_effect=lambda: instante[0]),
+                    patch.object(time, "sleep", side_effect=avancar),
+                    patch.object(urllib.request, "urlopen", side_effect=OSError("CDP indisponível")) as abrir_cdp,
+                    patch.object(sys, "stderr", new_callable=io.StringIO) as registro,
+                    self.assertRaises(RuntimeError),
+                ):
+                    ChromeDaBancada(Path("chrome"), Path(temp), 640, 480, 1, 8080)
+
+                self.assertEqual(iniciar_chrome.call_count, 1)
+                self.assertEqual(bool(abrir_cdp.call_count), falha == "endpoint")
+                self.assertEqual(registro.getvalue(), "")
+
     def test_uses_port_published_by_chrome(self):
         porta = 43210
 
