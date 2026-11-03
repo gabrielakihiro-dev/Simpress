@@ -93,8 +93,18 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(resposta.json()["descricao_finalizacao"], "Troquei o cabo")
         abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
         self.assertEqual(abertos[A]["softexpert"]["descricao_finalizacao"], "Troquei o cabo")
-        self.assertEqual(abertos[B]["softexpert"], {"descricao_finalizacao": "", "pdf": None, "finalizacao": None})
+        self.assertEqual(abertos[B]["softexpert"], {"descricao_finalizacao": "", "descricao_definida": False, "pdf": None, "finalizacao": None})
         self.assertEqual(self.put(A, "").json()["descricao_finalizacao"], "")
+
+    def test_descricao_apagada_conta_como_definida_e_so_o_campo_ausente_nao(self):
+        # a tela só aplica "Revisado." (API SEBRAE) quando descricao_definida é False; apagar a descrição não pode reabrir isso
+        self.assertIs(fin.publico(None)["descricao_definida"], False)
+        self.assertIs(self.put(A, "Revisado.").json()["descricao_definida"], True)
+        self.assertIs(self.put(A, "").json()["descricao_definida"], True)
+        abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertEqual((abertos[A]["softexpert"]["descricao_finalizacao"], abertos[A]["softexpert"]["descricao_definida"]), ("", True))
+        self.assertIs(abertos[B]["softexpert"]["descricao_definida"], False)
+        self.assertIs(self.post(f"/api/sebrae/chamados/{B}/anexo", files={"file": ("laudo.pdf", PDF, "application/pdf")}).json()["descricao_definida"], False)  # só PDF não define descrição
 
     def test_descricao_recusa_texto_grande_chamado_fechado_numero_ruim_e_campo_extra(self):
         self.assertEqual(self.put(A, "x" * 4001).status_code, 422)
