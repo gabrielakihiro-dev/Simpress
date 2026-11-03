@@ -660,6 +660,31 @@
     }
   }
 
+  async function carregarAgendamentoDashboard() {
+    const controle = document.getElementById("dashboard-agendamento-ativo");
+    const texto = document.getElementById("dashboard-agendamento-status");
+    if (!controle || !texto) return;
+    try {
+      const dados = await consultarAutomacao("/api/automacao/dashboard/agendamento", { errorMessage: "Não foi possível consultar o agendamento." });
+      controle.checked = dados.ativo;
+      texto.textContent = (dados.ativo ? `Ativo. Próxima tentativa: ${formatarHora(dados.proxima_execucao)}.` : "Pausado.")
+        + ` ${dados.aviso}` + (dados.bloqueio ? ` ${dados.bloqueio}` : "") + (dados.ultimo_disparo ? ` Última tentativa: ${dados.ultimo_disparo.resultado}.` : "");
+    } catch (erro) { texto.textContent = erro.message; }
+  }
+
+  async function alterarAgendamentoDashboard() {
+    const controle = document.getElementById("dashboard-agendamento-ativo");
+    const ativo = controle.checked;
+    controle.disabled = true;
+    try {
+      await consultarAutomacao("/api/automacao/dashboard/agendamento", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo }),
+        errorMessage: "Não foi possível alterar o agendamento.",
+      });
+    } catch (erro) { controle.checked = !ativo; avisarErro(erro); }
+    finally { controle.disabled = false; await carregarAgendamentoDashboard(); }
+  }
+
   async function atualizarEstadoAutomacao() {
     window.clearTimeout(estado.timer);
     try {
@@ -668,6 +693,7 @@
         errorMessage: "Não foi possível consultar a automação.",
       });
       aplicarEstado(dados);
+      await carregarAgendamentoDashboard();
     } catch (err) {
       console.error("Erro ao consultar a automação:", err);
     } finally {
@@ -748,7 +774,7 @@
   }
 
   return {
-    inicializarAutomacao,
+    inicializarAutomacao, alterarAgendamentoDashboard, carregarAgendamentoDashboard,
     iniciarRotinaAutomacao,
     cancelarRotinaAutomacao,
     atualizarEstadoAutomacao,

@@ -1640,7 +1640,7 @@ def montar_multipart(nome: str, conteudo: bytes) -> tuple[bytes, str]:
 
 def importar_dashboard_no_site(arquivo: Path) -> dict:
     corpo, tipo = montar_multipart(arquivo.name, arquivo.read_bytes())
-    url = f"http://127.0.0.1:{int(os.environ.get('SIMPRESS_PORT', '8000'))}/api/sebrae/dashboard"
+    url = f"http://127.0.0.1:{int(os.environ.get('SIMPRESS_PORT', '8000'))}/api/sebrae/dashboard?automatico=true"
     pedido = urllib.request.Request(url, data=corpo, method="POST", headers={"Content-Type": tipo})
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=120) as resposta:
@@ -1834,6 +1834,13 @@ def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
 
 
 def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None) -> int:
+    from core.integrity import lock_paths
+    # Import/update use this same cross-process guard: the bytes cannot change during upload.
+    with lock_paths([DASHBOARD_SAIDA_DIR.parent / "sebrae_dashboard_base.guard"]):
+        return _rodar_rotina_enviar_protegida(context, arquivo)
+
+
+def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | None" = None) -> int:
     """``arquivo`` só é passado para reenviar uma cópia pendente (com o nome do Dashboard); sem ele vai o arquivo gravado pelo site."""
     import hashlib
 

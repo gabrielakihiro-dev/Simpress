@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from core.errors import DomainError
 from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_agendamento import AgendadorSebrae
+from domains.dashboard_agendamento import AgendadorDashboard
 
 RotinaNome = Literal["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"]
 
@@ -35,6 +36,7 @@ class RotinaPayload(BaseModel):
 class AutomationRouteServices:
     runner: Callable[[], ChromeAutomationRunner]
     sebrae: Callable[[], AgendadorSebrae]
+    dashboard: Callable[[], AgendadorDashboard] | None = None
 
 
 def create_automation_router(services: AutomationRouteServices) -> APIRouter:
@@ -83,6 +85,18 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     def agendamento_sebrae(payload: AgendamentoPayload):
         """Ativa ou pausa o agendamento de segunda a sexta; 409 ao ativar antes de a rotina estar completa."""
         return JSONResponse(services.sebrae().definir_ativo(payload.ativo), headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/automacao/dashboard/agendamento")
+    def resumo_dashboard() -> JSONResponse:
+        if services.dashboard is None:
+            raise DomainError("Agendamento indisponível.", status_code=503)
+        return JSONResponse(services.dashboard().resumo(), headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/automacao/dashboard/agendamento")
+    def agendamento_dashboard(payload: AgendamentoPayload) -> JSONResponse:
+        if services.dashboard is None:
+            raise DomainError("Agendamento indisponível.", status_code=503)
+        return JSONResponse(services.dashboard().definir_ativo(payload.ativo), headers={"Cache-Control": "no-store"})
 
     @router.get("/api/automacao/capturas/{nome}")
     def captura_automacao(nome: str):
