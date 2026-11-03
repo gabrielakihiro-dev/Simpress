@@ -984,12 +984,13 @@ def _fechar_formulario(context: "BrowserContext", page: "Page", formulario: Opti
 def _conferir(formulario: "Page", numero: str, texto_linha: str) -> str:
     """Confere número e título do formulário aberto com os da lista; devolve o título lido."""
     lido = _ler_campo(formulario, "numero")
-    if extrair_numeros(lido)[:1] != [numero]:
+    cabecalho = _cabecalho(formulario) if not lido else {}
+    if extrair_numeros(lido or cabecalho["numero"])[:1] != [numero]:
         raise ChamadoNaoConfere(
-            f"{numero}: o formulário aberto é de outro chamado ({extrair_numeros(lido) or 'sem número'}).",
+            f"{numero}: o formulário aberto é de outro chamado ({extrair_numeros(lido or cabecalho['numero']) or 'sem número'}).",
             MOTIVO_NUMERO_NAO_CONFERE,
         )
-    titulo = _ler_campo(formulario, "titulo")
+    titulo = _ler_campo(formulario, "titulo") if lido else cabecalho["titulo"]
     if not titulo_confere(titulo, texto_linha):
         raise ChamadoNaoConfere(
             f"{numero}: o título do formulário não corresponde ao da lista.", MOTIVO_TITULO_NAO_CONFERE
@@ -1049,6 +1050,7 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
         campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "solicitante", "habilitada_em")}
         # Na interface atual o "Habilitada em" não está no formulário: vem do cartão da lista.
         campos["habilitada_em"] = campos["habilitada_em"] or habilitada_da_lista(item.texto)
+        campos["solicitante"] = campos["solicitante"] or _cabecalho(formulario)["solicitante"]
         for tentativa in range(1, RELEITURAS_CAMPOS + 1):
             if all(campos.values()):
                 break
