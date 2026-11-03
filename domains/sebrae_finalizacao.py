@@ -283,6 +283,8 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     fin = item.get("finalizacao")
     return {
         "descricao_finalizacao": str(item.get("descricao_finalizacao") or ""),
+        # False = nunca houve descrição guardada (campo ausente); texto apagado pelo usuário é "" guardado, e aí vale True
+        "descricao_definida": "descricao_finalizacao" in item,
         "pdf": {"nome": str(pdf.get("nome") or ""), "tamanho": int(pdf.get("tamanho") or 0)} if isinstance(pdf, dict) else None,
         "finalizacao": {k: str(fin.get(k) or "") for k in ("status", "em", "encerrado_em")} if isinstance(fin, dict) else None,
     }
