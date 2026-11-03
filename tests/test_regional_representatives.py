@@ -161,6 +161,20 @@ class RegionalRepresentativesTests(unittest.TestCase):
         for field, value in {"horario": "00:00:00 às 23:59:59", "almoco": "23:59:59", "pausaDuracao": "0h59"}.items():
             self.assertEqual(self.client.put(f"{URL}/Londrina", json={**VALID, field: value}).status_code, 200, field)
 
+    def test_schedule_must_start_before_it_ends(self):
+        for value in ("20:00:00 às 08:00:00", "18:00:00 às 18:00:00", "00:00:00 às 00:00:00", "08:00:01 às 08:00:00"):
+            with self.subTest(value=value):
+                response = self.client.put(f"{URL}/Londrina", json={**VALID, "horario": value})
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertIn("começar antes de terminar", response.json()["detail"][0]["msg"])
+        self.assertFalse(self.path.exists())
+        for value in ("08:00:00 às 18:00:00", "08:00:00 às 08:00:01", "00:00:00 às 23:59:59"):
+            with self.subTest(value=value):
+                self.assertEqual(self.client.put(f"{URL}/Londrina", json={**VALID, "horario": value}).status_code, 200)
+        saved = self.path.read_text(encoding="utf-8")
+        self.assertEqual(self.client.put(f"{URL}/Londrina", json={**VALID, "horario": "20:00:00 às 08:00:00"}).status_code, 422)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), saved)
+
     def test_disk_failure_is_500_with_message_and_no_personal_data_in_logs(self):
         with patch.object(local_setup, "atomic_write_json", side_effect=OSError("disco cheio")):
             with self.assertLogs("routers.local_setup", level="WARNING") as logs:

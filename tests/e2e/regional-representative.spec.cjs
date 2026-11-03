@@ -112,3 +112,37 @@ test("when the defaults cannot be loaded the selectors stay empty, a toast expla
   await page.locator("#retirada-contato").fill("Contato digitado");
   await expect(page.locator("#retirada-contato")).toHaveValue("Contato digitado");
 });
+
+test("a failed first load is retried once and the cities appear without reloading, with no toast", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/config/representantes-regionais", route => (++requests === 1 ? route.abort() : route.continue()));
+  await page.goto("/");
+  await openTransferTab(page);
+  await expect(page.locator("#retirada-representante option[value='Londrina']")).toHaveCount(1, { timeout: 8_000 });
+  await expect(page.locator("#entrega-representante option[value='Maringá']")).toHaveCount(1);
+  expect(requests).toBe(2);
+  await expect(page.locator("#toast-container")).not.toContainText("Não foi possível carregar os representantes regionais");
+});
+
+test("a city chosen by the equipment search before the defaults arrive is filled when they load", async ({ page }) => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route("**/api/config/representantes-regionais", async route => { await gate; await route.continue(); });
+  await page.goto("/");
+  await page.route("**/api/buscar-expandida*", route => route.fulfill({ json: { items: [], total: 0, has_more: false, filters: { categories: [], cities: [] } } }));
+  await page.route("**/api/equipamento/LENTO", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), retirada_cidade: "Londrina" } });
+  });
+  await page.locator("#input-serial").fill("LENTO");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-equipamento")).toBeVisible({ timeout: 15_000 });
+  await openTransferTab(page);
+  await expect(page.locator("#retirada-representante option")).toHaveCount(1);
+  await expect(page.locator("#retirada-contato")).not.toHaveValue("Renata Custodio de Oliveira Varasquim");
+  release();
+  await expect(page.locator("#retirada-representante")).toHaveValue("Londrina");
+  await expect(page.locator("#retirada-contato")).toHaveValue("Renata Custodio de Oliveira Varasquim");
+  await expect(page.locator("#btn-editar-representante-retirada")).toBeEnabled();
+});

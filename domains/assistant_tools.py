@@ -1049,7 +1049,7 @@ CHANGE_TOOLS: List[Tool] = [
             "nome": {"type": "string", "description": "Nome completo (opcional)."},
             "email": {"type": "string", "description": "E-mail (opcional)."},
             "telefone": {"type": "string", "description": "Celular com DDD (opcional)."},
-            "horario": {"type": "string", "description": "Expediente no formato '08:00:00 às 18:00:00' (opcional)."},
+            "horario": {"type": "string", "description": "Expediente no formato '08:00:00 às 18:00:00'; o início precisa ser antes do fim (opcional)."},
             "almoco": {"type": "string", "description": "Almoço '12:00:00' ou 'Escritório não fecha' (opcional)."},
             "pausa": {"type": "string", "description": "Duração da pausa, como '1h', '1h30' ou '2h' (obrigatória quando há horário de almoço; opcional)."},
         },

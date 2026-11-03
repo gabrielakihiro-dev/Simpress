@@ -1582,7 +1582,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
 
     def test_invalid_hidden_unchanged_or_incomplete_input_never_reaches_a_card_or_the_route(self) -> None:
         casos = (
-            {"email": "sem-arroba"}, {"telefone": "123"}, {"horario": "8h às 18h"}, {"almoco": "meio-dia"}, {"pausa": "uma hora"},
+            {"email": "sem-arroba"}, {"telefone": "123"}, {"horario": "8h às 18h"}, {"horario": "20:00:00 às 08:00:00"}, {"horario": "09:00:00 às 09:00:00"}, {"almoco": "meio-dia"}, {"pausa": "uma hora"},
             {"nome": "x" * 161}, {"nome": "[PESSOA_1 OCULTADO]"}, {"email": "[E-MAIL OCULTADO]"}, {"telefone": "[TELEFONE OCULTADO]"},
             {}, {"nome": "Renata Custodio de Oliveira Varasquim"}, {"almoco": "12:00:00"},  # no pause for a lunch that closes the office
         )
@@ -1594,6 +1594,14 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         erro = SimpressApi(RepresentativesSimpress()).alterar_representante_regional("Londrina", "[PESSOA_1 OCULTADO]", None, None, None, None, None)["erro"]
         self.assertIn("Editar", erro)
         self.assertIn("Transferência", erro)
+
+    def test_inverted_schedule_is_explained_before_any_card_or_route_call(self) -> None:
+        simpress = RepresentativesSimpress()
+        erro = SimpressApi(simpress).alterar_representante_regional("Londrina", None, None, None, "20:00:00 às 08:00:00", None, None)["erro"]
+        self.assertIn("começar antes de terminar", erro)
+        self.assertNotIn("Value error", erro)
+        self.assertEqual(simpress.writes(), [])
+        self.assertIn("início precisa ser antes do fim", TOOLS["alterar_representante_regional"].properties["horario"]["description"])
 
     def test_restore_sends_one_delete_after_the_card_shows_saved_and_default(self) -> None:
         simpress = RepresentativesSimpress()

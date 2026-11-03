@@ -164,10 +164,11 @@
   // The 22 defaults come only from the backend (`padroes` of GET /api/config/representantes-regionais); the edits
   // saved on this computer (config/representantes_regionais.json) are merged over them per city.
   // Until the first load succeeds the list is empty: the selectors hold only the empty option and the fills asked
-  // for meanwhile (pendentes, by form type) are replayed when the defaults arrive.
+  // for meanwhile (pendentes, by form type) are replayed when the defaults arrive (also after the single retry).
   const CAMPOS_REPRESENTANTE_EDITAVEIS = ["nome", "email", "telefone", "horario", "almoco", "pausaDuracao"];
   const ALMOCO_NAO_FECHA = "Escritório não fecha";
   const ID_MODAL_REPRESENTANTE = "modal-representante-regional";
+  const ATRASO_NOVA_TENTATIVA_REPRESENTANTES_MS = 2000;
   let padroesRepresentantes = [];
   let alteracoesRepresentantes = {};
   const pendentes = {};
@@ -212,7 +213,8 @@
   }
 
   // refazerFormularios: o assistente mudou o arquivo por fora; refaz os campos só das cidades que mudaram.
-  async function carregarRepresentantesRegionais(refazerFormularios = false) {
+  // Devolve true se a resposta foi aplicada; falha só avisa no console (o aviso ao usuário fica em carregarRepresentantesRegionais).
+  async function buscarRepresentantesRegionais(refazerFormularios) {
     try {
       const response = await fetch("/api/config/representantes-regionais", { cache: "no-store" });
       if (!response.ok) throw new Error("Falha ao carregar os representantes regionais.");
@@ -230,10 +232,28 @@
           .filter((cidade) => JSON.stringify(antes[cidade]) !== JSON.stringify(alteracoesRepresentantes[cidade]))
           .forEach((cidade) => aplicarAlteracoesRepresentantes(resultado, cidade));
       }
+      return true;
     } catch (error) {
       console.warn("Não foi possível carregar os representantes regionais:", error);
-      if (!padroesRepresentantes.length) app.showToast("Não foi possível carregar os representantes regionais. Recarregue a página.", "warning");
+      return false;
     }
+  }
+
+  // Sem padrões a tela fica sem cidades: se a primeira busca falhar, tenta mais uma vez e só então avisa.
+  // Enquanto a lista está vazia e há uma carga em andamento (inclusive esperando a nova tentativa), reaproveita essa carga.
+  let cargaRepresentantes = null;
+  function carregarRepresentantesRegionais(refazerFormularios = false) {
+    if (cargaRepresentantes && !padroesRepresentantes.length) return cargaRepresentantes;
+    const carga = (async () => {
+      let carregou = await buscarRepresentantesRegionais(refazerFormularios);
+      if (!carregou && !padroesRepresentantes.length) {
+        await new Promise((resolve) => setTimeout(resolve, ATRASO_NOVA_TENTATIVA_REPRESENTANTES_MS));
+        carregou = await buscarRepresentantesRegionais(refazerFormularios);
+      }
+      if (!carregou && !padroesRepresentantes.length) app.showToast("Não foi possível carregar os representantes regionais. Recarregue a página.", "warning");
+    })().finally(() => { if (cargaRepresentantes === carga) cargaRepresentantes = null; });
+    cargaRepresentantes = carga;
+    return carga;
   }
 
   // The API reports validation errors as "Value error, <message>"; show only the message.
