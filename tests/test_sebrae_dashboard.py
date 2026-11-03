@@ -44,7 +44,7 @@ class ImportacaoTest(unittest.TestCase):
 
 
 class TriagemTest(unittest.TestCase):
-    def test_novos_ignorados_e_alertas_do_endpoint(self):
+    def test_alertas_do_endpoint_tambem_sao_novos(self):
         titulos = {
             "UTIC-2026-0094": "Já lançado",
             "UTIC-2026-1378": "Verificar por que o computador está travando",
@@ -52,9 +52,9 @@ class TriagemTest(unittest.TestCase):
             "UTIC-2026-1253": "Endpoint Central - Computer(s) Added to \"Staged\" Page",
         }
         resultado = dash.triar_novos(titulos, {"UTIC-2026-0094"})
-        self.assertEqual(resultado.novos, ("UTIC-2026-1378",))
+        self.assertEqual(set(resultado.novos), {"UTIC-2026-1378", "UTIC-2026-1387", "UTIC-2026-1253"})
         self.assertEqual(resultado.ignorados, ("UTIC-2026-0094",))
-        self.assertEqual({numero for numero, _ in resultado.pendentes}, {"UTIC-2026-1387", "UTIC-2026-1253"})
+        self.assertEqual(resultado.pendentes, ())
 
 
 def reg(nome, serie, modelo="", cidade="", **extra):
