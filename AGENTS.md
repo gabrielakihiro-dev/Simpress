@@ -159,13 +159,14 @@ Não altere arquivos, dados operacionais, dependências nem o estado do Git. Sep
 
 O usuário é leigo em back-end e front-end, mas conhece Git: em comandos Git, seja sucinto e dispense a explicação básica, mantendo o que o comando altera e o destino quando houver risco (push, force, reset). Em toda análise, auditoria, revisão ou instrução sobre o código, e sempre que sugerir um comando, termo técnico ou próximo passo:
 
+- Antes de implementar uma mudança autorizada, explique em português simples o objetivo, o motivo, os arquivos ou áreas afetados, o comportamento esperado e como pretende verificar. Se o pedido já autorizar a mudança, prossiga sem esperar confirmação repetida; pergunte apenas se faltar uma decisão ou autorização necessária.
 - Explique em português simples, sem presumir conhecimento prévio, e defina cada termo técnico na primeira vez que aparecer (ex.: "XSS: quando um texto digitado vira código que o navegador executa").
 - Dê pelo menos um exemplo concreto por item, com situação do dia a dia ou do próprio projeto (ex.: "se alguém digitar X na planilha, a tela faz Y").
 - Para cada comando, diga o que ele faz, se altera algo (arquivos, dados, Git) e como saber se deu certo.
 - Para cada recomendação, diga o que acontece se não for feita e o que muda se for feita.
 - Comece pelo resumo em linguagem simples; deixe o detalhe técnico (arquivo, linha, código) depois, para consulta.
 - Não troque precisão por simplicidade: mantenha caminhos, comandos e mensagens de erro exatos dentro de blocos de código.
-- Depois de executar correções ou qualquer alteração pedida, explique o que foi feito: o que mudou (arquivo e trecho), por quê, o efeito prático com um exemplo, o que foi verificado e o que não foi.
+- Depois de executar correções ou qualquer alteração pedida, explique o que foi feito: o que mudou (arquivo e trecho), por quê, o efeito prático com um exemplo, quais verificações foram executadas e seus resultados, e o que não foi verificado ou permanece incerto.
 
 ## Idioma das respostas do ponytail
 
