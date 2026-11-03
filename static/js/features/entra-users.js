@@ -51,15 +51,26 @@
       input.value = "";
       input.dispatchEvent(new Event("change", { bubbles: true }));
       document.getElementById("btn-exportar-nomes-entra").disabled = false;
+      let refreshError = null;
       if (appState.currentEquipamento?.serial) {
         const serial = appState.currentEquipamento.serial;
-        const fresh = await app.apiFetch(`/api/equipamento/${encodeURIComponent(serial)}`);
-        if (fresh?.serial && appState.currentEquipamento?.serial === serial) {
-          app.definirEquipamentoAtual(fresh);
-          app.atualizarUsuarioLogadoCard(fresh);
+        const selectionRevision = appState.equipamentoSelectionRevision;
+        try {
+          const fresh = await app.apiFetch(`/api/equipamento/${encodeURIComponent(serial)}`);
+          if (fresh?.serial && appState.equipamentoSelectionRevision === selectionRevision && appState.currentEquipamento?.serial === serial) {
+            app.definirEquipamentoAtual(fresh);
+            app.atualizarUsuarioLogadoCard(fresh);
+          }
+        } catch (error) {
+          refreshError = error;
         }
       }
-      app.showToast("Nomes do Entra atualizados.", "success");
+      if (refreshError) {
+        status.textContent = `${resumoNomesEntra(result)} Não foi possível atualizar o equipamento selecionado: ${refreshError.message}`;
+        app.showToast("Nomes do Entra importados, mas não foi possível atualizar o equipamento selecionado.", "warning");
+      } else {
+        app.showToast("Nomes do Entra atualizados.", "success");
+      }
       app.carregarProntidao?.();
     } catch (error) {
       status.textContent = error.message;

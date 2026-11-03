@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Single JSON request helper for the features: reads the body tolerating empty or non-JSON
- * responses and turns FastAPI `detail` (text or Pydantic 422 list) into a readable Error.
+ * Single JSON request helper for the features: accepts empty bodies and turns FastAPI
+ * `detail` (text or Pydantic 422 list) into a readable Error.
  *
  * @typedef {RequestInit & { errorMessage?: string, responseType?: "json" | "response" }} ApiFetchOptions
  * @typedef {Error & { status?: number, detail?: unknown, data?: unknown }} ApiFetchError
@@ -31,16 +31,33 @@
     return Boolean(error) && /** @type {{ name?: unknown }} */ (error).name === "AbortError";
   }
 
-  // An empty or non-JSON body becomes {}; cancelling while the body is read still rejects.
-  /** @param {Response} response */
-  async function readJson(response) {
+  // Empty bodies are allowed; malformed success bodies must not look like success.
+  /** @param {Response} response @param {boolean} tolerateInvalid @param {string} errorMessage */
+  async function readJson(response, tolerateInvalid, errorMessage) {
     if (typeof response?.json !== "function") return {};
+    if (typeof response.text === "function") {
+      let body;
+      try {
+        body = await response.text();
+      } catch (error) {
+        if (isAbortError(error) || !tolerateInvalid) throw error;
+        return {};
+      }
+      if (!body.trim()) return {};
+      try {
+        return JSON.parse(body) ?? {};
+      } catch (error) {
+        if (tolerateInvalid) return {};
+        throw new Error(errorMessage);
+      }
+    }
     try {
       const data = await response.json();
       return data ?? {};
     } catch (error) {
       if (isAbortError(error)) throw error;
-      return {};
+      if (tolerateInvalid) return {};
+      throw error;
     }
   }
 
@@ -54,7 +71,7 @@
     // Resolved per call so tests and harnesses can replace the global fetch.
     const response = await globalThis.fetch(url, init);
     if (!response.ok) {
-      const data = await readJson(response);
+      const data = await readJson(response, true, errorMessage);
       const detail = data && typeof data === "object" ? /** @type {{ detail?: unknown }} */ (data).detail : undefined;
       const error = /** @type {ApiFetchError} */ (new Error(formatDetail(detail, errorMessage)));
       error.status = response.status;
@@ -62,7 +79,7 @@
       error.data = data;
       throw error;
     }
-    return responseType === "response" ? response : readJson(response);
+    return responseType === "response" ? response : readJson(response, false, errorMessage);
   }
 
   return { apiFetch, isAbortError };
