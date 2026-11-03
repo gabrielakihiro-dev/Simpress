@@ -359,5 +359,13 @@ class ArquivoRotasTest(RotasBase):
         self.assertIn("Camila Lopes", guardado)
 
 
+class DescricaoOpenApiTest(RotasBase):
+    def test_rotas_de_gravacao_mantem_descricao_no_openapi(self):
+        caminhos = self.cliente.app.openapi()["paths"]
+        for url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert"):
+            with self.subTest(url=url):
+                self.assertTrue(caminhos[url]["post"].get("description"))
+
+
 if __name__ == "__main__":
     unittest.main()

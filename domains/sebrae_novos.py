@@ -132,8 +132,11 @@ def salvar_existentes(
     ordenados = sorted(set(numeros))
     # names stay (the match by name needs them); CPF and passwords never reach the file
     seguros = [{**a, **{k: _seguro(a[k]) for k in ("titulo", "descricao", "usuario") if k in a}} for a in abertos]
+    anterior = _ler(caminho) or {}
+    # same file bytes: keep the version, so a screen left open does not get a false 409 after the 30 min import
+    igual = bool(sha256) and anterior.get("sha256") == sha256 and bool(anterior.get("versao"))
     _gravar(caminho, {
-        "versao": uuid.uuid4().hex, "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
+        "versao": str(anterior["versao"]) if igual else uuid.uuid4().hex, "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
         "sha256": sha256, "listas": {k: list(v) for k, v in (listas or {}).items()}, "abertos": seguros,
     })
     return len(ordenados)
