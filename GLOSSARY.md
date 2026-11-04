@@ -48,7 +48,7 @@ Série de MacBook do Endpoint sem o `S` inicial, tratada como a mesma série de 
 _Regra_: [AGENTS.md, "Fonte oficial do cadastro de equipamentos"](./AGENTS.md)
 
 **Comparação**:
-Confronto entre o cadastro EquipamentosDetalhes e o inventário do Endpoint, na aba Comparação (F7).
+Confronto entre o cadastro EquipamentosDetalhes e o inventário do Endpoint, na aba Comparação (F3, junto do Resumo).
 _Regra_: [AGENTS.md, "Equipamentos do Sebrae nas comparações Simpress"](./AGENTS.md)
 
 **ausentes_em_detalhes**:
