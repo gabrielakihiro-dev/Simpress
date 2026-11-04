@@ -16,7 +16,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -93,6 +93,12 @@ class DescricaoPayload(BaseModel):
     descricao_finalizacao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # the exact limit is checked (and explained) by the domain
 
 
+class DescricaoEditadaPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    descricao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # limite exato e mensagem ficam no domínio
+
+
 class FichaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -124,6 +130,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
         its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
         antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos())) if abertos else {}
+        if antigos:
+            antigos = sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado()))
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
@@ -138,6 +146,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _pasta_estado():
         return fin.pasta_estado(services.caminhos().existentes)
+
+    def _novos(caminhos: sebrae_novos.Caminhos, lancados: Iterable[str]) -> Optional[Dict[str, Any]]:
+        """Chamados novos da última busca já com a descrição que o usuário editou no site (lápis do cartão)."""
+        novos = sebrae_novos.ler_novos(caminhos.novos, lancados)
+        if novos is not None:
+            novos["chamados"] = sebrae_novos.aplicar_descricoes_novos(novos["chamados"], fin.descricoes_editadas(_pasta_estado()))
+        return novos
 
     def _estado() -> Dict[str, Any]:
         corpo = _estado_base()
@@ -154,7 +169,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
-        novos = sebrae_novos.ler_novos(caminhos.novos, lancados) if importado else None
+        novos = _novos(caminhos, lancados) if importado else None
         finalizacao = fin.ler_estado(_pasta_estado()) if novos else {}
         return {
             "importado": None if importado is None else {
@@ -291,7 +306,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
             raise DomainValidationError("Importe o Dashboard antes de exportar.", status_code=422)
-        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
+        novos = _novos(caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de exportar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}
@@ -464,6 +479,25 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         item = fin.definir_descricao(_pasta_estado(), numero, payload.descricao_finalizacao)
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
+    @router.put("/api/sebrae/chamados/{numero}/descricao")
+    def definir_descricao_editada(numero: str, payload: DescricaoEditadaPayload):
+        """Lápis do cartão: texto do bloco "Descrição" editado só neste site (SoftExpert e coluna H já lançada não mudam); vazio restaura o original."""
+        numero = _exigir_finalizavel(numero)
+        item = fin.definir_descricao_editada(_pasta_estado(), numero, sebrae_novos.descricao_segura(payload.descricao))
+        # `descricao` = o que o cartão passa a mostrar; ao restaurar, o texto original lido do SoftExpert
+        return JSONResponse(
+            {"numero": numero, "descricao": item.get("descricao_editada") or _descricao_original(numero), **fin.publico(item)},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    def _descricao_original(numero: str) -> str:
+        caminhos = services.caminhos()
+        novos = sebrae_novos.ler_novos(caminhos.novos)
+        achado = next((c.descricao for c in novos["chamados"] if c.numero == numero), None) if novos else None
+        if achado is not None:
+            return achado
+        return sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(caminhos)).get(numero, {}).get("descricao", "")
+
     @router.put("/api/sebrae/chamados/{numero}/ficha")
     def definir_ficha(numero: str, payload: FichaPayload):
         """Cartão do chamado como estava na tela ao finalizar; aparece de novo em "Chamados finalizados"."""
@@ -558,7 +592,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _linhas_novas(payload: AtualizarPayload, importado: Mapping[str, Any], caminhos: sebrae_novos.Caminhos) -> List[Dict[str, str]]:
         if not payload.chamados:
             return []
-        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
+        novos = _novos(caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de atualizar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}

@@ -47,6 +47,26 @@ class ValidacaoTest(unittest.TestCase):
             self.assertEqual(ctx.exception.status_code, codigo, nome)
 
 
+class DescricaoEditadaTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+
+    def test_guarda_lista_e_apaga_com_texto_vazio_sem_tocar_nos_outros_campos(self):
+        fin.definir_descricao(self.dir, UTIC, "para finalizar")
+        item = fin.definir_descricao_editada(self.dir, UTIC, "editada")
+        self.assertEqual((item["descricao_editada"], fin.publico(item)["descricao_editada"]), ("editada", "editada"))
+        self.assertEqual(fin.descricoes_editadas(self.dir), {UTIC: "editada"})
+        item = fin.definir_descricao_editada(self.dir, UTIC, "")
+        self.assertEqual(fin.descricoes_editadas(self.dir), {})
+        self.assertEqual((fin.publico(item)["descricao_editada"], item["descricao_finalizacao"]), ("", "para finalizar"))
+
+    def test_recusa_numero_ruim_e_texto_grande(self):
+        with self.assertRaises(DomainValidationError):
+            fin.definir_descricao_editada(self.dir, "linha:2", "x")
+        with self.assertRaises(DomainValidationError):
+            fin.definir_descricao_editada(self.dir, UTIC, "x" * 4001)
+
+
 class EstadoTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
