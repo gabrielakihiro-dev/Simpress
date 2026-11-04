@@ -52,6 +52,13 @@
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
   }
 
+  // No saved comparison: the empty message is already in the content area; adds only the "Sem usuário" section below it.
+  function renderizarSemUsuarioSemComparacao(semUsuario, navigationTarget = null) {
+    const content = document.getElementById("comparacao-planilhas-conteudo");
+    content.insertAdjacentHTML("beforeend", renderer.secaoSemUsuario(semUsuario));
+    if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+  }
+
   const SEM_USUARIO_PAGINA = 100;
   const SEM_USUARIO_MAX_PAGINAS = 20;
   // Successful reads are reused between event selections; invalidated when the Comparação panel opens or inventories change.
@@ -657,7 +664,7 @@
   }
 
   return {
-    renderizarResultadoComparacao, carregarSemUsuarioResumo, invalidarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
+    renderizarResultadoComparacao, renderizarSemUsuarioSemComparacao, carregarSemUsuarioResumo, invalidarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
     renderizarAnotacaoOperacional, conectarAnotacoesOperacionais,
   };
 });

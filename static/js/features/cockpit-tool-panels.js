@@ -564,8 +564,15 @@
     const request = ++comparisonDetailRequest;
     selectedComparison = null;
     if (!eventId) {
-      if (!keepContent) clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
-      return updateComparisonStatus();
+      updateComparisonStatus();
+      if (keepContent) return;
+      clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
+      // Without a saved comparison the "Sem usuário" section (current inventory) still shows below the empty message.
+      const target = pendingComparisonTarget;
+      pendingComparisonTarget = null;
+      const semUsuario = await app.carregarSemUsuarioResumo?.();
+      if (semUsuario && request === comparisonDetailRequest && activeTool === "comparacao") app.renderizarSemUsuarioSemComparacao(semUsuario, target);
+      return;
     }
     if (!keepContent) clearComparisonResult("Carregando comparação…", "carregando");
     try {

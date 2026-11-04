@@ -451,6 +451,32 @@ test("histórico de comparações vazio limpa a aba e mantém o Exportar desativ
   } finally { delete global.document; }
 });
 
+test("histórico vazio ainda mostra a seção Sem usuário abaixo da mensagem vazia e leva o alvo da Home até ela", async () => {
+  const secoes = [];
+  const semUsuario = { estado: "ok", items: [{ serial: "SN-1" }] };
+  const { api, el } = criarAmbientePaineis({
+    apiFetch: async () => ({ eventos: [] }),
+    appExtra: { carregarSemUsuarioResumo: async () => semUsuario, renderizarSemUsuarioSemComparacao: (...args) => secoes.push(args) },
+  });
+  try {
+    await api.abrirComparacaoDaSerie("SN-1", "sem_usuario");
+    assert.equal(secoes.length, 1);
+    assert.equal(secoes[0][0], semUsuario);
+    assert.deepEqual(JSON.parse(JSON.stringify(secoes[0][1])), { serial: "SN-1", category: "sem_usuario" });
+    assert.equal(el("btn-exportar-resultado-comparacao").disabled, true);
+    assert.equal(el("comparacao-planilhas-conteudo").dataset.estado, "vazio");
+    // Erro e limite do inventário também chegam à seção (o renderer escolhe a mensagem).
+    for (const estado of ["erro", "limite"]) {
+      const { api: outro } = criarAmbientePaineis({
+        apiFetch: async () => ({ eventos: [] }),
+        appExtra: { carregarSemUsuarioResumo: async () => ({ estado, items: [] }), renderizarSemUsuarioSemComparacao: semUsuarioLido => secoes.push(semUsuarioLido) },
+      });
+      await outro.abrirPainelCockpit("comparacao");
+      assert.equal(secoes.at(-1).estado, estado);
+    }
+  } finally { delete global.document; }
+});
+
 test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026)", () => {
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="unidades"[\s\S]*?\n        <\/section>/)?.[0] || "";
   for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-copy-cnpj", "cockpit-units-copy-cep", "cockpit-units-detail-badge"]) {

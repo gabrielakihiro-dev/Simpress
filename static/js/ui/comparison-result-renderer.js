@@ -597,5 +597,5 @@
 
 
 
-  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, SECOES_CARTOES_RESUMO };
+  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, secaoSemUsuario, SECOES_CARTOES_RESUMO };
 });
