@@ -37,7 +37,7 @@ async function openHistory(page, eventos) {
   await expect(page.locator(ITEMS)).toHaveCount(eventos.length);
 }
 
-test("the F8 panel is the full history: search, type, action filter and clear", async ({ page }) => {
+test("the F7 panel is the full history: search, type, action filter and clear", async ({ page }) => {
   test.setTimeout(60_000);
   const eventos = fixtureHistory();
   await openHistory(page, eventos);

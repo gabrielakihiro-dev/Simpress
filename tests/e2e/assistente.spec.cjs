@@ -188,24 +188,24 @@ test("histórico: exportar PDF monta o documento Cockpit na lista e na leitura",
   await expect(quadro).toHaveCount(1);
 });
 
-test("F10 abre e F10 fecha, inclusive com o cursor na caixa de mensagem", async ({ page }) => {
+test("F9 abre e F9 fecha, inclusive com o cursor na caixa de mensagem", async ({ page }) => {
   await mockAssistente(page, { estado: PRONTO });
   await page.goto("/");
-  await page.keyboard.press("F10");
+  await page.keyboard.press("F9");
   await expect(page.locator("#assistente-widget")).toBeVisible();
   await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "true");
   await page.locator("#assistente-texto").focus();
-  await page.keyboard.press("F10");
+  await page.keyboard.press("F9");
   await expect(page.locator("#assistente-widget")).toBeHidden();
   await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#btn-assistente")).toBeFocused();
 });
 
-test("F10 com o foco na busca do Home leva o foco à caixa do chat", async ({ page }) => {
+test("F9 com o foco na busca do Home leva o foco à caixa do chat", async ({ page }) => {
   await mockAssistente(page, { estado: PRONTO });
   await page.goto("/");
   await page.locator("#input-serial").focus();
-  await page.keyboard.press("F10");
+  await page.keyboard.press("F9");
   await expect(page.locator("#assistente-widget")).toBeVisible();
   await expect(page.locator("#assistente-texto")).toBeFocused({ timeout: 2000 });
 });
@@ -251,8 +251,7 @@ test("Esc com um painel de ferramentas aberto fecha só o chat", async ({ page }
   await mockAssistente(page, { estado: PRONTO });
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
   await page.goto("/");
-  await page.locator("#cockpit-tools-trigger").click();
-  await page.locator("#btn-cockpit-comparacao").click();
+  await page.locator("#btn-resumo-aba").click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await abrirAssistente(page);
   await expect(page.locator("#assistente-texto")).toBeFocused();

@@ -1,14 +1,14 @@
 const test = require("node:test");
 const { assert, createAppHarness, apiResponse, FakeElement } = require("./support/inventory-harness.cjs");
 
-async function createStatusHarness(equipmentFetch) {
+async function createStatusHarness(equipmentFetch, listItems = [{ serial: "S1", usuarios_logados: "Usuário" }, { serial: "S2", usuarios_logados: "Usuário" }]) {
   FakeElement.prototype.prepend = function (...children) { this.children.unshift(...children); };
   const harness = createAppHarness(url => url.startsWith("/api/equipamento/") && equipmentFetch ? equipmentFetch(url) : Promise.resolve(apiResponse(url === "/api/painel" ? { ultima_comparacao: { id: "latest" } }
     : url.startsWith("/api/historico-comparacoes/") ? { evento: { comparacao: {
       sem_acesso_7_dias: [{ serie: "S1", dias_sem_acesso: 9 }],
       ausentes_no_endpoint: [], divergencias_local: [{ serie: "S1" }],
     } } }
-    : { items: [{ serial: "S1", usuarios_logados: "Usuário" }, { serial: "S2", usuarios_logados: "Usuário" }], total: 2, has_more: true })));
+    : { items: listItems, total: listItems.length, has_more: true })));
   const list = harness.element("home-equipment-list");
   list.getAttribute = name => list.attributes.get(name);
   list.querySelectorAll = selector => list.children.filter(item => selector === '[role="option"]'
@@ -16,7 +16,7 @@ async function createStatusHarness(equipmentFetch) {
   list.querySelector = selector => list.children.find(item => selector.includes(`"${item.dataset.serial}"`));
   harness.context.document.createElementNS = (_namespace, tag) => new FakeElement(tag);
   harness.context.CSS = { escape: value => value };
-  harness.run('abrirResumoSemAcesso = async serial => { workflowEffects.resumo = serial; }; abrirComparacaoDaSerie = async serial => { workflowEffects.comparacao = serial; }; inicializarListaHome()');
+  harness.run('workflowEffects.comparacoes = []; abrirComparacaoDaSerie = async (serial, categoria) => { workflowEffects.comparacoes.push([serial, categoria]); }; inicializarListaHome()');
   // Drain the list and comparison fetches, including the comparison-triggered list refresh.
   await new Promise(resolve => setImmediate(resolve));
   const keydown = list.listeners.get("keydown")[0];
@@ -38,8 +38,13 @@ test("Home keeps focusable status actions outside options and updates their seri
     assert.notEqual(button.tabIndex, -1, "native buttons stay in the sequential Tab order");
     for (const click of button.listeners.get("click")) click({ stopPropagation() {} });
   }
-  assert.equal(harness.effects.resumo, "S1");
-  assert.equal(harness.effects.comparacao, "S1");
+  assert.deepEqual(buttons.map(button => button.dataset.categoria), ["sem_acesso_7_dias", "divergencias_local"]);
+  assert.deepEqual(buttons.map(button => button.attributes.get("aria-label")), [
+    "Sem acesso 9 d: abrir S1 no Resumo (F3)",
+    "Divergente: abrir S1 no Resumo (F3)",
+  ]);
+  assert.deepEqual(buttons.map(button => button.title), ["Abrir no Resumo", "Abrir no Resumo"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.effects.comparacoes)), [["S1", "sem_acesso_7_dias"], ["S1", "divergencias_local"]]);
   press("End");
   assert.equal(actions.hidden, true, "a series without these statuses has no actions");
   press("ArrowUp");
@@ -126,7 +131,7 @@ for (const completion of ["pagination", "late selection"]) {
       harness.run('highlightHomeListItem("S2")');
     }
     press("Home");
-    const button = actions.children.find(child => child.dataset.destino === "resumo");
+    const button = actions.children.find(child => child.dataset.categoria === "sem_acesso_7_dias");
     button.focus = () => { document.activeElement = button; };
     button.focus();
     if (completion === "late selection") {
@@ -139,3 +144,37 @@ for (const completion of ["pagination", "late selection"]) {
     assert.ok(actions.children.includes(button), "unchanged actions keep the original button tree");
   });
 }
+
+test("Home chip Sem usuário opens the Resumo on the notebook row; other types and users have no link", async () => {
+  const { harness, list, press, actions } = await createStatusHarness(undefined, [
+    { serial: "N1", categoria: "notebook", usuarios_logados: "" },
+    { serial: "M1", categoria: "macbook", usuarios_logados: "  " },
+    { serial: "D1", categoria: "monitor", usuarios_logados: "" },
+    { serial: "N2", categoria: "notebook", usuarios_logados: "Usuário" },
+  ]);
+  const descendants = item => item.children.flatMap(child => typeof child === "object" ? [child, ...descendants(child)] : []);
+  const actionButtons = () => descendants(actions).filter(child => child.type === "button");
+  press("Home");
+  assert.equal(actions.attributes.get("aria-label"), "Ações de N1");
+  let [button] = actionButtons();
+  assert.equal(actionButtons().length, 1);
+  assert.equal(button.dataset.destino, "comparacao");
+  assert.equal(button.dataset.categoria, "sem_usuario");
+  assert.equal(button.attributes.get("aria-label"), "Sem usuário: abrir N1 no Resumo (F3)");
+  assert.equal(button.title, "Abrir no Resumo");
+  for (const click of button.listeners.get("click")) click({ stopPropagation() {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.effects.comparacoes)), [["N1", "sem_usuario"]]);
+
+  press("ArrowDown");
+  [button] = actionButtons();
+  assert.equal(actions.attributes.get("aria-label"), "Ações de M1");
+  assert.equal(button.dataset.categoria, "sem_usuario");
+
+  press("ArrowDown");
+  assert.equal(actions.hidden, true, "a monitor is not in the Resumo list, so its Sem usuário chip is not a link");
+  press("ArrowDown");
+  assert.equal(actions.hidden, true, "a series with a user has no Sem usuário action");
+  const pills = descendants(list.children[0]).filter(child => child.dataset?.status === "info");
+  assert.equal(pills.length, 1, "the list keeps the non-interactive Sem usuário badge");
+  assert.equal(pills[0].type, undefined);
+});

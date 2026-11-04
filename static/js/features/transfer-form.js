@@ -68,11 +68,10 @@
     }, true);
   });
 
-  // Abas de primeiro nível: Home, Transporte, Resumo e Automação (nessa ordem na barra lateral).
+  // Abas de primeiro nível: Home, Transporte e Automação (nessa ordem na barra lateral).
   const ABAS_PRINCIPAIS = Object.freeze({
     home: Object.freeze({ tab: "tab-home", painel: "tab-panel-home", titulo: "Home" }),
     transferencia: Object.freeze({ tab: "tab-retirada-entrega", painel: "tab-panel-retirada-entrega", titulo: "Transporte" }),
-    resumo: Object.freeze({ tab: "tab-resumo", painel: "tab-panel-resumo", titulo: "Resumo" }),
     automacao: Object.freeze({ tab: "tab-automacao", painel: "tab-panel-automacao", titulo: "Automação" }),
   });
 
@@ -103,7 +102,6 @@
     if (titulo) titulo.textContent = ABAS_PRINCIPAIS[alvo].titulo;
     document.body.classList.toggle("has-quick-actions", alvo === "transferencia");
     if (alvo === "transferencia") app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
-    if (alvo === "resumo" && mudou) void app.carregarResumoCockpit?.();
     if (mudou && destino.painel) motion?.reveal(destino.painel, "page");
   }
 
@@ -124,7 +122,7 @@
 
   function controlarAbasTransferencia(event) {
     const tablist = event.target.closest('[role="tablist"]') || event.currentTarget;
-    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]:not([hidden])'));
     const currentIndex = tabs.indexOf(event.target.closest('[role="tab"]'));
     if (currentIndex < 0 || !tabs.length) return;
 
@@ -139,6 +137,8 @@
     const nextTab = tabs[nextIndex];
     nextTab.focus();
     nextTab.click();
+    // O Resumo abre um painel que leva o foco ao título; as setas continuam percorrendo a barra de abas.
+    if (nextTab.dataset.cockpitTool) nextTab.focus();
   }
 
   // "Forçar SEDE Prado Velho" button action

@@ -13,15 +13,14 @@ const panels = createCockpitToolPanels({ app: {}, appState: {} });
 test("the four Cockpit tools open dedicated panels from the nine-dot menu", () => {
   const expected = [
     ["btn-acompanhamento-chamados", "chamados", "F6"],
-    ["btn-cockpit-comparacao", "comparacao", "F7"],
-    ["btn-historico-apelidos", "apelidos", "F8"],
-    ["btn-relatorio-mensal", "relatorio", "F9"],
+    ["btn-historico-apelidos", "apelidos", "F7"],
+    ["btn-relatorio-mensal", "relatorio", "F8"],
   ];
   for (const [id, panel, shortcut] of expected) {
     const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] || "";
     assert.match(button, new RegExp(`data-on-click="abrirPainelCockpit"`));
     assert.match(button, new RegExp(`data-args='\\["${panel}"\\]'`));
-    // OS fica na barra principal (title com o atalho); os demais seguem no menu com <kbd> (Comparação F7, Histórico de apelidos F8, Relatório mensal F9).
+    // OS fica na barra principal (title com o atalho); os demais seguem no menu com <kbd> (Histórico de apelidos F7, Relatório mensal F8).
     if (panel === "chamados") assert.match(button, new RegExp(`title="OS \\(${shortcut}\\)"`));
     else if (shortcut) assert.match(html, new RegExp(`<kbd aria-hidden="true">${shortcut}</kbd>`));
     else assert.doesNotMatch(html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>[\\s\\S]*?</button>`))[0], /<kbd/);
@@ -29,10 +28,18 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
   }
   assert.match(html, /id="cockpit-tool-panels"[^>]*hidden/);
   assert.match(html, /id="cockpit-comparison-event"/);
-  // O resultado completo mora na aba Comparação; lista/detalhe/KPIs/filtros/exportação antigos e o modal saíram.
+  // Resumo (F3) é a aba da barra que abre o painel interno "comparacao"; o item de menu Comparação F7 saiu.
+  assert.doesNotMatch(html, /btn-cockpit-comparacao/);
+  const abaResumo = html.match(/<button[^>]*id="btn-resumo-aba"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(abaResumo, /role="tab"/);
+  assert.match(abaResumo, /data-cockpit-tool="comparacao" data-on-click="abrirPainelCockpit" data-args='\["comparacao"\]'/);
+  assert.match(abaResumo, /aria-label="Resumo" title="Resumo \(F3\)" aria-keyshortcuts="F3"/);
+  assert.match(abaResumo, /<span>Resumo<\/span><kbd class="ck-aba__kbd" aria-hidden="true">F3<\/kbd><\/button>$/);
+  assert.match(html, /<h2 id="cockpit-comparison-heading" class="sr-only">Resumo<\/h2>/);
+  // O resultado completo mora no Resumo (painel "comparacao"); lista/detalhe/KPIs/filtros/exportação antigos e o modal saíram.
   const comparacao = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)?.[0] || "";
-  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao"]) {
-    assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro da aba Comparação`);
+  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao", "resumo-regionais", "resumo-total-ativos", "resumo-total-anterior", "resumo-total-proxima"]) {
+    assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro do painel Resumo`);
   }
   assert.match(comparacao, /id="btn-exportar-resultado-comparacao"[^>]*data-on-click="exportarResultadoComparacaoPlanilhas"/);
   assert.doesNotMatch(html, /id="cockpit-comparison-(kpis|filters|list|detail|export)"/);
@@ -182,11 +189,14 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.match(aba, /data-args='\["sebrae-chamados"\]'/);
   assert.match(aba, /aria-label="Chamados" title="Chamados \(F5\)" aria-keyshortcuts="F5"/);
   assert.match(aba, /<span>Chamados<\/span>/);
-  // Ordem final da barra: ... Automação, Chamados (F5), OS (F6).
+  // Ordem final da barra: Home, Transporte, Resumo (F3, abre o painel "comparacao"), Automação, Chamados (F5), OS (F6).
+  assert.ok(html.indexOf('id="tab-retirada-entrega"') < html.indexOf('id="btn-resumo-aba"'));
+  assert.ok(html.indexOf('id="btn-resumo-aba"') < html.indexOf('id="tab-automacao"'));
+  assert.doesNotMatch(html, /id="tab-resumo"|id="tab-panel-resumo"|id="resumo-cards"|cockpit-summary/, "Resumo antigo removido");
   assert.ok(html.indexOf('id="tab-automacao"') < html.indexOf('id="btn-sebrae-chamados-aba"'));
   assert.ok(html.indexOf('id="btn-sebrae-chamados-aba"') < html.indexOf('id="btn-acompanhamento-chamados"'));
   // Atalho F1-F6 pequeno em cada aba principal, escondido dos leitores de tela (o aria-label já traz o nome).
-  for (const [id, atalho] of [["tab-home", "F1"], ["tab-retirada-entrega", "F2"], ["tab-resumo", "F3"], ["tab-automacao", "F4"], ["btn-sebrae-chamados-aba", "F5"], ["btn-acompanhamento-chamados", "F6"]]) {
+  for (const [id, atalho] of [["tab-home", "F1"], ["tab-retirada-entrega", "F2"], ["btn-resumo-aba", "F3"], ["tab-automacao", "F4"], ["btn-sebrae-chamados-aba", "F5"], ["btn-acompanhamento-chamados", "F6"]]) {
     const botao = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>[^]*?</button>`))?.[0] || "";
     assert.match(botao, new RegExp(`</span><kbd class="ck-aba__kbd" aria-hidden="true">${atalho}</kbd></button>$`), id);
   }
@@ -204,7 +214,7 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.ok(html.indexOf('id="ck-menu-g-paineis"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
   assert.doesNotMatch(html, /btn-historico-comparacoes|data-cockpit-tool-panel="historico-planilhas"|cockpit-sheets-history/);
   assert.ok(html.indexOf('id="btn-sebrae-chamados-menu"') < html.indexOf('id="btn-chamados-menu"'));
-  // Desde 31/10/2026 o menu não tem o grupo "Planilhas": Atualizar planilhas saiu; Exportar Excel (modelo) mora na aba Comparação.
+  // Desde 31/10/2026 o menu não tem o grupo "Planilhas": Atualizar planilhas saiu; Exportar Excel (modelo) mora no Resumo.
   assert.doesNotMatch(html, /ck-menu-g-planilhas|btn-atualizar-planilhas/);
   const menuFerramentas = html.match(/id="cockpit-tools-menu"[\s\S]*?<\/details>/)[0];
   assert.doesNotMatch(menuFerramentas, /btn-exportar-equipamentos/);
@@ -402,6 +412,25 @@ test("abrir Comparação com evento_id e destino leva o destino ao resultado sal
     assert.equal(renders.length, 1);
     assert.equal(renders[0][0].evento_id, "9");
     assert.deepEqual(renders[0][1], { serial: "SN-1" });
+  } finally { delete global.document; }
+});
+
+test("abrirComparacaoDaSerie leva a categoria ao alvo e repassa o Sem usuário ao resultado", async () => {
+  const renders = [];
+  const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  const semUsuario = { estado: "ok", items: [{ serial: "SN-1" }] };
+  const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  const { api } = criarAmbientePaineis({
+    apiFetch,
+    appExtra: { carregarSemUsuarioResumo: async () => semUsuario, renderizarResultadoComparacao: (...args) => renders.push(args) },
+  });
+  try {
+    await api.abrirComparacaoDaSerie("SN-1", "sem_usuario");
+    assert.equal(renders.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(renders[0][1])), { serial: "SN-1", category: "sem_usuario" });
+    assert.equal(renders[0][2], semUsuario);
+    await api.abrirComparacaoDaSerie("SN-2");
+    assert.deepEqual(JSON.parse(JSON.stringify(renders[1][1])), { serial: "SN-2" }, "sem categoria o alvo é só a série");
   } finally { delete global.document; }
 });
 

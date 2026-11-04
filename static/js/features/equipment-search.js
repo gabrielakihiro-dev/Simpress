@@ -27,6 +27,16 @@
   let homeListQuery = "";
   let homeListActiveSerial = "";
   let homeListSerials = new Map();
+  // Items of the rendered list by serial, so the actions bar (which only knows the serial) can tell "Sem usuário" apart.
+  let homeListItems = new Map();
+  // Divergence keys in the order the Resumo lists them; registros_ambiguos rows sit under correspondencias_ambiguas.
+  const HOME_DIVERGENCE_CATEGORIES = Object.freeze([
+    ["divergencias_local", "divergencias_local"],
+    ["ausentes_no_endpoint", "ausentes_no_endpoint"],
+    ["correspondencias_ambiguas", "correspondencias_ambiguas"],
+    ["registros_ambiguos", "correspondencias_ambiguas"],
+  ]);
+  const HOME_NOTEBOOK_CATEGORIES = Object.freeze(["notebook", "macbook"]);
   let homeComparisonFilters = { "7-dias": null, divergentes: null };
   let homeCountsLoaded = false;
   let finishEquipmentLoading = () => {};
@@ -717,12 +727,14 @@
       const days = Number(row?.dias_sem_acesso ?? row?.dias ?? row?.dias_desde_ultimo_acesso);
       homeListSerials.set(serial, { stale: true, days: Number.isFinite(days) && days > 0 ? days : null });
     }
-    for (const key of HOME_COMPARISON_FILTERS.divergentes) {
+    // First listed key wins, so the chip lands on the section the Resumo shows first for that serial.
+    for (const [key, category] of HOME_DIVERGENCE_CATEGORIES) {
       const rows = Array.isArray(comparison?.[key]) ? comparison[key] : [];
       for (const row of rows) {
         const serial = serialDeComparacao(row);
         if (!serial) continue;
-        homeListSerials.set(serial, { ...homeListSerials.get(serial), divergent: true });
+        const previous = homeListSerials.get(serial);
+        homeListSerials.set(serial, { ...previous, divergent: true, divergentCategory: previous?.divergentCategory || category });
       }
     }
   }
@@ -737,6 +749,7 @@
   }
 
   function limparListaHome(message) {
+    homeListItems = new Map();
     atualizarAcoesListaHome("");
     const list = document.getElementById("home-equipment-list");
     if (list) {
@@ -764,11 +777,18 @@
         tone: "alerta",
         icon: "i-alerta",
         label: comparison.days ? `Sem acesso ${comparison.days} d` : "Sem acesso 7+ d",
-        destino: "resumo",
+        destino: "comparacao",
+        categoria: "sem_acesso_7_dias",
       });
     }
-    if (comparison?.divergent) statuses.push({ tone: "erro", icon: "i-erro", label: "Divergente", destino: "comparacao" });
-    if (!String(item?.usuarios_logados || "").trim()) statuses.push({ tone: "info", icon: "i-user", label: "Sem usuário" });
+    if (comparison?.divergent) {
+      statuses.push({ tone: "erro", icon: "i-erro", label: "Divergente", destino: "comparacao", categoria: comparison.divergentCategory || "divergencias_local" });
+    }
+    if (!String(item?.usuarios_logados || "").trim()) {
+      // The Resumo lists only notebooks/MacBooks without a user (the Home "Sem usuário" filter rule); other types get no link.
+      const linkable = HOME_NOTEBOOK_CATEGORIES.includes(String(item?.categoria || "").toLowerCase());
+      statuses.push({ tone: "info", icon: "i-user", label: "Sem usuário", ...(linkable ? { destino: "comparacao", categoria: "sem_usuario" } : {}) });
+    }
     return statuses.length ? statuses : [{ tone: "ok", icon: "i-ok", label: "Sincronizado" }];
   }
 
@@ -789,12 +809,12 @@
     if (interativo) {
       el.type = "button";
       el.dataset.destino = status.destino;
-      el.setAttribute("aria-label", status.destino === "resumo"
-        ? `${status.label}: abrir ${serial} na aba Resumo`
-        : `${status.label}: abrir ${serial} na Comparação`);
+      el.dataset.categoria = status.categoria;
+      el.title = "Abrir no Resumo";
+      el.setAttribute("aria-label", `${status.label}: abrir ${serial} no Resumo (F3)`);
       el.addEventListener("click", event => {
         event.stopPropagation();
-        void abrirDestinoStatusHome(status.destino, serial);
+        void abrirDestinoStatusHome(status.categoria, serial);
       });
       el.addEventListener("keydown", event => event.stopPropagation());
     }
@@ -805,11 +825,13 @@
     homeListActiveSerial = String(serial || "").trim();
     const actions = document.getElementById("home-equipment-actions");
     if (!actions) return;
-    const statuses = homeListActiveSerial ? statusDaLinhaHome({ serial: homeListActiveSerial }).filter(status => status.destino) : [];
+    // Serial outside the rendered list: unknown user, so no "Sem usuário" chip (the placeholder user keeps it out).
+    const activeItem = homeListItems.get(homeListActiveSerial.toUpperCase()) || { serial: homeListActiveSerial, usuarios_logados: "—" };
+    const statuses = homeListActiveSerial ? statusDaLinhaHome(activeItem).filter(status => status.destino) : [];
     const signature = JSON.stringify([homeListActiveSerial, statuses]);
     if (actions.dataset.signature === signature) return;
     const focused = document.activeElement;
-    const focusedDestination = actions.dataset.serial === homeListActiveSerial && actions.contains?.(focused) ? focused.dataset.destino : "";
+    const focusedDestination = actions.dataset.serial === homeListActiveSerial && actions.contains?.(focused) ? focused.dataset.categoria : "";
     actions.dataset.signature = signature;
     actions.dataset.serial = homeListActiveSerial;
     actions.hidden = !statuses.length;
@@ -820,12 +842,12 @@
       createTextElement("span", "ck-lista__info", `Ações de ${homeListActiveSerial}`),
       ...statuses.map(status => criarStatusListaHome(status, homeListActiveSerial, true)),
     );
-    if (focusedDestination) actions.querySelector(`[data-destino="${CSS.escape(focusedDestination)}"]`)?.focus({ preventScroll: true });
+    if (focusedDestination) actions.querySelector(`[data-categoria="${CSS.escape(focusedDestination)}"]`)?.focus({ preventScroll: true });
   }
 
-  async function abrirDestinoStatusHome(destino, serial) {
-    if (destino === "resumo") await app.abrirResumoSemAcesso?.(serial);
-    else await app.abrirComparacaoDaSerie?.(serial);
+  // Opens the Resumo (F3) on the serial's row in the section of the chip's category.
+  async function abrirDestinoStatusHome(categoria, serial) {
+    await app.abrirComparacaoDaSerie?.(serial, categoria);
   }
 
   function criarPilhaStatusHome(statuses, serial) {
@@ -871,10 +893,12 @@
     if (!append) {
       list.replaceChildren();
       list.removeAttribute("aria-activedescendant");
+      homeListItems = new Map();
     }
     (Array.isArray(items) ? items : []).forEach((item, index) => {
       const serial = String(item?.serial || "").trim().toUpperCase();
       if (serial && list.querySelector(`[data-serial="${CSS.escape(serial)}"]`)) return;
+      if (serial) homeListItems.set(serial, item);
       list.appendChild(criarOpcaoListaHome(item, homeListOffset + index));
     });
     const selected = String(appState.currentEquipamento?.serial || "").trim();

@@ -12,8 +12,9 @@
   let comparisonAnnotationSyncObservers = [];
 
   // Renders the result inside the Comparação tab (#comparacao-planilhas-conteudo); the tab must already be open.
-  function renderizarResultadoComparacao(comparison, navigationTarget = null) {
-    const listas = renderer.listasComparacao(comparison);
+  // semUsuario ({estado, items}) is the optional inventory read from carregarSemUsuarioResumo; without it the section is omitted.
+  function renderizarResultadoComparacao(comparison, navigationTarget = null, semUsuario = null) {
+    const listas = { ...renderer.listasComparacao(comparison), semUsuario };
     const colunas = renderer.criarColunasAnotacao(comparison);
     const arquivo = comparison.arquivos_enviados || {};
     document.getElementById("comparacao-planilhas-fontes").textContent =
@@ -49,6 +50,28 @@
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+  }
+
+  const SEM_USUARIO_PAGINA = 100;
+  const SEM_USUARIO_MAX_PAGINAS = 20;
+
+  // Notebooks without a logged user in the current inventory (same rule and endpoint as the Home chip).
+  // Never throws: a failure becomes {estado: "erro"} so the rest of the Resumo still renders.
+  async function carregarSemUsuarioResumo() {
+    const items = [];
+    try {
+      for (let pagina = 0; pagina < SEM_USUARIO_MAX_PAGINAS; pagina += 1) {
+        const params = new URLSearchParams({
+          listar_todos: "true", usuario: "sem", limit: String(SEM_USUARIO_PAGINA), offset: String(pagina * SEM_USUARIO_PAGINA),
+        });
+        const data = await app.apiFetch(`/api/buscar-expandida?${params}`, { errorMessage: "Não foi possível consultar os notebooks sem usuário." });
+        items.push(...(Array.isArray(data?.items) ? data.items : []));
+        if (data?.has_more !== true) return { estado: "ok", items };
+      }
+      return { estado: "erro", items };
+    } catch (error) {
+      return { estado: "erro", items: [] };
+    }
   }
 
   function conectarAcoesApelidosManuais(comparison, divergenciasApelidosManuais) {
@@ -282,6 +305,7 @@
       divergencias_apelidos_manuais: "Apelidos manuais divergentes",
       series_sem_mapeamento: "Séries sem local definido",
       mudancas_usuarios: "Mudanças de usuário logado",
+      sem_usuario: "Sem usuário",
     };
     const searchInput = filterBar.querySelector("[data-history-filter-search]");
     const categorySelect = filterBar.querySelector("[data-history-filter-category]");
@@ -445,7 +469,11 @@
         if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
       }
     }
-    if (!row) return;
+    if (!row) {
+      // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
+      if (target.category) navegarParaLinhaComparacao({ ...target, category: "" });
+      return;
+    }
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     motion?.reveal(row);
@@ -616,7 +644,7 @@
   }
 
   return {
-    renderizarResultadoComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
+    renderizarResultadoComparacao, carregarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
     renderizarAnotacaoOperacional, conectarAnotacoesOperacionais,
   };
 });

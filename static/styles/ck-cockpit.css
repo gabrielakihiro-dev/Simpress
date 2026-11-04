@@ -807,25 +807,12 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
   .ck-acoes-status { flex: 1 1 100%; margin-right: 0; }
 }
 
-/* Região 3E: Resumo. Legado (.cockpit-shell .cockpit-summary-*) deixou de casar; aqui só o que o pacote não cobre. */
-#tab-panel-resumo.ck-tela--ferramenta { overflow: visible; }
-#resumo-cards.ck-ferramenta { height: auto; }
+/* Região 3E: Resumo (F3). Barras de "Ativos por regional" e série em mono no "Total de ativos"; .ck-espaco é compartilhado. */
 .ck-espaco { flex: 1 1 auto; }
-#resumo-cards .ck-dividido__lista, #resumo-cards .ck-dividido__detalhe { overflow: visible; }
-#resumo-cards .ck-kpi { text-align: left; font: inherit; color: inherit; background: transparent; }
-#resumo-cards .ck-kpi__valor { color: var(--cor-texto); }
-#resumo-cards .ck-kpi[data-tone="ok"] .ck-kpi__valor { color: var(--cor-ok-texto); }
-#resumo-cards .ck-kpi[data-tone="warn"] .ck-kpi__valor { color: var(--cor-alerta-texto); }
-#resumo-cards .ck-kpi[data-tone="error"] .ck-kpi__valor { color: var(--cor-erro-texto); }
-#cockpit-summary-region-list.ck-barras { gap: 7px; }
-#cockpit-summary-region-list .ck-barra__trilho { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--cor-neutro-fundo); }
-#cockpit-summary-region-list .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); }
-#cockpit-summary-rows td:first-child { font-family: var(--fonte-mono); }
-#cockpit-summary-rows [data-status="error"] { color: var(--cor-erro-texto); }
-#cockpit-summary-rows [data-status="warning"] { color: var(--cor-alerta-texto); }
-#cockpit-summary-rows [data-status="ok"] { color: var(--cor-ok-texto); }
-#cockpit-summary-status:empty { display: none; }
-#cockpit-summary-pagination[hidden] { display: none; }
+#resumo-regionais.ck-barras { gap: 7px; }
+#resumo-regionais .ck-barra__trilho { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--cor-neutro-fundo); }
+#resumo-regionais .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); }
+#resumo-total-ativos td:first-child { font-family: var(--fonte-mono); }
 
 /* Região 3D: tabela de OS (montada em Chamados por montarTabelaOs, seção .ck-os). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */
 .ck-os { margin: 0; }
@@ -922,6 +909,13 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 /* Resultado completo da comparação dentro da aba: rola com o painel da ferramenta (sem scroll próprio nem visual de modal). */
 #comparacao-planilhas-fontes { margin: 0; padding: 8px 20px 0; overflow-wrap: anywhere; }
 #comparacao-planilhas-fontes:empty { display: none; }
+/* Resumo (painel "comparacao"): Ativos por regional e Total de ativos ficam abaixo do resultado da comparação. */
+.ck-resumo-secao { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 0 20px 24px; color: var(--cor-texto); }
+.ck-resumo-secao > * { min-width: 0; }
+.ck-resumo-secao .ck-barra-ferr { padding-left: 0; padding-right: 0; }
+.ck-resumo-secao .ck-tabela { width: 100%; }
+#resumo-total-paginacao[hidden] { display: none; }
+@media (max-width: 720px) { .ck-resumo-secao { padding-left: 12px; padding-right: 12px; } }
 .ck-comparacao-resultado { display: grid; gap: 20px; align-content: start; min-width: 0; padding: 16px 20px 24px; color: var(--cor-texto); }
 .ck-comparacao-resultado > * { min-width: 0; max-width: 100%; }
 /* Barra de filtros compacta e fixa no topo da lista: rola junto com a página, sem acompanhar a rolagem, para não cobrir as linhas. */
@@ -1710,7 +1704,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 }
 
 /* =====================================================================
-   Comparação (F7) · painel [data-cockpit-tool-panel="comparacao"] · camada de redesign
+   Resumo (F3) · painel [data-cockpit-tool-panel="comparacao"] · camada de redesign
    Onde cabe: static/styles/ck-cockpit.css, no FIM do arquivo, ou arquivo novo carregado
    depois dele (e depois de ck-pendencias.css). Nada do CSS atual é removido: esta camada
    só sobrepõe, com seletores do painel (P) ou do resultado (R).
