@@ -2,6 +2,8 @@
 
 Este arquivo é a fonte única das regras para agentes (Claude Code, Codex e Cursor). `CLAUDE.md` e `.cursor/rules/*.mdc` apenas apontam para cá; altere as regras somente aqui.
 
+Vocabulário do domínio: consulte o `GLOSSARY.md` (definições; as regras continuam neste arquivo).
+
 ## Fonte oficial do cadastro de equipamentos
 
 - Para consultas, contagens e definição de quais equipamentos pertencem ao cadastro, use somente o workbook contido no ZIP `EquipamentosDetalhes` fornecido mais recentemente pelo usuário.
