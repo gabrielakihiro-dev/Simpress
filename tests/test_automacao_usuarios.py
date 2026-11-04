@@ -274,6 +274,17 @@ class GradeTest(AmbienteBase):
         grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
         self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
 
+    def test_digitar_preserva_serie_com_debounce_do_endpoint(self):
+        class CampoDebounce(CampoFiltro):
+            def press_sequentially(self, texto, delay=0):
+                # A grade real perde os caracteres restantes quando o filtro atualiza rápido demais.
+                super().press_sequentially(texto if delay >= 100 else texto[:4], delay)
+
+        pagina = PaginaEndpoint([computador("H1", "BRJ5492593")])
+        campo = CampoDebounce(pagina, 1)
+        rotina._digitar(campo, "BRJ5492593")
+        self.assertEqual(campo.input_value(), "BRJ5492593")
+
     def test_valor_nao_vai_para_a_coluna_vizinha_quando_a_barra_desloca_a_grade(self):
         pagina = PaginaEndpoint([computador("H1", "AAA1", "ana"), computador("H2", "BBB2", "ana")], deslocar_ao_abrir=True)
         grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
