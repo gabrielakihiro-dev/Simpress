@@ -159,7 +159,10 @@ class FluxoUxBrowserTests(unittest.TestCase):
     def rodar(self, modo="ok"):
         from playwright.sync_api import sync_playwright
         with tempfile.TemporaryDirectory() as pasta, sync_playwright() as pw:
-            browser = pw.chromium.launch(executable_path=str(self.executavel), headless=True)
+            # Sem isso, o Chromium sem janela em runner lento pode pausar o rAF e o click espera "stable" por 30 s.
+            browser = pw.chromium.launch(executable_path=str(self.executavel), headless=True, args=[
+                "--disable-renderer-backgrounding", "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows"])
             try:
                 contexto = browser.new_context()
                 contexto.route("**/*", lambda rota: rota.abort())
