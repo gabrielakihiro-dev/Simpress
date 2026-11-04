@@ -139,7 +139,7 @@ ROTINAS_CARTAO = {
     "os": "exportar a Gestão de Solicitações do Oracle e o Acompanhamento de Pedidos do UX Simpress e importar no Simpress local.",
     "inventarios": "exportar o inventário do UX Simpress e do Endpoint Central, importar no Simpress local e, se der certo, "
                    "verificar os usuários logados.",
-    "ambas": "rodar a rotina de OS e depois a de Inventários.",
+    "ambas": "rodar a rotina de OS e depois a de Inventários (na tela, \"Rotina Completa\").",
     "usuarios": "conferir no Endpoint Central as pendências de usuário logado e registrar as decisões e anotações no Simpress local.",
     "sebrae": "ler no SoftExpert os chamados novos que ainda não estão no Dashboard importado e os antigos em aberto com a UTIC; "
               "só leitura no SoftExpert, o resultado fica no Simpress local.",
@@ -231,6 +231,20 @@ def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
         f"Texto de \"Detalhes do Atendimento Realizado\": \"{alvo['descricao']}\". "
         "Se der certo, grava data e hora na coluna R do Dashboard e substitui o arquivo no SharePoint. "
         "Rascunhos que estão só no navegador (A, B, J, S) não vão nesse envio."
+    )
+
+
+def _describe_editar_descricao_chamado(api: SimpressApi, args: Args) -> str:
+    # Só vai à tela (nunca ao modelo): mostra o texto atual e o novo de verdade.
+    alvo = api.chamado_para_editar_descricao(args.get("numero"), args.get("descricao"))
+    atual = f"\"{alvo['atual']}\"" if alvo["atual"] else "(vazio)"
+    if not alvo["descricao"]:
+        if not alvo["editada"]:
+            raise ValueError("A descrição desse chamado ainda não foi editada; não há o que restaurar.")
+        return f"Restaurar a descrição de {alvo['numero']} ao texto original do SoftExpert. Texto atual: {atual}. Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam."
+    return (
+        f"Editar a descrição de {alvo['numero']}, igual ao lápis da tela Chamados. Texto atual: {atual}. Novo texto: \"{alvo['descricao']}\". "
+        "Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam; um chamado novo leva o texto novo na coluna H ao Atualizar Dashboard."
     )
 
 
@@ -958,7 +972,7 @@ CHANGE_TOOLS: List[Tool] = [
         "executar_automacao_chrome",
         "Inicia uma rotina de automação pelo servidor Simpress, no Chrome de automação. 'login' abre as abas do Endpoint, "
         "UX e Oracle para login manual; 'os' exporta Oracle e UX e importa as OS no Simpress local; 'inventarios' exporta "
-        "UX e Endpoint, importa e verifica usuários; 'ambas' roda OS e Inventários; 'usuarios' confere no Endpoint as "
+        "UX e Endpoint, importa e verifica usuários; 'ambas' (na tela, \"Rotina Completa\") roda OS e Inventários; 'usuarios' confere no Endpoint as "
         "pendências de usuário logado e registra as decisões no Simpress local; 'sebrae' lê no SoftExpert (só leitura) os "
         "chamados novos e os antigos em aberto; 'dashboard' é o botão \"Baixar, importar e buscar\" (baixa o Dashboard do "
         "SharePoint, importa no site e busca os chamados novos; não atualiza a cópia local nem envia ao SharePoint). "
@@ -1021,6 +1035,21 @@ CHANGE_TOOLS: List[Tool] = [
         ["numero"],
         changes_data=True,
         describe=_describe_finalizar_softexpert,
+        describe_com_api=True,
+    ),
+    Tool(
+        "editar_descricao_chamado_sebrae",
+        "Edita o texto do bloco \"Descrição\" de um chamado na tela Chamados (o lápis), só neste site: o SoftExpert e linhas já lançadas no Dashboard "
+        "não mudam. Vale para chamado antigo já lido ou chamado novo da última busca, ainda não finalizado. Use o texto exato do usuário, não invente; "
+        "marcadores de nome ([PESSOA_n]) voltam ao nome real no programa, mas e-mail e telefone ocultados no chat não podem ir no texto. Descrição vazia restaura o texto original. O usuário confirma antes.",
+        lambda c, a: c.editar_descricao_chamado_sebrae(a.get("numero"), a.get("descricao")),
+        {
+            "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},
+            "descricao": {"type": "string", "maxLength": 4000, "description": "Novo texto completo da descrição; vazio restaura o original."},
+        },
+        ["numero", "descricao"],
+        changes_data=True,
+        describe=_describe_editar_descricao_chamado,
         describe_com_api=True,
     ),
     Tool(
@@ -1285,10 +1314,10 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
          "listar_vinculos_os", "vincular_os", "anotar_linha_do_tempo", "excluir_chamados_antigos"),
     ),
     "sebrae": (
-        r"\bsebrae|\bdashboard|sharepoint|\bsoftexpert|\bfinaliz|\bencerr|\bchamados? antigos?\b|\b(?:ler|leitura|leu|lei[ao]|lidos?) (?:d?os? )?antigos\b|\bantigos em aberto\b",
+        r"\bsebrae|\bdashboard|sharepoint|\bsoftexpert|\bfinaliz|\bencerr|\bdescricao\b|\bchamados? antigos?\b|\b(?:ler|leitura|leu|lei[ao]|lidos?) (?:d?os? )?antigos\b|\bantigos em aberto\b",
         ("resumo_sebrae", "chamados_novos_sebrae", "proximo_passo_sebrae", "chamados_antigos_abertos_sebrae", "historico_sebrae",
          "situacao_finalizacao_sebrae", "status_leitura_antigos_sebrae", "finalizar_chamado_softexpert",
-         "ler_chamados_antigos_softexpert"),
+         "editar_descricao_chamado_sebrae", "ler_chamados_antigos_softexpert"),
     ),
     "historico": (
         r"\bhistoric|\bcompar|\bplanilha|\batualizacao|\batualizacoes|\bevolu|\bperiodo|\bevento|\brestaur|\bdivergen|\banotac|\banot(?:e|ar)\b|\bdesfaz|\bdesfazer",

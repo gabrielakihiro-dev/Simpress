@@ -27,7 +27,7 @@ echo  Durante uma rotina, Ctrl+C cancela sem fechar o Chrome.
 echo.
 echo   [1] Executar Rotina de OS (Oracle Service Cloud + UX Simpress)
 echo   [2] Executar Rotina de Inventarios (UX Simpress + Endpoint Central)
-echo   [3] Executar Ambas as Rotinas (OS + Inventarios)
+echo   [3] Executar Rotina Completa (OS + Inventarios)
 echo   [4] Abrir Chrome de Automacao para Login / Autenticacao
 echo   [5] Sair
 echo.

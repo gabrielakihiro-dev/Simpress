@@ -570,6 +570,31 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
 });
 
+test("o lápis da Descrição do antigo lido edita o texto só no site e Restaurar original volta ao lido", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request, "", "leitura");
+  await painel.locator("#sebrae-antigos > summary").click();
+  const lido = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1210"]');
+  await abrirItemAntigo(lido);
+  const descricao = lido.locator("details.sebrae-chamado__texto").filter({ hasText: "Descrição" }).first();
+  const lapis = lido.getByRole("button", { name: "Editar descrição de UTIC-2026-1210" });
+  await lapis.click();
+  await expect(descricao).toHaveJSProperty("open", true); // o lápis abre o bloco, não fecha
+  await expect(lapis).toHaveAttribute("aria-expanded", "true");
+  const campo = descricao.locator("textarea[data-sebrae-descricao-editada]");
+  await expect(campo).toHaveValue("O monitor da sala 3 ficou sem imagem.");
+  await campo.fill("O monitor da sala 3 ficou sem imagem. Cliente pediu troca do cabo.");
+  await descricao.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(descricao.getByRole("status")).toHaveText("Descrição salva só neste site.");
+  await expect(descricao.locator("p").first()).toHaveText("O monitor da sala 3 ficou sem imagem. Cliente pediu troca do cabo.");
+  await expect(descricao.locator(".sebrae-descricao__selo")).toBeVisible();
+  await lapis.click();
+  await descricao.getByRole("button", { name: "Restaurar original" }).click();
+  await expect(descricao.getByRole("status")).toHaveText("Descrição original restaurada.");
+  await expect(descricao.locator("p").first()).toHaveText("O monitor da sala 3 ficou sem imagem.");
+  await expect(descricao.locator(".sebrae-descricao__selo")).toBeHidden();
+  await expect(lido.getByLabel("Descrição para Finalizar o Chamado")).toHaveValue(""); // a descrição de finalização é outro campo e não mudou
+});
+
 test("Ler chamados antigos com outra rotina em andamento (409) vira aviso e não acompanha nada", async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request, "", "conflito");
   await painel.locator("#btn-sebrae-ler-antigos").click();

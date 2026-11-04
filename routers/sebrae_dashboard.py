@@ -16,11 +16,11 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.config import format_size_limit
@@ -93,10 +93,50 @@ class DescricaoPayload(BaseModel):
     descricao_finalizacao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # the exact limit is checked (and explained) by the domain
 
 
+class DescricaoEditadaPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    descricao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # limite exato e mensagem ficam no domínio
+
+
 class FichaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ficha: Dict[str, Any]
+
+    @field_validator("ficha")
+    @classmethod
+    def validar_campos(cls, ficha: Dict[str, Any]) -> Dict[str, Any]:
+        for campo in ("titulo", "solicitante"):
+            if campo in ficha and not isinstance(ficha[campo], str):
+                raise ValueError(f"{campo} precisa ser texto.")
+        for campo in ("fatos", "detalhes"):
+            if campo in ficha and (not isinstance(ficha[campo], list) or any(
+                not isinstance(par, list) or len(par) != 2 or not all(isinstance(valor, str) for valor in par)
+                for par in ficha[campo]
+            )):
+                raise ValueError(f"{campo} precisa ser uma lista de pares de textos.")
+        if "manuais" in ficha and (not isinstance(ficha["manuais"], dict) or any(
+            not isinstance(valor, str) for valor in ficha["manuais"].values()
+        )):
+            raise ValueError("manuais precisa ser um objeto com valores textuais.")
+        return ficha
+
+
+class RecuperacaoEnvioPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
+    acao: Literal["limpar", "confirmar_recebimento", "declarar_nao_enviado", "concluir_legado"]
+    confirmacao: str = Field("", max_length=100)
+
+
+class ReenvioSnapshotPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
+    sha256: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+    confirmado: bool = Field(False, strict=True)
 
 
 def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRouter:
@@ -124,6 +164,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
         its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
         antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos())) if abertos else {}
+        if antigos:
+            antigos = sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado()))
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
@@ -138,6 +180,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _pasta_estado():
         return fin.pasta_estado(services.caminhos().existentes)
+
+    def _novos(caminhos: sebrae_novos.Caminhos, lancados: Iterable[str]) -> Optional[Dict[str, Any]]:
+        """Chamados novos da última busca já com a descrição que o usuário editou no site (lápis do cartão)."""
+        novos = sebrae_novos.ler_novos(caminhos.novos, lancados)
+        if novos is not None:
+            novos["chamados"] = sebrae_novos.aplicar_descricoes_novos(novos["chamados"], fin.descricoes_editadas(_pasta_estado()))
+        return novos
 
     def _estado() -> Dict[str, Any]:
         corpo = _estado_base()
@@ -154,7 +203,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
-        novos = sebrae_novos.ler_novos(caminhos.novos, lancados) if importado else None
+        novos = _novos(caminhos, lancados) if importado else None
         finalizacao = fin.ler_estado(_pasta_estado()) if novos else {}
         return {
             "importado": None if importado is None else {
@@ -291,7 +340,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
             raise DomainValidationError("Importe o Dashboard antes de exportar.", status_code=422)
-        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
+        novos = _novos(caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de exportar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}
@@ -426,7 +475,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if ativa is not None:
             raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
 
-    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR) -> None:
+    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR, *, envio_id: str = "", sha256: str = "") -> None:
         """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
 
         409 when a run is in progress or another job still waits; the job is removed if the routine does not start."""
@@ -434,9 +483,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainBusyError("A automação não está disponível neste servidor.")
         runner = services.runner()
         pasta = _pasta_estado()
-        with lock_paths([fin.caminho_job(pasta)]):
+        with lock_paths([_base_guard(), fin.caminho_envio(pasta), fin.caminho_job(pasta)]):
             _exigir_rotina_livre(pasta)
-            fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
+            if acao == fin.ACAO_REENVIAR_SNAPSHOT:
+                try:
+                    estado = runner.state().get("estado")
+                except Exception as error:
+                    raise DomainBusyError("Não foi possível confirmar que a automação está livre.") from error
+                if estado not in ("livre", "em_andamento"):
+                    raise DomainBusyError("O estado da automação é desconhecido.")
+                if estado != "livre":
+                    raise DomainConflictError("Aguarde a rotina em andamento antes de reenviar esta cópia.")
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, envio_id=envio_id, sha256=sha256)
+            else:
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
             try:
                 runner.start("fechar")
             except BaseException:
@@ -464,6 +524,25 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         item = fin.definir_descricao(_pasta_estado(), numero, payload.descricao_finalizacao)
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
+    @router.put("/api/sebrae/chamados/{numero}/descricao")
+    def definir_descricao_editada(numero: str, payload: DescricaoEditadaPayload):
+        """Lápis do cartão: texto do bloco "Descrição" editado só neste site (SoftExpert e coluna H já lançada não mudam); vazio restaura o original."""
+        numero = _exigir_finalizavel(numero)
+        item = fin.definir_descricao_editada(_pasta_estado(), numero, sebrae_novos.descricao_segura(payload.descricao))
+        # `descricao` = o que o cartão passa a mostrar; ao restaurar, o texto original lido do SoftExpert
+        return JSONResponse(
+            {"numero": numero, "descricao": item.get("descricao_editada") or _descricao_original(numero), **fin.publico(item)},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    def _descricao_original(numero: str) -> str:
+        caminhos = services.caminhos()
+        novos = sebrae_novos.ler_novos(caminhos.novos)
+        achado = next((c.descricao for c in novos["chamados"] if c.numero == numero), None) if novos else None
+        if achado is not None:
+            return achado
+        return sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(caminhos)).get(numero, {}).get("descricao", "")
+
     @router.put("/api/sebrae/chamados/{numero}/ficha")
     def definir_ficha(numero: str, payload: FichaPayload):
         """Cartão do chamado como estava na tela ao finalizar; aparece de novo em "Chamados finalizados"."""
@@ -481,9 +560,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
     @router.delete("/api/sebrae/chamados/{numero}/anexo")
-    def remover_pdf(numero: str):
-        numero = _exigir_finalizavel(numero)
-        return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero))}, headers={"Cache-Control": "no-store"})
+    def remover_pdf(numero: str, somente_pendentes: bool = False):
+        numero = fin.validar_numero(numero) if somente_pendentes else _exigir_finalizavel(numero)
+        return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero, somente_pendentes=somente_pendentes))}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
     def finalizar_softexpert(payload: FinalizarPayload):
@@ -550,15 +629,47 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     @router.post("/api/sebrae/dashboard/pendente/reenviar", status_code=202)
     def reenviar_pendente():
         """Botão Tentar substituir de novo: a rotina reenvia a cópia pendente mais recente, com a mesma conferência do SharePoint."""
+        fin.exigir_envio_livre(_pasta_estado())
         if fin.pendente_mais_recente(_pasta_estado()) is None:
             raise DomainValidationError("Não há cópia pendente do Dashboard para enviar.", status_code=422)
         _disparar([], acao=fin.ACAO_REENVIAR)
         return JSONResponse({"iniciado": True}, status_code=202, headers={"Cache-Control": "no-store"})
 
+    @router.post("/api/sebrae/dashboard/envio/recuperar")
+    def recuperar_envio(payload: RecuperacaoEnvioPayload):
+        def em_andamento() -> bool:
+            if services.runner is None:
+                return bool((fin.ler_resultado(_pasta_estado()) or {}).get("em_andamento"))
+            try:
+                ativo = services.runner().state()
+                if ativo.get("estado") not in ("livre", "em_andamento"):
+                    raise ValueError("estado desconhecido")
+                return ativo["estado"] == "em_andamento"
+            except Exception as error:
+                raise DomainBusyError("Não foi possível confirmar que a automação está livre. Tente novamente.") from error
+
+        resultado = fin.recuperar_envio(_pasta_estado(), payload.envio_id, payload.acao, confirmacao=payload.confirmacao, em_andamento=em_andamento)
+        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/dashboard/envio/reenviar-snapshot", status_code=202)
+    def reenviar_snapshot(payload: ReenvioSnapshotPayload):
+        if not payload.confirmado:
+            raise DomainValidationError("Confirme o reenvio separado desta cópia revisada.", status_code=422)
+        _disparar([], acao=fin.ACAO_REENVIAR_SNAPSHOT, envio_id=payload.envio_id, sha256=payload.sha256)
+        return JSONResponse({"iniciado": True, "envio_id": payload.envio_id, "sha256": payload.sha256}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/dashboard/envio/{envio_id}/snapshot")
+    def snapshot_envio(envio_id: str):
+        with lock_paths([fin.caminho_envio(_pasta_estado())]):
+            conteudo = fin.conteudo_snapshot_envio(_pasta_estado(), envio_id)
+        return Response(conteudo, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+            "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="{fin.NOME_DASHBOARD}"',
+        })
+
     def _linhas_novas(payload: AtualizarPayload, importado: Mapping[str, Any], caminhos: sebrae_novos.Caminhos) -> List[Dict[str, str]]:
         if not payload.chamados:
             return []
-        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
+        novos = _novos(caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de atualizar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}

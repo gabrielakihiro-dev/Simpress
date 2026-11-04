@@ -4,7 +4,7 @@
   else (root.SimpressFeatures = root.SimpressFeatures || {}).cockpitSummary = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitSummary(context) {
   "use strict";
-  const { app } = context;
+  const { app, motion } = context;
   const INVENTORY_PAGE_SIZE = 50;
   const sections = Object.freeze({
     total: [],
@@ -329,6 +329,8 @@
     const root = document.getElementById("resumo-cards");
     if (!root) return;
     root.setAttribute("aria-busy", "true");
+    root.dataset.estado = "carregando";
+    const stopLoading = motion?.startLoading(document.getElementById("cockpit-summary-region-list"), "Carregando dados da base local…") || (() => {});
     try {
       const response = await fetch("/api/painel", { cache: "no-store" });
       if (!response.ok) throw new Error("Não foi possível consultar o painel local.");
@@ -345,11 +347,15 @@
       const count = document.getElementById("btn-cockpit-summary-export");
       if (count) count.disabled = !event?.horario;
       root.dataset.state = "ready";
+      root.dataset.estado = "pronto";
+      stopLoading();
       renderKpis();
       renderRegions();
       renderRows();
     } catch (error) {
       root.dataset.state = "error";
+      root.dataset.estado = "erro";
+      stopLoading();
       const status = document.getElementById("cockpit-summary-status");
       if (status) status.textContent = error.message || "Não foi possível carregar o resumo local.";
       const kpis = document.getElementById("cockpit-summary-kpis");
@@ -357,6 +363,7 @@
       renderRegions();
       renderRows();
     } finally {
+      stopLoading();
       root.setAttribute("aria-busy", "false");
     }
   }
