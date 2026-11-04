@@ -516,10 +516,17 @@ class AssistantConversation:
                     self._parada = self._parada or motivo
                     self._mensagens.append(self._msg_tool(tc_id, nome, {"erro": "Limite de consultas do turno atingido. Responda só com o que já tem."}))
                     continue
+                if nome == "consultar_endpoint" and nome in self._consultas:
+                    self._mensagens.append(self._msg_tool(tc_id, nome, {"erro": "Faça uma consulta Endpoint por mensagem. Peça a próxima série em outra mensagem."}))
+                    continue
                 self._vistas.add(chave)
                 self._consultas.append(nome)
                 ferramentas.append(nome)
+                inicio_consulta = self._relogio() if nome == "consultar_endpoint" else None
                 resultado = self._executar(nome, args)
+                if inicio_consulta is not None:
+                    # This Chrome read has its own bounded timeout; keep the model's answer budget.
+                    self._inicio += max(0.0, self._relogio() - inicio_consulta)
                 if tool.usa_relatorios:
                     # The id stays with the program: the screen gets the file, the model never sees a way to build a link.
                     arquivo = self.relatorios.obter(str(resultado.pop("id", "")))

@@ -29,6 +29,7 @@ DADO_OMITIDO = "[DADO SENSÍVEL OMITIDO]"
 
 # Keys whose value identifies a person or was chosen by one.
 CHAVES_SENSIVEIS = frozenset({
+    "ultimo_logon",
     "usuario_logado", "usuarios_logados", "usuario_manual", "usuario", "apelido",
     "nome", "nome_pessoa", "solicitante", "responsavel", "login", "email",
     "entrega_contato", "retirada_contato", "retirada_telefone",
@@ -44,6 +45,7 @@ CHAVES_TEXTO_LIVRE = frozenset({
 })
 # Keys holding a person's name: each word of the name also becomes a marker ("o Bruno" inside a text).
 CHAVES_NOME_PESSOA = frozenset({
+    "ultimo_logon",
     "nome", "nome_pessoa", "solicitante", "responsavel", "usuario_logado", "usuarios_logados", "usuario_manual",
     "usuario", "usuario_anterior", "usuario_novo", "nome_pessoa_anterior", "nome_pessoa_novo",
 })
