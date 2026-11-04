@@ -925,6 +925,7 @@
     if (homeListFilter === "7-dias" || homeListFilter === "divergentes") {
       const series = homeComparisonFilters[homeListFilter];
       if (!series) {
+        finishHomeListLoading();
         limparListaHome("O filtro depende de uma comparação de inventários disponível.");
         return;
       }
