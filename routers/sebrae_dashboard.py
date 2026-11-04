@@ -16,11 +16,11 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.config import format_size_limit
@@ -103,6 +103,40 @@ class FichaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ficha: Dict[str, Any]
+
+    @field_validator("ficha")
+    @classmethod
+    def validar_campos(cls, ficha: Dict[str, Any]) -> Dict[str, Any]:
+        for campo in ("titulo", "solicitante"):
+            if campo in ficha and not isinstance(ficha[campo], str):
+                raise ValueError(f"{campo} precisa ser texto.")
+        for campo in ("fatos", "detalhes"):
+            if campo in ficha and (not isinstance(ficha[campo], list) or any(
+                not isinstance(par, list) or len(par) != 2 or not all(isinstance(valor, str) for valor in par)
+                for par in ficha[campo]
+            )):
+                raise ValueError(f"{campo} precisa ser uma lista de pares de textos.")
+        if "manuais" in ficha and (not isinstance(ficha["manuais"], dict) or any(
+            not isinstance(valor, str) for valor in ficha["manuais"].values()
+        )):
+            raise ValueError("manuais precisa ser um objeto com valores textuais.")
+        return ficha
+
+
+class RecuperacaoEnvioPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
+    acao: Literal["limpar", "confirmar_recebimento", "declarar_nao_enviado", "concluir_legado"]
+    confirmacao: str = Field("", max_length=100)
+
+
+class ReenvioSnapshotPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
+    sha256: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+    confirmado: bool = Field(False, strict=True)
 
 
 def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRouter:
@@ -441,7 +475,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if ativa is not None:
             raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
 
-    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR) -> None:
+    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR, *, envio_id: str = "", sha256: str = "") -> None:
         """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
 
         409 when a run is in progress or another job still waits; the job is removed if the routine does not start."""
@@ -449,9 +483,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainBusyError("A automação não está disponível neste servidor.")
         runner = services.runner()
         pasta = _pasta_estado()
-        with lock_paths([fin.caminho_job(pasta)]):
+        with lock_paths([_base_guard(), fin.caminho_envio(pasta), fin.caminho_job(pasta)]):
             _exigir_rotina_livre(pasta)
-            fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
+            if acao == fin.ACAO_REENVIAR_SNAPSHOT:
+                try:
+                    estado = runner.state().get("estado")
+                except Exception as error:
+                    raise DomainBusyError("Não foi possível confirmar que a automação está livre.") from error
+                if estado not in ("livre", "em_andamento"):
+                    raise DomainBusyError("O estado da automação é desconhecido.")
+                if estado != "livre":
+                    raise DomainConflictError("Aguarde a rotina em andamento antes de reenviar esta cópia.")
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, envio_id=envio_id, sha256=sha256)
+            else:
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
             try:
                 runner.start("fechar")
             except BaseException:
@@ -515,9 +560,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
     @router.delete("/api/sebrae/chamados/{numero}/anexo")
-    def remover_pdf(numero: str):
-        numero = _exigir_finalizavel(numero)
-        return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero))}, headers={"Cache-Control": "no-store"})
+    def remover_pdf(numero: str, somente_pendentes: bool = False):
+        numero = fin.validar_numero(numero) if somente_pendentes else _exigir_finalizavel(numero)
+        pasta = _pasta_estado()
+        try:
+            item = fin.remover_pdf(pasta, numero, somente_pendentes=somente_pendentes)
+        except DomainBusyError as error:
+            item = fin.ler_estado(pasta).get(numero, {})
+            if not item.get("pdf_remocao"):
+                raise
+            return JSONResponse({"numero": numero, **fin.publico(item), "detail": error.detail}, status_code=503, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
     def finalizar_softexpert(payload: FinalizarPayload):
@@ -584,10 +637,42 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     @router.post("/api/sebrae/dashboard/pendente/reenviar", status_code=202)
     def reenviar_pendente():
         """Botão Tentar substituir de novo: a rotina reenvia a cópia pendente mais recente, com a mesma conferência do SharePoint."""
+        fin.exigir_envio_livre(_pasta_estado())
         if fin.pendente_mais_recente(_pasta_estado()) is None:
             raise DomainValidationError("Não há cópia pendente do Dashboard para enviar.", status_code=422)
         _disparar([], acao=fin.ACAO_REENVIAR)
         return JSONResponse({"iniciado": True}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/dashboard/envio/recuperar")
+    def recuperar_envio(payload: RecuperacaoEnvioPayload):
+        def em_andamento() -> bool:
+            if services.runner is None:
+                return bool((fin.ler_resultado(_pasta_estado()) or {}).get("em_andamento"))
+            try:
+                ativo = services.runner().state()
+                if ativo.get("estado") not in ("livre", "em_andamento"):
+                    raise ValueError("estado desconhecido")
+                return ativo["estado"] == "em_andamento"
+            except Exception as error:
+                raise DomainBusyError("Não foi possível confirmar que a automação está livre. Tente novamente.") from error
+
+        resultado = fin.recuperar_envio(_pasta_estado(), payload.envio_id, payload.acao, confirmacao=payload.confirmacao, em_andamento=em_andamento)
+        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/dashboard/envio/reenviar-snapshot", status_code=202)
+    def reenviar_snapshot(payload: ReenvioSnapshotPayload):
+        if not payload.confirmado:
+            raise DomainValidationError("Confirme o reenvio separado desta cópia revisada.", status_code=422)
+        _disparar([], acao=fin.ACAO_REENVIAR_SNAPSHOT, envio_id=payload.envio_id, sha256=payload.sha256)
+        return JSONResponse({"iniciado": True, "envio_id": payload.envio_id, "sha256": payload.sha256}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/dashboard/envio/{envio_id}/snapshot")
+    def snapshot_envio(envio_id: str):
+        with lock_paths([fin.caminho_envio(_pasta_estado())]):
+            conteudo = fin.conteudo_snapshot_envio(_pasta_estado(), envio_id)
+        return Response(conteudo, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+            "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="{fin.NOME_DASHBOARD}"',
+        })
 
     def _linhas_novas(payload: AtualizarPayload, importado: Mapping[str, Any], caminhos: sebrae_novos.Caminhos) -> List[Dict[str, str]]:
         if not payload.chamados:

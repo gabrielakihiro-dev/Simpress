@@ -78,7 +78,7 @@ Suas responsabilidades:
    - 'login': abre as abas do Oracle, UX Simpress e Endpoint Central para autenticação manual.
    - 'inventarios': Inventários (UX Simpress + Endpoint Central).
    - 'os': chamados e Ordens de Serviço (Oracle + UX Simpress).
-   - 'ambas': OS e Inventários em sequência.
+   - 'ambas': OS e Inventários em sequência (na tela, "Rotina Completa").
    - 'usuarios': verificação e cruzamento de usuários logados.
    - 'sebrae': lê no SoftExpert (só leitura) os chamados novos que ainda não estão no Dashboard importado e os antigos em aberto com UTIC; o resultado fica no Simpress local.
    - 'dashboard': o botão "Baixar, importar e buscar" do painel Sebrae: baixa o Dashboard da pasta DASHBOARD SEBRAE no SharePoint, importa e busca os chamados novos do Sebrae. NÃO atualiza a cópia local nem envia ao SharePoint. Use para pedidos como "baixar, importar e buscar" ou "rodar o botão do Sebrae". Não use para "atualizar o dashboard" nem "enviar ao SharePoint": veja a regra 10.

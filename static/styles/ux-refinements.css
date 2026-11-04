@@ -189,9 +189,9 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 @media (min-width: 768px) { #btn-gerar-planilha { white-space: nowrap; } }
 
 /* Light theme: pre-existing axe color-contrast failures in the delivery card. */
-html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: #065f46; }
-html[data-theme="light"] .transfer-form-grid .glass-card-header .text-emerald-400 { color: #047857; }
-html[data-theme="light"] .transfer-form-grid button.text-fg-subtle { color: #334155; }
+html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: var(--color-emerald-200); }
+html[data-theme="light"] .transfer-form-grid .glass-card-header .text-emerald-400 { color: var(--color-emerald-300); }
+html[data-theme="light"] .transfer-form-grid button.text-fg-subtle { color: var(--text-body); }
 
 /* ---------- 7. Dense data tables ---------- */
 .accessible-table-wrap table { font-variant-numeric: tabular-nums; }
@@ -366,7 +366,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ux-home-header { display: flex; align-items: center; justify-content: space-between; gap: var(--ux-space-3); margin-bottom: var(--ux-space-4); }
 .ux-home-header:has(+ .ux-home-body[hidden]) { margin-bottom: 0; }
 .ux-home-body[hidden] { display: none; }
-.ux-home-toggle { padding: .3rem .75rem; border: 1px solid var(--ux-border, #334155); border-radius: 9999px; background: transparent; color: var(--ux-text-muted); font-size: .78rem; font-weight: 600; cursor: pointer; }
+.ux-home-toggle { padding: .3rem .75rem; border: 1px solid var(--ux-border); border-radius: 9999px; background: transparent; color: var(--ux-text-muted); font-size: .78rem; font-weight: 600; cursor: pointer; }
 .ux-home-toggle:hover { color: var(--ux-text); }
 .ux-home-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .ux-home-title { margin: 0; color: var(--ux-text); font-size: 1.05rem; font-weight: 700; }
@@ -375,7 +375,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ux-city-head .ux-home-subtitle { margin: 0; }
 .ux-city-filter {
   padding: 0.25rem 0.5rem;
-  border: 1px solid var(--ux-border, #334155);
+  border: 1px solid var(--ux-border);
   border-radius: 0.5rem;
   background: transparent;
   color: var(--ux-text);
@@ -410,7 +410,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ux-home-note + .ux-attention { margin-top: var(--ux-space-3); }
 
 /* Ranking de cidades: todas as cidades, em linhas compactas com rolagem própria. */
-.ux-city-list { max-height: 15rem; overflow-y: auto; padding-right: 0.35rem; scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+.ux-city-list { max-height: 15rem; overflow-y: auto; padding-right: 0.35rem; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb-hover) transparent; }
 .ux-city-list .ux-bars { gap: 0.2rem; }
 .ux-city-list .ux-bar-row { font-size: 0.78rem; gap: var(--ux-space-2); line-height: 1.2; }
 .ux-city-list .ux-bar { height: 0.4rem; }

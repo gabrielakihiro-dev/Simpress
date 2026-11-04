@@ -770,7 +770,7 @@ test("Anexos: imagem mostra o aviso de que sai sem ocultar dados; erro do servid
   await entrada.setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: Buffer.from("\x89PNG\r\n\x1a\n") });
   await expect(page.locator("#assistente-anexos li")).toContainText("Imagem · 2,1 MB");
   await expect(page.locator("#assistente-anexos-aviso")).toBeVisible();
-  await expect(page.locator("#assistente-anexos-aviso")).toContainText("sem ocultar CPF, nome, e-mail");
+  await expect(page.locator("#assistente-anexos-aviso")).toContainText("sem ocultar dados pessoais (CPF, nome, e-mail)");
 
   proximo = { status: 415, detail: "Arquivos .doc (Word antigo) não são aceitos. Abra o arquivo no Word e salve como .docx; depois anexe de novo." };
   await entrada.setInputFiles({ name: "antigo.doc", mimeType: "application/msword", buffer: Buffer.from("x") });
