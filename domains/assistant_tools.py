@@ -553,7 +553,7 @@ QUERY_TOOLS: List[Tool] = [
             "termo": {"type": "string", "description": "Modelo ou parte da série (ex.: 'ProBook', 'Dell')."},
             "cidade": {"type": "string", "description": "Cidade (ex.: 'Curitiba', 'Maringá')."},
             "categoria": {"type": "string", "description": "Categoria (ex.: 'notebook', 'macbook', 'desktop')."},
-            "usuario": {"type": "string", "enum": ["sem", "com"], "description": "'sem' = sem usuário logado; 'com' = com usuário."},
+            "usuario": {"type": "string", "enum": ["sem", "com"], "description": "'sem' = sem usuário logado (a seção Sem usuário do Resumo, F3); 'com' = com usuário."},
         },
     ),
     _read(
@@ -591,7 +591,8 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "obter_painel",
-        "Painel geral do Simpress (visão resumida de inventário, chamados e pendências).",
+        "Painel geral do Simpress (visão resumida de inventário, chamados e pendências), com os ativos por cidade/regional: são os mesmos números do Resumo (F3). "
+        "Para 'quantos ativos por regional', use esta ferramenta e diga que o usuário vê isso no Resumo (F3).",
         lambda c, a: c.obter_painel(),
     ),
     _read(
@@ -854,7 +855,7 @@ QUERY_TOOLS: List[Tool] = [
         "exportar_planilha",
         "Exporta uma das planilhas Excel que o Simpress já exporta (a mesma dos botões Exportar), para o usuário baixar. "
         "Só grava o arquivo na memória do servidor; não altera dados, então não pede confirmação. O botão Baixar aparece na tela. "
-        "Difere do botão Exportar Excel em Comparação (F7): aquele também inicia a atualização externa de apelidos/id no UX; esta ferramenta só baixa. "
+        "Difere do botão Exportar Excel na seção Comparação do Resumo (F3): aquele também inicia a atualização externa de apelidos/id no UX; esta ferramenta só baixa. "
         "Quando der certo, responda exatamente: Planilha Exportada com Sucesso! (sem contagens, links nem caminhos). "
         "Só exporte quando o usuário pedir a planilha.",
         _exportar_planilha,

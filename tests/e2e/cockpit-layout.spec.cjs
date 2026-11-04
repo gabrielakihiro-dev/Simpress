@@ -29,38 +29,6 @@ test("Home loads the real first page and derives its total from the API", async 
   await expect(page.locator("#home-equipment-list")).toContainText("LENTO");
 });
 
-test("Resumo uses the latest comparison and opens its series in Home", async ({ page, request }) => {
-  await request.get("/__fixture_cockpit?comparacao=1");
-  try {
-    await page.goto("/");
-    await page.locator("#tab-resumo").click();
-
-    const locality = page.locator('#cockpit-summary-kpis [data-metric="divergencias_local"]');
-    await expect(locality.locator(".ck-kpi__valor")).toHaveText("1");
-    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(1);
-    await expect(page.locator("#cockpit-summary-rows")).toContainText("LENTO");
-    await expect(page.locator("#cockpit-summary-rows tr").first().locator("td").nth(2)).toHaveText("Londrina");
-    await expect(page.locator("#cockpit-summary-rows tr").first().locator("td").nth(3)).toHaveText("Curitiba");
-    await expect(page.locator("#cockpit-summary-region-list")).toContainText("Curitiba");
-
-    await page.locator('#cockpit-summary-kpis [data-metric="total"]').click();
-    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(1);
-    await expect(page.locator("#cockpit-summary-rows")).toContainText("Na base local");
-    await expect(page.locator("#cockpit-summary-count")).toHaveText("Mostrando 1–1 de 1");
-
-    await page.locator('#cockpit-summary-kpis [data-metric="sincronizados"]').click();
-    await expect(page.locator('#cockpit-summary-kpis [data-metric="sincronizados"] .ck-kpi__valor')).toHaveText("0");
-    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(0);
-    await expect(page.locator("#cockpit-summary-status")).toContainText("lista detalhada não é armazenada");
-
-    await page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]').click();
-    await expect(page.locator("#cockpit-summary-table-title")).toHaveText("Sem acesso há 7+ dias · 1");
-    await expect(page.locator("#cockpit-summary-rows")).toContainText("9 dias");
-  } finally {
-    await request.get("/__fixture_cockpit?comparacao=0");
-  }
-});
-
 test("Home exposes status actions outside its listbox and keyboard activation opens the correct panels", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   try {
@@ -77,26 +45,28 @@ test("Home exposes status actions outside its listbox and keyboard activation op
     await expect(list).toHaveAttribute("aria-activedescendant", await row.getAttribute("id"));
     const actions = page.locator("#home-equipment-actions");
     await expect(actions).toHaveAccessibleName("Ações de LENTO");
-    const divergent = actions.locator('button[data-destino="comparacao"]');
-    const stale = actions.locator('button[data-destino="resumo"]');
-    await expect(divergent).toHaveAccessibleName(/Divergente: abrir LENTO/);
-    await expect(stale).toHaveAccessibleName(/abrir LENTO na aba Resumo/);
+    const staleAccess = actions.locator('button[data-categoria="sem_acesso_7_dias"]');
+    const divergent = actions.locator('button[data-categoria="divergencias_local"]');
+    await expect(actions.locator("button[data-destino]")).toHaveCount(2);
+    await expect(staleAccess).toHaveAccessibleName("Sem acesso 7+ d: abrir LENTO no Resumo (F3)");
+    await expect(divergent).toHaveAccessibleName("Divergente: abrir LENTO no Resumo (F3)");
+    await expect(divergent).toHaveAttribute("title", "Abrir no Resumo");
 
     await page.keyboard.press("Tab");
-    await expect(stale).toBeFocused();
+    await expect(staleAccess).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#tab-resumo")).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]')).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("#cockpit-summary-rows tr.ck-linha-destaque")).toHaveCount(1);
+    await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+    await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_7_dias"][data-comparison-serial="LENTO"]:visible').first()).toBeInViewport();
 
-    await page.locator("#tab-home").click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
     await list.focus();
     await page.keyboard.press("End");
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     await expect(divergent).toBeFocused();
     await page.keyboard.press("Space");
-    // A série abre na aba Comparação já posicionada na linha dela dentro do resultado completo.
+    // A série abre no Resumo já posicionada na linha dela dentro do resultado completo.
     await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
     const target = page.locator('#comparacao-planilhas-conteudo [data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
     await expect(target).toContainText("LENTO");
@@ -104,6 +74,47 @@ test("Home exposes status actions outside its listbox and keyboard activation op
     await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("Localidade divergente");
     expect(equipmentRequests).toEqual([]);
   } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+test("Home chips Sem acesso, Divergente and Sem usuário open the Resumo on the exact row of their section", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  const semUsuario = { serial: "NOTE-SEM-USUARIO", apelido: "PRNOTEDEMO02", categoria: "notebook", modelo: "Notebook", retirada_cidade: "Curitiba", usuarios_logados: "" };
+  try {
+    await page.route("**/api/buscar-expandida?*", async route => {
+      if (new URL(route.request().url()).searchParams.get("usuario") === "sem") {
+        await route.fulfill({ json: { items: [semUsuario], total: 1, offset: 0, limit: 100, has_more: false, filters: { categories: [], cities: [], users: { sem: 1, com: 1 } } } });
+        return;
+      }
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, items: [...data.items, semUsuario], total: 2 } });
+    });
+    await page.goto("/");
+    const list = page.locator("#home-equipment-list");
+    await expect(list.locator("[role=option]")).toHaveCount(2);
+    const actions = page.locator("#home-equipment-actions");
+    const cases = [
+      { serial: "LENTO", categoria: "sem_acesso_7_dias", name: "Sem acesso 7+ d: abrir LENTO no Resumo (F3)" },
+      { serial: "LENTO", categoria: "divergencias_local", name: "Divergente: abrir LENTO no Resumo (F3)" },
+      { serial: "NOTE-SEM-USUARIO", categoria: "sem_usuario", name: "Sem usuário: abrir NOTE-SEM-USUARIO no Resumo (F3)" },
+    ];
+    for (const { serial, categoria, name } of cases) {
+      await list.locator(`[role=option][data-serial="${serial}"]`).click();
+      const chip = actions.locator(`button[data-categoria="${categoria}"]`);
+      await expect(chip).toHaveAccessibleName(name);
+      await chip.click();
+      await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+      const row = page.locator(`#comparacao-planilhas-conteudo [data-comparison-category="${categoria}"][data-comparison-serial="${serial}"]:visible`).first();
+      await expect(row).toBeInViewport();
+      if (categoria === "sem_usuario") await expect(page.locator("#comparacao-secao-sem-usuario")).toHaveText("Sem usuário");
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+    }
+  } finally {
+    // O Resumo ainda pode ter um GET da lista em andamento quando o teste acaba; sem isso o erro do route.fetch vaza para o teste seguinte.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await request.get("/__fixture_cockpit?comparacao=0");
   }
 });
@@ -177,7 +188,7 @@ for (const completion of ["pagination", "late selection"]) {
         await page.locator("#btn-home-list-more").click();
       } else await list.locator("[role=option]").first().click();
       await inFlight;
-      const action = page.locator('#home-equipment-actions button[data-destino="resumo"]');
+      const action = page.locator('#home-equipment-actions button[data-categoria="sem_acesso_7_dias"]');
       await action.focus();
       const originalAction = completion === "pagination" ? await action.elementHandle() : null;
       release();
@@ -243,7 +254,7 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
   test(`every tab fits a ${width}px window without horizontal scrolling`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
-    for (const [tab, panel] of [["tab-home", "tab-panel-home"], ["tab-retirada-entrega", "tab-panel-retirada-entrega"], ["tab-resumo", "tab-panel-resumo"], ["tab-automacao", "tab-panel-automacao"]]) {
+    for (const [tab, panel] of [["tab-home", "tab-panel-home"], ["tab-retirada-entrega", "tab-panel-retirada-entrega"], ["tab-automacao", "tab-panel-automacao"]]) {
       await page.locator(`#${tab}`).click();
       await expect(page.locator(`#${panel}`)).toBeVisible();
       const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
@@ -262,24 +273,24 @@ const toolComparison = {
     ausentes_no_endpoint: [], ausentes_em_detalhes: [],
   },
 };
-// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Comparação F7, Histórico F8, Relatório F9 só no menu (kbd).
+// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3 fica na barra principal; Histórico F7 e Relatório F8 só no menu (kbd).
 const toolButtons = [
   ["#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "sebrae-chamados", "F5", "Chamados"],
   ["#btn-acompanhamento-chamados", "#btn-chamados-menu", "chamados", "F6", "OS"],
-  ["#btn-cockpit-comparacao", "#btn-cockpit-comparacao", "comparacao", "F7", "Comparação"],
-  ["#btn-historico-apelidos", "#btn-historico-apelidos", "apelidos", "F8", "Histórico de apelidos"],
-  ["#btn-relatorio-mensal", "#btn-relatorio-mensal", "relatorio", "F9", "Relatório mensal"],
+  ["#btn-resumo-aba", "#btn-resumo-aba", "comparacao", "F3", "Resumo"],
+  ["#btn-historico-apelidos", "#btn-historico-apelidos", "apelidos", "F7", "Histórico de apelidos"],
+  ["#btn-relatorio-mensal", "#btn-relatorio-mensal", "relatorio", "F8", "Relatório mensal"],
 ];
 
 for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
-  test(`tool panels fit a ${width}px window and keep the F5–F9 shortcuts`, async ({ page }) => {
+  test(`tool panels fit a ${width}px window and keep the F3 and F5–F8 shortcuts`, async ({ page }) => {
     test.setTimeout(60_000);
     await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [toolComparison] } }));
     await page.route("**/api/historico-comparacoes/review-comparison", route => route.fulfill({ json: { evento: toolComparison } }));
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
     for (const [barra, item, tool, key, titulo] of toolButtons) {
-      const naBarra = barra !== item && width >= 1200;
+      const naBarra = barra === "#btn-resumo-aba" || (barra !== item && width >= 1200);
       if (naBarra) {
         await expect(page.locator(barra)).toHaveAttribute("title", `${titulo} (${key})`);
         await expect(page.locator(barra)).toBeVisible();
@@ -313,8 +324,7 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
 test("a real modal stays reachable on a short compact screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 420 });
   await page.goto("/");
-  await page.locator("#cockpit-tools-trigger").click();
-  await page.locator("#btn-cockpit-comparacao").click();
+  await page.locator("#btn-resumo-aba").click();
   await page.locator("#cockpit-comparison-legacy").click();
   const dialog = page.getByRole("dialog", { name: "Histórico de atualizações de planilhas" });
   await expect(dialog).toBeVisible();

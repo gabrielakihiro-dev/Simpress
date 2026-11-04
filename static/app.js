@@ -14,7 +14,7 @@
   const FEATURE_ORDER = Object.freeze([
     "shell",
     "dashboard",
-    "cockpitSummary",
+    "resumoAtivos",
     "cockpitToolPanels",
     "regionalContacts",
     "transferForm",

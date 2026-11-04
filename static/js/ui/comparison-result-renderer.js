@@ -423,6 +423,7 @@
     apelidos_sem_atualizacao: { id: "comparacao-secao-linhas-conferencia", titulo: "Linhas mantidas para conferência" },
     divergencias_apelidos_manuais: { id: "comparacao-secao-apelidos-manuais", titulo: "Divergências com apelidos alterados manualmente" },
     mudancas_usuarios: { id: "comparacao-secao-mudancas-usuarios", titulo: "Mudanças de usuário logado" },
+    sem_usuario: { id: "comparacao-secao-sem-usuario", titulo: "Sem usuário" },
   };
 
   function tituloSecaoComparacao(titulo, tom, idSecao = "") {
@@ -454,11 +455,50 @@
           </section>`;
   }
 
+  // "Sem usuário" is not saved in the history events: the controller reads it from the current inventory
+  // (same rule as the Home chip), so the same rows appear whichever event is open. There is no per-event row id,
+  // hence no annotation column.
+  function linhasSemUsuario(items) {
+    return [...items]
+      .sort((a, b) => String(a.apelido || a.computador || "").localeCompare(String(b.apelido || b.computador || ""), "pt-BR")
+        || String(a.serial || "").localeCompare(String(b.serial || ""), "pt-BR"))
+      .map(item => `
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao("sem_usuario", { serie: item.serial, computador: item.apelido || item.computador })}>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.apelido || item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serial || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.retirada_cidade || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.modelo || "—")}</td>
+        </tr>`);
+  }
+
+  function secaoSemUsuario(semUsuario) {
+    const titulo = tituloSecaoComparacao("Sem usuário", "amber", SECOES_CARTOES_RESUMO.sem_usuario.id);
+    if (semUsuario.estado !== "ok" && semUsuario.estado !== "limite") {
+      return `
+        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="erro">
+          <div>${titulo}<p class="text-xs text-fg-muted" role="status">Não foi possível consultar os notebooks sem usuário agora. Abra o Resumo de novo para tentar outra vez.</p></div>
+        </section>`;
+    }
+    const items = Array.isArray(semUsuario.items) ? semUsuario.items : [];
+    const limite = semUsuario.estado === "limite";
+    const aviso = limite
+      ? `<p class="text-xs text-fg-muted" role="status">Mostrando os primeiros ${items.length.toLocaleString("pt-BR")}${Number.isSafeInteger(semUsuario.total) ? ` de ${semUsuario.total.toLocaleString("pt-BR")}` : ""} notebooks sem usuário; há mais no cadastro. Use o filtro "Sem usuário" da Home para ver todos.</p>`
+      : "";
+    return `
+        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="${limite ? "limite" : "ok"}">
+          <div>${titulo}${aviso}<p class="text-xs text-fg-muted">Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.</p></div>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local", "Modelo"], linhasSemUsuario(items), "Todos os notebooks do cadastro têm usuário.", "sem_usuario")}
+        </section>`;
+  }
+
   function conteudoResultadoComparacao(comparison, listas, colunas) {
     const {
       ausentesEndpoint, ausentesDetalhes, divergenciasLocal, seriesSemMapa, semAcesso7DiasOrdenados, ambiguidades,
       registrosAmbiguos, apelidosAtualizados, apelidosSemAtualizacao, divergenciasApelidosManuais, mudancasUsuarios,
+      semUsuario,
     } = listas;
+    // Only when the controller supplies the inventory read; without it the section is left out.
+    const exibirSemUsuario = Boolean(semUsuario) && typeof semUsuario === "object";
     const { permitirAnotacoes, annotationHeaders, aliasReviewHeaders } = colunas;
     const barra = barraFiltrosHistorico(comparison);
     const aliasUpdateRows = linhasApelidosAtualizados(apelidosAtualizados);
@@ -507,6 +547,7 @@
           ${cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao")}
           ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais")}
           ${secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : ""}
+          ${exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario") : ""}
         </div>
         ${barra}
         ${secaoMudancasUsuarios}
@@ -549,11 +590,12 @@
           <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-xs text-fg-muted">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
+        ${exibirSemUsuario ? secaoSemUsuario(semUsuario) : ""}
         <p class="text-xs text-fg-subtle">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
   }
 
 
 
-  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, SECOES_CARTOES_RESUMO };
+  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, secaoSemUsuario, SECOES_CARTOES_RESUMO };
 });
