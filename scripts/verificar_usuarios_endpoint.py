@@ -49,7 +49,7 @@ HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
 URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
 CONFIRMACAO_FILTRO_S = 25
-ATRASO_DIGITACAO_MS = 40
+ATRASO_DIGITACAO_MS = 100
 
 JS_LER_GRADE = """
 () => {
