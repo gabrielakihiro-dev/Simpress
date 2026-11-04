@@ -417,18 +417,20 @@ test("abrir Comparação com evento_id e destino leva o destino ao resultado sal
 
 test("abrirComparacaoDaSerie leva a categoria ao alvo e repassa o Sem usuário ao resultado", async () => {
   const renders = [];
+  let invalidacoes = 0;
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const semUsuario = { estado: "ok", items: [{ serial: "SN-1" }] };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
   const { api } = criarAmbientePaineis({
     apiFetch,
-    appExtra: { carregarSemUsuarioResumo: async () => semUsuario, renderizarResultadoComparacao: (...args) => renders.push(args) },
+    appExtra: { carregarSemUsuarioResumo: async () => semUsuario, invalidarSemUsuarioResumo: () => { invalidacoes += 1; }, renderizarResultadoComparacao: (...args) => renders.push(args) },
   });
   try {
     await api.abrirComparacaoDaSerie("SN-1", "sem_usuario");
     assert.equal(renders.length, 1);
     assert.deepEqual(JSON.parse(JSON.stringify(renders[0][1])), { serial: "SN-1", category: "sem_usuario" });
     assert.equal(renders[0][2], semUsuario);
+    assert.equal(invalidacoes, 1, "abrir o painel Comparação invalida o cache do Sem usuário");
     await api.abrirComparacaoDaSerie("SN-2");
     assert.deepEqual(JSON.parse(JSON.stringify(renders[1][1])), { serial: "SN-2" }, "sem categoria o alvo é só a série");
   } finally { delete global.document; }

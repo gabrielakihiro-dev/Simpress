@@ -36,7 +36,7 @@ function mount() {
   return { doc, nodes };
 }
 
-function load({ painel, paginas }) {
+function load({ painel, paginas, motion }) {
   const { doc, nodes } = mount();
   const requests = [];
   const calls = [];
@@ -56,7 +56,7 @@ function load({ painel, paginas }) {
     ativarAbaTransferencia: aba => calls.push(["aba", aba]),
     buscarSerial: async () => { calls.push(["buscar", nodes.serial.value]); },
   };
-  const feature = require("../../static/js/features/resumo-ativos.js")({ app });
+  const feature = require("../../static/js/features/resumo-ativos.js")({ app, motion });
   return { feature, nodes, requests, calls };
 }
 
@@ -151,6 +151,26 @@ test("Total de ativos: erro da API vira mensagem e não deixa a tabela com dados
   assert.equal(nodes.corpo.querySelectorAll("tr").length, 0);
 });
 
+test("Total de ativos: erro na segunda página mantém a paginação (Anterior volta) e falha de rede não mostra texto em inglês", async () => {
+  const { feature, nodes } = load({
+    painel: { cidades_principais: [] },
+    paginas: { 0: { items: linhas(50), offset: 0, total: 120, has_more: true }, 50: new Error("500") },
+  });
+  await feature.carregarResumoAtivos();
+  nodes.proxima.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(nodes.status.textContent, "Não foi possível carregar os equipamentos da base local.");
+  assert.equal(nodes.paginacao.hidden, false, "o total conhecido mantém a paginação visível");
+  assert.equal(nodes.anterior.disabled, false);
+  assert.equal(nodes.pagina.textContent, "Página 2 de 3");
+  assert.equal(nodes.contagem.textContent, "120 equipamentos");
+
+  const rede = load({ painel: { cidades_principais: [] }, paginas: {} });
+  globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+  await rede.feature.carregarResumoAtivos();
+  assert.equal(rede.nodes.status.textContent, "Não foi possível carregar os equipamentos da base local.");
+});
+
 test("index.html: seções novas dentro do painel comparacao, rótulos aprovados e sem IDs duplicados", () => {
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)[0];
   assert.ok(painel.indexOf('id="comparacao-planilhas-conteudo"') < painel.indexOf('id="resumo-regionais"'));
@@ -163,4 +183,22 @@ test("index.html: seções novas dentro do painel comparacao, rótulos aprovados
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
   const duplicados = ids.filter((id, i) => ids.indexOf(id) !== i);
   assert.deepEqual(duplicados, []);
+});
+
+test("carregamento: esqueleto ao buscar as regionais, data-estado pronto/erro e aviso de erro do total", async () => {
+  const eventos = [];
+  const motion = { startLoading: (alvo, rotulo) => { eventos.push(["inicio", alvo.getAttribute("id"), rotulo, alvo.dataset.estado]); return () => eventos.push(["fim"]); } };
+  const ok = load({ painel: { cidades_principais: [{ cidade: "Curitiba", total: 1 }] }, paginas: { 0: { items: linhas(1), total: 1 } }, motion });
+  await ok.feature.carregarResumoAtivos();
+  assert.deepEqual(eventos[0], ["inicio", "resumo-regionais", "Carregando dados da base local…", "carregando"]);
+  assert.ok(eventos.some(([tipo]) => tipo === "fim"));
+  assert.equal(ok.nodes.regionais.dataset.estado, "pronto");
+  assert.equal(ok.nodes.regionais.getAttribute("aria-busy"), "false");
+  assert.equal(ok.nodes.status.dataset.estado, "pronto");
+
+  const falha = load({ painel: new Error("offline"), paginas: { 0: new Error("500") }, motion });
+  await falha.feature.carregarResumoAtivos();
+  assert.equal(falha.nodes.regionais.dataset.estado, "erro");
+  assert.equal(falha.nodes.status.dataset.estado, "erro");
+  assert.equal(falha.nodes.regionais.getAttribute("aria-busy"), "false");
 });

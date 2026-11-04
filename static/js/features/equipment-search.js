@@ -149,6 +149,7 @@
   }
 
   function invalidarDadosEquipamentoAposRestauracao() {
+    app.invalidarSemUsuarioResumo?.();
     const serialInput = document.getElementById("input-serial");
     if (serialInput) serialInput.value = "";
     document.getElementById("btn-clear-serial")?.classList.add("hidden");
@@ -158,6 +159,7 @@
   }
 
   async function atualizarSelecaoAposSubstituirInventarios(serialSelecionada) {
+    app.invalidarSemUsuarioResumo?.();
     app.fecharAutocomplete();
     return transferUtils.refreshSelectionAfterInventoryReplacement({
       requestGate: equipmentLookupRequestGate,

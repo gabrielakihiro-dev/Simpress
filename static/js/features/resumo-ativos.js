@@ -4,12 +4,12 @@
   else (root.SimpressFeatures = root.SimpressFeatures || {}).resumoAtivos = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createResumoAtivos(context) {
   "use strict";
-  const { app } = context;
+  const { app, motion } = context;
   const PAGE_SIZE = 50;
+  const LOAD_ERROR = "Não foi possível carregar os equipamentos da base local.";
   const columnLabels = ["Série", "Modelo / host", "Simpress", "Ação"];
   let page = { items: [], offset: 0, total: 0, hasMore: false, loading: false, error: "" };
   let pageRequestId = 0;
-  let regionsLoad = null;
 
   function list(value) { return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : []; }
   function number(value) {
@@ -69,8 +69,9 @@
     if (!body || !count || !status) return;
     const rows = page.items;
     if (page.loading) count.textContent = "Carregando equipamentos…";
+    else if (page.total && !rows.length) count.textContent = `${page.total.toLocaleString("pt-BR")} equipamentos`;
     else if (page.total) {
-      const start = rows.length ? page.offset + 1 : 0;
+      const start = page.offset + 1;
       const end = page.offset + rows.length;
       count.textContent = `Mostrando ${start.toLocaleString("pt-BR")}–${end.toLocaleString("pt-BR")} de ${page.total.toLocaleString("pt-BR")}`;
     } else count.textContent = "0 equipamentos";
@@ -108,6 +109,7 @@
         ? `Página ${Math.floor(page.offset / PAGE_SIZE) + 1} de ${Math.ceil(page.total / PAGE_SIZE)}`
         : "";
     }
+    status.dataset.estado = page.error ? "erro" : page.loading ? "carregando" : "pronto";
     status.textContent = page.error || (page.loading
       ? "Carregando equipamentos da base local…"
       : rows.length ? "Equipamentos da base local." : "Não há equipamentos cadastrados na base local.");
@@ -115,12 +117,13 @@
 
   async function carregarPaginaAtivosResumo(offset) {
     const requestId = ++pageRequestId;
+    const knownTotal = page.total;
     page = { items: [], offset, total: 0, hasMore: false, loading: true, error: "" };
     renderTotal();
     try {
       const params = new URLSearchParams({ listar_todos: "true", offset: String(offset), limit: String(PAGE_SIZE) });
       const response = await fetch(`/api/buscar-expandida?${params}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("Não foi possível carregar os equipamentos da base local.");
+      if (!response.ok) throw new Error(LOAD_ERROR);
       const result = await response.json();
       if (requestId !== pageRequestId) return;
       page = {
@@ -131,9 +134,10 @@
         loading: false,
         error: "",
       };
-    } catch (error) {
+    } catch {
       if (requestId !== pageRequestId) return;
-      page = { items: [], offset, total: 0, hasMore: false, loading: false, error: error.message || "Falha ao consultar a base local." };
+      // Mantém o total conhecido: com erro numa página, o Anterior continua disponível em vez de a paginação sumir.
+      page = { items: [], offset, total: knownTotal, hasMore: false, loading: false, error: LOAD_ERROR };
     }
     renderTotal();
   }
@@ -141,14 +145,21 @@
   async function carregarRegionaisResumo() {
     const target = document.getElementById("resumo-regionais");
     if (!target) return;
-    target.setAttribute("aria-busy", "true");
+    target.dataset.estado = "carregando";
+    const stopLoading = motion?.startLoading(target, "Carregando dados da base local…") || (() => {});
     try {
       const response = await fetch("/api/painel", { cache: "no-store" });
       if (!response.ok) throw new Error("Não foi possível consultar o painel local.");
-      renderRegions(await response.json());
+      const dashboard = await response.json();
+      target.dataset.estado = "pronto";
+      stopLoading();
+      renderRegions(dashboard);
     } catch {
+      target.dataset.estado = "erro";
+      stopLoading();
       target.textContent = "A distribuição por regional está indisponível enquanto o servidor local não responde.";
     } finally {
+      stopLoading();
       target.setAttribute("aria-busy", "false");
     }
   }
@@ -163,8 +174,7 @@
 
   // Chamado ao abrir o painel: recarrega as regionais e volta o total à primeira página.
   function carregarResumoAtivos() {
-    regionsLoad = Promise.all([carregarRegionaisResumo(), carregarPaginaAtivosResumo(0)]).finally(() => { regionsLoad = null; });
-    return regionsLoad;
+    return Promise.all([carregarRegionaisResumo(), carregarPaginaAtivosResumo(0)]);
   }
 
   document.getElementById("resumo-total-anterior")?.addEventListener("click", () => {

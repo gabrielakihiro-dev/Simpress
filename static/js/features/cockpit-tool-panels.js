@@ -1482,6 +1482,7 @@
     byId("cockpit-tool-title").focus();
     if (tool === "chamados") await loadTickets();
     if (tool === "comparacao") {
+      app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
       await loadComparisons();
       await ativos;

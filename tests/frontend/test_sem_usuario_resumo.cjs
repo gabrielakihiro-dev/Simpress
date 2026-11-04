@@ -125,3 +125,66 @@ test("carregarSemUsuarioResumo pages the notebooks without user and reports erro
   const falha = await criar(async () => { throw new Error("fora"); }).carregarSemUsuarioResumo();
   assert.deepEqual({ estado: falha.estado, total: falha.items.length }, { estado: "erro", total: 0 });
 });
+
+test("carregarSemUsuarioResumo reutiliza o resultado bem-sucedido e só relê depois de invalidar; erro não entra no cache", async () => {
+  let chamadas = 0;
+  globalThis.document = {};
+  const criar = apiFetch => createComparisonResult({
+    app: { apiFetch }, appState: {}, motion: null, dom, historyFormat,
+    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+  });
+  const api = criar(async () => { chamadas += 1; return { items: [{ serial: "A" }], has_more: false, total: 1 }; });
+  const primeira = await api.carregarSemUsuarioResumo();
+  const segunda = await api.carregarSemUsuarioResumo();
+  assert.equal(chamadas, 1);
+  assert.equal(segunda, primeira);
+  api.invalidarSemUsuarioResumo();
+  await api.carregarSemUsuarioResumo();
+  assert.equal(chamadas, 2);
+
+  let falhar = true;
+  const instavel = criar(async () => { if (falhar) throw new Error("fora"); return { items: [], has_more: false }; });
+  assert.equal((await instavel.carregarSemUsuarioResumo()).estado, "erro");
+  falhar = false;
+  assert.equal((await instavel.carregarSemUsuarioResumo()).estado, "ok", "falha não fica em cache");
+
+  // Invalidar durante uma leitura em andamento: o resultado antigo não é guardado.
+  let liberar;
+  const lenta = criar(() => new Promise(resolve => { liberar = () => resolve({ items: [{ serial: "V" }], has_more: false }); }));
+  const pendente = lenta.carregarSemUsuarioResumo();
+  lenta.invalidarSemUsuarioResumo();
+  liberar();
+  assert.equal((await pendente).estado, "ok");
+  let reler = 0;
+  const outra = criar(async () => { reler += 1; return { items: [], has_more: false }; });
+  await outra.carregarSemUsuarioResumo();
+  assert.equal(reler, 1);
+});
+
+test("carregarSemUsuarioResumo ao bater o limite de páginas devolve estado limite com os itens lidos e o total", async () => {
+  let chamadas = 0;
+  globalThis.document = {};
+  const api = createComparisonResult({
+    app: { apiFetch: async () => { chamadas += 1; return { items: Array.from({ length: 100 }, (_, i) => ({ serial: `P${chamadas}-${i}` })), has_more: true, total: 2500 }; } },
+    appState: {}, motion: null, dom, historyFormat,
+    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+  });
+  const resultado = await api.carregarSemUsuarioResumo();
+  assert.equal(chamadas, 20);
+  assert.equal(resultado.estado, "limite");
+  assert.equal(resultado.items.length, 2000);
+  assert.equal(resultado.total, 2500);
+  await api.carregarSemUsuarioResumo();
+  assert.equal(chamadas, 20, "o estado limite também fica em cache");
+});
+
+test("Sem usuário em estado limite mostra os itens lidos e um aviso próprio, sem a mensagem de erro e sem cartão", () => {
+  globalThis.document = { createElement: () => ({ content: { querySelector: () => null } }) };
+  const html = renderizar({ estado: "limite", items: ITENS, total: 2500 });
+  assert.match(html, /data-sem-usuario-section="limite"/);
+  assert.match(html, /Mostrando os primeiros 2 de 2\.500 notebooks sem usuário; há mais no cadastro\./);
+  assert.doesNotMatch(html, /Não foi possível consultar os notebooks sem usuário/);
+  assert.equal([...html.matchAll(/<tr [^>]*data-comparison-category="sem_usuario"[^>]*>/g)].length, 2);
+  assert.doesNotMatch(html, /data-comparison-section-target="comparacao-secao-sem-usuario"/);
+  assert.match(renderizar({ estado: "limite", items: ITENS }), /Mostrando os primeiros 2 notebooks sem usuário; há mais/);
+});

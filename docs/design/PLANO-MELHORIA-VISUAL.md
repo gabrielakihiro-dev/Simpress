@@ -80,7 +80,7 @@ Processo: (1) explique objetivo/arquivos/verificação em português simples; (2
 1. `ui-fixture` (porta 8765): prints antes/depois nas 4 combinações por aba alterada.
 2. `npm run verify` (não roda Playwright) e `npm run test:ui:e2e`.
 3. Contraste medido de novo nos pares da tabela de achados (meta ≥ 4,5:1 texto; ≥ 3:1 controles).
-4. Teclado: Tab/foco visível; atalhos F1–F10 intactos; movimento reduzido ativado → sem animação.
+4. Teclado: Tab/foco visível; atalhos F1–F9 intactos; movimento reduzido ativado → sem animação.
 5. Assistente real no servidor local: pedir a mudança relevante e conferir a tela.
 
 ## Não verificado até aqui / riscos
