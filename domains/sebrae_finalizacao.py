@@ -11,16 +11,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import shutil
+import time
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
-from core.errors import DomainValidationError
-from core.integrity import atomic_write_bytes, atomic_write_json, lock_paths
-from domains.sebrae_chamados import chave_do_numero
+from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
+from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths
+from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
+from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
+
+logger = logging.getLogger(__name__)
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 FORMATO_ENCERRAMENTO = "%d/%m/%Y %H:%M"
@@ -34,6 +40,7 @@ NOME_DASHBOARD = "Dashboard Operacional_SEBRAE.xlsx"
 
 ACAO_FINALIZAR = "finalizar"
 ACAO_REENVIAR = "reenviar_pendente"
+ACAO_REENVIAR_SNAPSHOT = "reenviar_snapshot"
 
 STATUS_OK = "ok"
 STATUS_JA_FINALIZADO = "ja_finalizado"
@@ -52,6 +59,11 @@ SUGESTOES_SHAREPOINT: Tuple[str, str, str] = (
 _NOME_PDF_INVALIDO = re.compile(r"[^A-Za-z0-9._() -]")
 _NOMES_RESERVADOS_WINDOWS = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)), *(f"LPT{n}" for n in range(1, 10))})
 _CONTROLES = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_CHAVE_SENHA = re.compile(r"(?i)(?:senha|password|passwd|pwd)")
+_NOME_PENDENTE = re.compile(
+    rf"^{re.escape(Path(NOME_DASHBOARD).stem)} \(pendente "
+    r"(?P<data>\d{4}-\d{2}-\d{2}) (?P<hora>\d{4}(?:\d{2})?)(?:-(?P<ordem>n\d+|[a-f0-9]{32}))?\)\.xlsx$",
+)
 
 
 def pasta_estado(existentes: Path) -> Path:
@@ -81,6 +93,10 @@ def pasta_pendente(state_dir: Path) -> Path:
 
 def caminho_enviado(state_dir: Path) -> Path:
     return state_dir / "sebrae_dashboard_enviado.json"
+
+
+def caminho_envio(state_dir: Path) -> Path:
+    return state_dir / "sebrae_dashboard_envio.json"
 
 
 def caminho_copia_enviada(state_dir: Path) -> Path:
@@ -159,8 +175,15 @@ def _ler_json(caminho: Path) -> Optional[Dict[str, Any]]:
 
 
 def ler_estado(state_dir: Path) -> Dict[str, Dict[str, Any]]:
-    dados = _ler_json(_estado(state_dir)) or {}
-    return {str(numero): dict(item) for numero, item in dados.items() if isinstance(item, dict)}
+    try:
+        dados = json.loads(_estado(state_dir).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as error:
+        raise DomainBusyError("O histórico de finalização está ilegível e foi preservado. Restaure uma cópia válida antes de alterar os chamados.") from error
+    if not isinstance(dados, dict) or any(not isinstance(item, dict) for item in dados.values()):
+        raise DomainBusyError("O histórico de finalização tem estrutura inválida e foi preservado. Restaure uma cópia válida antes de alterar os chamados.")
+    return {str(numero): dict(item) for numero, item in dados.items()}
 
 
 def _alterar(state_dir: Path, numero: str, mudar: Callable[[Dict[str, Any]], object]) -> Dict[str, Any]:
@@ -204,6 +227,38 @@ def descricoes_editadas(state_dir: Path) -> Dict[str, str]:
     return {n: str(i["descricao_editada"]) for n, i in ler_estado(state_dir).items() if str(i.get("descricao_editada") or "").strip()}
 
 
+def _sanitizar_ficha(valor: Any) -> Any:
+    if isinstance(valor, dict):
+        resultado = {}
+        chaves_comuns = {chave: _sanitizar_ficha(chave) for chave in valor if not _CHAVE_SENHA.search(str(chave))}
+        reservadas = set(chaves_comuns.values())
+        if len(reservadas) != len(chaves_comuns):
+            raise DomainValidationError("A ficha contém chaves repetidas após ocultar dados sensíveis.", status_code=422)
+        credenciais = 0
+        for chave, item in valor.items():
+            sensivel = bool(_CHAVE_SENHA.search(str(chave)))
+            if sensivel:
+                credenciais += 1
+                chave_limpa = f"{OMITIDO} {credenciais}"
+                while chave_limpa in reservadas:
+                    credenciais += 1
+                    chave_limpa = f"{OMITIDO} {credenciais}"
+                reservadas.add(chave_limpa)
+            else:
+                chave_limpa = chaves_comuns[chave]
+            resultado[chave_limpa] = OMITIDO if sensivel else _sanitizar_ficha(item)
+        return resultado
+    if isinstance(valor, list):
+        if len(valor) == 2 and isinstance(valor[0], str) and _CHAVE_SENHA.search(valor[0]):
+            rotulo = valor[0] if _CHAVE_SENHA.fullmatch(valor[0]) else OMITIDO
+            return [rotulo, OMITIDO]
+        return [_sanitizar_ficha(item) for item in valor]
+    if isinstance(valor, str):
+        limpo = mascarar_cpfs(omitir_credenciais(valor))
+        return "'" + limpo if limpo.lstrip().startswith(("=", "+", "-", "@")) else limpo
+    return valor
+
+
 def definir_ficha(state_dir: Path, numero: str, ficha: Any) -> Dict[str, Any]:
     """Snapshot of the ticket card (what the screen showed when finalizing), kept to show it again under "Chamados finalizados".
 
@@ -212,32 +267,76 @@ def definir_ficha(state_dir: Path, numero: str, ficha: Any) -> Dict[str, Any]:
     numero = validar_numero(numero)
     if not isinstance(ficha, dict):
         raise DomainValidationError("A ficha do chamado precisa ser um objeto.", status_code=422)
-    if len(json.dumps(ficha, ensure_ascii=False)) > MAX_FICHA:
+    tamanho_original = len(json.dumps(ficha, ensure_ascii=False).encode("utf-8"))
+    ficha_limpa = _sanitizar_ficha(ficha)
+    if max(tamanho_original, len(json.dumps(ficha_limpa, ensure_ascii=False).encode("utf-8"))) > MAX_FICHA:
         raise DomainValidationError("A ficha do chamado é grande demais.", status_code=413)
-    return _alterar(state_dir, numero, lambda item: item.update(ficha=ficha, atualizado_em=agora_iso()))
+    return _alterar(state_dir, numero, lambda item: item.update(ficha=ficha_limpa, atualizado_em=agora_iso()))
 
 
 def anexar_pdf(state_dir: Path, numero: str, nome: Any, conteudo: bytes, limite: int = MAX_PDF_BYTES) -> Dict[str, Any]:
-    """Keeps ONE PDF per ticket under ``sebrae_anexos/<numero>/``; a new one replaces the old."""
+    """Stages a unique version; only a committed state change retires the previous PDF."""
     numero = validar_numero(numero)
     seguro = validar_pdf(nome, conteudo, limite)
     pasta = pasta_anexos(state_dir, numero)
-    destino = (pasta / seguro).resolve(strict=False)
-    if destino.parent != pasta.resolve(strict=False):  # belt and braces after the name filter
-        raise DomainValidationError("O nome do anexo PDF é inválido.", status_code=422)
     with lock_paths([_estado(state_dir)]):
-        _apagar_pasta(pasta)
-        atomic_write_bytes(destino, conteudo)
-        return _alterar(
-            state_dir, numero, lambda item: item.update(pdf={"nome": seguro, "tamanho": len(conteudo)}, atualizado_em=agora_iso()),
-        )
+        anterior = _caminho_pdf(state_dir, numero, ler_estado(state_dir).get(numero, {}).get("pdf"))
+        arquivo = _estado(state_dir)
+        estado_anterior = arquivo.read_bytes() if arquivo.is_file() else None
+        versao = uuid.uuid4().hex
+        pasta_nova = pasta / versao
+        try:
+            atomic_write_bytes(pasta_nova / seguro, conteudo)
+            item = _alterar(
+                state_dir, numero,
+                lambda item: item.update(pdf={"nome": seguro, "tamanho": len(conteudo), "versao": versao}, atualizado_em=agora_iso()),
+            )
+        except Exception:
+            if estado_anterior is None:
+                arquivo.unlink(missing_ok=True)
+            elif not arquivo.is_file() or arquivo.read_bytes() != estado_anterior:
+                atomic_write_bytes(arquivo, estado_anterior)
+            _apagar_pasta(pasta_nova)
+            raise
+        if anterior is not None:
+            try:
+                if anterior.parent == pasta:
+                    anterior.unlink(missing_ok=True)
+                else:
+                    shutil.rmtree(anterior.parent)
+            except OSError as error:
+                logger.warning("O novo PDF foi salvo, mas a versão anterior não pôde ser limpa (erro=%s).", type(error).__name__)
+        return item
 
 
-def remover_pdf(state_dir: Path, numero: str) -> Dict[str, Any]:
+def remover_pdf(state_dir: Path, numero: str, *, somente_pendentes: bool = False) -> Dict[str, Any]:
     numero = validar_numero(numero)
     with lock_paths([_estado(state_dir)]):
-        _apagar_pasta(pasta_anexos(state_dir, numero))
-        return _alterar(state_dir, numero, lambda item: (item.pop("pdf", None), item.update(atualizado_em=agora_iso())))
+        atual = ler_estado(state_dir).get(numero, {})
+        if somente_pendentes and not atual.get("pdf_remocao"):
+            return atual
+        if atual.get("pdf_remocao") and not isinstance(atual["pdf_remocao"], list):
+            raise DomainBusyError("O pedido de remoção do PDF é inválido e foi preservado. Confira os anexos manualmente.")
+        def marcar(item: Dict[str, Any]) -> None:
+            pendentes = list(item.get("pdf_remocao") or [])
+            if not somente_pendentes and item.get("pdf"):
+                pendentes.append(item.pop("pdf"))
+            item.update(pdf_remocao=pendentes, atualizado_em=agora_iso())
+
+        item = _alterar(state_dir, numero, marcar)
+        try:
+            for pdf in item["pdf_remocao"]:
+                caminho = _caminho_pdf(state_dir, numero, pdf)
+                if caminho is None:
+                    raise DomainBusyError("A referência do PDF a remover é inválida; confira os anexos manualmente.")
+                if isinstance(pdf, dict) and pdf.get("versao"):
+                    if caminho.parent.exists():
+                        shutil.rmtree(caminho.parent)
+                else:
+                    caminho.unlink(missing_ok=True)
+        except OSError as error:
+            raise DomainBusyError("A remoção do PDF está pendente. Use Tentar remover novamente; o pedido foi preservado.") from error
+        return _alterar(state_dir, numero, lambda item: item.pop("pdf_remocao", None))
 
 
 def _apagar_pasta(pasta: Path) -> None:
@@ -245,17 +344,28 @@ def _apagar_pasta(pasta: Path) -> None:
         shutil.rmtree(pasta, ignore_errors=True)
 
 
+def _caminho_pdf(state_dir: Path, numero: str, pdf: Any) -> Optional[Path]:
+    if not isinstance(pdf, dict) or not pdf.get("nome"):
+        return None
+    if re.search(r"[/\\]", str(pdf["nome"])):
+        return None
+    pasta = pasta_anexos(state_dir, numero)
+    if pdf.get("versao"):
+        if not re.fullmatch(r"[a-f0-9]{32}", str(pdf["versao"])):
+            return None
+        pasta /= str(pdf["versao"])
+        if pasta.resolve(strict=False).parent != pasta_anexos(state_dir, numero).resolve(strict=False):
+            return None
+    candidato = pasta / str(pdf["nome"])
+    return candidato if candidato.resolve(strict=False).parent == pasta.resolve(strict=False) else None
+
+
 def dados_para_finalizar(state_dir: Path, numero: str) -> Tuple[str, Optional[Path]]:
     """Text and PDF of the ticket as stored NOW (read at run time, never taken from the job file)."""
     item = ler_estado(state_dir).get(numero, {})
     descricao = str(item.get("descricao_finalizacao") or "").strip()
-    pdf = item.get("pdf")
-    caminho: Optional[Path] = None
-    if isinstance(pdf, dict) and pdf.get("nome"):
-        candidato = pasta_anexos(state_dir, numero) / str(pdf["nome"])
-        if candidato.is_file() and candidato.parent == pasta_anexos(state_dir, numero):
-            caminho = candidato
-    return descricao, caminho
+    caminho = _caminho_pdf(state_dir, numero, item.get("pdf"))
+    return descricao, caminho if caminho is not None and caminho.is_file() else None
 
 
 def registrar_finalizacao(state_dir: Path, numero: str, status: str, encerrado_em: str = "") -> Dict[str, Any]:
@@ -296,6 +406,7 @@ def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
                 "numero": numero, "encerrado_em": str(fin.get("encerrado_em") or ""), "em": str(fin.get("em") or ""),
                 "descricao": str(item.get("descricao_finalizacao") or ""), "ficha": ficha if isinstance(ficha, dict) else None,
                 "pdf": str(pdf.get("nome") or "") if isinstance(pdf, dict) else "",
+                **({"pdf_remocao_pendente": True} if item.get("pdf_remocao") else {}),
             })
     return sorted(achados, key=lambda a: str(a["em"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
 
@@ -306,6 +417,7 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     pdf = item.get("pdf")
     fin = item.get("finalizacao")
     return {
+        **({"pdf_remocao_pendente": True} if item.get("pdf_remocao") else {}),
         "descricao_finalizacao": str(item.get("descricao_finalizacao") or ""),
         # False = nunca houve descrição guardada (campo ausente); texto apagado pelo usuário é "" guardado, e aí vale True
         "descricao_definida": "descricao_finalizacao" in item,
@@ -319,13 +431,21 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 
 def gravar_job(
     state_dir: Path, numeros: Sequence[str], *, confirmar_final: bool = True, pulados: Sequence[Mapping[str, str]] = (),
-    acao: str = ACAO_FINALIZAR,
+    acao: str = ACAO_FINALIZAR, envio_id: str = "", sha256: str = "",
 ) -> None:
     """Request for the next ``fechar`` run; the routine consumes it. ``--sem-finalizar`` can still force a dry run."""
-    atomic_write_json(caminho_job(state_dir), {
-        "criado_em": agora_iso(), "acao": acao, "numeros": list(numeros), "confirmar_final": bool(confirmar_final),
-        "pulados": [dict(p) for p in pulados],
-    })
+    with lock_paths([state_dir / "sebrae_dashboard_base.guard", caminho_envio(state_dir), caminho_job(state_dir)]):
+        if acao == ACAO_REENVIAR:
+            exigir_envio_livre(state_dir)
+        if acao == ACAO_REENVIAR_SNAPSHOT:
+            validar_reenvio_snapshot(state_dir, envio_id, sha256)
+            if job_pendente(state_dir):
+                raise DomainConflictError("Já há um pedido aguardando a automação.")
+        atomic_write_json(caminho_job(state_dir), {
+            "criado_em": agora_iso(), "acao": acao, "numeros": list(numeros), "confirmar_final": bool(confirmar_final),
+            "pulados": [dict(p) for p in pulados],
+            **({"envio_id": envio_id, "sha256": sha256} if acao == ACAO_REENVIAR_SNAPSHOT else {}),
+        })
 
 
 def apagar_job(state_dir: Path) -> None:
@@ -336,9 +456,12 @@ def _job_valido(job: Mapping[str, Any], agora: Optional[datetime]) -> bool:
     """``criado_em`` legível e com menos de ``JOB_VALIDADE``."""
     try:
         criado = datetime.fromisoformat(str(job.get("criado_em")))
-    except ValueError:
+        if criado.tzinfo is None:
+            criado = criado.replace(tzinfo=FUSO)
+        idade = (agora or agora_local()) - criado
+    except (ValueError, TypeError):
         return False
-    return (agora or agora_local()) - criado <= JOB_VALIDADE
+    return timedelta(0) <= idade <= JOB_VALIDADE
 
 
 def consumir_job(state_dir: Path, agora: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
@@ -350,11 +473,12 @@ def consumir_job(state_dir: Path, agora: Optional[datetime] = None) -> Optional[
     if job is None or not _job_valido(job, agora):
         return None
     numeros = job.get("numeros")
-    if not isinstance(numeros, list) or job.get("acao") not in (ACAO_FINALIZAR, ACAO_REENVIAR):
+    if not isinstance(numeros, list) or job.get("acao") not in (ACAO_FINALIZAR, ACAO_REENVIAR, ACAO_REENVIAR_SNAPSHOT):
         return None
     return {
         "acao": job["acao"], "numeros": [str(n) for n in numeros], "confirmar_final": job.get("confirmar_final") is not False,
         "pulados": [p for p in job.get("pulados") or [] if isinstance(p, dict)],
+        **({"envio_id": str(job.get("envio_id") or ""), "sha256": str(job.get("sha256") or "")} if job["acao"] == ACAO_REENVIAR_SNAPSHOT else {}),
     }
 
 
@@ -365,6 +489,7 @@ def job_pendente(state_dir: Path, agora: Optional[datetime] = None) -> bool:
 
 
 def gravar_resultado(state_dir: Path, resultado: Mapping[str, Any]) -> None:
+    ler_envio(state_dir)  # Migrate an old cleanup notice before replacing a transient job result.
     atomic_write_json(caminho_resultado(state_dir), resultado)
 
 
@@ -373,6 +498,207 @@ def ler_resultado(state_dir: Path) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------- SharePoint: sent hash, pending copy, notice
+
+
+def _gravar_envio(state_dir: Path, registro: Mapping[str, Any]) -> None:
+    try:
+        atomic_write_json(state_dir / "sebrae_dashboard_envios" / str(registro["id"]) / "registro.json", registro)
+        atomic_write_json(caminho_envio(state_dir), registro)
+    except (OSError, FileBusyError, FileTransactionError) as error:
+        raise DomainBusyError("Não foi possível guardar a confirmação do envio. Confira o SharePoint manualmente antes de repetir.") from error
+
+
+def ler_envio(state_dir: Path) -> Optional[Dict[str, Any]]:
+    with lock_paths([caminho_envio(state_dir)]):
+        try:
+            registro = json.loads(caminho_envio(state_dir).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            antigo = (ler_resultado(state_dir) or {}).get("sharepoint")
+            if not isinstance(antigo, dict) or not antigo.get("limpeza_pendente"):
+                return None
+            registro = {"id": uuid.uuid4().hex, "status": "confirmado", "sha256": "", "legado": True, "copias": [], "limpeza_pendente": True}
+            _gravar_envio(state_dir, registro)
+        except (OSError, ValueError) as error:
+            raise DomainBusyError("O registro de envio está ilegível. Foi preservado; confira o SharePoint manualmente antes de repetir.") from error
+        if (not isinstance(registro, dict) or not re.fullmatch(r"[a-f0-9]{32}", str(registro.get("id", "")))
+                or registro.get("status") not in ("preparado", "incerto", "confirmado", "concluido", "falhou")
+                or not isinstance(registro.get("sha256"), str) or not isinstance(registro.get("copias"), list)
+                or not isinstance(registro.get("limpeza_pendente"), bool)
+                or not isinstance(registro.get("snapshot", False), bool)
+                or not isinstance(registro.get("reenvio_snapshot", False), bool)
+                or (registro.get("recuperacao") is not None and not isinstance(registro["recuperacao"], dict))
+                or not isinstance(registro.get("resolucoes", []), list)
+                or registro["limpeza_pendente"] != (registro["status"] in ("preparado", "incerto", "confirmado"))
+                or not (re.fullmatch(r"[a-f0-9]{64}", registro["sha256"]) or (registro.get("legado") is True and registro["sha256"] == ""))
+                or any(not isinstance(copia, dict) or not isinstance(copia.get("nome"), str)
+                       or Path(copia["nome"]).name != copia["nome"] or not re.fullmatch(r"[a-f0-9]{64}", str(copia.get("sha256", "")))
+                       for copia in registro["copias"])):
+            raise DomainBusyError("O registro de envio tem estrutura inválida. Foi preservado; confira o SharePoint manualmente antes de repetir.")
+        return registro
+
+
+def envio_do_id(state_dir: Path, envio_id: str) -> Dict[str, Any]:
+    registro = ler_envio(state_dir)
+    if registro is None or registro["id"] != envio_id:
+        raise DomainConflictError("O envio mudou. Recarregue a tela antes de continuar.")
+    return registro
+
+
+def snapshot_envio(state_dir: Path, envio_id: str) -> Path:
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = envio_do_id(state_dir, envio_id)
+        caminho = state_dir / "sebrae_dashboard_envios" / envio_id / NOME_DASHBOARD
+        if not registro.get("snapshot"):
+            raise DomainConflictError("Este envio antigo não tem cópia privada verificável. Nenhum arquivo será apagado; preserve as cópias para conferência manual.")
+        try:
+            conteudo = caminho.read_bytes()
+        except FileNotFoundError as error:
+            raise DomainConflictError("A cópia privada do envio não foi encontrada; a recuperação foi bloqueada.") from error
+        except OSError as error:
+            raise DomainBusyError("A cópia privada do envio não pôde ser lida; tente novamente.") from error
+        if hashlib.sha256(conteudo).hexdigest() != registro["sha256"]:
+            raise DomainConflictError("A cópia privada do envio foi alterada; a recuperação foi bloqueada.")
+        return caminho
+
+
+def conteudo_snapshot_envio(state_dir: Path, envio_id: str) -> bytes:
+    with lock_paths([caminho_envio(state_dir)]):
+        conteudo = snapshot_envio(state_dir, envio_id).read_bytes()
+        if hashlib.sha256(conteudo).hexdigest() != envio_do_id(state_dir, envio_id)["sha256"]:
+            raise DomainConflictError("A cópia privada mudou durante a leitura; a recuperação foi bloqueada.")
+        return conteudo
+
+
+def validar_reenvio_snapshot(state_dir: Path, envio_id: str, sha256: str) -> Path:
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = envio_do_id(state_dir, envio_id)
+        if (registro["status"] != "falhou" or (registro.get("recuperacao") or {}).get("acao") != "declarar_nao_enviado"
+                or not re.fullmatch(r"[a-f0-9]{64}", sha256) or registro["sha256"] != sha256):
+            raise DomainConflictError("Este ID/hash não está liberado por uma declaração de não enviado. Recarregue e confira esta cópia.")
+        return snapshot_envio(state_dir, envio_id)
+
+
+def retomar_envio_snapshot(state_dir: Path, envio_id: str, sha256: str) -> Path:
+    with lock_paths([state_dir / "sebrae_dashboard_base.guard", caminho_envio(state_dir)]):
+        caminho = validar_reenvio_snapshot(state_dir, envio_id, sha256)
+        registro = envio_do_id(state_dir, envio_id)
+        registro.update(status="preparado", limpeza_pendente=True, reenvio_snapshot=True, copias=[])
+        registro["resolucoes"] = [*(registro.get("resolucoes") or []), {"acao": ACAO_REENVIAR_SNAPSHOT, "em": agora_iso()}]
+        _gravar_envio(state_dir, registro)
+        return caminho
+
+
+def exigir_envio_livre(state_dir: Path) -> None:
+    registro = ler_envio(state_dir)
+    if registro and registro["status"] not in ("falhou", "concluido"):
+        raise DomainConflictError("Há um envio confirmado com limpeza pendente ou um envio incerto. Confira o registro e o SharePoint manualmente antes de reenviar; nenhuma cópia foi apagada.")
+
+
+def preparar_envio(state_dir: Path, conteudo: bytes, *, pendente: Optional[Path] = None) -> str:
+    with lock_paths([caminho_envio(state_dir), state_dir / "sebrae_dashboard_pendente.guard"]):
+        exigir_envio_livre(state_dir)
+        sha = hashlib.sha256(conteudo).hexdigest()
+        try:
+            arquivos = _pendentes_ordenados(state_dir)
+        except DomainConflictError:
+            if pendente is not None:
+                raise
+            arquivos = []  # An independent send can proceed, but ambiguous old copies are never covered.
+        if pendente is not None and (not arquivos or arquivos[0][1] != pendente or pendente.read_bytes() != conteudo):
+            raise DomainConflictError("A cópia pendente mudou antes do envio. Confira a lista novamente.")
+        copias = []
+        for _, caminho in arquivos:
+            digest = hashlib.sha256(caminho.read_bytes()).hexdigest()
+            if digest == sha:
+                copias.append({"nome": caminho.name, "sha256": digest})
+        envio = uuid.uuid4().hex
+        try:
+            atomic_write_bytes(state_dir / "sebrae_dashboard_envios" / envio / NOME_DASHBOARD, conteudo)
+        except (OSError, FileBusyError, FileTransactionError) as error:
+            raise DomainBusyError("Não foi possível preservar a cópia privada antes do envio. Nada foi enviado.") from error
+        _gravar_envio(state_dir, {"id": envio, "status": "preparado", "sha256": sha, "copias": copias, "limpeza_pendente": True, "snapshot": True})
+        return envio
+
+
+def marcar_envio_incerto(state_dir: Path, envio: str) -> None:
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = ler_envio(state_dir)
+        if registro is None or registro["id"] != envio or registro["status"] != "preparado":
+            raise DomainConflictError("O pedido de envio mudou; nada foi enviado.")
+        snapshot_envio(state_dir, envio)
+        registro["status"] = "incerto"
+        _gravar_envio(state_dir, registro)
+
+
+def cancelar_envio_preparado(state_dir: Path, envio: str) -> None:
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = ler_envio(state_dir)
+        if registro and registro["id"] == envio and registro["status"] == "preparado":
+            registro.update(status="falhou", limpeza_pendente=False)
+            _gravar_envio(state_dir, registro)
+
+
+def confirmar_envio(state_dir: Path, envio: str) -> None:
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = ler_envio(state_dir)
+        if registro is None or registro["id"] != envio or registro["status"] not in ("incerto", "confirmado", "concluido"):
+            raise DomainConflictError("Não há confirmação confiável deste envio. Confira o SharePoint manualmente.")
+        if registro["status"] == "incerto":
+            registro["status"] = "confirmado"
+            _gravar_envio(state_dir, registro)
+
+
+def recuperar_envio(
+    state_dir: Path, envio_id: str, acao: str, *, confirmacao: str = "", em_andamento: Callable[[], bool] = lambda: False,
+) -> Dict[str, Any]:
+    """Local operator declaration/retry; this function never uploads or creates a job."""
+    if em_andamento():
+        raise DomainConflictError("Aguarde a rotina em andamento antes de recuperar o envio.")
+    with lock_paths([state_dir / "sebrae_dashboard_base.guard", caminho_job(state_dir), caminho_envio(state_dir), state_dir / "sebrae_dashboard_pendente.guard"]):
+        if em_andamento() or job_pendente(state_dir):
+            raise DomainConflictError("Aguarde a rotina em andamento antes de recuperar o envio.")
+        registro = envio_do_id(state_dir, envio_id)
+        if acao == "concluir_legado":
+            resolvido = registro["status"] == "concluido" and (registro.get("recuperacao") or {}).get("acao") == acao
+            if (registro.get("legado") is not True or registro.get("snapshot") or (registro["status"] != "confirmado" and not resolvido)
+                    or confirmacao != f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio_id}"):
+                raise DomainConflictError("Confira o legado confirmado e declare o ID e a preservação dos arquivos antes de concluir.")
+            try:
+                pasta = pasta_pendente(state_dir)
+                if pasta.exists() and any(pasta.iterdir()):
+                    raise DomainConflictError("A pasta pendente ainda contém arquivos ou subpastas. Preserve e mova todos para fora dela manualmente antes de concluir.")
+            except OSError as error:
+                raise DomainBusyError("Não foi possível confirmar que a pasta pendente está vazia. Nada foi alterado.") from error
+            if not resolvido:
+                registro.update(status="concluido", limpeza_pendente=False, recuperacao={"acao": acao, "em": agora_iso()})
+                registro["resolucoes"] = [*(registro.get("resolucoes") or []), registro["recuperacao"]]
+                _gravar_envio(state_dir, registro)
+            return {"envio_id": envio_id, "status": "concluido", "sharepoint": aviso_do_pendente(state_dir)}
+        conteudo = conteudo_snapshot_envio(state_dir, envio_id)
+        if acao == "limpar":
+            if registro["status"] not in ("confirmado", "concluido"):
+                raise DomainConflictError("Este envio ainda exige a declaração explícita de conferência no SharePoint.")
+        elif acao in ("confirmar_recebimento", "declarar_nao_enviado"):
+            if registro["status"] not in ("incerto", "preparado"):
+                raise DomainConflictError("Este envio já foi reconciliado. Recarregue a tela.")
+            frase = "CONFIRMO APLICADO" if acao == "confirmar_recebimento" else "CONFIRMO NAO APLICADO"
+            if confirmacao != f"{frase} {envio_id}":
+                raise DomainConflictError("Digite a declaração completa com o ID deste envio após conferir seu conteúdo no SharePoint.")
+            if acao == "confirmar_recebimento":
+                gravar_enviado(state_dir, registro["sha256"], conteudo)
+            registro.update(status="confirmado" if acao == "confirmar_recebimento" else "falhou", limpeza_pendente=acao == "confirmar_recebimento")
+        else:
+            raise DomainValidationError("A ação de recuperação é inválida.", status_code=422)
+        registro["recuperacao"] = {"acao": acao, "em": agora_iso()}
+        registro["resolucoes"] = [*(registro.get("resolucoes") or []), registro["recuperacao"]]
+        _gravar_envio(state_dir, registro)
+        if acao != "declarar_nao_enviado":
+            try:
+                descartar_pendentes(state_dir, envio_id=envio_id)
+            except (OSError, FileBusyError, FileTransactionError) as error:
+                logger.warning("Envio confirmado; limpeza pendente após recuperação (erro=%s).", type(error).__name__)
+        atual = envio_do_id(state_dir, envio_id)
+        return {"envio_id": envio_id, "status": atual["status"], "sharepoint": aviso_do_pendente(state_dir)}
 
 def gravar_enviado(state_dir: Path, sha256: str, conteudo: Optional[bytes] = None) -> None:
     """Hash (and copy) of the Dashboard this site last put on SharePoint; the next ``enviar`` accepts exactly that file as "unchanged".
@@ -398,8 +724,29 @@ def ler_enviado(state_dir: Path) -> str:
     return str((_ler_json(caminho_enviado(state_dir)) or {}).get("sha256") or "")
 
 
-def nome_pendente(momento: datetime) -> str:
-    return f"{Path(NOME_DASHBOARD).stem} (pendente {momento.astimezone(FUSO):%Y-%m-%d %H%M}).xlsx"
+def nome_pendente(momento: datetime, ordem_criacao: int) -> str:
+    return f"{Path(NOME_DASHBOARD).stem} (pendente {momento.astimezone(FUSO):%Y-%m-%d %H%M%S}-n{ordem_criacao}).xlsx"
+
+
+def _ordem_pendente(caminho: Path) -> int:
+    achado = _NOME_PENDENTE.fullmatch(caminho.name)
+    if achado is not None:
+        ordem = achado["ordem"] or ""
+        if ordem.startswith("n"):
+            return int(ordem[1:])
+        try:
+            momento = datetime.strptime(f"{achado['data']} {achado['hora'].ljust(6, '0')}", "%Y-%m-%d %H%M%S").replace(tzinfo=FUSO)
+            return int(momento.timestamp()) * 1_000_000_000
+        except ValueError:
+            pass
+    raise DomainConflictError("Há cópias pendentes sem ordem de criação confiável. Confira-as manualmente antes de reenviar; nenhuma cópia foi apagada.")
+
+
+def _pendentes_ordenados(state_dir: Path) -> List[Tuple[int, Path]]:
+    arquivos = [(_ordem_pendente(caminho), caminho) for caminho in pasta_pendente(state_dir).glob("*.xlsx")]
+    if len({ordem for ordem, _ in arquivos}) != len(arquivos):
+        raise DomainConflictError("Há cópias pendentes com ordem de criação ambígua. Confira-as manualmente antes de reenviar; nenhuma cópia foi apagada.")
+    return sorted(arquivos, key=lambda item: item[0], reverse=True)
 
 
 def guardar_pendente(
@@ -407,23 +754,30 @@ def guardar_pendente(
 ) -> Path:
     """Copies ``origem`` to ``sebrae_dashboard_pendente/`` with the pending name plus a JSON record of what is missing."""
     pasta = pasta_pendente(state_dir)
-    destino = pasta / nome_pendente(momento)
-    atomic_write_bytes(destino, Path(origem).read_bytes())
-    atomic_write_json(destino.with_suffix(".json"), {
-        "arquivo": destino.name, "criado_em": agora_iso(), "motivo": motivo, "chamados": list(tickets),
-        "copia_sharepoint": copia_sharepoint,
-    })
+    with lock_paths([state_dir / "sebrae_dashboard_pendente.guard"]):
+        ordens = []
+        for caminho in pasta.glob("*.xlsx"):
+            try:
+                ordens.append(_ordem_pendente(caminho))
+            except DomainConflictError:
+                pass  # Preserve an unorderable old copy without blocking storage of the new snapshot.
+        ordem = max(time.time_ns(), max(ordens, default=0) + 1)
+        destino = pasta / nome_pendente(momento, ordem)
+        atomic_write_bytes(destino, Path(origem).read_bytes())
+        atomic_write_json(destino.with_suffix(".json"), {
+            "arquivo": destino.name, "criado_em": agora_iso(), "ordem_criacao": ordem, "motivo": motivo, "chamados": list(tickets),
+            "copia_sharepoint": copia_sharepoint,
+        })
     return destino
 
 
 def pendente_mais_recente(state_dir: Path) -> Optional[Tuple[Path, Dict[str, Any]]]:
-    pasta = pasta_pendente(state_dir)
-    if not pasta.is_dir():
-        return None
-    arquivos = sorted(pasta.glob("*.xlsx"), key=lambda p: p.name, reverse=True)  # the name starts with the date
-    if not arquivos:
-        return None
-    return arquivos[0], _ler_json(arquivos[0].with_suffix(".json")) or {}
+    with lock_paths([state_dir / "sebrae_dashboard_pendente.guard"]):
+        arquivos = _pendentes_ordenados(state_dir)
+        if not arquivos:
+            return None
+        caminho = arquivos[0][1]
+        return caminho, _ler_json(caminho.with_suffix(".json")) or {}
 
 
 def marcar_copia_sharepoint(pendente: Path) -> None:
@@ -437,12 +791,35 @@ def descartar_pendente(pendente: Path) -> None:
     pendente.with_suffix(".json").unlink(missing_ok=True)
 
 
-def descartar_pendentes(state_dir: Path) -> None:
-    """Remove every pending copy: after a successful send they are all older than what is now on SharePoint."""
-    achado = pendente_mais_recente(state_dir)
-    while achado is not None:
-        descartar_pendente(achado[0])
-        achado = pendente_mais_recente(state_dir)
+def descartar_pendentes(state_dir: Path, *, envio_id: Optional[str] = None) -> bool:
+    """Only captured identities covered by a confirmed send may be removed."""
+    with lock_paths([caminho_envio(state_dir), state_dir / "sebrae_dashboard_pendente.guard"]):
+        registro = ler_envio(state_dir)
+        if envio_id is not None:
+            registro = envio_do_id(state_dir, envio_id)
+        if registro and registro.get("reenvio_snapshot") and registro["status"] in ("confirmado", "concluido"):
+            snapshot_envio(state_dir, registro["id"])
+            pasta = pasta_pendente(state_dir)
+            limpas = not pasta.exists() or not any(pasta.iterdir())
+            registro.update(status="concluido" if limpas else "confirmado", limpeza_pendente=not limpas)
+            _gravar_envio(state_dir, registro)
+            return limpas
+        try:
+            arquivos = _pendentes_ordenados(state_dir)
+        except DomainConflictError as error:
+            logger.warning("A limpeza das cópias pendentes foi adiada: %s", error.detail)
+            return False
+        if not registro or registro["status"] not in ("confirmado", "concluido"):
+            return not arquivos
+        snapshot_envio(state_dir, registro["id"])
+        cobertas = {copia["nome"]: copia["sha256"] for copia in registro["copias"]}
+        for _, caminho in arquivos:
+            if cobertas.get(caminho.name) == registro["sha256"] == hashlib.sha256(caminho.read_bytes()).hexdigest():
+                descartar_pendente(caminho)
+        limpas = not any(pasta_pendente(state_dir).glob("*.xlsx"))
+        registro.update(status="concluido" if limpas else "confirmado", limpeza_pendente=not limpas)
+        _gravar_envio(state_dir, registro)
+        return limpas
 
 
 def aviso_sharepoint(
@@ -457,7 +834,18 @@ def aviso_sharepoint(
 
 def aviso_do_pendente(state_dir: Path) -> Optional[Dict[str, Any]]:
     """The notice again from the pending copy on disk (so it survives a restart); ``None`` when nothing is pending."""
-    achado = pendente_mais_recente(state_dir)
+    envio = ler_envio(state_dir)
+    if envio and (envio["status"] not in ("falhou", "concluido") or envio.get("recuperacao")):
+        snapshot = state_dir / "sebrae_dashboard_envios" / envio["id"] / NOME_DASHBOARD
+        return {**aviso_sharepoint(False), "limpeza_pendente": envio["limpeza_pendente"], "incerto": envio["status"] in ("preparado", "incerto"),
+                "envio_id": envio["id"], "status": envio["status"], "snapshot_disponivel": bool(envio.get("snapshot") and snapshot.is_file()),
+                "sha256": envio["sha256"], "legado": envio.get("legado") is True, "pasta_pendente": str(pasta_pendente(state_dir)),
+                "reenvio_confirmado": bool(envio.get("reenvio_snapshot") and envio["status"] in ("confirmado", "concluido")),
+                "recuperacao": envio.get("recuperacao"), "resolucoes": envio.get("resolucoes") or []}
+    try:
+        achado = pendente_mais_recente(state_dir)
+    except DomainConflictError as error:
+        return aviso_sharepoint(True, str(error.detail))
     if achado is None:
         return None
     arquivo, registro = achado

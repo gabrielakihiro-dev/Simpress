@@ -4,16 +4,18 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from core.errors import DomainConflictError, DomainError
+from core.errors import DomainBusyError, DomainConflictError, DomainError
 from domains import sebrae_finalizacao as fin
 from domains import sebrae_novos
 from domains.sebrae_chamados import ChamadoSoftExpert
-from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
+from routers.sebrae_dashboard import FichaPayload, SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
 
 A, B, C = "UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"
@@ -22,6 +24,34 @@ R_1405 = r'<c r="R\d+"[^>]*><v>46325\.586'
 ATUALIZAR = "/api/sebrae/dashboard/atualizar"
 FINALIZAR = "/api/sebrae/finalizar-softexpert"
 REENVIAR = "/api/sebrae/dashboard/pendente/reenviar"
+
+
+class FichaPayloadTest(unittest.TestCase):
+    def test_post_reenvio_bloqueia_aviso_legado_antes_de_gravar_job(self):
+        raiz = Path(tempfile.mkdtemp())
+        caminhos = sebrae_novos.caminhos_padrao(raiz)
+        fin.gravar_resultado(raiz, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})
+        runner = RunnerFalso()
+        router = create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: caminhos, max_upload_bytes=lambda: 1024, registros=lambda: [],
+            relatorio_chamados=lambda: None, runner=lambda: runner,
+        ))
+        post = next(route.endpoint for route in router.routes if route.path == REENVIAR)
+        with self.assertRaises(DomainConflictError):
+            post()
+        self.assertFalse(fin.caminho_job(raiz).exists())
+        self.assertEqual(runner.iniciadas, [])
+
+    def test_recusa_campos_incompativeis_com_o_cartao_sem_coagir_valores(self):
+        for ficha in ({"detalhes": "texto"}, {"fatos": {}}, {"detalhes": [None]},
+                      {"fatos": [["rótulo"]]}, {"detalhes": [["rótulo", 4]]},
+                      {"titulo": {}}, {"solicitante": []}, {"manuais": []}, {"manuais": {"A": {}}}):
+            with self.subTest(ficha=ficha), self.assertRaises(ValidationError):
+                FichaPayload(ficha=ficha)
+
+    def test_aceita_ficha_parcial_e_pares_textuais(self):
+        ficha = {"titulo": "Teclado", "detalhes": [["Descrição", "Travando"]], "manuais": {"A": "CLIENTE"}}
+        self.assertEqual(FichaPayload(ficha=ficha).ficha, ficha)
 
 
 class RunnerFalso:
@@ -38,6 +68,65 @@ class RunnerFalso:
 
     def state(self):
         return self.estado
+
+
+class RecuperacaoEnvioTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        caminhos = sebrae_novos.caminhos_padrao(self.dir)
+        self.runner = RunnerFalso()
+        self.router = create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: caminhos, max_upload_bytes=lambda: 1024, registros=lambda: [],
+            relatorio_chamados=lambda: None, runner=lambda: self.runner,
+        ))
+        self.envio = fin.preparar_envio(self.dir, b"snapshot")
+        fin.marcar_envio_incerto(self.dir, self.envio)
+
+    def endpoint(self, path):
+        return next(route.endpoint for route in self.router.routes if route.path == path)
+
+    def test_rota_recusa_stale_worker_ativo_e_libera_so_por_declaracao_explicita(self):
+        from routers.sebrae_dashboard import RecuperacaoEnvioPayload
+        recuperar = self.endpoint("/api/sebrae/dashboard/envio/recuperar")
+        def payload(envio):
+            return RecuperacaoEnvioPayload(envio_id=envio, acao="declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        with self.assertRaises(DomainConflictError):
+            recuperar(payload("a" * 32))
+        self.runner.estado = {"estado": "em_andamento", "rotina": "enviar"}
+        with self.assertRaises(DomainConflictError):
+            recuperar(payload(self.envio))
+        self.runner.estado = {"estado": "livre"}
+        resposta = recuperar(payload(self.envio))
+        self.assertEqual(json.loads(resposta.body)["status"], "falhou")
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_snapshot_local_exige_id_atual_e_hash_intacto(self):
+        baixar = self.endpoint("/api/sebrae/dashboard/envio/{envio_id}/snapshot")
+        self.assertEqual(baixar(self.envio).body, b"snapshot")
+        with self.assertRaises(DomainConflictError):
+            baixar("a" * 32)
+        fin.snapshot_envio(self.dir, self.envio).write_bytes(b"alterado")
+        with self.assertRaises(DomainConflictError):
+            baixar(self.envio)
+
+    def test_reenvio_separado_da_snapshot_nao_consulta_fila_e_exige_id_hash_e_clique(self):
+        from routers.sebrae_dashboard import ReenvioSnapshotPayload
+        sha = fin.ler_envio(self.dir)["sha256"]
+        fin.recuperar_envio(self.dir, self.envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {self.envio}")
+        enviar = self.endpoint("/api/sebrae/dashboard/envio/reenviar-snapshot")
+        with self.assertRaises(DomainError):
+            enviar(ReenvioSnapshotPayload(envio_id=self.envio, sha256=sha))
+        with self.assertRaises(DomainConflictError):
+            enviar(ReenvioSnapshotPayload(envio_id="a" * 32, sha256=sha, confirmado=True))
+        self.runner.estado = {"estado": "em_andamento"}
+        with self.assertRaises(DomainConflictError):
+            enviar(ReenvioSnapshotPayload(envio_id=self.envio, sha256=sha, confirmado=True))
+        self.runner.estado = {"estado": "livre"}
+        with patch.object(fin, "pendente_mais_recente", side_effect=AssertionError("não consultar fila")):
+            self.assertEqual(enviar(ReenvioSnapshotPayload(envio_id=self.envio, sha256=sha, confirmado=True)).status_code, 202)
+        job = fin.consumir_job(self.dir)
+        self.assertEqual((job["acao"], job["envio_id"], job["sha256"]), ("reenviar_snapshot", self.envio, sha))
 
 
 class FinalizarBase(unittest.TestCase):
@@ -86,6 +175,13 @@ class DescricaoEAnexoTest(FinalizarBase):
 
     def put(self, numero, texto):
         return self.cliente.put(f"/api/sebrae/chamados/{numero}/finalizacao", json={"descricao_finalizacao": texto})
+
+    def test_ficha_enviada_pela_api_e_mascarada_antes_de_persistir(self):
+        resposta = self.cliente.put(f"/api/sebrae/chamados/{A}/ficha", json={"ficha": {"titulo": "password é Segredo123", "valores": {"A": "=1+1"}}})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        salvo = fin.ler_estado(self.dir)[A]["ficha"]
+        self.assertNotIn("Segredo123", salvo["titulo"])
+        self.assertEqual(salvo["valores"]["A"], "'=1+1")
 
     def test_descricao_fica_guardada_e_aparece_no_estado_do_chamado(self):
         resposta = self.put(A, "Troquei o cabo")
@@ -173,12 +269,51 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(self.anexo().status_code, 413)
         self.assertIsNone(fin.dados_para_finalizar(self.dir, A)[1])
 
+    def test_remocao_pdf_503_informa_estado_persistido_e_retry_preserva_pdf_novo(self):
+        self.anexo()
+        antigo = fin.dados_para_finalizar(self.dir, A)[1]
+        url = f"/api/sebrae/chamados/{A}/anexo"
+        with patch.object(fin.shutil, "rmtree", side_effect=PermissionError("ocupado")):
+            resposta = self.cliente.delete(url)
+        self.assertEqual(resposta.status_code, 503, resposta.text)
+        dados = resposta.json()
+        self.assertEqual(dados.get("numero"), A)
+        self.assertIsNone(dados["pdf"])
+        self.assertIs(dados["pdf_remocao_pendente"], True)
+        self.assertIn("pendente", dados["detail"])
+        self.assertEqual(resposta.headers["cache-control"], "no-store")
+        self.assertNotIn("pdf", fin.ler_estado(self.dir)[A])
+        self.assertTrue(antigo.exists())
+
+        self.anexo("novo.pdf", PDF + b"novo")
+        novo = fin.dados_para_finalizar(self.dir, A)[1]
+        with patch.object(fin.shutil, "rmtree", side_effect=PermissionError("ocupado")):
+            retry = self.cliente.delete(url + "?somente_pendentes=true")
+        self.assertEqual(retry.status_code, 503, retry.text)
+        self.assertEqual(retry.json()["pdf"], {"nome": "novo.pdf", "tamanho": len(PDF + b"novo")})
+        self.assertIs(retry.json()["pdf_remocao_pendente"], True)
+        concluido = self.cliente.delete(url + "?somente_pendentes=true")
+        self.assertEqual(concluido.status_code, 200, concluido.text)
+        self.assertEqual(concluido.json()["pdf"]["nome"], "novo.pdf")
+        self.assertNotIn("pdf_remocao_pendente", concluido.json())
+        self.assertFalse(antigo.exists())
+        self.assertEqual(novo.read_bytes(), PDF + b"novo")
+
+    def test_remocao_pdf_503_sem_pedido_persistido_nao_inventa_estado(self):
+        self.anexo()
+        with patch.object(fin, "remover_pdf", side_effect=DomainBusyError("estado indisponível")):
+            resposta = self.cliente.delete(f"/api/sebrae/chamados/{A}/anexo")
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json(), {"detail": "estado indisponível"})
+        self.assertEqual(fin.dados_para_finalizar(self.dir, A)[1].read_bytes(), PDF)
+
     def test_nome_com_pasta_nunca_sai_da_pasta_do_chamado(self):
         resposta = self.anexo("../../../fora.pdf")
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(resposta.json()["pdf"]["nome"], "fora.pdf")
         caminho = fin.dados_para_finalizar(self.dir, A)[1]
-        self.assertEqual(caminho.parent, fin.pasta_anexos(self.dir, A))
+        self.assertIn(fin.pasta_anexos(self.dir, A).resolve(), caminho.resolve().parents)
+        self.assertEqual(caminho.name, "fora.pdf")
         self.assertFalse((self.dir.parent / "fora.pdf").exists())
 
 

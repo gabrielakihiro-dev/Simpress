@@ -4,7 +4,10 @@ import types
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
+from core.integrity import FileBusyError
+from core.errors import DomainConflictError
 from domains import sebrae_finalizacao as fin
 from domains import sebrae_novos
 from scripts import sebrae_fechar
@@ -69,9 +72,11 @@ class Rotinas:
         if self.cancelar_no == self.verificacoes:
             raise RotinaCancelada()
 
-    def rodar_rotina_enviar(self, context, arquivo=None):
+    def rodar_rotina_enviar(self, context, arquivo=None, *, envio_id=None):
         if self.falha_envio:
             raise self.falha_envio
+        if envio_id:
+            fin.marcar_envio_incerto(self.state_dir, envio_id)
         self.enviadas.append(None if arquivo is None else (Path(arquivo).name, Path(arquivo).read_bytes()))
 
     def enviar_copia_pendente(self, context, arquivo):
@@ -110,6 +115,7 @@ class FecharBase(unittest.TestCase):
         self.dir = Path(tempfile.mkdtemp())
         self.caminhos = sebrae_novos.caminhos_padrao(self.dir)
         self.rotinas = Rotinas()
+        self.rotinas.state_dir = self.dir
         self.aba = Aba()
         self.importado = montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "EM ABERTO"))
         sha = sebrae_novos.salvar_planilha(sebrae_novos.caminho_planilha(self.caminhos), self.importado)
@@ -347,6 +353,175 @@ class EnvioFalhoTest(FecharBase):
 
 
 class ReenviarTest(FecharBase):
+    def preparar_job_snapshot(self):
+        envio = fin.preparar_envio(self.dir, self.importado)
+        sha = fin.ler_envio(self.dir)["sha256"]
+        fin.marcar_envio_incerto(self.dir, envio)
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+        return envio, sha
+
+    def test_snapshot_alterada_apos_job_e_id_stale_bloqueiam_antes_de_envio(self):
+        for alterar_id in (False, True):
+            with self.subTest(alterar_id=alterar_id):
+                self.setUp()
+                envio, sha = self.preparar_job_snapshot()
+                if alterar_id:
+                    registro = fin.ler_envio(self.dir)
+                    registro["id"] = "a" * 32
+                    fin.atomic_write_json(fin.caminho_envio(self.dir), registro)
+                else:
+                    fin.snapshot_envio(self.dir, envio).write_bytes(b"alterado")
+                with self.assertRaises(DomainConflictError):
+                    sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir)
+                self.assertEqual(self.rotinas.enviadas, [])
+
+    def test_falha_antes_de_persistir_retomada_nao_envia_e_permite_novo_clique(self):
+        envio, sha = self.preparar_job_snapshot()
+        gravar = fin.atomic_write_json
+        def falhar(path, dados):
+            if path == fin.caminho_envio(self.dir) and dados.get("status") == "preparado":
+                raise PermissionError("disco")
+            gravar(path, dados)
+        with patch.object(fin, "atomic_write_json", side_effect=falhar):
+            with self.assertRaises(fin.DomainBusyError):
+                sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir)
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertEqual(fin.ler_envio(self.dir)["status"], "falhou")
+        fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+        self.assertEqual(sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir), 0)
+    def test_reenvio_da_snapshot_funciona_sem_fila_e_preserva_fila_ambigua(self):
+        for com_fila in (False, True):
+            with self.subTest(com_fila=com_fila):
+                self.setUp()
+                envio = fin.preparar_envio(self.dir, self.importado)
+                sha = fin.ler_envio(self.dir)["sha256"]
+                fin.marcar_envio_incerto(self.dir, envio)
+                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+                pasta = fin.pasta_pendente(self.dir)
+                if com_fila:
+                    pasta.mkdir()
+                    (pasta / "ambiguo.xlsx").write_bytes(b"antigo")
+                    (pasta / "ambiguo.json").write_bytes(b"sidecar")
+                antes = {p.name: p.read_bytes() for p in pasta.glob("*")}
+                fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+                with patch.object(fin, "pendente_mais_recente", side_effect=AssertionError("não selecionar fila")), patch.object(fin, "guardar_pendente", side_effect=AssertionError("não copiar para fila")):
+                    self.assertEqual(sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir), 0)
+                self.assertEqual(self.rotinas.enviadas, [(fin.NOME_DASHBOARD, self.importado)])
+                self.assertEqual({p.name: p.read_bytes() for p in pasta.glob("*")}, antes)
+                self.assertEqual(fin.ler_envio(self.dir)["id"], envio)
+    def test_erro_ao_salvar_resultado_depois_do_envio_confirmado_nao_desfaz_sucesso(self):
+        self.criar_pendente()
+        gravar = fin.gravar_resultado
+        def falhar_no_fim(state_dir, resultado):
+            if resultado.get("terminado_em"):
+                raise OSError("disco")
+            gravar(state_dir, resultado)
+        with patch.object(fin, "gravar_resultado", side_effect=falhar_no_fim):
+            self.assertEqual(self.pedir(), 0)
+        self.assertEqual(fin.ler_envio(self.dir)["status"], "concluido")
+
+    def test_id_divergente_apos_erro_local_nao_e_tratado_como_confirmacao(self):
+        self.criar_pendente()
+        def enviar(context, *, envio_id):
+            registro = fin.ler_envio(self.dir)
+            registro["id"] = "a" * 32
+            registro["status"] = "confirmado"
+            fin.atomic_write_json(fin.caminho_envio(self.dir), registro)
+            raise OSError("close")
+        with patch.object(self.rotinas, "rodar_rotina_enviar", side_effect=enviar), self.assertRaises(DomainConflictError):
+            sebrae_fechar._enviar_ao_sharepoint(None, self.rotinas, self.dir, self.saida, [], self.rotinas.logs.append, lambda: AGORA)
+        self.assertEqual(self.rotinas.copias, [])
+
+    def test_erro_local_apos_confirmado_nao_cria_fallback_nos_dois_fluxos(self):
+        for reenvio in (False, True):
+            with self.subTest(reenvio=reenvio):
+                self.setUp()
+                self.criar_pendente()
+                def enviar(context, arquivo=None, *, envio_id=None):
+                    fin.marcar_envio_incerto(self.dir, envio_id)
+                    fin.confirmar_envio(self.dir, envio_id)
+                    raise OSError("close falhou")
+                with patch.object(self.rotinas, "rodar_rotina_enviar", side_effect=enviar):
+                    if reenvio:
+                        self.assertEqual(self.pedir(), 0)
+                    else:
+                        aviso = sebrae_fechar._enviar_ao_sharepoint(None, self.rotinas, self.dir, self.saida, [], self.rotinas.logs.append, lambda: AGORA)
+                        self.assertFalse(aviso["falhou"])
+                self.assertEqual(self.rotinas.copias, [])
+                self.assertNotIn("reenvio falhou", " ".join(self.rotinas.logs))
+    def test_resultado_incerto_nao_e_sucesso_da_rotina_nem_falha_confirmada_do_envio(self):
+        self.descrever(A)
+        def incerto(context, *, envio_id):
+            fin.marcar_envio_incerto(self.dir, envio_id)
+            raise RuntimeError("sem confirmação remota")
+        with patch.object(self.rotinas, "rodar_rotina_enviar", side_effect=incerto):
+            codigo, _ = self.rodar({A: ok()}, [A])
+        self.assertEqual(codigo, 1)
+        self.assertTrue(self.resultado()["sharepoint"]["incerto"])
+        self.assertFalse(self.resultado()["sharepoint"]["falhou"])
+        with self.assertRaises(DomainConflictError):
+            self.pedir()
+
+    def test_nova_finalizacao_nao_apaga_marca_duravel_nem_dispara_outro_envio(self):
+        pendente = self.criar_pendente()
+        with patch.object(fin, "descartar_pendente", side_effect=PermissionError("ocupado")):
+            self.assertEqual(self.pedir(), 0)
+        self.descrever(B)
+        codigo, mod = self.rodar({B: ok()}, [B])
+        self.assertEqual(codigo, 0)
+        self.assertEqual(len(mod.chamadas), 1)
+        self.assertEqual(len(self.rotinas.enviadas), 1)
+        self.assertTrue(pendente.exists())
+        self.assertTrue(fin.aviso_do_pendente(self.dir)["limpeza_pendente"])
+        self.assertFalse(fin.aviso_do_pendente(self.dir)["falhou"])
+
+    def test_worker_nao_sobrescreve_aviso_nem_reenvia_apos_confirmacao_com_limpeza_pendente(self):
+        pendente = self.criar_pendente()
+        fin.gravar_resultado(self.dir, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})
+        with self.assertRaises(DomainConflictError):
+            sebrae_fechar._reenviar_pendente(None, self.rotinas, self.dir, self.rotinas.logs.append)
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertTrue(pendente.exists())
+        self.assertTrue(fin.aviso_do_pendente(self.dir)["limpeza_pendente"])
+
+    def test_trava_na_limpeza_nao_desfaz_envio_confirmado(self):
+        with patch.object(fin, "descartar_pendentes", side_effect=FileBusyError("ocupado")):
+            self.assertFalse(sebrae_fechar._descartar_pendentes(self.dir, self.rotinas.logs.append))
+        self.assertIn("preservadas", " ".join(self.rotinas.logs))
+
+    def test_reenvio_confirmado_avisa_quando_limpeza_preserva_copias(self):
+        for conflito in (False, True):
+            with self.subTest(conflito=conflito):
+                self.setUp()
+                pendente = self.criar_pendente()
+                self.rotinas.logs.clear()
+                if conflito:
+                    outro = pendente.parent / "legado-ambiguo.xlsx"
+                    def enviar(context, arquivo, *, envio_id=None):
+                        fin.marcar_envio_incerto(self.dir, envio_id)
+                        outro.write_bytes(self.importado)
+                    alvo = patch.object(self.rotinas, "rodar_rotina_enviar", side_effect=enviar)
+                else:
+                    alvo = patch.object(fin, "descartar_pendente", side_effect=PermissionError("bloqueado"))
+                with alvo:
+                    self.assertEqual(self.pedir(), 0)
+                self.assertTrue(pendente.exists())
+                aviso = self.resultado()["sharepoint"]
+                self.assertFalse(aviso["falhou"])
+                self.assertTrue(aviso["limpeza_pendente"])
+                self.assertTrue(fin.aviso_do_pendente(self.dir)["limpeza_pendente"])
+                self.assertNotIn("foi removida", " ".join(self.rotinas.logs))
+                self.assertIn("preservad", " ".join(self.rotinas.logs))
+
+    def test_envio_confirmado_propaga_limpeza_adiada(self):
+        pendente = self.criar_pendente()
+        with patch.object(fin, "descartar_pendente", side_effect=PermissionError("bloqueado")):
+            aviso = sebrae_fechar._enviar_ao_sharepoint(None, self.rotinas, self.dir, self.saida, [], self.rotinas.logs.append, lambda: AGORA)
+        self.assertFalse(aviso["falhou"])
+        self.assertTrue(aviso["limpeza_pendente"])
+        self.assertTrue(pendente.exists())
+
     def pedir(self):
         fin.gravar_job(self.dir, [], acao=fin.ACAO_REENVIAR)
         return sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir, modulo=modulo({}, self.aba), agora=lambda: AGORA)
@@ -378,17 +553,17 @@ class ReenviarTest(FecharBase):
             self.pedir()
         self.assertFalse(self.resultado()["em_andamento"])
 
-    def test_envio_que_falha_e_depois_funciona_nao_deixa_pendente_e_o_reenvio_nao_regrava_dado_velho(self):
+    def test_envio_novo_confirmado_preserva_copia_antiga_diferente_e_bloqueia_reenvio(self):
         self.descrever(A, B)
         self.rotinas.falha_envio = RuntimeError("sem login")
         self.rodar({A: ok()}, [A])
         self.assertIsNotNone(fin.pendente_mais_recente(self.dir))
         self.rotinas.falha_envio = None
         self.rodar({B: ok()}, [B])  # envio bem-sucedido: a saída já traz A e B
-        self.assertIsNone(fin.pendente_mais_recente(self.dir))
-        self.assertEqual([p for p in fin.pasta_pendente(self.dir).glob("*") if p.suffix in (".xlsx", ".json")], [])
+        self.assertIsNotNone(fin.pendente_mais_recente(self.dir))
+        self.assertTrue(fin.aviso_do_pendente(self.dir)["limpeza_pendente"])
         self.assertEqual(len(self.rotinas.enviadas), 1)
-        with self.assertRaises(Rotinas.RotinaErro):  # nada a reenviar: a cópia velha (só A) nunca sobe por cima
+        with self.assertRaises(DomainConflictError):  # a cópia velha (só A) nunca sobe por cima
             self.pedir()
         self.assertEqual(len(self.rotinas.enviadas), 1)
         enviado = self.saida.read_bytes()

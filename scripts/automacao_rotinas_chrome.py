@@ -1908,21 +1908,23 @@ def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
     page.close()
 
 
-def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None) -> int:
+def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None, *, envio_id: "str | None" = None) -> int:
     from core.integrity import lock_paths
     # Import/update use this same cross-process guard: the bytes cannot change during upload.
     with lock_paths([DASHBOARD_SAIDA_DIR.parent / "sebrae_dashboard_base.guard"]):
-        return _rodar_rotina_enviar_protegida(context, arquivo)
+        return _rodar_rotina_enviar_protegida(context, arquivo, envio_id=envio_id)
 
 
-def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | None" = None) -> int:
+def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | None" = None, *, envio_id: "str | None" = None) -> int:
     """``arquivo`` só é passado para reenviar uma cópia pendente (com o nome do Dashboard); sem ele vai o arquivo gravado pelo site."""
     import hashlib
 
     from domains import sebrae_finalizacao
 
     print(f"\n=== ENVIAR DASHBOARD ATUALIZADO (início {agora_iso()}) ===", flush=True)
-    do_site = arquivo is None
+    state_dir = DASHBOARD_SAIDA_DIR.parent
+    if envio_id is None:
+        sebrae_finalizacao.exigir_envio_livre(state_dir)
     arquivo = arquivo if arquivo is not None else arquivo_final_dashboard()
     page = None
     try:
@@ -1934,25 +1936,45 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         conferir_dashboard_do_sharepoint(baixado)
         guardar_backup_do_dashboard(baixado)
         verificar_cancelamento()
-        enviar_arquivo_para_pasta(page, arquivo)
+        conteudo = arquivo.read_bytes()
+        if envio_id is None:
+            envio_id = sebrae_finalizacao.preparar_envio(state_dir, conteudo)
+        registro = sebrae_finalizacao.ler_envio(state_dir)
+        if registro is None or registro["id"] != envio_id or registro["sha256"] != hashlib.sha256(conteudo).hexdigest():
+            raise RotinaErro("O arquivo mudou antes do envio; nenhuma substituição foi iniciada.")
+        sebrae_finalizacao.marcar_envio_incerto(state_dir, envio_id)
+        snapshot = sebrae_finalizacao.snapshot_envio(state_dir, envio_id)
+        enviar_arquivo_para_pasta(page, snapshot)
+        if snapshot.read_bytes() != conteudo:
+            raise RotinaErro("O arquivo local mudou durante o envio. O resultado é incerto; confira o SharePoint manualmente.")
+        sebrae_finalizacao.confirmar_envio(state_dir, envio_id)
         # Guarda o hash do que subiu: o próximo envio reconhece esse arquivo no SharePoint como "sem mudança de terceiros".
         # Falha aqui não desfaz o envio: o SharePoint já aceitou; o próximo envio só cai na comparação de valores.
         try:
-            enviado = arquivo.read_bytes()
+            enviado = snapshot.read_bytes()
             sebrae_finalizacao.gravar_enviado(DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado)
         except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
             log("Dashboard", f"Não consegui guardar o hash do arquivo enviado ({erro}); o próximo envio usará só a comparação de valores.")
-        if do_site:  # o arquivo do site é mais novo que qualquer cópia pendente: reenviá-la depois desfaria este envio
-            try:
-                sebrae_finalizacao.descartar_pendentes(DASHBOARD_SAIDA_DIR.parent)
-            except OSError as erro:
-                log("Dashboard", f"Não consegui apagar a cópia pendente antiga ({erro}); apague-a à mão.")
+        try:
+            if not sebrae_finalizacao.descartar_pendentes(state_dir, envio_id=envio_id):
+                log("Dashboard", "Envio confirmado; cópias locais preservadas exigem conferência manual. Não reenvie automaticamente.")
+        except (OSError, RuntimeError, sebrae_finalizacao.DomainBusyError) as erro:
+            log("Dashboard", f"Envio confirmado; a limpeza ficou pendente ({type(erro).__name__}). Confira as cópias locais manualmente.")
+        page.close()
+        print(f"\n[SUCESSO] {arquivo.name} sobreposto na pasta DASHBOARD SEBRAE (cópia de segurança e backup local feitos).", flush=True)
+        return 0
     except Exception:
+        if envio_id is not None:
+            estado_envio = sebrae_finalizacao.envio_do_id(state_dir, envio_id)
+            if estado_envio["status"] in ("confirmado", "concluido"):
+                try:
+                    log("Dashboard", "Envio confirmado; uma etapa local posterior falhou. O estado da limpeza foi preservado.")
+                except Exception:
+                    pass  # A logging/close error cannot undo a matching durable confirmation.
+                return 0
+            sebrae_finalizacao.cancelar_envio_preparado(state_dir, envio_id)
         registrar_erro(page, "Dashboard")
         raise
-    page.close()
-    print(f"\n[SUCESSO] {arquivo.name} sobreposto na pasta DASHBOARD SEBRAE (cópia de segurança e backup local feitos).", flush=True)
-    return 0
 
 
 def abrir_para_login(context: "BrowserContext") -> int:
