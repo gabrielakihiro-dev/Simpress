@@ -139,7 +139,7 @@ ROTINAS_CARTAO = {
     "os": "exportar a Gestão de Solicitações do Oracle e o Acompanhamento de Pedidos do UX Simpress e importar no Simpress local.",
     "inventarios": "exportar o inventário do UX Simpress e do Endpoint Central, importar no Simpress local e, se der certo, "
                    "verificar os usuários logados.",
-    "ambas": "rodar a rotina de OS e depois a de Inventários.",
+    "ambas": "rodar a rotina de OS e depois a de Inventários (na tela, \"Rotina Completa\").",
     "usuarios": "conferir no Endpoint Central as pendências de usuário logado e registrar as decisões e anotações no Simpress local.",
     "sebrae": "ler no SoftExpert os chamados novos que ainda não estão no Dashboard importado e os antigos em aberto com a UTIC; "
               "só leitura no SoftExpert, o resultado fica no Simpress local.",
@@ -984,7 +984,7 @@ CHANGE_TOOLS: List[Tool] = [
         "executar_automacao_chrome",
         "Inicia uma rotina de automação pelo servidor Simpress, no Chrome de automação. 'login' abre as abas do Endpoint, "
         "UX e Oracle para login manual; 'os' exporta Oracle e UX e importa as OS no Simpress local; 'inventarios' exporta "
-        "UX e Endpoint, importa e verifica usuários; 'ambas' roda OS e Inventários; 'usuarios' confere no Endpoint as "
+        "UX e Endpoint, importa e verifica usuários; 'ambas' (na tela, \"Rotina Completa\") roda OS e Inventários; 'usuarios' confere no Endpoint as "
         "pendências de usuário logado e registra as decisões no Simpress local; 'sebrae' lê no SoftExpert (só leitura) os "
         "chamados novos e os antigos em aberto; 'dashboard' é o botão \"Baixar, importar e buscar\" (baixa o Dashboard do "
         "SharePoint, importa no site e busca os chamados novos; não atualiza a cópia local nem envia ao SharePoint). "

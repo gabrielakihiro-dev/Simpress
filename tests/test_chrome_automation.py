@@ -188,7 +188,7 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         with self.assertRaises(DomainError) as raised:
             harness.runner.start("login")
         self.assertEqual(raised.exception.status_code, 409)
-        self.assertIn("Ambas as rotinas desde 07:30", raised.exception.detail)
+        self.assertIn("Rotina Completa desde 07:30", raised.exception.detail)
         self.assertEqual(harness.popen_calls, [])
 
     def test_stale_lock_with_dead_pid_does_not_block(self):

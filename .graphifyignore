@@ -1,0 +1,20 @@
+# Pastas que não são código-fonte do projeto (evita indexar dezenas de milhares de arquivos)
+TEMP/
+node_modules/
+.venv/
+venv/
+.mypy_cache/
+__pycache__/
+.transactions/
+.git/
+.github/
+.vscode/
+.claude/
+.codex/
+.cursor/
+.agents/
+.atomic-transactions.lock
+data/
+logs/
+playwright-report/
+graphify-out/

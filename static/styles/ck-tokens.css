@@ -59,7 +59,7 @@
   --cor-borda: #2f3244;
   --cor-borda-suave: #23263a;
   --cor-destaque: #9184d9;
-  --cor-destaque-forte: #7466c0;
+  --cor-destaque-forte: #7568c1;
   --cor-destaque-fundo: #2a2550;
   --cor-destaque-texto: #e8e5fb;
   --cor-ok-texto: #60d7a5;
@@ -171,7 +171,7 @@ a:hover { color: var(--cor-destaque-forte); text-decoration: underline; }
    --cor-borda               #d7d8e2 → #2f3244
    --cor-borda-suave         #e6e6ed → #23263a
    --cor-destaque            #705dc6 → #9184d9
-   --cor-destaque-forte      #5947a9 → #7466c0
+   --cor-destaque-forte      #5947a9 → #7568c1
    --cor-destaque-fundo      #edeafb → #2a2550
    --cor-destaque-texto      #34276f → #e8e5fb
    --cor-ok-texto / fundo    #087650 / #e5f5ee → #60d7a5 / #193d34

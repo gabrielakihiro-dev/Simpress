@@ -11,3 +11,9 @@ Regras do projeto Simpress para o Claude Code; a fonte única é o AGENTS.md, co
 
 - Depois de vincular o PR da sessão (`bind_pr`), ative o auto-fix com `set_monitor` (`auto_fix: true`) para acompanhar falhas de CI, conflitos e comentários de revisão.
 - Não ative o auto-merge sem pedido explícito.
+
+## Grafo do código (graphify, somente Claude Code)
+
+- Antes de explorar o código para responder perguntas de arquitetura ou de relações entre arquivos, consulte `graphify-out/GRAPH_REPORT.md` e use `graphify query "<pergunta>" --budget 1500`, `graphify path "A" "B"` ou `graphify explain "X"`. Abra só os arquivos citados no resultado (`source_location`).
+- Depois de mudanças em código, atualize com `graphify update .` (sem LLM). Para documentos (`.md`), rode `/graphify --update` no Claude Code.
+- `graphify-out/` é local e ignorado pelo Git; a configuração de pastas excluídas fica em `.graphifyignore`.
