@@ -2,7 +2,19 @@
 
 Objetivo: executar pelo site local as rotinas de `scripts/automacao_rotinas_chrome.py` (as mesmas do `executar_automacao.bat`), acompanhar o andamento ao vivo e consultar as últimas execuções, sem abrir o terminal.
 
-O site **só inicia** o script. As exportações continuam sendo feitas no Chrome de automação (perfil próprio, porta CDP 9333) e os arquivos continuam sendo importados pelas pastas locais `data/state/entrada_chamados` e `data/state/entrada_automatica`, nunca por upload ou HTTP (regra do `AGENTS.md`).
+O site inicia o script. As exportações de OS/inventários continuam no Chrome de automação (perfil próprio, porta CDP 9333) e são importadas pelas pastas locais `data/state/entrada_chamados` e `data/state/entrada_automatica`. A rotina dedicada do F7 abaixo recebe o arquivo por HTTP local somente para enviá-lo ao UX; não importa inventários.
+
+## F7: atualizar apelidos e id no UX
+
+Autorizado pelo usuário em **03/11/2026**. **Comparação (F7) › Exportar Excel** mantém o download e inicia `ux_apelidos` com a mesma planilha: o navegador envia o próprio Blob e o nome gerado por `GET /api/exportar-equipamentos`, sem regenerar o arquivo nem procurar o mais recente em Downloads. `POST /api/automacao/ux-apelidos` recebe multipart `file`, valida nome `.xlsx` sem caminho/nome reservado do Windows, conteúdo não vazio de até 20 MB e estrutura XLSX pelos limites existentes; macros e arquivos criptografados são recusados. Limite HTTP: 20 MB + 1 MB para multipart, com a mesma proteção de origem local e admissão de upload. Responde 202 com o estado da rotina, 409 se o Chrome estiver ocupado, 422 para arquivo inválido e 503 para falha ao iniciar.
+
+O servidor guarda uma cópia temporária com os bytes e o nome recebidos e passa `--rotina ux_apelidos --planilha-ux <arquivo>` ao runner existente. A cópia é apagada ao terminar a execução acompanhada (encerramento abrupto do servidor pode deixar a cópia no temporário do Windows). Reutiliza sessão, trava, espera de login manual, logs, status e cancelamento. Não chama a rotina `inventarios`, não exporta Endpoint e não altera a base local, anotações ou histórico de comparação.
+
+No UX, abre `https://ux.simpress.com.br/MeusEquipamentos/Index`, seleciona a única opção do contrato **16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR** e confere código/nome/marcação; clica **Buscar**, **Editar apelido e id**, **Enviar Planilha**, escolhe a cópia exata e confere o nome visível e o único arquivo no editor. Reconfere o contrato e só então clica **Salvar edições** uma vez. Escreve apelidos e id no UX, conforme o pedido explícito; nenhuma gravação real faz parte dos testes.
+
+O editor precisa se identificar como diálogo `Editar apelido e id` e os controles precisam ser únicos e visíveis (botão ou link com rótulo exato). A confirmação aceita é um novo alerta explícito `Edições salvas com sucesso!` ou `Apelidos e id atualizados com sucesso!` (também IdCliente). **Esses atributos e o aviso real ainda precisam de conferência supervisionada no UX.** A bancada local prova o fluxo com esses contratos; não prova o DOM atual do serviço externo. Se algo divergir, para com erro. Sem confirmação depois do clique único, informa resultado incerto e pede conferência manual antes de nova tentativa; não repete o clique nem afirma que nada foi gravado.
+
+`Planilha Exportada com Sucesso!` continua confirmando somente a exportação local. Início, falha e conclusão UX são separados; o acompanhamento existente continua em segundo plano e aparece em **Automação (F4)** com login/log/histórico/cancelamento. Se a resposta HTTP ao início se perder, consulte F4 antes de repetir, pois o processo pode ter sido iniciado. O Assistente só explica e consulta status: sua ferramenta `exportar_planilha` mantém apenas o download. `ux_apelidos` não é aceita pelo chat nem por `POST /api/automacao/executar`; só o botão F7 envia o arquivo ao endpoint dedicado.
 
 Rotina `sebrae` (Chamados novos Sebrae: lê o SoftExpert e grava `data/state/sebrae_novos.json`; sem agendamento na tela): [especificação](sincronizar-chamados-sebrae.md). Ela usa este mesmo contrato, a mesma trava e o mesmo histórico.
 

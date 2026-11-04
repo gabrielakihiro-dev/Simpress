@@ -125,7 +125,9 @@ O resultado traz, entre outras seções:
 
 **Comparar duas atualizações:** a tela **Evolução das atualizações** foi removida em 31/10/2026. A comparação de cada atualização fica em **Comparação** (menu **Ferramentas**); o aviso **Divergências novas** (Home e sino) traz o botão **Ver evolução**, que abre **Comparação**.
 
-**Exportar Excel** (barra da aba **Comparação**, ao lado de **Exportar**) é outra coisa: baixa o modelo de exportação com `Apelido` e `IdCliente` atualizados. Se ele só conseguir exportar parte das séries, a notificação diz o motivo.
+**Exportar Excel** (barra da aba **Comparação**, F7, ao lado de **Exportar**) baixa o modelo com `Apelido` e `IdCliente` atualizados e inicia o envio dessa mesma planilha ao UX Simpress (autorizado em 03/11/2026). Por exemplo: o arquivo que acabou de baixar é o mesmo escolhido em **Enviar Planilha**, sem procurar outro em Downloads. A rotina confirma o contrato **16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR**, abre **Editar apelido e id**, envia e clica **Salvar edições** uma vez. Login/senha/MFA ficam com você no Chrome de automação. Acompanhe em **Automação (F4)**; pode cancelar ali.
+
+**Planilha Exportada com Sucesso!** confirma o download. A atualização no UX tem mensagem e resultado separados: se houver erro de contrato/editor/arquivo, ela para antes de salvar; se o clique em salvar já ocorreu e o aviso não for claro, confira manualmente no UX antes de tentar novamente. Se a resposta do início se perder, consulte Automação (F4) antes de tentar de novo. A rotina não repete o clique. Os controles e o aviso real do UX ainda precisam de validação supervisionada; os testes usam uma bancada local. Pedir uma exportação no **Assistente** continua fornecendo apenas o arquivo para baixar e não inicia essa escrita externa.
 
 ## 6. Gerar uma transferência
 

@@ -68,6 +68,14 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 
 ## Rotina de exportação de inventários
 
+### F7: exportar e atualizar apelidos/id no UX (03/11/2026)
+
+Autorização explícita: pedido do usuário de 03/11/2026 para, após clicar **Exportar Excel** em **Comparação (F7)**, enviar a mesma planilha ao UX e salvar as edições. Esse botão mantém o download local e envia os bytes exatos do Blob e o nome de `Content-Disposition` para `POST /api/automacao/ux-apelidos`. A rotina dedicada `ux_apelidos` usa Chrome/CDP 9333, trava, log, status, cancelamento e login manual existentes; não chama `inventarios`, não consulta Downloads, não exporta Endpoint nem importa bases.
+
+Ordem: `MeusEquipamentos/Index` → contrato único `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR` confirmado no campo e na seleção → **Buscar** → **Editar apelido e id** → **Enviar Planilha** → conferir arquivo e contrato → **Salvar edições** uma única vez → confirmação explícita. Controle/editor/arquivo ambíguo interrompe antes de salvar. Se o clique já ocorreu e a confirmação não chegar, o resultado é incerto e exige conferência manual no UX antes de repetir; nunca repetir automaticamente. Escreve externamente os apelidos/id do contrato no UX; localmente cria só uma cópia temporária dos bytes e logs/estado da rotina, sem alterar bases/históricos/anotações. O backend limita a 20 MB, valida nome simples `.xlsx` e estrutura segura do arquivo. A cópia temporária é removida ao terminar a execução acompanhada pelo servidor; interrupção abrupta pode deixá-la na pasta temporária do Windows.
+
+`Planilha Exportada com Sucesso!` confirma somente o download. Início, falha e conclusão UX são mensagens separadas em F7/F4; se a resposta ao pedido de início não chegar, consulte F4 antes de repetir. O Assistente explica essa diferença; `exportar_planilha` do chat continua gerando só download, sem escrita UX. `ux_apelidos` não entra em `ROTINAS_VALIDAS` do Assistente nem no endpoint genérico de execução. Detalhes em `docs/operacao/automacao-chrome.md`, `docs/cockpit-prompts/08-comparacao-operacional.md` e `docs/guias/manual_usuario.md`.
+
 Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.claude/skills/rotina-exportar-planilhas` (UX Simpress + Endpoint Central, importação pela pasta `data/state/entrada_automatica`). As mesmas regras de login, bloqueio e "pare"/"cancelar" da rotina de OS se aplicam. Em qualquer automação do Endpoint Central e do UX Simpress (inventários), se aparecerem janelas de notificação (em geral uma ou duas), feche cada uma clicando no X; só quando aparecerem. "Executar OS Simpress" aciona a rotina de OS acima.
 
 ## Chamados novos do Sebrae

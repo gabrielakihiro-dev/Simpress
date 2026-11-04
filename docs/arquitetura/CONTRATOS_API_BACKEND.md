@@ -32,6 +32,7 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | 15 | DELETE /api/historico-alteracoes/{evento_id} | Remove registro e reverte alias conforme regra do evento mais recente. | {sucesso,evento_id,tipo,equipamento,mensagem}. | 404 evento/equipamento; 409 evento não elegível. Arquivos. main.py; static/js/features/alias-history.js. |
 | 16 | DELETE /api/historico-apelidos/{evento_id} | Alias da exclusão/reversão anterior. | Mesmo contrato. | 404/409 como acima. Arquivos. main.py. |
 | 17 | GET /api/exportar-equipamentos | Sem parâmetros. | XLSX para download; conteúdo validado contra modelo e base ativos. | 404 base/modelo; 409 incompatibilidade, safety ou busy; 500 falha de geração. Arquivos. main.py; static/js/features/inventory-upload.js. |
+| 165 | POST /api/automacao/ux-apelidos | Multipart `file`: bytes exatos e nome do XLSX exportado pelo F7, até 20 MB; valida nome simples e estrutura segura. | 202 com estado da rotina dedicada `ux_apelidos`; cópia temporária passada por `--planilha-ux`, removida ao terminar a execução acompanhada. Reutiliza runner/trava/log/login/cancelamento. Envia ao contrato 16467 e salva uma vez no UX (escrita externa autorizada em 03/11/2026). Não importa inventários nem consulta Downloads. Não disponível no chat/endpoint genérico. | 403 origem não local; 409 rotina ocupada; 413 corpo > 21 MB; 422 arquivo inválido; 503 falha ao iniciar. routers/automation.py; domains/chrome_automation.py; scripts/automacao_rotinas_chrome.py; docs/operacao/automacao-chrome.md. |
 
 ## Transferência e inventário
 

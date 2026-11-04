@@ -390,6 +390,23 @@
       window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
       app.showToast("Planilha Exportada com Sucesso!", "success");
+      try {
+        const form = new FormData();
+        form.append("file", blob, filename);
+        const execucao = await app.apiFetch("/api/automacao/ux-apelidos", {
+          method: "POST", body: form,
+          errorMessage: "Não foi possível iniciar a atualização no UX Simpress.",
+        });
+        app.showToast("Atualização no UX Simpress iniciada. Acompanhe o resultado e o login em Automação (F4).", "info");
+        app.acompanharExecucaoAutomacao?.(execucao);
+      } catch (error) {
+        const status = Number(error?.status);
+        if (status >= 400 && status < 500) {
+          app.showToast(`Atualização no UX Simpress não iniciada: ${error.message}`, "error");
+        } else {
+          app.showToast(`Não foi possível confirmar o início da atualização no UX Simpress. Consulte Automação (F4) antes de tentar novamente. ${error.message}`, "error");
+        }
+      }
     } catch (err) {
       console.error("Erro ao exportar planilha de equipamentos:", err);
       app.showToast(err.message, "error");

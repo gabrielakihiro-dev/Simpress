@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from core.config import REQUEST_BODY_IDLE_TIMEOUT_SECONDS
+from core.config import REQUEST_BODY_IDLE_TIMEOUT_SECONDS, MAX_UX_ALIAS_BYTES
 from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_ERROR, IDEMPOTENCY_KEY_PATTERN
 from security.network import is_direct_loopback_request
@@ -226,6 +226,7 @@ class LocalRequestSafetyMiddleware:
         is_entra_upload = path == "/api/usuarios-entra/importar" and scope.get("method") == "POST"
         is_assistant_audio = path == "/api/assistente/audio"
         is_assistant_attachment = path == "/api/assistente/anexo" and scope.get("method") == "POST"
+        is_ux_alias_upload = path == "/api/automacao/ux-apelidos" and scope.get("method") == "POST"
         limits = services.body_limits()
         body_limit = (
             limits.upload_request_bytes if is_inventory_upload
@@ -234,6 +235,7 @@ class LocalRequestSafetyMiddleware:
             else limits.entra_csv_request_bytes if is_entra_upload
             else limits.assistant_audio_request_bytes if is_assistant_audio
             else limits.assistant_attachment_request_bytes if is_assistant_attachment
+            else MAX_UX_ALIAS_BYTES + 1024 * 1024 if is_ux_alias_upload
             else limits.api_request_bytes if path.startswith("/api/")
             else None
         )
@@ -257,7 +259,7 @@ class LocalRequestSafetyMiddleware:
                     await response(scope, receive, send)
                     return
 
-        uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or path == "/api/recarregar-base"
+        uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or is_ux_alias_upload or path == "/api/recarregar-base"
         if uses_upload_admission:
             key_headers = [value for name, value in raw_headers if name.lower() == b"idempotency-key"]
             is_keyed_inventory_update = is_inventory_upload and scope.get("method") == "POST"

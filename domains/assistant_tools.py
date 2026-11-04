@@ -818,6 +818,7 @@ QUERY_TOOLS: List[Tool] = [
         "exportar_planilha",
         "Exporta uma das planilhas Excel que o Simpress já exporta (a mesma dos botões Exportar), para o usuário baixar. "
         "Só grava o arquivo na memória do servidor; não altera dados, então não pede confirmação. O botão Baixar aparece na tela. "
+        "Difere do botão Exportar Excel em Comparação (F7): aquele também inicia a atualização externa de apelidos/id no UX; esta ferramenta só baixa. "
         "Quando der certo, responda exatamente: Planilha Exportada com Sucesso! (sem contagens, links nem caminhos). "
         "Só exporte quando o usuário pedir a planilha.",
         _exportar_planilha,
