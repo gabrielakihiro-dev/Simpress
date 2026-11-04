@@ -217,6 +217,11 @@ test("data-origem marca o vínculo do Dashboard e aria-invalid o número inváli
     assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-editor").dataset.origem, "dashboard");
     assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-editor").dataset.origem, undefined, "sem vínculo, sem origem");
 
+    const irF5 = linha("SN-SOR").querySelector("button.ticket-os-link-goto");
+    assert.equal(irF5.getAttribute("data-on-click"), "abrirChamadoSebraeNoF5");
+    assert.deepEqual(JSON.parse(irF5.getAttribute("data-args")), ["UTIC-2026-3290"]);
+    assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-goto"), null, "sem vínculo, o prefixo não é link");
+
     const input = linha("SN-CONF").querySelector(".ticket-os-link-input");
     input.value = "";
     linha("SN-CONF").querySelector(".ticket-os-link-form").dispatchEvent({ type: "submit", preventDefault() {} });

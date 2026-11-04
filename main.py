@@ -2610,6 +2610,7 @@ app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
     caminhos=lambda: sebrae_novos.caminhos_padrao(STATE_DIR),
     max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
     registros=lambda: sebrae_cruzamento.registros_de_equipamentos(_listar_equipamentos_indexados()),
+    apelidos=lambda: sebrae_cruzamento.apelidos_por_serie(_listar_equipamentos_indexados()),
     relatorio_chamados=_dashboard_ticket_report,
     vinculos_os=_dashboard_manual_os_links,
     runner=get_chrome_automation_runner,

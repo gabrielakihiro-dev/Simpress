@@ -267,8 +267,21 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
   const feature = createSebraeDashboard({ app, dom });
   await feature.carregarNovosSebrae();
-  return { doc, el, feature };
+  return { doc, el, feature, app };
 }
+
+test("a OS do cartão é um botão que abre a aba OS (F6) na linha dessa OS, sem escrever nada", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  Object.assign(carga.novos.formulario[0].linha, { K: "BRJ54925BT", E: "7281145" });
+  const { el, app } = await renderizarCartoes(carga);
+  const aberturas = [];
+  app.abrirChamadoDaOs = (...args) => aberturas.push(args);
+  const botao = el["sebrae-novos-lista"].querySelector("button.sebrae-chamado__os");
+  assert.ok(botao);
+  assert.equal(botao.textContent, "7281145");
+  botao.click();
+  assert.deepEqual(aberturas, [[[], "BRJ54925BT", "7281145"]]);
+});
 
 test("ficha legada malformada preserva partes válidas e não interrompe os cartões", async () => {
   for (const detalhes of ["texto bruto", {}, [null, ["incompleto"], ["Descrição", "Válida"]]]) {
