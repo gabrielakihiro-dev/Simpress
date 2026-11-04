@@ -964,6 +964,7 @@ class EnviarDashboardTests(unittest.TestCase):
     def test_routine_does_not_upload_when_the_precheck_fails(self):
         with tempfile.TemporaryDirectory() as pasta:
             with patch.object(automacao, "arquivo_final_dashboard", return_value=Path(pasta) / "x.xlsx"), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
                     patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                     patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
                     patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=automacao.RotinaErro(automacao.MSG_SHAREPOINT_MUDOU)), \
@@ -1014,17 +1015,82 @@ class EnviarDashboardTests(unittest.TestCase):
                 sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(enviado).hexdigest(), enviado)
                 automacao.conferir_dashboard_do_sharepoint(baixado)
 
-    def _rodar_enviar(self, pasta: str, falha_no_envio: bool):
+    def _rodar_enviar(self, pasta: str, falha_no_envio: bool, ao_enviar=None, falha_close=False):
         arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
         arquivo.write_bytes(b"conteudo novo")
-        erro = automacao.RotinaErro("sem aviso") if falha_no_envio else None
+        erro = ao_enviar or (automacao.RotinaErro("sem aviso") if falha_no_envio else None)
         with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
-                patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                patch.object(automacao, "nova_aba", return_value=MagicMock(close=MagicMock(side_effect=OSError("close") if falha_close else None))), patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                 patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
                 patch.object(automacao, "conferir_dashboard_do_sharepoint"), patch.object(automacao, "guardar_backup_do_dashboard"), \
                 patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=erro), patch.object(automacao, "registrar_erro"), \
                 redirect_stdout(io.StringIO()):
             return automacao.rodar_rotina_enviar(MagicMock(), arquivo)
+
+    def test_close_failure_after_confirmation_keeps_success_and_durable_status(self):
+        from domains import sebrae_finalizacao as fin
+
+        with tempfile.TemporaryDirectory() as pasta:
+            self.assertEqual(self._rodar_enviar(pasta, False, falha_close=True), 0)
+            self.assertEqual(fin.ler_envio(Path(pasta))["status"], "concluido")
+
+    def test_independent_send_persists_cleanup_failure_and_blocks_another_upload(self):
+        from domains import sebrae_finalizacao as fin
+
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta)
+            origem = raiz / "origem.xlsx"
+            origem.write_bytes(b"conteudo novo")
+            copia = fin.guardar_pendente(raiz, origem, fin.agora_local(), motivo="x", tickets=[])
+            chamadas = []
+            with patch.object(fin, "descartar_pendente", side_effect=PermissionError("ocupado")):
+                self.assertEqual(self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload")), 0)
+            fin.gravar_resultado(raiz, {"sharepoint": None})
+            self.assertTrue(fin.aviso_do_pendente(raiz)["limpeza_pendente"])
+            with self.assertRaises(fin.DomainConflictError):
+                self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+            self.assertEqual(chamadas, ["upload"])
+            self.assertTrue(copia.exists())
+
+    def test_independent_send_does_not_delete_copy_created_during_upload(self):
+        from domains import sebrae_finalizacao as fin
+
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta)
+            copias = []
+            def criar(page, arquivo):
+                copias.append(fin.guardar_pendente(raiz, arquivo, fin.agora_local(), motivo="nova", tickets=[]))
+            self.assertEqual(self._rodar_enviar(pasta, False, criar), 0)
+            self.assertTrue(copias[0].exists())
+            self.assertTrue(fin.aviso_do_pendente(raiz)["limpeza_pendente"])
+
+    def test_source_changed_during_upload_stays_uncertain(self):
+        from domains import sebrae_finalizacao as fin
+
+        with tempfile.TemporaryDirectory() as pasta:
+            def alterar(page, arquivo):
+                arquivo.write_bytes(b"outros bytes")
+            with self.assertRaises(automacao.RotinaErro):
+                self._rodar_enviar(pasta, False, alterar)
+            self.assertTrue(fin.aviso_do_pendente(Path(pasta))["incerto"])
+
+    def test_confirmation_disk_failure_is_uncertain_and_cannot_be_auto_retried(self):
+        from domains import sebrae_finalizacao as fin
+
+        with tempfile.TemporaryDirectory() as pasta:
+            gravar = fin.atomic_write_json
+            chamadas = []
+            def falhar_confirmacao(path, dados):
+                if path == fin.caminho_envio(Path(pasta)) and dados.get("status") == "confirmado":
+                    raise PermissionError("disco cheio")
+                gravar(path, dados)
+            with patch.object(fin, "atomic_write_json", side_effect=falhar_confirmacao):
+                with self.assertRaises(fin.DomainBusyError):
+                    self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+            self.assertTrue(fin.aviso_do_pendente(Path(pasta))["incerto"])
+            with self.assertRaises(fin.DomainConflictError):
+                self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+            self.assertEqual(chamadas, ["upload"])
 
     def test_routine_records_the_sha256_of_what_it_uploaded_and_nothing_on_failure(self):
         import hashlib
@@ -1035,6 +1101,10 @@ class EnviarDashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(automacao.RotinaErro, "sem aviso"):
                 self._rodar_enviar(pasta, falha_no_envio=True)
             self.assertEqual(sebrae_finalizacao.ler_enviado(Path(pasta)), "")
+            self.assertTrue(sebrae_finalizacao.aviso_do_pendente(Path(pasta))["incerto"])
+            with self.assertRaises(sebrae_finalizacao.DomainConflictError):
+                self._rodar_enviar(pasta, falha_no_envio=False)
+        with tempfile.TemporaryDirectory() as pasta:
             self.assertEqual(self._rodar_enviar(pasta, falha_no_envio=False), 0)
             self.assertEqual(sebrae_finalizacao.ler_enviado(Path(pasta)), hashlib.sha256(b"conteudo novo").hexdigest())
 
