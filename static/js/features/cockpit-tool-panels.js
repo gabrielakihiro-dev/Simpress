@@ -1478,8 +1478,9 @@
   async function abrirChamadoDaOs(_fontes, serie, os) {
     if (activeTool !== "chamados") await openPanel("chamados");
     const host = byId("cockpit-tickets-os");
+    const chave = valor => String(valor || "").replace(/\s+/g, "").toUpperCase();
     const findRow = () => [...host.querySelectorAll("tbody tr[data-serial]")]
-      .find(row => row.dataset.serial === String(serie) && (!os || row.dataset.os === String(os)));
+      .find(row => (!serie || chave(row.dataset.serial) === chave(serie)) && (!os || row.dataset.os === String(os)));
     let row = findRow();
     // Aberta agora pela Home, a tabela ainda está carregando: espera a linha aparecer (até ~3 s).
     for (let tentativa = 0; !row && tentativa < 30; tentativa += 1) {
@@ -1491,7 +1492,7 @@
       row = findRow();
     }
     if (!row) return;
-    const toggle = [...host.querySelectorAll(".ck-os__andamento-btn")].find(button => button.dataset.serie === String(serie));
+    const toggle = [...host.querySelectorAll(".ck-os__andamento-btn")].find(button => button.dataset.serie === row.dataset.serial);
     if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
     destacarLinhaCockpit(row);
   }

@@ -73,6 +73,7 @@ class SebraeDashboardServices:
     registros: Callable[[], Sequence[Mapping[str, Any]]]  # equipment records by person name (EquipamentosDetalhes, Endpoint, Entra)
     relatorio_chamados: Callable[[], Optional[Mapping[str, Any]]]  # ticket report, for column E
     vinculos_os: Callable[[], Sequence[Mapping[str, Any]]] = lambda: ()  # manual links UTIC -> OS of the ticket table, for column E
+    apelidos: Callable[[], Mapping[str, str]] = lambda: {}  # SERIE -> apelido, só para exibir no cartão (nunca gravado)
     runner: Optional[Callable[[], ChromeAutomationRunner]] = None  # starts the ``fechar`` routine; without it nothing is finalized
 
 
@@ -170,13 +171,18 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
+        apelidos = services.apelidos() if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
+             "apelido": _apelido(apelidos, (a.get("automaticos") or {}).get("K") or sugestoes.get(str(a.get("numero")), {}).get("K")),
              **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
              "leitura_softexpert": antigos.get(str(a.get("numero")))}  # ``softexpert`` is the finalization state; this is the read data
             for a, e in zip(abertos, efetivos)
         ]
+
+    def _apelido(apelidos: Mapping[str, str], serie: Any) -> str:
+        return apelidos.get(str(serie or "").strip().upper(), "")
 
     def _pasta_estado():
         return fin.pasta_estado(services.caminhos().existentes)
@@ -205,6 +211,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         lancados = importado["numeros"] if importado else frozenset()
         novos = _novos(caminhos, lancados) if importado else None
         finalizacao = fin.ler_estado(_pasta_estado()) if novos else {}
+        apelidos = services.apelidos() if novos else {}
         return {
             "importado": None if importado is None else {
                 "versao": importado["versao"], "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
@@ -217,7 +224,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
                 "erros": novos["erros"],
                 "formulario": [
-                    {**item, "softexpert": fin.publico(finalizacao.get(item["numero"]))}
+                    {**item, "apelido": _apelido(apelidos, item["linha"].get("K")), "softexpert": fin.publico(finalizacao.get(item["numero"]))}
                     for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
                 ],
             },
