@@ -53,3 +53,24 @@ test("Home discards an old result even when the same serial is selected again", 
   assert.equal(h.element("endpoint-lookup-result").textContent, "");
   assert.equal(h.element("btn-consultar-endpoint").disabled, false);
 });
+
+test("Controle remoto: botão ao lado do Consultar, habilitado só com série e mensagem de offline", async () => {
+  assert.match(appHtml, /id="btn-consultar-endpoint"[\s\S]*?<\/button>\s*<button[^>]*id="btn-controle-remoto-endpoint"[^>]*data-on-click="controleRemotoEndpoint"/);
+  const h = createAppHarness((url, options) => {
+    assert.equal(url, "/api/endpoint/controle-remoto");
+    assert.deepEqual(JSON.parse(options.body), { serial: "ABC" });
+    return apiResponse(h.resposta);
+  });
+  h.selectEquipment({ serial: "ABC" });
+  assert.equal(h.element("btn-controle-remoto-endpoint").disabled, false);
+  h.run("definirEquipamentoAtual(null)");
+  assert.equal(h.element("btn-controle-remoto-endpoint").disabled, true);
+  h.selectEquipment({ serial: "ABC" });
+  h.resposta = { status: "connected", serial: "ABC", hostname: "PC1" };
+  await h.run("controleRemotoEndpoint()");
+  assert.match(h.element("endpoint-lookup-result").textContent, /Controle remoto solicitado para PC1/);
+  h.resposta = { status: "offline", serial: "ABC", hostname: "PC1" };
+  await h.run("controleRemotoEndpoint()");
+  assert.match(h.element("endpoint-lookup-result").textContent, /offline/);
+  assert.match(h.effects.confirmations.at(-1), /offline/);
+});

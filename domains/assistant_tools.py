@@ -357,6 +357,17 @@ def _par_hostname(args: Args) -> Tuple[str, str]:
     return serie, hostname
 
 
+def _describe_controle_remoto(args: Args) -> str:
+    serial = limpar_texto_sensivel(_serial(args))
+    if not serial:
+        raise ValueError("Informe o número de série.")
+    return (
+        f"Abrir o controle remoto do equipamento {serial} no Endpoint, pelo Chrome de automação: busca a série, clica no monitor, "
+        "escolhe Controle remoto, escreve o motivo 'acesso' e clica em Conectar. Inicia uma conexão real com o computador "
+        "e não fecha nada; você continua a sessão. Se o computador estiver offline, nada é conectado. Exige o login do Endpoint feito."
+    )
+
+
 def _describe_remover_hostname(api: SimpressApi, args: Args) -> str:
     serie, hostname = _par_hostname(args)
     if api.hostname_removido(serie, hostname):
@@ -1199,6 +1210,17 @@ CHANGE_TOOLS: List[Tool] = [
         describe=_describe_remover_hostname,
         describe_com_api=True,
     ),
+    _change(
+        "abrir_controle_remoto",
+        "Abre o controle remoto de um computador no Endpoint (o botão \"Controle remoto\" da Home): busca a série, clica no monitor, escolhe Controle remoto, "
+        "escreve o motivo \"acesso\" e clica em Conectar; a conexão fica aberta para o usuário, sem fechar nada. Inicia uma conexão real: só quando o usuário "
+        "pedir explicitamente para conectar/abrir o controle remoto/acesso remoto, nunca para apenas consultar. Retorna connected, offline "
+        "(computador offline), not_found ou ambiguous. Para só ver o usuário do último logon use consultar_endpoint. O usuário confirma antes. "
+        "Requer Chrome de automação aberto e login manual.",
+        lambda c, a: c.abrir_controle_remoto(str(a.get("serial", ""))),
+        _describe_controle_remoto,
+        {"serial": SERIAL}, ["serial"],
+    ),
     Tool(
         "restaurar_hostname_endpoint",
         "Desfaz a remoção de um hostname do Endpoint: ele volta às duplicidades. Série e hostname vêm de listar_hostnames_removidos. O usuário confirma antes.",
@@ -1368,6 +1390,10 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "hostname": (
         r"\bhostname|\bduplicad|\bendpoint",
         ("consultar_endpoint", "listar_hostnames_removidos", "remover_hostname_endpoint", "restaurar_hostname_endpoint"),
+    ),
+    "remoto": (
+        r"\bcontrole remoto|\bacesso remoto|\bremot[oa]|\bconect(?:ar|e)\b",
+        ("abrir_controle_remoto", "consultar_endpoint"),
     ),
     "mensal": (r"\bmensal|\bmes\b|\bmeses\b|\brelatorio", ("obter_relatorio_mensal", "comparar_periodos")),
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),

@@ -478,7 +478,16 @@
       const year = Number(saved?.ano) || new Date().getFullYear();
       const label = el("label", "ck-sr ticket-os-link-label", "Número do chamado UTIC");
       const controls = el("div", "ck-utic ticket-os-link-controls");
-      const prefix = el("span", "ticket-os-link-prefix", `UTIC-${year}-`);
+      // Vínculo salvo: o prefixo vira botão que abre o chamado na aba Chamados (F5); o campo continua editável.
+      const prefix = el(saved?.numero ? "button" : "span", "ticket-os-link-prefix", `UTIC-${year}-`);
+      if (saved?.numero) {
+        const chamado = `UTIC-${year}-${saved.numero}`;
+        prefix.className = "ck-link-btn ticket-os-link-prefix ticket-os-link-goto";
+        prefix.type = "button";
+        prefix.setAttribute("aria-label", `Abrir o chamado ${chamado} na aba Chamados (F5)`);
+        prefix.setAttribute("data-on-click", "abrirChamadoSebraeNoF5");
+        prefix.setAttribute("data-args", JSON.stringify([chamado]));
+      }
       const input = el("input", "ck-entrada ck-entrada--sm ticket-os-link-input");
       input.type = "text";
       input.inputMode = "numeric";

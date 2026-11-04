@@ -837,6 +837,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-os .ticket-summary-order-link { vertical-align: top; align-items: flex-start; font-size: inherit; text-align: left; overflow-wrap: anywhere; }
 .ck-os .ticket-os-link-controls { flex-wrap: wrap; align-items: center; }
 .ck-os .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); white-space: nowrap; }
+.ck-os .ticket-os-link-goto { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .ck-os .ticket-os-link-input { flex: 0 0 5.5rem; width: 5.5rem; min-width: 0; font-family: var(--fonte-mono); }
 .ck-os .ck-descricao__texto { white-space: pre-line; overflow-wrap: anywhere; }
 .ck-os__andamento-btn { display: block; text-align: left; }
@@ -1152,6 +1153,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__auto { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 16px; }
 .sebrae-chamado__auto > div { min-width: 0; }
 .sebrae-chamado__auto dd { overflow-wrap: anywhere; }
+.sebrae-chamado__os { padding: 0; border: 0; background: none; color: var(--cor-destaque-texto); font: inherit; font-variant-numeric: tabular-nums; text-decoration: underline; cursor: pointer; }
+.sebrae-chamado__os:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .sebrae-chamado__aviso { align-items: flex-start; gap: 8px; margin: 0; padding: 7px 10px; border-radius: var(--raio-sm); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
 .sebrae-chamado__aviso::before { content: "!"; flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: var(--fs-2xs); font-weight: var(--peso-marca); line-height: 1; }
 .sebrae-chamado__dica { margin: 0; color: var(--cor-texto-mudo); font-size: var(--fs-sm); }

@@ -135,10 +135,10 @@ class ArquivoUxTests(unittest.TestCase):
 
 
 EDITOR = """
-<button id="editar" hidden>Editar apelido e id</button>
-<section role="dialog" aria-label="Editar apelido e id" hidden>
- <button id="enviar">Enviar Planilha</button><input type="file" id="arquivo" hidden>
- <span id="nome"></span><button id="salvar">Salvar edições</button>
+<a role="button" id="editar" hidden><i>&#xe84c;</i> Editar apelido e id</a>
+<section role="dialog" hidden><h5>Editar apelido e id</h5>
+ <label role="button" id="enviar"><i style="font-family:x">&#xe84c;</i> Enviar planilha</label><input type="file" id="arquivo" hidden>
+ <span id="nome"></span><button id="salvar" hidden>Salvar edições</button>
 </section><div role="alert" id="aviso"></div>
 <script>
 window.salvos=0; window.recebido=null;
@@ -146,8 +146,8 @@ buscar.addEventListener('click',()=>setTimeout(()=>editar.hidden=false,550));
 editar.onclick=()=>document.querySelector('section').hidden=false;
 enviar.onclick=()=>arquivo.click();
 arquivo.onchange=async()=>{window.recebido=Array.from(new Uint8Array(await arquivo.files[0].arrayBuffer()));
- nome.textContent=window.nomeErrado?'outro.xlsx':arquivo.files[0].name;};
-salvar.onclick=()=>{window.salvos++; if(!window.semConfirmacao) aviso.textContent='Edições salvas com sucesso!';};
+ nome.textContent=window.nomeErrado?'outro.xlsx':arquivo.files[0].name; salvar.hidden=false;};
+salvar.onclick=()=>{window.salvos++; if(!window.semConfirmacao) aviso.innerHTML='<button>&times;</button><div>Edições salvas com sucesso!</div>';};
 </script>
 """
 

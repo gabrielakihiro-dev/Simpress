@@ -19,6 +19,19 @@ class RegistrosTest(unittest.TestCase):
         )
 
 
+class ApelidosPorSerieTest(unittest.TestCase):
+    def test_serie_maiuscula_sem_marcador_manual_e_ambigua_fica_de_fora(self):
+        itens = [
+            {"serial": "abc1", "apelido": "PRNOTE001 (M)"},
+            {"serial": "SEM", "apelido": ""},
+            {"serial": "DUP", "apelido": "PRNOTE002"},
+            {"serial": "DUP", "apelido": "PRNOTE003"},
+            {"serial": "IGUAL", "apelido": "PRNOTE004"},
+            {"serial": "IGUAL", "apelido": "PRNOTE004"},
+        ]
+        self.assertEqual(cruz.apelidos_por_serie(itens), {"ABC1": "PRNOTE001", "IGUAL": "PRNOTE004"})
+
+
 class OsDaSerieTest(unittest.TestCase):
     RELATORIO = {"chamados": [
         {"serie": "ABC 123", "simpress": {"ordens_servico": ["7303022"]}, "oracle": [{"ordem_servico": "7300001"}]},
