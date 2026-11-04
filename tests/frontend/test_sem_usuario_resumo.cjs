@@ -53,6 +53,29 @@ test("Sem usuário read error shows a message and no card; without the read the 
   assert.doesNotMatch(ausente, /Sem usuário|comparacao-secao-sem-usuario/);
 });
 
+test("renderizarSemUsuarioSemComparacao acrescenta só a seção Sem usuário ao estado vazio (ok, limite e erro)", () => {
+  const criar = () => {
+    const content = { html: "", insertAdjacentHTML(_posicao, html) { this.html += html; } };
+    globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), createElement: () => ({ content: { querySelector: () => null } }) };
+    const api = createComparisonResult({
+      app: {}, appState: {}, motion: null, dom, historyFormat,
+      comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+    });
+    return { api, content };
+  };
+  const ok = criar();
+  ok.api.renderizarSemUsuarioSemComparacao({ estado: "ok", items: ITENS });
+  assert.match(ok.content.html, /data-sem-usuario-section="ok"/);
+  assert.equal([...ok.content.html.matchAll(/<tr [^>]*data-comparison-category="sem_usuario"[^>]*>/g)].length, 2);
+  assert.doesNotMatch(ok.content.html, /data-history-filter-bar|Mudanças de usuário/);
+  const limite = criar();
+  limite.api.renderizarSemUsuarioSemComparacao({ estado: "limite", items: ITENS, total: 2500 });
+  assert.match(limite.content.html, /Mostrando os primeiros 2 de 2\.500 notebooks sem usuário/);
+  const erro = criar();
+  erro.api.renderizarSemUsuarioSemComparacao({ estado: "erro", items: [] });
+  assert.match(erro.content.html, /Não foi possível consultar os notebooks sem usuário agora/);
+});
+
 test("Sem usuário values are escaped", () => {
   const html = renderizar({ estado: "ok", items: [{ serial: "<b>x</b>", apelido: "<img src=x>", retirada_cidade: "", modelo: "" }] });
   assert.doesNotMatch(html, /<img src=x>|<b>x<\/b>/);

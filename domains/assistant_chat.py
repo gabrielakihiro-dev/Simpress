@@ -55,6 +55,8 @@ ENVELOPE_FECHA = re.compile(rf"<\s*/\s*{ENVELOPE_TAG}", re.IGNORECASE)
 DIAS_SEMANA = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo")
 # A reply that only announces a query ("Vou consultar...") without calling a tool.
 PROMESSA = re.compile(r"^\s*(vou|vamos|irei|deixe-me|um momento|aguarde)\b", re.IGNORECASE)
+# Asked once when the model ends a turn with empty text after tool calls; the results are already in the history.
+PEDIDO_RESPOSTA_FINAL = "Responda agora ao usuário, em texto, com os resultados que você já obteve. Não chame ferramentas."
 
 MSG_SEM_CHAVE = "A chave do OpenRouter não foi configurada. Abra o arquivo .env na pasta do Simpress e preencha OPENROUTER_API_KEY (ou DEEPSEEK_API_KEY)."
 MSG_OCUPADO = "O assistente ainda está respondendo. Aguarde um instante."
@@ -358,7 +360,7 @@ class AssistantConversation:
         return {"role": "tool", "tool_call_id": tool_call_id, "name": nome, "content": conteudo}
 
     def _final(self, bruto: str, ferramentas: List[str]) -> Resposta:
-        bruto = bruto or "Não obtive resposta do modelo."
+        bruto = bruto if (bruto or "").strip() else "Não obtive resposta do modelo."
         # The history goes back to the model, so it keeps the masked text; only the screen gets real values.
         mascarado = self._mascara.ocultar_conhecidos(limpar_texto_sensivel(bruto))
         self._mensagens.append({"role": "assistant", "content": mascarado})
@@ -431,6 +433,7 @@ class AssistantConversation:
         assert self._client is not None
         self._consultas, self._vistas, self._caracteres, self._parada = [], set(), 0, None
         self._inicio = self._relogio()
+        pediu_resposta_final = False
         for _ in range(MAX_RODADAS):
             if self._relogio() - self._inicio >= ORCAMENTO_SEGUNDOS:
                 return self._parar(self._limite() or "no limite de tempo", ferramentas)
@@ -454,6 +457,11 @@ class AssistantConversation:
                     # The model promised a query and stopped: ask for the call instead of showing the promise.
                     self._mensagens.append({"role": "assistant", "content": texto})
                     self._mensagens.append({"role": "user", "content": "Chame agora a ferramenta de consulta e responda com os dados."})
+                    continue
+                if ferramentas and not texto.strip() and not pediu_resposta_final:
+                    # Empty final text after tool calls: one more ask for the answer, reusing the results already in the history.
+                    pediu_resposta_final = True
+                    self._mensagens.append({"role": "user", "content": PEDIDO_RESPOSTA_FINAL})
                     continue
                 return self._final(texto, ferramentas)
 

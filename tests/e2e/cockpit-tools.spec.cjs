@@ -72,6 +72,22 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
 });
 
+test("comparison tab without a saved comparison still lists the notebooks without user", async ({ page }) => {
+  await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
+  await page.route("**/api/buscar-expandida?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("usuario") !== "sem") return route.fallback();
+    const item = { serial: "NOTE-SEM-USUARIO", apelido: "PRNOTEDEMO02", retirada_cidade: "Curitiba", modelo: "Notebook" };
+    await route.fulfill({ json: { items: [item], total: 1, offset: 0, limit: 100, has_more: false } });
+  });
+  await page.goto("/");
+  await openTool(page, "#btn-resumo-aba");
+  const result = page.locator("#comparacao-planilhas-conteudo");
+  await expect(result).toContainText("Não há comparação de inventários disponível neste histórico.");
+  await expect(result.locator("#comparacao-secao-sem-usuario")).toHaveText("Sem usuário");
+  await expect(result.locator('[data-comparison-category="sem_usuario"][data-comparison-serial="NOTE-SEM-USUARIO"]:visible').first()).toContainText("PRNOTEDEMO02");
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
+});
+
 test("each tool is accessible in both themes and remains reachable below 1200px", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await mockComparison(page);

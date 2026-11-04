@@ -523,6 +523,29 @@ class ConversationTests(unittest.TestCase):
         self.assertIsNotNone(reply.pendente)
         self.assertEqual(simpress.writes(), [])
 
+    def test_empty_final_text_after_tools_is_retried_once_without_repeating_tools(self) -> None:
+        model = FakeModel(calls(call("obter_totais_inventario")), text(""), text("Temos 3 notebooks."))
+        conversation, _ = make_conversation(model)
+        reply = conversation.enviar_mensagem("quantos notebooks temos?")
+        self.assertEqual(reply.texto, "Temos 3 notebooks.")
+        self.assertEqual(reply.ferramentas, ["obter_totais_inventario"])
+        self.assertEqual(len(model.sent), 3)
+        self.assertIn("Responda agora", model.sent[2][-1]["content"])
+        self.assertEqual(sum(m["role"] == "tool" for m in model.sent[2]), 1, "the tool ran once; the retry reuses its result")
+
+    def test_empty_final_text_twice_keeps_the_current_message(self) -> None:
+        model = FakeModel(calls(call("obter_totais_inventario")), text(""), text("  "))
+        conversation, _ = make_conversation(model)
+        reply = conversation.enviar_mensagem("quantos notebooks temos?")
+        self.assertEqual(reply.texto, "Não obtive resposta do modelo.")
+        self.assertEqual(len(model.sent), 3, "at most one retry per turn")
+
+    def test_empty_text_without_tool_calls_is_not_retried(self) -> None:
+        model = FakeModel(text(""))
+        conversation, _ = make_conversation(model)
+        self.assertEqual(conversation.enviar_mensagem("oi").texto, "Não obtive resposta do modelo.")
+        self.assertEqual(len(model.sent), 1)
+
     def test_second_request_while_busy_is_refused(self) -> None:
         release = threading.Event()
 
