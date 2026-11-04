@@ -90,7 +90,7 @@ class LookupTests(unittest.TestCase):
             result = endpoint_lookup.consultar_grade(MagicMock(), automation, "SABC", True, details_serials=("SABC",))
         self.assertEqual(result, {"status": "ambiguous", "serial": "SABC", "origem": "correspondencia_mac"})
 
-    def test_private_tab_only_and_lock_released_on_success_or_failure(self):
+    def test_tab_stays_open_and_lock_released_on_success_or_failure(self):
         for failure in (False, True):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmp:
                 lock = Path(tmp) / "automacao_chrome.lock"
@@ -110,7 +110,7 @@ class LookupTests(unittest.TestCase):
                     else:
                         endpoint_lookup.consultar("ABC", False)
                     self.assertFalse(lock.exists())
-                    page.close.assert_called_once()
+                    page.close.assert_not_called()
                     browser.close.assert_not_called()
                     pw.chromium.connect_over_cdp.assert_called_once_with("http://127.0.0.1:9333", timeout=10000)
 
@@ -133,6 +133,47 @@ class LookupTests(unittest.TestCase):
             factory.return_value.__enter__.return_value = pw
             endpoint_lookup.consultar("ABC", False)
             self.assertTrue(ready.call_args.kwargs["confirmar"]())
+
+
+class RemoteControlTests(unittest.TestCase):
+    def run_remote(self, found, menus=(True,), **kwargs):
+        pw = MagicMock()
+        pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
+        page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
+        page.locator.return_value.first.locator.return_value.first.inner_text.return_value = " PC1 "
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)):
+            factory.return_value.__enter__.return_value = pw
+            result = endpoint_lookup.controle_remoto("ABC", False, **kwargs)
+        return result, page
+
+    def test_connects_with_reason_acesso_and_closes_nothing(self):
+        result, page = self.run_remote({"status": "found", "serial": "ABC"})
+        self.assertEqual(result, {"status": "connected", "serial": "ABC", "hostname": "PC1"})
+        page.locator.assert_any_call('textarea[name="reasonMessage"]:visible')
+        page.locator.return_value.fill.assert_called_once_with("acesso", timeout=15000)
+        page.close.assert_not_called()
+
+    def test_red_monitor_falls_back_to_actions_menu_then_connects(self):
+        result, page = self.run_remote({"status": "found", "serial": "ABC"}, menus=(False, True))
+        self.assertEqual(result["status"], "connected")
+        page.locator.assert_any_call(".resource-action--tab .resource-action--button")
+
+    def test_offline_when_no_menu_shows_remote_control(self):
+        result, page = self.run_remote({"status": "found", "serial": "ABC"}, menus=(False, False))
+        self.assertEqual(result, {"status": "offline", "serial": "ABC", "hostname": "PC1"})
+        page.locator.return_value.fill.assert_not_called()
+
+    def test_not_found_and_ambiguous_never_click(self):
+        for status in ("not_found", "ambiguous"):
+            result, page = self.run_remote({"status": status, "serial": "ABC"})
+            self.assertEqual(result["status"], status)
+            page.locator.return_value.fill.assert_not_called()
+
+    def test_mac_fallback_needs_unchanged_snapshot(self):
+        found = {"status": "found", "serial": "ABC", "_fallback_mac": True}
+        result, page = self.run_remote(found, antes_de_conectar=lambda: False)
+        self.assertEqual(result, {"status": "ambiguous", "serial": "ABC", "origem": "base_local"})
+        page.locator.return_value.fill.assert_not_called()
 
 
 class RouteTests(unittest.TestCase):
@@ -193,3 +234,21 @@ class RouteTests(unittest.TestCase):
         response = self.client.post("/api/endpoint/consultar", json={"serial": "ABC"})
         self.assertEqual(response.json(), {"status": "found", "serial": "ABC", "ultimo_logon": "user"})
         self.assertEqual(self.snapshot.call_count, 2)
+
+    def test_remote_control_route_uses_same_rules_and_errors(self):
+        remote = MagicMock(return_value={"status": "connected", "serial": "ABC", "hostname": "PC1"})
+        app = FastAPI()
+        app.include_router(create_endpoint_lookup_router(get_snapshot=self.snapshot, lookup=self.lookup, remote_control=remote))
+        client = TestClient(app)
+        response = client.post("/api/endpoint/controle-remoto", json={"serial": " abc "})
+        self.assertEqual(response.json(), {"status": "connected", "serial": "ABC", "hostname": "PC1"})
+        self.assertEqual(remote.call_args.args, ("ABC", False, ("ABC",)))
+        self.assertTrue(remote.call_args.kwargs["antes_de_conectar"]())
+        self.snapshot.side_effect = lambda serial: dict(self.equipment, details_serials=("ABC", "X"))
+        self.assertFalse(remote.call_args.kwargs["antes_de_conectar"]())
+        for exception, expected in [(automation.TravaOcupada("busy"), 409), (RuntimeError("secret"), 503)]:
+            remote.side_effect = exception
+            response = client.post("/api/endpoint/controle-remoto", json={"serial": "ABC"})
+            self.assertEqual(response.status_code, expected)
+            self.assertNotIn("secret", response.text)
+        self.assertEqual(client.post("/api/endpoint/controle-remoto", json={"serial": ""}).status_code, 422)

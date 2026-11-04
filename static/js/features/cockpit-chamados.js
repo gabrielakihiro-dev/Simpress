@@ -276,7 +276,20 @@
     await app.abrirPainelCockpit?.("sebrae-chamados");
     const alvo = [...document.querySelectorAll('[data-cockpit-tool-panel="sebrae-chamados"] article[data-numero]')]
       .find(artigo => artigo.dataset.numero === String(chave));
-    for (let pai = alvo?.parentElement?.closest("details"); pai; pai = pai.parentElement?.closest("details")) pai.open = true;
+    const abertos = [];
+    for (let pai = alvo?.parentElement?.closest("details"); pai; pai = pai.parentElement?.closest("details")) {
+      if (!pai.open) { pai.open = true; abertos.push(pai); }
+    }
+    if (abertos.length) {
+      // Abrir um details anima a altura do conteúdo (CSS): rolar antes do fim erra o alvo e exigia um segundo clique.
+      void alvo.offsetHeight;
+      const fim = Promise.all(abertos.flatMap(pai => pai.getAnimations?.({ subtree: true }) || []).map(animacao => animacao.finished.catch(() => {})));
+      await Promise.race([fim, new Promise(resolve => setTimeout(resolve, 800))]);
+    }
+    // Lista longa: o salto é instantâneo (rolagem suave de milhares de px era interrompida pelo relayout e parava fora do cartão).
+    alvo?.scrollIntoView?.({ block: "center", behavior: "auto" });
+    await new Promise(resolve => requestAnimationFrame(() => resolve()));
+    alvo?.scrollIntoView?.({ block: "center", behavior: "auto" });
     app.destacarLinhaCockpit?.(alvo);
   }
 
@@ -378,6 +391,6 @@
 
   return {
     sincronizarGestaoChamadosCockpit, selecionarVersaoChamadosCockpit, excluirImportacoesAntigasChamadosCockpit,
-    exportarChamadosCockpit, abrirGestaoChamadosCockpit, atualizarChamadosAbertosHome,
+    exportarChamadosCockpit, abrirGestaoChamadosCockpit, atualizarChamadosAbertosHome, abrirChamadoSebraeNoF5,
   };
 });

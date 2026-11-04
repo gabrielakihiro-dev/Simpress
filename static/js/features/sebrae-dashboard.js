@@ -559,12 +559,24 @@
       return zona;
     }
 
-    function listaFatos(pares) {
+    /** Número da OS como botão: abre a aba OS (F6) na linha dessa OS, com o andamento da série aberto. Só navegação. */
+    function valorOs(os, serie, sufixo = "") {
+      const botao = dom.createTextElement("button", "sebrae-chamado__os", os);
+      botao.type = "button";
+      botao.setAttribute("aria-label", `Abrir a OS ${os} na aba OS (F6)`);
+      botao.addEventListener("click", () => app.abrirChamadoDaOs?.([], serie, os));
+      const dd = document.createElement("dd");
+      dd.append(botao, sufixo);
+      return dd;
+    }
+
+    function listaFatos(pares, serie = "") {
       const fatos = document.createElement("dl");
       fatos.className = "ck-fatos sebrae-chamado__auto";
       pares.forEach(([rotulo, valor]) => {
         const linha = document.createElement("div");
-        linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", valor));
+        const ehOs = rotulo === "OS" && valor && valor !== "—";
+        linha.append(dom.createTextElement("dt", "", rotulo), ehOs ? valorOs(valor, serie) : dom.createTextElement("dd", "", valor));
         fatos.appendChild(linha);
       });
       return fatos;
@@ -819,14 +831,18 @@
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", dados.titulo || "Sem título"));
       const artigo = cartaoChamado(item.numero, "antigo", titulo, "Em aberto", "");
       const pares = [["I", "Solicitante", dados.solicitante], ["", "Abertura", dados.abertura],
-        ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])];
+        ...CAMPOS_PREENCHIDOS.flatMap(([letra, rotulo]) => {
+          const par = [letra, rotulo, item.automaticos?.[letra]];
+          return letra === "K" ? [par, ["", "Apelido", item.apelido]] : [par]; // Apelido: só exibição, vem da base
+        })];
       const fatos = document.createElement("dl");
       fatos.className = "ck-fatos sebrae-chamado__auto";
       pares.forEach(([letra, rotulo, atual]) => {
         const sugerido = letra ? item.automaticos_sugeridos?.[letra] : "";
         if (!atual && !sugerido) return;
         const linha = document.createElement("div");
-        linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
+        const serie = item.automaticos?.K || item.automaticos_sugeridos?.K || "";
+        linha.append(dom.createTextElement("dt", "", rotulo), letra === "E" ? valorOs(atual || sugerido, serie, atual ? "" : " (será preenchido)") : dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
         fatos.appendChild(linha);
       });
       const manuais = document.createElement("div");
@@ -869,7 +885,10 @@
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.linha.G || "Sem título"));
       const artigo = cartaoChamado(item.numero, "novo", titulo, "Novo", "info");
-      const fatos = listaFatos(CAMPOS_AUTOMATICOS.map(([letra, rotulo]) => [rotulo, item.linha[letra] || "—"]));
+      const fatos = listaFatos(CAMPOS_AUTOMATICOS.flatMap(([letra, rotulo]) => {
+        const par = [rotulo, item.linha[letra] || "—"];
+        return letra === "K" ? [par, ["Apelido", item.apelido || "—"]] : [par]; // Apelido: só exibição, vem da base
+      }), item.linha.K);
       const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));

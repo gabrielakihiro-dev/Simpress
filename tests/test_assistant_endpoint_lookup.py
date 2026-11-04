@@ -20,9 +20,11 @@ class AssistantEndpointTests(unittest.TestCase):
         with patch("domains.assistant_api.asyncio.wait_for", side_effect=wait), patch("domains.assistant_api._asgi_call", side_effect=response):
             transport = asgi_transport(lambda: None, 8000)
             transport("POST", "/api/endpoint/consultar", None, {"serial": "ABC"})
+            transport("POST", "/api/endpoint/controle-remoto", None, {"serial": "ABC"})
             transport("GET", "/api/stats", None, None)
         self.assertGreaterEqual(limits[0], 120)
-        self.assertEqual(limits[1], 30)
+        self.assertEqual(limits[1], limits[0])
+        self.assertEqual(limits[2], 30)
 
     def test_slow_endpoint_lookup_preserves_budget_for_final_model_answer(self):
         now = [0.0]
@@ -95,3 +97,54 @@ class AssistantEndpointTests(unittest.TestCase):
         self.assertEqual(response.ferramentas, ["consultar_endpoint"])
         self.assertIn("Private User", response.texto)
         self.assertNotIn("Private User", json.dumps(model.sent))
+
+
+class AssistantRemoteControlTests(unittest.TestCase):
+    def conversation(self, response, requests):
+        def transport(method, path, params, body):
+            if method == "POST":
+                requests.append((path, body))
+                return 200, response
+            return 200, {"items": [], "has_more": False}
+        model = FakeModel(calls(call("abrir_controle_remoto", serial="abc")), text("Pronto."))
+        return AssistantConversation(model, SimpressApi(transport), "modelo-teste"), model
+
+    def test_remote_control_is_a_change_tool_and_needs_confirmation(self):
+        self.assertTrue(TOOLS["abrir_controle_remoto"].changes_data)
+        requests = []
+        conversation, _ = self.conversation({"status": "connected", "serial": "ABC", "hostname": "PC1"}, requests)
+        reply = conversation.enviar_mensagem("Abra o controle remoto da ABC")
+        self.assertIn("ABC", reply.pendente["descricao"])
+        self.assertIn("acesso", reply.pendente["descricao"])
+        self.assertEqual(requests, [])  # nothing connects before the card is confirmed
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(requests, [("/api/endpoint/controle-remoto", {"serial": "ABC"})])
+
+    def test_cancel_never_connects(self):
+        requests = []
+        conversation, _ = self.conversation({"status": "connected", "serial": "ABC"}, requests)
+        conversation.enviar_mensagem("Conecte na ABC")
+        conversation.resolver_confirmacao(False)
+        self.assertEqual(requests, [])
+
+    def test_results_are_distinct(self):
+        for status, success, trecho in (("connected", True, "solicitado"), ("offline", False, "offline"),
+                                        ("not_found", False, "não encontrado"), ("ambiguous", False, "não foi aberto")):
+            result = TOOLS["abrir_controle_remoto"].run(
+                SimpressApi(lambda *args, s=status: (200, {"status": s, "serial": "ABC", "hostname": "PC1"})), {"serial": "abc"})
+            self.assertEqual(result["sucesso"], success, status)
+            self.assertIn(trecho, result["mensagem"], status)
+
+    def test_http_error_and_unknown_status_are_errors(self):
+        for answer in ((503, {"detail": "falha"}), (200, {"status": "x"}), (409, {"detail": "ocupado"})):
+            result = TOOLS["abrir_controle_remoto"].run(SimpressApi(lambda *args, a=answer: a), {"serial": "ABC"})
+            self.assertFalse(result["sucesso"])
+            self.assertIn("erro", result)
+        self.assertFalse(TOOLS["abrir_controle_remoto"].run(SimpressApi(lambda *args: (200, {})), {"serial": " "})["sucesso"])
+
+    def test_tool_only_sent_for_remote_requests(self):
+        for prompt in ("Abra o controle remoto da ABC", "Quero acesso remoto na ABC", "Conecte na máquina ABC"):
+            self.assertIn("abrir_controle_remoto", [s["function"]["name"] for s in schemas_para_mensagem(prompt)], prompt)
+        self.assertNotIn("abrir_controle_remoto", [s["function"]["name"] for s in schemas_para_mensagem("Consulte ABC no Endpoint")])
+        self.assertNotIn("abrir_controle_remoto", [s["function"]["name"] for s in schemas_para_mensagem("quais chamados estão abertos?")])
+

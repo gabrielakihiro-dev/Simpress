@@ -1034,25 +1034,32 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         page = abrir_ux(context, UX_EQUIPAMENTOS_URL)
 
         def unico(locator, nome):
+            from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
             visiveis = locator.filter(visible=True)
-            aguardar_estado(visiveis.first, "visible", timeout_ms=UX_EDICOES_TIMEOUT_MS)
+            try:
+                aguardar_estado(visiveis.first, "visible", timeout_ms=UX_EDICOES_TIMEOUT_MS)
+            except PlaywrightTimeout as erro:
+                raise RotinaErro(f"{nome} não apareceu em {UX_EDICOES_TIMEOUT_MS // 1000} s; nenhuma edição foi salva.") from erro
             if visiveis.count() != 1:
                 raise RotinaErro(f"{nome} não é inequívoco; nenhuma edição foi salva.")
             return visiveis
 
         def controle(escopo, nome):
-            return unico(escopo.get_by_role("button", name=nome, exact=True).or_(
-                escopo.get_by_role("link", name=nome, exact=True)), nome)
+            # O UX põe um ícone (fonte de glifos) antes do texto no nome acessível; por isso o prefixo não-alfanumérico é aceito.
+            rotulo = re.compile(rf"^[\W_]*{re.escape(nome)}\s*$", re.IGNORECASE)
+            return unico(escopo.get_by_role("button", name=rotulo).or_(escopo.get_by_role("link", name=rotulo)), nome)
 
         if page.locator("#CodigosContratosFiltro").count() != 1:
             raise RotinaErro("O filtro de contrato não é único.")
         selecionar_contrato_ux(page)
         controle(page, "Buscar").click()
         aguardar_ux_livre(page)
-        controle(page, re.compile(r"^Editar apelido e id$", re.IGNORECASE)).click()
-        editor = unico(page.get_by_role("dialog", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE)), "Editor de apelido e id")
-        salvar = controle(editor, "Salvar edições")
-        enviar = controle(editor, "Enviar Planilha")
+        controle(page, "Editar apelido e id").click()
+        # O diálogo real do UX (#editarApelidoModal) não tem aria-label: o nome vem do título (h5).
+        editor = unico(page.get_by_role("dialog").filter(
+            has=page.get_by_role("heading", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE))), "Editor de apelido e id")
+        enviar = controle(editor, "Enviar planilha")
         verificar_cancelamento()
         with page.expect_file_chooser(timeout=UX_EDICOES_TIMEOUT_MS) as escolha:
             enviar.click()
@@ -1067,9 +1074,11 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         campo = page.locator("#CodigosContratosFiltro")
         if campo.input_value().strip() != CONTRATO_NOME or campo.get_attribute("data-valor") != CONTRATO:
             raise RotinaErro("O contrato mudou antes da gravação; nenhuma edição foi salva.")
-        # shortcut: confirmação explícita por rótulo; ampliar apenas com evidência do aviso real do UX.
+        # No UX real o botão só aparece depois de escolher o arquivo.
+        salvar = controle(editor, "Salvar edições")
+        # shortcut: confirmação explícita por rótulo (o toast real traz o × do botão fechar no texto); ampliar apenas com evidência do aviso real do UX.
         confirmacao = page.get_by_role("alert").filter(has_text=re.compile(
-            r"^\s*(?:Edições salvas|Apelidos e (?:id|IdCliente) atualizados) com sucesso!?\s*$", re.IGNORECASE))
+            r"^[\s×]*(?:Edições salvas|Apelidos e (?:id|IdCliente) atualizados) com sucesso!?\s*$", re.IGNORECASE))
         if confirmacao.filter(visible=True).count():
             raise RotinaErro("Já havia confirmação na tela; não é seguro associá-la a esta gravação.")
         if not salvar.is_enabled():
