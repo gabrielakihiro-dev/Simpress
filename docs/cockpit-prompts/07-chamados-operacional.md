@@ -22,6 +22,16 @@ Mesmas APIs de antes (`/api/operacoes/chamados`, `/snapshot/{id}`, `/evolucao`, 
 
 Correção na Home (02/11/2026): o cartão `Chamados abertos` combina as OS do Oracle com os chamados da série obtidos em `GET /api/sebrae/novos`. Uma falha apenas do Sebrae preserva as OS e mostra o alerta `Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.`; a contagem recebe `consulta parcial` (`Consulta parcial` sem OS). A mensagem `Nenhum chamado aberto para esta série.` exige consulta bem-sucedida às duas fontes. A correção é somente de consulta e apresentação, sem escrita ou exclusão de dados locais/externos.
 
+## Redesenho visual da aba OS (F6, 01/11/2026)
+
+Autorizado pelo usuário em 01/11/2026. Hoje o painel `[data-cockpit-tool-panel="chamados"]` é a aba **OS** (F6); `Chamados` (F5) é o painel Sebrae (AGENTS.md, "Navegação do Cockpit e atalhos (31/10/2026)"). Escopo: só CSS e apresentação em `static/styles/ck-cockpit.css`, `static/js/ui/data-panels.js` e `static/js/features/cockpit-tool-panels.js` (classes e atributos); sem regra de negócio, endpoint, rotina nem escrita nova no SoftExpert, SharePoint ou Excel; `static/index.html` não muda.
+
+- Composição: a triagem (`#cockpit-tickets-triage`) fica à esquerda e os KPIs (`#cockpit-tickets-kpis`) viram a legenda `Relação entre as fontes` à direita; a barra separa filtros (Buscar, Relação, Atenção, Limpar filtros) das ações (Exportar Excel, Importar e gerenciar). O cabeçalho da tabela fica fixo (`position: sticky`) a partir de 1200 px; abaixo de 1200 px as linhas viram cartões que começam por Série e OS. A coluna `Chamado` é a única marcada `Manual`.
+- Textos novos aceitos pelo usuário em 01/11/2026 (gerados por CSS): `Relação entre as fontes`, `Conferida`, `Divergente`, `Só Simpress`, `Só Oracle` (iguais a `relationLabels`), `3+ dias`, `Sem data`, `Manual`, `Automático · Dashboard`, `Nenhuma OS importada. Use Importar e gerenciar para enviar as planilhas Simpress e Oracle.` e `Nenhuma OS corresponde aos filtros. Use Limpar filtros.`.
+- Atributos novos, aditivos: `data-estado` no cartão `.ck-os` (`carregando`, `vazio`, `erro`, `pronto`); `data-origem` no `.ticket-os-link-editor` (valor de `origem` de `GET /api/operacoes/chamados/vinculos-os`); `aria-invalid` no campo UTIC quando o número é inválido.
+- Compatibilidade: textos aprovados antes, IDs, `data-*` e handlers não mudam. A regra de 30/10/2026 continua valendo: série sem OS vinculada (nem na Simpress nem no Oracle) some por completo da aba (`#cockpit-tickets-os`), sem linha, KPI nem opção de filtro `Sem OS` e sem o sufixo de contagem; só a exibição muda, o relatório do servidor e o histórico seguem guardando `sem_os`.
+- Escritas da aba, sem acréscimo: `PUT /api/operacoes/chamados/vinculos-os`, anotação com autosave e importação das planilhas; nada é escrito nem apagado em sistemas externos.
+
 ---
 
 # Histórico: prompt 7 original

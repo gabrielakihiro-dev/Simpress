@@ -17,7 +17,7 @@ description: Ajustes visuais pontuais na interface do Simpress com prints antes/
 
 ## Fluxo
 
-1. Inicie o fixture isolado com a configuração `ui-fixture` de `.claude/launch.json` (porta 8765, `tests/support/serve_ui_motion_preview.py`). Ele não usa dados operacionais.
+1. Inicie o fixture isolado com a configuração `ui-fixture` de `.claude/launch.json` (porta 8765, `tests/support/serve_ui_motion_preview.py`). Ele não usa dados operacionais. Se o Chromium compatível com o Playwright local estiver ausente, instale-o com `node node_modules/playwright/cli.js install chromium`; quando o cache padrão do sandbox não persistir entre chamadas, use `.claude/prints/<assunto>/pw-browsers` como `PLAYWRIGHT_BROWSERS_PATH` na instalação e na captura.
 2. Tire os prints **antes**, em quatro combinações: desktop (1366×900) e mobile (390×844), cada um nos temas claro e escuro. Salve em `.claude/prints/<assunto>/antes-<tela>-<desktop|mobile>-<light|dark>.png` (pasta ignorada pelo Git).
 3. Faça a alteração. Se o CSS do Tailwind mudar, rode `npm run build:ui`.
 4. Tire os prints **depois** com os mesmos nomes, trocando `antes` por `depois`, e compare lado a lado.

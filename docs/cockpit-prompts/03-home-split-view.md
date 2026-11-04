@@ -66,6 +66,8 @@ A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left:
 - Clicar numa linha seleciona o equipamento e mostra o detalhe à direita.
 - Ao iniciar a busca de outro equipamento, limpe `aria-selected` da seleção anterior; se a busca falhar, nenhuma opção permanece selecionada. O item ativo (`aria-activedescendant`) e suas ações continuam disponíveis, independentemente da seleção carregada.
 - A busca global (`#input-serial`) filtra esta lista.
+- Pesquisa da Home sem resultado: o autocompletar mostra `Você quis dizer <usuário mais próximo>?` (campo `sugestao` de `/api/buscar-expandida`); só aparece se a sugestão achar equipamento e nada é gravado.
+- Barra de pesquisa (04/11/2026, pedido do usuário): `Enter` na barra (`#input-serial`) ou `Buscar Equipamento` leva sempre à Home (F1) (`app.ativarAbaTransferencia("home")`, que também fecha painéis F5–F9) antes de pesquisar; só navegação, sem escrita.
 - Com um único caractere, invalida e cancela a requisição anterior da lista e mostra `Digite ao menos 2 caracteres para filtrar a lista.`; uma resposta atrasada não altera a lista, a contagem nem a paginação. Limpar a busca volta a listar o inventário.
 - Mantenha o autocomplete (`#autocomplete-box`) funcionando — ele pode aparecer sobre a lista ou como dropdown da busca.
 - Os dados vêm da mesma fonte atual (API de equipamentos). Use o JS existente em `equipment-search.js` e adapte a renderização.

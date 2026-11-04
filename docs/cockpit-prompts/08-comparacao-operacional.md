@@ -69,6 +69,16 @@ Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover 
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
 `#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos.
+
+## Redesenho visual da aba Comparação (F7, 02/11/2026)
+
+Autorizado pelo usuário em 02/11/2026. Escopo: só CSS e apresentação em `static/styles/ck-cockpit.css`, sem regra de negócio, endpoint, rotina nem escrita nova; `static/index.html` não muda. Painel `[data-cockpit-tool-panel="comparacao"]`:
+
+- Barra: à esquerda a comparação escolhida (`#cockpit-comparison-event`) e a nota de estado; à direita as ações. `Exportar` é a única ação principal; `Histórico e ações completas` fica com o visual secundário (a classe no HTML não muda).
+- Resultado (`#comparacao-planilhas-conteudo`), ordem visual: avisos, resumo, filtros, seções com linhas, seções sem linhas, nota final. O resumo vira uma faixa de cartões compactos (5 colunas a partir de 1200 px, 3 até 1199 px, 2 até 767 px), com o número no tom de `data-metric-tone` quando há itens e recuado quando não há; as seções sem linhas encolhem e descem.
+- Linhas: cada linha da tabela ou do cartão mostra por CSS uma faixa de estado (de `data-comparison-category`, `data-user-change`, `[data-manual-alias-actions]` e `[data-user-hold-status]`); a anotação existente continua marcada por uma segunda faixa; a barra de filtros mostra o estado ativo. A barra de filtros é estática (rola com a página); isso prevalece sobre o `sticky` citado na revisão acima.
+- Nenhum texto novo: os textos aprovados, os rótulos ("no Endpoint", "na Simpress"), os IDs, os `data-*`, o ARIA e os handlers não mudam. Atributo novo, opcional e aditivo: `data-estado` em `#comparacao-planilhas-conteudo` (`carregando`, `vazio`, `erro`, `pronto`).
+
 # Atualização funcional de 03/11/2026: F7 e UX
 
 O botão existente **Exportar Excel** (`#btn-exportar-equipamentos`) preserva download, ID, handler e disponibilidade, e inicia a atualização externa de apelidos/id no UX com o próprio Blob e nome recém-exportados. Ordem e salvaguardas: [Automação Chrome](../operacao/automacao-chrome.md#f7-atualizar-apelidos-e-id-no-ux). Autorização explícita do usuário em 03/11/2026. A confirmação exata `Planilha Exportada com Sucesso!` não confirma gravação UX; início, falha e conclusão externa são separados, com acompanhamento/cancelamento em F4. O Assistente conhece a diferença, mas não ganha ferramenta de disparo: sua exportação só baixa o arquivo. Testes usam fixture local, nunca gravação real.
