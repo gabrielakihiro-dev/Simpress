@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Tuple[int, Any]]
 
 CALL_TIMEOUT_SECONDS = 30.0
+ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 480.0  # Navigation, grid waits and two confirmed serial filters.
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
@@ -201,7 +202,8 @@ def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
 
     def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
-            return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), CALL_TIMEOUT_SECONDS)
+            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path == "/api/endpoint/consultar" else CALL_TIMEOUT_SECONDS
+            return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
 
         return asyncio.run(run())
 
@@ -805,6 +807,18 @@ class SimpressApi:
         return self._ultimo_evento()
 
     # --- queries ----------------------------------------------------------
+
+    def consultar_endpoint(self, serial: str) -> Dict[str, Any]:
+        """The same read-only Chrome lookup used by Home; the conversation masks ultimo_logon."""
+        clean = serial.strip().upper()
+        if not clean:
+            return {"erro": "Número de série não informado."}
+        ok, dados = self._chamar("POST", "/api/endpoint/consultar", corpo={"serial": clean})
+        if not ok:
+            return {"erro": dados}
+        if not isinstance(dados, dict) or dados.get("status") not in ("found", "not_found", "ambiguous"):
+            return {"erro": "Não foi possível confirmar o resultado do Endpoint."}
+        return {key: dados[key] for key in ("status", "serial", "ultimo_logon", "origem") if key in dados}
 
     def consultar_equipamento(self, serial: str) -> Dict[str, Any]:
         """Look up one serial. MacBook rule from AGENTS.md: retry with a leading 'S', accepted only for a MacBook."""

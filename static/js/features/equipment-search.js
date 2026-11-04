@@ -13,6 +13,7 @@
   const autocompleteRequestGate = transferUtils.createRequestGate();
   const equipmentLookupRequestGate = transferUtils.createRequestGate();
   const homeListRequestGate = transferUtils.createRequestGate();
+  const endpointRequestGate = transferUtils.createRequestGate();
   const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
   const HOME_LIST_PAGE_SIZE = 50;
   const HOME_COMPARISON_FILTERS = Object.freeze({
@@ -31,14 +32,68 @@
   let finishEquipmentLoading = () => {};
 
   function definirEquipamentoAtual(equipment) {
+    endpointRequestGate.invalidate();
     appState.currentEquipamento = equipment;
     appState.equipamentoSelectionRevision += 1;
     app.atualizarResumoSerieTransferencia(equipment);
     const copySerialButton = document.getElementById("btn-copiar-serie");
     const hasSerial = Boolean(String(equipment?.serial || "").trim());
+    const endpointButton = document.getElementById("btn-consultar-endpoint");
+    if (endpointButton) {
+      endpointButton.disabled = !hasSerial;
+      endpointButton.removeAttribute("aria-busy");
+    }
+    const endpointResult = document.getElementById("endpoint-lookup-result");
+    if (endpointResult) endpointResult.textContent = "";
     if (copySerialButton) {
       copySerialButton.disabled = !hasSerial;
       copySerialButton.setAttribute("aria-disabled", String(!hasSerial));
+    }
+  }
+
+  async function consultarEndpoint() {
+    const serial = String(appState.currentEquipamento?.serial || "").trim();
+    const button = document.getElementById("btn-consultar-endpoint");
+    const result = document.getElementById("endpoint-lookup-result");
+    if (!serial || button?.disabled) return;
+    const revision = appState.equipamentoSelectionRevision;
+    const request = endpointRequestGate.begin();
+    const current = () => endpointRequestGate.isCurrent(request.id)
+      && appState.equipamentoSelectionRevision === revision;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    result.textContent = "Consultando no Endpoint…";
+    try {
+      const data = await app.apiFetch("/api/endpoint/consultar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serial }), signal: request.signal,
+        errorMessage: "Não foi possível consultar o Endpoint.",
+      });
+      if (!current()) return;
+      if (data.status === "found") {
+        result.textContent = data.ultimo_logon
+          ? `Usuário do último logon: ${data.ultimo_logon}`
+          : "Equipamento encontrado no Endpoint, sem usuário do último logon informado.";
+      } else if (data.status === "not_found") {
+        result.textContent = "Equipamento não encontrado no Endpoint";
+      } else if (data.status === "ambiguous") {
+        if (data.origem === "base_local") {
+          result.textContent = "A série alternativa do MacBook é ambígua na base local. Nenhum usuário foi associado.";
+        } else if (data.origem === "correspondencia_mac") {
+          result.textContent = "Não foi possível confirmar a correspondência única do MacBook no Endpoint. Nenhum usuário foi associado.";
+        } else {
+          result.textContent = "Mais de um equipamento encontrado no Endpoint para esta série. Confira as duplicidades.";
+        }
+      } else {
+        throw new Error("Não foi possível confirmar o resultado do Endpoint.");
+      }
+    } catch (error) {
+      if (current() && error.name !== "AbortError") result.textContent = error.message || "Não foi possível consultar o Endpoint.";
+    } finally {
+      if (current()) {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+      }
     }
   }
 
@@ -958,6 +1013,7 @@
   }
 
   return {
+    consultarEndpoint,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,

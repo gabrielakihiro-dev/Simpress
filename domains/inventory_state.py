@@ -497,6 +497,7 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
             equipment.get("idCliente"),
         )
         normalized_serial = normalize_reference_value(equipment.get("serial"))
+        equipment["serie_detalhes_duplicada"] = details_serial_counts.get(normalized_serial, 0) > 1
         equipment["_apelido_manual_override"] = normalized_serial in manual_aliases
         equipment["_apelido_local"] = manual_aliases.get(
             normalized_serial, equipment.get("_apelido_base", "")
@@ -504,7 +505,7 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
         services.apply_effective_alias(
             equipment,
             endpoint_index,
-            details_duplicate=details_serial_counts.get(normalized_serial, 0) > 1,
+            details_duplicate=equipment["serie_detalhes_duplicada"],
         )
 
     # Calculate stats

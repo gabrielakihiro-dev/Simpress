@@ -576,7 +576,7 @@ test("Cancelar durante o Pensando…: aborta o envio, tira o carregando e devolv
   await expect(page.locator("#assistente-texto")).toBeFocused();
 });
 
-test("sem resposta em 100 s o envio é abortado com mensagem clara e o campo volta a funcionar", async ({ page }) => {
+test("sem resposta em 600 s o envio é abortado com mensagem clara e o campo volta a funcionar", async ({ page }) => {
   await page.clock.install();
   await mockAssistente(page, { estado: PRONTO });
   await page.route("**/api/assistente/mensagem", () => {});
@@ -585,7 +585,7 @@ test("sem resposta em 100 s o envio é abortado com mensagem clara e o campo vol
   await page.locator("#assistente-texto").fill("pergunta lenta");
   await page.keyboard.press("Enter");
   await expect(page.locator("#assistente-status")).toHaveText("Pensando…");
-  await page.clock.fastForward(99000);
+  await page.clock.fastForward(599000);
   await expect(page.locator("#assistente-status")).toHaveText("Pensando…");
   await page.clock.fastForward(2000);
   await expect(page.locator("#assistente-status")).toContainText("demorou demais");
