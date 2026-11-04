@@ -10,12 +10,15 @@ inbox folders; this module only starts, watches and stops the process.
 from __future__ import annotations
 
 import json
+import io
 import logging
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -23,10 +26,12 @@ from typing import Any, Callable, Dict, List, Optional, Protocol
 from urllib.parse import quote
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError
+from core.config import MAX_UX_ALIAS_BYTES
+from core.xlsx_safety import validate_xlsx_archive, WORKBOOK_READ_ERRORS
 
 logger = logging.getLogger(__name__)
 
-ROUTINES = ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos")
+ROUTINES = ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos", "ux_apelidos")
 ROUTINE_LABELS = {
     "os": "Rotina de OS",
     "inventarios": "Inventários",
@@ -38,6 +43,7 @@ ROUTINE_LABELS = {
     "enviar": "Enviar Dashboard atualizado ao SharePoint",
     "fechar": "Finalizar chamados no SoftExpert",
     "antigos": "Ler chamados antigos no SoftExpert",
+    "ux_apelidos": "Atualizar apelidos e id no UX Simpress",
 }
 MAX_LOG_CHUNK_BYTES = 64 * 1024
 LOGIN_SCAN_BYTES = 256 * 1024
@@ -205,6 +211,7 @@ class _Run:
     process: Optional[ProcessHandle]
     cancel_requested: bool = False
     finished: bool = False
+    upload: Optional[tempfile.TemporaryDirectory[str]] = None
 
     def alive(self, is_alive: Callable[[int], bool]) -> bool:
         if self.process is not None:
@@ -286,6 +293,8 @@ class ChromeAutomationRunner:
             run.finished = True
             record = _read_json(run.record_path) or {}
             self._finish_record(run.record_path, record, code, run.log_path, cancelled=run.cancel_requested)
+            if run.upload is not None:
+                run.upload.cleanup()
         if self._current is run:
             self._current = None
 
@@ -334,6 +343,7 @@ class ChromeAutomationRunner:
         lotes: List[Dict[str, str]] = []
         capturas: List[str] = []
         falha = ""
+        salvamento_ux_pedido = False
         for line in _read_tail(log_path, 1024 * 1024).splitlines():
             batch = re.search(r"Lote (\S+) em (\w+)", line)
             if batch:
@@ -345,7 +355,10 @@ class ChromeAutomationRunner:
                 capturas.append(Path(line.split(self.contract.capture_marker, 1)[1].strip()).name)
             if "[FALHA]" in line:
                 falha = line.split("[FALHA]", 1)[1].strip()
-        return {"lotes": lotes, "capturas": capturas, "mensagem": falha}
+            if "clicando uma vez em Salvar edições..." in line:
+                salvamento_ux_pedido = True
+        return {"lotes": lotes, "capturas": capturas, "mensagem": falha,
+                "salvamento_ux_pedido": salvamento_ux_pedido}
 
     def _status_for(self, code: Optional[int], cancelled: bool) -> str:
         if code is None:
@@ -362,9 +375,18 @@ class ChromeAutomationRunner:
         self, path: Path, record: Dict[str, Any], code: Optional[int], log_path: Path, *, cancelled: bool = False,
     ) -> None:
         parsed = self._parse_log(log_path)
+        salvamento_ux_incerto = record.get("rotina") == "ux_apelidos" and code != 0 and parsed["salvamento_ux_pedido"]
         status = self._status_for(code, cancelled)
+        if salvamento_ux_incerto:
+            status = "interrompido" if code is None else "falha"
         mensagem = parsed["mensagem"]
-        if status == "interrompido":
+        if salvamento_ux_incerto and "resultado incerto" not in mensagem.casefold():
+            aviso = (
+                "Resultado incerto após o início do clique em Salvar edições. Confira manualmente no UX "
+                "antes de tentar novamente; o clique não será repetido."
+            )
+            mensagem = f"{mensagem} {aviso}".strip()
+        elif status == "interrompido":
             mensagem = mensagem or "O servidor foi reiniciado durante a execução; o resultado final não foi registrado."
         elif status == "ocupada":
             mensagem = mensagem or "Outra execução da automação estava em andamento."
@@ -393,8 +415,30 @@ class ChromeAutomationRunner:
     # ------------------------------------------------------------------ actions
 
     def start(self, rotina: str) -> Dict[str, Any]:
-        if rotina not in ROUTINES:
+        if rotina not in ROUTINES or rotina == "ux_apelidos":
             raise DomainError("Rotina inválida.", status_code=422)
+        return self._start(rotina)
+
+    def start_ux_alias(self, filename: str, content: bytes) -> Dict[str, Any]:
+        """Recebe o próprio Blob do F7; não consulta Downloads nem regenera a exportação."""
+        if (not re.fullmatch(r"[\w () .-]{1,160}\.xlsx", filename, re.IGNORECASE)
+                or filename.startswith((" ", "."))
+                or re.match(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", filename, re.IGNORECASE)):
+            raise DomainError("Nome de planilha inválido; envie um nome simples terminado em .xlsx.", status_code=422)
+        if not content or len(content) > MAX_UX_ALIAS_BYTES:
+            raise DomainError("A planilha deve ter entre 1 byte e 20 MB.", status_code=422)
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as arquivo:
+                infos = arquivo.infolist()
+                validate_xlsx_archive(arquivo)
+                if (any(item.flag_bits & 1 or "vbaproject" in item.filename.lower() for item in infos)
+                        or arquivo.testzip() is not None):
+                    raise ValueError("XLSX inválido")
+        except WORKBOOK_READ_ERRORS:
+            raise DomainError("O arquivo enviado não é uma planilha XLSX válida.", status_code=422) from None
+        return self._start("ux_apelidos", filename=filename, content=content)
+
+    def _start(self, rotina: str, *, filename: str = "", content: bytes = b"") -> Dict[str, Any]:
         with self._lock:
             active = self._active_locked()
             if active is not None:
@@ -402,18 +446,28 @@ class ChromeAutomationRunner:
             if not self.contract.script.is_file():
                 raise DomainBusyError("O script da automação não foi encontrado em scripts/automacao_rotinas_chrome.py.")
             log_path = self._new_log_path(rotina)
+            upload = None
             try:
+                arguments = [self.contract.routine_flag, rotina]
+                if rotina == "ux_apelidos":
+                    upload = tempfile.TemporaryDirectory(prefix="simpress-ux-apelidos-")
+                    path = Path(upload.name) / filename
+                    path.write_bytes(content)
+                    arguments.extend(["--planilha-ux", str(path)])
                 with log_path.open("wb") as output:
                     process = self._popen(
-                        self._command(self.contract.routine_flag, rotina),
+                        self._command(*arguments),
                         stdout=output,
                         stderr=subprocess.STDOUT,
                         **self._process_options(),
                     )
             except OSError as error:
+                if upload is not None:
+                    upload.cleanup()
                 logger.warning("A automação não pôde ser iniciada (erro=%s).", type(error).__name__)
                 raise DomainBusyError("Não foi possível iniciar a automação. Confira o ambiente Python do projeto.") from None
             run = _Run(rotina, _now_iso(self._now()), process.pid, log_path, self._record_path(log_path), process)
+            run.upload = upload
             _write_json(run.record_path, {
                 "rotina": rotina, "inicio": run.inicio, "fim": None, "status": "em_andamento", "codigo": None,
                 "mensagem": "", "pid": process.pid, "log": log_path.name, "origem": "site", "lotes": [], "capturas": [],
@@ -581,7 +635,13 @@ class ChromeAutomationRunner:
                 # The script's own summary knows the batches and captures better than the stdout scan.
                 twin["lotes"] = record.get("lotes") or twin.get("lotes")
                 twin["capturas"] = [*(record.get("capturas") or []), *(twin.get("capturas") or [])]
-                twin["mensagem"] = record.get("mensagem") or twin.get("mensagem")
+                site_message = str(twin.get("mensagem") or "")
+                script_message = str(record.get("mensagem") or "")
+                if script_message and (
+                    "resultado incerto" in script_message.casefold()
+                    or "resultado incerto" not in site_message.casefold()
+                ):
+                    twin["mensagem"] = script_message
                 if twin.get("status") not in FINAL_STATUSES and record.get("status") in FINAL_STATUSES:
                     twin.update(status=record["status"], fim=record.get("fim"), codigo=record.get("codigo"))
                 continue

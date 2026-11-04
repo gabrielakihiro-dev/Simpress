@@ -147,7 +147,7 @@ class CredenciaisTest(unittest.TestCase):
             ("A senha fictícia foi alterada com sucesso", "A senha fictícia foi alterada com sucesso"),
             ("senha fictícia foi alterada para segredo", "senha fictícia foi alterada para " + dash.OMITIDO),
             ("senha fictícia é frase secreta", "senha fictícia é " + dash.OMITIDO),
-            ("senha fictícia e frase secreta para acesso", "senha fictícia e frase secreta para acesso"),
+            ("senha fictícia e frase secreta para acesso", "senha fictícia e " + dash.OMITIDO + " para acesso"),
         ):
             with self.subTest(texto=texto):
                 self.assertEqual(dash.omitir_credenciais(texto), esperado)
@@ -162,12 +162,27 @@ class CredenciaisTest(unittest.TestCase):
                 self.assertEqual(dash.montar_linha(chamado)["F"], esperado)
 
     def test_senha_minuscula_apos_e_preserva_contexto(self):
-        self.assertEqual(dash.omitir_credenciais("senha e segredo para acesso"), "senha e segredo para acesso")
+        for texto, esperado in (
+            ("senha e segredo para acesso", "senha e " + dash.OMITIDO + " para acesso"),
+            ("password e abc para acesso.", "password e " + dash.OMITIDO + " para acesso."),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
+                self.assertEqual(dash.omitir_credenciais(esperado), esperado)
+                chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+                self.assertEqual(dash.montar_linha(chamado)["F"], esperado)
+
+    def test_valor_simples_minusculo_apos_e_e_omitido(self):
+        for texto, esperado in (
+            ("senha e segredo", "senha e " + dash.OMITIDO),
+            ("password e segredo", "password e " + dash.OMITIDO),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
 
     def test_e_gramatical_e_marcador_existente_sao_preservados(self):
         for texto in (
             "A senha e o usuário foram alterados",
-            "senha e segredo",
             "senha fictícia e frase secreta",
             "O usuário esqueceu a senha e precisa de ajuda",
             "O usuário esqueceu a senha e solicitou ajuda",
@@ -181,6 +196,12 @@ class CredenciaisTest(unittest.TestCase):
                 limpo = dash.omitir_credenciais(texto)
                 self.assertEqual(limpo, "senha e " + dash.OMITIDO + " para acesso")
                 self.assertEqual(dash.omitir_credenciais(limpo), limpo)
+
+    def test_narrativa_de_ajuda_para_acesso_e_preservada_na_coluna_f(self):
+        texto = "O usuário esqueceu a senha e solicitou ajuda para acesso"
+        self.assertEqual(dash.omitir_credenciais(texto), texto)
+        chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+        self.assertEqual(dash.montar_linha(chamado)["F"], texto)
 
     def test_senha_explicita_apos_continuacao_gramatical_ainda_e_omitida(self):
         texto = "O usuário esqueceu a senha e precisa de ajuda; password: Segredo123"

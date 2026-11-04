@@ -918,7 +918,7 @@ def _apply_held_aliases(
         if cached_key in next_holds or cached_key in existing_holds:
             apply_effective_alias(
                 cached, refreshed_index,
-                details_duplicate=cached.get("invall_alias_status") == "serie_detalhes_duplicada",
+                details_duplicate=bool(cached.get("serie_detalhes_duplicada", cached.get("invall_alias_status") == "serie_detalhes_duplicada")),
             )
 
 

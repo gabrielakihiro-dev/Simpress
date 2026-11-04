@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Callable, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from core.errors import DomainError
-from domains.chrome_automation import ChromeAutomationRunner
+from domains.chrome_automation import ChromeAutomationRunner, MAX_UX_ALIAS_BYTES
 from domains.sebrae_agendamento import AgendadorSebrae
 from domains.dashboard_agendamento import AgendadorDashboard
 
@@ -42,6 +43,20 @@ class AutomationRouteServices:
 def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     router = APIRouter()
 
+    @router.post("/api/automacao/ux-apelidos", status_code=202)
+    async def atualizar_apelidos_ux(request: Request):
+        """F7: mantém os bytes/nome do download e inicia a escrita explicitamente solicitada no UX."""
+        form = await request.form(max_files=1, max_fields=0)
+        try:
+            campos = form.multi_items()
+            if len(campos) != 1 or campos[0][0] != "file" or not isinstance(campos[0][1], StarletteUploadFile):
+                raise DomainError("Envie exatamente um arquivo XLSX.", status_code=422)
+            file = campos[0][1]
+            content = await file.read(MAX_UX_ALIAS_BYTES + 1)
+            return services.runner().start_ux_alias(file.filename or "", content)
+        finally:
+            await form.close()
+
     @router.post("/api/automacao/executar", status_code=202)
     def executar_automacao(payload: RotinaPayload):
         """Inicia uma rotina; 409 quando já há uma execução (do site ou do .bat)."""
@@ -64,7 +79,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     def historico_automacao(
         limite: int = Query(15, ge=1, le=50), pagina: int = Query(1, ge=1),
         data_inicio: date | None = None, data_fim: date | None = None,
-        rotina: RotinaNome | None = None,
+        rotina: RotinaNome | Literal["ux_apelidos"] | None = None,
         status: Literal["em_andamento", "concluido", "falha", "cancelado", "ocupada", "interrompido"] | None = None,
     ):
         """Últimas execuções com status, lotes e capturas de erro."""

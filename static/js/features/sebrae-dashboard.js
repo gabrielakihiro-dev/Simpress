@@ -1070,6 +1070,11 @@
         estado.soft[numero].pdfRemocaoPendente = Boolean(dados.pdf_remocao_pendente);
         definirFeedback(ref.feedbackPdf, "PDF removido.", "ok");
       } catch (error) {
+        const dados = error.data;
+        if (error.status === 503 && dados?.numero === numero && dados.pdf_remocao_pendente === true && Object.hasOwn(dados, "pdf")) {
+          estado.soft[numero].pdf = dados.pdf;
+          estado.soft[numero].pdfRemocaoPendente = true;
+        }
         definirFeedback(ref.feedbackPdf, `PDF não removido: ${error.message}`, "erro");
       } finally {
         atualizarFinalizar(numero);

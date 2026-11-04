@@ -504,6 +504,17 @@ def _describe_recarregar_base(args: Args) -> str:
 
 QUERY_TOOLS: List[Tool] = [
     _read(
+        "consultar_endpoint",
+        "Consulta ao vivo no Endpoint pelo Chrome de automação o número de série exato e a coluna Usuário do último logon. "
+        "Somente leitura, sem alterar cadastro ou usuários. Retorna found (ultimo_logon vazio é equipamento sem valor), "
+        "not_found (Equipamento não encontrado no Endpoint), ambiguous ou erro de acesso. Não substitui por Usuários logados. "
+        "Em ambiguous, origem base_local indica colisão na base, correspondencia_mac indica Mac não confirmado; sem origem, duplicidade no Endpoint. "
+        "O usuário do último logon é mascarado antes do modelo. Uma consulta Endpoint por mensagem; peça outras séries em mensagens separadas. "
+        "Requer Chrome de automação aberto e login manual.",
+        lambda c, a: c.consultar_endpoint(str(a.get("serial", ""))),
+        {"serial": SERIAL}, ["serial"],
+    ),
+    _read(
         "ver_contato_origem_transferencia",
         "Mostra o contato de origem da transferência (nome, e-mail, celular, se está completo e de onde vem cada valor). Os dados pessoais aparecem como marcadores.",
         lambda c, a: c.ver_contato_origem(),
@@ -832,6 +843,7 @@ QUERY_TOOLS: List[Tool] = [
         "exportar_planilha",
         "Exporta uma das planilhas Excel que o Simpress já exporta (a mesma dos botões Exportar), para o usuário baixar. "
         "Só grava o arquivo na memória do servidor; não altera dados, então não pede confirmação. O botão Baixar aparece na tela. "
+        "Difere do botão Exportar Excel em Comparação (F7): aquele também inicia a atualização externa de apelidos/id no UX; esta ferramenta só baixa. "
         "Quando der certo, responda exatamente: Planilha Exportada com Sucesso! (sem contagens, links nem caminhos). "
         "Só exporte quando o usuário pedir a planilha.",
         _exportar_planilha,
@@ -1342,7 +1354,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     ),
     "usuarios": (
         r"\busuario|\bentra\b|\blogad|\bpessoa|\blogin\b|\bnome\b|\bpendencia",
-        ("estado_usuarios_entra", "listar_pendencias_usuarios", "decidir_pendencia_usuario", "atualizar_usuario", "usuarios_logados", "salvar_nome_pessoa"),
+        ("consultar_endpoint", "estado_usuarios_entra", "listar_pendencias_usuarios", "decidir_pendencia_usuario", "atualizar_usuario", "usuarios_logados", "salvar_nome_pessoa"),
     ),
     "apelido": (
         r"\bapelido|\balias\b|\brenome",
@@ -1354,7 +1366,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     ),
     "hostname": (
         r"\bhostname|\bduplicad|\bendpoint",
-        ("listar_hostnames_removidos", "remover_hostname_endpoint", "restaurar_hostname_endpoint"),
+        ("consultar_endpoint", "listar_hostnames_removidos", "remover_hostname_endpoint", "restaurar_hostname_endpoint"),
     ),
     "mensal": (r"\bmensal|\bmes\b|\bmeses\b|\brelatorio", ("obter_relatorio_mensal", "comparar_periodos")),
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
