@@ -39,7 +39,7 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
    $lote = "OS_<AAAAMMDD>_<HHMM>"
    Copy-Item -Recurse "$raiz\modelo_lote" "$raiz\pendentes\$lote"
    ```
-   Exatamente um `.xlsx` em `pendentes\$lote\simpress` (UX) e um em `pendentes\$lote\oracle` (Oracle), com nomes originais e até 60 MB cada. Não sobrescreva lotes anteriores. `.importador.lock` vazio indica fila livre.
+   Exatamente um `.xlsx` em `pendentes\$lote\simpress` (UX, Acompanhamento de Pedidos) e um em `pendentes\$lote\oracle` (Oracle, Gestão de Solicitações), com nomes originais e até 60 MB cada. Não sobrescreva lotes anteriores. `.importador.lock` vazio indica fila livre.
 6. **Importar**: com o servidor ativo, o lote é processado em ~20–45 s (varre a cada 10 s, duas leituras estáveis); não clique em Importar nem repita o lote enquanto aguarda. Sem servidor: `.\.venv\Scripts\python.exe scripts\process_ticket_inbox.py`.
 7. **Confirmar**: lote em `processadas\<lote>` com `_resultado.json` `status: concluido` **e** nova entrada/contadores no Histórico do Acompanhamento de Chamados. Sem os dois, não declare conclusão. Se foi para `falhas`, leia o `_resultado.json`, relate o erro e, após corrigir, use identificador novo; não reprocesse por conta própria.
 8. Não apague lotes processados (auditoria). Relate fontes, horários, contadores e limitações; informe commit/push só se realizados.

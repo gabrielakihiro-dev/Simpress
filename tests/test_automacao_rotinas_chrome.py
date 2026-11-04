@@ -314,6 +314,13 @@ class LoginAbasTests(unittest.TestCase):
         campo.filter.return_value.first.fill.assert_called_with("gakihiro@pr.sebrae.com.br")
         avancar.filter.return_value.first.click.assert_called_once()
 
+    def test_sharepoint_dashboard_signs_in_with_the_simpress_account(self):
+        page = MagicMock()
+        page.url = "https://login.microsoftonline.com/"
+        with patch.object(automacao, "entrar_microsoft") as entrar:
+            self.assertTrue(automacao.pasta_dashboard_entrar(page))
+        self.assertEqual(entrar.call_args.args[2], automacao.EMAIL_DASHBOARD)
+
     def _pagina_endpoint(self, usuario="gakihiro"):
         page = MagicMock()
         page.url = "https://centralendpoint.pr.sebrae.com.br/client#/login"
