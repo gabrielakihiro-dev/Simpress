@@ -117,9 +117,9 @@ if exist "%MIGRATOR%" (
 echo.
 
 rem ---------------------------------------------------------------
-rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep e Node.js (nunca bloqueiam)
+rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify e Node.js (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais ^(ripgrep, RTK e Node.js; so para desenvolvimento^)...
+echo [5/5] Conferindo ferramentas opcionais ^(ripgrep, RTK, graphify e Node.js; so para desenvolvimento^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
@@ -149,13 +149,13 @@ if errorlevel 1 (
 ) else (
     echo   OK: RTK ^(Rust Token Killer^) encontrado.
 )
-goto checar_node
+goto checar_graphify
 
 :instalar_rtk
 where winget >nul 2>nul
 if errorlevel 1 (
     echo   RTK nao encontrado e o winget nao esta disponivel. Baixe o binario em https://github.com/rtk-ai/rtk/releases ^(opcional^).
-    goto checar_node
+    goto checar_graphify
 )
 echo   RTK ^(Rust Token Killer^) nao encontrado; instalando pelo winget ^(reduz o consumo de tokens dos agentes^)...
 winget install -e --id rtk-ai.rtk --accept-package-agreements --accept-source-agreements
@@ -165,6 +165,36 @@ if errorlevel 1 (
     echo   OK: RTK instalado. Abra um terminal novo e rode "rtk gain" para confirmar.
     echo   Para ativar o hook do Claude Code, rode uma vez: rtk init -g ^(altera ~/.claude/settings.json; nao e feito aqui^).
 )
+
+:checar_graphify
+where graphify >nul 2>nul
+if not errorlevel 1 (
+    echo   OK: graphify encontrado.
+    goto checar_node
+)
+where uv >nul 2>nul
+if errorlevel 1 goto graphify_com_pip
+echo   graphify nao encontrado; instalando com uv ^(grafo de conhecimento do codigo; opcional^)...
+uv tool install graphifyy
+goto graphify_resultado
+
+:graphify_com_pip
+if /i "%BOOTSTRAP_LAUNCHER%"=="%PYTHON%" (
+    echo   graphify nao encontrado e o uv nao esta disponivel. Instale o uv ^(winget install -e --id astral-sh.uv^)
+    echo   e execute este instalador de novo, ou rode: pip install --user graphifyy ^(opcional^).
+    goto checar_node
+)
+echo   graphify nao encontrado e o uv nao esta disponivel; instalando com pip --user...
+"%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% -m pip install --user graphifyy
+
+:graphify_resultado
+if errorlevel 1 (
+    echo   [AVISO] Nao foi possivel instalar o graphify; o servidor nao e afetado.
+    goto checar_node
+)
+echo   OK: graphify instalado. Abra um terminal novo para ele entrar no PATH.
+echo   Para registrar a skill no Claude Code, rode uma vez: graphify install ^(altera ~/.claude; nao e feito aqui^).
+echo   Para criar o grafo do projeto: /graphify . no Claude Code ^(a extracao de docs usa tokens; nao e feita aqui^).
 
 :checar_node
 where npm >nul 2>nul

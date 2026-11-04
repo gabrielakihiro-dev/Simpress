@@ -728,7 +728,7 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ui-equipment-loading:empty { display: none; }
 .ck-itens:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; }
 .ck-item { padding: 9px 12px; }
-.ck-item__serie { font-size: 18px; line-height: 1.3; white-space: nowrap; }
+.ck-item__serie { font-size: var(--fs-2xl); line-height: 1.3; white-space: nowrap; }
 .ck-item__local { align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 14ch; }
 .ck-item__status { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .ck-item .ck-status { white-space: nowrap; }
@@ -806,6 +806,10 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 @media (max-width: 767.98px) {
   .ck-acoes-status { flex: 1 1 100%; margin-right: 0; }
 }
+/* B4: app.css dá min-height 48px a todo button até 1280px (ou toque), mas "Abrir chamado" é um link; sem isto ele ficava com 30px ao lado dos botões de 48px na barra de ações do Transporte. */
+@media (max-width: 1280px), (pointer: coarse) {
+  .ck-acoes-barra a.ck-btn { min-height: 48px; }
+}
 
 /* Região 3E: Resumo. Legado (.cockpit-shell .cockpit-summary-*) deixou de casar; aqui só o que o pacote não cobre. */
 #tab-panel-resumo.ck-tela--ferramenta { overflow: visible; }
@@ -826,6 +830,13 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #cockpit-summary-rows [data-status="ok"] { color: var(--cor-ok-texto); }
 #cockpit-summary-status:empty { display: none; }
 #cockpit-summary-pagination[hidden] { display: none; }
+#resumo-cards[data-estado="erro"] #cockpit-summary-kpis { padding: 12px 16px; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-md); }
+#resumo-cards[data-estado="erro"] #cockpit-summary-status, #home-equipment-list[data-estado="erro"] + #home-list-empty { color: var(--cor-erro-texto); }
+/* Esqueleto de carregamento (ui-motion) com os tokens do Cockpit; vale só em Home e Resumo. */
+.ck-home .ui-skeleton-list, #resumo-cards .ui-skeleton-list { padding: 8px 12px; }
+.ck-home .ui-skeleton-row, #resumo-cards .ui-skeleton-row { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-home .ui-skeleton, #resumo-cards .ui-skeleton { background: var(--cor-neutro-fundo); }
+.ck-home .ui-equipment-loading:not(:empty) { margin-top: 0; }
 
 /* Região 3D: tabela de OS (montada em Chamados por montarTabelaOs, seção .ck-os). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */
 .ck-os { margin: 0; }
@@ -863,6 +874,10 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 
 #automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 #automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
+/* B4: no card de chamados novos, a opção "Repetir a cada 30 minutos" e as três linhas de status ficam juntas (6px em vez de 14px) e se leem como um só grupo; o gap de 14px continua entre os grupos. */
+#tab-panel-automacao label.ck-campo + #dashboard-agendamento-status,
+#tab-panel-automacao #dashboard-agendamento-status + #sebrae-dashboard-status,
+#tab-panel-automacao #sebrae-dashboard-status + #sebrae-novos-resumo { margin-top: -8px; }
 .ck-aviso--alerta { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 #automacao-cards .ck-aviso--alerta .ck-ico { grid-row: auto; }
 
@@ -895,18 +910,28 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) { position: relative; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overflow: clip; }
 #simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) > .app-workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) #cockpit-tool-panels.ck-ferramenta { flex: 1; height: auto; }
-#cockpit-tool-title { margin: 0; font-size: 16px; font-weight: var(--peso-medio); }
+#cockpit-tool-title { margin: 0; font-size: var(--fs-xl); font-weight: var(--peso-medio); }
 #cockpit-tool-title:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-ferr-painel { flex: 1 0 auto; display: flex; flex-direction: column; }
 .ck-ferr-painel > :not(.ck-dividido):not(.ck-rel__corpo) { flex: none; }
 .ck-ferr-painel .ck-dividido { min-height: 240px; }
-.ck-ferr-painel .ck-kpi__valor { font-size: 22px; }
+.ck-ferr-painel .ck-kpi__valor { font-size: var(--fs-kpi); }
 .ck-ferr-painel .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
+/* Motion (B3): entrada discreta (ck-surgir: fade + 4px, --duracao) só quando o painel de ferramenta, a aba de modelo de chamado ou o conteúdo de um bloco recolhível passa a ser exibido; não anima a saída nem tabelas. As abas principais já têm SimpressMotion.reveal; os details do Sebrae têm ::details-content (mais abaixo). */
+@media (prefers-reduced-motion: no-preference) {
+  .ck-ferr-painel:not([hidden]), .ck-chamado__painel:not([hidden]),
+  :is(.ckp-recolher, details.ck-det-bloco)[open] > :not(summary) { animation: ck-surgir var(--duracao) var(--curva); }
+}
 .ck-ferr-os { min-width: 0; }
 /* Listas com detalhe: o painel inteiro rola, então o detalhe acompanha a lista em vez de ficar lá no topo (telas largas). */
 @media (min-width: 1200px) { #cockpit-tool-panels .ck-dividido__detalhe { align-self: start; position: sticky; top: 0; max-height: calc(100dvh - var(--ck-topbar-h, 48px)); overflow: auto; } }
 .ck-barra-ferr .ck-btn { align-self: flex-end; }
 .ck-barra-ferr .ck-btn--icone.ck-btn--sm { min-height: 0; align-self: center; }
+/* B4: no celular a busca do Histórico de apelidos e do Catálogo de unidades ocupa a linha toda (a regra de 220px de .ck-ferr-painel vencia o 100% de .ck-barra-ferr) e, nos apelidos, o Tipo preenche o espaço ao lado de Exportar CSV. */
+@media (max-width: 767.98px) {
+  .ck-ferr-painel:is([data-cockpit-tool-panel="apelidos"], [data-cockpit-tool-panel="unidades"]) .ck-barra-ferr .ck-campo { flex: 1 1 160px; }
+  .ck-ferr-painel:is([data-cockpit-tool-panel="apelidos"], [data-cockpit-tool-panel="unidades"]) .ck-barra-ferr .ck-campo:first-child { flex-basis: 100%; }
+}
 .ck-dividido__lista > .ck-barra-ferr { align-items: center; }
 .ck-ferr-filtros { padding: 8px 20px; border-bottom: 1px solid var(--cor-borda-suave); align-items: center; }
 .ck-ferr-filtros .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
@@ -954,6 +979,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
 .ck-rel__corpo > .ck-det-bloco { grid-column: 1 / -1; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
 .ck-rel__detalhe > .ck-rel__largo { grid-column: 1 / -1; }
+@media (max-width: 767.98px) { .ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } } /* F9 no celular: o detalhe do relatório (gráfico, tabela e cartões) ocupa a largura toda em vez de duas colunas de ~165px */
 .ck-rel__col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .ck-rel__barra { flex-wrap: wrap; align-items: flex-end; padding-top: 8px; padding-bottom: 8px; }
 .ck-rel__barra .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; }
@@ -961,7 +987,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-rel__cartao { padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
 .ck-rel__numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 0; }
 .ck-rel__numero { display: flex; flex-direction: column-reverse; min-width: 0; }
-.ck-rel__valor { margin: 0; font-size: 22px; font-weight: var(--peso-medio); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ck-rel__valor { margin: 0; font-size: var(--fs-kpi); font-weight: var(--peso-medio); line-height: 1.2; font-variant-numeric: tabular-nums; }
 .ck-rel__rotulo { font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
 .ck-rel__previa summary { cursor: pointer; }
 @media (max-width: 1199.98px) { .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } }
@@ -1029,7 +1055,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-topo__acoes { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: -14px -16px 0; padding: 10px 16px; background: var(--cor-fundo); border-bottom: 1px solid var(--cor-borda-suave); }
 .sebrae-topo > :not(.sebrae-topo__acoes) { margin-top: -8px; }
 .sebrae-topo__passos { align-items: center; gap: 6px; }
-.sebrae-topo__seta { color: var(--cor-texto-apagado); }
+.sebrae-topo__seta { color: var(--cor-texto-mudo); }
 .sebrae-topo > .ck-cartao__meta { overflow-wrap: anywhere; }
 .sebrae-topo > .ck-cartao__meta:empty { display: none; }
 .sebrae-topo > ul.ck-cartao__meta { padding-left: 18px; }
@@ -1154,8 +1180,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-descricao__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
 .sebrae-descricao__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
 @media (prefers-reduced-motion: no-preference) {
-  .sebrae-descricao__editor { animation: sebrae-descricao-entrar var(--duracao) var(--curva); }
-  @keyframes sebrae-descricao-entrar { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .sebrae-descricao__editor { animation: ck-surgir var(--duracao) var(--curva); }
 }
 
 /* Zona 2 · Classificação operacional */
@@ -1303,6 +1328,13 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-antigos > summary, .sebrae-antigo > summary, .sebrae-finalizado > summary, .sebrae-chamado__texto > summary { min-height: 44px; }
 }
 
+/* Toque: alvo de 44px nos controles compactos; no desktop (ponteiro fino) as medidas literais de 24/26px não mudam. */
+@media (pointer: coarse) {
+  .ck-btn--mini { min-width: 44px; min-height: 44px; }
+  .ck-segmentado__op { min-height: 44px; }
+  details.ck-chip, .ck-chip--botao, .ck-chip__gatilho { min-height: 44px; }
+}
+
 /* ---------- Automação: histórico do Dashboard Sebrae ---------- */
 .sebrae-historico-resumo { margin-top: 4px; }
 .sebrae-historico-mini { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
@@ -1336,6 +1368,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__status { flex: 1 1 auto; overflow-wrap: anywhere; }
 .ck-assist__barra { align-items: center; }
 .ck-assist__barra > .ck-btn { align-self: center; }
+.ck-assist__barra > .ck-btn--fantasma { padding-inline: 6px; } /* B4: os quatro atalhos (Nova conversa, Voz, Instruções, Lembretes) cabem numa linha no widget de 420px, sem Lembretes órfão */
+/* B4: o status fica ao lado do globo e os botões descem juntos; com o erro visível, "Tentar novamente" ocupa a própria linha antes dos atalhos. */
+.ck-assist__status { flex-basis: calc(100% - 64px); }
+.ck-assist__barra > #assistente-tentar:not([hidden]) { flex-basis: 100%; }
 .ck-assist__cancelar-envio[hidden] { display: none; }
 .ck-assist__globo { flex: none; align-self: center; width: 56px; height: 56px; color: var(--cor-destaque); }
 .ck-assist__lista { min-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
@@ -1844,7 +1880,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #comparacao-planilhas-conteudo .comparison-desktop-table { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); overflow-y: hidden; }
 #comparacao-planilhas-conteudo .comparison-desktop-table [data-comparison-annotation] { min-width: 260px; }
 #comparacao-planilhas-conteudo .comparison-desktop-table thead { background: var(--cor-superficie-funda); }
-#comparacao-planilhas-conteudo .comparison-desktop-table th { padding: 8px 12px; border-bottom: 1px solid var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); letter-spacing: .01em; color: var(--cor-texto-sutil); }
+#comparacao-planilhas-conteudo .comparison-desktop-table th { vertical-align: middle; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); letter-spacing: .01em; color: var(--cor-texto-sutil); }
 #comparacao-planilhas-conteudo .comparison-desktop-table td { padding: 9px 12px; font-size: var(--fs-ui); color: var(--cor-texto-suave); }
 #comparacao-planilhas-conteudo .comparison-desktop-table td.text-white { color: var(--cor-texto); font-weight: var(--peso-medio); }
 #comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td { transition: background-color var(--duracao) var(--curva); }

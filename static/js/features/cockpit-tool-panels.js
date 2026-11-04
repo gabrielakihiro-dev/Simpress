@@ -1004,16 +1004,18 @@
       section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return section;
     }
-    const table = element("table", "ck-tabela");
+    const columns = ["Cidade", "Endereço", "Equipamentos"];
+    const table = element("table", "ck-tabela ck-tabela--cards");
     const head = element("tr");
-    ["Cidade", "Endereço", "Equipamentos"].forEach((label, index) => head.append(element("th", index === 2 ? "ck-th--dir" : "", label)));
+    columns.forEach((label, index) => head.append(element("th", index === 2 ? "ck-th--dir" : "", label)));
     const thead = element("thead");
     thead.append(head);
     table.append(thead);
     const body = element("tbody");
     rows.forEach(row => {
       const line = element("tr");
-      line.append(element("td", "", row[0]), element("td", "", row[1] || "—"), element("td", "ck-td--dir", displayCount(row[2])));
+      line.append(element("td", "", row[0]), element("td", "ck-td--largo", row[1] || "—"), element("td", "ck-td--dir", displayCount(row[2])));
+      Array.from(line.children).forEach((cell, index) => { cell.dataset.label = columns[index]; });
       body.append(line);
     });
     table.append(body);

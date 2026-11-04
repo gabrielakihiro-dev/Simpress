@@ -167,3 +167,6 @@ __pycache__/
 /config/contato_origem.json
 # Local per-city edits of the regional representatives (names, e-mails, phones).
 /config/representantes_regionais.json
+
+# graphify (grafo de conhecimento local)
+graphify-out/

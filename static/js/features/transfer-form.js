@@ -28,7 +28,10 @@
     }
     const retiradaSerie = document.getElementById("ck-passo-retirada-serie");
     if (retiradaSerie) retiradaSerie.textContent = serial;
-    if (banner) banner.dataset.state = selected ? "selected" : "empty";
+    if (banner) {
+      banner.dataset.state = selected ? "selected" : "empty";
+      banner.dataset.estado = selected ? "pronto" : "vazio";
+    }
     if (description) {
       description.textContent = selected
         ? [equipment.modelo, equipment.tipo, logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
@@ -466,6 +469,7 @@
     if (state) {
       state.textContent = equipamento ? (unidade?.value ? "Prévia atualizada" : "Selecione a entrega") : "Aguardando equipamento";
       state.dataset.state = equipamento ? (unidade?.value ? "ready" : "pending") : "empty";
+      state.dataset.estado = equipamento && unidade?.value ? "pronto" : "vazio";
       state.dataset.status = equipamento ? (unidade?.value ? "ok" : "alerta") : "neutro";
     }
   }

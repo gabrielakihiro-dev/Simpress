@@ -30,6 +30,7 @@
   let homeComparisonFilters = { "7-dias": null, divergentes: null };
   let homeCountsLoaded = false;
   let finishEquipmentLoading = () => {};
+  let finishHomeListLoading = () => {};
 
   function definirEquipamentoAtual(equipment) {
     endpointRequestGate.invalidate();
@@ -743,6 +744,7 @@
       list.replaceChildren();
       list.setAttribute("aria-busy", "false");
       list.removeAttribute("aria-activedescendant");
+      list.dataset.estado = "vazio";
     }
     const empty = document.getElementById("home-list-empty");
     if (empty) {
@@ -886,6 +888,8 @@
     const list = document.getElementById("home-equipment-list");
     if (!list) return;
     homeListQuery = String(query || "").trim();
+    finishHomeListLoading();
+    finishHomeListLoading = () => {};
     if (homeListQuery.length === 1) {
       homeListRequestGate.invalidate();
       homeListHasMore = false;
@@ -901,7 +905,9 @@
       homeListHasMore = false;
       list.replaceChildren();
       list.setAttribute("aria-busy", "true");
+      list.dataset.estado = "carregando";
       list.removeAttribute("aria-activedescendant");
+      finishHomeListLoading = motion?.startLoading(document.getElementById("equipment-loading"), "Carregando equipamentos…") || (() => {});
       const count = document.getElementById("home-list-count");
       if (count) count.textContent = "Carregando equipamentos…";
       const empty = document.getElementById("home-list-empty");
@@ -919,6 +925,7 @@
     if (homeListFilter === "7-dias" || homeListFilter === "divergentes") {
       const series = homeComparisonFilters[homeListFilter];
       if (!series) {
+        finishHomeListLoading();
         limparListaHome("O filtro depende de uma comparação de inventários disponível.");
         return;
       }
@@ -932,6 +939,7 @@
       if (!response.ok) throw new Error("Não foi possível carregar a lista de equipamentos.");
       const result = await response.json();
       if (!homeListRequestGate.isCurrent(request.id)) return;
+      finishHomeListLoading();
 
       homeListTotal = Number(result.total) || 0;
       homeListOffset = offset + (Array.isArray(result.items) ? result.items.length : 0);
@@ -942,6 +950,7 @@
       renderHomeList(result.items, !reset);
       const empty = document.getElementById("home-list-empty");
       const hasItems = list.children.length > 0;
+      list.dataset.estado = hasItems ? "pronto" : "vazio";
       if (empty) {
         empty.textContent = homeListQuery
           ? "Nenhum equipamento corresponde à pesquisa."
@@ -960,8 +969,10 @@
       list.setAttribute("aria-busy", "false");
     } catch (error) {
       if (error.name === "AbortError" || !homeListRequestGate.isCurrent(request.id)) return;
+      finishHomeListLoading();
       list.setAttribute("aria-busy", "false");
       limparListaHome(error.message || "Não foi possível carregar os equipamentos.");
+      list.dataset.estado = "erro";
     }
   }
 

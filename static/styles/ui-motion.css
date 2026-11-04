@@ -21,11 +21,7 @@ input, select, textarea, .glass-input {
 }
 .modal-overlay[data-motion-closing="true"] { pointer-events: none; }
 .header-secondary-actions[open] .header-secondary-panel {
-  animation: ui-menu-enter var(--motion-fast) var(--motion-ease);
-}
-@keyframes ui-menu-enter {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: ck-surgir var(--motion-fast) var(--motion-ease);
 }
 .ui-toast { transition: none; }
 .ui-equipment-loading:empty { display: none; }

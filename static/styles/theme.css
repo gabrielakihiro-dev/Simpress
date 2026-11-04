@@ -44,8 +44,8 @@ html[data-theme="light"] {
 }
 
 html[data-theme="light"] body {
-  background-color: #f1f5f9;
-  color: #0f172a;
+  background-color: var(--surface);
+  color: var(--text-strong);
 }
 
 html[data-theme="light"] ::selection {
@@ -54,7 +54,7 @@ html[data-theme="light"] ::selection {
 }
 
 html[data-theme="light"] .text-white {
-  color: #0f172a;
+  color: var(--text-strong);
 }
 
 /* sky-400 no tema claro (#0284c7) dá contraste 4,1:1 em texto pequeno; sky-300 do tema (#0369a1) passa de 4,5:1. */
@@ -98,13 +98,13 @@ html[data-theme="light"] :focus-visible {
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.72);
-  color: #cbd5e1;
+  color: var(--text-body);
   transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 
 .theme-toggle-button:hover {
   border-color: rgba(125, 211, 252, 0.55);
-  background: #1e293b;
+  background: var(--ux-surface-2);
   color: #fff;
 }
 
@@ -112,13 +112,13 @@ html[data-theme="light"] :focus-visible {
 .theme-toggle-button:focus-visible { outline: 2px solid var(--focus-color, #7dd3fc); outline-offset: 2px; }
 
 html[data-theme="light"] .theme-toggle-button {
-  border-color: #cbd5e1;
-  background: #fff;
-  color: #334155;
+  border-color: var(--border-control);
+  background: var(--surface-raised);
+  color: var(--text-body);
 }
 
 html[data-theme="light"] .theme-toggle-button:hover {
-  border-color: #94a3b8;
-  background: #e2e8f0;
-  color: #0f172a;
+  border-color: var(--border-firm);
+  background: var(--surface-control);
+  color: var(--text-strong);
 }
