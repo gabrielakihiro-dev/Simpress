@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Tuple[int, Any]]
 
 CALL_TIMEOUT_SECONDS = 30.0
+ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 480.0  # Navigation, grid waits and two confirmed serial filters.
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
@@ -201,7 +202,8 @@ def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
 
     def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
-            return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), CALL_TIMEOUT_SECONDS)
+            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path == "/api/endpoint/consultar" else CALL_TIMEOUT_SECONDS
+            return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
 
         return asyncio.run(run())
 
@@ -805,6 +807,18 @@ class SimpressApi:
         return self._ultimo_evento()
 
     # --- queries ----------------------------------------------------------
+
+    def consultar_endpoint(self, serial: str) -> Dict[str, Any]:
+        """The same read-only Chrome lookup used by Home; the conversation masks ultimo_logon."""
+        clean = serial.strip().upper()
+        if not clean:
+            return {"erro": "Número de série não informado."}
+        ok, dados = self._chamar("POST", "/api/endpoint/consultar", corpo={"serial": clean})
+        if not ok:
+            return {"erro": dados}
+        if not isinstance(dados, dict) or dados.get("status") not in ("found", "not_found", "ambiguous"):
+            return {"erro": "Não foi possível confirmar o resultado do Endpoint."}
+        return {key: dados[key] for key in ("status", "serial", "ultimo_logon", "origem") if key in dados}
 
     def consultar_equipamento(self, serial: str) -> Dict[str, Any]:
         """Look up one serial. MacBook rule from AGENTS.md: retry with a leading 'S', accepted only for a MacBook."""
@@ -1534,6 +1548,52 @@ class SimpressApi:
             "versao_importacao": item.get("_versao_importacao", ""), "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
             "pdf": str(_dict(se.get("pdf")).get("nome") or ""),
         }
+
+    def chamado_para_editar_descricao(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+        """Data for the card and the action of "editar descrição" (lápis da tela Chamados). ValueError (shown to the user) when it cannot be edited.
+
+        Works on an old open ticket already read from SoftExpert or on a new ticket of the last search; empty text restores the original."""
+        numero = str(numero or "").strip().upper()
+        if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
+            raise ValueError("Informe o número do chamado no formato UTIC-AAAA-NNNN.")
+        ok, dados = self._chamar("GET", "/api/sebrae/novos")
+        if not ok:
+            raise ValueError(str(dados))
+        dados = _dict(dados)
+        importado = _dict(dados.get("importado"))
+        if not importado:
+            raise ValueError("Importe o Dashboard na tela Chamados antes. Nada foi feito.")
+        antigo = next((a for a in importado.get("abertos") or [] if isinstance(a, dict) and a.get("numero") == numero), None)
+        novo = next((f for f in _dict(dados.get("novos")).get("formulario") or [] if isinstance(f, dict) and f.get("numero") == numero), None)
+        if antigo is not None:
+            leitura = antigo.get("leitura_softexpert")
+            if not isinstance(leitura, dict):
+                raise ValueError(f"{numero} ainda não foi lido no SoftExpert (Ler chamados antigos); não há descrição para editar. Nada foi feito.")
+            se, atual = _dict(antigo.get("softexpert")), str(leitura.get("descricao") or "")
+        elif novo is not None:
+            se, atual = _dict(novo.get("softexpert")), str(_dict(novo.get("linha")).get("H") or "")
+        else:
+            raise ValueError(f"{numero} não está entre os chamados em aberto nem entre os novos da última busca. Nada foi feito.")
+        if _dict(se.get("finalizacao")).get("status") == "ok":
+            raise ValueError(f"{numero} já foi finalizado no SoftExpert; a descrição não pode mais ser editada. Nada foi feito.")
+        texto = str(descricao or "").strip()
+        if len(texto) > MAX_DESCRICAO_FINALIZACAO:
+            raise ValueError(f"A descrição pode ter no máximo {MAX_DESCRICAO_FINALIZACAO} caracteres.")
+        if re.search(r"\[(?:PESSOA_\d+|E-MAIL OCULTADO|TELEFONE OCULTADO|DADO SENSÍVEL OMITIDO)\]", texto):
+            raise ValueError("A descrição tem dado ocultado pela privacidade (nome não identificado, e-mail ou telefone); peça ao usuário para editá-la pelo lápis do chamado, na tela Chamados.")
+        return {"numero": numero, "descricao": texto, "atual": atual, "editada": bool(str(se.get("descricao_editada") or "").strip())}
+
+    def editar_descricao_chamado_sebrae(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+        """Same call as the pencil of the Descrição block; local only (SoftExpert and the Dashboard are not touched)."""
+        try:
+            alvo = self.chamado_para_editar_descricao(numero, descricao)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        ok, dados = self._chamar("PUT", f"/api/sebrae/chamados/{alvo['numero']}/descricao", corpo={"descricao": alvo["descricao"]})
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        acao = "editada" if alvo["descricao"] else "restaurada ao texto original"
+        return {"sucesso": True, "mensagem": f"Descrição de {alvo['numero']} {acao}, só neste site. SoftExpert e linhas já lançadas no Dashboard não mudaram."}
 
     def estado_usuarios_entra(self) -> Dict[str, Any]:
         return self._leitura("/api/usuarios-entra/estado")

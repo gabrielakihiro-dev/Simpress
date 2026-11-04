@@ -211,6 +211,7 @@ from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
+from routers.endpoint_lookup import create_endpoint_lookup_router
 from domains.assistant_api import asgi_transport
 from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
@@ -1886,6 +1887,29 @@ def get_equipamento(serial: str):
         return _public_equipment(equipment)
 
     raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
+
+
+def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
+    clean_serial = serial.strip().upper()
+    chave = normalize_reference_value(clean_serial)
+    relevantes = {chave, chave[1:]} if chave.startswith("S") else {chave}
+    with STATE_LOCK:
+        equipment = inventory_state.equipamentos_cache.get(clean_serial)
+        if equipment is None:
+            raise HTTPException(404, "Equipamento não encontrado na base local.")
+        return {
+            "serial": clean_serial,
+            "tipo": str(equipment.get("tipo") or ""),
+            "modelo": str(equipment.get("modelo") or ""),
+            "categoria": str(equipment.get("categoria") or ""),
+            "serie_detalhes_duplicada": bool(equipment.get("serie_detalhes_duplicada")),
+            "details_serials": tuple(sorted(
+                key for key in inventory_state.equipamentos_cache if normalize_reference_value(key) in relevantes
+            )),
+        }
+
+
+app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
 
 
 @app.post("/api/equipamento/salvar")

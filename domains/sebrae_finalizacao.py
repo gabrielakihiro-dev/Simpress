@@ -180,6 +180,30 @@ def definir_descricao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any
     return _alterar(state_dir, numero, lambda item: item.update(descricao_finalizacao=descricao, atualizado_em=agora_iso()))
 
 
+def definir_descricao_editada(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any]:
+    """Texto do bloco "Descrição" do cartão (F5) editado pelo usuário; vazio volta ao texto original do chamado.
+
+    Só local: o SoftExpert não é alterado e a coluna H de uma linha que já está no Dashboard também não.
+    """
+    numero = validar_numero(numero)
+    descricao = validar_descricao(texto)
+
+    def mudar(item: Dict[str, Any]) -> None:
+        if descricao:
+            item.update(descricao_editada=descricao, descricao_editada_em=agora_iso())
+        else:
+            item.pop("descricao_editada", None)
+            item.pop("descricao_editada_em", None)
+        item["atualizado_em"] = agora_iso()
+
+    return _alterar(state_dir, numero, mudar)
+
+
+def descricoes_editadas(state_dir: Path) -> Dict[str, str]:
+    """``{UTIC: texto}`` de todo chamado com a descrição editada no site."""
+    return {n: str(i["descricao_editada"]) for n, i in ler_estado(state_dir).items() if str(i.get("descricao_editada") or "").strip()}
+
+
 def definir_ficha(state_dir: Path, numero: str, ficha: Any) -> Dict[str, Any]:
     """Snapshot of the ticket card (what the screen showed when finalizing), kept to show it again under "Chamados finalizados".
 
@@ -283,6 +307,9 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     fin = item.get("finalizacao")
     return {
         "descricao_finalizacao": str(item.get("descricao_finalizacao") or ""),
+        # False = nunca houve descrição guardada (campo ausente); texto apagado pelo usuário é "" guardado, e aí vale True
+        "descricao_definida": "descricao_finalizacao" in item,
+        "descricao_editada": str(item.get("descricao_editada") or ""),
         "pdf": {"nome": str(pdf.get("nome") or ""), "tamanho": int(pdf.get("tamanho") or 0)} if isinstance(pdf, dict) else None,
         "finalizacao": {k: str(fin.get(k) or "") for k in ("status", "em", "encerrado_em")} if isinstance(fin, dict) else None,
     }
