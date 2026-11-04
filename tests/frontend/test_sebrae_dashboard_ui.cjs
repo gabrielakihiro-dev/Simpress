@@ -320,6 +320,62 @@ test("remoção de PDF pendente aparece após reload e retry preserva o PDF atua
   assert.match(el["sebrae-antigos-lista"].textContent, /novo.pdf/);
 });
 
+test("erro de remoção com estado confirmado atualiza o PDF e oferece retry sem apagar anexo novo", async () => {
+  for (const pdfAtual of [null, { nome: "novo.pdf", tamanho: 16 }]) {
+    const carga = structuredClone(CARGA_CARTOES);
+    const numero = "UTIC-2026-1200";
+    carga.importado.abertos[0].softexpert.pdf = pdfAtual || { nome: "antigo.pdf", tamanho: 16 };
+    carga.importado.abertos[0].softexpert.pdf_remocao_pendente = Boolean(pdfAtual);
+    const pedidos = [];
+    const { el } = await renderizarCartoes(carga, null, async (url, opts) => {
+      if (opts?.method === "DELETE") {
+        pedidos.push(url);
+        throw Object.assign(new Error("A remoção do PDF está pendente."), {
+          status: 503, data: { numero, pdf: pdfAtual, pdf_remocao_pendente: true },
+        });
+      }
+      return carga;
+    });
+    const lista = el["sebrae-antigos-lista"];
+    const remover = lista.querySelector(`[data-sebrae-pdf-remover="${numero}"]`);
+    const retry = lista.querySelector(`[data-sebrae-pdf-remocao="${numero}"]`);
+    (pdfAtual ? retry : remover).click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(pedidos, [`/api/sebrae/chamados/${numero}/anexo${pdfAtual ? "?somente_pendentes=true" : ""}`]);
+    assert.equal(retry.hidden, false);
+    assert.match(retry.textContent, /Tentar remover novamente/);
+    assert.equal(remover.hidden, !pdfAtual);
+    assert.doesNotMatch(lista.textContent, /antigo.pdf/);
+    assert.match(lista.textContent, pdfAtual ? /PDF anexado: novo.pdf/ : /Nenhum PDF anexado/);
+    assert.match(lista.textContent, /remoção do PDF está pendente/);
+  }
+});
+
+test("falha de rede ou erro sem estado de remoção confirmado preserva o PDF exibido", async () => {
+  const numero = "UTIC-2026-1200";
+  for (const erro of [
+    new TypeError("offline"),
+    Object.assign(new Error("ocupado"), { status: 503, data: { detail: "ocupado" } }),
+    Object.assign(new Error("outro chamado"), { status: 503, data: { numero: "UTIC-2026-9999", pdf: null, pdf_remocao_pendente: true } }),
+    Object.assign(new Error("sem confirmação"), { status: 503, data: { numero, pdf: null } }),
+  ]) {
+    const carga = structuredClone(CARGA_CARTOES);
+    carga.importado.abertos[0].softexpert.pdf = { nome: "atual.pdf", tamanho: 16 };
+    const { el } = await renderizarCartoes(carga, null, async (_url, opts) => {
+      if (opts?.method === "DELETE") throw erro;
+      return carga;
+    });
+    const lista = el["sebrae-antigos-lista"];
+    const remover = lista.querySelector(`[data-sebrae-pdf-remover="${numero}"]`);
+    remover.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(remover.hidden, false);
+    assert.equal(lista.querySelector(`[data-sebrae-pdf-remocao="${numero}"]`).hidden, true);
+    assert.match(lista.textContent, /PDF anexado: atual.pdf/);
+    assert.match(lista.textContent, /PDF não removido:/);
+  }
+});
+
 test("envio incerto pede reconciliação manual sem confirmar envio nem oferecer retry", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   carga.sharepoint = { falhou: false, limpeza_pendente: true, incerto: true };

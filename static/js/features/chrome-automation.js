@@ -15,6 +15,7 @@
     antigos: "Chamados antigos Sebrae",
     dashboard: "Dashboard + chamados novos Sebrae",
     enviar: "Enviar Dashboard atualizado ao SharePoint",
+    ux_apelidos: "Atualizar apelidos e id no UX Simpress",
   });
   const STATUS = Object.freeze({
     em_andamento: "Em andamento",
@@ -655,7 +656,7 @@
       const ultima = dados.ultima;
       if (ultima) {
         const tipo = ultima.status === "concluido" ? "success" : "error";
-        app.showToast(`${ROTINAS[ultima.rotina] || ultima.rotina}: ${STATUS[ultima.status] || ultima.status}.`, tipo);
+        app.showToast(textoResultadoAutomacao(ultima), tipo);
       }
     }
   }
@@ -705,6 +706,23 @@
     const eventos = document.getElementById("cockpit-automation-events");
     eventos?.scrollIntoView({ block: "nearest" });
     eventos?.focus({ preventScroll: true });
+  }
+
+  function textoResultadoAutomacao(ultima) {
+    const rotina = ROTINAS[ultima.rotina] || ultima.rotina;
+    const status = STATUS[ultima.status] || ultima.status;
+    const mensagem = ultima.rotina === "ux_apelidos" && ["falha", "interrompido"].includes(ultima.status) && ultima.mensagem
+      ? ` ${ultima.mensagem}` : "";
+    return `${rotina}: ${status}.${mensagem}`;
+  }
+
+  function acompanharExecucaoAutomacao(dados) {
+    estado.acompanharFim = dados.estado === "em_andamento";
+    aplicarEstado(dados);
+    if (!estado.acompanharFim && dados.ultima) {
+      app.showToast(textoResultadoAutomacao(dados.ultima), dados.ultima.status === "concluido" ? "success" : "error");
+    }
+    agendar();
   }
 
   async function iniciarRotinaAutomacao(rotina) {
@@ -776,6 +794,7 @@
   return {
     inicializarAutomacao, alterarAgendamentoDashboard, carregarAgendamentoDashboard,
     iniciarRotinaAutomacao,
+    acompanharExecucaoAutomacao,
     cancelarRotinaAutomacao,
     atualizarEstadoAutomacao,
     carregarHistoricoAutomacao,

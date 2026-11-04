@@ -269,6 +269,44 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(self.anexo().status_code, 413)
         self.assertIsNone(fin.dados_para_finalizar(self.dir, A)[1])
 
+    def test_remocao_pdf_503_informa_estado_persistido_e_retry_preserva_pdf_novo(self):
+        self.anexo()
+        antigo = fin.dados_para_finalizar(self.dir, A)[1]
+        url = f"/api/sebrae/chamados/{A}/anexo"
+        with patch.object(fin.shutil, "rmtree", side_effect=PermissionError("ocupado")):
+            resposta = self.cliente.delete(url)
+        self.assertEqual(resposta.status_code, 503, resposta.text)
+        dados = resposta.json()
+        self.assertEqual(dados.get("numero"), A)
+        self.assertIsNone(dados["pdf"])
+        self.assertIs(dados["pdf_remocao_pendente"], True)
+        self.assertIn("pendente", dados["detail"])
+        self.assertEqual(resposta.headers["cache-control"], "no-store")
+        self.assertNotIn("pdf", fin.ler_estado(self.dir)[A])
+        self.assertTrue(antigo.exists())
+
+        self.anexo("novo.pdf", PDF + b"novo")
+        novo = fin.dados_para_finalizar(self.dir, A)[1]
+        with patch.object(fin.shutil, "rmtree", side_effect=PermissionError("ocupado")):
+            retry = self.cliente.delete(url + "?somente_pendentes=true")
+        self.assertEqual(retry.status_code, 503, retry.text)
+        self.assertEqual(retry.json()["pdf"], {"nome": "novo.pdf", "tamanho": len(PDF + b"novo")})
+        self.assertIs(retry.json()["pdf_remocao_pendente"], True)
+        concluido = self.cliente.delete(url + "?somente_pendentes=true")
+        self.assertEqual(concluido.status_code, 200, concluido.text)
+        self.assertEqual(concluido.json()["pdf"]["nome"], "novo.pdf")
+        self.assertNotIn("pdf_remocao_pendente", concluido.json())
+        self.assertFalse(antigo.exists())
+        self.assertEqual(novo.read_bytes(), PDF + b"novo")
+
+    def test_remocao_pdf_503_sem_pedido_persistido_nao_inventa_estado(self):
+        self.anexo()
+        with patch.object(fin, "remover_pdf", side_effect=DomainBusyError("estado indisponível")):
+            resposta = self.cliente.delete(f"/api/sebrae/chamados/{A}/anexo")
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json(), {"detail": "estado indisponível"})
+        self.assertEqual(fin.dados_para_finalizar(self.dir, A)[1].read_bytes(), PDF)
+
     def test_nome_com_pasta_nunca_sai_da_pasta_do_chamado(self):
         resposta = self.anexo("../../../fora.pdf")
         self.assertEqual(resposta.status_code, 200, resposta.text)

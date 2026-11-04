@@ -994,8 +994,11 @@ def selecionar_contrato_ux(page: "Page") -> None:
     busca.wait_for(state="visible", timeout=10000)
     busca.fill("")
     busca.press_sequentially(CONTRATO, delay=50)
-    opcao = page.locator(f'li[data-valor="{CONTRATO}"]').filter(visible=True).first
+    opcoes = page.locator(f'li[data-valor="{CONTRATO}"]').filter(visible=True)
+    opcao = opcoes.first
     opcao.wait_for(state="visible", timeout=15000)
+    if opcoes.count() != 1:
+        raise RotinaErro("A opção do contrato não é única.")
     texto = (opcao.get_attribute("data-texto") or "").strip()
     if texto != CONTRATO_NOME:
         raise RotinaErro(f"A opção do contrato não confere: {texto!r}.")
@@ -1016,6 +1019,78 @@ def selecionar_contrato_ux(page: "Page") -> None:
     if valor != CONTRATO_NOME or codigo != CONTRATO:
         raise RotinaErro(f"O campo Contrato/Nome ficou com {valor!r} (código {codigo!r}).")
     log("UX Simpress", "Contrato confirmado no campo (✓).")
+
+
+UX_EDICOES_TIMEOUT_MS = 30000
+
+
+def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
+    """Escrita autorizada no F7 em 03/11/2026; qualquer ambiguidade impede nova gravação."""
+    page = None
+    salvamento_pedido = False
+    try:
+        if not arquivo.is_file() or arquivo.suffix.lower() != ".xlsx" or arquivo.stat().st_size == 0:
+            raise RotinaErro("A planilha exportada não está disponível; nenhuma edição foi salva.")
+        page = abrir_ux(context, UX_EQUIPAMENTOS_URL)
+
+        def unico(locator, nome):
+            visiveis = locator.filter(visible=True)
+            aguardar_estado(visiveis.first, "visible", timeout_ms=UX_EDICOES_TIMEOUT_MS)
+            if visiveis.count() != 1:
+                raise RotinaErro(f"{nome} não é inequívoco; nenhuma edição foi salva.")
+            return visiveis
+
+        def controle(escopo, nome):
+            return unico(escopo.get_by_role("button", name=nome, exact=True).or_(
+                escopo.get_by_role("link", name=nome, exact=True)), nome)
+
+        if page.locator("#CodigosContratosFiltro").count() != 1:
+            raise RotinaErro("O filtro de contrato não é único.")
+        selecionar_contrato_ux(page)
+        controle(page, "Buscar").click()
+        aguardar_ux_livre(page)
+        controle(page, re.compile(r"^Editar apelido e id$", re.IGNORECASE)).click()
+        editor = unico(page.get_by_role("dialog", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE)), "Editor de apelido e id")
+        salvar = controle(editor, "Salvar edições")
+        enviar = controle(editor, "Enviar Planilha")
+        verificar_cancelamento()
+        with page.expect_file_chooser(timeout=UX_EDICOES_TIMEOUT_MS) as escolha:
+            enviar.click()
+        seletor = escolha.value
+        if seletor.is_multiple():
+            raise RotinaErro("O seletor aceita vários arquivos; o upload não é inequívoco.")
+        seletor.set_files(str(arquivo))
+        unico(editor.get_by_text(arquivo.name, exact=True), "Nome da planilha enviada")
+        inputs = editor.locator('input[type="file"]')
+        if inputs.count() != 1 or inputs.evaluate("e => e.files.length !== 1 || e.files[0].name !== " + json.dumps(arquivo.name)):
+            raise RotinaErro("O arquivo selecionado no editor não confere; nenhuma edição foi salva.")
+        campo = page.locator("#CodigosContratosFiltro")
+        if campo.input_value().strip() != CONTRATO_NOME or campo.get_attribute("data-valor") != CONTRATO:
+            raise RotinaErro("O contrato mudou antes da gravação; nenhuma edição foi salva.")
+        # shortcut: confirmação explícita por rótulo; ampliar apenas com evidência do aviso real do UX.
+        confirmacao = page.get_by_role("alert").filter(has_text=re.compile(
+            r"^\s*(?:Edições salvas|Apelidos e (?:id|IdCliente) atualizados) com sucesso!?\s*$", re.IGNORECASE))
+        if confirmacao.filter(visible=True).count():
+            raise RotinaErro("Já havia confirmação na tela; não é seguro associá-la a esta gravação.")
+        if not salvar.is_enabled():
+            raise RotinaErro("Salvar edições está desabilitado; nenhuma edição foi salva.")
+        verificar_cancelamento()
+        log("UX Simpress", "Planilha conferida; clicando uma vez em Salvar edições...")
+        salvamento_pedido = True
+        salvar.click(timeout=UX_EDICOES_TIMEOUT_MS)
+        unico(confirmacao, "Confirmação de gravação")
+        log("UX Simpress", "Apelidos e id atualizados no UX Simpress; gravação confirmada.")
+        return 0
+    except RotinaCancelada as erro:
+        if salvamento_pedido:
+            registrar_erro(page, "UX Simpress")
+            raise RotinaErro("Cancelamento solicitado depois de Salvar edições; o resultado é incerto. Confira o UX manualmente antes de tentar novamente; o clique não será repetido.") from erro
+        raise
+    except Exception as erro:
+        registrar_erro(page, "UX Simpress")
+        if salvamento_pedido:
+            raise RotinaErro("Salvar edições foi acionado uma vez, mas a confirmação não foi inequívoca. Confira o UX manualmente antes de tentar de novo; o clique não será repetido.") from erro
+        raise RotinaErro(f"Atualização UX interrompida antes de Salvar edições: {descrever_erro(erro)}") from erro
 
 
 def exportar_ux_pedidos(context: "BrowserContext") -> Path:
@@ -1989,7 +2064,7 @@ def _esperar_logins(pendentes: list, tentar: Callable) -> None:
         pendentes[0][1].wait_for_timeout(2000)
 
 
-def executar(rotina: str, sem_finalizar: bool = False) -> int:
+def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None = None) -> int:
     # A trava vem antes do Playwright: uma execução bloqueada responde mesmo sem ele instalado.
     with trava_execucao(rotina):
         from playwright.sync_api import sync_playwright
@@ -2005,6 +2080,10 @@ def executar(rotina: str, sem_finalizar: bool = False) -> int:
                     return com_aviso("OS", rodar_rotina_os, context)
                 if rotina == "inventarios":
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
+                if rotina == "ux_apelidos":
+                    if planilha_ux is None:
+                        raise RotinaErro("A rotina de apelidos exige a planilha do F7.")
+                    return atualizar_apelidos_ux(context, planilha_ux)
                 if rotina == "usuarios":
                     return com_aviso("usuários", rodar_rotina_usuarios, context)
                 if rotina == "dashboard":
@@ -2058,7 +2137,8 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos", "ux_apelidos"], default="os")
+    parser.add_argument("--planilha-ux", type=Path, help="arquivo exato exportado pelo F7; somente com --rotina ux_apelidos")
     parser.add_argument(
         "--sem-finalizar", action="store_true",
         help="só com --rotina fechar: preenche e confere o formulário, mas não clica em Finalizar nem altera o Dashboard",
@@ -2078,7 +2158,7 @@ def main() -> int:
         print(f"\n[ERRO] {mensagem_playwright_ausente()}", flush=True)
         return 3
     try:
-        return executar(args.rotina, args.sem_finalizar)
+        return executar(args.rotina, args.sem_finalizar, args.planilha_ux)
     except TravaOcupada as erro:
         print(f"\n[BLOQUEADO] {erro}", flush=True)
         return 2

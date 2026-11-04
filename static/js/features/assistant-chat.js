@@ -14,8 +14,8 @@
   let modelo = "";
   let ocupado = false;
   let pendente = false;
-  // Envio em andamento (AbortController + motivo do aborto); o navegador desiste um pouco depois do orçamento de 90 s do servidor.
-  const PRAZO_ENVIO_MS = 100000;
+  // One Endpoint read (480 s) plus the model budget (90 s), with a margin for the HTTP response.
+  const PRAZO_ENVIO_MS = 600000;
   const MSG_PRAZO = "O Assistente demorou demais para responder. Se havia uma ação pendente, confira o cartão antes de tentar de novo.";
   const MSG_CANCELADO = "Envio cancelado. Se o Assistente ainda estiver terminando, aguarde alguns segundos antes de enviar de novo.";
   const MSG_CONVERSA_OCUPADA = "O Assistente ainda está terminando a resposta anterior. Aguarde alguns segundos e tente de novo.";
@@ -1036,7 +1036,7 @@
     falar(texto);
   }
 
-  // As respostas podem levar até ~90 s (orçamento do servidor); enquanto isso a entrada fica bloqueada.
+  // The server permits at most one Endpoint read per message; the model keeps its 90 s budget.
   // O prazo do navegador é maior para a resposta de erro do servidor chegar antes de abortarmos.
   async function enviarAoAssistente(url, corpo, textoParaDevolver = "") {
     pararFala();

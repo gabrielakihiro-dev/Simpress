@@ -38,6 +38,7 @@ DADO_OMITIDO = "[DADO SENSÍVEL OMITIDO]"
 
 # Keys whose value identifies a person or was chosen by one.
 CHAVES_SENSIVEIS = frozenset({
+    "ultimo_logon",
     "usuario_logado", "usuarios_logados", "usuario_manual", "usuario", "apelido",
     "nome", "nome_pessoa", "solicitante", "responsavel", "login", "email",
     "entrega_contato", "retirada_contato", "retirada_telefone",
@@ -53,6 +54,7 @@ CHAVES_TEXTO_LIVRE = frozenset({
 })
 # Keys holding a person's name: each word of the name also becomes a marker ("o Bruno" inside a text).
 CHAVES_NOME_PESSOA = frozenset({
+    "ultimo_logon",
     "nome", "nome_pessoa", "solicitante", "responsavel", "usuario_logado", "usuarios_logados", "usuario_manual",
     "usuario", "usuario_anterior", "usuario_novo", "nome_pessoa_anterior", "nome_pessoa_novo",
 })
@@ -108,9 +110,16 @@ def omitir_senhas(texto: Any) -> str:
             inferido = achado["sem_separador"] is not None
             # Passive completion describes an action, unlike an explicit password assignment.
             descricao = achado["verbal"] is not None and achado["verbal"].strip().casefold() == "foi" and bool(re.fullmatch(r"alterada(?:[ \t]+com[ \t]+sucesso)?[.!?]?", valor.strip(), re.IGNORECASE))
+            contexto = None
             if achado["conjuncao"] is not None:
-                # shortcut: ambiguous "e" needs a strong credential token; use "é", ":" or "=" for words/passphrases.
-                descricao = not _parece_credencial(valor, campo=False)
+                # shortcut: terminal "para acesso" is context; mask its prefix only when it signals a credential.
+                contexto = re.search(r"[ \t]+para[ \t]+acesso[.!?]?$", valor, re.IGNORECASE)
+                candidato = valor[:contexto.start()] if contexto is not None else valor
+                descricao = not (
+                    _parece_credencial(candidato, campo=contexto is not None)
+                    or (candidato.strip().isalpha() and candidato.strip().islower())
+                    or (contexto is not None and re.fullmatch(r"frase[ \t]+secreta", candidato, re.IGNORECASE))
+                )
             if descricao or (inferido and valor.strip() and not _parece_credencial(valor, campo=True)):
                 achado = SENHA_PATTERN.search(linha, inicio)
                 continue
@@ -118,11 +127,8 @@ def omitir_senhas(texto: Any) -> str:
             if valor_pendente:
                 break
             fim = achado.end()
-            if achado["conjuncao"] is not None:
-                # shortcut: only the terminal phrase "para acesso" is known context; other suffixes stay masked.
-                contexto = re.search(r"[ \t]+para[ \t]+acesso[.!?]?$", valor, re.IGNORECASE)
-                if contexto is not None:
-                    fim = inicio + contexto.start()
+            if contexto is not None:
+                fim = inicio + contexto.start()
             partes.extend((linha[copiado:inicio], DADO_OMITIDO))
             copiado = fim
             achado = SENHA_PATTERN.search(linha, fim)

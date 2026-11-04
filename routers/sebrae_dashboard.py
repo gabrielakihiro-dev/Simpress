@@ -562,7 +562,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     @router.delete("/api/sebrae/chamados/{numero}/anexo")
     def remover_pdf(numero: str, somente_pendentes: bool = False):
         numero = fin.validar_numero(numero) if somente_pendentes else _exigir_finalizavel(numero)
-        return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero, somente_pendentes=somente_pendentes))}, headers={"Cache-Control": "no-store"})
+        pasta = _pasta_estado()
+        try:
+            item = fin.remover_pdf(pasta, numero, somente_pendentes=somente_pendentes)
+        except DomainBusyError as error:
+            item = fin.ler_estado(pasta).get(numero, {})
+            if not item.get("pdf_remocao"):
+                raise
+            return JSONResponse({"numero": numero, **fin.publico(item), "detail": error.detail}, status_code=503, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
     def finalizar_softexpert(payload: FinalizarPayload):

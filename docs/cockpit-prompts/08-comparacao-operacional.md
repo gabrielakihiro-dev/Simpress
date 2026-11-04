@@ -69,3 +69,6 @@ Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover 
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
 `#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos.
+# Atualização funcional de 03/11/2026: F7 e UX
+
+O botão existente **Exportar Excel** (`#btn-exportar-equipamentos`) preserva download, ID, handler e disponibilidade, e inicia a atualização externa de apelidos/id no UX com o próprio Blob e nome recém-exportados. Ordem e salvaguardas: [Automação Chrome](../operacao/automacao-chrome.md#f7-atualizar-apelidos-e-id-no-ux). Autorização explícita do usuário em 03/11/2026. A confirmação exata `Planilha Exportada com Sucesso!` não confirma gravação UX; início, falha e conclusão externa são separados, com acompanhamento/cancelamento em F4. O Assistente conhece a diferença, mas não ganha ferramenta de disparo: sua exportação só baixa o arquivo. Testes usam fixture local, nunca gravação real.

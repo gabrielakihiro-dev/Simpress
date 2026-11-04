@@ -38,6 +38,7 @@ EXPORT_MODEL_FILE = BASE_DIR / "modelos" / "EquipamentosDetalhes-exportacao.xlsx
 UPLOAD_BACKUPS_DIR = INPUT_DIR / "_backups"
 
 MAX_UPLOAD_BYTES = 60 * 1024 * 1024
+MAX_UX_ALIAS_BYTES = 20 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
 MAX_API_REQUEST_BYTES = 1024 * 1024
 # Assistant voice message: 16 kHz mono 16-bit WAV, 120 s = about 3.7 MiB.

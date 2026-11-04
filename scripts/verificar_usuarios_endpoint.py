@@ -49,7 +49,7 @@ HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
 URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
 CONFIRMACAO_FILTRO_S = 25
-ATRASO_DIGITACAO_MS = 40
+ATRASO_DIGITACAO_MS = 100
 
 JS_LER_GRADE = """
 () => {
@@ -65,10 +65,13 @@ JS_LER_GRADE = """
       return {texto: texto(celula), ...caixa(celula), href: link ? (link.getAttribute('href') || '') : ''};
     }));
   const corpo = document.body ? document.body.innerText : '';
+  const paginacao = corpo.match(/(?:^|\\s)\\d+\\s*[-–]\\s*\\d+\\s+de\\s+([\\d.,]+)(?:\\s|$)/i);
+  const vazia = /Nenhum dado dispon[ií]vel/i.test(corpo) || /(^|\\s)0\\s*-\\s*0\\s*de(\\s|$)/.test(corpo);
   return {
     cabecalhos, linhas,
+    total: paginacao ? Number(paginacao[1].replace(/[.,]/g, '')) : (vazia ? 0 : null),
     carregando: [...document.querySelectorAll('.page-loader-wrapper, .spinner')].some(visivel),
-    vazia: /Nenhum dado dispon[ií]vel/i.test(corpo) || /(^|\\s)0\\s*-\\s*0\\s*de(\\s|$)/.test(corpo),
+    vazia,
   };
 }
 """

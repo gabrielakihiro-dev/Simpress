@@ -354,6 +354,13 @@ test("Exportar Excel (apelidos e IdCliente) fica na aba Comparação e some sem 
   let corpo = stats(true, 0);
   await page.route("**/api/stats", route => route.fulfill({ json: corpo }));
   let exportacoes = 0;
+  const uploadsUx = [];
+  await page.route("**/api/automacao/ux-apelidos", route => {
+    uploadsUx.push(route.request().postDataBuffer().toString("utf8"));
+    return route.fulfill({ status: 202, json: { estado: "livre", ultima: {
+      rotina: "ux_apelidos", status: "interrompido", mensagem: "Processo interrompido após salvar: resultado incerto. Confira o UX manualmente.",
+    } } });
+  });
   await page.route("**/api/exportar-equipamentos", route => {
     exportacoes += 1;
     return route.fulfill({ status: 200, headers: { "Content-Disposition": 'attachment; filename="EquipamentosDetalhes-atualizados.xlsx"' }, contentType: "application/octet-stream", body: "xlsx" });
@@ -371,8 +378,14 @@ test("Exportar Excel (apelidos e IdCliente) fica na aba Comparação e some sem 
   await expect(botao).toHaveText("Exportar Excel");
   await expect(botao).toHaveAttribute("aria-label", /^Exportar Excel/);
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveText("Exportar");
+  const download = page.waitForEvent("download");
   await botao.click();
+  expect((await download).suggestedFilename()).toBe("EquipamentosDetalhes-atualizados.xlsx");
   await expect.poll(() => exportacoes).toBe(1);
+  await expect.poll(() => uploadsUx.length).toBe(1);
+  expect(uploadsUx[0]).toContain('filename="EquipamentosDetalhes-atualizados.xlsx"');
+  expect(uploadsUx[0]).toContain("\r\n\r\nxlsx\r\n");
+  await expect(page.locator("#toast-container [role=alert]")).toContainText("resultado incerto");
   await expect(botao).toBeEnabled();
   await expect(botao).not.toHaveAttribute("aria-busy", "true");
   await expect(botao).toHaveText("Exportar Excel");

@@ -170,7 +170,7 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
             self.assertFalse(automacao.cancelamento_pedido())
 
     def test_main_returns_130_and_clears_signal_when_cancelled(self):
-        def executar(_rotina, _sem_finalizar=False):
+        def executar(_rotina, _sem_finalizar=False, _planilha_ux=None):
             automacao.pedir_cancelamento()
             automacao.verificar_cancelamento()
 

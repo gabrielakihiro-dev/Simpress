@@ -255,7 +255,7 @@ class ConversationTests(unittest.TestCase):
             ("A senha fictícia foi alterada com sucesso", "A senha fictícia foi alterada com sucesso"),
             ("senha fictícia foi alterada para segredo", "senha fictícia foi alterada para [DADO SENSÍVEL OMITIDO]"),
             ("senha fictícia é frase secreta", "senha fictícia é [DADO SENSÍVEL OMITIDO]"),
-            ("senha fictícia e frase secreta para acesso", "senha fictícia e frase secreta para acesso"),
+            ("senha fictícia e frase secreta para acesso", "senha fictícia e [DADO SENSÍVEL OMITIDO] para acesso"),
         ):
             with self.subTest(phrase=phrase):
                 model = FakeModel(text("ok"))
@@ -336,16 +336,40 @@ class ConversationTests(unittest.TestCase):
                     self.assertEqual(sent, label + " [DADO SENSÍVEL OMITIDO]")
 
     def test_lowercase_password_after_unaccented_verb_preserves_context(self) -> None:
+        for phrase, expected in (
+            ("senha e segredo para acesso", "senha e [DADO SENSÍVEL OMITIDO] para acesso"),
+            ("password e abc para acesso.", "password e [DADO SENSÍVEL OMITIDO] para acesso."),
+        ):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, expected)
+
+    def test_bare_lowercase_password_after_e_is_masked(self) -> None:
+        for phrase, expected in (
+            ("senha e segredo", "senha e [DADO SENSÍVEL OMITIDO]"),
+            ("password e segredo", "password e [DADO SENSÍVEL OMITIDO]"),
+        ):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, expected)
+
+    def test_access_help_narrative_after_password_is_preserved(self) -> None:
+        phrase = "O usuário esqueceu a senha e solicitou ajuda para acesso"
         model = FakeModel(text("ok"))
         conversation, _ = make_conversation(model)
-        conversation.enviar_mensagem("senha e segredo para acesso")
+        conversation.enviar_mensagem(phrase)
         sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
-        self.assertEqual(sent, "senha e segredo para acesso")
+        self.assertEqual(sent, phrase)
 
     def test_unaccented_password_verb_keeps_narrative_and_existing_mask(self) -> None:
         for phrase in (
             "A senha e o usuário foram alterados",
-            "senha e segredo",
             "senha fictícia e frase secreta",
             "O usuário esqueceu a senha e precisa de ajuda",
             "O usuário esqueceu a senha e solicitou ajuda",
