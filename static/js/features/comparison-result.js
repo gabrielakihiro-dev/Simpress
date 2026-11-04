@@ -54,11 +54,23 @@
 
   const SEM_USUARIO_PAGINA = 100;
   const SEM_USUARIO_MAX_PAGINAS = 20;
+  // Successful reads are reused between event selections; invalidated when the Comparação panel opens or inventories change.
+  let semUsuarioCache = null;
+  let semUsuarioGeracao = 0;
+  function invalidarSemUsuarioResumo() { semUsuarioCache = null; semUsuarioGeracao += 1; }
 
   // Notebooks without a logged user in the current inventory (same rule and endpoint as the Home chip).
   // Never throws: a failure becomes {estado: "erro"} so the rest of the Resumo still renders.
+  // Past the page cap it returns {estado: "limite", items, total} with what was read, not an error.
   async function carregarSemUsuarioResumo() {
+    if (semUsuarioCache) return semUsuarioCache;
+    const geracao = semUsuarioGeracao;
+    const guardar = resultado => {
+      if (geracao === semUsuarioGeracao) semUsuarioCache = resultado;
+      return resultado;
+    };
     const items = [];
+    let total;
     try {
       for (let pagina = 0; pagina < SEM_USUARIO_MAX_PAGINAS; pagina += 1) {
         const params = new URLSearchParams({
@@ -66,9 +78,10 @@
         });
         const data = await app.apiFetch(`/api/buscar-expandida?${params}`, { errorMessage: "Não foi possível consultar os notebooks sem usuário." });
         items.push(...(Array.isArray(data?.items) ? data.items : []));
-        if (data?.has_more !== true) return { estado: "ok", items };
+        if (Number.isSafeInteger(data?.total)) total = data.total;
+        if (data?.has_more !== true) return guardar({ estado: "ok", items });
       }
-      return { estado: "erro", items };
+      return guardar({ estado: "limite", items, total });
     } catch (error) {
       return { estado: "erro", items: [] };
     }
@@ -644,7 +657,7 @@
   }
 
   return {
-    renderizarResultadoComparacao, carregarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
+    renderizarResultadoComparacao, carregarSemUsuarioResumo, invalidarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
     renderizarAnotacaoOperacional, conectarAnotacoesOperacionais,
   };
 });

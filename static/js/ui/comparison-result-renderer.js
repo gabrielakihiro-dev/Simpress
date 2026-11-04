@@ -473,16 +473,20 @@
 
   function secaoSemUsuario(semUsuario) {
     const titulo = tituloSecaoComparacao("Sem usuário", "amber", SECOES_CARTOES_RESUMO.sem_usuario.id);
-    if (semUsuario.estado !== "ok") {
+    if (semUsuario.estado !== "ok" && semUsuario.estado !== "limite") {
       return `
         <section class="space-y-2" data-history-filter-section data-sem-usuario-section="erro">
           <div>${titulo}<p class="text-xs text-fg-muted" role="status">Não foi possível consultar os notebooks sem usuário agora. Abra o Resumo de novo para tentar outra vez.</p></div>
         </section>`;
     }
     const items = Array.isArray(semUsuario.items) ? semUsuario.items : [];
+    const limite = semUsuario.estado === "limite";
+    const aviso = limite
+      ? `<p class="text-xs text-fg-muted" role="status">Mostrando os primeiros ${items.length.toLocaleString("pt-BR")}${Number.isSafeInteger(semUsuario.total) ? ` de ${semUsuario.total.toLocaleString("pt-BR")}` : ""} notebooks sem usuário; há mais no cadastro. Use o filtro "Sem usuário" da Home para ver todos.</p>`
+      : "";
     return `
-        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="ok">
-          <div>${titulo}<p class="text-xs text-fg-muted">Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.</p></div>
+        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="${limite ? "limite" : "ok"}">
+          <div>${titulo}${aviso}<p class="text-xs text-fg-muted">Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.</p></div>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local", "Modelo"], linhasSemUsuario(items), "Todos os notebooks do cadastro têm usuário.", "sem_usuario")}
         </section>`;
   }

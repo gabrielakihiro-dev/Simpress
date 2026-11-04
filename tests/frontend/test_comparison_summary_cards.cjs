@@ -99,3 +99,11 @@ test("pending manual alias card keeps its counter id inside the link", () => {
   const html = renderizar(COMPARACAO_COMPLETA);
   assert.match(html, /<button [^>]*data-comparison-section-target="comparacao-secao-apelidos-manuais"[^>]*>.*?<p id="comparacao-divergencias-manuais-pendentes"/s);
 });
+
+test("Sem usuário em estado limite mantém o título único da seção e não cria cartão com contagem parcial", () => {
+  const html = renderizar(COMPARACAO_COMPLETA, { estado: "limite", items: [{ serial: "SN-1", apelido: "PRNOTE-A" }], total: 500 });
+  const id = renderer.SECOES_CARTOES_RESUMO.sem_usuario.id;
+  assert.equal(html.split(`id="${id}"`).length - 1, 1);
+  assert.equal(cartoes(html).filter(cartao => cartao.alvo === id).length, 0);
+  assert.match(html, /Mostrando os primeiros 1 de 500 notebooks sem usuário/);
+});

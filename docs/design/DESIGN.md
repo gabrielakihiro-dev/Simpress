@@ -8,7 +8,7 @@ Regra de ouro herdada do `AGENTS.md`: o design Cockpit é aprovado. Layout idên
 
 ## 1. Visão geral e tema
 
-- App local (FastAPI + front estático). Interface densa de operação: cabeçalho com abas F1–F10, telas por aba, painéis de detalhe, modais e um assistente flutuante.
+- App local (FastAPI + front estático). Interface densa de operação: cabeçalho com abas e atalhos F1–F9, telas por aba, painéis de detalhe, modais e um assistente flutuante.
 - Duas aparências, escolhidas por `html[data-theme="light" | "dark"]`.
 - Os temas não são simétricos entre arquivos:
   - `ck-tokens.css`: `:root` é o tema claro; `[data-theme="dark"]` redefine para o escuro.
@@ -116,7 +116,7 @@ Fora da escala (confirmado):
 - Tabela que vira cards abaixo de 1200 px; lista/detalhe dividido (`.ck-dividido`).
 - Assistente flutuante `.ck-assist-widget` (50; maximizado 60), painel `.ck-assist__*`.
 - Skeleton: `.ui-skeleton` (`ui-motion.css`), criado por `SimpressMotion.startLoading` (`static/js/ui/ui-motion.js`); usado em buscas (`equipment-search.js`, `full-equipment-search.js`, `comparison-history.js`) e na lista de chamados novos.
-- Estados com `data-estado`: OS e Comparação (`vazio`, `carregando`, `erro`, `pronto`, em `data-panels.js` e `cockpit-tool-panels.js`), seletor de arquivo (`vazio`/`selecionado`), rotinas da Automação (`ocioso`/`em-andamento`) e vários blocos do painel Chamados (`ok`, `alerta`, `erro`, `andamento`, `salvando`). Desde o B2 (04/11/2026), Home (`#home-equipment-list`: `carregando`, `pronto`, `vazio`, `erro`), Resumo (`#resumo-cards`: `carregando`, `pronto`, `erro`) e Transporte (`#transfer-equipment-banner` e `#cockpit-transport-preview-state`: `vazio`/`pronto`) também expõem `data-estado`, ao lado do `data-state` em inglês que já existia (não removido). Home e Resumo reaproveitam o skeleton de `startLoading`.
+- Estados com `data-estado`: OS e Comparação (`vazio`, `carregando`, `erro`, `pronto`, em `data-panels.js` e `cockpit-tool-panels.js`), seletor de arquivo (`vazio`/`selecionado`), rotinas da Automação (`ocioso`/`em-andamento`) e vários blocos do painel Chamados (`ok`, `alerta`, `erro`, `andamento`, `salvando`). Desde o B2 (04/11/2026), Home (`#home-equipment-list`: `carregando`, `pronto`, `vazio`, `erro`), Resumo (`#resumo-regionais`: `carregando`, `pronto`, `erro`; `#resumo-total-status` com os mesmos valores) e Transporte (`#transfer-equipment-banner` e `#cockpit-transport-preview-state`: `vazio`/`pronto`) também expõem `data-estado`, ao lado do `data-state` em inglês que já existia (não removido). Home e Resumo reaproveitam o skeleton de `startLoading`.
 
 ## 6. Layout e responsividade
 
@@ -137,7 +137,7 @@ Fora da escala (confirmado):
 | `--motion-ease` | cubic-bezier(0.22,1,0.36,1) | `tokens.css` |
 
 - Keyframes: `ck-surgir` (fade + 4px; entrada padrão de menus, popovers, toasts, véus, painéis de ferramenta e blocos recolhíveis), `ck-girar`, `ui-shimmer`, `panel-card-enter` (6px), `sebrae-historico-entrada` (só opacidade), `ck-assist-entrada` (+4px, sobe), `ck-assist-abrir` (scale), `equipment-user-in` (-2px, 200ms, em `app.css`), `ux-pop`, `ux-nudge`, `ux-spin`, `automation-pulse`, `sebrae-varredura`, `sebrae-brilho`. Desde o B3, `ui-menu-enter` e `sebrae-descricao-entrar` (idênticos a `ck-surgir`) foram removidos e usam `ck-surgir`; os demais fade-ins diferem em distância, direção ou propriedade e ficam como estão.
-- Entradas (B3, `ck-cockpit.css`, bloco depois de `.ck-ferr-painel`): `.ck-ferr-painel:not([hidden])` (painéis F5 a F9), `.ck-chamado__painel:not([hidden])` (abas de modelo de chamado da Home) e o conteúdo de `.ckp-recolher[open]` e `details.ck-det-bloco[open]` animam com `ck-surgir var(--duracao) var(--curva)` (180 ms), só dentro de `@media (prefers-reduced-motion: no-preference)`. Só a entrada anima (sem saída). As abas principais F1 a F4 já usam `SimpressMotion.reveal(..., "page")` (220 ms, 8px); os `<details>` do Sebrae usam `::details-content`; ficam sem entrada por decisão: `details[data-user-change-details]` (nasce aberto e seria animado a cada renderização da comparação), `.ticket-disclosure` (dentro de célula de tabela) e as linhas de qualquer tabela.
+- Entradas (B3, `ck-cockpit.css`, bloco depois de `.ck-ferr-painel`): `.ck-ferr-painel:not([hidden])` (painéis F3 e F5 a F8), `.ck-chamado__painel:not([hidden])` (abas de modelo de chamado da Home) e o conteúdo de `.ckp-recolher[open]` e `details.ck-det-bloco[open]` animam com `ck-surgir var(--duracao) var(--curva)` (180 ms), só dentro de `@media (prefers-reduced-motion: no-preference)`. Só a entrada anima (sem saída). As abas principais F1 a F4 já usam `SimpressMotion.reveal(..., "page")` (220 ms, 8px); os `<details>` do Sebrae usam `::details-content`; ficam sem entrada por decisão: `details[data-user-change-details]` (nasce aberto e seria animado a cada renderização da comparação), `.ticket-disclosure` (dentro de célula de tabela) e as linhas de qualquer tabela.
 - Durações literais fora de token: `ck-cockpit.css` 522 (900ms), 862 (150ms), 1042 e 1227 e 1252 (.8s), 1045 e 1058 (1.2s), 1082 (1.4s), 1769 (900ms); `ux-refinements.css` 259 (800ms), 479 (1.4s), 540 (150ms), 550 (200ms).
 - Movimento reduzido, três mecanismos com valores diferentes: `ck-tokens.css:155-157` (1ms), `ck-cockpit.css:673-675` (0.01ms, com comentário de que o contrato do `ui.spec` exige 0.01ms ou menos), `tokens.css:617-625` (variáveis `--motion-*` em 0.01ms). Há também guards locais (`ck-cockpit.css` 995, 1267–1270, 1913; `ux-refinements.css` 270, 597–598; `ui-motion.css` 68–69).
 - `<details>` do Sebrae já animam a altura (`ck-cockpit.css`, `::details-content`, bloco `@supports (interpolate-size…)`).
@@ -149,7 +149,7 @@ Fora da escala (confirmado):
 - Foco global: `:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }` (`ck-tokens.css:137`, repetido em `ck-cockpit.css:8` para `.simpress-app-shell`). No tema claro, `theme.css:84-87` usa `--focus-color` e `box-shadow`.
 - `.ck-pular` (link de pular) com z-index 100.
 - `outline: none` só em `.ck-tela:focus` (14), `#cockpit-tool-panels:focus` (893) e `.ck-busca__entrada:focus-visible` (254); o último é compensado por `.ck-busca__campo:focus-within` (252).
-- Atalhos F1–F10 e navegação por setas na lista da Home são contratos do `AGENTS.md`.
+- Atalhos F1–F9 e navegação por setas na lista da Home são contratos do `AGENTS.md`.
 - Pontos fracos (detalhe em `AUDITORIA-VISUAL.md`): `--cor-texto-apagado` abaixo de 3:1 (decisão do B1: valor mantido, ver AUDITORIA-VISUAL.md seção F), bordas abaixo de 1,5:1, alvos de toque pequenos nos chips só de estado e nos demais controles. `--cor-destaque-forte` escuro passou a 3,05:1 no B1.
 
 ## 9. Quality Gates (checklist de PR visual)

@@ -817,11 +817,12 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #resumo-regionais .ck-barra__trilho { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--cor-neutro-fundo); }
 #resumo-regionais .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); }
 #resumo-total-ativos td:first-child { font-family: var(--fonte-mono); }
-#home-equipment-list[data-estado="erro"] + #home-list-empty { color: var(--cor-erro-texto); }
-/* Esqueleto de carregamento (ui-motion) com os tokens do Cockpit; vale só na Home. */
-.ck-home .ui-skeleton-list { padding: 8px 12px; }
-.ck-home .ui-skeleton-row { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
-.ck-home .ui-skeleton { background: var(--cor-neutro-fundo); }
+#resumo-regionais[data-estado="erro"] { padding: 12px 16px; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-md); }
+#resumo-total-status[data-estado="erro"], #home-equipment-list[data-estado="erro"] + #home-list-empty { color: var(--cor-erro-texto); }
+/* Esqueleto de carregamento (ui-motion) com os tokens do Cockpit; vale só em Home e Resumo. */
+.ck-home .ui-skeleton-list, #resumo-regionais .ui-skeleton-list { padding: 8px 12px; }
+.ck-home .ui-skeleton-row, #resumo-regionais .ui-skeleton-row { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-home .ui-skeleton, #resumo-regionais .ui-skeleton { background: var(--cor-neutro-fundo); }
 .ck-home .ui-equipment-loading:not(:empty) { margin-top: 0; }
 
 /* Região 3D: tabela de OS (montada em Chamados por montarTabelaOs, seção .ck-os). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */

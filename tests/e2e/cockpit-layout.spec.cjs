@@ -113,6 +113,8 @@ test("Home chips Sem acesso, Divergente and Sem usuário open the Resumo on the 
       await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
     }
   } finally {
+    // O Resumo ainda pode ter um GET da lista em andamento quando o teste acaba; sem isso o erro do route.fetch vaza para o teste seguinte.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await request.get("/__fixture_cockpit?comparacao=0");
   }
 });
