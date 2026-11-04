@@ -1140,6 +1140,23 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__texto > summary { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: var(--raio-sm); cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-suave); transition: background-color var(--duracao) var(--curva); }
 .sebrae-chamado__texto > summary:hover { background: var(--cor-neutro-fundo); }
 .sebrae-chamado__texto p { max-height: 9em; margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--cor-borda-suave); overflow: auto; font-size: var(--fs-sm); line-height: 1.5; color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Lápis da Descrição (F5): botão pequeno no resumo, editor inline abaixo do texto */
+.sebrae-descricao__selo { margin-left: auto; }
+.sebrae-descricao__selo[hidden] { display: none; }
+.sebrae-descricao { position: relative; min-width: 0; }
+.sebrae-descricao > details > summary { padding-right: 40px; }
+.sebrae-descricao__lapis { position: absolute; top: 2px; right: 6px; min-height: 24px; padding: 2px 6px; }
+.sebrae-descricao__editor { display: grid; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--cor-borda-suave); }
+.sebrae-descricao__editor[hidden] { display: none; }
+.sebrae-descricao__editor .ck-entrada { width: 100%; }
+.sebrae-descricao__feedback { display: block; margin: 0; padding: 0 10px 8px; font-size: var(--fs-sm); color: var(--cor-texto-suave); }
+.sebrae-descricao__feedback:empty { display: none; }
+.sebrae-descricao__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-descricao__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+@media (prefers-reduced-motion: no-preference) {
+  .sebrae-descricao__editor { animation: sebrae-descricao-entrar var(--duracao) var(--curva); }
+  @keyframes sebrae-descricao-entrar { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}
 
 /* Zona 2 · Classificação operacional */
 .sebrae-chamado__manuais { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; }

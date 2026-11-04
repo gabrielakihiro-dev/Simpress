@@ -93,7 +93,7 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(resposta.json()["descricao_finalizacao"], "Troquei o cabo")
         abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
         self.assertEqual(abertos[A]["softexpert"]["descricao_finalizacao"], "Troquei o cabo")
-        self.assertEqual(abertos[B]["softexpert"], {"descricao_finalizacao": "", "descricao_definida": False, "pdf": None, "finalizacao": None})
+        self.assertEqual(abertos[B]["softexpert"], {"descricao_finalizacao": "", "descricao_definida": False, "descricao_editada": "", "pdf": None, "finalizacao": None})
         self.assertEqual(self.put(A, "").json()["descricao_finalizacao"], "")
 
     def test_descricao_apagada_conta_como_definida_e_so_o_campo_ausente_nao(self):
@@ -112,6 +112,40 @@ class DescricaoEAnexoTest(FinalizarBase):
         self.assertEqual(self.put("UTIC-2026-9999", "x").status_code, 422)
         self.assertEqual(self.put("abc", "x").status_code, 422)
         extra = self.cliente.put(f"/api/sebrae/chamados/{A}/finalizacao", json={"descricao_finalizacao": "x", "z": 1})
+        self.assertEqual(extra.status_code, 422)
+        self.assertEqual(fin.ler_estado(self.dir), {})
+
+    def put_descricao(self, numero, texto):
+        return self.cliente.put(f"/api/sebrae/chamados/{numero}/descricao", json={"descricao": texto})
+
+    def test_descricao_editada_antigo_lido_vale_na_leitura_e_restaurar_volta_ao_original(self):
+        sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(A, "Titulo", "Texto lido", "Maria"))
+        resposta = self.put_descricao(A, "Texto lido CPF 123.456.789-09 senha: abc123 e mais info")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertNotIn("123.456.789-09", resposta.json()["descricao"])  # mascarado ao salvar
+        abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertEqual(abertos[A]["leitura_softexpert"]["descricao"], resposta.json()["descricao"])
+        self.assertEqual(abertos[A]["softexpert"]["descricao_editada"], resposta.json()["descricao"])
+        self.assertEqual(abertos[B]["softexpert"]["descricao_editada"], "")
+        restaurada = self.put_descricao(A, "  ")
+        self.assertEqual((restaurada.json()["descricao"], restaurada.json()["descricao_editada"]), ("Texto lido", ""))
+        abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertEqual(abertos[A]["leitura_softexpert"]["descricao"], "Texto lido")
+
+    def test_descricao_editada_novo_vira_a_coluna_h_da_linha_nova(self):
+        novo = "UTIC-2026-0009"
+        sebrae_novos.salvar_novos(self.caminhos.novos, [ChamadoSoftExpert(novo, "T", "Original", "Joao")], [], 0, {})
+        self.assertEqual(self.put_descricao(novo, "Original + detalhe").json()["descricao"], "Original + detalhe")
+        formulario = {f["numero"]: f for f in self.cliente.get("/api/sebrae/novos").json()["novos"]["formulario"]}
+        self.assertEqual(formulario[novo]["linha"]["H"], "Original + detalhe")
+        self.assertEqual(self.put_descricao(novo, "").json()["descricao"], "Original")
+
+    def test_descricao_editada_recusa_texto_grande_chamado_fechado_numero_ruim_e_campo_extra(self):
+        self.assertEqual(self.put_descricao(A, "x" * (fin.MAX_DESCRICAO * 2 + 1)).status_code, 422)
+        self.assertEqual(self.put_descricao(C, "x").status_code, 422)  # FINALIZADO no Dashboard
+        self.assertEqual(self.put_descricao("UTIC-2026-9999", "x").status_code, 422)
+        self.assertEqual(self.put_descricao("abc", "x").status_code, 422)
+        extra = self.cliente.put(f"/api/sebrae/chamados/{A}/descricao", json={"descricao": "x", "z": 1})
         self.assertEqual(extra.status_code, 422)
         self.assertEqual(fin.ler_estado(self.dir), {})
 

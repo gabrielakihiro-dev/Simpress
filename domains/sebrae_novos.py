@@ -14,7 +14,7 @@ import hashlib
 import json
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -234,6 +234,21 @@ def ler_antigos(caminho: Path) -> Dict[str, Dict[str, str]]:
         str(n): {k: str(r.get(k) or "") for k in ("titulo", "descricao", "solicitante", "habilitada_em", "atendimento", "lido_em")}
         for n, r in dados.items() if isinstance(r, dict)
     }
+
+
+def descricao_segura(texto: Any) -> str:
+    """Texto digitado pelo usuário na descrição do chamado, com CPF e senhas mascarados como os lidos do SoftExpert."""
+    return _seguro(texto)
+
+
+def aplicar_descricoes_novos(chamados: Sequence[ChamadoSoftExpert], editadas: Mapping[str, str]) -> List[ChamadoSoftExpert]:
+    """Chamados novos com a descrição editada no site no lugar da lida (vira a coluna H da linha nova e alimenta o cruzamento por nome)."""
+    return [replace(c, descricao=editadas[c.numero]) if c.numero in editadas else c for c in chamados]
+
+
+def aplicar_descricoes_antigos(antigos: Mapping[str, Mapping[str, str]], editadas: Mapping[str, str]) -> Dict[str, Dict[str, str]]:
+    """Leitura dos antigos com a descrição editada no lugar da lida; chamado ainda não lido fica de fora (não há descrição a corrigir)."""
+    return {n: ({**r, "descricao": editadas[n]} if n in editadas else dict(r)) for n, r in antigos.items()}
 
 
 def salvar_resultado_antigos(caminhos: Caminhos, resultado: Mapping[str, Any]) -> None:
