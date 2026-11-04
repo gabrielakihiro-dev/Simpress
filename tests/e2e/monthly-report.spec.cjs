@@ -116,3 +116,21 @@ test("changing month clears the previous preview until the new response arrives"
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("setembro de 2026");
   await expect(page.locator("#cockpit-monthly-copy")).toBeEnabled();
 });
+
+test("the Cockpit report detail keeps one column and card rows on phones without horizontal scroll", async ({ page }) => {
+  await page.route("**/api/relatorio-mensal/dados**", route => route.fulfill({
+    json: monthlyReport(new URL(route.request().url()).searchParams.get("mes")),
+  }));
+  await page.goto("/");
+  await openMonthlyReport(page);
+  const details = page.locator("#cockpit-monthly-details");
+  await expect(details.locator('td[data-label="Cidade"]').first()).toHaveText("Curitiba Sede");
+  await expect(details.locator('td[data-label="Endereço"]').first()).toHaveText("Prado Velho");
+  await expect(details.locator('td[data-label="Equipamentos"]').first()).toBeVisible();
+  const { width } = page.viewportSize();
+  // Faixas de grid computadas (px separados por espaço): "366px" = 1 coluna, "a px b px" = 2.
+  const tracks = (await details.evaluate(el => getComputedStyle(el).gridTemplateColumns)).trim().split(/\s+/);
+  if (width < 768) expect(tracks).toHaveLength(1);
+  else if (width >= 1200) expect(tracks).toHaveLength(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});

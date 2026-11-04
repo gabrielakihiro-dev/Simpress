@@ -711,6 +711,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"numero": FINALIZAR_NUMERO, "descricao_finalizacao": finalizar_state["descricao"],
                        "pdf": finalizar_state["pdf"], "finalizacao": finalizar_state["finalizacao"]})
             return
+        if path.startswith("/api/sebrae/chamados/") and path.endswith("/descricao"):  # lápis do bloco Descrição: só ecoa, sem guardar
+            size = int(self.headers.get("Content-Length", "0"))
+            texto = str(json.loads(self.rfile.read(size) or b"{}").get("descricao", ""))[:4000].strip()
+            self.send({"numero": path.split("/")[-2], "descricao": texto or "O monitor da sala 3 ficou sem imagem.", "descricao_editada": texto})
+            return
         if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/ficha":
             size = int(self.headers.get("Content-Length", "0"))
             finalizar_state["ficha"] = json.loads(self.rfile.read(size) or b"{}").get("ficha")

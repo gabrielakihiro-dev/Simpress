@@ -613,6 +613,10 @@
     /** Mesmo layout do chamado, só leitura, recolhido: o resumo diz número, título, pessoa e encerramento. */
     function textoFinalizado(item) {
       const ficha = item.ficha || {};
+      const pares = valor => Array.isArray(valor)
+        ? valor.filter(par => Array.isArray(par) && par.length === 2 && par.every(texto => typeof texto === "string")) : [];
+      const fatos = pares(ficha.fatos);
+      const detalhes = pares(ficha.detalhes);
       const li = document.createElement("li");
       const detalhe = document.createElement("details");
       detalhe.className = "sebrae-finalizado";
@@ -622,8 +626,8 @@
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
       const artigo = cartaoChamado(item.numero, "finalizado", titulo, "Finalizado", "ok");
-      artigo.appendChild(zonaSolicitacao((ficha.fatos || []).length ? listaFatos(ficha.fatos) : null, [],
-        (ficha.detalhes || []).map(([rotulo, texto]) => blocoDetalhe(rotulo, texto))));
+      artigo.appendChild(zonaSolicitacao(fatos.length ? listaFatos(fatos) : null, [],
+        detalhes.map(([rotulo, texto]) => blocoDetalhe(rotulo, texto))));
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => {
@@ -646,6 +650,25 @@
       const colAnexo = document.createElement("div");
       colAnexo.className = "sebrae-final__anexo";
       colAnexo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__pdf", item.pdf ? `PDF anexado: ${item.pdf}` : "Nenhum PDF anexado."));
+      if (item.pdf_remocao_pendente) {
+        const tentar = document.createElement("button");
+        tentar.type = "button";
+        tentar.className = "ck-btn ck-btn--fantasma ck-btn--sm";
+        tentar.textContent = "Tentar remover novamente o PDF antigo";
+        tentar.dataset.sebraePdfRemocao = item.numero;
+        const feedback = dom.createTextElement("p", "ck-campo__ajuda", "Remoção de PDF pendente.");
+        feedback.setAttribute("role", "status");
+        tentar.addEventListener("click", async () => {
+          tentar.disabled = true;
+          try {
+            await app.apiFetch(urlChamado(item.numero, "anexo") + "?somente_pendentes=true", { method: "DELETE", errorMessage: "Não foi possível remover o PDF antigo." });
+            tentar.hidden = true;
+            feedback.textContent = "PDF antigo removido.";
+          } catch (error) { feedback.textContent = error.message; }
+          finally { tentar.disabled = false; }
+        });
+        colAnexo.append(tentar, feedback);
+      }
       const quando = formatarDataHora(item.em);
       const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", `${textoResultado({ status: "ok", encerrado_em: item.encerrado_em })}${quando ? ` · ${quando}` : ""}`);
       resultado.dataset.estado = "ok";
@@ -668,6 +691,105 @@
       detalhe.className = "sebrae-chamado__texto";
       detalhe.append(dom.createTextElement("summary", "", rotulo), dom.createTextElement("p", "", texto || "Vazio"));
       return detalhe;
+    }
+
+    /** Bloco "Descrição" com lápis (F5): o texto muda só neste site, o SoftExpert e a linha já lançada no Dashboard ficam como estão.
+     * Texto vazio restaura o original. `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
+    function blocoDescricaoEditavel(item, texto, aplicar) {
+      const numero = item.numero;
+      let atual = texto || "";
+      let editada = Boolean(item.softexpert?.descricao_editada);
+      const detalhe = blocoDetalhe("Descrição", atual);
+      const resumo = detalhe.querySelector("summary");
+      const paragrafo = detalhe.querySelector("p");
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-descricao__selo", "Editada");
+      selo.dataset.status = "info";
+      const lapis = document.createElement("button");
+      lapis.type = "button";
+      lapis.className = "ck-btn ck-btn--fantasma ck-btn--sm sebrae-descricao__lapis";
+      lapis.title = "Editar descrição";
+      lapis.setAttribute("aria-label", `Editar descrição de ${numero}`);
+      lapis.setAttribute("aria-expanded", "false");
+      lapis.dataset.sebraeEditarDescricao = numero;
+      lapis.appendChild(iconePendencia("i-pencil", ""));
+      resumo.appendChild(selo);
+      const entrada = document.createElement("textarea");
+      entrada.className = "ck-entrada";
+      entrada.rows = 5;
+      entrada.maxLength = MAX_DESCRICAO;
+      entrada.placeholder = "Vazio volta ao texto original do chamado.";
+      entrada.setAttribute("aria-label", `Descrição de ${numero}`);
+      entrada.dataset.sebraeDescricaoEditada = numero;
+      const criarBotao = (rotulo, classe, chave) => {
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = `ck-btn ${classe} ck-btn--sm`;
+        botao.textContent = rotulo;
+        botao.dataset[chave] = numero;
+        return botao;
+      };
+      const salvar = criarBotao("Salvar", "ck-btn--primario", "sebraeSalvarDescricao");
+      const cancelar = criarBotao("Cancelar", "ck-btn--secundario", "sebraeCancelarDescricao");
+      const restaurar = criarBotao("Restaurar original", "ck-btn--fantasma", "sebraeRestaurarDescricao");
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-chamado__acoes";
+      acoes.append(salvar, cancelar, restaurar);
+      const editor = document.createElement("div");
+      editor.className = "sebrae-descricao__editor";
+      editor.hidden = true;
+      editor.append(entrada, acoes);
+      const feedback = dom.createTextElement("span", "sebrae-descricao__feedback", "");
+      feedback.setAttribute("role", "status");
+      detalhe.append(editor, feedback);
+      const mostrarEstado = () => { selo.hidden = !editada; restaurar.hidden = !editada; };
+      const abrirEditor = aberto => {
+        editor.hidden = !aberto;
+        paragrafo.hidden = aberto;
+        lapis.setAttribute("aria-expanded", String(aberto));
+      };
+      mostrarEstado();
+      lapis.addEventListener("click", evento => {
+        detalhe.open = true;
+        entrada.value = atual;
+        definirFeedback(feedback, "");
+        abrirEditor(true);
+        entrada.focus();
+      });
+      cancelar.addEventListener("click", () => { abrirEditor(false); lapis.focus(); });
+      const enviar = async novoTexto => {
+        [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = true; });
+        definirFeedback(feedback, "Salvando…", "salvando");
+        try {
+          const dados = await app.apiFetch(urlChamado(numero, "descricao"), {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao: novoTexto }),
+            errorMessage: "Não foi possível salvar a descrição.",
+          });
+          atual = dados.descricao || "";
+          editada = Boolean(dados.descricao_editada);
+          paragrafo.textContent = atual || "Vazio";
+          aplicar(dados);
+          mostrarEstado();
+          abrirEditor(false);
+          definirFeedback(feedback, editada ? "Descrição salva só neste site." : "Descrição original restaurada.", "ok");
+          lapis.focus();
+        } catch (error) {
+          definirFeedback(feedback, `Não foi possível salvar: ${error.message}`, "erro");
+        } finally {
+          [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = false; });
+        }
+      };
+      salvar.addEventListener("click", () => enviar(entrada.value));
+      restaurar.addEventListener("click", () => enviar(""));
+      // O lápis fica ao lado do <details>, não dentro do <summary>: botão dentro de summary é "nested-interactive" no axe.
+      const envoltorio = document.createElement("div");
+      envoltorio.className = "sebrae-descricao";
+      envoltorio.append(lapis, detalhe); // lápis primeiro: a ordem do Tab segue a tela (canto superior direito do cabeçalho)
+      return envoltorio;
+    }
+
+    /** Guarda no item em memória o que o servidor devolveu ao editar a descrição (flag do estado local e o texto que o cartão mostra). */
+    function marcarDescricaoEditada(item, dados) {
+      item.softexpert = { ...(item.softexpert || {}), descricao_editada: dados.descricao_editada || "" };
     }
 
     /** Selo de leitura do resumo: só chamado com UTIC pode ser lido no SoftExpert; sem UTIC nada é prometido. */
@@ -714,7 +836,12 @@
       const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
       if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
       let detalhes = [];
-      if (dados.lido) detalhes = [blocoDetalhe("Descrição", dados.descricao), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      if (dados.lido) {
+        detalhes = [blocoDescricaoEditavel(item, dados.descricao, resposta => {
+          marcarDescricaoEditada(item, resposta);
+          item.leitura_softexpert = { ...item.leitura_softexpert, descricao: resposta.descricao };
+        }), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      }
       else if (NUMERO_UTIC.test(item.numero)) {
         const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
         dica.dataset.leitura = "pendente";
@@ -746,7 +873,10 @@
       const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
-      const detalhes = [["H", "Descrição"], ["F", "Atendimento realizado"]].map(([letra, rotulo]) => blocoDetalhe(rotulo, item.linha[letra]));
+      const detalhes = [blocoDescricaoEditavel(item, item.linha.H, resposta => {
+        marcarDescricaoEditada(item, resposta);
+        item.linha = { ...item.linha, H: resposta.descricao };
+      }), blocoDetalhe("Atendimento realizado", item.linha.F)];
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
@@ -774,6 +904,7 @@
       const soft = estado.soft[numero] = {
         descricao: aplicarRevisado ? DESCRICAO_API_SEBRAE : guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
         pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
+          pdfRemocaoPendente: Boolean(guardado.pdf_remocao_pendente),
       };
       const area = criarZona("finalizacao", "Finalização no SoftExpert", "Irreversível", {
         destaque: true, classe: "sebrae-chamado__finalizar",
@@ -798,6 +929,11 @@
       remover.className = "ck-btn ck-btn--fantasma ck-btn--sm";
       remover.textContent = "Remover PDF";
       remover.dataset.sebraePdfRemover = numero;
+      const tentarRemover = document.createElement("button");
+      tentarRemover.type = "button";
+      tentarRemover.className = "ck-btn ck-btn--fantasma ck-btn--sm";
+      tentarRemover.textContent = "Tentar remover novamente o PDF antigo";
+      tentarRemover.dataset.sebraePdfRemocao = numero;
       const feedbackPdf = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__feedback", "");
       feedbackPdf.setAttribute("role", "status");
       const botao = document.createElement("button");
@@ -818,7 +954,7 @@
       resultado.setAttribute("role", "status");
       const pdfLinha = document.createElement("div");
       pdfLinha.className = "sebrae-chamado__pdf-linha";
-      pdfLinha.append(infoPdf, remover);
+      pdfLinha.append(infoPdf, remover, tentarRemover);
       // A ordem no DOM dos dois `.sebrae-chamado__feedback` (descrição primeiro, PDF depois) precisa ser mantida.
       const colTexto = document.createElement("div");
       colTexto.className = "sebrae-final__texto";
@@ -833,7 +969,7 @@
       corpo.className = "sebrae-final__corpo";
       corpo.append(listaPendencias(), colTexto, colAnexo, rodape);
       area.appendChild(corpo);
-      estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, feedbackPdf, botao, cancelar, resultado });
+      estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, tentarRemover, feedbackPdf, botao, cancelar, resultado });
       texto.addEventListener("input", () => {
         window.clearTimeout(estado.temporizadores[numero]);
         estado.temporizadores[numero] = window.setTimeout(() => salvarDescricao(numero), 800);
@@ -843,6 +979,7 @@
       texto.addEventListener("change", () => salvarDescricao(numero));
       arquivo.addEventListener("change", () => enviarPdf(numero));
       remover.addEventListener("click", () => removerPdf(numero));
+      tentarRemover.addEventListener("click", () => removerPdf(numero, true));
       botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
       cancelar.addEventListener("click", () => cancelarFinalizacao(numero));
       atualizarFinalizar(numero);
@@ -859,6 +996,7 @@
       ref.cancelar.hidden = !soft.processando;
       ref.infoPdf.textContent = soft.pdf ? `PDF anexado: ${soft.pdf.nome} (${formatarTamanho(soft.pdf.tamanho)})` : "Nenhum PDF anexado.";
       ref.remover.hidden = !soft.pdf;
+      ref.tentarRemover.hidden = !soft.pdfRemocaoPendente;
       const quando = formatarDataHora(soft.finalizacao?.em);
       ref.resultado.textContent = soft.processando ? "Finalizando no SoftExpert…"
         : soft.cancelado && !soft.finalizacao ? "Finalização cancelada."
@@ -912,6 +1050,7 @@
       try {
         const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "POST", body: corpo, errorMessage: "Não foi possível enviar o PDF." });
         estado.soft[numero].pdf = dados.pdf || null;
+        estado.soft[numero].pdfRemocaoPendente = Boolean(dados.pdf_remocao_pendente);
         definirFeedback(ref.feedbackPdf, "PDF salvo.", "ok");
       } catch (error) {
         definirFeedback(ref.feedbackPdf, `PDF não salvo: ${error.message}`, "erro");
@@ -921,13 +1060,14 @@
       }
     }
 
-    async function removerPdf(numero) {
+    async function removerPdf(numero, somentePendentes = false) {
       const ref = estado.refs.get(numero);
       if (!ref) return;
       definirFeedback(ref.feedbackPdf, "Removendo PDF…", "salvando");
       try {
-        const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "DELETE", errorMessage: "Não foi possível remover o PDF." });
+        const dados = await app.apiFetch(urlChamado(numero, "anexo") + (somentePendentes ? "?somente_pendentes=true" : ""), { method: "DELETE", errorMessage: "Não foi possível remover o PDF." });
         estado.soft[numero].pdf = dados.pdf || null;
+        estado.soft[numero].pdfRemocaoPendente = Boolean(dados.pdf_remocao_pendente);
         definirFeedback(ref.feedbackPdf, "PDF removido.", "ok");
       } catch (error) {
         definirFeedback(ref.feedbackPdf, `PDF não removido: ${error.message}`, "erro");
@@ -1029,6 +1169,120 @@
       const host = el("sebrae-sharepoint-aviso");
       if (!host) return;
       const aviso = estado.fechar.sharepoint;
+      const recuperar = async (acao, confirmacao = "") => {
+        try {
+          const dados = await app.apiFetch("/api/sebrae/dashboard/envio/recuperar", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ envio_id: aviso.envio_id, acao, confirmacao }),
+            errorMessage: "Não foi possível recuperar o envio. Recarregue e confira o estado.",
+          });
+          estado.fechar.sharepoint = dados.sharepoint;
+          renderizarSharepoint();
+        } catch (error) { app.showToast(error.message, "error"); }
+      };
+      const controlesRecuperacao = () => {
+        if (!aviso.envio_id) return;
+        host.appendChild(dom.createTextElement("p", "ck-campo__ajuda", `ID do envio: ${aviso.envio_id}`));
+        if (!aviso.snapshot_disponivel) {
+          if (aviso.legado && aviso.status === "confirmado" && !aviso.incerto) {
+            host.appendChild(dom.createTextElement("p", "", `Confira o Dashboard no SharePoint e preserve/mova manualmente todos os arquivos, sidecars e subpastas para fora de ${aviso.pasta_pendente}. O sistema só conclui com a pasta vazia; não move nem exclui arquivos.`));
+            const frase = `CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS ${aviso.envio_id}`;
+            const entrada = document.createElement("input");
+            entrada.type = "text";
+            entrada.className = "ck-entrada";
+            entrada.id = "sebrae-legado-confirmacao";
+            const label = dom.createTextElement("label", "", `Após conferir e preservar, digite ${frase}`);
+            label.setAttribute("for", entrada.id);
+            const concluir = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Concluir legado após conferência e preservação");
+            concluir.type = "button";
+            concluir.dataset.sebraeEnvioAcao = "concluir_legado";
+            concluir.disabled = true;
+            const atualizar = () => { concluir.disabled = estado.fechar.emAndamento || entrada.value !== frase; };
+            entrada.addEventListener("input", atualizar);
+            concluir.addEventListener("click", async () => { if (concluir.disabled) return; concluir.disabled = true; await recuperar("concluir_legado", entrada.value); atualizar(); });
+            host.append(label, entrada, concluir);
+            return;
+          }
+          host.appendChild(dom.createTextElement("p", "", "Este envio não tem cópia local verificável. A recuperação permanece bloqueada; preserve os arquivos para conferência."));
+          return;
+        }
+        const copia = dom.createTextElement("a", "ck-btn ck-btn--fantasma ck-btn--sm", "Baixar cópia local deste envio para conferir");
+        copia.href = `/api/sebrae/dashboard/envio/${encodeURIComponent(aviso.envio_id)}/snapshot`;
+        host.appendChild(copia);
+        if (!aviso.incerto) {
+          const limpar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Tentar limpar cópias já enviadas");
+          limpar.type = "button";
+          limpar.dataset.sebraeEnvioAcao = "limpar";
+          limpar.disabled = estado.fechar.emAndamento;
+          limpar.addEventListener("click", async () => { limpar.disabled = true; await recuperar("limpar"); limpar.disabled = estado.fechar.emAndamento; });
+          host.appendChild(limpar);
+          return;
+        }
+        host.appendChild(dom.createTextElement("p", "", "O sistema não consultou o SharePoint. Compare o conteúdo do Dashboard com a cópia local antes de declarar o resultado. A declaração não dispara upload."));
+        const entrada = document.createElement("input");
+        entrada.id = "sebrae-envio-confirmacao";
+        entrada.className = "ck-entrada";
+        entrada.type = "text";
+        entrada.autocomplete = "off";
+        const label = dom.createTextElement("label", "", `Digite CONFIRMO APLICADO ${aviso.envio_id} ou CONFIRMO NAO APLICADO ${aviso.envio_id}, conforme a conferência realizada.`);
+        label.setAttribute("for", entrada.id);
+        host.append(label, entrada);
+        for (const [acao, frase, texto] of [["confirmar_recebimento", "CONFIRMO APLICADO", "Declaro que está aplicado no SharePoint"], ["declarar_nao_enviado", "CONFIRMO NAO APLICADO", "Declaro que não está aplicado no SharePoint"]]) {
+          const botao = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", texto);
+          botao.type = "button";
+          botao.dataset.sebraeEnvioAcao = acao;
+          botao.disabled = true;
+          const atualizar = () => { botao.disabled = estado.fechar.emAndamento || entrada.value !== `${frase} ${aviso.envio_id}`; };
+          entrada.addEventListener("input", atualizar);
+          botao.addEventListener("click", async () => { if (botao.disabled) return; botao.disabled = true; await recuperar(acao, entrada.value); atualizar(); });
+          host.appendChild(botao);
+        }
+      };
+      if (aviso?.recuperacao && !aviso.limpeza_pendente && !aviso.incerto) {
+        const naoEnviado = aviso.status === "falhou" && aviso.recuperacao.acao === "declarar_nao_enviado";
+        host.replaceChildren(dom.createTextElement("p", "", naoEnviado
+          ? "Você declarou que este envio não está aplicado no SharePoint. As cópias foram preservadas. Nenhum upload foi disparado."
+          : aviso.reenvio_confirmado
+            ? "Esta cópia foi reenviada ao SharePoint com sucesso. A fila pendente foi preservada."
+            : "Recuperação concluída. A limpeza das cópias comprovadamente cobertas terminou. Nenhum upload foi disparado."));
+        if (aviso.recuperacao.acao === "concluir_legado") host.replaceChildren(dom.createTextElement("p", "", `Conclusão manual do legado ${aviso.envio_id} registrada após conferência e pasta vazia. Nenhum arquivo foi movido ou excluído pelo sistema; nenhum upload foi disparado.`));
+        if (naoEnviado) {
+          host.appendChild(dom.createTextElement("p", "ck-campo__ajuda", `Esta cópia: ${aviso.envio_id}; SHA-256: ${aviso.sha256 || "indisponível"}. A fila pendente será preservada.`));
+          const copia = dom.createTextElement("a", "ck-btn ck-btn--fantasma ck-btn--sm", "Baixar ESTA cópia para revisar");
+          copia.href = `/api/sebrae/dashboard/envio/${encodeURIComponent(aviso.envio_id)}/snapshot`;
+          host.appendChild(copia);
+          const reenviar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Revisar e reenviar ESTA cópia");
+          reenviar.type = "button";
+          reenviar.id = "btn-sebrae-reenviar-snapshot";
+          reenviar.dataset.sebraeEnvioAcao = "reenviar_snapshot";
+          reenviar.disabled = estado.fechar.emAndamento || !aviso.snapshot_disponivel || !/^[a-f0-9]{64}$/.test(aviso.sha256 || "");
+          reenviar.addEventListener("click", async () => {
+            if (reenviar.disabled || !(await app.confirmarAcao({ titulo: "Reenviar ESTA cópia", mensagem: `Reenvia somente a cópia revisada ${aviso.envio_id}, SHA-256 ${aviso.sha256}. A fila existente não será escolhida nem alterada. Confirme após conferir esta cópia e a declaração de que não está aplicada no SharePoint.`, confirmar: "Reenviar esta cópia", cancelar: "Cancelar" }))) return;
+            reenviar.disabled = true;
+            try {
+              await app.apiFetch("/api/sebrae/dashboard/envio/reenviar-snapshot", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ envio_id: aviso.envio_id, sha256: aviso.sha256, confirmado: true }),
+                errorMessage: "Não foi possível reenviar esta cópia. Recarregue e confira o ID e o estado.",
+              });
+              acompanharFechar([]);
+            } catch (error) { reenviar.disabled = false; app.showToast(error.message, "error"); }
+          });
+          host.appendChild(reenviar);
+        }
+        host.hidden = false;
+        return;
+      }
+      if (aviso?.incerto) {
+        host.replaceChildren(dom.createTextElement("p", "", "O resultado do envio é incerto. Confira o Dashboard no SharePoint e reconcilie o registro local manualmente antes de repetir. Nenhuma cópia local foi descartada automaticamente."));
+        host.hidden = false;
+        controlesRecuperacao();
+        return;
+      }
+      if (aviso?.limpeza_pendente && !aviso.falhou) {
+        host.replaceChildren(dom.createTextElement("p", "", "Dashboard enviado ao SharePoint. Cópias locais foram preservadas porque a limpeza não foi concluída. Confira-as antes de qualquer reenvio."));
+        host.hidden = false;
+        controlesRecuperacao();
+        return;
+      }
       if (!aviso?.falhou) {
         host.hidden = true;
         host.replaceChildren();

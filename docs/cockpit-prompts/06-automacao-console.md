@@ -36,7 +36,7 @@ O `#tab-panel-automacao` vira um split-view:
 - Ícone Chrome
 - "Chrome · porta 9333"
 - Badge "Ocupado · #ID" ou "Livre" (ligado a `#automacao-estado`)
-- Seletor de rotina: Rotina de OS, Inventários, Ambas, Verificar usuários (chips ou tabs, não botões soltos)
+- Seletor de rotina: Rotina de OS, Inventários, Rotina Completa, Verificar usuários (chips ou tabs, não botões soltos)
 - Botão **Executar** (primário)
 
 #### IDs preservados na barra

@@ -22,8 +22,17 @@ TOKEN_PATTERN = re.compile(r"\[PESSOA_\d+\]")
 # A formatted CPF is always masked; 11 loose digits only when the check digits match.
 CPF_FORMATADO_PATTERN = re.compile(r"(?<!\d)\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)")
 CPF_SOLTO_PATTERN = re.compile(r"(?<![\w-])\d{11}(?![\w-])")
-# shortcut: only "label: value" / "label=value" (value up to the next space); "senha é x" passes through.
-SENHA_PATTERN = re.compile(r"\b(senha|password|passwd)([ \t]*[:=][ \t]*)\S+", re.IGNORECASE)
+SENHA_PATTERN = re.compile(
+    r"\b(senha|password|passwd|pwd)\b"
+    r"(?:[ \t]+(?:atual|nova|antiga|tempor[aá]ria|padr[aã]o|fict[ií]cia|de[ \t]+(?:acesso|teste))\b)?"
+    r"(?P<separador>"
+    r"(?:[ \t]+(?:é|eh|foi(?:[ \t]+alterada[ \t]+para)?|ser[aá])\b)?[ \t]*[:=-][ \t]*"
+    r"|(?P<verbal>[ \t]+(?:é|eh|(?P<atribuicao>foi[ \t]+alterada[ \t]+para)|foi|ser[aá])\b[ \t]*"
+    r")|(?P<conjuncao>[ \t]+e[ \t]+)"
+    r"|[ \t]*(?=[\r\n]|$)"
+    r"|(?P<sem_separador>[ \t]+))(?P<valor>[^\r\n]*)",
+    re.IGNORECASE,
+)
 CPF_MASCARA = "***.***.***-**"
 DADO_OMITIDO = "[DADO SENSÍVEL OMITIDO]"
 
@@ -63,11 +72,70 @@ def _cpf_valido(digitos: str) -> bool:
     return True
 
 
+def _parece_credencial(valor: str, *, campo: bool) -> bool:
+    """Conservative first-token check; a lone word after a label can be a password."""
+    token = valor.split(maxsplit=1)[0] if valor.strip() else ""
+    if token.casefold() == "2fa":
+        return False
+    return (
+        (any(c.isalpha() for c in token) and any(c.isdigit() for c in token))
+        or (token.isdecimal() and len(token) >= 6)
+        or (len(token) >= 7 and token.isalpha() and token.isupper())
+        or (len(token) >= 6 and token.isalpha() and not token.islower() and not token.isupper())
+        or (campo and token.isalpha() and valor.strip() == token)
+        # Ordinary sentence endings alone are not a credential signal.
+        or any(not c.isalnum() for c in token.rstrip("?.,;:"))
+    )
+
+
+def omitir_senhas(texto: Any) -> str:
+    linhas = []
+    valor_pendente = False
+    for linha in str(texto or "").splitlines(keepends=True):
+        if valor_pendente and linha.strip():
+            linhas.append(DADO_OMITIDO + linha[len(linha.rstrip("\r\n")):])
+            valor_pendente = False
+            continue
+        partes: List[str] = []
+        copiado = 0
+        achado = SENHA_PATTERN.search(linha)
+        while achado is not None:
+            valor = achado["valor"]
+            inicio = achado.start("valor")
+            if valor.startswith(DADO_OMITIDO):
+                achado = SENHA_PATTERN.search(linha, inicio + len(DADO_OMITIDO))
+                continue
+            inferido = achado["sem_separador"] is not None
+            # Passive completion describes an action, unlike an explicit password assignment.
+            descricao = achado["verbal"] is not None and achado["verbal"].strip().casefold() == "foi" and bool(re.fullmatch(r"alterada(?:[ \t]+com[ \t]+sucesso)?[.!?]?", valor.strip(), re.IGNORECASE))
+            if achado["conjuncao"] is not None:
+                # shortcut: ambiguous "e" needs a strong credential token; use "é", ":" or "=" for words/passphrases.
+                descricao = not _parece_credencial(valor, campo=False)
+            if descricao or (inferido and valor.strip() and not _parece_credencial(valor, campo=True)):
+                achado = SENHA_PATTERN.search(linha, inicio)
+                continue
+            valor_pendente = not achado["valor"].strip()
+            if valor_pendente:
+                break
+            fim = achado.end()
+            if achado["conjuncao"] is not None:
+                # shortcut: only the terminal phrase "para acesso" is known context; other suffixes stay masked.
+                contexto = re.search(r"[ \t]+para[ \t]+acesso[.!?]?$", valor, re.IGNORECASE)
+                if contexto is not None:
+                    fim = inicio + contexto.start()
+            partes.extend((linha[copiado:inicio], DADO_OMITIDO))
+            copiado = fim
+            achado = SENHA_PATTERN.search(linha, fim)
+        partes.append(linha[copiado:])
+        linhas.append("".join(partes))
+    return "".join(linhas)
+
+
 def limpar_texto_sensivel(texto: Any) -> str:
     """Remove passwords, CPFs, e-mails and phones from free text (CPF before phone)."""
     if not texto:
         return ""
-    limpo = SENHA_PATTERN.sub(lambda m: f"{m.group(1)}{m.group(2)}{DADO_OMITIDO}", str(texto))
+    limpo = omitir_senhas(texto)
     limpo = CPF_FORMATADO_PATTERN.sub(CPF_MASCARA, limpo)
     limpo = CPF_SOLTO_PATTERN.sub(lambda m: CPF_MASCARA if _cpf_valido(m.group(0)) else m.group(0), limpo)
     limpo = EMAIL_PATTERN.sub("[E-MAIL OCULTADO]", limpo)

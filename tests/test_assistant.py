@@ -226,6 +226,146 @@ class ConversationTests(unittest.TestCase):
         self.assertNotIn("segredo123", sent)
         self.assertIn("***.***.***-**", sent)
 
+    def test_passwords_written_in_natural_language_never_reach_the_model(self) -> None:
+        for phrase in ("senha é Segredo123", "password é Segredo123", "a senha temporária foi Segredo123", "pwd=Segredo123", "a senha de acesso e Segredo123", "A senha foi alterada para Segredo123", "Senha de acesso Segredo123", "Senha temporária Segredo123", "Senha temporária 123456", "Senha de acesso Segredo"):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = json.dumps(model.sent, ensure_ascii=False)
+                self.assertTrue("Segredo123" not in sent, "A senha não pode chegar ao modelo.")
+                self.assertNotIn("123456", sent)
+                if phrase == "Senha de acesso Segredo":
+                    self.assertNotIn("Segredo", sent)
+                self.assertIn("[DADO SENSÍVEL OMITIDO]", sent)
+
+    def test_fictitious_and_test_password_qualifiers_never_reach_model(self) -> None:
+        for phrase in ("A senha fictícia é TokenSintetico123", "A senha ficticia é TokenSintetico123", "senha de teste é TokenSintetico123"):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = json.dumps(model.sent, ensure_ascii=False)
+                self.assertNotIn("TokenSintetico123", sent)
+                self.assertIn("[DADO SENSÍVEL OMITIDO]", sent)
+
+    def test_fictitious_password_description_and_passphrase(self) -> None:
+        from domains.assistant_lgpd import omitir_senhas
+        for phrase, expected in (
+            ("A senha fictícia foi alterada com sucesso", "A senha fictícia foi alterada com sucesso"),
+            ("senha fictícia foi alterada para segredo", "senha fictícia foi alterada para [DADO SENSÍVEL OMITIDO]"),
+            ("senha fictícia é frase secreta", "senha fictícia é [DADO SENSÍVEL OMITIDO]"),
+            ("senha fictícia e frase secreta para acesso", "senha fictícia e frase secreta para acesso"),
+        ):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, expected)
+                self.assertEqual(omitir_senhas(expected), expected)
+
+    def test_password_phrase_and_next_nonempty_line_never_reach_the_model(self) -> None:
+        for phrase in ("senha: frase secreta", "Contexto\nsenha:\n\nfrase secreta\nFim", "Senha\nSegredo123", "password\nSegredo123", "Senha\n\nSegredo123", "password\n\nSegredo123", "Senha é:\nSegredo123", "A senha temporária é\nSegredo123", "Senha padrão:\nSegredo123"):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertNotIn("frase", sent)
+                self.assertNotIn("secreta", sent)
+                self.assertNotIn("Segredo123", sent)
+                self.assertIn("[DADO SENSÍVEL OMITIDO]", sent)
+                if "Contexto" in phrase:
+                    self.assertIn("Contexto", sent)
+                    self.assertIn("Fim", sent)
+
+    def test_password_discussion_without_a_credential_keeps_the_text(self) -> None:
+        for phrase in ("Como criar uma senha forte?", "O usuário esqueceu a senha e precisa redefinir o acesso.", "password_hint: nome do primeiro animal", "Senha temporária forte?", "Senha de acesso do sistema", "Senha de acesso 2FA habilitada", "senha de acesso 2fa habilitada", "A senha esquecida impede o acesso.", "senha atualizada com sucesso", "senha foi alterada", "senha foi alterada\nContexto preservado"):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, phrase)
+
+    def test_password_after_an_ambiguous_mention_is_still_masked(self) -> None:
+        for prefix, credential in (("senha temporária forte; ", "senha: Segredo123"), ("senha de acesso do sistema; ", "password=Segredo123")):
+            with self.subTest(prefix=prefix):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(prefix + credential)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertTrue(sent.startswith(prefix))
+                self.assertNotIn("Segredo123", sent)
+                self.assertIn("[DADO SENSÍVEL OMITIDO]", sent)
+
+    def test_qualified_password_tokens_are_masked(self) -> None:
+        for secret in ("SENHASECRETA", "abcDEF", "!@#abc", "abc#def", "123ABC", "abc!", "abcdefgh"):
+            with self.subTest(secret=secret):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem("senha temporária " + secret)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, "senha temporária [DADO SENSÍVEL OMITIDO]")
+
+    def test_simple_password_label_without_separator_is_masked(self) -> None:
+        for label in ("Senha", "password", "senha atual é", "senha nova:", "senha antiga:"):
+            with self.subTest(label=label):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(label + " Segredo123")
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, label + " [DADO SENSÍVEL OMITIDO]")
+
+    def test_password_changed_to_lowercase_value_is_masked(self) -> None:
+        model = FakeModel(text("ok"))
+        conversation, _ = make_conversation(model)
+        conversation.enviar_mensagem("senha foi alterada para segredo")
+        sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+        self.assertEqual(sent, "senha foi alterada para [DADO SENSÍVEL OMITIDO]")
+
+    def test_simple_credentials_after_labels_and_verbs_never_reach_model(self) -> None:
+        for label in ("senha", "senha é", "password é", "senha eh", "senha foi", "senha será"):
+            for secret in ("segredo", "Segredo123", "abc", "segura"):
+                with self.subTest(label=label, secret=secret):
+                    model = FakeModel(text("ok"))
+                    conversation, _ = make_conversation(model)
+                    conversation.enviar_mensagem(label + " " + secret)
+                    sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                    self.assertEqual(sent, label + " [DADO SENSÍVEL OMITIDO]")
+
+    def test_lowercase_password_after_unaccented_verb_preserves_context(self) -> None:
+        model = FakeModel(text("ok"))
+        conversation, _ = make_conversation(model)
+        conversation.enviar_mensagem("senha e segredo para acesso")
+        sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+        self.assertEqual(sent, "senha e segredo para acesso")
+
+    def test_unaccented_password_verb_keeps_narrative_and_existing_mask(self) -> None:
+        for phrase in (
+            "A senha e o usuário foram alterados",
+            "senha e segredo",
+            "senha fictícia e frase secreta",
+            "O usuário esqueceu a senha e precisa de ajuda",
+            "O usuário esqueceu a senha e solicitou ajuda",
+            "O usuário esqueceu a senha e não consegue entrar",
+            "O usuário perdeu a senha e precisa redefinir o acesso.",
+        ):
+            with self.subTest(phrase=phrase):
+                model = FakeModel(text("ok"))
+                conversation, _ = make_conversation(model)
+                conversation.enviar_mensagem(phrase)
+                sent = next(message["content"] for message in model.sent[0] if message["role"] == "user")
+                self.assertEqual(sent, phrase)
+
+        from domains.assistant_lgpd import omitir_senhas
+        for phrase in ("senha e Segredo123 para acesso", "senha e sebrae@123 para acesso", "senha e [DADO SENSÍVEL OMITIDO] para acesso"):
+            with self.subTest(phrase=phrase):
+                limpo = omitir_senhas(phrase)
+                self.assertEqual(limpo, "senha e [DADO SENSÍVEL OMITIDO] para acesso")
+                self.assertEqual(omitir_senhas(limpo), limpo)
+
     def test_tool_result_is_masked_and_cpf_in_ticket_text_hidden(self) -> None:
         simpress = FakeSimpress()
         simpress.equipamento = {"serial": "ABC123", "modelo": f"nota com cpf {CPF}", "cidade": "Curitiba"}
@@ -1424,6 +1564,59 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
 
     def test_mass_finalization_is_not_a_routine_of_the_assistant(self) -> None:
         self.assertNotIn("fechar", ROTINAS_VALIDAS)
+
+
+class EditDescriptionSimpress(FakeSimpress):
+    """GET /api/sebrae/novos (one read old ticket, one unread, one finalized, one new) and the PUT of the edited description."""
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"importado": {"versao": "v1", "abertos": [
+                {"numero": "UTIC-2026-1253", "leitura_softexpert": {"descricao": "Notebook lento"}, "softexpert": {"descricao_editada": ""}},
+                {"numero": "UTIC-2026-1254", "leitura_softexpert": None, "softexpert": {}},
+                {"numero": "UTIC-2026-1255", "leitura_softexpert": {"descricao": "x"}, "softexpert": {"finalizacao": {"status": "ok"}}},
+            ]}, "novos": {"formulario": [{"numero": "UTIC-2026-2000", "linha": {"H": "Sem rede"}, "softexpert": {"descricao_editada": "Sem rede (editada)"}}]}}
+        if path.endswith("/descricao"):
+            self.calls.append((method, path, params, body))
+            return 200, {"numero": path.split("/")[-2]}
+        return super().__call__(method, path, params, body)
+
+
+class EditDescriptionToolTests(unittest.TestCase):
+    def test_card_shows_old_and_new_text_and_nothing_is_written_before_confirming(self) -> None:
+        model = FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1253", descricao="Notebook lento; trocada a bateria")), text("feito"))
+        conversation, simpress = make_conversation(model, EditDescriptionSimpress())
+        card = conversation.enviar_mensagem("edita a descrição do 1253").pendente["descricao"]  # type: ignore[index]
+        for trecho in ("UTIC-2026-1253", "\"Notebook lento\"", "\"Notebook lento; trocada a bateria\"", "SoftExpert"):
+            self.assertIn(trecho, card)
+        self.assertEqual(simpress.writes(), [])
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("PUT", "/api/sebrae/chamados/UTIC-2026-1253/descricao")])
+        self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao": "Notebook lento; trocada a bateria"})
+
+    def test_new_ticket_is_editable_and_empty_text_restores_only_if_edited(self) -> None:
+        conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-2000", descricao="")), text("ok")), EditDescriptionSimpress())
+        card = conversation.enviar_mensagem("restaura a descrição do 2000").pendente["descricao"]  # type: ignore[index]
+        self.assertIn("Restaurar", card)
+        conversation.resolver_confirmacao(True)
+        self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao": ""})
+        conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1253", descricao="")), text("ok")), EditDescriptionSimpress())
+        self.assertIsNone(conversation.enviar_mensagem("restaura").pendente)  # never edited: nothing to restore
+        self.assertEqual(simpress.writes(), [])
+
+    def test_cases_that_must_never_reach_a_card(self) -> None:
+        for args in (
+            {"numero": "UTIC-2026-1254", "descricao": "x"},  # old ticket not read yet
+            {"numero": "UTIC-2026-1255", "descricao": "x"},  # already finalized
+            {"numero": "UTIC-2026-9999", "descricao": "x"},  # unknown
+            {"numero": "UTIC-2026-1253", "descricao": "Falar com [E-MAIL OCULTADO]"},  # masked data must not be saved
+            {"numero": "UTIC-2026-1253", "descricao": "x" * 4001},
+            {"numero": "1253", "descricao": "x"},
+        ):
+            conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", **args)), text("ok")), EditDescriptionSimpress())
+            self.assertIsNone(conversation.enviar_mensagem("edita").pendente, args)
+            self.assertEqual(simpress.writes(), [], args)
 
 
 class ContactSimpress(FakeSimpress):

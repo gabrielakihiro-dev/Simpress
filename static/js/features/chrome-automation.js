@@ -9,7 +9,7 @@
     os: "Rotina de OS",
     inventarios: "Inventários",
     usuarios: "Verificar usuários",
-    ambas: "Ambas as rotinas",
+    ambas: "Rotina Completa",
     login: "Abrir Chrome para login",
     sebrae: "Chamados novos Sebrae",
     antigos: "Chamados antigos Sebrae",
