@@ -5,10 +5,10 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
-  const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F7", apelidos: "F8", relatorio: "F9" };
+  const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F3", apelidos: "F7", relatorio: "F8" };
   const toolInfo = {
     chamados: ["OS", "Acompanhamento local de ordens relacionadas por série."],
-    comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
+    comparacao: ["Resumo", "Ativos por regional, total de ativos e resultados salvos da comparação entre as bases locais."],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
@@ -458,16 +458,18 @@
     setTimeout(() => element.classList.remove("ck-linha-destaque"), HIGHLIGHT_MS);
   }
 
-  // Serial-only target: navegarParaLinhaComparacao finds the row in the rendered result (S-prefix rule included).
-  async function abrirComparacaoDaSerie(serial) {
+  // Serial (+ optional category) target: navegarParaLinhaComparacao finds the row in the rendered result (S-prefix rule included).
+  // The category (sem_acesso_7_dias, divergencias_local, sem_usuario...) picks the right section when the serial is in several.
+  async function abrirComparacaoDaSerie(serial, categoria = "") {
     const value = String(serial || "").trim();
-    pendingComparisonTarget = value ? { serial: value } : null;
+    const category = String(categoria || "").trim();
+    pendingComparisonTarget = value ? (category ? { serial: value, category } : { serial: value }) : null;
     selectedComparisonId = "";
     await openPanel("comparacao");
     pendingComparisonTarget = null;
   }
 
-  // Shows a result in the Comparação tab. With evento_id that event is selected; a fresh result (no evento_id)
+  // Shows a result in the Resumo panel (internal tool key "comparacao"). With evento_id that event is selected; a fresh result (no evento_id)
   // is rendered at once and then replaced by the newest saved event, since annotations need evento_id.
   async function mostrarResultadoNaAbaComparacao(comparison, navigationTarget = null) {
     const eventId = String(comparison?.evento_id || "");
@@ -562,18 +564,28 @@
     const request = ++comparisonDetailRequest;
     selectedComparison = null;
     if (!eventId) {
-      if (!keepContent) clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
-      return updateComparisonStatus();
+      updateComparisonStatus();
+      if (keepContent) return;
+      clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
+      // Without a saved comparison the "Sem usuário" section (current inventory) still shows below the empty message.
+      const target = pendingComparisonTarget;
+      pendingComparisonTarget = null;
+      const semUsuario = await app.carregarSemUsuarioResumo?.();
+      if (semUsuario && request === comparisonDetailRequest && activeTool === "comparacao") app.renderizarSemUsuarioSemComparacao(semUsuario, target);
+      return;
     }
     if (!keepContent) clearComparisonResult("Carregando comparação…", "carregando");
     try {
+      // "Sem usuário" comes from the current inventory (not from the saved event), read in parallel with the event.
+      const semUsuarioLoad = app.carregarSemUsuarioResumo?.();
       const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(eventId)}`, { errorMessage: "Não foi possível abrir esta comparação." });
+      const semUsuario = await semUsuarioLoad;
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       selectedComparison = data.evento || null;
       if (!selectedComparison) return clearComparisonResult("Comparação não encontrada.");
       const target = pendingComparisonTarget;
       pendingComparisonTarget = null;
-      app.renderizarResultadoComparacao(comparisonFromEvent(selectedComparison), target);
+      app.renderizarResultadoComparacao(comparisonFromEvent(selectedComparison), target, semUsuario);
       updateComparisonStatus();
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
@@ -1391,7 +1403,7 @@
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
       if (!modal) { event.preventDefault(); closePanel(); }
     });
-    // O destaque dos botões da barra (Chamados e OS) segue o painel, qualquer que seja o caminho que o esconda.
+    // O destaque dos botões da barra (Resumo, Chamados e OS) segue o painel, qualquer que seja o caminho que o esconda.
     if (typeof MutationObserver !== "undefined") new MutationObserver(() => {
       if (root.hidden) syncPanelButtons("");
     }).observe(root, { attributes: true, attributeFilter: ["hidden"] });
@@ -1399,9 +1411,35 @@
   }
 
   // Botões da barra principal (.ck-aba--painel) ficam pressionados enquanto o painel deles está aberto.
+  // O Resumo é uma aba (role="tab") da barra: fica selecionada e a aba que estava ativa fica desmarcada até o painel fechar.
+  let suspendedTab = null;
+  function restoreSuspendedTab() {
+    if (!suspendedTab) return;
+    suspendedTab.setAttribute("aria-selected", "true");
+    suspendedTab.tabIndex = 0;
+    suspendedTab.classList.add("is-active");
+    suspendedTab = null;
+  }
   function syncPanelButtons(tool) {
     document.querySelectorAll(".ck-aba--painel[data-cockpit-tool]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.cockpitTool === tool));
+    });
+    const toolTabs = [...document.querySelectorAll('[role="tab"][data-cockpit-tool]')];
+    const opened = toolTabs.find(tab => tab.dataset.cockpitTool === tool);
+    if (!opened) restoreSuspendedTab();
+    else if (!suspendedTab) {
+      suspendedTab = document.querySelector('#ck-abas [role="tab"][aria-selected="true"]:not([data-cockpit-tool])');
+      if (suspendedTab) {
+        suspendedTab.setAttribute("aria-selected", "false");
+        suspendedTab.tabIndex = -1;
+        suspendedTab.classList.remove("is-active");
+      }
+    }
+    toolTabs.forEach(tab => {
+      const selected = tab === opened;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      tab.classList.toggle("is-active", selected);
     });
   }
 
@@ -1429,7 +1467,7 @@
     const root = byId("cockpit-tool-panels");
     if (!root) return;
     const activeElement = document.activeElement;
-    if (!activeTool) returnTarget = activeElement?.closest?.(".ck-aba--painel") || byId("cockpit-tools-trigger") || activeElement;
+    if (!activeTool) returnTarget = activeElement?.closest?.(".ck-aba--painel, [data-cockpit-tool]") || byId("cockpit-tools-trigger") || activeElement;
     if (activeTool && activeTool !== tool && !goingBack) previousTool = activeTool;
     activeTool = tool;
     byId("cockpit-tools-dropdown").dataset.activeTool = tool;
@@ -1450,7 +1488,12 @@
     document.querySelectorAll("[data-cockpit-tool-panel]").forEach(panel => { panel.hidden = panel.dataset.cockpitToolPanel !== tool; });
     byId("cockpit-tool-title").focus();
     if (tool === "chamados") await loadTickets();
-    if (tool === "comparacao") await loadComparisons();
+    if (tool === "comparacao") {
+      app.invalidarSemUsuarioResumo?.();
+      const ativos = app.carregarResumoAtivos?.();
+      await loadComparisons();
+      await ativos;
+    }
     if (tool === "apelidos") await loadAliases();
     if (tool === "relatorio") {
       const input = byId("cockpit-monthly-month");

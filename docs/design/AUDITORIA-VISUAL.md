@@ -123,7 +123,7 @@ Itens que o plano trata como achados mas que são evolução de organização ou
 
 Capturados em 03/11/2026 com Chromium do Playwright do projeto (headless), contra o fixture isolado `ui-fixture` (`tests/support/serve_ui_motion_preview.py`, porta 8765, dados fictícios; iniciado com `.venv/Scripts/python.exe -B` e parado ao fim). 40 PNGs em `.claude/prints/linha-de-base/`, nome `antes-<tela>-<desktop|mobile>-<light|dark>.png`.
 
-- Telas (por atalho F1 a F10): home, transporte, resumo, automacao, sebrae-chamados, os, comparacao, apelidos, relatorio, assistente.
+- Telas (por atalho F1 a F10, mapa de 03/11/2026; hoje o Resumo, F3, é o painel `comparacao` e os atalhos vão de F1 a F9): home, transporte, resumo, automacao, sebrae-chamados, os, comparacao, apelidos, relatorio, assistente.
 - Viewports: desktop 1366×900 e mobile 390×844, cada um em tema claro e escuro (tema fixado por `localStorage["simpress:theme"]`; `data-theme` conferido em cada combinação).
 - Só a janela visível (sem página inteira). Home recapturada com espera maior, porque a primeira captura pegou "Carregando equipamentos...".
 - Limites: dados do fixture (1 equipamento fictício, 1 OS), não os dados operacionais reais; espera fixa de 700 ms por tela, então estados lentos podem aparecer incompletos; nenhum print foi inspecionado um a um (só `antes-os-desktop-dark`, `antes-home-desktop-dark` e `antes-home-mobile-light` foram vistos).

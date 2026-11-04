@@ -31,16 +31,16 @@ async function openAnalysisMenu(page) {
   if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
 }
 
-// O menu abre a tela Comparação; o modal completo abre pelo botão "Histórico e ações completas".
+// A aba Resumo (F3) abre a tela com a comparação; o modal completo abre pelo botão "Histórico e ações completas".
 async function openHistoryModal(page) {
-  await openAnalysisMenu(page);
-  await page.locator("#btn-cockpit-comparacao").click();
+  await openSidebarIfNeeded(page);
+  await page.locator("#btn-resumo-aba").click();
   await expect(page.locator("#cockpit-comparison-legacy")).toBeVisible();
   await page.locator("#cockpit-comparison-legacy").click();
   await expect(page.getByRole("dialog")).toBeVisible();
 }
 
-// O resultado completo da comparação abre na aba Comparação do Cockpit (não há mais modal).
+// O resultado completo da comparação abre no Resumo do Cockpit (não há mais modal).
 const COMPARISON_PANEL = '[data-cockpit-tool-panel="comparacao"]';
 
 async function openFixtureComparison(page) {
@@ -76,7 +76,8 @@ test("Cockpit keeps compact typography and a single tools disclosure", async ({ 
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await openAnalysisMenu(page);
-  await expect(page.locator("#btn-cockpit-comparacao")).toBeVisible();
+  await expect(page.locator("#btn-cockpit-comparacao")).toHaveCount(0);
+  await expect(page.locator("#btn-resumo-aba")).toBeVisible();
   await expect(page.locator("#btn-atualizar-planilhas, #cockpit-tools-menu #btn-exportar-equipamentos")).toHaveCount(0);
   await expect(page.locator(`${COMPARISON_PANEL} #btn-exportar-equipamentos`)).toHaveCount(1);
   await expect(page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible")).toHaveCount(1);
@@ -152,7 +153,6 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   await expect(homeTab).toHaveAttribute("aria-selected", "true");
   await expect(input).toBeFocused();
 
-  await openAnalysisMenu(page);
   await openHistoryModal(page);
   const dialog = page.getByRole("dialog");
   await page.keyboard.press("Control+K");
@@ -233,7 +233,7 @@ test("comparison result tab takes focus, passes axe and closes with Escape", asy
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator("#modal-historico-comparacoes")).toBeHidden();
   await expect(page.locator("#cockpit-tool-title")).toBeFocused();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Comparação");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
   await expect(panel.locator("#btn-exportar-resultado-comparacao")).toBeVisible();
   await auditAccessibility(page, COMPARISON_PANEL);
 
@@ -507,7 +507,7 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     await page.keyboard.press("Tab");
     await annotation.focus();
-    // Dentro da aba Comparação vale o anel do Cockpit (2px, cor de destaque), igual aos demais controles do shell; no tema claro theme.css mantém a cor `--focus-color`.
+    // Dentro do Resumo vale o anel do Cockpit (2px, cor de destaque), igual aos demais controles do shell; no tema claro theme.css mantém a cor `--focus-color`.
     await expect(annotation).toHaveCSS("outline-width", "2px");
     await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(145, 132, 217)");
   }
@@ -622,15 +622,16 @@ test("@profile UI route transitions retain responsive frame pacing", async ({ pa
 
 test("Resumo tab does not show the removed usage panel", async ({ page }) => {
   await openSidebarIfNeeded(page);
-  await page.locator("#tab-resumo").click();
+  await page.locator("#btn-resumo-aba").click();
   await expect(page.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toHaveCount(0);
 });
 
 test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", async ({ page }) => {
-  const tabs = { home: "#tab-home", transporte: "#tab-retirada-entrega", resumo: "#tab-resumo", automacao: "#tab-automacao" };
+  // O Resumo (F3) é a aba da barra que abre o painel de ferramenta "comparacao"; a aba Resumo antiga não existe mais.
+  const tabs = { home: "#tab-home", transporte: "#tab-retirada-entrega", resumo: "#btn-resumo-aba", automacao: "#tab-automacao" };
   const panels = {
     home: "#tab-panel-home", transporte: "#tab-panel-retirada-entrega",
-    resumo: "#tab-panel-resumo", automacao: "#tab-panel-automacao",
+    resumo: '[data-cockpit-tool-panel="comparacao"]', automacao: "#tab-panel-automacao",
   };
   async function expectOnly(ativa) {
     for (const nome of Object.keys(tabs)) {
@@ -640,13 +641,15 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
       if (selecionada) await expect(page.locator(panels[nome])).toBeVisible();
       else await expect(page.locator(panels[nome])).toBeHidden();
     }
-    await expect(page.locator("body")).toHaveClass(ativa === "transporte" ? /has-quick-actions/ : /^(?!.*has-quick-actions).*$/);
+    // O painel do Resumo cobre a aba anterior sem trocá-la (igual aos painéis F5/F6): a classe da aba coberta continua.
+    if (ativa !== "resumo") await expect(page.locator("body")).toHaveClass(ativa === "transporte" ? /has-quick-actions/ : /^(?!.*has-quick-actions).*$/);
   }
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
-  await expect(page.locator("#resumo-cards")).toBeVisible();
+  await expect(page.locator("#resumo-regionais")).toBeVisible();
+  await expect(page.locator("#tab-resumo")).toHaveCount(0);
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.transporte).click();
@@ -664,6 +667,8 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await expectOnly("transporte");
   await page.keyboard.press("ArrowDown");
   await expectOnly("resumo");
+  // O painel do Resumo abre, mas o foco fica na aba para a seta seguinte (clique e F3 levam o foco ao título).
+  await expect(page.locator(tabs.resumo)).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expectOnly("automacao");
   await page.keyboard.press("ArrowDown");
@@ -756,7 +761,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(panel).toBeHidden();
     // 31/10/2026: a tela Evolução saiu; "Ver evolução" abre a aba Comparações.
     await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
-    await expect(page.locator("#cockpit-tool-title")).toHaveText("Comparação");
+    await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
     await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator("#cockpit-tool-panels")).toBeHidden();

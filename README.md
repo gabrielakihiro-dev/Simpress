@@ -4,7 +4,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 ## Recursos
 
-- Interface Cockpit com as abas **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4), mais o menu **Ferramentas** com os painéis de chamados, comparação, históricos e relatório mensal, e o chat flutuante do assistente (ícone no topbar).
+- Interface Cockpit com as abas **Home** (F1), **Transporte** (F2) e **Automação** (F4), o botão **Resumo** (F3, ativos por regional, total de ativos e comparação das bases, aberto como painel de ferramenta), mais o menu **Ferramentas** com os painéis de chamados, históricos e relatório mensal, e o chat flutuante do assistente (ícone no topbar).
 - Busca por número de série, apelido/hostname, modelo, cidade ou usuário logado. A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**).
 - Geração e download da planilha oficial de transferência a partir do modelo local.
 - Aba **OS** (F6) com a tabela de ordens de serviço por série (Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição), que relaciona as exportações Simpress e Oracle, marca divergências e permite vincular cada OS a um chamado `UTIC-<ano>-<número>`.
@@ -18,7 +18,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Central de pendências e comparação entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
-- Chat flutuante do assistente (ícone no topbar, F10) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
+- Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
 
 ## Requisitos
 
@@ -133,7 +133,7 @@ Sem dados, a aba **Transporte** mostra um aviso com o botão **Configurar contat
 Copy-Item config\contato_origem.exemplo.json config\contato_origem.json
 ```
 
-Os 22 representantes regionais do SEBRAE/PR têm o padrão no backend (a tela os carrega da API); o botão **Editar** (Retirada e Entrega) grava só as alterações por cidade em `config/representantes_regionais.json`, local e ignorado pelo Git, sem reiniciar o servidor. **Restaurar padrão** no modal remove a alteração da cidade. O assistente (F10) também consulta, altera e restaura essas cidades, com cartão de confirmação.
+Os 22 representantes regionais do SEBRAE/PR têm o padrão no backend (a tela os carrega da API); o botão **Editar** (Retirada e Entrega) grava só as alterações por cidade em `config/representantes_regionais.json`, local e ignorado pelo Git, sem reiniciar o servidor. **Restaurar padrão** no modal remove a alteração da cidade. O assistente (F9) também consulta, altera e restaura essas cidades, com cartão de confirmação.
 
 As variáveis de ambiente têm prioridade sobre o arquivo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
 
@@ -225,9 +225,9 @@ O comando usa a mesma validação sem enviar requisições HTTP. Se o site estiv
 
 ### Comparar e atualizar inventários
 
-Use **Pendências** para revisar e anotar as linhas da atualização mais recente; o painel **Evolução das atualizações** foi removido da interface em 31/10/2026 (o alerta **Divergências novas** da Home continua e seu botão **Ver evolução** abre a aba **Comparação**).
+Use **Pendências** para revisar e anotar as linhas da atualização mais recente; o painel **Evolução das atualizações** foi removido da interface em 31/10/2026 (o alerta **Divergências novas** da Home continua e seu botão **Ver evolução** abre o **Resumo**).
 
-1. Abra **Atualizar planilhas**: na aba **Comparação** (menu **Ferramentas**, F7), clique em **Nova comparação**; também abrem o mesmo fluxo o botão **Importar** da Home e o botão **Atualizar base** do alerta de base desatualizada.
+1. Abra **Atualizar planilhas**: no **Resumo** (F3), seção Comparação, clique em **Nova comparação**; também abrem o mesmo fluxo o botão **Importar** da Home e o botão **Atualizar base** do alerta de base desatualizada.
 2. Selecione um arquivo `.xlsx` do **Endpoint** e um `.xlsx` ou `.zip` do **Simpress**.
 3. Clique em **Pré-visualizar impacto** e confira as contagens de séries novas, removidas e duplicadas antes de **Confirmar substituição**. A prévia vale por dez minutos e precisa ser refeita se os arquivos ou a base ativa mudarem.
 4. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada. Após confirmar, confira ausências em cada fonte, notebooks sem verificação com êxito há 7 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
@@ -294,13 +294,13 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 ### Exportar equipamentos
 
-**Exportar Excel** baixa uma cópia do modelo local atualizada com os dados do inventário principal. O sistema processa somente séries com correspondência única, atualiza células graváveis de `Apelido` e, quando a coluna existe nos dois arquivos, `IdCliente`. Fórmulas não são sobrescritas; as demais abas e formatações do modelo são preservadas. Se a exportação for parcial, a notificação informa os motivos e exemplos para conferência. Desde 31/10/2026 o botão **Exportar Excel** fica na barra da aba **Comparação** (ao lado de **Exportar**, que baixa só o resultado da comparação) e some quando não há alterações exportáveis; ele não está mais no menu **Ferramentas**.
+**Exportar Excel** baixa uma cópia do modelo local atualizada com os dados do inventário principal. O sistema processa somente séries com correspondência única, atualiza células graváveis de `Apelido` e, quando a coluna existe nos dois arquivos, `IdCliente`. Fórmulas não são sobrescritas; as demais abas e formatações do modelo são preservadas. Se a exportação for parcial, a notificação informa os motivos e exemplos para conferência. Desde 31/10/2026 o botão **Exportar Excel** fica na barra da seção **Comparação** do **Resumo** (ao lado de **Exportar**, que baixa só o resultado da comparação) e some quando não há alterações exportáveis; ele não está mais no menu **Ferramentas**.
 
 ### Catálogo de unidades e acessibilidade
 
 O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. O painel mostra o selo **SEDE** na lista e no detalhe (que traz cidade, UF, endereço, CEP e CNPJ da unidade selecionada); os botões **Copiar CNPJ** e **Copiar CEP** copiam os valores e a interface informa sucesso ou falha. **Nova unidade** abre o formulário dentro do próprio painel, e o lápis ao lado do CNPJ (na lista e no detalhe) abre a unidade para editar, com o foco no campo CNPJ. Desde 31/10/2026 não existe mais o modal "Gerenciar unidades" nem o botão "Fluxo completo".
 
-A barra superior tem **Home** (F1), **Transporte** (F2), **Resumo** (F3), **Automação** (F4), **Chamados** (F5, o antigo painel Chamados Sebrae) e **OS** (F6, o antigo painel Chamados com a tabela de ordens de serviço). Abaixo de 1200 px, **Chamados** e **OS** saem da barra e aparecem no menu **Ferramentas**. O menu **Ferramentas** agrupa os painéis (**Comparação** F7, **Histórico de apelidos** F8, **Relatório mensal** F9, além de **Chamados** e **OS** em telas menores) e o catálogo (**Catálogo de unidades**). Cada aba da barra mostra, bem pequeno e centralizado embaixo do nome, o atalho F1 a F6 (sem aumentar a altura da barra; escondido abaixo de 768 px e entre 1200 e 1289 px, onde não cabe). Com um painel de ferramenta aberto, o cabeçalho (título, atalho e **Voltar**) fica fixo e só o conteúdo abaixo rola. O assistente abre com F10. Desde 31/10/2026 o menu não tem mais **Atualizar planilhas** nem **Exportar Excel** (este agora fica na aba **Comparação**). O painel **Histórico de apelidos** (F8) concentra o histórico de alterações, com filtros e as ações de restaurar e excluir; a janela **Histórico de alterações** foi removida.
+A barra superior tem **Home** (F1), **Transporte** (F2), **Resumo** (F3, abre o painel de ferramenta com os ativos por regional, o total de ativos e a Comparação), **Automação** (F4), **Chamados** (F5, o antigo painel Chamados Sebrae) e **OS** (F6, o antigo painel Chamados com a tabela de ordens de serviço). Abaixo de 1200 px, **Chamados** e **OS** saem da barra e aparecem no menu **Ferramentas**. O menu **Ferramentas** agrupa os painéis (**Histórico de apelidos** F7, **Relatório mensal** F8, além de **Chamados** e **OS** em telas menores) e o catálogo (**Catálogo de unidades**). Cada aba da barra mostra, bem pequeno e centralizado embaixo do nome, o atalho F1 a F6 (sem aumentar a altura da barra; escondido abaixo de 768 px e entre 1200 e 1289 px, onde não cabe). Com um painel de ferramenta aberto, o cabeçalho (título, atalho e **Voltar**) fica fixo e só o conteúdo abaixo rola. O assistente abre com F9. Desde 31/10/2026 o menu não tem mais **Atualizar planilhas** nem **Exportar Excel** (este agora fica na seção **Comparação** do **Resumo**). O painel **Histórico de apelidos** (F7) concentra o histórico de alterações, com filtros e as ações de restaurar e excluir; a janela **Histórico de alterações** foi removida.
 
 A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário; **Equipamentos sem usuário**, abaixo da pesquisa, lista os equipamentos sem usuário do Endpoint nem manual. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
 
@@ -318,9 +318,9 @@ Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Da
 
 O site só grava no arquivo gerado; apenas a rotina `enviar` sobrepõe o arquivo no SharePoint, e no SoftExpert a rotina só lê chamados; a única escrita é a confirmação de associar o chamado ao seu usuário, que o SoftExpert pede ao abrir o formulário. Chamados que saem da lista de abertos ficam em `data/state/sebrae_chamados_encerrados.json`. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
 
-### Assistente (F10)
+### Assistente (F9)
 
-O assistente é um chat flutuante no canto inferior direito: abre e fecha pelo ícone de robô à direita do sino de notificações, na barra superior, ou com F10. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
+O assistente é um chat flutuante no canto inferior direito: abre e fecha pelo ícone de robô à direita do sino de notificações, na barra superior, ou com F9. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
 
 - O assistente consulta as rotas do próprio Simpress. Toda alteração de dados para antes e mostra um cartão de confirmação, com texto montado pelo programa; no máximo uma alteração por mensagem.
 - Só sai do computador o texto da conversa e o resultado das consultas, com `data_collection: deny`. Antes do envio, CPFs são mascarados, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela) e e-mails e telefones são removidos, assim como senhas escritas como `senha: valor` ou `senha=valor`.
@@ -355,7 +355,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | A migração não consegue concluir uma recuperação ou encontra upload em andamento | Preserve os arquivos indicados. Confira `.transactions`; aguarde o upload terminar e execute a migração novamente quando a operação estiver resolvida. |
 | A migração informa que já existe um arquivo diferente no destino | Compare os dois arquivos e resolva o conflito manualmente antes de repetir `scripts/migrate_local_data.py`. A migração não substitui nenhum deles. |
 | A busca não encontra equipamentos ou escolheu dados antigos | Confira os cabeçalhos e a data de modificação dos arquivos `EquipamentosDetalhes*.xlsx` em `data/planilhas_entrada`. O sistema seleciona o mais recente que contém uma aba válida. Reinicie após substituir um arquivo manualmente. |
-| Atualização ou comparação está indisponível | Envie os dois inventários `.xlsx` pelo fluxo **Atualizar planilhas** (aba **Comparação › Nova comparação**) e confira se cada um tem uma única aba com os cabeçalhos exigidos. |
+| Atualização ou comparação está indisponível | Envie os dois inventários `.xlsx` pelo fluxo **Atualizar planilhas** (**Resumo** (F3) › **Nova comparação**) e confira se cada um tem uma única aba com os cabeçalhos exigidos. |
 | A exportação está indisponível | Confira `modelos/EquipamentosDetalhes-exportacao.xlsx` e se ele contém as colunas de série e `Apelido`. |
 | Não é possível restaurar uma atualização | O histórico precisa ter o backup dos dois inventários, e ambos devem passar novamente pela validação. |
 | O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
@@ -446,7 +446,7 @@ routers/equipment_search.py         Rotas de busca e estatísticas de equipament
 routers/system.py                    Rotas de status e configuração do sistema
 routers/units.py                     Rotas e esquema do catálogo de unidades
 routers/operations.py                Chamados Simpress/Oracle e vínculos UTIC por OS
-routers/assistant.py                 Rotas /api/assistente/* do chat do assistente (F10)
+routers/assistant.py                 Rotas /api/assistente/* do chat do assistente (F9)
 routers/automation.py                Rotas da aba Automação
 routers/sebrae_dashboard.py          Importação do Dashboard e chamados novos do Sebrae
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone

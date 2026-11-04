@@ -79,18 +79,17 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    if (command || event.shiftKey || (typing && !/^F(?:[1-9]|10)$/.test(key))) return null; // teclas F não digitam texto: valem com o cursor num campo (senão F5 recarrega a página); F10 também fecha o chat do Assistente
+    if (command || event.shiftKey || (typing && !/^F[1-9]$/.test(key))) return null; // teclas F não digitam texto: valem com o cursor num campo (senão F5 recarrega a página); F9 também fecha o chat do Assistente
     return ({
       F1: "tab-home",
       F2: "tab-transferencia",
-      F3: "tab-resumo",
+      F3: "tool-resumo",
       F4: "tab-automacao",
       F5: "tool-sebrae-chamados",
       F6: "tool-os",
-      F7: "tool-comparacao",
-      F8: "tool-apelidos",
-      F9: "tool-relatorio",
-      F10: "tool-assistente",
+      F7: "tool-apelidos",
+      F8: "tool-relatorio",
+      F9: "tool-assistente",
     })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
   }
 
@@ -461,9 +460,6 @@
       } else if (action === "tab-transferencia") {
         event.preventDefault();
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("transferencia");
-      } else if (action === "tab-resumo") {
-        event.preventDefault();
-        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("resumo");
       } else if (action === "tab-automacao") {
         event.preventDefault();
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("automacao");
@@ -479,7 +475,7 @@
         const buttonIds = {
           "tool-sebrae-chamados": "btn-sebrae-chamados-aba",
           "tool-os": "btn-acompanhamento-chamados",
-          "tool-comparacao": "btn-cockpit-comparacao",
+          "tool-resumo": "btn-resumo-aba",
           "tool-apelidos": "btn-historico-apelidos",
           "tool-relatorio": "btn-relatorio-mensal",
           "tool-assistente": "btn-assistente",
