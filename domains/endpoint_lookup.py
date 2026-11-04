@@ -23,7 +23,7 @@ def consultar_grade(page: Any, automacao: Any, serial: str, macbook: bool, detai
             # A confirmed full grid prevents the previous empty result from satisfying the next filter.
             grid.limpar_filtro(page, automacao, grid.COLUNA_SERIE)
         grade = grid.aplicar_filtro(page, automacao, grid.COLUNA_SERIE, valor)
-        if grade.get("carregando") or grade.get("total") != len(grade["linhas"]):
+        if grade.get("carregando") or (grade.get("total") is not None and grade["total"] != len(grade["linhas"])):
             raise RuntimeError("A grade do Endpoint não confirmou todas as linhas filtradas.")
         cab_serie = grid.achar_cabecalho(grade, grid.COLUNA_SERIE)
         cab_usuario = next((c for c in grade["cabecalhos"] if grid.normalizar(c["texto"]) == "usuario do ultimo logon"), None)

@@ -44,6 +44,15 @@ class LookupTests(unittest.TestCase):
         with patch.object(grid, "aplicar_filtro", return_value=data), self.assertRaises(RuntimeError):
             endpoint_lookup.consultar_grade(MagicMock(), automation, "ABC", False)
 
+    def test_exact_result_is_usable_when_endpoint_omits_pagination_count(self):
+        data = grade([("ABC", "logged-user", "last-user")])
+        data["total"] = None
+        with patch.object(grid, "aplicar_filtro", return_value=data):
+            self.assertEqual(
+                endpoint_lookup.consultar_grade(MagicMock(), automation, "ABC", False),
+                {"status": "found", "serial": "ABC", "ultimo_logon": "last-user"},
+            )
+
     def test_mac_retry_only_when_authorized_and_exact_missing(self):
         for mac, count, status in [(False, 1, "not_found"), (True, 2, "found")]:
             with self.subTest(mac=mac), patch.object(grid, "limpar_filtro"), patch.object(grid, "aplicar_filtro", side_effect=[grade([]), grade([("ABC", "wrong", "user")])]) as search:
