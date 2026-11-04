@@ -12,6 +12,22 @@
   const CAMPOS_PREENCHIDOS = Object.freeze([["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"]]); // do antigo: vazios são preenchidos pelo site
   const STATUS_CHAMADO =Object.freeze(["EM ABERTO", "FINALIZADO"]);
   const TIPOS_CHAMADO = Object.freeze(["INCIDENTE", "SOLICITAÇÃO"]);
+  const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
+  // Chamados criados pela API: classificação habitual (A, B, J) mais os padrões de todos; a descrição "Revisado." entra uma vez só (secaoFinalizar)
+  const PADROES_API_SEBRAE = Object.freeze({ A: "CLIENTE", B: "OUTRO", D: "EM ABERTO", J: "INCIDENTE", S: "DISPONIBILIDADE" });
+  const DESCRICAO_API_SEBRAE = "Revisado.";
+  const SOLICITANTE_API_SEBRAE = "api sebrae"; // mesma comparação de SOLICITANTE_SEM_EMAIL (scripts/sebrae_softexpert.py): sem acento, maiúsculas e espaços extras
+
+  function ehApiSebrae(solicitante) {
+    const limpo = String(solicitante || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+    return limpo === SOLICITANTE_API_SEBRAE;
+  }
+
+  /** Padrões de um chamado novo; recebe o solicitante (coluna I) ou o item do formulário. */
+  function padroesManuais(origem) {
+    const solicitante = origem && typeof origem === "object" ? origem.linha?.I : origem;
+    return ehApiSebrae(solicitante) ? PADROES_API_SEBRAE : PADROES_MANUAIS;
+  }
   const AVISO_CRUZAMENTO = Object.freeze({
     ausente: "Série, modelo e cidade vazios: nenhum equipamento encontrado para este solicitante.",
     ambiguo: "Série, modelo e cidade vazios: mais de um equipamento encontrado para este solicitante.",
@@ -409,7 +425,7 @@
         }
       }
       controle.className = "ck-entrada ck-entrada--sm";
-      const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : PADROES_MANUAIS[letra] ?? "";
+      const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : padroesManuais(estado.formulario.find(item => item.numero === numero))[letra] ?? "";
       controle.value = valores[letra] ?? inicial;
       if (antigo && atual && letra !== "D") controle.disabled = true; // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO
       if (!antigo && !(letra in valores) && controle.value) guardados[numero] = { ...valores, [letra]: controle.value };
@@ -434,8 +450,6 @@
       Object.entries(estado.edicoes[numero] || {}).forEach(([letra, valor]) => { if (String(valor || "").trim()) efetivos[letra] = valor; });
       return efetivos;
     }
-
-    const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
 
     const ROTULOS_MANUAIS = Object.freeze({
       A: "Responsável (A) *", B: "Categoria (B)", D: "Status (D) *", J: "Tipo do chamado (J) *",
@@ -656,6 +670,105 @@
       return detalhe;
     }
 
+    /** Bloco "Descrição" com lápis (F5): o texto muda só neste site, o SoftExpert e a linha já lançada no Dashboard ficam como estão.
+     * Texto vazio restaura o original. `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
+    function blocoDescricaoEditavel(item, texto, aplicar) {
+      const numero = item.numero;
+      let atual = texto || "";
+      let editada = Boolean(item.softexpert?.descricao_editada);
+      const detalhe = blocoDetalhe("Descrição", atual);
+      const resumo = detalhe.querySelector("summary");
+      const paragrafo = detalhe.querySelector("p");
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-descricao__selo", "Editada");
+      selo.dataset.status = "info";
+      const lapis = document.createElement("button");
+      lapis.type = "button";
+      lapis.className = "ck-btn ck-btn--fantasma ck-btn--sm sebrae-descricao__lapis";
+      lapis.title = "Editar descrição";
+      lapis.setAttribute("aria-label", `Editar descrição de ${numero}`);
+      lapis.setAttribute("aria-expanded", "false");
+      lapis.dataset.sebraeEditarDescricao = numero;
+      lapis.appendChild(iconePendencia("i-pencil", ""));
+      resumo.appendChild(selo);
+      const entrada = document.createElement("textarea");
+      entrada.className = "ck-entrada";
+      entrada.rows = 5;
+      entrada.maxLength = MAX_DESCRICAO;
+      entrada.placeholder = "Vazio volta ao texto original do chamado.";
+      entrada.setAttribute("aria-label", `Descrição de ${numero}`);
+      entrada.dataset.sebraeDescricaoEditada = numero;
+      const criarBotao = (rotulo, classe, chave) => {
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = `ck-btn ${classe} ck-btn--sm`;
+        botao.textContent = rotulo;
+        botao.dataset[chave] = numero;
+        return botao;
+      };
+      const salvar = criarBotao("Salvar", "ck-btn--primario", "sebraeSalvarDescricao");
+      const cancelar = criarBotao("Cancelar", "ck-btn--secundario", "sebraeCancelarDescricao");
+      const restaurar = criarBotao("Restaurar original", "ck-btn--fantasma", "sebraeRestaurarDescricao");
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-chamado__acoes";
+      acoes.append(salvar, cancelar, restaurar);
+      const editor = document.createElement("div");
+      editor.className = "sebrae-descricao__editor";
+      editor.hidden = true;
+      editor.append(entrada, acoes);
+      const feedback = dom.createTextElement("span", "sebrae-descricao__feedback", "");
+      feedback.setAttribute("role", "status");
+      detalhe.append(editor, feedback);
+      const mostrarEstado = () => { selo.hidden = !editada; restaurar.hidden = !editada; };
+      const abrirEditor = aberto => {
+        editor.hidden = !aberto;
+        paragrafo.hidden = aberto;
+        lapis.setAttribute("aria-expanded", String(aberto));
+      };
+      mostrarEstado();
+      lapis.addEventListener("click", evento => {
+        detalhe.open = true;
+        entrada.value = atual;
+        definirFeedback(feedback, "");
+        abrirEditor(true);
+        entrada.focus();
+      });
+      cancelar.addEventListener("click", () => { abrirEditor(false); lapis.focus(); });
+      const enviar = async novoTexto => {
+        [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = true; });
+        definirFeedback(feedback, "Salvando…", "salvando");
+        try {
+          const dados = await app.apiFetch(urlChamado(numero, "descricao"), {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao: novoTexto }),
+            errorMessage: "Não foi possível salvar a descrição.",
+          });
+          atual = dados.descricao || "";
+          editada = Boolean(dados.descricao_editada);
+          paragrafo.textContent = atual || "Vazio";
+          aplicar(dados);
+          mostrarEstado();
+          abrirEditor(false);
+          definirFeedback(feedback, editada ? "Descrição salva só neste site." : "Descrição original restaurada.", "ok");
+          lapis.focus();
+        } catch (error) {
+          definirFeedback(feedback, `Não foi possível salvar: ${error.message}`, "erro");
+        } finally {
+          [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = false; });
+        }
+      };
+      salvar.addEventListener("click", () => enviar(entrada.value));
+      restaurar.addEventListener("click", () => enviar(""));
+      // O lápis fica ao lado do <details>, não dentro do <summary>: botão dentro de summary é "nested-interactive" no axe.
+      const envoltorio = document.createElement("div");
+      envoltorio.className = "sebrae-descricao";
+      envoltorio.append(lapis, detalhe); // lápis primeiro: a ordem do Tab segue a tela (canto superior direito do cabeçalho)
+      return envoltorio;
+    }
+
+    /** Guarda no item em memória o que o servidor devolveu ao editar a descrição (flag do estado local e o texto que o cartão mostra). */
+    function marcarDescricaoEditada(item, dados) {
+      item.softexpert = { ...(item.softexpert || {}), descricao_editada: dados.descricao_editada || "" };
+    }
+
     /** Selo de leitura do resumo: só chamado com UTIC pode ser lido no SoftExpert; sem UTIC nada é prometido. */
     function seloLeitura(item, dados) {
       if (!NUMERO_UTIC.test(item.numero)) return null;
@@ -700,7 +813,12 @@
       const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
       if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
       let detalhes = [];
-      if (dados.lido) detalhes = [blocoDetalhe("Descrição", dados.descricao), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      if (dados.lido) {
+        detalhes = [blocoDescricaoEditavel(item, dados.descricao, resposta => {
+          marcarDescricaoEditada(item, resposta);
+          item.leitura_softexpert = { ...item.leitura_softexpert, descricao: resposta.descricao };
+        }), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      }
       else if (NUMERO_UTIC.test(item.numero)) {
         const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
         dica.dataset.leitura = "pendente";
@@ -732,7 +850,10 @@
       const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
-      const detalhes = [["H", "Descrição"], ["F", "Atendimento realizado"]].map(([letra, rotulo]) => blocoDetalhe(rotulo, item.linha[letra]));
+      const detalhes = [blocoDescricaoEditavel(item, item.linha.H, resposta => {
+        marcarDescricaoEditada(item, resposta);
+        item.linha = { ...item.linha, H: resposta.descricao };
+      }), blocoDetalhe("Atendimento realizado", item.linha.F)];
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
@@ -755,8 +876,10 @@
     function secaoFinalizar(item, novo = false) {
       const numero = item.numero;
       const guardado = item.softexpert || {};
+      // "Revisado." só entra se o servidor nunca guardou descrição (campo ausente); apagada depois, vira "" guardado e não volta
+      const aplicarRevisado = novo && ehApiSebrae(item.linha?.I) && guardado.descricao_definida === false;
       const soft = estado.soft[numero] = {
-        descricao: guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
+        descricao: aplicarRevisado ? DESCRICAO_API_SEBRAE : guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
         pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
       };
       const area = criarZona("finalizacao", "Finalização no SoftExpert", "Irreversível", {
@@ -830,6 +953,7 @@
       botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
       cancelar.addEventListener("click", () => cancelarFinalizacao(numero));
       atualizarFinalizar(numero);
+      if (aplicarRevisado) salvarDescricao(numero); // só salva; finalizar continua sendo clique do usuário
       return area;
     }
 
@@ -920,10 +1044,10 @@
     }
 
     /** A cópia de saída é refeita da importada: vão o próprio chamado (se novo, mesmo sem campos) e os outros novos que o usuário trabalhou
-     * (campo diferente do padrão D/S), nunca novos em branco; edições dos antigos só com campo mudado. */
+     * (campo diferente do padrão do próprio chamado: D/S, e também A/B/J no API SEBRAE), nunca novos em branco; edições dos antigos só com campo mudado. */
     function manuaisDoChamado(numero) {
       const trabalhado = item => item.numero === numero
-        || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== PADROES_MANUAIS[letra]; });
+        || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== padroesManuais(item)[letra]; });
       return { chamados: payloadAtualizacao(estado.formulario.filter(trabalhado), estado.valores), edicoes: payloadEdicoes(estado.abertos, estado.edicoes) };
     }
 
@@ -1530,7 +1654,7 @@
     return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando,
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando, ehApiSebrae, padroesManuais,
     formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
     lerRascunho, gravarRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;

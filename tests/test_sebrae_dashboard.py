@@ -128,6 +128,14 @@ class LinhaTest(unittest.TestCase):
         linha = dash.montar_linha(chamado)
         self.assertEqual((linha["G"][0], linha["H"][0], linha["I"][0]), ("'", "'", "'"))
 
+    def test_descricao_editada_no_site_que_comeca_com_formula_ganha_apostrofo_na_coluna_h(self):
+        from domains.sebrae_novos import aplicar_descricoes_novos, descricao_segura
+        chamado = ChamadoSoftExpert("UTIC-2026-1", titulo="T", descricao="original", solicitante="Ana")
+        editado = aplicar_descricoes_novos([chamado], {"UTIC-2026-1": descricao_segura("=1+1 CPF 123.456.789-09")})[0]
+        h = dash.montar_linha(editado)["H"]
+        self.assertTrue(h.startswith("'=1+1"), h)
+        self.assertNotIn("123.456.789-09", h)
+
     def test_descricao_vazia_nao_usa_o_titulo(self):
         chamado = ChamadoSoftExpert("UTIC-2026-1", titulo="Título", descricao="", solicitante="Ana")
         self.assertEqual(dash.montar_linha(chamado)["H"], "")

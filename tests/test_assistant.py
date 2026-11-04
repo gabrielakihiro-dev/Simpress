@@ -1426,6 +1426,59 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertNotIn("fechar", ROTINAS_VALIDAS)
 
 
+class EditDescriptionSimpress(FakeSimpress):
+    """GET /api/sebrae/novos (one read old ticket, one unread, one finalized, one new) and the PUT of the edited description."""
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"importado": {"versao": "v1", "abertos": [
+                {"numero": "UTIC-2026-1253", "leitura_softexpert": {"descricao": "Notebook lento"}, "softexpert": {"descricao_editada": ""}},
+                {"numero": "UTIC-2026-1254", "leitura_softexpert": None, "softexpert": {}},
+                {"numero": "UTIC-2026-1255", "leitura_softexpert": {"descricao": "x"}, "softexpert": {"finalizacao": {"status": "ok"}}},
+            ]}, "novos": {"formulario": [{"numero": "UTIC-2026-2000", "linha": {"H": "Sem rede"}, "softexpert": {"descricao_editada": "Sem rede (editada)"}}]}}
+        if path.endswith("/descricao"):
+            self.calls.append((method, path, params, body))
+            return 200, {"numero": path.split("/")[-2]}
+        return super().__call__(method, path, params, body)
+
+
+class EditDescriptionToolTests(unittest.TestCase):
+    def test_card_shows_old_and_new_text_and_nothing_is_written_before_confirming(self) -> None:
+        model = FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1253", descricao="Notebook lento; trocada a bateria")), text("feito"))
+        conversation, simpress = make_conversation(model, EditDescriptionSimpress())
+        card = conversation.enviar_mensagem("edita a descrição do 1253").pendente["descricao"]  # type: ignore[index]
+        for trecho in ("UTIC-2026-1253", "\"Notebook lento\"", "\"Notebook lento; trocada a bateria\"", "SoftExpert"):
+            self.assertIn(trecho, card)
+        self.assertEqual(simpress.writes(), [])
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("PUT", "/api/sebrae/chamados/UTIC-2026-1253/descricao")])
+        self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao": "Notebook lento; trocada a bateria"})
+
+    def test_new_ticket_is_editable_and_empty_text_restores_only_if_edited(self) -> None:
+        conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-2000", descricao="")), text("ok")), EditDescriptionSimpress())
+        card = conversation.enviar_mensagem("restaura a descrição do 2000").pendente["descricao"]  # type: ignore[index]
+        self.assertIn("Restaurar", card)
+        conversation.resolver_confirmacao(True)
+        self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao": ""})
+        conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1253", descricao="")), text("ok")), EditDescriptionSimpress())
+        self.assertIsNone(conversation.enviar_mensagem("restaura").pendente)  # never edited: nothing to restore
+        self.assertEqual(simpress.writes(), [])
+
+    def test_cases_that_must_never_reach_a_card(self) -> None:
+        for args in (
+            {"numero": "UTIC-2026-1254", "descricao": "x"},  # old ticket not read yet
+            {"numero": "UTIC-2026-1255", "descricao": "x"},  # already finalized
+            {"numero": "UTIC-2026-9999", "descricao": "x"},  # unknown
+            {"numero": "UTIC-2026-1253", "descricao": "Falar com [E-MAIL OCULTADO]"},  # masked data must not be saved
+            {"numero": "UTIC-2026-1253", "descricao": "x" * 4001},
+            {"numero": "1253", "descricao": "x"},
+        ):
+            conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", **args)), text("ok")), EditDescriptionSimpress())
+            self.assertIsNone(conversation.enviar_mensagem("edita").pendente, args)
+            self.assertEqual(simpress.writes(), [], args)
+
+
 class ContactSimpress(FakeSimpress):
     """GET /api/config/transferencia and PUT .../contato-origem with fictitious data."""
 
