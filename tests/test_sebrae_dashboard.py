@@ -142,11 +142,133 @@ class LinhaTest(unittest.TestCase):
 
 
 class CredenciaisTest(unittest.TestCase):
+    def test_descricao_ficticia_e_passphrase_sao_tratadas_sem_vazamento_parcial(self):
+        for texto, esperado in (
+            ("A senha fictícia foi alterada com sucesso", "A senha fictícia foi alterada com sucesso"),
+            ("senha fictícia foi alterada para segredo", "senha fictícia foi alterada para " + dash.OMITIDO),
+            ("senha fictícia é frase secreta", "senha fictícia é " + dash.OMITIDO),
+            ("senha fictícia e frase secreta para acesso", "senha fictícia e " + dash.OMITIDO + " para acesso"),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
+                self.assertEqual(dash.omitir_credenciais(esperado), esperado)
+
+    def test_senhas_ficticias_e_de_teste_sao_omitidas(self):
+        for texto in ("A senha fictícia é TokenSintetico123", "A senha ficticia é TokenSintetico123", "senha de teste é TokenSintetico123"):
+            with self.subTest(texto=texto):
+                esperado = texto.replace("TokenSintetico123", dash.OMITIDO)
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
+                chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+                self.assertEqual(dash.montar_linha(chamado)["F"], esperado)
+
+    def test_senha_minuscula_apos_e_preserva_contexto(self):
+        for texto, esperado in (
+            ("senha e segredo para acesso", "senha e " + dash.OMITIDO + " para acesso"),
+            ("password e abc para acesso.", "password e " + dash.OMITIDO + " para acesso."),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
+                self.assertEqual(dash.omitir_credenciais(esperado), esperado)
+                chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+                self.assertEqual(dash.montar_linha(chamado)["F"], esperado)
+
+    def test_valor_simples_minusculo_apos_e_e_omitido(self):
+        for texto, esperado in (
+            ("senha e segredo", "senha e " + dash.OMITIDO),
+            ("password e segredo", "password e " + dash.OMITIDO),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), esperado)
+
+    def test_e_gramatical_e_marcador_existente_sao_preservados(self):
+        for texto in (
+            "A senha e o usuário foram alterados",
+            "senha fictícia e frase secreta",
+            "O usuário esqueceu a senha e precisa de ajuda",
+            "O usuário esqueceu a senha e solicitou ajuda",
+            "O usuário esqueceu a senha e não consegue entrar",
+            "O usuário perdeu a senha e precisa redefinir o acesso.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), texto)
+        for texto in ("senha e Segredo123 para acesso", "senha e sebrae@123 para acesso", "senha e " + dash.OMITIDO + " para acesso"):
+            with self.subTest(texto=texto):
+                limpo = dash.omitir_credenciais(texto)
+                self.assertEqual(limpo, "senha e " + dash.OMITIDO + " para acesso")
+                self.assertEqual(dash.omitir_credenciais(limpo), limpo)
+
+    def test_narrativa_de_ajuda_para_acesso_e_preservada_na_coluna_f(self):
+        texto = "O usuário esqueceu a senha e solicitou ajuda para acesso"
+        self.assertEqual(dash.omitir_credenciais(texto), texto)
+        chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+        self.assertEqual(dash.montar_linha(chamado)["F"], texto)
+
+    def test_senha_explicita_apos_continuacao_gramatical_ainda_e_omitida(self):
+        texto = "O usuário esqueceu a senha e precisa de ajuda; password: Segredo123"
+        self.assertEqual(dash.omitir_credenciais(texto), "O usuário esqueceu a senha e precisa de ajuda; password: " + dash.OMITIDO)
+
+    def test_credenciais_simples_apos_rotulos_e_verbos_sao_omitidas(self):
+        for rotulo in ("senha", "senha é", "password é", "senha eh", "senha foi", "senha será"):
+            for segredo in ("segredo", "Segredo123", "abc", "segura"):
+                with self.subTest(rotulo=rotulo, segredo=segredo):
+                    texto = rotulo + " " + segredo
+                    self.assertEqual(dash.omitir_credenciais(texto), rotulo + " " + dash.OMITIDO)
+                    chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado=texto)
+                    self.assertEqual(dash.montar_linha(chamado)["F"], rotulo + " " + dash.OMITIDO)
+
+    def test_senha_alterada_para_palavra_minuscula_e_omitida(self):
+        self.assertEqual(dash.omitir_credenciais("senha foi alterada para segredo"), "senha foi alterada para " + dash.OMITIDO)
+
+    def test_rotulo_simples_sem_separador_omite_senha(self):
+        for rotulo in ("Senha", "password", "senha atual é", "senha nova:", "senha antiga:"):
+            with self.subTest(rotulo=rotulo):
+                self.assertEqual(dash.omitir_credenciais(rotulo + " Segredo123"), rotulo + " " + dash.OMITIDO)
+
+    def test_senhas_qualificadas_com_maiusculas_ou_simbolos_sao_omitidas(self):
+        for segredo in ("SENHASECRETA", "abcDEF", "!@#abc", "abc#def", "123ABC", "abc!", "abcdefgh"):
+            with self.subTest(segredo=segredo):
+                self.assertEqual(dash.omitir_credenciais("senha temporária " + segredo), "senha temporária " + dash.OMITIDO)
+
+    def test_senha_explicita_apos_mencao_ambigua_e_omitida(self):
+        for prefixo, credencial in (("senha temporária forte; ", "senha: Segredo123"), ("senha de acesso do sistema; ", "password=Segredo123")):
+            with self.subTest(prefixo=prefixo):
+                omitido = dash.omitir_credenciais(prefixo + credencial)
+                self.assertTrue(omitido.startswith(prefixo))
+                self.assertNotIn("Segredo123", omitido)
+                self.assertIn(dash.OMITIDO, omitido)
+
+    def test_senha_com_espacos_e_na_proxima_linha_nao_vaza_e_preserva_contexto(self):
+        for texto in ("senha: frase secreta", "Contexto\nsenha:\n\nfrase secreta\nFim", "Senha\nSegredo123", "password\nSegredo123", "Senha\n\nSegredo123", "password\n\nSegredo123", "Senha é:\nSegredo123", "A senha temporária é\nSegredo123", "Senha padrão:\nSegredo123"):
+            with self.subTest(texto=texto):
+                omitido = dash.omitir_credenciais(texto)
+                self.assertNotIn("frase", omitido)
+                self.assertNotIn("secreta", omitido)
+                self.assertNotIn("Segredo123", omitido)
+                self.assertIn(dash.OMITIDO, omitido)
+                if "Contexto" in texto:
+                    self.assertIn("Contexto", omitido)
+                    self.assertIn("Fim", omitido)
+
+    def test_mencao_sem_credencial_preserva_o_texto(self):
+        for texto in ("Como criar uma senha forte?", "O usuário esqueceu a senha e precisa redefinir o acesso.", "password_hint: nome do primeiro animal", "Senha temporária forte?", "Senha de acesso do sistema", "Senha de acesso 2FA habilitada", "senha de acesso 2fa habilitada", "A senha esquecida impede o acesso.", "senha atualizada com sucesso", "senha foi alterada", "senha foi alterada\nContexto preservado"):
+            with self.subTest(texto=texto):
+                self.assertEqual(dash.omitir_credenciais(texto), texto)
+
+    def test_senhas_em_linguagem_natural_sao_omitidas(self):
+        for texto in ("senha é Segredo123", "password é Segredo123", "a senha temporária foi Segredo123", "passwd será Segredo123", "a senha de acesso e Segredo123", "A senha foi alterada para Segredo123", "Senha de acesso Segredo123", "Senha temporária Segredo123", "Senha temporária 123456", "Senha de acesso Segredo"):
+            with self.subTest(texto=texto):
+                omitido = dash.omitir_credenciais(texto)
+                self.assertNotIn("Segredo123", omitido)
+                self.assertNotIn("123456", omitido)
+                if texto == "Senha de acesso Segredo":
+                    self.assertNotIn("Segredo", omitido)
+                self.assertIn(dash.OMITIDO, omitido)
+
     def test_senha_apos_login_e_senha_rotulada_sao_omitidas(self):
         texto = "Criado o login\n\ncvalente@pr.sebrae.com.br\nSebrae@661"
         self.assertEqual(dash.omitir_credenciais(texto).splitlines()[-1], dash.OMITIDO)
         self.assertIn("cvalente@pr.sebrae.com.br", dash.omitir_credenciais(texto))
-        self.assertEqual(dash.omitir_credenciais("Senha: abc123 ok"), "Senha: " + dash.OMITIDO + " ok")
+        self.assertEqual(dash.omitir_credenciais("Senha: abc123 ok"), "Senha: " + dash.OMITIDO)
 
     def test_senha_inicial_do_padrao_sebrae_some_mesmo_na_linha_do_email(self):
         omitido = dash.omitir_credenciais("Login ana@pr.sebrae.com.br senha Sebrae@661 ok")
