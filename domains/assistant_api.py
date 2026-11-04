@@ -202,7 +202,7 @@ def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
 
     def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
-            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path == "/api/endpoint/consultar" else CALL_TIMEOUT_SECONDS
+            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto") else CALL_TIMEOUT_SECONDS
             return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
 
         return asyncio.run(run())
@@ -819,6 +819,27 @@ class SimpressApi:
         if not isinstance(dados, dict) or dados.get("status") not in ("found", "not_found", "ambiguous"):
             return {"erro": "Não foi possível confirmar o resultado do Endpoint."}
         return {key: dados[key] for key in ("status", "serial", "ultimo_logon", "origem") if key in dados}
+
+    def abrir_controle_remoto(self, serial: str) -> Dict[str, Any]:
+        """The Home "Controle remoto" button: opens the remote-control session (reason "acesso") and leaves it open for the user."""
+        clean = serial.strip().upper()
+        if not clean:
+            return {"sucesso": False, "erro": "Número de série não informado."}
+        ok, dados = self._chamar("POST", "/api/endpoint/controle-remoto", corpo={"serial": clean})
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        status = dados.get("status") if isinstance(dados, dict) else None
+        host = f" ({dados['hostname']})" if status in ("connected", "offline") and dados.get("hostname") else ""
+        mensagens = {
+            "connected": f"Controle remoto solicitado{host}. A conexão ficou aberta no Chrome de automação para o usuário continuar; nada foi fechado.",
+            "offline": f"O computador{host} está offline no Endpoint: o controle remoto não está disponível.",
+            "not_found": "Equipamento não encontrado no Endpoint.",
+            "ambiguous": "Não foi possível identificar um único equipamento no Endpoint para esta série. O controle remoto não foi aberto.",
+        }
+        if status not in mensagens:
+            return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
+        return {"sucesso": status == "connected", "status": status, "serial": clean, "mensagem": mensagens[status],
+                **({"hostname": dados["hostname"]} if "hostname" in dados else {})}
 
     def consultar_equipamento(self, serial: str) -> Dict[str, Any]:
         """Look up one serial. MacBook rule from AGENTS.md: retry with a leading 'S', accepted only for a MacBook."""

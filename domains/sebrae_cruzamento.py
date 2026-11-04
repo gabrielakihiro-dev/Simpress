@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
+from domains.effective_alias import strip_manual_alias_marker
 from domains.equipment_search import normalize_search_term
 
 # AGENTS.md: hostnames with these prefixes are installed in Curitiba whatever EquipamentosDetalhes says.
@@ -32,6 +33,23 @@ def registros_de_equipamentos(equipamentos: Iterable[Mapping[str, Any]]) -> List
             "cidade": cidade,
         })
     return registros
+
+
+def apelidos_por_serie(equipamentos: Iterable[Mapping[str, Any]]) -> Dict[str, str]:
+    """Display-only map ``SERIE`` -> apelido (without the ``(M)`` marker). A serial with two different aliases is left out.
+
+    shortcut: exact upper-case serial match (no MacBook ``S`` prefix rule), upgrade if a MacBook chamado misses its apelido.
+    """
+    apelidos: Dict[str, str] = {}
+    ambiguas = set()
+    for item in equipamentos:
+        serie = str(item.get("serial") or "").strip().upper()
+        apelido = strip_manual_alias_marker(item.get("apelido"))
+        if not serie or not apelido:
+            continue
+        if apelidos.setdefault(serie, apelido) != apelido:
+            ambiguas.add(serie)
+    return {serie: apelido for serie, apelido in apelidos.items() if serie not in ambiguas}
 
 
 def _palavras(texto: Any) -> str:

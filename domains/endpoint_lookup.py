@@ -45,6 +45,42 @@ def consultar_grade(page: Any, automacao: Any, serial: str, macbook: bool, detai
     return {"status": "not_found", "serial": serial}
 
 
+NOME_ABA_CONSULTA = "simpress-consulta-endpoint"
+
+
+def _e_aba_da_consulta(aba: Any) -> bool:
+    try:
+        return aba.evaluate("window.name") == NOME_ABA_CONSULTA
+    except Exception:
+        return False
+
+
+def _preparar_aba(pw: Any) -> Any:
+    """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (porta 9333), com a grade completa pronta."""
+    browser = pw.chromium.connect_over_cdp("http://127.0.0.1:9333", timeout=10000)
+    if not browser.contexts:
+        raise RuntimeError("Chrome sem contexto de navegação.")
+    contexto = browser.contexts[0]
+    # A aba fica aberta depois da consulta (pedido do usuário, 04/11/2026); a próxima consulta reaproveita a mesma.
+    page = next((aba for aba in contexto.pages if _e_aba_da_consulta(aba)), None)
+    if page is None:
+        page = contexto.new_page()
+        page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
+    page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+    automation.selecionar_todos_computadores(page)
+    automation.confirmar_modo_todos(page)
+
+    def pronta() -> bool:
+        leitura = grid.ler_grade(page)
+        return not leitura["carregando"] and all(
+            grid.achar_cabecalho(leitura, coluna)
+            for coluna in (grid.COLUNA_SERIE, "usuario do ultimo logon")
+        )
+
+    automation.acionar_quando_pronto(lambda: None, "A grade do Endpoint não carregou", confirmar=pronta)
+    return page
+
+
 def consultar(serial: str, macbook: bool, details_serials: Collection[str] = ()) -> dict[str, Any]:
     with automation.trava_execucao("consulta_endpoint"):
         from playwright.sync_api import sync_playwright
@@ -52,23 +88,56 @@ def consultar(serial: str, macbook: bool, details_serials: Collection[str] = ())
         # Ignore cancellation left by an earlier run, without deleting its operational file.
         setattr(automation, "_inicio_execucao", automation.time.time())
         with sync_playwright() as pw:
-            browser = pw.chromium.connect_over_cdp("http://127.0.0.1:9333", timeout=10000)
-            if not browser.contexts:
-                raise RuntimeError("Chrome sem contexto de navegação.")
-            page = browser.contexts[0].new_page()
-            try:
-                page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
-                automation.selecionar_todos_computadores(page)
-                automation.confirmar_modo_todos(page)
+            page = _preparar_aba(pw)
+            return consultar_grade(page, automation, serial, macbook, details_serials)
 
-                def pronta() -> bool:
-                    leitura = grid.ler_grade(page)
-                    return not leitura["carregando"] and all(
-                        grid.achar_cabecalho(leitura, coluna)
-                        for coluna in (grid.COLUNA_SERIE, "usuario do ultimo logon")
-                    )
 
-                automation.acionar_quando_pronto(lambda: None, "A grade do Endpoint não carregou", confirmar=pronta)
-                return consultar_grade(page, automation, serial, macbook, details_serials)
-            finally:
-                page.close()
+MOTIVO_CONTROLE_REMOTO = "acesso"
+_LINHA = ".ember-table-table-row:not(.ember-table-header-row)"
+_ITEM_CONTROLE_REMOTO = 'li.zmenu__item[data-label="Controle remoto"]:visible'
+
+
+def _menu_com_controle_remoto(page: Any, esperar_ms: int = 5000) -> bool:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    try:
+        page.locator(_ITEM_CONTROLE_REMOTO).first.wait_for(state="visible", timeout=esperar_ms)
+        return True
+    except PlaywrightTimeout:
+        return False
+
+
+def _conectar_controle_remoto(page: Any) -> None:
+    page.locator(_ITEM_CONTROLE_REMOTO).first.click(timeout=10000)
+    page.locator('textarea[name="reasonMessage"]:visible').fill(MOTIVO_CONTROLE_REMOTO, timeout=15000)
+    page.locator("button.button-primary-form:visible", has_text="Conectar").click(timeout=10000)
+    # Dá tempo de o clique ser processado; nada é fechado depois (o usuário continua a sessão).
+    page.wait_for_timeout(2000)
+
+
+def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str] = (), antes_de_conectar: Any = None) -> dict[str, Any]:
+    """Filtra a série como a consulta e abre o Controle remoto (motivo "acesso"); não fecha aba nem janela."""
+    with automation.trava_execucao("consulta_endpoint"):
+        from playwright.sync_api import sync_playwright
+
+        setattr(automation, "_inicio_execucao", automation.time.time())
+        with sync_playwright() as pw:
+            page = _preparar_aba(pw)
+            achado = consultar_grade(page, automation, serial, macbook, details_serials)
+            if achado["status"] != "found":
+                return achado
+            if achado.get("_fallback_mac") and antes_de_conectar is not None and not antes_de_conectar():
+                return {"status": "ambiguous", "serial": serial, "origem": "base_local"}
+            linha = page.locator(_LINHA).first
+            hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
+            linha.locator(".resource-action--button").first.click(timeout=10000)
+            if not _menu_com_controle_remoto(page):
+                # Monitor vermelho ou sem a opção: tenta o menu "Ações" da página do computador.
+                page.keyboard.press("Escape")
+                linha.locator("a.anchor-text").first.click(timeout=10000)
+                page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000)
+                if not _menu_com_controle_remoto(page):
+                    page.keyboard.press("Escape")
+                    return {"status": "offline", "serial": serial, "hostname": hostname}
+            _conectar_controle_remoto(page)
+            return {"status": "connected", "serial": serial, "hostname": hostname}

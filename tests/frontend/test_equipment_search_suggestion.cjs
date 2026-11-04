@@ -59,3 +59,34 @@ test("a search without results offers the closest user name and clicking it sear
   assert.ok(requests.some(url => url.includes("q=bpinheiro&")));
   assert.doesNotMatch(element("autocomplete-empty-state").innerHTML, /Você quis dizer/);
 });
+
+test("Enter na barra de pesquisa e o botão Buscar levam ao Home (F1) antes de pesquisar", async () => {
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, fakeElement(id));
+    return elements.get(id);
+  };
+  globalThis.document = { addEventListener() {}, getElementById: id => (id === "home-equipment-list" ? null : element(id)) };
+  globalThis.window = { innerHeight: 800, localStorage: {}, matchMedia: () => ({ matches: false }), addEventListener() {}, visualViewport: null };
+  globalThis.lucide = { createIcons() {} };
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ items: [], total: 0, has_more: false }) });
+  const abas = [];
+  const app = new Proxy({
+    invalidarBuscasEquipamento() {}, limparSelecaoEquipamento() {}, fecharAutocomplete() {}, showToast() {},
+    ativarAbaTransferencia: aba => abas.push(aba),
+    apiFetch: async () => { throw Object.assign(new Error("x"), { status: 500 }); },
+  }, { get: (target, name) => target[name] ?? (() => {}) });
+  const feature = createEquipmentSearch({
+    app, appState: {}, motion: null, transferUtils, recentEquipment: null,
+    dom: { createTextElement: () => ({}) },
+    equipmentSearchRenderer: () => ({ criarLinhaAutocomplete: () => fakeElement("row") }),
+  });
+
+  element("input-serial").value = "PRNOTE1";
+  feature.handleSerialKeydown({ key: "Enter", preventDefault() {} });
+  assert.deepEqual(abas, ["home"]);
+
+  abas.length = 0;
+  await feature.buscarSerial().catch(() => {});
+  assert.equal(abas[0], "home");
+});

@@ -54,6 +54,11 @@
       endpointButton.disabled = !hasSerial;
       endpointButton.removeAttribute("aria-busy");
     }
+    const remoteButton = document.getElementById("btn-controle-remoto-endpoint");
+    if (remoteButton) {
+      remoteButton.disabled = !hasSerial;
+      remoteButton.removeAttribute("aria-busy");
+    }
     const endpointResult = document.getElementById("endpoint-lookup-result");
     if (endpointResult) endpointResult.textContent = "";
     if (copySerialButton) {
@@ -100,6 +105,51 @@
       }
     } catch (error) {
       if (current() && error.name !== "AbortError") result.textContent = error.message || "Não foi possível consultar o Endpoint.";
+    } finally {
+      if (current()) {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+      }
+    }
+  }
+
+  async function controleRemotoEndpoint() {
+    const serial = String(appState.currentEquipamento?.serial || "").trim();
+    const button = document.getElementById("btn-controle-remoto-endpoint");
+    const result = document.getElementById("endpoint-lookup-result");
+    if (!serial || button?.disabled) return;
+    const revision = appState.equipamentoSelectionRevision;
+    const request = endpointRequestGate.begin();
+    const current = () => endpointRequestGate.isCurrent(request.id)
+      && appState.equipamentoSelectionRevision === revision;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    result.textContent = "Abrindo o controle remoto no Endpoint…";
+    try {
+      const data = await app.apiFetch("/api/endpoint/controle-remoto", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serial }), signal: request.signal,
+        errorMessage: "Não foi possível abrir o controle remoto.",
+      });
+      if (!current()) return;
+      if (data.status === "connected") {
+        result.textContent = `Controle remoto solicitado${data.hostname ? ` para ${data.hostname}` : ""}. Continue a conexão no Chrome de automação.`;
+      } else if (data.status === "offline") {
+        result.textContent = "O computador está offline no Endpoint.";
+        await app.confirmarAcao({
+          titulo: "Computador offline",
+          mensagem: `O computador${data.hostname ? ` ${data.hostname}` : ""} está offline. O controle remoto não está disponível.`,
+          confirmar: "OK", cancelar: "Fechar", destrutiva: false,
+        });
+      } else if (data.status === "not_found") {
+        result.textContent = "Equipamento não encontrado no Endpoint";
+      } else if (data.status === "ambiguous") {
+        result.textContent = "Não foi possível identificar um único equipamento no Endpoint para esta série. O controle remoto não foi aberto.";
+      } else {
+        throw new Error("Não foi possível confirmar o resultado do Endpoint.");
+      }
+    } catch (error) {
+      if (current() && error.name !== "AbortError") result.textContent = error.message || "Não foi possível abrir o controle remoto.";
     } finally {
       if (current()) {
         button.disabled = false;
@@ -264,6 +314,8 @@
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // Pesquisar sempre leva ao Home (F1), mesmo vindo de outra aba ou de um painel F5-F9.
+      app.ativarAbaTransferencia?.("home");
       if (isBoxOpen && highlightedAutocompleteIndex >= 0 && autocompleteItemsList[highlightedAutocompleteIndex]) {
         app.selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
       } else if (isBoxOpen && autocompleteItemsList.length === 1) {
@@ -436,6 +488,7 @@
 
   // Search Equipment by Serial
   async function buscarSerial(equipmentHint = null) {
+    app.ativarAbaTransferencia?.("home");
     const serialInput = document.getElementById("input-serial");
     const serial = serialInput.value.trim().toUpperCase();
 
@@ -1051,6 +1104,7 @@
 
   return {
     consultarEndpoint,
+    controleRemotoEndpoint,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,
