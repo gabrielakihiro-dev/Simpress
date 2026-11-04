@@ -670,6 +670,105 @@
       return detalhe;
     }
 
+    /** Bloco "Descrição" com lápis (F5): o texto muda só neste site, o SoftExpert e a linha já lançada no Dashboard ficam como estão.
+     * Texto vazio restaura o original. `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
+    function blocoDescricaoEditavel(item, texto, aplicar) {
+      const numero = item.numero;
+      let atual = texto || "";
+      let editada = Boolean(item.softexpert?.descricao_editada);
+      const detalhe = blocoDetalhe("Descrição", atual);
+      const resumo = detalhe.querySelector("summary");
+      const paragrafo = detalhe.querySelector("p");
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-descricao__selo", "Editada");
+      selo.dataset.status = "info";
+      const lapis = document.createElement("button");
+      lapis.type = "button";
+      lapis.className = "ck-btn ck-btn--fantasma ck-btn--sm sebrae-descricao__lapis";
+      lapis.title = "Editar descrição";
+      lapis.setAttribute("aria-label", `Editar descrição de ${numero}`);
+      lapis.setAttribute("aria-expanded", "false");
+      lapis.dataset.sebraeEditarDescricao = numero;
+      lapis.appendChild(iconePendencia("i-pencil", ""));
+      resumo.appendChild(selo);
+      const entrada = document.createElement("textarea");
+      entrada.className = "ck-entrada";
+      entrada.rows = 5;
+      entrada.maxLength = MAX_DESCRICAO;
+      entrada.placeholder = "Vazio volta ao texto original do chamado.";
+      entrada.setAttribute("aria-label", `Descrição de ${numero}`);
+      entrada.dataset.sebraeDescricaoEditada = numero;
+      const criarBotao = (rotulo, classe, chave) => {
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = `ck-btn ${classe} ck-btn--sm`;
+        botao.textContent = rotulo;
+        botao.dataset[chave] = numero;
+        return botao;
+      };
+      const salvar = criarBotao("Salvar", "ck-btn--primario", "sebraeSalvarDescricao");
+      const cancelar = criarBotao("Cancelar", "ck-btn--secundario", "sebraeCancelarDescricao");
+      const restaurar = criarBotao("Restaurar original", "ck-btn--fantasma", "sebraeRestaurarDescricao");
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-chamado__acoes";
+      acoes.append(salvar, cancelar, restaurar);
+      const editor = document.createElement("div");
+      editor.className = "sebrae-descricao__editor";
+      editor.hidden = true;
+      editor.append(entrada, acoes);
+      const feedback = dom.createTextElement("span", "sebrae-descricao__feedback", "");
+      feedback.setAttribute("role", "status");
+      detalhe.append(editor, feedback);
+      const mostrarEstado = () => { selo.hidden = !editada; restaurar.hidden = !editada; };
+      const abrirEditor = aberto => {
+        editor.hidden = !aberto;
+        paragrafo.hidden = aberto;
+        lapis.setAttribute("aria-expanded", String(aberto));
+      };
+      mostrarEstado();
+      lapis.addEventListener("click", evento => {
+        detalhe.open = true;
+        entrada.value = atual;
+        definirFeedback(feedback, "");
+        abrirEditor(true);
+        entrada.focus();
+      });
+      cancelar.addEventListener("click", () => { abrirEditor(false); lapis.focus(); });
+      const enviar = async novoTexto => {
+        [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = true; });
+        definirFeedback(feedback, "Salvando…", "salvando");
+        try {
+          const dados = await app.apiFetch(urlChamado(numero, "descricao"), {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao: novoTexto }),
+            errorMessage: "Não foi possível salvar a descrição.",
+          });
+          atual = dados.descricao || "";
+          editada = Boolean(dados.descricao_editada);
+          paragrafo.textContent = atual || "Vazio";
+          aplicar(dados);
+          mostrarEstado();
+          abrirEditor(false);
+          definirFeedback(feedback, editada ? "Descrição salva só neste site." : "Descrição original restaurada.", "ok");
+          lapis.focus();
+        } catch (error) {
+          definirFeedback(feedback, `Não foi possível salvar: ${error.message}`, "erro");
+        } finally {
+          [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = false; });
+        }
+      };
+      salvar.addEventListener("click", () => enviar(entrada.value));
+      restaurar.addEventListener("click", () => enviar(""));
+      // O lápis fica ao lado do <details>, não dentro do <summary>: botão dentro de summary é "nested-interactive" no axe.
+      const envoltorio = document.createElement("div");
+      envoltorio.className = "sebrae-descricao";
+      envoltorio.append(lapis, detalhe); // lápis primeiro: a ordem do Tab segue a tela (canto superior direito do cabeçalho)
+      return envoltorio;
+    }
+
+    /** Guarda no item em memória o que o servidor devolveu ao editar a descrição (flag do estado local e o texto que o cartão mostra). */
+    function marcarDescricaoEditada(item, dados) {
+      item.softexpert = { ...(item.softexpert || {}), descricao_editada: dados.descricao_editada || "" };
+    }
+
     /** Selo de leitura do resumo: só chamado com UTIC pode ser lido no SoftExpert; sem UTIC nada é prometido. */
     function seloLeitura(item, dados) {
       if (!NUMERO_UTIC.test(item.numero)) return null;
@@ -714,7 +813,12 @@
       const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
       if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
       let detalhes = [];
-      if (dados.lido) detalhes = [blocoDetalhe("Descrição", dados.descricao), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      if (dados.lido) {
+        detalhes = [blocoDescricaoEditavel(item, dados.descricao, resposta => {
+          marcarDescricaoEditada(item, resposta);
+          item.leitura_softexpert = { ...item.leitura_softexpert, descricao: resposta.descricao };
+        }), blocoDetalhe("Atendimento realizado", dados.atendimento)];
+      }
       else if (NUMERO_UTIC.test(item.numero)) {
         const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
         dica.dataset.leitura = "pendente";
@@ -746,7 +850,10 @@
       const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
-      const detalhes = [["H", "Descrição"], ["F", "Atendimento realizado"]].map(([letra, rotulo]) => blocoDetalhe(rotulo, item.linha[letra]));
+      const detalhes = [blocoDescricaoEditavel(item, item.linha.H, resposta => {
+        marcarDescricaoEditada(item, resposta);
+        item.linha = { ...item.linha, H: resposta.descricao };
+      }), blocoDetalhe("Atendimento realizado", item.linha.F)];
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));

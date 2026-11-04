@@ -256,7 +256,9 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   const el = {};
   for (const [id, tag] of ids) { el[id] = doc.createElement(tag); el[id].setAttribute("id", id); doc.body.append(el[id]); }
   el["sebrae-novos-lista"].setAttribute("aria-busy", "true");
-  const app = { apiFetch: async (url, opcoes = {}) => { chamadas?.push({ url, metodo: opcoes.method || "GET", corpo: opcoes.body }); return carga; }, showToast() {}, confirmarAcao: async () => true };
+  const app = { apiFetch: async (url, opcoes = {}) => { chamadas?.push({ url, metodo: opcoes.method || "GET", corpo: opcoes.body });
+    if (opcoes.method === "PUT" && url.endsWith("/descricao")) { const texto = JSON.parse(opcoes.body).descricao; return { descricao: texto || "Travando.", descricao_editada: texto }; }
+    return carga; }, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
   const feature = createSebraeDashboard({ app, dom });
   await feature.carregarNovosSebrae();
@@ -522,4 +524,39 @@ test("API SEBRAE: trocar só D para FINALIZADO e clicar leva A, B, J e S padrão
   await esvaziarFila();
   assert.equal(cartaoDe(el2, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "Revisado.");
   assert.equal(puts(outras).length, 0);
+});
+
+test("o lápis abre o editor com o texto atual, salva só no site e a restauração volta ao original", async () => {
+  const chamadas = [];
+  const { el } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "Camila", softexpertVazio(false))]), null, chamadas);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const lapis = cartao.querySelector("button[data-sebrae-editar-descricao]");
+  assert.equal(lapis.getAttribute("aria-label"), "Editar descrição de UTIC-2026-1500");
+  assert.equal(lapis.getAttribute("aria-expanded"), "false");
+  const editor = cartao.querySelector(".sebrae-descricao__editor");
+  const selo = cartao.querySelector(".sebrae-descricao__selo");
+  const restaurar = cartao.querySelector("button[data-sebrae-restaurar-descricao]");
+  assert.equal(editor.hidden, true);
+  assert.equal(selo.hidden, true, "sem edição não há selo");
+  assert.equal(restaurar.hidden, true, "sem edição não há o que restaurar");
+  assert.equal(lapis.parentNode.className, "sebrae-descricao", "botão dentro do summary é nested-interactive no axe");
+  lapis.click();
+  assert.equal(editor.hidden, false);
+  assert.equal(lapis.getAttribute("aria-expanded"), "true");
+  const texto = cartao.querySelector("textarea[data-sebrae-descricao-editada]");
+  assert.equal(texto.value, "Travando.");
+  texto.value = "Travando. Cliente também reclamou do teclado.";
+  cartao.querySelector("button[data-sebrae-salvar-descricao]").click();
+  await esvaziarFila();
+  const descricoes = chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/descricao"));
+  assert.deepEqual(descricoes.map(c => [c.url, JSON.parse(c.corpo)]), [["/api/sebrae/chamados/UTIC-2026-1500/descricao", { descricao: "Travando. Cliente também reclamou do teclado." }]]);
+  assert.equal(editor.hidden, true);
+  assert.equal(selo.hidden, false);
+  assert.equal(restaurar.hidden, false);
+  assert.equal(puts(chamadas).filter(c => c.url.endsWith("/finalizacao")).length, 0, "editar a descrição nunca finaliza nem grava a descrição de finalização");
+  restaurar.click();
+  await esvaziarFila();
+  assert.deepEqual(JSON.parse(chamadas.filter(c => c.url.endsWith("/descricao")).pop().corpo), { descricao: "" });
+  assert.equal(selo.hidden, true);
 });
