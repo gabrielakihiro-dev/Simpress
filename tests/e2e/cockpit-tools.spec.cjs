@@ -6,7 +6,8 @@ const itemDeMenuDaBarra = { "#btn-acompanhamento-chamados": "#btn-chamados-menu"
 
 async function openTool(page, id) {
   const menu = page.locator("#cockpit-tools-dropdown");
-  const naBarra = id in itemDeMenuDaBarra && await page.locator(id).isVisible();
+  // O Resumo (F3) é uma aba da barra principal, visível em qualquer largura: não passa pelo menu Ferramentas.
+  const naBarra = id === "#btn-resumo-aba" || (id in itemDeMenuDaBarra && await page.locator(id).isVisible());
   if (!naBarra && !(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator(naBarra || !(id in itemDeMenuDaBarra) ? id : itemDeMenuDaBarra[id]).click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
@@ -35,7 +36,7 @@ test("Home hides the unselected equipment and never displays reference serials",
 
 test("main navigation shortcuts and Ctrl+K leave the active tool", async ({ page }) => {
   await page.goto("/");
-  for (const [key, panel] of [["F1", "home"], ["F2", "retirada-entrega"], ["F3", "resumo"], ["F4", "automacao"], ["Control+k", "home"]]) {
+  for (const [key, panel] of [["F1", "home"], ["F2", "retirada-entrega"], ["F4", "automacao"], ["Control+k", "home"]]) {
     await openTool(page, "#btn-acompanhamento-chamados");
     await page.keyboard.press(key);
     await expect(page.locator("#cockpit-tool-panels"), key).toBeHidden();
@@ -55,7 +56,7 @@ test("closing a tool returns keyboard focus to its visible trigger", async ({ pa
 test("comparison tab shows the full result and survives an empty history refresh", async ({ page }) => {
   await mockComparison(page);
   await page.goto("/");
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   const result = page.locator("#comparacao-planilhas-conteudo");
   // Tabela no desktop e card no mobile: só a variante visível conta.
   const row = result.locator('[data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
@@ -65,7 +66,7 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(result).not.toContainText("LENTO");
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
@@ -75,7 +76,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
   test.setTimeout(60_000);
   await mockComparison(page);
   await page.goto("/");
-  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-aba", "sebrae-chamados"]]) {
+  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-resumo-aba", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-aba", "sebrae-chamados"]]) {
     await openTool(page, id);
     for (const theme of ["dark", "light"]) {
       await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
@@ -100,11 +101,11 @@ test("visual snapshots cover the Cockpit workspaces", async ({ page }, testInfo)
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     await page.locator("#tab-home").click();
-    for (const [id, name] of [["#tab-home", "home"], ["#tab-retirada-entrega", "transporte"], ["#tab-resumo", "resumo"], ["#tab-automacao", "automacao"]]) {
+    for (const [id, name] of [["#tab-home", "home"], ["#tab-retirada-entrega", "transporte"], ["#btn-resumo-aba", "resumo"], ["#tab-automacao", "automacao"]]) {
       await page.locator(id).click();
       await page.screenshot({ path: `.claude/prints/cockpit-review/${phase}-${name}-${testInfo.project.name}-${theme}.png`, fullPage: true });
     }
-    for (const [id, name] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"]]) {
+    for (const [id, name] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-resumo-aba", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"]]) {
       await openTool(page, id);
       await page.screenshot({ path: `.claude/prints/cockpit-review/${phase}-${name}-${testInfo.project.name}-${theme}.png`, fullPage: true });
     }
@@ -138,7 +139,7 @@ test("comparison skips restoration and synchronized-note entries and uses the En
     ...comparison, comparacao: { ...comparison.comparacao, ausentes_em_detalhes: [{ serie: "SN-ENDPOINT", usuario: "usuario.endpoint", local_previsto: "Curitiba" }] },
   } } }));
   await page.goto("/");
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   await expect(page.locator("#cockpit-comparison-event")).toHaveValue(comparison.id);
   // O resultado completo (cartões de resumo + tabelas) vem de renderizarResultadoComparacao, só do evento real.
   const result = page.locator("#comparacao-planilhas-conteudo");
@@ -155,7 +156,7 @@ test("a failed comparison switch cannot export the previously displayed event", 
     await route.fulfill({ status: 503, json: { detail: "Não foi possível abrir a versão." } });
   });
   await page.goto("/");
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("LENTO");
   await page.locator("#cockpit-comparison-event").selectOption("failed");
@@ -242,13 +243,16 @@ test("Chamados e OS: rótulos, atalhos e títulos dos painéis na barra e no men
   await expect(page.locator("#btn-acompanhamento-chamados")).toHaveAttribute("aria-keyshortcuts", "F6");
   await expect(page.locator("#btn-sebrae-chamados-menu")).toHaveText(/^Chamados\s*F5$/);
   await expect(page.locator("#btn-chamados-menu")).toHaveText(/^OS\s*F6$/);
-  await expect(page.locator("#btn-cockpit-comparacao")).toHaveText(/^Comparação\s*F7$/);
-  await expect(page.locator("#btn-historico-apelidos")).toHaveText(/^Histórico de apelidos\s*F8$/);
-  await expect(page.locator("#btn-relatorio-mensal")).toHaveText(/^Relatório mensal\s*F9$/);
-  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-keyshortcuts", "F10");
+  await expect(page.locator("#btn-cockpit-comparacao")).toHaveCount(0);
+  await expect(page.locator("#btn-resumo-aba")).toHaveAttribute("title", "Resumo (F3)");
+  await expect(page.locator("#btn-resumo-aba")).toHaveAttribute("aria-keyshortcuts", "F3");
+  await expect(page.locator("#btn-historico-apelidos")).toHaveText(/^Histórico de apelidos\s*F7$/);
+  await expect(page.locator("#btn-relatorio-mensal")).toHaveText(/^Relatório mensal\s*F8$/);
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("title", "Assistente (F9)");
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-keyshortcuts", "F9");
   await expect(page.locator("#btn-atualizar-planilhas, #ck-menu-g-planilhas")).toHaveCount(0);
-  // sem blur: no desktop a busca nasce com foco e F5-F9 precisam valer mesmo assim (senão F5 recarrega a página)
-  for (const [key, painel, titulo] of [["F5", "sebrae-chamados", "Chamados"], ["F6", "chamados", "OS"], ["F7", "comparacao", "Comparação"], ["F8", "apelidos", "Histórico de apelidos"], ["F9", "relatorio", "Relatório mensal"]]) {
+  // sem blur: no desktop a busca nasce com foco e F3 e F5-F8 precisam valer mesmo assim (senão F5 recarrega a página)
+  for (const [key, painel, titulo] of [["F3", "comparacao", "Resumo"], ["F5", "sebrae-chamados", "Chamados"], ["F6", "chamados", "OS"], ["F7", "apelidos", "Histórico de apelidos"], ["F8", "relatorio", "Relatório mensal"]]) {
     await page.keyboard.press(key);
     await expect(page.locator("#cockpit-tool-title"), key).toHaveText(titulo);
     await expect(page.locator("#cockpit-tool-kbd"), key).toHaveText(key);
@@ -270,7 +274,7 @@ test("o item Chamados do menu Ferramentas abre o painel e volta com Esc", async 
 
 test("abas principais mostram o atalho F1-F6 sem mudar o rótulo nem o nome acessível", async ({ page }) => {
   await page.goto("/");
-  const abas = [["#tab-home", "Home", "F1"], ["#tab-retirada-entrega", "Transporte", "F2"], ["#tab-resumo", "Resumo", "F3"],
+  const abas = [["#tab-home", "Home", "F1"], ["#tab-retirada-entrega", "Transporte", "F2"], ["#btn-resumo-aba", "Resumo", "F3"],
     ["#tab-automacao", "Automação", "F4"], ["#btn-sebrae-chamados-aba", "Chamados", "F5"], ["#btn-acompanhamento-chamados", "OS", "F6"]];
   const larguraComAtalho = page.viewportSize().width >= 1290;
   for (const [id, rotulo, atalho] of abas) {
@@ -288,7 +292,7 @@ test("abas principais mostram o atalho F1-F6 sem mudar o rótulo nem o nome aces
 test("em todos os painéis o cabeçalho sobe junto com o conteúdo e a página não rola", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
-  for (const id of ["#btn-sebrae-chamados-aba", "#btn-acompanhamento-chamados", "#btn-cockpit-comparacao", "#btn-historico-apelidos", "#btn-relatorio-mensal", "#btn-catalogo-unidades"]) {
+  for (const id of ["#btn-sebrae-chamados-aba", "#btn-acompanhamento-chamados", "#btn-resumo-aba", "#btn-historico-apelidos", "#btn-relatorio-mensal", "#btn-catalogo-unidades"]) {
     await openTool(page, id);
     const r = await page.evaluate(() => {
       const raiz = document.querySelector("#cockpit-tool-panels");
@@ -349,7 +353,7 @@ test("OS: Importar e gerenciar abre o painel sem rolar o shell nem esconder a ba
   }
 });
 
-test("Exportar Excel (apelidos e IdCliente) fica na aba Comparação e some sem alterações exportáveis", async ({ page }) => {
+test("Exportar Excel (apelidos e IdCliente) fica no Resumo e some sem alterações exportáveis", async ({ page }) => {
   const stats = (exportavel, total) => ({ total_equipamentos: 1, total_unidades: 0, exportacao_disponivel: exportavel, total_alteracoes_exportaveis: total });
   let corpo = stats(true, 0);
   await page.route("**/api/stats", route => route.fulfill({ json: corpo }));
@@ -368,12 +372,12 @@ test("Exportar Excel (apelidos e IdCliente) fica na aba Comparação e some sem 
   await mockComparison(page);
   await page.goto("/");
   await expect(page.locator("#cockpit-tools-dropdown #btn-exportar-equipamentos")).toHaveCount(0);
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   const botao = page.locator('[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr #btn-exportar-equipamentos');
   await expect(botao).toBeHidden();
   corpo = stats(true, 3);
   await page.reload();
-  await openTool(page, "#btn-cockpit-comparacao");
+  await openTool(page, "#btn-resumo-aba");
   await expect(botao).toBeVisible();
   await expect(botao).toHaveText("Exportar Excel");
   await expect(botao).toHaveAttribute("aria-label", /^Exportar Excel/);
@@ -442,4 +446,70 @@ test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antig
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
   expect(errors).toEqual([]);
+});
+
+test("Resumo (F3) abre o painel pela barra e pelo atalho, tem um só botão Resumo e restaura a aba anterior", async ({ page }) => {
+  await mockComparison(page);
+  await page.goto("/");
+  const botao = page.locator("#btn-resumo-aba");
+  await expect(page.getByRole("tab", { name: "Resumo", exact: true })).toHaveCount(1);
+  await expect(page.locator('button:visible:has(> span:text-is("Resumo"))')).toHaveCount(1);
+  await expect(page.locator("#tab-resumo")).toHaveCount(0);
+  await expect(botao).toHaveAttribute("title", "Resumo (F3)");
+  await expect(botao.locator("kbd")).toHaveText("F3");
+  await expect(botao).toHaveAttribute("aria-selected", "false");
+
+  await page.locator("#tab-retirada-entrega").click();
+  await botao.click();
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
+  await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+  await expect(botao).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#tab-retirada-entrega")).toHaveAttribute("aria-selected", "false");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  await expect(botao).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator("#tab-retirada-entrega")).toHaveAttribute("aria-selected", "true");
+
+  await page.locator("#input-serial").focus();
+  await page.keyboard.press("F3");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
+  await expect(botao).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+test("Resumo mostra Ativos por regional e Total de ativos ao abrir, sem erros de console", async ({ page }) => {
+  await mockComparison(page);
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  await page.goto("/");
+  await openTool(page, "#btn-resumo-aba");
+  const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
+  await expect(painel.getByRole("heading", { name: "Ativos por regional" })).toBeVisible();
+  await expect(painel.getByRole("heading", { name: "Total de ativos" })).toBeVisible();
+  await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
+  await expect(page.locator("#resumo-regionais .ck-barra__nome")).toHaveText("Curitiba");
+  await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText("1");
+  await expect(page.locator("#resumo-total-ativos tr")).toHaveCount(1);
+  await expect(page.locator("#resumo-total-contagem")).toHaveText("Mostrando 1–1 de 1");
+  await expect(page.locator("#resumo-total-paginacao")).toBeHidden();
+  const abrir = page.locator("#resumo-total-ativos tr").first().getByRole("button", { name: "Abrir" });
+  await expect(abrir).toBeEnabled();
+  await abrir.click();
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  await expect(page.locator("#tab-panel-home")).toBeVisible();
+  await expect(page.locator("#input-serial")).not.toHaveValue("");
+  expect(errors.filter(text => !/404|Failed to load resource/.test(text))).toEqual([]);
+});
+
+test("Resumo passa pela auditoria de acessibilidade", async ({ page }) => {
+  await mockComparison(page);
+  await page.goto("/");
+  await openTool(page, "#btn-resumo-aba");
+  await expect(page.locator("#resumo-total-ativos tr")).toHaveCount(1);
+  const results = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+  expect(results.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
+  const nav = await new AxeBuilder({ page }).include("#ck-abas").withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(nav.violations.map(v => v.id)).toEqual([]);
 });

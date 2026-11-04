@@ -81,27 +81,30 @@ test("horizontal overflow state drives the table edge fade", () => {
 });
 
 test("function keys map to the four main tabs, the Cockpit tools and the Assistente", () => {
-  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"]
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
     .map(key => ux.shortcutAction({ key }));
   assert.deepEqual(actions, [
-    "tab-home", "tab-transferencia", "tab-resumo", "tab-automacao",
-    "tool-sebrae-chamados", "tool-os", "tool-comparacao", "tool-apelidos",
+    "tab-home", "tab-transferencia", "tool-resumo", "tab-automacao",
+    "tool-sebrae-chamados", "tool-os", "tool-apelidos",
     "tool-relatorio", "tool-assistente",
   ]);
+  assert.equal(ux.shortcutAction({ key: "F10" }), null, "F10 não tem mais função");
 });
 
 test("modified function keys, typing and open dialogs keep their normal behavior", () => {
   assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }), null);
   assert.equal(ux.shortcutAction({ key: "F6", shiftKey: true }), null);
   assert.equal(ux.shortcutAction({ key: "F8" }, { modalOpen: true }), null);
-  assert.equal(ux.shortcutAction({ key: "F10" }, { modalOpen: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F9" }, { modalOpen: true }), null);
 });
 
-test("F1 a F10 valem mesmo com o cursor num campo de texto (F5 não recarrega a página)", () => {
+test("F1 a F9 valem mesmo com o cursor num campo de texto (F5 não recarrega a página)", () => {
   assert.equal(ux.shortcutAction({ key: "F1" }, { typing: true }), "tab-home");
   assert.equal(ux.shortcutAction({ key: "F5" }, { typing: true }), "tool-sebrae-chamados");
-  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), "tool-comparacao");
-  assert.equal(ux.shortcutAction({ key: "F10" }, { typing: true }), "tool-assistente");
+  assert.equal(ux.shortcutAction({ key: "F3" }, { typing: true }), "tool-resumo");
+  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), "tool-apelidos");
+  assert.equal(ux.shortcutAction({ key: "F9" }, { typing: true }), "tool-assistente");
+  assert.equal(ux.shortcutAction({ key: "F10" }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F11" }, { typing: true }), null);
 });
@@ -150,7 +153,7 @@ test("index loads the refinement layer last and links every transfer label", () 
   assert.ok(app > 0 && enhancements > app, "ux-enhancements.js must load after app.js");
 
   const start = appHtml.indexOf('id="tab-panel-retirada-entrega"');
-  const end = appHtml.indexOf('id="tab-panel-resumo"', start);
+  const end = appHtml.indexOf('id="tab-panel-automacao"', start);
   const transferPanel = appHtml.slice(start, end);
   const unlinked = transferPanel.match(/<label\b(?![^>]*\bfor=)[^>]*>/g) || [];
   assert.deepEqual(unlinked, []);
