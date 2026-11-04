@@ -16,10 +16,10 @@ const renderer = createComparisonResultRenderer({
 // The table renderer derives mobile cards through <template>; this markup check only needs the desktop rows.
 globalThis.document = { createElement: () => ({ content: { querySelector: () => null } }) };
 
-function renderizar(comparison) {
+function renderizar(comparison, semUsuario = null) {
   return renderer.conteudoResultadoComparacao(
     comparison,
-    renderer.listasComparacao(comparison),
+    { ...renderer.listasComparacao(comparison), semUsuario },
     renderer.criarColunasAnotacao(comparison),
   );
 }
@@ -77,7 +77,8 @@ test("summary cards with rows jump to the title of their own section", () => {
 });
 
 test("summary card targets are unique and every mapped section title is rendered once", () => {
-  const html = renderizar(COMPARACAO_COMPLETA);
+  // "Sem usuário" só é desenhada quando o controller entrega a leitura do inventário.
+  const html = renderizar(COMPARACAO_COMPLETA, { estado: "ok", items: [] });
   const ids = Object.values(renderer.SECOES_CARTOES_RESUMO).map(secao => secao.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) {

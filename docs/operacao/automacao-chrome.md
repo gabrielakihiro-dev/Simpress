@@ -89,7 +89,7 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 ## Tela
 
 - Menu lateral › `Navegação` › aba `Automação` (`#tab-automacao`, painel `#tab-panel-automacao`), depois de `Resumo`. Mesmo comportamento das outras abas (setas, `Home`/`End`, `aria-selected`).
-- Cartão **Rotinas**: botões `Rotina de OS`, `Inventários`, `Verificar usuários`, `Ambas`, `Abrir Chrome para login` e `Cancelar`. Com uma rotina em andamento, os cinco primeiros ficam desabilitados e só `Cancelar` fica ativo; livre, `Cancelar` fica desabilitado. Texto curto lembrando que os logins são feitos na janela do Chrome de automação e que a importação é pelas pastas locais.
+- Cartão **Rotinas**: botões `Rotina de OS`, `Inventários`, `Verificar usuários`, `Rotina Completa`, `Abrir Chrome para login` e `Cancelar`. Com uma rotina em andamento, os cinco primeiros ficam desabilitados e só `Cancelar` fica ativo; livre, `Cancelar` fica desabilitado. Texto curto lembrando que os logins são feitos na janela do Chrome de automação e que a importação é pelas pastas locais.
 - **Estado atual** (`role="status"`): `Livre` ou `Em andamento`, com rotina, horário de início e origem (`pelo site` ou `fora do site`). Durante o cancelamento: `Cancelamento pedido…`.
 - **Aviso de login** (`#automacao-aviso-login`, `role="alert"`): visível só enquanto a rotina espera login: `Faça o login no Chrome de automação (<sistema>). A rotina continua sozinha depois do login.`
 - **Andamento**: área de log monoespaçada (`role="log"`, `aria-live="polite"`) com as linhas novas a cada 1,5 s enquanto houver execução e a cada 5 s quando livre; rolagem automática só quando o usuário já está no fim. Até 500 linhas em memória, com 200 linhas visíveis por padrão (opções 100/200/500).
@@ -111,7 +111,7 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 
 Abre três abas no Chrome de automação e adianta tudo o que não é senha nem autenticador:
 
-- **Endpoint Central** (`/client#/login`): preenche `gakihiro` só se o campo estiver vazio (`SIMPRESS_ENDPOINT_USUARIO` troca o usuário) e escolhe `pr-sebrae` na lista "Autenticação local". Clica em "Fazer login" apenas se a lista ficou confirmada **e** o Chrome já preencheu a senha; sem senha salva (primeiro acesso), para antes do clique e o usuário termina. O código do autenticador é sempre do usuário. A exportação do Endpoint (Inventários e Ambas) usa o mesmo preenchimento ao encontrar a tela de login.
+- **Endpoint Central** (`/client#/login`): preenche `gakihiro` só se o campo estiver vazio (`SIMPRESS_ENDPOINT_USUARIO` troca o usuário) e escolhe `pr-sebrae` na lista "Autenticação local". Clica em "Fazer login" apenas se a lista ficou confirmada **e** o Chrome já preencheu a senha; sem senha salva (primeiro acesso), para antes do clique e o usuário termina. O código do autenticador é sempre do usuário. A exportação do Endpoint (Inventários e Rotina Completa) usa o mesmo preenchimento ao encontrar a tela de login.
 - **UX Simpress** (`/ng/autenticacao/login`): clica em "Acesso Time Simpress" e na conta `gansouza@simpress.com.br`; se a conta não aparecer, digita só o e-mail e clica em Avançar.
 - **Oracle** (`/AgentWeb/`): mesmo fluxo da UX.
 - **SoftExpert** (SSO): ao cair na tela "Entrar" da Microsoft com o campo de e-mail vazio, digita `gakihiro@pr.sebrae.com.br`, clica em Avançar e espera o login manual. O campo é achado por `CAMPO_EMAIL_MICROSOFT` (e-mail, `loginfmt`, `login`, texto genérico), para não depender do tipo do input. Se, após 10 s, a tela não for reconhecida, o log registra uma vez `Tela da Microsoft não reconhecida (campos visíveis: …)` e a rotina segue aguardando você.
@@ -121,7 +121,7 @@ Abre três abas no Chrome de automação e adianta tudo o que não é senha nem 
 
 ## Aviso "New Hotfix Available" do Endpoint
 
-O Endpoint Central mostra um aviso de atualização que cobre a tela e derruba cliques com `Locator.click: Timeout 30000ms exceeded` (visto na verificação de usuários). `endpoint_vigiar_avisos` registra um `add_locator_handler` do Playwright na aba do Endpoint: sempre que o aviso (`.server-update--notification`) bloqueia uma ação, a automação clica em "Do it Later" (ou, sem o botão, passa o mouse e clica no X) e a ação segue. Vale para Inventários, Ambas (`exportar_endpoint`) e `--rotina usuarios`.
+O Endpoint Central mostra um aviso de atualização que cobre a tela e derruba cliques com `Locator.click: Timeout 30000ms exceeded` (visto na verificação de usuários). `endpoint_vigiar_avisos` registra um `add_locator_handler` do Playwright na aba do Endpoint: sempre que o aviso (`.server-update--notification`) bloqueia uma ação, a automação clica em "Do it Later" (ou, sem o botão, passa o mouse e clica no X) e a ação segue. Vale para Inventários, Rotina Completa (`exportar_endpoint`) e `--rotina usuarios`.
 
 ## Janela pequena e downloads
 
@@ -144,7 +144,7 @@ Detalhes e análise de melhorias: [especificação](automacao-historico-especifi
 
 ## Verificar usuários (`--rotina usuarios`)
 
-`scripts/verificar_usuarios_endpoint.py` confere, na grade "Todos os computadores" do Endpoint Central, cada pendência de usuário logado sem decisão. Também roda no fim de `Inventários` e `Ambas`; nesses casos uma falha dela vira `[AVISO]` e não desfaz a importação já confirmada.
+`scripts/verificar_usuarios_endpoint.py` confere, na grade "Todos os computadores" do Endpoint Central, cada pendência de usuário logado sem decisão. Também roda no fim de `Inventários` e `Rotina Completa`; nesses casos uma falha dela vira `[AVISO]` e não desfaz a importação já confirmada.
 
 - Pesquisa por série, série sem o `S` inicial (MacBook) e hostname, sempre com correspondência exata, e limpa cada filtro depois. O filtro é digitado tecla a tecla e só vale quando o campo mantém o valor e as linhas batem com ele (ou a grade vazia é confirmada); sem confirmação a rotina para com `[FALHA]` e nada é decidido.
 - Abre o detalhe do computador e prioriza "Usuário do último logon" (o "Horário da última inicialização" colado ao nome é descartado). Sem um valor válido, usa a coluna "Usuários logados" da grade: uma única conta válida pode fundamentar a decisão; múltiplas contas válidas deixam a pendência aberta e anotada. A coluna pode trazer contas separadas por vírgula. Se não houver conta válida na grade, consulta Sistema > Usuários, onde a primeira linha válida vence. Ignoram-se vazios, `NA`, `Administrador`, `Convidado`, `DefaultAccount`, `WDAGUtilityAccount`, `root`, contas `CodexSandbox*`, `Default*` e UI Flow Service. Aba ou tabela que não carrega interrompe a rotina sem decidir, e a grade é restaurada mesmo com erro.

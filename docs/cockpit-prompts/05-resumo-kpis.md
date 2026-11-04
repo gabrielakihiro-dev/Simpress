@@ -64,7 +64,7 @@ Os números vêm dos dados reais de `#resumo-cards` e da comparação de planilh
 
 #### Colunas
 
-| SÉRIE | MODELO | SIMPRESS | ENDPOINT CENTRAL | ÚLTIMO ACESSO | SITUAÇÃO | (ação) |
+| Série | Modelo / host | Simpress | Endpoint Central | Último acesso | Situação | Ação |
 
 - Série: fonte mono
 - Situação: badge (Localidade = err, Sem acesso = warn, etc.)

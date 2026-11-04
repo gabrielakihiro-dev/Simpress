@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
+from domains.assistant_lgpd import omitir_senhas
 from domains.equipment_search import normalize_search_term
 from domains.inventory_comparison import SEBRAE_OWNED_NOTEBOOK_SERIALS
 from domains.sebrae_chamados import (
@@ -261,18 +262,17 @@ def cruzar_por_nome(nome: str, registros: Iterable[Mapping[str, Any]]) -> Cruzam
 OMITIDO = "[DADO SENSÍVEL OMITIDO]"  # same wording the Dashboard already uses for passwords
 _EMAIL = re.compile(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$")
 _SENHA_PADRAO = re.compile(r"(?i)\bsebrae@\d+\b")  # initial password pattern seen in real tickets
-_SENHA_ROTULADA = re.compile(r"(?i)\b(senha|password|pwd)(\s*[:=-]\s*)(\S+)")
 
 
 def omitir_credenciais(texto: Any) -> str:
-    """Hides passwords: the value after ``senha:`` and the lone token on the line after a lone e-mail.
+    """Hides labeled passwords (including ``senha temporária foi``) and the token after a lone e-mail.
 
     shortcut: a password written next to other words on its own line is not detected; widen the
     patterns if a ticket leaks one that way.
     """
     saida: List[str] = []
     apos_email = False
-    for linha in _SENHA_PADRAO.sub(OMITIDO, str(texto or "")).splitlines():
+    for linha in omitir_senhas(_SENHA_PADRAO.sub(OMITIDO, str(texto or ""))).splitlines():
         palavra = linha.strip()
         if not palavra:
             saida.append(linha)
@@ -280,7 +280,7 @@ def omitir_credenciais(texto: Any) -> str:
         if apos_email and len(palavra.split()) == 1 and len(palavra) >= 6 and not _EMAIL.match(palavra):
             saida.append(OMITIDO)
         else:
-            saida.append(_SENHA_ROTULADA.sub(lambda m: m.group(1) + m.group(2) + OMITIDO, linha))
+            saida.append(linha)
         apos_email = bool(_EMAIL.match(palavra)) or (apos_email and not palavra)
     return "\n".join(saida)
 

@@ -78,6 +78,37 @@ async def ok_endpoint(scope, receive, send):
 
 
 class LocalRequestSecurityTests(unittest.TestCase):
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_sebrae_upload_routes_pass_a_body_larger_than_the_general_api_limit(self):
+        from fastapi import FastAPI, Request
+
+        app = FastAPI()
+        app.add_middleware(main.LocalRequestSafetyMiddleware)
+
+        async def consume(request: Request):
+            return {"bytes": len(await request.body())}
+
+        for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/{numero}/anexo"):
+            app.add_api_route(path, consume, methods=["POST"])
+        client = TestClient(app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/UTIC-2026-1/anexo"):
+            with self.subTest(path=path):
+                response = client.post(path, content=b"x" * (1536 * 1024), headers={"Content-Type": "application/octet-stream"})
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json(), {"bytes": 1536 * 1024})
+
+    def test_sebrae_upload_limits_remain_bounded_and_apply_only_to_post_routes(self):
+        limits = main._local_request_safety_services.body_limits()
+        for path, limit in (
+            ("/api/sebrae/dashboard", limits.upload_bytes + 1024 * 1024),
+            ("/api/sebrae/chamados/UTIC-2026-1/anexo", limits.assistant_attachment_request_bytes),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(run_boundary(("127.0.0.1", 1234), path=path, method="POST", headers=[(b"content-length", str(1536 * 1024).encode())]), (200, True))
+                self.assertEqual(run_boundary(("127.0.0.1", 1234), path=path, method="POST", headers=[(b"content-length", str(limit + 1).encode())]), (413, False))
+                self.assertEqual(run_boundary(("127.0.0.1", 1234), path=path, method="PUT", headers=[(b"content-length", str(main.MAX_API_REQUEST_BYTES + 1).encode())]), (413, False))
+
     def test_every_response_carries_the_browser_hardening_headers(self):
         for client, expected in ((("127.0.0.1", 1234), 200), (("192.0.2.1", 1234), 403)):
             with self.subTest(client=client):

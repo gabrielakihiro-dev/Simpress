@@ -7,6 +7,7 @@ unexpected exceptions with a generic response.
 
 import asyncio
 import logging
+import re
 import traceback
 from dataclasses import dataclass
 from typing import Any, Callable, FrozenSet, Optional, Tuple, Type
@@ -227,6 +228,8 @@ class LocalRequestSafetyMiddleware:
         is_assistant_audio = path == "/api/assistente/audio"
         is_assistant_attachment = path == "/api/assistente/anexo" and scope.get("method") == "POST"
         is_ux_alias_upload = path == "/api/automacao/ux-apelidos" and scope.get("method") == "POST"
+        is_sebrae_dashboard_upload = path == "/api/sebrae/dashboard" and scope.get("method") == "POST"
+        is_sebrae_pdf_upload = scope.get("method") == "POST" and re.fullmatch(r"/api/sebrae/chamados/[^/]+/anexo", path) is not None
         limits = services.body_limits()
         body_limit = (
             limits.upload_request_bytes if is_inventory_upload
@@ -236,6 +239,8 @@ class LocalRequestSafetyMiddleware:
             else limits.assistant_audio_request_bytes if is_assistant_audio
             else limits.assistant_attachment_request_bytes if is_assistant_attachment
             else MAX_UX_ALIAS_BYTES + 1024 * 1024 if is_ux_alias_upload
+            else limits.upload_bytes + 1024 * 1024 if is_sebrae_dashboard_upload
+            else limits.assistant_attachment_request_bytes if is_sebrae_pdf_upload
             else limits.api_request_bytes if path.startswith("/api/")
             else None
         )

@@ -219,7 +219,7 @@
       </div>
 
       <div id="equipment-loading" class="ui-equipment-loading"></div>
-      <ul id="home-equipment-list" class="ck-itens" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true"></ul>
+      <ul id="home-equipment-list" class="ck-itens" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true" data-estado="carregando"></ul>
       <p id="home-list-empty" class="ck-lista__vazio" role="status" hidden>Nenhum equipamento encontrado.</p>
       <div id="home-equipment-actions" class="ck-lista__acoes" role="group" aria-label="Ações do equipamento ativo" hidden></div>
       <div class="ck-lista__rodape">
@@ -321,7 +321,7 @@
           </div>
           <div class="ck-dado" id="ck-dado-login">
             <div class="ck-dado__textos">
-              <dt id="ck-rotulo-login">Nome Completo</dt>
+              <dt id="ck-rotulo-login">Nome completo</dt>
               <dd data-campo="login">
                 <span id="card-nome-pessoa" class="hidden">—</span>
                 <form id="form-nome-pessoa" class="ck-edicao hidden" data-on-submit="salvarNomePessoa" autocomplete="off">
@@ -461,7 +461,7 @@ Horário disponível para atendimento:</textarea>
     <div class="ck-transp" id="ck-transp">
 
     <!-- Equipamento selecionado -->
-    <section id="transfer-equipment-banner" class="ck-cartao ck-selecionado" data-state="empty" aria-labelledby="transfer-equipment-title">
+    <section id="transfer-equipment-banner" class="ck-cartao ck-selecionado" data-state="empty" data-estado="vazio" aria-labelledby="transfer-equipment-title">
       <h2 id="transfer-equipment-title" class="sr-only">Equipamento desta transferência</h2>
       <div class="ck-selecionado__id">
         <span class="ck-eq-cab__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span>
@@ -584,7 +584,7 @@ Horário disponível para atendimento:</textarea>
                 <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
               </button>
               <button type="button" data-on-click="copiarDadoEntrega" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--sm" title="Copiar o CNPJ de faturamento padrão" aria-label="Copiar CNPJ de faturamento da entrega">
-                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Fat.</span>
+                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Faturamento</span>
               </button>
             </span>
           </div>
@@ -613,7 +613,7 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo" for="entrega-pausa-duracao"><span class="ck-campo__rotulo">Pausa <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="entrega-pausa-duracao" required value="1h" class="ck-entrada" />
             </label>
-            <label class="ck-campo ck-span-3" for="entrega-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span> · célula B37</span>
+            <label class="ck-campo ck-span-3" for="entrega-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span></span>
               <textarea id="entrega-obs" required rows="2" class="ck-entrada" placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."></textarea>
             </label>
           </div>
@@ -629,7 +629,7 @@ Horário disponível para atendimento:</textarea>
       <aside class="ck-cartao ck-previa" id="ck-previa-transporte" aria-labelledby="cockpit-transport-preview-title">
         <div class="ck-cartao__cab">
           <h2 class="ck-cartao__titulo" id="cockpit-transport-preview-title">Pré-visualização</h2>
-          <span id="cockpit-transport-preview-state" class="ck-sr" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
+          <span id="cockpit-transport-preview-state" class="ck-sr" data-estado="vazio" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
           <span class="ck-espaco"></span>
           <span class="ck-badge" data-status="neutro" id="ck-previa-contagem"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="ck-previa-contagem-texto">0/0 campos</span></span>
         </div>
@@ -728,7 +728,7 @@ Horário disponível para atendimento:</textarea>
             <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="inventarios"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-inventarios" aria-describedby="ck-rotina-inventarios-titulo" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
           <article class="ck-cartao ck-rotina" data-rotina="ambas" data-estado="ocioso">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-ambas-titulo">Ambas</h3><span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Ambas" aria-describedby="tip-rotina-ambas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-rotina-ambas" role="tooltip" class="info-tip-text">Rotina de OS e, em seguida, a de inventários.</span></span></div>
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-ambas-titulo">Rotina Completa</h3><span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Rotina Completa" aria-describedby="tip-rotina-ambas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-rotina-ambas" role="tooltip" class="info-tip-text">Rotina de OS e, em seguida, a de inventários.</span></span></div>
             <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="ambas"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-ambas" aria-describedby="ck-rotina-ambas-titulo" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
         </div>
@@ -772,7 +772,7 @@ Horário disponível para atendimento:</textarea>
         <div class="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
           <label class="ck-campo"><span class="ck-campo__rotulo">De</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio"></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Até</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim"></label>
-          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Chamados novos Sebrae</option><option value="antigos">Chamados antigos Sebrae</option><option value="dashboard">Dashboard + chamados novos Sebrae</option></select></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Rotina Completa</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Chamados novos Sebrae</option><option value="antigos">Chamados antigos Sebrae</option><option value="dashboard">Dashboard + chamados novos Sebrae</option></select></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Status</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
           <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar</button>
           <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar</button>
@@ -1155,7 +1155,7 @@ Horário disponível para atendimento:</textarea>
       <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
       <input id="assistente-anexo-arquivo" type="file" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden data-on-change="anexarArquivoAssistente" data-args='["$event"]'>
       <ul id="assistente-anexos" class="ck-assist__anexos" aria-label="Arquivos anexados" hidden></ul>
-      <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens anexadas vão para o OpenRouter exatamente como estão, sem ocultar CPF, nome, e-mail ou outros dados que apareçam nelas. Anexe só o que pode sair deste computador.</p>
+      <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens vão ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Anexe só o que pode sair deste computador.</p>
       <p id="assistente-anexos-status" class="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"></p>
       <div class="ck-assist__acoes">
         <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>

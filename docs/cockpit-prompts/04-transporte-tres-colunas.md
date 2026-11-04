@@ -104,7 +104,7 @@ Mantenha o `#select-unidade-destino` no DOM (pode ficar `hidden`) para que o JS 
 - Expediente (`#entrega-horario`) — obrigatório (*)
 - Almoço (`#entrega-almoco`) — obrigatório (*)
 - Pausa (`#entrega-pausa-duracao`) — obrigatório (*)
-- Observações (`#entrega-obs`) — obrigatório (*), indicando "célula B37"
+- Observações (`#entrega-obs`) — obrigatório (*)
 
 #### Chips de observação rápida
 
