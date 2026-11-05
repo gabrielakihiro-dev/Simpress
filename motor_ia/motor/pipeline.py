@@ -17,11 +17,12 @@ from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ValidationError
 
-from . import usage_log
+from . import memoria, usage_log
 from .circuit_breaker import CircuitBreaker, CircuitBreakerError
 from .config import MotorConfig, OpenRouterError
 from .harness import ResultadoHarness, preparar_sandbox, rodar_harness
 from .llm_adapter import ResultadoChamada
+from .memoria import HistoricoL1
 from .schemas import CodigoSaida, PlanoSaida
 
 # (modelo, mensagens, max_tokens, temperatura, missao_id) -> ResultadoChamada; produção injeta
@@ -151,6 +152,37 @@ def executar_missao(
     chamador: Chamador,
     log_path: Path,
     sandbox_dir: Optional[Path] = None,
+    registrar_memoria_sessao: bool = False,
+    memoria_log_path: Optional[Path] = None,
+) -> ResultadoMissao:
+    """`registrar_memoria_sessao=True` liga o resumo L2 (Fase 4): desligado por padrão pra não
+    mudar o comportamento (nem o nº de chamadas ao `chamador`) de quem já chama esta função.
+
+    L4/L5 (memória de longo prazo entre sessões, etc.): não implementadas nem estudadas nesta
+    fase — decisão adiada até L1-L3 (`motor/memoria.py`) rodarem de verdade.
+    """
+    resultado = _executar_missao(tarefa, config, chamador, log_path, sandbox_dir)
+    if registrar_memoria_sessao:
+        caminho = memoria_log_path or memoria.CAMINHO_PADRAO_SESSAO
+        try:
+            # L2 é best-effort: não deve gastar além do teto já estourado pela missão, nem
+            # propagar erro de provedor (ex.: 402 sem crédito) depois que a missão já terminou.
+            guarda = CircuitBreaker(limites=config.limites, log_path=log_path, custo_missao_usd=resultado.custo_usd)
+            guarda.registrar_custo(0.0)
+            memoria.registrar_resumo_sessao(
+                caminho, resultado.missao_id, tarefa, resultado, chamador, config.modelos.planejador, log_path,
+            )
+        except (CircuitBreakerError, OpenRouterError):
+            pass
+    return resultado
+
+
+def _executar_missao(
+    tarefa: str,
+    config: MotorConfig,
+    chamador: Chamador,
+    log_path: Path,
+    sandbox_dir: Optional[Path],
 ) -> ResultadoMissao:
     missao_id = uuid.uuid4().hex[:12]
     sandbox_dir = preparar_sandbox(sandbox_dir or config.sandbox_dir)
@@ -167,7 +199,9 @@ def executar_missao(
             config.chamada.max_tokens_plano, config.chamada.temperatura, PlanoSaida, breaker,
         )
 
-        mensagens_codigo: List[Dict[str, Any]] = [
+        # L1 (Fase 4, motor/memoria.py): scratchpad da missão, só em memória, descartado ao
+        # fim de `_executar_missao` — nunca persistido, nunca compartilhado entre missões.
+        mensagens_codigo: HistoricoL1 = [
             {"role": "system", "content": (
                 'Responda só com JSON: {"arquivo": "...", "conteudo": "..."}. '
                 '"arquivo" tem que começar com "test_" e terminar em ".py"; "conteudo" tem que '

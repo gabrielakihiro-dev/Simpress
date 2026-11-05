@@ -38,7 +38,7 @@ def main() -> None:
     chamador = functools.partial(chamar_modelo, settings, config)
     resultado = executar_missao(
         "Crie a função soma(a, b) que retorna a + b, com um teste que verifica soma(2, 3) == 5.",
-        config, chamador, LOG_PATH,
+        config, chamador, LOG_PATH, registrar_memoria_sessao=True,
     )
 
     print(f"missao_id={resultado.missao_id} ok={resultado.ok} iteracoes={resultado.iteracoes}")
