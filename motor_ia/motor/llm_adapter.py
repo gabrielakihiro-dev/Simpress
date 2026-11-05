@@ -7,10 +7,10 @@ expuser um equivalente que devolva o corpo bruto.
 """
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, List
 
-from .config import MotorConfig, OpenRouterClient, OpenRouterSettings
+from .config import MotorConfig, OpenRouterClient, OpenRouterError, OpenRouterSettings
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,18 @@ def chamar_modelo(
 ) -> ResultadoChamada:
     """Chamada mínima e explícita: `max_tokens`/`temperature` sempre presentes, sem tools
     (a Fase 1 não usa ferramentas), sem fallback automático de modelo."""
+    if settings.deepseek:
+        if modelo == config.modelos.juiz:
+            # Juiz não é modelo DeepSeek: API direta da DeepSeek nunca teria esse slug.
+            if not settings.voice_key:
+                raise OpenRouterError(
+                    "O DeepSeek não tem o modelo do juiz. Preencha OPENROUTER_API_KEY para habilitar o juiz."
+                )
+            settings = replace(settings, api_key=settings.voice_key, base_url=settings.voice_base_url, deepseek=False)
+        else:
+            # Planejador/codificador: troca o slug do OpenRouter pelo ID da API direta da DeepSeek.
+            modelo = config.modelos.deepseek_direto
+
     payload: Dict[str, Any] = {
         "model": modelo,
         "messages": mensagens,

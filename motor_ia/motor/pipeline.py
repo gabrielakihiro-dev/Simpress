@@ -115,7 +115,7 @@ def executar_missao(
 
         ultimo_harness: Optional[ResultadoHarness] = None
         for iteracao in range(1, config.limites.max_loop_iterations + 1):
-            sandbox_dir = preparar_sandbox(sandbox_dir)  # sandbox limpo a cada tentativa: arquivo da rodada anterior não some sem querer
+            sandbox_dir = preparar_sandbox(sandbox_dir)  # sandbox limpo a cada tentativa: nenhum arquivo de rodada anterior sobrevive e confunde o pytest
 
             codigo = _chamar_com_schema(
                 chamador, log_path, missao_id, f"codigo_{iteracao}", config.modelos.codificador,
