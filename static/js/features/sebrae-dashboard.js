@@ -1586,12 +1586,36 @@
     }
 
     /** `situacao` vai para `data-estado` do bloco (o CSS pinta a bolinha): "ok" = salvo agora; vazio = restaurado/descartado. */
-    function mostrarRascunho(texto, situacao = "") {
+    function mostrarRascunho(texto, situacao = "", detalhes = []) {
       definirTexto("sebrae-rascunho-status", texto);
       const bloco = el("sebrae-rascunho");
       if (!bloco) return;
       bloco.hidden = !texto;
       bloco.dataset.estado = situacao;
+      const caixa = el("sebrae-rascunho-detalhes");
+      if (!caixa) return;
+      // Lista recolhida: o aviso fica em uma linha e cada chamado ganha a sua. Recarregar recolhe de novo.
+      caixa.hidden = !detalhes.length;
+      caixa.open = false;
+      definirTexto("sebrae-rascunho-resumo", `Ver detalhes (${detalhes.length})`);
+      el("sebrae-rascunho-itens")?.replaceChildren(...detalhes.map(item => {
+        const linha = document.createElement("li");
+        if (typeof item === "string") {
+          linha.textContent = item;
+          return linha;
+        }
+        linha.appendChild(dom.createTextElement("b", "", item.numero));
+        item.campos.forEach(([letra, valor]) => linha.appendChild(dom.createTextElement("span", "", `${letra} ${valor}`)));
+        return linha;
+      }));
+    }
+
+    /** Linhas do detalhe do rascunho: um chamado por linha, com as seleções (A, B, D, J, R, S) lado a lado. */
+    function detalhesRascunho(pendentes, conflitos) {
+      return [
+        ...pendentes.map(([numero, campos]) => ({ numero, campos: Object.entries(campos).map(([letra, valor]) => [letra, String(valor)]) })),
+        ...conflitos,
+      ];
     }
 
     /** Volta ao que o Dashboard importado traz: apaga o rascunho e refaz a tela (se a consulta falhar, nada muda). */
@@ -1662,8 +1686,8 @@
       estado.valores = rascunho.valores;
       const salvoEm = formatarDataHora(rascunho.salvoEm);
       mostrarRascunho(estado.descartar ? "Rascunho descartado." : rascunho.restaurado ? `Rascunho restaurado${salvoEm ? ` (salvo em ${salvoEm})` : ""}. Passe por Atualizar Dashboard para gravar no arquivo.` : "");
-      if (rascunho.conflitos.length) mostrarRascunho(`Rascunho preservado com divergências; o arquivo importado prevalece nos campos já preenchidos. Confira: ${rascunho.conflitos.join("; ")}`, "alerta");
-      if (rascunho.pendentes.length) mostrarRascunho(`Rascunhos preservados sem correspondência nesta importação: ${rascunho.pendentes.map(([numero, campos]) => `${numero}: ${JSON.stringify(campos)}`).join("; ")}. ${rascunho.conflitos.join("; ")}`, "alerta");
+      if (rascunho.conflitos.length) mostrarRascunho("Rascunho preservado com divergências; o arquivo importado prevalece nos campos já preenchidos.", "alerta", detalhesRascunho([], rascunho.conflitos));
+      if (rascunho.pendentes.length) mostrarRascunho(`Rascunhos preservados sem correspondência nesta importação (${rascunho.pendentes.length}).`, "alerta", detalhesRascunho(rascunho.pendentes, rascunho.conflitos));
       if (Object.values(estado.naoSalvos).some(itens => Object.keys(itens).length)) mostrarRascunho("Há edições preservadas apenas nesta aba porque o navegador não conseguiu salvá-las. Copie os valores antes de recarregar.", "erro");
       estado.soft = {};
       estado.refs.clear();
