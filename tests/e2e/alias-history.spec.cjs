@@ -66,6 +66,20 @@ test("the F7 panel is the full history: search, type, action filter and clear", 
   await expect(page.locator(ITEMS)).toHaveCount(32);
 });
 
+test("the F7 panel hides VMWARE and GOOGLECLOUD serials", async ({ page }) => {
+  test.setTimeout(60_000);
+  const hidden = ["VMWARE423B6CB95FB", "vmwareead6764dfb", "GOOGLECLOUD58347873"].map((serial, index) => ({
+    id: `hidden-${index}`, horario: "2026-10-30T12:15:59-03:00", tipo: "aviso_endpoint", serial, motivo: "hostname_removido",
+  }));
+  await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos: [...hidden, ...fixtureHistory()] } }));
+  await page.goto("/");
+  await page.locator("#cockpit-tools-trigger").click();
+  await page.locator("#btn-historico-apelidos").click();
+  await expect(page.locator(ITEMS)).toHaveCount(32);
+  await expect(page.locator("#cockpit-alias-count-all")).toHaveText("32");
+  await expect(page.locator("#cockpit-alias-list")).not.toContainText(/VMWARE|GOOGLECLOUD/i);
+});
+
 test("detail offers only the actions each record allows", async ({ page }) => {
   test.setTimeout(60_000);
   await openHistory(page, fixtureHistory());
