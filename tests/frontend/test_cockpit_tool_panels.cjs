@@ -38,7 +38,7 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
   assert.match(html, /<h2 id="cockpit-comparison-heading" class="sr-only">Resumo<\/h2>/);
   // O resultado completo mora no Resumo (painel "comparacao"); lista/detalhe/KPIs/filtros/exportação antigos e o modal saíram.
   const comparacao = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)?.[0] || "";
-  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao", "resumo-regionais", "resumo-total-ativos", "resumo-total-anterior", "resumo-total-proxima"]) {
+  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao", "resumo-regionais", "resumo-regionais-filtros", "resumo-regionais-mais"]) {
     assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro do painel Resumo`);
   }
   assert.match(comparacao, /id="btn-exportar-resultado-comparacao"[^>]*data-on-click="exportarResultadoComparacaoPlanilhas"/);

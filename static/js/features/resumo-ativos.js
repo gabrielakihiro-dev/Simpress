@@ -1,15 +1,14 @@
-/** Resumo (painel de ferramenta "comparacao"): ativos por regional e lista paginada do total de ativos, só com a API local. */
+/** Resumo (painel de ferramenta "comparacao"): ativos por regional, com filtro por categoria, só com a API local (/api/painel). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).resumoAtivos = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createResumoAtivos(context) {
   "use strict";
-  const { app, motion } = context;
-  const PAGE_SIZE = 50;
-  const LOAD_ERROR = "Não foi possível carregar os equipamentos da base local.";
-  const columnLabels = ["Série", "Modelo / host", "Simpress", "Ação"];
-  let page = { items: [], offset: 0, total: 0, hasMore: false, loading: false, error: "" };
-  let pageRequestId = 0;
+  const { motion } = context;
+  const VISIBLE_REGIONS = 8;
+  let dashboard = null;
+  let filter = "todos";
+  let expanded = false;
 
   function list(value) { return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : []; }
   function number(value) {
@@ -17,22 +16,77 @@
     const parsed = Number(value);
     return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
   }
-  function serial(item) { return String(item?.serie || item?.serial || item?.chave || "").trim(); }
+  const format = value => value.toLocaleString("pt-BR");
+  const byTotal = (left, right) => right.total - left.total || left.name.localeCompare(right.name, "pt-BR");
 
-  function renderRegions(dashboard) {
-    const target = document.getElementById("resumo-regionais");
+  function categories() {
+    return list(dashboard?.por_categoria)
+      .map(item => ({ value: String(item.value || ""), label: String(item.label || ""), total: number(item.total) ?? 0 }))
+      .filter(item => item.value && item.label);
+  }
+
+  function regions() {
+    const source = filter === "todos" ? dashboard?.cidades_principais : dashboard?.cidades_por_categoria?.[filter];
+    return list(source)
+      .map(item => ({ name: String(item.cidade || "Sem cidade"), total: number(item.total) ?? 0 }))
+      .sort(byTotal);
+  }
+
+  function renderFilters() {
+    const target = document.getElementById("resumo-regionais-filtros");
     if (!target) return;
-    const cities = list(dashboard?.cidades_principais).map(item => ({
-      name: String(item.cidade || "Sem cidade"),
-      total: number(item.total) ?? 0,
-    })).sort((left, right) => right.total - left.total || left.name.localeCompare(right.name, "pt-BR"));
+    const options = [{ value: "todos", label: "Todos", total: number(dashboard?.total_equipamentos) ?? 0 }, ...categories()];
+    // Filtro que sumiu ou ficou sem ativos volta para "Todos" (a pílula dele fica desabilitada).
+    if (!options.some(option => option.value === filter && (option.value === "todos" || option.total > 0))) filter = "todos";
+    target.replaceChildren(...options.map(option => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "ck-pilula";
+      pill.dataset.categoria = option.value;
+      pill.setAttribute("aria-pressed", String(option.value === filter));
+      pill.disabled = option.value !== "todos" && option.total === 0;
+      const count = document.createElement("span");
+      count.className = "ck-pilula__n";
+      count.textContent = format(option.total);
+      pill.append(option.label, " ", count);
+      pill.addEventListener("click", () => {
+        filter = option.value;
+        expanded = false;
+        renderRegions();
+        // As pílulas são recriadas: devolve o foco à escolhida para quem usa teclado.
+        [...target.children].find(item => item.dataset.categoria === filter)?.focus?.();
+      });
+      return pill;
+    }));
+  }
+
+  function renderRegions() {
+    const target = document.getElementById("resumo-regionais");
+    const meta = document.getElementById("resumo-regionais-contagem");
+    const more = document.getElementById("resumo-regionais-mais");
+    if (!target) return;
+    renderFilters();
+    const cities = regions();
+    const label = categories().find(item => item.value === filter)?.label;
+    if (meta) {
+      const sum = cities.reduce((total, city) => total + city.total, 0);
+      meta.textContent = cities.length ? `${format(sum)} ${sum === 1 ? "ativo" : "ativos"} em ${format(cities.length)} ${cities.length === 1 ? "regional" : "regionais"}` : "";
+    }
+    if (more) more.hidden = cities.length <= VISIBLE_REGIONS;
     if (!cities.length) {
-      target.textContent = "A distribuição por cidade não está disponível.";
+      target.removeAttribute("style");
+      target.textContent = label ? `Nenhum ativo de ${label} na base local.` : "A distribuição por cidade não está disponível.";
       return;
     }
-    const maximum = Math.max(...cities.map(item => item.total), 1);
-    const rows = [];
-    cities.forEach(city => {
+    const shown = expanded ? cities : cities.slice(0, VISIBLE_REGIONS);
+    if (more) {
+      more.textContent = expanded ? "Ver menos" : `Ver todas as ${format(cities.length)} regionais`;
+      more.setAttribute("aria-expanded", String(expanded));
+    }
+    // Duas colunas no desktop, preenchidas de cima para baixo (a ordem do ranking continua na leitura).
+    target.style.setProperty("--linhas", String(Math.ceil(shown.length / 2)));
+    const maximum = Math.max(...shown.map(item => item.total), 1);
+    target.replaceChildren(...shown.map(city => {
       const row = document.createElement("div");
       row.className = "ck-barra";
       const name = document.createElement("span");
@@ -48,98 +102,10 @@
       track.appendChild(bar);
       const count = document.createElement("span");
       count.className = "ck-barra__valor";
-      count.textContent = city.total.toLocaleString("pt-BR");
+      count.textContent = format(city.total);
       row.append(name, track, count);
-      rows.push(row);
-    });
-    target.replaceChildren(...rows);
-  }
-
-  function cell(row, text) {
-    const td = document.createElement("td");
-    td.textContent = String(text || "—");
-    td.dataset.label = columnLabels[row.children.length] || "";
-    row.appendChild(td);
-  }
-
-  function renderTotal() {
-    const body = document.getElementById("resumo-total-ativos");
-    const count = document.getElementById("resumo-total-contagem");
-    const status = document.getElementById("resumo-total-status");
-    if (!body || !count || !status) return;
-    const rows = page.items;
-    if (page.loading) count.textContent = "Carregando equipamentos…";
-    else if (page.total && !rows.length) count.textContent = `${page.total.toLocaleString("pt-BR")} equipamentos`;
-    else if (page.total) {
-      const start = page.offset + 1;
-      const end = page.offset + rows.length;
-      count.textContent = `Mostrando ${start.toLocaleString("pt-BR")}–${end.toLocaleString("pt-BR")} de ${page.total.toLocaleString("pt-BR")}`;
-    } else count.textContent = "0 equipamentos";
-    const trs = [];
-    rows.forEach(item => {
-      const tr = document.createElement("tr");
-      const currentSerial = serial(item);
-      tr.dataset.serial = currentSerial.toUpperCase();
-      cell(tr, currentSerial);
-      cell(tr, item.modelo || item.computador || item.hostname || item.tipo);
-      cell(tr, item.retirada_cidade || item.local);
-      const actionCell = document.createElement("td");
-      actionCell.dataset.label = columnLabels[3];
-      const open = document.createElement("button");
-      open.type = "button";
-      open.className = "ck-btn ck-btn--fantasma ck-btn--sm";
-      open.textContent = "Abrir";
-      open.disabled = !currentSerial || currentSerial.includes("/");
-      open.title = open.disabled ? "A série está ausente ou tem mais de uma correspondência." : `Abrir ${currentSerial} na Home`;
-      open.addEventListener("click", () => abrirEquipamentoResumo(currentSerial));
-      actionCell.appendChild(open);
-      tr.appendChild(actionCell);
-      trs.push(tr);
-    });
-    body.replaceChildren(...trs);
-    const pagination = document.getElementById("resumo-total-paginacao");
-    const previous = document.getElementById("resumo-total-anterior");
-    const next = document.getElementById("resumo-total-proxima");
-    const pageLabel = document.getElementById("resumo-total-pagina");
-    if (pagination) pagination.hidden = page.total <= PAGE_SIZE;
-    if (previous) previous.disabled = page.loading || page.offset <= 0;
-    if (next) next.disabled = page.loading || !page.hasMore;
-    if (pageLabel) {
-      pageLabel.textContent = page.total
-        ? `Página ${Math.floor(page.offset / PAGE_SIZE) + 1} de ${Math.ceil(page.total / PAGE_SIZE)}`
-        : "";
-    }
-    status.dataset.estado = page.error ? "erro" : page.loading ? "carregando" : "pronto";
-    status.textContent = page.error || (page.loading
-      ? "Carregando equipamentos da base local…"
-      : rows.length ? "Equipamentos da base local." : "Não há equipamentos cadastrados na base local.");
-  }
-
-  async function carregarPaginaAtivosResumo(offset) {
-    const requestId = ++pageRequestId;
-    const knownTotal = page.total;
-    page = { items: [], offset, total: 0, hasMore: false, loading: true, error: "" };
-    renderTotal();
-    try {
-      const params = new URLSearchParams({ listar_todos: "true", offset: String(offset), limit: String(PAGE_SIZE) });
-      const response = await fetch(`/api/buscar-expandida?${params}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(LOAD_ERROR);
-      const result = await response.json();
-      if (requestId !== pageRequestId) return;
-      page = {
-        items: list(result?.items),
-        offset: number(result?.offset) ?? offset,
-        total: number(result?.total) ?? 0,
-        hasMore: result?.has_more === true,
-        loading: false,
-        error: "",
-      };
-    } catch {
-      if (requestId !== pageRequestId) return;
-      // Mantém o total conhecido: com erro numa página, o Anterior continua disponível em vez de a paginação sumir.
-      page = { items: [], offset, total: knownTotal, hasMore: false, loading: false, error: LOAD_ERROR };
-    }
-    renderTotal();
+      return row;
+    }));
   }
 
   async function carregarRegionaisResumo() {
@@ -150,13 +116,19 @@
     try {
       const response = await fetch("/api/painel", { cache: "no-store" });
       if (!response.ok) throw new Error("Não foi possível consultar o painel local.");
-      const dashboard = await response.json();
+      dashboard = await response.json();
       target.dataset.estado = "pronto";
       stopLoading();
-      renderRegions(dashboard);
+      renderRegions();
     } catch {
+      dashboard = null;
       target.dataset.estado = "erro";
       stopLoading();
+      document.getElementById("resumo-regionais-filtros")?.replaceChildren();
+      const meta = document.getElementById("resumo-regionais-contagem");
+      if (meta) meta.textContent = "";
+      const more = document.getElementById("resumo-regionais-mais");
+      if (more) more.hidden = true;
       target.textContent = "A distribuição por regional está indisponível enquanto o servidor local não responde.";
     } finally {
       stopLoading();
@@ -164,25 +136,10 @@
     }
   }
 
-  async function abrirEquipamentoResumo(serialValue) {
-    const input = document.getElementById("input-serial");
-    if (!input || !serialValue) return;
-    input.value = serialValue;
-    app.ativarAbaTransferencia("home");
-    await app.buscarSerial();
-  }
+  // Chamado ao abrir o painel: recarrega o painel local e mantém o filtro escolhido.
+  function carregarResumoAtivos() { return carregarRegionaisResumo(); }
 
-  // Chamado ao abrir o painel: recarrega as regionais e volta o total à primeira página.
-  function carregarResumoAtivos() {
-    return Promise.all([carregarRegionaisResumo(), carregarPaginaAtivosResumo(0)]);
-  }
-
-  document.getElementById("resumo-total-anterior")?.addEventListener("click", () => {
-    if (page.offset > 0) void carregarPaginaAtivosResumo(Math.max(0, page.offset - PAGE_SIZE));
-  });
-  document.getElementById("resumo-total-proxima")?.addEventListener("click", () => {
-    if (page.hasMore) void carregarPaginaAtivosResumo(page.offset + PAGE_SIZE);
-  });
+  document.getElementById("resumo-regionais-mais")?.addEventListener("click", () => { expanded = !expanded; renderRegions(); });
 
   return { carregarResumoAtivos };
 });

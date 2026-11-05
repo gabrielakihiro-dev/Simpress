@@ -811,14 +811,25 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
   .ck-acoes-barra a.ck-btn { min-height: 48px; }
 }
 
-/* Região 3E: Resumo (F3). Barras de "Ativos por regional" e série em mono no "Total de ativos"; .ck-espaco é compartilhado. */
+/* Região 3E: Resumo (F3). Cartão "Ativos por regional" (filtro por categoria + barras); .ck-espaco é compartilhado. */
 .ck-espaco { flex: 1 1 auto; }
-#resumo-regionais.ck-barras { gap: 7px; }
+.ck-regionais__filtros { padding: 10px 12px 0; }
+.ck-regionais__rodape { display: flex; justify-content: center; padding: 0 12px 10px; }
+.ck-regionais__rodape:has(> [hidden]), #resumo-regionais-mais[hidden] { display: none; }
+#resumo-regionais.ck-barras { gap: 4px 32px; padding: 12px; }
+#resumo-regionais .ck-barra { grid-template-columns: minmax(96px, 168px) minmax(0, 1fr) 44px; min-height: 28px; padding: 0 8px; border-radius: var(--raio-sm); transition: background-color var(--duracao) var(--curva); }
+#resumo-regionais .ck-barra:hover { background: var(--cor-neutro-fundo); }
+#resumo-regionais .ck-barra__nome { color: var(--cor-texto); }
+#resumo-regionais .ck-barra__valor { font-weight: var(--peso-medio); }
 #resumo-regionais .ck-barra__trilho { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--cor-neutro-fundo); }
-#resumo-regionais .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); }
-#resumo-total-ativos td:first-child { font-family: var(--fonte-mono); }
-#resumo-regionais[data-estado="erro"] { padding: 12px 16px; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-md); }
-#resumo-total-status[data-estado="erro"], #home-equipment-list[data-estado="erro"] + #home-list-empty { color: var(--cor-erro-texto); }
+#resumo-regionais .ck-barra:hover .ck-barra__trilho { background: var(--cor-borda-suave); }
+#resumo-regionais .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); transition: width var(--duracao) var(--curva); }
+@media (min-width: 1000px) {
+  #resumo-regionais.ck-barras:has(> .ck-barra):not([data-estado="carregando"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--linhas, 1), auto); grid-auto-flow: column; }
+}
+@media (prefers-reduced-motion: reduce) { #resumo-regionais .ck-barra, #resumo-regionais .ck-barra__cheio { transition: none; } }
+#resumo-regionais[data-estado="erro"] { margin: 12px; padding: 12px 16px; border-radius: var(--raio-md); background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-md); }
+#home-equipment-list[data-estado="erro"] + #home-list-empty { color: var(--cor-erro-texto); }
 /* Esqueleto de carregamento (ui-motion) com os tokens do Cockpit; vale só em Home e Resumo. */
 .ck-home .ui-skeleton-list, #resumo-regionais .ui-skeleton-list { padding: 8px 12px; }
 .ck-home .ui-skeleton-row, #resumo-regionais .ui-skeleton-row { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
@@ -935,12 +946,9 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 /* Resultado completo da comparação dentro da aba: rola com o painel da ferramenta (sem scroll próprio nem visual de modal). */
 #comparacao-planilhas-fontes { margin: 0; padding: 8px 20px 0; overflow-wrap: anywhere; }
 #comparacao-planilhas-fontes:empty { display: none; }
-/* Resumo (painel "comparacao"): Ativos por regional e Total de ativos ficam abaixo do resultado da comparação. */
+/* Resumo (painel "comparacao"): o cartão Ativos por regional fica abaixo do resultado da comparação. */
 .ck-resumo-secao { display: grid; gap: 10px; align-content: start; min-width: 0; padding: 0 20px 24px; color: var(--cor-texto); }
 .ck-resumo-secao > * { min-width: 0; }
-.ck-resumo-secao .ck-barra-ferr { padding-left: 0; padding-right: 0; }
-.ck-resumo-secao .ck-tabela { width: 100%; }
-#resumo-total-paginacao[hidden] { display: none; }
 @media (max-width: 720px) { .ck-resumo-secao { padding-left: 12px; padding-right: 12px; } }
 .ck-comparacao-resultado { display: grid; gap: 20px; align-content: start; min-width: 0; padding: 16px 20px 24px; color: var(--cor-texto); }
 .ck-comparacao-resultado > * { min-width: 0; max-width: 100%; }
