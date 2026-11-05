@@ -1,0 +1,53 @@
+import unittest
+import unittest.mock
+
+from scripts import automacao_rotinas_chrome as automacao
+
+
+class EtapaResilienteTests(unittest.TestCase):
+    def test_succeeds_after_retrying_and_calls_recuperar_between_attempts(self):
+        chamadas = []
+
+        def etapa():
+            chamadas.append(1)
+            if len(chamadas) < 3:
+                raise automacao.EtapaInstavel("instável")
+            return "ok"
+
+        recuperar = unittest.mock.Mock()
+        resultado = automacao.etapa_resiliente(etapa, "passo de teste", tentativas=3, recuperar=recuperar)
+
+        self.assertEqual(resultado, "ok")
+        self.assertEqual(len(chamadas), 3)
+        self.assertEqual(recuperar.call_count, 2)
+
+    def test_reraises_original_exception_when_attempts_are_exhausted(self):
+        chamadas = []
+
+        def etapa():
+            chamadas.append(1)
+            raise automacao.EtapaInstavel("O Dashboard no SharePoint mudou depois da importação")
+
+        with self.assertRaises(automacao.EtapaInstavel) as contexto:
+            automacao.etapa_resiliente(etapa, "passo de teste", tentativas=3, recuperar=unittest.mock.Mock())
+
+        self.assertEqual(str(contexto.exception), "O Dashboard no SharePoint mudou depois da importação")
+        self.assertEqual(len(chamadas), 3)
+
+    def test_does_not_retry_a_plain_rotina_erro(self):
+        chamadas = []
+
+        def etapa():
+            chamadas.append(1)
+            raise automacao.RotinaErro("erro irreversível, sem retry")
+
+        recuperar = unittest.mock.Mock()
+        with self.assertRaises(automacao.RotinaErro):
+            automacao.etapa_resiliente(etapa, "passo de teste", tentativas=3, recuperar=recuperar)
+
+        self.assertEqual(len(chamadas), 1)
+        recuperar.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
