@@ -494,7 +494,7 @@ test("Resumo (F3) abre o painel pela barra e pelo atalho, tem um só botão Resu
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 });
 
-test("Resumo mostra Ativos por regional e Total de ativos ao abrir, sem erros de console", async ({ page }) => {
+test("Resumo mostra Ativos por regional com filtros por categoria ao abrir, sem erros de console", async ({ page }) => {
   await mockComparison(page);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -503,19 +503,17 @@ test("Resumo mostra Ativos por regional e Total de ativos ao abrir, sem erros de
   await openTool(page, "#btn-resumo-aba");
   const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
   await expect(painel.getByRole("heading", { name: "Ativos por regional" })).toBeVisible();
-  await expect(painel.getByRole("heading", { name: "Total de ativos" })).toBeVisible();
+  await expect(painel.getByRole("heading", { name: "Total de ativos" })).toHaveCount(0);
+  await expect(page.locator("#resumo-total-ativos")).toHaveCount(0);
   await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
   await expect(page.locator("#resumo-regionais .ck-barra__nome")).toHaveText("Curitiba");
   await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText("1");
-  await expect(page.locator("#resumo-total-ativos tr")).toHaveCount(1);
-  await expect(page.locator("#resumo-total-contagem")).toHaveText("Mostrando 1–1 de 1");
-  await expect(page.locator("#resumo-total-paginacao")).toBeHidden();
-  const abrir = page.locator("#resumo-total-ativos tr").first().getByRole("button", { name: "Abrir" });
-  await expect(abrir).toBeEnabled();
-  await abrir.click();
-  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
-  await expect(page.locator("#tab-panel-home")).toBeVisible();
-  await expect(page.locator("#input-serial")).not.toHaveValue("");
+  await expect(page.locator("#resumo-regionais-contagem")).toHaveText("1 ativo em 1 regional");
+  await expect(page.locator("#resumo-regionais-filtros .ck-pilula")).toHaveText(["Todos 1", "Notebooks 1"]);
+  await expect(page.locator('#resumo-regionais-filtros [data-categoria="todos"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('#resumo-regionais-filtros [data-categoria="notebook"]').click();
+  await expect(page.locator('#resumo-regionais-filtros [data-categoria="notebook"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#resumo-regionais .ck-barra__nome")).toHaveText("Curitiba");
   expect(errors.filter(text => !/404|Failed to load resource/.test(text))).toEqual([]);
 });
 
@@ -523,7 +521,7 @@ test("Resumo passa pela auditoria de acessibilidade", async ({ page }) => {
   await mockComparison(page);
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
-  await expect(page.locator("#resumo-total-ativos tr")).toHaveCount(1);
+  await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
   const results = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(results.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
   const nav = await new AxeBuilder({ page }).include("#ck-abas").withTags(["wcag2a", "wcag2aa"]).analyze();
