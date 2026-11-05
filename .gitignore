@@ -100,6 +100,7 @@ __pycache__/
 /data/state/sebrae_anexos/
 /data/state/sebrae_dashboard_pendente/
 /data/state/sebrae_dashboard_saida/
+/data/state/sebrae_dashboard_envios/
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
 !/data/state/entrada_automatica/modelo_lote/
