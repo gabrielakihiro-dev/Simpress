@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List
 from motor.llm_adapter import ResultadoChamada
 
 
-def fake_chamador(respostas: List[str], custo_usd: float = 0.0001) -> Callable:
+def fake_chamador(respostas: List[str], custo_usd: float = 0.0001, cached_tokens: int = 0) -> Callable:
     """Devolve um `Chamador` que responde, em ordem, com os textos de `respostas` (um por chamada)."""
     fila = list(respostas)
 
@@ -17,7 +17,7 @@ def fake_chamador(respostas: List[str], custo_usd: float = 0.0001) -> Callable:
             modelo=modelo,
             conteudo=conteudo,
             prompt_tokens=100,
-            cached_tokens=0,
+            cached_tokens=cached_tokens,
             completion_tokens=50,
             custo_usd=custo_usd,
             custo_origem="estimated",
