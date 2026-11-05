@@ -32,11 +32,11 @@ for (const theme of ["dark", "light"]) {
     await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
     expect(await contrastViolations(page, "#tab-panel-retirada-entrega")).toEqual([]);
 
-    // Resumo (F3): Ativos por regional e Total de ativos dentro do painel de ferramenta.
+    // Resumo (F3): cartão Ativos por regional (filtros + barras) dentro do painel de ferramenta.
     await openSidebarForTabs(page);
     await page.locator("#btn-resumo-aba").click();
     await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
-    await expect(page.locator("#resumo-total-ativos tr")).toHaveCount(1);
+    await expect(page.locator("#resumo-regionais-filtros .ck-pilula")).toHaveCount(2);
     expect(await contrastViolations(page, '[data-cockpit-tool-panel="comparacao"]')).toEqual([]);
 
     await openSidebarForTabs(page);

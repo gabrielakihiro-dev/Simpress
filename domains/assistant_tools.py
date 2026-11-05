@@ -592,7 +592,8 @@ QUERY_TOOLS: List[Tool] = [
     _read(
         "obter_painel",
         "Painel geral do Simpress (visão resumida de inventário, chamados e pendências), com os ativos por cidade/regional: são os mesmos números do Resumo (F3). "
-        "Para 'quantos ativos por regional', use esta ferramenta e diga que o usuário vê isso no Resumo (F3).",
+        "Para 'quantos ativos por regional', use esta ferramenta e diga que o usuário vê isso no Resumo (F3). "
+        "Por categoria (notebook, macbook, monitor, fone) use `cidades_por_categoria`: é o filtro do cartão Ativos por regional no Resumo (F3).",
         lambda c, a: c.obter_painel(),
     ),
     _read(
