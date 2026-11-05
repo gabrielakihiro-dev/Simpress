@@ -59,6 +59,7 @@ Antes de guardar ou exportar qualquer texto de chamado, o site mascara CPFs (`**
 
 O cartão antigo "Sincronizar chamados Sebrae" (agendamento, contadores, pendências) foi removido da tela em 28/10/2026; o agendamento e as rotas `/api/automacao/sebrae/*` continuam no servidor, sem tela. Só HTML/CSS e o JS de `static/js/features/sebrae-dashboard.js` e `static/js/features/sebrae-historico.js`; segue os tokens `ck-*` e os temas claro e escuro. Fluxo na tela:
 
+- **Topo da aba Chamados (F5) não acompanha a rolagem** (04/11/2026, pedido do usuário): a faixa `.sebrae-topo__acoes` (`Atualizar Dashboard`, `Enviar ao SharePoint`, `Ler chamados antigos` e o aviso de rascunho) fica no topo da página e rola junto com o conteúdo (`position: relative`, não mais `sticky`). Só CSS em `static/styles/ck-cockpit.css`; nenhum texto, ID, rotina ou escrita muda.
 **Onde fica cada coisa (rótulos exatos):**
 
 - **Automações** (cartão "Chamados novos do SoftExpert") mantém: `Importar Dashboard`, `Buscar chamados novos`, status, resumo e avisos, o resumo do histórico e o botão `#btn-sebrae-abrir-chamados` com o rótulo exato `Chamados`, que abre o painel.

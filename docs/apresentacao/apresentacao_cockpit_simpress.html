@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apresentação do Cockpit Simpress</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cockpit-bg: #0f111d;
+      --cockpit-surface: #171a2a;
+      --cockpit-surface-card: #1c2035;
+      --cockpit-surface-elevated: #232740;
+      --cockpit-surface-hover: #282d4a;
+      --cockpit-text: #f0f1f7;
+      --cockpit-text-muted: #a6abc2;
+      --cockpit-text-subtle: #6e738d;
+      --cockpit-border: #2c314a;
+      --cockpit-border-soft: #21253a;
+      --cockpit-accent: #9184d9;
+      --cockpit-accent-light: #d8d3fc;
+      --cockpit-accent-soft: rgba(145, 132, 217, 0.12);
+      --cockpit-accent-glow: rgba(145, 132, 217, 0.3);
+      --cockpit-ok: #34d399;
+      --cockpit-ok-bg: rgba(52, 211, 153, 0.12);
+      --cockpit-ok-border: rgba(52, 211, 153, 0.28);
+      --cockpit-warn: #fbbf24;
+      --cockpit-warn-bg: rgba(251, 191, 36, 0.12);
+      --cockpit-warn-border: rgba(251, 191, 36, 0.28);
+      --cockpit-err: #f87171;
+      --cockpit-err-bg: rgba(248, 113, 113, 0.12);
+      --cockpit-err-border: rgba(248, 113, 113, 0.28);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--cockpit-border-soft);
+      --shadow-glow: 0 0 35px -5px var(--cockpit-accent-glow);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--cockpit-bg);
+      color: var(--cockpit-text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--cockpit-border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--cockpit-accent-light);
+      white-space: nowrap;
+    }
+
+    /* Top Progress Bar */
+    .top-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cockpit-accent), #c084fc);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+    }
+
+    /* Cockpit Shell Topbar */
+    .cockpit-topbar {
+      height: 52px;
+      background-color: rgba(23, 26, 42, 0.95);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--cockpit-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 36px;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-chip {
+      background: linear-gradient(135deg, var(--cockpit-accent), #6366f1);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      padding: 4px 9px;
+      border-radius: var(--radius-sm);
+      text-transform: uppercase;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+    }
+
+    .topbar-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--cockpit-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .topbar-title span {
+      color: var(--cockpit-text-muted);
+      font-weight: 400;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-topbar {
+      background: transparent;
+      border: 1px solid var(--cockpit-border);
+      color: var(--cockpit-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-topbar:hover {
+      background: var(--cockpit-surface-hover);
+      color: var(--cockpit-text);
+      border-color: var(--cockpit-accent);
+    }
+
+    /* Deck Viewport */
+    .deck-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 26px 52px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(30px) scale(0.99);
+      transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+
+    .slide.previous {
+      opacity: 0;
+      transform: translateX(-30px) scale(0.99);
+    }
+
+    /* Slide Header */
+    .slide-header {
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .slide-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--cockpit-accent);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+
+    .slide-title {
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--cockpit-text);
+      line-height: 1.2;
+    }
+
+    .slide-subtitle {
+      font-size: 15px;
+      color: var(--cockpit-text-muted);
+      margin-top: 3px;
+      max-width: 1050px;
+      line-height: 1.45;
+    }
+
+    /* Slide Content Layout */
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 0;
+      width: 100%;
+    }
+
+    /* Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 1400px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      width: 100%;
+      max-width: 1400px;
+    }
+
+    .grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+      max-width: 1400px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--cockpit-surface-card);
+      border: 1px solid var(--cockpit-border);
+      border-radius: var(--radius-md);
+      padding: 18px 22px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      border-color: var(--cockpit-accent);
+      box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--cockpit-accent);
+      transform: translateY(-2px);
+    }
+
+    .card-accent-top {
+      border-top: 3px solid var(--cockpit-accent);
+    }
+
+    .card-header-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-icon-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      background: var(--cockpit-accent-soft);
+      color: var(--cockpit-accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--cockpit-text);
+      letter-spacing: -0.2px;
+    }
+
+    .card-desc {
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--cockpit-text-muted);
+    }
+
+    /* Mini Structured Feature Blocks inside Cards */
+    .feature-blocks-container {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 2px;
+    }
+
+    .feature-block {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--cockpit-border-soft);
+      border-radius: var(--radius-sm);
+      padding: 8px 11px;
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .feature-block:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: var(--cockpit-border);
+    }
+
+    .feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--cockpit-accent);
+      margin-top: 5px;
+      flex-shrink: 0;
+      box-shadow: 0 0 6px var(--cockpit-accent-glow);
+    }
+
+    .feature-info {
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--cockpit-text);
+      flex: 1;
+    }
+
+    .feature-info strong {
+      color: var(--cockpit-accent-light);
+      font-weight: 600;
+    }
+
+    /* Badges */
+    .card-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2.5px 7px;
+      border-radius: 4px;
+      width: fit-content;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-ok {
+      background: var(--cockpit-ok-bg);
+      color: var(--cockpit-ok);
+      border: 1px solid var(--cockpit-ok-border);
+    }
+
+    .badge-warn {
+      background: var(--cockpit-warn-bg);
+      color: var(--cockpit-warn);
+      border: 1px solid var(--cockpit-warn-border);
+    }
+
+    .badge-err {
+      background: var(--cockpit-err-bg);
+      color: var(--cockpit-err);
+      border: 1px solid var(--cockpit-err-border);
+    }
+
+    .badge-accent {
+      background: var(--cockpit-accent-soft);
+      color: var(--cockpit-accent-light);
+      border: 1px solid rgba(145, 132, 217, 0.35);
+    }
+
+    /* Cover Slide */
+    .cover-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      height: 100%;
+    }
+
+    .hero-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: var(--cockpit-accent-soft);
+      border: 1px solid var(--cockpit-accent);
+      color: var(--cockpit-accent-light);
+      padding: 5px 15px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .hero-title {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      max-width: 950px;
+      margin-bottom: 14px;
+      background: linear-gradient(180deg, #ffffff 45%, #c2c7de 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 14px;
+      color: var(--cockpit-text-muted);
+      max-width: 800px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .hero-metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      width: 100%;
+      max-width: 920px;
+      margin-bottom: 22px;
+    }
+
+    .metric-box {
+      background: var(--cockpit-surface-card);
+      border: 1px solid var(--cockpit-border);
+      border-radius: var(--radius-md);
+      padding: 13px 16px;
+      text-align: left;
+      box-shadow: var(--shadow-card);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .metric-box:hover {
+      border-color: var(--cockpit-accent);
+      transform: translateY(-2px);
+    }
+
+    .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 23px;
+      font-weight: 700;
+      color: var(--cockpit-accent-light);
+      margin-bottom: 3px;
+    }
+
+    .metric-lbl {
+      font-size: 12.5px;
+      color: var(--cockpit-text-muted);
+      line-height: 1.35;
+    }
+
+    .hero-tags {
+      display: flex;
+      gap: 12px;
+    }
+
+    .hero-tag-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--cockpit-surface);
+      border: 1px solid var(--cockpit-border);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--cockpit-text);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Comparison Box (Antes vs Depois) */
+    .compare-box {
+      border-radius: var(--radius-md);
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+      box-shadow: var(--shadow-card);
+    }
+
+    .box-before {
+      background: linear-gradient(180deg, rgba(248, 113, 113, 0.05) 0%, rgba(28, 32, 53, 0.6) 100%);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+    }
+
+    .box-after {
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.05) 0%, rgba(28, 32, 53, 0.6) 100%);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      box-shadow: 0 0 35px rgba(52, 211, 153, 0.06);
+    }
+
+    .compare-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--cockpit-border);
+      padding-bottom: 8px;
+    }
+
+    .compare-title {
+      font-size: 15.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .compare-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      flex: 1;
+      justify-content: space-around;
+    }
+
+    .compare-row {
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid var(--cockpit-border-soft);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .compare-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: var(--cockpit-border);
+    }
+
+    .compare-badge-icon {
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .icon-err {
+      background: rgba(248, 113, 113, 0.2);
+      color: var(--cockpit-err);
+      border: 1px solid var(--cockpit-err);
+    }
+
+    .icon-ok {
+      background: rgba(52, 211, 153, 0.2);
+      color: var(--cockpit-ok);
+      border: 1px solid var(--cockpit-ok);
+    }
+
+    .compare-text {
+      flex: 1;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--cockpit-text);
+    }
+
+    .compare-text strong {
+      color: #fff;
+    }
+
+    /* Architecture Flow on Slide 6 */
+    .architecture-flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1.35fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      width: 100%;
+      max-width: 1400px;
+      margin-bottom: 18px;
+    }
+
+    .flow-col {
+      background: var(--cockpit-surface-card);
+      border: 1px solid var(--cockpit-border);
+      border-radius: var(--radius-md);
+      padding: 15px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .flow-col-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--cockpit-accent-light);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--cockpit-border-soft);
+      padding-bottom: 8px;
+    }
+
+    .flow-item {
+      font-size: 13px;
+      background: var(--cockpit-surface);
+      border: 1px solid var(--cockpit-border-soft);
+      padding: 8px 11px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--cockpit-text);
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.3;
+    }
+
+    .flow-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--cockpit-accent);
+      padding: 0 4px;
+    }
+
+    .flow-arrow-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--cockpit-accent-soft);
+      border: 1px solid var(--cockpit-accent);
+      color: var(--cockpit-accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 0 12px var(--cockpit-accent-glow);
+    }
+
+    /* Live Transition Card */
+    .transition-card {
+      background: linear-gradient(135deg, rgba(28, 32, 53, 0.98), rgba(40, 36, 60, 0.85));
+      border: 1px solid var(--cockpit-accent);
+      border-radius: var(--radius-md);
+      padding: 22px 36px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 0 45px rgba(145, 132, 217, 0.18);
+      width: 100%;
+      max-width: 1400px;
+    }
+
+    .demo-steps-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 10px 0 12px;
+      flex-wrap: wrap;
+    }
+
+    .demo-step-chip {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--cockpit-border);
+      padding: 3px 9px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--cockpit-accent-light);
+    }
+
+    .btn-launch {
+      background: linear-gradient(135deg, var(--cockpit-accent), #796cbf);
+      color: #fff;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 11px 26px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      box-shadow: 0 6px 20px rgba(145, 132, 217, 0.45);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-launch:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(145, 132, 217, 0.65);
+      background: linear-gradient(135deg, #a396ec, #8b7cd4);
+    }
+
+    /* Bottom Control Bar */
+    .cockpit-footer {
+      height: 50px;
+      background-color: var(--cockpit-surface);
+      border-top: 1px solid var(--cockpit-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 36px;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 12px;
+      color: var(--cockpit-text-subtle);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .nav-dots {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cockpit-border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-dot.active {
+      background: var(--cockpit-accent);
+      width: 24px;
+      border-radius: 4px;
+    }
+
+    .footer-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-nav {
+      background: var(--cockpit-surface-card);
+      border: 1px solid var(--cockpit-border);
+      color: var(--cockpit-text);
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    .btn-nav:hover:not(:disabled) {
+      background: var(--cockpit-surface-hover);
+      border-color: var(--cockpit-accent);
+    }
+
+    .btn-nav:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* Modo apresentação: libera 52px de altura */
+    :fullscreen .cockpit-topbar { display: none; }
+
+    /* Cronômetro (tecla T) */
+    .timer { display: none; font-weight: 600; color: var(--cockpit-text); }
+    .timer.on { display: inline; }
+    .timer.warn { color: var(--cockpit-warn); }
+    .timer.over { color: var(--cockpit-err); }
+
+    .kbd-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--cockpit-border);
+      color: var(--cockpit-accent-light);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* Projetor 4:3 / telas estreitas: reduz um pouco o texto para caber */
+    @media (max-width: 1100px) {
+      .feature-info { font-size: 12px; }
+      .card-desc { font-size: 12.5px; }
+      .card-title { font-size: 15px; }
+      .flow-item { font-size: 12px; }
+    }
+
+    /* Slide 3: espaço fixo entre o subtítulo e os cards; compacta em telas baixas */
+    .slide[data-slide="3"] .slide-header { margin-bottom: 22px; }
+    .slide[data-slide="3"] .slide-content { justify-content: safe center; }
+    @media (max-height: 900px) {
+      .slide[data-slide="3"] .slide-header { margin-bottom: 18px; }
+      .slide[data-slide="3"] .grid-2x2 { gap: 12px; }
+      .slide[data-slide="3"] .card { padding: 14px 20px; gap: 8px; }
+      .slide[data-slide="3"] .feature-blocks-container { gap: 5px; }
+      .slide[data-slide="3"] .feature-block { padding: 6px 11px; }
+    }
+
+    /* Modo de edição de texto (tecla E) */
+    .edit-only { display: none; }
+    body.editing .edit-only { display: flex; }
+    .btn-topbar.on { border-color: var(--cockpit-accent); color: var(--cockpit-text); }
+    body.editing [data-editable] { outline: 1px dashed rgba(167, 139, 250, 0.45); outline-offset: 2px; border-radius: 3px; cursor: text; }
+    body.editing [data-editable]:hover { outline-color: var(--cockpit-accent); }
+    body.editing [data-editable]:focus { outline: 2px solid var(--cockpit-accent); background: rgba(139, 92, 246, 0.08); }
+    body.editing .card:hover, body.editing .metric-box:hover { transform: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide, .top-progress, .card, .metric-box, .btn-launch, .nav-dot { transition: none; }
+      .card:hover, .metric-box:hover, .btn-launch:hover { transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Bar -->
+  <div class="top-progress" id="progressBar" style="width: 14.28%;"></div>
+
+  <!-- Top Bar (Cockpit Shell Style) -->
+  <header class="cockpit-topbar">
+    <div class="topbar-brand">
+      <div class="logo-chip">Simpress</div>
+      <div class="topbar-title">
+        Cockpit <span>/ Apresentação: Gestão e Operação</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="btn-topbar edit-only" onclick="restoreEdits()" title="Descarta as edições salvas no navegador">
+        <span>Restaurar original</span>
+      </button>
+      <button class="btn-topbar edit-only" onclick="downloadHtml()" title="Baixa uma cópia do HTML com seus textos">
+        <span>Baixar HTML</span>
+      </button>
+      <button class="btn-topbar" id="btnEdit" onclick="toggleEdit()" title="Edita os textos de todos os slides">
+        <span>Editar texto (E)</span>
+      </button>
+      <button class="btn-topbar" onclick="toggleFullScreen()">
+        <span>Tela Cheia (F)</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Deck Viewport -->
+  <main class="deck-viewport">
+
+    <!-- SLIDE 1: CAPA & PROPÓSITO EXECUTIVO -->
+    <section class="slide active" data-slide="1">
+      <div class="cover-container">
+        <div class="hero-badge">
+          <span>● COCKPIT OPERACIONAL V1.1</span> &nbsp;|&nbsp; <span>GESTÃO DE EQUIPAMENTOS & ATENDIMENTO EM CAMPO</span>
+        </div>
+        <h1 class="hero-title">Controle de equipamentos, inventário e automação de campo</h1>
+        <p class="hero-subtitle">
+          Sistema web rápido que reúne o controle dos equipamentos, acaba com a dependência do Excel e liga a Simpress aos sistemas dos clientes (Oracle, SoftExpert e Endpoint Central).
+        </p>
+
+        <!-- Metrics Strip -->
+        <div class="hero-metrics-strip">
+          <div class="metric-box">
+            <div class="metric-val">&lt; 100ms</div>
+            <div class="metric-lbl">Tempo de resposta da busca (dados na memória)</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">Local</div>
+            <div class="metric-lbl">Dados e servidor na sua máquina; a IA só recebe dados mascarados</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">4 Fontes</div>
+            <div class="metric-lbl">Fontes cruzadas: Simpress, Endpoint, Oracle e SoftExpert</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">1 Clique</div>
+            <div class="metric-lbl">Planilha oficial de envio e textos de transporte prontos</div>
+          </div>
+        </div>
+
+        <div class="hero-tags">
+          <div class="hero-tag-item">
+            <span style="color:var(--cockpit-ok)">⚡</span> FastAPI Backend
+          </div>
+          <div class="hero-tag-item">
+            <span style="color:var(--cockpit-accent)">🛡️</span> Gravação Segura & Desfazer
+          </div>
+          <div class="hero-tag-item">
+            <span style="color:var(--cockpit-warn)">🤖</span> Playwright / Chrome CDP
+          </div>
+          <div class="hero-tag-item">
+            <span style="color:#c084fc">🔒</span> Assistente com Limites & LGPD
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: O CENÁRIO ANTERIOR (O DIAGNÓSTICO DA DOR) -->
+    <section class="slide" data-slide="2">
+      <div class="slide-header">
+        <div class="slide-tag">01. Contexto e problemas do dia a dia</div>
+        <h2 class="slide-title">Como era antes: planilhas pesadas e retrabalho</h2>
+        <p class="slide-subtitle">A rotina de TI e Field Services tinha arquivos enormes que travavam o computador, sistemas que não se cruzavam e muito retrabalho manual.</p>
+      </div>
+      <div class="slide-content">
+        <div class="grid-2">
+          <!-- Box Antes -->
+          <div class="compare-box box-before">
+            <div class="compare-header">
+              <span class="compare-title" style="color: var(--cockpit-err);">
+                <span>✕</span> O processo manual legado
+              </span>
+              <span class="card-badge badge-err">Alto risco e lentidão</span>
+            </div>
+            <ul class="compare-list">
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-err">✕</div>
+                <div class="compare-text">
+                  <strong>Planilhas pesadas travando o Excel:</strong> Arquivos com mais de 30 mil linhas (<code>EquipamentosDetalhes.xlsx</code>) levavam de 3 a 5 minutos para abrir, travando filtros e congelando o computador.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-err">✕</div>
+                <div class="compare-text">
+                  <strong>Inventários sempre diferentes:</strong> A base interna Simpress ficava diferente do inventário de rede dos clientes (<code>InvAllComputersSummary</code>), com usuário e hostname diferentes.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-err">✕</div>
+                <div class="compare-text">
+                  <strong>Logística lenta e cheia de erros:</strong> A emissão de cada guia de transporte exigia buscar CNPJs, endereços de filiais e digitar série por série manualmente, levando até 30 minutos.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-err">✕</div>
+                <div class="compare-text">
+                  <strong>OSs e chamados desconectados:</strong> Digitar a mesma coisa várias vezes entre o sistema Oracle da Simpress, chamados do SoftExpert e a planilha de Dashboard no SharePoint.
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Box Depois -->
+          <div class="compare-box box-after">
+            <div class="compare-header">
+              <span class="compare-title" style="color: var(--cockpit-ok);">
+                <span>✓</span> O Cockpit Simpress em ação
+              </span>
+              <span class="card-badge badge-ok">Rapidez e confiança</span>
+            </div>
+            <ul class="compare-list">
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-ok">✓</div>
+                <div class="compare-text">
+                  <strong>Busca rápida:</strong> Dados na memória do PC. O operador pesquisa por série, modelo, apelido ou colaborador e recebe a ficha completa em menos de 100ms.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-ok">✓</div>
+                <div class="compare-text">
+                  <strong>Conferência automática:</strong> Cruza na hora Simpress e Endpoint Central. Mostra as diferenças e máquinas sem dono com backups automáticos.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-ok">✓</div>
+                <div class="compare-text">
+                  <strong>Guia em 1 clique:</strong> Catálogo de unidades pronto. Geração do arquivo oficial <code>TRANSFERENCIA SIMPRESS.xlsx</code> e cópia dos textos prontos.
+                </div>
+              </li>
+              <li class="compare-row">
+                <div class="compare-badge-icon icon-ok">✓</div>
+                <div class="compare-text">
+                  <strong>Chamados e OSs sempre rastreáveis:</strong> Vínculo direto de ordens de serviço ao número de chamado corporativo (<code>UTIC-AAAA-NNNN</code>), sem perder informação.
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: OS QUATRO PILARES DA PLATAFORMA (2x2 Grid) -->
+    <section class="slide" data-slide="3">
+      <div class="slide-header">
+        <div class="slide-tag">02. O que o Sistema Faz</div>
+        <h2 class="slide-title">As quatro áreas do Cockpit</h2>
+        <p class="slide-subtitle">Cobre o dia a dia do trabalho de campo em uma só tela.</p>
+      </div>
+      <div class="slide-content">
+        <div class="grid-2x2">
+          <!-- Pilar 1 -->
+          <div class="card card-accent-top">
+            <div class="card-header-line">
+              <div class="card-icon-title">
+                <div class="card-icon">🔍</div>
+                <h3 class="card-title">1. Busca instantânea em memória</h3>
+              </div>
+              <span class="card-badge badge-accent">Atalho F1</span>
+            </div>
+            <p class="card-desc">Localiza qualquer equipamento da empresa na hora, direto da memória local.</p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Multi-busca:</strong> série, hostname, apelido, modelo, cidade ou usuário.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Split-View:</strong> ficha completa do equipamento com status de inventário e categoria.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Apelidos:</strong> histórico completo de alterações, com restauração.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pilar 2 -->
+          <div class="card card-accent-top">
+            <div class="card-header-line">
+              <div class="card-icon-title">
+                <div class="card-icon">🚚</div>
+                <h3 class="card-title">2. Transporte e logística de campo</h3>
+              </div>
+              <span class="card-badge badge-accent">Atalho F2</span>
+            </div>
+            <p class="card-desc">Gera a planilha oficial de transferência sem digitação manual.</p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>3 colunas:</strong> origem, destino e equipamentos a transportar.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Catálogo de unidades:</strong> CNPJ, CEP e endereço preenchidos sozinhos.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>1 clique:</strong> <code>TRANSFERENCIA SIMPRESS.xlsx</code> e textos para chamados.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pilar 3 -->
+          <div class="card card-accent-top">
+            <div class="card-header-line">
+              <div class="card-icon-title">
+                <div class="card-icon">⚖️</div>
+                <h3 class="card-title">3. Conferência e segurança do inventário</h3>
+              </div>
+              <span class="card-badge badge-accent">Atalho F7</span>
+            </div>
+            <p class="card-desc">Confronta a base da Simpress com o inventário de rede do cliente.</p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Cruzamento:</strong> <code>EquipamentosDetalhes</code> × <code>InvAllComputersSummary</code>.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Anomalias:</strong> hostname divergente, troca de usuário, máquina sem dono.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Segurança:</strong> gravação segura, backup e desfazer em 1 clique.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pilar 4 -->
+          <div class="card card-accent-top">
+            <div class="card-header-line">
+              <div class="card-icon-title">
+                <div class="card-icon">📋</div>
+                <h3 class="card-title">4. Controle de OSs e chamados</h3>
+              </div>
+              <span class="card-badge badge-accent">Atalhos F5 / F6</span>
+            </div>
+            <p class="card-desc">Une as OSs do Oracle aos chamados corporativos.</p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Tabela única:</strong> OSs Oracle cruzadas com o cadastro oficial.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Vínculo UTIC:</strong> cada OS ligada a um chamado <code>UTIC-AAAA-NNNN</code>.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Alertas:</strong> OSs paradas ou com divergência em aberto.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: AUTOMAÇÃO INTELIGENTE COM NAVEGADOR -->
+    <section class="slide" data-slide="4">
+      <div class="slide-header">
+        <div class="slide-tag">03. Automação web e economia de tempo</div>
+        <h2 class="slide-title">Automação de rotinas: Chrome e Playwright</h2>
+        <p class="slide-subtitle">Automação segura que evita digitar a mesma informação em vários sistemas e não repete serviço.</p>
+      </div>
+      <div class="slide-content">
+        <div class="grid-3">
+          <!-- Card 1 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon" style="background: rgba(52, 211, 153, 0.15); color: var(--cockpit-ok);">🤖</div>
+              <span class="card-badge badge-ok">Triagem inteligente</span>
+            </div>
+            <h3 class="card-title">Triagem SoftExpert & Sebrae</h3>
+            <p class="card-desc">
+              O robô lê a lista de chamados novos no SoftExpert e extrai detalhes do atendimento sem ninguém digitar.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Cruzamento de 3 fontes:</strong> Cruza o Solicitante com Microsoft Entra ID, Endpoint e Simpress para identificar Série e Modelo.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Proteção contra gravação:</strong> Apenas lê os dados e associa o chamado; nunca finaliza ou cancela sem ação explícita.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Casos com dúvida:</strong> Se houver duas ou mais pessoas citadas, pede a decisão de uma pessoa, sem adivinhar.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon" style="background: rgba(251, 191, 36, 0.15); color: var(--cockpit-warn);">📊</div>
+              <span class="card-badge badge-warn">Dashboard Sebrae</span>
+            </div>
+            <h3 class="card-title">Sincronização do dashboard</h3>
+            <p class="card-desc">
+              Gera a cópia atualizada do <code>Dashboard Operacional_SEBRAE.xlsx</code> com os novos chamados para o SharePoint.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Fórmulas preservadas:</strong> Mantém intactas as fórmulas do Excel (<code>DIAS ABERTOS, AGING, HR CONSUMIDA</code>).</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Limpeza automática:</strong> CPF e contatos mascarados.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Pronto para o SharePoint:</strong> Arquivo pronto para abrir no Excel Online sem travar.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon" style="background: rgba(145, 132, 217, 0.15); color: var(--cockpit-accent);">🛡️</div>
+              <span class="card-badge badge-accent">Segurança operacional</span>
+            </div>
+            <h3 class="card-title">Sem Repetição & Recibos</h3>
+            <p class="card-desc">
+              Proteção: se a rotina rodar duas vezes, nada é duplicado e a planilha não estraga.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Recibos:</strong> Registro em <code>.transactions/</code> para auditar exatamente o que foi gravado.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Chrome de automação:</strong> perfil próprio mantém o login; senha e MFA ficam com o usuário.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Trava:</strong> Impede que duas rotinas mexam na mesma planilha ao mesmo tempo.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: GOVERNANÇA, LGPD E IA COM CONTROLE HUMANO -->
+    <section class="slide" data-slide="5">
+      <div class="slide-header">
+        <div class="slide-tag">04. Segurança e inteligência artificial</div>
+        <h2 class="slide-title">Segurança, LGPD e IA com supervisão</h2>
+        <p class="slide-subtitle">A IA ajuda, os dados ficam protegidos e uma pessoa sempre decide (Human-in-the-Loop).</p>
+      </div>
+      <div class="slide-content">
+        <div class="grid-3">
+          <!-- Card 1 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon">🔒</div>
+              <span class="card-badge badge-ok">Dados no PC</span>
+            </div>
+            <h3 class="card-title">Privacidade e LGPD</h3>
+            <p class="card-desc">
+              Os dados operacionais, inventários e números de série ficam só no computador do operador.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Mascaramento antes da IA:</strong> pessoa vira <code>[PESSOA_n]</code>, CPF é mascarado, senha é omitida.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Sem retenção:</strong> o provedor da IA não guarda nem treina com os prompts.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-ok);"></div>
+                <div class="feature-info"><strong>Chave protegida:</strong> a chave da IA fica no <code>.env</code> do servidor, nunca no navegador.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon">🧠</div>
+              <span class="card-badge badge-accent">Atalho F10</span>
+            </div>
+            <h3 class="card-title">Assistente de IA integrado</h3>
+            <p class="card-desc">
+              Chat na tela (via OpenRouter) para tirar dúvidas rápidas, escrevendo do jeito normal.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Contexto operacional:</strong> consulta a base local; ação de escrita só com a sua confirmação.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Apoio de campo:</strong> Ajuda com rascunhos de e-mails técnicos, regras de garantia e conferência de ativos.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot"></div>
+                <div class="feature-info"><strong>Jarvis (desktop):</strong> versão por voz ("Hey Jarvis"), fora do navegador, com as mesmas confirmações.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="card">
+            <div class="card-header-line">
+              <div class="card-icon">👤</div>
+              <span class="card-badge badge-warn">Aprovação obrigatória</span>
+            </div>
+            <h3 class="card-title">Princípio Human-in-the-Loop</h3>
+            <p class="card-desc">
+              A inteligência artificial só sugere. Ela nunca grava dados sozinha.
+            </p>
+            <div class="feature-blocks-container">
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Cartão de confirmação:</strong> Toda mudança de apelido ou vínculo precisa do clique de uma pessoa.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Registro de alterações:</strong> Toda alteração confirmada gera entrada no histórico com data, hora e opção de restaurar.</div>
+              </div>
+              <div class="feature-block">
+                <div class="feature-dot" style="background-color: var(--cockpit-warn);"></div>
+                <div class="feature-info"><strong>Desfazer na hora:</strong> Restaura com 1 clique no painel de Histórico de Apelidos (F8).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: MAPA ARQUITETURAL & TRANSIÇÃO PARA O SISTEMA -->
+    <section class="slide" data-slide="6">
+      <div class="slide-header">
+        <div class="slide-tag">05. Visão geral e demonstração</div>
+        <h2 class="slide-title">Do projeto à prática: o Cockpit ao vivo</h2>
+        <p class="slide-subtitle">O fluxo completo, do início ao fim, e a passagem para a demonstração no navegador.</p>
+      </div>
+      <div class="slide-content">
+        <!-- Architecture Flow with Balanced Heights & SVG Arrows -->
+        <div class="architecture-flow">
+          <!-- Coluna 1: Fontes -->
+          <div class="flow-col">
+            <div class="flow-col-title">
+              <span>📥 Fontes de Dados</span>
+            </div>
+            <div class="flow-item">EquipamentosDetalhes.xlsx</div>
+            <div class="flow-item">InvAll (Endpoint Central)</div>
+            <div class="flow-item">Oracle ERP / OSs</div>
+            <div class="flow-item">SoftExpert Sebrae</div>
+          </div>
+
+          <!-- Arrow 1 -->
+          <div class="flow-divider">
+            <div class="flow-arrow-badge">→</div>
+          </div>
+
+          <!-- Coluna 2: Motor Cockpit -->
+          <div class="flow-col" style="border-color: var(--cockpit-accent); background: rgba(28, 32, 53, 0.95); box-shadow: 0 0 30px rgba(145, 132, 217, 0.1);">
+            <div class="flow-col-title" style="color: var(--cockpit-accent-light);">
+              <span>⚡ Núcleo do Cockpit</span>
+            </div>
+            <div class="flow-item" style="border-color: var(--cockpit-accent); color: var(--cockpit-accent-light);">FastAPI + Memória Indexada (&lt;100ms)</div>
+            <div class="flow-item">Automação Chrome / Playwright CDP</div>
+            <div class="flow-item">Gravação Segura & Trava</div>
+            <div class="flow-item">Assistente IA (Human-in-the-Loop + LGPD)</div>
+            <div class="flow-item">Jarvis desktop por voz (opcional)</div>
+          </div>
+
+          <!-- Arrow 2 -->
+          <div class="flow-divider">
+            <div class="flow-arrow-badge">→</div>
+          </div>
+
+          <!-- Coluna 3: Entregáveis -->
+          <div class="flow-col">
+            <div class="flow-col-title">
+              <span>📤 Resultados Oficiais</span>
+            </div>
+            <div class="flow-item">Guia de Transporte Oficial</div>
+            <div class="flow-item">Dashboard Conferido (UTIC)</div>
+            <div class="flow-item">Inventário Conferido com Desfazer</div>
+            <div class="flow-item">Relatório Mensal Automatizado</div>
+          </div>
+        </div>
+
+        <!-- Launch Card -->
+        <div class="transition-card">
+          <h3 style="font-size: 18px; font-weight: 700; color: #fff;">
+            Funcionando no dia a dia
+          </h3>
+          <p style="font-size: 13px; color: var(--cockpit-text-muted); max-width: 820px; line-height: 1.5; margin-top: 3px;">
+            Nos próximos 15 minutos, navego ao vivo pelo Cockpit e mostro cada uma dessas partes funcionando.
+          </p>
+
+          <div class="demo-steps-strip">
+            <div class="demo-step-chip">1. Busca Instantânea (F1)</div>
+            <div class="demo-step-chip">2. Transporte & Guias (F2)</div>
+            <div class="demo-step-chip">3. Comparação de Bases (F7)</div>
+            <div class="demo-step-chip">4. OSs & Chamados (F5/F6)</div>
+            <div class="demo-step-chip">5. Assistente com Confirmação (F10)</div>
+          </div>
+
+          <a href="http://127.0.0.1:8000" target="_blank" class="btn-launch" id="btnOpenSite">
+            <span>🚀 Iniciar Demonstração ao Vivo no Cockpit</span>
+          </a>
+          <span style="font-size: 11px; color: var(--cockpit-text-subtle); margin-top: 7px; font-family: 'JetBrains Mono', monospace;">
+            Porta padrão 8000. Confira a porta antes de abrir
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: FECHAMENTO / PERGUNTAS -->
+    <section class="slide" data-slide="7">
+      <div class="slide-header">
+        <div class="slide-tag">06. Fechamento</div>
+        <h2 class="slide-title">Perguntas</h2>
+        <p class="slide-subtitle">Atalhos para voltar a qualquer ponto do sistema durante as perguntas.</p>
+      </div>
+      <div class="slide-content">
+        <div class="grid-3">
+          <div class="card card-accent-top">
+            <h3 class="card-title">Buscar e transportar</h3>
+            <div class="feature-blocks-container">
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F1</span> Home e busca instantânea</div></div>
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F2</span> Transporte e planilha oficial</div></div>
+            </div>
+          </div>
+          <div class="card card-accent-top">
+            <h3 class="card-title">Conciliar e rastrear</h3>
+            <div class="feature-blocks-container">
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F7</span> Comparação Simpress × Endpoint</div></div>
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F6</span> OSs e vínculo UTIC</div></div>
+            </div>
+          </div>
+          <div class="card card-accent-top">
+            <h3 class="card-title">Automatizar e perguntar</h3>
+            <div class="feature-blocks-container">
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F4</span> Automação pelo Chrome</div></div>
+              <div class="feature-block"><div class="feature-dot"></div><div class="feature-info"><span class="kbd-chip">F10</span> Assistente de IA (e Jarvis no desktop)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Control Bar -->
+  <footer class="cockpit-footer">
+    <div class="footer-left">
+      <span>SLIDE <strong id="currentSlideNumber" style="color:var(--cockpit-text)">1</strong> / 7</span>
+      <span class="timer" id="timer" title="Tecla T: cronômetro regressivo de 30 min"></span>
+      <div class="nav-dots" id="navDots">
+        <div class="nav-dot active" onclick="goToSlide(1)"></div>
+        <div class="nav-dot" onclick="goToSlide(2)"></div>
+        <div class="nav-dot" onclick="goToSlide(3)"></div>
+        <div class="nav-dot" onclick="goToSlide(4)"></div>
+        <div class="nav-dot" onclick="goToSlide(5)"></div>
+        <div class="nav-dot" onclick="goToSlide(6)"></div>
+        <div class="nav-dot" onclick="goToSlide(7)"></div>
+      </div>
+    </div>
+
+    <div class="footer-controls">
+      <button class="btn-nav" id="btnPrev" onclick="prevSlide()" disabled title="Slide Anterior (←)">‹</button>
+      <button class="btn-nav" id="btnNext" onclick="nextSlide()" title="Próximo Slide (→)">›</button>
+    </div>
+  </footer>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 7;
+
+    function updateDeck() {
+      // Update slides active state
+      document.querySelectorAll('.slide').forEach((slide, index) => {
+        const slideIndex = index + 1;
+        slide.classList.remove('active', 'previous');
+        if (slideIndex === currentSlide) {
+          slide.classList.add('active');
+        } else if (slideIndex < currentSlide) {
+          slide.classList.add('previous');
+        }
+      });
+
+      // Update progress bar
+      const progressPercent = (currentSlide / totalSlides) * 100;
+      document.getElementById('progressBar').style.width = progressPercent + '%';
+
+      // Update footer numbers & dots
+      document.getElementById('currentSlideNumber').textContent = currentSlide;
+      document.querySelectorAll('.nav-dot').forEach((dot, index) => {
+        dot.classList.toggle('active', index + 1 === currentSlide);
+      });
+
+      // Update prev/next button state
+      document.getElementById('btnPrev').disabled = currentSlide === 1;
+      document.getElementById('btnNext').disabled = currentSlide === totalSlides;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        currentSlide++;
+        updateDeck();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        currentSlide--;
+        updateDeck();
+      }
+    }
+
+    function goToSlide(n) {
+      if (n >= 1 && n <= totalSlides) {
+        currentSlide = n;
+        updateDeck();
+      }
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      // Digitando em texto editável: não navega nem aciona atalhos
+      if (e.target.isContentEditable) {
+        if (e.key === 'Escape') e.target.blur();
+        else if (e.key === 'Enter') e.preventDefault();
+        return;
+      }
+      if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        toggleEdit();
+      } else if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'Home') {
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        goToSlide(totalSlides);
+      } else if (e.key.toLowerCase() === 't') {
+        toggleTimer();
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullScreen();
+      }
+    });
+
+    // Fullscreen Toggle
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Cronômetro regressivo de 30 min (tecla T liga/desliga)
+    let timerId = null;
+    function toggleTimer() {
+      const el = document.getElementById('timer');
+      if (timerId) { clearInterval(timerId); timerId = null; el.className = 'timer'; return; }
+      const start = Date.now();
+      const tick = () => {
+        const left = 1800 - Math.floor((Date.now() - start) / 1000);
+        const a = Math.abs(left);
+        el.textContent = (left < 0 ? '+' : '') + String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0');
+        el.className = 'timer on' + (left < 0 ? ' over' : left < 300 ? ' warn' : '');
+      };
+      tick();
+      timerId = setInterval(tick, 1000);
+    }
+
+    // Edição manual de texto (tecla E): salva no navegador; "Baixar HTML" gera o arquivo com as edições
+    const EDIT_KEY = 'cockpit-deck-edits:' + location.pathname;
+    const editables = [];
+    document.querySelectorAll('.slide *').forEach(el => {
+      if (el.parentElement.closest('[data-editable]')) return;
+      if ([...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) {
+        el.setAttribute('data-editable', '');
+        editables.push(el);
+      }
+    });
+    const origs = editables.map(el => el.innerHTML);
+    let editing = false;
+
+    function saveEdits() {
+      try {
+        const out = {};
+        editables.forEach((el, i) => { if (el.innerHTML !== origs[i]) out[i] = { o: origs[i], h: el.innerHTML }; });
+        localStorage.setItem(EDIT_KEY, JSON.stringify(out));
+      } catch (e) {}
+    }
+
+    function loadEdits() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(EDIT_KEY) || '{}');
+        editables.forEach((el, i) => { if (saved[i] && saved[i].o === origs[i]) el.innerHTML = saved[i].h; });
+      } catch (e) {}
+    }
+
+    function toggleEdit() {
+      editing = !editing;
+      document.body.classList.toggle('editing', editing);
+      editables.forEach(el => {
+        if (editing) el.setAttribute('contenteditable', 'true'); else el.removeAttribute('contenteditable');
+        el.spellcheck = editing;
+      });
+      const btn = document.getElementById('btnEdit');
+      btn.classList.toggle('on', editing);
+      btn.firstElementChild.textContent = editing ? 'Concluir edição (E)' : 'Editar texto (E)';
+      if (!editing) saveEdits();
+    }
+
+    function restoreEdits() {
+      if (!confirm('Descartar todas as edições salvas no navegador e voltar ao texto do arquivo?')) return;
+      try { localStorage.removeItem(EDIT_KEY); } catch (e) {}
+      location.reload();
+    }
+
+    function downloadHtml() {
+      const wasEditing = editing;
+      if (editing) toggleEdit();
+      const clone = document.documentElement.cloneNode(true);
+      clone.querySelectorAll('[data-editable]').forEach(el => { el.removeAttribute('data-editable'); el.removeAttribute('spellcheck'); });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['<!DOCTYPE html>\n' + clone.outerHTML], { type: 'text/html' }));
+      a.download = 'apresentacao_cockpit_simpress.html';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      if (wasEditing) toggleEdit();
+    }
+
+    document.addEventListener('input', () => { if (editing) saveEdits(); });
+    document.addEventListener('paste', (e) => {
+      if (!e.target.isContentEditable) return;
+      e.preventDefault();
+      document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+    });
+    document.addEventListener('click', (e) => { if (editing && e.target.closest('a')) e.preventDefault(); }, true);
+    loadEdits();
+
+    // Initialize
+    updateDeck();
+  </script>
+</body>
+</html>
