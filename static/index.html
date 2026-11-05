@@ -911,25 +911,16 @@ Horário disponível para atendimento:</textarea>
           <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota"></p>
           <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
           <section class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
-            <h3 id="resumo-regionais-titulo" class="ck-det__titulo">Ativos por regional</h3>
-            <div id="resumo-regionais" class="ck-barras" aria-live="polite" aria-busy="true"></div>
-          </section>
-          <section class="ck-resumo-secao" aria-labelledby="resumo-total-titulo">
-            <div class="ck-barra-ferr">
-              <h3 id="resumo-total-titulo" class="ck-det__titulo">Total de ativos</h3>
-              <span class="ck-espaco"></span>
-              <span id="resumo-total-contagem" class="ck-cartao__meta" role="status" aria-live="polite">Carregando…</span>
+            <div class="ck-cartao ck-regionais">
+              <div class="ck-cartao__cab">
+                <h3 id="resumo-regionais-titulo" class="ck-cartao__titulo">Ativos por regional</h3>
+                <span class="ck-espaco"></span>
+                <span id="resumo-regionais-contagem" class="ck-cartao__meta" role="status" aria-live="polite"></span>
+              </div>
+              <div id="resumo-regionais-filtros" class="ck-pilulas ck-regionais__filtros" role="group" aria-label="Filtrar ativos por categoria"></div>
+              <div id="resumo-regionais" class="ck-barras" aria-busy="true"></div>
+              <div class="ck-regionais__rodape"><button type="button" id="resumo-regionais-mais" class="ck-btn ck-btn--fantasma ck-btn--sm" aria-expanded="false" hidden></button></div>
             </div>
-            <p id="resumo-total-status" class="ck-lista__vazio" role="status" aria-live="polite">Carregando equipamentos da base local…</p>
-            <table class="ck-tabela ck-tabela--cards">
-              <thead><tr><th>SÉRIE</th><th>MODELO / HOST</th><th>SIMPRESS</th><th>AÇÃO</th></tr></thead>
-              <tbody id="resumo-total-ativos"></tbody>
-            </table>
-            <nav id="resumo-total-paginacao" class="ck-paginacao" aria-label="Paginação do total de ativos" hidden>
-              <button type="button" id="resumo-total-anterior" class="ck-btn ck-btn--secundario ck-btn--sm">Anterior</button>
-              <span id="resumo-total-pagina" aria-live="polite"></span>
-              <button type="button" id="resumo-total-proxima" class="ck-btn ck-btn--secundario ck-btn--sm">Próxima</button>
-            </nav>
           </section>
         </section>
 

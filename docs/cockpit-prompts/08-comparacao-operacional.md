@@ -82,3 +82,14 @@ Autorizado pelo usuário em 02/11/2026. Escopo: só CSS e apresentação em `sta
 # Atualização funcional de 03/11/2026: F7 e UX
 
 O botão existente **Exportar Excel** (`#btn-exportar-equipamentos`) preserva download, ID, handler e disponibilidade, e inicia a atualização externa de apelidos/id no UX com o próprio Blob e nome recém-exportados. Ordem e salvaguardas: [Automação Chrome](../operacao/automacao-chrome.md#f7-atualizar-apelidos-e-id-no-ux). Autorização explícita do usuário em 03/11/2026. A confirmação exata `Planilha Exportada com Sucesso!` não confirma gravação UX; início, falha e conclusão externa são separados, com acompanhamento/cancelamento em F4. O Assistente conhece a diferença, mas não ganha ferramenta de disparo: sua exportação só baixa o arquivo. Testes usam fixture local, nunca gravação real.
+
+## Cartão Ativos por regional (F3, 04/11/2026)
+
+Pedido do usuário em 04/11/2026: as seções `Ativos por regional` e `Total de ativos` destoavam do resto do Resumo. Escopo: front-end (`static/index.html`, `static/js/features/resumo-ativos.js`, `static/styles/ck-cockpit.css`); sem endpoint, rotina, dado gravado nem escrita em sistema externo.
+
+- `Total de ativos` (tabela paginada com série, modelo, host e botão `Abrir`) foi removida, junto com os IDs `resumo-total-*`. Quem precisa de um equipamento usa a busca da Home (F1).
+- `Ativos por regional` virou um cartão (`.ck-cartao.ck-regionais`): título, contagem (`#resumo-regionais-contagem`, `N ativos em N regionais`), filtros em pílulas (`#resumo-regionais-filtros`, `button.ck-pilula[data-categoria]`, `aria-pressed`) e barras (`#resumo-regionais`).
+- Filtros: `Todos` usa `cidades_principais`; cada categoria (`notebook`, `macbook`, `monitor`, `fone`, vindas de `por_categoria`) usa `cidades_por_categoria[categoria]` de `GET /api/painel`. Cada pílula mostra a contagem da categoria; categoria sem ativos fica desabilitada. O filtro escolhido sobrevive a recarregar o painel e volta a `Todos` se a categoria sumir.
+- Barras: ordem por total (desempate por nome), largura proporcional ao maior valor mostrado. Top 8; `#resumo-regionais-mais` (`Ver todas as N regionais` / `Ver menos`, `aria-expanded`) expande. Desktop (≥ 1000 px): duas colunas preenchidas de cima para baixo (`--linhas`); abaixo disso, uma coluna. Animações de 180 ms (`--duracao`), desligadas com `prefers-reduced-motion`.
+- Estados: `data-estado` carregando/pronto/erro, `aria-busy`, mensagens `Nenhum ativo de <categoria> na base local.`, `A distribuição por cidade não está disponível.` e `A distribuição por regional está indisponível enquanto o servidor local não responde.`
+- Assistente: nenhuma ferramenta nova; a descrição de `obter_painel` agora cita `cidades_por_categoria` (o mesmo filtro da tela). Testes: `tests/frontend/test_resumo_ativos.cjs`, `tests/e2e/cockpit-tools.spec.cjs`, `tests/test_assistant.py` (`PanelRegionalToolTests`).

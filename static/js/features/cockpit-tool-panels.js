@@ -8,7 +8,7 @@
   const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F3", apelidos: "F7", relatorio: "F8" };
   const toolInfo = {
     chamados: ["OS", "Acompanhamento local de ordens relacionadas por série."],
-    comparacao: ["Resumo", "Ativos por regional, total de ativos e resultados salvos da comparação entre as bases locais."],
+    comparacao: ["Resumo", "Ativos por regional (com filtro por categoria) e resultados salvos da comparação entre as bases locais."],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],

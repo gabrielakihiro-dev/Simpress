@@ -1759,6 +1759,21 @@ def alterar_representante(simpress: RepresentativesSimpress, **args: Any) -> Tup
     return conversation, conversation.enviar_mensagem("troque").pendente
 
 
+class PanelRegionalToolTests(unittest.TestCase):
+    """Resumo (F3): o cartão Ativos por regional filtra por categoria; o Assistente lê os mesmos números."""
+
+    def test_description_points_to_the_category_filter_data(self) -> None:
+        descricao = TOOLS["obter_painel"].description
+        self.assertFalse(TOOLS["obter_painel"].changes_data)
+        for termo in ("cidades_por_categoria", "notebook", "macbook", "monitor", "fone", "Resumo (F3)"):
+            self.assertIn(termo, descricao)
+
+    def test_tool_returns_the_regional_numbers_by_category(self) -> None:
+        painel = {"cidades_principais": [{"cidade": "Curitiba", "total": 3}], "cidades_por_categoria": {"macbook": [{"cidade": "Londrina", "total": 2}]}}
+        dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
+        self.assertEqual(dados["dados"]["cidades_por_categoria"]["macbook"], [{"cidade": "Londrina", "total": 2}])
+
+
 class RegionalRepresentativeToolTests(unittest.TestCase):
     def test_list_without_city_has_no_email_or_phone(self) -> None:
         dados = SimpressApi(RepresentativesSimpress()).ver_representantes_regionais()
