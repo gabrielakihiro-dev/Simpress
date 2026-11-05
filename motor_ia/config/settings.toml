@@ -1,0 +1,47 @@
+# Config único do motor (Fase 1). IDs de modelo confirmados ao vivo via
+# listar_modelos_ao_vivo() (Jarvas-Simpress/llm_client.py) em 2026-11-05, contra
+# https://openrouter.ai/api/v1/models. Não usar nomes do dossiê antigo
+# ("codex-6.1-sol/terra/luna"): os IDs reais são abaixo.
+
+[modelos]
+# Planejador e codificador: DeepSeek V4.1 Flash, via OpenRouter (cache automático).
+planejador = "deepseek/deepseek-v4.1-flash"
+codificador = "deepseek/deepseek-v4.1-flash"
+# Juiz: só chamado se a triagem marcar a missão como crítica. Tier escolhido: Sonnet 5.5
+# (mais barato que Opus 5.5; "Claude 5.5" no dossiê era ambíguo entre os dois).
+juiz = "anthropic/claude-sonnet-5.5"
+# API direta da DeepSeek (DEEPSEEK_API_KEY no .env), usada no lugar do OpenRouter quando
+# configurada. listar_modelos_ao_vivo() só lista o catálogo do OpenRouter, então este ID
+# vem do código existente (Simpress/domains/assistant_openrouter.py), não foi confirmado ao vivo.
+deepseek_direto = "deepseek-flash"
+
+[chamada]
+max_tokens_plano = 1024
+max_tokens_codigo = 2048
+max_tokens_juiz = 512
+temperatura = 0.2
+
+[limites]
+max_loop_iterations = 3
+teto_custo_missao_usd = 0.05
+teto_custo_dia_usd = 0.50
+repeticoes_erro_para_parar = 2
+
+[workspace]
+sandbox_dir = "sandbox"
+
+# Preço de fallback (US$ por milhão de tokens) só usado quando o "usage" da resposta não
+# traz custo (caso da API direta da DeepSeek). Preços de entrada/saída lidos ao vivo do
+# OpenRouter em 2026-11-05; é estimativa, não a fatura real.
+[precos_usd_por_milhao."deepseek/deepseek-v4.1-flash"]
+entrada = 0.04
+saida = 0.50
+
+[precos_usd_por_milhao."anthropic/claude-sonnet-5.5"]
+entrada = 2.00
+saida = 10.00
+
+[precos_usd_por_milhao."deepseek-flash"]
+# Preço da API direta DeepSeek (fora do catálogo OpenRouter); ajustar se a DeepSeek mudar a tabela.
+entrada = 0.01
+saida = 0.50
