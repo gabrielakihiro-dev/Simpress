@@ -145,22 +145,22 @@ test("filtros: categoria escolhida que fica sem ativos após recarregar volta pa
   assert.equal(pilula(nodes, "todos").getAttribute("aria-pressed"), "true");
 });
 
-test("regionais: mais de 8 mostram o top 8 e 'Ver todas' expande e recolhe", async () => {
+test("regionais: mais de 8 mostram todas por padrão e 'Ver menos' recolhe para o top 8", async () => {
   const painel = { ...painelBase(), cidades_principais: cidades(12), total_equipamentos: 12 };
   const { feature, nodes } = load({ painel });
   await feature.carregarResumoAtivos();
-  assert.equal(nomes(nodes).length, 8);
-  assert.equal(nodes.regionais.style["--linhas"], "4");
-  assert.equal(nodes.mais.hidden, false);
-  assert.equal(nodes.mais.textContent, "Ver todas as 12 regionais");
-  assert.equal(nodes.mais.getAttribute("aria-expanded"), "false");
-  nodes.mais.click();
   assert.equal(nomes(nodes).length, 12);
   assert.equal(nodes.regionais.style["--linhas"], "6");
+  assert.equal(nodes.mais.hidden, false);
   assert.equal(nodes.mais.textContent, "Ver menos");
   assert.equal(nodes.mais.getAttribute("aria-expanded"), "true");
   nodes.mais.click();
   assert.equal(nomes(nodes).length, 8);
+  assert.equal(nodes.regionais.style["--linhas"], "4");
+  assert.equal(nodes.mais.textContent, "Ver todas as 12 regionais");
+  assert.equal(nodes.mais.getAttribute("aria-expanded"), "false");
+  pilula(nodes, "todos").click();
+  assert.equal(nomes(nodes).length, 12, "trocar de filtro volta a mostrar todas");
 });
 
 test("regionais: categoria sem ativos, base sem cidades e servidor fora do ar mostram aviso em vez de barras", async () => {

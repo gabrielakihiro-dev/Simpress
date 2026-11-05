@@ -8,7 +8,7 @@
   const VISIBLE_REGIONS = 8;
   let dashboard = null;
   let filter = "todos";
-  let expanded = false;
+  let expanded = true; // por padrão mostra todas as regionais; "Ver menos" recolhe para o top 8
 
   function list(value) { return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : []; }
   function number(value) {
@@ -51,7 +51,7 @@
       pill.append(option.label, " ", count);
       pill.addEventListener("click", () => {
         filter = option.value;
-        expanded = false;
+        expanded = true;
         renderRegions();
         // As pílulas são recriadas: devolve o foco à escolhida para quem usa teclado.
         [...target.children].find(item => item.dataset.categoria === filter)?.focus?.();
