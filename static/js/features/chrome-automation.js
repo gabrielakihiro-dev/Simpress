@@ -268,7 +268,8 @@
   function valor(id) { return document.getElementById(id)?.value || ""; }
 
   function classificarEventoAutomacao(mensagem) {
-    const texto = mensagem.toLocaleLowerCase("pt-BR");
+    // "0 com erro"/"0 com falha" é contagem zerada, não falha.
+    const texto = mensagem.toLocaleLowerCase("pt-BR").replace(/\b0\s+com\s+(?:erros?|falhas?)\b/g, "");
     const percentual = texto.match(/(?:^|\s)(\d{1,3}%)(?=\s|$)/)?.[1];
     if (/\b(falha|falhou|erro|error|exception|não conclu[ií]d[oa]|nao conclu[ií]d[oa])\b/.test(texto)) {
       return { estado: "error", icone: "✕", status: "Falha" };
