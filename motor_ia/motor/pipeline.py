@@ -1,5 +1,6 @@
 """Fase 1: pipeline mínimo real — triagem (determinística) -> plano -> código -> harness ->
-(se falhar) correção, até `max_loop_iterations` -> juiz (só se crítica; por padrão o harness decide).
+(se falhar) correção, até `max_loop_iterations` -> juiz (só se crítica ou grande; por padrão
+o harness decide — Fase 3 adiciona o critério de tamanho ao de palavra crítica).
 
 Fase 2 (prompt caching): em toda lista de mensagens, a mensagem de "system" (instruções/schema,
 estática) vem sempre antes da de "user" (a tarefa, dinâmica) e seu texto nunca interpola `tarefa`,
@@ -7,6 +8,7 @@ estática) vem sempre antes da de "user" (a tarefa, dinâmica) e seu texto nunca
 direto ou via OpenRouter) cachear automaticamente o prefixo entre chamadas da mesma etapa.
 """
 
+import difflib
 import json
 import uuid
 from dataclasses import dataclass
@@ -28,6 +30,17 @@ Chamador = Callable[[str, List[Dict[str, Any]], int, float, str], ResultadoChama
 
 PALAVRAS_CRITICAS = ("senha", "produção", "producao", "pagamento", "excluir", "deletar", "drop table")
 
+# Fase 3: toda classificação de missão precisa cair numa rota conhecida (True = juiz roda,
+# se o harness passou; False = harness decide, sem juiz). Tipo fora deste mapa é erro
+# explícito (`decidir_juiz`), nunca silêncio. Fallback por classificador barato (Haiku ou
+# equivalente) pra quando a regra determinística errar demais é a próxima evolução, ainda
+# não implementada nesta fase — aqui é regra pura, sem LLM.
+ROTAS_JUIZ: Dict[str, bool] = {
+    "critica": True,
+    "grande": True,
+    "normal": False,
+}
+
 
 class MissaoError(Exception):
     pass
@@ -40,12 +53,57 @@ class TriagemResultado:
 
 
 def triar(tarefa: str) -> TriagemResultado:
-    """Triagem determinística, sem LLM (dossiê: roteador calculava e ignorava o resultado)."""
+    """Triagem por palavra crítica, determinística e sem LLM (dossiê: roteador calculava e
+    ignorava o resultado). Roda sobre o texto da tarefa, antes de existir código; a triagem
+    por tamanho (`classificar_tamanho`) só é possível depois do código gerado."""
     baixa = tarefa.lower()
     for palavra in PALAVRAS_CRITICAS:
         if palavra in baixa:
             return TriagemResultado(critica=True, motivo=f"tarefa contém '{palavra}'")
     return TriagemResultado(critica=False, motivo="sem palavra crítica")
+
+
+def classificar_tamanho(conteudo: str, limite_linhas: int) -> bool:
+    """Mudança "grande": código gerado com `limite_linhas` linhas ou mais, determinístico."""
+    return len(conteudo.splitlines()) >= limite_linhas
+
+
+def classificar_rota(critica: bool, grande: bool) -> str:
+    """Classificação final da missão (sempre uma das rotas conhecidas em `ROTAS_JUIZ`), usada
+    só para decidir se o juiz roda."""
+    if critica:
+        return "critica"
+    if grande:
+        return "grande"
+    return "normal"
+
+
+def decidir_juiz(tipo: str) -> bool:
+    """Toda saída do roteador precisa de rota conhecida; tipo sem rota é erro explícito."""
+    try:
+        return ROTAS_JUIZ[tipo]
+    except KeyError:
+        raise MissaoError(f"Roteador sem rota conhecida para o tipo de missão '{tipo}'.") from None
+
+
+def _montar_diff_para_juiz(codigo_atual: CodigoSaida, codigo_anterior: Optional[CodigoSaida]) -> str:
+    """Diff do código gerado contra a versão anterior da mesma missão (iteração de correção
+    passada). Sem versão anterior (1ª iteração), não há o que diferenciar: manda o código
+    completo, documentado aqui — não é o corte arbitrário de caracteres de antes."""
+    if codigo_anterior is None:
+        return f"(1ª versão da missão, sem código anterior para diff)\n{codigo_atual.conteudo}"
+    diff = "".join(difflib.unified_diff(
+        codigo_anterior.conteudo.splitlines(keepends=True),
+        codigo_atual.conteudo.splitlines(keepends=True),
+        fromfile=f"{codigo_anterior.arquivo} (tentativa anterior)",
+        tofile=f"{codigo_atual.arquivo} (atual)",
+    ))
+    diff = diff or "(diff vazio: código idêntico à tentativa anterior)"
+    # O juiz decide sobre o resultado final da missão, não sobre a evolução entre tentativas:
+    # o diff mostra o que mudou desde a última correção, mas o código completo abaixo é o que
+    # de fato é aprovado/escrito (dossiê Fase 2: o juiz via o código inteiro; a Fase 3 não pode
+    # perder isso ao trocar pelo diff).
+    return f"{diff}\n\nCódigo final completo:\n{codigo_atual.conteudo}"
 
 
 @dataclass
@@ -119,6 +177,7 @@ def executar_missao(
         ]
 
         ultimo_harness: Optional[ResultadoHarness] = None
+        codigo_anterior: Optional[CodigoSaida] = None
         for iteracao in range(1, config.limites.max_loop_iterations + 1):
             sandbox_dir = preparar_sandbox(sandbox_dir)  # sandbox limpo a cada tentativa: nenhum arquivo de rodada anterior sobrevive e confunde o pytest
 
@@ -131,8 +190,12 @@ def executar_missao(
             ultimo_harness = resultado_harness
 
             if resultado_harness.ok:
-                if triagem.critica:
-                    aprovado, motivo_juiz = _chamar_juiz(chamador, log_path, missao_id, config, tarefa, codigo, breaker)
+                grande = classificar_tamanho(codigo.conteudo, config.limites.limite_linhas_grande)
+                tipo = classificar_rota(triagem.critica, grande)
+                if decidir_juiz(tipo):
+                    aprovado, motivo_juiz = _chamar_juiz(
+                        chamador, log_path, missao_id, config, tarefa, codigo, codigo_anterior, resultado_harness, breaker,
+                    )
                     if not aprovado:
                         return ResultadoMissao(
                             ok=False, missao_id=missao_id, motivo=f"Juiz reprovou: {motivo_juiz}", iteracoes=iteracao,
@@ -148,6 +211,7 @@ def executar_missao(
                 {"role": "assistant", "content": json.dumps({"arquivo": codigo.arquivo, "conteudo": codigo.conteudo}, ensure_ascii=False)},
                 {"role": "user", "content": f"O harness falhou: {resultado_harness.erro}. Corrija e responda só com o JSON do código."},
             ]
+            codigo_anterior = codigo
 
         return ResultadoMissao(
             ok=False, missao_id=missao_id, iteracoes=config.limites.max_loop_iterations,
@@ -165,12 +229,23 @@ def executar_missao(
 
 def _chamar_juiz(
     chamador: Chamador, log_path: Path, missao_id: str, config: MotorConfig,
-    tarefa: str, codigo: CodigoSaida, breaker: CircuitBreaker,
+    tarefa: str, codigo: CodigoSaida, codigo_anterior: Optional[CodigoSaida],
+    resultado_harness: ResultadoHarness, breaker: CircuitBreaker,
 ) -> tuple[bool, str]:
-    """Juiz caro: só roda para missão marcada crítica (dossiê #9: antes rodava em toda missão).
+    """Juiz caro: só roda quando o harness passou e a missão é crítica ou grande (dossiê #9:
+    antes rodava em toda missão crítica, sem olhar tamanho).
 
     dossiê #2: o retorno do portão nunca era lido; aqui o veredito decide o resultado da missão.
+
+    Fase 3: evidência estruturada (diff, saída real do pytest e do ruff) no lugar do corte
+    arbitrário de caracteres do código.
     """
+    diff = _montar_diff_para_juiz(codigo, codigo_anterior)
+    evidencia = (
+        f"Diff do código gerado:\n{diff}\n\n"
+        f"Saída do pytest:\n{resultado_harness.saida_pytest or '(sem saída)'}\n\n"
+        f"Saída do ruff:\n{resultado_harness.saida_ruff or '(sem saída)'}"
+    )
     resultado = chamador(
         config.modelos.juiz,
         [
@@ -188,7 +263,7 @@ def _chamar_juiz(
                     }
                 ],
             },
-            {"role": "user", "content": f"Tarefa: {tarefa}\nArquivo: {codigo.arquivo}\nCódigo:\n{codigo.conteudo}"},
+            {"role": "user", "content": f"Tarefa: {tarefa}\nArquivo: {codigo.arquivo}\n\n{evidencia}"},
         ],
         config.chamada.max_tokens_juiz, config.chamada.temperatura, missao_id,
     )

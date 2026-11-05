@@ -53,6 +53,10 @@ class LimitesConfig:
     teto_custo_missao_usd: float
     teto_custo_dia_usd: float
     repeticoes_erro_para_parar: int
+    # Fase 3: código gerado com esse nº de linhas ou mais conta como "mudança grande" pro
+    # roteador. 100 porque `max_tokens_codigo` (padrão 2048) já limita o código gerado a
+    # algo em torno de 150-200 linhas; um limite de 200 quase nunca seria alcançado na prática.
+    limite_linhas_grande: int = 100
 
 
 @dataclass(frozen=True)

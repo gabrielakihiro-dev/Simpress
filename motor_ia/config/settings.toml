@@ -7,8 +7,9 @@
 # Planejador e codificador: DeepSeek V4.1 Flash, via OpenRouter (cache automático).
 planejador = "deepseek/deepseek-v4.1-flash"
 codificador = "deepseek/deepseek-v4.1-flash"
-# Juiz: só chamado se a triagem marcar a missão como crítica. Tier escolhido: Sonnet 5.5
-# (mais barato que Opus 5.5; "Claude 5.5" no dossiê era ambíguo entre os dois).
+# Juiz: só chamado se o harness passou e a triagem marcar a missão como crítica ou grande
+# (ver limite_linhas_grande em [limites]). Tier escolhido: Sonnet 5.5 (mais barato que Opus
+# 5.5; "Claude 5.5" no dossiê era ambíguo entre os dois).
 juiz = "anthropic/claude-sonnet-5.5"
 # API direta da DeepSeek (DEEPSEEK_API_KEY no .env), usada no lugar do OpenRouter quando
 # configurada. listar_modelos_ao_vivo() só lista o catálogo do OpenRouter, então este ID
@@ -26,6 +27,11 @@ max_loop_iterations = 3
 teto_custo_missao_usd = 0.05
 teto_custo_dia_usd = 0.50
 repeticoes_erro_para_parar = 2
+# Fase 3: código gerado com esse nº de linhas ou mais conta como "mudança grande" pro roteador
+# (aciona o juiz mesmo sem palavra crítica, se o harness passou). 100 porque max_tokens_codigo
+# (2048, em [chamada]) já limita o código gerado a algo em torno de 150-200 linhas; um limite
+# maior quase nunca seria alcançado na prática.
+limite_linhas_grande = 100
 
 [workspace]
 sandbox_dir = "sandbox"
