@@ -60,7 +60,7 @@ def rodar_harness(sandbox_dir: Path, arquivo_relativo: str, conteudo: str, timeo
     if not pytest_ok:
         return ResultadoHarness(ok=False, erro=pytest_saida, assinatura_erro=_assinatura(pytest_saida), caminho_escrito=caminho)
 
-    _rodar_ruff(sandbox_dir)  # só registrado; nunca bloqueia o harness (ruff pode faltar no ambiente)
+    _rodar_ruff(sandbox_dir)  # resultado descartado de propósito: ruff pode estar ausente no ambiente e nunca deve bloquear o harness
 
     return ResultadoHarness(ok=True, caminho_escrito=caminho)
 
