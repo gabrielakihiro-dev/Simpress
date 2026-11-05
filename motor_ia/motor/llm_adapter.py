@@ -39,9 +39,14 @@ def chamar_modelo(
     mensagens: List[Dict[str, Any]],
     max_tokens: int,
     temperatura: float,
+    missao_id: str,
 ) -> ResultadoChamada:
     """Chamada mínima e explícita: `max_tokens`/`temperature` sempre presentes, sem tools
-    (a Fase 1 não usa ferramentas), sem fallback automático de modelo."""
+    (a Fase 1 não usa ferramentas), sem fallback automático de modelo.
+
+    `missao_id` vira `session_id` do OpenRouter (Fase 2: sticky routing) quando a chamada passa
+    pelo OpenRouter; na API direta da DeepSeek esse campo não existe e é ignorado.
+    """
     if settings.deepseek:
         if modelo == config.modelos.juiz:
             # Juiz não é modelo DeepSeek: API direta da DeepSeek nunca teria esse slug.
@@ -63,6 +68,9 @@ def chamar_modelo(
     if not settings.deepseek:
         payload["usage"] = {"include": True}
         payload["provider"] = {"require_parameters": True, "data_collection": "deny"}
+        # Sticky routing por missão (nunca fixar provider.order: isso desligaria o sticky routing).
+        if missao_id:
+            payload["session_id"] = missao_id
 
     cliente = OpenRouterClient(settings)
     inicio = time.monotonic()

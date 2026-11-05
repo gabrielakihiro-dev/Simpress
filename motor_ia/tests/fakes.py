@@ -9,7 +9,7 @@ def fake_chamador(respostas: List[str], custo_usd: float = 0.0001) -> Callable:
     """Devolve um `Chamador` que responde, em ordem, com os textos de `respostas` (um por chamada)."""
     fila = list(respostas)
 
-    def _chamador(modelo: str, mensagens: List[Dict[str, Any]], max_tokens: int, temperatura: float) -> ResultadoChamada:
+    def _chamador(modelo: str, mensagens: List[Dict[str, Any]], max_tokens: int, temperatura: float, missao_id: str = "") -> ResultadoChamada:
         if not fila:
             raise AssertionError("fake_chamador: mais chamadas do que respostas programadas")
         conteudo = fila.pop(0)
