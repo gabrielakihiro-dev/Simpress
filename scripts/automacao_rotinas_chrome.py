@@ -29,6 +29,7 @@ O login é sempre feito pelo usuário na janela do Chrome; o script apenas esper
 from __future__ import annotations
 
 import argparse
+import ctypes.wintypes
 import importlib.util
 import json
 import os
@@ -42,7 +43,7 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, Page
@@ -95,6 +96,10 @@ _inicio_execucao = 0.0
 
 class RotinaErro(RuntimeError):
     """Falha de uma etapa que interrompe a rotina sem repetir cliques."""
+
+
+class EtapaInstavel(RotinaErro):
+    """Falha recuperável de navegação (interferência detectada ou estado inesperado); nunca usada nos cliques irreversíveis."""
 
 
 class RotinaCancelada(BaseException):
@@ -179,6 +184,60 @@ def acionar_quando_pronto(
             segundos = (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) // 1000
             raise RotinaErro(f"{descricao}: a tela não ficou pronta em {segundos} s ({ultimo_erro}).")
         time.sleep(intervalo_s)
+
+
+_pagina_ativa_recuperacao: "Page | None" = None
+
+
+def definir_pagina_ativa_para_recuperacao(pagina: "Page | None") -> None:
+    """Página usada pelo recuperar padrão de ``etapa_resiliente`` (Escape) quando o chamador não passa um ``recuperar`` próprio."""
+    global _pagina_ativa_recuperacao
+    _pagina_ativa_recuperacao = pagina
+
+
+def obter_posicao_cursor() -> tuple[int, int]:
+    """Posição do cursor do sistema (Windows); o CDP move o cursor só dentro do renderer, nunca este."""
+    ponto = ctypes.wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(ponto))
+    return (ponto.x, ponto.y)
+
+
+def cursor_mudou(baseline: tuple[int, int], folga_px: int = 4) -> bool:
+    """True se o cursor do sistema se moveu mais que ``folga_px`` desde ``baseline`` (sinal de interferência humana real)."""
+    x, y = obter_posicao_cursor()
+    return abs(x - baseline[0]) > folga_px or abs(y - baseline[1]) > folga_px
+
+
+def _recuperar_padrao() -> None:
+    pagina = _pagina_ativa_recuperacao
+    if pagina is not None:
+        try:
+            pagina.keyboard.press("Escape")
+        except Exception:
+            pass
+    time.sleep(1)
+
+
+T = TypeVar("T")
+
+
+def etapa_resiliente(
+    etapa: Callable[[], T],
+    descricao: str,
+    tentativas: int = 3,
+    recuperar: Callable[[], None] | None = None,
+) -> T:
+    """Refaz ``etapa`` do zero ao levantar ``EtapaInstavel``; esgotadas as ``tentativas``, relança a falha original."""
+    for tentativa in range(1, tentativas + 1):
+        try:
+            return etapa()
+        except EtapaInstavel as erro:
+            if tentativa >= tentativas:
+                raise
+            log("Etapa", f"{descricao}: tentativa {tentativa}/{tentativas} instável ({erro}); refazendo.")
+            (recuperar or _recuperar_padrao)()
+            verificar_cancelamento()
+    raise AssertionError("inacessível: o loop sempre retorna ou relança")
 
 
 def log(origem: str, mensagem: str) -> None:
