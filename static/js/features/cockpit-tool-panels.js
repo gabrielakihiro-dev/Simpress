@@ -656,6 +656,11 @@
     hostname_removido: "Hostname removido no Endpoint",
   };
 
+  // Séries de máquinas virtuais do próprio Sebrae (VMware, Google Cloud): fora do F7, só na exibição.
+  const ALIAS_HIDDEN_SERIAL = /^(VMWARE|GOOGLECLOUD)/i;
+
+  const aliasDate = value => (value ? displayDate(value) : "Data indisponível");
+
   function aliasReason(event) {
     return event.tipo === "aviso_endpoint" ? ALIAS_WARNING_REASONS[event.motivo] || "" : "";
   }
@@ -729,7 +734,7 @@
     const request = ++aliasEquipmentRequest;
     if (!event) return renderEmpty(target, "Selecione uma alteração do histórico.");
     const fields = [
-      ["Data", event.horario], ["Série", event.serial], ["Equipamento", event.equipamento],
+      ["Data", aliasDate(event.horario)], ["Série", event.serial], ["Equipamento", event.equipamento],
       ["Tipo", aliasTypeLabel(event.tipo)], ["Campo", event.acao], ["Valor anterior", aliasValue(event, true)],
       ["Valor novo", aliasValue(event)], ["Usuário relacionado", event.usuario_endpoint],
       ["Origem", event.origem], ["Motivo", aliasReason(event) || event.motivo],
@@ -756,7 +761,7 @@
         );
         body.append(
           element("strong", "ck-tempo__titulo", `${aliasTypeLabel(item.tipo)} · ${item.acao || "registro"}`),
-          element("time", "ck-tempo__meta", item.horario || "Data indisponível"),
+          Object.assign(element("time", "ck-tempo__meta", aliasDate(item.horario)), { dateTime: item.horario || "" }),
           element("span", "ck-tempo__meta", `Autor: ${item.autor || "não informado"} · Origem: ${item.origem || "não informada"}`),
           change,
         );
@@ -817,7 +822,7 @@
         const timestamp = Date.parse(event.horario || "");
         if (!Number.isFinite(timestamp) || timestamp < cutoff) return false;
       }
-      const searchable = normalize([event.serial, event.equipamento, event.tipo, event.acao, event.usuario_endpoint, event.horario,
+      const searchable = normalize([event.serial, event.equipamento, event.tipo, event.acao, event.usuario_endpoint, event.horario, aliasDate(event.horario),
         event.motivo, aliasReason(event), event.origem, aliasValue(event, true), aliasValue(event)].join(" "));
       return terms.every(term => searchable.includes(term));
     });
@@ -855,7 +860,7 @@
       button.setAttribute("aria-pressed", String(String(event.id || "") === selectedAliasId));
       button.append(Object.assign(element("strong", "ck-item__serie", event.serial || "Série indisponível"), { title: event.serial || "Série indisponível" }));
       button.append(badge(aliasTypeLabel(event.tipo), "info"));
-      button.append(element("small", "ck-item__sub", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
+      button.append(element("small", "ck-item__sub", `${aliasDate(event.horario)} · ${event.tipo === "aviso_endpoint"
         ? aliasReason(event) || event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));
       button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
       row.append(button);
@@ -872,7 +877,7 @@
     try {
       const data = await apiFetch("/api/historico-alteracoes", { errorMessage: "Não foi possível carregar o histórico de alterações." });
       if (request !== aliasRequest || activeTool !== "apelidos") return;
-      aliasEvents = Array.isArray(data.eventos) ? data.eventos : [];
+      aliasEvents = (Array.isArray(data.eventos) ? data.eventos : []).filter(event => !ALIAS_HIDDEN_SERIAL.test(String(event.serial || "").trim()));
       aliasLatest = app.ultimoRegistroPorCampo(aliasEvents);
       aliasEquipmentCache.clear();
       if (!aliasEvents.some(event => String(event.id || "") === selectedAliasId)) selectedAliasId = String(aliasEvents[0]?.id || "");
