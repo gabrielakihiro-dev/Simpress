@@ -1,7 +1,7 @@
 """Uma chamada real e barata (fora da suíte de testes) para medir custo/latência de verdade.
 
 Uso: `python scripts/chamada_real_exemplo.py` (a partir de `motor_ia/`), com o `.env` de
-`Jarvas-Simpress` ou `OPENROUTER_API_KEY`/`DEEPSEEK_API_KEY` já no ambiente.
+`Jarvis-Simpress` ou `OPENROUTER_API_KEY`/`DEEPSEEK_API_KEY` já no ambiente.
 """
 
 import sys
@@ -22,7 +22,7 @@ from motor import usage_log
 from motor.config import OpenRouterSettings, carregar_config
 from motor.llm_adapter import chamar_modelo
 
-ENV_FILE = MOTOR_IA_DIR.parent.parent / "Jarvas-Simpress" / ".env"  # motor_ia/ está em Simpress/; Jarvas-Simpress/ é irmã de Simpress/
+ENV_FILE = MOTOR_IA_DIR.parent.parent / "Jarvis-Simpress" / ".env"  # motor_ia/ está em Simpress/; Jarvis-Simpress/ é irmã de Simpress/
 LOG_PATH = MOTOR_IA_DIR / "data" / "usage_log.jsonl"
 
 

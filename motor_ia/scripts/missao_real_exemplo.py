@@ -1,7 +1,7 @@
 """Uma missão real de ponta a ponta (fora da suíte de testes), pelo pipeline da Fase 1.
 
 Uso: `python scripts/missao_real_exemplo.py` (a partir de `motor_ia/`), com o `.env` de
-`Jarvas-Simpress` já preenchido (OPENROUTER_API_KEY). Gasta de verdade, mas pouco: o teto por
+`Jarvis-Simpress` já preenchido (OPENROUTER_API_KEY). Gasta de verdade, mas pouco: o teto por
 missão em settings.toml é US$ 0,05.
 """
 
@@ -24,7 +24,7 @@ from motor.config import OpenRouterSettings, carregar_config
 from motor.llm_adapter import chamar_modelo
 from motor.pipeline import executar_missao
 
-ENV_FILE = MOTOR_IA_DIR.parent.parent / "Jarvas-Simpress" / ".env"  # motor_ia/ está em Simpress/; Jarvas-Simpress/ é irmã de Simpress/
+ENV_FILE = MOTOR_IA_DIR.parent.parent / "Jarvis-Simpress" / ".env"  # motor_ia/ está em Simpress/; Jarvis-Simpress/ é irmã de Simpress/
 LOG_PATH = MOTOR_IA_DIR / "data" / "usage_log.jsonl"
 
 
