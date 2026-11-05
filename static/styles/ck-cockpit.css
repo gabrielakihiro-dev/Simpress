@@ -1044,10 +1044,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
    Breakpoints do projeto: compacto ≤767.98px · médio 768–1199.98px · amplo ≥1200px.
    ===================================================================== */
 
-/* ---------- 1. Topo de ações (sticky) ---------- */
+/* ---------- 1. Topo de ações (fixo no topo da página; rola junto com o conteúdo) ---------- */
 /* Só a barra de botões fica fixa; status, rotina e alerta rolam logo abaixo dela (display: contents os põe no fluxo de .ck-det__corpo). */
 .sebrae-topo { display: contents; }
-.sebrae-topo__acoes { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: -14px -16px 0; padding: 10px 16px; background: var(--cor-fundo); border-bottom: 1px solid var(--cor-borda-suave); }
+.sebrae-topo__acoes { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: -14px -16px 0; padding: 10px 16px; background: var(--cor-fundo); border-bottom: 1px solid var(--cor-borda-suave); }
 .sebrae-topo > :not(.sebrae-topo__acoes) { margin-top: -8px; }
 .sebrae-topo__passos { align-items: center; gap: 6px; }
 .sebrae-topo__seta { color: var(--cor-texto-mudo); }
