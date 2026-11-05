@@ -1,6 +1,8 @@
 from dataclasses import replace
 
-from motor.config import OpenRouterClient, OpenRouterSettings
+import pytest
+
+from motor.config import OpenRouterClient, OpenRouterError, OpenRouterSettings
 from motor.llm_adapter import chamar_modelo
 
 
@@ -69,3 +71,12 @@ def test_chamar_modelo_deepseek_direto_troca_modelo_e_estima_custo(config_teste,
     assert resultado.custo_origem == "estimated"
     assert resultado.custo_usd > 0
     assert resultado.cached_tokens == 10
+
+
+def test_chamar_modelo_deepseek_juiz_sem_voice_key_levanta_erro(config_teste, monkeypatch):
+    settings = OpenRouterSettings(api_key="chave-deepseek", deepseek=True)
+
+    with pytest.raises(OpenRouterError, match="juiz"):
+        chamar_modelo(
+            settings, config_teste, config_teste.modelos.juiz, [{"role": "user", "content": "oi"}], 256, 0.2
+        )
