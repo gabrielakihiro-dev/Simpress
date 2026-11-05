@@ -5,27 +5,32 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 ## Recursos
 
 - Interface Cockpit com as abas **Home** (F1), **Transporte** (F2) e **Automação** (F4), o botão **Resumo** (F3, ativos por regional com filtro por categoria e comparação das bases, aberto como painel de ferramenta), mais o menu **Ferramentas** com os painéis de chamados, históricos e relatório mensal, e o chat flutuante do assistente (ícone no topbar).
-- Busca por número de série, apelido/hostname, modelo, cidade ou usuário logado. A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**).
+- Busca por número de série, apelido/hostname, modelo, cidade, usuário logado ou nome da pessoa (vindo do Microsoft Entra). A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**); sem resultado, a busca sugere `Você quis dizer <usuário>?`.
+- Na Home, **Consultar no Endpoint** lê ao vivo o usuário do último logon do equipamento selecionado, e **Controle remoto** abre a conexão remota do Endpoint Central para ele, sempre por clique do usuário.
 - Geração e download da planilha oficial de transferência a partir do modelo local.
 - Aba **OS** (F6) com a tabela de ordens de serviço por série (Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição), que relaciona as exportações Simpress e Oracle, marca divergências e permite vincular cada OS a um chamado `UTIC-<ano>-<número>`.
 - Usuário logado informado à mão quando o Endpoint não o traz, com pendências de confirmação quando uma nova planilha muda ou remove esse usuário.
 - Alertas no painel inicial (base desatualizada, OS paradas, divergências novas) e relatório mensal, gerado também automaticamente no início de cada mês.
-- Automação pelo Chrome (`executar_automacao.bat` ou aba **Automação**) para as rotinas de OS (Oracle + UX), inventários (UX + Endpoint Central) e chamados novos do Sebrae (Dashboard + SoftExpert).
+- Automação pelo Chrome (`executar_automacao.bat` ou aba **Automação**) para as rotinas de OS (Oracle + UX), inventários (UX + Endpoint Central) e chamados novos do Sebrae (Dashboard + SoftExpert), com a opção **Repetir a cada 30 minutos** para **Baixar, importar e buscar**.
+- Aba **Chamados** (F5) com os chamados novos, antigos em aberto e finalizados do Sebrae: classificação manual, edição local da descrição, cópia atualizada do Dashboard, envio ao SharePoint e finalização individual no SoftExpert, sempre por ação do usuário.
+- Importação dos nomes do Microsoft Entra (CSV) para mostrar o nome da pessoa ao lado do login, sem alterar a base oficial de equipamentos.
 - Importação automática desse par de planilhas por lotes em pastas locais, com validação, histórico, proteção contra reimportação e recibos de processamento.
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
 - Central de pendências e comparação entre atualizações.
-- Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
+- Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local; a mesma planilha é enviada em seguida ao UX Simpress pela rotina `ux_apelidos`, que salva os apelidos/id do contrato 16467.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
-- Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
+- Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter (ou, opcionalmente, o DeepSeek) com a chave do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Aceita anexos e áudio, guarda conversas, notas e instruções localmente e pode buscar na web quando você liga essa opção. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
+
+As mudanças ainda sem versão publicada estão na seção **[Não lançado]** do [CHANGELOG](CHANGELOG.md).
 
 ## Requisitos
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior.
 - O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript.
-- Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas; o assistente (OpenRouter) e as rotinas de automação pelo Chrome precisam de internet.
+- Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas; o assistente (OpenRouter ou DeepSeek) e as rotinas de automação pelo Chrome precisam de internet.
 - Google Chrome instalado, só para as rotinas de automação.
 
 O repositório é privado; a conta usada para cloná-lo precisa ter acesso.
@@ -79,7 +84,7 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
-Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. O arquivo `.env` da raiz (fora do Git) só é lido pelo assistente, para `OPENROUTER_API_KEY` e os modelos opcionais; sem ele, o restante da aplicação funciona normalmente e o painel do assistente mostra o aviso de assistente desligado. Para criá-lo, copie o modelo:
+Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. O arquivo `.env` da raiz (fora do Git) só é lido pelo assistente, para `OPENROUTER_API_KEY`, os modelos opcionais e, se quiser usar o DeepSeek, `DEEPSEEK_API_KEY` e `DEEPSEEK_MODEL`; sem ele, o restante da aplicação funciona normalmente e o painel do assistente mostra o aviso de assistente desligado. Para criá-lo, copie o modelo:
 
 ```powershell
 Copy-Item .env.example .env
@@ -102,8 +107,13 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
 | Lotes para chamados Simpress/Oracle | `data/state/entrada_chamados` | Fila local para importar automaticamente o par de planilhas de chamados; os arquivos e resultados ficam fora do Git. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
-| `sebrae_*.json` e `sebrae_dashboard_importado.xlsx` | `data/state` | Estado local dos chamados novos do Sebrae e do Dashboard importado; fora do Git. |
-| `.env` | raiz do projeto | Chave e modelos do assistente (OpenRouter); fora do Git. Modelo em `.env.example`. |
+| `sebrae_*.json` e `sebrae_dashboard_importado.xlsx` | `data/state` | Estado local dos chamados do Sebrae e do Dashboard importado, incluindo `sebrae_finalizacao.json` (descrições editadas e finalizações) e `sebrae_chamados_encerrados.json`; fora do Git. |
+| `sebrae_dashboard_saida/`, `sebrae_backups/` e `sebrae_dashboard_pendente/` | `data/state` | Cópias geradas por **Atualizar Dashboard**, os 20 backups mais recentes baixados antes de cada envio ao SharePoint e a cópia que ficou pendente quando o envio falhou; fora do Git. |
+| `dashboard_agendamento.json` | `data/state` | Estado do agendamento **Repetir a cada 30 minutos**; fora do Git. |
+| Lotes de nomes do Microsoft Entra | `data/state/entrada_usuarios_entra` | Fila local do CSV de usuários do Entra (`pendentes`, `processadas`, `falhas`, com `_resultado.json`); fora do Git. |
+| `assistente_*.json` | `data/state` | Conversas (só texto mascarado), notas e lembretes, instruções permanentes e o interruptor da busca na web do assistente; fora do Git. |
+| `representantes_regionais.json` | `config` | Alterações por cidade dos representantes regionais do SEBRAE/PR; fora do Git. |
+| `.env` | raiz do projeto | Chaves e modelos do assistente (OpenRouter e, opcionalmente, DeepSeek); fora do Git. Modelo em `.env.example`. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
 
@@ -183,9 +193,16 @@ Na inicialização, o terminal e a aplicação mostram quais arquivos locais est
 
 ### Pesquisar equipamento
 
-Na aba **Home**, pesquise por série, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, que apresenta o total e carrega até 50 resultados por vez com **Carregar mais**.
+Na aba **Home**, pesquise por série, apelido/hostname, modelo, cidade, login ou nome da pessoa. Pressione `Enter` ou clique em **Buscar Equipamento**; de qualquer outra aba, isso leva primeiro à **Home** (F1) e depois pesquisa. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, que apresenta o total e carrega até 50 resultados por vez com **Carregar mais**. Quando nada é encontrado, o autocompletar sugere `Você quis dizer <usuário mais próximo>?`.
 
-Na pesquisa completa, combine os filtros de categoria e cidade. As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha; por exemplo, monitores também são identificados pelo modelo e MacBooks aparecem separados dos outros notebooks.
+Na pesquisa completa, combine os filtros de categoria, cidade e **Usuário** (**Sem usuário** e **Com usuário**). As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha; por exemplo, monitores também são identificados pelo modelo e MacBooks aparecem separados dos outros notebooks.
+
+Com um equipamento selecionado na Home:
+
+- **Consultar no Endpoint** consulta só aquela série no Endpoint Central, pelo Chrome de automação (porta `9333`), e mostra exatamente o `Usuário do último logon`; se a série não existir lá, aparece `Equipamento não encontrado no Endpoint`. É só leitura: nada é gravado no Endpoint, nas planilhas nem nos históricos. O login é manual, e a aba usada é reaproveitada na consulta seguinte.
+- **Controle remoto**, ao lado, abre a mesma aba, escolhe `Controle remoto` na linha do equipamento, informa o motivo `acesso` e clica em `Conectar`; a janela do controle remoto fica aberta para você. É a única ação do Simpress que inicia uma conexão externa, e só acontece pelo seu clique ou por um pedido ao assistente confirmado no cartão.
+- O cartão **Chamados abertos** mostra as OS do Oracle e também os chamados da aba **Chamados** (F5) ainda não finalizados para a mesma série, com o botão **Ver na aba Chamados (F5)**. Se a consulta do Sebrae falhar, as OS do Oracle continuam na tela com o aviso de consulta parcial.
+- Quando o login do Endpoint corresponde a uma única conta do Microsoft Entra importada, o cartão mostra o nome da pessoa ao lado do login (veja [Nomes do Microsoft Entra](#nomes-do-microsoft-entra)).
 
 ### Gerar transferência
 
@@ -225,6 +242,8 @@ O comando usa a mesma validação sem enviar requisições HTTP. Se o site estiv
 
 ### Comparar e atualizar inventários
 
+O **Resumo** (F3) abre com o cartão **Ativos por regional**: filtros por categoria (**Todos**, **Notebooks**, **MacBooks**, **Monitores**, **Fones**, cada um com sua contagem), todas as regionais visíveis por padrão e o botão **Ver menos** para recolher às 8 maiores (**Ver todas as N regionais** mostra todas de novo). A antiga tabela **Total de ativos** saiu; a lista completa de equipamentos fica na Home.
+
 Use **Pendências** para revisar e anotar as linhas da atualização mais recente; o painel **Evolução das atualizações** foi removido da interface em 31/10/2026 (o alerta **Divergências novas** da Home continua e seu botão **Ver evolução** abre o **Resumo**).
 
 1. Abra **Atualizar planilhas**: no **Resumo** (F3), seção Comparação, clique em **Nova comparação**; também abrem o mesmo fluxo o botão **Importar** da Home e o botão **Atualizar base** do alerta de base desatualizada.
@@ -234,6 +253,15 @@ Use **Pendências** para revisar e anotar as linhas da atualização mais recent
 5. Em **Comparação**, clique em **Histórico e ações completas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
 
 A prévia também funciona na primeira importação, quando ainda não há inventário local. O processamento automático pela pasta de entrada mantém seu fluxo próprio.
+
+No resultado da comparação:
+
+- **Mudanças de usuário logado** lista os casos em que o novo Endpoint informa um usuário onde havia um usuário digitado à mão, ou deixa de informar um usuário que existia. Nada muda sozinho: o usuário atual continua valendo até você decidir.
+- Em uma duplicidade do Endpoint (a mesma série com dois hostnames), **Remover mais antigo** descarta o hostname mais antigo, depois da confirmação; o outro passa a valer na base e nas próximas exportações. A planilha do Endpoint não é alterada, e **Desfazer** devolve a duplicidade.
+
+#### Nomes do Microsoft Entra
+
+Em **Atualizar planilhas**, uma seção própria aceita o CSV de usuários exportado do Microsoft Entra. A tela mostra quantas contas `@pr.sebrae.com.br` válidas foram importadas e a data da última atualização, e oferece o XLSX compacto com as colunas **Login** e **Display Name**. O nome da pessoa só aparece quando o login corresponde a uma única conta; logins repetidos com nomes diferentes ficam de fora e são contados como ignorados. O CSV também pode entrar pela fila local `data/state/entrada_usuarios_entra/pendentes/<lote>/`, que segue o mesmo padrão de `processadas`, `falhas` e `_resultado.json`. A importação não altera a base oficial de equipamentos. Detalhes em [Nomes do Microsoft Entra](docs/operacao/nomes-entra-ui.md).
 
 #### Processar atualizações pela pasta de entrada
 
@@ -296,13 +324,15 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 **Exportar Excel** baixa uma cópia do modelo local atualizada com os dados do inventário principal. O sistema processa somente séries com correspondência única, atualiza células graváveis de `Apelido` e, quando a coluna existe nos dois arquivos, `IdCliente`. Fórmulas não são sobrescritas; as demais abas e formatações do modelo são preservadas. Se a exportação for parcial, a notificação informa os motivos e exemplos para conferência. Desde 31/10/2026 o botão **Exportar Excel** fica na barra da seção **Comparação** do **Resumo** (ao lado de **Exportar**, que baixa só o resultado da comparação) e some quando não há alterações exportáveis; ele não está mais no menu **Ferramentas**.
 
+Depois do download, o mesmo clique envia a planilha ao UX Simpress (rotina `ux_apelidos`, no Chrome de automação): a rotina confirma o contrato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, carrega o arquivo e clica **uma única vez** em **Salvar edições**. Só os apelidos/id desse contrato são gravados no UX. `Planilha Exportada com Sucesso!` confirma apenas o download; o início, a falha e a conclusão do envio ao UX aparecem como mensagens separadas no **Resumo** e na **Automação**. Se o clique em **Salvar edições** acontecer e a confirmação não chegar, o resultado fica incerto: confira manualmente no UX, porque a rotina nunca repete o envio sozinha. O login é manual e a rotina pode ser cancelada como as demais. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+
 ### Catálogo de unidades e acessibilidade
 
 O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. O painel mostra o selo **SEDE** na lista e no detalhe (que traz cidade, UF, endereço, CEP e CNPJ da unidade selecionada); os botões **Copiar CNPJ** e **Copiar CEP** copiam os valores e a interface informa sucesso ou falha. **Nova unidade** abre o formulário dentro do próprio painel, e o lápis ao lado do CNPJ (na lista e no detalhe) abre a unidade para editar, com o foco no campo CNPJ. Desde 31/10/2026 não existe mais o modal "Gerenciar unidades" nem o botão "Fluxo completo".
 
-A barra superior tem **Home** (F1), **Transporte** (F2), **Resumo** (F3, abre o painel de ferramenta com os ativos por regional, filtráveis por categoria, e a Comparação), **Automação** (F4), **Chamados** (F5, o antigo painel Chamados Sebrae) e **OS** (F6, o antigo painel Chamados com a tabela de ordens de serviço). Abaixo de 1200 px, **Chamados** e **OS** saem da barra e aparecem no menu **Ferramentas**. O menu **Ferramentas** agrupa os painéis (**Histórico de apelidos** F7, **Relatório mensal** F8, além de **Chamados** e **OS** em telas menores) e o catálogo (**Catálogo de unidades**). Cada aba da barra mostra, bem pequeno e centralizado embaixo do nome, o atalho F1 a F6 (sem aumentar a altura da barra; escondido abaixo de 768 px e entre 1200 e 1289 px, onde não cabe). Com um painel de ferramenta aberto, o cabeçalho (título, atalho e **Voltar**) fica fixo e só o conteúdo abaixo rola. O assistente abre com F9. Desde 31/10/2026 o menu não tem mais **Atualizar planilhas** nem **Exportar Excel** (este agora fica na seção **Comparação** do **Resumo**). O painel **Histórico de apelidos** (F7) concentra o histórico de alterações, com filtros e as ações de restaurar e excluir; a janela **Histórico de alterações** foi removida.
+A barra superior tem **Home** (F1), **Transporte** (F2), **Resumo** (F3, abre o painel de ferramenta com os ativos por regional, filtráveis por categoria, e a Comparação), **Automação** (F4), **Chamados** (F5, o antigo painel Chamados Sebrae) e **OS** (F6, o antigo painel Chamados com a tabela de ordens de serviço). Abaixo de 1200 px, **Chamados** e **OS** saem da barra e aparecem no menu **Ferramentas**. O menu **Ferramentas** agrupa os painéis (**Histórico de apelidos** F7, **Relatório mensal** F8, além de **Chamados** e **OS** em telas menores) e o catálogo (**Catálogo de unidades**). Cada aba da barra mostra, bem pequeno e centralizado embaixo do nome, o atalho F1 a F6 (sem aumentar a altura da barra; escondido abaixo de 768 px e entre 1200 e 1289 px, onde não cabe). Com um painel de ferramenta aberto, o cabeçalho (título, atalho e **Voltar**) fica fixo e só o conteúdo abaixo rola. O assistente abre com F9. Desde 31/10/2026 o menu não tem mais **Atualizar planilhas** nem **Exportar Excel** (este agora fica na seção **Comparação** do **Resumo**). O painel **Histórico de apelidos** (F7) concentra o histórico de alterações, com filtros e as ações de restaurar e excluir; a janela **Histórico de alterações** foi removida. O F7 não exibe eventos de séries iniciadas por `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae); o filtro vale só para a exibição e nada é apagado do histórico.
 
-A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário; **Equipamentos sem usuário**, abaixo da pesquisa, lista os equipamentos sem usuário do Endpoint nem manual. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
+A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário. A lista de equipamentos tem os filtros **Todos**, **Sem usuário**, **7+ dias** e **Divergentes**; o selo **Sem usuário** de um notebook ou MacBook leva à seção **Sem usuário** do **Resumo**, que lista os notebooks sem usuário do Endpoint nem manual mesmo sem comparação salva. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
 
 No cartão do equipamento pesquisado, os atalhos compactos copiam o CEP e o CNPJ de instalação da localidade de retirada, além do CNPJ de faturamento fixo. Na aba **Transporte**, o atalho **CNPJ Inst.** só é habilitado após escolher um destino; a confirmação da cópia identifica a cidade selecionada. O rodapé inclui **Copiar Série** para copiar a série pesquisada.
 
@@ -310,22 +340,48 @@ Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rá
 
 ### Automação pelo Chrome
 
-As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`. Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` em todos os logins Microsoft (Oracle, UX e Dashboard), exceto no SoftExpert, que usa `gakihiro@pr.sebrae.com.br` (também o usuário de login local do Endpoint Central); se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`; **Abrir Chrome para login** só abre Endpoint Central, UX Simpress e Oracle para você entrar antes das rotinas, sem digitar senha nem código do autenticador, e **Cancelar execução** interrompe a rotina em andamento (o Chrome continua aberto). Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` em todos os logins Microsoft (Oracle, UX e Dashboard), exceto no SoftExpert, que usa `gakihiro@pr.sebrae.com.br` (também o usuário de login local do Endpoint Central); se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
 
 ### Chamados novos do Sebrae
 
 Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Dashboard Operacional_SEBRAE (aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que ainda não estão nele. **Baixar, importar e buscar** (rotina `dashboard`) baixa o Dashboard da pasta `DASHBOARD SEBRAE` (`Mais ações › Baixar`), importa e busca de uma vez. O painel **Chamados** (F5) mostra um formulário por chamado novo, exporta as linhas para colar e, em **Atualizar Dashboard**, baixa `Dashboard Operacional_SEBRAE.xlsx`; **Enviar ao SharePoint** (rotina `enviar`) faz uma `Duplicata` do arquivo da pasta `DASHBOARD SEBRAE`, confere se ele não mudou desde a importação, guarda um backup local e só então o sobrepõe (`Replace`).
 
-O site só grava no arquivo gerado; apenas a rotina `enviar` sobrepõe o arquivo no SharePoint, e no SoftExpert a rotina só lê chamados; a única escrita é a confirmação de associar o chamado ao seu usuário, que o SoftExpert pede ao abrir o formulário. Chamados que saem da lista de abertos ficam em `data/state/sebrae_chamados_encerrados.json`. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
+**Repetir a cada 30 minutos** liga o agendamento de **Baixar, importar e buscar**. Ele vem pausado, só roda com o servidor ligado, reaproveita o login manual do Chrome e pula a tentativa quando há uma cópia gerada ainda não enviada; não envia nada ao SharePoint nem finaliza chamados.
+
+O painel **Chamados** (F5) separa **Chamados novos**, **Chamados antigos em aberto** e **Chamados finalizados** (as duas últimas listas começam recolhidas). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
+
+- **Ler chamados antigos**, no topo, lê no SoftExpert os chamados antigos ainda em aberto, sem gravar nada.
+- O lápis no bloco **Descrição** edita o texto do chamado (até 4.000 caracteres), com **Salvar**, **Cancelar** e **Restaurar original**. O texto fica só no site, em `data/state/sebrae_finalizacao.json`; no chamado novo, ele vira a coluna H no próximo **Atualizar Dashboard**.
+- Chamados do solicitante `API SEBRAE` já vêm com A `CLIENTE`, B `OUTRO`, D `EM ABERTO`, J `INCIDENTE` e a descrição para finalizar `Revisado.`.
+- As seleções ficam como rascunho no navegador até **Descartar rascunho**.
+- Um chamado do Dashboard e uma OS com a mesma série se ligam sozinhos (vínculo `Automático · Dashboard` na aba **OS**); o vínculo manual sempre vence e casos ambíguos não são ligados.
+
+O que o site grava fora do computador, sempre por ação sua:
+
+- **Enviar ao SharePoint** (rotina `enviar`) sobrepõe o Dashboard da pasta `DASHBOARD SEBRAE` com as salvaguardas acima.
+- **Finalizar no SoftExpert** encerra no SoftExpert um único chamado que você marcou como `FINALIZADO`, com a descrição informada e, se quiser, um PDF anexado. Finalizar é irreversível e pede confirmação. Em **Atualizar Dashboard**, o diálogo oferece **Atualizar e finalizar** ou **Só atualizar**; só a primeira opção finaliza. Depois de finalizar, a rotina `fechar` grava as colunas R (data e hora do encerramento) e D `FINALIZADO` e roda a `enviar`. Se o envio falhar, a cópia fica em `data/state/sebrae_dashboard_pendente/` e o painel oferece **Tentar substituir de novo**.
+- Fora isso, no SoftExpert a rotina só lê chamados; a outra escrita aceita é a confirmação de associar o chamado ao seu usuário, que o SoftExpert pede ao abrir o formulário.
+
+Atualizar e finalizar exigem que a tela esteja na mesma versão da importação; se o Dashboard foi reimportado no meio do caminho, o servidor recusa (409) sem gerar cópia nem finalizar. Chamados que saem da lista de abertos ficam em `data/state/sebrae_chamados_encerrados.json`. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
 
 ### Assistente (F9)
 
 O assistente é um chat flutuante no canto inferior direito: abre e fecha pelo ícone de robô à direita do sino de notificações, na barra superior, ou com F9. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
 
+Opcionalmente, com `DEEPSEEK_API_KEY` no `.env`, o texto da conversa vai direto ao DeepSeek, com o modelo `DEEPSEEK_MODEL` (padrão `deepseek-flash`). Nesse modo não há modelo reserva nem `data_collection: deny`, e a mensagem de voz continua exigindo `OPENROUTER_API_KEY`.
+
 - O assistente consulta as rotas do próprio Simpress. Toda alteração de dados para antes e mostra um cartão de confirmação, com texto montado pelo programa; no máximo uma alteração por mensagem.
-- Só sai do computador o texto da conversa e o resultado das consultas, com `data_collection: deny`. Antes do envio, CPFs são mascarados, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela) e e-mails e telefones são removidos, assim como senhas escritas como `senha: valor` ou `senha=valor`.
-- **Gravar áudio** grava até 120 segundos (`Esc` cancela) e transcreve a fala para a caixa de mensagem, para você revisar antes de enviar. O áudio sai do computador sem máscara e não é guardado.
+- Saem do computador o texto da conversa e o resultado das consultas (no OpenRouter, com `data_collection: deny`), o áudio gravado e as imagens anexadas (ambos sem máscara) e, só com o interruptor **Busca na web** ligado, a pesquisa já mascarada, enviada à Exa. Antes do envio de texto, CPFs são mascarados, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela) e e-mails e telefones são removidos, assim como senhas escritas como `senha: valor` ou `senha=valor`. A busca na web vem desligada.
+- Perguntas compostas podem juntar várias consultas na mesma resposta, até 8 idas ao modelo e 12 consultas; ao passar do limite, o assistente para e diz o que conseguiu consultar.
+- **Anexar** aceita PDF, `.docx`, PNG ou JPEG (até 10 MB; imagens até 4 MB; até 5 por conversa). O texto de PDF e `.docx` é mascarado antes do envio; arquivos `.doc` são recusados.
+- **Gravar áudio** grava até 120 segundos (`Esc` cancela) e transcreve a fala para a caixa de mensagem, para você revisar antes de enviar. O áudio sai do computador sem máscara e não é guardado. **Voz** lê as respostas em voz alta com a voz instalada no computador.
+- **Instruções** guarda preferências de resposta (até 4.000 caracteres) em `data/state/assistente_instrucoes.json`. **Lembretes** guarda notas e lembretes (até 200, de 500 caracteres) em `data/state/assistente_notas.json`; não há alarme.
+- As conversas ficam em `data/state/assistente_conversas.json`, só com o texto já mascarado. O histórico abre em modo leitura e cada conversa pode sair em **Exportar PDF**.
+- O assistente gera relatórios em `.xlsx` ou `.docx` (resumo mensal, totais do inventário, última comparação, divergências por localidade, chamados do Sebrae em aberto e pendências), baixados pelo link `Baixar <nome>`; ficam só na memória por 30 minutos. Também monta rascunhos de e-mail ou texto, sem enviar nada, e explica divergências ou compara períodos.
+- Pelo chat, com cartão de confirmação, é possível rodar as rotinas do Chrome (inclusive chamados do Sebrae e Dashboard), cancelar a rotina atual, ler os chamados antigos, editar a descrição de um chamado, finalizar um chamado individual no SoftExpert, abrir o controle remoto, ativar ou pausar o agendamento do Dashboard e alterar representantes regionais. Consultar um equipamento no Endpoint é só leitura e não pede cartão. O assistente não envia ao SharePoint, não atualiza a cópia local do Dashboard e não finaliza em lote.
 - Uma conversa por vez: uma segunda mensagem simultânea recebe a resposta 409.
+
+Detalhes em [Assistente](docs/cockpit-prompts/15-assistente.md).
 
 ## Limites de planilhas
 
@@ -416,6 +472,18 @@ Testes da interface JavaScript:
 node --test "tests/frontend/*.cjs"
 ```
 
+Verificação completa em um comando (testes Python, `node --test`, `node --check`, tipos TypeScript, `compileall`, `mypy` e a busca de credenciais em arquivos versionados, com resumo `OK`/`FALHA` por etapa):
+
+```powershell
+npm run verify
+```
+
+Testes da interface no navegador (Playwright):
+
+```powershell
+npm run test:ui:e2e
+```
+
 O executor Python usa dados fictícios em uma pasta temporária, bloqueia a leitura das planilhas operacionais durante a descoberta dos testes e isola os testes de transação. Não use planilhas de produção como fixtures ou destinos.
 
 ## Estrutura do projeto
@@ -439,6 +507,11 @@ domains/assistant_*.py              Assistente: OpenRouter, ferramentas, máscar
 domains/sebrae_*.py                 Chamados novos do Sebrae: Dashboard, SoftExpert, cruzamento e cópia atualizada
 domains/chrome_automation.py        Disparo e acompanhamento das rotinas do Chrome de automação
 domains/monthly_report.py           Relatório mensal de operações
+domains/endpoint_lookup.py          Consulta ao vivo no Endpoint e controle remoto pelo Chrome de automação
+domains/endpoint_removals.py        Hostnames duplicados do Endpoint descartados e restaurados
+domains/entra_users.py              Nomes do Microsoft Entra (domains/entra_inbox.py: pasta de entrada)
+domains/dashboard_agendamento.py    Agendamento "Repetir a cada 30 minutos" do Dashboard do Sebrae
+domains/local_setup.py              Importação validada dos modelos locais, com backup
 security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
@@ -449,6 +522,16 @@ routers/operations.py                Chamados Simpress/Oracle e vínculos UTIC p
 routers/assistant.py                 Rotas /api/assistente/* do chat do assistente (F9)
 routers/automation.py                Rotas da aba Automação
 routers/sebrae_dashboard.py          Importação do Dashboard e chamados novos do Sebrae
+routers/inventory_update.py          Prévia, atualização e recarga dos inventários
+routers/aliases.py                   Apelidos manuais e histórico de alterações
+routers/dashboard.py                 Resumo somente leitura do painel da Home
+routers/endpoint_lookup.py           Consultar no Endpoint e Controle remoto
+routers/endpoint_removals.py         Hostnames duplicados do Endpoint removidos/restaurados
+routers/entra_users.py               Importação e exportação dos nomes do Microsoft Entra
+routers/local_setup.py               Importação dos modelos locais
+routers/monthly_report.py            Relatório mensal (F8)
+routers/transfer_history.py          Histórico local das transferências geradas
+routers/frontend.py                  Política de cache das páginas e arquivos da interface
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
 static/js/features/                  Módulos da interface por funcionalidade
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
@@ -456,6 +539,14 @@ scripts/migrate_local_data.py        Migração segura dos dados locais para dat
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
 scripts/automacao_rotinas_chrome.py  Rotinas do Chrome de automação (OS, inventários, Sebrae, Dashboard)
+scripts/sebrae_leitura.py            Leitura no SoftExpert dos chamados que o Dashboard ainda não tem
+scripts/sebrae_softexpert.py         Acesso ao SoftExpert usado pelas rotinas do Sebrae
+scripts/sebrae_fechar.py             Finalização no SoftExpert dos chamados marcados FINALIZADO
+scripts/verificar_usuarios_endpoint.py  Conferência das pendências de usuário logado no Endpoint
+scripts/prepare_*_downloads.py       Publicação de downloads recentes nas pastas de entrada
+scripts/check_update.py              Oferta de atualização para a tag publicada mais nova
+scripts/check_secrets.py             Busca de credenciais em arquivos versionados
+scripts/verify.cjs                   Verificação completa (npm run verify)
 data/planilhas_entrada/               Modelo de transferência e planilhas locais
 data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
@@ -469,12 +560,17 @@ package.json / package-lock.json     Dependências de desenvolvimento da interfa
 iniciar_servidor.bat                  Inicializador local para Windows
 instalar_primeira_vez.bat             Instalação completa em uma máquina nova
 executar_automacao.bat                Menu das rotinas do Chrome de automação
-.env.example                          Modelo do .env do assistente (OpenRouter)
+.env.example                          Modelo do .env do assistente (OpenRouter ou DeepSeek)
+GLOSSARY.md                           Termos usados no projeto
 ```
 
 ## Índice da documentação
 
 - [Manual do usuário](docs/guias/manual_usuario.md) (para operadores, sem linguagem técnica)
+- [Glossário](GLOSSARY.md)
+- [Contratos da API do backend](docs/arquitetura/CONTRATOS_API_BACKEND.md)
+- [Nomes do Microsoft Entra](docs/operacao/nomes-entra-ui.md)
+- [Assistente](docs/cockpit-prompts/15-assistente.md)
 - [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
 - [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
@@ -500,5 +596,13 @@ As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os
 O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site.
 
 Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
+
+Algumas ações gravam ou enviam dados para fora do computador, sempre a partir de um clique seu (ou do cartão de confirmação do assistente):
+
+- **Enviar ao SharePoint**: envia a cópia atualizada do Dashboard do Sebrae.
+- **Finalizar no SoftExpert**: finaliza o chamado no SoftExpert, de forma irreversível; a rotina `fechar` também atualiza o Dashboard e o envia.
+- Sincronização com o UX Simpress na exportação de equipamentos: grava apelidos no contrato 16467.
+- **Controle remoto**: abre uma conexão com o computador escolhido pelo Endpoint Central.
+- Assistente (F9): envia texto, imagens e áudio ao OpenRouter ou ao DeepSeek e, com **Busca na web** ligada, a pesquisa à Exa (veja [Assistente (F9)](#assistente-f9)).
 
 Arquivos operacionais que já foram versionados continuam recuperáveis no histórico Git local. As regras atuais de `.gitignore` impedem novos rastreamentos, mas não reescrevem o histórico existente.
