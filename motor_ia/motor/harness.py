@@ -6,6 +6,7 @@ sandbox isolado e ruff opcional (não bloqueia se estiver indisponível no ambie
 """
 
 import ast
+import importlib.util
 import os
 import re
 import shutil
@@ -28,6 +29,8 @@ class ResultadoHarness:
     erro: str = ""
     assinatura_erro: str = ""  # usada pelo circuit breaker para detectar erro repetido
     caminho_escrito: Optional[Path] = None
+    saida_pytest: str = ""  # Fase 3: evidência estruturada pro juiz (sucesso ou falha)
+    saida_ruff: str = ""  # Fase 3: idem; ruff continua nunca bloqueando o harness
 
 
 def preparar_sandbox(sandbox_dir: Path) -> Path:
@@ -58,11 +61,16 @@ def rodar_harness(sandbox_dir: Path, arquivo_relativo: str, conteudo: str, timeo
 
     pytest_ok, pytest_saida = _rodar_pytest(sandbox_dir, timeout_s)
     if not pytest_ok:
-        return ResultadoHarness(ok=False, erro=pytest_saida, assinatura_erro=_assinatura(pytest_saida), caminho_escrito=caminho)
+        return ResultadoHarness(
+            ok=False, erro=pytest_saida, assinatura_erro=_assinatura(pytest_saida),
+            caminho_escrito=caminho, saida_pytest=pytest_saida,
+        )
 
-    _rodar_ruff(sandbox_dir)  # resultado descartado de propósito: ruff pode estar ausente no ambiente e nunca deve bloquear o harness
+    # ruff nunca bloqueia o harness (pode estar ausente no ambiente); a saída só vira
+    # evidência pro juiz (Fase 3), não mais descartada de propósito.
+    saida_ruff = _rodar_ruff(sandbox_dir)
 
-    return ResultadoHarness(ok=True, caminho_escrito=caminho)
+    return ResultadoHarness(ok=True, caminho_escrito=caminho, saida_pytest=pytest_saida, saida_ruff=saida_ruff)
 
 
 def _validar_sintaxe(conteudo: str) -> Tuple[bool, str]:
@@ -115,16 +123,23 @@ def _rodar_pytest(sandbox_dir: Path, timeout_s: float) -> Tuple[bool, str]:
         return False, "nenhum teste coletado: o arquivo deve se chamar test_*.py e conter funções test_*."
     if resultado.returncode != 0:
         return False, (resultado.stdout + resultado.stderr)[-4000:]
-    return True, ""
+    return True, (resultado.stdout + resultado.stderr)[-4000:]
 
 
-def _rodar_ruff(sandbox_dir: Path) -> None:
+def _rodar_ruff(sandbox_dir: Path) -> str:
+    # `python -m ruff` sem o pacote instalado não levanta exceção: sai com código 1 e imprime
+    # "No module named ruff" (com o caminho local do interpretador) — isso iria pro juiz como
+    # se fosse achado de lint, então checa a disponibilidade antes de rodar.
+    if importlib.util.find_spec("ruff") is None:
+        return "ruff indisponível neste ambiente; não bloqueia o harness."
     try:
-        subprocess.run(
+        resultado = subprocess.run(
             [sys.executable, "-m", "ruff", "check", "."],
             cwd=sandbox_dir,
             capture_output=True,
+            text=True,
             timeout=10,
         )
+        return (resultado.stdout + resultado.stderr).strip()
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        pass  # ruff indisponível neste ambiente; não bloqueia o harness.
+        return "ruff indisponível neste ambiente; não bloqueia o harness."
