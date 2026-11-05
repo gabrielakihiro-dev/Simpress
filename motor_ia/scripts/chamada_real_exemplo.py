@@ -37,7 +37,7 @@ def main() -> None:
     resultado = chamar_modelo(
         settings, config, modelo,
         [{"role": "user", "content": "Responda só com a palavra: ok"}],
-        max_tokens=16, temperatura=0.0,
+        max_tokens=16, temperatura=0.0, missao_id="exemplo-real-01",
     )
     usage_log.registrar(LOG_PATH, "exemplo-real-01", "conexao", resultado)  # etapa própria: não é "plano" de missão nenhuma
 

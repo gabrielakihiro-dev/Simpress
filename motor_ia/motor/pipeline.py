@@ -1,5 +1,10 @@
 """Fase 1: pipeline mínimo real — triagem (determinística) -> plano -> código -> harness ->
 (se falhar) correção, até `max_loop_iterations` -> juiz (só se crítica; por padrão o harness decide).
+
+Fase 2 (prompt caching): em toda lista de mensagens, a mensagem de "system" (instruções/schema,
+estática) vem sempre antes da de "user" (a tarefa, dinâmica) e seu texto nunca interpola `tarefa`,
+`missao_id` ou qualquer valor que mude a cada chamada — isso é o que permite ao provedor (DeepSeek,
+direto ou via OpenRouter) cachear automaticamente o prefixo entre chamadas da mesma etapa.
 """
 
 import json
@@ -17,9 +22,9 @@ from .harness import ResultadoHarness, preparar_sandbox, rodar_harness
 from .llm_adapter import ResultadoChamada
 from .schemas import CodigoSaida, PlanoSaida
 
-# (modelo, mensagens, max_tokens, temperatura) -> ResultadoChamada; produção injeta
+# (modelo, mensagens, max_tokens, temperatura, missao_id) -> ResultadoChamada; produção injeta
 # `functools.partial(chamar_modelo, settings, config)`, testes injetam um fake.
-Chamador = Callable[[str, List[Dict[str, Any]], int, float], ResultadoChamada]
+Chamador = Callable[[str, List[Dict[str, Any]], int, float, str], ResultadoChamada]
 
 PALAVRAS_CRITICAS = ("senha", "produção", "producao", "pagamento", "excluir", "deletar", "drop table")
 
@@ -67,7 +72,7 @@ def _chamar_com_schema(
 ) -> BaseModel:
     """1 chamada; se o JSON não validar o schema, 1 retry com o erro anexado; depois falha limpa."""
     for tentativa in range(2):
-        resultado = chamador(modelo, mensagens, max_tokens, temperatura)
+        resultado = chamador(modelo, mensagens, max_tokens, temperatura, missao_id)
         usage_log.registrar(log_path, missao_id, etapa, resultado)
         breaker.registrar_custo(resultado.custo_usd)
         try:
@@ -169,10 +174,23 @@ def _chamar_juiz(
     resultado = chamador(
         config.modelos.juiz,
         [
-            {"role": "system", "content": "Você é o juiz final. Responda só com 'aprovado' ou 'reprovado: <motivo>'."},
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Você é o juiz final. Responda só com 'aprovado' ou 'reprovado: <motivo>'.",
+                        # Bloco de conteúdo (formato Anthropic/OpenRouter), não cabeçalho HTTP.
+                        # TTL padrão de 5 min: o juiz roda no máximo 1x por missão (não há retry pro
+                        # juiz), então o único reuso possível é entre missões diferentes dentro da
+                        # janela de 5 min — não há como justificar aqui a escrita a 2x do TTL de 1h.
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            },
             {"role": "user", "content": f"Tarefa: {tarefa}\nArquivo: {codigo.arquivo}\nCódigo:\n{codigo.conteudo}"},
         ],
-        config.chamada.max_tokens_juiz, config.chamada.temperatura,
+        config.chamada.max_tokens_juiz, config.chamada.temperatura, missao_id,
     )
     usage_log.registrar(log_path, missao_id, "juiz", resultado)
     breaker.registrar_custo(resultado.custo_usd)
