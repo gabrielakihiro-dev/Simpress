@@ -310,7 +310,7 @@ Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rá
 
 ### Automação pelo Chrome
 
-As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`. Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` para Oracle, UX e Dashboard e `gakihiro@pr.sebrae.com.br` para Endpoint Central e SoftExpert; se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`. Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` em todos os logins Microsoft (Oracle, UX e Dashboard), exceto no SoftExpert, que usa `gakihiro@pr.sebrae.com.br` (também o usuário de login local do Endpoint Central); se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
 
 ### Chamados novos do Sebrae
 

@@ -4,7 +4,7 @@ Execute uma sincronização pontual do SoftExpert para a aba CHAMADOS do Dashboa
 
 ## Acesso e limites
 
-- Use a aba já autenticada. No primeiro acesso, pare para o usuário entrar. Se a sessão ativa do SoftExpert expirar, clique uma vez em Reconectar, depois em SSO, escolha gakihiro@pr.sebrae.com.br e aguarde. Se não concluir, pare e peça login manual. Não digite senha, token ou código. O SharePoint continua com login manual.
+- Use a aba já autenticada. No primeiro acesso, pare para o usuário entrar. Se a sessão ativa do SoftExpert expirar, clique uma vez em Reconectar, depois em SSO, escolha gakihiro@pr.sebrae.com.br e aguarde. Se não concluir, pare e peça login manual. Não digite senha, token ou código. O SharePoint continua com login manual, com a conta gansouza@simpress.com.br.
 - No SoftExpert, apenas leia. Não salve, finalize, reatribua, registre atendimento nem altere status. Se surgir confirmação inesperada, pare sem clicar.
 - Se CPF aparecer em texto que será gravado, mascare como ***.***.***-**. Não registre detalhes pessoais em logs ou no relatório final.
 
