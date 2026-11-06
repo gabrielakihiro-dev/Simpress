@@ -745,7 +745,9 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(automacao, "esperar_visivel", return_value=True), \
                     patch.object(automacao, "visivel", side_effect=lambda loc: concluido if loc is aviso else em_uso), \
                     patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
-                    patch.object(automacao, "_botao_enviar"):
+                    patch.object(automacao, "_botao_enviar"), \
+                    patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                    patch.object(automacao.time, "sleep"):
                 automacao.enviar_arquivo_para_pasta(page, arquivo)
 
     def test_menu_and_dialog_labels_in_portuguese_and_english(self):
@@ -764,6 +766,24 @@ class EnviarDashboardTests(unittest.TestCase):
         self._enviar(page)
         page.locators["substituir"].first.click.assert_called_once()
         page.locators["manter"].first.click.assert_not_called()
+
+    def test_upload_menu_retried_once_then_clicks_replace_exactly_once(self):
+        page = self._pagina({"substituir"})
+        botao = MagicMock()
+        botao.click.side_effect = [RuntimeError("DOM desatualizado"), None]
+        aviso = page.get_by_text.return_value.first
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "esperar_visivel", return_value=True), \
+                    patch.object(automacao, "visivel", side_effect=lambda loc: loc is aviso), \
+                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                    patch.object(automacao, "_botao_enviar", return_value=botao), \
+                    patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                    patch.object(automacao.time, "sleep"):
+                automacao.enviar_arquivo_para_pasta(page, arquivo)
+        self.assertEqual(botao.click.call_count, 2)
+        page.locators["substituir"].first.click.assert_called_once()
 
     def test_upload_refuses_when_only_keep_both_is_offered(self):
         page = self._pagina({"manter"})
