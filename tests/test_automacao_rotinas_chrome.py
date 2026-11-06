@@ -988,6 +988,24 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(codigo, 0)
         self.assertEqual(ordem, ["duplicata", "baixar", "conferir", "backup", "enviar"])
 
+    def test_a_post_click_failure_in_duplicate_is_not_retried_and_never_reclicks(self):
+        # Mesmo cenário do incidente real: interferência do mouse desincroniza a página depois do
+        # clique em Duplicata. O erro (genérico, não RotinaErro) deve propagar sem nova tentativa:
+        # envolver duplicar_dashboard_na_pasta inteira num retry repetiria o clique que cria a cópia.
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=RuntimeError("DOM desincronizado")) as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta") as baixar, \
+                    patch.object(automacao, "registrar_erro"), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "DOM desincronizado"):
+                    automacao.rodar_rotina_enviar(MagicMock())
+            duplicar.assert_called_once()
+            baixar.assert_not_called()
+
     def test_routine_does_not_upload_when_the_precheck_fails(self):
         with tempfile.TemporaryDirectory() as pasta:
             with patch.object(automacao, "arquivo_final_dashboard", return_value=Path(pasta) / "x.xlsx"), patch.object(automacao, "nova_aba"), \
