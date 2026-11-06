@@ -47,7 +47,7 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 - `Controle remoto` (botão ao lado de `Consultar no Endpoint`, Home/F1; pedido do usuário, 04/11/2026) é a única ação do Simpress que inicia uma conexão externa, e só por ação explícita do usuário: o clique na Home ou o pedido ao Assistente (ferramenta de escrita `abrir_controle_remoto`, com cartão de confirmação antes de conectar). Usa `POST /api/endpoint/controle-remoto`, a mesma trava e aba, sempre no Chrome de automação CDP 9333; não fecha aba nem janela.
 - O Assistente consulta pela ferramenta de leitura `consultar_endpoint`: `ultimo_logon` é dado pessoal, mascarado antes do modelo e restaurado só para a tela. Perguntas de cadastro usam `consultar_equipamento`. O fallback de MacBook (série sem `S`) exige série única na base local (`serie_detalhes_duplicada`, `mac_endpoint_serial_key`).
 
-Detalhes (fallback, snapshot sob `STATE_LOCK`, esperas de 480, 600 e 90 s): `docs/operacao/automacao-chrome.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+Detalhes (fallback, snapshot sob `STATE_LOCK`, esperas de 480, 600, 1200 e 90 s): `docs/operacao/automacao-chrome.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
 
 ## Importação de nomes do Microsoft Entra
 

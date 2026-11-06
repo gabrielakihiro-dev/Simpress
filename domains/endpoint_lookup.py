@@ -68,12 +68,18 @@ def _preparar_aba(pw: Any) -> Any:
         page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
     page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
     # Mesmo login da exportação de inventários: escolhe pr-sebrae e espera o usuário (senha/MFA).
-    automation.aguardar_login(
-        page, "Endpoint Central", automation.endpoint_logado,
-        entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
-    )
+    def esperar_login() -> None:
+        automation.aguardar_login(
+            page, "Endpoint Central", automation.endpoint_logado,
+            entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
+        )
+
+    esperar_login()
     if "inventory/computers" not in page.url:
         page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+        # A sessão pode cair entre os dois goto; sem esta checagem a falha seria um erro genérico da grade.
+        if not automation.endpoint_logado(page):
+            esperar_login()
     automation.selecionar_todos_computadores(page)
     automation.confirmar_modo_todos(page)
 
