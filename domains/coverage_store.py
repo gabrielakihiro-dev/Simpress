@@ -21,6 +21,9 @@ from domains.sebrae_vinculos import vinculos_derivados
 from domains.ticket_reporting import _is_closed
 
 Operacao = Callable[[coverage.Estado], Tuple[coverage.Estado, coverage.Registro]]
+OperacaoHistorico = Callable[
+    [coverage.Estado, Any], Tuple[coverage.Estado, Optional[coverage.Historico], coverage.Registro]
+]
 
 
 class EstadoIlegivel(ValueError):
@@ -96,6 +99,45 @@ class CoberturaStore:
                 )
             transacao.commit()
         return resultado["registro"]
+
+    def escrever_com_historico(self, historico: Path, operacao: OperacaoHistorico, hoje: date) -> coverage.Registro:
+        """Como ``escrever``, mas numa única transação também sobre o histórico de transferências.
+
+        ``operacao(estado, historico_bruto)`` devolve ``(novo_estado, novo_historico | None, resultado)``; ``None``
+        deixa o histórico intocado. Os dois arquivos ficam travados juntos desde o início, então a leitura do
+        histórico antes da gravação é consistente.
+        """
+        historico = Path(historico)
+        resultado: Dict[str, Any] = {}
+        movidos: Dict[str, Dict[str, coverage.Registro]] = {}
+        alvos = [historico, self.arquivo, self.arquivados]
+        with AtomicFileTransaction(self.transaction_root, alvos) as transacao:
+            bruto: Any = []
+            if historico.exists():
+                try:
+                    bruto = _ler_json(historico)
+                except (OSError, UnicodeError, ValueError) as error:
+                    raise FileTransactionError(f"Não foi possível ler '{historico.name}' para atualizá-lo com segurança.") from error
+
+            def atualizar(atual: Any) -> coverage.Estado:
+                novo, novo_historico, registro = operacao(validar_estado(atual, self.arquivo.name), bruto)
+                resultado.update(registro=registro, historico=novo_historico)
+                restante, saindo = coverage.separar_arquivaveis(novo, hoje)
+                movidos.update(saindo)
+                return restante
+
+            transacao.update_json(self.arquivo, atualizar, coverage.estado_vazio())
+            if resultado["historico"] is not None:
+                transacao.update_json(historico, lambda _atual: resultado["historico"], [])
+            if movidos:
+                transacao.update_json(
+                    self.arquivados,
+                    lambda atual: coverage.juntar_arquivados(validar_estado(atual, self.arquivados.name), movidos),
+                    coverage.estado_vazio(),
+                )
+            transacao.commit()
+        registro_final: coverage.Registro = resultado["registro"]
+        return registro_final
 
 
 def eh_ilegivel(error: BaseException) -> bool:

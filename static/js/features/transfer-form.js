@@ -204,6 +204,45 @@
     }
   }
 
+  // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Gerar planilha).
+  async function prepararTransporte({ serial, cidade, obs, movimentacao } = {}) {
+    const serie = String(serial || "").trim();
+    if (serie && chaveSerieTransporte(appState.currentEquipamento?.serial) !== chaveSerieTransporte(serie)) {
+      await app.selecionarItemAutocomplete({ serial: serie });
+    }
+    app.abrirAbaTransporteDoEquipamento();
+    if (cidade) app.selecionarUnidadePorCidade(String(cidade));
+    if (obs) app.adicionarObsChamado(String(obs));
+    appState.movimentacaoPendente = movimentacao ? {
+      id: movimentacao.id,
+      rev: movimentacao.rev,
+      chave: movimentacao.chave,
+      serie: movimentacao.serie,
+      destino_cidade: movimentacao.destino_cidade,
+    } : null;
+  }
+
+  // Mesmas regras de chave_serie e dobrar em domains/coverage.py.
+  function chaveSerieTransporte(valor) {
+    return String(valor || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  function dobrarCidadeTransporte(valor) {
+    return String(valor || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  // A planilha só fica ligada à movimentação se série e destino ainda forem os preparados pela Cobertura.
+  function movimentacaoDaPlanilha(payload) {
+    const pendente = appState.movimentacaoPendente;
+    appState.movimentacaoPendente = null;
+    if (!pendente) return null;
+    const bate = chaveSerieTransporte(payload?.serial) === chaveSerieTransporte(pendente.serie)
+      && dobrarCidadeTransporte(payload?.entrega_cidade) === dobrarCidadeTransporte(pendente.destino_cidade);
+    if (bate) return pendente;
+    app.showToast("Os dados mudaram; a planilha não foi ligada à movimentação.", "warning");
+    return null;
+  }
+
   async function copiarModeloChamado(textareaId) {
     const textarea = document.getElementById(textareaId);
     const texto = String(textarea?.value || "").trim();
@@ -732,7 +771,8 @@
       a.remove();
 
       app.showToast("Planilha Exportada com Sucesso!", "success");
-      emitirEventoInterface("simpress:transfer-generated", { payload });
+      const movimentacao = movimentacaoDaPlanilha(payload);
+      emitirEventoInterface("simpress:transfer-generated", movimentacao ? { payload, movimentacao } : { payload });
 
     } catch (err) {
       console.error("Erro ao gerar planilha:", err);
@@ -815,5 +855,6 @@
     atualizarPreviaTransporteCockpit, copiarResumoCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
+    prepararTransporte,
   };
 });
