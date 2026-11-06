@@ -15,6 +15,7 @@ automation = import_module("scripts.automacao_rotinas_chrome")
 
 LeituraLista = tuple[list[tuple[int, str, int]], int, int, int]
 LISTA_INCOMPLETA = "Não foi possível confirmar a lista completa de problemas no UX."
+MSG_CHROME = "Não foi possível abrir ou conectar o Chrome de automação. Feche as janelas desse Chrome e tente de novo."
 
 
 def ler_opcoes_rolaveis(
@@ -67,8 +68,15 @@ def contexto_chrome_ux() -> Iterator[Any]:
         with automation.trava_execucao("abrir_chamado_ux"):
             from playwright.sync_api import sync_playwright
 
+            try:
+                automation.garantir_chrome()  # opens the automation Chrome when it was closed
+            except Exception:
+                raise ErroUX(503, MSG_CHROME, codigo="chrome_indisponivel") from None
             with sync_playwright() as pw:
-                browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10_000)
+                try:
+                    browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10_000)
+                except Exception:
+                    raise ErroUX(503, MSG_CHROME, codigo="chrome_indisponivel") from None
                 if not browser.contexts:
                     raise ErroUX(503, "Abra o Chrome de automação antes de preparar o chamado.")
                 yield browser.contexts[0]
@@ -101,7 +109,33 @@ def _rolar_lista(lista: Any, posicao: int) -> None:
     }""", posicao)
 
 
+def _ler_lista_completa_no_dom(page: Any, lista: Any) -> list[tuple[str, int]]:
+    """ng-select renders every option without aria-posinset/setsize: accept only stable reads that reach the end."""
+    def ler() -> tuple[list[str], int]:
+        textos, fim = lista.evaluate("(lista) => {" + _SCRIPT_HOST + """
+            if (host) host.scrollTop = host.scrollHeight;
+            return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve([
+                [...lista.querySelectorAll('[role="option"]')].filter(el => el.getAttribute('aria-disabled') !== 'true')
+                    .map(el => el.innerText.trim()),
+                host ? Number(host.scrollTop + host.clientHeight >= host.scrollHeight - 1) : 1,
+            ]))));
+        }""")
+        return textos, fim
+
+    anterior: list[str] | None = None
+    for tentativa in range(6):
+        if tentativa:
+            page.wait_for_timeout(120)
+        textos, fim = ler()
+        if textos and fim and textos == anterior:
+            return [(texto, 0) for texto in textos if texto]
+        anterior = textos
+    raise ErroUX(409, LISTA_INCOMPLETA)
+
+
 def _ler_lista_acessivel(page: Any, lista: Any) -> list[tuple[str, int]]:
+    if not lista.evaluate("(lista) => !!lista.querySelector('[role=\"option\"][aria-setsize]')"):
+        return _ler_lista_completa_no_dom(page, lista)
     def ler() -> LeituraLista:
         linhas, atual, maximo, proximo = lista.evaluate("(lista) => {" + _SCRIPT_HOST + """
             const atual = host ? Math.round(host.scrollTop) : 0;
@@ -131,6 +165,8 @@ ESPERA_LOGIN_S = 420
 ESPERA_OS_S = 30
 TITULO_SERIE_MODELO = re.compile(r"^\s*Número de série/Modelo:\s*([^/]+?)\s*/\s*(.+?)\s*$")
 TITULO_OS = re.compile(r"^\s*#([0-9]{1,24})\s*$")
+BOTAO_ENVIAR = re.compile(r"^Enviar solicita[cç][aã]o$", re.IGNORECASE)
+IDS_SOLICITANTE = {"nome": "nome", "email": "email", "telefone": "telefone", "ramal": "ramal", "departamento_cargo": "cargo"}
 CAMPOS_SOLICITANTE = {
     "nome": "Nome", "email": "E-mail", "telefone": "Telefone para contato",
     "ramal": "Ramal", "departamento_cargo": "Departamento/Cargo",
@@ -154,6 +190,36 @@ def _rotulado(page: Any, nome: str) -> Any:
 
 def _botao(page: Any, nome: str) -> Any:
     return page.get_by_role("button", name=nome, exact=True)
+
+
+def _botao_enviar(page: Any) -> Any:
+    """The real portal writes "Enviar Solicitação"; the plain-text spelling stays accepted."""
+    return page.get_by_role("button", name=BOTAO_ENVIAR)
+
+
+def _campo_serie(page: Any) -> Any:
+    return _rotulado(page, "Número de série").or_(page.locator("input#numeroSerie"))
+
+
+def _campo_solicitante(page: Any, campo: str) -> Any:
+    """Contact inputs carry only aria-label=id (nome, email, telefone, ramal, cargo), never the visible label."""
+    return _rotulado(page, CAMPOS_SOLICITANTE[campo]).or_(page.locator(f"input#{IDS_SOLICITANTE[campo]}"))
+
+
+def _campo_descricao(page: Any) -> Any:
+    return _rotulado(page, "Descreva o problema").or_(page.locator("textarea"))
+
+
+def _fechar_aviso_backup(page: Any, espera_ms: int = 0) -> None:
+    """Step 2 opens an informational "Backup de dados" modal that blocks every click until closed."""
+    aviso = page.locator("app-modal[titulo='Backup de dados'] .fechar").filter(visible=True)
+    for _ in range(max(1, espera_ms // 250 + 1)):
+        if aviso.count() == 1:
+            aviso.click(timeout=CONTROLES_MS)
+            aviso.wait_for(state="hidden", timeout=CONTROLES_MS)
+            return
+        if espera_ms:
+            page.wait_for_timeout(250)
 
 
 def _valor_confere(campo: str, atual: str, esperado: str) -> bool:
@@ -210,7 +276,7 @@ class PortalUXChrome:
         voltou = False
         while monotonic() < limite:
             rota = _rota(page.url)
-            if rota == ROTA_INICIAL and page.get_by_text("Etapa 1 de 2", exact=True).filter(visible=True).count() == 1:
+            if rota == ROTA_INICIAL and _campo_serie(page).filter(visible=True).count() == 1:
                 return
             if rota and rota != ROTA_INICIAL and not voltou and automation.ux_logado(page):
                 page.goto(ORIGEM_UX + ROTA_INICIAL, wait_until="domcontentloaded", timeout=CONTROLES_MS)
@@ -223,7 +289,7 @@ class PortalUXChrome:
         page.goto(ORIGEM_UX + ROTA_INICIAL, wait_until="domcontentloaded", timeout=CONTROLES_MS)
         page.bring_to_front()
         self._esperar_etapa_inicial(page)
-        _unico(_rotulado(page, "Número de série")).fill(serial, timeout=CONTROLES_MS)
+        _unico(_campo_serie(page)).fill(serial, timeout=CONTROLES_MS)
         _unico(_botao(page, "Buscar")).click(timeout=CONTROLES_MS)
         _unico(_botao(page, "Próximo")).click(timeout=CONTROLES_MS)
         rota = _rota(page.url)
@@ -234,11 +300,15 @@ class PortalUXChrome:
         if rota not in ROTAS_FORMULARIO:
             raise ErroUX(409, "O UX saiu da rota esperada para o formulário.")
         page.evaluate("(nome) => { window.name = nome; }", f"{aba}:{rota}")
+        _fechar_aviso_backup(page, espera_ms=3000)
         return modelo, self._opcoes(page)
 
     @staticmethod
     def _controle_problema(page: Any) -> Any:
         nome = "Selecione o problema"
+        ng_select = page.locator("ng-select").filter(visible=True)
+        if ng_select.count() == 1:
+            return _unico(ng_select)
         return _unico(_rotulado(page, nome).or_(page.get_by_role("combobox", name=nome, exact=True)).or_(_botao(page, nome)))
 
     @staticmethod
@@ -282,8 +352,9 @@ class PortalUXChrome:
         self._pronto = None
         page = self._validar(serial, modelo, aba)
         _unico(page.get_by_text("Solicitante", exact=True))
-        campos = {campo: _unico(_rotulado(page, nome)) for campo, nome in CAMPOS_SOLICITANTE.items()}
-        texto = _unico(_rotulado(page, "Descreva o problema"))
+        _fechar_aviso_backup(page)
+        campos = {campo: _unico(_campo_solicitante(page, campo)) for campo in CAMPOS_SOLICITANTE}
+        texto = _unico(_campo_descricao(page))
         self._opcoes(page, problema)
         texto.fill(descricao, timeout=CONTROLES_MS)
         for campo, elemento in campos.items():
@@ -302,13 +373,13 @@ class PortalUXChrome:
         if pronto is None or pronto[2] != aba:
             raise ErroUX(409, "A aba não está pronta para envio.")
         page = self._validar(*pronto)
-        _unico(_botao(page, "Enviar solicitação")).click(timeout=CONTROLES_MS)
+        _unico(_botao_enviar(page)).click(timeout=CONTROLES_MS)
         prazo = monotonic() + ESPERA_OS_S
         while monotonic() < prazo:
             rota = _rota(page.url)
             if (
                 rota.startswith("/ng/solicitar-atendimento/")
-                and not _botao(page, "Enviar solicitação").filter(visible=True).count()
+                and not _botao_enviar(page).filter(visible=True).count()
                 and not page.get_by_text("Etapa 2 de 2", exact=True).filter(visible=True).count()
             ):
                 os_visivel = page.get_by_text(TITULO_OS).filter(visible=True)

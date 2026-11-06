@@ -1284,11 +1284,12 @@ Horário disponível para atendimento:</textarea>
       <p class="font-bold">Descrição</p>
       <div id="ux-chamado-descricao"></div>
       <p id="ux-chamado-status" role="status"></p>
+      <p id="ux-chamado-motivo" class="font-bold" hidden></p>
       <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-fechar" data-on-click="fecharChamadoUX">Fechar</button>
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-conferido" data-on-click="conferirChamadoUX" hidden>Conferi no UX; preparar de novo</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' disabled>Simular preenchimento</button>
-        <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' disabled>Revisar e enviar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' aria-describedby="ux-chamado-motivo" disabled>Simular preenchimento</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' aria-describedby="ux-chamado-motivo" disabled>Revisar e enviar</button>
       </div>
     </div>
   </div>
