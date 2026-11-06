@@ -158,6 +158,74 @@
     }
   }
 
+  const powershellRequestGate = transferUtils.createRequestGate();
+  const POWERSHELL_HOST_PADRAO = "PRNOTEUMU005";
+  const POWERSHELL_AVISO_NAO_EXECUTADO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
+
+  function alternarModoPowerShellEndpoint() {
+    const modo = document.getElementById("select-powershell-modo").value;
+    document.getElementById("campo-powershell-usuario").classList.toggle("hidden", modo !== "usuario");
+  }
+
+  function mensagemPowerShellEndpoint(data, hostname) {
+    const host = data.hostname || hostname;
+    const usuarios = Array.isArray(data.usuarios) ? data.usuarios.join(", ") : "";
+    if (data.status === "inserido") {
+      const offline = data.hostname_padrao_offline ? ` O computador padrão ${POWERSHELL_HOST_PADRAO} estava offline; foi usado ${host}.` : "";
+      return `${POWERSHELL_AVISO_NAO_EXECUTADO} Computador: ${host}; conectado como ${data.usuario || data.modo}.${offline}`;
+    }
+    if (data.status === "not_found") return `Computador ${host} não encontrado no Endpoint. Nada foi inserido.`;
+    if (data.status === "sem_host_online") return `O computador padrão ${host} está offline e nenhum outro computador online foi encontrado. Nada foi inserido.`;
+    if (data.status === "sem_usuario") return `Usuário não encontrado em ${host}.${usuarios ? ` Usuários disponíveis: ${usuarios}.` : " Nenhum usuário logado disponível."} Nada foi inserido.`;
+    if (data.status === "usuario_ambiguo") return `Há mais de um usuário logado em ${host}: ${usuarios}. Informe o usuário e tente de novo. Nada foi inserido.`;
+    if (data.status === "erro_terminal") return data.mensagem || `Não foi possível abrir o PowerShell em ${host}. Nada foi inserido.`;
+    throw new Error("Não foi possível confirmar o resultado do Endpoint.");
+  }
+
+  async function abrirPowerShellEndpoint() {
+    const button = document.getElementById("btn-powershell-endpoint");
+    const result = document.getElementById("endpoint-powershell-result");
+    if (button.disabled) return;
+    const comando = document.getElementById("input-powershell-comando").value;
+    if (/[\r\n]/.test(comando)) {
+      result.textContent = "O comando não pode ter quebra de linha.";
+      return;
+    }
+    if (!comando.trim()) {
+      result.textContent = "Informe o comando.";
+      return;
+    }
+    const modo = document.getElementById("select-powershell-modo").value === "usuario" ? "usuario" : "sistema";
+    const hostname = document.getElementById("input-powershell-hostname").value.trim();
+    const usuario = modo === "usuario" ? document.getElementById("input-powershell-usuario").value.trim() : "";
+    const payload = { modo, comando };
+    if (hostname) payload.hostname = hostname;
+    if (usuario) payload.usuario = usuario;
+    const confirmado = await app.confirmarAcao({
+      titulo: "Inserir comando no PowerShell",
+      mensagem: `Vai abrir o PowerShell do Endpoint em ${hostname || `${POWERSHELL_HOST_PADRAO} (padrão)`}, modo ${modo === "usuario" ? `usuário logado${usuario ? ` (${usuario})` : ""}` : "SYSTEM"}, e inserir este comando no prompt:\n\n${comando}\n\nO comando será apenas inserido; NÃO será executado. O Enter é seu, no terminal do Chrome.`,
+      confirmar: "Inserir no PowerShell", cancelar: "Cancelar", destrutiva: false,
+    });
+    if (!confirmado) return;
+    const request = powershellRequestGate.begin();
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    result.textContent = "Abrindo o PowerShell no Endpoint…";
+    try {
+      const data = await app.apiFetch("/api/endpoint/powershell", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload), signal: request.signal,
+        errorMessage: "Não foi possível abrir o PowerShell.",
+      });
+      result.textContent = mensagemPowerShellEndpoint(data, hostname || POWERSHELL_HOST_PADRAO);
+    } catch (error) {
+      if (error.name !== "AbortError") result.textContent = error.message || "Não foi possível abrir o PowerShell.";
+    } finally {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
+  }
+
   function limparSelecaoEquipamento() {
     app.definirEquipamentoAtual(null);
     highlightHomeListItem(null);
@@ -1104,7 +1172,7 @@
 
   return {
     consultarEndpoint,
-    controleRemotoEndpoint,
+    controleRemotoEndpoint, abrirPowerShellEndpoint, alternarModoPowerShellEndpoint,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,
