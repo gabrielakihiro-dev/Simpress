@@ -1017,9 +1017,14 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
                         raise SoftExpertErro(mensagem)
                     raise EtapaInstavelSX(mensagem)
                 return resultado  # type: ignore[no-any-return]
-            except SoftExpertErro:
+            except SoftExpertErro as erro:
+                if respondidas and isinstance(erro, _rotinas().EtapaInstavel):
+                    # Já respondeu Sim a associar o chamado: refazer do zero arriscaria clicar de novo.
+                    raise SoftExpertErro(str(erro)) from erro
                 raise
             except Exception as erro:
+                if respondidas:
+                    raise SoftExpertErro(str(erro)) from erro
                 raise EtapaInstavelSX(str(erro)) from erro
 
         return _rotinas().etapa_resiliente(  # type: ignore[no-any-return]

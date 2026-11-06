@@ -209,13 +209,14 @@ def cursor_mudou(baseline: tuple[int, int], folga_px: int = 4) -> bool:
 
 
 def aguardar_estabilidade_pre_clique(
-    verificar: Callable[[], bool], descricao: str, espera_s: float = 0.6, janelas: int = 3
+    verificar: Callable[[], bool], descricao: str, espera_s: float = 0.6, janelas: int = 20
 ) -> None:
     """Confere, por breves silêncios, que o cursor não se moveu e ``verificar()`` ainda é verdade antes de um clique irreversível.
 
-    Nunca repete o clique: só a espera é refeita (até ``janelas`` vezes) quando o cursor se move ou o estado muda,
-    nunca o clique em si. Levanta ``RotinaErro`` normal (nunca ``EtapaInstavel``) só depois de esgotar todas as
-    janelas, para não arriscar disparar a ação duas vezes num mero tremor do mouse de uma única janela.
+    Nunca repete o clique: só a espera é refeita (até ``janelas`` vezes, ~12 s com os padrões) quando o cursor se
+    move ou o estado muda, nunca o clique em si. Esperar é seguro porque o clique ainda não aconteceu; um prazo
+    curto abortaria Finalizar/Enviar anexo no meio do fluxo e deixaria o chamado a meio caminho. Levanta
+    ``RotinaErro`` normal (nunca ``EtapaInstavel``) só depois de esgotar todas as janelas.
     """
     for tentativa in range(1, janelas + 1):
         baseline = obter_posicao_cursor()

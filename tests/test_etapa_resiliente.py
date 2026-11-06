@@ -52,13 +52,24 @@ class EtapaResilienteTests(unittest.TestCase):
 
 class AguardarEstabilidadePreCliqueTests(unittest.TestCase):
     def test_raises_plain_rotina_erro_not_etapa_instavel_when_cursor_never_stabilizes(self):
-        # Cursor instável nas 3 janelas (tentativas) seguidas: só aí levanta, sem EtapaInstavel (nunca repete o clique).
-        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50)] * 3), \
-                unittest.mock.patch.object(automacao.time, "sleep"), \
+        # Cursor instável nas 20 janelas (~12 s) seguidas: só aí levanta, sem EtapaInstavel (nunca repete o clique).
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50)] * 20), \
+                unittest.mock.patch.object(automacao.time, "sleep") as sleep, \
                 unittest.mock.patch.object(automacao, "verificar_cancelamento"):
             with self.assertRaises(automacao.RotinaErro) as contexto:
                 automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
         self.assertNotIsInstance(contexto.exception, automacao.EtapaInstavel)
+        self.assertEqual(sleep.call_count, 20)
+        self.assertAlmostEqual(sum(chamada.args[0] for chamada in sleep.call_args_list), 12.0)
+
+    def test_tolerates_about_twelve_seconds_of_moving_cursor_before_stabilizing(self):
+        # Mouse em movimento por 19 janelas (~11,4 s) e parado na 20a: retorna sem levantar (o antigo limite de 3 abortava).
+        posicoes = [(0, 0), (50, 50)] * 19 + [(10, 10), (10, 10)]
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=posicoes), \
+                unittest.mock.patch.object(automacao.time, "sleep") as sleep, \
+                unittest.mock.patch.object(automacao, "verificar_cancelamento"):
+            automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
+        self.assertEqual(sleep.call_count, 20)
 
     def test_raises_plain_rotina_erro_when_state_check_fails_in_every_window(self):
         with unittest.mock.patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
