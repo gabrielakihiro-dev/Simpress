@@ -84,7 +84,7 @@
       lido: Boolean(leitura),
       titulo: texto(item.titulo) || texto(leitura?.titulo),
       solicitante: texto(item.usuario) || texto(leitura?.solicitante),
-      descricao: texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
+      descricao: texto(item.descricao) || texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
     };
   }
 
@@ -858,10 +858,14 @@
           item.leitura_softexpert = { ...item.leitura_softexpert, descricao: resposta.descricao };
         }), blocoDetalhe("Atendimento realizado", dados.atendimento)];
       }
-      else if (NUMERO_UTIC.test(item.numero)) {
-        const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
-        dica.dataset.leitura = "pendente";
-        notas.push(dica);
+      else {
+        // Ainda não lido no SoftExpert: mostra a descrição da planilha Dashboard (coluna H) quando houver, só leitura.
+        if (dados.descricao) detalhes.push(blocoDetalhe("Descrição", dados.descricao));
+        if (NUMERO_UTIC.test(item.numero)) {
+          const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
+          dica.dataset.leitura = "pendente";
+          notas.push(dica);
+        }
       }
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
