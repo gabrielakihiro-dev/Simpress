@@ -77,6 +77,9 @@ test("dadosAntigo: o Dashboard manda; título e solicitante vazios usam a leitur
   assert.equal(comDashboard.solicitante, "Camila");
   assert.deepEqual(dadosAntigo({ titulo: "T", usuario: "U", leitura_softexpert: null }),
     { lido: false, titulo: "T", solicitante: "U", descricao: "", atendimento: "", abertura: "" });
+  // 05/11/2026: sem leitura, a descrição vem da coluna H do Dashboard (item.descricao); com leitura, o Dashboard ainda manda.
+  assert.equal(dadosAntigo({ titulo: "T", usuario: "U", descricao: "Falha no teclado.", leitura_softexpert: null }).descricao, "Falha no teclado.");
+  assert.equal(dadosAntigo({ titulo: "T", usuario: "U", descricao: "Da planilha.", leitura_softexpert: leitura }).descricao, "Da planilha.");
 });
 
 test("resumoLeituraAntigos: andamento com X de Y, resultado completo e interrompido", () => {

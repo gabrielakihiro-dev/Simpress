@@ -99,7 +99,7 @@ class LookupTests(unittest.TestCase):
                 context = browser.contexts = [MagicMock()]
                 page = context[0].new_page.return_value
                 with patch.object(automation, "TRAVA_PATH", lock), patch.object(automation, "acionar_quando_pronto"), \
-                     patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"), \
+                     patch.object(automation, "aguardar_login"), patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"), \
                      patch.object(endpoint_lookup, "consultar_grade", side_effect=RuntimeError("failure") if failure else None,
                                   return_value={"status": "found"}), \
                      patch("playwright.sync_api.sync_playwright") as factory:
@@ -120,6 +120,24 @@ class LookupTests(unittest.TestCase):
             endpoint_lookup.consultar("ABC", False)
         factory.assert_not_called()
 
+    def test_waits_for_endpoint_login_before_reading_the_grid(self):
+        pw = MagicMock()
+        pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
+        page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
+        page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/login"
+        ordem = []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
+             patch("playwright.sync_api.sync_playwright") as factory, \
+             patch.object(automation, "aguardar_login", side_effect=lambda *a, **k: ordem.append("login")) as login, \
+             patch.object(automation, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("grade")), \
+             patch.object(automation, "confirmar_modo_todos"), patch.object(automation, "acionar_quando_pronto"), \
+             patch.object(endpoint_lookup, "consultar_grade", return_value={}):
+            factory.return_value.__enter__.return_value = pw
+            endpoint_lookup.consultar("ABC", False)
+        self.assertEqual(ordem, ["login", "grade"])
+        self.assertEqual(login.call_args.args[1:3], ("Endpoint Central", automation.endpoint_logado))
+        self.assertIs(login.call_args.kwargs["entrar"], automation.endpoint_entrar)
+
     def test_private_tab_preparation_does_not_require_logged_users_column(self):
         data = grade([("ABC", "logged", "last")])
         data["cabecalhos"].pop(1)
@@ -127,7 +145,7 @@ class LookupTests(unittest.TestCase):
         pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
         with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
              patch("playwright.sync_api.sync_playwright") as factory, \
-             patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"), \
+             patch.object(automation, "aguardar_login"), patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"), \
              patch.object(automation, "acionar_quando_pronto") as ready, \
              patch.object(grid, "ler_grade", return_value=data), patch.object(endpoint_lookup, "consultar_grade", return_value={}):
             factory.return_value.__enter__.return_value = pw
@@ -142,7 +160,7 @@ class RemoteControlTests(unittest.TestCase):
         page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
         page.locator.return_value.first.locator.return_value.first.inner_text.return_value = " PC1 "
         page.url = ""
-        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "aguardar_login"), patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)):
             factory.return_value.__enter__.return_value = pw
             result = endpoint_lookup.controle_remoto("ABC", False, **kwargs)
         return result, page
