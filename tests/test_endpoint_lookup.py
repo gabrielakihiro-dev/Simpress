@@ -141,6 +141,7 @@ class RemoteControlTests(unittest.TestCase):
         pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
         page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
         page.locator.return_value.first.locator.return_value.first.inner_text.return_value = " PC1 "
+        page.url = ""
         with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)):
             factory.return_value.__enter__.return_value = pw
             result = endpoint_lookup.controle_remoto("ABC", False, **kwargs)

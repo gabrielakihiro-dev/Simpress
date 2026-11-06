@@ -37,6 +37,8 @@ class BrowserLookupTests(unittest.TestCase):
         from playwright.sync_api import sync_playwright
         automation = SimpleNamespace(
             verificar_cancelamento=lambda: None, log=lambda *args: None, RotinaErro=RuntimeError,
+            EtapaInstavel=RuntimeError, etapa_resiliente=lambda etapa, descricao, **kwargs: etapa(),
+            definir_pagina_ativa_para_recuperacao=lambda pagina: None, aguardar_estado=lambda *a, **k: None,
         )
         with sync_playwright() as pw:
             try:
