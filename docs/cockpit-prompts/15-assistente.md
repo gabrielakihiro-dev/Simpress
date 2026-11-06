@@ -1,5 +1,23 @@
 # 15 — Chat flutuante do Assistente
 
+## Abrir chamado no UX pela Home (06/11/2026)
+
+Selecione o equipamento e complete a descrição na aba de chamado ativa da Home. No
+Assistente, digite **Abrir chamado no UX**. A ferramenta local de preparação consulta
+modelo e opções sem preencher o formulário de envio. Digite exatamente uma das opções
+ou `Cancelar`; qualquer outra mensagem cancela o preparo e segue para o modelo normal.
+O pedido exige o assunto (`UX` e `chamado`/`solicita`/`atendimento`) e um verbo de ação
+(`abrir`, `criar`, `registrar` e flexões): perguntas como "quais chamados abertos no UX?"
+não acionam o portal. A ação de escrita só começa após a confirmação no cartão montado pelo
+programa. Se a seleção ou a descrição mudar, é necessário preparar de novo. Em caso de
+envio incerto, confira no portal antes de dizer **Conferi no UX** para preparar novamente.
+O sistema registra essa conferência na tentativa correspondente.
+
+A conversa de abertura é processada localmente e não passa pelo OpenRouter. A descrição
+da Home fica em memória para o pedido; o cartão identifica série e problema e indica que
+usará o texto editado na Home. Os dados do solicitante são lidos apenas para preencher o
+portal. Nenhum desses dados é gravado no histórico do Assistente.
+
 Chat com a IA do Simpress (OpenRouter, chamado pelo servidor local), aberto como um widget flutuante no canto inferior direito, sem tirar o usuário da tela em que está. Nos trechos abaixo, "painel" e "área" se referem ao conteúdo desse chat.
 
 ## Desvio do artefato do Cockpit

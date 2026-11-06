@@ -31,7 +31,8 @@ from domains.assistant_lgpd import Mascara, limpar_texto_sensivel
 from domains.assistant_notas import NotasStore
 from domains.assistant_openrouter import ModelClient, ModelReply, OpenRouterError
 from domains.assistant_relatorios import GeradorRelatorios
-from domains.assistant_tools import TOOLS, schemas_para_mensagem, tool_schemas
+from domains.assistant_tools import FERRAMENTAS_LOCAIS_UX, TOOLS, schemas_para_mensagem, tool_schemas
+from domains.ux_chamados import ErroUX, validar_descricao
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,7 @@ class AssistantConversation:
         self._lock = threading.Lock()
         self._mensagens: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         self._pendente: Optional[Dict[str, Any]] = None
+        self._ux_preparo: Optional[Dict[str, Any]] = None
         self._schemas: Optional[List[Dict[str, Any]]] = None  # subset picked per user message; None = all tools
         self.anexos = AnexoStore()
         self.relatorios = GeradorRelatorios(api)
@@ -209,12 +211,24 @@ class AssistantConversation:
 
     # --- public turns ---------------------------------------------------
 
-    def enviar_mensagem(self, texto_usuario: str) -> Resposta:
+    def enviar_mensagem(self, texto_usuario: str, *, contexto_ux: Optional[Dict[str, Any]] = None) -> Resposta:
         with self._exclusivo():
             if self._client is None:
                 return Resposta(texto=MSG_SEM_CHAVE)
             if self._pendente is not None:
                 return Resposta(texto="Há uma alteração aguardando sua confirmação. Confirme ou cancele antes de continuar.")
+            # A question about UX tickets must not open the portal: it takes the subject and an action verb.
+            comando_ux = bool(
+                re.search(r"\bux\b", texto_usuario, re.I)
+                and re.search(r"chamad|solicita|atendimento", texto_usuario, re.I)
+                and re.search(r"\b(abr(ir|a|am|e)|cri(ar|a|e|am|em)|registr(ar|a|e|am))\b", texto_usuario, re.I)
+            )
+            conferido = texto_usuario.strip().casefold() == "conferi no ux"
+            if comando_ux or conferido or self._ux_preparo is not None:
+                resposta_ux = self._mensagem_ux(texto_usuario, contexto_ux, preparar=comando_ux or conferido, conferido=conferido)
+                if resposta_ux is not None:
+                    return resposta_ux
+                # None: the text was not a choice, so the preparation was cancelled and the message goes to the model.
             self._carregar_nomes_base()
             self._atualizar_prompt()
             self._aparar_historico()
@@ -235,13 +249,68 @@ class AssistantConversation:
                 self.anexos.marcar_enviadas([a.id for a in imagens])
             return resposta
 
-    def resolver_confirmacao(self, confirmado: bool) -> Resposta:
+    def _cancelar_preparo_ux(self) -> None:
+        preparo, self._ux_preparo = self._ux_preparo, None
+        if preparo is not None:
+            self._api.cancelar_chamado_ux(preparo["session_id"])
+
+    def _mensagem_ux(
+        self, texto: str, contexto: Optional[Dict[str, Any]], *, preparar: bool, conferido: bool,
+    ) -> Optional[Resposta]:
+        if preparar:
+            self._cancelar_preparo_ux()
+            if not contexto or not contexto["serial"]:
+                return Resposta(texto="Selecione um equipamento na Home e preencha a descrição da aba ativa antes de preparar o chamado.")
+            try:
+                validar_descricao(contexto["descricao"])
+            except ErroUX as falha:
+                return Resposta(texto=str(falha))
+            ferramenta = FERRAMENTAS_LOCAIS_UX["preparar_chamado_ux"]
+            dados = ferramenta.run(self._api, {"serial": contexto["serial"], "conferido": conferido})
+            if dados.get("erro"):
+                return Resposta(texto=str(dados["erro"]) + (" Se já conferiu manualmente, digite “Conferi no UX”." if "não confirmou o envio" in str(dados["erro"]) else ""))
+            if not dados.get("session_id") or dados.get("serial") != contexto["serial"]:
+                return Resposta(texto="O UX não confirmou a preparação para este equipamento.")
+            self._ux_preparo = {**dados, "contexto": contexto}
+            opcoes = "\n".join(f"• {opcao}" for opcao in dados["opcoes"])
+            ultimo = dados.get("ultimo_envio")
+            aviso = f"Já existe um chamado enviado para esta série (OS #{ultimo['os']}). Confira antes de prosseguir.\n\n" if ultimo else ""
+            return Resposta(
+                texto=f"{aviso}Série: {dados['serial']} · Modelo: {dados['modelo']}\nDigite exatamente o nome de um problema da lista, ou “Cancelar”.\n{opcoes}",
+                ferramentas=[ferramenta.name],
+            )
+        sessao = self._ux_preparo
+        assert sessao is not None
+        escolhas = [opcao for opcao in sessao["opcoes"] if opcao.casefold() == texto.strip().casefold()]
+        if texto.strip().casefold() in ("cancelar", "pare") or (len(escolhas) == 1 and contexto != sessao["contexto"]):
+            self._cancelar_preparo_ux()
+            return Resposta(texto="Preparação cancelada. Selecione o equipamento e prepare novamente para continuar.")
+        if len(escolhas) != 1:
+            self._cancelar_preparo_ux()
+            return None
+        ferramenta = FERRAMENTAS_LOCAIS_UX["enviar_chamado_ux"]
+        assert ferramenta.describe is not None
+        args = {"session_id": sessao["session_id"], "serial": sessao["serial"], "problema": escolhas[0],
+                "descricao": sessao["contexto"]["descricao"]}
+        descricao = ferramenta.describe(args)
+        self._ux_preparo = None
+        self._pendente = {"nome": ferramenta.name, "args": args, "descricao": descricao, "contexto_ux": sessao["contexto"]}
+        return Resposta(texto=descricao, ferramentas=[ferramenta.name], pendente={"descricao": descricao, "ux": "1"})
+
+    def resolver_confirmacao(self, confirmado: bool, *, contexto_ux: Optional[Dict[str, Any]] = None) -> Resposta:
         with self._exclusivo():
             if self._client is None:
                 return Resposta(texto=MSG_SEM_CHAVE)
             pendente, self._pendente = self._pendente, None
             if pendente is None:
                 return Resposta(texto="Não há alteração pendente.")
+            if pendente["nome"] in FERRAMENTAS_LOCAIS_UX:
+                if not confirmado or contexto_ux != pendente["contexto_ux"]:
+                    self._api.cancelar_chamado_ux(pendente["args"]["session_id"])
+                    return Resposta(texto="Envio cancelado. Prepare novamente se a série ou o texto da Home mudou.")
+                ferramenta = FERRAMENTAS_LOCAIS_UX[pendente["nome"]]
+                resultado_ux = ferramenta.run(self._api, pendente["args"])
+                return Resposta(texto=self._texto_resultado(pendente["descricao"], resultado_ux), ferramentas=[ferramenta.name])
             if confirmado:
                 resultado = self._executar(pendente["nome"], pendente["args"])
             else:
@@ -262,6 +331,9 @@ class AssistantConversation:
         with self._exclusivo():
             self._mensagens = [{"role": "system", "content": SYSTEM_PROMPT}]
             self._mascara.limpar()
+            self._cancelar_preparo_ux()
+            if self._pendente and self._pendente["nome"] in FERRAMENTAS_LOCAIS_UX:
+                self._api.cancelar_chamado_ux(self._pendente["args"]["session_id"])
             self._pendente = None
             self._texto_turno = ""
             self._conversa_id = novo_id()
