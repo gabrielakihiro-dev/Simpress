@@ -67,6 +67,13 @@ def _preparar_aba(pw: Any) -> Any:
         page = contexto.new_page()
         page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
     page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+    # Mesmo login da exportação de inventários: escolhe pr-sebrae e espera o usuário (senha/MFA).
+    automation.aguardar_login(
+        page, "Endpoint Central", automation.endpoint_logado,
+        entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
+    )
+    if "inventory/computers" not in page.url:
+        page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
     automation.selecionar_todos_computadores(page)
     automation.confirmar_modo_todos(page)
 

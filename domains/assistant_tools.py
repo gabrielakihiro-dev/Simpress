@@ -364,7 +364,7 @@ def _describe_controle_remoto(args: Args) -> str:
     return (
         f"Abrir o controle remoto do equipamento {serial} no Endpoint, pelo Chrome de automação: busca a série, clica no monitor, "
         "escolhe Controle remoto, escreve o motivo 'acesso' e clica em Conectar. Inicia uma conexão real com o computador "
-        "e não fecha nada; você continua a sessão. Se o computador estiver offline, nada é conectado. Exige o login do Endpoint feito."
+        "e não fecha nada; você continua a sessão. Se o computador estiver offline, nada é conectado. Se o Endpoint pedir login, a aba escolhe o domínio pr-sebrae e espera o usuário entrar (senha e autenticador são do usuário)."
     )
 
 
