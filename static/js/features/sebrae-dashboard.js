@@ -341,6 +341,7 @@
     const estado = {
       naoSalvos: { valores: {}, edicoes: {} }, rascunhoExterno: false, formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", versaoImportacao: "", descartar: false,
       soft: {}, refs: new Map(), temporizadores: {}, salvando: {}, finalizados: new Set(),
+      observacoes: {}, temporizadoresObs: {}, salvandoObs: {},
       fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
       antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
     };
@@ -552,10 +553,11 @@
       return zona;
     }
 
-    /** Zona 2: os seis campos manuais (A, B, D, J, R, S). */
-    function zonaClassificacao(manuais) {
+    /** Zona 2: os seis campos manuais (A, B, D, J, R, S) e a observação interna do andamento. */
+    function zonaClassificacao(manuais, observacao = null) {
       const zona = criarZona("classificacao", "Classificação operacional", "Preenchimento manual");
       zona.appendChild(manuais);
+      if (observacao) zona.appendChild(observacao);
       return zona;
     }
 
@@ -646,7 +648,7 @@
         const valor = letra === "R" ? item.encerrado_em : letra === "D" ? "FINALIZADO" : ficha.manuais?.[letra];
         manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleLeitura(letra, valor)));
       });
-      artigo.appendChild(zonaClassificacao(manuais));
+      artigo.appendChild(zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao, true)));
       // Zona 3 concluída: sem pendências nem botões, só a descrição enviada, o PDF e o resultado.
       const zonaFinal = criarZona("finalizacao", "Finalização no SoftExpert", "Concluída", { destaque: true });
       const descricao = document.createElement("textarea");
@@ -867,7 +869,7 @@
           notas.push(dica);
         }
       }
-      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais));
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao)));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
       const detalhe = document.createElement("details");
       detalhe.className = "sebrae-antigo";
@@ -903,7 +905,7 @@
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
-      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais));
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao)));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
       return artigo;
     }
@@ -1060,6 +1062,92 @@
         return false;
       } finally {
         atualizarFinalizar(numero);
+      }
+    }
+
+    /** Bloco de anotação interna do andamento (Zona 2, abaixo dos campos manuais). */
+    function blocoObservacao(numero, observacaoInicial, somenteLeitura = false) {
+      const bloco = document.createElement("div");
+      bloco.className = "sebrae-chamado__observacao";
+      const textarea = document.createElement("textarea");
+      textarea.className = "ck-entrada";
+      textarea.rows = 2;
+      textarea.placeholder = somenteLeitura
+        ? " "
+        : "Anotação interna do andamento deste chamado (não vai para o SoftExpert nem para o Dashboard)";
+      textarea.dataset.sebraeObservacao = numero;
+      textarea.value = observacaoInicial || "";
+
+      if (somenteLeitura) {
+        textarea.readOnly = true;
+        bloco.appendChild(campo("Observação do andamento", textarea));
+        return bloco;
+      }
+
+      const feedback = dom.createTextElement(
+        "p",
+        "ck-campo__ajuda sebrae-obs__feedback",
+        "Salva automaticamente."
+      );
+      feedback.setAttribute("role", "status");
+      feedback.dataset.estado = "";
+
+      estado.observacoes[numero] = {
+        enviado: observacaoInicial || "",
+        textarea,
+        feedback,
+      };
+
+      textarea.addEventListener("input", () => {
+        window.clearTimeout(estado.temporizadoresObs[numero]);
+        estado.temporizadoresObs[numero] = window.setTimeout(() => salvarObservacao(numero), 800);
+        definirFeedback(feedback, "Alteração ainda não salva…", "pendente");
+      });
+      textarea.addEventListener("change", () => salvarObservacao(numero));
+      textarea.addEventListener("blur", () => salvarObservacao(numero));
+
+      bloco.append(campo("Observação do andamento", textarea), feedback);
+      return bloco;
+    }
+
+    /** Salvamentos de observação entram em fila: a última versão digitada é a que fica gravada. */
+    function salvarObservacao(numero) {
+      window.clearTimeout(estado.temporizadoresObs[numero]);
+      const fila = (estado.salvandoObs[numero] || Promise.resolve(true)).then(() => enviarObservacao(numero));
+      estado.salvandoObs[numero] = fila;
+      return fila;
+    }
+
+    async function enviarObservacao(numero) {
+      const reg = estado.observacoes[numero];
+      if (!reg || !reg.textarea) return true;
+      const texto = reg.textarea.value;
+      if (texto === reg.enviado) {
+        if (reg.feedback && reg.feedback.dataset.estado === "pendente") {
+          definirFeedback(reg.feedback, "Salva automaticamente.", "");
+        }
+        return true;
+      }
+      definirFeedback(reg.feedback, "Salvando…", "salvando");
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "observacao"), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ observacao: texto }),
+          errorMessage: "Não foi possível salvar a observação.",
+        });
+        reg.enviado = texto;
+        if (dados && typeof dados.observacao === "string") {
+          reg.enviado = dados.observacao;
+          if (reg.textarea.value === texto) {
+            reg.textarea.value = dados.observacao;
+          }
+        }
+        definirFeedback(reg.feedback, "Salva.", "ok");
+        return true;
+      } catch (error) {
+        definirFeedback(reg.feedback, `Não foi possível salvar: ${error.message}`, "erro");
+        return false;
       }
     }
 

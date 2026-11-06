@@ -358,6 +358,69 @@ class ArquivoRotasTest(RotasBase):
         self.assertNotIn("Segredo123", guardado)
         self.assertIn("Camila Lopes", guardado)
 
+    def test_observacoes_put_get_e_presenca_no_estado(self):
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        self.importar(montar())
+
+        # Testar PUT com UTIC de chamado aberto
+        resp1 = self.cliente.put(
+            "/api/sebrae/chamados/UTIC-2026-0001/observacao",
+            json={"observacao": "Aguardando retorno do usuário."},
+        )
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(resp1.json()["numero"], "UTIC-2026-0001")
+        self.assertEqual(resp1.json()["observacao"], "Aguardando retorno do usuário.")
+        self.assertEqual(resp1.headers.get("cache-control"), "no-store")
+
+        # Testar PUT com UTIC de chamado novo
+        resp_novo = self.cliente.put(
+            "/api/sebrae/chamados/UTIC-2026-1378/observacao",
+            json={"observacao": "Chamado novo em triagem."},
+        )
+        self.assertEqual(resp_novo.status_code, 200)
+        self.assertEqual(resp_novo.json()["numero"], "UTIC-2026-1378")
+        self.assertEqual(resp_novo.json()["observacao"], "Chamado novo em triagem.")
+
+        # Testar PUT com linha:N (antigo sem UTIC)
+        resp2 = self.cliente.put(
+            "/api/sebrae/chamados/linha:15/observacao",
+            json={"observacao": "Chamado antigo sem UTIC."},
+        )
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.json()["numero"], "linha:15")
+        self.assertEqual(resp2.json()["observacao"], "Chamado antigo sem UTIC.")
+
+        # Testar validações
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/invalido/observacao", json={"observacao": "x"}).status_code, 422)
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/observacao", json={"observacao": "a" * 4001}).status_code, 422)
+
+        # Testar GET /api/sebrae/observacoes
+        resp_lista = self.cliente.get("/api/sebrae/observacoes")
+        self.assertEqual(resp_lista.status_code, 200)
+        obs_map = resp_lista.json()["observacoes"]
+        self.assertEqual(obs_map["UTIC-2026-0001"]["observacao"], "Aguardando retorno do usuário.")
+        self.assertEqual(obs_map["UTIC-2026-1378"]["observacao"], "Chamado novo em triagem.")
+        self.assertEqual(obs_map["linha:15"]["observacao"], "Chamado antigo sem UTIC.")
+
+        # Testar presença em GET /api/sebrae/novos
+        estado = self.cliente.get("/api/sebrae/novos").json()
+        abertos = estado["importado"]["abertos"]
+        aberto_alvo = next((a for a in abertos if a["numero"] == "UTIC-2026-0001"), None)
+        self.assertIsNotNone(aberto_alvo)
+        self.assertEqual(aberto_alvo["observacao"], "Aguardando retorno do usuário.")
+
+        formulario = estado["novos"]["formulario"]
+        novo_alvo = next((n for n in formulario if n["numero"] == "UTIC-2026-1378"), None)
+        self.assertIsNotNone(novo_alvo)
+        self.assertEqual(novo_alvo["observacao"], "Chamado novo em triagem.")
+
+        # Testar limpeza com string vazia
+        resp_limpar = self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/observacao", json={"observacao": ""})
+        self.assertEqual(resp_limpar.status_code, 200)
+        self.assertEqual(resp_limpar.json()["observacao"], "")
+        obs_depois = self.cliente.get("/api/sebrae/observacoes").json()["observacoes"]
+        self.assertNotIn("UTIC-2026-0001", obs_depois)
+
 
 class DescricaoOpenApiTest(RotasBase):
     def test_rotas_de_gravacao_mantem_descricao_no_openapi(self):
