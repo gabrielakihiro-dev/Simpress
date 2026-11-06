@@ -297,6 +297,39 @@
         </header>
 
         <p id="endpoint-lookup-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+        <details class="ck-ps-endpoint" id="endpoint-powershell">
+          <summary>PowerShell no Endpoint</summary>
+          <form class="ck-ps-endpoint__form" data-on-submit="abrirPowerShellEndpoint" autocomplete="off" novalidate>
+            <p class="ck-campo__rotulo">O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.</p>
+            <label class="ck-campo">
+              <span class="ck-campo__rotulo">Comando (uma linha)</span>
+              <textarea id="input-powershell-comando" class="ck-entrada" rows="2" maxlength="2000" spellcheck="false" aria-describedby="endpoint-powershell-result"></textarea>
+            </label>
+            <div class="ck-ps-endpoint__linha">
+              <label class="ck-campo">
+                <span class="ck-campo__rotulo">Modo</span>
+                <select id="select-powershell-modo" class="ck-entrada" data-on-change="alternarModoPowerShellEndpoint">
+                  <option value="sistema">SYSTEM</option>
+                  <option value="usuario">Usuário logado</option>
+                </select>
+              </label>
+              <label class="ck-campo">
+                <span class="ck-campo__rotulo">Hostname (opcional)</span>
+                <input id="input-powershell-hostname" class="ck-entrada" type="text" maxlength="64" placeholder="PRNOTEUMU005">
+              </label>
+              <label class="ck-campo hidden" id="campo-powershell-usuario">
+                <span class="ck-campo__rotulo">Usuário (opcional)</span>
+                <input id="input-powershell-usuario" class="ck-entrada" type="text" maxlength="128" placeholder="ex.: gananias">
+              </label>
+            </div>
+            <div>
+              <button type="submit" id="btn-powershell-endpoint" class="ck-btn ck-btn--secundario" aria-controls="endpoint-powershell-result" title="Abre o PowerShell no Endpoint e insere o comando no prompt, sem executá-lo">
+                <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Inserir no PowerShell</span>
+              </button>
+            </div>
+            <p id="endpoint-powershell-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+          </form>
+        </details>
         <dl class="ck-dados" id="ck-dados-equipamento">
           <div class="ck-dado">
             <div class="ck-dado__textos"><dt>Série</dt><dd class="ck-mono" id="grid-serial">—</dd></div>

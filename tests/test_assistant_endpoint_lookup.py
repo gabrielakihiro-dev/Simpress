@@ -21,10 +21,12 @@ class AssistantEndpointTests(unittest.TestCase):
             transport = asgi_transport(lambda: None, 8000)
             transport("POST", "/api/endpoint/consultar", None, {"serial": "ABC"})
             transport("POST", "/api/endpoint/controle-remoto", None, {"serial": "ABC"})
+            transport("POST", "/api/endpoint/powershell", None, {"comando": "ls", "modo": "sistema"})
             transport("GET", "/api/stats", None, None)
         self.assertGreaterEqual(limits[0], 120)
         self.assertEqual(limits[1], limits[0])
-        self.assertEqual(limits[2], 30)
+        self.assertEqual(limits[2], limits[0])
+        self.assertEqual(limits[3], 30)
 
     def test_slow_endpoint_lookup_preserves_budget_for_final_model_answer(self):
         now = [0.0]
