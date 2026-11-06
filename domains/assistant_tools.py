@@ -1387,6 +1387,23 @@ CHANGE_TOOLS: List[Tool] = [
 
 TOOLS: Dict[str, Tool] = {tool.name: tool for tool in QUERY_TOOLS + CHANGE_TOOLS}
 
+# The description and session of these local tools never cross the model boundary.
+FERRAMENTAS_LOCAIS_UX: Dict[str, Tool] = {
+    tool.name: tool for tool in (
+        _read(
+            "preparar_chamado_ux", "Consulta o modelo e as opções de problema no UX.",
+            lambda c, a: c.preparar_chamado_ux(a["serial"], a["conferido"]),
+        ),
+        _change(
+            "enviar_chamado_ux", "Envia o chamado no UX após confirmação no cartão.",
+            lambda c, a: c.enviar_chamado_ux(a),
+            lambda a: f"Enviar solicitação no UX para a série {a['serial']}. Problema: {a['problema']}. "
+            "Será usado o texto que você editou na aba ativa da Home.",
+        ),
+    )
+}
+
+
 
 def tool_schemas(busca_web: bool = False) -> List[Dict[str, Any]]:
     return [tool.schema() for tool in TOOLS.values() if busca_web or not tool.usa_web]

@@ -54,6 +54,14 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 
 Detalhes (fallback, snapshot sob `STATE_LOCK`, esperas de 480, 600, 1200 e 90 s): `docs/operacao/automacao-chrome.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
 
+## Abertura de chamados no UX (06/11/2026)
+
+- Autorização: pedido do usuário de 06/11/2026 para adicionar a abertura de chamados no UX pela Home e pelo Assistente. O link manual e o botão Copiar permanecem.
+- A Home usa apenas a série selecionada e o texto da aba ativa. O usuário escolhe o problema no Simpress; exclua `impress`, `digitaliza`, `atolament`, `scanner`, `printer`, `mfp`, `licenciament` e `diverg` sem acentos e sem distinguir maiúsculas, e exclua `Hardware` apenas como prefixo. Não escolha por inferência. Descrição vazia ou com campos de modelo não preenchidos impede a operação.
+- Use aba própria e trava compartilhada do Chrome de automação. Sessão opaca de 30 min; revalide origem, rota, etapa, nome da aba, série, modelo e correspondência única do problema antes de operar. Login manual. A aba da sessão é fechada ao cancelar, ao expirar e após o resultado do envio (inclusive o incerto, sem novo clique). Preserve endereço diferenciado, anexos e dias de indisponibilidade.
+- O envio real exige os booleanos `enviar: true` e `confirmado: true` após confirmação do usuário. Na simulação, preencha e pare antes do envio. Não envie na validação real com a série de teste: o backend recusa `enviar:true` para `BRM551RN1Y` (`SERIES_SEM_ENVIO_REAL`, 422), e a variável de ambiente `SIMPRESS_UX_SEM_ENVIO=1` recusa qualquer envio real (a simulação continua funcionando), no serviço e no adaptador, antes do clique. Após o clique, aguarde a OS uma vez; timeout é incerto, não recarregue nem repita. Envio anterior confirmado gera aviso. A última tentativa incerta exige conferência manual explícita e fica marcada com `conferido_em` no histórico, preservando o estado original. Uma nova tentativa incerta exige nova conferência.
+- Mantenha `data/state/ux_solicitante.json` e `data/state/ux_chamados_historico.json` fora do Git. O histórico guarda série, data, OS, estado e, se houver conferência manual, a data `conferido_em`. Para listas personalizadas de problemas, exija posições e total ARIA consistentes e cobertura completa. Nunca grave descrição nem dados do solicitante em logs, históricos ou conteúdo enviado ao modelo. O Assistente prepara localmente, pede a escolha literal do problema e usa o cartão do programa para a confirmação final.
+
 ## Importação de nomes do Microsoft Entra
 
 - Se o POST de importação concluir e a consulta complementar do equipamento selecionado falhar, mantenha explícito o sucesso da importação, avise a falha separadamente e não afirme que a tela do equipamento foi atualizada. Falha no próprio POST continua sendo apresentada como erro de importação.

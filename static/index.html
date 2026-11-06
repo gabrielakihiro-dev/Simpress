@@ -426,6 +426,7 @@
                   <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copiar
                   <kbd class="ck-kbd" aria-hidden="true">C</kbd>
                 </button>
+                <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-abrir-chamado-ux" data-on-click="abrirChamadoUX" aria-haspopup="dialog">Abrir chamado no UX</button>
               </div>
             </div>
 
@@ -1274,6 +1275,24 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
   <!-- ========================================== -->
+  <div id="modal-chamado-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-ux">
+    <div class="ck-dialogo">
+      <h3 id="titulo-chamado-ux" class="text-base font-bold">Abrir chamado no UX</h3>
+      <p>Série: <strong id="ux-chamado-serie"></strong> · Modelo: <strong id="ux-chamado-modelo"></strong></p>
+      <label for="ux-chamado-problema">Problema</label>
+      <select id="ux-chamado-problema" class="ck-input" data-on-change="atualizarProblemaChamadoUX" disabled></select>
+      <p class="font-bold">Descrição</p>
+      <div id="ux-chamado-descricao"></div>
+      <p id="ux-chamado-status" role="status"></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-fechar" data-on-click="fecharChamadoUX">Fechar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-conferido" data-on-click="conferirChamadoUX" hidden>Conferi no UX; preparar de novo</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' disabled>Simular preenchimento</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' disabled>Revisar e enviar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-confirmar-acao" class="modal-overlay ck-veu hidden">
     <div class="ck-dialogo">
       <div class="flex items-center space-x-2.5 pb-4 border-b border-line-quiet">

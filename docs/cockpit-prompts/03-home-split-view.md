@@ -125,6 +125,16 @@ Em **Usuário** e **Local atual**: o ícone é de lápis (pencil) e abre ediçã
 
 #### Card de chamado manual (abaixo da grade)
 
+Em 06/11/2026, a pedido do usuário, o cartão recebeu **Abrir chamado no UX**. O botão
+usa a série selecionada e a descrição editada na aba ativa; Portal e Copiar continuam
+disponíveis. O modal mostra série, modelo, texto e problemas filtrados. O usuário
+escolhe o problema e pode simular o preenchimento ou revisar a série, o problema e a
+descrição antes de clicar em **Enviar solicitação**. A simulação deixa a aba no formulário;
+o envio confirmado mostra a OS. Uma tentativa incerta exige conferência explícita no UX.
+O sistema registra a conferência daquela tentativa e só volta a exigir o passo se houver novo envio incerto.
+Fechar o modal ou mudar de equipamento descarta a preparação antiga e cancela a sessão
+se o envio ainda não começou.
+
 Substitui os 4 textareas de "Textos prontos para chamados manuais".
 
 **Barra de pílulas:** Deslocamento, Kit teclado + mouse, Mau funcionamento, Uso inadequado.
