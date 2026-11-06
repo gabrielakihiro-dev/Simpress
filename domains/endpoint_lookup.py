@@ -67,6 +67,7 @@ def _preparar_aba(pw: Any) -> Any:
         page = contexto.new_page()
         page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
     page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+    automation.definir_pagina_ativa_para_recuperacao(page)
     automation.selecionar_todos_computadores(page)
     automation.confirmar_modo_todos(page)
 
@@ -107,6 +108,17 @@ def _menu_com_controle_remoto(page: Any, esperar_ms: int = 5000) -> bool:
         return False
 
 
+def _clicar_resiliente(acao: Any, descricao: str) -> None:
+    """Clique de navegação (nunca o "Conectar", irreversível): refaz do zero em caso de instabilidade."""
+    def _etapa() -> None:
+        try:
+            acao()
+        except Exception as erro:
+            raise automation.EtapaInstavel(str(erro)) from erro
+
+    automation.etapa_resiliente(_etapa, descricao)
+
+
 def _conectar_controle_remoto(page: Any) -> None:
     page.locator(_ITEM_CONTROLE_REMOTO).first.click(timeout=10000)
     page.locator('textarea[name="reasonMessage"]:visible').fill(MOTIVO_CONTROLE_REMOTO, timeout=15000)
@@ -130,12 +142,17 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
                 return {"status": "ambiguous", "serial": serial, "origem": "base_local"}
             linha = page.locator(_LINHA).first
             hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
-            linha.locator(".resource-action--button").first.click(timeout=10000)
+            _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")
             if not _menu_com_controle_remoto(page):
                 # Monitor vermelho ou sem a opção: tenta o menu "Ações" da página do computador.
                 page.keyboard.press("Escape")
-                linha.locator("a.anchor-text").first.click(timeout=10000)
-                page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000)
+                def _abrir_pagina_computador() -> None:
+                    if grid.URL_DETALHE.search(page.url):
+                        return  # tentativa anterior já navegou; o clique a seguir buscaria "linha" de novo, que não existe mais.
+                    linha.locator("a.anchor-text").first.click(timeout=10000)
+
+                _clicar_resiliente(_abrir_pagina_computador, "Abrir a página do computador")
+                _clicar_resiliente(lambda: page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000), "Abrir menu de ações na página do computador")
                 if not _menu_com_controle_remoto(page):
                     page.keyboard.press("Escape")
                     return {"status": "offline", "serial": serial, "hostname": hostname}
