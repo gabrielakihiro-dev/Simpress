@@ -317,6 +317,15 @@ class ChamadoNaoEncontrado(SoftExpertErro):
     motivo = MOTIVO_NAO_ENCONTRADO
 
 
+class EtapaInstavelSX(SoftExpertErro, _rotinas().EtapaInstavel):
+    """Falha de navegação recuperável: etapa_resiliente refaz do zero antes de desistir.
+
+    Herda de SoftExpertErro para que, se as tentativas se esgotarem, o motivo relatado em
+    finalizar_chamado continue o mesmo de hoje (MOTIVO_FORMULARIO_INDISPONIVEL), em vez de cair
+    no genérico MOTIVO_ERRO_INESPERADO.
+    """
+
+
 @dataclass(frozen=True)
 class ItemLista:
     """Uma linha da central de tarefas; ``texto`` é o texto bruto da linha (dado não confiável)."""
@@ -533,6 +542,7 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
     Com ``parar_em``, pára assim que esse número aparece, deixando a lista posicionada nele.
     Uma lista que não termina em ``MAX_RODADAS_LISTA`` voltas é falha, nunca resultado parcial.
     """
+    _rotinas().definir_pagina_ativa_para_recuperacao(page)
     _aguardar_lista(page)
     # Logo depois do login a lista aparece antes das linhas (ou com o aviso de vazia): sem esperar por elas
     # a rotina lia 0 chamados e dava a busca como concluída. Uma lista realmente vazia só paga esta espera.
@@ -548,10 +558,22 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
         if botao is not None:  # paginação: avança até o botão ficar desabilitado
             if not _proxima_disponivel(botao):
                 break
+
             antes = _textos_linhas(page)
-            clicar(botao, "Próxima página")
-            if not _esperar(page, lambda: _textos_linhas(page) != antes, ESPERA_PAGINA_MS):
-                raise SoftExpertErro("A lista não mudou depois de pedir a próxima página.")
+
+            def _proxima_pagina() -> None:
+                try:
+                    if _textos_linhas(page) != antes:
+                        return  # tentativa anterior já avançou; refazer o clique pularia uma página.
+                    clicar(botao, "Próxima página")
+                    if not _esperar(page, lambda: _textos_linhas(page) != antes, ESPERA_PAGINA_MS):
+                        raise EtapaInstavelSX("A lista não mudou depois de pedir a próxima página.")
+                except SoftExpertErro:
+                    raise
+                except Exception as erro:
+                    raise EtapaInstavelSX(str(erro)) from erro
+
+            _rotinas().etapa_resiliente(_proxima_pagina, "Próxima página na central de tarefas")
             _aguardar_sem_carregamento(page, ESPERA_PAGINA_MS)
             continue
         # Rolagem: só termina depois de algumas voltas sem número novo.
@@ -581,28 +603,38 @@ def _localizar_chamado(page: "Page", numero: str) -> Optional[tuple[ItemLista, "
         if busca.count() != 1:
             raise SoftExpertErro(f"{numero}: não consegui identificar o campo de pesquisa da central de tarefas.")
         _log(f"{numero}: ausente da lista; pesquisando o número pelo filtro do SoftExpert.")
+
         antes = _textos_linhas(page)
-        busca.fill(numero)
-        busca.press("Enter")
-        ultimo: tuple = ()
-        desde = time.monotonic()
 
-        def pesquisa_respondeu() -> bool:
-            # O SoftExpert esvazia a lista por ~0,4 s antes de mostrar o resultado (sem spinner): só vale um estado
-            # que mudou em relação à lista anterior, é lista com cartões ou "vazia" declarada, e se manteve estável.
-            nonlocal ultimo, desde
-            if tela_de_login(page):
-                raise SessaoExpirada("O SoftExpert voltou para o login durante a pesquisa do chamado.")
-            textos = _textos_linhas(page)
-            estado = (tuple(textos), bool(textos) or _lista_declarada_vazia(page), _visivel(page.locator(SEL_CARREGANDO)))
-            if estado != ultimo:
-                ultimo, desde = estado, time.monotonic()
-                return False
-            mudou = textos != antes if textos else estado[1]
-            return mudou and not estado[2] and (time.monotonic() - desde) * 1000 >= ESPERA_RESULTADO_ESTAVEL_MS
+        def _pesquisar() -> None:
+            ultimo: tuple = ()
+            desde = [time.monotonic()]
 
-        if not _esperar(page, pesquisa_respondeu, ESPERA_LISTA_MS):
-            raise SoftExpertErro(f"{numero}: a pesquisa pelo filtro do SoftExpert não mostrou uma resposta confirmável.")
+            def pesquisa_respondeu() -> bool:
+                # O SoftExpert esvazia a lista por ~0,4 s antes de mostrar o resultado (sem spinner): só vale um estado
+                # que mudou em relação à lista anterior, é lista com cartões ou "vazia" declarada, e se manteve estável.
+                nonlocal ultimo
+                if tela_de_login(page):
+                    raise SessaoExpirada("O SoftExpert voltou para o login durante a pesquisa do chamado.")
+                textos = _textos_linhas(page)
+                estado = (tuple(textos), bool(textos) or _lista_declarada_vazia(page), _visivel(page.locator(SEL_CARREGANDO)))
+                if estado != ultimo:
+                    ultimo, desde[0] = estado, time.monotonic()
+                    return False
+                mudou = textos != antes if textos else estado[1]
+                return mudou and not estado[2] and (time.monotonic() - desde[0]) * 1000 >= ESPERA_RESULTADO_ESTAVEL_MS
+
+            try:
+                busca.fill(numero)
+                busca.press("Enter")
+                if not _esperar(page, pesquisa_respondeu, ESPERA_LISTA_MS):
+                    raise EtapaInstavelSX(f"{numero}: a pesquisa pelo filtro do SoftExpert não mostrou uma resposta confirmável.")
+            except SoftExpertErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavelSX(str(erro)) from erro
+
+        _rotinas().etapa_resiliente(_pesquisar, f"{numero}: pesquisar pelo filtro da central de tarefas")
         if not _textos_linhas(page) and _lista_declarada_vazia(page):
             return None
         item = next((i for i in listar_chamados(page) if i.numero == numero), None)
@@ -745,7 +777,17 @@ def _abrir_aba_registro(formulario: "Page") -> None:
         return
     aba = formulario.get_by_text(NOME_REGISTRO).filter(visible=True)
     if _esperar(formulario, lambda: aba.count() == 1, ESPERA_ABERTURA_MS):
-        clicar(aba, "aba Registro de Chamados")
+        _rotinas().definir_pagina_ativa_para_recuperacao(formulario)
+
+        def _abrir_aba() -> None:
+            try:
+                clicar(aba, "aba Registro de Chamados")
+            except SoftExpertErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavelSX(str(erro)) from erro
+
+        _rotinas().etapa_resiliente(_abrir_aba, "Abrir aba Registro de Chamados")
         # Chamado da API costuma vir com o Registro em branco: espera curta pelo número, para não custar ESPERA_ABERTURA_MS à toa.
         api = _sem_acentos(_cabecalho(formulario)["solicitante"]) == SOLICITANTE_SEM_EMAIL
         _esperar(formulario, numero_lido, ESPERA_REGISTRO_API_MS if api else ESPERA_ABERTURA_MS)
@@ -785,29 +827,33 @@ def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
     if valor:
         return str(valor)
 
-    for frame in _frames(page):
-        candidatos = (
-            frame.get_by_role("tab", name=NOME_ATENDIMENTO_TI),
-            frame.get_by_role("link", name=NOME_ATENDIMENTO_TI),
-            frame.get_by_role("button", name=NOME_ATENDIMENTO_TI),
-            frame.get_by_text(NOME_ATENDIMENTO_TI, exact=True),
-        )
-        for candidato in candidatos:
-            try:
-                visiveis = candidato.filter(visible=True)
-                if visiveis.count() != 1:
-                    continue
-                clicar(visiveis, "Atendimento - Chamados TI")
-                _aguardar_estavel(page)
-                return str(_esperar(page, lambda: _ler_detalhes_atendimento_visiveis(page), ESPERA_ESTAVEL_MS) or "")
-            except SoftExpertErro:
-                raise
-            except Exception:
-                continue
+    _rotinas().definir_pagina_ativa_para_recuperacao(page)
 
-    raise SoftExpertErro(
-        f"{numero}: a seção Atendimento - Chamados TI não ficou disponível para consultar os detalhes."
-    )
+    def _abrir_e_ler() -> str:
+        for frame in _frames(page):
+            candidatos = (
+                frame.get_by_role("tab", name=NOME_ATENDIMENTO_TI),
+                frame.get_by_role("link", name=NOME_ATENDIMENTO_TI),
+                frame.get_by_role("button", name=NOME_ATENDIMENTO_TI),
+                frame.get_by_text(NOME_ATENDIMENTO_TI, exact=True),
+            )
+            for candidato in candidatos:
+                try:
+                    visiveis = candidato.filter(visible=True)
+                    if visiveis.count() != 1:
+                        continue
+                    clicar(visiveis, "Atendimento - Chamados TI")
+                    _aguardar_estavel(page)
+                    return str(_esperar(page, lambda: _ler_detalhes_atendimento_visiveis(page), ESPERA_ESTAVEL_MS) or "")
+                except SoftExpertErro:
+                    raise
+                except Exception:
+                    continue
+        raise EtapaInstavelSX(
+            f"{numero}: a seção Atendimento - Chamados TI não ficou disponível para consultar os detalhes."
+        )
+
+    return _rotinas().etapa_resiliente(_abrir_e_ler, "Abrir Atendimento - Chamados TI")
 
 
 def _formulario_visivel(page: "Page") -> bool:
@@ -914,42 +960,76 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
     context.on("page", nova_janela)
     page.on("dialog", tratar)
     try:
-        _conferir_linha(linha, numero)
-        if linha.locator(SEL_GRUPO_ACOES).count():
-            _clicar_icone_executar(page, linha, numero)  # interface atual: o ✓ já abre o formulário
-        else:
-            linha.click(timeout=15_000)
-            executar = page.get_by_role("button", name=NOME_EXECUTAR).filter(visible=True)
-            if not _esperar(page, lambda: executar.count() and executar.first.is_enabled(), ESPERA_ABERTURA_MS):
-                raise SoftExpertErro(f"{numero}: o botão Executar não ficou disponível depois de selecionar a linha.")
-            _conferir_linha(linha, numero)
-            clicar(executar, "Executar")
-            item = page.get_by_role("menuitem", name=NOME_REGISTRO).or_(page.get_by_text(NOME_REGISTRO)).filter(visible=True)
-            if not _esperar(page, lambda: item.count(), ESPERA_ABERTURA_MS):
-                raise SoftExpertErro(f"{numero}: o item Registro de Chamados não apareceu no menu Executar.")
-            _conferir_linha(linha, numero)
-            clicar(item, "Registro de Chamados")
+        _rotinas().definir_pagina_ativa_para_recuperacao(page)
 
-        def formulario() -> Optional["Page"]:
-            candidatos = [janela for janela in novas if not janela.is_closed()] + [page]
-            for candidato in candidatos:
-                if tela_de_login(candidato):
-                    raise SessaoExpirada(f"{numero}: o SoftExpert pediu o login ao abrir o Registro de Chamados.")
-            if _responder_confirmacao(candidatos, respondidas):
-                return None
-            for candidato in candidatos:
-                lista_na_tela = candidato is page and _visivel(page.locator(SEL_LISTA))
-                if not lista_na_tela and _formulario_visivel(candidato):
-                    return candidato
-            return None
+        def _recuperar_janela() -> None:
+            # Default não serve aqui: fecha janelas PHP de tentativas anteriores antes de refazer do zero.
+            for janela in novas:
+                try:
+                    if not janela.is_closed():
+                        janela.close()
+                except Exception:
+                    pass
+            novas.clear()
+            # respondidas não é limpa: já ter clicado Sim em associar o chamado vale para todas as tentativas.
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            time.sleep(1)
 
-        resultado = _esperar(page, formulario, ESPERA_ABERTURA_MS)
-        if resultado is None:
-            raise SoftExpertErro(
-                f"{numero}: o formulário do Registro de Chamados não abriu em {ESPERA_ABERTURA_MS // 1000} s.",
-                MOTIVO_FORMULARIO_INDISPONIVEL,
-            )
-        return resultado  # type: ignore[no-any-return]
+        def _etapa() -> "Page":
+            try:
+                _conferir_linha(linha, numero)
+                if linha.locator(SEL_GRUPO_ACOES).count():
+                    _clicar_icone_executar(page, linha, numero)  # interface atual: o ✓ já abre o formulário
+                else:
+                    linha.click(timeout=15_000)
+                    executar = page.get_by_role("button", name=NOME_EXECUTAR).filter(visible=True)
+                    if not _esperar(page, lambda: executar.count() and executar.first.is_enabled(), ESPERA_ABERTURA_MS):
+                        raise EtapaInstavelSX(f"{numero}: o botão Executar não ficou disponível depois de selecionar a linha.")
+                    _conferir_linha(linha, numero)
+                    clicar(executar, "Executar")
+                    item = page.get_by_role("menuitem", name=NOME_REGISTRO).or_(page.get_by_text(NOME_REGISTRO)).filter(visible=True)
+                    if not _esperar(page, lambda: item.count(), ESPERA_ABERTURA_MS):
+                        raise EtapaInstavelSX(f"{numero}: o item Registro de Chamados não apareceu no menu Executar.")
+                    _conferir_linha(linha, numero)
+                    clicar(item, "Registro de Chamados")
+
+                def formulario() -> Optional["Page"]:
+                    candidatos = [janela for janela in novas if not janela.is_closed()] + [page]
+                    for candidato in candidatos:
+                        if tela_de_login(candidato):
+                            raise SessaoExpirada(f"{numero}: o SoftExpert pediu o login ao abrir o Registro de Chamados.")
+                    if _responder_confirmacao(candidatos, respondidas):
+                        return None
+                    for candidato in candidatos:
+                        lista_na_tela = candidato is page and _visivel(page.locator(SEL_LISTA))
+                        if not lista_na_tela and _formulario_visivel(candidato):
+                            return candidato
+                    return None
+
+                resultado = _esperar(page, formulario, ESPERA_ABERTURA_MS)
+                if resultado is None:
+                    mensagem = f"{numero}: o formulário do Registro de Chamados não abriu em {ESPERA_ABERTURA_MS // 1000} s."
+                    if respondidas:
+                        # Já respondeu Sim a associar o chamado: refazer do zero arriscaria clicar de novo.
+                        raise SoftExpertErro(mensagem)
+                    raise EtapaInstavelSX(mensagem)
+                return resultado  # type: ignore[no-any-return]
+            except SoftExpertErro as erro:
+                if respondidas and isinstance(erro, _rotinas().EtapaInstavel):
+                    # Já respondeu Sim a associar o chamado: refazer do zero arriscaria clicar de novo.
+                    raise SoftExpertErro(str(erro)) from erro
+                raise
+            except Exception as erro:
+                if respondidas:
+                    raise SoftExpertErro(str(erro)) from erro
+                raise EtapaInstavelSX(str(erro)) from erro
+
+        return _rotinas().etapa_resiliente(  # type: ignore[no-any-return]
+            _etapa, f"{numero}: abrir Registro de Chamados", recuperar=_recuperar_janela
+        )
     except BaseException:
         # Falha ou cancelamento antes do formulário: não deixa a janela PHP aberta.
         for janela in novas:
@@ -1216,27 +1296,32 @@ def _achar_controle(page: "Page", rotulo: str, marca: str, quer: str = "campo") 
 
 def _ir_para_menu(page: "Page", nome: "re.Pattern[str]", descricao: str) -> None:
     """Clica em um item do menu lateral (aba/link/botão/texto) que seja o único visível com esse nome."""
-    for frame in _frames(page):
-        candidatos = (
-            frame.get_by_role("tab", name=nome),
-            frame.get_by_role("menuitem", name=nome),
-            frame.get_by_role("link", name=nome),
-            frame.get_by_role("button", name=nome),
-            frame.get_by_text(nome),
-        )
-        for candidato in candidatos:
-            try:
-                visiveis = candidato.filter(visible=True)
-                if visiveis.count() != 1:
+    _rotinas().definir_pagina_ativa_para_recuperacao(page)
+
+    def _etapa() -> None:
+        for frame in _frames(page):
+            candidatos = (
+                frame.get_by_role("tab", name=nome),
+                frame.get_by_role("menuitem", name=nome),
+                frame.get_by_role("link", name=nome),
+                frame.get_by_role("button", name=nome),
+                frame.get_by_text(nome),
+            )
+            for candidato in candidatos:
+                try:
+                    visiveis = candidato.filter(visible=True)
+                    if visiveis.count() != 1:
+                        continue
+                    clicar(visiveis, descricao)
+                except SoftExpertErro:
+                    raise
+                except Exception:
                     continue
-                clicar(visiveis, descricao)
-            except SoftExpertErro:
-                raise
-            except Exception:
-                continue
-            _aguardar_estavel(page)
-            return
-    raise SoftExpertErro(f"O item de menu {descricao!r} não ficou disponível.")
+                _aguardar_estavel(page)
+                return
+        raise EtapaInstavelSX(f"O item de menu {descricao!r} não ficou disponível.")
+
+    _rotinas().etapa_resiliente(_etapa, f"Ir para o menu {descricao}")
 
 
 def _ler_controle(locator: "Locator", tipo: str) -> Any:
@@ -1255,32 +1340,42 @@ def _selecionado(locator: "Locator", tipo: str, valor: str) -> bool:
 
 def _definir_selecao(page: "Page", rotulo: str, valor: str, marca: str) -> None:
     """Escolhe ``valor`` em um select nativo ou em um dropdown estilo select2 e confere o texto escolhido."""
-    frame, controle, tipo = _achar_controle(page, rotulo, marca)
-    controle.scroll_into_view_if_needed(timeout=5000)
-    if tipo == "select":
-        controle.select_option(label=valor, timeout=5000)
-    elif tipo == "dropdown":
-        clicar(controle, rotulo)
-        busca = frame.locator(".select2-search__field, input[type='search']").filter(visible=True)
-        if busca.count():
-            busca.first.fill(valor)
-        exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
-        opcao = frame.get_by_role("option", name=exato).filter(visible=True)
-        if not _esperar(page, lambda: opcao.count(), ESPERA_BOTAO_MS):
-            raise SoftExpertErro(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
-        clicar(opcao, f"{rotulo}: {valor}")
-    elif tipo == "input":
-        # Campo de pesquisa do SoftExpert ("Clique aqui para pesquisar"): a lista abre ao clicar e os itens são divs sem role=option.
-        clicar(controle, rotulo)
-        exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
-        opcao = frame.locator("[role=listbox] [data-test-selector^='rctSelectItem']").filter(has_text=exato).filter(visible=True)
-        if not _esperar(page, lambda: opcao.count() == 1, ESPERA_BOTAO_MS):
-            raise SoftExpertErro(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
-        clicar(opcao, f"{rotulo}: {valor}")
-    else:
-        raise SoftExpertErro(f"{rotulo}: tipo de campo não suportado ({tipo}).")
-    if not _esperar(page, lambda: _selecionado(controle, tipo, valor), ESPERA_BOTAO_MS):
-        raise SoftExpertErro(f"{rotulo}: o valor escolhido não é {valor!r} (lido: {_ler_controle(controle, tipo)!r}).")
+    _rotinas().definir_pagina_ativa_para_recuperacao(page)
+
+    def _etapa() -> None:
+        try:
+            frame, controle, tipo = _achar_controle(page, rotulo, marca)
+            controle.scroll_into_view_if_needed(timeout=5000)
+            if tipo == "select":
+                controle.select_option(label=valor, timeout=5000)
+            elif tipo == "dropdown":
+                clicar(controle, rotulo)
+                busca = frame.locator(".select2-search__field, input[type='search']").filter(visible=True)
+                if busca.count():
+                    busca.first.fill(valor)
+                exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
+                opcao = frame.get_by_role("option", name=exato).filter(visible=True)
+                if not _esperar(page, lambda: opcao.count(), ESPERA_BOTAO_MS):
+                    raise EtapaInstavelSX(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
+                clicar(opcao, f"{rotulo}: {valor}")
+            elif tipo == "input":
+                # Campo de pesquisa do SoftExpert ("Clique aqui para pesquisar"): a lista abre ao clicar e os itens são divs sem role=option.
+                clicar(controle, rotulo)
+                exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
+                opcao = frame.locator("[role=listbox] [data-test-selector^='rctSelectItem']").filter(has_text=exato).filter(visible=True)
+                if not _esperar(page, lambda: opcao.count() == 1, ESPERA_BOTAO_MS):
+                    raise EtapaInstavelSX(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
+                clicar(opcao, f"{rotulo}: {valor}")
+            else:
+                raise SoftExpertErro(f"{rotulo}: tipo de campo não suportado ({tipo}).")
+            if not _esperar(page, lambda: _selecionado(controle, tipo, valor), ESPERA_BOTAO_MS):
+                raise EtapaInstavelSX(f"{rotulo}: o valor escolhido não é {valor!r} (lido: {_ler_controle(controle, tipo)!r}).")
+        except SoftExpertErro:
+            raise
+        except Exception as erro:
+            raise EtapaInstavelSX(str(erro)) from erro
+
+    _rotinas().etapa_resiliente(_etapa, f"Selecionar {rotulo}: {valor}")
 
 
 def _normaliza_quebras(texto: str) -> str:
@@ -1308,6 +1403,7 @@ def _ler_caixa(caixa: "Locator") -> bool:
 
 def _marcar_caixa(caixa: "Locator", marcado: bool) -> None:
     """Marca/desmarca o checkbox e confere o estado final; nunca passa por ``clicar`` (o rótulo contém "Enviar")."""
+    # Sem retry: reclicar desfaz a marcação.
     if _ler_caixa(caixa) == marcado:
         return
     if caixa.evaluate(ESTADO_CAIXA_JS) is None:
@@ -1404,33 +1500,41 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
         lambda f: f.locator(SEL_INCLUIR).or_(f.get_by_role("button", name=re.compile(r"^\s*\+\s*$"))),
         "Incluir anexo",
     )
-    escolhidos: List[Any] = []
+    def _etapa() -> None:
+        escolhidos: List[Any] = []
 
-    def guardar(seletor: Any) -> None:
-        escolhidos.append(seletor)
+        def guardar(seletor: Any) -> None:
+            escolhidos.append(seletor)
 
-    page.on("filechooser", guardar)
-    try:
-        clicar(incluir, "Incluir anexo")
+        page.on("filechooser", guardar)
+        try:
+            try:
+                clicar(incluir, "Incluir anexo")
 
-        def entrada_de_arquivo() -> Any:
-            if escolhidos:
-                return escolhidos[0]
-            for frame in _frames(page):
-                alvo = frame.locator("input[type='file']")
-                if alvo.count():
-                    return alvo.first
-            return None
+                def entrada_de_arquivo() -> Any:
+                    if escolhidos:
+                        return escolhidos[0]
+                    for frame in _frames(page):
+                        alvo = frame.locator("input[type='file']")
+                        if alvo.count():
+                            return alvo.first
+                    return None
 
-        alvo = _esperar(page, entrada_de_arquivo, ESPERA_BOTAO_MS)
-        if alvo is None:
-            raise SoftExpertErro("Anexo: nem o seletor de arquivo nem um campo de arquivo apareceram depois do +.")
-        if hasattr(alvo, "set_input_files"):  # campo <input type=file> achado antes do evento do seletor
-            alvo.set_input_files(str(pdf))
-        else:
-            alvo.set_files(str(pdf))  # FileChooser do diálogo de pasta
-    finally:
-        page.remove_listener("filechooser", guardar)
+                alvo = _esperar(page, entrada_de_arquivo, ESPERA_BOTAO_MS)
+                if alvo is None:
+                    raise EtapaInstavelSX("Anexo: nem o seletor de arquivo nem um campo de arquivo apareceram depois do +.")
+                if hasattr(alvo, "set_input_files"):  # campo <input type=file> achado antes do evento do seletor
+                    alvo.set_input_files(str(pdf))
+                else:
+                    alvo.set_files(str(pdf))  # FileChooser do diálogo de pasta
+            except SoftExpertErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavelSX(str(erro)) from erro
+        finally:
+            page.remove_listener("filechooser", guardar)
+
+    _rotinas().etapa_resiliente(_etapa, "Incluir anexo")
 
     def frame_do_item() -> Any:
         return next((f for f in _frames(page) if f.get_by_text(pdf.name).filter(visible=True).count()), None)
@@ -1442,6 +1546,10 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
     enviar = _conteiner_do_upload(achado, pdf.name).get_by_role("button", name=NOME_ENVIAR_ANEXO).filter(visible=True)
     if enviar.count() != 1:
         raise SoftExpertErro(f"Anexo: esperado 1 botão Enviar junto de {pdf.name}, achei {enviar.count()}; nada foi clicado.")
+    try:
+        _rotinas().aguardar_estabilidade_pre_clique(lambda: enviar.count() == 1, "Enviar anexo")
+    except _rotinas().RotinaErro as erro:
+        raise SoftExpertErro(str(erro)) from erro
     with _liberar_escrita("enviar"):
         clicar(enviar, "Enviar anexo")
     escritas.append("anexo")
@@ -1484,6 +1592,12 @@ def _confirmar_modal_finalizar(janela: "Page") -> bool:
                     f"Apareceu uma confirmação inesperada depois do Finalizar ({texto[:80]!r}); nada foi clicado.",
                     MOTIVO_CONFIRMACAO_INESPERADA,
                 )
+            try:
+                _rotinas().aguardar_estabilidade_pre_clique(lambda: sim.count() > 0, "Confirmação de finalizar")
+            except _rotinas().RotinaErro as erro:
+                # Sem isto, _esperar (chamado por _clicar_finalizar) trata RotinaErro genérica como "ainda não"
+                # e engole o aborto do guard, repetindo a checagem até estourar o prazo sem nunca confirmar.
+                raise SoftExpertErro(str(erro)) from erro
             clicar(sim, "Confirmação de finalizar")
             _log("Confirmação do Finalizar: Sim.")
             return True
@@ -1497,6 +1611,10 @@ def _clicar_finalizar(page: "Page", janela: "Page", escritas: List[str]) -> None
     tratar = _tratar_dialogo_finalizar(inesperados)
     janela.on("dialog", tratar)
     try:
+        try:
+            _rotinas().aguardar_estabilidade_pre_clique(lambda: botao.is_enabled(), "Finalizar")
+        except _rotinas().RotinaErro as erro:
+            raise SoftExpertErro(str(erro)) from erro
         with _liberar_escrita("finalizar"):
             clicar(botao, "Finalizar")
         escritas.append("finalizar")
