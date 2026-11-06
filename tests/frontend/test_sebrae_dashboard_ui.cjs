@@ -803,3 +803,76 @@ test("o lápis abre o editor com o texto atual, salva só no site e a restauraç
   assert.deepEqual(JSON.parse(chamadas.filter(c => c.url.endsWith("/descricao")).pop().corpo), { descricao: "" });
   assert.equal(selo.hidden, true);
 });
+
+test("campo de observação é renderizado na Zona 2 em novos, antigos (com UTIC e linha:N) e finalizados", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario[0].observacao = "Observação de chamado novo.";
+  carga.importado.abertos[0].observacao = "Observação de chamado antigo UTIC.";
+  carga.importado.abertos[1].observacao = "Observação de antigo linha:27.";
+  carga.importado.finalizados[0].observacao = "Observação de chamado finalizado.";
+
+  const { el } = await renderizarCartoes(carga);
+
+  // Novo: na Zona 2 (Classificação operacional)
+  const cartaoNovo = el["sebrae-novos-lista"].querySelector("article.sebrae-chamado--novo");
+  const zonasNovo = cartaoNovo.querySelectorAll(".sebrae-zona");
+  assert.equal(zonasNovo.length, 3, "preserva o layout de exatamente 3 zonas");
+  const zona2Novo = zonasNovo[1];
+  assert.equal(zona2Novo.querySelector(".sebrae-zona__titulo").textContent, "Classificação operacional");
+  const obsNovo = zona2Novo.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1378"]');
+  assert.ok(obsNovo);
+  assert.equal(obsNovo.value, "Observação de chamado novo.");
+  assert.equal(Boolean(obsNovo.readOnly), false);
+  const feedbackNovo = zona2Novo.querySelector(".sebrae-obs__feedback");
+  assert.ok(feedbackNovo);
+  assert.equal(feedbackNovo.textContent, "Salva automaticamente.");
+
+  // Antigo com UTIC:
+  const cartaoAntigoUtic = el["sebrae-antigos-lista"].querySelectorAll("details.sebrae-antigo")[0];
+  const obsAntigoUtic = cartaoAntigoUtic.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1200"]');
+  assert.ok(obsAntigoUtic);
+  assert.equal(obsAntigoUtic.value, "Observação de chamado antigo UTIC.");
+  assert.equal(Boolean(obsAntigoUtic.readOnly), false);
+  const feedbackAntigoUtic = cartaoAntigoUtic.querySelector(".sebrae-obs__feedback");
+  assert.ok(feedbackAntigoUtic);
+
+  // Antigo sem UTIC (linha:27):
+  const cartaoAntigoLinha = el["sebrae-antigos-lista"].querySelectorAll("details.sebrae-antigo")[1];
+  const obsAntigoLinha = cartaoAntigoLinha.querySelector('textarea[data-sebrae-observacao="linha:27"]');
+  assert.ok(obsAntigoLinha);
+  assert.equal(obsAntigoLinha.value, "Observação de antigo linha:27.");
+  assert.equal(Boolean(obsAntigoLinha.readOnly), false);
+
+  // Finalizado: somente leitura
+  const cartaoFinalizado = el["sebrae-finalizados-lista"].querySelector("li details.sebrae-finalizado");
+  const obsFinalizado = cartaoFinalizado.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1100"]');
+  assert.ok(obsFinalizado);
+  assert.equal(obsFinalizado.value, "Observação de chamado finalizado.");
+  assert.equal(obsFinalizado.readOnly, true);
+  assert.equal(cartaoFinalizado.querySelector(".sebrae-obs__feedback"), null, "finalizado não tem feedback interativo");
+});
+
+test("autosave de observação dispara PUT com debounce no input e imediato no change/blur", async () => {
+  const chamadas = [];
+  const { el } = await renderizarCartoes(CARGA_CARTOES, null, chamadas);
+  const cartaoNovo = el["sebrae-novos-lista"].querySelector("article.sebrae-chamado--novo");
+  const textarea = cartaoNovo.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1378"]');
+  const feedback = cartaoNovo.querySelector(".sebrae-obs__feedback");
+
+  // Digitar: muda para pendente
+  textarea.value = "Aguardando confirmação do usuário.";
+  textarea.dispatchEvent({ type: "input" });
+  assert.equal(feedback.textContent, "Alteração ainda não salva…");
+  assert.equal(feedback.dataset.estado, "pendente");
+
+  // Disparar blur (imediato)
+  textarea.dispatchEvent({ type: "blur" });
+  await esvaziarFila();
+
+  const putsObs = chamadas.filter(c => c.metodo === "PUT" && c.url.includes("/observacao"));
+  assert.equal(putsObs.length, 1);
+  assert.equal(putsObs[0].url, "/api/sebrae/chamados/UTIC-2026-1378/observacao");
+  assert.deepEqual(JSON.parse(putsObs[0].corpo), { observacao: "Aguardando confirmação do usuário." });
+  assert.equal(feedback.textContent, "Salva.");
+  assert.equal(feedback.dataset.estado, "ok");
+});
