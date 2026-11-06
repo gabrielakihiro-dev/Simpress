@@ -10,6 +10,19 @@ from domains.ux_chamados import ChamadosUX, ErroUX
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
+# Keyed by exception class name only: Playwright messages can carry selectors and form contents.
+MENSAGENS_FALHA_UX = {
+    "TimeoutError": (
+        "ux_formulario_diferente",
+        "O UX não mostrou o campo esperado a tempo. O formulário pode ter mudado ou ainda estar carregando: "
+        "confira a aba do UX no Chrome de automação e tente de novo.",
+    ),
+}
+MENSAGEM_FALHA_UX_GENERICA = (
+    "ux_falha",
+    "Falha inesperada ao falar com o UX. Confira o Chrome de automação e tente de novo; "
+    "se persistir, o formulário do UX pode ter mudado.",
+)
 
 
 class SeriePayload(BaseModel):
@@ -57,8 +70,10 @@ def create_ux_chamados_router(
             raise
         except Exception as erro:
             # Playwright errors can include selectors, profile values and form contents: log only the class name.
-            logger.warning("UX: %s", type(erro).__name__)
-            raise HTTPException(503, "Não foi possível concluir a etapa no UX. Confira a aba e o Chrome de automação.") from None
+            nome = type(erro).__name__
+            logger.warning("UX: %s", nome)
+            codigo, mensagem = MENSAGENS_FALHA_UX.get(nome, MENSAGEM_FALHA_UX_GENERICA)
+            return JSONResponse(status_code=503, content={"detail": mensagem, "codigo": codigo})
 
     @router.post("/preparar", response_model=None)
     def preparar(payload: PrepararPayload) -> dict[str, Any] | JSONResponse:
