@@ -1779,10 +1779,10 @@ def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
         definir_pagina_ativa_para_recuperacao(page)
 
         def _baixar() -> Path:
+            # Nada irreversível acontece aqui (só download); um RotinaErro de extensão errada
+            # (ex.: arquivo incompleto por desincronização) também deve repetir, não abortar.
             try:
                 return baixar_dashboard_da_pasta(page)
-            except RotinaErro:
-                raise
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
@@ -2053,16 +2053,20 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         duplicar_dashboard_na_pasta(page)
         verificar_cancelamento()
 
-        def _baixar() -> Path:
+        def _baixar_e_conferir() -> Path:
+            # Baixar e conferir formam uma única etapa: nada irreversível acontece aqui (só leitura),
+            # então um download corrompido/desincronizado pela interferência do mouse (inclusive o
+            # incidente real: a conferência reprovou um arquivo bom) refaz as duas do zero em vez de
+            # abortar. Uma mudança real no SharePoint continua reprovando em toda tentativa, e a
+            # mensagem original (MSG_SHAREPOINT_MUDOU, sem alteração) chega ao usuário do mesmo jeito.
             try:
-                return baixar_dashboard_da_pasta(page)
-            except RotinaErro:
-                raise
+                baixado = baixar_dashboard_da_pasta(page)
+                conferir_dashboard_do_sharepoint(baixado)
+                return baixado
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
-        baixado = etapa_resiliente(_baixar, "Baixar Dashboard da pasta")
-        conferir_dashboard_do_sharepoint(baixado)
+        baixado = etapa_resiliente(_baixar_e_conferir, "Baixar e conferir Dashboard da pasta")
         guardar_backup_do_dashboard(baixado)
         verificar_cancelamento()
         conteudo = arquivo.read_bytes()
