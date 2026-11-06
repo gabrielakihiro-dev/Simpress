@@ -43,6 +43,8 @@ from core.config import (
     AUTOMATIC_TICKET_INBOX_DIR,
     BASE_DIR,
     COMPARISON_HISTORY_FILE,
+    COVERAGE_ARCHIVE_FILE,
+    COVERAGE_FILE,
     CUSTOM_UNIDADES_FILE,
     DATA_DIR,
     DETAILS_UPLOAD_FILE,
@@ -100,6 +102,8 @@ from routers.transfers import (
     formatar_telefone_brasileiro,
 )
 from routers.transfer_history import TransferHistoryServices, create_transfer_history_router
+from routers.coverage import CoverageServices, create_coverage_router
+from domains.coverage_store import manutencao_dos_chamados
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
@@ -2272,6 +2276,26 @@ transfer_history_router, _transfer_history_exports = create_transfer_history_rou
 listar_historico_transferencias = _transfer_history_exports.listar_historico_transferencias
 registrar_historico_transferencia = _transfer_history_exports.registrar_historico_transferencia
 app.include_router(transfer_history_router)
+
+
+def _coverage_equipment_snapshot() -> List[Dict[str, Any]]:
+    """Cadastro atual só para leitura da Cobertura; EquipamentosDetalhes nunca é alterado."""
+    with STATE_LOCK:
+        return [
+            {key: item.get(key) for key in ("serial", "tipo", "modelo", "retirada_cidade", "apelido")}
+            for item in inventory_state.equipamentos_cache.values()
+        ]
+
+
+coverage_router, _coverage_exports = create_coverage_router(CoverageServices(
+    state_file=lambda: COVERAGE_FILE,
+    archive_file=lambda: COVERAGE_ARCHIVE_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    hoje=lambda: datetime.now().date(),
+    manutencao=lambda: manutencao_dos_chamados(TICKET_REPORT_FILE, sebrae_novos.caminhos_padrao(STATE_DIR).existentes),
+    cadastro=_coverage_equipment_snapshot,
+))
+app.include_router(coverage_router)
 
 
 def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
