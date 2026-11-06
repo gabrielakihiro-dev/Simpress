@@ -115,6 +115,7 @@ Em **Usuário** e **Local atual**: o ícone é de lápis (pencil) e abre ediçã
 - `#form-usuario-manual`, `#input-usuario-manual`, `#btn-salvar-usuario-manual`
 - `#form-nome-pessoa`, `#input-nome-pessoa`, `#btn-salvar-nome-pessoa`
 - `#equip-icon-box`, `#equip-icon`
+- `#endpoint-powershell` (06/11/2026, autorizado pelo usuário): card recolhível `PowerShell no Endpoint` dentro de `card-equipamento`, só visível com equipamento selecionado, com comando (`#input-powershell-comando`), modo `SYSTEM`/`Usuário logado`, hostname e usuário opcionais e o botão `Inserir no PowerShell` (`#btn-powershell-endpoint`). Pede confirmação antes do envio e só **insere** o comando no prompt do terminal do Endpoint, sem executar: o Enter é do usuário, no terminal do Chrome (aviso `O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.`). Detalhes em `docs/operacao/automacao-chrome.md`.
 - `#badge-apelido-status`
 - `#btn-ir-para-transporte`, `#btn-toggle-ticket-templates`
 - `#btn-copiar-serie` (se existir no contexto)
