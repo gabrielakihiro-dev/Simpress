@@ -718,6 +718,26 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
             with self.assertRaisesRegex(automacao.RotinaErro, "Não achei"):
                 automacao.baixar_dashboard_da_pasta(MagicMock())
 
+    def test_export_for_dashboard_routine_retries_a_bad_download_then_succeeds(self):
+        # Mesmo padrão da rotina enviar: nada irreversível acontece aqui, então um RotinaErro
+        # (ex.: extensão errada por download desincronizado) refaz em vez de abortar de primeira.
+        page = MagicMock()
+        tentativas = [automacao.RotinaErro("não é um .xlsx"), Path("Dashboard Operacional_SEBRAE.xlsx")]
+
+        def _baixar(pagina):
+            efeito = tentativas.pop(0)
+            if isinstance(efeito, Exception):
+                raise efeito
+            return efeito
+
+        with patch.object(automacao, "nova_aba", return_value=page), patch.object(automacao, "aguardar_login"), \
+                patch.object(automacao, "definir_pagina_ativa_para_recuperacao"), \
+                patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=_baixar), \
+                patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"):
+            arquivo = automacao.exportar_dashboard_sebrae(MagicMock())
+        self.assertEqual(arquivo, Path("Dashboard Operacional_SEBRAE.xlsx"))
+        self.assertEqual(tentativas, [])
+
 
 class EnviarDashboardTests(unittest.TestCase):
     def _pagina(self, botoes):
@@ -745,7 +765,9 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(automacao, "esperar_visivel", return_value=True), \
                     patch.object(automacao, "visivel", side_effect=lambda loc: concluido if loc is aviso else em_uso), \
                     patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
-                    patch.object(automacao, "_botao_enviar"):
+                    patch.object(automacao, "_botao_enviar"), \
+                    patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                    patch.object(automacao.time, "sleep"):
                 automacao.enviar_arquivo_para_pasta(page, arquivo)
 
     def test_menu_and_dialog_labels_in_portuguese_and_english(self):
@@ -764,6 +786,24 @@ class EnviarDashboardTests(unittest.TestCase):
         self._enviar(page)
         page.locators["substituir"].first.click.assert_called_once()
         page.locators["manter"].first.click.assert_not_called()
+
+    def test_upload_menu_retried_once_then_clicks_replace_exactly_once(self):
+        page = self._pagina({"substituir"})
+        botao = MagicMock()
+        botao.click.side_effect = [RuntimeError("DOM desatualizado"), None]
+        aviso = page.get_by_text.return_value.first
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "esperar_visivel", return_value=True), \
+                    patch.object(automacao, "visivel", side_effect=lambda loc: loc is aviso), \
+                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                    patch.object(automacao, "_botao_enviar", return_value=botao), \
+                    patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                    patch.object(automacao.time, "sleep"):
+                automacao.enviar_arquivo_para_pasta(page, arquivo)
+        self.assertEqual(botao.click.call_count, 2)
+        page.locators["substituir"].first.click.assert_called_once()
 
     def test_upload_refuses_when_only_keep_both_is_offered(self):
         page = self._pagina({"manter"})
@@ -968,7 +1008,27 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(codigo, 0)
         self.assertEqual(ordem, ["duplicata", "baixar", "conferir", "backup", "enviar"])
 
+    def test_a_post_click_failure_in_duplicate_is_not_retried_and_never_reclicks(self):
+        # Mesmo cenário do incidente real: interferência do mouse desincroniza a página depois do
+        # clique em Duplicata. O erro (genérico, não RotinaErro) deve propagar sem nova tentativa:
+        # envolver duplicar_dashboard_na_pasta inteira num retry repetiria o clique que cria a cópia.
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=RuntimeError("DOM desincronizado")) as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta") as baixar, \
+                    patch.object(automacao, "registrar_erro"), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "DOM desincronizado"):
+                    automacao.rodar_rotina_enviar(MagicMock())
+            duplicar.assert_called_once()
+            baixar.assert_not_called()
+
     def test_routine_does_not_upload_when_the_precheck_fails(self):
+        # Mudança real no SharePoint: a conferência reprova em toda tentativa (mesmo mock reaplicado
+        # pelo etapa_resiliente), então a mensagem original chega ao usuário do mesmo jeito.
         with tempfile.TemporaryDirectory() as pasta:
             with patch.object(automacao, "arquivo_final_dashboard", return_value=Path(pasta) / "x.xlsx"), patch.object(automacao, "nova_aba"), \
                     patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
@@ -976,11 +1036,42 @@ class EnviarDashboardTests(unittest.TestCase):
                     patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
                     patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=automacao.RotinaErro(automacao.MSG_SHAREPOINT_MUDOU)), \
                     patch.object(automacao, "guardar_backup_do_dashboard") as backup, patch.object(automacao, "enviar_arquivo_para_pasta") as enviar, \
-                    patch.object(automacao, "registrar_erro"), redirect_stdout(io.StringIO()):
+                    patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(automacao.RotinaErro, "importe de novo"):
                     automacao.rodar_rotina_enviar(MagicMock())
         backup.assert_not_called()
         enviar.assert_not_called()
+
+    def test_routine_retries_download_and_precheck_together_after_mouse_interference_then_succeeds(self):
+        # Cenário do incidente real: a 1a tentativa de baixar+conferir falha (download/leitura
+        # desincronizados pelo clique do mouse), a 2a tentativa baixa e confere de novo do zero e
+        # tem sucesso — sem repetir Duplicata e sem abortar com a mensagem de "mudou".
+        ordem = []
+        baixados = [RuntimeError("leitura desincronizada"), None]
+
+        def _baixar(pagina):
+            efeito = baixados.pop(0)
+            ordem.append("baixar")
+            if efeito is not None:
+                raise efeito
+            return Path("baixado.xlsx")
+
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=lambda p: ordem.append("duplicata")) as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=_baixar), \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=lambda b: ordem.append("conferir")), \
+                    patch.object(automacao, "guardar_backup_do_dashboard", side_effect=lambda b: ordem.append("backup")), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: ordem.append("enviar")), \
+                    patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
+                codigo = automacao.rodar_rotina_enviar(MagicMock())
+        self.assertEqual(codigo, 0)
+        duplicar.assert_called_once()
+        self.assertEqual(ordem, ["duplicata", "baixar", "baixar", "conferir", "backup", "enviar"])
 
     def test_precheck_accepts_the_hash_of_the_last_upload_but_not_an_unknown_changed_file(self):
         import hashlib
