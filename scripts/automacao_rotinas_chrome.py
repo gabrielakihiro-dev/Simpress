@@ -2047,15 +2047,10 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         definir_pagina_ativa_para_recuperacao(page)
 
-        def _duplicar() -> None:
-            try:
-                duplicar_dashboard_na_pasta(page)
-            except RotinaErro:
-                raise
-            except Exception as erro:
-                raise EtapaInstavel(str(erro)) from erro
-
-        etapa_resiliente(_duplicar, "Duplicata de segurança do Dashboard")
+        # Sem retry aqui: duplicar_dashboard_na_pasta já refaz só a navegação internamente
+        # (etapa_resiliente em _abrir_menu_duplicata); envolver a função inteira repetiria
+        # o clique que cria a cópia se a espera pós-clique falhar por interferência do mouse.
+        duplicar_dashboard_na_pasta(page)
         verificar_cancelamento()
 
         def _baixar() -> Path:
