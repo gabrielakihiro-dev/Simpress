@@ -391,22 +391,30 @@ def _abrir_campo_filtro(page: "Page", automacao: ModuleType, coluna: str) -> "Lo
 
     O cabeçalho é lido só depois de a barra abrir: ao aparecer, ela pode deslocar as colunas, e uma posição
     lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados)."""
-    if not _caixas_de_filtro(page).count():
-        page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
-        automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
-    cabecalho = achar_cabecalho(ler_grade(page), coluna)
-    if cabecalho is None:
-        raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
-    campo = _localizar_campo(page, cabecalho)
-    if campo is None:
-        # Coluna fora da área visível: rola até o cabeçalho e relê a posição dele (a grade deslocou).
-        page.locator(".ember-table-header-cell").filter(has_text=cabecalho["texto"]).first.scroll_into_view_if_needed()
-        page.wait_for_timeout(300)
-        atual = achar_cabecalho(ler_grade(page), coluna)
-        campo = _localizar_campo(page, atual) if atual else None
-    if campo is None:
-        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{coluna}' não foi encontrada.")
-    return campo
+    def _etapa() -> "Locator":
+        try:
+            if not _caixas_de_filtro(page).count():
+                page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
+                automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
+            cabecalho = achar_cabecalho(ler_grade(page), coluna)
+            if cabecalho is None:
+                raise automacao.EtapaInstavel(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
+            campo = _localizar_campo(page, cabecalho)
+            if campo is None:
+                # Coluna fora da área visível: rola até o cabeçalho e relê a posição dele (a grade deslocou).
+                page.locator(".ember-table-header-cell").filter(has_text=cabecalho["texto"]).first.scroll_into_view_if_needed()
+                page.wait_for_timeout(300)
+                atual = achar_cabecalho(ler_grade(page), coluna)
+                campo = _localizar_campo(page, atual) if atual else None
+            if campo is None:
+                raise automacao.EtapaInstavel(f"A caixa de filtro da coluna '{coluna}' não foi encontrada.")
+            return campo
+        except automacao.EtapaInstavel:
+            raise
+        except Exception as erro:
+            raise automacao.EtapaInstavel(str(erro)) from erro
+
+    return automacao.etapa_resiliente(_etapa, f"Abrir a barra de pesquisa da coluna '{coluna}' no Endpoint")
 
 
 def _limpar_caixas_preenchidas(page: "Page") -> None:
@@ -531,16 +539,20 @@ def pesquisar_computador_endpoint(
 
 def abrir_aba(page: "Page", automacao: ModuleType, nome: str) -> None:
     padrao = re.compile(rf"^\s*{re.escape(nome)}\s*$", re.IGNORECASE)
-    alvo = (
-        page.get_by_role("tab", name=padrao)
-        .or_(page.get_by_role("link", name=padrao))
-        .or_(page.get_by_role("menuitem", name=padrao))
-    ).filter(visible=True).first
-    try:
-        automacao.aguardar_estado(alvo, "visible", 30000)
-    except Exception as erro:
-        raise automacao.RotinaErro(f"A aba '{nome}' do detalhe do computador não apareceu.") from erro
-    alvo.click()
+
+    def _etapa() -> None:
+        alvo = (
+            page.get_by_role("tab", name=padrao)
+            .or_(page.get_by_role("link", name=padrao))
+            .or_(page.get_by_role("menuitem", name=padrao))
+        ).filter(visible=True).first
+        try:
+            automacao.aguardar_estado(alvo, "visible", 30000)
+        except Exception as erro:
+            raise automacao.EtapaInstavel(f"A aba '{nome}' do detalhe do computador não apareceu.") from erro
+        alvo.click()
+
+    automacao.etapa_resiliente(_etapa, f"Abrir aba '{nome}' do detalhe do computador")
 
 
 def ler_usuarios_sistema(page: "Page", automacao: ModuleType) -> dict[str, Any]:
@@ -591,10 +603,19 @@ def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
         raise automacao.RotinaErro(f"O link do detalhe de {nome} não foi identificado.")
     try:
         automacao.log(ORIGEM, f"Lendo o último logon de {nome}...")
-        page.locator(f'a.anchor-text[href="{href}"]').first.click()
-        automacao.acionar_quando_pronto(
-            lambda: None, "O detalhe do computador não abriu", confirmar=lambda: bool(URL_DETALHE.search(page.url)),
-        )
+
+        def _abrir_detalhe() -> None:
+            if URL_DETALHE.search(page.url):
+                return  # tentativa anterior já abriu o detalhe; clicar de novo sairia dele.
+            try:
+                page.locator(f'a.anchor-text[href="{href}"]').first.click()
+                automacao.acionar_quando_pronto(
+                    lambda: None, "O detalhe do computador não abriu", confirmar=lambda: bool(URL_DETALHE.search(page.url)),
+                )
+            except Exception as erro:
+                raise automacao.EtapaInstavel(str(erro)) from erro
+
+        automacao.etapa_resiliente(_abrir_detalhe, f"Abrir o detalhe de {nome}")
         ultimo = ler_ultimo_logon(page, automacao)
         if ultimo:
             return {"fonte": "Último logon", "usuario": ultimo}
@@ -659,6 +680,7 @@ def verificar_usuarios_endpoint(context: "BrowserContext", automacao: ModuleType
         return 0
     automacao.log(ORIGEM, f"{len(pendencias)} pendência(s) de usuário para conferir.")
     page = automacao.nova_aba(context, automacao.ENDPOINT_URL, "Endpoint Central")
+    automacao.definir_pagina_ativa_para_recuperacao(page)
     automacao.endpoint_vigiar_avisos(page)
     contagem = {"decidida": 0, "anotada": 0}
     try:
