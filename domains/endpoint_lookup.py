@@ -69,12 +69,18 @@ def _preparar_aba(pw: Any) -> Any:
         page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
     page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
     # Mesmo login da exportação de inventários: escolhe pr-sebrae e espera o usuário (senha/MFA).
-    automation.aguardar_login(
-        page, "Endpoint Central", automation.endpoint_logado,
-        entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
-    )
+    def esperar_login() -> None:
+        automation.aguardar_login(
+            page, "Endpoint Central", automation.endpoint_logado,
+            entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
+        )
+
+    esperar_login()
     if "inventory/computers" not in page.url:
         page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+        # A sessão pode cair entre os dois goto; sem esta checagem a falha seria um erro genérico da grade.
+        if not automation.endpoint_logado(page):
+            esperar_login()
     automation.definir_pagina_ativa_para_recuperacao(page)
     automation.selecionar_todos_computadores(page)
     automation.confirmar_modo_todos(page)
@@ -146,8 +152,10 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
             achado = consultar_grade(page, automation, serial, macbook, details_serials)
             if achado["status"] != "found":
                 return achado
-            if achado.get("_fallback_mac") and antes_de_conectar is not None and not antes_de_conectar():
-                return {"status": "ambiguous", "serial": serial, "origem": "base_local"}
+            # Última checagem antes do clique: o pedido ainda vale e, no fallback de MacBook, a base local não mudou.
+            fallback = bool(achado.get("_fallback_mac"))
+            if antes_de_conectar is not None and not antes_de_conectar(fallback):
+                return {"status": "ambiguous", "serial": serial, "origem": "base_local" if fallback else "pedido_cancelado"}
             linha = page.locator(_LINHA).first
             hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
             _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Tuple[int, Any]]
 
 CALL_TIMEOUT_SECONDS = 30.0
-ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 480.0  # Navigation, grid waits and two confirmed serial filters.
+ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 1200.0  # Endpoint login wait (600 s) + navigation and filters (480 s); keeps the route thread from outliving the call.
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
