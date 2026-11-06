@@ -1476,6 +1476,7 @@ class SimpressApi:
             itens.append({
                 "numero": str(a.get("numero") or ""),
                 "titulo": limpar_texto_sensivel(a.get("titulo"))[:MAX_TEXTO_CHAMADO],
+                "descricao": limpar_texto_sensivel(a.get("descricao"))[:MAX_TEXTO_CHAMADO],
                 "responsavel": limpar_texto_sensivel(v.get("A")),
                 "categoria": limpar_texto_sensivel(v.get("B")),
                 "status": str(v.get("D") or ""),
