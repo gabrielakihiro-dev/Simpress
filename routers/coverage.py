@@ -1,22 +1,25 @@
 """Cobertura de Equipamentos (Entrega 1A): rotas de leitura e de escrita do estado operacional local.
 
 Regras em ``domains/coverage.py``; gravação em ``domains/coverage_store.py`` (``AtomicFileTransaction``, sem lock
-Python). Nada aqui grava em ``EquipamentosDetalhes``, em sistemas externos nem no histórico de transferências.
+Python). Nada aqui grava em ``EquipamentosDetalhes`` nem em sistemas externos. O histórico de transferências só
+recebe o registro da planilha que o operador baixou (``registrar-transferencia``) ou a marca de vínculo
+(``vincular-historico``), na mesma transação da cobertura; o Simpress nunca gera planilha nem envia o Transporte.
 
 Erros: ``HTTPException`` com ``detail = {"codigo", "mensagem", ...}``. Arquivo ocupado → 409 ``arquivo_ocupado``;
 estado ilegível → 503 ``estado_ilegível`` (o arquivo é preservado); falha de gravação → 500 ``falha_gravacao``.
 
-Nota para o bloco 2 (``registrar-transferencia``): a idempotência pela ``chave`` da movimentação deve conferir
-primeiro a própria movimentação (``historico_id`` já preenchido com a mesma chave) e só depois o histórico de
-transferências, que guarda apenas os 500 registros mais recentes e pode já ter descartado o registro.
+Idempotência de ``registrar-transferencia`` pela ``chave`` da movimentação: primeiro a própria movimentação
+(``historico_id`` já preenchido com a mesma chave) e só depois o histórico de transferências, que guarda apenas os
+500 registros mais recentes e pode já ter descartado o registro.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Literal, Mapping, NoReturn, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -25,6 +28,13 @@ from core.integrity import FileBusyError, FileTransactionError
 from domains import coverage
 from domains.coverage import CoberturaErro, Contexto, Manutencao
 from domains.coverage_store import CoberturaStore, EstadoIlegivel, eh_ilegivel
+from routers.transfer_history import (
+    MAX_HISTORY_RECORDS,
+    TransferHistoryCorruptionError,
+    _validate_history,
+    build_record,
+)
+from routers.transfers import TransferenciaPayload
 
 MENSAGEM_ILEGIVEL = "O estado da cobertura está ilegível; os dados foram preservados e nada foi gravado."
 
@@ -39,6 +49,8 @@ class CoverageServices:
     manutencao: Callable[[], Manutencao]
     cadastro: Callable[[], Iterable[Mapping[str, Any]]]
     agora: Callable[[], str] = lambda: datetime.now().astimezone().isoformat(timespec="seconds")
+    # historico_transferencias.json; sem ele, registrar/vincular recusam e não há candidatos.
+    history_file: Optional[Callable[[], Path]] = None
 
 
 @dataclass(frozen=True)
@@ -101,6 +113,18 @@ class KitPayload(_Corpo):
 class MovimentacaoPayload(_Corpo):
     reserva_id: str = Field(max_length=64)
     rev: int
+    tipo: Literal["transporte", "local"] = "transporte"
+
+
+class RegistrarTransferenciaPayload(_Corpo):
+    payload: TransferenciaPayload
+    chave: str = Field(min_length=1, max_length=64)
+    rev: int
+
+
+class VincularHistoricoPayload(_Corpo):
+    historico_id: str = Field(min_length=1, max_length=64)
+    rev: int
 
 
 class DivergenciaPayload(_Corpo):
@@ -153,6 +177,38 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
             cadastro=coverage.indexar_cadastro(services.cadastro()),
         )
 
+    def historico_path() -> Path:
+        if services.history_file is None:
+            raise CoberturaErro("indisponivel", 503, "O histórico de transferências não está configurado.")
+        return services.history_file()
+
+    def historico_valido(bruto: Any) -> coverage.Historico:
+        try:
+            return _validate_history(bruto)
+        except TransferHistoryCorruptionError as error:
+            raise EstadoIlegivel(str(error)) from error
+
+    def candidatos_por_movimentacao(estado: coverage.Estado) -> Dict[str, List[coverage.Registro]]:
+        """Só leitura; histórico ausente ou ilegível vira lista vazia (o GET da cobertura não falha por ele)."""
+        preparadas = [m for m in estado["movimentacoes"].values() if m.get("estado") == "preparada" and not m.get("historico_id")]
+        historico: coverage.Historico = []
+        if preparadas and services.history_file is not None:
+            try:
+                caminho = services.history_file()
+                historico = historico_valido(json.loads(caminho.read_text(encoding="utf-8"))) if caminho.exists() else []
+            except (OSError, UnicodeError, ValueError):
+                historico = []
+        return {str(m.get("id")): coverage.candidatos_historico(m, historico) for m in preparadas}
+
+    def executar_com_historico(operacao: Callable[[coverage.Estado, coverage.Historico, Contexto], Any]) -> coverage.Registro:
+        ctx = contexto()
+        try:
+            return store().escrever_com_historico(
+                historico_path(), lambda estado, bruto: operacao(estado, historico_valido(bruto), ctx), ctx.hoje,
+            )
+        except (CoberturaErro, FileBusyError, EstadoIlegivel, FileTransactionError) as error:
+            _falhar(error)
+
     def executar(transicao: Transicao) -> coverage.Registro:
         ctx = contexto()
         try:
@@ -169,7 +225,10 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
         except EstadoIlegivel as error:
             _falhar(error)
         hoje = services.hoje()
-        return {**coverage.build_coverage(estado, hoje, services.manutencao()), "casos": coverage.anotar_casos(estado, hoje)}
+        casos = coverage.anotar_casos(estado, hoje)
+        for mov_id, candidatos in candidatos_por_movimentacao(estado).items():
+            casos["movimentacoes"][mov_id]["candidatos_historico"] = candidatos
+        return {**coverage.build_coverage(estado, hoje, services.manutencao()), "casos": casos}
 
     @router.get("/api/cobertura/casos/{caso_id}")
     def ler_caso(caso_id: str) -> Dict[str, Any]:
@@ -238,7 +297,9 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
 
     @router.post("/api/cobertura/movimentacoes")
     def preparar_movimentacao(payload: MovimentacaoPayload) -> Dict[str, Any]:
-        mov = executar(lambda estado, ctx: coverage.preparar_movimentacao(estado, ctx, payload.reserva_id, payload.rev))
+        mov = executar(lambda estado, ctx: coverage.preparar_movimentacao(
+            estado, ctx, payload.reserva_id, payload.rev, payload.tipo,
+        ))
         return {key: mov.get(key) for key in ("id", "serie", "destino_cidade", "chave", "rev")}
 
     @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/estado")
@@ -253,6 +314,21 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
     def resolver_divergencia(movimentacao_id: str, payload: ResolverDivergenciaPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.resolver_divergencia(
             estado, ctx, movimentacao_id, payload.rev, payload.resolucao, payload.serie_recebida,
+        ))
+
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/registrar-transferencia")
+    def registrar_transferencia(movimentacao_id: str, payload: RegistrarTransferenciaPayload) -> coverage.Registro:
+        """Registra no histórico a planilha que o operador baixou e passa a movimentação a ``gerada`` (idempotente)."""
+        registro = build_record(payload.payload)
+        return executar_com_historico(lambda estado, historico, ctx: coverage.registrar_transferencia(
+            estado, historico, ctx, movimentacao_id, payload.rev, payload.chave, registro, MAX_HISTORY_RECORDS,
+        ))
+
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/vincular-historico")
+    def vincular_historico(movimentacao_id: str, payload: VincularHistoricoPayload) -> coverage.Registro:
+        """Liga à movimentação preparada uma planilha já baixada sem vínculo (de ``candidatos_historico``)."""
+        return executar_com_historico(lambda estado, historico, ctx: coverage.vincular_historico(
+            estado, historico, ctx, movimentacao_id, payload.rev, payload.historico_id,
         ))
 
     return router, CoverageRouteExports(ler_cobertura=ler_cobertura, ler_caso=ler_caso)

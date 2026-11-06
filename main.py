@@ -2294,6 +2294,7 @@ coverage_router, _coverage_exports = create_coverage_router(CoverageServices(
     hoje=lambda: datetime.now().date(),
     manutencao=lambda: manutencao_dos_chamados(TICKET_REPORT_FILE, sebrae_novos.caminhos_padrao(STATE_DIR).existentes),
     cadastro=_coverage_equipment_snapshot,
+    history_file=lambda: TRANSFER_HISTORY_FILE,
 ))
 app.include_router(coverage_router)
 

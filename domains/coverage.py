@@ -12,7 +12,7 @@ import copy
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from domains.equipment_search import normalize_search_term
@@ -740,10 +740,13 @@ def marcar_kit(estado: Estado, ctx: Contexto, reserva_id: str, rev: Any, item: s
 def preparar_movimentacao(
     estado: Estado, ctx: Contexto, reserva_id: str, rev: Any, tipo: str = "transporte",
 ) -> Tuple[Estado, Registro]:
-    """Consome a reserva e cria a movimentação ``preparada``, que passa a carregar o bloqueio da série."""
+    """Consome a reserva e cria a movimentação ``preparada``, que passa a carregar o bloqueio da série.
+
+    ``local``: a série já está na cidade da vaga; não há Transporte nem planilha (preparada → recebida).
+    """
     novo = copy.deepcopy(estado)
-    if tipo != "transporte":
-        raise CoberturaErro("dados_invalidos", 422, "Só o tipo 'transporte' está disponível.", campo="tipo")
+    if tipo not in PROXIMOS_ESTADOS:
+        raise CoberturaErro("dados_invalidos", 422, "Tipo de movimentação desconhecido.", campo="tipo")
     reserva = _buscar(novo, "reservas", reserva_id, "Reserva")
     _conferir_rev(reserva, rev)
     _exigir_estado(reserva, ("ativa",), "A reserva")
@@ -755,6 +758,10 @@ def preparar_movimentacao(
         raise CoberturaErro("serie_indisponivel", 422, "Esta máquina está em manutenção.", motivo="manutencao")
     demanda = novo["demandas"].get(str(reserva.get("demanda_id"))) or {}
     disponibilidade = novo["disponibilidade"].get(chave_serie(reserva.get("serie"))) or {}
+    if tipo == "local" and (not dobrar(demanda.get("cidade")) or dobrar(disponibilidade.get("cidade")) != dobrar(demanda.get("cidade"))):
+        raise CoberturaErro(
+            "fora_da_cidade", 422, "A entrega local só vale quando a máquina já está na cidade da vaga.", campo="tipo",
+        )
     mov = {
         "id": _novo_id("mov"),
         "tipo": tipo,
@@ -877,6 +884,119 @@ def resolver_divergencia(
         _gravar_disponibilidade(novo, ctx, original, "a_confirmar", origem)
     _tocar(mov, ctx)
     return novo, mov
+
+
+# ------------------------------------------------------------------- vínculo com o histórico de transferências
+# O Transporte é sempre enviado pelo operador: aqui só se liga a movimentação ao registro que a planilha baixada
+# gerou no histórico (``historico_transferencias.json``, os 500 mais recentes). Funções puras sobre cópias.
+
+Historico = List[Registro]
+CAMPOS_CANDIDATO = ("id", "criado_em", "serial", "retirada_cidade", "entrega_cidade")
+
+
+def _momento(valor: Any) -> Optional[datetime]:
+    try:
+        momento = datetime.fromisoformat(str(valor))
+    except ValueError:
+        return None
+    return momento if momento.tzinfo is not None else None
+
+
+def _conferir_dados(mov: Mapping[str, Any], serial: Any, entrega_cidade: Any) -> None:
+    """Série e destino da planilha precisam ser os da movimentação (sem acento e sem caixa)."""
+    if chave_serie(serial) != chave_serie(mov.get("serie")):
+        raise CoberturaErro("dados_divergentes", 422, "A série da planilha não é a da movimentação.", campo="serial")
+    if dobrar(entrega_cidade) != dobrar(mov.get("destino_cidade")):
+        raise CoberturaErro("dados_divergentes", 422, "O destino da planilha não é o da movimentação.", campo="entrega_cidade")
+
+
+def _mov_transporte(estado: Estado, mov_id: str) -> Registro:
+    mov = _buscar(estado, "movimentacoes", mov_id, "Movimentação")
+    if mov.get("tipo") != "transporte":
+        raise CoberturaErro(
+            "transicao_invalida", 409, "Entrega local não tem planilha de Transporte.", id=mov_id, estado=mov.get("estado"),
+        )
+    return mov
+
+
+def _gerar(mov: Registro, ctx: Contexto, registro: Mapping[str, Any]) -> None:
+    mov.update({
+        "estado": "gerada",
+        "historico_id": registro.get("id"),
+        # Cópia própria: o histórico descarta registros antigos, a movimentação não.
+        "transferencia": {campo: registro.get(campo) for campo in CAMPOS_CANDIDATO if campo != "id"},
+    })
+    _tocar(mov, ctx)
+
+
+def _resultado(mov: Registro, repetido: bool) -> Registro:
+    return {"movimentacao": mov, "historico_id": mov.get("historico_id"), "transferencia": mov.get("transferencia"), "repetido": repetido}
+
+
+def registrar_transferencia(
+    estado: Estado, historico: Historico, ctx: Contexto, mov_id: str, rev: Any, chave: str,
+    registro: Mapping[str, Any], limite: int,
+) -> Tuple[Estado, Optional[Historico], Registro]:
+    """Liga a planilha baixada à movimentação. Devolve ``(novo_estado, novo_historico | None, resultado)``.
+
+    Idempotência pela ``chave``: primeiro a própria movimentação (já ``gerada`` com a mesma chave devolve a cópia
+    guardada, sem olhar o histórico nem o ``rev``, que a nova tentativa traz antigo); depois o histórico.
+    """
+    novo = copy.deepcopy(estado)
+    mov = _mov_transporte(novo, mov_id)
+    _conferir_dados(mov, registro.get("serial"), registro.get("entrega_cidade"))
+    if chave != mov.get("chave"):
+        raise CoberturaErro("chave_diferente", 409, "Esta planilha não pertence a esta movimentação.", id=mov_id)
+    if mov.get("estado") == "gerada" and mov.get("historico_id"):
+        return novo, None, _resultado(mov, True)
+    _exigir_estado(mov, ("preparada",), "A movimentação")
+    _conferir_rev(mov, rev)
+    existente = next((r for r in historico if r.get("chave") == chave), None)
+    if existente is not None:
+        _gerar(mov, ctx, existente)
+        return novo, None, _resultado(mov, True)
+    novo_registro = {**copy.deepcopy(dict(registro)), "movimentacao_id": mov_id, "chave": chave}
+    _gerar(mov, ctx, novo_registro)
+    return novo, [*historico, novo_registro][-limite:], _resultado(mov, False)
+
+
+def vincular_historico(
+    estado: Estado, historico: Historico, ctx: Contexto, mov_id: str, rev: Any, historico_id: str,
+) -> Tuple[Estado, Historico, Registro]:
+    """Liga uma planilha já baixada sem vínculo (escolhida em ``candidatos_historico``) à movimentação preparada."""
+    novo = copy.deepcopy(estado)
+    mov = _mov_transporte(novo, mov_id)
+    _exigir_estado(mov, ("preparada",), "A movimentação")
+    if mov.get("historico_id"):
+        raise CoberturaErro("transicao_invalida", 409, "A movimentação já tem planilha ligada.", id=mov_id, estado=mov.get("estado"))
+    _conferir_rev(mov, rev)
+    novo_historico = copy.deepcopy(historico)
+    registro = next((r for r in novo_historico if r.get("id") == historico_id), None)
+    if registro is None:
+        raise CoberturaErro("nao_encontrado", 404, "Registro do histórico não encontrado.", id=historico_id)
+    if registro.get("movimentacao_id"):
+        raise CoberturaErro("conflito_vinculo", 409, "Este registro já está ligado a outra movimentação.", id=historico_id)
+    _conferir_dados(mov, registro.get("serial"), registro.get("entrega_cidade"))
+    registro.update({"movimentacao_id": mov_id, "chave": mov.get("chave")})
+    _gerar(mov, ctx, registro)
+    return novo, novo_historico, _resultado(mov, False)
+
+
+def candidatos_historico(mov: Mapping[str, Any], historico: Iterable[Mapping[str, Any]]) -> List[Registro]:
+    """Planilhas baixadas depois da preparação, com a mesma série e o mesmo destino e sem vínculo (sem nomes)."""
+    preparada_em = _momento(mov.get("criada_em"))
+    if preparada_em is None:
+        return []
+    candidatos = []
+    for registro in historico:
+        criado_em = _momento(registro.get("criado_em"))
+        if (
+            criado_em is not None and criado_em >= preparada_em and not registro.get("movimentacao_id")
+            and chave_serie(registro.get("serial")) == chave_serie(mov.get("serie"))
+            and dobrar(registro.get("entrega_cidade")) == dobrar(mov.get("destino_cidade"))
+        ):
+            candidatos.append({campo: registro.get(campo) for campo in CAMPOS_CANDIDATO})
+    return candidatos
 
 
 # ----------------------------------------------------------------------------------------- arquivamento (D6)

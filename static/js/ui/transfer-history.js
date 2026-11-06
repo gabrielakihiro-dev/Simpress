@@ -12,6 +12,7 @@
   const MODAL_ID = "modal-historico-transferencias";
   const LIST_LIMIT = 50;
   const SEARCH_DELAY_MS = 250;
+  const PENDING_KEY = "simpress:cobertura:sem-vinculo";
   // Delivery fields restored by "Duplicar destino"; the equipment (serial) always comes from a new search.
   const DUPLICATE_FIELDS = Object.freeze([
     ["entrega-contato", "entrega_contato"],
@@ -247,10 +248,92 @@
       searchTimer = win.setTimeout(load, SEARCH_DELAY_MS);
     });
 
+    // Cobertura: a planilha que o operador baixou para uma movimentação vai SÓ para a rota da cobertura, que grava
+    // histórico e movimentação juntos. Falha transitória guarda a pendência neste navegador para reenviar com a
+    // mesma chave (idempotente). API para a tela da Cobertura: win.SimpressCoberturaVinculo.
+    function readPending() {
+      try {
+        const data = JSON.parse(win.localStorage?.getItem(PENDING_KEY) || "{}");
+        return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function writePending(data) {
+      try {
+        if (Object.keys(data).length) win.localStorage?.setItem(PENDING_KEY, JSON.stringify(data));
+        else win.localStorage?.removeItem(PENDING_KEY);
+      } catch (error) {
+        // Sem localStorage a pendência vive só nesta página.
+      }
+    }
+
+    // Pendências desta página valem mesmo se o localStorage falhar.
+    const memoryPending = {};
+    function allPending() {
+      return { ...memoryPending, ...readPending() };
+    }
+
+    function errorMessage(body) {
+      const detail = body?.detail;
+      return typeof detail?.mensagem === "string" ? detail.mensagem : "A movimentação não aceitou esta planilha.";
+    }
+
+    async function linkToMovement(item) {
+      const { movimentacao, payload, chave } = item;
+      let response;
+      try {
+        response = await win.fetch(`/api/cobertura/movimentacoes/${encodeURIComponent(movimentacao.id)}/registrar-transferencia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payload, chave, rev: movimentacao.rev }),
+        });
+      } catch (error) {
+        response = null;
+      }
+      const body = response ? await response.json().catch(() => null) : null;
+      const pending = allPending();
+      if (response?.ok) {
+        delete memoryPending[movimentacao.id];
+        delete pending[movimentacao.id];
+        writePending(pending);
+        doc.dispatchEvent(new win.CustomEvent("simpress:cobertura-atualizada", { detail: body }));
+        return { ok: true, resultado: body };
+      }
+      // Conflito ou dado recusado não melhora com outra tentativa; arquivo ocupado (409) é transitório.
+      if (response && (response.status === 422 || (response.status === 409 && body?.detail?.codigo !== "arquivo_ocupado"))) {
+        delete memoryPending[movimentacao.id];
+        delete pending[movimentacao.id];
+        writePending(pending);
+        notify(errorMessage(body), "error");
+        return { ok: false, status: response.status, detail: body?.detail };
+      }
+      memoryPending[movimentacao.id] = item;
+      pending[movimentacao.id] = item;
+      writePending(pending);
+      notify("Planilha baixada sem vínculo — Tentar de novo", "warning");
+      return { ok: false, status: response ? response.status : 0, pendente: true };
+    }
+
+    win.SimpressCoberturaVinculo = Object.freeze({
+      // Lista {movimentacao, payload, chave} das planilhas baixadas que ainda não ficaram ligadas à movimentação.
+      pendenciaSemVinculo: () => Object.values(allPending()),
+      // Reenvia com a MESMA chave; sem id, reenvia todas. Resolve com o resultado de cada tentativa.
+      tentarVincularDeNovo: id => Promise.all(Object.values(allPending())
+        .filter(item => id === undefined || item.movimentacao?.id === id)
+        .map(linkToMovement)),
+    });
+
     // Append after each generated sheet; the history is optional, so failures never reach the user's flow.
     doc.addEventListener("simpress:transfer-generated", event => {
       const payload = event.detail?.payload;
       if (!payload) return;
+      const movimentacao = event.detail?.movimentacao;
+      if (movimentacao?.id) {
+        void linkToMovement({ movimentacao, payload, chave: movimentacao.chave });
+        return;
+      }
       win.fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
