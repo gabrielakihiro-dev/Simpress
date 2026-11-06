@@ -50,21 +50,31 @@ class EtapaResilienteTests(unittest.TestCase):
 
 
 class AguardarEstabilidadePreCliqueTests(unittest.TestCase):
-    def test_raises_plain_rotina_erro_not_etapa_instavel_when_cursor_moves(self):
-        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50)]), \
+    def test_raises_plain_rotina_erro_not_etapa_instavel_when_cursor_never_stabilizes(self):
+        # Cursor instável nas 3 janelas (tentativas) seguidas: só aí levanta, sem EtapaInstavel (nunca repete o clique).
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50)] * 3), \
                 unittest.mock.patch.object(automacao.time, "sleep"), \
                 unittest.mock.patch.object(automacao, "verificar_cancelamento"):
             with self.assertRaises(automacao.RotinaErro) as contexto:
                 automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
         self.assertNotIsInstance(contexto.exception, automacao.EtapaInstavel)
 
-    def test_raises_plain_rotina_erro_when_state_check_fails(self):
+    def test_raises_plain_rotina_erro_when_state_check_fails_in_every_window(self):
         with unittest.mock.patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
                 unittest.mock.patch.object(automacao.time, "sleep"), \
                 unittest.mock.patch.object(automacao, "verificar_cancelamento"):
             with self.assertRaises(automacao.RotinaErro) as contexto:
                 automacao.aguardar_estabilidade_pre_clique(lambda: False, "Clique de teste")
         self.assertNotIsInstance(contexto.exception, automacao.EtapaInstavel)
+
+    def test_recovers_after_an_unstable_window_without_raising(self):
+        # Tremor do mouse só na 1a janela: a 2a estabiliza e a espera retorna normal, sem levantar nada
+        # (a repetição é só da espera, nunca do clique, que fica a cargo de quem chama, uma única vez).
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50), (10, 10), (10, 10)]), \
+                unittest.mock.patch.object(automacao.time, "sleep") as sleep, \
+                unittest.mock.patch.object(automacao, "verificar_cancelamento"):
+            automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
+        self.assertEqual(sleep.call_count, 2)
 
 
 if __name__ == "__main__":

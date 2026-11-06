@@ -208,19 +208,25 @@ def cursor_mudou(baseline: tuple[int, int], folga_px: int = 4) -> bool:
     return abs(x - baseline[0]) > folga_px or abs(y - baseline[1]) > folga_px
 
 
-def aguardar_estabilidade_pre_clique(verificar: Callable[[], bool], descricao: str, espera_s: float = 0.6) -> None:
-    """Confere, por um breve silêncio, que o cursor não se moveu e ``verificar()`` ainda é verdade antes de um clique irreversível.
+def aguardar_estabilidade_pre_clique(
+    verificar: Callable[[], bool], descricao: str, espera_s: float = 0.6, janelas: int = 3
+) -> None:
+    """Confere, por breves silêncios, que o cursor não se moveu e ``verificar()`` ainda é verdade antes de um clique irreversível.
 
-    Nunca repete o clique: detectada interferência ou estado inesperado, levanta ``RotinaErro`` normal (comportamento
-    atual) em vez de ``EtapaInstavel``, para não arriscar disparar a ação duas vezes.
+    Nunca repete o clique: só a espera é refeita (até ``janelas`` vezes) quando o cursor se move ou o estado muda,
+    nunca o clique em si. Levanta ``RotinaErro`` normal (nunca ``EtapaInstavel``) só depois de esgotar todas as
+    janelas, para não arriscar disparar a ação duas vezes num mero tremor do mouse de uma única janela.
     """
-    baseline = obter_posicao_cursor()
-    time.sleep(espera_s)
-    verificar_cancelamento()
-    if cursor_mudou(baseline):
-        raise RotinaErro(f"{descricao}: o cursor do sistema se moveu antes do clique; não cliquei para não repetir uma ação irreversível.")
-    if not verificar():
-        raise RotinaErro(f"{descricao}: o estado mudou antes do clique; não cliquei para não repetir uma ação irreversível.")
+    for tentativa in range(1, janelas + 1):
+        baseline = obter_posicao_cursor()
+        time.sleep(espera_s)
+        verificar_cancelamento()
+        cursor_instavel = cursor_mudou(baseline)
+        if not cursor_instavel and verificar():
+            return
+        if tentativa == janelas:
+            motivo = "o cursor do sistema se moveu" if cursor_instavel else "o estado mudou"
+            raise RotinaErro(f"{descricao}: {motivo} antes do clique; não cliquei para não repetir uma ação irreversível.")
 
 
 def _recuperar_padrao() -> None:
