@@ -1270,6 +1270,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__feedback[data-estado="ok"]::before { content: "✓"; }
 .sebrae-chamado__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
 
+.sebrae-chamado__observacao { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.sebrae-chamado__observacao .ck-campo__rotulo { color: var(--cor-texto-suave); }
+.sebrae-chamado__observacao textarea.ck-entrada { min-height: 52px; resize: vertical; line-height: 1.4; font-size: var(--fs-sm); }
+.sebrae-obs__feedback { min-height: 16px; color: var(--cor-texto-mudo); font-size: var(--fs-xs); display: flex; align-items: center; gap: 6px; }
+.sebrae-obs__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-obs__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-obs__feedback[data-estado="pendente"] { color: var(--cor-alerta-texto); }
+.sebrae-obs__feedback[data-estado="salvando"]::before { content: ""; width: 9px; height: 9px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ck-girar .8s linear infinite; }
+.sebrae-obs__feedback[data-estado="ok"]::before { content: "✓"; }
+.sebrae-obs__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
+
 /* Ações: Finalizar não é botão de sucesso (nem verde, nem o violeta primário) */
 .sebrae-chamado__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sebrae-chamado__acoes .ck-btn[hidden] { display: none; }
@@ -1299,7 +1310,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 
 /* ---------- 5. Animações ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  .sebrae-chamado__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+  .sebrae-chamado__feedback, .sebrae-obs__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
   @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
     :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) { interpolate-size: allow-keywords; }
     :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto)::details-content { height: 0; overflow: clip; transition: height var(--duracao-lenta) var(--curva), content-visibility var(--duracao-lenta) allow-discrete; }
