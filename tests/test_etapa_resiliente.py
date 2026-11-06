@@ -49,5 +49,23 @@ class EtapaResilienteTests(unittest.TestCase):
         recuperar.assert_not_called()
 
 
+class AguardarEstabilidadePreCliqueTests(unittest.TestCase):
+    def test_raises_plain_rotina_erro_not_etapa_instavel_when_cursor_moves(self):
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", side_effect=[(0, 0), (50, 50)]), \
+                unittest.mock.patch.object(automacao.time, "sleep"), \
+                unittest.mock.patch.object(automacao, "verificar_cancelamento"):
+            with self.assertRaises(automacao.RotinaErro) as contexto:
+                automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
+        self.assertNotIsInstance(contexto.exception, automacao.EtapaInstavel)
+
+    def test_raises_plain_rotina_erro_when_state_check_fails(self):
+        with unittest.mock.patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                unittest.mock.patch.object(automacao.time, "sleep"), \
+                unittest.mock.patch.object(automacao, "verificar_cancelamento"):
+            with self.assertRaises(automacao.RotinaErro) as contexto:
+                automacao.aguardar_estabilidade_pre_clique(lambda: False, "Clique de teste")
+        self.assertNotIsInstance(contexto.exception, automacao.EtapaInstavel)
+
+
 if __name__ == "__main__":
     unittest.main()

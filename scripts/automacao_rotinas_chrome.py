@@ -208,6 +208,21 @@ def cursor_mudou(baseline: tuple[int, int], folga_px: int = 4) -> bool:
     return abs(x - baseline[0]) > folga_px or abs(y - baseline[1]) > folga_px
 
 
+def aguardar_estabilidade_pre_clique(verificar: Callable[[], bool], descricao: str, espera_s: float = 0.6) -> None:
+    """Confere, por um breve silêncio, que o cursor não se moveu e ``verificar()`` ainda é verdade antes de um clique irreversível.
+
+    Nunca repete o clique: detectada interferência ou estado inesperado, levanta ``RotinaErro`` normal (comportamento
+    atual) em vez de ``EtapaInstavel``, para não arriscar disparar a ação duas vezes.
+    """
+    baseline = obter_posicao_cursor()
+    time.sleep(espera_s)
+    verificar_cancelamento()
+    if cursor_mudou(baseline):
+        raise RotinaErro(f"{descricao}: o cursor do sistema se moveu antes do clique; não cliquei para não repetir uma ação irreversível.")
+    if not verificar():
+        raise RotinaErro(f"{descricao}: o estado mudou antes do clique; não cliquei para não repetir uma ação irreversível.")
+
+
 def _recuperar_padrao() -> None:
     pagina = _pagina_ativa_recuperacao
     if pagina is not None:
@@ -1761,7 +1776,17 @@ def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
     try:
         page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
-        arquivo = baixar_dashboard_da_pasta(page)
+        definir_pagina_ativa_para_recuperacao(page)
+
+        def _baixar() -> Path:
+            try:
+                return baixar_dashboard_da_pasta(page)
+            except RotinaErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        arquivo = etapa_resiliente(_baixar, "Baixar Dashboard da pasta")
     except Exception:
         registrar_erro(page, "Dashboard")
         raise
@@ -1860,9 +1885,20 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     if copias > LIMITE_AVISO_COPIAS:
         log("Dashboard", f"Aviso: há {copias} cópias de segurança na pasta DASHBOARD SEBRAE; apague as antigas à mão (a rotina não apaga).")
     log("Dashboard", "Criando a cópia de segurança (Mais ações > Duplicata)...")
-    _abrir_mais_acoes(linha)
-    duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first
-    duplicata.wait_for(state="visible", timeout=15000)
+
+    def _abrir_menu_duplicata():
+        try:
+            _abrir_mais_acoes(linha)
+            duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first
+            duplicata.wait_for(state="visible", timeout=15000)
+            return duplicata
+        except RotinaErro:
+            raise
+        except Exception as erro:
+            raise EtapaInstavel(str(erro)) from erro
+
+    # Só a navegação (abrir o menu) é refeita: o clique que cria a cópia nunca é repetido por conta própria.
+    duplicata = etapa_resiliente(_abrir_menu_duplicata, "Abrir menu Mais ações > Duplicata")
     duplicata.click()
     limite = time.time() + 30
     while time.time() < limite:
@@ -1932,12 +1968,22 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
     Se o SharePoint oferecer só "Keep both", recusa: criaria um segundo arquivo em vez de atualizar o Dashboard.
     """
     log("Dashboard", f"Enviando {arquivo.name} ({arquivo.stat().st_size:,} bytes)...".replace(",", "."))
-    _botao_enviar(page).click()
-    arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
-    arquivos.wait_for(state="visible", timeout=15000)
-    with page.expect_file_chooser(timeout=15000) as escolha:
-        arquivos.click()
-    escolha.value.set_files(str(arquivo))
+    definir_pagina_ativa_para_recuperacao(page)
+
+    def _abrir_menu_e_escolher_arquivo() -> None:
+        try:
+            _botao_enviar(page).click()
+            arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
+            arquivos.wait_for(state="visible", timeout=15000)
+            with page.expect_file_chooser(timeout=15000) as escolha:
+                arquivos.click()
+            escolha.value.set_files(str(arquivo))
+        except RotinaErro:
+            raise
+        except Exception as erro:
+            raise EtapaInstavel(str(erro)) from erro
+
+    etapa_resiliente(_abrir_menu_e_escolher_arquivo, "Abrir menu de upload e escolher arquivo")
     substituir = page.get_by_role("button", name=_BOTAO_SUBSTITUIR)
     manter = page.get_by_role("button", name=_BOTAO_MANTER_AMBOS)
     if esperar_visivel(substituir.or_(manter).first, 8000):
@@ -1947,6 +1993,7 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
             except Exception:
                 pass
             raise RotinaErro('O SharePoint ofereceu só "Keep both" (manter os dois); não enviei para não criar um segundo arquivo.')
+        aguardar_estabilidade_pre_clique(lambda: substituir.count() > 0, "Substituir o Dashboard no SharePoint")
         substituir.first.click()
     aviso_uso = page.get_by_role("dialog").or_(page.get_by_role("alertdialog")).filter(has_text=_AVISO_ARQUIVO_EM_USO)
     limite = time.time() + 90
@@ -1998,9 +2045,28 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
     try:
         page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
-        duplicar_dashboard_na_pasta(page)
+        definir_pagina_ativa_para_recuperacao(page)
+
+        def _duplicar() -> None:
+            try:
+                duplicar_dashboard_na_pasta(page)
+            except RotinaErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_duplicar, "Duplicata de segurança do Dashboard")
         verificar_cancelamento()
-        baixado = baixar_dashboard_da_pasta(page)
+
+        def _baixar() -> Path:
+            try:
+                return baixar_dashboard_da_pasta(page)
+            except RotinaErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        baixado = etapa_resiliente(_baixar, "Baixar Dashboard da pasta")
         conferir_dashboard_do_sharepoint(baixado)
         guardar_backup_do_dashboard(baixado)
         verificar_cancelamento()
