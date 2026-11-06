@@ -78,7 +78,7 @@
       && appState.equipamentoSelectionRevision === revision;
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
-    result.textContent = "Consultando no Endpoint…";
+    result.textContent = "Consultando no Endpoint… Se o Endpoint pedir login, entre na janela do Chrome de automação.";
     try {
       const data = await app.apiFetch("/api/endpoint/consultar", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -122,13 +122,22 @@
     const request = endpointRequestGate.begin();
     const current = () => endpointRequestGate.isCurrent(request.id)
       && appState.equipamentoSelectionRevision === revision;
+    // Identifica o pedido: se a seleção mudar enquanto o servidor espera o login, o servidor não conecta.
+    const pedido = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let finalizado = false;
+    request.signal.addEventListener("abort", () => {
+      if (!finalizado) app.apiFetch("/api/endpoint/controle-remoto/cancelar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedido }), errorMessage: "",
+      }).catch(() => {});
+    });
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
-    result.textContent = "Abrindo o controle remoto no Endpoint…";
+    result.textContent = "Abrindo o controle remoto no Endpoint… Se o Endpoint pedir login, entre na janela do Chrome de automação.";
     try {
       const data = await app.apiFetch("/api/endpoint/controle-remoto", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serial }), signal: request.signal,
+        body: JSON.stringify({ serial, pedido }), signal: request.signal,
         errorMessage: "Não foi possível abrir o controle remoto.",
       });
       if (!current()) return;
@@ -151,6 +160,7 @@
     } catch (error) {
       if (current() && error.name !== "AbortError") result.textContent = error.message || "Não foi possível abrir o controle remoto.";
     } finally {
+      finalizado = true;
       if (current()) {
         button.disabled = false;
         button.removeAttribute("aria-busy");

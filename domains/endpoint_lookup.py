@@ -139,8 +139,10 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
             achado = consultar_grade(page, automation, serial, macbook, details_serials)
             if achado["status"] != "found":
                 return achado
-            if achado.get("_fallback_mac") and antes_de_conectar is not None and not antes_de_conectar():
-                return {"status": "ambiguous", "serial": serial, "origem": "base_local"}
+            # Última checagem antes do clique: o pedido ainda vale e, no fallback de MacBook, a base local não mudou.
+            fallback = bool(achado.get("_fallback_mac"))
+            if antes_de_conectar is not None and not antes_de_conectar(fallback):
+                return {"status": "ambiguous", "serial": serial, "origem": "base_local" if fallback else "pedido_cancelado"}
             linha = page.locator(_LINHA).first
             hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
             linha.locator(".resource-action--button").first.click(timeout=10000)

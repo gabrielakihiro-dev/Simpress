@@ -234,8 +234,14 @@ class RemoteControlTests(unittest.TestCase):
 
     def test_mac_fallback_needs_unchanged_snapshot(self):
         found = {"status": "found", "serial": "ABC", "_fallback_mac": True}
-        result, page = self.run_remote(found, antes_de_conectar=lambda: False)
+        result, page = self.run_remote(found, antes_de_conectar=lambda fallback: not fallback)
         self.assertEqual(result, {"status": "ambiguous", "serial": "ABC", "origem": "base_local"})
+        page.locator.return_value.fill.assert_not_called()
+
+    def test_cancelled_request_never_clicks_connect(self):
+        # A checagem roda sempre, não só no fallback de MacBook.
+        result, page = self.run_remote({"status": "found", "serial": "ABC"}, antes_de_conectar=lambda fallback: False)
+        self.assertEqual(result, {"status": "ambiguous", "serial": "ABC", "origem": "pedido_cancelado"})
         page.locator.return_value.fill.assert_not_called()
 
 
@@ -306,12 +312,30 @@ class RouteTests(unittest.TestCase):
         response = client.post("/api/endpoint/controle-remoto", json={"serial": " abc "})
         self.assertEqual(response.json(), {"status": "connected", "serial": "ABC", "hostname": "PC1"})
         self.assertEqual(remote.call_args.args, ("ABC", False, ("ABC",)))
-        self.assertTrue(remote.call_args.kwargs["antes_de_conectar"]())
+        self.assertTrue(remote.call_args.kwargs["antes_de_conectar"](True))
         self.snapshot.side_effect = lambda serial: dict(self.equipment, details_serials=("ABC", "X"))
-        self.assertFalse(remote.call_args.kwargs["antes_de_conectar"]())
+        self.assertFalse(remote.call_args.kwargs["antes_de_conectar"](True))
+        self.assertTrue(remote.call_args.kwargs["antes_de_conectar"](False))
         for exception, expected in [(automation.TravaOcupada("busy"), 409), (RuntimeError("secret"), 503)]:
             remote.side_effect = exception
             response = client.post("/api/endpoint/controle-remoto", json={"serial": "ABC"})
             self.assertEqual(response.status_code, expected)
             self.assertNotIn("secret", response.text)
         self.assertEqual(client.post("/api/endpoint/controle-remoto", json={"serial": ""}).status_code, 422)
+
+    def test_remote_control_request_cancelled_or_replaced_does_not_connect(self):
+        remote = MagicMock(return_value={"status": "connected", "serial": "ABC"})
+        app = FastAPI()
+        app.include_router(create_endpoint_lookup_router(get_snapshot=self.snapshot, lookup=self.lookup, remote_control=remote))
+        client = TestClient(app)
+        client.post("/api/endpoint/controle-remoto", json={"serial": "ABC", "pedido": "p1"})
+        antes_p1 = remote.call_args.kwargs["antes_de_conectar"]
+        self.assertTrue(antes_p1(False))
+        client.post("/api/endpoint/controle-remoto", json={"serial": "ABC", "pedido": "p2"})  # substitui p1
+        self.assertFalse(antes_p1(False))
+        antes_p2 = remote.call_args.kwargs["antes_de_conectar"]
+        self.assertTrue(antes_p2(False))
+        self.assertEqual(client.post("/api/endpoint/controle-remoto/cancelar", json={"pedido": "p2"}).json(), {"status": "cancelled"})
+        self.assertFalse(antes_p2(False))
+        self.assertEqual(client.post("/api/endpoint/controle-remoto/cancelar", json={"pedido": ""}).status_code, 422)
+        self.assertEqual(client.post("/api/endpoint/controle-remoto", json={"serial": "ABC", "pedido": "a b"}).status_code, 422)
