@@ -1,5 +1,7 @@
 """Endpoint lookup shares the selected equipment and never saves a user."""
 import re
+from collections import deque
+from threading import Lock
 from typing import Any, Callable, Collection, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +21,14 @@ class ConsultaEndpointPayload(BaseModel):
             raise ValueError("Informe um número de série válido.")
         return value.strip().upper()
 
+
+class ControleRemotoPayload(ConsultaEndpointPayload):
+    # Identificador opcional do pedido da Home; o Assistente não o envia.
+    pedido: str | None = Field(None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+
+
+class CancelarControleRemotoPayload(BaseModel):
+    pedido: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
 
 class PowerShellPayload(BaseModel):
     hostname: str | None = Field(None, max_length=64)
@@ -52,6 +62,10 @@ def create_endpoint_lookup_router(
     powershell: Callable[..., dict[str, Any]] = endpoint_lookup.abrir_powershell,
 ) -> APIRouter:
     router = APIRouter()
+    # Pedidos de controle remoto cancelados ou substituídos; guardados só em memória.
+    cancelados: deque[str] = deque(maxlen=64)
+    estado: dict[str, str | None] = {"vigente": None}
+    trava = Lock()
 
     @router.post("/api/endpoint/consultar")
     def consultar_endpoint(payload: ConsultaEndpointPayload) -> dict[str, Any]:
@@ -78,15 +92,25 @@ def create_endpoint_lookup_router(
             raise HTTPException(503, "Não foi possível consultar o Endpoint. Confira o Chrome de automação, o login e a coluna Usuário do último logon.") from None
 
     @router.post("/api/endpoint/controle-remoto")
-    def controle_remoto_endpoint(payload: ConsultaEndpointPayload) -> dict[str, Any]:
+    def controle_remoto_endpoint(payload: ControleRemotoPayload) -> dict[str, Any]:
+        if payload.pedido:
+            with trava:  # pedido novo invalida o anterior
+                if estado["vigente"] and estado["vigente"] != payload.pedido:
+                    cancelados.append(estado["vigente"])
+                estado["vigente"] = payload.pedido
         equipment = get_snapshot(payload.serial)
         macbook = equipment.get("categoria") == "macbook" or categorize_equipment(equipment.get("tipo"), equipment.get("modelo")) == "macbook"
         details_serials = tuple(equipment["details_serials"])
         if equipment.get("serie_detalhes_duplicada"):
             details_serials += (payload.serial,)
 
-        def inalterado() -> bool:
+        def inalterado(fallback_mac: bool) -> bool:
+            # Nunca conecta por um pedido cancelado ou substituído (a tela já descartou a resposta).
+            if payload.pedido and payload.pedido in cancelados:
+                return False
             # Antes de conectar por série alternativa de MacBook, a base local precisa continuar igual.
+            if not fallback_mac:
+                return True
             try:
                 return get_snapshot(payload.serial) == equipment
             except HTTPException as error:
@@ -102,6 +126,12 @@ def create_endpoint_lookup_router(
             raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
         except Exception:
             raise HTTPException(503, "Não foi possível abrir o controle remoto. Confira o Chrome de automação (porta 9333) e o login no Endpoint.") from None
+
+    @router.post("/api/endpoint/controle-remoto/cancelar")
+    def cancelar_controle_remoto(payload: CancelarControleRemotoPayload) -> dict[str, Any]:
+        with trava:
+            cancelados.append(payload.pedido)
+        return {"status": "cancelled"}
 
     @router.post("/api/endpoint/powershell")
     def powershell_endpoint(payload: PowerShellPayload) -> dict[str, Any]:
