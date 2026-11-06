@@ -129,14 +129,35 @@ class LookupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
              patch("playwright.sync_api.sync_playwright") as factory, \
              patch.object(automation, "aguardar_login", side_effect=lambda *a, **k: ordem.append("login")) as login, \
+             patch.object(automation, "endpoint_logado", return_value=True), \
              patch.object(automation, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("grade")), \
              patch.object(automation, "confirmar_modo_todos"), patch.object(automation, "acionar_quando_pronto"), \
              patch.object(endpoint_lookup, "consultar_grade", return_value={}):
             factory.return_value.__enter__.return_value = pw
             endpoint_lookup.consultar("ABC", False)
         self.assertEqual(ordem, ["login", "grade"])
-        self.assertEqual(login.call_args.args[1:3], ("Endpoint Central", automation.endpoint_logado))
+        self.assertEqual(login.call_args.args[1], "Endpoint Central")
         self.assertIs(login.call_args.kwargs["entrar"], automation.endpoint_entrar)
+
+    def test_waits_again_when_session_drops_after_second_goto(self):
+        pw = MagicMock()
+        pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
+        page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
+        page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/login"
+        ordem = []
+        page.goto.side_effect = lambda *a, **k: ordem.append("goto")
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
+             patch("playwright.sync_api.sync_playwright") as factory, \
+             patch.object(automation, "aguardar_login", side_effect=lambda *a, **k: ordem.append("login")) as login, \
+             patch.object(automation, "endpoint_logado", return_value=False) as logado, \
+             patch.object(automation, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("grade")), \
+             patch.object(automation, "confirmar_modo_todos"), patch.object(automation, "acionar_quando_pronto"), \
+             patch.object(endpoint_lookup, "consultar_grade", return_value={}):
+            factory.return_value.__enter__.return_value = pw
+            endpoint_lookup.consultar("ABC", False)
+        self.assertEqual(ordem, ["goto", "login", "goto", "login", "grade"])
+        logado.assert_called_once_with(page)
+        self.assertEqual(login.call_args_list[0], login.call_args_list[1])
 
     def test_private_tab_preparation_does_not_require_logged_users_column(self):
         data = grade([("ABC", "logged", "last")])
@@ -181,6 +202,29 @@ class RemoteControlTests(unittest.TestCase):
         result, page = self.run_remote({"status": "found", "serial": "ABC"}, menus=(False, False))
         self.assertEqual(result, {"status": "offline", "serial": "ABC", "hostname": "PC1"})
         page.locator.return_value.fill.assert_not_called()
+
+    def test_waits_for_endpoint_login_before_grid_and_before_clicking_connect(self):
+        pw = MagicMock()
+        pw.chromium.connect_over_cdp.return_value.contexts = [MagicMock()]
+        page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
+        page.locator.return_value.first.locator.return_value.first.inner_text.return_value = " PC1 "
+        page.url = ""
+        ordem = []
+        page.locator.return_value.click.side_effect = lambda **_: ordem.append("conectar")
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
+             patch("playwright.sync_api.sync_playwright") as factory, \
+             patch.object(automation, "aguardar_login", side_effect=lambda *a, **k: ordem.append("login")) as login, \
+             patch.object(automation, "endpoint_logado", return_value=True), \
+             patch.object(automation, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("grade")), \
+             patch.object(automation, "confirmar_modo_todos"), patch.object(automation, "acionar_quando_pronto"), \
+             patch.object(endpoint_lookup, "consultar_grade", return_value={"status": "found", "serial": "ABC"}), \
+             patch.object(endpoint_lookup, "_menu_com_controle_remoto", return_value=True):
+            factory.return_value.__enter__.return_value = pw
+            result = endpoint_lookup.controle_remoto("ABC", False)
+        self.assertEqual(result["status"], "connected")
+        self.assertEqual(ordem, ["login", "grade", "conectar"])
+        self.assertEqual(login.call_args.args[1], "Endpoint Central")
+        self.assertIs(login.call_args.kwargs["entrar"], automation.endpoint_entrar)
 
     def test_not_found_and_ambiguous_never_click(self):
         for status in ("not_found", "ambiguous"):
