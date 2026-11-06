@@ -304,6 +304,7 @@ class SchemasPorMensagemTests(unittest.TestCase):
             "mude o endereço da unidade 3": "salvar_unidade",
             "remova o hostname duplicado": "remover_hostname_endpoint",
             "abra o controle remoto da ABC123": "abrir_controle_remoto",
+            "abra o PowerShell da PRNOTEUMU005": "abrir_powershell_endpoint",
             "relatório mensal de março": "obter_relatorio_mensal",
             "exporte para excel": "exportar_planilha",
             "recarregue a base": "recarregar_base",
@@ -316,7 +317,7 @@ class SchemasPorMensagemTests(unittest.TestCase):
 
     def test_writes_do_not_enter_through_unrelated_words(self) -> None:
         nomes = self.nomes("quais chamados estão abertos?")
-        for escrita in ("atualizar_apelido", "salvar_unidade", "recarregar_base", "executar_automacao_chrome", "registrar_transferencia", "remover_hostname_endpoint", "abrir_controle_remoto"):
+        for escrita in ("atualizar_apelido", "salvar_unidade", "recarregar_base", "executar_automacao_chrome", "registrar_transferencia", "remover_hostname_endpoint", "abrir_controle_remoto", "abrir_powershell_endpoint"):
             self.assertNotIn(escrita, nomes)
 
     def test_article_os_is_not_the_service_order(self) -> None:
@@ -341,7 +342,7 @@ class SchemasPorMensagemTests(unittest.TestCase):
         agrupadas = set(NUCLEO_FERRAMENTAS).union(*(set(tools) for _, tools in GRUPOS_FERRAMENTAS.values()))
         self.assertEqual(agrupadas, set(TOOLS))
         self.assertEqual(len(QUERY_TOOLS) + len(CHANGE_TOOLS), len(TOOLS))  # no duplicated name swallowed by the dict
-        todos = set().union(*(self.nomes(f"{padrao}") for padrao in ("chamados sebrae histórico transferência rotina usuário apelido unidade hostname remoto mensal excel recarregar",)))
+        todos = set().union(*(self.nomes(f"{padrao}") for padrao in ("chamados sebrae histórico transferência rotina usuário apelido unidade hostname remoto powershell mensal excel recarregar",)))
         self.assertEqual(todos, {t for t in TOOLS if t != "buscar_web"})
 
     def test_subset_is_smaller_than_the_full_set(self) -> None:
