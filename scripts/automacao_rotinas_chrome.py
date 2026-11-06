@@ -979,33 +979,53 @@ def exportar_oracle(context: "BrowserContext") -> Path:
     page = nova_aba(context, ORACLE_URL, "Oracle")
     try:
         aguardar_login(page, "Oracle", oracle_logado, email=EMAIL_DASHBOARD)
-        campo = abrir_gestao_solicitacoes(page)
+        definir_pagina_ativa_para_recuperacao(page)
 
-        log("Oracle", f"Preenchendo Contrato/Item com {FILTRO_ORACLE}...")
-        campo.click()
-        campo.press("Control+A")
-        campo.press_sequentially(FILTRO_ORACLE, delay=60)
-        campo.press("Tab")
-        if campo.input_value().strip() != FILTRO_ORACLE:
-            campo.fill(FILTRO_ORACLE)
-        if campo.input_value().strip() != FILTRO_ORACLE:
-            raise RotinaErro(f"O campo Contrato/Item ficou com {campo.input_value()!r}.")
+        def _pesquisar() -> None:
+            try:
+                # Reabre a Gestão de Solicitações a cada tentativa: se algo dentro do Oracle foi fechado
+                # (não a aba) no meio da pesquisa anterior, o campo antigo pode não existir mais.
+                campo = abrir_gestao_solicitacoes(page)
+                log("Oracle", f"Preenchendo Contrato/Item com {FILTRO_ORACLE}...")
+                campo.click()
+                campo.press("Control+A")
+                campo.press_sequentially(FILTRO_ORACLE, delay=60)
+                campo.press("Tab")
+                if campo.input_value().strip() != FILTRO_ORACLE:
+                    campo.fill(FILTRO_ORACLE)
+                if campo.input_value().strip() != FILTRO_ORACLE:
+                    raise RotinaErro(f"O campo Contrato/Item ficou com {campo.input_value()!r}.")
 
-        log("Oracle", "Pesquisando...")
-        page.get_by_role("button", name="Pesquisar", exact=True).filter(visible=True).first.click()
-        total = page.get_by_text(re.compile(r"Registros:\s*Total")).filter(visible=True).first
-        aguardar_estado(total, "visible")
-        log("Oracle", f"Pesquisa concluída ({total.inner_text().strip()}).")
+                log("Oracle", "Pesquisando...")
+                page.get_by_role("button", name="Pesquisar", exact=True).filter(visible=True).first.click()
+                total = page.get_by_text(re.compile(r"Registros:\s*Total")).filter(visible=True).first
+                aguardar_estado(total, "visible")
+                log("Oracle", f"Pesquisa concluída ({total.inner_text().strip()}).")
+            except RotinaErro:
+                raise
+            except Exception as erro:
+                # Cobre o caso relatado: algo fechado dentro do Oracle trava a espera do resultado sem
+                # erro visível (Playwright TimeoutError puro); a Camada B refaz a pesquisa do zero.
+                raise EtapaInstavel(str(erro)) from erro
 
-        log("Oracle", "Exportando: ⋮ > Exportar > Excel...")
-        page.locator("button.runtimeOptions").filter(visible=True).first.click()
-        excel = page.locator('button[automationid$="coreExcelExport"]').filter(visible=True)
-        submenu = page.locator("button.ws-submenu-menu-button.Exportar").filter(visible=True).first
-        submenu.wait_for(state="visible", timeout=10000)
-        submenu.hover()
-        if not visivel(excel):
-            submenu.click()
-        excel.first.wait_for(state="visible", timeout=10000)
+        etapa_resiliente(_pesquisar, "Pesquisa no Oracle (Contrato/Item)")
+
+        def _abrir_menu_exportar():
+            try:
+                log("Oracle", "Exportando: ⋮ > Exportar > Excel...")
+                page.locator("button.runtimeOptions").filter(visible=True).first.click()
+                excel = page.locator('button[automationid$="coreExcelExport"]').filter(visible=True)
+                submenu = page.locator("button.ws-submenu-menu-button.Exportar").filter(visible=True).first
+                submenu.wait_for(state="visible", timeout=10000)
+                submenu.hover()
+                if not visivel(excel):
+                    submenu.click()
+                excel.first.wait_for(state="visible", timeout=10000)
+                return excel
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        excel = etapa_resiliente(_abrir_menu_exportar, "Abrir menu Exportar > Excel no Oracle")
         arquivo = exportar_com_download(page, "Oracle", excel.first.click, r"Gest[ãa]o de Solicita[çc][õo]es")
     except Exception:
         registrar_erro(page, "Oracle")
@@ -1065,40 +1085,53 @@ def selecionar_contrato_ux(page: "Page") -> None:
     campo = page.locator("#CodigosContratosFiltro").first
     aguardar_estado(campo, "visible")
     aguardar_ux_livre(page)
-    log("UX Simpress", f"Selecionando o contrato {CONTRATO_NOME}...")
-    campo.click()
-    desmarcar = page.get_by_text("Desmarcar todos", exact=True).filter(visible=True)
-    if campo.input_value().strip() and visivel(desmarcar):
-        desmarcar.first.click()
-    busca = page.get_by_placeholder("Buscar Contrato/Nome").filter(visible=True).first
-    busca.wait_for(state="visible", timeout=10000)
-    busca.fill("")
-    busca.press_sequentially(CONTRATO, delay=50)
-    opcoes = page.locator(f'li[data-valor="{CONTRATO}"]').filter(visible=True)
-    opcao = opcoes.first
-    opcao.wait_for(state="visible", timeout=15000)
-    if opcoes.count() != 1:
-        raise RotinaErro("A opção do contrato não é única.")
-    texto = (opcao.get_attribute("data-texto") or "").strip()
-    if texto != CONTRATO_NOME:
-        raise RotinaErro(f"A opção do contrato não confere: {texto!r}.")
-    if opcao.locator("i.icon-ok-squared").count() == 0:
-        opcao.click()
-    if opcao.locator("i.icon-ok-squared").count() == 0:
-        raise RotinaErro("A opção do contrato não ficou marcada (✓).")
-    # Fecha a lista clicando no título da tela (fora do seletor); o UX então recarrega os
-    # filtros dependentes ("Aguarde...") e só depois grava o código no campo.
-    page.locator("h1, h2").filter(visible=True).first.click()
-    limite = time.time() + 60
-    while time.time() < limite and (campo.get_attribute("data-valor") or "") != CONTRATO:
-        verificar_cancelamento()
-        page.wait_for_timeout(500)
-    aguardar_ux_livre(page)
-    valor = campo.input_value().strip()
-    codigo = campo.get_attribute("data-valor") or ""
-    if valor != CONTRATO_NOME or codigo != CONTRATO:
-        raise RotinaErro(f"O campo Contrato/Nome ficou com {valor!r} (código {codigo!r}).")
-    log("UX Simpress", "Contrato confirmado no campo (✓).")
+    definir_pagina_ativa_para_recuperacao(page)
+
+    def _selecionar() -> None:
+        log("UX Simpress", f"Selecionando o contrato {CONTRATO_NOME}...")
+        campo.click()
+        desmarcar = page.get_by_text("Desmarcar todos", exact=True).filter(visible=True)
+        if campo.input_value().strip() and visivel(desmarcar):
+            desmarcar.first.click()
+        busca = page.get_by_placeholder("Buscar Contrato/Nome").filter(visible=True).first
+        busca.wait_for(state="visible", timeout=10000)
+        busca.fill("")
+        busca.press_sequentially(CONTRATO, delay=50)
+        opcoes = page.locator(f'li[data-valor="{CONTRATO}"]').filter(visible=True)
+        opcao = opcoes.first
+        opcao.wait_for(state="visible", timeout=15000)
+        if opcoes.count() != 1:
+            raise RotinaErro("A opção do contrato não é única.")
+        texto = (opcao.get_attribute("data-texto") or "").strip()
+        if texto != CONTRATO_NOME:
+            raise RotinaErro(f"A opção do contrato não confere: {texto!r}.")
+        if opcao.locator("i.icon-ok-squared").count() == 0:
+            opcao.click()
+        if opcao.locator("i.icon-ok-squared").count() == 0:
+            raise EtapaInstavel("A opção do contrato não ficou marcada (✓).")
+        # Fecha a lista clicando no título da tela (fora do seletor); o UX então recarrega os
+        # filtros dependentes ("Aguarde...") e só depois grava o código no campo.
+        page.locator("h1, h2").filter(visible=True).first.click()
+        limite = time.time() + 60
+        while time.time() < limite and (campo.get_attribute("data-valor") or "") != CONTRATO:
+            verificar_cancelamento()
+            page.wait_for_timeout(500)
+        aguardar_ux_livre(page)
+        valor = campo.input_value().strip()
+        codigo = campo.get_attribute("data-valor") or ""
+        if valor != CONTRATO_NOME or codigo != CONTRATO:
+            raise EtapaInstavel(f"O campo Contrato/Nome ficou com {valor!r} (código {codigo!r}).")
+        log("UX Simpress", "Contrato confirmado no campo (✓).")
+
+    def _tentar() -> None:
+        try:
+            _selecionar()
+        except RotinaErro:
+            raise
+        except Exception as erro:
+            raise EtapaInstavel(str(erro)) from erro
+
+    etapa_resiliente(_tentar, "Selecionar contrato no UX")
 
 
 UX_EDICOES_TIMEOUT_MS = 30000
@@ -1133,14 +1166,24 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         if page.locator("#CodigosContratosFiltro").count() != 1:
             raise RotinaErro("O filtro de contrato não é único.")
         selecionar_contrato_ux(page)
-        controle(page, "Buscar").click()
-        aguardar_ux_livre(page)
-        controle(page, "Editar apelido e id").click()
-        # O diálogo real do UX (#editarApelidoModal) não tem aria-label: o nome vem do título (h5).
-        editor = unico(page.get_by_role("dialog").filter(
-            has=page.get_by_role("heading", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE))), "Editor de apelido e id")
-        enviar = controle(editor, "Enviar planilha")
+        definir_pagina_ativa_para_recuperacao(page)
+
+        def _abrir_editor():
+            try:
+                controle(page, "Buscar").click()
+                aguardar_ux_livre(page)
+                controle(page, "Editar apelido e id").click()
+                # O diálogo real do UX (#editarApelidoModal) não tem aria-label: o nome vem do título (h5).
+                editor = unico(page.get_by_role("dialog").filter(
+                    has=page.get_by_role("heading", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE))), "Editor de apelido e id")
+                enviar = controle(editor, "Enviar planilha")
+                return editor, enviar
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        editor, enviar = etapa_resiliente(_abrir_editor, "Abrir o editor de apelido e id no UX")
         verificar_cancelamento()
+        aguardar_estabilidade_pre_clique(lambda: visivel(enviar), "Enviar planilha (upload de apelidos no UX)")
         with page.expect_file_chooser(timeout=UX_EDICOES_TIMEOUT_MS) as escolha:
             enviar.click()
         seletor = escolha.value
@@ -1164,6 +1207,7 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         if not salvar.is_enabled():
             raise RotinaErro("Salvar edições está desabilitado; nenhuma edição foi salva.")
         verificar_cancelamento()
+        aguardar_estabilidade_pre_clique(lambda: salvar.is_enabled(), "Salvar edições (UX)")
         log("UX Simpress", "Planilha conferida; clicando uma vez em Salvar edições...")
         salvamento_pedido = True
         salvar.click(timeout=UX_EDICOES_TIMEOUT_MS)
@@ -1187,9 +1231,17 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
     try:
         page = abrir_ux(context, UX_PEDIDOS_URL)
         selecionar_contrato_ux(page)
-        page.get_by_role("button", name="Buscar", exact=True).filter(visible=True).first.click()
+        definir_pagina_ativa_para_recuperacao(page)
         resumo = page.get_by_text(re.compile(r"\d+\s+pedidos?\s+encontrados?")).filter(visible=True).first
-        aguardar_estado(resumo, "visible")
+
+        def _buscar() -> None:
+            try:
+                page.get_by_role("button", name="Buscar", exact=True).filter(visible=True).first.click()
+                aguardar_estado(resumo, "visible")
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_buscar, "Buscar pedidos no UX")
         log("UX Simpress", f"Busca concluída: {resumo.inner_text().strip()}.")
         contratos = page.locator("strong", has_text=re.compile(r"^\s*Contrato:\s*$")).locator("xpath=..")
         textos = [t.replace("Contrato:", "").strip() for t in contratos.all_inner_texts()]
@@ -1198,10 +1250,17 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
             raise RotinaErro(f"Cartões com contrato diferente de {CONTRATO}: {divergentes or 'nenhum cartão'}.")
         log("UX Simpress", f"{len(textos)} cartões visíveis conferidos com o contrato {CONTRATO}.")
 
-        log("UX Simpress", "Exportando: Baixar detalhes > Excel...")
-        page.get_by_role("button", name="Baixar detalhes").filter(visible=True).first.click()
         excel = page.locator('a.export-option[data-extensao="xlsx"]').filter(visible=True).first
-        excel.wait_for(state="visible", timeout=10000)
+
+        def _abrir_exportar() -> None:
+            try:
+                log("UX Simpress", "Exportando: Baixar detalhes > Excel...")
+                page.get_by_role("button", name="Baixar detalhes").filter(visible=True).first.click()
+                excel.wait_for(state="visible", timeout=10000)
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_abrir_exportar, "Abrir exportação Excel no UX (pedidos)")
         arquivo = exportar_com_download(page, "UX Simpress", excel.click, r"Acompanhamento[_ ]de[_ ]pedidos")
     except Exception:
         registrar_erro(page, "UX Simpress")
@@ -1215,13 +1274,28 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
     try:
         page = abrir_ux(context, UX_EQUIPAMENTOS_URL)
         selecionar_contrato_ux(page)
-        page.locator("#buscar").click()
+        definir_pagina_ativa_para_recuperacao(page)
         exportar = page.locator("#ExportarDropdown").filter(visible=True).first
-        aguardar_estado(exportar, "visible")
+
+        def _buscar() -> None:
+            try:
+                page.locator("#buscar").click()
+                aguardar_estado(exportar, "visible")
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_buscar, "Buscar equipamentos no UX")
         log("UX Simpress", "Busca concluída; exportando: Baixar detalhes > Excel...")
-        exportar.click()
         excel = page.locator("#ExportarXlsx").filter(visible=True).first
-        excel.wait_for(state="visible", timeout=10000)
+
+        def _abrir_exportar() -> None:
+            try:
+                exportar.click()
+                excel.wait_for(state="visible", timeout=10000)
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_abrir_exportar, "Abrir exportação Excel no UX (equipamentos)")
         arquivo = exportar_com_download(page, "UX Simpress", excel.click, "EquipamentosDetalhes")
     except Exception:
         registrar_erro(page, "UX Simpress")
@@ -1393,20 +1467,29 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         log("Endpoint Central", "Selecionando 'Todos os computadores'...")
         selecionar_todos_computadores(page)
         confirmar_modo_todos(page)
+        definir_pagina_ativa_para_recuperacao(page)
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
-        aguardar_estado(exportar, "visible")
-
-        log("Endpoint Central", "Exportando: Exportar > XLSX + declaração de privacidade...")
-        exportar.click()
         xlsx = page.locator('input[name="exportFormat"][value="xls"]')
         consentimento = page.locator('input[name="userConsent"]')
-        xlsx.first.wait_for(state="attached", timeout=15000)
-        if not xlsx.first.is_checked():
-            page.locator("label.radiobox", has=xlsx).first.click()
-        if not consentimento.first.is_checked():
-            page.locator("label.checkbox--form", has=consentimento).first.click()
-        if not (xlsx.first.is_checked() and consentimento.first.is_checked()):
-            raise RotinaErro("Formato XLSX ou declaração de privacidade não ficaram marcados.")
+
+        def _abrir_exportar() -> None:
+            try:
+                aguardar_estado(exportar, "visible")
+                log("Endpoint Central", "Exportando: Exportar > XLSX + declaração de privacidade...")
+                exportar.click()
+                xlsx.first.wait_for(state="attached", timeout=15000)
+                if not xlsx.first.is_checked():
+                    page.locator("label.radiobox", has=xlsx).first.click()
+                if not consentimento.first.is_checked():
+                    page.locator("label.checkbox--form", has=consentimento).first.click()
+                if not (xlsx.first.is_checked() and consentimento.first.is_checked()):
+                    raise EtapaInstavel("Formato XLSX ou declaração de privacidade não ficaram marcados.")
+            except RotinaErro:
+                raise
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+
+        etapa_resiliente(_abrir_exportar, "Abrir exportação XLSX no Endpoint")
         arquivo = exportar_com_download(
             page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click,
             "InvAllComputersSummary",

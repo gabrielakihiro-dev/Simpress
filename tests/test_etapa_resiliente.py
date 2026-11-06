@@ -1,5 +1,6 @@
 import unittest
 import unittest.mock
+from pathlib import Path
 
 from scripts import automacao_rotinas_chrome as automacao
 
@@ -75,6 +76,37 @@ class AguardarEstabilidadePreCliqueTests(unittest.TestCase):
                 unittest.mock.patch.object(automacao, "verificar_cancelamento"):
             automacao.aguardar_estabilidade_pre_clique(lambda: True, "Clique de teste")
         self.assertEqual(sleep.call_count, 2)
+
+
+class ExportarOracleRetryTests(unittest.TestCase):
+    def test_reabre_a_gestao_de_solicitacoes_do_zero_em_cada_tentativa_de_pesquisa(self):
+        # Caso relatado: algo fechado dentro do Oracle (não a aba) trava "Pesquisando..." sem erro
+        # visível. A pesquisa precisa reabrir a Gestão de Solicitações e reaquirir o campo a cada
+        # tentativa, nunca reusar o campo (possivelmente morto) da tentativa anterior.
+        campo1, campo2 = unittest.mock.MagicMock(), unittest.mock.MagicMock()
+        for campo in (campo1, campo2):
+            campo.input_value.return_value = automacao.FILTRO_ORACLE
+        page = unittest.mock.MagicMock()
+
+        with (
+            unittest.mock.patch.object(automacao, "nova_aba", return_value=page),
+            unittest.mock.patch.object(automacao, "aguardar_login"),
+            unittest.mock.patch.object(automacao, "definir_pagina_ativa_para_recuperacao"),
+            unittest.mock.patch.object(automacao, "abrir_gestao_solicitacoes", side_effect=[campo1, campo2]) as abrir,
+            unittest.mock.patch.object(automacao, "aguardar_estado", side_effect=[TimeoutError("travou"), None]),
+            unittest.mock.patch.object(automacao, "visivel", return_value=True),
+            unittest.mock.patch.object(automacao, "exportar_com_download", return_value=Path("Gestão de Solicitações.xlsx")),
+            unittest.mock.patch.object(automacao, "verificar_cancelamento"),
+            unittest.mock.patch.object(automacao.time, "sleep"),
+            unittest.mock.patch.object(automacao, "log"),
+        ):
+            arquivo = automacao.exportar_oracle(unittest.mock.MagicMock())
+
+        self.assertEqual(arquivo, Path("Gestão de Solicitações.xlsx"))
+        self.assertEqual(abrir.call_count, 2)
+        campo1.press_sequentially.assert_called_once()
+        campo2.press_sequentially.assert_called_once()  # preenche o campo reaberto, não o antigo (campo1)
+        page.close.assert_called_once()
 
 
 if __name__ == "__main__":
