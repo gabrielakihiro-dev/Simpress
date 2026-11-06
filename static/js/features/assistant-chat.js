@@ -1314,6 +1314,11 @@
     return iniciarGravacao();
   }
 
+  function contextoUXLocal() {
+    const contexto_ux = context.app?.contextoChamadoUX?.();
+    return contexto_ux?.serial && contexto_ux.descricao.length <= 8000 ? { contexto_ux } : {};
+  }
+
   function enviarMensagemAssistente() {
     if (!online || ocupado || pendente || gravando || transcrevendo || anexando) return;
     const campo = byId("assistente-texto");
@@ -1323,13 +1328,13 @@
     adicionarMensagem("usuario", texto);
     campo.value = "";
     contarMensagemAssistente();
-    return enviarAoAssistente("/api/assistente/mensagem", { texto }, texto);
+    return enviarAoAssistente("/api/assistente/mensagem", { texto, ...contextoUXLocal() }, texto);
   }
 
   function responderPendente(confirmado) {
     if (!pendente || ocupado) return;
     adicionarMensagem("usuario", confirmado ? "Confirmar e executar" : "Cancelar");
-    return enviarAoAssistente("/api/assistente/confirmar", { confirmado });
+    return enviarAoAssistente("/api/assistente/confirmar", { confirmado, ...contextoUXLocal() });
   }
 
   function confirmarPendenteAssistente() { return responderPendente(true); }

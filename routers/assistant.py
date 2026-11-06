@@ -40,10 +40,19 @@ class AssistantRouteServices:
     client_factory: Callable[[OpenRouterSettings], ModelClient] = OpenRouterClient
 
 
+class ContextoUXPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    serial: str = Field(max_length=128)
+    descricao: str = Field(max_length=8000)
+    revisao: int = Field(ge=0)
+
+
 class MensagemPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     texto: str = Field(min_length=1, max_length=4000)
+    contexto_ux: Optional[ContextoUXPayload] = None
 
 
 class InstrucoesPayload(BaseModel):
@@ -69,6 +78,7 @@ class ConfirmacaoPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirmado: bool
+    contexto_ux: Optional[ContextoUXPayload] = None
 
 
 def _reply(resposta: Resposta) -> Dict[str, Any]:
@@ -125,7 +135,7 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     def enviar_mensagem(payload: MensagemPayload):
         current = ready()
         try:
-            return _reply(current.enviar_mensagem(payload.texto))
+            return _reply(current.enviar_mensagem(payload.texto, contexto_ux=payload.contexto_ux.model_dump() if payload.contexto_ux else None))
         except AssistantBusy:
             raise busy() from None
 
@@ -186,7 +196,7 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     def confirmar_acao(payload: ConfirmacaoPayload):
         current = ready()
         try:
-            return _reply(current.resolver_confirmacao(payload.confirmado))
+            return _reply(current.resolver_confirmacao(payload.confirmado, contexto_ux=payload.contexto_ux.model_dump() if payload.contexto_ux else None))
         except AssistantBusy:
             raise busy() from None
 

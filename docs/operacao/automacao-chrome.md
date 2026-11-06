@@ -1,5 +1,44 @@
 # Tela Automação (rotinas do Chrome pelo site)
 
+## Abrir chamado no UX (06/11/2026)
+
+A Home e o Assistente usam o Chrome de automação (CDP) e `automacao_chrome.lock`.
+A preparação abre aba própria em `https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1`
+e aguarda login manual. Busca a série e avança sem alterar o endereço diferenciado.
+Confere a série e o modelo na segunda etapa, lê os problemas disponíveis e aplica as
+exclusões descritas em `AGENTS.md`. O usuário escolhe o problema no Simpress.
+Os rótulos exatos do formulário e o formato da OS vieram do plano. A página simulada
+cobre esses candidatos. Em listas personalizadas, a leitura exige posições e total ARIA
+(`aria-posinset` e `aria-setsize`), duas leituras iguais por posição de rolagem e cobertura
+de todas as posições anunciadas. A inspeção autenticada e a simulação com a série real seguem
+pendentes. Um controle ausente ou duplicado interrompe a operação.
+
+O servidor mantém apenas a sessão opaca, não uma referência Playwright entre chamadas.
+Cada chamada encontra a aba por `window.name` e confere origem, rota, etapa, série e modelo
+antes de preencher ou enviar. A automação preenche só o problema, a descrição e os
+campos de Solicitante, preservando anexos e dias de indisponibilidade. O perfil local
+`data/state/ux_solicitante.json` contém `nome`, `email`, `telefone`, `ramal`
+(vazio quando não houver) e `departamento_cargo`.
+
+A simulação para no formulário. O clique real, autorizado no cartão, ocorre uma só vez.
+A automação aguarda a OS uma só vez; resultado incerto exige conferência manual
+e nunca dispara recarga ou repetição automática. A aba da sessão (e só ela, achada por `window.name`)
+é fechada ao cancelar, quando a sessão de 30 min expira ou é substituída por outro preparo (no próximo
+contato com o Chrome) e depois do resultado do envio, inclusive o incerto, sem novo clique; a simulação
+mantém a aba aberta até lá. Falha ao fechar é ignorada e nunca altera o resultado. O histórico local em
+`data/state/ux_chamados_historico.json` guarda `serie`, `data`, `os` e `estado`. A conferência manual acrescenta `conferido_em`
+à última tentativa incerta e preserva os campos originais. A próxima tentativa incerta
+exige nova conferência.
+O teste ao vivo da série de validação deve sempre usar simulação.
+
+### Travas contra envio real
+- **Série de teste:** `BRM551RN1Y` (`SERIES_SEM_ENVIO_REAL` em `domains/ux_chamados.py`) nunca gera envio real:
+  `enviar: true` é recusado com 422 (`Esta série é de teste: só a simulação é permitida.`); a simulação funciona.
+- **Kill switch `SIMPRESS_UX_SEM_ENVIO=1`** (também `true`, `sim`, `yes`): recusa qualquer envio real com 422
+  (`O envio real está desativado (SIMPRESS_UX_SEM_ENVIO). Só a simulação é permitida.`), no serviço e no adaptador
+  (`PortalUXChrome.enviar`), antes do clique em `Enviar solicitação`. A simulação continua preenchendo o formulário e
+  parando antes do envio. Defina a variável antes de iniciar o servidor ao testar o Assistente ou a Home contra o UX real.
+
 ## Consulta do Endpoint na Home
 
 Na Home/F1, selecione um equipamento e clique em `Consultar no Endpoint`. Com o Chrome de automação aberto na porta 9333, a aplicação abre uma aba própria, espera o login do Endpoint (mesmo fluxo da exportação de inventários, pedido do usuário de 05/11/2026: com a tela de login, preenche o usuário se vazio, escolhe o domínio `pr-sebrae` e só clica em `Fazer login` se o Chrome já preencheu a senha; senha e código do autenticador são do usuário; espera até 10 min, com aviso de "login necessário" e a trava ocupada durante a espera), seleciona `Todos os computadores`, filtra a série e lê exatamente a coluna `Usuário do último logon`. A aba não é fechada ao terminar (pedido do usuário, 04/11/2026): fica aberta no Chrome de automação, marcada por `window.name`, e a próxima consulta a reaproveita; as outras abas também permanecem abertas. A trava `data/state/automacao_chrome.lock` impede concorrência com as rotinas de exportação e com o agendamento. Chrome ocupado retorna 409; falta de login, conexão, coluna ou confirmação de todas as linhas retorna 503. Não inicia Chrome nem digita senha. A consulta só abre e reaproveita a aba própria: `conectar()` fecha as abas anteriores e por isso nunca é usado nesse fluxo.
