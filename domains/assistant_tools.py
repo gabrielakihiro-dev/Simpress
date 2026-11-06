@@ -368,6 +368,44 @@ def _describe_controle_remoto(args: Args) -> str:
     )
 
 
+def _args_powershell(args: Args) -> Tuple[str, str, str, str]:
+    """(comando, modo, hostname, usuario) validados; o mesmo que a rota aceita. Sem parâmetro de Enter: o comando só é inserido."""
+    from domains.endpoint_lookup import validar_comando
+
+    comando = validar_comando(str(args.get("comando", "")))
+    modo = str(args.get("modo") or "sistema").strip().lower()
+    if modo not in ("sistema", "usuario"):
+        raise ValueError("Modo inválido: use sistema ou usuario.")
+    hostname = str(args.get("hostname") or "").strip().upper()
+    if hostname and not re.fullmatch(r"[A-Z0-9_.-]{1,64}", hostname):
+        raise ValueError("Informe um hostname válido.")
+    usuario = str(args.get("usuario") or "").strip() if modo == "usuario" else ""
+    if len(usuario) > 128:
+        raise ValueError("Usuário longo demais.")
+    return comando, modo, hostname, usuario
+
+
+def _run_powershell(api: SimpressApi, args: Args) -> Dict[str, Any]:
+    try:
+        parametros = _args_powershell(args)
+    except ValueError as falha:  # invalid command never reaches the route
+        return {"sucesso": False, "erro": str(falha)}
+    return api.abrir_powershell_endpoint(*parametros)
+
+
+def _describe_powershell(args: Args) -> str:
+    from domains.endpoint_lookup import HOSTNAME_PADRAO_POWERSHELL
+
+    comando, modo, hostname, usuario = _args_powershell(args)
+    quem = "SYSTEM" if modo == "sistema" else f"usuário logado ({limpar_texto_sensivel(usuario) if usuario else 'o único usuário listado'})"
+    return (
+        f"Abrir o PowerShell (Gerente do Sistema) no Endpoint, pelo Chrome de automação, em {limpar_texto_sensivel(hostname) or HOSTNAME_PADRAO_POWERSHELL + ' (padrão)'}, "
+        f"como {quem}, e INSERIR este comando no prompt: {comando} "
+        "O comando será apenas inserido no prompt; NÃO será executado (o Enter é seu, no Chrome). "
+        "Se o Endpoint pedir login, a aba espera o usuário entrar (senha e autenticador são do usuário)."
+    )
+
+
 def _describe_remover_hostname(api: SimpressApi, args: Args) -> str:
     serie, hostname = _par_hostname(args)
     if api.hostname_removido(serie, hostname):
@@ -1226,6 +1264,24 @@ CHANGE_TOOLS: List[Tool] = [
         _describe_controle_remoto,
         {"serial": SERIAL}, ["serial"],
     ),
+    _change(
+        "abrir_powershell_endpoint",
+        "Abre o PowerShell de um computador no Endpoint (Gerente do Sistema) e INSERE um comando no prompt. NUNCA executa: o sistema não aperta Enter, "
+        "quem revisa e executa é o usuário, no terminal do Chrome. Só quando o usuário pedir explicitamente para abrir o PowerShell ou inserir um comando "
+        "nele, nunca para apenas consultar. Um comando de uma linha (até 2000 caracteres). modo sistema (SYSTEM, padrão) ou usuario (usuário logado). "
+        "Sem hostname usa o computador padrão PRNOTEUMU005. Retorna só status, hostname, modo e tamanho do comando; status inserido, not_found, "
+        "sem_host_online, erro_terminal, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
+        "Requer Chrome de automação aberto e login manual.",
+        _run_powershell,
+        _describe_powershell,
+        {
+            "comando": {"type": "string", "description": "Comando de UMA linha a inserir no prompt (sem quebra de linha)."},
+            "modo": {"type": "string", "enum": ["sistema", "usuario"], "description": "sistema (SYSTEM, padrão) ou usuario (usuário logado)."},
+            "hostname": {"type": "string", "description": "Hostname do computador (opcional; padrão PRNOTEUMU005)."},
+            "usuario": {"type": "string", "description": "Usuário logado a usar no modo usuario (opcional; ex.: gananias)."},
+        },
+        ["comando"],
+    ),
     Tool(
         "restaurar_hostname_endpoint",
         "Desfaz a remoção de um hostname do Endpoint: ele volta às duplicidades. Série e hostname vêm de listar_hostnames_removidos. O usuário confirma antes.",
@@ -1416,6 +1472,10 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "remoto": (
         r"\bcontrole remoto|\bacesso remoto|\bremot[oa]|\bconect(?:ar|e)\b",
         ("abrir_controle_remoto", "consultar_endpoint"),
+    ),
+    "powershell": (
+        r"\bpower ?shell|\bpws?h\b|\bprompt de comando|\bterminal",
+        ("abrir_powershell_endpoint", "consultar_endpoint"),
     ),
     "mensal": (r"\bmensal|\bmes\b|\bmeses\b|\brelatorio", ("obter_relatorio_mensal", "comparar_periodos")),
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
