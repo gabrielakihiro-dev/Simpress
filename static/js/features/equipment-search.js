@@ -44,6 +44,7 @@
 
   function definirEquipamentoAtual(equipment) {
     endpointRequestGate.invalidate();
+    app.fecharChamadoUX?.();
     appState.currentEquipamento = equipment;
     appState.equipamentoSelectionRevision += 1;
     app.atualizarResumoSerieTransferencia(equipment);

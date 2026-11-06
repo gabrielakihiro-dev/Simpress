@@ -202,7 +202,11 @@ def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
 
     def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
-            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto") else CALL_TIMEOUT_SECONDS
+            timeout = CALL_TIMEOUT_SECONDS
+            if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto"):
+                timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS
+            elif method == "POST" and path in ("/api/ux/abrir-chamado/preparar", "/api/ux/abrir-chamado/enviar"):
+                timeout = 580.0
             return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
 
         return asyncio.run(run())
@@ -763,7 +767,10 @@ class SimpressApi:
         except asyncio.TimeoutError:
             return False, "O Simpress demorou demais para responder."
         except Exception:
-            logger.exception("Falha na chamada interna do assistente: %s %s", metodo, caminho)
+            if caminho.startswith("/api/ux/abrir-chamado/"):
+                logger.warning("Falha na chamada interna do Assistente para abrir chamado no UX.")
+            else:
+                logger.exception("Falha na chamada interna do assistente: %s %s", metodo, caminho)
             return False, "Falha ao consultar o Simpress."
         if 200 <= status < 300:
             if self._leituras is not None:
@@ -807,6 +814,23 @@ class SimpressApi:
         return self._ultimo_evento()
 
     # --- queries ----------------------------------------------------------
+
+    def preparar_chamado_ux(self, serial: str, conferido: bool) -> Dict[str, Any]:
+        ok, dados = self._chamar("POST", "/api/ux/abrir-chamado/preparar", corpo={"serial": serial, "conferido": conferido})
+        return _dict(dados) if ok else {"erro": dados}
+
+    def cancelar_chamado_ux(self, session_id: str) -> None:
+        self._chamar("POST", "/api/ux/abrir-chamado/cancelar", corpo={"session_id": session_id})
+
+    def enviar_chamado_ux(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        corpo = {campo: args[campo] for campo in ("session_id", "serial", "problema", "descricao")}
+        ok, dados = self._chamar("POST", "/api/ux/abrir-chamado/enviar", corpo={**corpo, "enviar": True, "confirmado": True})
+        if not ok:
+            return {"erro": dados}
+        resultado = _dict(dados)
+        if resultado.get("status") == "enviado" and resultado.get("os"):
+            return {"mensagem": f"Chamado enviado. OS #{resultado['os']}."}
+        return {"erro": "O UX não confirmou o envio. Confira se o chamado foi criado antes de tentar novamente."}
 
     def consultar_endpoint(self, serial: str) -> Dict[str, Any]:
         """The same read-only Chrome lookup used by Home; the conversation masks ultimo_logon."""

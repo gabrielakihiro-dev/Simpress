@@ -159,6 +159,22 @@ Edição por cidade dos 22 representantes (tela Transferência, F2; autorizada p
 | 73 | GET /api/sebrae/historico | Query limite (1–200, padrão 50), pagina (1–1000, padrão 1) e tipo (importacao ou busca; vazio = todos). | {total,pagina,itens,importacoes,buscas}, da mais recente para a mais antiga. Cada item traz id, seq, tipo, em e só contagens (importação: arquivo,sha256,total,inicial,n_adicionados,n_removidos,n_alterados,truncado,repeticoes,ultima_repeticao_em; busca: importacao_id,ignorados,n_lidos,n_pendentes,n_erros), sem as listas de números; lê data/state/sebrae_historico.json (até 200 entradas); Cache-Control: no-store. | 422 parâmetro inválido; 503 arquivo do histórico ilegível (nunca é sobrescrito). Somente leitura. routers/sebrae_dashboard.py; domains/sebrae_historico.py; static/js/features/sebrae-historico.js. |
 | 74 | GET /api/sebrae/historico/{entrada_id} | Caminho com o id da entrada. | A entrada completa: os campos do item mais adicionados, removidos e alterados [{numero,de,para,encerramento}] (importação) ou lidos, pendentes e erros (busca), só com números UTIC; Cache-Control: no-store. | 404 entrada inexistente; 503 arquivo do histórico ilegível. Somente leitura. routers/sebrae_dashboard.py; domains/sebrae_historico.py; static/js/features/sebrae-historico.js. |
 
+## Abertura de chamados no UX (Home e Assistente)
+
+| # | Método e caminho | Entrada JSON | Resultado |
+| --- | --- | --- | --- |
+| 174 | POST /api/ux/abrir-chamado/preparar | `{serial, conferido?:bool}`. Após conferência manual de um envio incerto, `conferido:true` registra `conferido_em` na tentativa original. Uma nova tentativa incerta volta a bloquear a preparação. | `{status:"preparado", serial, modelo, opcoes, session_id, ultimo_envio}`. `ultimo_envio` é `null` ou `{os,data}`; serve como aviso. |
+| 175 | POST /api/ux/abrir-chamado/enviar | `{session_id, serial, problema, descricao, enviar?:bool, confirmado?:bool}`. Ambos os booleanos vêm como `false` por padrão. | `preenchido` em simulação; `enviado` com a OS confirmada; `incerto` com instrução de conferência se faltar confirmação após o clique. |
+| 176 | POST /api/ux/abrir-chamado/cancelar | `{session_id}`. | `{status:"cancelado"}` para sessão ativa sem envio iniciado. |
+
+A sessão vale por 30 min e não sobrevive ao reinício. Sem descrição válida, problema da
+lista ou confirmação de envio: 422. Série ausente no cadastro local: 404. Chrome ocupado,
+série duplicada, sessão inválida ou contexto do formulário divergente: 409. Histórico de
+envio incerto retorna 409 com `codigo:"envio_incerto"`; falhas de acesso/configuração
+retornam 503. Nenhum erro retorna detalhes técnicos do Playwright.
+`POST /api/assistente/mensagem` e `.../confirmar` aceitam opcionalmente o contexto
+local `contexto_ux:{serial,descricao,revisao}`; esse objeto não é enviado ao modelo.
+
 ## Assistente (IA própria via OpenRouter)
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
