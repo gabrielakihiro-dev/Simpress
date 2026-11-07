@@ -213,7 +213,7 @@ test("Cancelar movimentação gerada avisa que a planilha continua no histórico
   await cenario(page);
   const reserva = await reservaPronta(page, "SINT-002");
   const mov = await api(page, "/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" });
-  await api(page, `/api/cobertura/movimentacoes/${mov.id}/registrar-transferencia`, {
+  const gerada = await api(page, `/api/cobertura/movimentacoes/${mov.id}/registrar-transferencia`, {
     chave: mov.chave, rev: mov.rev,
     payload: {
       serial: "SINT-002", retirada_cidade: "Cidade B", entrega_cidade: "Cidade A", entrega_cnpj: "00.000.000/0001-91",
@@ -224,8 +224,19 @@ test("Cancelar movimentação gerada avisa que a planilha continua no histórico
   await abrirCobertura(page);
   await aba(page, "movimento");
   const movimento = page.locator("#cobertura-lista-movimento");
-  await movimento.getByRole("button", { name: "Cancelar movimentação — SINT-002" }).click();
-  await expect(page.locator("#modal-confirmar-acao")).toContainText("continua no histórico de transferências");
+  const cancelar = movimento.getByRole("button", { name: "Cancelar movimentação — SINT-002" });
+  await cancelar.click();
+  const modal = page.locator("#modal-confirmar-acao");
+  await expect(modal).toContainText("continua no histórico de transferências");
+  await expect(modal).not.toContainText("já coletou a máquina");
+  await page.locator("#btn-confirmar-acao-cancelar").click();
+  // Coletada: o aviso extra pede confirmar que a máquina voltou, pois a série fica livre para outra demanda.
+  await api(page, `/api/cobertura/movimentacoes/${mov.id}/estado`, { estado: "coletada", rev: gerada.movimentacao.rev });
+  await page.goto("/");
+  await abrirCobertura(page);
+  await aba(page, "movimento");
+  await cancelar.click();
+  await expect(modal).toContainText("O Transporte já coletou a máquina: confirme que ela voltou antes de cancelar");
   await page.locator("#btn-confirmar-acao-ok").click();
   await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("0");
   const leitura = await api(page, "/api/cobertura");

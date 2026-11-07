@@ -201,6 +201,23 @@ test("falha de rede guarda a pendência e a nova tentativa usa a MESMA chave", a
   assert.equal(env.storage.data.has("simpress:cobertura:sem-vinculo"), false);
 });
 
+test("repetido (200) de movimentação já cancelada limpa a pendência, avisa a tela e não grava no histórico genérico", async () => {
+  const env = installHistory({ responses: [new Error("offline"), { status: 200, body: { repetido: true } }] });
+  emitir(env, { payload: PAYLOAD, movimentacao: MOV });
+  await tick(); await tick();
+  assert.equal(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo().length, 1);
+  assert.ok(env.storage.data.has("simpress:cobertura:sem-vinculo"));
+
+  const [ok] = await env.win.SimpressCoberturaVinculo.tentarVincularDeNovo("mov-1");
+  assert.equal(ok.ok, true);
+  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  assert.equal(env.storage.data.has("simpress:cobertura:sem-vinculo"), false);
+  const avisos = env.document.events.filter(event => event.type === "simpress:cobertura-atualizada");
+  assert.equal(avisos.length, 1);
+  assert.equal(avisos[0].detail.repetido, true);
+  assert.equal(env.requests.some(r => r.url === history.ENDPOINT), false);
+});
+
 for (const recusa of [
   { status: 409, body: { detail: { codigo: "chave_diferente", mensagem: "Chave diferente." } } },
   { status: 422, body: { detail: { codigo: "dados_divergentes", mensagem: "Série diferente." } } },
