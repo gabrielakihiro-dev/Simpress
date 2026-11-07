@@ -365,7 +365,10 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-chamado__barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
 .ck-chamado__info { flex: 1 1 200px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-chamado__info strong { font: var(--peso-regular) var(--fs-sm) var(--fonte-mono); color: var(--cor-texto); }
-.ck-chamado__acoes { display: flex; gap: 6px; }
+.ck-chamado__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+#ux-chamado-descricao { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ux-chamado-solicitante { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+@media (min-width: 640px) { .ux-chamado-solicitante { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; } .ux-chamado-solicitante legend { grid-column: 1 / -1; } }
 .ck-chamado__texto { padding: 12px 14px 14px; font-size: var(--fs-md); line-height: 1.7; color: var(--cor-texto-forte); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ck-var { padding: 1px 5px; border-radius: 3px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-var--vazia { background: transparent; border: 1px dashed var(--cor-alerta-texto); color: var(--cor-alerta-texto); }
@@ -743,6 +746,10 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-detalhe__vazio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 24px; text-align: center; color: var(--cor-texto-mudo); font-size: var(--fs-md); }
 .ck-detalhe__card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .ck-eq-cab__status { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-ps-endpoint > summary { cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-ps-endpoint__form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; min-width: 0; }
+.ck-ps-endpoint__linha { display: flex; flex-wrap: wrap; gap: 10px; }
+.ck-ps-endpoint__linha .ck-campo { flex: 1 1 160px; }
 .ck-detalhe__cliente { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-dado dd form.ck-edicao { margin-top: 0; }
 .ck-dado:has(form.ck-edicao:not(.hidden)) { grid-column: span 2; }
@@ -1112,7 +1119,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* ---------- 2. Seções e listas ---------- */
 .sebrae-secao { display: flex; flex-direction: column; gap: 10px; }
 .sebrae-secao__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto-suave); }
-#sebrae-novos-lista, #sebrae-antigos-lista { display: flex; flex-direction: column; gap: 12px; }
+#sebrae-novos-lista, #sebrae-antigos-lista, #sebrae-destaques-lista { display: flex; flex-direction: column; gap: 12px; }
 #sebrae-novos-lista:empty:not([aria-busy="true"]) { padding: 22px 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); text-align: center; font-size: var(--fs-md); color: var(--cor-texto-suave); }
 #sebrae-novos-lista:empty:not([aria-busy="true"])::before { content: "Nenhum chamado novo na lista."; display: block; font-weight: var(--peso-medio); color: var(--cor-texto); }
 #sebrae-novos-lista:empty:not([aria-busy="true"])::after { content: "A importação do Dashboard e a busca ficam na aba Automação (F4)."; display: block; margin-top: 2px; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
@@ -1266,6 +1273,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__feedback[data-estado="ok"]::before { content: "✓"; }
 .sebrae-chamado__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
 
+.sebrae-chamado__observacao { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.sebrae-chamado__observacao .ck-campo__rotulo { color: var(--cor-texto-suave); }
+.sebrae-chamado__observacao textarea.ck-entrada { min-height: 52px; resize: vertical; line-height: 1.4; font-size: var(--fs-sm); }
+.sebrae-obs__feedback { min-height: 16px; color: var(--cor-texto-mudo); font-size: var(--fs-xs); display: flex; align-items: center; gap: 6px; }
+.sebrae-obs__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-obs__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-obs__feedback[data-estado="pendente"] { color: var(--cor-alerta-texto); }
+.sebrae-obs__feedback[data-estado="salvando"]::before { content: ""; width: 9px; height: 9px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ck-girar .8s linear infinite; }
+.sebrae-obs__feedback[data-estado="ok"]::before { content: "✓"; }
+.sebrae-obs__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
+
 /* Ações: Finalizar não é botão de sucesso (nem verde, nem o violeta primário) */
 .sebrae-chamado__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sebrae-chamado__acoes .ck-btn[hidden] { display: none; }
@@ -1293,9 +1311,32 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado--finalizado .sebrae-zona__cab--aviso { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
 .sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto anexo" "rodape rodape"; }
 
+/* Destaque manual: faixa lateral + selo âmbar (tokens de alerta, AA nos dois temas); o selo leva estrela e texto, não só a cor. */
+.sebrae-selo-destaque { border: 1px solid var(--cor-alerta-texto); } /* borda 1px no tom do texto: o selo se vê também sem distinguir o fundo âmbar */
+.sebrae-selo-destaque[hidden] { display: none; }
+.sebrae-selo-destaque__estrela { font-size: var(--fs-xs); line-height: 1; }
+.sebrae-chamado--destaque { border-left: 4px solid var(--cor-alerta-texto); }
+.sebrae-antigo:has(.sebrae-chamado--destaque), .sebrae-finalizado:has(.sebrae-chamado--destaque) { border-left: 4px solid var(--cor-alerta-texto); }
+.sebrae-antigo:has(.sebrae-chamado--destaque) > summary, .sebrae-finalizado:has(.sebrae-chamado--destaque) > summary { background: var(--cor-alerta-fundo); }
+.sebrae-antigo:has(.sebrae-chamado--destaque) > summary .sebrae-antigo__quem { color: var(--cor-texto-suave); } /* sobre o fundo âmbar do escuro o tom mudo cai a 4,31:1 */
+.sebrae-finalizado > summary:has(.sebrae-selo-destaque:not([hidden])) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.sebrae-destaques > summary .ck-badge { margin-left: auto; }
+.sebrae-destaques > p:empty { display: none; }
+#sebrae-destaque-anuncio:empty { display: none; } /* aviso visível de marcar/tirar destaque; sem texto não ocupa espaço */
+.sebrae-destaque__acao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px; }
+.sebrae-destaque__botao[aria-pressed="true"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-weight: var(--peso-marca); }
+.sebrae-destaque__feedback { margin: 0; color: var(--cor-texto-mudo); font-size: var(--fs-xs); }
+.sebrae-destaque__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-destaque__corpo { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; }
+.sebrae-destaque__corpo .sebrae-destaque__acao { margin-top: 0; }
+.sebrae-destaque__observacao { display: flex; flex-direction: column; gap: 4px; }
+.sebrae-destaque__observacao .ck-campo__rotulo { color: var(--cor-texto-suave); }
+.sebrae-destaque__texto { margin: 0; font-size: var(--fs-md); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- 5. Animações ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  .sebrae-chamado__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+  .sebrae-chamado, .sebrae-antigo, .sebrae-finalizado, .sebrae-selo-destaque, .sebrae-destaque__botao { transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+  .sebrae-chamado__feedback, .sebrae-obs__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
   @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
     :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) { interpolate-size: allow-keywords; }
     :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto)::details-content { height: 0; overflow: clip; transition: height var(--duracao-lenta) var(--curva), content-visibility var(--duracao-lenta) allow-discrete; }
@@ -1303,6 +1344,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .sebrae-chamado, .sebrae-antigo, .sebrae-finalizado, .sebrae-selo-destaque, .sebrae-destaque__botao { transition: none; }
   .sebrae-topo:has(#sebrae-fechar[aria-busy="true"]) > .sebrae-topo__acoes::after, .sebrae-fechar[aria-busy="true"]::before { background: var(--cor-destaque); background-size: 100% 100%; opacity: .5; animation: none; }
   #sebrae-novos-lista:empty[aria-busy="true"] { animation: none; background: var(--cor-superficie-funda); }
 }

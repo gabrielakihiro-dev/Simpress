@@ -1,10 +1,74 @@
 # Tela Automação (rotinas do Chrome pelo site)
 
+## Abrir chamado no UX (06/11/2026)
+
+A Home e o Assistente usam o Chrome de automação (CDP) e `automacao_chrome.lock`.
+A preparação abre aba própria em `https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1`
+e aguarda login manual. Busca a série e avança sem alterar o endereço diferenciado.
+Confere a série e o modelo na segunda etapa, lê os problemas disponíveis e aplica as
+exclusões descritas em `AGENTS.md`. O usuário escolhe o problema no Simpress.
+Os rótulos exatos do formulário e o formato da OS vieram do plano. A página simulada
+cobre esses candidatos. Em listas personalizadas, a leitura exige posições e total ARIA
+(`aria-posinset` e `aria-setsize`), duas leituras iguais por posição de rolagem e cobertura
+de todas as posições anunciadas. Verificado no portal real em 06/11/2026 (só preparo e simulação,
+com `SIMPRESS_UX_SEM_ENVIO=1`, série de teste): o formulário é Angular, sem o texto "Etapa 1 de 2";
+o campo da série tem `id=numeroSerie`, o problema é um `ng-select` (lista sem `aria-setsize`, lida do
+DOM só quando duas leituras seguidas coincidem e a rolagem chegou ao fim), a descrição é o único
+`textarea` e os campos do Solicitante têm `id` (`nome`, `email`, `telefone`, `ramal`, `cargo`) em vez
+de rótulo acessível. Ao avançar, o aviso "Backup de dados" cobre a tela e é fechado antes de operar.
+O botão final aparece como `Enviar Solicitação` (comparação sem distinguir maiúsculas). O envio real
+nunca foi exercitado, por desenho. Um controle ausente ou duplicado interrompe a operação.
+
+A preparação inicia o Chrome de automação se ele estiver fechado (`garantir_chrome`, sem fechar abas
+nem usar `conectar()`). Se não for possível iniciá-lo ou conectar, a API responde 503 com
+`codigo: chrome_indisponivel`. Falhas inesperadas do Playwright respondem 503 com mensagem em
+linguagem simples (`ux_formulario_diferente` para `TimeoutError`, `ux_falha` para o resto); o log
+guarda só o nome da classe. Depois de reiniciar o servidor, o código novo passa a valer.
+
+O servidor mantém apenas a sessão opaca, não uma referência Playwright entre chamadas.
+Cada chamada encontra a aba por `window.name` e confere origem, rota, etapa, série e modelo
+antes de preencher ou enviar. A automação preenche só o problema, a descrição e os
+campos de Solicitante, preservando anexos e dias de indisponibilidade. O perfil local
+`data/state/ux_solicitante.json` contém `nome`, `email`, `telefone`, `ramal`
+(vazio quando não houver) e `departamento_cargo`.
+O perfil é opcional. Sem o arquivo, vale o padrão `SOLICITANTE_PADRAO` (`domains/ux_chamados.py`:
+Gabriel Akihiro Noda Souza, gansouza@simpress.com.br, (41)98751-2389, Analista WP Junior). A Home mostra
+esses quatro campos editáveis antes de simular ou enviar; o que o usuário editar vale só para aquela
+solicitação (`solicitante` em `POST /enviar`). Se o portal ainda deixar campo obrigatório vazio, a
+simulação informa em `faltando` e o envio real é recusado (409). Arquivo inválido ou incompleto responde 503 com mensagem clara.
+
+A simulação para no formulário. O clique real, autorizado no cartão, ocorre uma só vez.
+A automação aguarda a OS uma só vez; resultado incerto exige conferência manual
+e nunca dispara recarga ou repetição automática. A aba da sessão (e só ela, achada por `window.name`)
+é fechada ao cancelar, quando a sessão de 30 min expira ou é substituída por outro preparo (no próximo
+contato com o Chrome) e depois do resultado do envio, inclusive o incerto, sem novo clique; a simulação
+mantém a aba aberta até lá. Falha ao fechar é ignorada e nunca altera o resultado. O histórico local em
+`data/state/ux_chamados_historico.json` guarda `serie`, `data`, `os` e `estado`. A conferência manual acrescenta `conferido_em`
+à última tentativa incerta e preserva os campos originais. A próxima tentativa incerta
+exige nova conferência.
+O teste ao vivo da série de validação deve sempre usar simulação.
+
+### Travas contra envio real
+- **Série de teste:** `BRM551RN1Y` (`SERIES_SEM_ENVIO_REAL` em `domains/ux_chamados.py`) nunca gera envio real:
+  `enviar: true` é recusado com 422 (`Esta série é de teste: só a simulação é permitida.`); a simulação funciona.
+- **Kill switch `SIMPRESS_UX_SEM_ENVIO=1`** (também `true`, `sim`, `yes`): recusa qualquer envio real com 422
+  (`O envio real está desativado (SIMPRESS_UX_SEM_ENVIO). Só a simulação é permitida.`), no serviço e no adaptador
+  (`PortalUXChrome.enviar`), antes do clique em `Enviar solicitação`. A simulação continua preenchendo o formulário e
+  parando antes do envio. Defina a variável antes de iniciar o servidor ao testar o Assistente ou a Home contra o UX real.
+
 ## Consulta do Endpoint na Home
 
 Na Home/F1, selecione um equipamento e clique em `Consultar no Endpoint`. Com o Chrome de automação aberto na porta 9333, a aplicação abre uma aba própria, espera o login do Endpoint (mesmo fluxo da exportação de inventários, pedido do usuário de 05/11/2026: com a tela de login, preenche o usuário se vazio, escolhe o domínio `pr-sebrae` e só clica em `Fazer login` se o Chrome já preencheu a senha; senha e código do autenticador são do usuário; espera até 10 min, com aviso de "login necessário" e a trava ocupada durante a espera), seleciona `Todos os computadores`, filtra a série e lê exatamente a coluna `Usuário do último logon`. A aba não é fechada ao terminar (pedido do usuário, 04/11/2026): fica aberta no Chrome de automação, marcada por `window.name`, e a próxima consulta a reaproveita; as outras abas também permanecem abertas. A trava `data/state/automacao_chrome.lock` impede concorrência com as rotinas de exportação e com o agendamento. Chrome ocupado retorna 409; falta de login, conexão, coluna ou confirmação de todas as linhas retorna 503. Não inicia Chrome nem digita senha. A consulta só abre e reaproveita a aba própria: `conectar()` fecha as abas anteriores e por isso nunca é usado nesse fluxo.
 
-**Controle remoto.** O botão `Controle remoto`, ao lado de `Consultar no Endpoint`, filtra a série como a consulta (mesma aba, mesma trava, CDP 9333), clica no monitor da linha, escolhe `Controle remoto`, preenche `acesso` em `Mensagem do motivo` e clica `Conectar`. Nada é fechado depois: a janela do controle remoto fica aberta para o usuário. Se o monitor estiver vermelho/sem a opção, a rotina abre o computador pelo nome e tenta `Ações` → `Controle remoto`; sem a opção, a Home avisa em caixa de mensagem que o computador está offline. Rota: `POST /api/endpoint/controle-remoto` (`connected`, `offline`, `not_found`, `ambiguous`; 409 Chrome ocupado, 503 falha). O Assistente usa a ferramenta `abrir_controle_remoto`, que mostra um cartão e só conecta depois da confirmação do usuário; a rota tem a mesma espera de 480 s da consulta. A busca por série inclui as regras de MacBook, e a base local é revalidada antes de conectar por série alternativa. O `Controle remoto` é a única ação do Simpress que inicia uma conexão externa e só ocorre por ação explícita do usuário: o clique na Home ou o pedido ao Assistente (ferramenta de escrita `abrir_controle_remoto`, grupo de ferramentas `remoto`, com cartão de confirmação antes de conectar). Verificado ao vivo em 04/11/2026: monitor vermelho = computador offline, o menu não traz `Controle remoto` e o resultado é `offline`.
+**Controle remoto.** O botão `Controle remoto`, ao lado de `Consultar no Endpoint`, filtra a série como a consulta (mesma aba, mesma trava, CDP 9333), clica no monitor da linha, escolhe `Controle remoto`, preenche `acesso` em `Mensagem do motivo` e clica `Conectar`. Nada é fechado depois: a janela do controle remoto fica aberta para o usuário. Se o monitor estiver vermelho/sem a opção, a rotina abre o computador pelo nome e tenta `Ações` → `Controle remoto`; sem a opção, a Home avisa em caixa de mensagem que o computador está offline. Rota: `POST /api/endpoint/controle-remoto` (`connected`, `offline`, `not_found`, `ambiguous`; 409 Chrome ocupado, 503 falha). O Assistente usa a ferramenta `abrir_controle_remoto`, que mostra um cartão e só conecta depois da confirmação do usuário; a rota tem a mesma espera da consulta (até 1200 s: login do Endpoint de até 600 s + 480 s de navegação e filtros). A busca por série inclui as regras de MacBook, e a base local é revalidada antes de conectar por série alternativa. A Home envia um `pedido`; ao trocar de equipamento ela chama `POST /api/endpoint/controle-remoto/cancelar`, e o pedido cancelado ou substituído por outro não clica em `Conectar` (`ambiguous`/`pedido_cancelado`); o cancelamento só vale na checagem final (o servidor continua esperando o login até acabar o prazo). O `Controle remoto` é a única ação do Simpress que inicia uma conexão externa e só ocorre por ação explícita do usuário: o clique na Home ou o pedido ao Assistente (ferramenta de escrita `abrir_controle_remoto`, grupo de ferramentas `remoto`, com cartão de confirmação antes de conectar). Verificado ao vivo em 04/11/2026: monitor vermelho = computador offline, o menu não traz `Controle remoto` e o resultado é `offline`.
+
+**PowerShell no Endpoint (06/11/2026).** Autorizado pelo usuário em 06/11/2026 para máquinas de produção. O card recolhível `PowerShell no Endpoint` (`details#endpoint-powershell`, dentro do card do equipamento na Home/F1, só visível com equipamento selecionado) recebe um comando de uma linha, o modo (`SYSTEM` ou `Usuário logado`) e, opcionalmente, hostname e usuário. Depois da confirmação (`app.confirmarAcao`), `POST /api/endpoint/powershell` usa o Chrome de automação (CDP 9333), a trava `consulta_endpoint` e a aba própria: filtra o hostname pelo nome, clica no menu da linha, passa o mouse em `Gerente do Sistema`, clica em `PowerShell` (abre uma aba nova) e **insere** o comando em `#remotePowershellInputField`.
+
+- **Regra crítica: nunca Enter.** É terminantemente proibido enviar Enter (`\n` ou submit automático): o código só usa `locator.fill()`, e o Enter é manual do usuário, no terminal do Chrome. Comando vazio, com mais de 2000 caracteres ou com caractere de controle (código < 32, exceto tab) é rejeitado; o retorno traz `enter_enviado: false`. O log registra só o tamanho e o modo, nunca o texto do comando. A Home avisa `O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.`
+- **Modos.** `sistema` abre no prompt `PS C:\WINDOWS\system32>` (SYSTEM) e é o padrão. `usuario` usa o botão `Executar como` → `Atualizar usuários` → usuário e espera `Atualmente conectado como <usuário>`; sem `usuario` informado, só segue se houver um único usuário listado: `sem_usuario` (não achou) e `usuario_ambiguo` (vários, com `usuarios` no retorno) não inserem nada.
+- **Host.** O padrão é `PRNOTEUMU005`. Hostname explícito é sempre tentado, mesmo com o ícone de status vermelho (o ícone pode estar defasado). Só o padrão com o ícone offline cai para o primeiro `prnote` online (`hostname_padrao_offline: true`); sem nenhum online, `sem_host_online`; hostname ausente na grade, `not_found`. Nunca se troca de host em silêncio.
+- **Falha ou lentidão.** A internet do colaborador pode cair ou o notebook ser desligado. A aba do terminal espera cerca de 40 s (polling de 4 s); o texto `desconectado` conta como falha. Em falha, recarrega a MESMA aba uma vez; se continuar, fecha a aba, não digita nada e retorna `status: "erro_terminal"` com mensagem em português avisando o usuário (o mesmo vale se o texto não for confirmado no campo depois do `fill`). Erros de usuário (`sem_usuario`, `usuario_ambiguo`) também fecham a aba do terminal.
+- **Sucesso.** Em `inserido` a aba do terminal fica aberta para o usuário revisar o comando e apertar Enter; nada é fechado. Rota: `POST /api/endpoint/powershell` (409 trava ocupada, 503 outro erro; contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`). O Assistente usa a ferramenta de escrita `abrir_powershell_endpoint` (grupo `powershell`), com cartão de confirmação; o resultado não repete o comando. Se o Endpoint pedir login, a aba espera o usuário (senha e autenticador são do usuário).
 
 Um resultado único mostra o usuário do último logon; se a célula estiver vazia, informa que o equipamento foi encontrado sem usuário informado. Ausência mostra exatamente `Equipamento não encontrado no Endpoint`; duplicidade mostra aviso específico, sem escolher um equipamento. Série exata duplicada retorna `ambiguous`; série ausente retorna `not_found`; usuário vazio continua `found`. Paginação incompleta ou coluna ausente são erro, nunca ausência. A série exata tem prioridade; somente um MacBook identificado na base permite tentar a série sem o `S` inicial. A consulta não usa hostname como alternativa nem troca a coluna por `Usuários logados`. Se o total filtrado não puder ser confirmado ou houver linhas fora da área renderizada, a leitura é recusada para não esconder duplicatas.
 
@@ -12,7 +76,7 @@ Mudar a seleção apaga o resultado e invalida a resposta anterior; a Home desca
 
 O fallback MacBook também precisa ser único na base local: por exemplo, se existem `SABC` e outro equipamento `ABC`, a consulta não associa o usuário de `ABC` a `SABC`. Duplicidade da série selecionada na base também bloqueia esse fallback. A regra compartilhada `mac_endpoint_serial_key` exige ainda que a linha ao vivo tenha hostname `PRMAC` único. As recusas informam ambiguidade na base local ou correspondência Mac não confirmada, sem afirmar duplicidade do Endpoint. Entre a pesquisa exata e a sem `S`, a aplicação limpa o filtro e espera a grade cheia confirmada; uma tela vazia remanescente da primeira consulta não prova ausência na segunda.
 
-Somente `POST /api/endpoint/consultar` dispõe de até 480 s no transporte interno do Assistente, cobrindo as esperas encadeadas de navegação, grade e filtros. O tempo dessa consulta não consome os 90 s do orçamento de resposta do modelo; todas as demais chamadas internas mantêm 30 s. O Chrome ocupado continua retornando 409 de imediato.
+Somente `POST /api/endpoint/consultar` dispõe de até 1200 s no transporte interno do Assistente, cobrindo a espera de login do Endpoint (até 600 s) mais as esperas encadeadas de navegação, grade e filtros (480 s). O tempo dessa consulta não consome os 90 s do orçamento de resposta do modelo; todas as demais chamadas internas mantêm 30 s. O Chrome ocupado continua retornando 409 de imediato.
 
 O Assistente faz no máximo uma consulta Endpoint por mensagem; para outra série, envie outra mensagem. A tela aguarda até 600 s para essa consulta e a resposta final do modelo, mantendo o botão `Cancelar`. Cancelar ou atingir o prazo restaura o texto digitado, e o servidor pode ainda estar concluindo a leitura. A duplicidade local é preservada em `serie_detalhes_duplicada`, calculado pela contagem das linhas da base oficial no carregamento e mantido no refresh/importação, inclusive quando o arquivo InvAll estiver indisponível. Assim, uma chave única no cache não oculta duas linhas da planilha com a mesma série.
 

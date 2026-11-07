@@ -1,5 +1,23 @@
 # 15 — Chat flutuante do Assistente
 
+## Abrir chamado no UX pela Home (06/11/2026)
+
+Selecione o equipamento e complete a descrição na aba de chamado ativa da Home. No
+Assistente, digite **Abrir chamado no UX**. A ferramenta local de preparação consulta
+modelo e opções sem preencher o formulário de envio. Digite exatamente uma das opções
+ou `Cancelar`; qualquer outra mensagem cancela o preparo e segue para o modelo normal.
+O pedido exige o assunto (`UX` e `chamado`/`solicita`/`atendimento`) e um verbo de ação
+(`abrir`, `criar`, `registrar` e flexões): perguntas como "quais chamados abertos no UX?"
+não acionam o portal. A ação de escrita só começa após a confirmação no cartão montado pelo
+programa. Se a seleção ou a descrição mudar, é necessário preparar de novo. Em caso de
+envio incerto, confira no portal antes de dizer **Conferi no UX** para preparar novamente.
+O sistema registra essa conferência na tentativa correspondente.
+
+A conversa de abertura é processada localmente e não passa pelo OpenRouter. A descrição
+da Home fica em memória para o pedido; o cartão identifica série e problema e indica que
+usará o texto editado na Home. Os dados do solicitante são lidos apenas para preencher o
+portal. Nenhum desses dados é gravado no histórico do Assistente.
+
 Chat com a IA do Simpress (OpenRouter, chamado pelo servidor local), aberto como um widget flutuante no canto inferior direito, sem tirar o usuário da tela em que está. Nos trechos abaixo, "painel" e "área" se referem ao conteúdo desse chat.
 
 ## Desvio do artefato do Cockpit
@@ -32,6 +50,7 @@ Texto movido da seção "Assistente (OpenRouter)" do `AGENTS.md`, que mantém s�
 - Conferido no código (04/11/2026): `OpenRouterSettings.configured` usa `DEEPSEEK_API_KEY` ou, na falta dela, `OPENROUTER_API_KEY` (`domains/assistant_openrouter.py`); só com a chave do DeepSeek o assistente fica online, e a mensagem de voz continua exigindo a chave do OpenRouter.
 - Análise do serviço externo: os dados que saem do computador são o texto da conversa e o resultado das consultas; o áudio gravado, quando o usuário grava uma mensagem de voz (sem máscara; veja "Mensagem de voz" abaixo); imagens anexadas (sem máscara e ficam no histórico da conversa); e, só com o interruptor `Busca na web` ligado, a consulta genérica já mascarada. No modo OpenRouter (padrão) tudo vai com `data_collection: deny`, exceto a busca, cujo provedor (Exa) `data_collection` não controla; no modo DeepSeek, veja a linha acima. Texto de PDF e docx é extraído localmente e passa pela máscara antes de sair. Antes do envio, CPFs viram `***.***.***-**`, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela), e e-mails, telefones e senhas são removidos; a máscara só cobre nomes já conhecidos da base. Conteúdo de planilhas, chamados, anexos, notas e resultados da web é dado, nunca instrução.
 - As ferramentas consultam as rotas do próprio Simpress por chamada interna ao app (mesmo `LocalRequestSafetyMiddleware`). Cada uma declara se consulta ou altera dados. Toda alteração para antes e mostra um cartão de confirmação com texto montado pelo programa (nunca pela IA); no máximo uma alteração por turno; o cartão volta após recarregar a página.
+- `abrir_powershell_endpoint` (06/11/2026, autorizado pelo usuário; ferramenta de escrita com cartão `Confirmar e executar`, grupo de roteamento `powershell` em `GRUPOS_FERRAMENTAS`, que também libera `consultar_endpoint`): espelha o card `PowerShell no Endpoint` da Home e chama `POST /api/endpoint/powershell`. Parâmetros: `comando` (uma linha, até 2000 caracteres, obrigatório), `modo` (`sistema`, padrão, ou `usuario`), `hostname` (padrão `PRNOTEUMU005`) e `usuario` (só no modo `usuario`); não existe parâmetro de Enter. Só roda quando o usuário pede explicitamente para abrir o PowerShell ou inserir um comando nele, nunca para consultar (regra 29 do prompt, `domains/assistant_chat.py`). O cartão, montado pelo programa, mostra host, modo e o comando e avisa que ele será apenas inserido, não executado. O comando é apenas **inserido** no prompt: o sistema nunca aperta Enter (`enter_enviado: false`), e o Assistente nunca diz que foi executado: diz que foi inserido e que o usuário revisa e aperta Enter no terminal do Chrome. O resultado traz só `status`, `hostname`, `modo`, `tamanho_comando`, `mensagem` e `enter_enviado`, e não repete o comando; `inserido` acrescenta `usuario`, e `sem_usuario`/`usuario_ambiguo` trazem `usuarios` (o Assistente pede ao usuário qual usar). Status: `inserido`, `not_found`, `sem_host_online`, `erro_terminal` (mensagem de falha ou lentidão: uma recarga da mesma aba e, se persistir, a aba é fechada sem digitar nada), `sem_usuario`, `usuario_ambiguo`. A rota usa o mesmo timeout interno de 480 s da consulta ao Endpoint. Requer Chrome de automação aberto e login manual.
 
 ## Contrato (`routers/assistant.py`)
 
@@ -147,7 +166,7 @@ O que o usuário diz e o que o Assistente faz agora (automação e Sebrae pelo c
 
 ## Cobertura pelo chat (07/11/2026)
 
-Ferramenta de consulta `listar_cobertura(cidade?, data?, ate?, perfil?)`, autorizada pelo usuário em 07/11/2026. Exemplo: "vai faltar notebook na Cidade A dia 20?" → `listar_cobertura(cidade="Cidade A", data="2026-11-20")`; o dia sem mês e ano usa o mês e o ano de hoje (regra 29 do prompt).
+Ferramenta de consulta `listar_cobertura(cidade?, data?, ate?, perfil?)`, autorizada pelo usuário em 07/11/2026. Exemplo: "vai faltar notebook na Cidade A dia 20?" → `listar_cobertura(cidade="Cidade A", data="2026-11-20")`; o dia sem mês e ano usa o mês e o ano de hoje (regra 30 do prompt).
 
 - Fonte única: chama `GET /api/cobertura`, a mesma rota da tela Cobertura (F10), que calcula as vagas com `build_coverage`. Sem filtro, as contagens são as da tela; com filtro, são recontadas só sobre as vagas filtradas, com as mesmas quatro situações (`atendivel`, `condicionada`, `sem_cobertura`, `entregue`). `faltam` é `sem_cobertura`.
 - Filtros: `cidade` por igualdade sem acento e sem caixa ("Cidade" não casa com "Cidade A"); `data` exata e `ate` inclusive, as duas em AAAA-MM-DD (outro formato dá erro); `perfil` por trecho do texto livre do cadastro.

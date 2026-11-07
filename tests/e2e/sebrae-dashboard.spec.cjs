@@ -79,13 +79,13 @@ test("Chamados finalizados fica abaixo dos antigos, recolhido e só com leitura"
   await secao.locator("> summary").click();
   await expect(secao.locator("#sebrae-finalizados-resumo")).toContainText("1 chamado(s) finalizado(s)");
   const cartao = secao.locator('#sebrae-finalizados-lista details.sebrae-finalizado[data-numero="UTIC-2026-1100"]');
-  await expect(cartao.locator("> summary")).toHaveText("UTIC-2026-1100 · encerrado em 27/10/2026 14:05");
+  await expect(cartao.locator("> summary")).toHaveText("UTIC-2026-1100 · encerrado em 27/10/2026 14:05", { useInnerText: true });
   await expect(cartao).not.toHaveAttribute("open", ""); // cada chamado finalizado também nasce minimizado
   await cartao.locator("> summary").click();
   await expect(cartao.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
   await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("27/10/2026 14:05");
   await expect(cartao.getByLabel("Descrição para Finalizar o Chamado")).toHaveValue("Teclado trocado.");
-  await expect(cartao.locator('input:not([disabled]), select, button, textarea:not([readonly])')).toHaveCount(0); // só leitura
+  await expect(cartao.locator('input:not([disabled]), select, button:not([data-sebrae-destaque]), textarea:not([readonly])')).toHaveCount(0); // só leitura
 });
 
 test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos antigos, sem tocar no original", async ({ page, request }) => {
@@ -283,7 +283,8 @@ test("Finalizar no SoftExpert pede confirmação explícita, mostra o andamento 
   await expect(botao).toBeDisabled(); // rotina rodando
   const cartao = page.locator('#sebrae-finalizados-lista details.sebrae-finalizado[data-numero="UTIC-2026-1200"]');
   await expect(cartao).toHaveCount(1, { timeout: 10000 }); // o `ok` vai na hora para Chamados finalizados
-  await expect(cartao.locator("> summary")).toHaveText("UTIC-2026-1200 · Teclado sem resposta · Camila Vitoria Lopes de Oliveira · encerrado em 28/10/2026 10:10");
+  await page.locator("#sebrae-finalizados > summary").click(); // a seção Chamados finalizados nasce recolhida; innerText de summary fechado vem vazio
+  await expect(cartao.locator("> summary")).toHaveText("UTIC-2026-1200 · Teclado sem resposta · Camila Vitoria Lopes de Oliveira · encerrado em 28/10/2026 10:10", { useInnerText: true });
   await expect(page.locator("#sebrae-antigos-lista .sebrae-chamado")).toHaveCount(0); // e sai dos antigos em aberto
   await expect(page.getByText("Finalização no SoftExpert terminada")).toHaveCount(0);
   expect(posts).toHaveLength(1);
@@ -291,7 +292,6 @@ test("Finalizar no SoftExpert pede confirmação explícita, mostra o andamento 
   // O finalizar individual leva só as edições mudadas (B é novo, D e R vêm da edição) e nenhum novo em branco (só com os padrões D/S).
   expect(posts[0].edicoes).toEqual([expect.objectContaining({ numero: "UTIC-2026-1200", B: "REDE", D: "FINALIZADO" })]);
   expect(posts[0].chamados).toEqual([]);
-  await page.locator("#sebrae-finalizados > summary").click(); // a seção Chamados finalizados nasce recolhida
   await cartao.locator("> summary").click();
   await expect(cartao.locator('[data-sebrae-campo="B"]')).toHaveValue("REDE");
   await expect(cartao.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
@@ -699,4 +699,56 @@ test("Chamados novos mostra o carregamento (aria-busy) e, vazio, o texto gerado 
   await expect(lista).toBeEmpty();
   expect(await pseudo("::before")).toBe('"Nenhum chamado novo na lista."');
   expect(await pseudo("::after")).toBe('"A importação do Dashboard e a busca ficam na aba Automação (F4)."');
+});
+
+// Destaque manual (nov/2026): a fixture não guarda observações; as rotas são simuladas aqui, com estado em memória.
+async function simularDestaques(page, inicial = {}) {
+  const observacoes = { ...inicial };
+  await page.route("**/api/sebrae/observacoes", rota => rota.fulfill({ json: { observacoes } }));
+  await page.route("**/api/sebrae/chamados/*/destaque", async rota => {
+    const numero = decodeURIComponent(new URL(rota.request().url()).pathname.split("/")[4]);
+    const ligado = rota.request().postDataJSON().destaque;
+    if (ligado) observacoes[numero] = { observacao: "", atualizado_em: null, destaque: true, destaque_em: "2026-11-05T09:00:00-03:00" };
+    else delete observacoes[numero];
+    await rota.fulfill({ json: { numero, destaque: ligado, destaque_em: ligado ? "2026-11-05T09:00:00-03:00" : null } });
+  });
+  return observacoes;
+}
+const focoAtual = page => page.evaluate(() => { const no = document.activeElement; return { tag: no.tagName, id: no.id, texto: (no.textContent || "").trim().slice(0, 60) }; });
+
+test("destaque: marcar e tirar anuncia o resultado e devolve o foco a um alvo visível (cartão original em details fechado)", async ({ page, request }) => {
+  await simularDestaques(page);
+  const { painel } = await abrirPainel(page, request);
+  await painel.locator("#sebrae-finalizados > summary").click();
+  const original = painel.locator('#sebrae-finalizados-lista .sebrae-chamado[data-numero="UTIC-2026-1100"]');
+  const itemFinalizado = original.locator("xpath=ancestor::details[1]");
+  await abrirItemAntigo(original); // o mesmo helper serve ao details interno do finalizado
+  await original.locator("[data-sebrae-destaque]").click();
+  await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque marcado.");
+  await expect(painel.locator("#sebrae-destaques")).toBeVisible();
+  const daSecao = painel.locator('#sebrae-destaques-lista [data-sebrae-destaque="UTIC-2026-1100"]');
+  await daSecao.focus();
+  await itemFinalizado.locator("> summary").click(); // recolhe o item original: o cartão passa a morar num details fechado
+  await expect(itemFinalizado).not.toHaveJSProperty("open", true);
+  await daSecao.focus();
+  await daSecao.click();
+  await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque removido.");
+  await expect(painel.locator("#sebrae-destaques")).toBeHidden();
+  const foco = await focoAtual(page);
+  expect(foco.tag).not.toBe("BODY");
+  const naoPerdeu = await page.evaluate(() => { const no = document.activeElement; return no !== document.body && no.getClientRects().length > 0; });
+  expect(naoPerdeu).toBe(true); // o foco está num elemento visível
+  expect(await itemFinalizado.locator("> summary").evaluate(no => no === document.activeElement)).toBe(true);
+});
+
+test("destaque: último destaque só no servidor (sem cartão original) leva o foco ao título da primeira seção", async ({ page, request }) => {
+  await simularDestaques(page, { "UTIC-2026-0999": { observacao: "Antiga.", atualizado_em: "2026-10-01T08:00:00-03:00", destaque: true, destaque_em: "2026-11-01T10:00:00-03:00" } });
+  const { painel } = await abrirPainel(page, request);
+  const botao = painel.locator('#sebrae-destaques-lista [data-sebrae-destaque="UTIC-2026-0999"]');
+  await expect(botao).toBeVisible();
+  await botao.focus();
+  await botao.click();
+  await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque removido.");
+  await expect(painel.locator("#sebrae-destaques")).toBeHidden();
+  await expect(painel.locator("#sebrae-novos-secao")).toBeFocused();
 });

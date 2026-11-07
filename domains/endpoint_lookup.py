@@ -1,4 +1,5 @@
 """Read-only, serial-scoped Endpoint lookup in a private Chrome tab."""
+import unicodedata
 from typing import Any, Collection
 from importlib import import_module
 
@@ -68,12 +69,18 @@ def _preparar_aba(pw: Any) -> Any:
         page.evaluate(f"window.name = '{NOME_ABA_CONSULTA}'")
     page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
     # Mesmo login da exportação de inventários: escolhe pr-sebrae e espera o usuário (senha/MFA).
-    automation.aguardar_login(
-        page, "Endpoint Central", automation.endpoint_logado,
-        entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
-    )
+    def esperar_login() -> None:
+        automation.aguardar_login(
+            page, "Endpoint Central", automation.endpoint_logado,
+            entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
+        )
+
+    esperar_login()
     if "inventory/computers" not in page.url:
         page.goto(automation.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+        # A sessão pode cair entre os dois goto; sem esta checagem a falha seria um erro genérico da grade.
+        if not automation.endpoint_logado(page):
+            esperar_login()
     automation.definir_pagina_ativa_para_recuperacao(page)
     automation.selecionar_todos_computadores(page)
     automation.confirmar_modo_todos(page)
@@ -145,8 +152,10 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
             achado = consultar_grade(page, automation, serial, macbook, details_serials)
             if achado["status"] != "found":
                 return achado
-            if achado.get("_fallback_mac") and antes_de_conectar is not None and not antes_de_conectar():
-                return {"status": "ambiguous", "serial": serial, "origem": "base_local"}
+            # Última checagem antes do clique: o pedido ainda vale e, no fallback de MacBook, a base local não mudou.
+            fallback = bool(achado.get("_fallback_mac"))
+            if antes_de_conectar is not None and not antes_de_conectar(fallback):
+                return {"status": "ambiguous", "serial": serial, "origem": "base_local" if fallback else "pedido_cancelado"}
             linha = page.locator(_LINHA).first
             hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
             _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")
@@ -165,3 +174,171 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
                     return {"status": "offline", "serial": serial, "hostname": hostname}
             _conectar_controle_remoto(page)
             return {"status": "connected", "serial": serial, "hostname": hostname}
+
+
+# --- PowerShell remoto (Gerente do Sistema). O comando só é INSERIDO no campo: nunca se envia Enter. ---
+HOSTNAME_PADRAO_POWERSHELL = "PRNOTEUMU005"
+_PREFIXO_FALLBACK_POWERSHELL = "prnote"
+LIMITE_COMANDO_POWERSHELL = 2000
+ESPERA_TERMINAL_S = 40
+INTERVALO_TERMINAL_S = 4
+_ITEM_GERENTE = 'li.zmenu__item[data-label="Gerente do Sistema"]:visible'
+_ITEM_POWERSHELL = 'li.zmenu__item[data-label="PowerShell"]:visible'
+_CAMPO_POWERSHELL = "#remotePowershellInputField"
+_TEXTOS_PRONTO = ("Atualmente conectado como",)  # "Executar como" é só o rótulo do botão e aparece antes da conexão
+
+
+def validar_comando(comando: str) -> str:
+    """Rejeita comando vazio, grande demais ou com quebra de linha/controle (Enter embutido)."""
+    if not comando.strip():
+        raise ValueError("Informe o comando.")
+    if len(comando) > LIMITE_COMANDO_POWERSHELL:
+        raise ValueError(f"O comando excede {LIMITE_COMANDO_POWERSHELL} caracteres.")
+    # Cc (controle, inclui \n e \r), Cf (bidi/largura zero), Zl e Zp (U+2028/2029): quebra de linha ou texto que engana o cartão.
+    if any(c != "\t" and unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp") for c in comando):
+        raise ValueError("O comando não pode ter quebra de linha nem caracteres de controle.")
+    return comando
+
+
+def _linhas_do_filtro(page: Any) -> list[tuple[str, bool, Any]]:
+    """(hostname, ícone 'Ao vivo', linha) de cada linha da grade; o ícone é só uma dica e pode estar defasado."""
+    saida = []
+    for i in range(page.locator(_LINHA).count()):
+        linha = page.locator(_LINHA).nth(i)
+        nome = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
+        try:
+            alt = linha.locator(".resource-action--button img").first.get_attribute("alt", timeout=2000) or ""
+        except Exception:
+            alt = ""
+        saida.append((nome, alt == "Ao vivo", linha))
+    return saida
+
+
+def _escolher_host(page: Any, hostname: str, explicito: bool) -> dict[str, Any]:
+    """Host explícito é sempre tentado (ícone vermelho não bloqueia); só o padrão offline cai para outro online."""
+    grid.aplicar_filtro(page, automation, grid.COLUNA_NOME, hostname)
+    alvo = next((l for l in _linhas_do_filtro(page) if l[0].upper() == hostname.upper()), None)
+    if alvo is None:
+        return {"status": "not_found", "hostname": hostname}
+    if explicito or alvo[1]:
+        return {"hostname": alvo[0], "linha": alvo[2]}
+    grid.limpar_filtro(page, automation, grid.COLUNA_NOME)
+    grid.aplicar_filtro(page, automation, grid.COLUNA_NOME, _PREFIXO_FALLBACK_POWERSHELL)
+    online = next((l for l in _linhas_do_filtro(page) if l[1]), None)
+    if online is None:
+        return {"status": "sem_host_online", "hostname": hostname, "hostname_padrao_offline": True}
+    return {"hostname": online[0], "linha": online[2], "hostname_padrao_offline": True}
+
+
+def _texto_da_aba(aba: Any) -> str:
+    try:
+        return aba.evaluate("document.body ? document.body.innerText : ''") or ""
+    except Exception:
+        return ""
+
+
+def _esperar_texto(aba: Any, textos: tuple[str, ...]) -> bool:
+    """Polling de 4 s por ~40 s; 'desconectado' na tela encerra a espera como falha."""
+    for _ in range(ESPERA_TERMINAL_S // INTERVALO_TERMINAL_S):
+        texto = _texto_da_aba(aba)
+        if "desconectado" in texto.lower():
+            return False
+        if any(t in texto for t in textos):
+            return True
+        aba.wait_for_timeout(INTERVALO_TERMINAL_S * 1000)
+    return False
+
+
+def _selecionar_usuario(aba: Any, usuario: str | None) -> tuple[str | None, dict[str, Any] | None]:
+    aba.locator("button#runAsUserTargetBind").first.click(timeout=10000)
+    aba.locator(".popover-list").first.wait_for(state="visible", timeout=10000)
+    aba.locator(".popover-list li#availableUsersHeader button").first.click(timeout=10000)
+    aba.wait_for_timeout(3000)  # dá tempo de a lista atualizar
+    itens = aba.locator(".popover-list li:not([id])")
+    nomes = [itens.nth(i).inner_text(timeout=5000).strip() for i in range(itens.count())]
+    nomes = [n for n in nomes if n]
+    if usuario:
+        escolhido = next((n for n in nomes if n.lower() == usuario.lower()), None)
+    else:
+        escolhido = nomes[0] if len(nomes) == 1 else None
+    if escolhido is None:
+        status = "usuario_ambiguo" if len(nomes) > 1 and not usuario else "sem_usuario"
+        return None, {"status": status, "usuarios": nomes}
+    itens.nth(nomes.index(escolhido)).click(timeout=10000)
+    return escolhido, None
+
+
+def _preparar_terminal(aba: Any, modo: str, usuario: str | None) -> tuple[str | None, dict[str, Any] | None]:
+    """Devolve (usuário conectado, None), (None, erro de usuário) ou (None, None) se o terminal falhou após 1 reload."""
+    for tentativa in (1, 2):
+        try:
+            if tentativa == 2:
+                aba.reload(wait_until="domcontentloaded")
+            if not _esperar_texto(aba, _TEXTOS_PRONTO):
+                continue
+            if modo == "sistema":
+                return "SYSTEM", None
+            escolhido, erro = _selecionar_usuario(aba, usuario)
+            if erro:
+                return None, erro
+            if _esperar_texto(aba, (f"Atualmente conectado como {escolhido}",)):
+                return escolhido, None
+        except Exception:
+            continue
+    return None, None
+
+
+def _fechar_aba(aba: Any) -> None:
+    try:
+        aba.close()
+    except Exception:
+        pass
+
+
+def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: str, comando: str, usuario: str | None) -> dict[str, Any]:
+    escolha = _escolher_host(page, hostname, explicito)
+    if "linha" not in escolha:
+        return escolha
+    usado, linha = escolha["hostname"], escolha["linha"]
+    extra = {"hostname_padrao_offline": True} if escolha.get("hostname_padrao_offline") else {}
+    _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")
+    _clicar_resiliente(lambda: page.locator(_ITEM_GERENTE).first.hover(timeout=10000), "Abrir Gerente do Sistema")
+    with page.context.expect_page(timeout=20000) as nova:
+        page.locator(_ITEM_POWERSHELL).first.click(timeout=10000)
+    aba = nova.value
+    conectado, erro = _preparar_terminal(aba, modo, usuario)
+    if erro:
+        _fechar_aba(aba)
+        return {**erro, "hostname": usado, "modo": modo, **extra}
+    if conectado is None:
+        _fechar_aba(aba)
+        return {"status": "erro_terminal", "hostname": usado, "modo": modo, **extra, "mensagem": (
+            f"Não foi possível abrir o PowerShell em {usado} (conexão lenta, agente desconectado ou equipamento desligado). "
+            "Recarreguei a página uma vez e o erro continuou; a execução foi cancelada.")}
+    try:
+        campo = aba.locator(_CAMPO_POWERSHELL).first
+        campo.fill(comando, timeout=10000)  # só insere; nunca Enter
+        confirmado = campo.input_value() == comando
+    except Exception:
+        confirmado = False
+    if not confirmado:
+        _fechar_aba(aba)
+        return {"status": "erro_terminal", "hostname": usado, "modo": modo, **extra,
+                "mensagem": f"O comando não foi confirmado no campo do PowerShell de {usado}; a execução foi cancelada."}
+    return {"status": "inserido", "hostname": usado, "modo": modo, "usuario": conectado, "inserido": True, "enter_enviado": False, **extra}
+
+
+def abrir_powershell(hostname: str | None, modo: str, comando: str, usuario: str | None = None) -> dict[str, Any]:
+    """Abre o PowerShell do Gerente do Sistema e INSERE o comando no prompt; nunca envia Enter nem fecha a aba."""
+    if modo not in ("sistema", "usuario"):
+        raise ValueError("Modo inválido.")
+    validar_comando(comando)
+    explicito = bool(hostname)
+    with automation.trava_execucao("consulta_endpoint"):
+        from playwright.sync_api import sync_playwright
+
+        automation.log("PowerShell", f"Inserindo comando (tamanho {len(comando)}, modo {modo}).")  # nunca o conteúdo
+        setattr(automation, "_inicio_execucao", automation.time.time())
+        with sync_playwright() as pw:
+            page = _preparar_aba(pw)
+            return _abrir_powershell_na_grade(page, hostname or HOSTNAME_PADRAO_POWERSHELL, explicito, modo, comando, usuario)
