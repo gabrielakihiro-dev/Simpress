@@ -81,14 +81,14 @@ test("horizontal overflow state drives the table edge fade", () => {
 });
 
 test("function keys map to the four main tabs, the Cockpit tools and the Assistente", () => {
-  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"]
     .map(key => ux.shortcutAction({ key }));
   assert.deepEqual(actions, [
     "tab-home", "tab-transferencia", "tool-resumo", "tab-automacao",
     "tool-sebrae-chamados", "tool-os", "tool-apelidos",
-    "tool-relatorio", "tool-assistente",
+    "tool-relatorio", "tool-assistente", "tool-cobertura",
   ]);
-  assert.equal(ux.shortcutAction({ key: "F10" }), null, "F10 não tem mais função");
+  assert.equal(ux.shortcutAction({ key: "F11" }), null, "F11 não tem função");
 });
 
 test("modified function keys, typing and open dialogs keep their normal behavior", () => {
@@ -104,7 +104,8 @@ test("F1 a F9 valem mesmo com o cursor num campo de texto (F5 não recarrega a p
   assert.equal(ux.shortcutAction({ key: "F3" }, { typing: true }), "tool-resumo");
   assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), "tool-apelidos");
   assert.equal(ux.shortcutAction({ key: "F9" }, { typing: true }), "tool-assistente");
-  assert.equal(ux.shortcutAction({ key: "F10" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F10" }, { typing: true }), "tool-cobertura");
+  assert.equal(ux.shortcutAction({ key: "F10", shiftKey: true }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F11" }, { typing: true }), null);
 });
