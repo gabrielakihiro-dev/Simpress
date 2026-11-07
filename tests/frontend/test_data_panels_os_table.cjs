@@ -16,6 +16,7 @@ const doc = createFakeDocument();
 const requests = [];
 // Ajustáveis por teste: vínculos devolvidos por /vinculos-os e falha de rede.
 let vinculos = [];
+let usuarios = {};
 let falhar = false;
 const win = {
   document: doc,
@@ -28,7 +29,7 @@ const win = {
     if (falhar) throw new Error("Failed to fetch");
     const json = url === "/api/operacoes/chamados" ? report
       : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
-      : url === "/api/equipamentos/usuarios-logados" ? { usuarios: {} }
+      : url === "/api/equipamentos/usuarios-logados" ? { usuarios }
       : null;
     return { ok: json !== null, json: async () => json || {} };
   },
@@ -230,4 +231,82 @@ test("data-origem marca o vínculo do Dashboard e aria-invalid o número inváli
     input.dispatchEvent({ type: "input" });
     assert.equal(input.hasAttribute("aria-invalid"), false, "digitar limpa a marca de erro");
   } finally { vinculos = []; }
+});
+
+test("a busca usa série, OS, modelo e UTIC salvo, sem casar descrição nem rótulos de botões", async () => {
+  vinculos = [{ fonte: "oracle", serie: "SN-SOR", os: "9002", ano: 2026, numero: "3290", origem: "dashboard" }];
+  const modelo = report.chamados[0].simpress.modelos;
+  report.chamados[0].simpress.modelos = ["Latitude 5440"];
+  try {
+    const { section } = await montar({ semBusca: true, aoExpandirSerie: () => {} });
+    panels.filtrarTabelaOs({ busca: "latitude", relacao: "" });
+    assert.deepEqual(visiveis(section), ["SN-CONF"], "modelo da Simpress");
+    panels.filtrarTabelaOs({ busca: "UTIC-2026-3290" });
+    assert.deepEqual(visiveis(section), ["SN-SOR"], "UTIC completo");
+    panels.filtrarTabelaOs({ busca: "3290" });
+    assert.deepEqual(visiveis(section), ["SN-SOR"], "só o número do UTIC");
+    for (const termo of ["salvar", "andamento", "remover", "bateria", "informado", "ambiguo"]) {
+      panels.filtrarTabelaOs({ busca: termo });
+      assert.deepEqual(visiveis(section), [], `"${termo}" não casa`);
+    }
+    usuarios = { "SN-CONF": { usuario: "maria.souza", hostname: "PR-NB-0101" },
+      "SN-SOR": { candidatos: ["joao.lima", "ana.reis"], hostname_ambiguo: true, hostname_candidatos: ["PR-NB-0202"] } };
+    const { section: comUsuarios } = await montar({ semBusca: true, aoExpandirSerie: () => {} });
+    for (const [termo, esperado] of [["souza", ["SN-CONF"]], ["pr-nb-0101", ["SN-CONF"]], ["ana.reis", ["SN-SOR"]], ["PR-NB-0202", ["SN-SOR"]], ["ambiguo", []]]) {
+      panels.filtrarTabelaOs({ busca: termo });
+      assert.deepEqual(visiveis(comUsuarios), esperado, `usuário/hostname: "${termo}"`);
+    }
+  } finally { vinculos = []; usuarios = {}; report.chamados[0].simpress.modelos = modelo; panels.filtrarTabelaOs({ busca: "" }); }
+});
+
+test("sem busca a lista mostra 25 OS por vez com Carregar mais; filtro novo volta à primeira página", async () => {
+  const chamados = report.chamados;
+  report.chamados = Array.from({ length: 60 }, (_, i) => ({
+    serie: `SN-P${String(i).padStart(2, "0")}`, relacao: "somente_oracle", simpress: { ordens_servico: [] },
+    oracle: [{ solicitacao: `R${i}`, ordem_servico: String(1000 + i), descricao: "" }],
+  }));
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    const mais = section.querySelector("[data-os-mais]");
+    const botao = mais.querySelector("button");
+    assert.equal(botao.textContent, "Carregar mais");
+    assert.equal(visiveis(section).length, 25);
+    assert.equal(mais.hidden, false);
+    assert.equal(mais.querySelector(".sebrae-mais__n").textContent, "Mostrando 25 de 60");
+    assert.equal(status.textContent, "60 OS · 60 séries", "a contagem é do total, não da página");
+
+    botao.click();
+    assert.equal(visiveis(section).length, 50);
+    assert.equal(mais.querySelector(".sebrae-mais__n").textContent, "Mostrando 50 de 60");
+    botao.click();
+    assert.equal(visiveis(section).length, 60);
+    assert.equal(mais.hidden, true, "sem mais páginas o botão some");
+
+    panels.filtrarTabelaOs({ busca: "SN-P" });
+    assert.equal(visiveis(section).length, 60, "com busca mostra todas as que casam");
+    assert.equal(mais.hidden, true);
+    panels.filtrarTabelaOs({ busca: "" });
+    assert.equal(visiveis(section).length, 25, "filtro novo volta à primeira página");
+
+    const linha40 = section.querySelectorAll("tbody tr[data-serial]")[40];
+    assert.equal(linha40.hidden, true);
+    assert.equal(panels.revelarLinhaOs(linha40), true, "abrir uma OS escondida pela página amplia a página");
+    assert.equal(linha40.hidden, false);
+    assert.equal(visiveis(section).length, 50);
+    panels.filtrarTabelaOs({ relacao: "conferida" });
+    assert.equal(panels.revelarLinhaOs(linha40), false, "linha escondida pelo filtro não é revelada");
+  } finally { report.chamados = chamados; panels.filtrarTabelaOs({ busca: "", relacao: "" }); }
+});
+
+test("contagens grandes usam separador de milhar", async () => {
+  const chamados = report.chamados;
+  report.chamados = Array.from({ length: 1000 }, (_, i) => ({
+    serie: `SN-M${i}`, relacao: "somente_oracle", simpress: { ordens_servico: [] },
+    oracle: [{ solicitacao: `R${i}`, ordem_servico: String(5000 + i), descricao: "" }],
+  }));
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    assert.equal(status.textContent, "1.000 OS · 1.000 séries");
+    assert.equal(section.querySelector("[data-os-mais] .sebrae-mais__n").textContent, "Mostrando 25 de 1.000");
+  } finally { report.chamados = chamados; }
 });
