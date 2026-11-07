@@ -41,10 +41,22 @@
   }
 
   function controles(ocupado) {
-    const pronto = !ocupado && !!vigente?.session_id && !!byId("ux-chamado-problema").value;
-    byId("ux-chamado-problema").disabled = ocupado || !vigente?.session_id;
-    byId("ux-chamado-simular").disabled = !pronto;
-    byId("ux-chamado-enviar").disabled = !pronto;
+    const preparado = !!vigente?.session_id;
+    const pronto = !ocupado && preparado && !!byId("ux-chamado-problema").value;
+    // The reason stays visible (and linked by aria-describedby) while the two actions are disabled.
+    const motivo = ocupado || pronto ? "" : preparado
+      ? "Escolha um problema para liberar a simulação e o envio."
+      : vigente?.falha
+        ? "Simulação e envio indisponíveis: a preparação no UX não foi concluída. A descrição foi mantida; corrija o que a mensagem acima indica e abra o chamado de novo."
+        : "Simulação e envio indisponíveis: esta sessão do UX já foi usada. Abra o chamado de novo se precisar.";
+    const aviso = byId("ux-chamado-motivo");
+    aviso.textContent = motivo;
+    aviso.hidden = !motivo;
+    byId("ux-chamado-problema").disabled = ocupado || !preparado;
+    for (const id of ["ux-chamado-simular", "ux-chamado-enviar"]) {
+      byId(id).disabled = !pronto;
+      byId(id).title = pronto ? "" : motivo;
+    }
     byId("ux-chamado-problema").setAttribute("aria-busy", String(ocupado));
   }
 
@@ -55,6 +67,7 @@
   async function preparar(pedido, conferido) {
     const status = byId("ux-chamado-status");
     byId("ux-chamado-conferido").hidden = true;
+    pedido.falha = false;
     status.textContent = "Preparando no UX… Se o Chrome de automação pedir login, entre manualmente.";
     pedido.ocupado = true;
     controles(true);
@@ -80,6 +93,7 @@
       seletor.focus();
     } catch (erro) {
       if (!atual(pedido)) return;
+      pedido.falha = true;
       status.textContent = erro.message;
       byId("ux-chamado-conferido").hidden = erro.data?.codigo !== "envio_incerto";
     } finally {

@@ -58,6 +58,17 @@ class AssistantUXTests(unittest.TestCase):
         self.assertEqual(calls, ["/api/ux/abrir-chamado/preparar", "/api/ux/abrir-chamado/cancelar"])
         self.assertEqual(model.calls, [])
 
+    def test_failed_preparation_shows_the_router_message_without_form_data(self):
+        aviso = "Não foi possível abrir ou conectar o Chrome de automação. Feche as janelas desse Chrome e tente de novo."
+        model = FakeModel()
+        conversa = AssistantConversation(model, SimpressApi(lambda *_a: (503, {"detail": aviso, "codigo": "chrome_indisponivel"})))
+        dados = {"serial": "S1", "descricao": "Descrição privada de teste.", "revisao": 1}
+        resposta = conversa.enviar_mensagem("Abrir chamado no UX", contexto_ux=dados)
+        self.assertIn(aviso, resposta.texto)
+        self.assertNotIn("Descrição privada", resposta.texto)
+        self.assertIsNone(resposta.pendente)
+        self.assertEqual(model.calls, [])
+
     def test_question_about_ux_tickets_never_opens_the_portal(self):
         rotas = []
         def local(method, route, _params, body):

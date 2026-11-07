@@ -34,3 +34,28 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   }]);
 });
 
+test("Home explains a failed UX preparation, keeps the description and disables the actions", async ({ page }) => {
+  const aviso = "Não foi possível abrir ou conectar o Chrome de automação. Feche as janelas desse Chrome e tente de novo.";
+  const requests = [];
+  await page.route("**/api/ux/abrir-chamado/**", async route => {
+    requests.push(new URL(route.request().url()).pathname);
+    await route.fulfill({ status: 503, json: { detail: aviso, codigo: "chrome_indisponivel" } });
+  });
+  await page.goto("/");
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  await page.getByRole("tab", { name: "Kit teclado + mouse" }).click();
+  await page.locator("#texto-chamado-teclado-mouse").fill("O teclado do notebook não funciona.");
+  await page.getByRole("button", { name: "Abrir chamado no UX" }).click();
+  const modal = page.getByRole("dialog", { name: "Abrir chamado no UX" });
+  await expect(modal.getByRole("status")).toContainText(aviso);
+  await expect(modal.locator("#ux-chamado-descricao")).toHaveText("O teclado do notebook não funciona.");
+  await expect(modal.locator("#ux-chamado-motivo")).toContainText("preparação no UX não foi concluída");
+  for (const nome of ["Simular preenchimento", "Revisar e enviar"]) {
+    const botao = modal.getByRole("button", { name: nome });
+    await expect(botao).toBeDisabled();
+    await expect(botao).toHaveAccessibleDescription(/preparação no UX não foi concluída/);
+  }
+  expect(requests).toEqual(["/api/ux/abrir-chamado/preparar"]);
+});

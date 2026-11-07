@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from domains import ux_chamados_browser as ux_browser
 from domains.ux_chamados import ErroUX
 from domains.ux_chamados_browser import PortalUXChrome, ler_opcoes_rolaveis
 
@@ -111,6 +112,7 @@ class PaginaFalsa:
         self.dias = [True, False, True, True, False]
         self.enviados = 0
         self.fechada = False
+        self.rotulo_enviar = "Enviar solicitação"
 
     def close(self):
         self.fechada = True
@@ -145,14 +147,23 @@ class PaginaFalsa:
                 return ControleFalso(texto=texto)
         return ControleFalso(quantidade=0)
 
-    def get_by_role(self, role, *, name, exact):
-        assert exact
+    def locator(self, _seletor):
+        return ControleFalso(quantidade=0)
+
+    def wait_for_timeout(self, _ms):
+        pass
+
+    @staticmethod
+    def _nome_confere(name, alvo):
+        return name.fullmatch(alvo) is not None if hasattr(name, "fullmatch") else name == alvo
+
+    def get_by_role(self, role, *, name, exact=False):
         if role == "button":
             if self.etapa == 1 and name == "Buscar":
                 return ControleFalso(acao=lambda: None)
             if self.etapa == 1 and name == "Próximo":
                 return ControleFalso(acao=self.avancar)
-            if self.etapa == 2 and name == "Enviar solicitação":
+            if self.etapa == 2 and self._nome_confere(name, self.rotulo_enviar):
                 return ControleFalso(acao=self.enviar)
         return ControleFalso(quantidade=0)
 
@@ -168,6 +179,203 @@ class PaginaFalsa:
         self.enviados += 1
         self.etapa = 3
         self.url = "https://ux.simpress.com.br/ng/solicitar-atendimento/confirmacao"
+
+
+class ListaNg(ControleFalso):
+    """The ng-select panel: every option is rendered, none carries aria-posinset/aria-setsize."""
+
+    def __init__(self, pagina, textos):
+        super().__init__()
+        self.pagina = pagina
+        self.textos = textos
+        self.aberta = False
+
+    def count(self):
+        return 1 if self.aberta else 0
+
+    def wait_for(self, *, state="visible", **_kwargs):
+        if (state == "hidden") == self.aberta:
+            raise ValueError("estado da lista")
+
+    def get_by_role(self, role, *, name=None, exact=False):
+        assert role == "option"
+        return OpcaoNg(self, name)
+
+    def evaluate(self, script, *_args):
+        if "aria-setsize" in script:
+            return False
+        if "innerText" in script:
+            return [list(self.textos), 1]
+        return None
+
+
+class OpcaoNg(ControleFalso):
+    def __init__(self, lista, nome):
+        super().__init__(quantidade=1 if nome is None or nome in lista.textos else 0)
+        self.lista = lista
+        self.nome = nome
+        self.first = self
+
+    def click(self, **_kwargs):
+        self.lista.pagina.problema_escolhido = self.nome
+        self.lista.aberta = False
+
+
+class SeletorNg(ControleFalso):
+    def __init__(self, pagina):
+        super().__init__()
+        self.pagina = pagina
+
+    def click(self, **_kwargs):
+        if self.pagina.backup_aberto:
+            raise RuntimeError("o modal Backup de dados intercepta o clique")
+        self.pagina.lista.aberta = True
+
+    def evaluate(self, script):
+        return False  # NG-SELECT is not a native <select>
+
+
+class AvisoBackup(ControleFalso):
+    def __init__(self, pagina):
+        super().__init__()
+        self.pagina = pagina
+
+    def count(self):
+        return 1 if self.pagina.backup_aberto else 0
+
+    def click(self, **_kwargs):
+        self.pagina.backup_aberto = False
+
+    def wait_for(self, *, state="visible", **_kwargs):
+        if (state == "hidden") == self.pagina.backup_aberto:
+            raise ValueError("estado do modal")
+
+
+class PaginaPortalReal(PaginaFalsa):
+    """The real portal: no "Etapa 1 de 2", inputs known only by id, ng-select, a blocking backup modal."""
+
+    IDS = {"nome": "Nome", "email": "E-mail", "telefone": "Telefone para contato", "ramal": "Ramal", "cargo": "Departamento/Cargo"}
+
+    def __init__(self):
+        super().__init__()
+        self.rotulo_enviar = "Enviar Solicitação"
+        self.backup_aberto = False
+        self.problema_escolhido = None
+        self.lista = ListaNg(self, ["Impressões escuras", "Notebook - Mouse", "Notebook - Teclado", "Hardware - Placa"])
+        self.ng = SeletorNg(self)
+        self.keyboard = SimpleNamespace(press=lambda _tecla: setattr(self.lista, "aberta", False))
+
+    def avancar(self):
+        super().avancar()
+        self.backup_aberto = True
+
+    def get_by_label(self, nome, *, exact):
+        return ControleFalso(quantidade=0)  # aria-label is the id ("nome"), never the visible label
+
+    def get_by_text(self, valor, *, exact=False):
+        if self.etapa == 1:
+            return ControleFalso(quantidade=0)
+        return super().get_by_text(valor, exact=exact)
+
+    def get_by_role(self, role, *, name=None, exact=False):
+        if role == "listbox":
+            return self.lista
+        return super().get_by_role(role, name=name, exact=exact)
+
+    def locator(self, seletor):
+        if seletor == "input#numeroSerie" and self.etapa == 1:
+            return self.serie
+        if self.etapa != 2:
+            return ControleFalso(quantidade=0)
+        if seletor == "ng-select":
+            return self.ng
+        if seletor == "textarea":
+            return self.descricao
+        if seletor == "app-modal[titulo='Backup de dados'] .fechar":
+            return AvisoBackup(self)
+        for id_, rotulo in self.IDS.items():
+            if seletor == f"input#{id_}":
+                return self.solicitante[rotulo]
+        return ControleFalso(quantidade=0)
+
+
+class PortalRealTests(unittest.TestCase):
+    """Regression: the adapter assumed a form the real UX portal does not have (live check, 2026-11-06)."""
+
+    def setUp(self):
+        sem_trava = mock.patch.dict(os.environ)
+        sem_trava.start()
+        self.addCleanup(sem_trava.stop)
+        os.environ.pop("SIMPRESS_UX_SEM_ENVIO", None)
+        self.pagina = PaginaPortalReal()
+        self.portal = PortalUXChrome(SimpleNamespace(pages=[self.pagina], new_page=lambda: self.pagina))
+        self.perfil = {"nome": "Pessoa Fictícia", "email": "teste@example.test", "telefone": "41999990000",
+                       "ramal": "", "departamento_cargo": "Teste"}
+
+    def preparar(self):
+        return self.portal.preparar("S1", "aba-opaca")
+
+    def test_prepare_closes_the_backup_modal_and_reads_the_ng_select_list(self):
+        modelo, opcoes = self.preparar()
+        self.assertEqual(modelo, "Modelo de teste")
+        self.assertEqual(opcoes, ["Impressões escuras", "Notebook - Mouse", "Notebook - Teclado", "Hardware - Placa"])
+        self.assertFalse(self.pagina.backup_aberto)
+        self.assertFalse(self.pagina.lista.aberta)
+
+    def test_fill_uses_ids_textarea_and_ng_select_and_sends_with_the_real_button_label(self):
+        modelo, _ = self.preparar()
+        self.portal.preencher("S1", modelo, "aba-opaca", "Notebook - Teclado", "Teclado com defeito.", self.perfil)
+        self.assertEqual(self.pagina.problema_escolhido, "Notebook - Teclado")
+        self.assertEqual(self.pagina.descricao.valor, "Teclado com defeito.")
+        self.assertEqual(self.pagina.solicitante["Nome"].valor, "Pessoa Fictícia")
+        self.assertEqual(self.pagina.solicitante["Telefone para contato"].valor, "41999990000")
+        self.assertEqual(self.pagina.enviados, 0)
+        self.assertEqual(self.portal.enviar("aba-opaca"), "24680")
+        self.assertEqual(self.pagina.enviados, 1)
+
+    def test_kill_switch_still_blocks_the_click_on_the_real_label(self):
+        modelo, _ = self.preparar()
+        self.portal.preencher("S1", modelo, "aba-opaca", "Notebook - Teclado", "Teclado com defeito.", self.perfil)
+        with mock.patch.dict(os.environ, {"SIMPRESS_UX_SEM_ENVIO": "1"}), self.assertRaises(ErroUX):
+            self.portal.enviar("aba-opaca")
+        self.assertEqual(self.pagina.enviados, 0)
+
+    def test_list_that_keeps_changing_is_refused_instead_of_trusted(self):
+        leituras = iter([[["A"], 1], [["A", "B"], 1], [["A", "B", "C"], 1], [["A"], 1], [["A", "B"], 1], [["A", "B", "C"], 1]])
+        self.pagina.lista.evaluate = lambda script, *_a: False if "aria-setsize" in script else next(leituras)
+        with self.assertRaisesRegex(ErroUX, "lista completa"):
+            self.preparar()
+
+
+class ConexaoChromeTests(unittest.TestCase):
+    def test_starts_the_automation_chrome_before_connecting(self):
+        ordem = []
+        browser = SimpleNamespace(contexts=["ctx"])
+        pw = SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=lambda *a, **k: ordem.append("conectar") or browser))
+        playwright = mock.MagicMock()
+        playwright.__enter__.return_value = pw
+        with mock.patch.object(ux_browser.automation, "garantir_chrome", lambda: ordem.append("garantir")), \
+                mock.patch("playwright.sync_api.sync_playwright", return_value=playwright), \
+                ux_browser.contexto_chrome_ux() as contexto:
+            self.assertEqual(contexto, "ctx")
+        self.assertEqual(ordem, ["garantir", "conectar"])
+
+    def test_chrome_that_cannot_start_or_connect_explains_it_without_leaking_the_cause(self):
+        def recusa(*_a, **_k):
+            raise ConnectionRefusedError("connect ECONNREFUSED 127.0.0.1:9333")
+
+        playwright = mock.MagicMock()
+        playwright.__enter__.return_value = SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=recusa))
+        with mock.patch.object(ux_browser.automation, "garantir_chrome", lambda: None), \
+                mock.patch("playwright.sync_api.sync_playwright", return_value=playwright):
+            with self.assertRaises(ErroUX) as erro, ux_browser.contexto_chrome_ux():
+                pass
+        self.assertEqual((erro.exception.status, erro.exception.codigo), (503, "chrome_indisponivel"))
+        self.assertNotIn("ECONNREFUSED", str(erro.exception))
+        with mock.patch.object(ux_browser.automation, "garantir_chrome", side_effect=RuntimeError("perfil bloqueado")):
+            with self.assertRaises(ErroUX) as erro, ux_browser.contexto_chrome_ux():
+                pass
+        self.assertEqual(erro.exception.codigo, "chrome_indisponivel")
 
 
 class PortalUXChromeTests(unittest.TestCase):
