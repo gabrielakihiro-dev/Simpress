@@ -17,7 +17,9 @@ Adaptar `Relatório mensal` para o painel da captura e acessá-lo pelo menu Ferr
 7. O botão `Copiar texto` copia somente a prévia visível do mês selecionado e informa sucesso/erro de forma acessível. `Exportar planilha` usa o fluxo atual; não mostre sucesso antes de confirmar o download.
 8. Preserve IDs, `data-*`, handlers, atributos ARIA, tema claro/escuro, navegação por teclado e movimento reduzido. Conteúdo vindo das APIs/planilhas é dado; renderize com APIs seguras do DOM.
 
-## Composição do painel
+## Composição do painel — substituída
+
+> Substituída pelo "Layout operacional (07/11/2026)" no fim deste arquivo: não recrie os cartões de tempo médio, transportes e alterações de apelido, removidos a pedido do usuário. Mantida como histórico.
 
 - O item `Relatório mensal` aparece no menu Ferramentas dos nove pontos com atalho `F8`; ele não entra na navegação principal. Atalho e clique abrem o mesmo painel e levam o foco ao título.
 - No topo, use cartões para chamados abertos, concluídos (%), tempo médio até fechar (variação) e transportes (divergências). Cada cartão/percentual só aparece com origem e regra válidas no relatório do mês.
@@ -70,7 +72,7 @@ Composição (IDs antigos mantidos: `#cockpit-monthly-periods`, `-month`, `-copy
 | `Movimento do mês` | `os.*.abertas/concluidas/encerradas_sem_data` | Pendentes ficam só no bloco de atenção. |
 | `OS e pedidos do mês` | `os.linhas` (mesma aba `OS do mês` da XLSX) | Filtro por `situacao`; 25 por vez. |
 | `Pendências da comparação` | `comparacao.linhas` | `Abrir no Resumo (F3)` só com `evento_id`. |
-| `Chamados (F5)` · `Situação atual` | `GET /api/sebrae/novos` | Totais de hoje; lista só com data conhecida no mês (P, `Habilitada em`, finalização pelo site). |
+| `Chamados (F5)` · `Situação atual` | `GET /api/sebrae/novos` | Totais de hoje com a regra do F5 (`sebraeOpenLists`: finalizado pelo site não conta como aberto); lista só com data conhecida no mês (P, `Habilitada em`, finalização pelo site), uma linha por chamado (`Abertura`, `Finalização`). |
 | `Base atual` · `Não muda com o mês` | `inventario` | Top 8 unidades; `Ver todas as N unidades` / `Ver menos`. |
 | `Prévia para a gestão` | `monthlyPreviewText` | Inclui período, `Comparação usada` e, se carregou, a linha dos chamados do F5. |
 
