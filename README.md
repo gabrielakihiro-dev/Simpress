@@ -5,6 +5,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 ## Recursos
 
 - Interface Cockpit com as abas **Home** (F1), **Transporte** (F2) e **Automação** (F4), o botão **Resumo** (F3, ativos por regional com filtro por categoria e comparação das bases, aberto como painel de ferramenta), mais o menu **Ferramentas** com os painéis de chamados, históricos e relatório mensal, e o chat flutuante do assistente (ícone no topbar).
+- Painel **Cobertura** (F10, menu Ferramentas): necessidades de equipamento por data e cidade, séries disponíveis, reservas com kit, movimentações e devoluções, com o Transporte (F2) preenchido para o operador gerar a planilha. Grava só no estado local; o assistente consulta os mesmos números (`listar_cobertura`).
 - Busca por número de série, apelido/hostname, modelo, cidade, usuário logado ou nome da pessoa (vindo do Microsoft Entra). A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**); sem resultado, a busca sugere `Você quis dizer <usuário>?`.
 - Na Home, **Consultar no Endpoint** lê ao vivo o usuário do último logon do equipamento selecionado, e **Controle remoto** abre a conexão remota do Endpoint Central para ele, sempre por clique do usuário.
 - Geração e download da planilha oficial de transferência a partir do modelo local.
@@ -571,6 +572,7 @@ GLOSSARY.md                           Termos usados no projeto
 - [Contratos da API do backend](docs/arquitetura/CONTRATOS_API_BACKEND.md)
 - [Nomes do Microsoft Entra](docs/operacao/nomes-entra-ui.md)
 - [Assistente](docs/cockpit-prompts/15-assistente.md)
+- [Cobertura de equipamentos](docs/cockpit-prompts/16-cobertura.md)
 - [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
 - [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)

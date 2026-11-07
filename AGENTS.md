@@ -132,11 +132,24 @@ Sino de notificações, `Sem acesso há 60 dias` (07/11/2026, pedido do usuário
 Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere sem novo pedido dele.
 
 - Barra superior, nesta ordem: Home (F1), Transporte (F2), Resumo (F3, abre o painel de ferramenta `comparacao` pelo botão `#btn-resumo-aba`; não é mais uma aba própria), Automação (F4), **Chamados** (F5, painel `sebrae-chamados`, o antigo "Chamados Sebrae") e **OS** (F6, painel `chamados`, botão `#btn-acompanhamento-chamados`, o antigo "Chamados"). Os rótulos visíveis são exatamente `Chamados` e `OS`; IDs e chaves internas foram mantidos.
-- Menu Ferramentas: Histórico de apelidos **F7**, Relatório mensal **F8**; o Resumo (F3) saiu do menu e fica só na barra. O Assistente é **F9** (o F10 deixou de existir). F1 a F9 valem também com o cursor numa caixa de texto (autorizado em 31/10/2026; senão o F5 recarregaria a página); as demais teclas de atalho (`/`, `t`, `e`, `c`) continuam ignoradas ao digitar. O mapa fica em `shortcutAction` e `toolKeys`; mantenha `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
+- Menu Ferramentas: Histórico de apelidos **F7**, Relatório mensal **F8** e, desde 07/11/2026, **Cobertura** **F10** (`#btn-cobertura`, painel `cobertura`; ver "Cobertura de equipamentos"); o Resumo (F3) saiu do menu e fica só na barra. O Assistente é **F9**. F1 a F9 valem também com o cursor numa caixa de texto (autorizado em 31/10/2026; senão o F5 recarregaria a página), e o F10 também, junto com a Cobertura (07/11/2026); as demais teclas de atalho (`/`, `t`, `e`, `c`) continuam ignoradas ao digitar. O mapa fica em `shortcutAction` e `toolKeys`; mantenha `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
 - O painel F7 (`data-cockpit-tool-panel="apelidos"`) é o histórico completo de apelidos; o modal `#modal-historico-apelidos` foi removido em 31/10/2026 por pedido do usuário. Não recrie o modal. Desde 04/11/2026 (pedido do usuário) o F7 não exibe eventos de séries iniciadas por `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae, sem relação com os equipamentos): filtro só na exibição, em `cockpit-tool-panels.js` (`ALIAS_HIDDEN_SERIAL`); nada é apagado do histórico e as demais telas não mudam.
 - O menu Ferramentas não tem grupo "Planilhas": o modal de atualização abre por **Nova comparação** (aba Comparação), pelo `Importar` da Home e pelo alerta `Atualizar base`; `Exportar Excel` (`#btn-exportar-equipamentos`) fica na barra da aba Comparação, com o rótulo visível `Exportar Excel`.
 
 Detalhes em `docs/cockpit-prompts/14-cockpit-v2.md`, seção "Navegação do Cockpit e atalhos (31/10/2026)".
+
+## Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)
+
+Painel `Cobertura` (F10) do plano aprovado pelo usuário: necessidades de equipamento por data e cidade, séries disponíveis, reservas, movimentações e devoluções.
+
+- `EquipamentosDetalhes` nunca é alterado: a Cobertura só lê o cadastro. Tudo o que ela grava fica em `data/state/operacao_cobertura.json` e `data/state/operacao_cobertura_arquivados.json` (locais, fora do Git).
+- O Transporte (F2) é sempre enviado pelo operador: `Preparar Transporte` só preenche a tela; a planilha é gerada pelo clique do operador e depois registrada na movimentação (`registrar-transferencia`) ou ligada a um registro já existente (`Vincular transferência já gerada`).
+- A elegibilidade (série livre, devolução livre, kit completo) é recalculada dentro da transação de cada escrita; nada confia no que a tela mostrou antes.
+- Arquivamento D6: casos fechados há mais de 30 dias vão para o arquivo de arquivados na mesma transação de uma escrita; a leitura (`GET /api/cobertura`) não grava.
+- Nada é escrito em SoftExpert, SharePoint, UX, Endpoint ou outro sistema externo.
+- Assistente: `listar_cobertura` só consulta (autorizada pelo usuário em 07/11/2026), com os mesmos números da tela e sem dados pessoais; não há ferramenta de escrita na Cobertura.
+
+Detalhes, rótulos e "Riscos conhecidos": `docs/cockpit-prompts/16-cobertura.md`; rotas: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos".
 
 ## Representantes regionais SEBRAE/PR (Transferência)
 

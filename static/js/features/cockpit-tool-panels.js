@@ -5,12 +5,13 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
-  const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F3", apelidos: "F7", relatorio: "F8" };
+  const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F3", apelidos: "F7", relatorio: "F8", cobertura: "F10" };
   const toolInfo = {
     chamados: ["OS", "Acompanhamento local de ordens relacionadas por série."],
     comparacao: ["Resumo", "Ativos por regional (com filtro por categoria) e resultados salvos da comparação entre as bases locais."],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
+    cobertura: ["Cobertura", "Necessidades de equipamento, reservas, transporte e devoluções por cidade."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
@@ -1508,6 +1509,7 @@
       await loadMonthlyReport(input.value);
     }
     if (tool === "planilhas") await loadSheets();
+    if (tool === "cobertura") await app.carregarCobertura?.();
     if (tool === "unidades") {
       app.toggleFormNovaUnidade?.(false);
       await loadUnits();
