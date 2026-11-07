@@ -26,7 +26,11 @@ SOLICITANTE_PADRAO = {
     "ramal": "", "departamento_cargo": "Analista WP Junior",
 }
 EDITAVEIS = ("nome", "email", "telefone", "departamento_cargo")  # shown in the modal; ramal is not
-EXCLUDED_STEMS = ("impress", "digitaliza", "atolament", "scanner", "printer", "mfp", "licenciament", "diverg")
+EXCLUDED_STEMS = (
+    "impress", "digitaliza", "atolament", "scanner", "printer", "mfp", "licenciament", "diverg", "toner",
+    "nao reconhece chip", "bloqueio na conta ou aparelho", "falha na temperatura do fusor",
+)
+EXCLUDED_PREFIXES = ("hardware", "celular", "tablet")
 # Same pattern as the check in static/js/features/ux-chamados.js (abrirChamadoUX): keep both in sync.
 PLACEHOLDER = re.compile(r"\[[^\]\n]*\]|:[ \t]*$", re.MULTILINE)
 SERIES_SEM_ENVIO_REAL = frozenset({"BRM551RN1Y"})
@@ -76,7 +80,7 @@ def filtrar_opcoes(opcoes: Iterable[str]) -> list[str]:
     for texto in opcoes:
         texto = texto.strip()
         chave = "".join(c for c in unicodedata.normalize("NFD", texto.casefold()) if not unicodedata.combining(c))
-        if chave and not chave.startswith("hardware") and not any(termo in chave for termo in EXCLUDED_STEMS):
+        if chave and not chave.startswith(EXCLUDED_PREFIXES) and not any(termo in chave for termo in EXCLUDED_STEMS):
             if texto not in resultado:
                 resultado.append(texto)
     return resultado
