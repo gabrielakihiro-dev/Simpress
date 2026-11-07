@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
-from domains.effective_alias import strip_manual_alias_marker
+from domains.effective_alias import mac_endpoint_serial_key, strip_manual_alias_marker
 from domains.equipment_search import normalize_search_term
 
 # AGENTS.md: hostnames with these prefixes are installed in Curitiba whatever EquipamentosDetalhes says.
@@ -105,9 +105,30 @@ def _numero_da_os(valor: Any) -> int:
     return int(texto) if texto.isdigit() else -1
 
 
-def os_da_serie(relatorio: Mapping[str, Any] | None, serie: str) -> str:
-    """Latest OS linked to the series in the ticket report; empty when the series has no ticket/OS yet."""
+def serie_equivalente_macbook(serie: Any, indice: Mapping[str, Any] | None) -> str:
+    """The other spelling of a MacBook serial (with/without the leading ``S``) under the AGENTS.md rule, or "".
+
+    Same helper as the logged-user lookup (``mac_endpoint_serial_key``): needs the Endpoint index with the Simpress base
+    serials (``with_details_serials``); with a second candidate in the base nothing is made, so ambiguity stays ambiguity.
+    """
     alvo = _chave_serie(serie)
+    if not alvo or not indice:
+        return ""
+    if alvo.startswith("S"):
+        return mac_endpoint_serial_key(indice, alvo)
+    return f"S{alvo}" if mac_endpoint_serial_key(indice, f"S{alvo}") == alvo else ""
+
+
+def os_da_serie(relatorio: Mapping[str, Any] | None, serie: str, indice_endpoint: Mapping[str, Any] | None = None) -> str:
+    """Latest OS linked to the series in the ticket report; empty when the series has no ticket/OS yet.
+
+    With ``indice_endpoint`` a MacBook serial that finds no OS as written is tried in its other spelling (``S`` prefix
+    or not); the exact serial always wins and the report's own values are never changed.
+    """
+    return _os_da_chave(relatorio, _chave_serie(serie)) or _os_da_chave(relatorio, _chave_serie(serie_equivalente_macbook(serie, indice_endpoint)))
+
+
+def _os_da_chave(relatorio: Mapping[str, Any] | None, alvo: str) -> str:
     chamados = (relatorio or {}).get("chamados")
     if not alvo or not isinstance(chamados, list):
         return ""

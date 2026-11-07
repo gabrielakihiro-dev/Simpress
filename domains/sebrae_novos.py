@@ -317,11 +317,14 @@ def preenchimentos(
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
     vinculos: Sequence[Mapping[str, Any]] = (),
+    indice_endpoint: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Dict[str, str]]:
     """E, K, L and N still empty in old open tickets: the unique equipment of the name in column I gives K, L and N;
     E is the latest OS of the serial the row has or just got. K, L and N are never mixed with a different serial
     already in the row. A manual ``vinculos`` entry of the row's UTIC gives E first, even without a serial. ``abertos`` are ``ChamadoAberto.como_dict()`` items; keys of the result are their ``numero``.
-    shortcut: serials compare as upper-case text (no MacBook ``S`` prefix rule), upgrade if one row misses a fill because of it."""
+    With ``indice_endpoint`` (Endpoint index plus Simpress base serials) E also finds a MacBook whose report serial
+    has the other ``S`` spelling, only when that match is unique; K and the report's values stay as they are.
+    shortcut: K vs the row's serial still compares as upper-case text (no ``S`` rule), upgrade if one row misses K/L/N because of it."""
     resultado: Dict[str, Dict[str, str]] = {}
     for item in abertos:
         atuais = {letra: str(valor or "").strip() for letra, valor in (item.get("automaticos") or {}).items()}
@@ -337,7 +340,7 @@ def preenchimentos(
         if os_vinculada:
             novos["E"] = os_vinculada
         elif serie:
-            novos["E"] = sebrae_cruzamento.os_da_serie(relatorio, serie)
+            novos["E"] = sebrae_cruzamento.os_da_serie(relatorio, serie, indice_endpoint)
         faltam = {letra: _texto_de_celula(valor) for letra, valor in novos.items() if valor and not atuais.get(letra)}
         if faltam:
             resultado[str(item.get("numero") or "")] = faltam

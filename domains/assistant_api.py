@@ -1521,7 +1521,7 @@ class SimpressApi:
         }
 
     def chamados_antigos_abertos_sebrae(self) -> Dict[str, Any]:
-        """Old Dashboard tickets with Status EM ABERTO or empty. Read only."""
+        """Old Dashboard tickets with Status EM ABERTO or empty (OS: E in the sheet, `os_sugerida` found by the serial). Read only."""
         ok, dados = self._chamar("GET", "/api/sebrae/novos")
         if not ok:
             return {"erro": dados}
@@ -1542,6 +1542,9 @@ class SimpressApi:
                 "categoria": limpar_texto_sensivel(v.get("B")),
                 "status": str(v.get("D") or ""),
                 "tipo": str(v.get("J") or ""),
+                "serie": str(_dict(a.get("automaticos")).get("K") or ""),
+                "os": str(_dict(a.get("automaticos")).get("E") or ""),
+                "os_sugerida": str(_dict(a.get("automaticos_sugeridos")).get("E") or ""),
             })
         return _aparar({
             "dashboard_importado": {k: importado.get(k, "") for k in ("arquivo", "importado_em", "total")},
