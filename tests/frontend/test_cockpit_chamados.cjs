@@ -115,6 +115,73 @@ test("exportar envia versão, busca e atenção; sem versão avisa e não chama 
   } finally { delete global.document; delete global.window; }
 });
 
+test("exportar manda por POST as séries da tela; sem lista ou com versão diferente da tela usa o GET", async () => {
+  const { api, app, el } = criarAmbiente();
+  const enviados = [];
+  const apiFetch = app.apiFetch;
+  app.apiFetch = (url, options = {}) => { enviados.push({ url, options }); return apiFetch(url, options); };
+  const relacao = document.createElement("select");
+  relacao.setAttribute("id", "cockpit-tickets-relation");
+  document.body.append(relacao);
+  let series = ["SN-1", "SN-2"];
+  const filtros = [];
+  globalThis.SimpressDataPanels = { seriesFiltradasOs: () => series, filtrarTabelaOs: filtro => filtros.push(filtro) };
+  try {
+    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", historico });
+    el["cockpit-tickets-search"].value = " Maria ";
+    el["cockpit-tickets-attention"].checked = true;
+    relacao.value = "conferida";
+    await api.exportarChamadosCockpit().catch(() => {});
+    assert.deepEqual(filtros.at(-1), { busca: " Maria " }, "busca ainda na espera de 150 ms é aplicada antes de ler as séries");
+    let envio = enviados.at(-1);
+    assert.equal(envio.url, "/api/operacoes/chamados/exportar");
+    assert.equal(envio.options.method, "POST");
+    assert.equal(envio.options.headers["Content-Type"], "application/json");
+    assert.deepEqual(JSON.parse(envio.options.body), {
+      snapshot_id: "s2", series: ["SN-1", "SN-2"], search: "Maria", relation: "conferida", attention_only: true,
+    });
+    assert.equal(envio.options.responseType, "response");
+
+    relacao.value = "todos";
+    series = [];
+    await api.exportarChamadosCockpit().catch(() => {});
+    assert.deepEqual(JSON.parse(enviados.at(-1).options.body).series, [], "lista vazia segue vazia");
+    assert.equal(JSON.parse(enviados.at(-1).options.body).relation, "");
+
+    series = null;
+    await api.exportarChamadosCockpit().catch(() => {});
+    envio = enviados.at(-1);
+    assert.equal(envio.options.method, undefined, "tabela não carregada: GET antigo");
+    assert.match(envio.url, /exportar\?snapshot_id=s2&stale_days=3&search=Maria&attention_only=true$/);
+
+    series = ["SN-1"];
+    el["cockpit-tickets-version"].value = "s1";
+    api.selecionarVersaoChamadosCockpit();
+    await api.exportarChamadosCockpit().catch(() => {});
+    envio = enviados.at(-1);
+    assert.equal(envio.options.method, undefined, "versão antiga não é a da tela: GET antigo");
+    assert.match(envio.url, /snapshot_id=s1/);
+  } finally { delete globalThis.SimpressDataPanels; delete global.document; delete global.window; }
+});
+
+test("logo depois de importar, enquanto a tabela recarrega, exportar usa o GET da versão nova", async () => {
+  const relatorio = { snapshot_id: "novo", historico: [{ id: "novo", atualizado_em: "2026-10-31" }] };
+  const { api, el, chamadas } = criarAmbiente({ respostas: { "/api/operacoes/chamados/importar": relatorio } });
+  globalThis.SimpressDataPanels = { seriesFiltradasOs: () => ["SN-ANTIGA"], filtrarTabelaOs() {} };
+  try {
+    el["cockpit-tickets-file-simpress"].files = [{ name: "pedidos.xlsx" }];
+    el["cockpit-tickets-file-oracle"].files = [{ name: "solicitacoes.xlsx" }];
+    enviarFormulario(api, el);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await api.exportarChamadosCockpit().catch(() => {});
+    assert.deepEqual(chamadas.at(-1), ["GET", "/api/operacoes/chamados/exportar?snapshot_id=novo&stale_days=3"],
+      "as linhas na tela ainda são da versão anterior: não manda as séries delas com a versão nova");
+    api.sincronizarGestaoChamadosCockpit(relatorio);
+    await api.exportarChamadosCockpit().catch(() => {});
+    assert.deepEqual(chamadas.at(-1), ["POST", "/api/operacoes/chamados/exportar"], "tabela recarregada: volta ao POST");
+  } finally { delete globalThis.SimpressDataPanels; delete global.document; delete global.window; }
+});
+
 test("excluir importações antigas confirma, chama DELETE e pede recarga da tabela", async () => {
   const { api, chamadas, toasts, eventos } = criarAmbiente({ respostas: { "/api/operacoes/chamados/historico/antigas": { removidas: 1 } } });
   try {

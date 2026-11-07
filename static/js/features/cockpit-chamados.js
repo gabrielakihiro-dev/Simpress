@@ -15,6 +15,8 @@
   const evolutionGate = transferUtils.createRequestGate();
   let history = [];
   let selectedVersion = "";
+  // Versão que a tabela de OS mostra (ela sempre carrega a mais recente); o Excel só sai igual à tela nessa versão.
+  let tableVersion = "";
   let evolutionKey = "";
   let bound = false;
 
@@ -108,6 +110,7 @@
     if (!byId("cockpit-tickets-version")) return;
     ligarGestao();
     history = Array.isArray(report?.historico) ? report.historico : [];
+    tableVersion = report?.snapshot_id || "";
     if (!history.some(event => event.id === selectedVersion)) selectedVersion = report?.snapshot_id || history[0]?.id || "";
     renderVersions();
     renderButtons();
@@ -161,6 +164,8 @@
       selectedVersion = "";
       evolutionKey = "";
       sincronizarGestaoChamadosCockpit(data);
+      // Até a tabela recarregar ela ainda mostra a versão anterior; o aoCarregar da tabela volta a definir tableVersion.
+      tableVersion = "";
       [simpressInput, oracleInput].forEach(input => {
         input.value = "";
         input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -212,17 +217,35 @@
       return;
     }
     const originalText = button.textContent;
-    const params = new URLSearchParams({ snapshot_id: selectedVersion, stale_days: "3" });
     const search = byId("cockpit-tickets-search").value.trim();
-    if (search) params.set("search", search);
-    if (byId("cockpit-tickets-attention").checked) params.set("attention_only", "true");
+    const attentionOnly = byId("cockpit-tickets-attention").checked;
+    // Séries que passam no filtro da tela (todas as páginas); null = tabela não carregada ou versão diferente da tela: GET antigo.
+    // Aplica antes a busca ainda na espera de 150 ms, para as séries e o rótulo "Busca" do Resumo virem do mesmo texto.
+    const panels = globalThis.SimpressDataPanels;
+    if (selectedVersion === tableVersion) panels?.filtrarTabelaOs?.({ busca: byId("cockpit-tickets-search").value });
+    const series = selectedVersion === tableVersion ? panels?.seriesFiltradasOs?.() ?? null : null;
+    let endpoint = "/api/operacoes/chamados/exportar";
+    const options = { responseType: "response", errorMessage: "Não foi possível exportar os chamados filtrados." };
+    if (Array.isArray(series)) {
+      const relation = byId("cockpit-tickets-relation")?.value || "";
+      Object.assign(options, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          snapshot_id: selectedVersion, series, search,
+          relation: relation === "todos" ? "" : relation, attention_only: attentionOnly,
+        }),
+      });
+    } else {
+      const params = new URLSearchParams({ snapshot_id: selectedVersion, stale_days: "3" });
+      if (search) params.set("search", search);
+      if (attentionOnly) params.set("attention_only", "true");
+      endpoint += `?${params.toString()}`;
+    }
     button.disabled = true;
     button.textContent = "Preparando Excel…";
     try {
-      const response = await app.apiFetch(`/api/operacoes/chamados/exportar?${params.toString()}`, {
-        responseType: "response",
-        errorMessage: "Não foi possível exportar os chamados filtrados.",
-      });
+      const response = await app.apiFetch(endpoint, options);
       const disposition = response.headers?.get("Content-Disposition") || "";
       const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
       const filename = match?.[1]?.replace(/["']/g, "") || "Acompanhamento_de_Chamados.xlsx";
