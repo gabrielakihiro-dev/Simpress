@@ -20,6 +20,12 @@ SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_chamados_historico.json"
 PROFILE_NAME = "ux_solicitante.json"
 PROFILE_FIELDS = ("nome", "email", "telefone", "ramal", "departamento_cargo")
+# Default Solicitante (pedido do usuário, 06/11/2026) when data/state/ux_solicitante.json does not exist.
+SOLICITANTE_PADRAO = {
+    "nome": "Gabriel Akihiro Noda Souza", "email": "gansouza@simpress.com.br", "telefone": "(41)98751-2389",
+    "ramal": "", "departamento_cargo": "Analista WP Junior",
+}
+EDITAVEIS = ("nome", "email", "telefone", "departamento_cargo")  # shown in the modal; ramal is not
 EXCLUDED_STEMS = ("impress", "digitaliza", "atolament", "scanner", "printer", "mfp", "licenciament", "diverg")
 # Same pattern as the check in static/js/features/ux-chamados.js (abrirChamadoUX): keep both in sync.
 PLACEHOLDER = re.compile(r"\[[^\]\n]*\]|:[ \t]*$", re.MULTILINE)
@@ -114,7 +120,7 @@ class ChamadosUX:
         try:
             perfil = json.loads(self._profile.read_text(encoding="utf-8-sig"))
         except FileNotFoundError:
-            return {}  # no local profile: the portal's own pre-filled Solicitante is used as is
+            return dict(SOLICITANTE_PADRAO)
         except (OSError, ValueError):
             raise ErroUX(503, "O perfil local do solicitante do UX está inválido. Corrija ou apague data/state/ux_solicitante.json.") from None
         try:
@@ -130,6 +136,13 @@ class ChamadosUX:
         except (OSError, ValueError):
             raise ErroUX(503, "O perfil local do solicitante do UX está incompleto. Corrija ou apague data/state/ux_solicitante.json.") from None
         return {campo: str(valor).strip() for campo, valor in dados.items()}
+
+    def _perfil_ou_padrao(self) -> dict[str, str]:
+        # A broken local profile must not block flows where the Home sends the editable fields itself.
+        try:
+            return self._solicitante()
+        except ErroUX:
+            return dict(SOLICITANTE_PADRAO)
 
     def _limpar_expiradas(self) -> None:
         agora = self._clock()
@@ -190,8 +203,10 @@ class ChamadosUX:
                 )
             self._fechar_pendentes(portal)
             ultimo_envio = self._ultimo(historico, serial, "enviado")
+            padrao = self._perfil_ou_padrao()
             return {
                 "status": "preparado", "serial": serial, "modelo": modelo, "opcoes": opcoes, "session_id": session_id,
+                "solicitante": {campo: padrao[campo] for campo in EDITAVEIS},
                 "ultimo_envio": {"os": ultimo_envio["os"], "data": ultimo_envio["data"]} if ultimo_envio else None,
             }
 
@@ -219,6 +234,7 @@ class ChamadosUX:
 
     def executar(
         self, *, session_id: str, serial: str, problema: str, descricao: str, enviar: bool, confirmado: bool,
+        solicitante: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         if enviar and not confirmado:
             raise ErroUX(422, "O envio real do chamado exige confirmação.")
@@ -232,7 +248,13 @@ class ChamadosUX:
         except ErroUX:
             self._fechar_abas()  # the session may have just expired
             raise
-        solicitante = self._solicitante()
+        # Edited in the Home modal: it overrides only the editable fields; ramal still comes from the profile/default.
+        dados = self._solicitante() if solicitante is None else self._perfil_ou_padrao()
+        if solicitante is not None:
+            dados.update({campo: solicitante[campo].strip() for campo in EDITAVEIS})
+            if any(not dados[campo] or any(ord(c) < 32 for c in dados[campo]) for campo in EDITAVEIS):
+                raise ErroUX(422, "Preencha nome, e-mail, telefone e departamento/cargo do solicitante.")
+        solicitante = dados
         with self._conectar() as portal:
             try:
                 return self._executar_no_portal(

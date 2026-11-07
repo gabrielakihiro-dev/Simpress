@@ -209,25 +209,47 @@ class UxChamadosTests(unittest.TestCase):
         self.assertEqual(self.portal.fills, [])
 
 
-    def test_without_local_profile_the_portal_solicitante_is_used_and_gaps_block_only_the_send(self):
+    def test_without_local_profile_the_default_solicitante_is_used(self):
         (self.state / "ux_solicitante.json").unlink()
+        self.assertEqual(self.preparar()["solicitante"], {
+            "nome": "Gabriel Akihiro Noda Souza", "email": "gansouza@simpress.com.br",
+            "telefone": "(41)98751-2389", "departamento_cargo": "Analista WP Junior",
+        })
         sessao = self.preparar()
-        self.portal.faltando = ["Telefone para contato"]
-        resultado = self.executar(sessao)
-        self.assertEqual((resultado["status"], resultado["faltando"]), ("preenchido", ["Telefone para contato"]))
-        self.assertEqual(self.portal.fills[-1][3], {})
-        with self.assertRaisesRegex(ux_chamados.ErroUX, "Telefone para contato"):
-            self.executar(sessao, enviar=True, confirmado=True)
-        self.assertEqual(self.portal.envios, 0)
-        self.assertFalse((self.state / "ux_chamados_historico.json").exists())
-        self.portal.faltando = []
-        self.assertEqual(self.executar(sessao, enviar=True, confirmado=True)["status"], "enviado")
+        self.assertEqual(self.executar(sessao)["status"], "preenchido")
+        self.assertEqual(self.portal.fills[-1][3], ux_chamados.SOLICITANTE_PADRAO)
+
+    def test_preparar_offers_the_profile_values_and_a_broken_profile_falls_back_to_the_default(self):
+        self.assertEqual(self.preparar()["solicitante"]["nome"], "Pessoa Fictícia")
+        (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
+        self.assertEqual(self.preparar()["solicitante"], {c: ux_chamados.SOLICITANTE_PADRAO[c] for c in ux_chamados.EDITAVEIS})
+
+    def test_edited_solicitante_overrides_the_default_for_that_request_only(self):
+        sessao = self.preparar()
+        editado = {"nome": " Outra Pessoa ", "email": "outra@example.test", "telefone": "(41)90000-0000", "departamento_cargo": "TI"}
+        self.assertEqual(self.executar(sessao, solicitante=editado)["status"], "preenchido")
+        self.assertEqual(self.portal.fills[-1][3], {**self.perfil, **editado, "nome": "Outra Pessoa"})
+        self.executar(sessao)
+        self.assertEqual(self.portal.fills[-1][3], self.perfil)
+        for vazio in ("nome", "email", "telefone", "departamento_cargo"):
+            with self.subTest(campo=vazio), self.assertRaises(ux_chamados.ErroUX) as erro:
+                self.executar(sessao, solicitante={**editado, vazio: "  "})
+            self.assertEqual(erro.exception.status, 422)
+        self.assertEqual(len(self.portal.fills), 2)
+
+    def test_invalid_profile_does_not_block_a_complete_solicitante_sent_by_the_home(self):
+        (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
+        sessao = self.preparar()
+        enviado = {"nome": "Outra Pessoa", "email": "outra@example.test", "telefone": "(41)90000-0000", "departamento_cargo": "TI"}
+        self.assertEqual(self.executar(sessao, solicitante=enviado)["status"], "preenchido")
+        self.assertEqual(self.portal.fills[-1][3], {**ux_chamados.SOLICITANTE_PADRAO, **enviado})
 
     def test_invalid_local_profile_is_refused_with_a_clear_message(self):
         (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
         sessao = self.preparar()
-        with self.assertRaisesRegex(ux_chamados.ErroUX, "inválido"):
-            self.executar(sessao)
+        with self.assertRaisesRegex(ux_chamados.ErroUX, "inválido") as erro:
+            self.executar(sessao, solicitante=None)
+        self.assertEqual(erro.exception.status, 503)
         self.assertEqual(self.portal.fills, [])
 
     def test_unexpected_failure_returns_503_and_logs_only_the_class_name(self):
@@ -265,3 +287,9 @@ class UxChamadosTests(unittest.TestCase):
         self.assertEqual(self.portal.envios, 0)
         self.assertEqual(rotas["enviar"](EnviarPayload(**dados))["status"], "preenchido")
         self.assertEqual(self.portal.envios, 0)
+        solicitante = {"nome": "Outra Pessoa", "email": "outra@example.test", "telefone": "(41)90000-0000", "departamento_cargo": "TI"}
+        self.assertEqual(rotas["enviar"](EnviarPayload(**dados, solicitante=solicitante))["status"], "preenchido")
+        self.assertEqual(self.portal.fills[-1][3]["nome"], "Outra Pessoa")
+        for invalido in ({**solicitante, "email": "sem-arroba"}, {**solicitante, "nome": " "}, {**solicitante, "extra": "x"}, {**solicitante, "nome": "Ana\nBia"}):
+            with self.assertRaises(ValidationError):
+                EnviarPayload(**dados, solicitante=invalido)

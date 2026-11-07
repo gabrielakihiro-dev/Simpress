@@ -1281,6 +1281,17 @@ Horário disponível para atendimento:</textarea>
       <p>Série: <strong id="ux-chamado-serie"></strong> · Modelo: <strong id="ux-chamado-modelo"></strong></p>
       <label for="ux-chamado-problema">Problema</label>
       <select id="ux-chamado-problema" class="ck-input" data-on-change="atualizarProblemaChamadoUX" disabled></select>
+      <fieldset id="ux-chamado-solicitante" class="ux-chamado-solicitante" disabled>
+        <legend class="font-bold">Solicitante</legend>
+        <label for="ux-solicitante-nome">Nome</label>
+        <input type="text" id="ux-solicitante-nome" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-email">E-mail</label>
+        <input type="email" id="ux-solicitante-email" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-telefone">Telefone</label>
+        <input type="tel" id="ux-solicitante-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-cargo">Departamento/Cargo</label>
+        <input type="text" id="ux-solicitante-cargo" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+      </fieldset>
       <p class="font-bold">Descrição</p>
       <div id="ux-chamado-descricao"></div>
       <p id="ux-chamado-status" role="status"></p>

@@ -1,5 +1,10 @@
 const { test, expect } = require("@playwright/test");
 
+const SOLICITANTE = {
+  nome: "Gabriel Akihiro Noda Souza", email: "gansouza@simpress.com.br",
+  telefone: "(41)98751-2389", departamento_cargo: "Analista WP Junior",
+};
+
 test("Home prepares a UX ticket and separates the dry run from the final action", async ({ page }) => {
   const requests = [];
   await page.route("**/api/ux/abrir-chamado/**", async route => {
@@ -7,7 +12,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
     const body = route.request().postDataJSON();
     requests.push({ path, body });
     await route.fulfill({ json: path.endsWith("/preparar")
-      ? { status: "preparado", serial: "LENTO", modelo: "Notebook de teste", session_id: "fixture", opcoes: ["Notebook - Teclado"] }
+      ? { status: "preparado", serial: "LENTO", modelo: "Notebook de teste", session_id: "fixture", opcoes: ["Notebook - Teclado"], solicitante: SOLICITANTE }
       : body.enviar ? { status: "enviado", os: "98765" } : { status: "preenchido" } });
   });
   await page.goto("/");
@@ -19,6 +24,11 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await page.getByRole("button", { name: "Abrir chamado no UX" }).click();
   const modal = page.getByRole("dialog", { name: "Abrir chamado no UX" });
   await expect(modal.getByText("Notebook de teste")).toBeVisible();
+  await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
+  await expect(modal.getByLabel("E-mail")).toHaveValue(SOLICITANTE.email);
+  await expect(modal.getByLabel("Telefone")).toHaveValue(SOLICITANTE.telefone);
+  await expect(modal.getByLabel("Departamento/Cargo")).toHaveValue(SOLICITANTE.departamento_cargo);
+  await modal.getByLabel("Telefone").fill("(41)90000-0000");
   await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhuma solicitação foi enviada");
@@ -30,7 +40,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await expect(modal.getByRole("status")).toContainText("OS #98765");
   expect(requests.filter(({ body }) => body.enviar === true).map(({ body }) => body)).toEqual([{
     session_id: "fixture", serial: "LENTO", problema: "Notebook - Teclado", descricao: "O teclado do notebook não funciona.",
-    enviar: true, confirmado: true,
+    solicitante: { ...SOLICITANTE, telefone: "(41) 90000-0000" }, enviar: true, confirmado: true,
   }]);
 });
 

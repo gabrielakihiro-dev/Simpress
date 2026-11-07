@@ -367,6 +367,8 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-chamado__info strong { font: var(--peso-regular) var(--fs-sm) var(--fonte-mono); color: var(--cor-texto); }
 .ck-chamado__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
 #ux-chamado-descricao { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ux-chamado-solicitante { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+@media (min-width: 640px) { .ux-chamado-solicitante { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; } .ux-chamado-solicitante legend { grid-column: 1 / -1; } }
 .ck-chamado__texto { padding: 12px 14px 14px; font-size: var(--fs-md); line-height: 1.7; color: var(--cor-texto-forte); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ck-var { padding: 1px 5px; border-radius: 3px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-var--vazia { background: transparent; border: 1px dashed var(--cor-alerta-texto); color: var(--cor-alerta-texto); }
