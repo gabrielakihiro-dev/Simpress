@@ -276,22 +276,21 @@ class CoberturaMovimentacaoTests(unittest.TestCase):
         restaurada = estado["reservas"][reserva["id"]]
         self.assertEqual((restaurada["estado"], restaurada["valida_ate"]), ("ativa", reserva["valida_ate"]))
 
-    def test_cancelar_gerada_e_coletada_restaura_reserva_e_libera_serie(self):
-        for parada in ("gerada", "coletada"):
-            with self.subTest(parada=parada):
-                estado, demanda, reserva, mov = self.preparar()
-                estado["movimentacoes"][mov["id"]].update({"estado": "gerada", "historico_id": "h1"})
-                if parada == "coletada":
-                    estado, _ = aplicar(estado, cov.mudar_estado_movimentacao, mov["id"], estado["movimentacoes"][mov["id"]]["rev"], "coletada")
-                rev = estado["movimentacoes"][mov["id"]]["rev"]
-                estado, cancelada = aplicar(estado, cov.mudar_estado_movimentacao, mov["id"], rev, "cancelada")
-                self.assertEqual((cancelada["estado"], cancelada["fechado_em"], cancelada["rev"]), ("cancelada", HOJE.isoformat(), rev + 1))
-                self.assertEqual(cancelada["historico_id"], "h1")  # rastro da planilha que continua no histórico
-                restaurada = estado["reservas"][reserva["id"]]
-                self.assertEqual((restaurada["estado"], restaurada["valida_ate"], restaurada["movimentacao_id"]), ("ativa", reserva["valida_ate"], None))
-                self.assertEqual(cov.motivo_bloqueio(estado, "SINT-001", HOJE, Manutencao(), ignorar_reserva=reserva["id"]), None)
-                self.assertIsNone(cov.build_coverage(estado, HOJE)["vagas"][0]["movimentacao_id"])
-                self.assertEqual(estado["demandas"][demanda["id"]]["estado"], "aberta")
+    def test_cancelar_coletada_restaura_reserva_e_libera_serie(self):
+        # O caminho real até "gerada" e o cancelamento por HTTP (gerada e coletada) ficam em test_coverage_transporte;
+        # gerada e coletada passam pelo mesmo ramo do domínio, então as asserções de estado abaixo valem para as duas.
+        estado, demanda, reserva, mov = self.preparar()
+        estado["movimentacoes"][mov["id"]].update({"estado": "gerada", "historico_id": "h1"})
+        estado, _ = aplicar(estado, cov.mudar_estado_movimentacao, mov["id"], estado["movimentacoes"][mov["id"]]["rev"], "coletada")
+        rev = estado["movimentacoes"][mov["id"]]["rev"]
+        estado, cancelada = aplicar(estado, cov.mudar_estado_movimentacao, mov["id"], rev, "cancelada")
+        self.assertEqual((cancelada["estado"], cancelada["fechado_em"], cancelada["rev"]), ("cancelada", HOJE.isoformat(), rev + 1))
+        self.assertEqual(cancelada["historico_id"], "h1")  # rastro da planilha que continua no histórico
+        restaurada = estado["reservas"][reserva["id"]]
+        self.assertEqual((restaurada["estado"], restaurada["valida_ate"], restaurada["movimentacao_id"]), ("ativa", reserva["valida_ate"], None))
+        self.assertEqual(cov.motivo_bloqueio(estado, "SINT-001", HOJE, Manutencao(), ignorar_reserva=reserva["id"]), None)
+        self.assertIsNone(cov.build_coverage(estado, HOJE)["vagas"][0]["movimentacao_id"])
+        self.assertEqual(estado["demandas"][demanda["id"]]["estado"], "aberta")
 
     def test_cancelar_gerada_com_reserva_vencida_fica_em_revisao(self):
         estado, _, reserva, mov = self.preparar()

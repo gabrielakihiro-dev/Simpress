@@ -221,34 +221,37 @@ class CoverageTransporteTests(unittest.TestCase):
         self.post(f"/api/cobertura/movimentacoes/{mov['id']}/estado", {"estado": "cancelada", "rev": mov["rev"]})
         self.assertEqual(self.leitura()["casos"]["reservas"][reserva["id"]]["estado"], "ativa")
 
-    def test_cancelar_gerada_e_coletada_devolve_reserva_e_mantem_a_planilha_no_historico(self):
-        for parada in ("gerada", "coletada"):
-            with self.subTest(parada=parada):
-                self.setUp()
-                reserva, mov = self.preparar()
-                gerada = self.registrar(mov)
-                mov = gerada["movimentacao"]
-                rota = f"/api/cobertura/movimentacoes/{mov['id']}/estado"
-                if parada == "coletada":
-                    mov = self.post(rota, {"estado": "coletada", "rev": mov["rev"]})
-                cancelada = self.post(rota, {"estado": "cancelada", "rev": mov["rev"]})
-                self.assertEqual(cancelada["estado"], "cancelada")
-                leitura = self.leitura()
-                restaurada = leitura["casos"]["reservas"][reserva["id"]]
-                self.assertEqual((restaurada["estado"], restaurada["valida_ate"]), ("ativa", reserva["valida_ate"]))
-                self.assertIsNone(leitura["vagas"][0]["movimentacao_id"])
-                # A planilha gerada não é apagada nem reaparece como candidata de outra movimentação.
-                historico = self.historico()
-                self.assertEqual([(r["id"], r["movimentacao_id"]) for r in historico], [(gerada["historico_id"], mov["id"])])
-                self.assertNotIn("candidatos_historico", leitura["casos"]["movimentacoes"][mov["id"]])
-                # Nova tentativa do vínculo depois do cancelamento (resposta perdida): repetido, sem cópia no histórico.
-                self.assertEqual(self.registrar(mov)["repetido"], True)
-                self.assertEqual(len(self.historico()), 1)
-                # A série volta a ser livre: nova movimentação sobre a mesma reserva.
-                nova = self.post("/api/cobertura/movimentacoes", {"reserva_id": reserva["id"], "rev": restaurada["rev"], "tipo": "transporte"})
-                self.assertNotEqual(nova["chave"], mov["chave"])
-                self.assertEqual(self.registrar(nova)["repetido"], False)
-                self.assertEqual(len(self.historico()), 2)
+    def cancelar_apos(self, parada):
+        reserva, mov = self.preparar()
+        gerada = self.registrar(mov)
+        mov = gerada["movimentacao"]
+        rota = f"/api/cobertura/movimentacoes/{mov['id']}/estado"
+        if parada == "coletada":
+            mov = self.post(rota, {"estado": "coletada", "rev": mov["rev"]})
+        cancelada = self.post(rota, {"estado": "cancelada", "rev": mov["rev"]})
+        self.assertEqual(cancelada["estado"], "cancelada")
+        leitura = self.leitura()
+        restaurada = leitura["casos"]["reservas"][reserva["id"]]
+        self.assertEqual((restaurada["estado"], restaurada["valida_ate"]), ("ativa", reserva["valida_ate"]))
+        self.assertIsNone(leitura["vagas"][0]["movimentacao_id"])
+        # A planilha gerada não é apagada nem reaparece como candidata de outra movimentação.
+        historico = self.historico()
+        self.assertEqual([(r["id"], r["movimentacao_id"]) for r in historico], [(gerada["historico_id"], mov["id"])])
+        self.assertNotIn("candidatos_historico", leitura["casos"]["movimentacoes"][mov["id"]])
+        # Nova tentativa do vínculo depois do cancelamento (resposta perdida): repetido, sem cópia no histórico.
+        self.assertEqual(self.registrar(mov)["repetido"], True)
+        self.assertEqual(len(self.historico()), 1)
+        # A série volta a ser livre: nova movimentação sobre a mesma reserva.
+        nova = self.post("/api/cobertura/movimentacoes", {"reserva_id": reserva["id"], "rev": restaurada["rev"], "tipo": "transporte"})
+        self.assertNotEqual(nova["chave"], mov["chave"])
+        self.assertEqual(self.registrar(nova)["repetido"], False)
+        self.assertEqual(len(self.historico()), 2)
+
+    def test_cancelar_gerada_devolve_reserva_e_mantem_a_planilha_no_historico(self):
+        self.cancelar_apos("gerada")
+
+    def test_cancelar_coletada_devolve_reserva_e_mantem_a_planilha_no_historico(self):
+        self.cancelar_apos("coletada")
 
     def test_cancelar_em_transito_recusa_com_409(self):
         _, mov = self.preparar()
