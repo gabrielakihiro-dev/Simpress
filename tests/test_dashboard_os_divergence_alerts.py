@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 
 from domains.history_insights import PINNED_BASELINE_ID
 from domains.inventory_comparison import comparison_history_for_display
-from routers.dashboard import DashboardServices, create_dashboard_router, new_divergences_status, stale_tickets_status
+from routers.dashboard import (
+    DashboardServices,
+    create_dashboard_router,
+    long_unused_status,
+    new_divergences_status,
+    stale_tickets_status,
+)
 
 TZ = timezone(timedelta(hours=-3))
 NOW = datetime(2026, 10, 19, 12, 0, tzinfo=TZ)
@@ -128,6 +134,68 @@ class NewDivergencesStatusTests(unittest.TestCase):
         self.assertEqual(history, snapshot)
 
 
+def idle(serial, days):
+    return {"serie": serial, "computador": f"PC-{serial}", "dias_sem_verificacao": days}
+
+
+class LongUnusedStatusTests(unittest.TestCase):
+    def test_flags_near_limit_above_55_and_past_limit_from_60(self):
+        history = [update("a", NOW, sem_acesso_7_dias=[idle("A", 54), idle("B", 55), idle("F", 56), idle("C", 59), idle("D", 60), idle("E", 80)])]
+        result = long_unused_status(history)
+        self.assertEqual(result["estado"], "passou_60")
+        self.assertEqual((result["total_limite"], result["total_passou"], result["total_saiu_endpoint"]), (2, 2, 0))  # 55 is not "above 55"
+        self.assertEqual(result["maior_dias"], 80)
+        self.assertEqual(result["horario"], NOW.isoformat())
+        self.assertEqual(
+            [(item["serie"], item["dias"], item["situacao"]) for item in result["equipamentos"]],
+            [("E", 80, "passou"), ("D", 60, "passou"), ("C", 59, "limite"), ("F", 56, "limite")],
+        )
+        self.assertEqual(result["equipamentos"][0]["computador"], "PC-E")
+
+    def test_only_near_limit_is_a_warning(self):
+        result = long_unused_status([update("a", NOW, sem_acesso_7_dias=[idle("A", 56), idle("B", 10)])])
+        self.assertEqual((result["estado"], result["total_limite"], result["total_passou"]), ("limite_55", 1, 0))
+
+    def test_recent_rows_are_up_to_date_and_no_update_has_no_data(self):
+        self.assertEqual(long_unused_status([update("a", NOW, sem_acesso_7_dias=[idle("A", 9)])])["estado"], "em_dia")
+        self.assertEqual(long_unused_status([])["estado"], "sem_dados")
+        self.assertEqual(long_unused_status([{"id": "x", "horario": NOW.isoformat()}])["estado"], "sem_dados")
+
+    def test_notebook_that_moved_to_endpoint_absences_counts_as_past_the_limit(self):
+        previous = update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("SABC", 54), idle("OTHER", 20)])
+        current = update("b", NOW, sem_acesso_7_dias=[], ausentes_no_endpoint=[{"serie": "ABC"}, {"serie": "OTHER"}])
+        result = long_unused_status([previous, current])
+        # 54 days plus the 7 days between updates reached 60; OTHER (20 + 7) did not.
+        self.assertEqual((result["estado"], result["total_passou"], result["total_saiu_endpoint"]), ("passou_60", 1, 1))
+        self.assertEqual(
+            result["equipamentos"],
+            [{"serie": "SABC", "computador": "PC-SABC", "dias": 61, "situacao": "saiu_endpoint"}],
+        )
+
+    def test_move_is_ignored_when_the_row_is_still_listed_or_belongs_to_sebrae(self):
+        previous = update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("BRJ135P5XS", 58), idle("KEEP", 58)])
+        current = update(
+            "b", NOW, sem_acesso_7_dias=[idle("KEEP", 65)],
+            ausentes_no_endpoint=[{"serie": "BRJ135P5XS"}, {"serie": "KEEP"}],
+        )
+        result = long_unused_status([previous, current])
+        self.assertEqual((result["total_passou"], result["total_saiu_endpoint"]), (1, 0))
+
+    def test_restorations_and_the_pinned_baseline_are_ignored(self):
+        history = [
+            update("a", NOW - timedelta(days=1), sem_acesso_7_dias=[idle("A", 70)]),
+            {**update("r", NOW, sem_acesso_7_dias=[]), "tipo": "restauracao"},
+            update(PINNED_BASELINE_ID, NOW, sem_acesso_7_dias=[]),
+        ]
+        self.assertEqual(long_unused_status(history)["total_passou"], 1)
+
+    def test_does_not_mutate_the_history(self):
+        history = [update("a", NOW, sem_acesso_7_dias=[idle("A", 70)], ausentes_no_endpoint=[{"serie": "A"}])]
+        snapshot = copy.deepcopy(history)
+        long_unused_status(history)
+        self.assertEqual(history, snapshot)
+
+
 class PanelAlertsTests(unittest.TestCase):
     def client(self, **options):
         router, _ = create_dashboard_router(DashboardServices(
@@ -140,8 +208,8 @@ class PanelAlertsTests(unittest.TestCase):
 
     def test_panel_reports_both_alerts(self):
         history = [
-            update("a", NOW - timedelta(days=7)),
-            update("b", NOW, series_sem_mapeamento=[{"serie": "S1"}]),
+            update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("N1", 54)]),
+            update("b", NOW, series_sem_mapeamento=[{"serie": "S1"}], sem_acesso_7_dias=[idle("N1", 61)]),
         ]
         report = {"chamados": [ticket("A", oracle("Aberto", days_ago(9)))]}
         data = self.client(
@@ -151,6 +219,7 @@ class PanelAlertsTests(unittest.TestCase):
         ).get("/api/painel").json()
         self.assertEqual((data["os_paradas"]["estado"], data["os_paradas"]["total"]), ("paradas", 1))
         self.assertEqual((data["divergencias_novas"]["estado"], data["divergencias_novas"]["total"]), ("novas", 1))
+        self.assertEqual((data["sem_acesso_60_dias"]["estado"], data["sem_acesso_60_dias"]["total_passou"]), ("passou_60", 1))
 
     def test_unreadable_sources_keep_the_panel(self):
         def broken():
@@ -162,11 +231,14 @@ class PanelAlertsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["os_paradas"]["estado"], "indisponivel")
         self.assertEqual(response.json()["divergencias_novas"]["estado"], "indisponivel")
+        self.assertEqual(response.json()["sem_acesso_60_dias"]["estado"], "indisponivel")
+        self.assertEqual(response.json()["sem_acesso_60_dias"]["equipamentos"], [])
 
     def test_panel_without_services_returns_null(self):
         data = self.client().get("/api/painel").json()
         self.assertIsNone(data["os_paradas"])
         self.assertIsNone(data["divergencias_novas"])
+        self.assertIsNone(data["sem_acesso_60_dias"])
 
 
 if __name__ == "__main__":

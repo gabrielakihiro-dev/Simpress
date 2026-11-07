@@ -297,6 +297,8 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-aviso__topo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .ck-aviso__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
 .ck-aviso__texto { font-size: var(--fs-md); color: var(--cor-texto-suave); line-height: 1.45; }
+.ck-aviso__lista { grid-column: 2; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--cor-texto-suave); }
+.ck-aviso__lista li { overflow-wrap: anywhere; }
 .ck-aviso__acao { grid-column: 2; justify-self: start; margin-top: 6px; }
 .ck-sino__rodape { padding: 8px 14px 10px; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 @media (max-width: 767.98px) {

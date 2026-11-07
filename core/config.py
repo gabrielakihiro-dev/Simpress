@@ -54,6 +54,10 @@ HISTORY_RETENTION_DAYS = 60
 STALE_BASE_ALERT_DAYS = 7
 # Home alert: open tickets without an Oracle update for this many days (docs/operacao/alertas-os-divergencias.md).
 STALE_TICKET_ALERT_DAYS = 7
+# Notification alert: notebooks/MacBooks without Endpoint access; after the limit the Endpoint drops the row
+# (docs/operacao/alertas-os-divergencias.md, section "Sem acesso há 60 dias").
+LONG_UNUSED_WARNING_DAYS = 55
+LONG_UNUSED_LIMIT_DAYS = 60
 MAX_XLSX_ARCHIVE_ENTRIES = 10000
 MAX_XLSX_UNCOMPRESSED_BYTES = 192 * 1024 * 1024
 # Technical safeguards for the read-only inventory parser, not business row limits.
