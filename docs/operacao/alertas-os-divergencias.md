@@ -1,6 +1,6 @@
-# Central de notificações: "OS paradas" e "Divergências novas"
+# Central de notificações: "OS paradas", "Divergências novas" e "Sem acesso há 60 dias"
 
-Exibe dois alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos dois grava nada: os históricos de OS e de planilhas são apenas lidos.
+Exibe três alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos três grava nada: os históricos de OS e de planilhas são apenas lidos.
 
 ## 1. OS paradas
 
@@ -93,10 +93,62 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 }
 ```
 
+## 3. Sem acesso há 60 dias
+
+### Objetivo
+
+Avisar, em dois níveis, quando um notebook/MacBook está perto de sumir do Endpoint por falta de acesso. Com 60 dias sem uso ele deixa a lista `Sem acesso há 7 dias ou mais` e passa a um campo que some dentro do Endpoint (`Ausentes no Endpoint`); o aviso evita que isso aconteça sem ninguém perceber (pedido do usuário, 07/11/2026).
+
+### Dados
+
+- Fonte: a atualização mais recente do Histórico de Planilhas (ignorando restaurações e a linha de base fixada), seção `sem_acesso_7_dias` (`dias_sem_verificacao`) e `ausentes_no_endpoint`. Séries do Sebrae ficam de fora, também no histórico antigo.
+- **Limite** (`LONG_UNUSED_WARNING_DAYS = 55` em `core/config.py`): mais de 55 dias e menos de 60 sem acesso. **Passou** (`LONG_UNUSED_LIMIT_DAYS = 60`): 60 dias ou mais.
+- **Saiu para Ausentes no Endpoint**: a série estava em `sem_acesso_7_dias` na atualização anterior, não está mais nela e aparece em `ausentes_no_endpoint` na atual; conta como passou quando os dias da atualização anterior mais os dias entre as duas atualizações chegam a 60. A série do MacBook no Endpoint (sem `S` inicial) equivale à de `EquipamentosDetalhes` com `S`, só na comparação.
+- Só leitura: nada é regravado. O filtro por categoria (notebook/MacBook) não é aplicado; vale para toda série que aparece nessas listas.
+
+### Quando aparece e quando some
+
+- Aparece com pelo menos um equipamento no limite ou que passou. Some quando não há nenhum, quando não há atualização no histórico ou quando o histórico não pode ser lido.
+- O aviso de "saiu da lista" dura até a próxima comparação, porque depois dela a série já consta só em `Ausentes no Endpoint`.
+- Estado `passou_60` tem prioridade (selo `Urgente`); `limite_55` mostra o selo `Atenção`.
+
+### Texto
+
+| Estado | Título | Texto | Botão |
+| --- | --- | --- | --- |
+| `passou_60` | Passou de 60 dias sem acesso | 2 notebooks/MacBooks passaram de 60 dias sem acesso. 1 já saiu da lista e foi para Ausentes no Endpoint. 1 notebook/MacBook está no limite, com mais de 55 dias sem acesso. | Ver Resumo |
+| `limite_55` | Perto de 60 dias sem acesso | 2 notebooks/MacBooks estão no limite, com mais de 55 dias sem acesso. | Ver Resumo |
+
+Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn-alerta-sem-acesso-60` abre o Resumo (`abrirPainelCockpit` com `["comparacao"]`). Título padrão do cartão oculto: `Notebooks sem acesso`.
+
+### Contrato da API
+
+`GET /api/painel` ganha `sem_acesso_60_dias`, ou `null` quando o serviço não está configurado:
+
+```json
+{
+  "estado": "passou_60 | limite_55 | em_dia | sem_dados | indisponivel",
+  "limite_aviso_dias": 55,
+  "limite_dias": 60,
+  "total_limite": 1,
+  "total_passou": 2,
+  "total_saiu_endpoint": 1,
+  "maior_dias": 72,
+  "horario": "2026-10-18T09:00:00-03:00",
+  "equipamentos": [
+    {"serie": "BRJ111AAAA", "computador": "PRNOTE001", "dias": 72, "situacao": "passou"},
+    {"serie": "BRJ222BBBB", "computador": "PRNOTE002", "dias": 61, "situacao": "saiu_endpoint"},
+    {"serie": "BRJ333CCCC", "computador": "PRNOTE003", "dias": 57, "situacao": "limite"}
+  ]
+}
+```
+
+`equipamentos` lista os notebooks/MacBooks do alerta, do mais antigo para o mais recente (`situacao`: `limite`, `passou` ou `saiu_endpoint`). Em `saiu_endpoint`, `dias` é estimado: dias da atualização anterior mais os dias entre as duas atualizações. O cartão mostra até 5 linhas (`série · hostname — N dias`, com `~` na estimativa) e "e mais N" para o resto.
+
 ## Interface
 
-- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 2 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
-- Os cartões `#alerta-os-paradas` e `#alerta-divergencias-novas` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 3 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas` e `#alerta-divergencias-novas` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
 - Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
@@ -106,7 +158,8 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 3. Com linhas novas entre as duas atualizações mais recentes, o painel mostra "Divergências novas" com o total, as datas e as seções; restaurações e a linha de base fixada são ignoradas.
 4. Séries do Sebrae e PRNOTE* em Curitiba nunca contam como divergência nova.
 5. Com menos de duas atualizações, sem linhas novas ou com histórico ilegível, o cartão de divergências fica oculto.
-6. Os botões abrem a aba OS e a aba Comparação; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
+6. Os botões abrem a aba OS e a aba Comparação (Resumo); o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
 7. Os avisos não aparecem no Home; "Base desatualizada" permanece no Home.
 8. Nenhum histórico é regravado e o contador mostra a quantidade de avisos ativos, não a quantidade de chamados ou linhas divergentes.
 9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.
+10. Com equipamento com mais de 55 dias (e menos de 60) sem acesso, o sino mostra "Perto de 60 dias sem acesso"; com 60 dias ou mais, ou depois de sair para Ausentes no Endpoint, mostra "Passou de 60 dias sem acesso"; com tudo em dia, sem atualização ou histórico ilegível, o cartão fica oculto.

@@ -774,8 +774,12 @@
     function renderizarNotificacoes(data) {
       const osParadas = data?.os_paradas;
       const divergenciasNovas = data?.divergencias_novas;
+      const semAcesso60 = data?.sem_acesso_60_dias;
+      const semAcesso60Ativo = (semAcesso60?.estado === "passou_60" && Number(semAcesso60.total_passou) > 0)
+        || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
-        + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0);
+        + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
+        + Number(semAcesso60Ativo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";
