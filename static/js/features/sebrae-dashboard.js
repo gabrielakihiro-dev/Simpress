@@ -824,6 +824,15 @@
       return selo;
     }
 
+    /** Selo `OS`: só aparece quando o chamado tem OS vinculada (E gravado ou sugerido); o número vai no `title`. */
+    function seloOs(os) {
+      if (!os || os === "—") return null;
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-selo-os", "OS");
+      selo.dataset.status = "ok";
+      selo.title = `OS ${os}`;
+      return selo;
+    }
+
     /** Selos automáticos do resumo: ficam escondidos e o CSS mostra o que vale agora (D FINALIZADO, pronto, andamento, atenção, erro). */
     function selosAutomaticos() {
       return [
@@ -889,7 +898,7 @@
       if (dados.solicitante) texto.appendChild(dom.createTextElement("span", "sebrae-antigo__quem", dados.solicitante));
       const selos = document.createElement("span");
       selos.className = "sebrae-antigo__selos";
-      selos.append(...[seloDestaque(item.numero), seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
+      selos.append(...[seloDestaque(item.numero), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
       const resumo = document.createElement("summary");
       resumo.className = "sebrae-antigo__resumo";
       resumo.append(texto, selos);
@@ -901,6 +910,8 @@
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.linha.G || "Sem título"));
       const artigo = cartaoChamado(item.numero, "novo", titulo, "Novo", "info");
+      const selo = seloOs(item.linha.E);
+      if (selo) artigo.querySelector(".sebrae-chamado__cab").appendChild(selo);
       const fatos = listaFatos(CAMPOS_AUTOMATICOS.flatMap(([letra, rotulo]) => {
         const par = [rotulo, item.linha[letra] || "—"];
         return letra === "K" ? [par, ["Apelido", item.apelido || "—"]] : [par]; // Apelido: só exibição, vem da base

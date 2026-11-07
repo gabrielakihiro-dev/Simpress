@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainValidationError
@@ -121,7 +121,7 @@ def ler_observacoes(state_dir: Path) -> Dict[str, Dict[str, Any]]:
     return {numero: _normalizar(item) for numero, item in _carregar(state_dir).items() if numero_observacao_valido(numero)}
 
 
-def _gravar(state_dir: Path, chave: str, alterar) -> Dict[str, Any]:
+def _gravar(state_dir: Path, chave: str, alterar: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
     """Aplica ``alterar(entrada)`` sob lock e grava; a entrada some só sem texto e sem destaque.
 
     Entradas com chave inválida são devolvidas ao arquivo como estavam."""
