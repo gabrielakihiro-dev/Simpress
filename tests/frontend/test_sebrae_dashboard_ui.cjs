@@ -565,6 +565,17 @@ test("a lista carregada solta o aria-busy e o antigo vira details recolhido com 
   assert.equal(comUtic.querySelector(".sebrae-chamado__selo").textContent, "Em aberto");
 });
 
+test("selo OS aparece no resumo do antigo só quando há OS vinculada (E gravado ou sugerido)", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.importado.abertos[0].automaticos = { E: "7281145" };
+  const { el } = await renderizarCartoes(carga);
+  const [comOs, semOs] = el["sebrae-antigos-lista"].querySelectorAll("details.sebrae-antigo");
+  const selos = item => item.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo-os");
+  assert.deepEqual(selos(comOs).map(no => no.textContent), ["OS"]);
+  assert.equal(selos(comOs)[0].title, "OS 7281145");
+  assert.equal(selos(semOs).length, 0);
+});
+
 test("o finalizado é só leitura, com a zona Concluída e sem pendências", async () => {
   const { el } = await renderizarCartoes();
   const cartao = el["sebrae-finalizados-lista"].querySelector("article.sebrae-chamado--finalizado");
