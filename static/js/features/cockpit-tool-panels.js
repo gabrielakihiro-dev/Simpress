@@ -419,7 +419,15 @@
     byId("cockpit-tickets-triage").querySelector(`[data-triagem="${ticketTriage}"]`)?.focus();
   }
 
+  // Busca: espera 150 ms sem digitar antes de filtrar (a contagem com aria-live não é anunciada a cada letra).
+  let ticketSearchTimer = 0;
+  function filterTicketTableSoon() {
+    clearTimeout(ticketSearchTimer);
+    ticketSearchTimer = setTimeout(filterTicketTable, 150);
+  }
+
   function clearTicketFilters() {
+    clearTimeout(ticketSearchTimer);
     byId("cockpit-tickets-search").value = "";
     byId("cockpit-tickets-relation").value = "todos";
     byId("cockpit-tickets-attention").checked = false;
@@ -1369,7 +1377,7 @@
     if (eventsBound || typeof document === "undefined") return;
     const root = byId("cockpit-tool-panels");
     if (!root) return;
-    byId("cockpit-tickets-search").addEventListener("input", filterTicketTable);
+    byId("cockpit-tickets-search").addEventListener("input", filterTicketTableSoon);
     byId("cockpit-tickets-relation").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-attention").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-clear").addEventListener("click", clearTicketFilters);
@@ -1537,9 +1545,11 @@
       await new Promise(resolve => setTimeout(resolve, 100));
       row = findRow();
     }
-    if (row?.hidden) {
+    // Escondida só pela página ("Carregar mais"): amplia a página; escondida pelo filtro: limpa os filtros e amplia.
+    if (row?.hidden && !dataPanels()?.revelarLinhaOs?.(row)) {
       clearTicketFilters();
       row = findRow();
+      if (row?.hidden) dataPanels()?.revelarLinhaOs?.(row);
     }
     if (!row) return;
     const toggle = [...host.querySelectorAll(".ck-os__andamento-btn")].find(button => button.dataset.serie === row.dataset.serial);
