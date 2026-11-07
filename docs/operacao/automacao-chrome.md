@@ -31,6 +31,10 @@ antes de preencher ou enviar. A automação preenche só o problema, a descriç�
 campos de Solicitante, preservando anexos e dias de indisponibilidade. O perfil local
 `data/state/ux_solicitante.json` contém `nome`, `email`, `telefone`, `ramal`
 (vazio quando não houver) e `departamento_cargo`.
+O perfil é opcional. Sem o arquivo, a automação não toca no Solicitante: usa o que o portal já trouxe
+(ou o que você digitou no Chrome de automação). A simulação funciona e informa em `faltando` os
+campos obrigatórios ainda vazios (telefone e cargo costumam vir vazios); o envio real é recusado
+(409) enquanto faltar algum. Arquivo inválido ou incompleto responde 503 com mensagem clara.
 
 A simulação para no formulário. O clique real, autorizado no cartão, ocorre uma só vez.
 A automação aguarda a OS uma só vez; resultado incerto exige conferência manual
