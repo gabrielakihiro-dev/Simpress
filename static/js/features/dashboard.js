@@ -503,12 +503,79 @@
     mostrarAlertaPainel(card, state, textoDivergenciasNovas(info));
   }
 
+  function textoSemAcesso60(info) {
+    const limit = Number(info.limite_dias);
+    const warning = Number(info.limite_aviso_dias);
+    const passed = Number(info.total_passou) || 0;
+    const nearLimit = Number(info.total_limite) || 0;
+    const left = Number(info.total_saiu_endpoint) || 0;
+    const parts = [];
+    if (passed > 0) {
+      const subject = passed === 1 ? "1 notebook/MacBook passou" : `${passed} notebooks/MacBooks passaram`;
+      const leftNote = left > 0
+        ? ` ${left === 1 ? "1 já saiu" : `${left} já saíram`} da lista e ${left === 1 ? "foi" : "foram"} para Ausentes no Endpoint.`
+        : "";
+      parts.push(`${subject} de ${limit} ${pluralize(limit, "dia")} sem acesso.${leftNote}`);
+    }
+    if (nearLimit > 0) {
+      const subject = nearLimit === 1 ? "1 notebook/MacBook está" : `${nearLimit} notebooks/MacBooks estão`;
+      parts.push(`${subject} no limite, com mais de ${warning} ${pluralize(warning, "dia")} sem acesso.`);
+    }
+    return parts.join(" ");
+  }
+
+  const MAX_SEM_ACESSO_60_LISTADOS = 5;
+
+  function linhaSemAcesso60(item) {
+    const name = [item.serie, item.computador].filter(Boolean).join(" · ") || "Sem identificação";
+    const days = Number(item.dias);
+    const age = Number.isFinite(days) ? `${item.situacao === "saiu_endpoint" ? "~" : ""}${days} ${pluralize(days, "dia")}` : "";
+    const note = item.situacao === "saiu_endpoint" ? " (saiu para Ausentes no Endpoint)" : "";
+    return `${name}${age ? ` — ${age}` : ""}${note}`;
+  }
+
+  function renderizarListaSemAcesso60(info) {
+    const list = document.getElementById("alerta-sem-acesso-60-lista");
+    if (!list) return;
+    const items = (Array.isArray(info.equipamentos) ? info.equipamentos : []).filter(item => item && typeof item === "object");
+    const lines = items.slice(0, MAX_SEM_ACESSO_60_LISTADOS).map(linhaSemAcesso60);
+    if (items.length > lines.length) lines.push(`e mais ${items.length - lines.length}`);
+    list.replaceChildren(...lines.map(line => {
+      const li = document.createElement("li");
+      li.textContent = line;
+      return li;
+    }));
+    list.hidden = lines.length === 0;
+  }
+
+  function renderizarAlertaSemAcesso60(info) {
+    const card = document.getElementById("alerta-sem-acesso-60");
+    if (!card) return;
+    const state = info && typeof info === "object" ? info.estado : null;
+    if (state !== "passou_60" && state !== "limite_55") {
+      ocultarAlertaPainel(card, state);
+      return;
+    }
+    const passed = state === "passou_60";
+    card.dataset.gravidade = passed ? "urgente" : "atencao";
+    const badge = document.getElementById("alerta-sem-acesso-60-selo");
+    if (badge) {
+      badge.dataset.status = passed ? "erro" : "alerta";
+      badge.textContent = passed ? "Urgente" : "Atenção";
+    }
+    const title = document.getElementById("alerta-sem-acesso-60-titulo");
+    if (title) title.textContent = passed ? "Passou de 60 dias sem acesso" : "Perto de 60 dias sem acesso";
+    mostrarAlertaPainel(card, state, textoSemAcesso60(info));
+    renderizarListaSemAcesso60(info);
+  }
+
   function inicializarAlertasOsDivergencias() {
     document.addEventListener("simpress:painel-atualizado", event => {
+      renderizarAlertaSemAcesso60(event.detail?.sem_acesso_60_dias);
       renderizarAlertaOsParadas(event.detail?.os_paradas);
       renderizarAlertaDivergenciasNovas(event.detail?.divergencias_novas);
     });
-    ["alerta-os-paradas", "alerta-divergencias-novas"].forEach(id => {
+    ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas"].forEach(id => {
       document.getElementById(id)?.addEventListener("animationend", event => {
         delete event.currentTarget.dataset.enter;
       });
@@ -524,5 +591,6 @@
     carregarEstatisticas, carregarProntidao, inicializarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
+    renderizarAlertaSemAcesso60,
   };
 });

@@ -33,6 +33,8 @@ TOP_CITIES = None  # lista todas as cidades; o painel limita a altura com rolage
 ENDPOINT_ABSENCE_CATEGORIES = frozenset({"notebook", "macbook"})
 DEFAULT_STALE_BASE_DAYS = 7
 DEFAULT_STALE_TICKET_DAYS = 7
+DEFAULT_LONG_UNUSED_WARNING_DAYS = 55
+DEFAULT_LONG_UNUSED_DAYS = 60
 # A base file modified this long after the newest history event was replaced outside the import flow.
 OUT_OF_FLOW_TOLERANCE = timedelta(minutes=10)
 
@@ -56,6 +58,9 @@ class DashboardServices:
     get_ticket_report: Optional[Callable[[], Optional[Dict[str, Any]]]] = None
     stale_ticket_days: int = DEFAULT_STALE_TICKET_DAYS
     display_comparison: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+    # Notebooks/MacBooks near (warning) or past (limit) the days without Endpoint access that make the Endpoint drop them.
+    long_unused_warning_days: int = DEFAULT_LONG_UNUSED_WARNING_DAYS
+    long_unused_days: int = DEFAULT_LONG_UNUSED_DAYS
     now: Callable[[], datetime] = field(default=_local_now)
     # Stat identity of the history file; when given, the new divergences alert is reused while it matches.
     get_comparison_history_signature: Optional[Callable[[], Optional[tuple]]] = None
@@ -169,6 +174,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "base_desatualizada": _stale_base_summary(services, history),
         "os_paradas": _stale_tickets_summary(services),
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
+        "sem_acesso_60_dias": _long_unused_summary(services, history),
     }
 
 
@@ -415,6 +421,124 @@ def _new_divergences_summary(
         with _NEW_DIVERGENCES_CACHE_LOCK:
             _NEW_DIVERGENCES_CACHE = (signature, deepcopy(result))
     return result
+
+
+def _serial_keys(value: Any) -> set:
+    # A MacBook serial is the Endpoint one with a leading S in EquipamentosDetalhes; compare without it.
+    keys = set()
+    for part in str(value or "").split(" / "):
+        key = part.strip().upper()
+        if key:
+            keys.add(key[1:] if len(key) > 1 and key.startswith("S") else key)
+    return keys
+
+
+def _dict_rows(comparison: Any, field_name: str) -> List[Dict[str, Any]]:
+    rows = comparison.get(field_name) if isinstance(comparison, dict) else None
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def long_unused_status(
+    history: Sequence[Any],
+    warning_days: int = DEFAULT_LONG_UNUSED_WARNING_DAYS,
+    limit_days: int = DEFAULT_LONG_UNUSED_DAYS,
+) -> Dict[str, Any]:
+    """Notebooks/MacBooks of the newest update that are near or past ``limit_days`` without Endpoint access.
+
+    Past the limit the Endpoint drops the row, so the notebook leaves "Sem acesso há 7 dias ou mais" and
+    reappears under "Ausentes no endpoint". Such a move since the previous update counts as past the limit
+    when the days it already had plus the days between the two updates reach the limit.
+    """
+    result: Dict[str, Any] = {
+        "estado": "sem_dados",
+        "limite_aviso_dias": warning_days,
+        "limite_dias": limit_days,
+        "total_limite": 0,
+        "total_passou": 0,
+        "total_saiu_endpoint": 0,
+        "maior_dias": None,
+        "horario": "",
+        "equipamentos": [],
+    }
+    updates: List[Tuple[datetime, Dict[str, Any]]] = []
+    for event in history:
+        if not isinstance(event, dict) or _is_restoration(event) or event.get("id") == PINNED_BASELINE_ID:
+            continue
+        moment = _parse_event_time(event.get("horario"))
+        if moment is not None:
+            updates.append((moment, event))
+    if not updates:
+        return result
+    updates.sort(key=lambda pair: pair[0])
+    current_moment, current = updates[-1]
+    comparison = current.get("comparacao")
+    if not isinstance(comparison, dict):
+        return result
+    stale = _dict_rows(comparison, "sem_acesso_7_dias")
+    equipment: List[Dict[str, Any]] = []
+    for row in stale:
+        age = _count(row.get("dias_sem_verificacao"))
+        if age > warning_days:
+            equipment.append({
+                "serie": str(row.get("serie") or ""),
+                "computador": str(row.get("computador") or ""),
+                "dias": age,
+                "situacao": "passou" if age >= limit_days else "limite",
+            })
+    left_endpoint = 0
+    if len(updates) > 1:
+        previous_moment, previous = updates[-2]
+        elapsed = max((current_moment - previous_moment).days, 0)
+        still_stale = set().union(*(_serial_keys(row.get("serie")) for row in stale))
+        absent = set().union(*(
+            _serial_keys(row.get("serie"))
+            for row in filter_sebrae_owned_unmatched_items(comparison.get("ausentes_no_endpoint"))
+            if isinstance(row, dict)
+        ))
+        for row in _dict_rows(previous.get("comparacao"), "sem_acesso_7_dias"):
+            keys = _serial_keys(row.get("serie"))
+            days = _count(row.get("dias_sem_verificacao")) + elapsed
+            if keys and not keys & still_stale and keys & absent and days >= limit_days:
+                left_endpoint += 1
+                # "dias" here is an estimate: days at the previous update plus the days between updates.
+                equipment.append({
+                    "serie": str(row.get("serie") or ""),
+                    "computador": str(row.get("computador") or ""),
+                    "dias": days,
+                    "situacao": "saiu_endpoint",
+                })
+    equipment.sort(key=lambda item: -item["dias"])
+    total_limite = sum(item["situacao"] == "limite" for item in equipment)
+    total_passou = sum(item["situacao"] in ("passou", "saiu_endpoint") for item in equipment)
+    # "saiu_endpoint" days are an estimate, so they do not count towards the largest age.
+    flagged = [item["dias"] for item in equipment if item["situacao"] != "saiu_endpoint"]
+    result.update({
+        "estado": "passou_60" if total_passou else "limite_55" if total_limite else "em_dia",
+        "total_limite": total_limite,
+        "total_passou": total_passou,
+        "total_saiu_endpoint": left_endpoint,
+        "maior_dias": max(flagged) if flagged else None,
+        "horario": str(current.get("horario") or ""),
+        "equipamentos": equipment,
+    })
+    return result
+
+
+def _long_unused_summary(services: DashboardServices, history: Optional[Sequence[Any]]) -> Optional[Dict[str, Any]]:
+    if services.get_comparison_history is None:
+        return None
+    unavailable = {
+        **long_unused_status([], services.long_unused_warning_days, services.long_unused_days),
+        "estado": "indisponivel",
+    }
+    if history is None:
+        return unavailable
+    try:
+        return long_unused_status(history, services.long_unused_warning_days, services.long_unused_days)
+    except Exception:
+        # The alert is optional; the inventory summary must still load.
+        logger.exception("Falha ao calcular o alerta de notebooks sem acesso há 60 dias.")
+        return unavailable
 
 
 @dataclass(frozen=True)

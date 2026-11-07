@@ -76,6 +76,8 @@ from core.config import (
     MONTHLY_REPORT_FIRST_CHECK_SECONDS,
     MONTHLY_REPORTS_DIR,
     STALE_BASE_ALERT_DAYS,
+    LONG_UNUSED_LIMIT_DAYS,
+    LONG_UNUSED_WARNING_DAYS,
     STALE_TICKET_ALERT_DAYS,
     STATIC_DIR,
     STATE_DIR,
@@ -2376,6 +2378,8 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     stale_base_days=STALE_BASE_ALERT_DAYS,
     get_ticket_report=_dashboard_ticket_report,
     stale_ticket_days=STALE_TICKET_ALERT_DAYS,
+    long_unused_warning_days=LONG_UNUSED_WARNING_DAYS,
+    long_unused_days=LONG_UNUSED_LIMIT_DAYS,
     display_comparison=comparison_history_for_display,
 ))
 obter_painel = _dashboard_exports.obter_painel

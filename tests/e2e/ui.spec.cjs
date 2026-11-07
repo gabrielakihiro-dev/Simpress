@@ -712,6 +712,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
   const panel = page.locator("#notification-center-panel");
   const tickets = panel.locator("#alerta-os-paradas");
   const divergences = panel.locator("#alerta-divergencias-novas");
+  const longUnused = panel.locator("#alerta-sem-acesso-60");
   const base = home.locator("#alerta-base-desatualizada");
   await request.get("/__fixture_alertas_painel?estado=ocultos");
   await request.get("/__fixture_base_desatualizada?estado=atualizada");
@@ -730,8 +731,18 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await trigger.click();
     await expect(panel).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(badge).toHaveText("2");
-    await expect(trigger).toHaveAccessibleName("Notificações, 2 avisos ativos");
+    await expect(badge).toHaveText("3");
+    await expect(trigger).toHaveAccessibleName("Notificações, 3 avisos ativos");
+    await expect(longUnused.getByRole("heading", { name: "Passou de 60 dias sem acesso" })).toBeVisible();
+    await expect(longUnused.locator(".ck-badge")).toHaveText("Urgente");
+    await expect(longUnused.locator("#alerta-sem-acesso-60-texto")).toHaveText(
+      "2 notebooks/MacBooks passaram de 60 dias sem acesso. 1 já saiu da lista e foi para Ausentes no Endpoint. 1 notebook/MacBook está no limite, com mais de 55 dias sem acesso."
+    );
+    await expect(longUnused.locator("#alerta-sem-acesso-60-lista li")).toHaveText([
+      "BRJ111AAAA · PRNOTE001 — 72 dias",
+      "BRJ222BBBB · PRNOTE002 — ~61 dias (saiu para Ausentes no Endpoint)",
+      "BRJ333CCCC · PRNOTE003 — 57 dias",
+    ]);
     await expect(tickets.getByRole("heading", { name: "OS paradas" })).toBeVisible();
     await expect(tickets.locator("#alerta-os-paradas-texto")).toHaveText(
       "3 chamados abertos estão sem atualização há 7 dias ou mais. O mais antigo está parado há 21 dias."
@@ -748,6 +759,14 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await page.keyboard.press("Escape");
     await expect(panel).toBeHidden();
     await expect(trigger).toBeFocused();
+
+    await trigger.click();
+    await longUnused.getByRole("button", { name: "Ver Resumo" }).click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
+    await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 
     await trigger.click();
     await tickets.getByRole("button", { name: "Ver OS" }).click();
@@ -773,6 +792,38 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(trigger).toHaveAccessibleName("Notificações, 1 aviso ativo");
     await expect(tickets).toBeVisible();
     await expect(divergences).toBeHidden();
+    await expect(longUnused).toBeHidden();
+
+    await page.locator(".ck-marca").click();
+    await expect(panel).toBeHidden();
+    await request.get("/__fixture_alertas_painel?estado=somente_limite");
+    await trigger.click();
+    await expect(badge).toHaveText("1");
+    await expect(trigger).toHaveAccessibleName("Notificações, 1 aviso ativo");
+    await expect(longUnused.getByRole("heading", { name: "Perto de 60 dias sem acesso" })).toBeVisible();
+    await expect(longUnused.locator(".ck-badge")).toHaveText("Atenção");
+    await expect(longUnused.locator("#alerta-sem-acesso-60-texto")).toHaveText(
+      "2 notebooks/MacBooks estão no limite, com mais de 55 dias sem acesso."
+    );
+    await expect(longUnused.locator("#alerta-sem-acesso-60-lista li")).toHaveText([
+      "BRJ333CCCC · PRNOTE003 — 58 dias",
+      "BRJ444DDDD — 56 dias",
+    ]);
+    await expect(tickets).toBeHidden();
+    await expect(divergences).toBeHidden();
+
+    await page.locator(".ck-marca").click();
+    await expect(panel).toBeHidden();
+    await request.get("/__fixture_alertas_painel?estado=muitos_equipamentos");
+    await trigger.click();
+    await expect(longUnused.locator("#alerta-sem-acesso-60-lista li")).toHaveText([
+      "BRJ111AAAA · PRNOTE001 — 70 dias",
+      "Sem identificação — 66 dias",
+      "BRJ222BBBB — ~61 dias (saiu para Ausentes no Endpoint)",
+      "BRJ333CCCC · PRNOTE003 — 58 dias",
+      "BRJ444DDDD · PRNOTE004 — 57 dias",
+      "e mais 2",
+    ]);
 
     await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
@@ -783,6 +834,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
     await expect(tickets).toBeHidden();
     await expect(divergences).toBeHidden();
+    await expect(longUnused).toBeHidden();
     await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
     await expect(base).toBeVisible();
