@@ -1409,7 +1409,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-chamado__cab, .sebrae-zona { padding-left: 12px; padding-right: 12px; }
   .sebrae-zona--finalizacao { padding: 0; }
   .sebrae-zona__cab--aviso { padding: 8px 12px; }
-  .sebrae-chamado__auto, .sebrae-chamado__manuais { grid-template-columns: minmax(0, 1fr); }
+  .sebrae-chamado__manuais { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]) { grid-column: 1 / -1; }
   .sebrae-final__corpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pend" "texto" "anexo" "rodape"; padding: 12px; }
   .sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto" "anexo" "rodape"; }
   .sebrae-final__rodape { flex-direction: column; align-items: stretch; }
@@ -1433,6 +1434,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-chamado__cab:has(> .sebrae-chamado__recolher) > .sebrae-chamado__titulo + * { margin-left: 54px; }
 }
 @media (max-width: 479.98px) {
+  .sebrae-chamado__auto { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sebrae-chamado__detalhes { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767.98px), (pointer: coarse) {
