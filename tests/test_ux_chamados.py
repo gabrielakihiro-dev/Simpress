@@ -6,7 +6,6 @@ from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fastapi import HTTPException
 from pydantic import ValidationError
 
 from domains import ux_chamados
@@ -209,19 +208,26 @@ class UxChamadosTests(unittest.TestCase):
 
 
     def test_unexpected_failure_returns_503_and_logs_only_the_class_name(self):
+        class TimeoutError(Exception):  # same class name Playwright uses
+            pass
+
         class Falha(Exception):
             pass
 
-        def explode(_serial, **_kwargs):
-            raise Falha("valor secreto do formulário")
+        for excecao, codigo in ((Falha, "ux_falha"), (TimeoutError, "ux_formulario_diferente")):
+            with self.subTest(excecao=excecao.__name__):
+                def explode(_serial, **_kwargs):
+                    raise excecao("valor secreto do formulário")
 
-        self.servico.preparar = explode
-        router = create_ux_chamados_router(self.servico, lambda _serial: {})
-        rotas = {rota.path.rsplit("/", 1)[-1]: rota.endpoint for rota in router.routes}
-        with self.assertLogs("routers.ux_chamados", "WARNING") as logs, self.assertRaises(HTTPException) as erro:
-            rotas["preparar"](PrepararPayload(serial="s123"))
-        self.assertEqual(erro.exception.status_code, 503)
-        self.assertEqual(logs.output, ["WARNING:routers.ux_chamados:UX: Falha"])
+                self.servico.preparar = explode
+                router = create_ux_chamados_router(self.servico, lambda _serial: {})
+                rotas = {rota.path.rsplit("/", 1)[-1]: rota.endpoint for rota in router.routes}
+                with self.assertLogs("routers.ux_chamados", "WARNING") as logs:
+                    resposta = rotas["preparar"](PrepararPayload(serial="s123"))
+                corpo = json.loads(resposta.body)
+                self.assertEqual((resposta.status_code, corpo["codigo"]), (503, codigo))
+                self.assertNotIn("secreto", corpo["detail"])
+                self.assertEqual(logs.output, [f"WARNING:routers.ux_chamados:UX: {excecao.__name__}"])
 
     def test_invalid_or_unconfirmed_writes_never_reach_the_portal(self):
         router = create_ux_chamados_router(self.servico, lambda _serial: {})

@@ -10,8 +10,20 @@ exclusões descritas em `AGENTS.md`. O usuário escolhe o problema no Simpress.
 Os rótulos exatos do formulário e o formato da OS vieram do plano. A página simulada
 cobre esses candidatos. Em listas personalizadas, a leitura exige posições e total ARIA
 (`aria-posinset` e `aria-setsize`), duas leituras iguais por posição de rolagem e cobertura
-de todas as posições anunciadas. A inspeção autenticada e a simulação com a série real seguem
-pendentes. Um controle ausente ou duplicado interrompe a operação.
+de todas as posições anunciadas. Verificado no portal real em 06/11/2026 (só preparo e simulação,
+com `SIMPRESS_UX_SEM_ENVIO=1`, série de teste): o formulário é Angular, sem o texto "Etapa 1 de 2";
+o campo da série tem `id=numeroSerie`, o problema é um `ng-select` (lista sem `aria-setsize`, lida do
+DOM só quando duas leituras seguidas coincidem e a rolagem chegou ao fim), a descrição é o único
+`textarea` e os campos do Solicitante têm `id` (`nome`, `email`, `telefone`, `ramal`, `cargo`) em vez
+de rótulo acessível. Ao avançar, o aviso "Backup de dados" cobre a tela e é fechado antes de operar.
+O botão final aparece como `Enviar Solicitação` (comparação sem distinguir maiúsculas). O envio real
+nunca foi exercitado, por desenho. Um controle ausente ou duplicado interrompe a operação.
+
+A preparação inicia o Chrome de automação se ele estiver fechado (`garantir_chrome`, sem fechar abas
+nem usar `conectar()`). Se não for possível iniciá-lo ou conectar, a API responde 503 com
+`codigo: chrome_indisponivel`. Falhas inesperadas do Playwright respondem 503 com mensagem em
+linguagem simples (`ux_formulario_diferente` para `TimeoutError`, `ux_falha` para o resto); o log
+guarda só o nome da classe. Depois de reiniciar o servidor, o código novo passa a valer.
 
 O servidor mantém apenas a sessão opaca, não uma referência Playwright entre chamadas.
 Cada chamada encontra a aba por `window.name` e confere origem, rota, etapa, série e modelo
