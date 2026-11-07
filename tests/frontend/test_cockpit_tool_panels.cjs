@@ -488,3 +488,24 @@ test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026)",
   assert.doesNotMatch(html, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit|lista-unidades-container/);
   assert.doesNotMatch(painel, /Fluxo completo/);
 });
+
+test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada uma vez)", async () => {
+  const { api, el } = criarAmbientePaineis();
+  const filtros = [];
+  const ouvintesBusca = {};
+  global.SimpressDataPanels = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
+  try {
+    el("cockpit-tickets-search").addEventListener = (tipo, fn) => { ouvintesBusca[tipo] = fn; };
+    await api.abrirPainelCockpit("chamados");
+    assert.equal(typeof ouvintesBusca.input, "function");
+    filtros.length = 0;
+    el("cockpit-tickets-search").value = "sn";
+    ouvintesBusca.input();
+    el("cockpit-tickets-search").value = "sn-1";
+    ouvintesBusca.input();
+    assert.equal(filtros.length, 0, "nada filtra antes da pausa");
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.equal(filtros.length, 1, "várias teclas viram um só filtro");
+    assert.equal(filtros[0].busca, "sn-1");
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});

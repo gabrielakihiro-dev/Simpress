@@ -1755,6 +1755,18 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* O min-height global (40px) de botão deixava a linha mais alta e empurrava o texto da série para baixo */
 #cockpit-tickets-os .ck-os tbody td[data-label="Série"] .ck-os__andamento-btn { min-height: 0; margin-top: 0; margin-left: 2px; vertical-align: baseline; align-self: baseline; line-height: 20px; }
 #cockpit-tickets-os .ck-os tbody td[data-label="OS"] .ticket-summary-order-link { min-height: 0; line-height: 20px; }
+/* Controles da aba OS na altura do desenho (o min-height global de botão/campo, 40/48px, venceria); no toque, alvo de 44px. */
+#cockpit-tickets-search, #cockpit-tickets-relation,
+.ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr .ck-btn,
+#cockpit-tickets-os :is(.ck-btn, .ck-entrada) { min-height: 0; }
+@media (pointer: coarse) {
+  #cockpit-tickets-search, #cockpit-tickets-relation,
+  .ck-ferr-painel[data-cockpit-tool-panel="chamados"] .ck-barra-ferr :is(.ck-btn, .ckp-alternar),
+  #cockpit-tickets-manage-panel .ckp-sistema,
+  #cockpit-tickets-os :is(.ck-btn, .ck-entrada),
+  #cockpit-tickets-os .ck-os tbody td[data-label="Série"] .ck-os__andamento-btn,
+  #cockpit-tickets-os .ck-os tbody td[data-label="OS"] .ticket-summary-order-link { min-height: 44px; }
+}
 #cockpit-tickets-os .ck-os .ck-tabela th { padding: 9px 10px; }
 #cockpit-tickets-os .ck-os tbody tr[data-serial] { transition: background-color var(--duracao) var(--curva); }
 #cockpit-tickets-os .ck-os tbody tr[data-serial]:hover { background: var(--cor-superficie-funda); }

@@ -32,6 +32,15 @@ Autorizado pelo usuário em 01/11/2026. Hoje o painel `[data-cockpit-tool-panel=
 - Compatibilidade: textos aprovados antes, IDs, `data-*` e handlers não mudam. A regra de 30/10/2026 continua valendo: série sem OS vinculada (nem na Simpress nem no Oracle) some por completo da aba (`#cockpit-tickets-os`), sem linha, KPI nem opção de filtro `Sem OS` e sem o sufixo de contagem; só a exibição muda, o relatório do servidor e o histórico seguem guardando `sem_os`.
 - Escritas da aba, sem acréscimo: `PUT /api/operacoes/chamados/vinculos-os`, anotação com autosave e importação das planilhas; nada é escrito nem apagado em sistemas externos.
 
+## Busca, paginação e toque na aba OS (F6, 07/11/2026)
+
+Correção dos achados da auditoria da aba OS (07/11/2026). Só apresentação em `static/js/ui/data-panels.js`, `static/js/features/cockpit-tool-panels.js` e `static/styles/ck-cockpit.css`; sem regra de negócio, endpoint nem escrita nova; IDs, `data-*` e ARIA anteriores não mudam.
+
+- Busca (`Buscar série ou OS`): procura em `data-busca` de cada linha, que traz série, número da OS, usuário, hostname, modelo (`simpress.modelos` do relatório) e o UTIC já vinculado (`UTIC-AAAA-N` e só o número), sem acento nem maiúscula. Descrição, fonte e rótulos de botões (`Salvar`, `Andamento`…) não entram mais na busca. O filtro espera 150 ms depois da última tecla, e a contagem anunciada (`aria-live`) só muda nessa hora.
+- Paginação: sem termo de busca a tabela mostra 25 OS por vez, com `Carregar mais` e `Mostrando N de M` (os mesmos textos e classes `.sebrae-mais` da aba Chamados, F5; bloco `[data-os-mais]`); com termo, mostra todas as que casam. Mudar busca, Relação, Atenção ou triagem volta à primeira página; recriar a tabela (vínculo salvo) mantém a página. Quando o botão some, o foco vai para a primeira OS nova. A contagem do cabeçalho é sempre do total filtrado, e a linha `Andamento` só aparece para séries na página. Abrir uma OS pela Home ou pela aba Chamados (`abrirChamadoDaOs`) amplia a página até a linha (`revelarLinhaOs`); se ela estiver escondida pelo filtro, limpa os filtros antes.
+- Números com separador de milhar (`1.000 OS · 1.000 séries`, `formatNumber`).
+- Altura dos controles: a busca, a Relação, os botões da barra e os da tabela seguem a altura do desenho (`min-height: 0`, sem o mínimo global de 40/48 px); em tela de toque (`pointer: coarse`) eles, os botões `Andamento` e os números da OS têm alvo de 44 px.
+
 ---
 
 # Histórico: prompt 7 original
