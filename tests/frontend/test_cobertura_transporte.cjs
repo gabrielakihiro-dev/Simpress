@@ -201,18 +201,31 @@ test("falha de rede guarda a pendência e a nova tentativa usa a MESMA chave", a
   assert.equal(env.storage.data.has("simpress:cobertura:sem-vinculo"), false);
 });
 
-test("409 e 422 mostram a mensagem e não guardam pendência; arquivo ocupado guarda", async () => {
-  const env = installHistory({ responses: [
-    { status: 409, body: { detail: { codigo: "chave_diferente", mensagem: "Chave diferente." } } },
-    { status: 409, body: { detail: { codigo: "arquivo_ocupado", mensagem: "Ocupado." } } },
-  ] });
+for (const recusa of [
+  { status: 409, body: { detail: { codigo: "chave_diferente", mensagem: "Chave diferente." } } },
+  { status: 422, body: { detail: { codigo: "dados_divergentes", mensagem: "Série diferente." } } },
+  { status: 404, body: { detail: { codigo: "nao_encontrado", mensagem: "Movimentação não encontrada." } } },
+]) {
+  test(`recusa definitiva ${recusa.status}: a planilha vai ao histórico genérico, o operador é avisado e a pendência some`, async () => {
+    const env = installHistory({ responses: [recusa, { status: 201, body: {} }] });
+    emitir(env, { payload: PAYLOAD, movimentacao: MOV });
+    for (let i = 0; i < 5; i += 1) await tick();
+    assert.deepEqual(env.requests.map(r => r.url), [ROTA, history.ENDPOINT]);
+    assert.deepEqual(env.requests[1].body, PAYLOAD);
+    const aviso = env.toasts.find(([, type]) => type === "error");
+    assert.ok(aviso[0].startsWith(recusa.body.detail.mensagem), aviso[0]);
+    assert.ok(aviso[0].includes("Vincular transferência já gerada"), aviso[0]);
+    assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  });
+}
+
+test("arquivo ocupado (409) guarda a pendência com a mesma chave e não grava no histórico genérico", async () => {
+  const env = installHistory({ responses: [{ status: 409, body: { detail: { codigo: "arquivo_ocupado", mensagem: "Ocupado." } } }] });
   emitir(env, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
-  assert.ok(env.toasts.some(([message, type]) => message === "Chave diferente." && type === "error"));
-  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
-  emitir(env, { payload: PAYLOAD, movimentacao: MOV });
-  await tick(); await tick();
-  assert.equal(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo().length, 1);
+  assert.deepEqual(env.requests.map(r => r.url), [ROTA]);
+  const [pendente] = env.win.SimpressCoberturaVinculo.pendenciaSemVinculo();
+  assert.equal(pendente.chave, "chave-sint-001");
 });
 
 test("localStorage que lança erro ou guarda lixo não quebra o vínculo", async () => {

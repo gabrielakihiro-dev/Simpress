@@ -124,9 +124,14 @@ class CoverageTransporteTests(unittest.TestCase):
         _, mov = self.preparar()
         self.history.write_text("{quebrado", encoding="utf-8")
         estado_antes = self.state.read_text(encoding="utf-8")
-        self.assertEqual(self.registrar(mov, 503)["detail"]["codigo"], "estado_ilegível")
+        detalhe = self.registrar(mov, 503)["detail"]
+        self.assertEqual(detalhe["codigo"], "estado_ilegível")
+        # A mensagem diz qual arquivo está ilegível: o histórico, não o estado da cobertura.
+        self.assertIn(self.history.name, detalhe["mensagem"])
         self.assertEqual(self.state.read_text(encoding="utf-8"), estado_antes)
         self.assertEqual(self.history.read_text(encoding="utf-8"), "{quebrado")
+        self.history.write_text('{"esquema": "outro"}', encoding="utf-8")
+        self.assertIn(self.history.name, self.registrar(mov, 503)["detail"]["mensagem"])
 
     def test_idempotencia_apos_retencao_de_501_registros(self):
         _, mov = self.preparar()

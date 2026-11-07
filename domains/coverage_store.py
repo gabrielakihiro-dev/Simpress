@@ -30,6 +30,14 @@ class EstadoIlegivel(ValueError):
     """O arquivo existe, mas não é um estado de cobertura válido; ele é preservado como está."""
 
 
+class HistoricoIlegivel(EstadoIlegivel):
+    """O histórico de transferências está ilegível; ``arquivo`` diz qual, para a mensagem ao operador."""
+
+    def __init__(self, arquivo: str) -> None:
+        super().__init__(f"'{arquivo}' está ilegível.")
+        self.arquivo = arquivo
+
+
 def validar_estado(valor: Any, nome: str = "operacao_cobertura.json") -> coverage.Estado:
     """Validação estrita: esquema conhecido, só as seções esperadas e registros com ``rev`` inteiro."""
     if not isinstance(valor, dict):
@@ -116,7 +124,9 @@ class CoberturaStore:
             if historico.exists():
                 try:
                     bruto = _ler_json(historico)
-                except (OSError, UnicodeError, ValueError) as error:
+                except (UnicodeError, ValueError) as error:
+                    raise HistoricoIlegivel(historico.name) from error
+                except OSError as error:
                     raise FileTransactionError(f"Não foi possível ler '{historico.name}' para atualizá-lo com segurança.") from error
 
             def atualizar(atual: Any) -> coverage.Estado:

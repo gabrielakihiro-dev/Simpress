@@ -42,6 +42,7 @@
     em_manutencao: "Em manutenção",
     indisponivel: "Indisponível",
     a_confirmar: "A confirmar",
+    entregue: "Entregue",
   });
   const TIPOS_DIVERGENCIA = Object.freeze([
     ["serie_diferente", "Série diferente"],
@@ -156,8 +157,9 @@
   function acoesDaMovimentacao(mov) {
     if (!mov) return [];
     const estado = mov.estado;
-    if (estado === "preparada" && mov.tipo === "transporte") return mov.historico_id ? [] : ["vincular"];
-    if (estado === "preparada" && mov.tipo === "local") return ["receber"];
+    // "cancelar" só em preparada: o servidor devolve a reserva com a validade original.
+    if (estado === "preparada" && mov.tipo === "transporte") return mov.historico_id ? ["cancelar"] : ["vincular", "cancelar"];
+    if (estado === "preparada" && mov.tipo === "local") return ["receber", "cancelar"];
     if (estado === "gerada") return ["coletada"];
     if (estado === "coletada") return ["em_transito"];
     if (estado === "em_transito") return ["receber"];

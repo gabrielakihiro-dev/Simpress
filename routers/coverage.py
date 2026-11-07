@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from core.integrity import FileBusyError, FileTransactionError
 from domains import coverage
 from domains.coverage import CoberturaErro, Contexto, Manutencao
-from domains.coverage_store import CoberturaStore, EstadoIlegivel, eh_ilegivel
+from domains.coverage_store import CoberturaStore, EstadoIlegivel, HistoricoIlegivel, eh_ilegivel
 from routers.transfer_history import (
     MAX_HISTORY_RECORDS,
     TransferHistoryCorruptionError,
@@ -158,6 +158,11 @@ def _falhar(error: BaseException) -> NoReturn:
         raise HTTPException(status_code=409, detail={
             "codigo": "arquivo_ocupado", "mensagem": "O arquivo da cobertura está ocupado. Tente de novo.",
         }) from error
+    if isinstance(error, HistoricoIlegivel):
+        raise HTTPException(status_code=503, detail={
+            "codigo": "estado_ilegível",
+            "mensagem": f"O histórico de transferências ({error.arquivo}) está ilegível; os dados foram preservados e nada foi gravado.",
+        }) from error
     if eh_ilegivel(error):
         raise HTTPException(status_code=503, detail={"codigo": "estado_ilegível", "mensagem": MENSAGEM_ILEGIVEL}) from error
     raise HTTPException(status_code=500, detail={
@@ -186,7 +191,7 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
         try:
             return _validate_history(bruto)
         except TransferHistoryCorruptionError as error:
-            raise EstadoIlegivel(str(error)) from error
+            raise HistoricoIlegivel(historico_path().name) from error
 
     def candidatos_por_movimentacao(estado: coverage.Estado) -> Dict[str, List[coverage.Registro]]:
         """Só leitura; histórico ausente ou ilegível vira lista vazia (o GET da cobertura não falha por ele)."""
@@ -235,7 +240,9 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
         """Um caso pelo id, no arquivo principal ou nos arquivados (links antigos continuam abrindo)."""
         atual = store()
         try:
-            for arquivado, estado in ((False, atual.ler()), (True, atual.ler_arquivados())):
+            # Os arquivados só são lidos se o caso não estiver no principal.
+            for arquivado, ler in ((False, atual.ler), (True, atual.ler_arquivados)):
+                estado = ler()
                 achado = coverage.buscar_caso(estado, caso_id)
                 if achado is not None:
                     secao, _ = achado

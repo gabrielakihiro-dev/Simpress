@@ -189,6 +189,26 @@ test("planilha baixada sem vínculo fica pendente e Tentar de novo liga a movime
   expect(await page.evaluate(() => localStorage.getItem("simpress:cobertura:sem-vinculo"))).toBeNull();
 });
 
+test("Cancelar movimentação preparada pede confirmação e devolve a reserva", async ({ page }) => {
+  await cenario(page);
+  const reserva = await reservaPronta(page, "SINT-002");
+  await api(page, "/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" });
+  await page.goto("/");
+  await abrirCobertura(page);
+  await aba(page, "movimento");
+  const movimento = page.locator("#cobertura-lista-movimento");
+  const cancelar = movimento.getByRole("button", { name: "Cancelar movimentação — SINT-002" });
+  await cancelar.click();
+  await page.locator("#btn-confirmar-acao-cancelar").click();
+  await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("1");
+  await cancelar.click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("0");
+  await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
+  const leitura = await api(page, "/api/cobertura");
+  expect(leitura.casos.reservas[reserva.id].estado).toBe("ativa");
+});
+
 test("manutenção não verificada pede confirmação e reserva com manutencao_conferida", async ({ page }) => {
   await cenario(page, "manutencao");
   const corpos = [];

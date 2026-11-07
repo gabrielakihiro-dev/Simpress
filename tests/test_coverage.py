@@ -325,6 +325,82 @@ class CoberturaMovimentacaoTests(unittest.TestCase):
         self.assertNotIn("SINT-009", [s["serie"] for s in resultado["disponiveis"]])
         self.assertEqual(resultado["contagens"]["entregue"], 1)
 
+    def test_divergencia_corrigir_recusa_serie_com_outro_destino_sebrae_ou_manutencao(self):
+        estado, demanda, mov = self.divergente()
+        # SINT-002 está reservada para outra vaga da mesma necessidade: não pode virar a série entregue.
+        estado, outra = aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="SINT-002")
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="SINT-002")
+        self.assertEqual((erro.exception.codigo, erro.exception.status, erro.exception.extra["motivo"]),
+                         ("conflito_reserva", 409, "reserva_ativa"))
+        self.assertEqual(erro.exception.extra["bloqueio_id"], outra["id"])
+        self.assertEqual(estado["reservas"][outra["id"]]["estado"], "ativa")
+
+        estado["movimentacoes"]["mov-outra"] = {"id": "mov-outra", "estado": "em_transito", "serie": "SINT-010", "rev": 1}
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="SINT-010")
+        self.assertEqual(erro.exception.extra["motivo"], "movimentacao_aberta")
+
+        estado["disponibilidade"]["SINT011"] = {"id": "SINT011", "serie": "SINT-011", "estado": "entregue", "cidade": "Cidade B",
+                                                "movimentacao_id": "mov-velha", "rev": 1}
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="SINT-011")
+        self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (409, "serie_entregue"))
+
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="BRJ135P5XS")
+        self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (422, "fora_do_inventario"))
+
+        em_manutencao = ctx(manutencao=Manutencao(series=frozenset({"SINT012"})))
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="SINT-012",
+                    contexto=em_manutencao)
+        self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (422, "manutencao"))
+
+    def test_preparar_revalida_disponibilidade_manual(self):
+        estado, demanda, _ = cenario_v1_v4()  # SINT-001 confirmada em 06/11, válida até 13/11
+        tarde = ctx(hoje=HOJE + timedelta(days=3))
+        estado, reserva = aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="SINT-001", contexto=tarde)
+        estado, reserva = kit_completo(estado, reserva)
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.preparar_movimentacao, reserva["id"], reserva["rev"], contexto=ctx(hoje=HOJE + timedelta(days=8)))
+        self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (422, "sem_disponibilidade"))
+        for situacao in ("em_manutencao", "indisponivel"):
+            alterado = json.loads(json.dumps(estado))
+            alterado["disponibilidade"]["SINT001"]["estado"] = situacao
+            for tipo in ("transporte", "local"):
+                with self.assertRaises(CoberturaErro) as erro:
+                    aplicar(alterado, cov.preparar_movimentacao, reserva["id"], reserva["rev"], tipo)
+                self.assertEqual(erro.exception.extra["motivo"], "sem_disponibilidade")
+        aplicar(estado, cov.preparar_movimentacao, reserva["id"], reserva["rev"], "local")
+
+    def test_disponibilidade_nao_muda_situacao_nem_cidade_de_serie_com_destino(self):
+        estado, demanda, _ = cenario_v1_v4()
+        estado, reserva = aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="SINT-001")
+        rev = estado["disponibilidade"]["SINT001"]["rev"]
+        for situacao, cidade in (("em_manutencao", None), ("indisponivel", None), ("disponivel", "Cidade B")):
+            with self.assertRaises(CoberturaErro) as erro:
+                aplicar(estado, cov.registrar_disponibilidade, serie="SINT-001", situacao=situacao, cidade=cidade, rev=rev)
+            self.assertEqual((erro.exception.codigo, erro.exception.status, erro.exception.extra["motivo"]),
+                             ("conflito_reserva", 409, "reserva_ativa"))
+        # Reconfirmar na mesma cidade continua valendo (renovar a reserva depende disso).
+        estado, _ = aplicar(estado, cov.registrar_disponibilidade, serie="SINT-001", situacao="disponivel", cidade="cidade a", rev=rev)
+        # Sem cidade (botão Confirmar disponível), mantém a cidade do registro mesmo se o cadastro diz outra.
+        cadastro = cov.indexar_cadastro([{"serial": "SINT-001", "retirada_cidade": "Cidade B"}])
+        estado, registro = aplicar(estado, cov.registrar_disponibilidade, serie="SINT-001", situacao="disponivel",
+                                   rev=estado["disponibilidade"]["SINT001"]["rev"], contexto=ctx(cadastro=cadastro))
+        self.assertEqual(registro["cidade"], "cidade a")
+
+        estado, reserva = kit_completo(estado, estado["reservas"][reserva["id"]])
+        estado, _ = aplicar(estado, cov.preparar_movimentacao, reserva["id"], reserva["rev"])
+        with self.assertRaises(CoberturaErro) as erro:
+            aplicar(estado, cov.registrar_disponibilidade, serie="SINT-001", situacao="indisponivel",
+                    rev=estado["disponibilidade"]["SINT001"]["rev"])
+        self.assertEqual(erro.exception.extra["motivo"], "movimentacao_aberta")
+        # Série sem destino continua livre para mudar.
+        aplicar(estado, cov.registrar_disponibilidade, serie="SINT-002", situacao="em_manutencao",
+                rev=estado["disponibilidade"]["SINT002"]["rev"])
+
     def test_divergencia_cancelar_reabre_vaga(self):
         estado, demanda, mov = self.divergente()
         estado, mov = aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "cancelar")
