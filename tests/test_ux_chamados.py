@@ -76,6 +76,17 @@ class UxChamadosTests(unittest.TestCase):
             "descricao": self.descricao, "enviar": False, "confirmado": False, **alteracoes,
         })
 
+    def test_filtrar_opcoes_drops_celular_tablet_toner_and_the_listed_problems(self):
+        lidas = [
+            "Celular - Tela quebrada", "TABLET – Não carrega", "Troca de Toner", "Toner baixo", "Não reconhece chip",
+            "Não reconhece o chip", "Bloqueio na conta ou aparelho", "Falha na temperatura do fusor",
+            "Notebook - Teclado", "Não reconhece pendrive", "Falha na temperatura",
+        ]
+        self.assertEqual(
+            ux_chamados.filtrar_opcoes(lidas),
+            ["Não reconhece o chip", "Notebook - Teclado", "Não reconhece pendrive", "Falha na temperatura"],
+        )
+
     def test_preparar_reads_valid_options_without_filling_or_writing(self):
         resultado = self.preparar()
         self.assertEqual(resultado["modelo"], "Modelo X")
