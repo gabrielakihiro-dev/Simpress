@@ -402,7 +402,8 @@
         caixa.append(botao("Cancelar movimentação", "perigo", async () => {
           const ok = await app.confirmarAcao({
             titulo: "Cancelar movimentação",
-            mensagem: `A movimentação da série ${mov.serie} será cancelada e a reserva volta a ficar ativa.`,
+            mensagem: `A movimentação da série ${mov.serie} será cancelada e a reserva volta a ficar ativa.`
+              + (mov.estado === "preparada" ? "" : " A planilha de Transporte já foi gerada e continua no histórico de transferências."),
             confirmar: "Cancelar movimentação",
             cancelar: "Voltar",
           });

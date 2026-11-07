@@ -39,14 +39,14 @@ MOTIVOS_CONFLITO = frozenset({
 })
 MOTIVOS_DESTINO = MOTIVOS_CONFLITO - {"devolucao_pendente"}  # a série já está comprometida com uma vaga
 MOVIMENTACAO_ABERTA = frozenset({"preparada", "gerada", "coletada", "em_transito", "recebida_com_divergencia"})
-MOVIMENTACAO_ENTREGUE = frozenset({"recebida", "encerrada"})
-# Próximos estados aceitos por POST .../estado ("cancelada" só a partir de "preparada", tratado à parte).
+MOVIMENTACAO_ENTREGUE = frozenset({"recebida", "encerrada"})  # "encerrada": legado, a transição saiu
+# Próximos estados aceitos por POST .../estado ("cancelada" é tratado à parte: de "preparada", e de "gerada"/"coletada"
+# no transporte; de "em_transito" não, a máquina pode estar na estrada).
 PROXIMOS_ESTADOS: Dict[str, Dict[str, FrozenSet[str]]] = {
     "transporte": {
         "gerada": frozenset({"coletada"}),
         "coletada": frozenset({"em_transito"}),
         "em_transito": frozenset({"recebida", "recebida_com_divergencia"}),
-        "recebida": frozenset({"encerrada"}),
     },
     "local": {"preparada": frozenset({"recebida", "recebida_com_divergencia"})},
 }
@@ -833,7 +833,8 @@ def mudar_estado_movimentacao(
     _conferir_rev(mov, rev)
     atual = str(mov.get("estado"))
     if novo_estado == "cancelada":
-        _exigir_estado(mov, ("preparada",), "A movimentação")
+        # A planilha de gerada/coletada continua no histórico (historico_id fica como rastro); sem "em_transito".
+        _exigir_estado(mov, ("preparada", "gerada", "coletada") if mov.get("tipo") == "transporte" else ("preparada",), "A movimentação")
         mov.update({"estado": "cancelada", "fechado_em": ctx.hoje.isoformat()})
         reserva = novo["reservas"].get(str(mov.get("reserva_id")))
         if reserva is not None:
@@ -978,15 +979,16 @@ def registrar_transferencia(
 ) -> Tuple[Estado, Optional[Historico], Registro]:
     """Liga a planilha baixada à movimentação. Devolve ``(novo_estado, novo_historico | None, resultado)``.
 
-    Idempotência pela ``chave``: primeiro a própria movimentação (já ``gerada`` com a mesma chave devolve a cópia
-    guardada, sem olhar o histórico nem o ``rev``, que a nova tentativa traz antigo); depois o histórico.
+    Idempotência pela ``chave``: primeiro a própria movimentação (já ``gerada``, ou ``cancelada`` com planilha ligada, com a mesma chave
+    devolve a cópia guardada, sem olhar o histórico nem o ``rev``, que a nova tentativa traz antigo); depois o histórico.
     """
     novo = copy.deepcopy(estado)
     mov = _mov_transporte(novo, mov_id)
     _conferir_dados(mov, registro.get("serial"), registro.get("entrega_cidade"))
     if chave != mov.get("chave"):
         raise CoberturaErro("chave_diferente", 409, "Esta planilha não pertence a esta movimentação.", id=mov_id)
-    if mov.get("estado") == "gerada" and mov.get("historico_id"):
+    # "cancelada" com planilha ligada: a nova tentativa (resposta perdida) não grava de novo nem vira candidata.
+    if mov.get("estado") in ("gerada", "cancelada") and mov.get("historico_id"):
         return novo, None, _resultado(mov, True)
     _exigir_estado(mov, ("preparada",), "A movimentação")
     _conferir_rev(mov, rev)

@@ -209,6 +209,29 @@ test("Cancelar movimentação preparada pede confirmação e devolve a reserva",
   expect(leitura.casos.reservas[reserva.id].estado).toBe("ativa");
 });
 
+test("Cancelar movimentação gerada avisa que a planilha continua no histórico e devolve a reserva", async ({ page }) => {
+  await cenario(page);
+  const reserva = await reservaPronta(page, "SINT-002");
+  const mov = await api(page, "/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" });
+  await api(page, `/api/cobertura/movimentacoes/${mov.id}/registrar-transferencia`, {
+    chave: mov.chave, rev: mov.rev,
+    payload: {
+      serial: "SINT-002", retirada_cidade: "Cidade B", entrega_cidade: "Cidade A", entrega_cnpj: "00.000.000/0001-91",
+      entrega_endereco: "Rua Sintética, 1", entrega_contato: "Pessoa Sintética",
+    },
+  });
+  await page.goto("/");
+  await abrirCobertura(page);
+  await aba(page, "movimento");
+  const movimento = page.locator("#cobertura-lista-movimento");
+  await movimento.getByRole("button", { name: "Cancelar movimentação — SINT-002" }).click();
+  await expect(page.locator("#modal-confirmar-acao")).toContainText("continua no histórico de transferências");
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("0");
+  const leitura = await api(page, "/api/cobertura");
+  expect(leitura.casos.reservas[reserva.id].estado).toBe("ativa");
+});
+
 test("manutenção não verificada pede confirmação e reserva com manutencao_conferida", async ({ page }) => {
   await cenario(page, "manutencao");
   const corpos = [];

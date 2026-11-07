@@ -157,11 +157,12 @@
   function acoesDaMovimentacao(mov) {
     if (!mov) return [];
     const estado = mov.estado;
-    // "cancelar" só em preparada: o servidor devolve a reserva com a validade original.
+    // "cancelar" em preparada, gerada e coletada (transporte): o servidor devolve a reserva com a validade original.
+    // Em trânsito não: a máquina pode estar na estrada; a saída é receber com divergência e cancelar e reabrir a vaga.
     if (estado === "preparada" && mov.tipo === "transporte") return mov.historico_id ? ["cancelar"] : ["vincular", "cancelar"];
     if (estado === "preparada" && mov.tipo === "local") return ["receber", "cancelar"];
-    if (estado === "gerada") return ["coletada"];
-    if (estado === "coletada") return ["em_transito"];
+    if (estado === "gerada") return ["coletada", "cancelar"];
+    if (estado === "coletada") return ["em_transito", "cancelar"];
     if (estado === "em_transito") return ["receber"];
     if (estado === "recebida_com_divergencia") return ["resolver"];
     return [];
