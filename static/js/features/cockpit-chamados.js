@@ -271,14 +271,16 @@
       .map(item => ({ ...item, numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero }));
   }
 
-  // Abre a aba Chamados (F5), expande os blocos recolhidos que guardam o chamado e o destaca.
+  // Abre a aba Chamados (F5) na sub-aba do chamado (tira o filtro que o esconde, amplia "Carregar mais"), expande a linha e a destaca.
   async function abrirChamadoSebraeNoF5(chave) {
     await app.abrirPainelCockpit?.("sebrae-chamados");
-    const alvo = [...document.querySelectorAll('[data-cockpit-tool-panel="sebrae-chamados"] article[data-numero]')]
+    const alvo = app.mostrarChamadoSebrae?.(chave) || [...document.querySelectorAll('[data-cockpit-tool-panel="sebrae-chamados"] article[data-numero]')]
       .find(artigo => artigo.dataset.numero === String(chave));
+    // mostrarChamadoSebrae já abre a linha; espera a animação de todo details em volta, aberto agora ou antes.
     const abertos = [];
     for (let pai = alvo?.parentElement?.closest("details"); pai; pai = pai.parentElement?.closest("details")) {
-      if (!pai.open) { pai.open = true; abertos.push(pai); }
+      pai.open = true;
+      abertos.push(pai);
     }
     if (abertos.length) {
       // Abrir um details anima a altura do conteúdo (CSS): rolar antes do fim erra o alvo e exigia um segundo clique.
