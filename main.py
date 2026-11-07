@@ -2438,9 +2438,24 @@ _ticket_import_services = TicketImportServices(
     load_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
 )
 
+def _dashboard_endpoint_index() -> Optional[Dict[str, Any]]:
+    """Endpoint index plus the Simpress base serials: the input of the MacBook ``S`` equivalence (read only).
+
+    None while the base is not loaded: without it the "S also in the base" ambiguity check would be blind.
+    """
+    with STATE_LOCK:
+        details = list(inventory_state.equipamentos_cache)
+    if not details:
+        return None
+    return effective_alias.with_details_serials(
+        effective_alias.read_endpoint_alias_index(_effective_alias_services, removed_endpoint_hostname_keys()), details,
+    )
+
+
 def _dashboard_derived_os_links(report: Dict[str, Any]) -> List[Dict[str, Any]]:
     importado = sebrae_novos.ler_existentes(sebrae_novos.caminhos_padrao(STATE_DIR).existentes)
-    return sebrae_vinculos.vinculos_derivados(importado["abertos"] if importado else [], report)
+    abertos = importado["abertos"] if importado else []
+    return sebrae_vinculos.vinculos_derivados(abertos, report, _dashboard_endpoint_index() if abertos else None)
 
 
 def _dashboard_manual_os_links() -> List[Dict[str, Any]]:
@@ -2617,6 +2632,7 @@ app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
     apelidos=lambda: sebrae_cruzamento.apelidos_por_serie(_listar_equipamentos_indexados()),
     relatorio_chamados=_dashboard_ticket_report,
     vinculos_os=_dashboard_manual_os_links,
+    indice_endpoint=_dashboard_endpoint_index,
     runner=get_chrome_automation_runner,
 )))
 

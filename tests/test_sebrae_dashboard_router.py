@@ -54,6 +54,39 @@ class RotasBase(unittest.TestCase):
         return self.post("/api/sebrae/dashboard", files={"file": (nome, conteudo, "application/octet-stream")})
 
 
+class OsDeMacbookPelaSerieTest(unittest.TestCase):
+    """Wiring of the MacBook ``S`` equivalence: the suggested E and the update flow use ``indice_endpoint``, and its failure is harmless."""
+
+    MAC = [{"nome": "Camila Lopes", "serie": "SCXC9F072K1", "modelo": "MacBook", "cidade": "Curitiba"}]
+    INDICE = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1"}}
+
+    def cliente(self, indice):
+        self.caminhos = sebrae_novos.caminhos_padrao(Path(tempfile.mkdtemp()))
+        app = FastAPI()
+        app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: self.caminhos, max_upload_bytes=lambda: 10 * 1024 * 1024, registros=lambda: self.MAC,
+            relatorio_chamados=lambda: {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]},
+            indice_endpoint=indice,
+        )))
+        cliente = TestClient(app)
+        base = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO")), 2, texto("I2", "Camila Lopes"))
+        return cliente, cliente.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", base, "application/octet-stream")}).json()["importado"]
+
+    def test_os_sugerida_pela_outra_grafia_da_serie_e_gravada_na_atualizacao(self):
+        cliente, estado = self.cliente(lambda: self.INDICE)
+        self.assertEqual(estado["abertos"][0]["automaticos_sugeridos"], {"K": "SCXC9F072K1", "L": "MacBook", "N": "Curitiba", "E": "77"})
+        resposta = cliente.post("/api/sebrae/dashboard/atualizar", json={"versao_importacao": estado["versao"]})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["linhas"][0]["celulas"], ["E", "K", "L", "N"])
+
+    def test_sem_indice_ou_com_indice_quebrado_a_tela_segue_sem_a_os(self):
+        def quebrado():
+            raise KeyError("x")
+        for indice in (lambda: None, quebrado):
+            _, estado = self.cliente(indice)
+            self.assertEqual(estado["abertos"][0]["automaticos_sugeridos"], {"K": "SCXC9F072K1", "L": "MacBook", "N": "Curitiba"})
+
+
 class RotasSebraeTest(RotasBase):
     def test_estado_vazio_antes_de_importar(self):
         self.assertEqual(self.cliente.get("/api/sebrae/novos").json(), {"importado": None, "novos": None})
