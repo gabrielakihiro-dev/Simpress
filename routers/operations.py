@@ -6,7 +6,7 @@ from datetime import datetime
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -34,7 +34,7 @@ from domains.ticket_import import (
     ticket_annotation_row_hash,
 )
 from domains.inventory_comparison import normalize_reference_value
-from domains.ticket_reconciliation import reconcile_ticket_workbooks
+from domains.ticket_reconciliation import _serial_key, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
@@ -75,6 +75,15 @@ class TicketOsLinkPayload(BaseModel):
         if not normalized:
             raise ValueError("Informe a série e o número da OS.")
         return normalized
+
+
+class TicketExportPayload(BaseModel):
+    """Exportação igual à tela da aba OS: só as séries que passam no filtro atual da tela."""
+    snapshot_id: str = Field("", max_length=200)
+    series: List[Annotated[str, Field(max_length=100)]] = Field(..., max_length=5000)
+    search: str = Field("", max_length=500)
+    relation: str = Field("", max_length=100)
+    attention_only: bool = False
 
 
 def create_operations_router(
@@ -451,42 +460,18 @@ def create_operations_router(
             "sincronizacao": "sincronizada" if sync_enabled and synced else "pendente" if sync_enabled else "local",
         }
 
-    @router.get("/api/operacoes/chamados/exportar")
-    def export_ticket_report(
-        snapshot_id: str = "",
-        relation: str = "",
-        status: str = "",
-        queue: str = "",
-        city: str = "",
-        provider: str = "",
-        search: str = "",
-        stale_days: int = 3,
-        age_filter: str = "",
-        attention_only: bool = False,
-    ):
+    def _ticket_export_response(
+        snapshot_id: str,
+        filters: Dict[str, Any],
+        select_tickets: Callable[[Sequence[Dict[str, Any]]], List[Dict[str, Any]]],
+    ) -> StreamingResponse:
         report = load_ticket_report()
         snapshots = displayed_ticket_snapshots(report)
         selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
         snapshot = next((item for item in snapshots if item.get("id") == selected_id), None)
         if snapshot is None:
             raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
-        filters = {
-            "relation": relation, "status": status, "queue": queue, "city": city,
-            "provider": provider, "search": search, "stale_days": 3,
-            "age_filter": age_filter, "attention_only": attention_only,
-        }
-        tickets = filter_ticket_records(
-            snapshot.get("chamados", []),
-            relation=relation,
-            status=status,
-            queue=queue,
-            city=city,
-            provider=provider,
-            search=search,
-            stale_days=3,
-            age_filter=age_filter,
-            attention_only=attention_only,
-        )
+        tickets = select_tickets(snapshot.get("chamados", []))
         selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == selected_id), len(snapshots) - 1)
         timeline_snapshots = snapshots[:selected_index + 1]
         annotation_records = latest_ticket_annotations()
@@ -504,6 +489,51 @@ def create_operations_router(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f'attachment; filename="Acompanhamento_de_Chamados_{date_label}.xlsx"'},
         )
+
+    @router.get("/api/operacoes/chamados/exportar")
+    def export_ticket_report(
+        snapshot_id: str = "",
+        relation: str = "",
+        status: str = "",
+        queue: str = "",
+        city: str = "",
+        provider: str = "",
+        search: str = "",
+        stale_days: int = 3,
+        age_filter: str = "",
+        attention_only: bool = False,
+    ):
+        filters = {
+            "relation": relation, "status": status, "queue": queue, "city": city,
+            "provider": provider, "search": search, "stale_days": 3,
+            "age_filter": age_filter, "attention_only": attention_only,
+        }
+        return _ticket_export_response(snapshot_id, filters, lambda chamados: filter_ticket_records(
+            chamados,
+            relation=relation,
+            status=status,
+            queue=queue,
+            city=city,
+            provider=provider,
+            search=search,
+            stale_days=3,
+            age_filter=age_filter,
+            attention_only=attention_only,
+        ))
+
+    # A tela da aba OS manda as séries que passam no filtro dela (busca por usuário, hostname e UTIC, Relação e Triagem):
+    # o servidor não refiltra, só limita às séries recebidas e mantém a ordem do GET. Busca, relação e atenção servem só ao Resumo.
+    @router.post("/api/operacoes/chamados/exportar")
+    def export_ticket_report_from_screen(payload: TicketExportPayload):
+        wanted = {key for key in map(_serial_key, payload.series) if key}
+        filters = {
+            "relation": payload.relation, "search": payload.search, "stale_days": 3,
+            "attention_only": payload.attention_only,
+        }
+        return _ticket_export_response(payload.snapshot_id, filters, lambda chamados: [
+            ticket for ticket in filter_ticket_records(chamados, stale_days=3)
+            if _serial_key(ticket.get("serie")) in wanted
+        ])
 
     @router.post("/api/operacoes/chamados/importar")
     def import_ticket_workbooks(

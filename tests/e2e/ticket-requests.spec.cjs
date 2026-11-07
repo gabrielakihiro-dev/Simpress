@@ -74,6 +74,27 @@ test("Chamados: Exportar Excel usa a versão selecionada e os filtros do painel"
   await expect(exportButton).toBeEnabled();
 });
 
+test("Chamados: na versão da tabela, Exportar Excel manda por POST as séries que a tela filtra", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
+  const row = page.locator('tbody tr[data-serial="DEMO-SN-001"]').first();
+  await expect(row).toBeAttached();
+  const exportar = async () => {
+    const request = page.waitForRequest(req => req.url().includes("/api/operacoes/chamados/exportar"));
+    await page.locator("#cockpit-tickets-export").click();
+    return request;
+  };
+  let request = await exportar();
+  expect(request.method()).toBe("POST");
+  expect(request.postDataJSON()).toMatchObject({ snapshot_id: "20261009_120000", series: ["DEMO-SN-001"], search: "" });
+  await expect(page.locator("#cockpit-tickets-export")).toBeEnabled();
+
+  await page.locator("#cockpit-tickets-search").fill("nada-casa-com-isto");
+  await expect(row).toBeHidden();
+  request = await exportar();
+  expect(request.postDataJSON()).toMatchObject({ series: [], search: "nada-casa-com-isto" });
+});
+
 test("Chamados: limpar a versão também limpa a comparação e bloqueia a exportação", async ({ page }) => {
   await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
     snapshot_id: "new", historico: HISTORICO,

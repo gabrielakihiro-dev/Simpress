@@ -9,7 +9,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 import openpyxl
 from pydantic import ValidationError
 from openpyxl.utils import column_index_from_string
@@ -21,7 +22,7 @@ from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.sebrae_vinculos import vinculos_derivados
 from domains.ticket_reporting import build_ticket_workbook
-from routers.operations import TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
+from routers.operations import TicketExportPayload, TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -732,6 +733,74 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(captured["serials"], ["SN-STALE"])
             self.assertEqual(captured["stale_days"], 3)
             self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def test_post_export_uses_screen_series_without_refiltering(self):
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
+            path = Path(directory) / "tickets.json"
+            today = date.today()
+            tickets = []
+            for serial, order, age in (("SN-FRESH", "7279287", 1), ("SN-STALE", "7279280", 5), ("SN-OTHER", "7279290", 1)):
+                updated = (today - timedelta(days=age)).isoformat()
+                tickets.append({
+                    "serie": serial, "relacao": "conferida", "ordens_servico_conferidas": [order],
+                    "simpress": {"serie": serial, "pedidos": ["48076976"], "ordens_servico": [order]},
+                    "oracle": [{"ordem_servico": order, "status": "Em execução", "ultima_atualizacao": updated}],
+                })
+            path.write_text(json.dumps({
+                "snapshot_id": "screen-version", "atualizado_em": today.isoformat(),
+                "fontes": {}, "resumo": {"series_total": 3}, "chamados": tickets,
+            }), encoding="utf-8")
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+            endpoint = route_handler(router, "/api/operacoes/chamados/exportar", "POST")
+            outputs = []
+
+            def keep_workbook(*args, **kwargs):
+                outputs.append(build_ticket_workbook(*args, **kwargs))
+                return outputs[-1]
+
+            def exported_serials(payload):
+                with patch("routers.operations.build_ticket_workbook", side_effect=keep_workbook):
+                    response = endpoint(TicketExportPayload(**payload))
+                self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                workbook = openpyxl.load_workbook(BytesIO(outputs[-1]))
+                summary = {row[0]: row[1] for row in workbook["Resumo"].iter_rows(values_only=True)}
+                return [row[0] for row in workbook["Chamados"].iter_rows(min_row=2, values_only=True)], summary
+
+            # A busca por nome de usuário só existe na tela: o servidor não a acharia, mas exporta as séries recebidas.
+            serials, summary = exported_serials({
+                "snapshot_id": "screen-version", "series": ["sn-fresh", "SN-STALE"], "search": "Maria Usuária",
+            })
+            with patch("routers.operations.build_ticket_workbook", side_effect=keep_workbook):
+                route_handler(router, "/api/operacoes/chamados/exportar", "GET")(snapshot_id="screen-version")
+            get_order = [row[0] for row in openpyxl.load_workbook(BytesIO(outputs[-1]))["Chamados"].iter_rows(min_row=2, values_only=True)]
+            self.assertEqual(serials, [serial for serial in get_order if serial in {"SN-FRESH", "SN-STALE"}], "mesma ordem do GET")
+            self.assertEqual(summary["Busca"], "Maria Usuária")
+            self.assertEqual(summary["Séries no resultado"], 2)
+
+            serials, summary = exported_serials({"snapshot_id": "screen-version", "series": []})
+            self.assertEqual(serials, [], "lista vazia exporta zero chamados, nunca todos")
+            self.assertEqual(summary["Séries no resultado"], 0)
+
+            with self.assertRaises(ValidationError):
+                TicketExportPayload(snapshot_id="screen-version")
+            with self.assertRaises(ValidationError):
+                TicketExportPayload(series=["X" * 101])
+
+            # Pelo HTTP de verdade: corpo JSON lido pelo FastAPI e 422 sem a lista.
+            app = FastAPI()
+            app.include_router(router)
+            client = TestClient(app)
+            response = client.post("/api/operacoes/chamados/exportar", json={"snapshot_id": "screen-version", "series": ["SN-OTHER"]})
+            self.assertEqual(response.status_code, 200, response.text)
+            rows = list(openpyxl.load_workbook(BytesIO(response.content))["Chamados"].iter_rows(min_row=2, values_only=True))
+            self.assertEqual([row[0] for row in rows], ["SN-OTHER"])
+            self.assertEqual(client.post("/api/operacoes/chamados/exportar", json={"snapshot_id": "screen-version"}).status_code, 422)
+            self.assertEqual(client.post("/api/operacoes/chamados/exportar", json={"snapshot_id": "nao-existe", "series": []}).status_code, 404)
 
     def test_import_rejects_non_xlsx_and_missing_source_columns(self):
         with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
