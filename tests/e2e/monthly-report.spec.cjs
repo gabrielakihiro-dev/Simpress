@@ -43,7 +43,15 @@ function monthlyReport(month) {
 
 function sebraeNovos() {
   return {
-    importado: { abertos: [{ numero: "UTIC-2026-10", titulo: "Notebook sem rede", automaticos: { K: "SN-UTIC-10" }, leitura_softexpert: { habilitada_em: "12/10/2026 10:00" } }, { numero: "linha:7", chamado: "", titulo: "Sem data", automaticos: {} }], finalizados: [] },
+    // UTIC-2026-12 foi finalizado pelo site e ainda está em `abertos` (antes de reimportar): o F5 já não o conta como aberto.
+    importado: {
+      abertos: [
+        { numero: "UTIC-2026-10", titulo: "Notebook sem rede", automaticos: { K: "SN-UTIC-10" }, leitura_softexpert: { habilitada_em: "12/10/2026 10:00" } },
+        { numero: "linha:7", chamado: "", titulo: "Sem data", automaticos: {} },
+        { numero: "UTIC-2026-12", titulo: "Já finalizado", automaticos: { K: "SN-UTIC-12" }, leitura_softexpert: { habilitada_em: "01/10/2026 09:00" } },
+      ],
+      finalizados: [{ numero: "UTIC-2026-12", encerrado_em: "20/10/2026 15:00", em: "2026-10-20T15:01:00-03:00", ficha: { titulo: "Já finalizado", fatos: [["Série", "SN-UTIC-12"]] } }],
+    },
     novos: { formulario: [{ numero: "UTIC-2026-11", linha: { G: "Monitor apagado", K: "SN-UTIC-11", P: "02/09/2026 08:30" } }] },
   };
 }
@@ -197,8 +205,11 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
   await expect(sebrae.locator(".ck-rel__numero").first()).toContainText("1");
   await expect(sebrae.locator(".ck-rel__numero").nth(1)).toContainText("2");
   await page.locator("#cockpit-monthly-month").fill("2026-10");
-  await expect(sebrae.locator("tbody tr")).toHaveCount(1);
-  await expect(sebrae.locator("tbody tr")).toContainText("UTIC-2026-10");
+  await expect(sebrae.locator("tbody tr")).toHaveCount(2);
+  await expect(sebrae.locator("tbody tr").first()).toContainText("UTIC-2026-10");
+  const both = sebrae.locator("tbody tr", { hasText: "UTIC-2026-12" });
+  await expect(both).toContainText("Aberto no mês");
+  await expect(both).toContainText("Finalizado no mês");
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), situação atual: 1 novo · 2 antigos em aberto");
 
   await details.getByRole("button", { name: "Abrir no Resumo (F3)" }).click();
@@ -212,6 +223,9 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
   await openMonthlyReport(page);
   await details.locator('[data-rel-secao="sebrae"]').getByRole("button", { name: "Abrir UTIC-2026-10 na aba Chamados (F5)" }).click();
   await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
+  // Mesmos números nas duas abas: o F8 segue a regra do F5 (finalizado pelo site sai de Novos e Antigos).
+  await expect(page.locator("#sebrae-novos-contagem")).toHaveText("1");
+  await expect(page.locator("#sebrae-antigos-contagem")).toHaveText("2");
 
   await openMonthlyReport(page);
   await details.locator('[data-rel-secao="comp"]').getByRole("button", { name: "Abrir SN-COMP-1 na Home" }).click();

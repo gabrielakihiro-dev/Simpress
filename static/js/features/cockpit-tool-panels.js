@@ -140,8 +140,9 @@
       `Localidade divergente: ${displayCount(counts["Localidade divergente"])}`,
     ];
     if (sebrae && (sebrae.importado || sebrae.novos)) {
-      const novos = (sebrae.novos?.formulario || []).length;
-      const antigos = (sebrae.importado?.abertos || []).length;
+      const lists = sebraeOpenLists(sebrae);
+      const novos = lists.novos.length;
+      const antigos = lists.antigos.length;
       lines.push("", `Chamados (F5), situação atual: ${displayCount(novos)} ${plural(novos, "novo", "novos")} · ${displayCount(antigos)} ${plural(antigos, "antigo", "antigos")} em aberto`);
     }
     lines.push(
@@ -1255,22 +1256,39 @@
     return section;
   }
 
-  // Chamados da aba Chamados (F5), lidos de GET /api/sebrae/novos (só leitura). Totais = situação atual (não mudam com o
-  // mês); a lista traz só os chamados com data conhecida no mês: abertura (P/"Habilitada em") ou finalização feita pelo site.
+  // Chamados da aba Chamados (F5), lidos de GET /api/sebrae/novos (só leitura). Mesma regra do F5 (sebrae-dashboard.js):
+  // um chamado que o site finalizou sai de Novos e de Antigos na hora, mesmo antes de reimportar o Dashboard.
+  function sebraeOpenLists(data) {
+    const finalizados = data?.importado?.finalizados || [];
+    const done = new Set(finalizados.map(item => item.numero));
+    const open = item => !done.has(item.numero);
+    return { novos: (data?.novos?.formulario || []).filter(open), antigos: (data?.importado?.abertos || []).filter(open), finalizados };
+  }
+
+  // Lista do mês: só chamados com data conhecida no mês: abertura (P dos novos, "Habilitada em" dos antigos já lidos)
+  // ou finalização feita pelo site. Um chamado aberto e finalizado no mesmo mês é uma linha só, com os dois selos.
   function sebraeMonthRows(data, monthKey) {
-    const rows = [];
-    (data?.novos?.formulario || []).forEach(item => {
-      if (sebraeMonthKey(item.linha?.P) === monthKey) rows.push({ chave: item.numero, numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K, data: item.linha?.P, situacao: "Aberto no mês", tom: "info" });
-    });
-    (data?.importado?.abertos || []).forEach(item => {
-      const opened = item.leitura_softexpert?.habilitada_em;
-      if (sebraeMonthKey(opened) === monthKey) rows.push({ chave: item.numero, numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero, titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K, data: opened, situacao: "Aberto no mês", tom: "info" });
-    });
+    const rows = new Map();
+    const row = (chave, base) => rows.get(chave) || rows.set(chave, { chave, abertura: "", finalizacao: "", situacoes: [], ...base }).get(chave);
+    const opened = (chave, base, date) => {
+      if (sebraeMonthKey(date) !== monthKey) return;
+      const item = row(chave, base);
+      item.abertura = date;
+      item.situacoes.unshift("Aberto no mês");
+    };
+    (data?.novos?.formulario || []).forEach(item => opened(item.numero, { numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }, item.linha?.P));
+    (data?.importado?.abertos || []).forEach(item => opened(item.numero, {
+      numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero,
+      titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K,
+    }, item.leitura_softexpert?.habilitada_em));
     (data?.importado?.finalizados || []).forEach(item => {
       const closed = item.encerrado_em || item.em;
-      if (sebraeMonthKey(closed) === monthKey) rows.push({ chave: item.numero, numero: item.numero, titulo: item.ficha?.titulo || "", serie: fichaSerial(item.ficha), data: closed, situacao: "Finalizado no mês", tom: "success" });
+      if (sebraeMonthKey(closed) !== monthKey) return;
+      const entry = row(item.numero, { numero: item.numero, titulo: item.ficha?.titulo || "", serie: fichaSerial(item.ficha) });
+      entry.finalizacao = closed;
+      entry.situacoes.push("Finalizado no mês");
     });
-    return rows;
+    return [...rows.values()];
   }
 
   function fichaSerial(ficha) {
@@ -1295,8 +1313,9 @@
       section.append(element("p", "ck-lista__vazio", "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4)."));
       return section;
     }
-    const novos = (data.novos?.formulario || []).length;
-    const antigos = (data.importado?.abertos || []).length;
+    const lists = sebraeOpenLists(data);
+    const novos = lists.novos.length;
+    const antigos = lists.antigos.length;
     const totals = element("div", "ck-rel__sebrae-totais");
     totals.append(
       monthlyNumbers([["Chamados novos", novos], ["Antigos em aberto", antigos]]),
@@ -1312,14 +1331,17 @@
       return section;
     }
     const shown = rows.slice(0, monthlyView.limiteSebrae);
-    section.append(monthlyTable(["Chamado", "Título", "Série", "Data", "Situação"], shown.map(row => {
+    section.append(monthlyTable(["Chamado", "Título", "Série", "Abertura", "Finalização", "Situação no mês"], shown.map(row => {
       const serial = singleSerial(row.serie);
+      const situations = element("span", "ck-rel__selos");
+      row.situacoes.forEach(text => situations.append(monthlyBadge(text, text === "Finalizado no mês" ? "success" : "info")));
       return [
         monthlyLink(row.numero || "—", `Abrir ${row.numero || "chamado"} na aba Chamados (F5)`, () => app.abrirChamadoSebraeNoF5?.(row.chave)),
         row.titulo || "—",
         serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : "—",
-        sebraeDateText(row.data),
-        monthlyBadge(row.situacao, row.tom),
+        row.abertura ? sebraeDateText(row.abertura) : "—",
+        row.finalizacao ? sebraeDateText(row.finalizacao) : "—",
+        situations,
       ];
     })), monthlyMore(shown.length, rows.length, () => {
       monthlyView.limiteSebrae += MONTHLY_PAGE;
@@ -1937,5 +1959,7 @@
     aliasMetrics,
     monthlyPreviewText,
     sebraeMonthKey,
+    sebraeOpenLists,
+    sebraeMonthRows,
   };
 });

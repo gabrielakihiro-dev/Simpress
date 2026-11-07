@@ -125,6 +125,26 @@ test("sebraeMonthKey reads Dashboard (dd/mm/aaaa HH:mm) and ISO dates and ignore
   assert.equal(panels.sebraeMonthKey("ontem"), "");
 });
 
+test("Sebrae lists follow the F5 rule and one ticket opened and finalized in the month is one row", () => {
+  const data = {
+    importado: {
+      abertos: [{ numero: "UTIC-2026-1", titulo: "A", leitura_softexpert: { habilitada_em: "03/10/2026 10:00" } }, { numero: "UTIC-2026-2", titulo: "B" }],
+      finalizados: [{ numero: "UTIC-2026-1", encerrado_em: "20/10/2026 15:00", ficha: { titulo: "A", fatos: [["Série", "SN-1"]] } }],
+    },
+    novos: { formulario: [{ numero: "UTIC-2026-3", linha: { G: "C", K: "SN-3", P: "02/09/2026 08:30" } }] },
+  };
+  const lists = panels.sebraeOpenLists(data);
+  assert.deepEqual(lists.antigos.map(item => item.numero), ["UTIC-2026-2"]);
+  assert.deepEqual(lists.novos.map(item => item.numero), ["UTIC-2026-3"]);
+  const october = panels.sebraeMonthRows(data, "2026-10");
+  assert.equal(october.length, 1);
+  assert.deepEqual(october[0].situacoes, ["Aberto no mês", "Finalizado no mês"]);
+  assert.equal(october[0].abertura, "03/10/2026 10:00");
+  assert.equal(october[0].finalizacao, "20/10/2026 15:00");
+  assert.deepEqual(panels.sebraeMonthRows(data, "2026-09").map(row => row.numero), ["UTIC-2026-3"]);
+  assert.match(panels.monthlyPreviewText({ mes: { label: "outubro de 2026" } }, data), /Chamados \(F5\), situação atual: 1 novo · 1 antigo em aberto/);
+});
+
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.
 function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {}) {
   const elementos = new Map();
