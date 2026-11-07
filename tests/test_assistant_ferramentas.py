@@ -341,7 +341,7 @@ class SchemasPorMensagemTests(unittest.TestCase):
         agrupadas = set(NUCLEO_FERRAMENTAS).union(*(set(tools) for _, tools in GRUPOS_FERRAMENTAS.values()))
         self.assertEqual(agrupadas, set(TOOLS))
         self.assertEqual(len(QUERY_TOOLS) + len(CHANGE_TOOLS), len(TOOLS))  # no duplicated name swallowed by the dict
-        todos = set().union(*(self.nomes(f"{padrao}") for padrao in ("chamados sebrae histórico transferência rotina usuário apelido unidade hostname remoto mensal excel recarregar",)))
+        todos = set().union(*(self.nomes(f"{padrao}") for padrao in ("chamados sebrae histórico transferência rotina usuário apelido unidade hostname remoto mensal excel recarregar cobertura",)))
         self.assertEqual(todos, {t for t in TOOLS if t != "buscar_web"})
 
     def test_subset_is_smaller_than_the_full_set(self) -> None:
