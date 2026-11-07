@@ -310,3 +310,34 @@ test("contagens grandes usam separador de milhar", async () => {
     assert.equal(section.querySelector("[data-os-mais] .sebrae-mais__n").textContent, "Mostrando 25 de 1.000");
   } finally { report.chamados = chamados; }
 });
+
+test("seriesFiltradasOs devolve as séries de todas as páginas que passam no filtro e null antes de carregar", async () => {
+  [...doc.body.children].forEach(node => node.remove());
+  assert.equal(panels.seriesFiltradasOs(), null, "sem tabela montada");
+  const chamados = report.chamados;
+  report.chamados = Array.from({ length: 60 }, (_, i) => ({
+    serie: `SN-X${String(i).padStart(2, "0")}`, relacao: i % 2 ? "conferida" : "somente_oracle",
+    simpress: { ordens_servico: i === 0 ? ["7000"] : [] },
+    oracle: [{ solicitacao: `R${i}`, ordem_servico: String(2000 + i), descricao: "" }],
+  }));
+  try {
+    const host = novoHost();
+    const section = panels.montarTabelaOs(host, { semBusca: true, grupoSerie: ticket => (Number(ticket.serie.slice(-2)) < 10 ? "atrasados" : "em_dia") });
+    assert.equal(panels.seriesFiltradasOs(), null, "tabela ainda carregando");
+    await waitFor(() => /OS ·/.test(section.querySelector(".ticket-summary-status").textContent));
+    panels.filtrarTabelaOs({ busca: "", relacao: "", triagem: "", atencao: false });
+    assert.equal(visiveis(section).length, 25, "a tela mostra só a primeira página");
+    const todas = panels.seriesFiltradasOs();
+    assert.equal(todas.length, 60, "todas as páginas, uma vez por série (SN-X00 tem duas OS)");
+    assert.equal(new Set(todas).size, 60);
+
+    panels.filtrarTabelaOs({ busca: "sn-x1" });
+    assert.deepEqual(panels.seriesFiltradasOs().sort(), Array.from({ length: 10 }, (_, i) => `SN-X1${i}`));
+    panels.filtrarTabelaOs({ busca: "", relacao: "conferida" });
+    assert.equal(panels.seriesFiltradasOs().length, 30);
+    panels.filtrarTabelaOs({ relacao: "conferida", triagem: "atrasados" });
+    assert.deepEqual(panels.seriesFiltradasOs().sort(), ["SN-X01", "SN-X03", "SN-X05", "SN-X07", "SN-X09"]);
+    panels.filtrarTabelaOs({ relacao: "", triagem: "", busca: "nada-casa" });
+    assert.deepEqual(panels.seriesFiltradasOs(), [], "filtro sem resultado devolve lista vazia, não null");
+  } finally { report.chamados = chamados; panels.filtrarTabelaOs({ busca: "", relacao: "", triagem: "" }); }
+});

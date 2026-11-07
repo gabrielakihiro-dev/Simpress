@@ -292,6 +292,20 @@
       return !row.hidden;
     }
 
+    // Séries de todas as OS que passam no filtro atual, em todas as páginas (o "Exportar Excel" sai igual à tela).
+    // null = nenhuma tabela carregada (quem chama mantém o caminho antigo); tabela carregada sem OS devolve [].
+    function seriesFiltradasOs() {
+      let carregada = false;
+      const series = new Set();
+      osExternas.forEach((st, section) => {
+        if (!section.isConnected || !(st.renderizada || section.dataset.estado === "vazio")) return;
+        carregada = true;
+        const termo = textoOs(st.busca.trim());
+        section.querySelectorAll("tbody tr[data-serial]").forEach(item => { if (casaOs(st, termo, item)) series.add(item.dataset.serial); });
+      });
+      return carregada ? [...series] : null;
+    }
+
     function filtrarTabelaOs(filtro = {}) {
       osExternas.forEach((st, section) => {
         const antes = [st.busca, st.relacao, st.triagem, st.atencao].join("|");
@@ -952,20 +966,21 @@
     doc.addEventListener("simpress:chamados-atualizados", () => refreshTicketSummary(true));
     doc.addEventListener("simpress:usuarios-equipamento-atualizados", () => refreshTicketSummary(true));
 
-    osApi = { montar: montarTabelaOs, atualizar: refreshTicketSummary, filtrar: filtrarTabelaOs, revelar: revelarLinhaOs };
+    osApi = { montar: montarTabelaOs, atualizar: refreshTicketSummary, filtrar: filtrarTabelaOs, revelar: revelarLinhaOs, series: seriesFiltradasOs };
     refresh(true);
   }
 
   // Ponte para a instalação ativa: permite window.SimpressDataPanels.montarTabelaOs(...) após o install.
-  let osApi = { montar: () => null, atualizar: async () => {}, filtrar: () => {}, revelar: () => false };
+  let osApi = { montar: () => null, atualizar: async () => {}, filtrar: () => {}, revelar: () => false, series: () => null };
   const montarTabelaOs = (host, opcoes) => osApi.montar(host, opcoes);
   const atualizarTabelaOs = force => osApi.atualizar(Boolean(force));
   const filtrarTabelaOs = filtro => osApi.filtrar(filtro);
   const revelarLinhaOs = row => osApi.revelar(row);
+  const seriesFiltradasOs = () => osApi.series();
 
   return Object.freeze({
     ENDPOINT, DENSITY_KEY, sortKey, compareValues, nextDirection, sortedOrder, toTsv,
     divergenceTotal, barPercentages, formatNumber, pluralize, install,
-    montarTabelaOs, atualizarTabelaOs, filtrarTabelaOs, revelarLinhaOs,
+    montarTabelaOs, atualizarTabelaOs, filtrarTabelaOs, revelarLinhaOs, seriesFiltradasOs,
   });
 });
