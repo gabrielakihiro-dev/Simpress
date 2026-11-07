@@ -26,7 +26,9 @@ Adaptar `Relatório mensal` para o painel da captura e acessá-lo pelo menu Ferr
 - À direita, apresente em fonte mono a prévia textual do mesmo relatório e do mesmo mês selecionado. Inclua os totais que o relatório suporta: chamados, tempo médio, transportes, divergências, alterações de apelido, lista por tipo e top 3 unidades. Use os mesmos critérios do XLSX e omita ou marque indisponível qualquer parte sem dados suficientes; não mantenha duas versões independentes do conteúdo.
 - No rodapé da prévia, ofereça `Copiar texto` e `Exportar planilha`. Mantenha feedback legível e o estado de carregamento/erro; em telas pequenas, os controles continuam acessíveis sem sobreposição.
 
-## Layout reestruturado (Cockpit, Etapa F)
+## Layout reestruturado (Cockpit, Etapa F) — substituído
+
+> Substituído pelo "Layout operacional (07/11/2026)" abaixo; mantido como histórico.
 
 Sobrepõe a composição acima no painel Cockpit (`data-cockpit-tool-panel="relatorio"`); mesmos dados, endpoints, exportação e IDs.
 
@@ -39,9 +41,7 @@ Sobrepõe a composição acima no painel Cockpit (`data-cockpit-tool-panel="rela
 
 ## Responsividade e acessibilidade
 
-- Mantenha `min-width:1200px` no app. Abaixo disso, a página pode rolar horizontalmente para preservar a composição completa; não corte os controles.
-- Em desktop, mantenha a área analítica à esquerda e a prévia à direita, com rolagem independente se necessário.
-- Gráficos devem ter legenda, rótulo textual e alternativa acessível aos valores; cor sozinha não comunica série.
+- Vale a regra geral do `AGENTS.md`: de 320px a 2560px sem rolagem horizontal da página e sem `min-width:1200px`. Tabelas largas rolam dentro da própria caixa e viram cartões no celular.
 - Preserve foco visível, nomes acessíveis, `aria-live` para estados de cópia/exportação e `prefers-reduced-motion`.
 
 ## Integração e validação
@@ -55,3 +55,28 @@ Sobrepõe a composição acima no painel Cockpit (`data-cockpit-tool-panel="rela
 ## Relato final
 
 Liste a origem usada por cada cartão, gráfico, tabela e trecho da prévia; indique o que ficou indisponível por falta de dados; e informe com precisão os testes executados e o contrato de exportação preservado.
+
+## Layout operacional (07/11/2026)
+
+Autorização: pedido do usuário de 07/11/2026 ("tudo está desconexo… planejar um layout perfeito e conectar às outras abas"), com plano e mockups aprovados no mesmo dia (canvas de Design da sessão: desktop claro, desktop escuro e celular). O usuário autorizou explicitamente os elementos visuais que o artefato de referência do Cockpit não tem: bloco tracejado para o que não muda com o mês, barras proporcionais em `Inventário por tipo` e botões de filtro por situação. Decisões do usuário: foco em acompanhar a operação (pendências no topo); remover `Tempo médio até fechar`, `Transportes` e `Alterações de apelido` da tela e da prévia (a XLSX não muda); escopo front-end + o campo de leitura `comparacao.evento_id`; incluir os chamados do SoftExpert (aba Chamados, F5) em duas etapas: primeiro a situação atual e a lista com data conhecida (esta entrega, só front-end), depois uma contagem mensal no backend (ainda não feita).
+
+Problemas que motivaram a mudança: o mesmo número aparecia três vezes (KPIs, gráfico e cartão) e de novo na prévia; dois KPIs eram sempre `—`; inventário da base atual misturado com dados do mês; listas sem ação; registros fora das contagens só no `title`; data crua no status; o painel não acompanhava importações.
+
+Composição (IDs antigos mantidos: `#cockpit-monthly-periods`, `-month`, `-copy`, `-export`, `-status`, `-kpis`, `-details`, `-preview`; novos: `#cockpit-monthly-period`, `#cockpit-monthly-attention`, `#cockpit-monthly-attention-title`, `#cockpit-monthly-fora`, títulos `#cockpit-monthly-{os,comp,sebrae,base,movimento}-title` e `data-rel-secao` em cada seção):
+
+| Bloco | Fonte | Observação |
+| --- | --- | --- |
+| `Precisa de atenção` | `os.oracle/simpress.pendentes`, `comparacao.contagens`, `comparacao.horario`, `os.dados_insuficientes` | `Ver lista ↓` leva à seção (o das OS já filtra `Pendentes`). |
+| `Movimento do mês` | `os.*.abertas/concluidas/encerradas_sem_data` | Pendentes ficam só no bloco de atenção. |
+| `OS e pedidos do mês` | `os.linhas` (mesma aba `OS do mês` da XLSX) | Filtro por `situacao`; 25 por vez. |
+| `Pendências da comparação` | `comparacao.linhas` | `Abrir no Resumo (F3)` só com `evento_id`. |
+| `Chamados (F5)` · `Situação atual` | `GET /api/sebrae/novos` | Totais de hoje; lista só com data conhecida no mês (P, `Habilitada em`, finalização pelo site). |
+| `Base atual` · `Não muda com o mês` | `inventario` | Top 8 unidades; `Ver todas as N unidades` / `Ver menos`. |
+| `Prévia para a gestão` | `monthlyPreviewText` | Inclui período, `Comparação usada` e, se carregou, a linha dos chamados do F5. |
+
+Ligações: ver `docs/operacao/relatorio-mensal.md`, seção "Tela". Nada é gravado; o único POST observado ao navegar é a consulta `POST /api/equipamentos/usuarios-logados`, feita pela própria aba OS.
+
+Textos novos aceitos pelo usuário em 07/11/2026: `Precisa de atenção`, `OS pendentes no fim do período`, `Comparação de inventário`, `Fora das contagens`, `Mostrar registros`, `Ocultar registros`, `Movimento do mês`, `OS e pedidos do mês`, `Pendências da comparação`, `Comparação usada`, `Base atual`, `Não muda com o mês`, `Ver lista ↓`, `Ver na aba OS (F6)`, `Abrir no Resumo (F3)`, `Ver todas as N unidades`. Da opção escolhida para os chamados do SoftExpert: `Situação atual`. Textos de apoio desta entrega (seguem o mesmo padrão): `Chamados (F5)`, `Chamados novos`, `Antigos em aberto`, `Ver novos`, `Ver antigos`, `Com data em <mês>`, `Aberto no mês`, `Finalizado no mês`, `Encerradas sem data`, `Unidades com mais equipamentos`, `Criados até o corte e ainda sem conclusão ou entrega.`, `Datas ou vínculo insuficientes: não entram nos números do mês.`, `Só entram chamados com data conhecida: abertura (novos e antigos já lidos no SoftExpert) ou finalização feita pelo site.`, `Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).`
+
+Limites conhecidos: a aba OS (F6) mostra a situação atual, sem filtro por mês; o atalho para ela filtra pela série. A lista do F5 não conta chamados sem data conhecida, e a lista de finalizados do Dashboard é limitada às mais recentes. A contagem mensal completa dos chamados do SoftExpert (etapa 2) ainda não existe.
+
