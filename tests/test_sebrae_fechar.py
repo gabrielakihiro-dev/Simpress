@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from core.integrity import FileBusyError
-from core.errors import DomainConflictError
+from core.integrity import FileBusyError, FileTransactionError
+from core.errors import DomainBusyError, DomainConflictError
 from domains import sebrae_finalizacao as fin
 from domains import sebrae_novos
 from scripts import sebrae_fechar
@@ -576,6 +576,101 @@ class ReenviarTest(FecharBase):
         self.assertEqual(self.pedir(), 1)
         self.assertEqual(self.rotinas.enviadas, [])
         self.assertTrue(pendente.exists())
+
+
+class RobustezFase1BTest(FecharBase):
+    def corromper_envio(self):
+        fin.caminho_envio(self.dir).write_bytes(b"{nao e json")
+
+    def test_gravar_resultado_nao_aborta_com_registro_de_envio_corrompido(self):
+        self.corromper_envio()
+        fin.gravar_resultado(self.dir, {"em_andamento": False})
+        self.assertEqual(fin.ler_resultado(self.dir), {"em_andamento": False})
+        self.assertEqual(fin.caminho_envio(self.dir).read_bytes(), b"{nao e json")  # preservado para conferencia
+
+    def test_falha_de_escrita_da_migracao_legada_preserva_o_aviso_e_a_excecao_sobe(self):
+        legado = {"sharepoint": {"limpeza_pendente": True}}
+        fin.atomic_write_json(fin.caminho_resultado(self.dir), legado)
+        with patch.object(fin, "_gravar_envio", side_effect=DomainBusyError("disco")), self.assertRaises(DomainBusyError):
+            fin.gravar_resultado(self.dir, {"em_andamento": True})
+        self.assertEqual(fin.ler_resultado(self.dir), legado)
+
+    def test_envio_corrompido_de_ponta_a_ponta_nao_derruba_e_gera_copia_pendente_local_com_aviso(self):
+        self.descrever(A)
+        self.corromper_envio()
+        codigo, _ = self.rodar({A: ok()}, [A])
+        self.assertEqual(codigo, 1)
+        pendente, registro = fin.pendente_mais_recente(self.dir)
+        self.assertEqual(pendente.read_bytes(), self.saida.read_bytes())
+        self.assertEqual(registro["chamados"], [A])
+        aviso = self.resultado()["sharepoint"]
+        self.assertTrue(aviso["falhou"])
+        self.assertEqual(aviso["copia_local"], str(pendente))
+        self.assertFalse(aviso["copia_sharepoint"])
+        self.assertEqual((self.rotinas.enviadas, self.rotinas.copias), ([], []))
+        self.assertEqual(fin.caminho_envio(self.dir).read_bytes(), b"{nao e json")
+
+    def test_falha_local_em_preparar_envio_gera_copia_pendente_local_com_aviso(self):
+        erros = (DomainBusyError("ocupado"), FileBusyError("lock"), FileTransactionError("falhou"), OSError("leitura"))
+        for erro in erros:
+            with self.subTest(erro=type(erro).__name__):
+                self.setUp()
+                self.descrever(A)
+                with patch.object(fin, "preparar_envio", side_effect=erro):
+                    codigo, _ = self.rodar({A: ok()}, [A])
+                self.assertEqual(codigo, 1)
+                pendente, _ = fin.pendente_mais_recente(self.dir)
+                self.assertEqual(pendente.read_bytes(), self.saida.read_bytes())
+                aviso = self.resultado()["sharepoint"]
+                self.assertTrue(aviso["falhou"])
+                self.assertEqual(aviso["copia_local"], str(pendente))
+                self.assertEqual((self.rotinas.enviadas, self.rotinas.copias), ([], []))
+
+    def test_falha_ao_guardar_copia_pendente_nao_derruba_depois_do_finalizar(self):
+        for erro in (FileBusyError("lock"), FileTransactionError("falhou"), OSError("disco")):
+            with self.subTest(erro=type(erro).__name__):
+                self.setUp()
+                self.descrever(A)
+                with patch.object(fin, "preparar_envio", side_effect=DomainBusyError("ocupado")), \
+                        patch.object(fin, "guardar_pendente", side_effect=erro):
+                    codigo, _ = self.rodar({A: ok()}, [A])
+                self.assertEqual(codigo, 1)
+                aviso = self.resultado()["sharepoint"]
+                self.assertTrue(aviso["falhou"])
+                self.assertEqual((self.rotinas.enviadas, self.rotinas.copias), ([], []))
+
+    def test_conflito_em_preparar_envio_preserva_local_sem_copia_pendente_nem_upload(self):
+        self.descrever(A)
+        with patch.object(fin, "preparar_envio", side_effect=DomainConflictError("envio mudou")):
+            self.rodar({A: ok()}, [A])
+        self.assertIsNone(fin.pendente_mais_recente(self.dir))
+        self.assertTrue(self.saida.is_file())
+        self.assertEqual((self.rotinas.enviadas, self.rotinas.copias), ([], []))
+
+    def falhar_no_fim(self):
+        gravar = fin.gravar_resultado
+
+        def falhar(state_dir, resultado):
+            if resultado.get("terminado_em"):
+                raise OSError("disco")
+            gravar(state_dir, resultado)
+
+        return patch.object(fin, "gravar_resultado", side_effect=falhar)
+
+    def test_finally_nao_esconde_a_excecao_original_e_fecha_as_abas(self):
+        self.descrever(A, B)
+        self.rotinas.cancelar_no = 2  # A abre a aba; o cancelamento chega antes de B
+        fin.gravar_job(self.dir, [A, B])
+        with self.falhar_no_fim(), self.assertRaises(RotinaCancelada):
+            sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir, modulo=modulo({A: ok(), B: ok()}, self.aba), agora=lambda: AGORA)
+        self.assertTrue(any("OSError" in texto for texto in self.rotinas.logs))
+        self.assertTrue(self.aba.is_closed())
+
+    def test_finally_relanca_o_erro_do_salvar_no_caminho_de_sucesso_e_fecha_as_abas(self):
+        self.descrever(A)
+        with self.falhar_no_fim(), self.assertRaises(OSError):
+            self.rodar({A: ok()}, [A])
+        self.assertTrue(self.aba.is_closed())
 
 
 if __name__ == "__main__":
