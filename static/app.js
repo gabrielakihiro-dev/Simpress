@@ -19,6 +19,7 @@
     "regionalContacts",
     "transferForm",
     "equipmentSearch",
+    "uxChamados",
     "fullEquipmentSearch",
     "unitsCatalog",
     "inventoryUpload",

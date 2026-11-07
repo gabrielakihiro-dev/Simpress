@@ -20,6 +20,7 @@ from urllib.parse import quote, urlencode
 from pydantic import ValidationError
 
 from domains import sebrae_finalizacao as fin
+from domains.sebrae_observacoes import numero_observacao_valido
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.coverage import dobrar
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Tuple[int, Any]]
 
 CALL_TIMEOUT_SECONDS = 30.0
-ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 480.0  # Navigation, grid waits and two confirmed serial filters.
+ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 1200.0  # Endpoint login wait (600 s) + navigation and filters (480 s); keeps the route thread from outliving the call.
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
@@ -203,7 +204,11 @@ def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
 
     def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
-            timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto") else CALL_TIMEOUT_SECONDS
+            timeout = CALL_TIMEOUT_SECONDS
+            if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto", "/api/endpoint/powershell"):
+                timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS
+            elif method == "POST" and path in ("/api/ux/abrir-chamado/preparar", "/api/ux/abrir-chamado/enviar"):
+                timeout = 580.0
             return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
 
         return asyncio.run(run())
@@ -764,7 +769,10 @@ class SimpressApi:
         except asyncio.TimeoutError:
             return False, "O Simpress demorou demais para responder."
         except Exception:
-            logger.exception("Falha na chamada interna do assistente: %s %s", metodo, caminho)
+            if caminho.startswith("/api/ux/abrir-chamado/"):
+                logger.warning("Falha na chamada interna do Assistente para abrir chamado no UX.")
+            else:
+                logger.exception("Falha na chamada interna do assistente: %s %s", metodo, caminho)
             return False, "Falha ao consultar o Simpress."
         if 200 <= status < 300:
             if self._leituras is not None:
@@ -811,6 +819,23 @@ class SimpressApi:
 
     # --- queries ----------------------------------------------------------
 
+    def preparar_chamado_ux(self, serial: str, conferido: bool) -> Dict[str, Any]:
+        ok, dados = self._chamar("POST", "/api/ux/abrir-chamado/preparar", corpo={"serial": serial, "conferido": conferido})
+        return _dict(dados) if ok else {"erro": dados}
+
+    def cancelar_chamado_ux(self, session_id: str) -> None:
+        self._chamar("POST", "/api/ux/abrir-chamado/cancelar", corpo={"session_id": session_id})
+
+    def enviar_chamado_ux(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        corpo = {campo: args[campo] for campo in ("session_id", "serial", "problema", "descricao")}
+        ok, dados = self._chamar("POST", "/api/ux/abrir-chamado/enviar", corpo={**corpo, "enviar": True, "confirmado": True})
+        if not ok:
+            return {"erro": dados}
+        resultado = _dict(dados)
+        if resultado.get("status") == "enviado" and resultado.get("os"):
+            return {"mensagem": f"Chamado enviado. OS #{resultado['os']}."}
+        return {"erro": "O UX não confirmou o envio. Confira se o chamado foi criado antes de tentar novamente."}
+
     def consultar_endpoint(self, serial: str) -> Dict[str, Any]:
         """The same read-only Chrome lookup used by Home; the conversation masks ultimo_logon."""
         clean = serial.strip().upper()
@@ -843,6 +868,42 @@ class SimpressApi:
             return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
         return {"sucesso": status == "connected", "status": status, "serial": clean, "mensagem": mensagens[status],
                 **({"hostname": dados["hostname"]} if "hostname" in dados else {})}
+
+    def abrir_powershell_endpoint(self, comando: str, modo: str, hostname: str = "", usuario: str = "") -> Dict[str, Any]:
+        """Home "PowerShell no Endpoint": INSERTS the command in the prompt; never presses Enter. The command text never comes back to the model."""
+        corpo: Dict[str, Any] = {"modo": modo, "comando": comando}
+        if hostname.strip():
+            corpo["hostname"] = hostname.strip()
+        if usuario.strip():
+            corpo["usuario"] = usuario.strip()
+        ok, dados = self._chamar("POST", "/api/endpoint/powershell", corpo=corpo)
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        if not isinstance(dados, dict):
+            return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
+        status = dados.get("status")
+        host = dados.get("hostname") or hostname.strip() or "PRNOTEUMU005"
+        usuarios = [str(u) for u in dados.get("usuarios", [])] if isinstance(dados.get("usuarios"), list) else []
+        # Never switch host in silence: the default host was offline and another one was used.
+        troca = f" O computador padrão estava offline; foi usado {host}." if dados.get("hostname_padrao_offline") else ""
+        mensagens = {
+            "inserido": f"Comando inserido no prompt do PowerShell de {host}, mas NÃO executado: o usuário revisa e aperta Enter no terminal do Chrome.{troca}",
+            "not_found": f"Computador {host} não encontrado no Endpoint. Nada foi inserido.",
+            "sem_host_online": f"O computador padrão {host} está offline e nenhum outro online foi encontrado. Nada foi inserido.",
+            "erro_terminal": str(dados.get("mensagem") or f"Não foi possível abrir o PowerShell em {host}. Nada foi inserido."),
+            "sem_usuario": f"Usuário não encontrado em {host}. Nada foi inserido.",
+            "usuario_ambiguo": f"Há mais de um usuário logado em {host}; peça ao usuário qual usar. Nada foi inserido.",
+        }
+        if status not in mensagens:
+            return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
+        resultado: Dict[str, Any] = {"sucesso": status == "inserido", "status": status, "hostname": host, "modo": modo,
+                                     "hostname_padrao_offline": bool(dados.get("hostname_padrao_offline")),
+                                     "tamanho_comando": len(comando), "mensagem": mensagens[status], "enter_enviado": False}
+        if status == "inserido":
+            resultado["usuario"] = dados.get("usuario")
+        if usuarios:
+            resultado["usuarios"] = usuarios
+        return resultado
 
     def consultar_equipamento(self, serial: str) -> Dict[str, Any]:
         """Look up one serial. MacBook rule from AGENTS.md: retry with a leading 'S', accepted only for a MacBook."""
@@ -1490,6 +1551,27 @@ class SimpressApi:
             "total_abertos": len(itens),
             "sem_responsavel": sum(1 for i in itens if not i["responsavel"]),
             "abertos": [_aparar(i) for i in itens[:MAX_ITENS_LISTA]],
+            "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
+        })
+
+    def chamados_destaque_sebrae(self) -> Dict[str, Any]:
+        """Sebrae tickets the user marked as highlight, with the local note. Read only; notes without highlight stay out."""
+        ok, dados = self._chamar("GET", "/api/sebrae/observacoes")
+        if not ok:
+            return {"erro": dados}
+        todas = _dict(_dict(dados).get("observacoes"))
+        itens = [
+            {
+                "numero": str(numero)[:40],
+                "observacao": limpar_texto_sensivel(e.get("observacao"))[:MAX_TEXTO_CHAMADO],
+                "destaque_em": str(e.get("destaque_em") or "")[:40],
+            }
+            for numero, e in todas.items() if numero_observacao_valido(numero) and isinstance(e, dict) and e.get("destaque") is True
+        ]
+        itens.sort(key=lambda i: i["destaque_em"], reverse=True)
+        return _aparar({
+            "total_destaques": len(itens),
+            "destaques": [_aparar(i) for i in itens[:MAX_ITENS_LISTA]],
             "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
         })
 

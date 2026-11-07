@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.integrity import FileBusyError, atomic_write_bytes, lock_paths  # noqa: E402
+from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, lock_paths  # noqa: E402
 from core.errors import DomainBusyError, DomainConflictError  # noqa: E402
 from domains import sebrae_dashboard_gravacao as gravacao  # noqa: E402
 from domains import sebrae_finalizacao as fin  # noqa: E402
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
 STATE_DIR = ROOT / "data" / "state"
 ORIGEM = "Sebrae fechar"
+_ERROS_ENVIO_LOCAL = (DomainBusyError, DomainConflictError, FileBusyError, FileTransactionError, OSError)
 MOTIVO_SESSAO = "O SoftExpert pediu login de novo; entre no SoftExpert no Chrome de automação e finalize outra vez."
 
 
@@ -103,10 +104,14 @@ def _enviar_ao_sharepoint(
     """Substitui o Dashboard pela rotina ``enviar``; se falhar, guarda a cópia pendente e tenta subi-la com outro nome."""
     try:
         fin.exigir_envio_livre(state_dir)
-    except DomainConflictError:
-        log("O envio anterior exige conferência manual; a nova saída local foi preservada e não foi enviada.")
-        return fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
-    envio = fin.preparar_envio(state_dir, saida.read_bytes())
+        envio = fin.preparar_envio(state_dir, saida.read_bytes())
+    except _ERROS_ENVIO_LOCAL as erro_preparo:
+        if isinstance(erro_preparo, DomainConflictError):
+            log("O envio anterior exige conferência manual; a nova saída local foi preservada e não foi enviada.")
+            return fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
+        # Registro de envio ilegível ou falha local: só cópia pendente local + aviso, sem subir nada enquanto o estado é incerto.
+        motivo = str(erro_preparo.detail) if isinstance(erro_preparo, DomainBusyError) else f"Falha local ao preparar o envio ({type(erro_preparo).__name__})."
+        return _guardar_pendente_e_avisar(context, rotinas, state_dir, saida, chamados, log, agora, motivo, subir_copia=False)
     try:
         rotinas.rodar_rotina_enviar(context, envio_id=envio)
     except Exception as erro:  # noqa: BLE001 - RotinaCancelada (BaseException) sobe
@@ -133,13 +138,22 @@ def _enviar_ao_sharepoint(
                 raise
             limpas = not estado_envio["limpeza_pendente"]
         return {**fin.aviso_sharepoint(False), "limpeza_pendente": not limpas}
+    return _guardar_pendente_e_avisar(context, rotinas, state_dir, saida, chamados, log, agora, motivo)
+
+
+def _guardar_pendente_e_avisar(
+    context: "BrowserContext", rotinas: Any, state_dir: Path, saida: Path, chamados: List[str], log: Callable[[str], None],
+    agora: Callable[[], datetime], motivo: str, *, subir_copia: bool = True,
+) -> Dict[str, Any]:
     log(f"Não consegui substituir o Dashboard no SharePoint: {motivo}")
     try:
         pendente = fin.guardar_pendente(state_dir, saida, agora(), motivo=motivo, tickets=chamados)
-    except OSError as erro_local:
+    except (OSError, FileBusyError, FileTransactionError) as erro_local:  # atomic_write_* levantam RuntimeError, não OSError
         log(f"Também não consegui guardar a cópia pendente ({type(erro_local).__name__}).")
         return fin.aviso_sharepoint(True, motivo)
     log(f"Cópia pendente guardada em {pendente}")
+    if not subir_copia:
+        return fin.aviso_sharepoint(True, motivo, str(pendente), False)
     copia_sharepoint = False
     try:
         rotinas.enviar_copia_pendente(context, pendente)
@@ -284,6 +298,7 @@ def executar(
         log("Modo sem finalizar: o formulário é preenchido e conferido, mas Finalizar NÃO é clicado e nada vai ao Dashboard.")
     abas: List[Any] = []  # a aba do SoftExpert; fica aqui para fechar também quando a rotina é cancelada
     encerramentos: Dict[str, str] = {}
+    propagando = False  # True when an exception is leaving ``executar``; the final save must not replace it
     try:
         try:
             _processar(context, rotinas, modulo, state_dir, job["numeros"], confirmar, resultado, encerramentos, salvar, agora, abas)
@@ -306,12 +321,21 @@ def executar(
         aviso = resultado["sharepoint"] or {}
         falhas = any(r["status"] == fin.STATUS_ERRO for r in resultado["resultados"]) or bool(aviso.get("falhou") or aviso.get("incerto"))
         return 1 if falhas else 0
+    except BaseException:
+        propagando = True
+        raise
     finally:
         resultado["em_andamento"] = False
         resultado["terminado_em"] = fin.agora_iso()
-        salvar()
-        for aba in abas:
-            _fechar_aba(aba)
+        try:
+            salvar()
+        except Exception as erro_final:
+            if not propagando:
+                raise
+            log(f"Não consegui gravar o resultado final ({type(erro_final).__name__}); a falha original foi mantida.")
+        finally:
+            for aba in abas:
+                _fechar_aba(aba)
 
 
 def _processar(

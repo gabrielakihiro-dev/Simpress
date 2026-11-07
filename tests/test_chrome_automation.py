@@ -390,6 +390,41 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
             harness.runner.execution_log("20261019_080000_os")
 
 
+class WriteJsonAtomicTests(unittest.TestCase):
+    def test_write_json_usa_atomic_write_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            alvo = Path(tmp) / "registro.json"
+            with patch.object(chrome_automation, "atomic_write_json") as atomico:
+                chrome_automation._write_json(alvo, {"a": 1})
+            atomico.assert_called_once_with(alvo, {"a": 1})
+
+    def test_write_json_converte_falhas_do_atomico_em_oserror_como_os_chamadores_esperam(self):
+        from core.integrity import FileBusyError, FileTransactionError
+        for erro in (FileBusyError("ocupado"), FileTransactionError("falhou")):
+            with self.subTest(erro=type(erro).__name__), tempfile.TemporaryDirectory() as tmp:
+                with patch.object(chrome_automation, "atomic_write_json", side_effect=erro):
+                    with self.assertRaises(OSError):
+                        chrome_automation._write_json(Path(tmp) / "registro.json", {})
+
+    def test_write_json_grava_json_valido(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            alvo = Path(tmp) / "registro.json"
+            chrome_automation._write_json(alvo, {"a": "ç"})
+            self.assertEqual(json.loads(alvo.read_text(encoding="utf-8")), {"a": "ç"})
+
+    def test_poda_remove_o_lock_do_registro_junto_com_registro_e_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            harness = RunnerHarness(Path(tmp))
+            pasta = harness.contract.log_dir
+            pasta.mkdir(parents=True)
+            for nome in ("a", "b"):
+                for arquivo in (f"{nome}.site.json", f"{nome}.site.log", f".{nome}.site.json.lock"):
+                    (pasta / arquivo).write_text("x", encoding="utf-8")
+            with patch.object(chrome_automation, "SITE_RECORDS_KEPT", 1):
+                harness.runner._prune_site_runs()
+            self.assertEqual(sorted(p.name for p in pasta.iterdir()), [".b.site.json.lock", "b.site.json", "b.site.log"])
+
+
 class FakeRunner:
     def __init__(self):
         self.started = []

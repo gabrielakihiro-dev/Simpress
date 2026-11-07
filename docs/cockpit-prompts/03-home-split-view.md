@@ -115,6 +115,7 @@ Em **Usuário** e **Local atual**: o ícone é de lápis (pencil) e abre ediçã
 - `#form-usuario-manual`, `#input-usuario-manual`, `#btn-salvar-usuario-manual`
 - `#form-nome-pessoa`, `#input-nome-pessoa`, `#btn-salvar-nome-pessoa`
 - `#equip-icon-box`, `#equip-icon`
+- `#endpoint-powershell` (06/11/2026, autorizado pelo usuário): card recolhível `PowerShell no Endpoint` dentro de `card-equipamento`, só visível com equipamento selecionado, com comando (`#input-powershell-comando`), modo `SYSTEM`/`Usuário logado`, hostname e usuário opcionais e o botão `Inserir no PowerShell` (`#btn-powershell-endpoint`). Pede confirmação antes do envio e só **insere** o comando no prompt do terminal do Endpoint, sem executar: o Enter é do usuário, no terminal do Chrome (aviso `O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.`). Detalhes em `docs/operacao/automacao-chrome.md`.
 - `#badge-apelido-status`
 - `#btn-ir-para-transporte`, `#btn-toggle-ticket-templates`
 - `#btn-copiar-serie` (se existir no contexto)
@@ -123,6 +124,16 @@ Em **Usuário** e **Local atual**: o ícone é de lápis (pencil) e abre ediçã
 ---
 
 #### Card de chamado manual (abaixo da grade)
+
+Em 06/11/2026, a pedido do usuário, o cartão recebeu **Abrir chamado no UX**. O botão
+usa a série selecionada e a descrição editada na aba ativa; Portal e Copiar continuam
+disponíveis. O modal mostra série, modelo, texto e problemas filtrados. O usuário
+escolhe o problema e pode simular o preenchimento ou revisar a série, o problema e a
+descrição antes de clicar em **Enviar solicitação**. A simulação deixa a aba no formulário;
+o envio confirmado mostra a OS. Uma tentativa incerta exige conferência explícita no UX.
+O sistema registra a conferência daquela tentativa e só volta a exigir o passo se houver novo envio incerto.
+Fechar o modal ou mudar de equipamento descarta a preparação antiga e cancela a sessão
+se o envio ainda não começou.
 
 Substitui os 4 textareas de "Textos prontos para chamados manuais".
 

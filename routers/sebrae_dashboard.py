@@ -27,6 +27,7 @@ from core.config import format_size_limit
 from core.integrity import lock_paths
 from domains import (
     sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin, sebrae_historico, sebrae_novos,
+    sebrae_observacoes as obs,
 )
 from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_chamados import chave_do_numero
@@ -100,6 +101,18 @@ class DescricaoEditadaPayload(BaseModel):
     descricao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # limite exato e mensagem ficam no domínio
 
 
+class ObservacaoPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observacao: str = Field("", max_length=4000)
+
+
+class DestaquePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    destaque: bool = Field(..., strict=True)
+
+
 class FichaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -159,7 +172,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except (OSError, ValueError):
             return None  # an unreadable ticket report only leaves column E empty
 
-    def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
 
         An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
@@ -171,15 +184,21 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
+        obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
         apelidos = services.apelidos() if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
              "apelido": _apelido(apelidos, (a.get("automaticos") or {}).get("K") or sugestoes.get(str(a.get("numero")), {}).get("K")),
              **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
-             "leitura_softexpert": antigos.get(str(a.get("numero")))}  # ``softexpert`` is the finalization state; this is the read data
+             "leitura_softexpert": antigos.get(str(a.get("numero"))),
+             "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
+             "destaque": _destacado(obs_map, a.get("numero"))}  # ``softexpert`` is the finalization state; this is the read data
             for a, e in zip(abertos, efetivos)
         ]
+
+    def _destacado(observacoes: Mapping[str, Mapping[str, Any]], numero: Any) -> bool:
+        return bool(observacoes.get(str(numero or ""), {}).get("destaque"))
 
     def _apelido(apelidos: Mapping[str, str], serie: Any) -> str:
         return apelidos.get(str(serie or "").strip().upper(), "")
@@ -210,13 +229,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
         novos = _novos(caminhos, lancados) if importado else None
-        finalizacao = fin.ler_estado(_pasta_estado()) if novos else {}
+        pasta = _pasta_estado()
+        finalizacao = fin.ler_estado(pasta) if (novos or importado) else {}
+        observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
         apelidos = services.apelidos() if novos else {}
+        finalizados = [
+            {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", ""),
+             "destaque": _destacado(observacoes, f.get("numero"))}
+            for f in fin.finalizados_no_dashboard(pasta)
+        ] if importado else []
         return {
             "importado": None if importado is None else {
                 "versao": importado["versao"], "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
-                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"]),
-                "finalizados": fin.finalizados_no_dashboard(_pasta_estado()),
+                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes),
+                "finalizados": finalizados,
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
                 "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),
             },
@@ -224,7 +250,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
                 "erros": novos["erros"],
                 "formulario": [
-                    {**item, "apelido": _apelido(apelidos, item["linha"].get("K")), "softexpert": fin.publico(finalizacao.get(item["numero"]))}
+                    {**item, "apelido": _apelido(apelidos, item["linha"].get("K")),
+                     "softexpert": fin.publico(finalizacao.get(item["numero"])),
+                     "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
+                     "destaque": _destacado(observacoes, item["numero"])}
                     for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
                 ],
             },
@@ -556,6 +585,23 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         numero = _exigir_finalizavel(numero)
         fin.definir_ficha(_pasta_estado(), numero, payload.ficha)
         return JSONResponse({"numero": numero}, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/observacao")
+    def definir_observacao(numero: str, payload: ObservacaoPayload):
+        """Anotação interna do chamado (salva automaticamente em disco, sem tocar SoftExpert nem Dashboard)."""
+        resultado = obs.salvar_observacao(_pasta_estado(), numero, payload.observacao)
+        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/destaque")
+    def definir_destaque(numero: str, payload: DestaquePayload):
+        """Destaque manual do chamado (só local, inclusive finalizado; fica até o usuário tirar)."""
+        resultado = obs.definir_destaque(_pasta_estado(), numero, payload.destaque)
+        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/observacoes")
+    def listar_observacoes():
+        """Lista todas as anotações internas gravadas em disco."""
+        return JSONResponse({"observacoes": obs.ler_observacoes(_pasta_estado())}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/chamados/{numero}/anexo")
     async def anexar_pdf(numero: str, file: UploadFile = File(...)):

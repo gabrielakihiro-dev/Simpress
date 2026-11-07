@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Protocol
 from urllib.parse import quote
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError
+from core.integrity import FileBusyError, FileTransactionError, atomic_write_json
 from core.config import MAX_UX_ALIAS_BYTES
 from core.xlsx_safety import validate_xlsx_archive, WORKBOOK_READ_ERRORS
 
@@ -159,9 +160,10 @@ def _read_json(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def _write_json(path: Path, data: Dict[str, Any]) -> None:
-    temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    try:
+        atomic_write_json(path, data)
+    except (FileBusyError, FileTransactionError) as error:
+        raise OSError(str(error)) from error  # callers already handle OSError
 
 
 def read_log_chunk(path: Optional[Path], offset: int, max_bytes: int = MAX_LOG_CHUNK_BYTES) -> Dict[str, Any]:
@@ -400,7 +402,7 @@ class ChromeAutomationRunner:
     def _prune_site_runs(self) -> None:
         for record in self._site_records()[:-SITE_RECORDS_KEPT]:
             stem = record.name[: -len(self.contract.site_record_suffix)]
-            for path in (record, record.with_name(f"{stem}{self.contract.site_log_suffix}")):
+            for path in (record, record.with_name(f"{stem}{self.contract.site_log_suffix}"), record.with_name(f".{record.name}.lock")):
                 try:
                     path.unlink()
                 except OSError:
