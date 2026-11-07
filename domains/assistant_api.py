@@ -23,6 +23,7 @@ from domains import sebrae_finalizacao as fin
 from domains.sebrae_observacoes import numero_observacao_valido
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
+from domains.coverage import dobrar
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
@@ -784,6 +785,8 @@ class SimpressApi:
         detalhe = dados.get("detail") if isinstance(dados, dict) else None
         if isinstance(detalhe, list):
             detalhe = "; ".join(str(d.get("msg", d)) if isinstance(d, dict) else str(d) for d in detalhe)
+        if isinstance(detalhe, dict):  # {codigo, mensagem} (ex.: cobertura com estado ilegível)
+            detalhe = detalhe.get("mensagem")
         texto = detalhe if isinstance(detalhe, str) else (dados[:200] if isinstance(dados, str) else "")
         return f"Erro {status} do Simpress: {_texto_erro_seguro(texto)}"
 
@@ -2119,6 +2122,65 @@ class SimpressApi:
             "horario": valores["horario"], "almoco": valores["almoco"], "pausa": valores["pausaDuracao"],
             "alterada": alterada, "arquivo_invalido": invalido,
         }
+
+    def listar_cobertura(self, cidade: Any = None, data: Any = None, ate: Any = None, perfil: Any = None) -> Dict[str, Any]:
+        """Painel Cobertura (F10), só leitura: o mesmo GET /api/cobertura da tela (build_coverage), filtrado aqui.
+
+        Allowlist: só vagas, contagens e séries; os `casos` (com quem recebeu, observações e cópias da transferência) nunca saem.
+        """
+        datas: Dict[str, str] = {}
+        for nome, valor in (("data", data), ("ate", ate)):
+            texto = str(valor or "").strip()
+            if not texto:
+                continue
+            try:
+                datas[nome] = date.fromisoformat(texto).isoformat() if re.fullmatch(r"\d{4}-\d{2}-\d{2}", texto) else ""
+            except ValueError:
+                datas[nome] = ""
+            if not datas[nome]:
+                return {"erro": f"Data inválida em `{nome}`: use AAAA-MM-DD (ex.: 2026-11-20)."}
+        ok, dados = self._chamar("GET", "/api/cobertura")
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        todas = [v for v in dados.get("vagas") or [] if isinstance(v, dict)]
+        alvo_cidade, alvo_perfil = dobrar(cidade), dobrar(perfil)
+        vagas = [
+            v for v in todas
+            if (not alvo_cidade or dobrar(v.get("cidade")) == alvo_cidade)
+            and (not alvo_perfil or alvo_perfil in dobrar(v.get("perfil")))
+            and (not datas.get("data") or str(v.get("data")) == datas["data"])
+            and (not datas.get("ate") or str(v.get("data")) <= datas["ate"])
+        ]
+        filtro = {k: v for k, v in (("cidade", cidade), ("perfil", perfil), *datas.items()) if str(v or "").strip()}
+        if not todas:
+            return {"hoje": dados.get("hoje"), "mensagem": "Nenhuma necessidade cadastrada na Cobertura.", "faltam": 0}
+        if not vagas:
+            return {
+                "hoje": dados.get("hoje"), "filtro": filtro,
+                "mensagem": "Nenhuma vaga corresponde ao filtro; isso não quer dizer que não vai faltar. Confira cidade, data e perfil.",
+                "cidades_existentes": sorted({str(v.get("cidade") or "") for v in todas}),
+                "datas_existentes": sorted({str(v.get("data") or "") for v in todas}),
+                "perfis_existentes": sorted({str(v.get("perfil") or "") for v in todas} - {""}),
+            }
+        contagens = {situacao: 0 for situacao in ("atendivel", "condicionada", "sem_cobertura", "entregue")}
+        for vaga in vagas:
+            if vaga.get("situacao") in contagens:
+                contagens[vaga["situacao"]] += 1
+        disponiveis = [
+            {k: s.get(k) for k in ("serie", "cidade", "valida_ate", "sinal")}
+            for s in dados.get("disponiveis") or []
+            if isinstance(s, dict) and (not alvo_cidade or dobrar(s.get("cidade")) == alvo_cidade)
+        ]
+        manutencao = _dict(dados.get("manutencao"))
+        return _aparar({
+            "hoje": dados.get("hoje"), "filtro": filtro, "contagens": contagens, "faltam": contagens["sem_cobertura"],
+            "vagas": [{k: v.get(k) for k in ("data", "cidade", "perfil", "monitor", "situacao", "serie", "selos", "motivo")} for v in vagas],
+            "disponiveis": disponiveis,
+            "reservas_vencidas": len(dados.get("reservas_vencidas") or []),
+            "manutencao_verificada": bool(manutencao.get("verificada", True)),
+            "aviso_manutencao": str(manutencao.get("aviso") or ""),
+        })
 
     def montar_alteracao_representante(self, cidade: Any, *novos: Any) -> Tuple[str, Dict[str, str], List[Tuple[str, str, str]]]:
         """(city, body for the route, changes) of `alterar_representante_regional`; ValueError (pt-BR) when it cannot run."""

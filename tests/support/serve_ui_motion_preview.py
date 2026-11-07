@@ -460,6 +460,76 @@ def automation_state(offset=0):
     }
 
 
+# Cobertura (F10): the real /api/cobertura router over a temporary folder, synthetic data and a fixed date.
+# /__fixture_cobertura?cenario=base|manutencao|ilegivel resets it; &historico=SERIE&cidade=X appends a sheet record.
+COBERTURA = {"client": None, "dir": None}
+COBERTURA_HOJE = (2026, 11, 6)
+COBERTURA_AGORA = "2026-11-06T09:00:00-03:00"
+
+
+def cobertura_reset(cenario="base"):
+    import shutil
+    import tempfile
+    from datetime import date
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from domains.coverage import Manutencao
+    from routers.coverage import CoverageServices, create_coverage_router
+
+    if COBERTURA["dir"]:
+        shutil.rmtree(COBERTURA["dir"], ignore_errors=True)
+    root = Path(tempfile.mkdtemp(prefix="simpress-cobertura-ui-"))
+    state_dir = root / "data" / "state"
+    state_dir.mkdir(parents=True)
+    manutencao = Manutencao(ilegivel=cenario == "manutencao")
+    router, _ = create_coverage_router(CoverageServices(
+        state_file=lambda: state_dir / "operacao_cobertura.json",
+        archive_file=lambda: state_dir / "operacao_cobertura_arquivados.json",
+        transaction_root=lambda: root,
+        hoje=lambda: date(*COBERTURA_HOJE),
+        agora=lambda: COBERTURA_AGORA,
+        manutencao=lambda: manutencao,
+        cadastro=lambda: [{"serial": "SINT-001", "retirada_cidade": "Cidade A"},
+                          {"serial": "SINT-002", "retirada_cidade": "Cidade B"}],
+        history_file=lambda: state_dir / "historico_transferencias.json",
+    ))
+    api = FastAPI()
+    api.include_router(router)
+    client = TestClient(api)
+    COBERTURA.update(client=client, dir=str(root))
+    # V1-V4: four slots in Cidade A; SINT-001 is local, SINT-002 needs a transfer, SINT-003 returns later, one is uncovered.
+    client.post("/api/cobertura/demandas", json={"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 4,
+                                                  "perfil": "Padrão", "observacao": "Necessidade sintética"})
+    client.post("/api/cobertura/disponibilidade", json={"serie": "SINT-001", "estado": "disponivel"})
+    client.post("/api/cobertura/disponibilidade", json={"serie": "SINT-002", "estado": "disponivel"})
+    client.post("/api/cobertura/devolucoes", json={"serie": "SINT-003", "data_prevista": "2026-11-15", "cidade": "Cidade A"})
+    if cenario == "ilegivel":
+        (state_dir / "operacao_cobertura.json").write_text("{ilegível", encoding="utf-8")
+    return {"cenario": cenario}
+
+
+def cobertura_historico(serie, cidade):
+    arquivo = Path(COBERTURA["dir"]) / "data" / "state" / "historico_transferencias.json"
+    registros = json.loads(arquivo.read_text(encoding="utf-8")) if arquivo.exists() else []
+    registros.append({"id": f"hist-{len(registros) + 1}", "criado_em": "2026-11-06T10:00:00-03:00", "serial": serie,
+                      "retirada_cidade": "Cidade B", "entrega_cidade": cidade, "entrega_contato": "Pessoa Sintética",
+                      "entrega_obs": "", "payload": {"serial": serie}})
+    arquivo.write_text(json.dumps(registros, ensure_ascii=False), encoding="utf-8")
+    return {"historico": len(registros)}
+
+
+def cobertura_proxy(handler, method, raw_path, body=None):
+    if COBERTURA["client"] is None:
+        cobertura_reset()
+    if method == "GET":
+        resposta = COBERTURA["client"].get(raw_path)
+    else:
+        resposta = COBERTURA["client"].post(raw_path, content=body or b"{}", headers={"Content-Type": "application/json"})
+    handler.send(resposta.content, resposta.status_code)
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
         payload = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode()
@@ -687,6 +757,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"items": [item], "total": 1, "has_more": False,
                        "filters": {"categories": [], "cities": [], "users": {"sem": 1, "com": 1}},
                        "query": params.get("q", [""])[0]})
+        elif path == "/__fixture_cobertura":
+            params = parse_qs(url.query)
+            if "historico" in params:
+                self.send(cobertura_historico(params["historico"][0], params.get("cidade", ["Cidade A"])[0]))
+            else:
+                self.send(cobertura_reset(params.get("cenario", ["base"])[0]))
+        elif path == "/api/cobertura" or path.startswith("/api/cobertura/"):
+            cobertura_proxy(self, "GET", self.path)
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
@@ -792,6 +870,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
+        if path.startswith("/api/cobertura/"):
+            size = int(self.headers.get("Content-Length", "0"))
+            cobertura_proxy(self, "POST", self.path, self.rfile.read(size))
+            return
         if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
             size = int(self.headers.get("Content-Length", "0"))
             corpo = self.rfile.read(size)
