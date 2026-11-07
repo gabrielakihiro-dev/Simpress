@@ -1119,7 +1119,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* ---------- 2. Seções e listas ---------- */
 .sebrae-secao { display: flex; flex-direction: column; gap: 10px; }
 .sebrae-secao__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto-suave); }
-#sebrae-novos-lista, #sebrae-antigos-lista { display: flex; flex-direction: column; gap: 12px; }
+#sebrae-novos-lista, #sebrae-antigos-lista, #sebrae-destaques-lista { display: flex; flex-direction: column; gap: 12px; }
 #sebrae-novos-lista:empty:not([aria-busy="true"]) { padding: 22px 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); text-align: center; font-size: var(--fs-md); color: var(--cor-texto-suave); }
 #sebrae-novos-lista:empty:not([aria-busy="true"])::before { content: "Nenhum chamado novo na lista."; display: block; font-weight: var(--peso-medio); color: var(--cor-texto); }
 #sebrae-novos-lista:empty:not([aria-busy="true"])::after { content: "A importação do Dashboard e a busca ficam na aba Automação (F4)."; display: block; margin-top: 2px; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
@@ -1311,8 +1311,31 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado--finalizado .sebrae-zona__cab--aviso { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
 .sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto anexo" "rodape rodape"; }
 
+/* Destaque manual: faixa lateral + selo âmbar (tokens de alerta, AA nos dois temas); o selo leva estrela e texto, não só a cor. */
+.sebrae-selo-destaque { border: 1px solid var(--cor-alerta-texto); } /* borda 1px no tom do texto: o selo se vê também sem distinguir o fundo âmbar */
+.sebrae-selo-destaque[hidden] { display: none; }
+.sebrae-selo-destaque__estrela { font-size: var(--fs-xs); line-height: 1; }
+.sebrae-chamado--destaque { border-left: 4px solid var(--cor-alerta-texto); }
+.sebrae-antigo:has(.sebrae-chamado--destaque), .sebrae-finalizado:has(.sebrae-chamado--destaque) { border-left: 4px solid var(--cor-alerta-texto); }
+.sebrae-antigo:has(.sebrae-chamado--destaque) > summary, .sebrae-finalizado:has(.sebrae-chamado--destaque) > summary { background: var(--cor-alerta-fundo); }
+.sebrae-antigo:has(.sebrae-chamado--destaque) > summary .sebrae-antigo__quem { color: var(--cor-texto-suave); } /* sobre o fundo âmbar do escuro o tom mudo cai a 4,31:1 */
+.sebrae-finalizado > summary:has(.sebrae-selo-destaque:not([hidden])) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.sebrae-destaques > summary .ck-badge { margin-left: auto; }
+.sebrae-destaques > p:empty { display: none; }
+#sebrae-destaque-anuncio:empty { display: none; } /* aviso visível de marcar/tirar destaque; sem texto não ocupa espaço */
+.sebrae-destaque__acao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px; }
+.sebrae-destaque__botao[aria-pressed="true"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-weight: var(--peso-marca); }
+.sebrae-destaque__feedback { margin: 0; color: var(--cor-texto-mudo); font-size: var(--fs-xs); }
+.sebrae-destaque__feedback[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-destaque__corpo { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; }
+.sebrae-destaque__corpo .sebrae-destaque__acao { margin-top: 0; }
+.sebrae-destaque__observacao { display: flex; flex-direction: column; gap: 4px; }
+.sebrae-destaque__observacao .ck-campo__rotulo { color: var(--cor-texto-suave); }
+.sebrae-destaque__texto { margin: 0; font-size: var(--fs-md); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- 5. Animações ---------- */
 @media (prefers-reduced-motion: no-preference) {
+  .sebrae-chamado, .sebrae-antigo, .sebrae-finalizado, .sebrae-selo-destaque, .sebrae-destaque__botao { transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
   .sebrae-chamado__feedback, .sebrae-obs__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
   @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
     :is(.sebrae-antigos, .sebrae-antigo, .sebrae-finalizado, .sebrae-chamado__texto) { interpolate-size: allow-keywords; }
@@ -1321,6 +1344,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .sebrae-chamado, .sebrae-antigo, .sebrae-finalizado, .sebrae-selo-destaque, .sebrae-destaque__botao { transition: none; }
   .sebrae-topo:has(#sebrae-fechar[aria-busy="true"]) > .sebrae-topo__acoes::after, .sebrae-fechar[aria-busy="true"]::before { background: var(--cor-destaque); background-size: 100% 100%; opacity: .5; animation: none; }
   #sebrae-novos-lista:empty[aria-busy="true"] { animation: none; background: var(--cor-superficie-funda); }
 }

@@ -20,6 +20,7 @@ from urllib.parse import quote, urlencode
 from pydantic import ValidationError
 
 from domains import sebrae_finalizacao as fin
+from domains.sebrae_observacoes import numero_observacao_valido
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
@@ -1547,6 +1548,27 @@ class SimpressApi:
             "total_abertos": len(itens),
             "sem_responsavel": sum(1 for i in itens if not i["responsavel"]),
             "abertos": [_aparar(i) for i in itens[:MAX_ITENS_LISTA]],
+            "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
+        })
+
+    def chamados_destaque_sebrae(self) -> Dict[str, Any]:
+        """Sebrae tickets the user marked as highlight, with the local note. Read only; notes without highlight stay out."""
+        ok, dados = self._chamar("GET", "/api/sebrae/observacoes")
+        if not ok:
+            return {"erro": dados}
+        todas = _dict(_dict(dados).get("observacoes"))
+        itens = [
+            {
+                "numero": str(numero)[:40],
+                "observacao": limpar_texto_sensivel(e.get("observacao"))[:MAX_TEXTO_CHAMADO],
+                "destaque_em": str(e.get("destaque_em") or "")[:40],
+            }
+            for numero, e in todas.items() if numero_observacao_valido(numero) and isinstance(e, dict) and e.get("destaque") is True
+        ]
+        itens.sort(key=lambda i: i["destaque_em"], reverse=True)
+        return _aparar({
+            "total_destaques": len(itens),
+            "destaques": [_aparar(i) for i in itens[:MAX_ITENS_LISTA]],
             "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
         })
 
