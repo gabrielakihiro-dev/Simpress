@@ -1613,6 +1613,24 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertNotIn("fechar", ROTINAS_VALIDAS)
 
 
+class OsDosAntigosTests(unittest.TestCase):
+    def test_old_open_tickets_expose_serial_written_os_and_suggested_os(self) -> None:
+        class Simpress(FakeSimpress):
+            def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+                if path == "/api/sebrae/novos":
+                    return 200, {"importado": {"arquivo": "d.xlsx", "total": 2, "abertos": [
+                        {"numero": "UTIC-2026-0094", "automaticos": {"K": "SCXC9F072K1", "E": ""}, "automaticos_sugeridos": {"E": "77"}},
+                        {"numero": "UTIC-2026-0095", "automaticos": {"K": "ABC123", "E": "5"}, "automaticos_sugeridos": {}},
+                    ]}}
+                return super().__call__(method, path, params, body)
+
+        itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
+        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
+        conversation, _ = make_conversation(model, Simpress())
+        self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")
+
+
 class EditDescriptionSimpress(FakeSimpress):
     """GET /api/sebrae/novos (one read old ticket, one unread, one finalized, one new) and the PUT of the edited description."""
 
