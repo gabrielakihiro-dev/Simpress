@@ -149,7 +149,9 @@
       const dados = await post("enviar", { session_id, serial, problema, descricao, enviar, confirmado: enviar });
       if (!atual(pedido)) return;
       if (dados.status === "preenchido") {
-        status.textContent = "Simulação concluída. Confira o formulário no Chrome de automação. Nenhuma solicitação foi enviada.";
+        const faltando = Array.isArray(dados.faltando) ? dados.faltando : [];
+        status.textContent = "Simulação concluída. Confira o formulário no Chrome de automação. Nenhuma solicitação foi enviada."
+          + (faltando.length ? " Faltam no formulário: " + faltando.join(", ") + ". Preencha no Chrome de automação antes de enviar." : "");
       } else if (dados.status === "enviado" && dados.os) {
         pedido.session_id = null;
         status.textContent = "Chamado enviado. OS #" + dados.os + ".";
@@ -169,6 +171,7 @@
         byId("ux-chamado-conferido").hidden = false;
       } else {
         status.textContent = erro.message;
+        app.showToast(erro.message, "error"); // the status line alone was easy to miss
       }
     } finally {
       if (atual(pedido)) {
