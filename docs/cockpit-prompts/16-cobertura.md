@@ -27,7 +27,7 @@ Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_sto
 - `Preparar Transporte` exige o kit completo e abre o Transporte com a série, a unidade de destino (`selecionarUnidadePorCidade`) e a observação.
 - Depois que o operador baixa a planilha, a tela chama `POST /api/cobertura/movimentacoes/{id}/registrar-transferencia`. Se essa chamada falhar por rede ou arquivo ocupado (409 `arquivo_ocupado`), a planilha fica sem vínculo: o Transporte guarda o pedido no navegador e mostra `Planilha baixada sem vínculo — Tentar de novo`. Se a recusa for definitiva (404, 422 ou outro 409), a planilha é registrada no histórico genérico (`POST /api/historico-transferencias`), o operador recebe a mensagem do servidor com a orientação de usar `Vincular transferência já gerada`, e nada fica pendente no navegador. Na Cobertura, `Vincular transferência já gerada` liga a movimentação a um registro já existente do histórico (`vincular-historico`).
 - `Entregar sem Transporte` (movimentação `local`) vale só quando a série já está na cidade da vaga.
-- `Cancelar movimentação` aparece só na movimentação `preparada`, pede confirmação e devolve a reserva ao estado ativo.
+- `Cancelar movimentação` aparece nas movimentações `preparada`, `gerada` e `coletada` (transporte), pede confirmação e devolve a reserva ao estado ativo com a validade original (se já passou, fica vencida em revisão). Em `gerada`/`coletada` a confirmação avisa que a planilha continua no histórico de transferências: o registro do histórico não é apagado, fica ligado à movimentação cancelada (`historico_id` preservado) e não volta a ser candidato de vínculo. `em_transito` não cancela (a máquina pode estar na estrada): a saída é `Recebida com divergência` e depois cancelar e reabrir a vaga.
 
 ## Assistente
 
@@ -40,7 +40,7 @@ Backlog, não regra: itens conferidos no código (07/11/2026) e ainda sem decis�
 1. O `localStorage` `simpress:cobertura:sem-vinculo` (`static/js/ui/transfer-history.js`) guarda o pedido da planilha, com nome, e-mail e telefone do destinatário, até a nova tentativa dar certo. É dado pessoal guardado no navegador (LGPD): a decidir se fica, se expira ou se guarda só o mínimo.
 2. `selecionarUnidadePorCidade` (`static/js/features/transfer-form.js`) compara com `includes` sensível a acento: "Sao Jose" não acha "São José", e um nome contido em outro pode escolher a unidade errada. O operador confere o destino antes de gerar a planilha.
 3. Rótulos criados sem definição no plano aguardam aprovação do usuário: `Entregue`, `Vincular`, `Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Tentar de novo`, `Nova data`, `Recebido por`, `Data do recebimento` e `Cancelar movimentação`.
-4. A rota `POST /api/cobertura/movimentacoes/{id}/estado` aceita `encerrada` (a partir de `recebida`), mas a tela não oferece botão para esse estado.
+4. (Corrigido em 07/11/2026) A transição `recebida` → `encerrada` foi removida: `recebida` já fecha o caso. O estado `encerrada` continua sendo lido (legado) como entregue e fechado, caso exista em dados antigos.
 
 ## Testes
 

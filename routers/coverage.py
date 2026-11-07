@@ -134,7 +134,7 @@ class DivergenciaPayload(_Corpo):
 
 
 class EstadoMovimentacaoPayload(_Corpo):
-    estado: Literal["coletada", "em_transito", "recebida", "recebida_com_divergencia", "encerrada", "cancelada"]
+    estado: Literal["coletada", "em_transito", "recebida", "recebida_com_divergencia", "cancelada"]
     rev: int
     recebido_por: Optional[str] = Field(None, max_length=120)
     data: Optional[str] = Field(None, max_length=10)
