@@ -364,6 +364,16 @@
       if (elemento) elemento.textContent = texto;
     }
 
+    // ---- Sub-abas do F5 (Novos, Antigos, Destaques, Finalizados), filtro e paginação: só apresentação, nada é gravado ----
+    const ABAS = ["novos", "antigos", "destaques", "finalizados"];
+    const ROTULO_ABA = { novos: "Novos", antigos: "Antigos", destaques: "Destaques", finalizados: "Finalizados" };
+    const POR_PAGINA = 25;
+    // Vive só na memória da página: F5 → F4 → F5 mantém a aba; recarregar volta a Novos com o filtro vazio.
+    const visao = { aba: "novos", termo: "", paginas: { antigos: POR_PAGINA, finalizados: POR_PAGINA }, novosAbertos: null, itens: [], porNo: new Map() };
+    const abertosPelaPessoa = new WeakSet();
+    const normalizar = valor => (context.ticketRules?.normalizarFiltroChamados || app.normalizarFiltroChamados
+      || (texto => String(texto || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").trim().toLocaleLowerCase("pt-BR")))(valor);
+
     /** Texto do resultado de Atualizar Dashboard; `situacao` (ok, alerta, erro) vai para `data-estado` e o CSS pinta a cor. */
     function definirStatusAtualizar(texto, situacao = "") {
       definirTexto("sebrae-atualizar-status", texto);
@@ -525,14 +535,37 @@
       return zona;
     }
 
-    /** Cabeçalho do cartão: título (número · assunto) e selo de situação (`data-status`: info = Novo, vazio = Em aberto, ok = Finalizado). */
+    /** Cabeçalho do cartão: recolher, título (número · assunto) e selo de situação (`data-status`: info = Novo, vazio = Em aberto, ok = Finalizado). */
     function cabecalhoChamado(titulo, seloTexto, seloStatus) {
       const cab = document.createElement("header");
       cab.className = "sebrae-chamado__cab";
       const selo = dom.createTextElement("span", "ck-badge sebrae-chamado__selo", seloTexto);
       selo.dataset.status = seloStatus;
-      cab.append(titulo, selo);
+      // Todo cartão daqui mora numa linha `details`: aberto, a linha some (CSS) e recolher passa a este botão.
+      const recolher = document.createElement("button");
+      recolher.type = "button";
+      recolher.className = "sebrae-chamado__recolher";
+      recolher.setAttribute("aria-expanded", "true");
+      recolher.setAttribute("aria-label", "Recolher chamado");
+      recolher.appendChild(iconePendencia("i-chevron-up", ""));
+      recolher.addEventListener("click", () => {
+        const linha = recolher.closest("details");
+        if (!linha) return;
+        linha.open = false;
+        linha.querySelector("summary")?.focus();
+      });
+      cab.append(recolher, titulo, selo);
       return cab;
+    }
+
+    /** Liga a linha recolhida: guarda os Novos abertos entre recargas e, só quando a pessoa abriu, leva o foco ao botão Recolher. */
+    function ligarLinha(detalhe, resumo, numero) {
+      resumo.addEventListener("click", () => abertosPelaPessoa.add(detalhe));
+      detalhe.addEventListener("toggle", () => {
+        const pelaPessoa = abertosPelaPessoa.delete(detalhe);
+        if (detalhe.className === "sebrae-novo" && visao.novosAbertos) visao.novosAbertos[detalhe.open ? "add" : "delete"](numero);
+        if (detalhe.open && pelaPessoa) detalhe.querySelector(".sebrae-chamado__recolher")?.focus();
+      });
     }
 
     /** Cartão vazio: `article.sebrae-chamado--novo|antigo|finalizado` com o cabeçalho; as zonas são acrescentadas por quem chama. */
@@ -647,6 +680,7 @@
       resumo.className = "sebrae-finalizado__resumo";
       resumo.append([item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · "), seloDestaque(item.numero));
       detalhe.appendChild(resumo);
+      ligarLinha(detalhe, resumo, item.numero);
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
       const artigo = cartaoChamado(item.numero, "finalizado", titulo, "Finalizado", "ok");
@@ -890,20 +924,36 @@
       }
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
+      return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), dados.titulo, dados.solicitante,
+        [seloDestaque(item.numero), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
+    }
+
+    /** Linha recolhida dos novos e antigos: `details` cujo resumo mostra número, assunto, pessoa e selos; o cartão fica dentro. */
+    function linhaRecolhida(classe, numero, numeroTexto, assunto, solicitante, selos, artigo) {
       const detalhe = document.createElement("details");
-      detalhe.className = "sebrae-antigo";
+      detalhe.className = classe;
+      detalhe.dataset.numero = numero;
       const texto = document.createElement("span");
       texto.className = "sebrae-antigo__texto";
-      texto.append(dom.createTextElement("span", "sebrae-antigo__num", tituloAntigo(item)), dom.createTextElement("span", "sebrae-antigo__assunto", dados.titulo || "Sem título"));
-      if (dados.solicitante) texto.appendChild(dom.createTextElement("span", "sebrae-antigo__quem", dados.solicitante));
-      const selos = document.createElement("span");
-      selos.className = "sebrae-antigo__selos";
-      selos.append(...[seloDestaque(item.numero), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
+      texto.append(dom.createTextElement("span", "sebrae-antigo__num", numeroTexto), dom.createTextElement("span", "sebrae-antigo__assunto", assunto || "Sem título"));
+      if (solicitante) texto.appendChild(dom.createTextElement("span", "sebrae-antigo__quem", solicitante));
+      const caixaSelos = document.createElement("span");
+      caixaSelos.className = "sebrae-antigo__selos";
+      caixaSelos.append(...selos.filter(Boolean));
       const resumo = document.createElement("summary");
       resumo.className = "sebrae-antigo__resumo";
-      resumo.append(texto, selos);
+      resumo.append(texto, caixaSelos);
       detalhe.append(resumo, artigo);
+      ligarLinha(detalhe, resumo, numero);
       return detalhe;
+    }
+
+    /** Item da lista de novos: mesmo formato de linha dos antigos, com o selo `Novo`. */
+    function blocoNovo(item) {
+      const novo = dom.createTextElement("span", "ck-badge sebrae-selo", "Novo");
+      novo.dataset.status = "info";
+      return linhaRecolhida("sebrae-novo", item.numero, item.numero, item.linha.G, item.linha.I,
+        [novo, seloDestaque(item.numero), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
     }
 
     function blocoChamado(item) {
@@ -1229,20 +1279,232 @@
       return cartao;
     }
 
-    /** Refaz a seção `Chamados em destaque`: escondida se vazia, aberta quando aparece (ou em toda recarga, com `reabrir`). */
-    function desenharDestaques(reabrir = false) {
-      const secao = el("sebrae-destaques");
-      if (!secao) return;
-      const numeros = Object.keys(estado.destaques).sort((a, b) => String(estado.destaques[b].em || "").localeCompare(String(estado.destaques[a].em || "")) || a.localeCompare(b));
+    /** Refaz a aba `Destaques`; contagem, selo de alerta e visibilidade ficam com `aplicarVisao`. */
+    function desenharDestaques() {
       const lista = el("sebrae-destaques-lista");
-      const comFoco = lista?.contains(document.activeElement) ? document.activeElement.dataset?.sebraeDestaque : undefined;
-      lista?.replaceChildren(...numeros.map(cartaoDestaque));
-      // a seção é refeita por inteiro; quem estava no botão de um cartão continua nele (no cartão novo)
-      if (comFoco) [...lista.querySelectorAll("[data-sebrae-destaque]")].find(botao => botao.dataset.sebraeDestaque === comFoco)?.focus();
-      definirTexto("sebrae-destaques-contagem", String(numeros.length));
-      const apareceu = secao.hidden && numeros.length > 0;
-      secao.hidden = !numeros.length;
-      if (numeros.length && (apareceu || reabrir)) secao.open = true;
+      const numeros = lista ? Object.keys(estado.destaques).sort((a, b) => String(estado.destaques[b].em || "").localeCompare(String(estado.destaques[a].em || "")) || a.localeCompare(b)) : [];
+      const cartoes = numeros.map(cartaoDestaque);
+      if (lista) {
+        const comFoco = lista.contains(document.activeElement) ? document.activeElement.dataset?.sebraeDestaque : undefined;
+        lista.replaceChildren(...cartoes);
+        // a seção é refeita por inteiro; quem estava no botão de um cartão continua nele (no cartão novo)
+        if (comFoco) [...lista.querySelectorAll("[data-sebrae-destaque]")].find(botao => botao.dataset.sebraeDestaque === comFoco)?.focus();
+      }
+      indexar([...visao.itens.filter(item => item.aba !== "destaques"), ...cartoes.map((cartao, i) => entradaVisao("destaques", numeros[i], cartao))]);
+      aplicarVisao();
+    }
+
+    /** Campos que o filtro procura em cada aba (os mesmos dados que a aba desenha); `naLinha` diz se o campo já aparece na linha recolhida. */
+    function entradaVisao(aba, item, no) {
+      const campo = (rotulo, valor, naLinha = false) => ({ rotulo, valor, naLinha });
+      let campos = [];
+      let resumo = no.querySelector(".sebrae-antigo__texto");
+      if (aba === "novos") {
+        const linha = item.linha || {};
+        campos = [campo("", item.numero, true), campo("", linha.G, true), campo("", linha.I, true), ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => campo(rotulo, linha[letra]))];
+      } else if (aba === "antigos") {
+        const dados = dadosAntigo(item);
+        campos = [campo("", item.numero, true), campo("", tituloAntigo(item), true), campo("", dados.titulo, true), campo("", dados.solicitante, true),
+          ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => campo(rotulo, item.automaticos?.[letra] || item.automaticos_sugeridos?.[letra]))];
+      } else if (aba === "finalizados") {
+        const ficha = item.ficha || {};
+        const fatos = Array.isArray(ficha.fatos) ? ficha.fatos.filter(par => Array.isArray(par) && par.length === 2) : [];
+        campos = [campo("", item.numero, true), campo("", ficha.titulo, true), campo("", ficha.solicitante, true), ...fatos.map(([rotulo, valor]) => campo(rotulo, valor, rotulo === "Solicitante"))];
+        resumo = no.querySelector("summary");
+      } else {
+        const info = resumoChamado(item) || {};
+        // o destaque acha o que a sub-aba de origem acha (série, modelo, cidade, OS...)
+        const origem = visao.itens.find(e => e.aba !== "destaques" && e.numero === item);
+        campos = [campo("", item, true), campo("", info.titulo, true), campo("", info.solicitante, true),
+          ...(origem?.campos || []).filter(c => !c.naLinha).map(c => campo(c.rotulo, c.valor))];
+        resumo = null;
+      }
+      campos = campos.filter(c => c.valor && c.valor !== "—").map(c => ({ ...c, valor: String(c.valor), norma: normalizar(c.valor) }));
+      return { numero: aba === "destaques" ? item : item.numero, aba, no, resumo, campos, achado: null };
+    }
+
+    function indexar(itens) {
+      visao.itens = itens;
+      visao.porNo = new Map(itens.map(item => [item.no, item]));
+    }
+
+    const casaTermo = (item, termo) => !termo || item.campos.some(c => c.norma.includes(termo));
+
+    /** Segunda linha do resumo quando o termo só casou com um campo que a linha não mostra (Série, Modelo, Cidade, OS...). */
+    function marcarAchado(item, termo) {
+      item.achado?.remove();
+      item.achado = null;
+      if (!termo || !item.resumo || item.campos.some(c => c.naLinha && c.norma.includes(termo))) return;
+      const campo = item.campos.find(c => !c.naLinha && c.norma.includes(termo));
+      if (!campo) return;
+      // normaliza letra a letra para saber onde o trecho casado começa e termina no texto original
+      let norma = "";
+      const origem = [];
+      for (let i = 0; i < campo.valor.length; i++) {
+        const parte = campo.valor[i].normalize("NFKD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR");
+        norma += parte;
+        for (let j = 0; j < parte.length; j++) origem.push(i);
+      }
+      const achado = dom.createTextElement("span", "sebrae-achado", "");
+      achado.append(`${campo.rotulo}: `);
+      const pos = norma.indexOf(termo);
+      if (pos < 0) achado.append(campo.valor);
+      else {
+        const inicio = origem[pos];
+        const fim = origem[pos + termo.length - 1] + 1;
+        achado.append(campo.valor.slice(0, inicio), dom.createTextElement("mark", "", campo.valor.slice(inicio, fim)), campo.valor.slice(fim));
+      }
+      item.resumo.appendChild(achado);
+      item.achado = achado;
+    }
+
+    /** Recalcula tudo o que depende de aba, termo e página: linhas visíveis, contagens, rótulos, vazios e `Carregar mais`. */
+    function aplicarVisao() {
+      const termo = normalizar(visao.termo);
+      const contagens = {};
+      const encontrados = new Set();
+      ABAS.forEach(aba => {
+        const painel = el(`sebrae-${aba}`);
+        const lista = el(`sebrae-${aba}-lista`);
+        const filhos = lista ? [...lista.children] : [];
+        const limite = visao.paginas[aba];
+        let casam = 0;
+        filhos.forEach(filho => {
+          const item = visao.porNo.get(filho);
+          const casa = !item || casaTermo(item, termo);
+          if (casa) casam += 1;
+          if (casa && termo && item) encontrados.add(item.numero);
+          filho.hidden = !casa || (!termo && limite !== undefined && casam > limite);
+          if (item) marcarAchado(item, casa ? termo : "");
+        });
+        contagens[aba] = casam;
+        if (!painel) return;
+        painel.hidden = aba !== visao.aba;
+        if (termo) painel.setAttribute("data-filtrando", "");
+        else painel.removeAttribute("data-filtrando");
+        const mais = painel.querySelector("[data-sebrae-mais]");
+        if (mais) {
+          mais.hidden = Boolean(termo) || limite === undefined || filhos.length <= limite;
+          const n = mais.querySelector(".sebrae-mais__n");
+          if (n) n.textContent = mais.hidden ? "" : `Mostrando ${limite} de ${filhos.length}`;
+        }
+      });
+      const outraAba = ABAS.find(aba => contagens[aba] > 0);
+      ABAS.forEach(aba => {
+        const n = contagens[aba];
+        definirTexto(`sebrae-${aba}-contagem`, String(n));
+        const botao = el(`sebrae-aba-${aba}`);
+        if (botao) {
+          const selecionada = aba === visao.aba;
+          botao.setAttribute("aria-selected", String(selecionada));
+          botao.tabIndex = selecionada ? 0 : -1;
+          botao.setAttribute("aria-label", `${ROTULO_ABA[aba]}: ${n} ${n === 1 ? "chamado" : "chamados"}${termo ? (n === 1 ? " encontrado" : " encontrados") : ""}`);
+          if (n) botao.removeAttribute("data-zero");
+          else botao.setAttribute("data-zero", "");
+        }
+        const vazio = el(`sebrae-${aba}`)?.querySelector("[data-sebrae-vazio-filtro]");
+        if (!vazio) return;
+        vazio.hidden = !termo || n > 0;
+        const frase = vazio.querySelector(".sebrae-vazio__1");
+        if (frase) frase.textContent = vazio.hidden ? "" : `Nenhum chamado encontrado para “${visao.termo.trim()}”.`;
+        const ir = vazio.querySelector(".sebrae-vazio__ir");
+        if (ir) {
+          ir.hidden = vazio.hidden || !outraAba;
+          ir.textContent = ir.hidden ? "" : `Ir para ${ROTULO_ABA[outraAba]}`;
+          ir.dataset.sebraeIr = ir.hidden ? "" : outraAba;
+        }
+      });
+      // selo âmbar segue o número exibido na aba (com filtro, o que bateu), como no artefato aprovado
+      const contagemDestaques = el("sebrae-destaques-contagem");
+      if (contagemDestaques) {
+        if (contagens.destaques > 0) contagemDestaques.setAttribute("data-status", "alerta");
+        else contagemDestaques.removeAttribute("data-status");
+      }
+      definirTexto("sebrae-filtro-resultado", termo ? `${encontrados.size} chamado(s) encontrado(s)` : "");
+    }
+
+    /** Seleciona a sub-aba (clique, setas, Home, End, `Ir para…`); `focar` leva o foco ao botão da aba. */
+    function selecionarAba(nome, { focar = false } = {}) {
+      if (!ABAS.includes(nome)) return;
+      visao.aba = nome;
+      aplicarVisao();
+      if (focar) el(`sebrae-aba-${nome}`)?.focus();
+    }
+
+    function definirTermo(texto) {
+      const entrada = el("sebrae-filtro-termo");
+      if (entrada && entrada.value !== texto) entrada.value = texto;
+      if (texto === visao.termo) return;
+      visao.termo = texto;
+      visao.paginas = { antigos: POR_PAGINA, finalizados: POR_PAGINA };
+      aplicarVisao();
+    }
+
+    function abrirFiltro(abrir) {
+      const caixa = el("sebrae-filtro");
+      if (!caixa) return;
+      caixa.hidden = !abrir;
+      el("btn-sebrae-filtro")?.setAttribute("aria-expanded", String(abrir));
+      if (abrir) el("sebrae-filtro-termo")?.focus();
+      else {
+        definirTermo("");
+        el("btn-sebrae-filtro")?.focus();
+      }
+    }
+
+    /** Liga abas, lupa, filtro, `Ir para…` e `Carregar mais` uma vez, já na criação (a lista pode nunca chegar se a consulta falhar). */
+    function instalarVisao() {
+      ABAS.forEach((aba, indice) => {
+        const botao = el(`sebrae-aba-${aba}`);
+        botao?.addEventListener("click", () => selecionarAba(aba));
+        botao?.addEventListener("keydown", evento => {
+          const destino = { ArrowRight: indice + 1, ArrowLeft: indice - 1, Home: 0, End: ABAS.length - 1 }[evento.key];
+          if (destino === undefined) return;
+          evento.preventDefault();
+          selecionarAba(ABAS[(destino + ABAS.length) % ABAS.length], { focar: true });
+        });
+        const painel = el(`sebrae-${aba}`);
+        const ir = painel?.querySelector(".sebrae-vazio__ir");
+        ir?.addEventListener("click", () => selecionarAba(ir.dataset.sebraeIr, { focar: true }));
+        const mais = painel?.querySelector(".sebrae-mais__botao");
+        mais?.addEventListener("click", () => {
+          const anterior = visao.paginas[aba];
+          visao.paginas[aba] = anterior + POR_PAGINA;
+          aplicarVisao();
+          // o botão some quando a lista acaba: o foco vai para a primeira linha que apareceu
+          if (painel.querySelector("[data-sebrae-mais]")?.hidden) el(`sebrae-${aba}-lista`)?.children[anterior]?.querySelector("summary")?.focus();
+        });
+      });
+      const lupa = el("btn-sebrae-filtro");
+      lupa?.addEventListener("click", () => abrirFiltro(Boolean(el("sebrae-filtro")?.hidden)));
+      const entrada = el("sebrae-filtro-termo");
+      entrada?.addEventListener("input", () => definirTermo(entrada.value));
+      entrada?.addEventListener("keydown", evento => {
+        if (evento.key !== "Escape") return;
+        evento.preventDefault(); // o campo de busca do Chrome limparia sozinho e o mesmo Esc ainda fecharia o filtro
+        if (entrada.value) definirTermo("");
+        else abrirFiltro(false);
+      });
+      el("btn-sebrae-limpar-filtro")?.addEventListener("click", () => {
+        definirTermo("");
+        entrada?.focus();
+      });
+    }
+
+    /** Leva a aba ao chamado (Novos > Antigos > Finalizados; só destaque → Destaques), limpa o filtro que o esconde, estende a página e abre a linha. Não rola nem destaca. */
+    function mostrarChamadoSebrae(numero) {
+      const chave = String(numero);
+      const doNumero = visao.itens.filter(item => item.numero === chave);
+      const alvo = ["novos", "antigos", "finalizados", "destaques"].map(aba => doNumero.find(item => item.aba === aba)).find(Boolean);
+      if (!alvo) return null;
+      if (!casaTermo(alvo, normalizar(visao.termo))) definirTermo("");
+      const lista = el(`sebrae-${alvo.aba}-lista`);
+      const posicao = lista ? [...lista.children].indexOf(alvo.no) : -1;
+      if (visao.paginas[alvo.aba] !== undefined && posicao >= visao.paginas[alvo.aba]) visao.paginas[alvo.aba] = Math.ceil((posicao + 1) / POR_PAGINA) * POR_PAGINA;
+      selecionarAba(alvo.aba);
+      const linha = alvo.no.tagName === "DETAILS" ? alvo.no : alvo.no.querySelector("details");
+      if (linha) linha.open = true;
+      return alvo.no.querySelector("article[data-numero]") || null;
     }
 
     /** Destaques fora das listas atuais (e as datas) vêm de GET /api/sebrae/observacoes; o que a pessoa mexeu enquanto isso não é sobrescrito. */
@@ -1288,6 +1550,9 @@
         anunciarDestaque(ligado ? "Destaque marcado." : "Destaque removido.");
         sincronizarDestaque(numero);
         reordenarFinalizados();
+        // como em mostrarChamadoSebrae: o chamado em uso não pode sumir atrás de "Carregar mais"
+        const posicao = [...(el("sebrae-finalizados-lista")?.children || [])].findIndex(li => li.dataset.numero === numero);
+        if (posicao >= visao.paginas.finalizados) visao.paginas.finalizados = Math.ceil((posicao + 1) / POR_PAGINA) * POR_PAGINA;
         desenharDestaques();
         // details fechado e seção escondida não recebem foco: se o foco se perdeu, cai no resumo visível mais próximo
         const escondidoPorDetails = (n) => {
@@ -1304,7 +1569,7 @@
           // último recurso (chamado fora das listas e seção some): o título visível da primeira seção, nunca o body
           const titulo = el("sebrae-novos-secao");
           if (titulo && titulo.tabIndex < 0 && !titulo.hasAttribute("tabindex")) titulo.tabIndex = -1;
-          [botao, original, el("sebrae-destaques")?.querySelector("summary"), ...resumos, titulo].find(focalizavel)?.focus?.();
+          [botao, original, el(`sebrae-aba-${visao.aba}`), ...resumos, titulo].find(focalizavel)?.focus?.();
         }
       } catch (error) {
         definirFeedback(feedback, `Não foi possível salvar o destaque: ${error.message}`, "erro");
@@ -1931,15 +2196,16 @@
     }
 
     function atualizarBotaoAtualizar() {
-      const botao = el("btn-sebrae-atualizar");
-      if (!botao) return;
       const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length;
       const preenchimentos = totalPreenchimentos(estado.abertos);
-      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
       const visiveis = estado.abertos.filter(item => !estado.finalizados.has(item.numero)).length;
+      // o resumo também é o vazio da aba Antigos (CSS): escrito mesmo sem o botão Atualizar montado
       definirTexto("sebrae-antigos-resumo", visiveis
         ? `${visiveis} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
         : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
+      const botao = el("btn-sebrae-atualizar");
+      if (!botao) return;
+      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
     }
 
     function renderizarAvisos(novos) {
@@ -2004,18 +2270,17 @@
       });
       estado.destaqueOcupado.forEach(numero => { if (anteriores[numero]) estado.destaques[numero] = anteriores[numero]; else delete estado.destaques[numero]; });
       const emAberto = item => !estado.finalizados.has(item.numero); // os `ok` seguem em estado.abertos/formulario só para não perder A, B, J e S no Atualizar
-      el("sebrae-antigos-lista")?.replaceChildren(...estado.abertos.filter(emAberto).map(blocoAntigo));
-      const painelAntigos = el("sebrae-antigos");
-      if (painelAntigos) painelAntigos.hidden = !importado;
-      el("sebrae-finalizados-lista")?.replaceChildren(...finalizados.map((item, indice) => {
+      const antigos = estado.abertos.filter(emAberto);
+      const linhasAntigos = antigos.map(blocoAntigo);
+      el("sebrae-antigos-lista")?.replaceChildren(...linhasAntigos);
+      const linhasFinalizados = finalizados.map((item, indice) => {
         const li = textoFinalizado(item);
         li.dataset.numero = item.numero;
         li.dataset.ordem = String(indice);
         return li;
-      }));
+      });
+      el("sebrae-finalizados-lista")?.replaceChildren(...linhasFinalizados);
       reordenarFinalizados();
-      const painelFinalizados = el("sebrae-finalizados");
-      if (painelFinalizados) painelFinalizados.hidden = !finalizados.length;
       definirTexto("sebrae-finalizados-resumo", `${finalizados.length} chamado(s) finalizado(s) no SoftExpert.`);
       definirTexto("sebrae-dashboard-status", importado
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
@@ -2023,8 +2288,18 @@
       // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
       definirEnvioDisponivel(Boolean(importado?.saida_pronta));
       if (importado && !importado.saida_pronta) definirStatusAtualizar("Gere o Dashboard atualizado antes de enviar ao SharePoint.", "alerta");
+      const novosAbertos = estado.formulario.filter(emAberto);
+      const linhasNovos = novosAbertos.map(blocoNovo);
+      // na primeira lista o primeiro novo vem aberto; depois valem os que a pessoa deixou abertos (antigos voltam recolhidos)
+      if (!visao.novosAbertos && novosAbertos.length) visao.novosAbertos = new Set([novosAbertos[0].numero]);
+      linhasNovos.forEach((linha, i) => { linha.open = Boolean(visao.novosAbertos?.has(novosAbertos[i].numero)); });
+      indexar([
+        ...linhasNovos.map((linha, i) => entradaVisao("novos", novosAbertos[i], linha)),
+        ...linhasAntigos.map((linha, i) => entradaVisao("antigos", antigos[i], linha)),
+        ...linhasFinalizados.map((linha, i) => entradaVisao("finalizados", finalizados[i], linha)),
+      ]);
       const lista = el("sebrae-novos-lista");
-      lista?.replaceChildren(...estado.formulario.filter(emAberto).map(blocoChamado));
+      lista?.replaceChildren(...linhasNovos);
       lista?.removeAttribute("aria-busy"); // a lista já está pronta (também vale para a importação, que chama renderizar direto)
       renderizarAvisos(novos);
       if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard para buscar os chamados novos.");
@@ -2038,7 +2313,7 @@
       atualizarTodosFinalizar();
       atualizarBotaoAtualizar();
       app.carregarResumoHistoricoSebrae?.();
-      desenharDestaques(true);
+      desenharDestaques(); // também reaplica aba, filtro e página sobre as listas novas
       carregarDestaques(); // sem await: os de fora das listas e as datas entram quando chegarem
       carregarFechar();
       carregarAntigos();
@@ -2164,7 +2439,8 @@
       }
     }
 
-    return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae };
+    instalarVisao();
+    return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae, mostrarChamadoSebrae };
   }
 
   createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando, ehApiSebrae, padroesManuais,
