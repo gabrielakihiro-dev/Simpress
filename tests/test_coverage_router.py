@@ -233,6 +233,10 @@ class CoverageRouterTests(unittest.TestCase):
         self.assertEqual((arquivado["arquivado"], arquivado["registro"]["estado"]), (True, "cancelada"))
         self.assertFalse(self.client.get("/api/cobertura/casos/dem-velha").json()["arquivado"])
         self.assertEqual(self.client.get("/api/cobertura/casos/inexistente").status_code, 404)
+        # Caso do arquivo principal não depende dos arquivados: eles nem são lidos.
+        self.archive.write_text("{quebrado", encoding="utf-8")
+        self.assertEqual(self.client.get("/api/cobertura/casos/dem-velha").status_code, 200)
+        self.assertEqual(self.client.get("/api/cobertura/casos/dem-solta").status_code, 503)
 
     def test_json_ilegivel_503_e_preservado(self):
         self.state.parent.mkdir(parents=True)

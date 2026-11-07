@@ -398,6 +398,17 @@
       if (acao === "coletada") caixa.append(botao("Coletada", "secundario", () => mudarEstado(mov, "coletada", {}, "Movimentação coletada."), `Coletada — ${mov.serie}`));
       if (acao === "em_transito") caixa.append(botao("Em trânsito", "secundario", () => mudarEstado(mov, "em_transito", {}, "Movimentação em trânsito."), `Em trânsito — ${mov.serie}`));
       if (acao === "receber") caixa.append(formularioRecebimento(mov));
+      if (acao === "cancelar") {
+        caixa.append(botao("Cancelar movimentação", "perigo", async () => {
+          const ok = await app.confirmarAcao({
+            titulo: "Cancelar movimentação",
+            mensagem: `A movimentação da série ${mov.serie} será cancelada e a reserva volta a ficar ativa.`,
+            confirmar: "Cancelar movimentação",
+            cancelar: "Voltar",
+          });
+          if (ok) await mudarEstado(mov, "cancelada", {}, "Movimentação cancelada; reserva devolvida.");
+        }, `Cancelar movimentação — ${mov.serie}`));
+      }
       if (acao === "resolver") {
         const serie = entrada("text", mov.divergencia?.serie_recebida || "", { name: "serie_recebida", maxLength: 60, autocomplete: "off" });
         caixa.append(

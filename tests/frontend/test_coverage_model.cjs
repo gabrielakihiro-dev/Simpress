@@ -65,9 +65,10 @@ test("ações da reserva respeitam kit, vencimento e cidade dobrada", () => {
 });
 
 test("ações da movimentação seguem as transições do servidor", () => {
-  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "transporte" }), ["vincular"]);
-  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "transporte", historico_id: "h1" }), []);
-  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "local" }), ["receber"]);
+  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "transporte" }), ["vincular", "cancelar"]);
+  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "transporte", historico_id: "h1" }), ["cancelar"]);
+  assert.deepEqual(m.acoesDaMovimentacao({ estado: "preparada", tipo: "local" }), ["receber", "cancelar"]);
+  assert.equal(m.DISPONIBILIDADE.entregue, "Entregue");
   assert.deepEqual(m.acoesDaMovimentacao({ estado: "gerada" }), ["coletada"]);
   assert.deepEqual(m.acoesDaMovimentacao({ estado: "coletada" }), ["em_transito"]);
   assert.deepEqual(m.acoesDaMovimentacao({ estado: "em_transito" }), ["receber"]);

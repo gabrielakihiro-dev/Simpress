@@ -37,6 +37,7 @@ SITUACOES_DISPONIBILIDADE = ("disponivel", "em_manutencao", "indisponivel")
 MOTIVOS_CONFLITO = frozenset({
     "reserva_ativa", "reserva_vencida_em_revisao", "reserva_em_espera", "movimentacao_aberta", "devolucao_pendente",
 })
+MOTIVOS_DESTINO = MOTIVOS_CONFLITO - {"devolucao_pendente"}  # a série já está comprometida com uma vaga
 MOVIMENTACAO_ABERTA = frozenset({"preparada", "gerada", "coletada", "em_transito", "recebida_com_divergencia"})
 MOVIMENTACAO_ENTREGUE = frozenset({"recebida", "encerrada"})
 # Próximos estados aceitos por POST .../estado ("cancelada" só a partir de "preparada", tratado à parte).
@@ -548,6 +549,19 @@ def registrar_disponibilidade(
     item = ctx.cadastro.get(chave)
     cidade_final = _texto(cidade, "a cidade", 80, obrigatorio=False) or cidade_do_cadastro(item) or str((atual or {}).get("cidade") or "")
     nome = str((item or {}).get("serial") or (atual or {}).get("serie") or serie).strip()
+    # Série com destino (reserva ou movimentação aberta) só pode ser reconfirmada na mesma cidade; o resto exige
+    # cancelar a reserva ou a movimentação antes, senão a vaga continuaria apontando para uma máquina que saiu.
+    bloqueio = motivo_bloqueio(novo, chave, ctx.hoje, ctx.manutencao)
+    if bloqueio is not None and bloqueio["motivo"] in MOTIVOS_DESTINO:
+        cidade_atual = str((atual or {}).get("cidade") or "")
+        if cidade_atual and not _texto(cidade, "a cidade", 80, obrigatorio=False):
+            cidade_final = cidade_atual  # sem cidade informada, a máquina com destino fica onde está
+        if situacao != "disponivel" or (cidade_atual and dobrar(cidade_final) != dobrar(cidade_atual)):
+            raise CoberturaErro(
+                "conflito_reserva", 409,
+                "Esta máquina já tem destino. Cancele a reserva ou a movimentação antes de mudar a situação ou a cidade.",
+                motivo=bloqueio["motivo"], bloqueio_id=bloqueio["id"],
+            )
     if situacao == "disponivel":
         if not cidade_final:
             raise CoberturaErro("dados_invalidos", 422, "Informe a cidade onde a máquina está.", campo="cidade")
@@ -754,8 +768,10 @@ def preparar_movimentacao(
         raise CoberturaErro("reserva_vencida", 422, "A reserva venceu; renove antes de preparar.", motivo="reserva_vencida_em_revisao")
     if not kit_pronto(reserva):
         raise CoberturaErro("kit_incompleto", 422, "Marque todos os itens do kit antes de preparar o Transporte.")
-    if not ctx.manutencao.ilegivel and chave_serie(reserva.get("serie")) in ctx.manutencao.series:
-        raise CoberturaErro("serie_indisponivel", 422, "Esta máquina está em manutenção.", motivo="manutencao")
+    # Mesma regra de reservar (manutenção, disponibilidade manual e validade), recalculada nesta transação.
+    bloqueio = motivo_bloqueio(novo, reserva.get("serie"), ctx.hoje, ctx.manutencao, ignorar_reserva=reserva_id)
+    if bloqueio is not None:
+        raise _erro_do_bloqueio(bloqueio)
     demanda = novo["demandas"].get(str(reserva.get("demanda_id"))) or {}
     disponibilidade = novo["disponibilidade"].get(chave_serie(reserva.get("serie"))) or {}
     if tipo == "local" and (not dobrar(demanda.get("cidade")) or dobrar(disponibilidade.get("cidade")) != dobrar(demanda.get("cidade"))):
@@ -856,6 +872,28 @@ def mudar_estado_movimentacao(
     return novo, mov
 
 
+def _conferir_serie_recebida(estado: Estado, ctx: Contexto, serie: str) -> None:
+    """A série que chegou não pode ter outro destino (reserva, movimentação, devolução ou entrega), ser do Sebrae nem
+    estar em manutenção. A falta de disponibilidade confirmada não impede: a máquina já está na vaga."""
+    if eh_sebrae(serie):
+        raise CoberturaErro("serie_indisponivel", 422, "Notebook próprio do Sebrae, fora do inventário da Simpress.", motivo="fora_do_inventario")
+    bloqueio = motivo_bloqueio(estado, serie, ctx.hoje, ctx.manutencao)
+    if bloqueio is not None and bloqueio["motivo"] in MOTIVOS_CONFLITO:
+        raise CoberturaErro(
+            "conflito_reserva", 409,
+            "A série recebida já tem outro destino. Resolva a reserva, a movimentação ou a devolução dela antes de corrigir.",
+            motivo=bloqueio["motivo"], bloqueio_id=bloqueio["id"],
+        )
+    if bloqueio is not None and bloqueio["motivo"] == "manutencao":
+        raise CoberturaErro("serie_indisponivel", 422, "A série recebida está em manutenção.", motivo="manutencao")
+    registro = estado["disponibilidade"].get(chave_serie(serie)) or {}
+    if registro.get("estado") == "entregue":
+        raise CoberturaErro(
+            "conflito_reserva", 409, "A série recebida já foi entregue em outra vaga.",
+            motivo="serie_entregue", bloqueio_id=str(registro.get("movimentacao_id") or ""),
+        )
+
+
 def resolver_divergencia(
     estado: Estado, ctx: Contexto, mov_id: str, rev: Any, resolucao: str, serie_recebida: Any = None,
 ) -> Tuple[Estado, Registro]:
@@ -876,6 +914,7 @@ def resolver_divergencia(
         recebida = _texto(serie_recebida, "a série recebida", 60)
         if not chave_serie(recebida) or chave_serie(recebida) == chave_serie(original):
             raise CoberturaErro("dados_invalidos", 422, "A série recebida precisa ser diferente da série enviada.", campo="serie_recebida")
+        _conferir_serie_recebida(novo, ctx, recebida)
         mov["serie_recebida"] = recebida
         _entregar(novo, ctx, mov, recebida)
         _gravar_disponibilidade(novo, ctx, original, "a_confirmar", origem)
