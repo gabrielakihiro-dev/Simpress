@@ -349,7 +349,7 @@ Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Da
 
 **Repetir a cada 30 minutos** liga o agendamento de **Baixar, importar e buscar**. Ele vem pausado, só roda com o servidor ligado, reaproveita o login manual do Chrome e pula a tentativa quando há uma cópia gerada ainda não enviada; não envia nada ao SharePoint nem finaliza chamados.
 
-O painel **Chamados** (F5) separa **Chamados novos**, **Chamados antigos em aberto** e **Chamados finalizados** (as duas últimas listas começam recolhidas). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
+O painel **Chamados** (F5) separa os chamados nas sub-abas **Novos**, **Antigos**, **Destaques** e **Finalizados** (abre em Novos; a lupa **Filtrar chamados** procura nas quatro). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
 
 - **Ler chamados antigos**, no topo, lê no SoftExpert os chamados antigos ainda em aberto, sem gravar nada.
 - O lápis no bloco **Descrição** edita o texto do chamado (até 4.000 caracteres), com **Salvar**, **Cancelar** e **Restaurar original**. O texto fica só no site, em `data/state/sebrae_finalizacao.json`; no chamado novo, ele vira a coluna H no próximo **Atualizar Dashboard**.
