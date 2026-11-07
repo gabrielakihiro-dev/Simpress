@@ -56,6 +56,72 @@ O teste ao vivo da série de validação deve sempre usar simulação.
   (`PortalUXChrome.enviar`), antes do clique em `Enviar solicitação`. A simulação continua preenchendo o formulário e
   parando antes do envio. Defina a variável antes de iniciar o servidor ao testar o Assistente ou a Home contra o UX real.
 
+## Gerar ticket de Atualização Cadastral no UX (Transporte F2, 07/11/2026)
+
+Autorizado pelo usuário em 07/11/2026 (regras em `AGENTS.md`, seção "Ticket de Atualização Cadastral no UX").
+Depois de cada `Gerar Planilha` bem-sucedido, o Transporte abre o modal `#modal-ticket-ux` e chama
+`POST /api/ux/gerar-ticket/preparar` com o mesmo corpo de `/api/gerar-planilha` + `entrega_cep`; a planilha é
+regerada no servidor e vira o anexo. Mesmo Chrome de automação (CDP 9333), trava, `garantir_chrome` e login manual
+da abertura de chamados acima; aba própria (achada por `window.name`), sessão opaca de 30 min. Código em
+`domains/ux_ticket.py` (serviço, histórico) e `domains/ux_ticket_browser.py` (`PortalTicketUXChrome`).
+
+Passos nomeados (cada um com guarda de rota antes e depois):
+
+1. Consulta `https://ux.simpress.com.br/ng/gerar-ticket/consulta`: `Contrato` (`ng-select` com `input#selectContrato`,
+   única opção que começa por `16467`) → `Número de série` (`input#inputNumeroSerie`) → `Buscar` → `Cartão do
+   equipamento` (único `app-consulta-card-gerar-ticket` com `div.numeroSerieEquipamento` igual à série; clique em
+   `div.card.cursor-pointer`) → rota `/ng/gerar-ticket/abrir-ticket`.
+2. `Aviso de backup` fechado; `Cabeçalho do equipamento` confere série, `NOME DO CONTRATO` 16467 e um único `MODELO`.
+3. `Incidente` (`input#selectIncidente`): `Atualização Cadastral`; `Motivo` (`input#selectMotivo`): `Alteração de
+   Endereço ou Razão Social`. Cada `ng-select` exige uma única opção igual e relê o rótulo escolhido.
+4. `CEP` (`input#cep-novo-endereco`, só dígitos) → `Buscar meus Endereços` → `Meus Endereços` (`input#novo-endereco`)
+   lê todas as opções. O serviço só escolhe sozinho com exatamente uma opção igual à unidade de entrega; senão
+   devolve `endereco_ambiguo` com a lista e o usuário escolhe no modal (`/escolher-endereco`). Nunca se infere.
+5. `CNPJ de instalação` (`input#atualizarCnpjInstalacao`) = CNPJ da entrega; `CNPJ de faturamento`
+   (`input#atualizarCnpjFaturamento`) = `75.110.585/0001-00`; ambos relidos por dígitos.
+6. Registro: o único `textarea[placeholder="Nos conte, em detalhes, o que houve."]` recebe o texto de Deslocamento
+   editado no modal (`Contato no local:` vem com Destinatário - Celular; linha terminada em `:` ou campo entre
+   colchetes bloqueia, 422).
+7. `Anexo`: `set_input_files` em memória no único `input[type="file"]` (nome da planilha, MIME xlsx, até 5 MB), sem
+   diálogo de arquivo e sem clicar em `Anexar documento`; pronto quando o nome aparece uma vez.
+8. Solicitante (`input#nome`, `input#email`, `input#telefone`) com os valores do modal (padrão `SOLICITANTE_PADRAO`,
+   nada gravado) e `Nº do chamado interno` (`input#InputNumeroChamado`, opcional; vazio segue).
+9. `Conferência final`: relê série, modelo, escolhas, CEP, CNPJs, registro, solicitante, Nº interno e o anexo
+   (uma vez) antes de devolver `preenchido`, e de novo antes de `Finalizar`.
+
+`Simular preenchimento` (`enviar: false`) para no passo 9. `Revisar e finalizar` (`app.confirmarAcao`) manda
+`enviar: true` e `confirmado: true`; o serviço grava `incerto` no histórico antes do clique, clica uma vez em
+`Finalizar` e espera uma vez pelo número (`ticket`/`protocolo`/`chamado` + dígitos, um só, fora o contrato e o Nº
+interno). Daqui em diante não há contingência, recarga nem repetição: timeout vira `incerto`, com conferência manual
+(`conferido: true` no próximo preparo grava `conferido_em`). Travas: `BRM551RN1Y` e `SIMPRESS_UX_SEM_ENVIO=1`
+recusam o envio real com 422 no serviço e de novo no adaptador, antes do clique.
+
+### Contingência (pedido do usuário de 07/11/2026)
+
+- Clique acidental (link, `/ng/home`, outro site) faz o passo atual falhar com `rota_inesperada`; janelas abertas pela
+  aba da sessão são fechadas (as outras abas nunca são tocadas).
+- Falha repetível (409 do portal, erro ou timeout do Playwright): a MESMA aba volta para `/ng/gerar-ticket/consulta`
+  e refaz tudo desde o contrato, reaproveitando o endereço já escolhido (revalidado na lista nova). No máximo 3
+  tentativas, a primeira incluída; esgotou → 409 `ux_tentativas_esgotadas` com o nome do passo.
+- Não gastam tentativa nem repetem: endereço ambíguo (`endereco_ambiguo`), aba perdida (`aba_perdida`), 422 e 503. O
+  login perdido espera o login manual como na F1 e não consome tentativa (limitado a 3 esperas).
+- O log guarda só passo, número da tentativa e classe do erro; nunca seletores, registro, solicitante, CNPJ ou
+  endereço.
+
+### Status e erros
+
+- Sucesso: `preparado` / `endereco_ambiguo` (preparar), `preparado` (escolher endereço), `preenchido` (simulação),
+  `enviado` com `ticket`, `incerto`, `cancelado`.
+- 409: trava ocupada, sessão expirada/cancelada, `envio_incerto` (conferência pendente), `aba_perdida`,
+  `endereco_ambiguo`, `ux_tentativas_esgotadas`. 422: validação, série de teste, `SIMPRESS_UX_SEM_ENVIO`. 503:
+  `chrome_indisponivel`, login manual não concluído, `ux_formulario_diferente`/`ux_falha`, histórico ilegível.
+- Histórico `data/state/ux_tickets_historico.json` (fora do Git): `serie`, `data`, `ticket`, `estado`, `conferido_em`.
+  A aba da sessão é fechada ao cancelar, ao expirar e depois do resultado do envio (inclusive o incerto, sem novo
+  clique); a simulação a mantém aberta.
+- Verificado no portal real em 07/11/2026 (só preparo e simulação, com `SIMPRESS_UX_SEM_ENVIO=1`, série de
+  teste): endereço único escolhido sozinho, `preenchido` e `cancelado`, com a aba da sessão fechada. `Finalizar`, a
+  contingência e o endereço ambíguo não foram exercitados ao vivo (só nos testes).
+
 ## Consulta do Endpoint na Home
 
 Na Home/F1, selecione um equipamento e clique em `Consultar no Endpoint`. Com o Chrome de automação aberto na porta 9333, a aplicação abre uma aba própria, espera o login do Endpoint (mesmo fluxo da exportação de inventários, pedido do usuário de 05/11/2026: com a tela de login, preenche o usuário se vazio, escolhe o domínio `pr-sebrae` e só clica em `Fazer login` se o Chrome já preencheu a senha; senha e código do autenticador são do usuário; espera até 10 min, com aviso de "login necessário" e a trava ocupada durante a espera), seleciona `Todos os computadores`, filtra a série e lê exatamente a coluna `Usuário do último logon`. A aba não é fechada ao terminar (pedido do usuário, 04/11/2026): fica aberta no Chrome de automação, marcada por `window.name`, e a próxima consulta a reaproveita; as outras abas também permanecem abertas. A trava `data/state/automacao_chrome.lock` impede concorrência com as rotinas de exportação e com o agendamento. Chrome ocupado retorna 409; falta de login, conexão, coluna ou confirmação de todas as linhas retorna 503. Não inicia Chrome nem digita senha. A consulta só abre e reaproveita a aba própria: `conectar()` fecha as abas anteriores e por isso nunca é usado nesse fluxo.

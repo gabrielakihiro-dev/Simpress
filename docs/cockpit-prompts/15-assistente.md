@@ -8,7 +8,10 @@ modelo e opções sem preencher o formulário de envio. Digite exatamente uma da
 ou `Cancelar`; qualquer outra mensagem cancela o preparo e segue para o modelo normal.
 O pedido exige o assunto (`UX` e `chamado`/`solicita`/`atendimento`) e um verbo de ação
 (`abrir`, `criar`, `registrar` e flexões): perguntas como "quais chamados abertos no UX?"
-não acionam o portal. A ação de escrita só começa após a confirmação no cartão montado pelo
+não acionam o portal. Mensagens com `ticket`, `cadastral`, `alteração de endereço` ou `razão social`
+também não acionam este fluxo (07/11/2026): o ticket de Atualização Cadastral nasce do `Gerar Planilha` no
+Transporte (F2) e se finaliza no modal `Gerar ticket no UX`; a regra 31 do `SYSTEM_PROMPT` faz o Assistente
+explicar isso, e ele não tem ferramenta para esse ticket. A ação de escrita só começa após a confirmação no cartão montado pelo
 programa. Se a seleção ou a descrição mudar, é necessário preparar de novo. Em caso de
 envio incerto, confira no portal antes de dizer **Conferi no UX** para preparar novamente.
 O sistema registra essa conferência na tentativa correspondente.

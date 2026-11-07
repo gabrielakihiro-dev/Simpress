@@ -178,6 +178,24 @@ retornam 503. Nenhum erro retorna detalhes técnicos do Playwright.
 `POST /api/assistente/mensagem` e `.../confirmar` aceitam opcionalmente o contexto
 local `contexto_ux:{serial,descricao,revisao}`; esse objeto não é enviado ao modelo.
 
+## Gerar ticket no UX (Transporte)
+
+Atualização cadastral de endereço no UX depois da planilha de transferência: contrato 16467,
+Incidente `Atualização Cadastral`, Motivo `Alteração de Endereço ou Razão Social`, Meus Endereços pelo CEP,
+CNPJ de instalação = `entrega_cnpj`, CNPJ de faturamento fixo `75.110.585/0001-00` (`CNPJ_FATURAMENTO` em
+`domains/ux_ticket.py`), planilha anexada. Aba própria, trava do Chrome compartilhada com a abertura de chamados,
+sessão opaca de 30 min. Erros: `{detail, codigo}`; 409 trava ocupada/sessão inválida/contexto divergente
+(`envio_incerto` exige conferência), 422 validação, 503 `chrome_indisponivel`, `ux_formulario_diferente` ou `ux_falha`.
+
+| # | Método e caminho | Entrada JSON | Resultado |
+| --- | --- | --- | --- |
+| 191 | POST /api/ux/gerar-ticket/preparar | O mesmo corpo de `POST /api/gerar-planilha` + `entrega_cep` (8 dígitos) e `conferido?:bool`. A planilha é regerada no servidor como anexo (até 5 MB). | `{status:"preparado"\|"endereco_ambiguo", session_id, serial, modelo, endereco, opcoes_endereco, cnpj_instalacao, cnpj_faturamento, arquivo, solicitante:{nome,email,telefone}, ultimo_envio:{ticket,data}\|null}`. O endereço só é escolhido sozinho com uma única opção que confere logradouro+número, cidade e CEP; senão `endereco_ambiguo` com a lista. |
+| 192 | POST /api/ux/gerar-ticket/escolher-endereco | `{session_id, serial, endereco}` com o texto exato de uma opção da sessão. | `{status:"preparado", session_id, serial, endereco}`; 422 se o texto não estiver na lista. Contingência (vale também para `preparar` e `enviar`): rota conferida antes e depois de cada passo, pop-ups abertos pela aba da sessão são fechados e qualquer falha volta a mesma aba à consulta e refaz desde o contrato, até 3 tentativas (409 `ux_tentativas_esgotadas` citando só o passo); lista de endereços ambígua ou vazia, login perdido e validação não gastam tentativas. |
+| 193 | POST /api/ux/gerar-ticket/enviar | `{session_id, serial, descricao (≤2500), solicitante:{nome,email,telefone}, chamado_interno? (≤10), enviar?:bool, confirmado?:bool}`. Envio real exige os dois booleanos; `BRM551RN1Y` e `SIMPRESS_UX_SEM_ENVIO=1` recusam com 422. | `preenchido` (simulação, para antes de Finalizar); `enviado` com `ticket`; `incerto` com `mensagem` se o número não aparecer após o único clique. Conferência final (rota, cabeçalho, escolhas, CNPJs, Registro, anexo, solicitante e Nº interno) antes do `preenchido` e imediatamente antes de Finalizar; divergência aciona a contingência e falha antes do clique é erro (sessão mantida), não `incerto`. Depois do clique em Finalizar nunca há repetição. |
+| 194 | POST /api/ux/gerar-ticket/cancelar | `{session_id}`. | `{status:"cancelado"}`; a aba da sessão é fechada. |
+
+Histórico em `data/state/ux_tickets_historico.json`: só série, data, ticket, estado e `conferido_em`.
+
 ## Assistente (IA própria via OpenRouter)
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
