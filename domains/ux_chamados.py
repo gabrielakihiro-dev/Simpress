@@ -27,6 +27,10 @@ SERIES_SEM_ENVIO_REAL = frozenset({"BRM551RN1Y"})
 VAR_SEM_ENVIO = "SIMPRESS_UX_SEM_ENVIO"
 MSG_SERIE_TESTE = "Esta série é de teste: só a simulação é permitida."
 MSG_SEM_ENVIO = f"O envio real está desativado ({VAR_SEM_ENVIO}). Só a simulação é permitida."
+MSG_SOLICITANTE_FALTANDO = (
+    "O envio não foi feito: faltam dados do solicitante no formulário do UX. Preencha no Chrome de automação "
+    "(ou crie data/state/ux_solicitante.json) e envie de novo. Faltando: "
+)
 INCERTO = "O UX não confirmou o envio. Confira se o chamado foi criado antes de tentar novamente."
 
 
@@ -47,7 +51,7 @@ class PortalUX(Protocol):
     def validar(self, serial: str, modelo: str, aba: str) -> None: ...
     def preencher(
         self, serial: str, modelo: str, aba: str, problema: str, descricao: str, solicitante: dict[str, str],
-    ) -> None: ...
+    ) -> list[str] | None: ...
     def enviar(self, aba: str) -> str: ...
     def fechar(self, aba: str) -> None: ...
 
@@ -109,6 +113,11 @@ class ChamadosUX:
     def _solicitante(self) -> dict[str, str]:
         try:
             perfil = json.loads(self._profile.read_text(encoding="utf-8-sig"))
+        except FileNotFoundError:
+            return {}  # no local profile: the portal's own pre-filled Solicitante is used as is
+        except (OSError, ValueError):
+            raise ErroUX(503, "O perfil local do solicitante do UX está inválido. Corrija ou apague data/state/ux_solicitante.json.") from None
+        try:
             if not isinstance(perfil, dict):
                 raise ValueError()
             dados = {campo: perfil.get(campo) for campo in PROFILE_FIELDS}
@@ -119,7 +128,7 @@ class ChamadosUX:
             ):
                 raise ValueError()
         except (OSError, ValueError):
-            raise ErroUX(503, "Configure o perfil local do solicitante do UX antes de preencher o formulário.") from None
+            raise ErroUX(503, "O perfil local do solicitante do UX está incompleto. Corrija ou apague data/state/ux_solicitante.json.") from None
         return {campo: str(valor).strip() for campo, valor in dados.items()}
 
     def _limpar_expiradas(self) -> None:
@@ -239,11 +248,13 @@ class ChamadosUX:
         with self._lock:
             self._sessao(session_id, serial)
         portal.validar(serial, sessao.modelo, sessao.aba)
-        portal.preencher(serial, sessao.modelo, sessao.aba, problema, descricao, solicitante)
+        faltando = portal.preencher(serial, sessao.modelo, sessao.aba, problema, descricao, solicitante) or []
         with self._lock:
             self._sessao(session_id, serial)
         if not enviar:
-            return {"status": "preenchido", "serial": serial}
+            return {"status": "preenchido", "serial": serial, "faltando": faltando}
+        if faltando:
+            raise ErroUX(409, MSG_SOLICITANTE_FALTANDO + ", ".join(faltando) + ".")
         portal.validar(serial, sessao.modelo, sessao.aba)
         with self._lock:
             self._sessao(session_id, serial)

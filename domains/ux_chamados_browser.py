@@ -346,9 +346,19 @@ class PortalUXChrome:
             lista.wait_for(state="hidden", timeout=CONTROLES_MS)
         return [nome for nome, _ in posicoes]
 
+    @staticmethod
+    def _solicitante_faltando(page: Any, campos: dict[str, Any]) -> list[str]:
+        """Without a local profile the portal's own Solicitante stays as it is; report what is still empty."""
+        for _ in range(8):  # the Angular form fills its fields a moment after the step opens
+            vazios = [c for c, el in campos.items() if c != "ramal" and not el.input_value(timeout=CONTROLES_MS).strip()]
+            if not vazios:
+                break
+            page.wait_for_timeout(250)
+        return [CAMPOS_SOLICITANTE[c] for c in vazios]
+
     def preencher(
         self, serial: str, modelo: str, aba: str, problema: str, descricao: str, solicitante: dict[str, str],
-    ) -> None:
+    ) -> list[str]:
         self._pronto = None
         page = self._validar(serial, modelo, aba)
         _unico(page.get_by_text("Solicitante", exact=True))
@@ -357,7 +367,8 @@ class PortalUXChrome:
         texto = _unico(_campo_descricao(page))
         self._opcoes(page, problema)
         texto.fill(descricao, timeout=CONTROLES_MS)
-        for campo, elemento in campos.items():
+        faltando = [] if solicitante else self._solicitante_faltando(page, campos)
+        for campo, elemento in (campos.items() if solicitante else ()):
             valor = solicitante[campo]
             if not _valor_confere(campo, elemento.input_value(timeout=CONTROLES_MS), valor):
                 elemento.fill(valor, timeout=CONTROLES_MS)
@@ -365,6 +376,7 @@ class PortalUXChrome:
                 raise ErroUX(409, "O UX não manteve um dos valores do solicitante.")
         self._validar(serial, modelo, aba)
         self._pronto = (serial, modelo, aba)
+        return faltando
 
     def enviar(self, aba: str) -> str:
         pronto, self._pronto = self._pronto, None

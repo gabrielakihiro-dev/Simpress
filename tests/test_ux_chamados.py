@@ -20,6 +20,7 @@ class Portal:
         self.falhar_envio = False
         self.fechadas = []
         self.falhar_fechar = False
+        self.faltando = []
 
     def fechar(self, aba):
         if self.falhar_fechar:
@@ -40,6 +41,7 @@ class Portal:
 
     def preencher(self, serial, modelo, aba, problema, descricao, solicitante):
         self.fills.append((serial, problema, descricao, solicitante))
+        return self.faltando
 
     def enviar(self, aba):
         self.envios += 1
@@ -206,6 +208,27 @@ class UxChamadosTests(unittest.TestCase):
                 self.executar(sessao, **mudanca)
         self.assertEqual(self.portal.fills, [])
 
+
+    def test_without_local_profile_the_portal_solicitante_is_used_and_gaps_block_only_the_send(self):
+        (self.state / "ux_solicitante.json").unlink()
+        sessao = self.preparar()
+        self.portal.faltando = ["Telefone para contato"]
+        resultado = self.executar(sessao)
+        self.assertEqual((resultado["status"], resultado["faltando"]), ("preenchido", ["Telefone para contato"]))
+        self.assertEqual(self.portal.fills[-1][3], {})
+        with self.assertRaisesRegex(ux_chamados.ErroUX, "Telefone para contato"):
+            self.executar(sessao, enviar=True, confirmado=True)
+        self.assertEqual(self.portal.envios, 0)
+        self.assertFalse((self.state / "ux_chamados_historico.json").exists())
+        self.portal.faltando = []
+        self.assertEqual(self.executar(sessao, enviar=True, confirmado=True)["status"], "enviado")
+
+    def test_invalid_local_profile_is_refused_with_a_clear_message(self):
+        (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
+        sessao = self.preparar()
+        with self.assertRaisesRegex(ux_chamados.ErroUX, "inválido"):
+            self.executar(sessao)
+        self.assertEqual(self.portal.fills, [])
 
     def test_unexpected_failure_returns_503_and_logs_only_the_class_name(self):
         class TimeoutError(Exception):  # same class name Playwright uses
