@@ -2338,6 +2338,17 @@ class AutonomiaTests(unittest.TestCase):
         self.assertIn("18.", SYSTEM_PROMPT)
         self.assertIn("NÃO conseguiu obter", SYSTEM_PROMPT)
 
+    def test_prompt_describes_the_f5_sub_tabs_and_filter(self) -> None:
+        for trecho in ("Tela Chamados (F5)", "Novos", "Antigos", "Destaques", "Finalizados", "Filtrar chamados", "Limpar filtro", "cidade",
+                       "não têm filtro por cidade"):
+            self.assertIn(trecho, SYSTEM_PROMPT)
+        self.assertNotIn("seção Chamados antigos", SYSTEM_PROMPT)
+
+    def test_prompt_describes_the_f6_search_and_pagination(self) -> None:
+        for trecho in ("Tela OS (F6)", "Buscar série ou OS", "modelo", "número UTIC", "não busca pela descrição",
+                       "25 OS por vez", "Carregar mais", "Limpar filtros"):
+            self.assertIn(trecho, SYSTEM_PROMPT)
+
 
 if __name__ == "__main__":
     unittest.main()
