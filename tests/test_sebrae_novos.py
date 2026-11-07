@@ -142,6 +142,30 @@ class PreenchimentosTest(unittest.TestCase):
         sem_vinculo = {**self.aberto(usuario="", K="ABC123", L="Dell", N="X"), "numero": "UTIC-2026-0095"}
         self.assertEqual(novos.preenchimentos([sem_vinculo], REGISTROS, RELATORIO, vinculos), {"UTIC-2026-0095": {"E": "7303022"}})
 
+    def test_macbook_com_ou_sem_s_acha_a_os_pela_equivalencia_e_nao_troca_valores(self):
+        relatorio = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]}
+        indice = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1"}}
+        com_s = self.aberto(usuario="", K="SCXC9F072K1", L="Mac", N="X")
+        self.assertEqual(novos.preenchimentos([com_s], REGISTROS, relatorio), {})  # sem índice, série exata não acha
+        self.assertEqual(novos.preenchimentos([com_s], REGISTROS, relatorio, indice_endpoint=indice), {"linha:2": {"E": "77"}})
+        sem_s = self.aberto(usuario="", K="CXC9F072K1", L="Mac", N="X")
+        relatorio_s = {"chamados": [{"serie": "SCXC9F072K1", "simpress": {"ordens_servico": ["88"]}}]}
+        self.assertEqual(novos.preenchimentos([sem_s], REGISTROS, relatorio_s, indice_endpoint=indice), {"linha:2": {"E": "88"}})
+        preenchido = self.aberto(usuario="", K="SCXC9F072K1", L="Mac", N="X", E="5")
+        self.assertEqual(novos.preenchimentos([preenchido], REGISTROS, relatorio, indice_endpoint=indice), {})
+        self.assertEqual(com_s["automaticos"]["K"], "SCXC9F072K1")
+
+    def test_macbook_ambiguo_ou_serie_exata_com_os_nao_usa_a_equivalencia(self):
+        relatorio = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]}
+        ambiguo = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1", "CXC9F072K1"}}
+        com_s = self.aberto(usuario="", K="SCXC9F072K1", L="Mac", N="X")
+        self.assertEqual(novos.preenchimentos([com_s], REGISTROS, relatorio, indice_endpoint=ambiguo), {})
+        nao_mac = {"unique": {"CXC9F072K1": "PRNOTE001"}, "details_serials": {"SCXC9F072K1"}}
+        self.assertEqual(novos.preenchimentos([com_s], REGISTROS, relatorio, indice_endpoint=nao_mac), {})
+        dois = {"chamados": relatorio["chamados"] + [{"serie": "SCXC9F072K1", "simpress": {"ordens_servico": ["99"]}}]}
+        indice = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1"}}
+        self.assertEqual(novos.preenchimentos([com_s], REGISTROS, dois, indice_endpoint=indice), {"linha:2": {"E": "99"}})  # exact wins
+
     def test_formulario_usa_o_vinculo_manual_antes_da_serie(self):
         item = novos.formulario([CHAMADO], REGISTROS, RELATORIO, [{"chamado": "UTIC-2026-1378", "os": "555"}])[0]
         self.assertEqual(item["linha"]["E"], "555")

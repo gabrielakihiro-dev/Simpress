@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List, Mapping, Sequence, Set, Tuple
 
 from domains.sebrae_chamados import NUMERO_UTIC
-from domains.sebrae_cruzamento import _chave_serie, _numero_da_os
+from domains.sebrae_cruzamento import _chave_serie, _numero_da_os, serie_equivalente_macbook
 
 
 def _os_chave(valor: Any) -> str:
@@ -35,8 +35,13 @@ def _ordens_da_serie(chamados: Sequence[Any], alvo: str) -> Dict[str, Dict[str, 
     return ordens
 
 
-def vinculos_derivados(abertos: Sequence[Mapping[str, Any]], relatorio: Mapping[str, Any] | None) -> List[Dict[str, Any]]:
+def vinculos_derivados(
+    abertos: Sequence[Mapping[str, Any]], relatorio: Mapping[str, Any] | None, indice_endpoint: Mapping[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
     """Links proposed by Dashboard rows with a full UTIC in C and a serial in K, marked ``origem: "dashboard"``.
+
+    A MacBook serial with no OS as written is looked up in its other ``S`` spelling (``indice_endpoint``, unique match
+    only); the link keeps the serial as the report has it.
 
     The target OS is the row's E when the serial has it, else the serial's only OS; zero or several OS is ambiguous and
     yields nothing. One entry per source (simpress/oracle) holding that OS. A (source, serial, OS) asked by two
@@ -53,6 +58,8 @@ def vinculos_derivados(abertos: Sequence[Mapping[str, Any]], relatorio: Mapping[
         if not achado or not serie or not 2000 <= int(achado.group(1)) <= 9999 or len(achado.group(2)) > 24:
             continue
         ordens = _ordens_da_serie(chamados, _chave_serie(serie))
+        if not ordens and (outra := _chave_serie(serie_equivalente_macbook(serie, indice_endpoint))):
+            ordens = _ordens_da_serie(chamados, outra)
         atual = _os_chave((item.get("automaticos") or {}).get("E"))
         alvo = atual if atual in ordens else next(iter(ordens)) if len(ordens) == 1 else ""
         if not alvo:
