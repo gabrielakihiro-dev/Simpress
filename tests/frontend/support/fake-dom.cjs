@@ -35,7 +35,12 @@ class FakeNode {
   addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) || []), listener]); }
   dispatchEvent(event) { (this.listeners.get(event.type) || []).forEach(listener => listener(event)); return true; }
   click() { this.dispatchEvent({ type: "click", target: this, preventDefault() {} }); }
-  focus() {}
+  // foco como no navegador: guardado no documento; `activeElement` volta ao body se o nó saiu da árvore ou ficou escondido
+  focus() { this.ownerDocument.focado = this; }
+  get tabIndex() { return this.attrs.has("tabindex") ? Number(this.attrs.get("tabindex")) : -1; } // padrão de elemento não focalizável
+  set tabIndex(valor) { this.setAttribute("tabindex", valor); }
+  get parentElement() { return this.parentNode?.tagName ? this.parentNode : null; }
+  contains(node) { for (let atual = node; atual; atual = atual.parentNode) if (atual === this) return true; return false; }
 
   matches(selector) {
     return selector.split(",").some(part => compound(this, part.trim()));
@@ -58,9 +63,11 @@ function compound(node, selector) {
   const tag = selector.match(/^[a-z][\w-]*/i)?.[0];
   if (tag && node.tagName !== tag.toUpperCase()) return false;
   for (const [, name] of selector.matchAll(/\.([\w-]+)/g)) if (!node.className.split(/\s+/).includes(name)) return false;
-  for (const [, name, value] of selector.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)) {
+  for (const [, interno] of selector.matchAll(/:not\(([^)]*)\)/g)) if (compound(node, interno)) return false;
+  for (const [, name, value] of selector.replace(/:not\([^)]*\)/g, "").matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)) {
     const actual = name === "id" ? node.id || undefined
-      : node.attrs.has(name) ? node.attrs.get(name) : node.dataset[camel(name.replace(/^data-/, ""))];
+      : node.attrs.has(name) ? node.attrs.get(name)
+      : node.dataset[camel(name.replace(/^data-/, ""))] ?? (node[name] === true ? "" : undefined); // `hidden` e `open` são propriedades
     if (actual === undefined || (value !== undefined && String(actual) !== value)) return false;
   }
   return true;
@@ -91,6 +98,11 @@ function createFakeDocument() {
     querySelectorAll: selector => doc.root.querySelectorAll(selector),
     addEventListener() {},
     dispatchEvent() { return true; },
+    get activeElement() {
+      const alvo = doc.focado;
+      const escondido = no => { for (let n = no; n?.tagName; n = n.parentNode) { if (n.hidden || (n.tagName === "DETAILS" && !n.open && !(no.tagName === "SUMMARY" && no.parentNode === n))) return true; } return false; };
+      return alvo && alvo.isConnected && !escondido(alvo) ? alvo : doc.body;
+    },
   };
   doc.root = new FakeNode("html", doc);
   doc.documentElement = doc.root;

@@ -107,6 +107,12 @@ class ObservacaoPayload(BaseModel):
     observacao: str = Field("", max_length=4000)
 
 
+class DestaquePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    destaque: bool = Field(..., strict=True)
+
+
 class FichaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -186,9 +192,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
-             "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", "")}  # ``softexpert`` is the finalization state; this is the read data
+             "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
+             "destaque": _destacado(obs_map, a.get("numero"))}  # ``softexpert`` is the finalization state; this is the read data
             for a, e in zip(abertos, efetivos)
         ]
+
+    def _destacado(observacoes: Mapping[str, Mapping[str, Any]], numero: Any) -> bool:
+        return bool(observacoes.get(str(numero or ""), {}).get("destaque"))
 
     def _apelido(apelidos: Mapping[str, str], serie: Any) -> str:
         return apelidos.get(str(serie or "").strip().upper(), "")
@@ -224,7 +234,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
         apelidos = services.apelidos() if novos else {}
         finalizados = [
-            {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", "")}
+            {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", ""),
+             "destaque": _destacado(observacoes, f.get("numero"))}
             for f in fin.finalizados_no_dashboard(pasta)
         ] if importado else []
         return {
@@ -241,7 +252,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "formulario": [
                     {**item, "apelido": _apelido(apelidos, item["linha"].get("K")),
                      "softexpert": fin.publico(finalizacao.get(item["numero"])),
-                     "observacao": observacoes.get(item["numero"], {}).get("observacao", "")}
+                     "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
+                     "destaque": _destacado(observacoes, item["numero"])}
                     for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
                 ],
             },
@@ -578,6 +590,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def definir_observacao(numero: str, payload: ObservacaoPayload):
         """Anotação interna do chamado (salva automaticamente em disco, sem tocar SoftExpert nem Dashboard)."""
         resultado = obs.salvar_observacao(_pasta_estado(), numero, payload.observacao)
+        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/destaque")
+    def definir_destaque(numero: str, payload: DestaquePayload):
+        """Destaque manual do chamado (só local, inclusive finalizado; fica até o usuário tirar)."""
+        resultado = obs.definir_destaque(_pasta_estado(), numero, payload.destaque)
         return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
 
     @router.get("/api/sebrae/observacoes")

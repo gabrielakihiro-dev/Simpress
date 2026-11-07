@@ -342,6 +342,10 @@
       naoSalvos: { valores: {}, edicoes: {} }, rascunhoExterno: false, formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", versaoImportacao: "", descartar: false,
       soft: {}, refs: new Map(), temporizadores: {}, salvando: {}, finalizados: new Set(),
       observacoes: {}, temporizadoresObs: {}, salvandoObs: {},
+      // Destaque manual: única fonte de verdade (número -> {em, observacao}); cartões, selos, botões e a seção `Chamados em destaque` leem daqui.
+      destaques: {}, destaqueEditados: new Set(), destaqueOcupado: new Set(), finalizadosItens: [],
+      // PUT de destaque concluído: versão global + último resultado por número; respostas de GET iniciadas antes dele são ignoradas para esse número.
+      destaqueVersao: 0, destaqueUltimo: {},
       fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
       antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
     };
@@ -534,9 +538,11 @@
     /** Cartão vazio: `article.sebrae-chamado--novo|antigo|finalizado` com o cabeçalho; as zonas são acrescentadas por quem chama. */
     function cartaoChamado(numero, tipo, titulo, seloTexto, seloStatus) {
       const artigo = document.createElement("article");
-      artigo.className = `sebrae-chamado sebrae-chamado--${tipo}`;
+      artigo.className = `sebrae-chamado sebrae-chamado--${tipo}${estado.destaques[numero] ? " sebrae-chamado--destaque" : ""}`;
       artigo.dataset.numero = numero;
-      artigo.appendChild(cabecalhoChamado(titulo, seloTexto, seloStatus));
+      const cab = cabecalhoChamado(titulo, seloTexto, seloStatus);
+      cab.appendChild(seloDestaque(numero));
+      artigo.appendChild(cab);
       return artigo;
     }
 
@@ -554,10 +560,11 @@
     }
 
     /** Zona 2: os seis campos manuais (A, B, D, J, R, S) e a observação interna do andamento. */
-    function zonaClassificacao(manuais, observacao = null) {
+    function zonaClassificacao(manuais, observacao = null, numero = "") {
       const zona = criarZona("classificacao", "Classificação operacional", "Preenchimento manual");
       zona.appendChild(manuais);
       if (observacao) zona.appendChild(observacao);
+      if (numero) zona.appendChild(blocoDestaque(numero)); // também no finalizado, onde a observação é só leitura
       return zona;
     }
 
@@ -636,7 +643,10 @@
       detalhe.className = "sebrae-finalizado";
       detalhe.dataset.numero = item.numero;
       const encerramento = item.encerrado_em ? `encerrado em ${item.encerrado_em}` : "";
-      detalhe.appendChild(dom.createTextElement("summary", "sebrae-finalizado__resumo", [item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · ")));
+      const resumo = document.createElement("summary");
+      resumo.className = "sebrae-finalizado__resumo";
+      resumo.append([item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · "), seloDestaque(item.numero));
+      detalhe.appendChild(resumo);
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
       const artigo = cartaoChamado(item.numero, "finalizado", titulo, "Finalizado", "ok");
@@ -648,7 +658,7 @@
         const valor = letra === "R" ? item.encerrado_em : letra === "D" ? "FINALIZADO" : ficha.manuais?.[letra];
         manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleLeitura(letra, valor)));
       });
-      artigo.appendChild(zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao, true)));
+      artigo.appendChild(zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao, true), item.numero));
       // Zona 3 concluída: sem pendências nem botões, só a descrição enviada, o PDF e o resultado.
       const zonaFinal = criarZona("finalizacao", "Finalização no SoftExpert", "Concluída", { destaque: true });
       const descricao = document.createElement("textarea");
@@ -869,7 +879,7 @@
           notas.push(dica);
         }
       }
-      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao)));
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
       const detalhe = document.createElement("details");
       detalhe.className = "sebrae-antigo";
@@ -879,7 +889,7 @@
       if (dados.solicitante) texto.appendChild(dom.createTextElement("span", "sebrae-antigo__quem", dados.solicitante));
       const selos = document.createElement("span");
       selos.className = "sebrae-antigo__selos";
-      selos.append(...[seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
+      selos.append(...[seloDestaque(item.numero), seloLeitura(item, dados), ...selosAutomaticos()].filter(Boolean));
       const resumo = document.createElement("summary");
       resumo.className = "sebrae-antigo__resumo";
       resumo.append(texto, selos);
@@ -905,7 +915,7 @@
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
-      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao)));
+      artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
       return artigo;
     }
@@ -1110,6 +1120,188 @@
       return bloco;
     }
 
+    // ---- Destaque manual: `estado.destaques` manda; tudo o que aparece na tela é refeito a partir dele ----
+
+    /** Selo `Destaque` (cor + estrela + texto); escondido enquanto o chamado não está em destaque. */
+    function seloDestaque(numero) {
+      const selo = document.createElement("span");
+      selo.className = "ck-badge sebrae-selo-destaque";
+      selo.dataset.status = "alerta";
+      selo.dataset.sebraeDestaqueSelo = numero;
+      selo.hidden = !estado.destaques[numero];
+      const estrela = dom.createTextElement("span", "sebrae-selo-destaque__estrela", "★");
+      estrela.setAttribute("aria-hidden", "true");
+      selo.append(estrela, "Destaque");
+      return selo;
+    }
+
+    /** Região `aria-live` fixa (fora da seção, que pode estar escondida): um nó novo a cada aviso para o leitor de tela repetir o texto. */
+    function anunciarDestaque(texto) {
+      el("sebrae-destaque-anuncio")?.replaceChildren(document.createTextNode(texto));
+    }
+
+    function atualizarBotaoDestaque(botao, ligado) {
+      botao.setAttribute("aria-pressed", String(ligado));
+      botao.textContent = ligado ? "Tirar destaque" : "Marcar destaque";
+    }
+
+    /** Botão que alterna o destaque (aria-pressed) + mensagem de erro; vale para todo cartão, inclusive o finalizado. */
+    function blocoDestaque(numero) {
+      const bloco = document.createElement("div");
+      bloco.className = "sebrae-destaque__acao";
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ck-btn ck-btn--secundario ck-btn--sm sebrae-destaque__botao";
+      botao.dataset.sebraeDestaque = numero;
+      atualizarBotaoDestaque(botao, Boolean(estado.destaques[numero]));
+      const feedback = dom.createTextElement("p", "ck-campo__ajuda sebrae-destaque__feedback", "");
+      feedback.setAttribute("role", "status");
+      feedback.dataset.estado = "";
+      botao.addEventListener("click", () => alternarDestaque(numero, botao, feedback));
+      bloco.append(botao, feedback);
+      return bloco;
+    }
+
+    const nosDoChamado = (seletor, atributo, numero) => [...document.querySelectorAll(seletor)].filter(no => no.dataset[atributo] === numero);
+
+    /** Leva `estado.destaques[numero]` para todos os cartões desse chamado (o original e o da seção), sem criar ids. */
+    function sincronizarDestaque(numero) {
+      const ligado = Boolean(estado.destaques[numero]);
+      nosDoChamado("[data-sebrae-destaque]", "sebraeDestaque", numero).forEach(botao => atualizarBotaoDestaque(botao, ligado));
+      nosDoChamado("[data-sebrae-destaque-selo]", "sebraeDestaqueSelo", numero).forEach(selo => { selo.hidden = !ligado; });
+      nosDoChamado("article.sebrae-chamado", "numero", numero).forEach(artigo => artigo.classList.toggle("sebrae-chamado--destaque", ligado));
+    }
+
+    /** Em `Chamados finalizados` os destaques ficam no topo; o resto segue a ordem original (`data-ordem`). Só mexe no DOM se a ordem mudou. */
+    function reordenarFinalizados() {
+      const lista = el("sebrae-finalizados-lista");
+      if (!lista) return;
+      const itens = [...lista.children];
+      const posto = li => (estado.destaques[li.dataset.numero] ? 0 : 1);
+      const ordenados = [...itens].sort((a, b) => posto(a) - posto(b) || Number(a.dataset.ordem) - Number(b.dataset.ordem));
+      if (ordenados.some((li, i) => li !== itens[i])) lista.replaceChildren(...ordenados);
+    }
+
+    /** Título, solicitante e observação de um chamado das listas atuais; `null` quando ele não está em nenhuma (destaque só no servidor). */
+    function resumoChamado(numero) {
+      const fin = estado.finalizadosItens.find(item => item.numero === numero);
+      if (fin) return { titulo: fin.ficha?.titulo, solicitante: fin.ficha?.solicitante, observacao: fin.observacao };
+      const novo = estado.formulario.find(item => item.numero === numero);
+      if (novo) return { titulo: novo.linha?.G, solicitante: novo.linha?.I, observacao: novo.observacao };
+      const antigo = estado.abertos.find(item => item.numero === numero);
+      if (antigo) { const dados = dadosAntigo(antigo); return { titulo: dados.titulo, solicitante: dados.solicitante, observacao: antigo.observacao }; }
+      return null;
+    }
+
+    /** Cartão compacto da seção: só leitura (número, solicitante, observação, data) + o botão. Não é `article[data-numero]`: o F5 da Home procura esse seletor e deve achar o original. */
+    function cartaoDestaque(numero) {
+      const info = resumoChamado(numero);
+      const registro = estado.destaques[numero] || {};
+      const cartao = document.createElement("div");
+      cartao.className = "sebrae-chamado sebrae-chamado--resumo sebrae-chamado--destaque";
+      cartao.dataset.sebraeDestaqueCartao = numero;
+      const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", numero);
+      if (info?.titulo) titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", info.titulo));
+      const cab = document.createElement("header");
+      cab.className = "sebrae-chamado__cab";
+      cab.append(titulo, seloDestaque(numero));
+      const desde = formatarDataHora(registro.em);
+      const fatos = listaFatos([info?.solicitante ? ["Solicitante", info.solicitante] : null, desde ? ["Em destaque desde", desde] : null].filter(Boolean));
+      const observacao = estado.observacoes[numero]?.enviado ?? registro.observacao ?? info?.observacao ?? "";
+      const bloco = document.createElement("div");
+      bloco.className = "sebrae-destaque__observacao";
+      bloco.append(dom.createTextElement("span", "ck-campo__rotulo", "Observação do andamento"), dom.createTextElement("p", "sebrae-destaque__texto", observacao || "—"));
+      const zona = document.createElement("div");
+      zona.className = "sebrae-destaque__corpo";
+      zona.append(...[fatos.children.length ? fatos : null, bloco, blocoDestaque(numero)].filter(Boolean));
+      cartao.append(cab, zona);
+      return cartao;
+    }
+
+    /** Refaz a seção `Chamados em destaque`: escondida se vazia, aberta quando aparece (ou em toda recarga, com `reabrir`). */
+    function desenharDestaques(reabrir = false) {
+      const secao = el("sebrae-destaques");
+      if (!secao) return;
+      const numeros = Object.keys(estado.destaques).sort((a, b) => String(estado.destaques[b].em || "").localeCompare(String(estado.destaques[a].em || "")) || a.localeCompare(b));
+      const lista = el("sebrae-destaques-lista");
+      const comFoco = lista?.contains(document.activeElement) ? document.activeElement.dataset?.sebraeDestaque : undefined;
+      lista?.replaceChildren(...numeros.map(cartaoDestaque));
+      // a seção é refeita por inteiro; quem estava no botão de um cartão continua nele (no cartão novo)
+      if (comFoco) [...lista.querySelectorAll("[data-sebrae-destaque]")].find(botao => botao.dataset.sebraeDestaque === comFoco)?.focus();
+      definirTexto("sebrae-destaques-contagem", String(numeros.length));
+      const apareceu = secao.hidden && numeros.length > 0;
+      secao.hidden = !numeros.length;
+      if (numeros.length && (apareceu || reabrir)) secao.open = true;
+    }
+
+    /** Destaques fora das listas atuais (e as datas) vêm de GET /api/sebrae/observacoes; o que a pessoa mexeu enquanto isso não é sobrescrito. */
+    async function carregarDestaques() {
+      const consulta = estado.consulta;
+      const versao = estado.destaqueVersao;
+      try {
+        const dados = await app.apiFetch("/api/sebrae/observacoes", { errorMessage: "Não foi possível consultar os destaques." });
+        if (consulta !== estado.consulta) return;
+        Object.entries(dados?.observacoes || {}).forEach(([numero, reg]) => {
+          if (!NUMERO_RASCUNHO.test(numero) || reg?.destaque !== true || estado.destaqueEditados.has(numero) || estado.destaqueOcupado.has(numero) || (estado.destaqueUltimo[numero]?.versao || 0) > versao) return;
+          estado.destaques[numero] = { em: reg.destaque_em || "", observacao: typeof reg.observacao === "string" ? reg.observacao : undefined };
+          sincronizarDestaque(numero);
+        });
+        reordenarFinalizados();
+        definirTexto("sebrae-destaques-resumo", "");
+        desenharDestaques();
+      } catch (error) {
+        if (consulta === estado.consulta) definirTexto("sebrae-destaques-resumo", error.message);
+      }
+    }
+
+    async function alternarDestaque(numero, botao, feedback) {
+      if (estado.destaqueOcupado.has(numero)) return;
+      estado.destaqueOcupado.add(numero);
+      estado.destaqueEditados.add(numero);
+      const ligar = !estado.destaques[numero];
+      definirFeedback(feedback, "Salvando…", "salvando");
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "destaque"), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ destaque: ligar }),
+          errorMessage: "Não foi possível salvar o destaque.",
+        });
+        const ligado = typeof dados?.destaque === "boolean" ? dados.destaque : ligar;
+        if (ligado) estado.destaques[numero] = { em: dados?.destaque_em || "", observacao: estado.destaques[numero]?.observacao };
+        else delete estado.destaques[numero];
+        estado.destaqueUltimo[numero] = { versao: ++estado.destaqueVersao, ligado, em: dados?.destaque_em || "" };
+        // lido depois da resposta: o botão pode ter sido refeito (autosave) e a pessoa pode ter saído dele durante o PUT
+        const tinhaFoco = document.activeElement?.dataset?.sebraeDestaque === numero;
+        definirFeedback(feedback, "", "");
+        anunciarDestaque(ligado ? "Destaque marcado." : "Destaque removido.");
+        sincronizarDestaque(numero);
+        reordenarFinalizados();
+        desenharDestaques();
+        // details fechado e seção escondida não recebem foco: se o foco se perdeu, cai no resumo visível mais próximo
+        const escondidoPorDetails = (n) => {
+          for (let d = n.closest?.("details:not([open])"); d; d = d.parentElement?.closest?.("details:not([open])")) {
+            if (!(n.tagName === "SUMMARY" && n.parentElement === d)) return true;
+          }
+          return false;
+        };
+        const focalizavel = (n) => n?.isConnected && n !== document.body && !n.closest?.("[hidden]") && !escondidoPorDetails(n);
+        if (tinhaFoco && !focalizavel(document.activeElement)) {
+          const original = nosDoChamado("[data-sebrae-destaque]", "sebraeDestaque", numero)[0];
+          const resumos = [];
+          for (let d = original?.closest?.("details"); d; d = d.parentElement?.closest?.("details")) resumos.push(d.querySelector("summary"));
+          // último recurso (chamado fora das listas e seção some): o título visível da primeira seção, nunca o body
+          const titulo = el("sebrae-novos-secao");
+          if (titulo && titulo.tabIndex < 0 && !titulo.hasAttribute("tabindex")) titulo.tabIndex = -1;
+          [botao, original, el("sebrae-destaques")?.querySelector("summary"), ...resumos, titulo].find(focalizavel)?.focus?.();
+        }
+      } catch (error) {
+        definirFeedback(feedback, `Não foi possível salvar o destaque: ${error.message}`, "erro");
+      } finally {
+        estado.destaqueOcupado.delete(numero);
+      }
+    }
+
     /** Salvamentos de observação entram em fila: a última versão digitada é a que fica gravada. */
     function salvarObservacao(numero) {
       window.clearTimeout(estado.temporizadoresObs[numero]);
@@ -1144,6 +1336,7 @@
           }
         }
         definirFeedback(reg.feedback, "Salva.", "ok");
+        if (estado.destaques[numero]) desenharDestaques(); // o cartão da seção mostra a observação salva
         return true;
       } catch (error) {
         definirFeedback(reg.feedback, `Não foi possível salvar: ${error.message}`, "erro");
@@ -1755,7 +1948,7 @@
       host.replaceChildren(dom.createTextElement("p", "ck-campo__ajuda", "Sem formulário (veja os motivos):"), lista);
     }
 
-    function renderizar(dados) {
+    function renderizar(dados, versaoDestaque = estado.destaqueVersao) {
       estado.rascunhoExterno = false;
       const importado = dados.importado;
       estado.listas = importado?.listas || {};
@@ -1785,11 +1978,31 @@
       estado.refs.clear();
       const finalizados = importado?.finalizados || [];
       estado.finalizados = new Set(finalizados.map(item => item.numero));
+      estado.finalizadosItens = finalizados;
+      estado.formulario = novos?.formulario || []; // antes dos cartões: `cartaoDestaque` e `resumoChamado` leem daqui
+      // Destaques das listas (a data e os de fora das listas chegam em carregarDestaques); refeito a cada recarga.
+      const anteriores = estado.destaques;
+      estado.destaques = {};
+      estado.destaqueEditados = new Set(estado.destaqueOcupado); // PUT em andamento: o número segue "mexido" até a resposta chegar
+      [...estado.formulario, ...estado.abertos, ...finalizados].forEach(item => { if (item.destaque === true) estado.destaques[item.numero] = { em: anteriores[item.numero]?.em || "" }; });
+      // lista lida antes de um PUT que já terminou (ou com ele em andamento): vale o resultado do PUT, não o da lista
+      Object.entries(estado.destaqueUltimo).forEach(([numero, ultimo]) => {
+        if (ultimo.versao <= versaoDestaque && !estado.destaqueOcupado.has(numero)) return;
+        if (ultimo.ligado) estado.destaques[numero] = { em: ultimo.em, observacao: anteriores[numero]?.observacao };
+        else delete estado.destaques[numero];
+      });
+      estado.destaqueOcupado.forEach(numero => { if (anteriores[numero]) estado.destaques[numero] = anteriores[numero]; else delete estado.destaques[numero]; });
       const emAberto = item => !estado.finalizados.has(item.numero); // os `ok` seguem em estado.abertos/formulario só para não perder A, B, J e S no Atualizar
       el("sebrae-antigos-lista")?.replaceChildren(...estado.abertos.filter(emAberto).map(blocoAntigo));
       const painelAntigos = el("sebrae-antigos");
       if (painelAntigos) painelAntigos.hidden = !importado;
-      el("sebrae-finalizados-lista")?.replaceChildren(...finalizados.map(textoFinalizado));
+      el("sebrae-finalizados-lista")?.replaceChildren(...finalizados.map((item, indice) => {
+        const li = textoFinalizado(item);
+        li.dataset.numero = item.numero;
+        li.dataset.ordem = String(indice);
+        return li;
+      }));
+      reordenarFinalizados();
       const painelFinalizados = el("sebrae-finalizados");
       if (painelFinalizados) painelFinalizados.hidden = !finalizados.length;
       definirTexto("sebrae-finalizados-resumo", `${finalizados.length} chamado(s) finalizado(s) no SoftExpert.`);
@@ -1799,7 +2012,6 @@
       // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
       definirEnvioDisponivel(Boolean(importado?.saida_pronta));
       if (importado && !importado.saida_pronta) definirStatusAtualizar("Gere o Dashboard atualizado antes de enviar ao SharePoint.", "alerta");
-      estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
       lista?.replaceChildren(...estado.formulario.filter(emAberto).map(blocoChamado));
       lista?.removeAttribute("aria-busy"); // a lista já está pronta (também vale para a importação, que chama renderizar direto)
@@ -1815,6 +2027,8 @@
       atualizarTodosFinalizar();
       atualizarBotaoAtualizar();
       app.carregarResumoHistoricoSebrae?.();
+      desenharDestaques(true);
+      carregarDestaques(); // sem await: os de fora das listas e as datas entram quando chegarem
       carregarFechar();
       carregarAntigos();
     }
@@ -1822,11 +2036,12 @@
     async function carregarNovosSebrae() {
       if (!el("sebrae-novos-painel") && !el("sebrae-novos-lista")) return; // vale com só o cartão F4 ou só o painel F5 montado
       const consulta = ++estado.consulta;
+      const versaoDestaque = estado.destaqueVersao;
       const lista = el("sebrae-novos-lista");
       lista?.setAttribute("aria-busy", "true"); // o CSS mostra o esqueleto de carregamento enquanto a lista está vazia
       try {
         const dados = await app.apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados novos." });
-        if (consulta === estado.consulta) renderizar(dados);
+        if (consulta === estado.consulta) renderizar(dados, versaoDestaque);
       } catch (error) {
         if (consulta === estado.consulta) definirTexto("sebrae-dashboard-status", error.message);
       } finally {

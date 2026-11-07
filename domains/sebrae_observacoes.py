@@ -3,6 +3,7 @@
 As anotações registradas aqui não afetam nem são enviadas ao SoftExpert,
 tampouco são gravadas na planilha ou no SharePoint do Dashboard Operacional.
 Ficam salvas atomicamente em ``data/state/sebrae_observacoes.json``.
+O destaque manual do chamado (``destaque``/``destaque_em``) vive no mesmo registro e é igualmente só local.
 """
 
 from __future__ import annotations
@@ -78,8 +79,13 @@ def validar_observacao(texto: Any) -> str:
     return limpo
 
 
-def ler_observacoes(state_dir: Path) -> Dict[str, Dict[str, str]]:
-    """Lê todas as observações salvas em disco."""
+def numero_observacao_valido(chave: Any) -> bool:
+    """True só para a chave exata ``UTIC-AAAA-N`` ou ``linha:N`` (a que ``validar_numero_observacao`` grava)."""
+    return isinstance(chave, str) and _PADRAO_NUMERO_OBSERVACAO.match(chave) is not None
+
+
+def _carregar(state_dir: Path) -> Dict[str, Any]:
+    """Conteúdo bruto do arquivo (chaves inclusive), só com a estrutura conferida; nunca altera o disco."""
     arquivo = caminho_observacoes(state_dir)
     try:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
@@ -93,26 +99,41 @@ def ler_observacoes(state_dir: Path) -> Dict[str, Dict[str, str]]:
         raise DomainBusyError(
             "O registro de observações tem estrutura inválida e foi preservado. Restaure uma cópia válida antes de alterar os chamados."
         )
+    return dados
+
+
+def _normalizar(item: Dict[str, Any]) -> Dict[str, Any]:
+    destacado = item.get("destaque") is True
     return {
-        str(numero): {
-            "observacao": str(item.get("observacao") or ""),
-            "atualizado_em": str(item.get("atualizado_em") or ""),
-        }
-        for numero, item in dados.items()
+        "observacao": str(item.get("observacao") or ""),
+        "atualizado_em": str(item.get("atualizado_em") or ""),
+        "destaque": destacado,
+        "destaque_em": str(item.get("destaque_em") or "") if destacado else "",
     }
 
 
-def salvar_observacao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any]:
-    """Salva atomicamente uma observação sob lock; se o texto for vazio, remove a entrada."""
-    chave = validar_numero_observacao(numero)
-    observacao_limpa = validar_observacao(texto)
-    agora = agora_iso()
+def ler_observacoes(state_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """Lê as observações salvas em disco.
+
+    Cada chamado traz ``observacao``, ``atualizado_em``, ``destaque`` (bool) e ``destaque_em`` (ISO local ou "").
+    Arquivos antigos sem os campos de destaque valem como não destacados. Chave fora de ``UTIC-AAAA-N``/``linha:N``
+    (JSON editado à mão) fica de fora do resultado, mas continua intacta no arquivo."""
+    return {numero: _normalizar(item) for numero, item in _carregar(state_dir).items() if numero_observacao_valido(numero)}
+
+
+def _gravar(state_dir: Path, chave: str, alterar) -> Dict[str, Any]:
+    """Aplica ``alterar(entrada)`` sob lock e grava; a entrada some só sem texto e sem destaque.
+
+    Entradas com chave inválida são devolvidas ao arquivo como estavam."""
     arquivo = caminho_observacoes(state_dir)
     try:
         with lock_paths([arquivo]):
-            dados = ler_observacoes(state_dir)
-            if observacao_limpa:
-                dados[chave] = {"observacao": observacao_limpa, "atualizado_em": agora}
+            bruto = _carregar(state_dir)
+            dados = {numero: (_normalizar(item) if numero_observacao_valido(numero) else item) for numero, item in bruto.items()}
+            entrada = dados.get(chave) or {"observacao": "", "atualizado_em": "", "destaque": False, "destaque_em": ""}
+            alterar(entrada)
+            if entrada["observacao"] or entrada["destaque"]:
+                dados[chave] = entrada
             else:
                 dados.pop(chave, None)
             arquivo.parent.mkdir(parents=True, exist_ok=True)
@@ -121,4 +142,41 @@ def salvar_observacao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any
         raise DomainBusyError(
             "O registro de observações está ocupado no momento. Tente novamente em instantes."
         ) from error
-    return {"numero": chave, "observacao": observacao_limpa, "atualizado_em": agora}
+    return entrada
+
+
+def salvar_observacao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any]:
+    """Salva atomicamente uma observação sob lock, preservando o destaque.
+
+    Texto vazio limpa a observação; a entrada só é removida se também não houver destaque."""
+    chave = validar_numero_observacao(numero)
+    observacao_limpa = validar_observacao(texto)
+    agora = agora_iso()
+
+    def alterar(entrada: Dict[str, Any]) -> None:
+        entrada["observacao"] = observacao_limpa
+        entrada["atualizado_em"] = agora if observacao_limpa else ""
+
+    entrada = _gravar(state_dir, chave, alterar)
+    return {
+        "numero": chave, "observacao": observacao_limpa, "atualizado_em": agora,
+        "destaque": entrada["destaque"], "destaque_em": entrada["destaque_em"],
+    }
+
+
+def definir_destaque(state_dir: Path, numero: str, destaque: bool) -> Dict[str, Any]:
+    """Marca ou desmarca o destaque do chamado (só local), preservando o texto da observação.
+
+    Marcar de novo um chamado já destacado mantém a data original. Desmarcar sem texto remove a entrada."""
+    chave = validar_numero_observacao(numero)
+    agora = agora_iso()
+
+    def alterar(entrada: Dict[str, Any]) -> None:
+        if destaque:
+            entrada["destaque_em"] = entrada["destaque_em"] or agora
+        else:
+            entrada["destaque_em"] = ""
+        entrada["destaque"] = bool(destaque)
+
+    entrada = _gravar(state_dir, chave, alterar)
+    return {"numero": chave, "destaque": entrada["destaque"], "destaque_em": entrada["destaque_em"]}

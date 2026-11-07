@@ -110,6 +110,75 @@ class SebraeObservacoesTests(unittest.TestCase):
         self.assertEqual(res_novo_vazio["observacao"], "")
         self.assertNotIn("linha:99", obs.ler_observacoes(self.state_dir))
 
+    def test_ler_observacoes_devolve_campos_de_destaque_e_legado_vale_false(self):
+        arquivo = obs.caminho_observacoes(self.state_dir)
+        arquivo.write_text(json.dumps({"UTIC-2024-0001": {"observacao": "Antiga", "atualizado_em": "2026-01-01T10:00:00-03:00"}}), encoding="utf-8")
+        self.assertEqual(obs.ler_observacoes(self.state_dir), {"UTIC-2024-0001": {
+            "observacao": "Antiga", "atualizado_em": "2026-01-01T10:00:00-03:00", "destaque": False, "destaque_em": "",
+        }})
+        # salvar texto num arquivo legado não inventa destaque
+        res = obs.salvar_observacao(self.state_dir, "UTIC-2024-0001", "Nova")
+        self.assertFalse(res["destaque"])
+        self.assertEqual(res["destaque_em"], "")
+
+    def test_definir_destaque_marca_e_desmarca(self):
+        res = obs.definir_destaque(self.state_dir, "utic-2024-0001", True)
+        self.assertEqual(set(res), {"numero", "destaque", "destaque_em"})
+        self.assertEqual(res["numero"], "UTIC-2024-0001")
+        self.assertTrue(res["destaque"])
+        self.assertTrue(res["destaque_em"])
+        lida = obs.ler_observacoes(self.state_dir)["UTIC-2024-0001"]
+        self.assertEqual((lida["observacao"], lida["destaque"], lida["destaque_em"]), ("", True, res["destaque_em"]))
+
+        # marcar de novo mantém a data original
+        self.assertEqual(obs.definir_destaque(self.state_dir, "UTIC-2024-0001", True)["destaque_em"], res["destaque_em"])
+
+        res2 = obs.definir_destaque(self.state_dir, "UTIC-2024-0001", False)
+        self.assertEqual((res2["destaque"], res2["destaque_em"]), (False, ""))
+        self.assertNotIn("UTIC-2024-0001", obs.ler_observacoes(self.state_dir))  # sem texto, a entrada some
+
+    def test_destaque_sobrevive_a_salvar_e_apagar_texto(self):
+        obs.definir_destaque(self.state_dir, "linha:7", True)
+        em = obs.ler_observacoes(self.state_dir)["linha:7"]["destaque_em"]
+
+        res = obs.salvar_observacao(self.state_dir, "linha:7", "Importante.")
+        self.assertEqual((res["destaque"], res["destaque_em"]), (True, em))
+        res = obs.salvar_observacao(self.state_dir, "linha:7", "")
+        self.assertTrue(res["destaque"])
+        lida = obs.ler_observacoes(self.state_dir)["linha:7"]  # texto vazio, mas o destaque mantém a entrada
+        self.assertEqual((lida["observacao"], lida["atualizado_em"], lida["destaque"], lida["destaque_em"]), ("", "", True, em))
+
+    def test_texto_sobrevive_a_desmarcar_e_entrada_some_so_quando_vazia(self):
+        obs.salvar_observacao(self.state_dir, "UTIC-2024-0002", "Anotação.")
+        obs.definir_destaque(self.state_dir, "UTIC-2024-0002", True)
+        obs.definir_destaque(self.state_dir, "UTIC-2024-0002", False)
+        lida = obs.ler_observacoes(self.state_dir)["UTIC-2024-0002"]
+        self.assertEqual((lida["observacao"], lida["destaque"], lida["destaque_em"]), ("Anotação.", False, ""))
+        obs.salvar_observacao(self.state_dir, "UTIC-2024-0002", "")
+        self.assertNotIn("UTIC-2024-0002", obs.ler_observacoes(self.state_dir))
+
+    def test_chave_invalida_fica_fora_da_leitura_mas_nao_some_do_arquivo(self):
+        arquivo = obs.caminho_observacoes(self.state_dir)
+        manual = {"qualquer coisa": {"observacao": "à mão", "destaque": True}, "utic-2026-1": {"observacao": "minúscula", "destaque": True}}
+        arquivo.write_text(json.dumps({**manual, "UTIC-2026-1": {"observacao": "ok", "destaque": True, "destaque_em": "x"}}), encoding="utf-8")
+        self.assertEqual(list(obs.ler_observacoes(self.state_dir)), ["UTIC-2026-1"])
+        obs.salvar_observacao(self.state_dir, "linha:3", "nova")
+        obs.definir_destaque(self.state_dir, "UTIC-2026-1", False)
+        gravado = json.loads(arquivo.read_text(encoding="utf-8"))
+        self.assertEqual(gravado["qualquer coisa"], manual["qualquer coisa"])  # intacta, sem normalizar
+        self.assertEqual(gravado["utic-2026-1"], manual["utic-2026-1"])
+        self.assertEqual(gravado["UTIC-2026-1"]["destaque"], False)
+        self.assertEqual(gravado["linha:3"]["observacao"], "nova")
+
+    def test_definir_destaque_numero_invalido_e_arquivo_ilegivel(self):
+        with self.assertRaises(DomainValidationError) as ctx:
+            obs.definir_destaque(self.state_dir, "invalido", True)
+        self.assertEqual(ctx.exception.status_code, 422)
+        obs.caminho_observacoes(self.state_dir).write_text("corrompido...", encoding="utf-8")
+        with self.assertRaises(DomainBusyError):
+            obs.definir_destaque(self.state_dir, "UTIC-2024-0001", True)
+        self.assertEqual(obs.caminho_observacoes(self.state_dir).read_text(encoding="utf-8"), "corrompido...")
+
 
 if __name__ == "__main__":
     unittest.main()
