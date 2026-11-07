@@ -179,3 +179,7 @@ O `#transfer-equipment-banner` continua no topo, acima das 3 colunas, mostrando 
 ## Desvio aprovado pelo usuário (etapa A, item 0)
 
 Os chips de cidade (`button.ck-unidade`) foram removidos. A seção "Chips de unidade" acima não vale mais: o `#select-unidade-destino` é o único seletor, com `aria-label="Selecione a filial"`, primeira opção `Selecione a filial` (valor vazio) e todas as filiais em seguida. O valor vazio bloqueia o envio (CNPJ/endereço vazios). Não "corrigir de volta".
+
+## Transporte preparado pela Cobertura (F10, 07/11/2026)
+
+`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Nunca clica em `Gerar planilha`; quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.

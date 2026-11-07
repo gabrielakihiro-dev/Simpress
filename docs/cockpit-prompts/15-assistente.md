@@ -144,6 +144,19 @@ O que o usuário diz e o que o Assistente faz agora (automação e Sebrae pelo c
 - Limites (decisão de escopo): o Assistente não dispara o envio manual ao SharePoint, não reenvia a cópia pendente, não atualiza a cópia local do Dashboard (os rascunhos vivem só no navegador) e não finaliza em lote; a finalização individual (`finalizar_chamado_softexpert(numero[, descricao])`, 30/10/2026) segue com cartão. `fechar`, `enviar` e `antigos` não são rotinas válidas do Assistente.
 - Grava localmente: rotinas do cartão de `executar_automacao_chrome` (`login`, `inventarios`, `os`, `ambas`, `usuarios`, `sebrae`, `dashboard` = `ROTINAS_VALIDAS` em `domains/assistant_api.py`: bases e cache em `data/` e o Chrome de automação), `ler_chamados_antigos_softexpert` e `cancelar_automacao_chrome`. Grava fora do computador só `finalizar_chamado_softexpert` (SoftExpert, irreversível, um chamado); quando dá certo, a rotina `fechar` também substitui o Dashboard no SharePoint (ou deixa cópia pendente), e o Assistente não leva os rascunhos do navegador (A, B, J, S) nesse envio; o cartão avisa isso.
 - Testes: `tests/test_assistant_automacao.py`, `tests/test_assistant_sebrae_automacao.py` e `tests/test_assistant_prompt_automacao.py`.
+
+## Cobertura pelo chat (07/11/2026)
+
+Ferramenta de consulta `listar_cobertura(cidade?, data?, ate?, perfil?)`, autorizada pelo usuário em 07/11/2026. Exemplo: "vai faltar notebook na Cidade A dia 20?" → `listar_cobertura(cidade="Cidade A", data="2026-11-20")`; o dia sem mês e ano usa o mês e o ano de hoje (regra 29 do prompt).
+
+- Fonte única: chama `GET /api/cobertura`, a mesma rota da tela Cobertura (F10), que calcula as vagas com `build_coverage`. Sem filtro, as contagens são as da tela; com filtro, são recontadas só sobre as vagas filtradas, com as mesmas quatro situações (`atendivel`, `condicionada`, `sem_cobertura`, `entregue`). `faltam` é `sem_cobertura`.
+- Filtros: `cidade` por igualdade sem acento e sem caixa ("Cidade" não casa com "Cidade A"); `data` exata e `ate` inclusive, as duas em AAAA-MM-DD (outro formato dá erro); `perfil` por trecho do texto livre do cadastro.
+- Filtro sem vaga devolve `mensagem` com as cidades, datas e perfis existentes, sem `faltam`: o Assistente não pode concluir que não vai faltar.
+- Privacidade: lista de campos permitidos. Vão ao modelo só vagas (data, cidade, perfil, monitor, situação, série, selos, motivo), disponíveis (série, cidade, validade, sinal), a quantidade de reservas vencidas e o aviso de manutenção. Os `casos` (quem recebeu, observações, cópias da transferência) nunca saem; a máscara da conversa continua valendo por cima.
+- Estado ilegível (503 `estado_ilegível`): volta só `erro`, sem números. Só leitura: não reserva, não cria nem altera nada; o arquivo de estado não muda.
+- Roteamento: grupo `cobertura` em `GRUPOS_FERRAMENTAS` (cobertura, falta/faltar, vaga, necessidade).
+- Testes: `tests/test_assistant_cobertura.py` (router real com dados sintéticos e cliente falso).
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.
