@@ -83,6 +83,37 @@ class AssistantUXTests(unittest.TestCase):
         self.assertEqual(len(model.calls), 2)
         self.assertFalse([r for r in rotas if "abrir-chamado" in r])
 
+    def test_atualizacao_cadastral_ticket_goes_to_the_model_not_to_the_home_flow(self):
+        rotas = []
+        def local(method, route, _params, body):
+            rotas.append(route)
+            return 200, {"serial": "S1", "modelo": "Modelo X", "session_id": "opaco", "opcoes": ["Teclado"]}
+
+        model = FakeModel()
+        conversa = AssistantConversation(model, SimpressApi(local))
+        dados = {"serial": "S1", "descricao": "O teclado não funciona.", "revisao": 1}
+        frases = (
+            "como gero o ticket de atualização cadastral no UX?",
+            "gerar ticket no UX",
+            "abrir chamado de alteração de endereço no UX",
+            "abre o chamado de atualização cadastral no UX",
+            "criar solicitação de alteração de razão social no UX",
+            "abrir ticket no UX para a série S1",
+        )
+        for frase in frases:
+            conversa.enviar_mensagem(frase, contexto_ux=dados)
+        self.assertEqual(len(model.calls), len(frases))
+        self.assertFalse([r for r in rotas if "abrir-chamado" in r])
+        conversa.enviar_mensagem("Abrir chamado no UX", contexto_ux=dados)
+        self.assertEqual([r for r in rotas if "/api/ux/" in r], ["/api/ux/abrir-chamado/preparar"])
+
+    def test_system_prompt_points_the_cadastral_ticket_to_transporte(self):
+        from domains.assistant_chat import SYSTEM_PROMPT
+        for trecho in ("Gerar Planilha", "Transporte (F2)", "Gerar ticket no UX", "Revisar e finalizar",
+                       "Você não abre nem finaliza esse ticket", "não tem mais o modelo \"Deslocamento\"",
+                       "\"Texto para Transporte\""):
+            self.assertIn(trecho, SYSTEM_PROMPT)
+
     def test_other_message_while_preparing_cancels_it_and_goes_to_the_model(self):
         rotas = []
         def local(method, route, _params, body):

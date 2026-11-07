@@ -145,7 +145,8 @@ def formatar_telefone_brasileiro(value: Any) -> str:
     return f"{telefone_formatado} Ramal: {ramal}" if ramal else telefone_formatado
 
 
-def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path) -> StreamingResponse:
+def gerar_planilha_transferencia_bytes(payload: TransferenciaPayload, template_file: Path) -> tuple[str, bytes]:
+    """Validate the payload and return (filename, workbook bytes); also used for the UX ticket attachment."""
     if not payload.serial.strip():
         raise HTTPException(
             status_code=422,
@@ -268,9 +269,6 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
             )
             wb.close()
 
-        buffer = io.BytesIO(output_bytes)
-        buffer.seek(0)
-
         safe_serial = re.sub(r"[^\w\-]", "_", serial_val)
 
         def safe_city(value: str) -> str:
@@ -281,12 +279,7 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
         safe_retirada = safe_city(payload.retirada_cidade)
         safe_entrega = safe_city(payload.entrega_cidade)
         filename = f"Transferencia_{safe_serial}_{safe_retirada}-{safe_entrega}.xlsx"
-
-        return StreamingResponse(
-            buffer,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return filename, output_bytes
 
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -300,6 +293,15 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
     finally:
         if wb is not None:
             wb.close()
+
+
+def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path) -> StreamingResponse:
+    filename, output_bytes = gerar_planilha_transferencia_bytes(payload, template_file)
+    return StreamingResponse(
+        io.BytesIO(output_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def create_transfer_router(

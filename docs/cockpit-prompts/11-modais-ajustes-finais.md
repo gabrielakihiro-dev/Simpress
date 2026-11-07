@@ -35,7 +35,7 @@ Todos os modais mantêm a mesma estrutura e os mesmos IDs. Ajustes visuais:
 - `#modal-preview` (pré-visualização do resumo)
 - `#modal-historico-transferencias`
 - `#modal-confirmar-acao`
-- `#modal-texto-transporte`
+- ~~`#modal-texto-transporte`~~ (substituído em 07/11/2026 por `#modal-ticket-ux`, "Gerar ticket no UX")
 - `#modal-editar-equipamento`
 - `#modal-editar-apelido`
 - `#modal-historico-apelidos`

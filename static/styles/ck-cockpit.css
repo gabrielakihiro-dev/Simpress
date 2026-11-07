@@ -371,6 +371,19 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 #ux-chamado-descricao { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ux-chamado-solicitante { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
 @media (min-width: 640px) { .ux-chamado-solicitante { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; } .ux-chamado-solicitante legend { grid-column: 1 / -1; } }
+/* Ticket no UX (Transporte, F2): resumo, aviso, erro visível e Registro com contador. */
+.ux-ticket-resumo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 12px; margin: 0; min-width: 0; }
+.ux-ticket-resumo dt { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ux-ticket-resumo dd { margin: 0 0 6px; overflow-wrap: anywhere; color: var(--cor-texto); }
+@media (min-width: 640px) { .ux-ticket-resumo { grid-template-columns: max-content minmax(0, 1fr); } .ux-ticket-resumo dd { margin: 0; } }
+.ux-ticket-erro { padding: 8px 10px; border-radius: var(--raio-sm); background: var(--cor-erro-fundo); color: var(--cor-erro-texto); overflow-wrap: anywhere; }
+.ux-ticket-aviso { padding: 8px 10px; border-radius: var(--raio-sm); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); overflow-wrap: anywhere; }
+.ux-ticket-enderecos, .ux-ticket-formulario { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ux-ticket-enderecos__lista { display: grid; gap: 4px; }
+.ux-ticket-opcao { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); overflow-wrap: anywhere; cursor: pointer; }
+.ux-ticket-opcao input { flex: none; margin-top: 3px; }
+.ux-ticket-registro { width: 100%; min-height: 12rem; resize: vertical; white-space: pre-wrap; }
+.ux-ticket-contador { margin: 0; text-align: right; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-chamado__texto { padding: 12px 14px 14px; font-size: var(--fs-md); line-height: 1.7; color: var(--cor-texto-forte); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ck-var { padding: 1px 5px; border-radius: 3px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-var--vazia { background: transparent; border: 1px dashed var(--cor-alerta-texto); color: var(--cor-alerta-texto); }
@@ -814,10 +827,6 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 }
 @media (max-width: 767.98px) {
   .ck-acoes-status { flex: 1 1 100%; margin-right: 0; }
-}
-/* B4: app.css dá min-height 48px a todo button até 1280px (ou toque), mas "Abrir chamado" é um link; sem isto ele ficava com 30px ao lado dos botões de 48px na barra de ações do Transporte. */
-@media (max-width: 1280px), (pointer: coarse) {
-  .ck-acoes-barra a.ck-btn { min-height: 48px; }
 }
 
 /* Região 3E: Resumo (F3). Cartão "Ativos por regional" (filtro por categoria + barras); .ck-espaco é compartilhado. */
