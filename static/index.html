@@ -1083,25 +1083,46 @@ Horário disponível para atendimento:</textarea>
               <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
             </div>
             <p id="sebrae-destaque-anuncio" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-            <section class="sebrae-secao" aria-labelledby="sebrae-novos-secao">
+            <div class="sebrae-abas-barra">
+              <div class="sebrae-abas" role="tablist" aria-label="Chamados por situação">
+                <button type="button" role="tab" id="sebrae-aba-novos" class="sebrae-aba" data-sebrae-aba="novos" aria-selected="true" aria-controls="sebrae-novos" tabindex="0" aria-label="Novos: 0 chamados"><span class="sebrae-aba__rotulo">Novos</span><span id="sebrae-novos-contagem" class="ck-badge sebrae-aba__n">0</span></button>
+                <button type="button" role="tab" id="sebrae-aba-antigos" class="sebrae-aba" data-sebrae-aba="antigos" aria-selected="false" aria-controls="sebrae-antigos" tabindex="-1" aria-label="Antigos: 0 chamados"><span class="sebrae-aba__rotulo">Antigos</span><span id="sebrae-antigos-contagem" class="ck-badge sebrae-aba__n">0</span></button>
+                <button type="button" role="tab" id="sebrae-aba-destaques" class="sebrae-aba" data-sebrae-aba="destaques" aria-selected="false" aria-controls="sebrae-destaques" tabindex="-1" aria-label="Destaques: 0 chamados"><span class="sebrae-aba__rotulo">Destaques</span><span id="sebrae-destaques-contagem" class="ck-badge sebrae-aba__n">0</span></button>
+                <button type="button" role="tab" id="sebrae-aba-finalizados" class="sebrae-aba" data-sebrae-aba="finalizados" aria-selected="false" aria-controls="sebrae-finalizados" tabindex="-1" aria-label="Finalizados: 0 chamados"><span class="sebrae-aba__rotulo">Finalizados</span><span id="sebrae-finalizados-contagem" class="ck-badge sebrae-aba__n">0</span></button>
+              </div>
+              <button type="button" id="btn-sebrae-filtro" class="sebrae-lupa" aria-label="Filtrar chamados" aria-expanded="false" aria-controls="sebrae-filtro"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg></button>
+              <div id="sebrae-filtro" class="sebrae-filtro" hidden>
+                <label class="sebrae-busca"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="sebrae-filtro-termo" type="search" class="sebrae-busca__entrada" placeholder="UTIC, título, solicitante, série, modelo, cidade, OS…" aria-label="Filtrar chamados" autocomplete="off" spellcheck="false"></label>
+                <button type="button" id="btn-sebrae-limpar-filtro" class="ck-btn ck-btn--fantasma ck-btn--sm">Limpar filtro</button>
+              </div>
+            </div>
+            <p id="sebrae-filtro-resultado" class="sebrae-filtro__resultado" role="status" aria-live="polite"></p>
+
+            <section id="sebrae-novos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-novos-secao" tabindex="0">
               <h3 class="sebrae-secao__titulo" id="sebrae-novos-secao">Chamados novos</h3>
               <div id="sebrae-novos-lista"></div>
+              <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
             </section>
-            <details id="sebrae-destaques" class="sebrae-antigos sebrae-destaques" hidden>
-              <summary>Chamados em destaque <span id="sebrae-destaques-contagem" class="ck-badge" data-status="alerta"></span></summary>
-              <p id="sebrae-destaques-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-              <div id="sebrae-destaques-lista"></div>
-            </details>
-            <details id="sebrae-antigos" class="sebrae-antigos" hidden>
-              <summary>Chamados antigos em aberto</summary>
+            <section id="sebrae-antigos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-antigos-titulo" tabindex="0" hidden>
+              <h3 class="sebrae-secao__titulo" id="sebrae-antigos-titulo">Chamados antigos em aberto</h3>
               <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
               <div id="sebrae-antigos-lista"></div>
-            </details>
-            <details id="sebrae-finalizados" class="sebrae-antigos" hidden>
-              <summary>Chamados finalizados</summary>
+              <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
+              <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>
+            </section>
+            <section id="sebrae-destaques" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-destaques-titulo" tabindex="0" hidden>
+              <h3 class="sebrae-secao__titulo" id="sebrae-destaques-titulo">Chamados em destaque</h3>
+              <p id="sebrae-destaques-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <div id="sebrae-destaques-lista"></div>
+              <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
+            </section>
+            <section id="sebrae-finalizados" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-finalizados-titulo" tabindex="0" hidden>
+              <h3 class="sebrae-secao__titulo" id="sebrae-finalizados-titulo">Chamados finalizados</h3>
               <p id="sebrae-finalizados-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
               <ul id="sebrae-finalizados-lista" class="sebrae-avisos"></ul>
-            </details>
+              <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
+              <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>
+            </section>
             <datalist id="sebrae-sugestoes-a"><option value="CLIENTE"></option><option value="SIMPRESS"></option></datalist>
             <datalist id="sebrae-sugestoes-b"><option value="AVARIA FÍSICA"></option><option value="DESLIGAMENTO"></option><option value="ENDPOINT CENTER"></option><option value="ERRO SOFTWARE"></option><option value="FALHA BATERIA"></option><option value="FALHA NO DOMÍNIO"></option><option value="FORMATAÇÃO"></option><option value="HARDWARE"></option><option value="INSTALAÇÃO"></option><option value="LENTIDÃO"></option><option value="NOVO USUÁRIO"></option><option value="NÃO LIGA"></option><option value="OUTRO"></option><option value="PERIFÉRICO"></option><option value="SOL. EQUIPAMENTO"></option></datalist>
             <datalist id="sebrae-sugestoes-s"><option value="DISPONIBILIDADE"></option></datalist>
