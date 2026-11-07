@@ -1768,6 +1768,16 @@ class PanelRegionalToolTests(unittest.TestCase):
         for termo in ("cidades_por_categoria", "notebook", "macbook", "monitor", "fone", "Resumo (F3)"):
             self.assertIn(termo, descricao)
 
+    def test_description_mentions_the_bell_alerts_including_60_days(self) -> None:
+        descricao = TOOLS["obter_painel"].description
+        for termo in ("sem_acesso_60_dias", "55 dias", "60 dias", "Ausentes no Endpoint"):
+            self.assertIn(termo, descricao)
+
+    def test_tool_returns_the_long_unused_alert(self) -> None:
+        painel = {"sem_acesso_60_dias": {"estado": "passou_60", "total_passou": 2, "total_limite": 1}}
+        dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
+        self.assertEqual(dados["dados"]["sem_acesso_60_dias"]["total_passou"], 2)
+
     def test_tool_returns_the_regional_numbers_by_category(self) -> None:
         painel = {"cidades_principais": [{"cidade": "Curitiba", "total": 3}], "cidades_por_categoria": {"macbook": [{"cidade": "Londrina", "total": 2}]}}
         dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
