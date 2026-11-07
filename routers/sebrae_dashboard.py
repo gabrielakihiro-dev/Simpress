@@ -75,6 +75,7 @@ class SebraeDashboardServices:
     relatorio_chamados: Callable[[], Optional[Mapping[str, Any]]]  # ticket report, for column E
     vinculos_os: Callable[[], Sequence[Mapping[str, Any]]] = lambda: ()  # manual links UTIC -> OS of the ticket table, for column E
     apelidos: Callable[[], Mapping[str, str]] = lambda: {}  # SERIE -> apelido, só para exibir no cartão (nunca gravado)
+    indice_endpoint: Callable[[], Optional[Mapping[str, Any]]] = lambda: None  # Endpoint index + Simpress base serials, only for the MacBook ``S`` equivalence in column E
     runner: Optional[Callable[[], ChromeAutomationRunner]] = None  # starts the ``fechar`` routine; without it nothing is finalized
 
 
@@ -172,6 +173,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except (OSError, ValueError):
             return None  # an unreadable ticket report only leaves column E empty
 
+    def _indice_endpoint() -> Optional[Mapping[str, Any]]:
+        try:
+            return services.indice_endpoint()
+        except Exception as erro:  # an optional fallback must never break the screen or the update
+            logger.warning("Índice do Endpoint indisponível para a OS de MacBook (erro=%s).", type(erro).__name__)
+            return None  # without the index E just keeps the exact-serial match
+
     def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
 
@@ -182,7 +190,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             antigos = sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado()))
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
-        sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
+        sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os(), _indice_endpoint()) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
         apelidos = services.apelidos() if abertos else {}
@@ -433,7 +441,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"])
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
-            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os())
+            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os(), _indice_endpoint())
             if not linhas and not edicoes and not automaticos:
                 if aceita_vazio:
                     return None

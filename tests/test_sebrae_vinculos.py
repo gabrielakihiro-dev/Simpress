@@ -26,6 +26,21 @@ class DerivadosTest(unittest.TestCase):
         escolhido = vinculos_derivados([aberto(K="DUO1", E="10")], RELATORIO)
         self.assertEqual([(v["fonte"], v["os"]) for v in escolhido], [("simpress", "10")])
 
+    def test_macbook_com_ou_sem_s_liga_pela_equivalencia_so_com_resultado_unico(self):
+        relatorio = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]}
+        indice = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1"}}
+        self.assertEqual(vinculos_derivados([aberto(K="SCXC9F072K1")], relatorio), [])
+        achado = vinculos_derivados([aberto(K="SCXC9F072K1")], relatorio, indice)
+        self.assertEqual([(v["serie"], v["os"], v["chamado"]) for v in achado], [("CXC9F072K1", "77", "UTIC-2026-0094")])
+        relatorio_s = {"chamados": [{"serie": "SCXC9F072K1", "simpress": {"ordens_servico": ["88"]}}]}
+        achado = vinculos_derivados([aberto(K="CXC9F072K1")], relatorio_s, indice)
+        self.assertEqual([(v["serie"], v["os"]) for v in achado], [("SCXC9F072K1", "88")])
+        ambiguo = {**indice, "details_serials": {"SCXC9F072K1", "CXC9F072K1"}}
+        self.assertEqual(vinculos_derivados([aberto(K="SCXC9F072K1")], relatorio, ambiguo), [])
+        duas = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["1", "2"]}}]}
+        self.assertEqual(vinculos_derivados([aberto(K="SCXC9F072K1")], duas, indice), [])  # two OS stay ambiguous
+        self.assertEqual([v["os"] for v in vinculos_derivados([aberto(K="SCXC9F072K1", E="2")], duas, indice)], ["2"])
+
     def test_linha_sem_utic_completo_ou_sem_serie_e_ignorada(self):
         self.assertEqual(vinculos_derivados([aberto("linha:2"), aberto(K=""), aberto("27371 / UTIC-2026-0094")], RELATORIO), [])
 

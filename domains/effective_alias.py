@@ -11,7 +11,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from core.errors import DomainError
 
@@ -327,7 +327,7 @@ def manual_aliases_by_serial(overrides: Dict[str, str]) -> Dict[str, str]:
     }
 
 
-def mac_endpoint_serial_key(index: Dict[str, Any], serial_key: str) -> str:
+def mac_endpoint_serial_key(index: Mapping[str, Any], serial_key: str) -> str:
     """Endpoint serial of a Simpress MacBook serial written with a leading ``S``.
 
     ``SCXC9F072K1`` in EquipamentosDetalhes is ``CXC9F072K1`` in the Endpoint when that
