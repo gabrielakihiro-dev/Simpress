@@ -208,6 +208,7 @@ class ComparisonSectionTests(unittest.TestCase):
     def test_uses_latest_update_until_month_end_with_current_rules(self):
         section = comparison_section(HISTORY, OCTOBER, comparison_history_for_display)
         self.assertEqual(section["horario"].date(), date(2026, 10, 15))
+        self.assertEqual(section["evento_id"], "evt-outubro-2")
         self.assertEqual(section["atualizacoes_no_mes"], 2)
         self.assertEqual(section["contagens"], {SECTION_ENDPOINT: 1, SECTION_SIMPRESS: 1, SECTION_LOCATION: 1})
         serials = {line["serie"] for line in section["linhas"]}
@@ -229,6 +230,7 @@ class ComparisonSectionTests(unittest.TestCase):
     def test_month_before_any_update_has_no_comparison(self):
         section = comparison_section(HISTORY, parse_report_month("2026-08", TODAY), comparison_history_for_display)
         self.assertIsNone(section["horario"])
+        self.assertIsNone(section["evento_id"])
         self.assertEqual(sum(section["contagens"].values()), 0)
 
 

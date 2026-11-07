@@ -146,7 +146,7 @@ def comparison_section(
             updates.append((moment, event))
     in_month = sum(1 for moment, _event in updates if month.contains(moment.date()))
     if not updates:
-        return {"horario": None, "atualizacoes_no_mes": 0, "linhas": [], "contagens": {
+        return {"horario": None, "evento_id": None, "atualizacoes_no_mes": 0, "linhas": [], "contagens": {
             SECTION_ENDPOINT: 0, SECTION_SIMPRESS: 0, SECTION_LOCATION: 0,
         }}
     moment, latest = max(updates, key=lambda entry: entry[0])
@@ -175,6 +175,8 @@ def comparison_section(
     ]
     return {
         "horario": moment,
+        # Read-only link for the screen: lets F8 open this exact event in the Resumo (F3).
+        "evento_id": str(latest.get("id") or "") or None,
         "atualizacoes_no_mes": in_month,
         "linhas": lines,
         "contagens": {section: len(items) for section, items in sections},

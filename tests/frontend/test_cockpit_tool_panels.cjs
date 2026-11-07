@@ -92,27 +92,37 @@ test("alias metrics count monthly events and distinct equipment without inventin
   });
 });
 
-test("monthly preview uses values returned by the existing report builder and marks unavailable metrics", () => {
-  const text = panels.monthlyPreviewText({
-    mes: { label: "outubro de 2026" },
+test("monthly preview uses the report values, the period and drops metrics the report does not provide", () => {
+  const report = {
+    mes: { label: "outubro de 2026", parcial: false, data_corte: "2026-10-31" },
     inventario: { total: 12, unidades: 3, arquivo_origem: "EquipamentosDetalhes_atual.xlsx", por_unidade: [["Curitiba", "Sede", 8], ["Londrina", "Centro", 4]] },
-    comparacao: { horario: null, atualizacoes_no_mes: 0, contagens: { "Sem correspondência — no endpoint": 2, "Sem correspondência — na Simpress": 1, "Localidade divergente": 0 } },
-    os: { oracle: { abertas: 2, concluidas: 1, pendentes: 3 }, simpress: { abertas: 1, concluidas: 0, pendentes: 1 }, dados_insuficientes: [] },
-  });
-  assert.match(text, /outubro de 2026/);
-  assert.match(text, /Equipamentos na base atual: 12/);
+    comparacao: { horario: "2026-10-15T09:00:00", atualizacoes_no_mes: 1, contagens: { "Sem correspondência — no endpoint": 2, "Sem correspondência — na Simpress": 1, "Localidade divergente": 0 } },
+    os: { oracle: { abertas: 2, concluidas: 1, pendentes: 3 }, simpress: { abertas: 1, concluidas: 0, pendentes: 1 }, dados_insuficientes: [{ fonte: "Simpress" }] },
+  };
+  const text = panels.monthlyPreviewText(report);
+  assert.match(text, /^Relatório mensal Simpress · outubro de 2026 · Mês encerrado/);
+  assert.match(text, /OS Oracle abertas no mês: 2/);
+  assert.match(text, /OS Oracle pendentes no fim do período: 3/);
+  assert.match(text, /Fora das contagens: 1 registro com dados insuficientes/);
+  assert.match(text, /Comparação usada: 15\/10\/2026 às 09:00 · 1 atualização de inventário no mês/);
+  assert.match(text, /Base atual \(não muda com o mês\): 12 equipamentos em 3 unidades/);
   assert.match(text, /Unidades com mais equipamentos \(base atual\):[\s\S]*Curitiba · Sede: 8/);
-  assert.match(text, /OS Oracle abertas: 2/);
-  assert.match(text, /Tempo médio até fechar: indisponível/);
-  assert.match(text, /Transportes solicitados: indisponível/);
-  assert.match(text, /Alterações de apelido: indisponível/);
-  assert.doesNotMatch(text, /Sem registros no mês/);
+  assert.doesNotMatch(text, /indisponível|Tempo médio|Transportes|Alterações de apelido/);
+  assert.doesNotMatch(text, /Chamados \(F5\)/, "sem a resposta do Sebrae a linha de chamados não aparece");
+
+  const withSebrae = panels.monthlyPreviewText({ ...report, mes: { label: "novembro de 2026", parcial: true, data_corte: "2026-11-07" } }, {
+    importado: { abertos: [{ numero: "UTIC-2026-1" }, { numero: "linha:9" }] }, novos: { formulario: [{ numero: "UTIC-2026-5" }] },
+  });
+  assert.match(withSebrae, /novembro de 2026 · Parcial até 07\/11\/2026/);
+  assert.match(withSebrae, /Chamados \(F5\), situação atual: 1 novo · 2 antigos em aberto/);
 });
 
-test("monthlyChartBars scales bars to the largest real count", () => {
-  const bars = panels.monthlyChartBars({ abertas: 4, concluidas: 2 }, { abertas: "x" });
-  assert.deepEqual(bars.map(bar => bar.height), [100, 50, 0, 0]);
-  assert.deepEqual(panels.monthlyChartBars().map(bar => bar.height), [0, 0, 0, 0]);
+test("sebraeMonthKey reads Dashboard (dd/mm/aaaa HH:mm) and ISO dates and ignores anything else", () => {
+  assert.equal(panels.sebraeMonthKey("05/11/2026 14:12"), "2026-11");
+  assert.equal(panels.sebraeMonthKey("5/1/2026"), "2026-01");
+  assert.equal(panels.sebraeMonthKey("2026-10-31T23:59:00-03:00"), "2026-10");
+  assert.equal(panels.sebraeMonthKey(""), "");
+  assert.equal(panels.sebraeMonthKey("ontem"), "");
 });
 
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.

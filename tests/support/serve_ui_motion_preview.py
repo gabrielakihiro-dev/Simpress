@@ -613,7 +613,7 @@ class Handler(BaseHTTPRequestHandler):
                 "mes": {"key": month, "label": month, "parcial": month == "2026-10", "data_corte": "2026-10-25"},
                 "gerado_em": "2026-10-25T09:00:00-03:00",
                 "inventario": {"total": 1, "unidades": 1, "por_tipo": [["Notebook", 1]], "por_unidade": [["Curitiba", "Endereço fictício", 1]]},
-                "comparacao": {"atualizacoes_no_mes": 1, "contagens": {}, "linhas": []},
+                "comparacao": {"horario": "2026-10-20T09:00:00", "evento_id": DEMO_EVENT_ID, "atualizacoes_no_mes": 1, "contagens": {}, "linhas": []},
                 "os": {"oracle": {"abertas": 1, "concluidas": 0, "pendentes": 1},
                        "simpress": {"abertas": 1, "concluidas": 0, "pendentes": 1}, "linhas": [], "dados_insuficientes": []},
             })
