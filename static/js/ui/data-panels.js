@@ -239,32 +239,62 @@
       return st.triagem === "ativos" ? Boolean(grupo) : grupo === st.triagem;
     }
 
+    // Sem termo de busca a lista mostra 25 OS por vez ("Carregar mais", como a aba Chamados/F5); com termo, mostra todas as que casam.
+    const OS_POR_PAGINA = 25;
+    // data-busca: série, OS, usuário, hostname, modelo e UTIC salvo, já sem acento; rótulos de botões ficam de fora.
+    const casaOs = (st, termo, item) => (!termo || (item.dataset.busca || "").includes(termo))
+      && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
+      && correspondeTriagemOs(st, item.dataset.triagem || "");
+
     function filtrarSecaoOs(section) {
       const st = osExternas.get(section);
       if (!st) return;
       const termo = textoOs(st.busca.trim());
       const itens = [...section.querySelectorAll("tbody tr[data-serial]")];
       const series = new Set();
+      const mostradas = new Set();
       let visiveis = 0;
       itens.forEach(item => {
-        const ok = (!termo || textoOs(item.textContent).includes(termo))
-          && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
-          && correspondeTriagemOs(st, item.dataset.triagem || "");
-        item.hidden = !ok;
+        const ok = casaOs(st, termo, item);
+        item.hidden = !ok || (!termo && visiveis >= st.limite);
         if (!ok) return;
         series.add(item.dataset.serial);
+        if (!item.hidden) mostradas.add(item.dataset.serial);
         visiveis += 1;
       });
       const total = itens.length;
-      section.querySelectorAll("tbody tr[data-andamento]").forEach(row => { row.hidden = !series.has(row.dataset.andamento); });
+      section.querySelectorAll("tbody tr[data-andamento]").forEach(row => { row.hidden = !mostradas.has(row.dataset.andamento); });
+      const mais = section.querySelector("[data-os-mais]");
+      if (mais) {
+        mais.hidden = Boolean(termo) || visiveis <= st.limite;
+        mais.querySelector(".sebrae-mais__n").textContent = mais.hidden ? ""
+          : "Mostrando " + formatNumber(st.limite) + " de " + formatNumber(visiveis);
+      }
       if (!st.renderizada) return;
       const status = section.querySelector(".ticket-summary-status");
-      status.textContent = (visiveis === total ? visiveis : visiveis + " de " + total) + " OS · "
+      const texto = (visiveis === total ? formatNumber(visiveis) : formatNumber(visiveis) + " de " + formatNumber(total)) + " OS · "
         + pluralize(series.size, "série", "séries") + (st.falhaUsuarios ? "; usuário e hostname indisponíveis." : "");
+      // role=status: reescrever o mesmo texto (ex.: "Carregar mais") faria o leitor de tela anunciar de novo.
+      if (status.textContent !== texto) status.textContent = texto;
+    }
+
+    // Abrir uma OS escondida só pela página (não pelo filtro): amplia a página até ela. Devolve se a linha ficou visível.
+    function revelarLinhaOs(row) {
+      const section = row?.closest?.(".ck-os");
+      const st = osExternas.get(section);
+      if (!st || !row.hidden) return Boolean(row && !row.hidden);
+      const termo = textoOs(st.busca.trim());
+      const casam = [...section.querySelectorAll("tbody tr[data-serial]")].filter(item => casaOs(st, termo, item));
+      const posicao = casam.indexOf(row);
+      if (posicao < 0) return false;
+      st.limite = Math.max(st.limite, Math.ceil((posicao + 1) / OS_POR_PAGINA) * OS_POR_PAGINA);
+      filtrarSecaoOs(section);
+      return !row.hidden;
     }
 
     function filtrarTabelaOs(filtro = {}) {
       osExternas.forEach((st, section) => {
+        const antes = [st.busca, st.relacao, st.triagem, st.atencao].join("|");
         if ("busca" in filtro) {
           st.busca = String(filtro.busca || "");
           const campo = section.querySelector(".ck-os__busca input");
@@ -273,6 +303,8 @@
         if ("relacao" in filtro) st.relacao = String(filtro.relacao || "");
         if ("triagem" in filtro) st.triagem = String(filtro.triagem || "");
         if ("atencao" in filtro) st.atencao = Boolean(filtro.atencao);
+        // Só filtro novo volta à primeira página; recriar a tabela (vínculo salvo) mantém o que já estava aberto.
+        if (antes !== [st.busca, st.relacao, st.triagem, st.atencao].join("|")) st.limite = OS_POR_PAGINA;
         filtrarSecaoOs(section);
       });
     }
@@ -293,7 +325,7 @@
       // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). aoExpandirSerie(serie, celula) preenche o "Andamento";
       // grupoSerie(chamado) devolve o grupo de triagem da série (data-triagem); aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
       const st = {
-        busca: "", relacao: "", triagem: "", atencao: false, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, carregada: false,
+        busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, carregada: false,
         aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
       };
       const head = el("div", "ck-cartao__cab");
@@ -304,7 +336,7 @@
         const campo = el("input", "ck-entrada ck-entrada--sm");
         campo.type = "search";
         campo.placeholder = "Série, OS ou usuário";
-        campo.addEventListener("input", () => { st.busca = campo.value; filtrarSecaoOs(section); });
+        campo.addEventListener("input", () => { st.busca = campo.value; st.limite = OS_POR_PAGINA; filtrarSecaoOs(section); });
         busca.append(campo);
         head.append(el("span", "ck-espaco"), busca);
         idLivre(campo, "ck-os-busca");
@@ -543,7 +575,7 @@
       }
     }
 
-    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map()) {
+    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map()) {
       const status = section.querySelector(".ticket-summary-status");
       const content = el("div", "ck-os__corpo ticket-summary-content");
       const externa = osExternas.get(section);
@@ -558,8 +590,8 @@
       }
       const orderCount = records.reduce((total, record) => total + record.ordens.length, 0);
       status.textContent = userFailure
-        ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
-        : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries");
+        ? formatNumber(orderCount) + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
+        : formatNumber(orderCount) + " OS · " + pluralize(records.length, "série", "séries");
       const table = el("table", "ck-tabela ck-tabela--cards ticket-summary-table");
       const cols = el("colgroup");
       ["fonte", "serie", "os", "usuario", "host", "chamado", ""].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
@@ -586,6 +618,12 @@
           row.dataset.os = String(order.os);
           row.dataset.relacao = relacoes.get(serialKey(record.serie)) || "";
           row.dataset.triagem = grupos.get(serialKey(record.serie)) || "";
+          const utics = order.fontes.map(fonte => links.get(ticketOsLinkKey({ fonte, serie: record.serie, os: order.os })))
+            .filter(saved => saved?.numero).map(saved => `UTIC-${saved.ano}-${saved.numero} ${saved.numero}`);
+          // Valores crus: "Não informado" e "Ambíguo" são rótulos e não entram na busca.
+          const pessoa = userFailure ? {} : user || {};
+          row.dataset.busca = textoOs([record.serie, order.os, pessoa.usuario, ...(pessoa.candidatos || []), pessoa.hostname,
+            ...(pessoa.hostname_candidatos || []), modelos.get(serialKey(record.serie)) || "", ...utics].filter(Boolean).join(" "));
           const cell = (label, className) => {
             const td = el("td", className || "");
             td.setAttribute("data-label", label);
@@ -626,6 +664,23 @@
       });
       table.append(body);
       content.append(table);
+      if (externa) {
+        const mais = el("div", "sebrae-mais ck-os__mais");
+        mais.dataset.osMais = "";
+        mais.hidden = true;
+        const botao = el("button", "ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao", "Carregar mais");
+        botao.type = "button";
+        botao.addEventListener("click", () => {
+          const linhas = [...body.querySelectorAll("tr[data-serial]")];
+          const antes = linhas.filter(item => !item.hidden).length;
+          externa.limite += OS_POR_PAGINA;
+          filtrarSecaoOs(section);
+          // Sem mais páginas o botão some: o foco vai para a primeira OS nova.
+          if (mais.hidden) linhas.filter(item => !item.hidden)[antes]?.querySelector(".ticket-summary-order-link")?.focus();
+        });
+        mais.append(botao, el("span", "sebrae-mais__n"));
+        content.append(mais);
+      }
       section.querySelector(".ticket-summary-content")?.remove();
       section.append(content);
       section.setAttribute("aria-busy", "false");
@@ -696,6 +751,8 @@
         const records = groupTicketOsRows(collectTicketOsRows(report));
         const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
           .map(ticket => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
+        const modelos = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
+          .map(ticket => [serialKey(ticket?.serie), (Array.isArray(ticket?.simpress?.modelos) ? ticket.simpress.modelos : []).join(" ")]));
         let users = {};
         let userFailure = false;
         if (records.length) {
@@ -718,7 +775,7 @@
           st?.aoCarregar?.(report);
           const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
             .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
-          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos);
+          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos, modelos);
         });
       } catch (error) {
         vivos().forEach(section => {
@@ -895,19 +952,20 @@
     doc.addEventListener("simpress:chamados-atualizados", () => refreshTicketSummary(true));
     doc.addEventListener("simpress:usuarios-equipamento-atualizados", () => refreshTicketSummary(true));
 
-    osApi = { montar: montarTabelaOs, atualizar: refreshTicketSummary, filtrar: filtrarTabelaOs };
+    osApi = { montar: montarTabelaOs, atualizar: refreshTicketSummary, filtrar: filtrarTabelaOs, revelar: revelarLinhaOs };
     refresh(true);
   }
 
   // Ponte para a instalação ativa: permite window.SimpressDataPanels.montarTabelaOs(...) após o install.
-  let osApi = { montar: () => null, atualizar: async () => {}, filtrar: () => {} };
+  let osApi = { montar: () => null, atualizar: async () => {}, filtrar: () => {}, revelar: () => false };
   const montarTabelaOs = (host, opcoes) => osApi.montar(host, opcoes);
   const atualizarTabelaOs = force => osApi.atualizar(Boolean(force));
   const filtrarTabelaOs = filtro => osApi.filtrar(filtro);
+  const revelarLinhaOs = row => osApi.revelar(row);
 
   return Object.freeze({
     ENDPOINT, DENSITY_KEY, sortKey, compareValues, nextDirection, sortedOrder, toTsv,
     divergenceTotal, barPercentages, formatNumber, pluralize, install,
-    montarTabelaOs, atualizarTabelaOs, filtrarTabelaOs,
+    montarTabelaOs, atualizarTabelaOs, filtrarTabelaOs, revelarLinhaOs,
   });
 });
