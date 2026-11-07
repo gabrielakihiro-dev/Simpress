@@ -8,7 +8,12 @@
   const MODAL = "modal-chamado-ux";
   const API = "/api/ux/abrir-chamado";
   const byId = id => document.getElementById(id);
+  const CAMPOS = { nome: "ux-solicitante-nome", email: "ux-solicitante-email", telefone: "ux-solicitante-telefone", departamento_cargo: "ux-solicitante-cargo" };
   let vigente = null;
+
+  // Solicitante shown in the modal (editable before Simular/Revisar e enviar); empty fields block both actions.
+  const lerSolicitante = () => Object.fromEntries(Object.entries(CAMPOS).map(([campo, id]) => [campo, byId(id).value.trim()]));
+  const solicitanteCompleto = () => Object.values(lerSolicitante()).every(Boolean);
 
   function contextoChamadoUX() {
     const serial = String(appState.currentEquipamento?.serial || "").trim().toUpperCase();
@@ -42,10 +47,12 @@
 
   function controles(ocupado) {
     const preparado = !!vigente?.session_id;
-    const pronto = !ocupado && preparado && !!byId("ux-chamado-problema").value;
+    const pronto = !ocupado && preparado && !!byId("ux-chamado-problema").value && solicitanteCompleto();
     // The reason stays visible (and linked by aria-describedby) while the two actions are disabled.
     const motivo = ocupado || pronto ? "" : preparado
-      ? "Escolha um problema para liberar a simulação e o envio."
+      ? (solicitanteCompleto()
+        ? "Escolha um problema para liberar a simulação e o envio."
+        : "Preencha todos os campos do solicitante para liberar a simulação e o envio.")
       : vigente?.falha
         ? "Simulação e envio indisponíveis: a preparação no UX não foi concluída. A descrição foi mantida; corrija o que a mensagem acima indica e abra o chamado de novo."
         : "Simulação e envio indisponíveis: esta sessão do UX já foi usada. Abra o chamado de novo se precisar.";
@@ -53,6 +60,7 @@
     aviso.textContent = motivo;
     aviso.hidden = !motivo;
     byId("ux-chamado-problema").disabled = ocupado || !preparado;
+    byId("ux-chamado-solicitante").disabled = ocupado || !preparado;
     for (const id of ["ux-chamado-simular", "ux-chamado-enviar"]) {
       byId(id).disabled = !pronto;
       byId(id).title = pronto ? "" : motivo;
@@ -86,6 +94,7 @@
         return opcao;
       }));
       byId("ux-chamado-modelo").textContent = dados.modelo;
+      for (const [campo, id] of Object.entries(CAMPOS)) byId(id).value = dados.solicitante?.[campo] || "";
       status.textContent = dados.ultimo_envio
         ? "Atenção: já há um chamado enviado para esta série (OS " + dados.ultimo_envio.os + "). Confira antes de prosseguir."
         : "Escolha um problema para simular ou enviar.";
@@ -118,6 +127,7 @@
     byId("ux-chamado-modelo").textContent = "—";
     byId("ux-chamado-descricao").textContent = pedido.descricao;
     byId("ux-chamado-problema").replaceChildren();
+    for (const id of Object.values(CAMPOS)) byId(id).value = "";
     app.abrirModalAcessivel(MODAL, "#ux-chamado-fechar", "fecharChamadoUX");
     return preparar(pedido, false);
   }
@@ -133,6 +143,8 @@
     const problema = byId("ux-chamado-problema").value;
     if (!pedido?.session_id || pedido.ocupado || !problema || !atual(pedido)) return;
     const { session_id, serial, descricao } = pedido;
+    const solicitante = lerSolicitante();
+    if (!solicitanteCompleto()) return;
     pedido.ocupado = true;
     controles(true);
     const status = byId("ux-chamado-status");
@@ -140,13 +152,14 @@
       if (enviar) {
         const confirmou = await app.confirmarAcao({
           titulo: "Confirmar chamado no UX",
-          mensagem: "Série: " + serial + "\nProblema: " + problema + "\n\n" + descricao,
+          mensagem: "Série: " + serial + "\nProblema: " + problema + "\nSolicitante: " + solicitante.nome + " · "
+            + solicitante.email + " · " + solicitante.telefone + " · " + solicitante.departamento_cargo + "\n\n" + descricao,
           confirmar: "Enviar solicitação",
         });
         if (!confirmou || !atual(pedido)) return;
       }
       status.textContent = enviar ? "Enviando a solicitação ao UX…" : "Preenchendo o formulário no Chrome de automação…";
-      const dados = await post("enviar", { session_id, serial, problema, descricao, enviar, confirmado: enviar });
+      const dados = await post("enviar", { session_id, serial, problema, descricao, solicitante, enviar, confirmado: enviar });
       if (!atual(pedido)) return;
       if (dados.status === "preenchido") {
         const faltando = Array.isArray(dados.faltando) ? dados.faltando : [];

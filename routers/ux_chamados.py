@@ -42,8 +42,25 @@ class PrepararPayload(SeriePayload):
     conferido: StrictBool = False
 
 
+class SolicitantePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    nome: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=3, max_length=200, pattern=r"^[^@\s]+@[^@\s]+$")
+    telefone: str = Field(min_length=1, max_length=40)
+    departamento_cargo: str = Field(min_length=1, max_length=200)
+
+    @field_validator("nome", "email", "telefone", "departamento_cargo")
+    @classmethod
+    def sem_caractere_de_controle(cls, valor: str) -> str:
+        if any(ord(c) < 32 for c in valor):
+            raise ValueError("Não use caracteres de controle.")
+        return valor
+
+
 class EnviarPayload(SeriePayload):
     session_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    solicitante: SolicitantePayload | None = None
     problema: str = Field(min_length=1, max_length=256)
     descricao: str = Field(max_length=8000)
     enviar: StrictBool = False
@@ -90,6 +107,7 @@ def create_ux_chamados_router(
         return executar(lambda: servico.executar(
             session_id=payload.session_id, serial=payload.serial, problema=payload.problema,
             descricao=payload.descricao, enviar=payload.enviar, confirmado=payload.confirmado,
+            solicitante=payload.solicitante.model_dump() if payload.solicitante else None,
         ))
 
     @router.post("/cancelar", response_model=None)
