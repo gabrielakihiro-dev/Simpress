@@ -489,7 +489,12 @@ def job_pendente(state_dir: Path, agora: Optional[datetime] = None) -> bool:
 
 
 def gravar_resultado(state_dir: Path, resultado: Mapping[str, Any]) -> None:
-    ler_envio(state_dir)  # Migrate an old cleanup notice before replacing a transient job result.
+    try:
+        ler_envio(state_dir)  # Migrate an old cleanup notice before replacing a transient job result.
+    except DomainBusyError:
+        if not caminho_envio(state_dir).exists():
+            raise  # Legacy-notice migration failed to write: keep the old notice instead of overwriting it.
+        # The existing send record is unreadable/invalid; it stays for manual review and must not block the job result.
     atomic_write_json(caminho_resultado(state_dir), resultado)
 
 
