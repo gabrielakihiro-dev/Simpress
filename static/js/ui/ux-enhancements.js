@@ -79,7 +79,7 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    if (command || event.shiftKey || (typing && !/^F[1-9]$/.test(key))) return null; // teclas F não digitam texto: valem com o cursor num campo (senão F5 recarrega a página); F9 também fecha o chat do Assistente
+    if (command || event.shiftKey || (typing && !/^F([1-9]|10)$/.test(key))) return null; // teclas F não digitam texto: valem com o cursor num campo (senão F5 recarrega a página); F9 também fecha o chat do Assistente
     return ({
       F1: "tab-home",
       F2: "tab-transferencia",
@@ -90,6 +90,7 @@
       F7: "tool-apelidos",
       F8: "tool-relatorio",
       F9: "tool-assistente",
+      F10: "tool-cobertura",
     })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
   }
 
@@ -479,6 +480,7 @@
           "tool-apelidos": "btn-historico-apelidos",
           "tool-relatorio": "btn-relatorio-mensal",
           "tool-assistente": "btn-assistente",
+          "tool-cobertura": "btn-cobertura",
         };
         const button = byId(buttonIds[action]);
         if (!button) return;

@@ -122,8 +122,28 @@ Conexão remota ao computador de um equipamento, aberta no Endpoint por ação e
 _Regra_: [AGENTS.md, "Consulta ao vivo do Endpoint na Home (03/11/2026)"](./AGENTS.md)
 
 **Assistente**:
-Chat do Cockpit (F10) que responde sobre os dados do Simpress usando ferramentas.
+Chat do Cockpit (F9) que responde sobre os dados do Simpress usando ferramentas.
 _Regra_: [AGENTS.md, "Assistente (OpenRouter)"](./AGENTS.md)
+
+**Cobertura**:
+Painel F10 do Cockpit que mostra se as necessidades de equipamento cadastradas (data, cidade, quantidade) vão ser atendidas e com qual série.
+_Regra_: [AGENTS.md, "Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)"](./AGENTS.md)
+
+**Disponibilidade confirmada**:
+Série marcada na Cobertura como disponível para uma vaga; vale 7 dias e depois precisa ser confirmada de novo.
+_Regra_: [AGENTS.md, "Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)"](./AGENTS.md)
+
+**Kit pronto**:
+Reserva com todos os itens do kit marcados (notebook, carregador, preparação e, quando a necessidade pede, monitor); só então `Preparar Transporte` é liberado.
+_Regra_: [AGENTS.md, "Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)"](./AGENTS.md)
+
+**Condicionada**:
+Vaga da Cobertura que só será atendida se uma devolução prevista chegar a tempo, com os dias de preparo (2 por padrão) antes da data da vaga.
+_Regra_: [AGENTS.md, "Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)"](./AGENTS.md)
+
+**Reserva em espera**:
+Reserva feita sobre uma devolução prevista, antes de a série voltar; ela só vira reserva ativa quando a devolução é recebida e a disponibilidade da série é confirmada.
+_Regra_: [AGENTS.md, "Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)"](./AGENTS.md)
 
 **Rotina**:
 Fluxo automatizado no Chrome de automação, iniciado na aba Automação (F4), como `login`, `inventarios`, `os`, `sebrae` ou `dashboard`.

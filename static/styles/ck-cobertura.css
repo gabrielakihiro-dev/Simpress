@@ -1,0 +1,24 @@
+/* Cobertura de equipamentos (F10): só layout; cores, botões, selos e tabela/cards vêm dos ck-* do cockpit. */
+.cob { display: grid; gap: 12px; }
+.cob__alertas { display: grid; gap: 8px; }
+.cob__alertas:empty { display: none; }
+.cob__abas { flex-wrap: wrap; }
+.cob__painel { display: grid; gap: 12px; border-radius: var(--raio-md); animation: cob-entrar var(--duracao, 200ms) var(--curva, ease-out); }
+.cob__painel[hidden] { display: none; }
+.cob__form { flex-wrap: wrap; align-items: end; gap: 8px; }
+.cob__form[hidden] { display: none; }
+.cob__check { display: inline-flex; align-items: center; gap: 6px; }
+.cob__acoes { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; }
+.cob__selos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cob__nota { margin: 0; font-size: 0.8125rem; color: var(--cor-texto-suave, inherit); }
+.cob__vazio { margin: 0; padding: 12px 0; color: var(--cor-texto-suave, inherit); }
+.cob__kit { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; }
+.cob__sub { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; flex-basis: 100%; }
+.cob__sub:empty { display: none; }
+.cob__candidato { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+@keyframes cob-entrar { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cob__painel { animation: none; }
+}

@@ -576,6 +576,19 @@ QUERY_TOOLS: List[Tool] = [
         {"cidade": {"type": "string", "description": "Cidade (ex.: 'Londrina', 'Foz do Iguaçu'; opcional)."}},
     ),
     _read(
+        "listar_cobertura",
+        "Painel Cobertura (F10), somente leitura: se vai faltar equipamento para as necessidades cadastradas. Usa o mesmo cálculo da tela, "
+        "então os números são os mesmos. Retorna contagens (atendivel, condicionada, sem_cobertura, entregue), faltam (= sem_cobertura), "
+        "as vagas filtradas e os disponíveis. Não reserva, não cria nem altera nada. Sem vaga no filtro, devolve as cidades, datas e perfis existentes.",
+        lambda c, a: c.listar_cobertura(a.get("cidade"), a.get("data"), a.get("ate"), a.get("perfil")),
+        {
+            "cidade": {"type": "string", "description": "Cidade exata da necessidade (ex.: 'Cidade A'; opcional)."},
+            "data": {"type": "string", "description": "Dia da necessidade, AAAA-MM-DD (opcional)."},
+            "ate": {"type": "string", "description": "Até este dia, inclusive, AAAA-MM-DD (opcional)."},
+            "perfil": {"type": "string", "description": "Parte do perfil da necessidade (opcional; texto livre do cadastro)."},
+        },
+    ),
+    _read(
         "consultar_equipamento",
         "Detalhes de um equipamento pelo número de série (modelo, tipo, cidade, usuário). Trata MacBooks que venham sem a letra 'S'.",
         lambda c, a: c.consultar_equipamento(str(a.get("serial", ""))),
@@ -1489,6 +1502,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "mensal": (r"\bmensal|\bmes\b|\bmeses\b|\brelatorio", ("obter_relatorio_mensal", "comparar_periodos")),
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
     "recarregar": (r"\brecarreg|\brecarga\b|\bbase de dados", ("recarregar_base",)),
+    "cobertura": (r"\bcobertura|\bfalt(?:a|ar|am|ara|ando)\b|\bvagas?\b|\bnecessidades?\b", ("listar_cobertura",)),
 }
 _PADROES_GRUPOS = {nome: re.compile(padrao) for nome, (padrao, _) in GRUPOS_FERRAMENTAS.items()}
 _SIGLA_OS = re.compile(r"\bOS\b")  # case-sensitive on purpose: "os" is the Portuguese article
