@@ -18,6 +18,9 @@ const requests = [];
 let vinculos = [];
 let usuarios = {};
 let falhar = false;
+// Observações da aba OS: null faz o GET falhar (caixa só leitura); os PUTs ficam em putsObs.
+let observacoes = null;
+const putsObs = [];
 const win = {
   document: doc,
   MutationObserver: class { observe() {} },
@@ -27,6 +30,14 @@ const win = {
   fetch: async (url, options = {}) => {
     requests.push([options.method || "GET", url]);
     if (falhar) throw new Error("Failed to fetch");
+    if (url === "/api/operacoes/chamados/observacoes") {
+      if (options.method === "PUT") {
+        const body = JSON.parse(options.body);
+        putsObs.push(body);
+        return { ok: true, json: async () => ({ ...body, observacao: body.observacao.trim(), atualizado_em: "2026-11-07T10:00:00-03:00" }) };
+      }
+      return { ok: observacoes !== null, json: async () => (observacoes ? { observacoes } : { detail: "Falha" }) };
+    }
     const json = url === "/api/operacoes/chamados" ? report
       : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
       : url === "/api/equipamentos/usuarios-logados" ? { usuarios }
@@ -142,7 +153,7 @@ test("Andamento expande uma linha por série, esconde com o filtro e recolhe", a
   assert.equal(chamadas.length, 1);
   assert.equal(chamadas[0][0], "SN-SOR");
   assert.equal(chamadas[0][1], detalhe.children[0], "o conteúdo é preenchido na célula da linha");
-  assert.equal(detalhe.children[0].colSpan, 7);
+  assert.equal(detalhe.children[0].colSpan, 8);
 
   panels.filtrarTabelaOs({ relacao: "conferida" });
   assert.equal(detalhe.hidden, true, "a linha de Andamento acompanha o filtro da série");
@@ -340,4 +351,48 @@ test("seriesFiltradasOs devolve as séries de todas as páginas que passam no fi
     panels.filtrarTabelaOs({ relacao: "", triagem: "", busca: "nada-casa" });
     assert.deepEqual(panels.seriesFiltradasOs(), [], "filtro sem resultado devolve lista vazia, não null");
   } finally { report.chamados = chamados; panels.filtrarTabelaOs({ busca: "", relacao: "", triagem: "" }); }
+});
+
+test("Observação do andamento: carrega por série+OS, salva, sobrevive à recriação e não entra na busca", async () => {
+  observacoes = [{ serie: "sn conf", os: " 9001 ", observacao: "Peça pedida", atualizado_em: "" }];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const caixa = serie => section.querySelector(`tbody tr[data-serial="${serie}"]`).children.at(-1).querySelector("textarea");
+    assert.equal(section.querySelectorAll("thead th").at(-1).textContent, "Observação do andamento");
+    assert.equal(caixa("SN-CONF").value, "Peça pedida", "a chave normaliza série e OS como o servidor");
+    assert.equal(caixa("SN-CONF").getAttribute("aria-label"), "Observação do andamento");
+    assert.equal(caixa("SN-CONF").parentNode.getAttribute("data-label"), "Observação do andamento");
+    assert.equal(caixa("SN-CONF").readOnly, undefined);
+    assert.equal(caixa("SN-SOR").value, "");
+
+    // Busca e contagem não mudam com a observação.
+    panels.filtrarTabelaOs({ busca: "peca", relacao: "" });
+    assert.deepEqual(visiveis(section), []);
+    panels.filtrarTabelaOs({ busca: "" });
+
+    // Digitar e recriar a tabela antes de salvar preserva o texto e o aviso de pendência.
+    caixa("SN-SOR").value = "Ligar amanhã ";
+    caixa("SN-SOR").dispatchEvent({ type: "input" });
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "pronto");
+    assert.equal(caixa("SN-SOR").value, "Ligar amanhã ");
+    const feedback = () => section.querySelector('tbody tr[data-serial="SN-SOR"] .sebrae-obs__feedback');
+    assert.equal(feedback().textContent, "Alteração ainda não salva…");
+    assert.equal(putsObs.length, 0);
+
+    caixa("SN-SOR").dispatchEvent({ type: "blur" });
+    await waitFor(() => feedback().textContent === "Salva.");
+    assert.deepEqual(putsObs, [{ serie: "SN-SOR", os: "9002", observacao: "Ligar amanhã " }]);
+    assert.equal(caixa("SN-SOR").value, "Ligar amanhã", "a caixa mostra o texto devolvido pelo servidor");
+    await new Promise(resolve => setTimeout(resolve, 850));
+    assert.equal(putsObs.length, 1, "o envio adiado não repete o que já foi salvo");
+  } finally { observacoes = null; putsObs.length = 0; }
+});
+
+test("Observação do andamento fica só leitura quando a leitura falha, sem derrubar a tabela", async () => {
+  const { section, status } = await montar({ semBusca: true });
+  assert.equal(status.textContent, "2 OS · 2 séries");
+  const caixa = section.querySelector('tbody tr[data-serial="SN-SOR"]').children.at(-1).querySelector("textarea");
+  assert.equal(caixa.readOnly, true);
+  assert.equal(section.querySelector(".sebrae-obs__feedback"), null);
 });

@@ -42,6 +42,31 @@ Correção dos achados da auditoria da aba OS (07/11/2026). Só apresentação e
 - Altura dos controles: a busca, a Relação, os botões da barra e os da tabela seguem a altura do desenho (`min-height: 0`, sem o mínimo global de 40/48 px); em tela de toque (`pointer: coarse`) eles, os botões `Andamento` e os números da OS têm alvo de 44 px.
 - `Exportar Excel` igual à tela: com `Versão em uso` na importação que a tabela mostra, `exportarChamadosCockpit` pega `SimpressDataPanels.seriesFiltradasOs()` (séries que passam em busca, Relação, Atenção e triagem, em todas as páginas, não só nas 25 visíveis) e faz `POST /api/operacoes/chamados/exportar` com `series`, `search`, `relation` e `attention_only`; o servidor só limita às séries recebidas (chave normalizada), mantém a ordem do `GET` e não refiltra. Busca, Relação e Atenção entram no Resumo com os rótulos existentes; triagem não tem rótulo. Filtro sem resultado gera planilha sem chamados. Antes de ler as séries, aplica a busca que ainda está na espera de 150 ms. Tabela ainda não carregada, recarregando logo depois de uma importação, ou versão anterior: `GET` como antes (busca e atenção do servidor).
 
+## Chamados × OS e observação por OS (F5/F6, 07/11/2026)
+
+Pedido do usuário (07/11/2026). O painel é só leitura; a observação por OS é a única escrita nova da aba OS e fica só no computador.
+
+**Painel `Chamados × OS`** (`section[data-cockpit-tool-panel="chamados-os"]`, subtítulo `Chamados em aberto com OS vinculada, lado a lado.`):
+
+- Onde clicar: botão `Chamados × OS` no topo do F5, logo depois de `Ler chamados antigos` (`#btn-chamados-os-f5`), e na barra da aba OS, entre `Exportar Excel` e `Limpar filtros` (`#btn-chamados-os-f6`). `Voltar` volta à aba de onde veio.
+- Dados: recarrega a cada abertura com três GETs que já existiam (`/api/sebrae/novos`, `/api/operacoes/chamados`, `/api/operacoes/chamados/vinculos-os`). Falha mostra `Não foi possível carregar as OS.`.
+- Quem entra: chamados em aberto do F5 com OS. Novos usam a OS da coluna E (`linha.E`); antigos, a OS gravada ou sugerida (`automaticos.E` ou `automaticos_sugeridos.E`). Finalizados (`importado.finalizados`) e chamados sem OS ou com `—` ficam fora.
+- Cruzamento: série normalizada (sem acento, espaço nem pontuação, em maiúsculas) e OS sem espaços, em maiúsculas. MacBook: a outra grafia (com ou sem `S` inicial) só quando a série exata não está no relatório. Série sem a OS no relatório mostra `Série não encontrada na importação atual.`.
+- Tabela: grupos `Chamado` e `OS`; colunas `Chamado` (UTIC, título e selo `Novo` ou `Em aberto`), `Abertura` (P no novo; `Habilitada em` da leitura no antigo), `Série`, `OS` (com o selo `Manual` ou `Automático · Dashboard` quando há vínculo), `Status Oracle`, `Status Simpress` e `Relação` (com o selo da triagem do F6). Abaixo de 1200 px vira cartões com os mesmos dados.
+- Busca `Buscar UTIC, série ou OS` (150 ms depois da última tecla, sem acento nem maiúscula); 25 por vez com `Carregar mais` e `Mostrando N de M`; lista vazia `Nenhum chamado em aberto com OS vinculada.`.
+- Clicar no UTIC abre o chamado no F5 (`abrirChamadoSebraeNoF5`); clicar na OS abre a OS no F6 (`abrirChamadoDaOs`). Só navegação: o painel não grava, não cria vínculo e não altera chamado nem OS.
+- Arquivos: `static/js/shared/chamados-os-model.js` (`montarParesChamadoOs`, `filtrarParesChamadoOs`, sem DOM nem rede) e `static/js/features/cockpit-tool-panels.js` (`loadChamadosOs`, `renderChamadosOs`). Testes: `tests/frontend/test_chamados_os.cjs`, `tests/frontend/test_cockpit_tool_panels.cjs`, `tests/e2e/chamados-os.spec.cjs`.
+
+**Coluna `Observação do andamento` na tabela de OS** (`static/js/ui/data-panels.js`):
+
+- Uma caixa por série e OS, última coluna da tabela (a linha `Andamento` passou a ocupar 8 colunas). Salva sozinha 800 ms depois da última tecla e na hora no `change` e no `blur`, com os avisos do F5: `Alteração ainda não salva…`, `Salvando…`, `Salva.`, `Salva automaticamente.` e `Não foi possível salvar: …`. Até 4.000 caracteres.
+- O rascunho ainda não salvo continua quando a tabela é recriada (busca, filtro, vínculo salvo). Se `GET /api/operacoes/chamados/observacoes` falhar, a tabela abre normalmente e a caixa fica só leitura.
+- Não entra na busca, nos filtros, nas contagens nem no `Exportar Excel`. A anotação por versão do `Andamento` (`Próxima ação ou o que já foi feito`) continua igual e separada.
+- Grava só em `data/state/os_observacoes.json` (fora do Git) por `PUT /api/operacoes/chamados/observacoes` (`domains/os_observacoes.py`), na chave [série normalizada, OS sem espaços em maiúsculas]. CPF mascarado, credenciais omitidas e apóstrofo antes de `=`, `+`, `-` ou `@`; texto vazio remove a entrada. 422 para payload inválido; 503 para registro ilegível, inválido ou ocupado (o arquivo é preservado). Nada vai ao SoftExpert, ao SharePoint nem ao Excel.
+- Testes: `tests/test_os_observacoes.py`, `tests/frontend/test_data_panels_os_table.cjs`, `tests/e2e/resumo-os.spec.cjs`.
+
+**Assistente (F9):** a ferramenta de leitura `chamados_com_os_sebrae` devolve a mesma lista do painel, com `observacao_os`; `listar_chamados_abertos` traz `observacao_os` por OS da série. O Assistente não altera a observação (regra 34 do prompt; ver `docs/cockpit-prompts/15-assistente.md`).
+
 ---
 
 # Histórico: prompt 7 original

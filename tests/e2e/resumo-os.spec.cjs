@@ -379,3 +379,37 @@ test("OS deste equipamento abre Chamados já filtrado pela série", async ({ pag
   await expect(visible).toHaveCount(1);
   await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
 });
+
+test("Observação do andamento da OS salva sozinha, volta após recarregar e digitar não aciona atalhos", async ({ page }) => {
+  const notas = new Map();
+  const puts = [];
+  await installSummaryRoutes(page);
+  await page.route("**/api/operacoes/chamados/observacoes", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { observacoes: [...notas.values()] } });
+    const payload = route.request().postDataJSON();
+    puts.push(payload);
+    const item = { ...payload, observacao: payload.observacao.trim(), atualizado_em: "2026-11-07T10:00:00-03:00" };
+    notas.set(JSON.stringify([normalized(payload.serie), payload.os]), item);
+    return route.fulfill({ json: item });
+  });
+  await openSummary(page);
+
+  const row = page.locator("#ck-os-tabela tbody tr").filter({ hasText: "7285073" });
+  const caixa = row.getByRole("textbox", { name: "Observação do andamento" });
+  await expect(caixa).toBeVisible();
+  await expect(row.locator(".sebrae-obs__feedback")).toHaveText("Salva automaticamente.");
+  await caixa.click();
+  await page.keyboard.type("/tec teste");
+  await expect(caixa).toHaveValue("/tec teste");
+  await expect(row.locator(".sebrae-obs__feedback")).toHaveText("Salva.");
+  expect(puts.at(-1)).toEqual({ serie: "DEMO-SN-AMB", os: "7285073", observacao: "/tec teste" });
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-os tr[data-andamento]")).toHaveCount(0);
+  await expect(page.locator(SECAO)).toContainText("4 OS · 2 séries");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.reload();
+  await selectSummary(page);
+  await expect(page.locator("#ck-os-tabela tbody tr").filter({ hasText: "7285073" })
+    .getByRole("textbox", { name: "Observação do andamento" })).toHaveValue("/tec teste");
+});

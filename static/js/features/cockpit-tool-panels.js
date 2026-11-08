@@ -16,6 +16,7 @@
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
     "sebrae-chamados": ["Chamados", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
+    "chamados-os": ["Chamados × OS", "Chamados em aberto com OS vinculada, lado a lado."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -470,6 +471,140 @@
     filterTicketTable();
     // Recém-montada já está carregando; só recarrega à força se já existia.
     if (mounted) await panels.atualizarTabelaOs(true);
+  }
+
+  // Chamados × OS: chamados em aberto do F5 com OS, lado a lado com a OS do F6. Só leitura; recarrega a cada abertura.
+  const CHAMADOS_OS_POR_PAGINA = 25;
+  let chamadosOsRequest = 0;
+  let chamadosOsPares = [];
+  let chamadosOsLimite = CHAMADOS_OS_POR_PAGINA;
+  let chamadosOsTimer = 0;
+
+  async function loadChamadosOs() {
+    const lista = byId("cockpit-chamados-os-lista");
+    const request = ++chamadosOsRequest;
+    lista.setAttribute("aria-busy", "true");
+    try {
+      const model = globalThis.SimpressChamadosOsModel;
+      const [sebrae, relatorio, vinculos] = await Promise.all([
+        apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados novos." }),
+        apiFetch("/api/operacoes/chamados", { errorMessage: "Não foi possível carregar as OS." }),
+        apiFetch("/api/operacoes/chamados/vinculos-os", { errorMessage: "Não foi possível carregar as OS." }),
+      ]);
+      if (request !== chamadosOsRequest || activeTool !== "chamados-os") return;
+      chamadosOsPares = model.montarParesChamadoOs({ sebrae, relatorio, vinculos });
+      chamadosOsLimite = CHAMADOS_OS_POR_PAGINA;
+      renderChamadosOs();
+    } catch (error) {
+      if (request !== chamadosOsRequest || activeTool !== "chamados-os") return;
+      byId("cockpit-chamados-os-mais").hidden = true;
+      renderError(lista, error, "Não foi possível carregar as OS.");
+    } finally {
+      if (request === chamadosOsRequest) lista.removeAttribute("aria-busy");
+    }
+  }
+
+  function chamadosOsCelula(row, label, ...conteudo) {
+    const td = element("td");
+    td.dataset.label = label;
+    const caixa = element("div", "ck-chos__celula");
+    caixa.append(...conteudo.filter(Boolean));
+    td.append(caixa);
+    row.append(td);
+    return td;
+  }
+
+  function chamadosOsLinha(par) {
+    const row = element("tr");
+    row.dataset.chave = String(par.chave);
+    const chamado = element("button", "ck-link-btn", par.numero || "Sem UTIC");
+    chamado.type = "button";
+    if (par.numero) chamado.setAttribute("aria-label", `Abrir o chamado ${par.numero} na aba Chamados (F5)`);
+    chamado.addEventListener("click", () => app.abrirChamadoSebraeNoF5?.(par.chave));
+    const selo = element("span", "ck-badge sebrae-selo", par.situacao === "novo" ? "Novo" : "Em aberto");
+    if (par.situacao === "novo") selo.dataset.status = "info";
+    chamadosOsCelula(row, "Chamado", chamado, element("span", "ck-chos__titulo", par.titulo || "Sem título"), selo);
+    chamadosOsCelula(row, "Abertura", element("span", "", par.abertura || "—"));
+    chamadosOsCelula(row, "Série", element("span", "", par.serie || "—"));
+    if (!par.encontrada) {
+      const td = chamadosOsCelula(row, "OS", element("span", "", par.os),
+        element("span", "ck-nota", "Série não encontrada na importação atual."));
+      td.colSpan = 4;
+      td.classList.add("ck-td--largo");
+      row.dataset.encontrada = "false";
+      return row;
+    }
+    const os = element("button", "ck-link-btn", par.os);
+    os.type = "button";
+    os.setAttribute("aria-label", `Abrir a OS ${par.os} na aba OS (F6)`);
+    os.addEventListener("click", () => app.abrirChamadoDaOs?.([], par.serieRelatorio || par.serie, par.osRelatorio || par.os));
+    let vinculo = null;
+    if (par.vinculo) {
+      vinculo = element("span", "ck-chos__vinculo", par.vinculo === "manual" ? "Manual" : "Automático · Dashboard");
+      vinculo.dataset.vinculo = par.vinculo;
+    }
+    chamadosOsCelula(row, "OS", os, vinculo);
+    chamadosOsCelula(row, "Status Oracle", element("span", "", par.statusOracle || "—"));
+    chamadosOsCelula(row, "Status Simpress", element("span", "", par.statusSimpress || "—"));
+    const relacao = badge(relationText(par.registro), ownEntry(relationTones, par.relacao));
+    // Selo da triagem do F6 (ticketTriageGroups). Ele já é a Atenção: em atenção = "3+ dias" ou "Sem data",
+    // o mesmo critério do filtro Atenção do F6 (data-panels.js), por isso não há um terceiro selo.
+    const grupo = app.grupoTriagemChamado?.(par.registro);
+    const triagem = ticketTriageGroups.find(([key]) => key === grupo && key !== "ativos");
+    let triagemBadge = null;
+    if (triagem) {
+      triagemBadge = element("span", "ck-badge", triagem[1]);
+      if (triagem[2]) triagemBadge.dataset.status = triagem[2];
+    }
+    chamadosOsCelula(row, "Relação", relacao, triagemBadge);
+    return row;
+  }
+
+  function renderChamadosOs() {
+    const lista = byId("cockpit-chamados-os-lista");
+    const mais = byId("cockpit-chamados-os-mais");
+    const filtrados = globalThis.SimpressChamadosOsModel.filtrarParesChamadoOs(chamadosOsPares, byId("cockpit-chamados-os-busca").value);
+    const visiveis = filtrados.slice(0, chamadosOsLimite);
+    mais.hidden = filtrados.length <= visiveis.length;
+    byId("cockpit-chamados-os-mostrando").textContent = `Mostrando ${displayCount(visiveis.length)} de ${displayCount(filtrados.length)}`;
+    if (!visiveis.length) return renderEmpty(lista, "Nenhum chamado em aberto com OS vinculada.");
+    const table = element("table", "ck-tabela ck-tabela--cards ck-chos__tabela");
+    table.append(element("caption", "sr-only", "Chamados × OS"));
+    [3, 4].forEach(span => { const col = element("colgroup"); col.span = span; table.append(col); });
+    const thead = element("thead");
+    const grupos = element("tr");
+    [["Chamado", 3], ["OS", 4]].forEach(([texto, span]) => {
+      const th = element("th", "", texto);
+      th.scope = "colgroup";
+      th.colSpan = span;
+      grupos.append(th);
+    });
+    const colunas = element("tr");
+    ["Chamado", "Abertura", "Série", "OS", "Status Oracle", "Status Simpress", "Relação"].forEach(texto => {
+      const th = element("th", "", texto);
+      th.scope = "col";
+      colunas.append(th);
+    });
+    thead.append(grupos, colunas);
+    const tbody = element("tbody");
+    tbody.append(...visiveis.map(chamadosOsLinha));
+    table.append(thead, tbody);
+    lista.replaceChildren(table);
+  }
+
+  function filtrarChamadosOsSoon() {
+    clearTimeout(chamadosOsTimer);
+    chamadosOsTimer = setTimeout(() => { chamadosOsLimite = CHAMADOS_OS_POR_PAGINA; renderChamadosOs(); }, 150);
+  }
+
+  function carregarMaisChamadosOs() {
+    const antes = chamadosOsLimite;
+    chamadosOsLimite += CHAMADOS_OS_POR_PAGINA;
+    renderChamadosOs();
+    // Como no F5: acabou a lista, o botão some e o foco vai para o primeiro item novo.
+    if (byId("cockpit-chamados-os-mais").hidden) {
+      byId("cockpit-chamados-os-lista").querySelectorAll("tbody tr")[antes]?.querySelector("button")?.focus();
+    }
   }
 
   function destacarLinhaCockpit(element) {
@@ -1767,6 +1902,8 @@
     byId("cockpit-tickets-attention").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-clear").addEventListener("click", clearTicketFilters);
     byId("cockpit-tickets-triage").addEventListener("click", selectTicketTriage);
+    byId("cockpit-chamados-os-busca").addEventListener("input", filtrarChamadosOsSoon);
+    byId("cockpit-chamados-os-mais-botao").addEventListener("click", carregarMaisChamadosOs);
     byId("cockpit-comparison-new").addEventListener("click", openNewComparison);
     byId("cockpit-comparison-event").addEventListener("change", event => {
       selectedComparisonId = String(event.currentTarget.value || "");
@@ -1889,6 +2026,7 @@
     document.querySelectorAll("[data-cockpit-tool-panel]").forEach(panel => { panel.hidden = panel.dataset.cockpitToolPanel !== tool; });
     byId("cockpit-tool-title").focus();
     if (tool === "chamados") await loadTickets();
+    if (tool === "chamados-os") await loadChamadosOs();
     if (tool === "comparacao") {
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();

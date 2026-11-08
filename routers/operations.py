@@ -10,7 +10,7 @@ from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Sequ
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.logging_setup import redact_reference
 from domains import ticket_import
@@ -34,6 +34,7 @@ from domains.ticket_import import (
     ticket_annotation_row_hash,
 )
 from domains.inventory_comparison import normalize_reference_value
+from domains.os_observacoes import ler_observacoes, salvar_observacao
 from domains.ticket_reconciliation import _serial_key, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
@@ -77,6 +78,21 @@ class TicketOsLinkPayload(BaseModel):
         return normalized
 
 
+class OsObservacaoPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    serie: str = Field(..., min_length=1, max_length=128)
+    os: str = Field(..., min_length=1, max_length=160)
+    observacao: str = Field("", max_length=4000)
+
+    @field_validator("serie", "os")
+    @classmethod
+    def trim_identifier(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Informe a série e o número da OS.")
+        return normalized
+
+
 class TicketExportPayload(BaseModel):
     """Exportação igual à tela da aba OS: só as séries que passam no filtro atual da tela."""
     snapshot_id: str = Field("", max_length=200)
@@ -99,6 +115,7 @@ def create_operations_router(
     ticket_import_services: Optional[TicketImportServices] = None,
     ticket_os_links_file: Optional[Callable[[], Path]] = None,
     dashboard_vinculos: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
+    ticket_os_notes_file: Optional[Callable[[], Path]] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
 
@@ -256,6 +273,17 @@ def create_operations_router(
             logger.exception("Não foi possível salvar o vínculo manual da OS %s.", redact_reference(payload.os))
             raise HTTPException(status_code=503, detail="Não foi possível salvar o vínculo manual da OS.") from None
         return {"vinculo": saved}
+
+    def ticket_os_notes_path() -> Path:
+        return ticket_os_notes_file() if ticket_os_notes_file else ticket_report_path().parent / "os_observacoes.json"
+
+    @router.get("/api/operacoes/chamados/observacoes")
+    def get_ticket_os_notes():
+        return {"observacoes": ler_observacoes(ticket_os_notes_path())}
+
+    @router.put("/api/operacoes/chamados/observacoes")
+    def save_ticket_os_note(payload: OsObservacaoPayload):
+        return salvar_observacao(ticket_os_notes_path(), payload.serie, payload.os, payload.observacao)
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]

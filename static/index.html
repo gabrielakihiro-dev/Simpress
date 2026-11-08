@@ -857,6 +857,7 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label class="ckp-alternar" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="cockpit-tickets-attention" type="checkbox">Atenção · 3+ dias</label>
             <button type="button" id="cockpit-tickets-export" class="ck-btn ck-btn--secundario" data-on-click="exportarChamadosCockpit" disabled>Exportar Excel</button>
+            <button type="button" id="btn-chamados-os-f6" class="ck-btn ck-btn--secundario" data-on-click="abrirPainelCockpit" data-args='["chamados-os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span>Chamados × OS</span></button>
             <button type="button" id="cockpit-tickets-clear" class="ck-btn ck-btn--fantasma">Limpar filtros</button>
             <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario" data-on-click="abrirGestaoChamadosCockpit">Importar e gerenciar</button>
           </div>
@@ -900,6 +901,15 @@ Horário disponível para atendimento:</textarea>
             </div>
           </details>
           <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados-os" aria-labelledby="cockpit-chamados-os-heading" hidden>
+          <h2 id="cockpit-chamados-os-heading" class="sr-only">Chamados × OS</h2>
+          <div class="ck-barra-ferr">
+            <input id="cockpit-chamados-os-busca" class="ck-entrada" type="search" autocomplete="off" placeholder="Buscar UTIC, série ou OS" aria-label="Buscar UTIC, série ou OS">
+          </div>
+          <div id="cockpit-chamados-os-lista" class="ck-chos" aria-live="polite"></div>
+          <div id="cockpit-chamados-os-mais" class="sebrae-mais" hidden><button type="button" id="cockpit-chamados-os-mais-botao" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span id="cockpit-chamados-os-mostrando" class="sebrae-mais__n"></span></div>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>
@@ -1068,6 +1078,7 @@ Horário disponível para atendimento:</textarea>
                 </div>
                 <div class="ck-grupo-botoes" role="group" aria-label="Chamados antigos">
                   <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-chamados-os-f5" data-on-click="abrirPainelCockpit" data-args='["chamados-os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span>Chamados × OS</span></button>
                 </div>
                 <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
                   <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
