@@ -455,6 +455,56 @@ def encerrar_chrome_do_perfil() -> int:
         return 0
 
 
+def continuar_de_onde_parou_gravado() -> bool:
+    """True se o perfil já está em "Continuar de onde parou" (session.restore_on_startup = 1)."""
+    for nome in ("Preferences", "Secure Preferences"):
+        try:
+            dados = json.loads((CHROME_PROFILE_DIR / "Default" / nome).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(dados, dict) and (dados.get("session") or {}).get("restore_on_startup") == 1:
+            return True
+    return False
+
+
+# Roda em processo próprio: quem chama garantir_chrome pode já estar dentro de um sync_playwright.
+_SCRIPT_CONTINUAR_DE_ONDE_PAROU = """
+import sys
+from playwright.sync_api import sync_playwright
+with sync_playwright() as pw:
+    browser = pw.chromium.connect_over_cdp(sys.argv[1], timeout=10000)
+    page = browser.contexts[0].new_page()
+    try:
+        page.goto("chrome://settings/onStartup")
+        page.evaluate("new Promise(r => chrome.settingsPrivate.setPref('session.restore_on_startup', 1, '', r))")
+    finally:
+        page.close()
+"""
+
+
+def manter_login_ao_fechar() -> None:
+    """Liga "Continuar de onde parou" no perfil de automação.
+
+    Sem isso, fechar o Chrome pelo X apaga os cookies de sessão e o Endpoint, o UX e a Microsoft
+    pedem login de novo; --restore-last-session só os guarda no fechamento pelo CDP. A gravação
+    passa pela página de configurações porque o Chrome desfaz edições diretas no Preferences.
+    """
+    if continuar_de_onde_parou_gravado():
+        return
+    try:
+        resultado = subprocess.run(
+            [sys.executable, "-c", _SCRIPT_CONTINUAR_DE_ONDE_PAROU, CDP_URL],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        ok = resultado.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    if ok:
+        log("Chrome", 'Perfil de automação em "Continuar de onde parou": o login fica guardado ao fechar pelo X.')
+    else:
+        log("Chrome", 'Não foi possível ligar "Continuar de onde parou"; fechar pelo X pode pedir login de novo.')
+
+
 def garantir_chrome() -> None:
     """Reaproveita o Chrome de automação na porta CDP ou o inicia destacado do script."""
     if cdp_ativo():
@@ -491,6 +541,7 @@ def garantir_chrome() -> None:
     while time.time() < limite:
         if cdp_ativo():
             log("Chrome", f"Chrome de automação iniciado (porta {CDP_PORT}, perfil {CHROME_PROFILE_DIR}).")
+            manter_login_ao_fechar()
             return
         time.sleep(0.5)
     raise RotinaErro(f"O Chrome não abriu a porta {CDP_PORT}. Feche as janelas do perfil de automação e tente de novo.")
