@@ -183,7 +183,7 @@
     pedido.concluido = false; // "Conferi no UX; preparar de novo" after an uncertain submission reopens the form
     pedido.session_id = null;
     mostrarErro("");
-    mostrarEstado("Preparando no UX…", "Pode levar alguns minutos. Se o Chrome de automação pedir login, entre manualmente.");
+    mostrarEstado("Preparando no UX…", "Pode levar alguns minutos. Fora do login, o Simpress clica em Acesso Time Simpress e escolhe a conta padrão; senha e MFA, se pedidos, são seus no Chrome de automação.");
     renderizarEnderecos(pedido);
     controles();
     try {

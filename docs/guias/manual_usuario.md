@@ -142,7 +142,7 @@ O resultado traz, entre outras seções:
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).
 
-Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação.
+Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação. Se o UX estiver deslogado, a automação clica em **Acesso Time Simpress** e escolhe a conta `gansouza@simpress.com.br` (nunca digita senha nem MFA). O endereço da unidade de entrega é escolhido sozinho quando sobra um só: o mesmo endereço repetido (como Irati), o complemento igual ao do cadastro (como "Sala 4") ou o bairro abreviado (como "AER" e "AEROPORTO") contam como um. Se ainda houver mais de um, o modal lista e você escolhe.
 
 Se **Gerar Planilha** não funcionar, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
 

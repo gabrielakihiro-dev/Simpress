@@ -76,10 +76,11 @@ def _escolher(page: Any, campo: str, alvo: str | None, *, busca: str | None = No
     lista.get_by_role("option").filter(visible=True).first.wait_for(state="visible", timeout=CONTROLES_MS)
     opcoes = [texto for texto, _ in _ler_lista_acessivel(page, lista)]
     achadas = [texto for texto in opcoes if (_do_contrato(texto) if alvo is None else texto == alvo)]
-    if len(achadas) != 1:
+    # The UX may list the same address twice with an identical label: one label = one choice. Different labels still fail.
+    if len(set(achadas)) != 1:
         page.keyboard.press("Escape")
         raise ErroUX(409, "A opção esperada não corresponde a uma única opção do UX.")
-    _unico(lista.get_by_role("option", name=achadas[0], exact=True)).click(timeout=CONTROLES_MS)
+    lista.get_by_role("option", name=achadas[0], exact=True).first.click(timeout=CONTROLES_MS)
     lista.wait_for(state="hidden", timeout=CONTROLES_MS)
     if _selecionado(page, campo) != achadas[0]:
         raise ErroUX(409, "O UX não manteve a opção escolhida.")
@@ -204,7 +205,11 @@ class PortalTicketUXChrome:
 
     @staticmethod
     def _esperar_consulta(page: Any) -> None:
-        """Same as F1: login is manual; once logged in elsewhere (/ng/home), go back to the search once."""
+        """Logged out: click "Acesso Time(s) Simpress" and pick gansouza once (never password or MFA), then wait
+        like F1; once logged in elsewhere (/ng/home), go back to the search once."""
+        if _no_login(page):
+            automation.aguardar_login(page, "UX Simpress", automation.ux_logado, entrar=automation.ux_entrar,
+                                      email=automation.EMAIL_DASHBOARD, esperar_usuario=False)
         limite = monotonic() + ESPERA_LOGIN_S
         voltou = False
         while monotonic() < limite:
@@ -255,7 +260,7 @@ class PortalTicketUXChrome:
         opcoes = [texto for texto, _ in _ler_lista_acessivel(page, lista)] if habilitadas.count() else []
         page.keyboard.press("Escape")
         lista.wait_for(state="hidden", timeout=CONTROLES_MS)
-        return opcoes
+        return list(dict.fromkeys(opcoes))  # identical labels (e.g. Irati listed twice) are one address
 
     def _ate_enderecos(self, page: Any, serial: str, aba: str, cep: str) -> tuple[str, list[str]]:
         """From the consulta screen: contract → série → card → Incidente → Motivo → CEP → Meus Endereços."""

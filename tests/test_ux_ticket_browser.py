@@ -210,12 +210,20 @@ class EscolherTests(unittest.TestCase):
         self.assertEqual(browser._escolher(pagina, "selectContrato", None, busca="16467"), "16467 - SERV DE APOIO SEBRAE PR")
         self.assertEqual(pagina.controles["input#selectContrato"].valor, "16467")
 
-    def test_zero_or_repeated_matches_close_the_list_and_refuse(self):
-        for opcoes in (["Outro"], ["Igual", "Igual"]):
+    def test_identical_repeated_labels_are_one_choice(self):
+        # The UX lists Irati twice with the same label: picking it must not stop the flow.
+        pagina = Pagina()
+        lista, rotulo = ng_select(pagina, "novo-endereco", [ENDERECO, ENDERECO])
+        self.assertEqual(browser._escolher(pagina, "novo-endereco", ENDERECO), ENDERECO)
+        self.assertEqual((lista.escolhida, rotulo.texto), (ENDERECO, ENDERECO))
+
+    def test_zero_or_different_matches_close_the_list_and_refuse(self):
+        casos = ((["Outro"], "selectMotivo", "Alvo"), (["16467 - A", "16467 - B"], "selectContrato", None))
+        for opcoes, campo, alvo in casos:
             pagina = Pagina()
-            lista, _ = ng_select(pagina, "selectMotivo", opcoes)
+            lista, _ = ng_select(pagina, campo, opcoes)
             with self.subTest(opcoes=opcoes), self.assertRaises(ux_chamados.ErroUX) as erro:
-                browser._escolher(pagina, "selectMotivo", "Igual" if len(opcoes) == 2 else "Alvo")
+                browser._escolher(pagina, campo, alvo)
             self.assertEqual(erro.exception.status, 409)
             self.assertEqual(pagina.keyboard.teclas, ["Escape"])
             self.assertIsNone(lista.escolhida)
@@ -519,6 +527,11 @@ class ContingenciaTests(unittest.TestCase):
                 self.assertEqual(browser.PortalTicketUXChrome._ler_enderecos(pagina), opcoes)
                 self.assertEqual(pagina.keyboard.teclas, ["Escape"])
 
+    def test_identical_addresses_are_read_once(self):
+        pagina = Pagina()
+        ng_select(pagina, "novo-endereco", [ENDERECO, "OUTRO", ENDERECO])
+        self.assertEqual(browser.PortalTicketUXChrome._ler_enderecos(pagina), [ENDERECO, "OUTRO"])
+
     def test_a_lost_login_waits_without_spending_tries(self):
         pagina = Pagina()
         falhas = iter(["login", "login", "login", "rota", "rota", None])
@@ -572,12 +585,16 @@ class LoginTests(unittest.TestCase):
             browser.PortalTicketUXChrome._esperar_consulta(pagina)
         self.assertEqual(pagina.idas, [ORIGEM + browser.ROTA_CONSULTA])
 
-    def test_without_login_it_gives_up_with_503(self):
+    def test_without_login_it_tries_gansouza_once_then_gives_up_with_503(self):
         pagina = Pagina(url="https://login.microsoftonline.com/x")
-        with mock.patch.object(browser, "ESPERA_LOGIN_S", 0.05), self.assertRaises(ux_chamados.ErroUX) as erro:
+        automacao = mock.Mock(ux_logado=lambda _p: False, EMAIL_DASHBOARD="gansouza@simpress.com.br")
+        with mock.patch.object(browser, "automation", automacao), mock.patch.object(browser, "ESPERA_LOGIN_S", 0.05),                 self.assertRaises(ux_chamados.ErroUX) as erro:
             browser.PortalTicketUXChrome._esperar_consulta(pagina)
         self.assertEqual(erro.exception.status, 503)
         self.assertEqual(pagina.idas, [])
+        automacao.aguardar_login.assert_called_once_with(
+            pagina, "UX Simpress", automacao.ux_logado, entrar=automacao.ux_entrar,
+            email="gansouza@simpress.com.br", esperar_usuario=False)
 
 
 class AbaTests(unittest.TestCase):

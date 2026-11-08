@@ -87,6 +87,41 @@ class EnderecoTests(unittest.TestCase):
         self.assertEqual(enderecos_correspondentes(opcoes, "R José de Alencar, 10", "Curitiba", "83005000"), [])
         self.assertEqual(enderecos_correspondentes(opcoes, "R José de Alencar, 10", "São José dos Pinhais", "8300500"), [])
 
+    def test_real_ux_lists_of_08_11_2026_pick_one_address(self):
+        # Option strings read from the real UX in the 30-city simulation.
+        casos = {
+            "Barracão": ("R HELMONT THILLI, 379 - SALA 02 - Barracão/PR - CEP 85700-000", "85700-000",
+                         ["R HELMONT THILLI, 379 , SALA 02 - Centro, Barracão - PR, 85700000"], 0),
+            "Cerro Azul": ("R BR do Rio Branco, 89 - Em Frente Bilu Mat Construção - Cerro Azul/PR - CEP 83570-000", "83570-000",
+                           ["R BARAO DO RIO BRANCO, 89 , SALA 2 - CENTRO, Cerro Azul - PR, 83570000",
+                            "R Caetê, 150 - Centro, Cerro Azul - PR, 83570000",
+                            "R BR do Rio Branco, 89 , Em Frente Bilu Mat Construção - Centro, Cerro Azul - PR, 83570000"], 2),
+            "Maringá": ("AV Bento Munhoz da Rocha Netto, 1116 - TERREO - Maringá/PR - CEP 87030-010", "87030-010",
+                        ["AV Bento Munhoz da Rocha Netto, 1116 , TERREO - Zona 7, Maringá - PR, 87030010",
+                         "AV Bento Munhoz da Rocha Neto, 116 - Zona 7, Maringá - PR, 87030010"], 0),
+            "Londrina": ("AV Santos Dumont, 1335 - Londrina/PR - CEP 86039-090", "86039-090",
+                         ["AV Santos Dumont, 1335 - AER, Londrina - PR, 86039090",
+                          "AV Santos Dumont, 1335 - AEROPORTO, Londrina - PR, 86039090"], 1),
+            "Curitiba": ("R Caeté, 150 - Curitiba/PR - CEP 80220-300", "80220-300",
+                         ["R Caeté, 150 - Prado Velho, Curitiba - PR, 80220300",
+                          "R Caeté, 150 , SEDE - Prado Velho, Curitiba - PR, 80220300"], 0),
+            "Cianorte": ("AV Goias, 1055 - Sala 4 - Cianorte/PR - CEP 87209-008", "87209-008",
+                         ["AV Goiás, 1055 - Zona de Armazém, Cianorte - PR, 87209008",
+                          "AV Goias, 1055 , Sala 4 - Centro, Cianorte - PR, 87209008"], 1),
+            "Toledo": ("AV Parigot de Souza, 2339 - Toledo/PR - CEP 85905-380", "85905-380",
+                       ["AV PARIGOT DE SOUZA, 2339 - CENTRO, Toledo - PR, 85905380",
+                        "AV Parigot de Souza, 2339 - Centro, Toledo - PR, 85905380"], 1),
+        }
+        for cidade, (endereco, cep, opcoes, certa) in casos.items():
+            with self.subTest(cidade=cidade):
+                self.assertEqual(enderecos_correspondentes(opcoes, endereco, cidade, cep), [opcoes[certa]])
+
+    def test_two_different_complements_or_neighbourhoods_still_go_to_the_user(self):
+        opcoes = ["AV X, 10 , SALA 1 - Centro, Irati - PR, 84500056", "AV X, 10 , SALA 2 - Centro, Irati - PR, 84500056"]
+        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Irati/PR - CEP 84500-056", "Irati", "84500-056"), [])
+        opcoes = ["AV X, 10 - Centro, Irati - PR, 84500056", "AV X, 10 - Vila Nova, Irati - PR, 84500056"]
+        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Irati/PR - CEP 84500-056", "Irati", "84500-056"), opcoes)
+
 
 class TicketsUXTests(unittest.TestCase):
     def setUp(self):
