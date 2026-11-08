@@ -109,7 +109,7 @@ test("necessidade até o recebimento sem Transporte", async ({ page }) => {
   await expect(movimento).toContainText("Sem Transporte");
   await movimento.getByLabel("Recebido por").fill("Pessoa Sintética");
   await expect(movimento.getByLabel("Data do recebimento")).toHaveValue("2026-11-06");
-  await movimento.getByRole("button", { name: "Recebida — SINT-001" }).click();
+  await movimento.getByRole("button", { name: "Confirmar recebimento — SINT-001" }).click();
   await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("0");
   await aba(page, "necessidades");
   await expect(page.locator("#cobertura-lista-necessidades").getByText("Entregue", { exact: true })).toBeVisible();
@@ -126,7 +126,7 @@ test("divergência no recebimento oferece as três resoluções", async ({ page 
   await movimento.getByLabel("Recebido por").fill("Pessoa Sintética");
   await movimento.getByLabel("Tipo da divergência").selectOption("serie_diferente");
   await movimento.getByLabel("Série recebida").fill("SINT-009");
-  await movimento.getByRole("button", { name: "Recebida com divergência — SINT-001" }).click();
+  await movimento.getByRole("button", { name: "Registrar divergência — SINT-001" }).click();
   await expect(movimento.getByText("Recebida com divergência", { exact: true })).toBeVisible();
   await expect(movimento).toContainText("Série diferente");
   for (const rotulo of ["Aceitar e encerrar", "Corrigir série recebida", "Cancelar e reabrir vaga"]) {
@@ -167,11 +167,11 @@ test("Preparar Transporte só preenche o Transporte e o vínculo usa a planilha 
   await movimento.getByRole("button", { name: "Vincular transferência já gerada — SINT-002" }).click();
   await movimento.getByRole("button", { name: /^Vincular planilha de / }).click();
   await expect(movimento.getByText("Planilha gerada", { exact: true })).toBeVisible();
-  await expect(movimento.getByRole("button", { name: "Coletada — SINT-002" })).toBeVisible();
+  await expect(movimento.getByRole("button", { name: "Marcar coletada — SINT-002" })).toBeVisible();
   expect(geracoes).toEqual([]);
 });
 
-test("planilha baixada sem vínculo fica pendente e Tentar de novo liga a movimentação", async ({ page }) => {
+test("planilha baixada sem vínculo fica pendente e Tentar vincular de novo liga a movimentação", async ({ page }) => {
   await cenario(page);
   const reserva = await reservaPronta(page, "SINT-002");
   const mov = await api(page, "/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" });
@@ -189,7 +189,7 @@ test("planilha baixada sem vínculo fica pendente e Tentar de novo liga a movime
   await abrirCobertura(page);
   const alerta = page.locator('[data-cobertura-alerta="sem_vinculo"]');
   await expect(alerta).toContainText("Planilha baixada sem vínculo");
-  await alerta.getByRole("button", { name: "Tentar de novo — série SINT-002" }).click();
+  await alerta.getByRole("button", { name: "Tentar vincular de novo — série SINT-002" }).click();
   await expect(alerta).toHaveCount(0);
   await aba(page, "movimento");
   await expect(page.locator("#cobertura-lista-movimento").getByText("Planilha gerada", { exact: true })).toBeVisible();
