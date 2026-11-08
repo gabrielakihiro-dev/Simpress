@@ -308,6 +308,11 @@ class RouterTests(unittest.TestCase):
             "solicitante": {"nome": "Pessoa", "email": "p@example.test", "telefone": "41999990000"}, **alteracoes,
         })
 
+    def test_default_solicitante_route_serves_the_backend_constant_without_touching_chrome(self):
+        resposta = self.client.get("/api/ux/gerar-ticket/solicitante")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {campo: ux_chamados.SOLICITANTE_PADRAO[campo] for campo in ("nome", "email", "telefone")})
+
     def test_routes_prepare_simulate_and_cancel(self):
         resposta = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo)
         self.assertEqual(resposta.status_code, 200, resposta.text)
