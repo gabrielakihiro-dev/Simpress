@@ -1,4 +1,5 @@
 """PowerShell do Endpoint: o comando só é inserido; nunca há Enter. Tudo com páginas falsas, sem Chrome."""
+import re
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -106,6 +107,7 @@ class AbaTerminal:
 class LinhaGrade:
     def __init__(self, pagina, nome, alt):
         self.pagina, self.nome, self.alt = pagina, nome, alt
+        self.href = f"#/uems/inventory/computers/{nome}"
 
     first = property(lambda self: self)
 
@@ -117,21 +119,47 @@ class LinhaGrade:
         return f" {self.nome} "
 
     def get_attribute(self, nome, **kw):
-        return self.alt
+        return self.href if nome == "href" else self.alt
 
     def click(self, **kw):
         self.pagina.cliques.append(("linha", self.nome))
 
 
+class LinhaPreguicosa:
+    """Como o locator do Playwright: a linha é resolvida na hora de cada ação, não quando o locator é criado."""
+
+    def __init__(self, resolver):
+        self.resolver = resolver
+
+    first = property(lambda self: self)
+
+    def locator(self, seletor):
+        return self
+
+    def __getattr__(self, nome):
+        return getattr(self.resolver(), nome)
+
+
 class LinhasDaGrade:
-    def __init__(self, pagina):
-        self.pagina = pagina
+    def __init__(self, pagina, href=None):
+        self.pagina, self.href = pagina, href
+
+    def _atuais(self):
+        return [l for l in self.pagina.linhas if self.href is None or l.href == self.href]
+
+    def _na_posicao(self, i):
+        atuais = self._atuais()
+        if i >= len(atuais):
+            raise TimeoutError("a linha não está na grade")
+        return atuais[i]
 
     def count(self):
-        return len(self.pagina.linhas)
+        return len(self._atuais())
 
     def nth(self, i):
-        return self.pagina.linhas[i]
+        return LinhaPreguicosa(lambda: self._na_posicao(i))
+
+    first = property(lambda self: LinhaPreguicosa(lambda: self._na_posicao(0)))
 
 
 class LocGrade:
@@ -152,17 +180,29 @@ class PaginaGrade:
         self.todas = [LinhaGrade(self, nome, alt) for nome, alt in hosts]
         self.linhas = self.todas
         self.aba, self.cliques, self.keyboard = aba, [], Teclado()
+        self.falhas_expect, self.sobra = 0, None  # quantas vezes a aba nova "não chega" a tempo, e a aba que aparece tarde
         pagina = self
 
         class Contexto:
             @contextmanager
             def expect_page(self, **kw):
                 yield MagicMock(value=pagina.aba)
+                if pagina.falhas_expect:
+                    pagina.falhas_expect -= 1
+                    self.pages.append(pagina.sobra)  # a aba aparece, mas depois do prazo
+                    raise TimeoutError("nenhuma aba nova no prazo")
+                self.pages.append(pagina.aba)
 
         self.context = Contexto()
+        self.context.pages = [self]
 
     def locator(self, seletor):
-        return LinhasDaGrade(self) if seletor == endpoint_lookup._LINHA else LocGrade(self, seletor)
+        if seletor == endpoint_lookup._LINHA:
+            return LinhasDaGrade(self)
+        href = re.search(r'href="([^"]+)"', seletor)
+        if seletor.startswith(endpoint_lookup._LINHA) and href:
+            return LinhasDaGrade(self, href.group(1))
+        return LocGrade(self, seletor)
 
     def filtrar(self, page, auto, coluna, valor):
         self.filtros.append(valor)
@@ -172,10 +212,22 @@ class PaginaGrade:
     filtros: list  # preenchido em abrir()
 
 
-def abrir(hosts, aba, hostname=None, modo="sistema", comando="Get-Date", usuario=None):
+def abrir(hosts, aba, hostname=None, modo="sistema", comando="Get-Date", usuario=None, preparar=None, depois_da_escolha=None):
     pagina = PaginaGrade(hosts, aba)
     pagina.filtros = []
-    with patch.object(grid, "aplicar_filtro", side_effect=pagina.filtrar), patch.object(grid, "limpar_filtro"):
+    if preparar:
+        preparar(pagina)
+    escolher = endpoint_lookup._escolher_host
+
+    def escolher_e_interferir(*a, **k):
+        escolha = escolher(*a, **k)
+        if depois_da_escolha:
+            depois_da_escolha(pagina)
+        return escolha
+
+    with patch.object(grid, "aplicar_filtro", side_effect=pagina.filtrar), patch.object(grid, "limpar_filtro"), \
+            patch.object(endpoint_lookup, "_escolher_host", side_effect=escolher_e_interferir), \
+            patch.object(automation, "_pagina_ativa_recuperacao", pagina), patch.object(automation.time, "sleep"):
         resultado = endpoint_lookup._abrir_powershell_na_grade(
             pagina, hostname or endpoint_lookup.HOSTNAME_PADRAO_POWERSHELL, bool(hostname), modo, comando, usuario)
     return resultado, pagina
@@ -228,6 +280,35 @@ class HostTests(unittest.TestCase):
         self.assertEqual(res, {"status": "not_found", "hostname": "PRNOTEX"})
         self.assertEqual(pagina.cliques, [])
         self.assertEqual(aba.preenchidos, [])
+
+
+class InterferenciaTests(unittest.TestCase):
+    GERENTE_E_POWERSHELL = [("hover", endpoint_lookup._ITEM_GERENTE), ("click", endpoint_lookup._ITEM_POWERSHELL)]
+
+    def test_row_shifted_after_choice_still_opens_the_chosen_computer(self):
+        def intruso_no_topo(pagina):
+            pagina.linhas.insert(0, LinhaGrade(pagina, "PRNOTEINTRUSO", "Ao vivo"))
+
+        aba = AbaTerminal()
+        res, pagina = abrir([("PRNOTEUMU005", "Ao vivo")], aba, depois_da_escolha=intruso_no_topo)
+        self.assertEqual((res["status"], res["hostname"]), ("inserido", "PRNOTEUMU005"))
+        self.assertEqual(pagina.cliques, [("linha", "PRNOTEUMU005"), *self.GERENTE_E_POWERSHELL])
+
+    def test_late_tab_is_closed_and_path_is_redone_with_fill_and_no_enter(self):
+        sobra = AbaTerminal()
+
+        def aba_atrasada(pagina):
+            pagina.falhas_expect, pagina.sobra = 1, sobra
+
+        aba = AbaTerminal()
+        res, pagina = abrir([("PRNOTEUMU005", "Ao vivo")], aba, preparar=aba_atrasada)
+        self.assertEqual((res["status"], res["hostname"], res["enter_enviado"]), ("inserido", "PRNOTEUMU005", False))
+        self.assertEqual(pagina.cliques, [("linha", "PRNOTEUMU005"), *self.GERENTE_E_POWERSHELL] * 2)
+        self.assertTrue(sobra.fechada)
+        self.assertFalse(aba.fechada)
+        self.assertEqual((aba.preenchidos, sobra.preenchidos), (["Get-Date"], []))
+        self.assertTrue(aba.sem_enter() and sobra.sem_enter())
+        self.assertNotIn("Enter", str(pagina.keyboard.chamadas))  # só o Escape da recuperação, na grade
 
 
 class TerminalTests(unittest.TestCase):

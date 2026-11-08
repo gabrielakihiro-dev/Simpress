@@ -183,6 +183,10 @@ Detalhes confirmados no SoftExpert real (30/10/2026, chamado `UTIC-2026-1253`): 
 
 Proibido e sem nenhum clique: **Solicitar Complemento**, **Enviar para outra equipe**, **Mais ações**, **Salvar**, **Reatribuir** e qualquer outro botão de escrita. `ROTULOS_PROIBIDOS` e o guarda de `clicar` continuam valendo para todo o restante do módulo; só os rótulos `Finalizar` e o `Enviar` do anexo são liberados, por um escopo estreito que existe somente durante `finalizar_chamado`. Finalizar é irreversível: o primeiro teste real para antes do `Finalizar` e só conclui depois do "pode finalizar" do usuário no chat. Com `confirmar_final=False` e PDF, o anexo **é enviado de verdade** (o `Enviar` do upload persiste no chamado); só o `Finalizar` fica de fora. Os testes da bancada (SoftExpert falso, Chrome headless) cobrem o fluxo; **nada disso foi executado no SoftExpert real**.
 
+### Interferência durante a leitura da lista (07/11/2026)
+
+Se a lista da central de tarefas muda por fora no meio da leitura (outro link, filtro, clique do usuário, cartão já lido que some, página que volta), a rotina volta ao mesmo link (`SOFTEXPERT_URL`) e lê tudo de novo, até 3 vezes. Esgotadas as tentativas, falha com "A lista da central de tarefas mudou durante a leitura; o resultado seria parcial" e nunca usa lista parcial. A releitura depois da pesquisa pelo filtro não recarrega (perderia o filtro) e só falha. A dica "Executar" que não aparece é refeita, porque nada foi clicado. Antes do `Finalizar`, a guarda confere também o número do chamado no cabeçalho da janela: outro número aborta sem clicar depois de ~12 s; cabeçalho ilegível não bloqueia, porque o número já foi conferido antes e a leitura do cabeçalho na visão Atendimento não foi verificada no site real. Nada disso foi executado no SoftExpert real.
+
 ### Ligação UTIC ↔ OS pela série (31/10/2026)
 
 Ao importar o Dashboard e rodar a busca, o chamado e a OS da mesma série ficam ligados nos dois sentidos, sem digitação:

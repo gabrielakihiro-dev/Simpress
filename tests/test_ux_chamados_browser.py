@@ -1,3 +1,4 @@
+import itertools
 import os
 import unittest
 from types import SimpleNamespace
@@ -51,6 +52,19 @@ class UXListTests(unittest.TestCase):
             ler_opcoes_rolaveis(lambda: sem_total, lambda _: None)
 
 
+def _hermetico(teste):
+    """Sem sinal de cancelamento antigo, cursor parado, sem esperas reais; o log fica em ``teste.logs``."""
+    teste.logs = []
+    for patch in (
+        mock.patch.object(ux_browser.automation, "verificar_cancelamento", lambda *_a: None),
+        mock.patch.object(ux_browser.automation, "obter_posicao_cursor", lambda: (0, 0)),
+        mock.patch.object(ux_browser.automation, "log", lambda _origem, mensagem: teste.logs.append(mensagem)),
+        mock.patch.object(ux_browser.automation.time, "sleep"),
+    ):
+        patch.start()
+        teste.addCleanup(patch.stop)
+
+
 class ControleFalso:
     def __init__(self, *, texto="", acao=None, opcoes=None, quantidade=1):
         self.texto = texto
@@ -89,6 +103,8 @@ class ControleFalso:
         self.acao()
 
     def evaluate(self, script):
+        if "ng-value" in script:  # leitura do problema escolhido
+            return self.valor
         if "tagName" in script:
             return self.opcoes is not None
         return [(indice, texto, bool(texto)) for indice, texto in enumerate(self.opcoes)]
@@ -113,12 +129,18 @@ class PaginaFalsa:
         self.enviados = 0
         self.fechada = False
         self.rotulo_enviar = "Enviar solicitação"
+        self.gotos = []
 
     def close(self):
         self.fechada = True
 
     def goto(self, url, **_kwargs):
+        # Navegar recarrega o formulário: volta à etapa 1 com os campos vazios.
+        self.gotos.append(url)
         self.url = url
+        self.etapa = 1
+        for controle in (self.descricao, self.problema, *self.solicitante.values()):
+            controle.valor = ""
 
     def bring_to_front(self):
         pass
@@ -232,6 +254,8 @@ class SeletorNg(ControleFalso):
         self.pagina.lista.aberta = True
 
     def evaluate(self, script):
+        if "ng-value" in script:  # leitura do problema escolhido
+            return self.pagina.problema_escolhido or ""
         return False  # NG-SELECT is not a native <select>
 
 
@@ -268,6 +292,12 @@ class PaginaPortalReal(PaginaFalsa):
     def avancar(self):
         super().avancar()
         self.backup_aberto = True
+
+    def goto(self, url, **kwargs):
+        super().goto(url, **kwargs)
+        self.problema_escolhido = None
+        self.lista.aberta = False
+        self.backup_aberto = False
 
     def get_by_label(self, nome, *, exact):
         return ControleFalso(quantidade=0)  # aria-label is the id ("nome"), never the visible label
@@ -307,6 +337,7 @@ class PortalRealTests(unittest.TestCase):
         sem_trava.start()
         self.addCleanup(sem_trava.stop)
         os.environ.pop("SIMPRESS_UX_SEM_ENVIO", None)
+        _hermetico(self)
         self.pagina = PaginaPortalReal()
         self.portal = PortalUXChrome(SimpleNamespace(pages=[self.pagina], new_page=lambda: self.pagina))
         self.perfil = {"nome": "Pessoa Fictícia", "email": "teste@example.test", "telefone": "41999990000",
@@ -341,10 +372,21 @@ class PortalRealTests(unittest.TestCase):
         self.assertEqual(self.pagina.enviados, 0)
 
     def test_list_that_keeps_changing_is_refused_instead_of_trusted(self):
-        leituras = iter([[["A"], 1], [["A", "B"], 1], [["A", "B", "C"], 1], [["A"], 1], [["A", "B"], 1], [["A", "B", "C"], 1]])
+        # A lista nunca estabiliza, nem depois de voltar ao mesmo link nas novas tentativas.
+        leituras = itertools.cycle([[["A"], 1], [["A", "B"], 1], [["A", "B", "C"], 1]])
         self.pagina.lista.evaluate = lambda script, *_a: False if "aria-setsize" in script else next(leituras)
         with self.assertRaisesRegex(ErroUX, "lista completa"):
             self.preparar()
+
+    def test_ng_select_choice_changed_after_filling_is_chosen_again_before_the_send(self):
+        modelo, _ = self.preparar()
+        self.portal.preencher("S1", modelo, "aba-opaca", "Notebook - Teclado", "Teclado com defeito.", self.perfil)
+        self.pagina.problema_escolhido = "Notebook - Mouse"  # clique acidental na lista do Chrome
+        self.portal.validar("S1", modelo, "aba-opaca")
+        self.assertEqual(self.pagina.problema_escolhido, "Notebook - Teclado")
+        self.assertEqual(self.pagina.enviados, 0)
+        self.assertEqual(self.portal.enviar("aba-opaca"), "24680")
+        self.assertEqual(self.pagina.enviados, 1)
 
 
 class ConexaoChromeTests(unittest.TestCase):
@@ -355,9 +397,12 @@ class ConexaoChromeTests(unittest.TestCase):
         playwright = mock.MagicMock()
         playwright.__enter__.return_value = pw
         with mock.patch.object(ux_browser.automation, "garantir_chrome", lambda: ordem.append("garantir")), \
+                mock.patch.object(ux_browser.automation, "_inicio_execucao", 0.0), \
                 mock.patch("playwright.sync_api.sync_playwright", return_value=playwright), \
                 ux_browser.contexto_chrome_ux() as contexto:
             self.assertEqual(contexto, "ctx")
+            # Um pedido de cancelamento deixado por outra rotina não pode interromper o chamado.
+            self.assertGreater(ux_browser.automation._inicio_execucao, 0.0)
         self.assertEqual(ordem, ["garantir", "conectar"])
 
     def test_chrome_that_cannot_start_or_connect_explains_it_without_leaking_the_cause(self):
@@ -385,6 +430,7 @@ class PortalUXChromeTests(unittest.TestCase):
         sem_trava.start()
         self.addCleanup(sem_trava.stop)
         os.environ.pop("SIMPRESS_UX_SEM_ENVIO", None)
+        _hermetico(self)
         self.pagina = PaginaFalsa()
         self.portal = PortalUXChrome(SimpleNamespace(pages=[self.pagina], new_page=lambda: self.pagina))
         self.modelo, self.opcoes = self.portal.preparar("S1", "aba-opaca")
@@ -424,12 +470,7 @@ class PortalUXChromeTests(unittest.TestCase):
             self.portal.enviar("aba-opaca")
         self.assertEqual(self.pagina.enviados, 0)
 
-    def test_changed_route_or_duplicate_option_never_writes_the_description(self):
-        rota = self.pagina.url
-        self.pagina.url = rota[:-1] + "2"
-        with self.assertRaises(ErroUX):
-            self.preencher()
-        self.pagina.url = rota
+    def test_duplicate_option_never_writes_the_description(self):
         self.pagina.problema.opcoes.append("Notebook - Teclado")
         with self.assertRaises(ErroUX):
             self.preencher()
@@ -443,3 +484,143 @@ class PortalUXChromeTests(unittest.TestCase):
         self.assertEqual(self.pagina.descricao.valor, "")
         self.assertEqual(self.pagina.enviados, 0)
 
+    def test_tab_moved_to_another_ux_link_returns_to_the_same_link_and_fills_again(self):
+        self.pagina.url = "https://ux.simpress.com.br/ng/home"  # clique acidental em outro link do UX
+        self.portal.validar("S1", self.modelo, "aba-opaca")
+        self.preencher()
+        self.assertEqual(self.pagina.gotos, [ux_browser.ORIGEM_UX + ux_browser.ROTA_INICIAL] * 2)
+        self.assertEqual(self.pagina.problema.valor, "Notebook - Teclado")
+        self.assertEqual(self.pagina.descricao.valor, "Teclado com defeito.")
+        self.assertEqual(self.portal.enviar("aba-opaca"), "24680")
+        self.assertEqual(self.pagina.enviados, 1)
+
+    def test_route_changed_while_filling_returns_to_the_same_link(self):
+        rota = self.pagina.url
+        self.pagina.url = rota[:-1] + "2"  # a aba saiu da rota gravada no window.name
+        self.preencher()
+        self.assertEqual(len(self.pagina.gotos), 2)
+        self.assertEqual(self.pagina.descricao.valor, "Teclado com defeito.")
+        self.assertEqual(self.pagina.enviados, 0)
+
+    def test_problem_changed_by_a_stray_click_is_read_back_and_chosen_again(self):
+        escolher = self.pagina.problema.select_option
+
+        def clique_acidental(*, index, **kwargs):
+            escolher(index=index, **kwargs)
+            if len(self.pagina.gotos) == 1:
+                self.pagina.problema.valor = "Impressões escuras"  # o clique acidental troca a escolha
+
+        self.pagina.problema.select_option = clique_acidental
+        self.preencher()
+        self.assertEqual(self.pagina.problema.valor, "Notebook - Teclado")
+        self.assertEqual(len(self.pagina.gotos), 2)  # voltou ao mesmo link e refez
+
+    def test_change_after_filling_is_filled_again_before_the_send(self):
+        self.preencher()
+        self.pagina.problema.valor = "Impressões escuras"
+        self.pagina.descricao.valor = "texto trocado"
+        self.portal.validar("S1", self.modelo, "aba-opaca")
+        self.assertEqual(self.pagina.problema.valor, "Notebook - Teclado")
+        self.assertEqual(self.pagina.descricao.valor, "Teclado com defeito.")
+        self.assertEqual(self.pagina.enviados, 0)
+        self.assertEqual(self.portal.enviar("aba-opaca"), "24680")
+        self.assertEqual(self.pagina.enviados, 1)
+
+    def test_form_changed_during_the_guard_never_clicks_send(self):
+        for mudar in (
+            lambda: setattr(self.pagina.descricao, "valor", "texto trocado"),
+            lambda: setattr(self.pagina.problema, "valor", "Impressões escuras"),
+            lambda: setattr(self.pagina.solicitante["Nome"], "valor", "Outra pessoa"),
+            lambda: setattr(self.pagina, "url", "https://ux.simpress.com.br/ng/home"),
+        ):
+            with self.subTest():
+                self.preencher()
+
+                def cursor_parado():
+                    mudar()  # a mudança acontece com a guarda já em andamento
+                    return (0, 0)
+
+                with mock.patch.object(ux_browser.automation, "obter_posicao_cursor", cursor_parado), \
+                        self.assertRaises(ux_browser.automation.RotinaErro):
+                    self.portal.enviar("aba-opaca")
+                self.assertEqual(self.pagina.enviados, 0)
+                self.pagina.url = ux_browser.ORIGEM_UX + ux_browser.ROTA_INICIAL
+
+    def test_send_waits_for_the_cursor_to_stop_and_clicks_once(self):
+        self.preencher()
+        posicoes = iter([(0, 0), (50, 50), (50, 50), (50, 50)])  # o mouse se move e depois para
+        with mock.patch.object(ux_browser.automation, "obter_posicao_cursor", lambda: next(posicoes)):
+            self.assertEqual(self.portal.enviar("aba-opaca"), "24680")
+        self.assertIsNone(next(posicoes, None))
+        self.assertEqual(self.pagina.enviados, 1)
+
+    def test_tab_that_already_shows_an_os_is_never_filled_again(self):
+        self.preencher()
+        self.pagina.enviar()  # clique acidental em "Enviar" direto no Chrome
+        with self.assertRaises(ErroUX):
+            self.portal.validar("S1", self.modelo, "aba-opaca")
+        self.assertEqual(len(self.pagina.gotos), 1)
+        self.assertEqual(self.pagina.enviados, 1)
+
+    def test_tab_on_another_atendimento_screen_is_never_filled_again(self):
+        self.preencher()
+        # Logo após um Enviar acidental a rota já saiu do formulário, mas o número da OS ainda não apareceu.
+        self.pagina.url = "https://ux.simpress.com.br/ng/solicitar-atendimento/sucesso"
+        with self.assertRaises(ErroUX):
+            self.portal.validar("S1", self.modelo, "aba-opaca")
+        self.assertEqual(len(self.pagina.gotos), 1)
+        self.assertEqual(self.pagina.enviados, 0)
+
+    def test_cancel_request_during_the_guard_never_clicks_and_is_a_plain_failure(self):
+        self.preencher()
+
+        def cancelar(*_a):
+            raise ux_browser.automation.RotinaCancelada()
+
+        with mock.patch.object(ux_browser.automation, "verificar_cancelamento", cancelar), \
+                self.assertRaises(ux_browser.automation.RotinaErro):
+            self.portal.enviar("aba-opaca")
+        self.assertEqual(self.pagina.enviados, 0)
+
+    def test_cancel_request_between_retries_is_a_plain_failure(self):
+        self.pagina.url = "https://ux.simpress.com.br/ng/home"
+        self.pagina.problema.opcoes.append("Notebook - Teclado")  # 409 que seria repetido
+
+        def cancelar(*_a):
+            raise ux_browser.automation.RotinaCancelada()
+
+        with mock.patch.object(ux_browser.automation, "verificar_cancelamento", cancelar), \
+                self.assertRaises(ux_browser.automation.RotinaErro):
+            self.preencher()
+        self.assertEqual(self.pagina.enviados, 0)
+
+    def test_retry_logs_only_the_failure_class_without_form_data(self):
+        preencher = self.pagina.descricao.fill
+
+        def falha_uma_vez(valor, **kwargs):
+            if len(self.pagina.gotos) == 1:
+                raise RuntimeError(f"fill({valor!r}) interceptado; Pessoa Fictícia")
+            preencher(valor, **kwargs)
+
+        self.pagina.descricao.fill = falha_uma_vez
+        self.preencher()
+        self.assertEqual(self.pagina.descricao.valor, "Teclado com defeito.")
+        self.assertTrue(self.logs)
+        self.assertFalse([m for m in self.logs if "Teclado com defeito" in m or "Pessoa Fictícia" in m])
+
+    def test_two_stray_clicks_while_opening_the_form_still_return_to_it(self):
+        pagina = PaginaFalsa()
+        ir = pagina.goto
+
+        def clique_acidental(url, **kwargs):
+            ir(url, **kwargs)
+            if len(pagina.gotos) <= 2:
+                pagina.url = "https://ux.simpress.com.br/ng/home"
+
+        pagina.goto = clique_acidental
+        portal = PortalUXChrome(SimpleNamespace(pages=[pagina], new_page=lambda: pagina))
+        with mock.patch.object(ux_browser.automation, "ux_logado", lambda _page: True), \
+                mock.patch.object(ux_browser, "ESPERA_LOGIN_S", 1):
+            modelo, _ = portal.preparar("S1", "aba-opaca")
+        self.assertEqual(modelo, "Modelo de teste")
+        self.assertEqual(len(pagina.gotos), 3)
