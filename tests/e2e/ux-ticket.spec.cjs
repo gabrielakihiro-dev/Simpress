@@ -28,6 +28,7 @@ async function prepararTela(page, ticket) {
   }));
   await page.route("**/api/ux/gerar-ticket/**", async route => {
     const etapa = new URL(route.request().url()).pathname.split("/").pop();
+    if (etapa === "solicitante") return route.fulfill({ json: SOLICITANTE });
     const corpo = route.request().postDataJSON();
     chamadas.push({ etapa, corpo });
     const [status, json] = ticket(etapa, corpo, chamadas);
