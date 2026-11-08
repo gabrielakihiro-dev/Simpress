@@ -23,6 +23,7 @@ with (
 
 from core.errors import DomainConflictError, DomainError
 from security import sessao_local
+from security.limite_taxa import LimiteTaxa
 from domains import chrome_automation
 from domains.chrome_automation import ChromeAutomationRunner, ScriptContract, read_log_chunk
 
@@ -462,6 +463,10 @@ class AutomationRouteTests(unittest.TestCase):
         patcher = patch.object(main, "_chrome_automation_runner", self.runner)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # main.app keeps one per-minute window for the whole run; tests/test_limite_taxa.py covers the cap.
+        limite = patch.object(LimiteTaxa, "exigir", lambda _self: None)
+        limite.start()
+        self.addCleanup(limite.stop)
         self.origin = f"http://127.0.0.1:{main.SERVER_PORT}"
         self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(self.client.close)

@@ -19,6 +19,7 @@ HTTP_TEST_AVAILABLE = importlib.util.find_spec("httpx") is not None
 if HTTP_TEST_AVAILABLE:
     from fastapi.testclient import TestClient
 from core.integrity import FileBusyError
+from domains.frontend_assets import CONTENT_SECURITY_POLICY
 from core.inventory_requests import InventoryUpdateMiddleware
 from security import local_requests, sessao_local
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -119,6 +120,41 @@ class LocalRequestSecurityTests(unittest.TestCase):
                 self.assertEqual(status, expected)
                 for name, value in local_requests.SECURITY_RESPONSE_HEADERS:
                     self.assertEqual(headers[name], value)
+
+    def test_api_responses_default_to_no_store_but_keep_route_cache_headers(self):
+        _, headers, _ = run_endpoint(ok_endpoint, path="/api/stats")
+        self.assertEqual(headers[b"cache-control"], b"no-store")
+        _, headers, _ = run_endpoint(ok_endpoint, path="/static/app.css", session=False)
+        self.assertNotIn(b"cache-control", headers)
+
+        async def cached(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": [(b"cache-control", b"no-cache")]})
+            await send({"type": "http.response.body", "body": b""})
+
+        _, headers, _ = run_endpoint(cached, path="/api/stats")
+        self.assertEqual(headers[b"cache-control"], b"no-cache")
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_static_html_pages_carry_the_content_security_policy(self):
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        page = client.get("/static/index.html")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.headers["content-security-policy"], CONTENT_SECURITY_POLICY)
+        self.assertNotIn("content-security-policy", client.get("/static/favicon.svg").headers)
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_validation_errors_name_the_field_without_echoing_the_input(self):
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
+                            client=("127.0.0.1", 1234),
+                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+        self.addCleanup(client.close)
+        response = client.post("/api/automacao/executar", json={"rotina": "senha-que-nao-volta"})
+        self.assertEqual(response.status_code, 422)
+        self.assertNotIn("senha-que-nao-volta", response.text)
+        detail = response.json()["detail"]
+        self.assertEqual([set(item) for item in detail], [{"campo", "msg"}])
+        self.assertEqual(detail[0]["campo"], "rotina")
 
     def test_route_headers_take_precedence_over_defaults(self):
         async def framed(scope, receive, send):
