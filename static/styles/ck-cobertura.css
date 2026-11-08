@@ -1,5 +1,6 @@
 /* Cobertura de equipamentos (F10): só layout; cores, botões, selos e tabela/cards vêm dos ck-* do cockpit. */
-.cob { display: grid; gap: 12px; }
+/* align-content: start: sem ele as linhas do grid esticam até a altura do painel e abrem vãos. */
+.cob { display: grid; gap: 12px; align-content: start; }
 .cob__alertas { display: grid; gap: 8px; }
 .cob__alertas:empty { display: none; }
 .cob__abas { flex-wrap: wrap; }
@@ -7,7 +8,8 @@
 .cob__painel[hidden] { display: none; }
 .cob__form { flex-wrap: wrap; align-items: end; gap: 8px; }
 .cob__form[hidden] { display: none; }
-.cob__check { display: inline-flex; align-items: center; gap: 6px; }
+/* overflow-wrap: normal: a célula da tabela usa anywhere, que partia "Note book" no rótulo do kit. */
+.cob__check { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: normal; }
 .cob__acoes { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; }
 .cob__selos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .cob__nota { margin: 0; font-size: 0.8125rem; color: var(--cor-texto-suave, inherit); }
