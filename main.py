@@ -2698,7 +2698,7 @@ def get_sebrae_scheduler() -> AgendadorSebrae:
 
 _dashboard_scheduler = AgendadorDashboard(
     STATE_DIR / "dashboard_agendamento.json", lambda rotina: get_chrome_automation_runner().start(rotina),
-    impedimento=lambda: "Dashboard atualizado aguardando envio; a importação automática foi impedida para preservar suas alterações."
+    impedimento=lambda: "Dashboard atualizado aguardando envio; a importação automática foi impedida para preservar suas alterações. Clique em Baixar, importar e buscar ou em Enviar ao SharePoint."
     if sebrae_novos.dashboard_saida_pendente(sebrae_novos.caminhos_padrao(STATE_DIR)) else "",
 )
 

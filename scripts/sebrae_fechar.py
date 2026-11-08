@@ -179,6 +179,12 @@ def _reenviar_pendente(context: "BrowserContext", rotinas: Any, state_dir: Path,
         if achado is None:
             raise rotinas.RotinaErro("Não há cópia pendente do Dashboard para enviar.")
         pendente, registro = achado
+        base = registro.get("base_sha256")
+        if not base or base != fin.base_importada(state_dir):
+            # Subir uma cópia montada sobre uma importação antiga apagaria o que mudou no SharePoint desde então; nada é apagado.
+            raise rotinas.RotinaErro(
+                "A cópia pendente foi gerada antes da última importação do Dashboard; reenviá-la apagaria o que mudou no SharePoint. "
+                "Use Atualizar Dashboard e Enviar ao SharePoint; a cópia pendente continua guardada.")
         with tempfile.TemporaryDirectory(prefix="dashboard-pendente-") as pasta:
             arquivo = Path(pasta) / fin.NOME_DASHBOARD
             shutil.copyfile(pendente, arquivo)

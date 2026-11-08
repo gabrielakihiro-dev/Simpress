@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
 from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths
+from domains import sebrae_novos
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
 
@@ -574,12 +575,23 @@ def conteudo_snapshot_envio(state_dir: Path, envio_id: str) -> bytes:
         return conteudo
 
 
+def base_importada(state_dir: Path) -> str:
+    """SHA-256 of the Dashboard the site last imported (``""`` when none): the base every output copy is built on."""
+    importado = sebrae_novos.ler_existentes(sebrae_novos.caminhos_padrao(state_dir).existentes)
+    return importado["sha256"] if importado else ""
+
+
 def validar_reenvio_snapshot(state_dir: Path, envio_id: str, sha256: str) -> Path:
     with lock_paths([caminho_envio(state_dir)]):
         registro = envio_do_id(state_dir, envio_id)
         if (registro["status"] != "falhou" or (registro.get("recuperacao") or {}).get("acao") != "declarar_nao_enviado"
                 or not re.fullmatch(r"[a-f0-9]{64}", sha256) or registro["sha256"] != sha256):
             raise DomainConflictError("Este ID/hash não está liberado por uma declaração de não enviado. Recarregue e confira esta cópia.")
+        base = registro.get("base_sha256")
+        if not base or base != base_importada(state_dir):
+            raise DomainConflictError(
+                "A cópia deste envio foi gerada antes da última importação do Dashboard; reenviá-la apagaria o que mudou no SharePoint. "
+                "Use Atualizar Dashboard e Enviar ao SharePoint; a cópia deste envio continua guardada.")
         return snapshot_envio(state_dir, envio_id)
 
 
@@ -621,7 +633,10 @@ def preparar_envio(state_dir: Path, conteudo: bytes, *, pendente: Optional[Path]
             atomic_write_bytes(state_dir / "sebrae_dashboard_envios" / envio / NOME_DASHBOARD, conteudo)
         except (OSError, FileBusyError, FileTransactionError) as error:
             raise DomainBusyError("Não foi possível preservar a cópia privada antes do envio. Nada foi enviado.") from error
-        _gravar_envio(state_dir, {"id": envio, "status": "preparado", "sha256": sha, "copias": copias, "limpeza_pendente": True, "snapshot": True})
+        _gravar_envio(state_dir, {
+            "id": envio, "status": "preparado", "sha256": sha, "copias": copias, "limpeza_pendente": True, "snapshot": True,
+            "base_sha256": base_importada(state_dir),
+        })
         return envio
 
 
@@ -771,7 +786,7 @@ def guardar_pendente(
         atomic_write_bytes(destino, Path(origem).read_bytes())
         atomic_write_json(destino.with_suffix(".json"), {
             "arquivo": destino.name, "criado_em": agora_iso(), "ordem_criacao": ordem, "motivo": motivo, "chamados": list(tickets),
-            "copia_sharepoint": copia_sharepoint,
+            "copia_sharepoint": copia_sharepoint, "base_sha256": base_importada(state_dir),
         })
     return destino
 

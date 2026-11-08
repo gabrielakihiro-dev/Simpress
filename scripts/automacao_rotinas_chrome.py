@@ -102,6 +102,14 @@ class EtapaInstavel(RotinaErro):
     """Falha recuperável de navegação (interferência detectada ou estado inesperado); nunca usada nos cliques irreversíveis."""
 
 
+class DashboardDivergente(RotinaErro):
+    """O Dashboard do SharePoint não é o importado; ``sha256`` identifica o arquivo baixado (a mesma divergência não adianta repetir)."""
+
+    def __init__(self, mensagem: str, sha256: str) -> None:
+        super().__init__(mensagem)
+        self.sha256 = sha256
+
+
 class RotinaCancelada(BaseException):
     """Pedido de cancelamento; deriva de BaseException para não ser engolido por ``except Exception``."""
 
@@ -1967,6 +1975,11 @@ _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloque
 DASHBOARD_BACKUPS_DIR = ROOT / "data" / "state" / "sebrae_backups"
 DASHBOARD_BACKUPS_MAX = 20
 MSG_SHAREPOINT_MUDOU = "O Dashboard no SharePoint mudou depois da importação; importe de novo."
+MSG_SHAREPOINT_PROXIMO_PASSO = (
+    " Nada foi substituído no SharePoint. Use Baixar, importar e buscar (a cópia gerada fica guardada em preservados "
+    "e o rascunho volta), depois Atualizar Dashboard e Enviar ao SharePoint."
+)
+LINHAS_NA_MENSAGEM = 5
 
 
 def _localizar_linha_do_dashboard(page: "Page"):
@@ -2085,6 +2098,10 @@ def rodar_rotina_dashboard(context: "BrowserContext") -> int:
     dados = importar_dashboard_no_site(arquivo)
     importado = dados.get("importado") or {}
     log("Dashboard", f"Dashboard importado: {importado.get('arquivo', arquivo.name)} ({importado.get('total', '?')} chamados).")
+    aviso = dados.get("aviso")
+    if aviso:  # o site guardou a cópia gerada e importou o SharePoint editado à mão
+        log("Dashboard", aviso)
+        avisar("Dashboard Sebrae", aviso)
     verificar_cancelamento()
     codigo = rodar_rotina_sebrae(context)
     print("\n[SUCESSO] Dashboard importado e busca concluída." if codigo == 0 else "\n[FALHA] A busca de chamados novos não foi concluída.", flush=True)
@@ -2195,14 +2212,41 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
         if ref is not None
     ]
     if not referencias:
-        raise RotinaErro(MSG_SHAREPOINT_MUDOU)
+        # sem cópia para comparar não há motivo a informar
+        raise DashboardDivergente(MSG_SHAREPOINT_MUDOU + MSG_SHAREPOINT_PROXIMO_PASSO, hash_baixado)
     try:
         valores = valores_dos_chamados(conteudo)
-        igual = any(valores_dos_chamados(ref) == valores for ref in referencias)
+        valores_das_referencias = [valores_dos_chamados(ref) for ref in referencias]
     except DashboardInvalido as erro:
         raise RotinaErro(f"Não consegui conferir o Dashboard do SharePoint: {erro}") from erro
-    if not igual:
-        raise RotinaErro(MSG_SHAREPOINT_MUDOU)
+    if valores not in valores_das_referencias:
+        # explica pela cópia mais próxima do baixado (a enviada pode ser anterior à importada)
+        motivo = _motivo_da_divergencia(valores, valores_das_referencias)
+        raise DashboardDivergente(f"{MSG_SHAREPOINT_MUDOU} {motivo}{MSG_SHAREPOINT_PROXIMO_PASSO}", hash_baixado)
+
+
+def _motivo_da_divergencia(baixado: dict, referencias: list) -> str:
+    """Por que o baixado difere da referência mais próxima (linha -> valores); só números de linha, nunca o conteúdo dos chamados."""
+    from collections import Counter
+
+    if any(Counter(baixado.values()) == Counter(referencia.values()) for referencia in referencias):
+        return "Só a ordem das linhas mudou (filtro/ordenação no Excel)."
+
+    def sem_par(linhas: dict, outras: dict) -> list:
+        # linhas sem igual no outro lado, por conteúdo e sem depender da posição (uma ordenação mudaria todas)
+        restante = Counter(outras.values())
+        sobras = []
+        for numero in sorted(linhas):
+            if restante[linhas[numero]] > 0:
+                restante[linhas[numero]] -= 1
+            else:
+                sobras.append(numero)
+        return sobras
+
+    linhas = min(((sem_par(baixado, ref) or sem_par(ref, baixado)) for ref in referencias), key=len)
+    resto = len(linhas) - LINHAS_NA_MENSAGEM
+    lista = ", ".join(str(numero) for numero in linhas[:LINHAS_NA_MENSAGEM])
+    return f"Linhas diferentes da importação: {lista}{f' (+{resto})' if resto > 0 else ''}."
 
 
 def guardar_backup_do_dashboard(baixado: Path) -> Path:
@@ -2314,17 +2358,25 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         duplicar_dashboard_na_pasta(page)
         verificar_cancelamento()
 
+        divergencia_anterior: list = []  # sha256 do download que já reprovou na conferência
+
         def _baixar_e_conferir() -> Path:
             # Baixar e conferir formam uma única etapa: nada irreversível acontece aqui (só leitura),
             # então um download corrompido/desincronizado pela interferência do mouse (inclusive o
             # incidente real: a conferência reprovou um arquivo bom) refaz as duas do zero em vez de
-            # abortar. Uma mudança real no SharePoint continua reprovando em toda tentativa, e a
-            # mensagem original (MSG_SHAREPOINT_MUDOU, sem alteração) chega ao usuário do mesmo jeito.
+            # abortar. Se o novo download reprova com o MESMO conteúdo (sha256) do anterior, a mudança
+            # no SharePoint é real: repetir não muda nada e a rotina para na 2ª tentativa, com a
+            # mensagem original (MSG_SHAREPOINT_MUDOU no início) e o motivo.
             try:
                 voltar_para_pasta_dashboard(page)
                 baixado = baixar_dashboard_da_pasta(page)
                 conferir_dashboard_do_sharepoint(baixado)
                 return baixado
+            except DashboardDivergente as erro:
+                if divergencia_anterior == [erro.sha256]:
+                    raise RotinaErro(str(erro)) from erro
+                divergencia_anterior[:] = [erro.sha256]
+                raise EtapaInstavel(str(erro)) from erro
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
