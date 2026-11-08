@@ -451,7 +451,7 @@ def _chave_da_linha(linha: _Linha, compartilhadas: Sequence[str]) -> Tuple[int, 
     bruto = linha.celulas.get("C", "")
     valor = _valor_celula(bruto, compartilhadas)  # raw text: Excel compares the real spaces
     achado = _CELULA.fullmatch(bruto)
-    return chave_coluna_c(valor, bool(achado) and _atributos(achado.group(2)).get("t", "n") == "n")
+    return chave_coluna_c(valor, achado is not None and _atributos(achado.group(2)).get("t", "n") == "n")
 
 
 def _assinatura(linha: _Linha) -> Tuple[Tuple[str, str], ...]:
@@ -508,7 +508,10 @@ def _ordenar(pacote: _Pacote, linhas: Mapping[int, _Linha], substituicoes: Mappi
     compartilhadas = pacote.compartilhadas
     finais = dict(linhas)
     for numero, bruto in substituicoes.items():
-        finais[numero] = replace(_linha_de(_LINHA.fullmatch(bruto)), inicio=linhas[numero].inicio, fim=linhas[numero].fim)
+        achado = _LINHA.fullmatch(bruto)
+        if achado is None:
+            raise GravacaoInvalida(f"A linha {numero} gravada não pôde ser lida para ordenar; nada foi entregue.")
+        finais[numero] = replace(_linha_de(achado), inicio=linhas[numero].inicio, fim=linhas[numero].fim)
     dados = [n for n in sorted(finais) if n >= 2 and _tem_dado(finais[n], compartilhadas)]
     if not dados:
         return _Ordem(substituicoes, {}, 0, Counter())
@@ -741,7 +744,7 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
     faixa = range(2, ordem.ultimo + 1)
     if any(n not in linhas for n in faixa) or Counter(_assinatura(linhas[n]) for n in faixa) != ordem.esperado:
         raise GravacaoInvalida("As linhas da cópia não conferem com as originais depois de ordenar; nada foi entregue.")
-    if any(int(re.match(r'<c r="[A-Z]+(\d+)"', c).group(1)) != n for n in faixa for c in linhas[n].celulas.values()):
+    if any((ref := re.match(r'<c r="[A-Z]+(\d+)"', c)) is None or int(ref.group(1)) != n for n in faixa for c in linhas[n].celulas.values()):
         raise GravacaoInvalida("Uma célula da cópia ficou na linha errada depois de ordenar; nada foi entregue.")
     chaves = [_chave_da_linha(linhas[n], pacote.compartilhadas) for n in faixa]
     if any(a > b for a, b in zip(chaves, chaves[1:])):

@@ -193,7 +193,7 @@ def acompanhar_chaves(state_dir: Path, mapa: Mapping[str, Optional[str]]) -> Lis
         with lock_paths([arquivo]):
             dados = _carregar(state_dir)
             presentes = [antiga for antiga in mapa if antiga in dados]
-            movem = {antiga: mapa[antiga] for antiga in presentes if mapa[antiga] not in (None, antiga)}
+            movem: Dict[str, str] = {antiga: nova for antiga in presentes if (nova := mapa[antiga]) is not None and nova != antiga}
             sem_rastro = [antiga for antiga in presentes if mapa[antiga] is None]
             avancou = True
             while avancou:  # a destination that holds an entry staying put blocks the move; the blocked one stays too
