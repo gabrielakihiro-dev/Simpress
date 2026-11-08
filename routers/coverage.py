@@ -16,13 +16,14 @@ Idempotência de ``registrar-transferencia`` pela ``chave`` da movimentação: p
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from core.integrity import FileBusyError, FileTransactionError
 from domains import coverage
@@ -35,6 +36,8 @@ from routers.transfer_history import (
     build_record,
 )
 from routers.transfers import TransferenciaPayload
+
+logger = logging.getLogger(__name__)
 
 MENSAGEM_ILEGIVEL = "O estado da cobertura está ilegível; os dados foram preservados e nada foi gravado."
 
@@ -68,21 +71,21 @@ class _Corpo(BaseModel):
 class DemandaPayload(_Corpo):
     data: str = Field(max_length=10)
     cidade: str = Field(max_length=80)
-    quantidade: int
+    quantidade: StrictInt
     perfil: str = Field("", max_length=80)
-    monitor: bool = False
+    monitor: StrictBool = False
     observacao: str = Field("", max_length=500)
 
 
 class RevPayload(_Corpo):
-    rev: int
+    rev: StrictInt
 
 
 class DisponibilidadePayload(_Corpo):
     serie: str = Field(max_length=60)
     estado: Literal["disponivel", "em_manutencao", "indisponivel"]
     cidade: Optional[str] = Field(None, max_length=80)
-    rev: Optional[int] = None
+    rev: Optional[StrictInt] = None
 
 
 class DevolucaoPayload(_Corpo):
@@ -93,7 +96,7 @@ class DevolucaoPayload(_Corpo):
 
 
 class ReprogramarPayload(_Corpo):
-    rev: int
+    rev: StrictInt
     data_prevista: str = Field(max_length=10)
 
 
@@ -101,30 +104,30 @@ class ReservaPayload(_Corpo):
     demanda_id: str = Field(max_length=64)
     serie: Optional[str] = Field(None, max_length=60)
     devolucao_id: Optional[str] = Field(None, max_length=64)
-    manutencao_conferida: bool = False
+    manutencao_conferida: StrictBool = False
 
 
 class KitPayload(_Corpo):
     item: Literal["notebook", "carregador", "monitor", "preparacao"]
-    marcado: bool
-    rev: int
+    marcado: StrictBool
+    rev: StrictInt
 
 
 class MovimentacaoPayload(_Corpo):
     reserva_id: str = Field(max_length=64)
-    rev: int
+    rev: StrictInt
     tipo: Literal["transporte", "local"] = "transporte"
 
 
 class RegistrarTransferenciaPayload(_Corpo):
     payload: TransferenciaPayload
     chave: str = Field(min_length=1, max_length=64)
-    rev: int
+    rev: StrictInt
 
 
 class VincularHistoricoPayload(_Corpo):
     historico_id: str = Field(min_length=1, max_length=64)
-    rev: int
+    rev: StrictInt
 
 
 class DivergenciaPayload(_Corpo):
@@ -135,7 +138,7 @@ class DivergenciaPayload(_Corpo):
 
 class EstadoMovimentacaoPayload(_Corpo):
     estado: Literal["coletada", "em_transito", "recebida", "recebida_com_divergencia", "cancelada"]
-    rev: int
+    rev: StrictInt
     recebido_por: Optional[str] = Field(None, max_length=120)
     data: Optional[str] = Field(None, max_length=10)
     comprovante: Optional[str] = Field(None, max_length=500)
@@ -145,7 +148,7 @@ class EstadoMovimentacaoPayload(_Corpo):
 class ResolverDivergenciaPayload(_Corpo):
     resolucao: Literal["aceitar", "corrigir", "cancelar"]
     serie_recebida: Optional[str] = Field(None, max_length=60)
-    rev: int
+    rev: StrictInt
 
 
 Transicao = Callable[[coverage.Estado, Contexto], Tuple[coverage.Estado, coverage.Registro]]
@@ -165,8 +168,10 @@ def _falhar(error: BaseException) -> NoReturn:
         }) from error
     if eh_ilegivel(error):
         raise HTTPException(status_code=503, detail={"codigo": "estado_ilegível", "mensagem": MENSAGEM_ILEGIVEL}) from error
+    # O texto da exceção pode ter caminho local: fica só no log do servidor.
+    logger.error("Falha ao gravar a cobertura.", exc_info=error)
     raise HTTPException(status_code=500, detail={
-        "codigo": "falha_gravacao", "mensagem": f"Falha ao gravar a cobertura: {error}",
+        "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
     }) from error
 
 

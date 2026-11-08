@@ -7,12 +7,14 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core.integrity import FileTransactionError
 from domains.coverage import Manutencao
 from routers.coverage import CoverageServices, create_coverage_router
 
@@ -252,6 +254,38 @@ class CoverageRouterTests(unittest.TestCase):
     def test_corpo_com_campo_desconhecido_e_recusado(self):
         resposta = self.client.post("/api/cobertura/reservas/res-x/cancelar", json={"rev": 1, "extra": True})
         self.assertEqual(resposta.status_code, 422)
+
+    def test_tipos_estritos_sem_coercao(self):
+        base = {"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 3}
+        self.post("/api/cobertura/demandas", {**base, "quantidade": "3"}, 422)
+        self.post("/api/cobertura/demandas", {**base, "quantidade": True}, 422)
+        self.post("/api/cobertura/demandas", {**base, "monitor": "true"}, 422)
+        self.post("/api/cobertura/demandas", {**base, "monitor": 1}, 422)
+        demanda = self.post("/api/cobertura/demandas", {**base, "monitor": True})
+        self.assertEqual(demanda["rev"], 1)
+        # true virava rev 1 e cancelava; "1" também.
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": True}, 422)
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": "1"}, 422)
+        self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": "1"}, 422)
+        self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": None})
+        # O corpo é validado antes da rota: ids inexistentes bastam para provar o 422.
+        self.post("/api/cobertura/reservas", {"demanda_id": "x", "manutencao_conferida": "true"}, 422)
+        self.post("/api/cobertura/reservas/x/kit", {"item": "monitor", "marcado": 1, "rev": 1}, 422)
+        self.post("/api/cobertura/movimentacoes/x/vincular-historico", {"historico_id": "h", "rev": "1"}, 422)
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": demanda["rev"]})
+
+    def test_falha_de_gravacao_500_nao_expoe_a_excecao(self):
+        erro = FileTransactionError("SEGREDO C:/Users/pessoa/arquivo.json")
+        with mock.patch("routers.coverage.CoberturaStore.escrever", side_effect=erro), \
+                self.assertLogs("routers.coverage", level="ERROR") as logs:
+            resposta = self.client.post("/api/cobertura/demandas", json={"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 1})
+        self.assertEqual(resposta.status_code, 500)
+        self.assertEqual(resposta.json()["detail"], {
+            "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
+        })
+        self.assertNotIn("SEGREDO", resposta.text)
+        self.assertNotIn("pessoa", resposta.text)
+        self.assertIn("FileTransactionError", "\n".join(logs.output))
 
 
 if __name__ == "__main__":
