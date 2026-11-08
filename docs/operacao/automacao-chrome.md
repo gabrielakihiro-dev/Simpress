@@ -79,9 +79,9 @@ Passos nomeados (cada um com guarda de rota antes e depois):
    devolve `endereco_ambiguo` com a lista e o usuário escolhe no modal (`/escolher-endereco`). Nunca se infere.
 5. `CNPJ de instalação` (`input#atualizarCnpjInstalacao`) = CNPJ da entrega; `CNPJ de faturamento`
    (`input#atualizarCnpjFaturamento`) = `75.110.585/0001-00`; ambos relidos por dígitos.
-6. Registro: o único `textarea[placeholder="Nos conte, em detalhes, o que houve."]` recebe o texto de Deslocamento
-   editado no modal (`Contato no local:` vem com Destinatário - Celular; linha terminada em `:` ou campo entre
-   colchetes bloqueia, 422).
+6. Registro: o único `textarea[placeholder="Nos conte, em detalhes, o que houve."]` recebe o texto escrito
+   no modal, que já vem com o Texto para Transporte da F2 (`montarTextoSolicitacaoTransporte`, a mesma função do
+   botão `Texto para Transporte`) e é editável (vazio, linha terminada em `:` ou campo entre colchetes bloqueia, 422).
 7. `Anexo`: `set_input_files` em memória no único `input[type="file"]` (nome da planilha, MIME xlsx, até 5 MB), sem
    diálogo de arquivo e sem clicar em `Anexar documento`; pronto quando o nome aparece uma vez.
 8. Solicitante (`input#nome`, `input#email`, `input#telefone`) com os valores do modal (padrão `SOLICITANTE_PADRAO`,

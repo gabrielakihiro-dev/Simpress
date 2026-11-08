@@ -29,8 +29,13 @@ function fakeElement(id = "") {
 }
 
 const PADRAO = { nome: "Pessoa Padrão", email: "padrao@exemplo.com", telefone: "(41) 90000-0000" };
+const TEXTO_TRANSPORTE = [
+  "Prezados,", "", "Solicito o transporte do equipamento da unidade do Sebrae de Origem/PR para a unidade do Sebrae de Destino/PR", "",
+  "O transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.", "",
+  "Endereço para Retirada: Rua A, 1", "Endereço para Entrega: Rua B, 2",
+].join(String.fromCharCode(10));
 
-function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
+function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte = "" } = {}) {
   const elementos = new Map();
   const listeners = {};
   const el = id => {
@@ -63,6 +68,8 @@ function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
     fecharModalAcessivel: id => efeitos.fechados.push(id),
     confirmarAcao: async opcoes => { efeitos.confirmacoes.push(opcoes); return confirmar; },
     showToast: (mensagem, tipo) => efeitos.toasts.push({ mensagem, tipo }),
+    // transfer-form.js publishes this; it returns { aviso } when the F2 addresses are missing.
+    montarTextoSolicitacaoTransporte: () => textoTransporte ? { texto: textoTransporte } : { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." },
   };
   el("select-unidade-destino").value = "7";
   const acoes = createUxTicket({ app, appState: { unidadesList: [{ id: 7, cep }] } });
@@ -77,7 +84,7 @@ const esperar = () => new Promise(resolve => setImmediate(resolve));
 const etapas = efeitos => efeitos.chamadas.map(([etapa]) => etapa);
 
 test("Gerar Planilha opens the modal and prepares with the payload plus the delivery CEP", async () => {
-  const h = criar({ responder: () => PREPARADO });
+  const h = criar({ responder: () => PREPARADO, textoTransporte: TEXTO_TRANSPORTE });
   await h.gerar();
   assert.deepEqual(h.efeitos.abertos, [["modal-ticket-ux", "#ux-ticket-cancelar", "fecharTicketUX"]]);
   assert.deepEqual(h.efeitos.chamadas, [["preparar", { ...PAYLOAD, entrega_cep: "80000-000" }]]);
@@ -85,20 +92,33 @@ test("Gerar Planilha opens the modal and prepares with the payload plus the deli
   assert.equal(h.el("ux-ticket-modelo").textContent, "Modelo X");
   assert.equal(h.el("ux-ticket-endereco").textContent, "Rua Um, 1");
   assert.equal(h.el("ux-ticket-nome").value, SOLICITANTE.nome);
-  // Deslocamento text with "Contato no local:" filled from the delivery contact and phone.
-  assert.match(h.el("ux-ticket-registro").value, /^Prezados,\n/);
-  assert.match(h.el("ux-ticket-registro").value, /\nContato no local: Maria Teste - \(41\) 3333-0000\n/);
+  // Default Registro = the F2 "Texto para Transporte" (same function as the button); Deslocamento stays in the Home (F1).
+  assert.equal(h.el("ux-ticket-registro").value, TEXTO_TRANSPORTE);
   assert.equal(h.el("ux-ticket-erro").hidden, true);
+  assert.equal(h.el("ux-ticket-simular").disabled, false);
+  assert.equal(h.el("ux-ticket-motivo").hidden, true);
+});
+
+test("the default Registro reaches /enviar unchanged when the user does not edit it", async () => {
+  const h = criar({ responder: (etapa, corpo) => etapa === "preparar" ? PREPARADO : { status: "preenchido" }, textoTransporte: TEXTO_TRANSPORTE });
+  await h.gerar();
+  await h.acoes.executarTicketUX(false);
+  assert.equal(h.efeitos.chamadas.at(-1)[0], "enviar");
+  assert.equal(h.efeitos.chamadas.at(-1)[1].descricao, TEXTO_TRANSPORTE);
 });
 
 test("a Registro line ending in ':' blocks Simular and Finalizar with a visible reason", async () => {
   const h = criar({ responder: () => PREPARADO });
   await h.gerar();
-  // "Colaborador(a) Novo(a):" and the other template lines are still empty.
+  // Without the F2 addresses the transport text is not built: the Registro starts empty and blocked.
   assert.equal(h.el("ux-ticket-simular").disabled, true);
   assert.equal(h.el("ux-ticket-finalizar").disabled, true);
-  assert.match(h.el("ux-ticket-motivo").textContent, /terminam com “:”/);
+  assert.equal(h.el("ux-ticket-motivo").textContent, "Preencha o Registro.");
   assert.equal(h.el("ux-ticket-motivo").hidden, false);
+  h.el("ux-ticket-registro").value = "Prezados,\nColaborador(a) Novo(a):";
+  h.acoes.atualizarTicketUX();
+  assert.equal(h.el("ux-ticket-simular").disabled, true);
+  assert.match(h.el("ux-ticket-motivo").textContent, /terminam com “:”/);
   h.el("ux-ticket-registro").value = REGISTRO_OK;
   h.acoes.atualizarTicketUX();
   assert.equal(h.el("ux-ticket-simular").disabled, false);
@@ -296,6 +316,8 @@ test("the default solicitante is shown at once, stays editable while preparing a
   assert.equal(h.el("ux-ticket-email").value, PADRAO.email);
   assert.equal(h.el("ux-ticket-telefone").value, PADRAO.telefone);
   assert.equal(h.el("ux-ticket-formulario").disabled, false);
+  h.el("ux-ticket-registro").value = ["Prezados,", "Colaborador(a) Novo(a):"].join(String.fromCharCode(10));
+  h.acoes.atualizarTicketUX();
   assert.equal(h.el("ux-ticket-registro").attrs["aria-invalid"], "true");
   assert.equal(h.el("ux-ticket-simular").disabled, true);
   h.el("ux-ticket-email").value = "outra@exemplo.com";
@@ -346,14 +368,17 @@ test("closing is ignored while the final submission is in flight", async () => {
   assert.equal(h.el("ux-ticket-cancelar").disabled, false);
 });
 
-test("the modal markup keeps the visible alert and the Deslocamento tab and old F2 buttons are gone", () => {
+test("the modal markup keeps the visible alert; Deslocamento is the Home default and Texto para Transporte is in F2", () => {
   assert.match(html, /<p id="ux-ticket-erro"[^>]*role="alert"/);
   // The "Solicitante" title spans the two-column grid, so each label stays next to its field.
   assert.match(html, /<p id="ux-ticket-solicitante-titulo" class="[^"]*ux-chamado-solicitante__titulo/);
   assert.match(html, /<p id="ux-ticket-motivo" class="ux-ticket-aviso"/);
   assert.match(html, /id="modal-ticket-ux"/);
-  assert.doesNotMatch(html, /deslocamento/i);
-  assert.doesNotMatch(html, /btn-copiar-resumo-cockpit|gerarTextoSolicitacaoTransporte|modal-texto-transporte/);
-  assert.doesNotMatch(html, />\s*Texto para Transporte\s*</);
-  assert.match(html, /aria-selected="true"[^>]*id="pill-chamado-teclado-mouse"/);
+  // Restored on 08/11/2026 at the user's request (the 07/11 migration to the ticket Registro was undone).
+  assert.match(html, /aria-selected="true"[^>]*id="pill-chamado-deslocamento"/);
+  assert.match(html, /id="texto-chamado-deslocamento"[^>]*>Prezados,/);
+  assert.match(html, /data-on-click="gerarTextoSolicitacaoTransporte"/);
+  assert.match(html, /id="modal-texto-transporte"/);
+  // Copiar texto stays out of the F2 aside (not requested back).
+  assert.doesNotMatch(html, /btn-copiar-resumo-cockpit/);
 });

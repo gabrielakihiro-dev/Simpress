@@ -14,6 +14,8 @@ const PREPARADO = {
   opcoes_endereco: [], cnpj_instalacao: UNIDADE.cnpj, cnpj_faturamento: "75.110.585/0001-00",
   arquivo: "Transferencia_LENTO.xlsx", solicitante: SOLICITANTE, ultimo_envio: null,
 };
+const TRANSPORTE_INICIO = /^Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de .+ para a unidade do Sebrae de Cidade Teste/;
+const TRANSPORTE_ENDERECOS = /\nEndereço para Retirada: \S.*\nEndereço para Entrega: Rua Fictícia, 100/;
 const REGISTRO_OK = "Prezados,\n\nSolicito o deslocamento de um técnico.\n\nContato no local: Maria Teste\nColaborador(a) Novo(a): Fulano\nData de Instalação: 10/11/2026\nHorário da Instalação: 09h";
 
 async function prepararTela(page, ticket) {
@@ -81,7 +83,10 @@ test("Gerar Planilha opens the ticket; an ambiguous address needs a choice; Simu
   expect(chamadas[0].corpo).not.toHaveProperty("conferido");
   await expect(modal.getByRole("status")).toContainText("Escolha o endereço");
   const registro = modal.getByLabel("Registro");
-  await expect(registro).toHaveValue(/Contato no local: Maria Teste - \(41\) 3333-0000/);
+  // Default Registro = the F2 "Texto para Transporte" (same function as the button); Deslocamento stays in the Home (F1).
+  await expect(registro).toHaveValue(TRANSPORTE_INICIO);
+  await expect(registro).toHaveValue(TRANSPORTE_ENDERECOS);
+  const textoTransporte = await registro.inputValue();
   await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
   await semRolagemHorizontal(page);
   // Layout only (not a visual review): the open modal fits 320 to 2560 px in dark mode with reduced motion.
@@ -104,7 +109,12 @@ test("Gerar Planilha opens the ticket; an ambiguous address needs a choice; Simu
   await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
   expect(chamadas[1]).toEqual({ etapa: "escolher-endereco", corpo: { session_id: SESSION, serial: "LENTO", endereco: opcoes[1] } });
 
-  // The template still has lines ending in ":" (Colaborador, Data, Horário): blocked with a visible reason.
+  // The default text is valid; an empty Registro, or one with a line ending in ":", stays blocked with a visible reason.
+  await expect(simular).toBeEnabled();
+  await registro.fill("");
+  await expect(simular).toBeDisabled();
+  await expect(modal.locator("#ux-ticket-motivo")).toHaveText("Preencha o Registro.");
+  await registro.fill("Prezados,\nColaborador(a) Novo(a):");
   await expect(simular).toBeDisabled();
   await expect(modal.locator("#ux-ticket-motivo")).toContainText("terminam com “:”");
   await registro.fill(REGISTRO_OK);
@@ -160,4 +170,31 @@ test("ux_tentativas_esgotadas on Simular shows its detail; Cancelar calls /cance
   await modal.getByRole("button", { name: "Cancelar" }).click();
   await expect(modal).toBeHidden();
   await expect.poll(() => chamadas.at(-1)).toEqual({ etapa: "cancelar", corpo: { session_id: SESSION } });
+});
+
+test("the unedited default Registro is the descricao sent to the UX ticket", async ({ page }) => {
+  const chamadas = await prepararTela(page, (etapa, corpo) => [200, etapa === "preparar" ? PREPARADO : (corpo.enviar ? { status: "enviado", ticket: "1" } : { status: "preenchido" })]);
+  const modal = await gerarPlanilha(page);
+  await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+  const registro = modal.getByLabel("Registro");
+  await expect(registro).toHaveValue(TRANSPORTE_ENDERECOS);
+  const textoTransporte = await registro.inputValue();
+  // Same function the F2 "Texto para Transporte" button uses.
+  expect(await page.evaluate(() => window.montarTextoSolicitacaoTransporte().texto)).toBe(textoTransporte);
+  await modal.getByRole("button", { name: "Simular preenchimento" }).click();
+  await expect(modal.getByRole("status")).toContainText("Nenhum ticket foi enviado");
+  expect(chamadas.at(-1)).toEqual({ etapa: "enviar", corpo: expect.objectContaining({ enviar: false, descricao: textoTransporte }) });
+});
+
+test("Texto para Transporte (F2) fills the request text with the pickup and delivery addresses", async ({ page }) => {
+  const chamadas = await prepararTela(page, () => [200, PREPARADO]);
+  await page.getByRole("button", { name: "Texto para Transporte" }).click();
+  const texto = page.locator("#textarea-texto-transporte");
+  await expect(page.locator("#modal-texto-transporte")).toBeVisible();
+  await expect(texto).toBeFocused();
+  await expect(texto).toHaveValue(/^Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de .+ para a unidade do Sebrae de Cidade Teste/);
+  await expect(texto).toHaveValue(/\nEndereço para Retirada: \S.*\nEndereço para Entrega: Rua Fictícia, 100/);
+  expect(chamadas).toEqual([]); // the text is local: no UX ticket call
+  await page.getByRole("button", { name: "Fechar texto de solicitação" }).click();
+  await expect(page.locator("#modal-texto-transporte")).toBeHidden();
 });
