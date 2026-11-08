@@ -46,10 +46,11 @@ COLUNA_SERIE = "numero de serie"
 COLUNA_NOME = "nome do computador"
 COLUNA_USUARIOS = "usuarios logados"
 HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
-URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
 CONFIRMACAO_FILTRO_S = 25
 ATRASO_DIGITACAO_MS = 100
+# Curto de propósito: se a caixa sumiu (clique acidental), falha logo e a etapa refaz, em vez de esperar 30 s.
+ESPERA_CAMPO_MS = 5000
 
 JS_LER_GRADE = """
 () => {
@@ -359,6 +360,29 @@ def preparar_grade(page: "Page", automacao: ModuleType) -> None:
     )
 
 
+SELETOR_MODO_TODOS = 'input[type="radio"][value="InvAllComputersSummary"]'
+
+
+def modo_todos_ativo(page: "Page") -> bool:
+    todos = page.locator(SELETOR_MODO_TODOS).first
+    return bool(todos.count()) and todos.is_checked(timeout=5000)
+
+
+def garantir_modo_todos(page: "Page", automacao: ModuleType) -> None:
+    """Um clique acidental (ex.: 'Computadores verificados') troca a visão e some com a coluna de série:
+    volta a 'Todos os computadores' antes de pesquisar, sem recarregar a página."""
+    if modo_todos_ativo(page):
+        return
+    if not page.locator(SELETOR_MODO_TODOS).count():
+        automacao.log(ORIGEM, "[AVISO] A aba saiu da grade de computadores; voltando ao mesmo endereço e retomando.")
+        restaurar_grade(page, automacao)
+        return
+    automacao.log(ORIGEM, "[AVISO] A grade saiu de 'Todos os computadores'; voltando a ela e retomando a pesquisa.")
+    automacao.selecionar_todos_computadores(page)
+    automacao.confirmar_modo_todos(page)
+    preparar_grade(page, automacao)
+
+
 def restaurar_grade(page: "Page", automacao: ModuleType) -> None:
     """Volta à grade "Todos os computadores", sem filtros, pronta para a próxima pesquisa."""
     page.goto(automacao.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
@@ -383,16 +407,21 @@ def _localizar_campo(page: "Page", cabecalho: dict) -> "Locator | None":
 
 def _valor_do_campo(page: "Page", cabecalho: dict) -> str:
     campo = _localizar_campo(page, cabecalho)
-    return campo.input_value() if campo else ""
+    try:
+        return campo.input_value(timeout=ESPERA_CAMPO_MS) if campo else ""
+    except Exception:
+        return ""  # a caixa sumiu entre a contagem e a leitura (barra fechada por um clique).
 
 
-def _abrir_campo_filtro(page: "Page", automacao: ModuleType, coluna: str) -> "Locator":
-    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna.
+def _preencher_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str) -> None:
+    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e digita na caixa da coluna.
 
     O cabeçalho é lido só depois de a barra abrir: ao aparecer, ela pode deslocar as colunas, e uma posição
-    lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados)."""
-    def _etapa() -> "Locator":
+    lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados).
+    Cada tentativa confere antes a visão da grade: um clique do usuário no meio fecha a barra ou troca a visão."""
+    def _etapa() -> None:
         try:
+            garantir_modo_todos(page, automacao)
             if not _caixas_de_filtro(page).count():
                 page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
                 automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
@@ -408,13 +437,13 @@ def _abrir_campo_filtro(page: "Page", automacao: ModuleType, coluna: str) -> "Lo
                 campo = _localizar_campo(page, atual) if atual else None
             if campo is None:
                 raise automacao.EtapaInstavel(f"A caixa de filtro da coluna '{coluna}' não foi encontrada.")
-            return campo
+            _digitar(campo, valor)
         except automacao.EtapaInstavel:
             raise
         except Exception as erro:
-            raise automacao.EtapaInstavel(str(erro)) from erro
+            raise automacao.EtapaInstavel(str(erro).strip().splitlines()[0] if str(erro).strip() else type(erro).__name__) from erro
 
-    return automacao.etapa_resiliente(_etapa, f"Abrir a barra de pesquisa da coluna '{coluna}' no Endpoint")
+    automacao.etapa_resiliente(_etapa, f"Pesquisar na coluna '{coluna}' do Endpoint")
 
 
 def _limpar_caixas_preenchidas(page: "Page") -> None:
@@ -423,20 +452,24 @@ def _limpar_caixas_preenchidas(page: "Page") -> None:
     caixas = _caixas_de_filtro(page)
     for i in range(caixas.count()):
         caixa = caixas.nth(i)
-        if caixa.input_value():
-            _digitar(caixa, "")
+        try:
+            if caixa.input_value(timeout=ESPERA_CAMPO_MS):
+                _digitar(caixa, "")
+        except Exception:
+            pass  # a barra fechou (clique do usuário): a próxima tentativa reabre a grade do zero.
+
 
 
 def _digitar(campo: "Locator", valor: str) -> None:
     # fill() troca o valor sem os eventos de teclado que o componente Ember usa para guardar o texto
     # do filtro; digitar tecla a tecla (depois de limpar com Ctrl+A/Backspace) é o que ele reconhece.
-    campo.click()
-    campo.press("Control+A")
-    campo.press("Backspace")
+    campo.click(timeout=ESPERA_CAMPO_MS)
+    campo.press("Control+A", timeout=ESPERA_CAMPO_MS)
+    campo.press("Backspace", timeout=ESPERA_CAMPO_MS)
     if valor:
         digitar = getattr(campo, "press_sequentially", None) or campo.type
-        digitar(valor, delay=ATRASO_DIGITACAO_MS)
-    campo.press("Enter")
+        digitar(valor, delay=ATRASO_DIGITACAO_MS, timeout=ESPERA_CAMPO_MS + len(valor) * ATRASO_DIGITACAO_MS)
+    campo.press("Enter", timeout=ESPERA_CAMPO_MS)
 
 
 def _aguardar_grade_estavel(page: "Page", automacao: ModuleType, aceitar: Callable[[dict], bool], limite_s: float) -> dict | None:
@@ -446,7 +479,8 @@ def _aguardar_grade_estavel(page: "Page", automacao: ModuleType, aceitar: Callab
     while time.time() < fim:
         automacao.verificar_cancelamento()
         grade = ler_grade(page)
-        if not grade["carregando"] and aceitar(grade):
+        # Em outra visão (ex.: 'Computadores verificados') um "não encontrado" seria falso: nunca confirma.
+        if not grade["carregando"] and modo_todos_ativo(page) and aceitar(grade):
             if anterior is not None:
                 return grade
             anterior = grade
@@ -461,8 +495,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
     (ou grade vazia confirmada). Sem confirmação levanta ``RotinaErro``; nada é decidido."""
     alvo = normalizar(valor)
     for tentativa in (1, 2):
-        campo = _abrir_campo_filtro(page, automacao, coluna)
-        _digitar(campo, valor)
+        _preencher_filtro(page, automacao, coluna, valor)
 
         def confirmada(g: dict) -> bool:
             # A grade rola na horizontal ao focar uma coluna fora da tela: posições relidas a cada leitura.
@@ -485,8 +518,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
 
 def limpar_filtro(page: "Page", automacao: ModuleType, coluna: str) -> None:
     """Remove o filtro da coluna; com um filtro antigo ativo, a próxima pesquisa cruzaria os dois."""
-    campo = _abrir_campo_filtro(page, automacao, coluna)
-    _digitar(campo, "")
+    _preencher_filtro(page, automacao, coluna, "")
     if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, achar_cabecalho(g, coluna)) == "", CONFIRMACAO_FILTRO_S) is None:
         raise automacao.RotinaErro(f"A grade do Endpoint não confirmou a limpeza do filtro '{coluna}'.")
 
@@ -604,19 +636,42 @@ def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
     try:
         automacao.log(ORIGEM, f"Lendo o último logon de {nome}...")
 
+        def _no_detalhe() -> bool:
+            # Identidade pelo link desta linha, não por "algum detalhe aberto" (o Endpoint acrescenta /summary etc.).
+            return bool(re.search(re.escape(href) + r"(/|$)", page.url))
+
         def _abrir_detalhe() -> None:
-            if URL_DETALHE.search(page.url):
-                return  # tentativa anterior já abriu o detalhe; clicar de novo sairia dele.
+            if _no_detalhe():
+                return  # tentativa anterior já abriu este detalhe; clicar de novo sairia dele.
             try:
-                page.locator(f'a.anchor-text[href="{href}"]').first.click()
-                automacao.acionar_quando_pronto(
-                    lambda: None, "O detalhe do computador não abriu", confirmar=lambda: bool(URL_DETALHE.search(page.url)),
-                )
+                link = page.locator(f'a.anchor-text[href="{href}"]').first
+                if link.count():
+                    link.click()
+                else:  # a aba saiu da grade (ex.: detalhe de outro computador): volta direto ao link desta linha.
+                    page.goto(automacao.ENDPOINT_URL.split("#")[0] + href, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+                automacao.acionar_quando_pronto(lambda: None, "O detalhe do computador não abriu", confirmar=_no_detalhe)
             except Exception as erro:
                 raise automacao.EtapaInstavel(str(erro)) from erro
 
-        automacao.etapa_resiliente(_abrir_detalhe, f"Abrir o detalhe de {nome}")
-        ultimo = ler_ultimo_logon(page, automacao)
+        def _ler_no_detalhe(ler: Callable[[], Any]) -> Any:
+            """Só aceita a leitura se a aba continuou no detalhe deste link do começo ao fim; senão refaz."""
+            def _etapa() -> Any:
+                _abrir_detalhe()
+                try:
+                    valor = ler()
+                except Exception as erro:
+                    if not _no_detalhe():
+                        raise automacao.EtapaInstavel(f"a aba saiu do detalhe de {nome} durante a leitura") from erro
+                    if isinstance(erro, automacao.EtapaInstavel):
+                        raise automacao.RotinaErro(str(erro)) from erro  # abrir_aba já refez as tentativas dela
+                    raise
+                if not _no_detalhe():
+                    raise automacao.EtapaInstavel(f"a aba saiu do detalhe de {nome} durante a leitura")
+                return valor
+
+            return automacao.etapa_resiliente(_etapa, f"Ler o detalhe de {nome}")
+
+        ultimo = _ler_no_detalhe(lambda: ler_ultimo_logon(page, automacao))
         if ultimo:
             return {"fonte": "Último logon", "usuario": ultimo}
         usuario_grade, ambiguo = escolher_usuario_grade(linha.get("usuarios", ""))
@@ -629,9 +684,12 @@ def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
         if usuario_grade:
             return {"fonte": "Usuários logados", "usuario": usuario_grade}
         automacao.log(ORIGEM, f"Sem usuário válido no último logon nem na grade de {nome}; lendo Sistema > Usuários...")
-        abrir_aba(page, automacao, "Sistema")
-        abrir_aba(page, automacao, "Usuários")
-        sistema = ler_usuarios_sistema(page, automacao)
+        def _ler_sistema() -> dict[str, Any]:
+            abrir_aba(page, automacao, "Sistema")
+            abrir_aba(page, automacao, "Usuários")
+            return ler_usuarios_sistema(page, automacao)
+
+        sistema = _ler_no_detalhe(_ler_sistema)
         return {"fonte": "Sistema", "usuario": escolher_usuario_sistema(sistema["nomes"], sistema["ultimo_logon"])}
     finally:
         restaurar_grade(page, automacao)

@@ -40,7 +40,7 @@ class Elemento:
         if not self.existe:
             raise TimeoutError("não apareceu")
 
-    def click(self):
+    def click(self, **_):
         if self.acao:
             self.acao()
 
@@ -56,7 +56,7 @@ class CampoFiltro(Elemento):
         _, x0, x1 = self.pagina.colunas[self.indice]
         return {"x": x0 + 5, "y": 0, "width": x1 - x0 - 10, "height": 20}
 
-    def press(self, tecla):
+    def press(self, tecla, **_):
         p = self.pagina
         if tecla == "Control+A":
             p.selecionado = True
@@ -70,10 +70,10 @@ class CampoFiltro(Elemento):
             if valor:
                 p.buscas.append((p.colunas[self.indice][0], valor))
 
-    def press_sequentially(self, texto, delay=0):
+    def press_sequentially(self, texto, delay=0, **_):
         self.pagina.buffers[self.indice] = self.pagina.buffers.get(self.indice, "") + texto
 
-    def input_value(self):
+    def input_value(self, **_):
         return self.pagina.buffers.get(self.indice, "")
 
 
@@ -95,6 +95,16 @@ class Caixas:
 
     def nth(self, i):
         return CampoFiltro(self.pagina, i)
+
+
+class RadioTodos(Elemento):
+    """Rádio 'Todos os computadores': ``pagina.modo`` diz a visão atual (``None`` = fora da grade)."""
+
+    def count(self):
+        return 0 if self.pagina.modo is None else 1
+
+    def is_checked(self, **_):
+        return self.pagina.modo == "todos"
 
 
 class LupaPesquisa(Elemento):
@@ -123,6 +133,7 @@ class PaginaEndpoint:
         self.surda, self.aba_ausente, self.deslocar_ao_abrir = surda, aba_ausente, deslocar_ao_abrir
         self.visitas, self.historico_abas = [], []
         self.url = automacao.ENDPOINT_URL
+        self.modo = "todos"
         self.reiniciar()
 
     def reiniciar(self):
@@ -139,6 +150,7 @@ class PaginaEndpoint:
     def goto(self, url, **_):
         self.visitas.append(url)
         self.url = url
+        self.modo = "todos"
         self.reiniciar()
 
     def locator(self, seletor):
@@ -146,6 +158,8 @@ class PaginaEndpoint:
             return Caixas(self)
         if "_searchButton" in seletor:
             return LupaPesquisa(self)
+        if "InvAllComputersSummary" in seletor:
+            return RadioTodos(self)
         if "server-update" in seletor:
             return Mock()
         href = seletor.split('href="')[1].rstrip('"]')
@@ -268,6 +282,105 @@ class DecisaoTest(unittest.TestCase):
         self.assertEqual(rotina.serie_sem_s("S"), "")
 
 
+class PaginaComClique(PaginaEndpoint):
+    """Simula o clique do usuário no meio da pesquisa: troca a visão (``modo``) e fecha a barra de filtros."""
+
+    def __init__(self, *args, cliques=1, modo_apos_clique="verificados", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cliques, self.modo_apos_clique = cliques, modo_apos_clique
+
+    def evaluate(self, js, *args):
+        if js == rotina.JS_LER_GRADE and self.cliques and self.buscas:
+            self.cliques -= 1
+            self.modo, self.barra_aberta, self.filtros, self.buffers = self.modo_apos_clique, False, {}, {}
+        leitura = super().evaluate(js, *args)
+        if js == rotina.JS_LER_GRADE and self.modo != "todos":
+            # Em 'Computadores verificados' a coluna de série não aparece (print do erro de 07/11/2026).
+            leitura["cabecalhos"] = [c for c in leitura["cabecalhos"] if "Número de série" not in c["texto"]]
+        return leitura
+
+
+class PaginaComTroca(PaginaEndpoint):
+    """Outro computador na aba: já aberto ou clicado pelo usuário na primeira leitura de ``trocar_em``.
+
+    ``goto`` no link de um detalhe abre esse detalhe; dentro de um detalhe não há links da grade."""
+
+    def __init__(self, *args, trocar_em=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.trocar_em = trocar_em
+
+    def goto(self, url, **kwargs):
+        super().goto(url, **kwargs)
+        href = "#" + url.split("#", 1)[1]
+        if rotina.HREF_DETALHE.match(href):
+            self._abrir_detalhe(href)
+
+    def locator(self, seletor):
+        alvo = super().locator(seletor)
+        if 'href="' in seletor and self.detalhe:
+            alvo.existe = False
+        return alvo
+
+    def evaluate(self, js, *args):
+        if self.trocar_em is not None and js == self.trocar_em:
+            self.trocar_em = None
+            self._abrir_detalhe(self.computadores[-1]["href"])
+        return super().evaluate(js, *args)
+
+
+class InterferenciaTest(AmbienteBase):
+    def setUp(self):
+        super().setUp()
+        automacao.selecionar_todos_computadores.side_effect = lambda pg: setattr(pg, "modo", "todos")
+
+    def test_clique_em_computadores_verificados_volta_para_todos_e_retoma(self):
+        pagina = PaginaComClique([computador("H1", "AAA1"), computador("H2", "BBB2")])
+        with patch.object(rotina, "CONFIRMACAO_FILTRO_S", 0.05):
+            grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertEqual(pagina.modo, "todos")
+        self.assertTrue(automacao.selecionar_todos_computadores.called)
+        self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_clique_em_outro_link_volta_ao_mesmo_endereco_e_retoma(self):
+        pagina = PaginaComClique([computador("H1", "AAA1"), computador("H2", "BBB2")], modo_apos_clique=None)
+        with patch.object(rotina, "CONFIRMACAO_FILTRO_S", 0.05):
+            grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertIn(automacao.ENDPOINT_URL, pagina.visitas)
+        self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_detalhe_de_outro_computador_aberto_nao_e_aceito(self):
+        a, b = computador("H1", "AAA1", href="#/uems/inventory/computers/111"), computador("H2", "BBB2", href="#/uems/inventory/computers/222")
+        pagina = PaginaComTroca([a, b], ultimos_logon={"H1": "ana", "H2": "bia"})
+        pagina._abrir_detalhe(b["href"])  # a aba já mostra o detalhe de H2
+        resultado = rotina.consultar_detalhe(pagina, automacao, a)
+        self.assertEqual(resultado, {"fonte": "Último logon", "usuario": "ana"})
+        self.assertIn(automacao.ENDPOINT_URL.split("#")[0] + a["href"], pagina.visitas)
+
+    def test_troca_de_computador_durante_o_ultimo_logon_refaz_no_mesmo_link(self):
+        a, b = computador("H1", "AAA1", href="#/uems/inventory/computers/111"), computador("H2", "BBB2", href="#/uems/inventory/computers/222")
+        pagina = PaginaComTroca([a, b], ultimos_logon={"H1": "ana", "H2": "bia"}, trocar_em=rotina.JS_LER_ULTIMO_LOGON)
+        resultado = rotina.consultar_detalhe(pagina, automacao, a)
+        self.assertEqual(resultado, {"fonte": "Último logon", "usuario": "ana"})
+        self.assertIn(automacao.ENDPOINT_URL.split("#")[0] + a["href"], pagina.visitas)
+
+    def test_troca_de_computador_durante_sistema_usuarios_refaz_no_mesmo_link(self):
+        a, b = computador("H1", "AAA1", href="#/uems/inventory/computers/111"), computador("H2", "BBB2", href="#/uems/inventory/computers/222")
+        pagina = PaginaComTroca(
+            [a, b], {"H1": ["ana"], "H2": ["bia"]}, ultimos_logon={"H2": "bia"}, trocar_em=rotina.JS_LER_USUARIOS_SISTEMA,
+        )
+        resultado = rotina.consultar_detalhe(pagina, automacao, a)
+        self.assertEqual(resultado, {"fonte": "Sistema", "usuario": "ana"})
+        self.assertEqual(pagina.historico_abas, ["Sistema", "Usuários", "Sistema", "Usuários"])
+
+    def test_grade_em_outra_visao_nunca_confirma_ausente(self):
+        pagina = PaginaEndpoint([computador("H1", "AAA1")])
+        pagina.modo = "verificados"
+        automacao.selecionar_todos_computadores.side_effect = None  # o Endpoint não volta para 'Todos'
+        with patch.object(rotina, "CONFIRMACAO_FILTRO_S", 0.05), patch.object(automacao, "CARREGAMENTO_MS", 50):
+            with self.assertRaises(automacao.RotinaErro):
+                rotina.aplicar_filtro(pagina, automacao, "numero de serie", "ZZZ9")
+
+
 class GradeTest(AmbienteBase):
     def test_filtro_digitado_e_confirmado(self):
         pagina = PaginaEndpoint([computador("H1", "AAA1"), computador("H2", "BBB2")])
@@ -276,7 +389,7 @@ class GradeTest(AmbienteBase):
 
     def test_digitar_preserva_serie_com_debounce_do_endpoint(self):
         class CampoDebounce(CampoFiltro):
-            def press_sequentially(self, texto, delay=0):
+            def press_sequentially(self, texto, delay=0, **_):
                 # A grade real perde os caracteres restantes quando o filtro atualiza rápido demais.
                 super().press_sequentially(texto if delay >= 100 else texto[:4], delay)
 

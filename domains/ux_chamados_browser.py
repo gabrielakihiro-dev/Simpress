@@ -68,6 +68,8 @@ def contexto_chrome_ux() -> Iterator[Any]:
         with automation.trava_execucao("abrir_chamado_ux"):
             from playwright.sync_api import sync_playwright
 
+            # Ignora um cancelamento deixado por outra rotina (sem apagar o arquivo dela): a guarda e as repetições o consultam.
+            setattr(automation, "_inicio_execucao", automation.time.time())
             try:
                 automation.garantir_chrome()  # opens the automation Chrome when it was closed
             except Exception:
@@ -228,10 +230,36 @@ def _valor_confere(campo: str, atual: str, esperado: str) -> bool:
     return atual == esperado
 
 
+def _refazer(etapa: Callable[[], Any], descricao: str) -> Any:
+    """Repete uma etapa reversível (nada foi enviado); cada nova tentativa volta ao mesmo link do formulário.
+
+    409 e falhas do Playwright viram ``EtapaInstavel``; 422/503 (login, envio bloqueado) param na hora.
+    Esgotadas as tentativas, relança a falha original, para o router manter a mensagem e o código de hoje.
+    """
+    def tentar() -> Any:
+        try:
+            return etapa()
+        except ErroUX as erro:
+            if erro.status != 409:
+                raise
+            raise automation.EtapaInstavel(str(erro)) from erro
+        except Exception as erro:
+            # Só o nome da classe vai para o log: mensagens do Playwright trazem seletores e dados do formulário.
+            raise automation.EtapaInstavel(type(erro).__name__) from erro
+
+    try:
+        # recuperar sem Escape: a página global de recuperação pode ser de outra automação.
+        return automation.etapa_resiliente(tentar, descricao, recuperar=lambda: None)
+    except automation.EtapaInstavel as erro:
+        raise erro.__cause__ from None
+    except automation.RotinaCancelada:
+        raise automation.RotinaErro(f"{descricao}: cancelado pelo usuário.") from None
+
+
 class PortalUXChrome:
     def __init__(self, contexto: Any) -> None:
         self._contexto = contexto
-        self._pronto: tuple[str, str, str] | None = None
+        self._pronto: tuple[Any, ...] | None = None  # (série, modelo, aba, problema, descrição, solicitante)
 
     @staticmethod
     def _identificar_equipamento(page: Any, serial: str) -> str:
@@ -267,27 +295,56 @@ class PortalUXChrome:
             raise ErroUX(409, "O modelo exibido no UX mudou. Prepare novamente.")
         return page
 
+    def _formulario(self, serial: str, modelo: str, aba: str, refazer: bool = False) -> Any:
+        """A aba da sessão no formulário; se ela saiu dele (clique acidental), volta ao mesmo link e refaz a etapa 1."""
+        if not refazer:
+            try:
+                return self._validar(serial, modelo, aba)
+            except Exception:
+                pass  # a aba saiu do formulário: segue para o mesmo link abaixo
+        page = self._aba(aba, encerrada=True)
+        rota = _rota(page.url)
+        if page.get_by_text(TITULO_OS).filter(visible=True).count() or (
+            rota.startswith("/ng/solicitar-atendimento/") and rota not in ROTAS_FORMULARIO
+        ):
+            # Um clique acidental em Enviar pode já ter aberto (ou estar abrindo) a OS: nunca preencher outro por cima.
+            raise ErroUX(409, "A aba do UX pode mostrar uma OS. Confira no UX antes de abrir outro chamado.")
+        if self._abrir_formulario(page, serial, aba) != modelo:
+            raise ErroUX(409, "O modelo exibido no UX mudou. Prepare novamente.")
+        return page
+
     def validar(self, serial: str, modelo: str, aba: str) -> None:
-        self._validar(serial, modelo, aba)
+        """Antes de preencher e de novo antes do Enviar: retoma no mesmo link e refaz o que um clique acidental mudou."""
+        pronto = self._pronto
+        if pronto is None or pronto[:3] != (serial, modelo, aba):
+            _refazer(lambda: self._formulario(serial, modelo, aba), "Voltar ao formulário do UX")
+        elif not self._formulario_confere(*pronto):
+            self.preencher(*pronto)
 
     @staticmethod
     def _esperar_etapa_inicial(page: Any) -> None:
         limite = monotonic() + ESPERA_LOGIN_S
-        voltou = False
+        voltas = 0  # limitado: um redirecionamento fixo do UX não vira um laço de navegação
         while monotonic() < limite:
             rota = _rota(page.url)
             if rota == ROTA_INICIAL and _campo_serie(page).filter(visible=True).count() == 1:
                 return
-            if rota and rota != ROTA_INICIAL and not voltou and automation.ux_logado(page):
+            if rota and rota != ROTA_INICIAL and voltas < 3 and automation.ux_logado(page):
                 page.goto(ORIGEM_UX + ROTA_INICIAL, wait_until="domcontentloaded", timeout=CONTROLES_MS)
-                voltou = True
+                voltas += 1
             page.wait_for_timeout(300)
         raise ErroUX(503, "Conclua o login manual no Chrome de automação e prepare novamente.")
 
     def preparar(self, serial: str, aba: str) -> tuple[str, list[str]]:
         page = self._contexto.new_page()
-        page.goto(ORIGEM_UX + ROTA_INICIAL, wait_until="domcontentloaded", timeout=CONTROLES_MS)
         page.bring_to_front()
+        return _refazer(
+            lambda: (self._abrir_formulario(page, serial, aba), self._opcoes(page)), "Abrir o formulário do UX",
+        )
+
+    def _abrir_formulario(self, page: Any, serial: str, aba: str) -> str:
+        """Abre o formulário pelo mesmo link e avança até a etapa 2; repetível do zero, pois nada foi enviado."""
+        page.goto(ORIGEM_UX + ROTA_INICIAL, wait_until="domcontentloaded", timeout=CONTROLES_MS)
         self._esperar_etapa_inicial(page)
         _unico(_campo_serie(page)).fill(serial, timeout=CONTROLES_MS)
         _unico(_botao(page, "Buscar")).click(timeout=CONTROLES_MS)
@@ -301,7 +358,7 @@ class PortalUXChrome:
             raise ErroUX(409, "O UX saiu da rota esperada para o formulário.")
         page.evaluate("(nome) => { window.name = nome; }", f"{aba}:{rota}")
         _fechar_aviso_backup(page, espera_ms=3000)
-        return modelo, self._opcoes(page)
+        return modelo
 
     @staticmethod
     def _controle_problema(page: Any) -> Any:
@@ -347,6 +404,34 @@ class PortalUXChrome:
         return [nome for nome, _ in posicoes]
 
     @staticmethod
+    def _problema_escolhido(page: Any) -> str:
+        """Lê, sem clicar, o problema que o controle mostra como escolhido (select nativo ou ng-select)."""
+        return PortalUXChrome._controle_problema(page).evaluate("""el => {
+            if (el.tagName === 'SELECT') return el.selectedIndex < 0 ? '' : el.options[el.selectedIndex].text;
+            const valores = [...el.querySelectorAll('.ng-value')];
+            if (valores.length) return valores.map(v => (v.querySelector('.ng-value-label') || v).innerText).join('\\n');
+            return el.value || el.innerText;
+        }""")
+
+    def _formulario_confere(
+        self, serial: str, modelo: str, aba: str, problema: str, descricao: str, solicitante: dict[str, str],
+    ) -> bool:
+        """Só leitura: a aba segue no mesmo equipamento, com o problema, a descrição e o solicitante preenchidos."""
+        try:
+            page = self._validar(serial, modelo, aba)
+            texto = _unico(_campo_descricao(page)).input_value(timeout=CONTROLES_MS)
+            return (
+                " ".join(self._problema_escolhido(page).split()) == " ".join(problema.split())
+                and texto.replace("\r\n", "\n") == descricao.replace("\r\n", "\n")
+                and all(
+                    _valor_confere(campo, _unico(_campo_solicitante(page, campo)).input_value(timeout=CONTROLES_MS), valor)
+                    for campo, valor in (solicitante or {}).items()
+                )
+            )
+        except Exception:
+            return False
+
+    @staticmethod
     def _solicitante_faltando(page: Any, campos: dict[str, Any]) -> list[str]:
         """Without a local profile the portal's own Solicitante stays as it is; report what is still empty."""
         for _ in range(8):  # the Angular form fills its fields a moment after the step opens
@@ -360,22 +445,32 @@ class PortalUXChrome:
         self, serial: str, modelo: str, aba: str, problema: str, descricao: str, solicitante: dict[str, str],
     ) -> list[str]:
         self._pronto = None
-        page = self._validar(serial, modelo, aba)
-        _unico(page.get_by_text("Solicitante", exact=True))
-        _fechar_aviso_backup(page)
-        campos = {campo: _unico(_campo_solicitante(page, campo)) for campo in CAMPOS_SOLICITANTE}
-        texto = _unico(_campo_descricao(page))
-        self._opcoes(page, problema)
-        texto.fill(descricao, timeout=CONTROLES_MS)
-        faltando = [] if solicitante else self._solicitante_faltando(page, campos)
-        for campo, elemento in (campos.items() if solicitante else ()):
-            valor = solicitante[campo]
-            if not _valor_confere(campo, elemento.input_value(timeout=CONTROLES_MS), valor):
-                elemento.fill(valor, timeout=CONTROLES_MS)
-            if not _valor_confere(campo, elemento.input_value(timeout=CONTROLES_MS), valor):
-                raise ErroUX(409, "O UX não manteve um dos valores do solicitante.")
-        self._validar(serial, modelo, aba)
-        self._pronto = (serial, modelo, aba)
+        refazer = False
+
+        def etapa() -> list[str]:
+            nonlocal refazer
+            page = self._formulario(serial, modelo, aba, refazer)
+            refazer = True  # se esta tentativa falhar, a próxima volta ao mesmo link e preenche do zero
+            _unico(page.get_by_text("Solicitante", exact=True))
+            _fechar_aviso_backup(page)
+            campos = {campo: _unico(_campo_solicitante(page, campo)) for campo in CAMPOS_SOLICITANTE}
+            texto = _unico(_campo_descricao(page))
+            self._opcoes(page, problema)
+            texto.fill(descricao, timeout=CONTROLES_MS)
+            faltando = [] if solicitante else self._solicitante_faltando(page, campos)
+            for campo, elemento in (campos.items() if solicitante else ()):
+                valor = solicitante[campo]
+                if not _valor_confere(campo, elemento.input_value(timeout=CONTROLES_MS), valor):
+                    elemento.fill(valor, timeout=CONTROLES_MS)
+                if not _valor_confere(campo, elemento.input_value(timeout=CONTROLES_MS), valor):
+                    raise ErroUX(409, "O UX não manteve um dos valores do solicitante.")
+            # Relê tudo, inclusive a escolha do problema: um clique acidental pode tê-la trocado.
+            if not self._formulario_confere(serial, modelo, aba, problema, descricao, solicitante):
+                raise ErroUX(409, "O formulário do UX mudou durante o preenchimento.")
+            return faltando
+
+        faltando = _refazer(etapa, "Preencher o chamado no UX")
+        self._pronto = (serial, modelo, aba, problema, descricao, solicitante)
         return faltando
 
     def enviar(self, aba: str) -> str:
@@ -384,8 +479,16 @@ class PortalUXChrome:
             raise ErroUX(422, MSG_SEM_ENVIO)  # last barrier before the click
         if pronto is None or pronto[2] != aba:
             raise ErroUX(409, "A aba não está pronta para envio.")
-        page = self._validar(*pronto)
-        _unico(_botao_enviar(page)).click(timeout=CONTROLES_MS)
+        page = self._validar(*pronto[:3])
+        botao = _unico(_botao_enviar(page))
+        # Guarda: mouse parado e formulário intacto; se não, RotinaErro sem clicar (o serviço já gravou "incerto").
+        try:
+            automation.aguardar_estabilidade_pre_clique(
+                lambda: botao.count() == 1 and self._formulario_confere(*pronto), "Enviar o chamado no UX",
+            )
+        except automation.RotinaCancelada:
+            raise automation.RotinaErro("Enviar o chamado no UX: cancelado antes do clique; não cliquei.") from None
+        botao.click(timeout=CONTROLES_MS)  # irreversível: um único clique, nunca repetido
         prazo = monotonic() + ESPERA_OS_S
         while monotonic() < prazo:
             rota = _rota(page.url)

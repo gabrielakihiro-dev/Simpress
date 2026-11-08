@@ -536,21 +536,51 @@ def _ler_pagina(page: "Page", itens: Dict[str, ItemLista], *, acumular: bool = F
     return novos
 
 
-def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista]:
+def listar_chamados(page: "Page", parar_em: str | None = None, *, recomecar: bool = True) -> List[ItemLista]:
     """Percorre TODA a lista da central de tarefas (paginação ou rolagem) e devolve os chamados em ordem.
 
     Com ``parar_em``, pára assim que esse número aparece, deixando a lista posicionada nele.
     Uma lista que não termina em ``MAX_RODADAS_LISTA`` voltas é falha, nunca resultado parcial.
+    Se a lista muda por fora no meio da leitura (outro link, filtro, clique do usuário), volta ao mesmo link e
+    recomeça do zero; ``recomecar=False`` (lista filtrada pela pesquisa, que o recarregamento perderia) só falha.
     """
     _rotinas().definir_pagina_ativa_para_recuperacao(page)
+    tentativas: List[int] = []
+
+    def _varrer() -> List[ItemLista]:
+        try:
+            if tentativas:  # houve interferência: volta ao mesmo link e lê tudo de novo
+                page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
+            tentativas.append(1)
+            return _varrer_lista(page, parar_em)
+        except SoftExpertErro:
+            raise
+        except Exception as erro:
+            raise EtapaInstavelSX(str(erro)) from erro
+
+    try:
+        return _rotinas().etapa_resiliente(_varrer, "Ler a lista da central de tarefas", tentativas=3 if recomecar else 1)
+    except _rotinas().EtapaInstavel as erro:
+        raise SoftExpertErro(f"A lista da central de tarefas mudou durante a leitura; o resultado seria parcial ({erro}).") from erro
+
+
+def _varrer_lista(page: "Page", parar_em: str | None) -> List[ItemLista]:
     _aguardar_lista(page)
     # Logo depois do login a lista aparece antes das linhas (ou com o aviso de vazia): sem esperar por elas
     # a rotina lia 0 chamados e dava a busca como concluída. Uma lista realmente vazia só paga esta espera.
     _esperar(page, lambda: any(extrair_numeros(texto) for texto in _textos_linhas(page)), ESPERA_PRIMEIRAS_LINHAS_MS)
     itens: Dict[str, ItemLista] = {}
     sem_novidade = 0
+    vistas: set = set()  # paginação: páginas já lidas (textos das linhas)
+    na_tela: set = set()  # rolagem: números visíveis na volta anterior; a lista real não descarta cartões ao rolar
+
+    def primeiros_numeros(textos: List[str]) -> set:
+        return {numeros[0] for numeros in map(extrair_numeros, textos) if numeros}
+
     for _ in range(MAX_RODADAS_LISTA):
         _cancelamento()
+        if na_tela and not _esperar(page, lambda: na_tela <= primeiros_numeros(_textos_linhas(page)), ESPERA_ROLAGEM_MS):
+            raise EtapaInstavelSX("Cartões já lidos sumiram da central de tarefas (outro link, filtro ou atualização).")
         botao = _botao_proxima(page)
         novos = _ler_pagina(page, itens, acumular=botao is not None)
         if parar_em is not None and parar_em in itens:
@@ -560,6 +590,7 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
                 break
 
             antes = _textos_linhas(page)
+            vistas.add(tuple(antes))
 
             def _proxima_pagina() -> None:
                 try:
@@ -575,12 +606,18 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
 
             _rotinas().etapa_resiliente(_proxima_pagina, "Próxima página na central de tarefas")
             _aguardar_sem_carregamento(page, ESPERA_PAGINA_MS)
+            # A lista "mudou" também quando o usuário volta uma página ou troca de tela: isso não é avançar.
+            # shortcut: um salto para a frente (clique em outra página adiante) não é detectável sem indicador de página.
+            depois = _textos_linhas(page)
+            if not depois or tuple(depois) in vistas:
+                raise EtapaInstavelSX("A paginação voltou para uma página já lida ou esvaziou a lista.")
             continue
         # Rolagem: só termina depois de algumas voltas sem número novo.
         sem_novidade = 0 if novos else sem_novidade + 1
         if sem_novidade >= RODADAS_SEM_NOVIDADE:
             break
         antes = _textos_linhas(page)
+        na_tela = primeiros_numeros(antes)
         # A lista carrega mais linhas ~3 s depois de rolar, mesmo quando o scrollTop não mudou.
         page.evaluate(ROLAR_LISTA_JS, SEL_LISTA)
         _esperar(page, lambda: _textos_linhas(page) != antes, ESPERA_ROLAGEM_MS)
@@ -637,7 +674,8 @@ def _localizar_chamado(page: "Page", numero: str) -> Optional[tuple[ItemLista, "
         _rotinas().etapa_resiliente(_pesquisar, f"{numero}: pesquisar pelo filtro da central de tarefas")
         if not _textos_linhas(page) and _lista_declarada_vazia(page):
             return None
-        item = next((i for i in listar_chamados(page) if i.numero == numero), None)
+        # Sem recarregar: o link de novo perderia o filtro e o chamado pareceria ausente (falso "não encontrado").
+        item = next((i for i in listar_chamados(page, recomecar=False) if i.numero == numero), None)
     if item is None:
         return None
     if item.ocorrencias != 1:
@@ -941,8 +979,8 @@ def _clicar_icone_executar(page: "Page", linha: "Locator", numero: str) -> None:
     botao = linha.locator(SEL_GRUPO_ACOES).first.locator("button").first
     botao.hover()
     dica = page.get_by_text(NOME_EXECUTAR).filter(visible=True)
-    if not _esperar(page, lambda: dica.count(), ESPERA_BOTAO_MS):
-        raise SoftExpertErro(f"{numero}: o ícone da linha não mostrou a dica Executar; nada foi clicado.")
+    if not _esperar(page, lambda: dica.count(), ESPERA_BOTAO_MS):  # nada clicado ainda: pode refazer do zero
+        raise EtapaInstavelSX(f"{numero}: o ícone da linha não mostrou a dica Executar; nada foi clicado.")
     _conferir_linha(linha, numero)
     clicar(botao, "Executar")
 
@@ -1604,15 +1642,20 @@ def _confirmar_modal_finalizar(janela: "Page") -> bool:
     return False
 
 
-def _clicar_finalizar(page: "Page", janela: "Page", escritas: List[str]) -> None:
+def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[str]) -> None:
     """Clica o único Finalizar da janela, responde a confirmação e espera a janela fechar (ou a página mudar)."""
     botao = _botao_unico(janela, lambda f: f.get_by_role("button", name=NOME_FINALIZAR), "Finalizar")
     inesperados: List[str] = []
     tratar = _tratar_dialogo_finalizar(inesperados)
     janela.on("dialog", tratar)
     try:
+        # O botão é resolvido na hora do clique: se a janela passou a mostrar outro chamado, não clica.
+        # Cabeçalho ilegível não bloqueia (só foi visto no site real na visão Registro); o número já foi conferido antes.
+        def pronto() -> bool:
+            return extrair_numeros(_cabecalho(janela)["numero"])[:1] in ([], [numero]) and botao.is_enabled()
+
         try:
-            _rotinas().aguardar_estabilidade_pre_clique(lambda: botao.is_enabled(), "Finalizar")
+            _rotinas().aguardar_estabilidade_pre_clique(pronto, f"Finalizar ({numero} no cabeçalho da janela)")
         except _rotinas().RotinaErro as erro:
             raise SoftExpertErro(str(erro)) from erro
         with _liberar_escrita("finalizar"):
@@ -1749,7 +1792,7 @@ def _finalizar(
             captura = _capturar(formulario, numero, "antes_de_finalizar")
             _log(f"{numero}: tudo conferido; parando antes do Finalizar.")
             return _resultado(numero, STATUS_PRONTO, finalizado=False, captura=captura, escritas=list(escritas), **base)
-        _clicar_finalizar(page, formulario, escritas)
+        _clicar_finalizar(page, formulario, numero, escritas)
         janela_fechou = formulario is not page and formulario.is_closed()
         if _cartao_na_lista(page, numero):
             raise SoftExpertErro(
