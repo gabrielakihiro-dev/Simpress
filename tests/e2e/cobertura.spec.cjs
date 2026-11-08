@@ -165,7 +165,7 @@ test("Preparar Transporte só preenche o Transporte e o vínculo usa a planilha 
   await abrirCobertura(page);
   await aba(page, "movimento");
   await movimento.getByRole("button", { name: "Vincular transferência já gerada — SINT-002" }).click();
-  await movimento.getByRole("button", { name: /^Vincular planilha de / }).click();
+  await movimento.getByRole("button", { name: /^Vincular esta planilha — / }).click();
   await expect(movimento.getByText("Planilha gerada", { exact: true })).toBeVisible();
   await expect(movimento.getByRole("button", { name: "Marcar coletada — SINT-002" })).toBeVisible();
   expect(geracoes).toEqual([]);
