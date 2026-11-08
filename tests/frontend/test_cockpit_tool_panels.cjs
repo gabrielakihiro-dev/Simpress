@@ -571,254 +571,64 @@ test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada
   } finally { delete global.document; delete global.SimpressDataPanels; }
 });
 
-// ---------- Chamados × OS (painel chamados-os) ----------
+// ---------- Chamados × OS: só a janela (o painel e os botões do topo foram removidos) ----------
 
-test("Chamados × OS: botões no topo do F5 e na barra do F6, painel com busca, lista viva e Carregar mais, sem tecla F", () => {
-  const botaoF5 = html.match(/<button[^>]*id="btn-chamados-os-f5"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
-  const botaoF6 = html.match(/<button[^>]*id="btn-chamados-os-f6"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
-  for (const botao of [botaoF5, botaoF6]) {
-    assert.match(botao, /data-on-click="abrirPainelCockpit" data-args='\["chamados-os"\]'/);
-    assert.match(botao, /<use href="#i-link"><\/use><\/svg><span>Chamados × OS<\/span>/);
-    assert.doesNotMatch(botao, /data-cockpit-tool=/, "não entra no destaque das abas da barra");
-  }
-  assert.match(botaoF5, /class="ck-btn ck-btn--secundario ck-btn--sm"/);
-  assert.match(botaoF6, /class="ck-btn ck-btn--secundario"/);
-  // F5: logo depois de Ler chamados antigos, no topo; F6: na barra de ferramentas da aba OS.
-  assert.ok(html.indexOf('id="btn-sebrae-ler-antigos"') < html.indexOf('id="btn-chamados-os-f5"'));
-  assert.ok(html.indexOf('id="btn-chamados-os-f5"') < html.indexOf('id="sebrae-atualizar-status"'));
-  // O painel do F6 tem seções aninhadas: confere pela posição (entre o início dele e o host da tabela de OS).
-  const inicioF6 = html.indexOf('data-cockpit-tool-panel="chamados"');
-  assert.ok(inicioF6 > 0 && inicioF6 < html.indexOf('id="btn-chamados-os-f6"'));
-  assert.ok(html.indexOf('id="btn-chamados-os-f6"') < html.indexOf('id="cockpit-tickets-os"'));
-  assert.ok(html.indexOf('id="cockpit-tickets-export"') < html.indexOf('id="btn-chamados-os-f6"'), "ao lado de Exportar Excel");
-  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="chamados-os"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(painel, /class="ck-ferr-painel"[^>]*hidden/);
-  assert.match(painel, /<input id="cockpit-chamados-os-busca"[^>]*placeholder="Buscar UTIC, série ou OS" aria-label="Buscar UTIC, série ou OS">/);
-  assert.match(painel, /<div id="cockpit-chamados-os-lista" class="ck-chos" aria-live="polite"><\/div>/);
-  assert.match(painel, /id="cockpit-chamados-os-mais" class="sebrae-mais" hidden>.*>Carregar mais<\/button><span id="cockpit-chamados-os-mostrando"/);
-  assert.match(source, /"chamados-os": \["Chamados × OS", "Chamados em aberto com OS vinculada, lado a lado\."\]/);
-  assert.doesNotMatch(source.match(/const toolKeys = \{[^}]*\}/)[0], /chamados-os/, "sem atalho F");
-  assert.match(css, /\.ck-chos \.ck-link-btn, #cockpit-chamados-os-busca \{ min-height: 44px; \}/);
+test("Chamados × OS: sem botões no topo do F5/F6 nem painel antigo; a janela #modal-chamado-os continua", () => {
+  assert.doesNotMatch(html, /id="btn-chamados-os-f5"|id="btn-chamados-os-f6"/);
+  assert.doesNotMatch(html, /data-cockpit-tool-panel="chamados-os"|cockpit-chamados-os-/);
+  assert.doesNotMatch(source, /"chamados-os"|loadChamadosOs|cockpit-chamados-os-/);
+  assert.doesNotMatch(css, /\.ck-chos|#cockpit-chamados-os-/);
+  const janela = html.match(/<div[^>]*id="modal-chamado-os"[\s\S]*?id="chamado-os-janela-f6"[\s\S]*?<\/button>/)?.[0] || "";
+  // Como os outros .modal-overlay, role="dialog" e aria-modal vêm de accessible-dialogs.js ao abrir.
+  assert.match(janela, /<div id="modal-chamado-os" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-os">/);
+  assert.match(janela, /<h3 id="titulo-chamado-os"[^>]*>Chamado × OS<\/h3>/);
+  assert.match(janela, /Abrir na aba OS \(F6\)/);
 });
 
-// DOM mínimo de verdade (árvore, texto, atributos e cliques) para conferir o que o painel desenha.
-class NoMini {
-  constructor(tag) {
-    Object.assign(this, { tagName: String(tag).toUpperCase(), children: [], dataset: {}, attrs: {}, ouvintes: {}, hidden: false, className: "", texto: "", value: "" });
-    this.classList = { add: nome => { this.className = `${this.className} ${nome}`.trim(); }, contains: nome => this.className.split(" ").includes(nome) };
-  }
-  get textContent() { return this.texto + this.children.map(filho => filho.textContent).join(""); }
-  set textContent(valor) { this.texto = String(valor); this.children = []; }
-  append(...nos) { this.children.push(...nos); }
-  replaceChildren(...nos) { this.texto = ""; this.children = nos; }
-  setAttribute(nome, valor) { this.attrs[nome] = String(valor); }
-  getAttribute(nome) { return this.attrs[nome] ?? null; }
-  removeAttribute(nome) { delete this.attrs[nome]; }
-  addEventListener(tipo, fn) { (this.ouvintes[tipo] ||= []).push(fn); }
-  click() { (this.ouvintes.click || []).forEach(fn => fn({ currentTarget: this })); }
-  focus() { global.document.activeElement = this; }
-  descendentes() { return this.children.flatMap(filho => [filho, ...filho.descendentes()]); }
-  // Só os seletores que o painel usa: "tag" e "tag tag".
-  querySelectorAll(seletor) {
-    const [pai, filho] = seletor.split(" ").map(tag => tag.toUpperCase());
-    if (!filho) return this.descendentes().filter(no => no.tagName === pai);
-    return this.descendentes().filter(no => no.tagName === pai).flatMap(no => no.descendentes().filter(item => item.tagName === filho));
-  }
-  querySelector(seletor) { return this.querySelectorAll(seletor)[0] || null; }
-}
-
-const modeloChamadosOs = require("../../static/js/shared/chamados-os-model.js");
-
-function sebraeComChamados(quantidade, extra = {}) {
-  const formulario = Array.from({ length: quantidade }, (_, indice) => ({
-    numero: `UTIC-2026-${indice + 1}`, linha: { G: `Chamado ${indice + 1}`, P: "01/11/2026", K: `SER${indice + 1}`, E: `OS-${indice + 1}` },
-  }));
-  return { novos: { formulario }, importado: { abertos: [], finalizados: [] }, ...extra };
-}
-
-function relatorioDasSeries(quantidade) {
-  return {
-    chamados: Array.from({ length: quantidade }, (_, indice) => ({
-      serie: `SER${indice + 1}`, relacao: "conferida",
-      oracle: [{ ordem_servico: `OS-${indice + 1}`, status: "Aberto", sub_status: "Em campo" }],
-      simpress: { ordens_servico: [`OS-${indice + 1}`], status: ["Em atendimento"] },
-    })),
+test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do chamado; fechar limpa", async () => {
+  const modal = { abrir: [], fechar: [] };
+  const pedidosCartao = [];
+  const cartao = { dataset: { serie: "SN-1", os: "77" } };
+  const { api, el } = criarAmbientePaineis({ appExtra: {
+    abrirModalAcessivel: (...args) => modal.abrir.push(args),
+    fecharModalAcessivel: id => modal.fechar.push(id),
+    cartaoChamadoSebraeLeitura: async chave => { pedidosCartao.push(chave); return chave === "UTIC-2026-1" ? cartao : null; },
+  } });
+  const montadas = [];
+  const linhaJanela = { dataset: { serial: "SN-1-REL", os: "77" } };
+  global.SimpressDataPanels = {
+    montarTabelaOs: (host, opcoes) => { montadas.push([host, opcoes]); return { querySelector: () => linhaJanela }; },
+    filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
   };
-}
-
-// Ambiente dos testes de Chamados × OS: roteamento do DOM falso + nós reais para o painel.
-function ambienteChamadosOs({ sebrae, relatorio = relatorioDasSeries(0), vinculos = { vinculos: [] }, falha = null, appExtra = {} } = {}) {
-  const urls = [];
-  const holder = {};
-  const apiFetch = async url => {
-    urls.push(url);
-    if (falha && url === falha.url) throw new Error(falha.mensagem);
-    if (url === "/api/sebrae/novos") return sebrae;
-    if (url === "/api/operacoes/chamados") return relatorio;
-    if (url === "/api/operacoes/chamados/vinculos-os") return vinculos;
-    return {};
-  };
-  const ambiente = criarAmbientePaineis({
-    apiFetch,
-    appExtra: {
-      abrirChamadoDaOs: (...args) => { holder.os = args; holder.pendente = holder.api.abrirChamadoDaOs(...args); return holder.pendente; },
-      abrirChamadoSebraeNoF5: chave => { holder.f5 = chave; },
-      grupoTriagemChamado: () => "atrasados",
-      ...appExtra,
-    },
-  });
-  holder.api = ambiente.api;
-  const nos = {};
-  const porId = global.document.getElementById;
-  for (const [id, tag] of [["cockpit-chamados-os-busca", "input"], ["cockpit-chamados-os-lista", "div"], ["cockpit-chamados-os-mais", "div"], ["cockpit-chamados-os-mais-botao", "button"], ["cockpit-chamados-os-mostrando", "span"]]) {
-    nos[id] = new NoMini(tag);
-  }
-  nos["cockpit-chamados-os-mais"].hidden = true;
-  global.document.getElementById = id => nos[id] || porId(id);
-  global.document.createElement = tag => new NoMini(tag);
-  global.SimpressChamadosOsModel = modeloChamadosOs;
-  const lista = nos["cockpit-chamados-os-lista"];
-  const linhas = () => lista.querySelectorAll("tbody tr");
-  const limpar = () => { delete global.document; delete global.SimpressChamadosOsModel; };
-  return { ...ambiente, holder, nos, lista, linhas, urls, limpar };
-}
-
-test("Chamados × OS: Voltar a partir do F5 e do F6 volta ao painel de origem e depois fecha", async () => {
-  for (const origem of ["sebrae-chamados", "chamados"]) {
-    const { api, el, limpar } = ambienteChamadosOs({ sebrae: sebraeComChamados(0) });
-    try {
-      await api.abrirPainelCockpit(origem);
-      await api.abrirPainelCockpit("chamados-os");
-      assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados-os");
-      assert.equal(el("cockpit-tool-title").textContent, "Chamados × OS");
-      assert.equal(el("cockpit-tool-subtitle").textContent, "Chamados em aberto com OS vinculada, lado a lado.");
-      assert.equal(el("cockpit-tool-kbd").hidden, true, "sem tecla F");
-      await api.fecharPainelCockpit();
-      assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, origem, `Voltar retorna a ${origem}`);
-      await api.fecharPainelCockpit();
-      assert.equal(el("cockpit-tool-panels").hidden, true);
-    } finally { limpar(); }
-  }
-});
-
-test("Chamados × OS: F5 → painel → OS no F6; o primeiro Voltar volta ao painel e o segundo fecha", async () => {
-  const { api, el, holder, linhas, limpar } = ambienteChamadosOs({ sebrae: sebraeComChamados(1), relatorio: relatorioDasSeries(1) });
+  const conteudo = id => { const lista = []; el(id).replaceChildren = (...nos) => lista.push(nos); return lista; };
   try {
-    // A tabela do F6 já tem a linha: abrirChamadoDaOs acha sem esperar.
-    const linhaF6 = { dataset: { serial: "SER1", os: "OS-1" }, hidden: false };
-    el("cockpit-tickets-os").querySelectorAll = seletor => (seletor.includes("andamento") ? [] : [linhaF6]);
-    await api.abrirPainelCockpit("sebrae-chamados");
-    await api.abrirPainelCockpit("chamados-os");
-    const botaoOs = linhas()[0].querySelectorAll("button")[1];
-    assert.equal(botaoOs.getAttribute("aria-label"), "Abrir a OS OS-1 na aba OS (F6)");
-    botaoOs.click();
-    await holder.pendente;
-    assert.deepEqual(holder.os, [[], "SER1", "OS-1"]);
+    const noChamado = conteudo("chamado-os-janela-chamado");
+    const noOs = conteudo("chamado-os-janela-os");
+    const gatilho = { isConnected: true };
+    await api.abrirJanelaChamadoOs({ chamado: "UTIC-2026-1" }, gatilho);
+    assert.deepEqual(modal.abrir, [["modal-chamado-os", "#chamado-os-janela-fechar", "fecharJanelaChamadoOs"]]);
+    assert.deepEqual(pedidosCartao, ["UTIC-2026-1"]);
+    assert.equal(noChamado.at(-1)[0], cartao, "o cartão só leitura do F5 vai para a esquerda");
+    assert.equal(montadas.length, 1);
+    const [host, opcoes] = montadas[0];
+    assert.equal(host, el("chamado-os-janela-os"));
+    assert.deepEqual(opcoes.soOs, { serie: "SN-1", os: "77" }, "série e OS vêm do cartão");
+    assert.equal(opcoes.somenteLeitura, true);
+    assert.equal(opcoes.semBusca, true);
+    assert.equal(el("chamado-os-janela-f6").hidden, false);
+
+    // Abrir na aba OS (F6): fecha a janela e procura a linha com a grafia do relatório.
+    const buscas = [];
+    el("cockpit-tickets-os").querySelectorAll = seletor => { buscas.push(seletor); return seletor === "tbody tr[data-serial]" ? [{ dataset: { serial: "SN-1-REL", os: "77" } }] : []; };
+    await el("chamado-os-janela-f6").onclick();
+    assert.deepEqual(modal.fechar, ["modal-chamado-os"]);
+    assert.ok(noChamado.at(-1).length === 0 && noOs.at(-1).length === 0, "fechar limpa os dois lados");
     assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados");
-    await api.fecharPainelCockpit();
-    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados-os");
-    await api.fecharPainelCockpit();
-    assert.equal(el("cockpit-tool-panels").hidden, true);
-  } finally { limpar(); }
-});
+    assert.ok(buscas.includes(".ck-os__andamento-btn"), "a linha SN-1-REL/77 foi achada na aba OS");
 
-test("Chamados × OS: OS encontrada mostra chamado, OS, status, relação, triagem e o vínculo Manual", async () => {
-  const { api, holder, linhas, lista, urls, nos, limpar } = ambienteChamadosOs({
-    sebrae: sebraeComChamados(1), relatorio: relatorioDasSeries(1), vinculos: { vinculos: [{ chamado: "UTIC-2026-1", serie: "SER1", os: "OS-1" }] },
-  });
-  try {
-    await api.abrirPainelCockpit("chamados-os");
-    assert.deepEqual([...urls].sort(), ["/api/operacoes/chamados", "/api/operacoes/chamados/vinculos-os", "/api/sebrae/novos"]);
-    assert.equal(lista.getAttribute("aria-busy"), null, "aria-busy sai ao terminar");
-    const tabela = lista.children[0];
-    assert.equal(tabela.tagName, "TABLE");
-    assert.match(tabela.className, /ck-tabela--cards/);
-    assert.equal(tabela.querySelector("caption").textContent, "Chamados × OS");
-    const [grupos, colunas] = tabela.querySelectorAll("thead tr");
-    assert.deepEqual(grupos.children.map(th => [th.textContent, th.scope, th.colSpan]), [["Chamado", "colgroup", 3], ["OS", "colgroup", 4]]);
-    assert.deepEqual(colunas.children.map(th => th.textContent), ["Chamado", "Abertura", "Série", "OS", "Status Oracle", "Status Simpress", "Relação"]);
-    assert.ok(colunas.children.every(th => th.scope === "col"));
-    const [linha] = linhas();
-    assert.equal(linha.dataset.chave, "UTIC-2026-1");
-    assert.equal(linha.dataset.encontrada, undefined);
-    const celulas = linha.children;
-    assert.deepEqual(celulas.map(td => td.dataset.label), ["Chamado", "Abertura", "Série", "OS", "Status Oracle", "Status Simpress", "Relação"]);
-    assert.equal(celulas[0].textContent, "UTIC-2026-1Chamado 1Novo");
-    assert.equal(celulas[0].querySelector("span").textContent, "Chamado 1");
-    const selo = celulas[0].querySelectorAll("span")[1];
-    assert.equal(selo.className, "ck-badge sebrae-selo");
-    assert.equal(selo.dataset.status, "info");
-    assert.equal(celulas[1].textContent, "01/11/2026");
-    assert.equal(celulas[2].textContent, "SER1");
-    assert.equal(celulas[3].textContent, "OS-1Manual");
-    assert.equal(celulas[3].querySelector("span").dataset.vinculo, "manual");
-    assert.equal(celulas[4].textContent, "Aberto · Em campo");
-    assert.equal(celulas[5].textContent, "Em atendimento");
-    const [relacao, triagem] = celulas[6].querySelectorAll("span");
-    assert.equal(relacao.textContent, "Conferida");
-    assert.equal(relacao.dataset.status, "ok");
-    assert.equal(triagem.textContent, "3+ dias");
-    assert.equal(triagem.dataset.status, "alerta");
-    celulas[0].querySelector("button").click();
-    assert.equal(holder.f5, "UTIC-2026-1", "o UTIC abre o chamado no F5");
-    assert.equal(nos["cockpit-chamados-os-mais"].hidden, true);
-    assert.equal(nos["cockpit-chamados-os-mostrando"].textContent, "Mostrando 1 de 1");
-  } finally { limpar(); }
-});
-
-test("Chamados × OS: série fora da importação mostra o número da OS e o aviso, sem selos de OS", async () => {
-  const { api, linhas, limpar } = ambienteChamadosOs({ sebrae: sebraeComChamados(1), relatorio: { chamados: [] } });
-  try {
-    await api.abrirPainelCockpit("chamados-os");
-    const [linha] = linhas();
-    assert.equal(linha.dataset.encontrada, "false");
-    assert.equal(linha.children.length, 4, "a célula da OS ocupa as quatro colunas");
-    const os = linha.children[3];
-    assert.equal(os.colSpan, 4);
-    assert.ok(os.classList.contains("ck-td--largo"));
-    assert.equal(os.textContent, "OS-1Série não encontrada na importação atual.");
-    assert.equal(os.querySelectorAll("button").length, 0);
-    assert.equal(linha.querySelectorAll("span").filter(span => /ck-badge/.test(span.className) && !/sebrae-selo/.test(span.className)).length, 0);
-  } finally { limpar(); }
-});
-
-test("Chamados × OS: sem pares mostra a lista vazia; falha mostra o texto de erro já existente", async () => {
-  let ambiente = ambienteChamadosOs({ sebrae: sebraeComChamados(0) });
-  try {
-    await ambiente.api.abrirPainelCockpit("chamados-os");
-    assert.equal(ambiente.lista.children[0].className, "ck-lista__vazio");
-    assert.equal(ambiente.lista.textContent, "Nenhum chamado em aberto com OS vinculada.");
-    assert.equal(ambiente.nos["cockpit-chamados-os-mais"].hidden, true);
-  } finally { ambiente.limpar(); }
-  ambiente = ambienteChamadosOs({ sebrae: sebraeComChamados(1), falha: { url: "/api/sebrae/novos", mensagem: "Não foi possível consultar os chamados novos." } });
-  try {
-    await ambiente.api.abrirPainelCockpit("chamados-os");
-    assert.equal(ambiente.lista.children[0].className, "ck-nota ck-nota--erro");
-    assert.equal(ambiente.lista.textContent, "Não foi possível consultar os chamados novos.");
-    assert.equal(ambiente.lista.getAttribute("aria-busy"), null);
-  } finally { ambiente.limpar(); }
-});
-
-test("Chamados × OS: 25 por vez com Carregar mais; a busca espera 150 ms e volta à primeira página", async () => {
-  const { api, linhas, nos, limpar } = ambienteChamadosOs({ sebrae: sebraeComChamados(30), relatorio: relatorioDasSeries(30) });
-  try {
-    await api.abrirPainelCockpit("chamados-os");
-    assert.equal(linhas().length, 25);
-    assert.equal(nos["cockpit-chamados-os-mais"].hidden, false);
-    assert.equal(nos["cockpit-chamados-os-mostrando"].textContent, "Mostrando 25 de 30");
-    nos["cockpit-chamados-os-mais-botao"].click();
-    assert.equal(linhas().length, 30);
-    assert.equal(nos["cockpit-chamados-os-mais"].hidden, true);
-    assert.equal(global.document.activeElement, linhas()[25].querySelector("button"), "foco no primeiro item novo");
-    // Busca: nada muda antes da pausa; depois filtra e volta a 25 por página.
-    const digitar = valor => { nos["cockpit-chamados-os-busca"].value = valor; (nos["cockpit-chamados-os-busca"].ouvintes.input || []).forEach(fn => fn()); };
-    digitar("UTIC-2026-2");
-    assert.equal(linhas().length, 30, "nada filtra antes da pausa");
-    await new Promise(resolve => setTimeout(resolve, 200));
-    assert.equal(linhas().length, 11, "UTIC-2026-2 e UTIC-2026-20 a 29");
-    assert.equal(nos["cockpit-chamados-os-mostrando"].textContent, "Mostrando 11 de 11");
-    digitar("");
-    await new Promise(resolve => setTimeout(resolve, 200));
-    assert.equal(linhas().length, 25, "a nova busca volta à primeira página");
-  } finally { limpar(); }
+    // Chamado que não está no F5: avisa à esquerda e ainda mostra a OS pedida.
+    await api.abrirJanelaChamadoOs({ chamado: "UTIC-X", serie: "SN-2", os: "88" });
+    assert.equal(noChamado.at(-1)[0].textContent, "Chamado não encontrado na aba Chamados (F5).");
+    assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88" });
+  } finally { delete global.document; delete global.SimpressDataPanels; }
 });

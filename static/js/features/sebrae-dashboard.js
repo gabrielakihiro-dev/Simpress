@@ -601,24 +601,25 @@
       return zona;
     }
 
-    /** Número da OS como botão: abre a aba OS (F6) na linha dessa OS, com o andamento da série aberto. Só navegação. */
-    function valorOs(os, serie, sufixo = "") {
+    /** Número da OS como botão: abre a janela Chamado × OS (cartão do chamado ao lado da OS da aba OS). Só navegação e leitura. */
+    function valorOs(os, serie, sufixo = "", chamado = "") {
       const botao = dom.createTextElement("button", "sebrae-chamado__os", os);
       botao.type = "button";
-      botao.setAttribute("aria-label", `Abrir a OS ${os} na aba OS (F6)`);
-      botao.addEventListener("click", () => app.abrirChamadoDaOs?.([], serie, os));
+      botao.setAttribute("aria-label", `Abrir a OS ${os} na janela Chamado × OS`);
+      botao.addEventListener("click", () => app.abrirJanelaChamadoOs?.({ chamado, serie, os }, botao));
       const dd = document.createElement("dd");
       dd.append(botao, sufixo);
       return dd;
     }
 
-    function listaFatos(pares, serie = "") {
+    /** `leitura`: a OS vira texto (cartão da própria janela Chamado × OS). */
+    function listaFatos(pares, serie = "", chamado = "", leitura = false) {
       const fatos = document.createElement("dl");
       fatos.className = "ck-fatos sebrae-chamado__auto";
       pares.forEach(([rotulo, valor]) => {
         const linha = document.createElement("div");
-        const ehOs = rotulo === "OS" && valor && valor !== "—";
-        linha.append(dom.createTextElement("dt", "", rotulo), ehOs ? valorOs(valor, serie) : dom.createTextElement("dd", "", valor));
+        const ehOs = !leitura && rotulo === "OS" && valor && valor !== "—";
+        linha.append(dom.createTextElement("dt", "", rotulo), ehOs ? valorOs(valor, serie, "", chamado) : dom.createTextElement("dd", "", valor));
         fatos.appendChild(linha);
       });
       return fatos;
@@ -684,7 +685,8 @@
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
       const artigo = cartaoChamado(item.numero, "finalizado", titulo, "Finalizado", "ok");
-      artigo.appendChild(zonaSolicitacao(fatos.length ? listaFatos(fatos) : null, [],
+      const serieFicha = fatos.find(([rotulo]) => rotulo === "Série")?.[1] || "";
+      artigo.appendChild(zonaSolicitacao(fatos.length ? listaFatos(fatos, serieFicha, item.numero) : null, [],
         detalhes.map(([rotulo, texto]) => blocoDetalhe(rotulo, texto))));
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
@@ -741,6 +743,45 @@
       detalhe.appendChild(artigo);
       li.appendChild(detalhe);
       return li;
+    }
+
+    /** Cópia só leitura do cartão do F5 para a janela Chamado × OS: zonas 1 e 2 sem lápis nem campos editáveis, sem a zona 3.
+     * `chave` = número do chamado (ou a chave `linha:N` do antigo sem UTIC único). Nada é gravado; null quando não acha. */
+    async function cartaoChamadoSebraeLeitura(chave) {
+      const alvo = String(chave ?? "").trim();
+      if (!alvo) return null;
+      if (!estado.formulario.length && !estado.abertos.length && !estado.finalizadosItens.length) await carregarNovosSebrae();
+      const igual = item => String(item.numero ?? "") === alvo;
+      const fin = estado.finalizadosItens.find(igual);
+      const novo = fin ? null : estado.formulario.find(igual);
+      const antigo = fin || novo ? null : estado.abertos.find(igual)
+        || estado.abertos.find(item => String(item.numero ?? "").startsWith("linha:") && String(item.chamado ?? "").trim() === alvo);
+      const item = fin || novo || antigo;
+      const ficha = fin ? fin.ficha || {} : item ? montarFicha(item.numero) : null;
+      if (!ficha) return null;
+      const pares = valor => Array.isArray(valor)
+        ? valor.filter(par => Array.isArray(par) && par.length === 2 && par.every(texto => typeof texto === "string")) : [];
+      const fatos = pares(ficha.fatos);
+      const valores = fin ? { ...ficha.manuais, D: "FINALIZADO", R: fin.encerrado_em }
+        : antigo ? valoresEfetivos(antigo.numero) : { ...padroesManuais(novo), ...estado.valores[novo.numero] };
+      const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", antigo ? tituloAntigo(antigo) : item.numero);
+      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", ficha.titulo || "Sem título"));
+      const [tipo, seloTexto, seloStatus] = fin ? ["finalizado", "Finalizado", "ok"] : antigo ? ["antigo", "Em aberto", ""] : ["novo", "Novo", "info"];
+      const artigo = cartaoChamado(item.numero, tipo, titulo, seloTexto, seloStatus);
+      artigo.querySelector(".sebrae-chamado__recolher")?.remove();
+      delete artigo.dataset.numero; // a cópia não é o cartão do F5: quem procura `article[data-numero]` acha só o original
+      artigo.dataset.serie = fatos.find(([rotulo]) => rotulo === "Série")?.[1] || "";
+      artigo.dataset.os = fatos.find(([rotulo]) => rotulo === "OS")?.[1] || "";
+      const manuais = document.createElement("div");
+      manuais.className = "sebrae-chamado__manuais";
+      ["A", "B", "D", "J", "R", "S"].forEach(letra => {
+        const valor = valores[letra];
+        manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleLeitura(letra, letra === "R" ? formatarEncerramento(valor) || valor : valor)));
+      });
+      const observacao = fin ? fin.observacao : estado.observacoes[item.numero]?.textarea?.value ?? item.observacao;
+      artigo.append(zonaSolicitacao(fatos.length ? listaFatos(fatos, "", "", true) : null, [], pares(ficha.detalhes).map(([rotulo, texto]) => blocoDetalhe(rotulo, texto))),
+        zonaClassificacao(manuais, blocoObservacao(item.numero, observacao, true)));
+      return artigo;
     }
 
     /** Bloco recolhido "Descrição" / "Atendimento realizado" (novo, antigo lido e finalizado). */
@@ -897,7 +938,7 @@
         if (!atual && !sugerido) return;
         const linha = document.createElement("div");
         const serie = item.automaticos?.K || item.automaticos_sugeridos?.K || "";
-        linha.append(dom.createTextElement("dt", "", rotulo), letra === "E" ? valorOs(atual || sugerido, serie, atual ? "" : " (será preenchido)") : dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
+        linha.append(dom.createTextElement("dt", "", rotulo), letra === "E" ? valorOs(atual || sugerido, serie, atual ? "" : " (será preenchido)", item.numero) : dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
         fatos.appendChild(linha);
       });
       const manuais = document.createElement("div");
@@ -965,7 +1006,7 @@
       const fatos = listaFatos(CAMPOS_AUTOMATICOS.flatMap(([letra, rotulo]) => {
         const par = [rotulo, item.linha[letra] || "—"];
         return letra === "K" ? [par, ["Apelido", item.apelido || "—"]] : [par]; // Apelido: só exibição, vem da base
-      }), item.linha.K);
+      }), item.linha.K, item.numero);
       const notas = [];
       const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
@@ -2440,7 +2481,7 @@
     }
 
     instalarVisao();
-    return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae, mostrarChamadoSebrae };
+    return { carregarNovosSebrae, lerAntigosSebrae, importarDashboardSebrae, atualizarDashboardSebrae, descartarRascunhoSebrae, mostrarChamadoSebrae, cartaoChamadoSebraeLeitura };
   }
 
   createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando, ehApiSebrae, padroesManuais,

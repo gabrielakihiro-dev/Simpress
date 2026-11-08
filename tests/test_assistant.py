@@ -1632,10 +1632,12 @@ class OsDosAntigosTests(unittest.TestCase):
 
 
 class ChamadosOsSimpress(FakeSimpress):
-    """GET /api/sebrae/novos, the OS report and the F6 notes: the three reads of the "Chamados × OS" panel."""
+    """GET /api/sebrae/novos, the OS report and the F6 notes: the three reads of chamados_com_os_sebrae (the screen shows each pair in the "Chamado × OS" window)."""
 
-    def __init__(self, novos: Optional[List[Dict[str, Any]]] = None, observacoes_status: int = 200) -> None:
+    def __init__(self, novos: Optional[List[Dict[str, Any]]] = None, observacoes_status: int = 200,
+                 relatorio_extra: Optional[List[Dict[str, Any]]] = None) -> None:
         super().__init__()
+        self.relatorio_extra = relatorio_extra or []
         self.novos = novos if novos is not None else [
             {"numero": "UTIC-2026-2000", "linha": {"G": f"Tela quebrada, Maria Souza, CPF {CPF}", "I": "Maria Souza", "K": "abc123", "E": "os 100"}},
             {"numero": "UTIC-2026-2001", "linha": {"G": "Traço", "K": "ABC123", "E": "—"}},
@@ -1662,6 +1664,7 @@ class ChamadosOsSimpress(FakeSimpress):
                 {"serie": "ABC123", "relacao": "conferida", "oracle": [{"ordem_servico": "OS100", "status": "Aberta", "sub_status": "Aguardando peça"}],
                  "simpress": {"ordens_servico": ["OS 100"], "status": ["Em atendimento"]}},
                 {"serie": "SCXC9F072K1", "relacao": "so_oracle", "oracle": [{"ordem_servico": "77", "status": "Aberta"}], "simpress": {}},
+                *self.relatorio_extra,
             ]}
         if path == "/api/operacoes/chamados/observacoes":
             self.calls.append((method, path, params, body))
@@ -1699,6 +1702,28 @@ class ChamadosComOsToolTests(unittest.TestCase):
         self.assertNotIn("solicitante", texto)
         self.assertNotIn("responsavel", texto)
         self.assertFalse(TOOLS["chamados_com_os_sebrae"].changes_data)
+
+    def test_ticket_without_serial_links_by_an_os_found_in_a_single_serial(self) -> None:
+        novos = [
+            {"numero": "27655", "linha": {"G": "Sem série", "K": "", "E": "77"}},
+            {"numero": "27656", "linha": {"G": "OS em duas séries", "K": "", "E": "88"}},
+            {"numero": "27657", "linha": {"G": "Série sem a OS", "K": "ABC123", "E": "77"}},
+        ]
+        extra = [
+            {"serie": "DEF456", "relacao": "so_oracle", "oracle": [{"ordem_servico": "88", "status": "Aberta"}], "simpress": {}},
+            {"serie": "GHI789", "relacao": "so_simpress", "oracle": [], "simpress": {"ordens_servico": ["8 8"], "status": ["Em atendimento"]}},
+        ]
+        dados = SimpressApi(ChamadosOsSimpress(novos=novos, relatorio_extra=extra)).chamados_com_os_sebrae()
+        itens = {i["utic"]: i for i in dados["chamados"]}
+        unica = itens["27655"]
+        # The ticket keeps its empty serial; the report's serial comes in serie_relatorio and the F6 note is read with it.
+        self.assertEqual((unica["encontrada"], unica["serie"], unica["serie_relatorio"], unica["fontes"], unica["relacao"]),
+                         (True, "", "SCXC9F072K1", ["oracle"], "so_oracle"))
+        self.assertEqual(unica["observacao_os"], "Mac aguardando")
+        for utic in ("27656", "27657"):  # OS in two serials, or a found serial without this OS: no link
+            self.assertEqual((itens[utic]["encontrada"], itens[utic]["serie_relatorio"], itens[utic]["fontes"], itens[utic]["observacao_os"]),
+                             (False, "", [], ""), utic)
+            self.assertEqual(itens[utic]["mensagem"], "Série não encontrada na importação atual.")
 
     def test_person_name_never_reaches_the_model(self) -> None:
         model = FakeModel(calls(call("chamados_com_os_sebrae")), text("ok"))

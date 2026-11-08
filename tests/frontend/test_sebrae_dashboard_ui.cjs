@@ -283,17 +283,75 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   return { doc, el, feature, app };
 }
 
-test("a OS do cartão é um botão que abre a aba OS (F6) na linha dessa OS, sem escrever nada", async () => {
+test("a OS do cartão é um botão que abre a janela Chamado × OS desse chamado, sem escrever nada", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   Object.assign(carga.novos.formulario[0].linha, { K: "BRJ54925BT", E: "7281145" });
-  const { el, app } = await renderizarCartoes(carga);
+  carga.importado.abertos[1].automaticos_sugeridos = { K: "BRJ1", E: "555" };
+  carga.importado.finalizados[0].ficha.fatos.push(["Série", "BRJ9"], ["OS", "999"]);
+  const chamadas = [];
+  const { el, app } = await renderizarCartoes(carga, null, chamadas);
   const aberturas = [];
-  app.abrirChamadoDaOs = (...args) => aberturas.push(args);
+  app.abrirChamadoDaOs = () => assert.fail("a OS do F5 não vai mais direto para a aba OS (F6)");
+  app.abrirJanelaChamadoOs = (...args) => aberturas.push(args);
   const botao = el["sebrae-novos-lista"].querySelector("button.sebrae-chamado__os");
   assert.ok(botao);
   assert.equal(botao.textContent, "7281145");
+  assert.equal(botao.getAttribute("aria-label"), "Abrir a OS 7281145 na janela Chamado × OS");
   botao.click();
-  assert.deepEqual(aberturas, [[[], "BRJ54925BT", "7281145"]]);
+  assert.deepEqual(aberturas, [[{ chamado: "UTIC-2026-1378", serie: "BRJ54925BT", os: "7281145" }, botao]]);
+  // antigo sem UTIC (chave linha:N, OS sugerida) e finalizado (série e OS da ficha) também passam a chave do chamado
+  el["sebrae-antigos-lista"].querySelector("button.sebrae-chamado__os").click();
+  el["sebrae-finalizados-lista"].querySelector("button.sebrae-chamado__os").click();
+  assert.deepEqual(aberturas.slice(1).map(([pedido]) => pedido), [
+    { chamado: "linha:27", serie: "BRJ1", os: "555" }, { chamado: "UTIC-2026-1100", serie: "BRJ9", os: "999" },
+  ]);
+  assert.ok(chamadas.every(chamada => chamada.metodo === "GET"), "abrir a janela não grava nada");
+});
+
+test("cartaoChamadoSebraeLeitura devolve a cópia só leitura do cartão (zonas 1 e 2, sem zona 3) para a janela Chamado × OS", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  Object.assign(carga.novos.formulario[0].linha, { K: "BRJ54925BT", E: "7281145" });
+  carga.novos.formulario[0].observacao = "Aguardando peça.";
+  carga.importado.abertos[1].automaticos_sugeridos = { K: "BRJ1", E: "555" };
+  carga.importado.finalizados[0].ficha.fatos.push(["Série", "BRJ9"], ["OS", "999"]);
+  const chamadas = [];
+  const { doc, el, feature } = await renderizarCartoes(carga, null, chamadas);
+  const antesF5 = el["sebrae-novos-lista"].textContent;
+  const semEscrita = cartao => {
+    assert.equal(cartao.querySelector(".sebrae-zona--finalizacao"), null, "sem a zona 3");
+    assert.equal(cartao.querySelector(".sebrae-chamado__recolher"), null, "sem Recolher");
+    assert.equal(cartao.querySelector("button.sebrae-chamado__os"), null, "a OS é texto");
+    assert.equal(cartao.querySelector("select"), null);
+    cartao.querySelectorAll("input").forEach(campo => assert.equal(campo.disabled, true));
+    cartao.querySelectorAll("textarea").forEach(campo => assert.equal(campo.readOnly, true));
+    assert.equal(cartao.dataset.numero, undefined, "não se confunde com o cartão do F5");
+    assert.ok(cartao.querySelector(".sebrae-zona--solicitacao") && cartao.querySelector(".sebrae-zona--classificacao"));
+  };
+  const novo = await feature.cartaoChamadoSebraeLeitura("UTIC-2026-1378");
+  semEscrita(novo);
+  assert.equal(novo.querySelectorAll("button").length, 0, "sem lápis nem botões de escrita");
+  assert.match(novo.className, /sebrae-chamado--novo/);
+  assert.deepEqual([novo.dataset.serie, novo.dataset.os], ["BRJ54925BT", "7281145"]);
+  assert.match(novo.textContent, /Computador travando/);
+  assert.match(novo.textContent, /Travando\./);
+  assert.equal(novo.querySelector("[data-sebrae-observacao]").value, "Aguardando peça.");
+  assert.equal(novo.querySelector('[data-sebrae-campo="D"]').value, "EM ABERTO");
+  const antigo = await feature.cartaoChamadoSebraeLeitura("Sem UTIC"); // antigo sem UTIC único: acha pela coluna C
+  semEscrita(antigo);
+  assert.match(antigo.textContent, /Impressora offline/);
+  assert.deepEqual([antigo.dataset.serie, antigo.dataset.os], ["BRJ1", "555"]);
+  assert.equal((await feature.cartaoChamadoSebraeLeitura("linha:27")).dataset.os, "555");
+  assert.equal((await feature.cartaoChamadoSebraeLeitura("UTIC-2026-1200")).querySelector('[data-sebrae-campo="A"]').value, "SIMPRESS");
+  const fin = await feature.cartaoChamadoSebraeLeitura("UTIC-2026-1100");
+  semEscrita(fin);
+  assert.equal(fin.querySelector('[data-sebrae-campo="D"]').value, "FINALIZADO");
+  assert.equal(fin.querySelector('[data-sebrae-campo="R"]').value, "27/10/2026 14:05");
+  assert.deepEqual([fin.dataset.serie, fin.dataset.os], ["BRJ9", "999"]);
+  assert.equal(await feature.cartaoChamadoSebraeLeitura("UTIC-2026-9"), null);
+  assert.equal(await feature.cartaoChamadoSebraeLeitura(""), null);
+  assert.equal(el["sebrae-novos-lista"].textContent, antesF5, "o cartão do F5 continua igual");
+  assert.equal(doc.querySelectorAll("article.sebrae-chamado[data-numero]").length, 4, "as cópias não entram no documento");
+  assert.ok(chamadas.every(chamada => chamada.metodo === "GET"), "nada é gravado");
 });
 
 test("ficha legada malformada preserva partes válidas e não interrompe os cartões", async () => {
