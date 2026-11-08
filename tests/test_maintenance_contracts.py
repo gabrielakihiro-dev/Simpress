@@ -20,6 +20,7 @@ from core import openpyxl_compat
 from domains import inventory_state
 from fastapi import HTTPException
 from starlette.routing import Match
+from security import sessao_local
 
 
 with patch(
@@ -98,6 +99,7 @@ def _run_local_safety_middleware(
         state["messages"].append(message)
 
     headers = [(b"host", host.encode("ascii")) for host in host_values]
+    headers.append((b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii")))
     if include_content_length:
         headers.append((b"content-length", str(len(body) if content_length is None else content_length).encode("ascii")))
     if origin is not None:
@@ -390,7 +392,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "raw_path": b"/api/equipamento/apelidos-modificados",
             "query_string": b"",
             "root_path": "",
-            "headers": [(b"host", b"localhost:8000")],
+            "headers": [(b"host", b"localhost:8000"), (b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii"))],
             "server": ("localhost", 8000),
             "client": ("127.0.0.1", 12345),
         }

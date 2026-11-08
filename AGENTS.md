@@ -192,6 +192,8 @@ Edição por cidade dos 22 representantes (tela Transferência, F2; autorizada p
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
 
+Sessão local (08/11/2026): `/api/*` só responde com o cookie `simpress_sessao_<porta>` criado por `GET /bootstrap?t=<segredo>`; o segredo muda a cada início do servidor e fica em `%LOCALAPPDATA%\Simpress\sessao_<porta>.txt`. Sem cookie: 401. O `main.py` abre o navegador em `/bootstrap` ao iniciar (`SIMPRESS_NAO_ABRIR_NAVEGADOR=1` desliga) e o `iniciar_servidor.bat` faz o mesmo ao reabrir uma instância já ativa. Todo cliente interno novo de `/api/*` (scripts, Assistente, testes) precisa enviar esse cookie (`security/sessao_local.py`: `cabecalho_cookie`, `ler_segredo`). Detalhes em `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
 ## Assistente (OpenRouter)
 
 O Assistente é o chat flutuante do Cockpit (F9) que responde sobre dados do Simpress usando ferramentas. Roda só nesta pasta (`routers/assistant.py`, `domains/assistant_*.py`) e chama o OpenRouter direto do servidor local. A chave `OPENROUTER_API_KEY` fica no `.env` da raiz (fora do Git) e nunca vai ao front-end, a logs nem a respostas da API.

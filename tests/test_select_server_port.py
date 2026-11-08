@@ -39,6 +39,25 @@ class SelectServerPortTests(unittest.TestCase):
         self.assertIn("porta 8000 (PID 4321)", calls[0].args[0])
         self.assertEqual(calls[-1].args[0], "PORT:8001")
 
+    def test_probe_accepts_401_from_stats_without_session_cookie(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+
+        paths = dict.fromkeys(selector.EXPECTED_PATHS | selector.CURRENT_PATHS, {})
+        document = {"info": {"title": selector.EXPECTED_TITLE}, "paths": paths}
+
+        class Opener:
+            def open(self, url, timeout):
+                if url.endswith("/openapi.json"):
+                    return io.BytesIO(json.dumps(document).encode())
+                raise HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b"{}"))
+
+        connection = mock.MagicMock()
+        connection.__enter__.return_value.connect_ex.return_value = 0
+        with mock.patch.object(selector.socket, "socket", return_value=connection),              mock.patch.object(selector, "build_opener", return_value=Opener()):
+            self.assertEqual(selector._probe_simpress(8000), document)
+
 
 if __name__ == "__main__":
     unittest.main()
