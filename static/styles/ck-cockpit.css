@@ -591,18 +591,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-diverge { color: var(--cor-erro-texto); }
 .ck-copia { display: flex; align-items: center; gap: 6px; font: var(--peso-regular) var(--fs-base) var(--fonte-mono); }
 
-.ck-rel__corpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; padding: 16px 20px 20px; align-content: start; }
-.ck-rel__largo { grid-column: 1 / -1; }
-.ck-legenda { display: flex; gap: 12px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
-.ck-legenda__item { display: inline-flex; align-items: center; gap: 5px; }
-.ck-legenda__cor { width: 8px; height: 8px; border-radius: 2px; }
-.ck-legenda__cor--abertos, .ck-graf__abertos { background: var(--cor-destaque); fill: var(--cor-destaque); }
-.ck-legenda__cor--concluidos, .ck-graf__concluidos { background: var(--cor-texto-apagado); fill: var(--cor-texto-apagado); }
-.ck-graf { width: 100%; height: 150px; }
-.ck-graf__base { stroke: var(--cor-borda); stroke-width: 1; }
-.ck-graf__rotulos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); text-align: center; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
-.ck-graf__rotulos strong { display: block; font-weight: var(--peso-regular); color: var(--cor-texto-suave); font-variant-numeric: tabular-nums; }
-.ck-rel__descricao { font-size: var(--fs-ui); line-height: 1.5; color: var(--cor-texto-mudo); }
 .ck-rel__texto { margin: 0; font: var(--peso-regular) var(--fs-ui)/1.65 var(--fonte-mono); color: var(--cor-texto-forte); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 @media (max-width: 1199.98px) {
@@ -614,7 +602,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
   #form-nova-unidade { margin-left: 12px; margin-right: 12px; }
   .ck-barra-ferr .ck-campo { flex: 1 1 100%; }
   .ck-dividido__lista { padding: 8px 12px 16px; }
-  .ck-rel__corpo { grid-template-columns: minmax(0, 1fr); padding: 14px 12px; }
   .ck-kpi { padding: 10px 12px; }
 }
 
@@ -635,7 +622,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-upload__titulo { font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto); }
 .ck-upload__meta { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-dividido__detalhe .ck-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ck-graf__rotulos--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
 /* ---------- 2.16 Home · edição dos dados cadastrais (botão Editar) ---------- */
 .ck-btn[aria-pressed="true"] { border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
@@ -997,21 +983,59 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-ferr-matriz { display: grid; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); overflow: hidden; }
 .ck-ferr-matriz__linha { display: grid; grid-template-columns: 84px minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--cor-borda-suave); }
 .ck-ferr-matriz__linha:last-child { border-bottom: 0; }
-.ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
-.ck-rel__corpo > .ck-det-bloco { grid-column: 1 / -1; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
-.ck-rel__detalhe > .ck-rel__largo { grid-column: 1 / -1; }
-@media (max-width: 767.98px) { .ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } } /* F9 no celular: o detalhe do relatório (gráfico, tabela e cartões) ocupa a largura toda em vez de duas colunas de ~165px */
-.ck-rel__col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* Relatório mensal (F8), layout operacional (07/11/2026; docs/cockpit-prompts/10-relatorio-mensal.md). Só tokens existentes. */
 .ck-rel__barra { flex-wrap: wrap; align-items: flex-end; padding-top: 8px; padding-bottom: 8px; }
 .ck-rel__barra .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; }
-.ck-rel__aviso { margin: 0; padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); }
-.ck-rel__cartao { padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__periodo { align-self: center; }
+.ck-rel__espaco { flex: 1 1 0; }
+.ck-rel__corpo { display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px; }
+.ck-rel__titulo { font-size: var(--fs-lg); font-weight: var(--peso-medio); }
+.ck-rel__atencao-bloco { display: flex; flex-direction: column; gap: 8px; }
+.ck-rel__atencao-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.ck-rel__detalhe { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ck-rel__cartao, .ck-rel__secao, .ck-rel__corpo > .ck-rel__previa { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__previa summary { cursor: pointer; }
+.ck-rel__cartao[data-status="alerta"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+.ck-rel__cartao[data-status="alerta"] :is(.ck-rel__cartao-titulo, .ck-rel__nota, .ck-rel__valor) { color: inherit; }
+.ck-rel__cartao-titulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
+.ck-rel__nota { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-rel__numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 0; }
 .ck-rel__numero { display: flex; flex-direction: column-reverse; min-width: 0; }
+.ck-rel__numero[data-status="alerta"] .ck-rel__valor { color: var(--cor-alerta-texto); }
 .ck-rel__valor { margin: 0; font-size: var(--fs-kpi); font-weight: var(--peso-medio); line-height: 1.2; font-variant-numeric: tabular-nums; }
 .ck-rel__rotulo { font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
-.ck-rel__previa summary { cursor: pointer; }
-@media (max-width: 1199.98px) { .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } }
+.ck-rel__total { margin: 0; }
+.ck-rel__contagens { display: flex; flex-direction: column; margin: 0; }
+.ck-rel__contagem { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-rel__contagem dd { margin: 0; font-weight: var(--peso-medio); }
+.ck-rel__fora { margin: 0; padding-left: 16px; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.ck-rel__link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--cor-destaque); font-weight: var(--peso-medio); text-align: left; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; cursor: pointer; }
+.ck-rel__link:hover { color: var(--cor-destaque-forte); }
+[data-theme="dark"] .ck-rel__link:hover { color: var(--cor-destaque-texto); }
+.ck-rel__secao-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ck-rel__secao-cab .ck-det__titulo { flex: 1 1 auto; margin: 0; }
+.ck-rel__filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.ck-rel__tabela { min-width: 0; overflow-x: auto; }
+.ck-rel__selos { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ck-rel__rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ck-rel__atual { border-style: dashed; border-color: var(--cor-borda); background: var(--cor-superficie-funda); }
+.ck-rel__base-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.ck-rel__sebrae-totais { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+.ck-rel__sebrae-totais .ck-rel__numeros { flex: 1 1 240px; }
+.ck-rel__tipos, .ck-rel__unidades { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ck-rel__unidades { gap: 0; }
+.ck-rel__tipo { display: flex; flex-direction: column; gap: 3px; }
+.ck-rel__tipo-linha, .ck-rel__unidade { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
+.ck-rel__unidade { padding: 5px 0; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-rel__unidade-nome { min-width: 0; overflow-wrap: anywhere; }
+.ck-rel__trilho { display: block; height: 6px; border-radius: 3px; background: var(--cor-neutro-fundo); overflow: hidden; }
+.ck-rel__trilho-valor { display: block; height: 100%; border-radius: 3px; background: var(--cor-destaque); transition: width var(--duracao-lenta) var(--curva); }
+@media (max-width: 1199.98px) { .ck-rel__base-grade { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767.98px) { .ck-rel__corpo { padding: 14px 12px; } }
+.ck-rel__corpo button { min-height: 0; } /* a regra global button{min-height:2.5rem} esticava filtros, links e "Carregar mais" (como em #tab-panel-home) */
+.ck-rel__cartao > button { align-self: flex-start; }
+@media (pointer: coarse) { [data-cockpit-tool-panel="relatorio"] .ck-rel__corpo :is(.ck-rel__link, .ck-btn--sm) { min-height: 44px; } .ck-rel__link { display: inline-flex; align-items: center; } }
+@media (prefers-reduced-motion: reduce) { .ck-rel__trilho-valor { transition: none; } }
 @media (max-width: 767.98px) { .ck-ferr-filtros { padding: 8px 12px; } }
 
 /* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */

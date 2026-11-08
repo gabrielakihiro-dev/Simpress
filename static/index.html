@@ -957,12 +957,17 @@ Horário disponível para atendimento:</textarea>
           <div class="ck-barra-ferr ck-rel__barra">
             <div id="cockpit-monthly-periods" class="ck-pilulas" role="group" aria-label="Meses recentes"></div>
             <label class="ck-campo"><span class="ck-campo__rotulo">Mês do relatório</span><input id="cockpit-monthly-month" class="ck-entrada" type="month"></label>
+            <span id="cockpit-monthly-period" class="ck-badge ck-rel__periodo" hidden></span>
+            <span class="ck-rel__espaco" aria-hidden="true"></span>
             <button type="button" id="cockpit-monthly-copy" class="ck-btn ck-btn--secundario">Copiar resumo</button>
             <button type="button" id="cockpit-monthly-export" class="ck-btn ck-btn--primario">Exportar planilha</button>
             <p id="cockpit-monthly-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Selecione um mês para carregar o relatório.</p>
           </div>
-          <div id="cockpit-monthly-kpis" class="ck-kpis" role="group" aria-label="Indicadores do relatório"></div>
           <div class="ck-rel__corpo">
+            <section id="cockpit-monthly-attention" class="ck-rel__atencao-bloco" aria-labelledby="cockpit-monthly-attention-title" hidden>
+              <h3 id="cockpit-monthly-attention-title" class="ck-rel__titulo" tabindex="-1">Precisa de atenção</h3>
+              <div id="cockpit-monthly-kpis" class="ck-rel__atencao-grade" role="group" aria-label="Indicadores do relatório"></div>
+            </section>
             <div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês"></div>
             <details class="ck-det-bloco ck-rel__previa"><summary class="ck-det__titulo">Prévia para a gestão</summary><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></details>
           </div>

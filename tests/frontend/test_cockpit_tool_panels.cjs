@@ -92,27 +92,88 @@ test("alias metrics count monthly events and distinct equipment without inventin
   });
 });
 
-test("monthly preview uses values returned by the existing report builder and marks unavailable metrics", () => {
-  const text = panels.monthlyPreviewText({
-    mes: { label: "outubro de 2026" },
+test("monthly preview uses the report values, the period and drops metrics the report does not provide", () => {
+  const report = {
+    mes: { label: "outubro de 2026", parcial: false, data_corte: "2026-10-31" },
     inventario: { total: 12, unidades: 3, arquivo_origem: "EquipamentosDetalhes_atual.xlsx", por_unidade: [["Curitiba", "Sede", 8], ["Londrina", "Centro", 4]] },
-    comparacao: { horario: null, atualizacoes_no_mes: 0, contagens: { "Sem correspondência — no endpoint": 2, "Sem correspondência — na Simpress": 1, "Localidade divergente": 0 } },
-    os: { oracle: { abertas: 2, concluidas: 1, pendentes: 3 }, simpress: { abertas: 1, concluidas: 0, pendentes: 1 }, dados_insuficientes: [] },
-  });
-  assert.match(text, /outubro de 2026/);
-  assert.match(text, /Equipamentos na base atual: 12/);
+    comparacao: { horario: "2026-10-15T09:00:00", atualizacoes_no_mes: 1, contagens: { "Sem correspondência — no endpoint": 2, "Sem correspondência — na Simpress": 1, "Localidade divergente": 0 } },
+    os: { oracle: { abertas: 2, concluidas: 1, pendentes: 3 }, simpress: { abertas: 1, concluidas: 0, pendentes: 1 }, dados_insuficientes: [{ fonte: "Simpress" }] },
+  };
+  const text = panels.monthlyPreviewText(report);
+  assert.match(text, /^Relatório mensal Simpress · outubro de 2026 · Mês encerrado/);
+  assert.match(text, /OS Oracle abertas no mês: 2/);
+  assert.match(text, /OS Oracle pendentes no fim do período: 3/);
+  assert.match(text, /Fora das contagens: 1 registro com dados insuficientes/);
+  assert.match(text, /Comparação usada: 15\/10\/2026 às 09:00 · 1 atualização de inventário no mês/);
+  assert.match(text, /Base atual \(não muda com o mês\): 12 equipamentos em 3 unidades/);
   assert.match(text, /Unidades com mais equipamentos \(base atual\):[\s\S]*Curitiba · Sede: 8/);
-  assert.match(text, /OS Oracle abertas: 2/);
-  assert.match(text, /Tempo médio até fechar: indisponível/);
-  assert.match(text, /Transportes solicitados: indisponível/);
-  assert.match(text, /Alterações de apelido: indisponível/);
-  assert.doesNotMatch(text, /Sem registros no mês/);
+  assert.doesNotMatch(text, /indisponível|Tempo médio|Transportes|Alterações de apelido/);
+  assert.doesNotMatch(text, /Chamados \(F5\)/, "sem a resposta do Sebrae a linha de chamados não aparece");
+
+  const withSebrae = panels.monthlyPreviewText({ ...report, mes: { label: "novembro de 2026", parcial: true, data_corte: "2026-11-07" } }, {
+    importado: { abertos: [{ numero: "UTIC-2026-1" }, { numero: "linha:9" }] }, novos: { formulario: [{ numero: "UTIC-2026-5" }] },
+  });
+  assert.match(withSebrae, /novembro de 2026 · Parcial até 07\/11\/2026/);
+  assert.match(withSebrae, /Chamados \(F5\), situação atual: 1 novo · 2 antigos em aberto/);
 });
 
-test("monthlyChartBars scales bars to the largest real count", () => {
-  const bars = panels.monthlyChartBars({ abertas: 4, concluidas: 2 }, { abertas: "x" });
-  assert.deepEqual(bars.map(bar => bar.height), [100, 50, 0, 0]);
-  assert.deepEqual(panels.monthlyChartBars().map(bar => bar.height), [0, 0, 0, 0]);
+test("monthly preview adds the server month count for Chamados (F5) and omits it on error or without Dashboard", () => {
+  const sebrae = { abertos: 1234, finalizados: 2, sem_data: 3, linhas: [] };
+  const line = /Chamados \(F5\), com data em outubro de 2026: Abertos no mês 1\.234 · Finalizados no mês 2 · Sem data de abertura ou de encerramento: 3 \(fora da contagem\)/;
+  const base = { mes: { label: "outubro de 2026" } };
+  // Sem a resposta do F5 (falhou), a linha do mês aparece sozinha, depois de uma linha em branco.
+  assert.match(panels.monthlyPreviewText({ ...base, sebrae }), new RegExp(`\\n\\n${line.source}`));
+  assert.doesNotMatch(panels.monthlyPreviewText({ ...base, sebrae }), /situação atual/);
+  const both = panels.monthlyPreviewText({ ...base, sebrae }, { novos: { formulario: [{ numero: "UTIC-2026-5" }] } });
+  assert.match(both, new RegExp(`Chamados \\(F5\\), situação atual: 1 novo · 0 antigos em aberto\\n${line.source}`));
+  for (const value of [null, undefined, { erro: "Dashboard ilegível." }]) {
+    assert.doesNotMatch(panels.monthlyPreviewText({ ...base, sebrae: value }), /com data em/);
+  }
+});
+
+test("Sebrae lists follow the F5 rule: a ticket the site finalized leaves Novos and Antigos", () => {
+  const data = {
+    importado: {
+      abertos: [{ numero: "UTIC-2026-1", titulo: "A" }, { numero: "UTIC-2026-2", titulo: "B" }],
+      finalizados: [{ numero: "UTIC-2026-1", encerrado_em: "20/10/2026 15:00" }],
+    },
+    novos: { formulario: [{ numero: "UTIC-2026-3", linha: { G: "C", K: "SN-3" } }] },
+  };
+  const lists = panels.sebraeOpenLists(data);
+  assert.deepEqual(lists.antigos.map(item => item.numero), ["UTIC-2026-2"]);
+  assert.deepEqual(lists.novos.map(item => item.numero), ["UTIC-2026-3"]);
+  assert.match(panels.monthlyPreviewText({ mes: { label: "outubro de 2026" } }, data), /Chamados \(F5\), situação atual: 1 novo · 1 antigo em aberto/);
+});
+
+test("a month row links to the F5 only with the F5 key and fills the series of new tickets", () => {
+  const data = {
+    importado: {
+      abertos: [
+        { numero: "UTIC-2026-1" },
+        { numero: "linha:40", chamado: " 27206 " },
+        { numero: "linha:41", chamado: "Sem chamado" },
+        { numero: "linha:42", chamado: "Sem chamado" },
+        { numero: "linha:43", chamado: "Chamado por e-mail" },
+        { numero: "linha:44", chamado: "" },
+      ],
+      finalizados: [{ numero: "UTIC-2026-9" }],
+    },
+    novos: { formulario: [{ numero: "UTIC-2026-5", linha: { K: "SN-5" } }] },
+  };
+  const match = row => panels.sebraeMonthMatch(row, data);
+  assert.deepEqual(match({ chave: "UTIC-2026-1", chamado: "UTIC-2026-1", serie: "SN-1" }), { chaveF5: "UTIC-2026-1", serie: "SN-1" });
+  assert.deepEqual(match({ chave: "UTIC-2026-9", chamado: "UTIC-2026-9", serie: "" }), { chaveF5: "UTIC-2026-9", serie: "" });
+  // Chamado novo da busca: série vazia no F8 vem de novos.formulario[].linha.K.
+  assert.deepEqual(match({ chave: "UTIC-2026-5", chamado: "UTIC-2026-5", serie: "" }), { chaveF5: "UTIC-2026-5", serie: "SN-5" });
+  // Número antigo: casa com o `linha:N` do F5 pelo número na coluna C.
+  assert.equal(match({ chave: "27206", chamado: "27206" }).chaveF5, "linha:40");
+  // linha:N do F8: nunca pela própria chave; só pelo texto de C, e só com resultado único e não vazio.
+  assert.equal(match({ chave: "linha:43", chamado: "Chamado por e-mail" }).chaveF5, "linha:43");
+  assert.equal(match({ chave: "linha:41", chamado: "Sem chamado" }).chaveF5, "", "ambíguo não liga");
+  assert.equal(match({ chave: "linha:44", chamado: "" }).chaveF5, "", "chamado vazio não liga");
+  assert.equal(match({ chave: "UTIC-2026-77", chamado: "UTIC-2026-77" }).chaveF5, "", "fora do F5: sem link");
+  assert.equal(match({ chave: "99999", chamado: "99999" }).chaveF5, "");
+  assert.deepEqual(panels.sebraeMonthMatch({ chave: "UTIC-2026-1", chamado: "UTIC-2026-1", serie: "" }, null), { chaveF5: "", serie: "" });
 });
 
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.

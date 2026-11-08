@@ -6,7 +6,7 @@ Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mê
 
 - XLSX gerado com `openpyxl` (sem biblioteca de PDF). Nome do arquivo: `Relatorio-mensal-AAAA-MM.xlsx`.
 - Gerado sob demanda por `GET /api/relatorio-mensal?mes=AAAA-MM`; o download não grava nada em `data/`. O mês atual é parcial até a data local do servidor; meses anteriores usam o mês completo.
-- A prévia Cockpit usa `GET /api/relatorio-mensal/dados?mes=AAAA-MM`, construído pelo mesmo serviço e sem gravar estado. A resposta JSON inclui `mes.parcial` e `mes.data_corte` para apresentar o período corretamente.
+- A prévia Cockpit usa `GET /api/relatorio-mensal/dados?mes=AAAA-MM`, construído pelo mesmo serviço e sem gravar estado. A resposta JSON inclui `mes.parcial` e `mes.data_corte` para apresentar o período corretamente e `comparacao.evento_id` (identificador da comparação usada, ou `null`) para o link ao Resumo (F3).
 - O servidor também salva automaticamente o relatório do mês anterior em `data/relatorios_mensais/`, uma vez por mês (ver `relatorio-mensal-automatico.md`).
 - Textos vindos das planilhas entram como texto literal (proteção contra fórmulas).
 
@@ -53,15 +53,26 @@ As OS e os pedidos vêm de `data/state/historico_chamados.json` (importado pela 
 - `mes` precisa ser `AAAA-MM` válido e não pode ser posterior ao mês atual (422). Base não carregada: 503 com mensagem clara. Histórico de chamados ilegível: 503.
 - Mês sem dados: a planilha é gerada mesmo assim, com zeros e a observação `Sem registros no mês`.
 - O inventário por unidade reflete a base atual, não uma fotografia histórica mensal. A prévia identifica isso e apresenta no máximo as três unidades com mais equipamentos.
-- A prévia marca transporte solicitado, tempo médio de fechamento e alterações de apelido como indisponíveis, pois essas métricas não são fornecidas pelo serviço do relatório mensal.
+- Transporte solicitado, tempo médio de fechamento e alterações de apelido não são fornecidos pelo serviço do relatório mensal; desde 07/11/2026 (decisão do usuário) não aparecem na tela nem na prévia, em vez de aparecer como indisponíveis. A XLSX não muda.
 
 ## Tela
 
-- Menu superior › `Ferramentas` (nove pontos) › `Relatório mensal` (`#btn-relatorio-mensal`, atalho F9).
-- Abre o painel Cockpit `data-cockpit-tool-panel="relatorio"`; mostra o mês atual e os dois meses anteriores como seletores rápidos, além do campo `<input type="month">` (máximo = mês atual). O mês atual aparece como parcial até a data informada pela API, e meses anteriores aparecem como encerrados.
-- A área analítica fica ao lado da prévia copiável. Os indicadores exibidos vêm de OS Oracle e pedidos Simpress com datas e status suficientes; não são inventados gráficos semanais, transportes, tempo médio nem alterações de apelido.
+Layout operacional aprovado pelo usuário em 07/11/2026 (mockups no canvas de Design da sessão; detalhes e textos em `docs/cockpit-prompts/10-relatorio-mensal.md`, seção "Layout operacional (07/11/2026)").
+
+- Menu superior › `Ferramentas` (nove pontos) › `Relatório mensal` (`#btn-relatorio-mensal`, atalho F8).
+- Barra: o mês atual e os dois anteriores como seletores rápidos, o campo `<input type="month">` (máximo = mês atual), o selo do período (`Parcial até dd/mm/aaaa` ou `Mês encerrado`, `#cockpit-monthly-period`), `Copiar resumo`, `Exportar planilha` e o status (`gerado em dd/mm/aaaa às hh:mm`).
+- Ordem do corpo, cada número uma vez só:
+  1. `Precisa de atenção` (`#cockpit-monthly-kpis`): `OS pendentes no fim do período` (Oracle e Simpress), `Comparação de inventário` (as três seções sem somar e a linha `Comparação usada`) e, só com registros fora das contagens, `Fora das contagens` com `Mostrar registros` / `Ocultar registros` (lista visível, não mais em tooltip).
+  2. `Movimento do mês`: abertas, concluídas e encerradas sem data por fonte.
+  3. `OS e pedidos do mês`: a tabela da aba `OS do mês` da XLSX, com filtro `Todas` / `Abertas` / `Concluídas` / `Pendentes` e 25 linhas por vez (`Carregar mais`).
+  4. `Pendências da comparação`: a tabela da aba `Comparação` da XLSX, 25 por vez.
+  5. `Chamados (F5)` com o selo `Situação atual`: totais de hoje (chamados novos e antigos em aberto, de `GET /api/sebrae/novos`, só leitura, com a mesma regra do F5: chamado finalizado pelo site sai dos dois totais na hora, mesmo antes de reimportar) e, abaixo, `Com data em <mês>` com a contagem do servidor (`report.sebrae`, etapa 2 de 07/11/2026): `Abertos no mês`, `Finalizados no mês` e `Sem data de abertura ou de encerramento: N (fora da contagem)`, pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca (`Habilitada em`) e pelos finalizados pelo site, que vencem a coluna R. A tabela tem `Chamado`, `Título`, `Série`, `Abertura`, `Finalização` e `Situação no mês` (`Aberto no mês` / `Finalizado no mês`; aberto e finalizado no mesmo mês é uma linha só, com os dois selos), 25 por vez. Série vazia é completada pela coluna K do chamado novo; sem série, `—`. Chamado com número antigo de 5 dígitos conta pelas próprias datas, deduplicado pelo número; sem número, uma linha por linha do Dashboard. Sem Dashboard importado aparece a mensagem de vazio; falha na contagem mostra o erro só nessa subparte e falha ao consultar o Sebrae, só na situação atual; o restante do relatório continua.
+  6. `Base atual` com o selo `Não muda com o mês`: totais, `Inventário por tipo` (com barra proporcional) e `Unidades com mais equipamentos` (8 primeiras; `Ver todas as N unidades` / `Ver menos`).
+  7. `Prévia para a gestão`, recolhida.
+- Ligações (só navegação, nada é gravado): série → Home (F1); OS/Pedido → aba OS (F6) filtrada pela série (a busca da F6 não procura o número do pedido Simpress); `Ver na aba OS (F6)`; `Abrir no Resumo (F3)` abre exatamente a comparação usada (`comparacao.evento_id`); chamado → aba Chamados (F5) na linha dele (só quando a linha do mês casa com um chamado do F5); `Ver novos` / `Ver antigos` abrem a sub-aba. A aba OS mostra a situação de hoje, não a do fim de um mês passado.
+- Sincronia: com o F8 aberto, importar OS (`simpress:chamados-atualizados`) ou uma nova comparação (`simpress:painel-atualizado`) recarrega o mês exibido sem piscar e sem perder filtro e páginas; fechado, o relatório é relido ao abrir.
 - `Copiar resumo` copia apenas a prévia visível; `Exportar planilha` usa a rota XLSX existente, com o mesmo nome de arquivo e a mensagem exata `Planilha Exportada com Sucesso!`.
-- Erros aparecem na região `role="status"` do painel e em toast. Temas claro e escuro usam os tokens existentes; em telas menores a composição analítica mantém os dados acessíveis com rolagem horizontal do painel.
+- Erros aparecem na região `role="status"` do painel e em toast. Temas claro e escuro usam os tokens existentes; abaixo de 1200px tudo fica em uma coluna e, no celular, as tabelas viram cartões, sem rolagem horizontal da página.
 
 ## Critérios de aceite
 
