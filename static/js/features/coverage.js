@@ -87,21 +87,30 @@
     return vez;
   }
 
+  // aria-busy só nos painéis e nos alertas: nunca no ancestral de #cobertura-status (aria-live), que engoliria o anúncio.
+  const regioesOcupadas = () => [...document.querySelectorAll(".cob__painel"), byId("cobertura-alertas")].filter(Boolean);
+
   async function lerCobertura() {
-    const r = await requisitar("GET", "/api/cobertura");
-    carregouAlgumaVez = true;
-    if (!r.ok || !r.corpo) {
-      dados = null;
-      bloquearEscrita(true);
-      limparListas();
-      status(modelo().mensagemErro(r.corpo, r.status), "erro");
-      return false;
+    status("Carregando…");
+    regioesOcupadas().forEach(regiao => regiao.setAttribute("aria-busy", "true"));
+    try {
+      const r = await requisitar("GET", "/api/cobertura");
+      carregouAlgumaVez = true;
+      if (!r.ok || !r.corpo) {
+        dados = null;
+        bloquearEscrita(true);
+        limparListas();
+        status(modelo().mensagemErro(r.corpo, r.status), "erro");
+        return false;
+      }
+      dados = r.corpo;
+      bloquearEscrita(false);
+      renderizar();
+      status(`Cobertura atualizada em ${modelo().formatarData(dados.hoje)}.`);
+      return true;
+    } finally {
+      regioesOcupadas().forEach(regiao => regiao.removeAttribute("aria-busy"));
     }
-    dados = r.corpo;
-    bloquearEscrita(false);
-    renderizar();
-    status(`Cobertura atualizada em ${modelo().formatarData(dados.hoje)}.`);
-    return true;
   }
 
   // ------------------------------------------------------------------ montagem

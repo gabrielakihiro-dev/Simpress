@@ -271,6 +271,34 @@ test("estado ilegível (503) mostra o erro e não oferece nenhuma escrita", asyn
   for (const form of await painel.locator("form[data-cobertura-escrita]").all()) await expect(form).toBeHidden();
   await expect(painel.locator(".cob__lista button")).toHaveCount(0);
   await expect(painel.getByRole("button", { name: /Registrar|Reservar|Confirmar disponível|Marcar/ })).toHaveCount(0);
+  // O erro também encerra o carregamento: nenhum painel fica preso em aria-busy.
+  await expect(painel.locator(".cob__painel[aria-busy]")).toHaveCount(0);
+});
+
+test("enquanto lê a cobertura o status mostra Carregando… e os painéis ficam com aria-busy", async ({ page }) => {
+  await cenario(page);
+  let soltar;
+  const portao = new Promise(resolve => { soltar = resolve; });
+  await page.route("**/api/cobertura", async route => {
+    await portao;
+    await route.continue();
+  });
+  try {
+    await page.goto("/");
+    await page.locator("#input-serial").focus();
+    await page.keyboard.press("F10");
+    await expect(page.locator('[data-cockpit-tool-panel="cobertura"]')).toBeVisible();
+    const status = page.locator("#cobertura-status");
+    await expect(status).toHaveText("Carregando…");
+    await expect(page.locator("#cobertura-painel-necessidades")).toHaveAttribute("aria-busy", "true");
+    await expect(page.locator("#cobertura-alertas")).toHaveAttribute("aria-busy", "true");
+    // O aria-busy não pode subir para o aria-live: ancestral ocupado engole o anúncio.
+    await expect(status).not.toHaveAttribute("aria-busy", /.*/);
+  } finally {
+    soltar();
+  }
+  await expect(page.locator("#cobertura-status")).toContainText("Cobertura atualizada");
+  await expect(page.locator(".cob__painel[aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
 });
 
 test("409 recarrega a cobertura e mostra a mensagem do servidor", async ({ page }) => {
