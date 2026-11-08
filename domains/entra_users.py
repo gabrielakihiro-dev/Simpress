@@ -51,6 +51,9 @@ def login_key(value: Any) -> str:
             return ""
         text = local
     key = text.casefold()
+    # MacBooks report the PR UPN without "@" (e.g. "ASmartinspr.sebrae.com.br").
+    if key.endswith(DOMAIN) and len(key) > len(DOMAIN):
+        key = key[: -len(DOMAIN)]
     return key if _LOGIN.fullmatch(key) else ""
 
 

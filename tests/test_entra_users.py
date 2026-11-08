@@ -87,6 +87,7 @@ class StorageAndExportTests(unittest.TestCase):
         self.assertEqual(entra_users.login_key("SEBRAE\\Ana.Lima"), "ana.lima")
         self.assertEqual(entra_users.login_key("ana@pr.sebrae.com.br"), "ana")
         self.assertEqual(entra_users.login_key("ana@outro.com"), "")
+        self.assertEqual(entra_users.login_key("ASmartinspr.sebrae.com.br"), "asmartins")
         self.assertEqual(entra_users.login_key("a\\b\\c"), "")
 
 
