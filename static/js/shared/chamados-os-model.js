@@ -1,4 +1,4 @@
-// Painel "Chamados × OS", sem DOM nem rede: junta os chamados em aberto do F5 (GET /api/sebrae/novos) que têm OS
+// Pareamento chamado × OS (regra espelhada por chamados_com_os_sebrae do Assistente; o painel "Chamados × OS" saiu em 08/11/2026), sem DOM nem rede: junta os chamados em aberto do F5 (GET /api/sebrae/novos) que têm OS
 // com a OS no relatório do F6 (GET /api/operacoes/chamados). Só leitura; nada é gravado.
 (function (root, factory) {
   const busca = typeof module === "object" && module.exports ? require("./catalog-search-utils.js") : root.SimpressCatalogSearch;
@@ -48,17 +48,26 @@
   function montarParesChamadoOs(entrada) {
     const { sebrae, relatorio, vinculos } = entrada || {};
     const registros = new Map();
+    const seriesPorOs = new Map();
     lista(relatorio?.chamados).forEach(registro => {
       const chave = serialKey(registro?.serie);
-      if (chave && !registros.has(chave)) registros.set(chave, registro);
+      if (!chave) return;
+      if (!registros.has(chave)) registros.set(chave, registro);
+      [...lista(registro?.oracle).map(item => item?.ordem_servico), ...lista(registro?.simpress?.ordens_servico)].forEach(os => {
+        const ordem = orderKey(os);
+        if (ordem) seriesPorOs.set(ordem, (seriesPorOs.get(ordem) || new Set()).add(chave));
+      });
     });
     const itensVinculo = Array.isArray(vinculos) ? vinculos : lista(vinculos?.vinculos);
     return chamadosComOs(sebrae).map(chamado => {
       const alvo = orderKey(chamado.os);
       const chaveSerie = serialKey(chamado.serie);
       // MacBook: a outra grafia (com/sem `S` inicial) só quando a série exata não existe no relatório.
-      const doSerie = registros.get(chaveSerie)
+      const porSerie = registros.get(chaveSerie)
         || (chaveSerie && registros.get(chaveSerie.startsWith("S") ? chaveSerie.slice(1) : `S${chaveSerie}`)) || null;
+      // Sem série (ou série fora do relatório), liga pela OS só se ela está em uma única série; série achada sem a OS é divergência real.
+      const seriesDaOs = porSerie ? null : seriesPorOs.get(alvo);
+      const doSerie = porSerie || (seriesDaOs?.size === 1 ? registros.get([...seriesDaOs][0]) : null);
       const oracle = lista(doSerie?.oracle).filter(item => orderKey(item?.ordem_servico) === alvo);
       const osSimpress = lista(doSerie?.simpress?.ordens_servico).find(os => orderKey(os) === alvo);
       const naSimpress = osSimpress !== undefined;

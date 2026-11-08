@@ -353,7 +353,7 @@ Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Da
 O painel **Chamados** (F5) separa os chamados nas sub-abas **Novos**, **Antigos**, **Destaques** e **Finalizados** (abre em Novos; a lupa **Filtrar chamados** procura nas quatro). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
 
 - **Ler chamados antigos**, no topo, lê no SoftExpert os chamados antigos ainda em aberto, sem gravar nada.
-- **Chamados × OS**, no topo (e também na aba **OS**), mostra os chamados em aberto que têm OS lado a lado com a OS da aba **OS**, com busca por UTIC, série ou OS. Só consulta: não grava nada.
+- **Chamado × OS**: clicar no número da OS no cartão do chamado (ou, na aba **OS**, no UTIC de uma OS vinculada) abre uma janela com o chamado ao lado da OS da aba **OS**. Só consulta: não grava nada.
 - O lápis no bloco **Descrição** edita o texto do chamado (até 4.000 caracteres), com **Salvar**, **Cancelar** e **Restaurar original**. O texto fica só no site, em `data/state/sebrae_finalizacao.json`; no chamado novo, ele vira a coluna H no próximo **Atualizar Dashboard**.
 - Chamados do solicitante `API SEBRAE` já vêm com A `CLIENTE`, B `OUTRO`, D `EM ABERTO`, J `INCIDENTE` e a descrição para finalizar `Revisado.`.
 - As seleções ficam como rascunho no navegador até **Descartar rascunho**.

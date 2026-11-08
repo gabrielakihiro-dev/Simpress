@@ -1,66 +1,46 @@
 const { test, expect } = require("@playwright/test");
-const AxeBuilder = require("@axe-core/playwright").default;
 
-// Chamados × OS: o fixture já traz um antigo (UTIC-2026-1200) cuja série não está na importação de OS;
-// o primeiro novo passa a apontar para a série DEMO-SN-001 / OS 7285070, que está no relatório do fixture.
-async function prepararChamados(page) {
-  await page.route("**/api/sebrae/novos", async route => {
-    const resposta = await route.fetch();
-    const dados = await resposta.json();
-    Object.assign(dados.novos.formulario[0].linha, { K: "DEMO-SN-001", E: "7285070" });
-    await route.fulfill({ response: resposta, json: dados });
-  });
+// Janela Chamado × OS: na aba OS (F6), o prefixo UTIC de uma OS vinculada abre #modal-chamado-os.
+// O fixture tem a OS 7285070 (série DEMO-SN-001) e o chamado UTIC-2026-1378 entre os novos do F5;
+// o vínculo salvo vem só desta rota (nada é gravado no servidor de fixture).
+async function abrirAbaOsComVinculo(page, numero) {
+  const vinculo = { fonte: "oracle", serie: "DEMO-SN-001", os: "7285070", ano: 2026, numero, origem: "manual", chamado: `UTIC-2026-${numero}` };
+  await page.route("**/api/operacoes/chamados/vinculos-os", route => route.request().method() === "GET"
+    ? route.fulfill({ json: { vinculos: [vinculo] } })
+    : route.fallback());
   await page.goto("/");
-  const naBarra = await page.locator("#btn-sebrae-chamados-aba").isVisible();
-  if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
-  await page.locator(naBarra ? "#btn-sebrae-chamados-aba" : "#btn-sebrae-chamados-menu").click();
-  await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
-}
-
-test("Chamados × OS abre pelo F5, liga UTIC e OS, passa no axe e volta pelo caminho de origem", async ({ page }) => {
-  await prepararChamados(page);
-  await page.locator("#btn-chamados-os-f5").click();
-  const painel = page.locator('[data-cockpit-tool-panel="chamados-os"]');
-  await expect(painel).toBeVisible();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados × OS");
-  const linhas = painel.locator("tbody tr");
-  await expect(linhas).toHaveCount(2);
-  const encontrada = linhas.filter({ hasText: "UTIC-2026-1378" });
-  await expect(encontrada).toContainText("Em atendimento");
-  await expect(encontrada.locator(".ck-badge").filter({ hasText: "Conferida" })).toBeVisible();
-  await expect(linhas.filter({ hasText: "UTIC-2026-1200" })).toContainText("Série não encontrada na importação atual.");
-  for (const tema of ["light", "dark"]) {
-    await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
-    const resultado = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="chamados-os"]').analyze();
-    expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`), tema).toEqual([]);
-  }
-  // Busca: só o número da OS fica.
-  await page.locator("#cockpit-chamados-os-busca").fill("7285070");
-  await expect(linhas).toHaveCount(1);
-  await encontrada.getByRole("button", { name: "Abrir a OS 7285070 na aba OS (F6)" }).click();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("OS");
-  await expect(page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"]').first()).toBeVisible();
-  const voltar = page.locator('#cockpit-tool-panels [data-on-click="fecharPainelCockpit"]');
-  await voltar.click();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados × OS");
-  await voltar.click();
-  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
-});
-
-test("Chamados × OS abre pela aba OS (F6), volta a ela e não rola na horizontal de 320 a 1366 px", async ({ page }) => {
-  await prepararChamados(page);
+  // OS fica na barra principal; abaixo de 1200px só o menu Ferramentas a oferece.
   const naBarra = await page.locator("#btn-acompanhamento-chamados").isVisible();
   if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
   await page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#btn-chamados-menu").click();
   await expect(page.locator("#cockpit-tool-title")).toHaveText("OS");
-  await page.locator("#btn-chamados-os-f6").click();
-  const painel = page.locator('[data-cockpit-tool-panel="chamados-os"]');
-  await expect(painel.locator("tbody tr")).toHaveCount(2);
-  for (const largura of [320, 390, 768, 1366]) {
-    await page.setViewportSize({ width: largura, height: 800 });
-    await expect(painel.locator("tbody tr").first()).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${largura}px`).toBe(true);
-  }
-  await page.locator('#cockpit-tool-panels [data-on-click="fecharPainelCockpit"]').click();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("OS");
+  const gatilho = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"] button.ticket-os-link-goto').first();
+  await expect(gatilho).toBeVisible();
+  await expect(gatilho).toHaveAttribute("aria-haspopup", "dialog");
+  return gatilho;
+}
+
+test("Chamado × OS: o UTIC da OS vinculada na aba OS (F6) abre a janela com o chamado e a OS; Esc fecha e devolve o foco", async ({ page }) => {
+  const gatilho = await abrirAbaOsComVinculo(page, "1378");
+  await gatilho.click();
+  const modal = page.locator("#modal-chamado-os");
+  await expect(modal).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Chamado × OS" })).toBeVisible();
+  await expect(page.locator("#chamado-os-janela-chamado")).toContainText("UTIC-2026-1378");
+  await expect(page.locator("#chamado-os-janela-os")).toContainText("7285070");
+  await expect(page.locator("#chamado-os-janela-f6")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+  await expect(gatilho).toBeFocused();
+});
+
+test("Chamado × OS: chamado ausente da F5 avisa e ainda mostra a OS", async ({ page }) => {
+  const gatilho = await abrirAbaOsComVinculo(page, "9999");
+  await gatilho.click();
+  await expect(page.locator("#modal-chamado-os")).toBeVisible();
+  await expect(page.locator("#chamado-os-janela-chamado")).toHaveText("Chamado não encontrado na aba Chamados (F5).");
+  await expect(page.locator("#chamado-os-janela-os")).toContainText("7285070");
+  await page.locator('#modal-chamado-os button:text-is("Fechar")').click();
+  await expect(page.locator("#modal-chamado-os")).toBeHidden();
+  await expect(gatilho).toBeFocused();
 });
