@@ -1255,7 +1255,11 @@ ROTULO_SECAO_EQUIPE = "Alterar Equipe de Atendimento"
 NOME_ANEXO = re.compile(r"^\s*Anexos?\s*(\(\d+\))?\s*$", re.IGNORECASE)
 NOME_FINALIZAR = re.compile(r"^\s*Finalizar\s*$", re.IGNORECASE)
 NOME_ENVIAR_ANEXO = re.compile(r"^\s*Enviar\s*$", re.IGNORECASE)
-SEL_INCLUIR = "[title='Incluir'], [aria-label='Incluir'], [data-original-title='Incluir']"
+# O "+" real do Anexo (visto em 08/11/2026) é <button id="btnInsertAttach"> só com o ícone seicon-plus, sem title nem texto.
+SEL_INCLUIR = "#btnInsertAttach, [title='Incluir'], [aria-label='Incluir'], [data-original-title='Incluir']"
+# O "+" abre o modal "Anexo" (Upload, ARQUIVO, NOME, Cancelar, Enviar); só o Enviar dele grava. A área "Arraste um arquivo"
+# da grade tem outro <input type=file> que sobe o arquivo na hora, sem Enviar: nunca usar (08/11/2026).
+SEL_MODAL_ANEXO = ".rctModal"
 TEXTO_FINALIZAR = re.compile(r"finaliz|conclu", re.IGNORECASE)
 ESPERA_ANEXO_MS = 30_000
 ESPERA_FINALIZAR_MS = 30_000
@@ -1520,18 +1524,22 @@ def _botao_unico(page: "Page", montar: Callable[["Frame"], "Locator"], descricao
 
 
 def _conteiner_do_upload(frame: "Frame", nome_pdf: str) -> "Locator":
-    """O bloco de upload: o mais interno que tem o nome do arquivo e um botão Enviar."""
+    """O modal "Anexo" visível com o botão Enviar (``nome_pdf`` fica no campo ARQUIVO; ver ``_arquivo_no_modal``)."""
     return (
-        frame.locator("div,section,form,dialog,[role='dialog']")
-        .filter(has_text=nome_pdf)
+        frame.locator(SEL_MODAL_ANEXO)
         .filter(has=frame.get_by_role("button", name=NOME_ENVIAR_ANEXO))
         .filter(visible=True)
-        .last
     )
 
 
+def _arquivo_no_modal(frame: "Frame", nome_pdf: str) -> bool:
+    """O campo ARQUIVO do modal "Anexo" mostra ``nome_pdf`` (o nome fica no valor do campo, não no texto)."""
+    campos = frame.locator(f"{SEL_MODAL_ANEXO} input:not([type='file'])").filter(visible=True)
+    return any(campos.nth(i).input_value(timeout=1000).strip() == nome_pdf for i in range(campos.count()))
+
+
 def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
-    """Anexo > "+" (Incluir) > arquivo > item na lista > Enviar do upload > espera concluir."""
+    """Anexo > "+" (Incluir) > modal "Anexo" > arquivo no campo ARQUIVO > Enviar do modal > espera o modal fechar."""
     _ir_para_menu(page, NOME_ANEXO, "Anexo")
     incluir = _botao_unico(
         page,
@@ -1550,21 +1558,21 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
                 clicar(incluir, "Incluir anexo")
 
                 def entrada_de_arquivo() -> Any:
-                    if escolhidos:
-                        return escolhidos[0]
-                    for frame in _frames(page):
-                        alvo = frame.locator("input[type='file']")
-                        if alvo.count():
-                            return alvo.first
+                    for frame in _frames(page):  # só o campo do modal; o da grade sobe sem Enviar
+                        if not frame.locator(SEL_MODAL_ANEXO).filter(visible=True).count():
+                            continue
+                        alvo = frame.locator(f"{SEL_MODAL_ANEXO} input[type='file']")
+                        if alvo.count() == 1:
+                            return alvo
                     return None
 
                 alvo = _esperar(page, entrada_de_arquivo, ESPERA_BOTAO_MS)
+                if alvo is None and escolhidos:
+                    # O seletor nativo viria do campo da grade, que sobe sem Enviar: nunca usar o que ele captura.
+                    raise SoftExpertErro("Anexo: o + abriu o seletor de arquivo em vez do modal Anexo; nada foi anexado.")
                 if alvo is None:
-                    raise EtapaInstavelSX("Anexo: nem o seletor de arquivo nem um campo de arquivo apareceram depois do +.")
-                if hasattr(alvo, "set_input_files"):  # campo <input type=file> achado antes do evento do seletor
-                    alvo.set_input_files(str(pdf))
-                else:
-                    alvo.set_files(str(pdf))  # FileChooser do diálogo de pasta
+                    raise EtapaInstavelSX("Anexo: o modal com o campo de arquivo não apareceu depois do +.")
+                alvo.set_input_files(str(pdf))
             except SoftExpertErro:
                 raise
             except Exception as erro:
@@ -1575,12 +1583,12 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
     _rotinas().etapa_resiliente(_etapa, "Incluir anexo")
 
     def frame_do_item() -> Any:
-        return next((f for f in _frames(page) if f.get_by_text(pdf.name).filter(visible=True).count()), None)
+        return next((f for f in _frames(page) if _arquivo_no_modal(f, pdf.name)), None)
 
     achado = _esperar(page, frame_do_item, ESPERA_ANEXO_MS)
     if achado is None:
-        raise SoftExpertErro(f"Anexo: {pdf.name} não apareceu na lista; nada foi enviado.")
-    # O Enviar do upload é o do bloco que tem o arquivo; qualquer outro "Enviar" da página fica de fora.
+        raise SoftExpertErro(f"Anexo: {pdf.name} não apareceu no campo ARQUIVO do modal; nada foi enviado.")
+    # O Enviar do upload é o do modal "Anexo"; qualquer outro "Enviar" da página fica de fora.
     enviar = _conteiner_do_upload(achado, pdf.name).get_by_role("button", name=NOME_ENVIAR_ANEXO).filter(visible=True)
     if enviar.count() != 1:
         raise SoftExpertErro(f"Anexo: esperado 1 botão Enviar junto de {pdf.name}, achei {enviar.count()}; nada foi clicado.")

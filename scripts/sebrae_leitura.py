@@ -35,6 +35,10 @@ MARCA_LOGIN_NAO_CONCLUIDO = "Login não concluído"
 TENTATIVAS_POR_CHAMADO = 2  # the PHP window sometimes takes longer than the wait; one more try is enough
 
 
+class _NaoEncontrado(str):
+    """Reason text for a ticket missing from the task center (e.g. closed by another technician); still a plain str for callers."""
+
+
 def _fechar_aba(pagina: Optional["Page"]) -> None:
     try:
         if pagina is not None and not pagina.is_closed():
@@ -57,8 +61,10 @@ def _ler_chamado(
                 pagina.goto(modulo.SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=rotinas.CARREGAMENTO_MS)
                 modulo.garantir_login(pagina, permitir_sso=True)
                 return modulo.extrair_chamado(context, pagina, numero)
-        except (modulo.ChamadoNaoConfere, modulo.ChamadoNaoEncontrado) as erro:
-            return str(erro)  # a different ticket or a missing one does not change on a retry
+        except modulo.ChamadoNaoEncontrado as erro:
+            return _NaoEncontrado(erro)  # a missing ticket does not change on a retry
+        except modulo.ChamadoNaoConfere as erro:
+            return str(erro)  # neither does a different ticket
         except modulo.SoftExpertErro as erro:
             motivo = str(erro)
             rotinas.log("Sebrae", f"{numero}: tentativa {tentativa} falhou ({type(erro).__name__}).")
@@ -168,7 +174,7 @@ def executar_antigos(
     a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, sebrae_novos.ler_antigos(destino))
     resultado: Dict[str, Any] = {
         "em": rotinas.agora_iso(), "concluido": False, "total": len(a_ler), "lidos": [], "falhas": {},
-        "sem_utic": sem_utic, "ja_lidos": ja_lidos,
+        "nao_encontrados": [], "sem_utic": sem_utic, "ja_lidos": ja_lidos,
     }
     salvar = lambda: sebrae_novos.salvar_resultado_antigos(caminhos, resultado)  # noqa: E731
     log(f"Antigos em aberto: {len(a_ler)} para ler, {ja_lidos} já lidos, {sem_utic} sem UTIC.")
@@ -185,6 +191,8 @@ def executar_antigos(
                 lido = _ler_chamado(context, pagina, numero, rotinas, modulo)
                 if isinstance(lido, str):
                     resultado["falhas"][numero] = lido[:200]
+                    if isinstance(lido, _NaoEncontrado):
+                        resultado["nao_encontrados"].append(numero)
                     log(f"{numero}: antigo não lido ({lido}).")
                 else:
                     sebrae_novos.salvar_antigo(destino, lido, rotinas.agora_iso())

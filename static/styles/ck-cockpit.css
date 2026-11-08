@@ -1420,6 +1420,11 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-selo-destaque { border: 1px solid var(--cor-alerta-texto); } /* borda 1px no tom do texto: o selo se vê também sem distinguir o fundo âmbar */
 .sebrae-selo-destaque[hidden] { display: none; }
 .sebrae-selo-destaque__estrela { font-size: var(--fs-xs); line-height: 1; }
+/* Antigo não encontrado no SoftExpert na última leitura (ex.: finalizado por outro técnico): vermelho para conferir depois; vem antes do destaque, que é escolha manual e vence. */
+.sebrae-antigo:has([data-leitura="nao_encontrado"]) { border-left: 4px solid var(--cor-erro-texto); }
+.sebrae-antigo:has([data-leitura="nao_encontrado"]) > summary { background: var(--cor-erro-fundo); }
+.sebrae-antigo:has([data-leitura="nao_encontrado"]) > summary .sebrae-antigo__quem { color: var(--cor-texto-suave); }
+.sebrae-chamado__dica[data-leitura="nao_encontrado"] { color: var(--cor-erro-texto); }
 .sebrae-chamado--destaque { border-left: 4px solid var(--cor-alerta-texto); }
 :is(.sebrae-novo, .sebrae-antigo, .sebrae-finalizado):has(.sebrae-chamado--destaque) { border-left: 4px solid var(--cor-alerta-texto); }
 :is(.sebrae-novo, .sebrae-antigo, .sebrae-finalizado):has(.sebrae-chamado--destaque) > summary { background: var(--cor-alerta-fundo); }

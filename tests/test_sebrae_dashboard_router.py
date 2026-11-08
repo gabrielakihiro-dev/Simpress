@@ -369,6 +369,17 @@ class ArquivoRotasTest(RotasBase):
         self.assertEqual(depois[alvo]["descricao"], antes[0]["descricao"])
         self.assertIn("softexpert", depois[alvo])  # estado de finalização, inalterado
 
+    def test_antigo_nao_encontrado_na_ultima_leitura_vem_marcado_ate_ser_lido(self):
+        self.importar(montar())
+        alvo = self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"][0]["numero"]
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {alvo: "não está na lista"}, "nao_encontrados": [alvo]})
+        abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertTrue(abertos[alvo]["nao_encontrado_softexpert"])
+        self.assertFalse(any(a["nao_encontrado_softexpert"] for n, a in abertos.items() if n != alvo))
+        sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(alvo, titulo="Achou"), "agora")
+        depois = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertFalse(depois[alvo]["nao_encontrado_softexpert"])  # lido depois: a marca some
+
     def test_ficha_recusa_corpo_invalido(self):
         self.importar(montar())
         self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/ficha", json={"ficha": "texto"}).status_code, 422)
