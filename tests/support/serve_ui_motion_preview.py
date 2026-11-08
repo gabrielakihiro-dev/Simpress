@@ -920,6 +920,10 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             cobertura_proxy(self, "POST", self.path, self.rfile.read(size))
             return
+        if path == "/api/operacoes/chamados/exportar":
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send(b"PK fixture", 200, "application/octet-stream")
+            return
         if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
             size = int(self.headers.get("Content-Length", "0"))
             corpo = self.rfile.read(size)

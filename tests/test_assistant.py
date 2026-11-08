@@ -2346,7 +2346,8 @@ class AutonomiaTests(unittest.TestCase):
 
     def test_prompt_describes_the_f6_search_and_pagination(self) -> None:
         for trecho in ("Tela OS (F6)", "Buscar série ou OS", "modelo", "número UTIC", "não busca pela descrição",
-                       "25 OS por vez", "Carregar mais", "Limpar filtros"):
+                       "25 OS por vez", "Carregar mais", "Limpar filtros", "Exportar Excel", "contando todas as páginas",
+                       "não enxerga os filtros da tela"):
             self.assertIn(trecho, SYSTEM_PROMPT)
 
 
