@@ -220,6 +220,8 @@ from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
 from routers.endpoint_lookup import create_endpoint_lookup_router
+from domains import chrome_ocioso
+from domains import endpoint_lookup as endpoint_lookup_domain
 from routers.ux_chamados import create_ux_chamados_router
 from domains.ux_chamados import ChamadosUX
 from domains.ux_chamados_browser import conectar_ux
@@ -997,6 +999,7 @@ async def lifespan(app: FastAPI):
             _external_change_reload_worker,
             _monthly_report_worker,
             _sebrae_scheduler_worker,
+            _chrome_idle_close_worker,
         ):
             task = asyncio.create_task(worker(), name=worker.__name__)
             task.add_done_callback(_log_background_task_failure)
@@ -1938,9 +1941,11 @@ def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
         }
 
 
+_ux_chamados = ChamadosUX(STATE_DIR, conectar_ux)
+_ux_tickets = TicketsUX(STATE_DIR, conectar_ux_ticket)
 app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
-app.include_router(create_ux_chamados_router(ChamadosUX(STATE_DIR, conectar_ux), _endpoint_lookup_snapshot))
-app.include_router(create_ux_ticket_router(TicketsUX(STATE_DIR, conectar_ux_ticket), get_local_transfer_template))
+app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
+app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
 
 
 @app.post("/api/equipamento/salvar")
@@ -2636,6 +2641,37 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
         if _chrome_automation_runner is None:
             _chrome_automation_runner = ChromeAutomationRunner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR))
         return _chrome_automation_runner
+
+
+def _chrome_session_alive() -> bool:
+    """A prepared UX session or an open PowerShell/remote-control tab keeps the idle automation Chrome open."""
+    return _ux_chamados.tem_sessao_viva() or _ux_tickets.tem_sessao_viva() or endpoint_lookup_domain.sessao_viva()
+
+
+def _build_chrome_idle_close() -> Optional[chrome_ocioso.FechamentoOcioso]:
+    limite = chrome_ocioso.limite_configurado()
+    if limite <= 0:
+        return None
+    automation = endpoint_lookup_domain.automation
+    return chrome_ocioso.FechamentoOcioso(
+        limite=limite,
+        ultimo_uso=automation.ultimo_uso,
+        ocupado=lambda: automation.ler_trava() is not None or _chrome_session_alive(),
+        cdp_ativo=automation.cdp_ativo,
+        fechar=lambda: chrome_ocioso.fechar_chrome_de_automacao(_chrome_session_alive),
+    )
+
+
+async def _chrome_idle_close_worker() -> None:
+    fechamento = _build_chrome_idle_close()
+    if fechamento is None:
+        return  # turned off with SIMPRESS_CHROME_OCIOSO_S=0
+    while True:
+        await asyncio.sleep(chrome_ocioso.VERIFICAR_A_CADA_S)
+        try:
+            await asyncio.to_thread(fechamento.verificar)
+        except Exception as error:
+            logger.warning("A verificação de ociosidade do Chrome de automação falhou (erro=%s).", type(error).__name__)
 
 
 _sebrae_scheduler: Optional[AgendadorSebrae] = None
