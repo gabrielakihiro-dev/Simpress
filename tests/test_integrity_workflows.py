@@ -820,6 +820,29 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(equipment["retirada_cnpj"], cnpj)
         self.assertEqual(delivery_unit["cnpj"], cnpj)
 
+    def test_same_address_with_conflicting_cnpj_uses_the_majority(self):
+        # Real export of 08/11/2026: one Toledo notebook (BRJ5512GCT) carries Paranaguá's CNPJ in the UX.
+        certo, errado = "75.110.585/0018-40", "75.110.585/0019-20"
+        make_details(
+            self.details,
+            [
+                ("TOL-1", "PRNOTETOL001", "Modelo A", "Toledo", "Notebook", "85905380", "AV PARIGOT DE SOUZA, 2339", certo),
+                ("TOL-2", "PRNOTETOL002", "Modelo A", "Toledo", "Notebook", "85905380", "AV PARIGOT DE SOUZA, 2339", certo),
+                ("TOL-ERRADO", "PRNOTETOL005", "Modelo A", "Toledo", "Notebook", "85905380", "AV Parigot de Souza, 2339", errado),
+                ("PGA-1", "PRNOTEPGA001", "Modelo A", "Paranaguá", "Notebook", "83203420", "R BAR do Cerro Azul, 937", errado),
+            ],
+            headers=["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "Endereco", "CNPJ Instalacao"],
+        )
+        make_endpoint(self.endpoint, [("TOL-1", "PRNOTETOL001")])
+
+        self.assertTrue(main.load_database())
+        toledo = [unit for unit in inventory_state.unidades_cache if unit["cidade"] == "Toledo"]
+        paranagua = next(unit for unit in inventory_state.unidades_cache if unit["cidade"] == "Paranaguá")
+
+        self.assertEqual([(unit["endereco"], unit["cnpj"]) for unit in toledo], [("AV Parigot de Souza, 2339", certo)])
+        self.assertEqual(main.get_equipamento("TOL-ERRADO")["retirada_cnpj"], certo)
+        self.assertEqual(paranagua["cnpj"], errado)
+
     def test_upload_rejects_duplicate_normalized_or_semantic_headers(self):
         make_details(
             self.details,
