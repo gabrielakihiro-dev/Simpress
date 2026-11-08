@@ -137,7 +137,7 @@ se o envio ainda não começou.
 
 Substitui os 4 textareas de "Textos prontos para chamados manuais".
 
-**Barra de pílulas:** Deslocamento, Kit teclado + mouse, Mau funcionamento, Uso inadequado.
+**Barra de pílulas:** Kit teclado + mouse (padrão), Mau funcionamento, Uso inadequado. A pílula Deslocamento saiu em 07/11/2026: o texto virou o registro do `Gerar ticket no UX` do Transporte (F2), e estado antigo `deslocamento` cai em Kit.
 
 - Cada pílula tem um ponto: verde (`--ok-dot`) quando pronta, âmbar (`--warn-dot`) quando falta campo.
 - Contêiner: `flex:1; min-width:0; flex-wrap:wrap`.
@@ -153,8 +153,8 @@ Substitui os 4 textareas de "Textos prontos para chamados manuais".
 **IDs preservados:**
 
 - `#ticket-templates-content`, `#ticket-templates-serial`
-- `#texto-chamado-deslocamento`, `#texto-chamado-teclado-mouse`, `#texto-chamado-mau-funcionamento`, `#texto-chamado-uso-inadequado`
-- `#visualizacao-chamado-deslocamento`, `#visualizacao-chamado-teclado-mouse`, `#visualizacao-chamado-mau-funcionamento`, `#visualizacao-chamado-uso-inadequado`
+- `#texto-chamado-teclado-mouse`, `#texto-chamado-mau-funcionamento`, `#texto-chamado-uso-inadequado`
+- `#visualizacao-chamado-teclado-mouse`, `#visualizacao-chamado-mau-funcionamento`, `#visualizacao-chamado-uso-inadequado`
 - Todos os `data-on-click`: `alternarVisualizacaoModelo`, `copiarModeloChamado`, `alternarChamadosManuais`
 - Os links externos (`ticket-template-link`) para `ux.simpress.com.br`
 

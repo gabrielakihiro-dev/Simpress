@@ -20,6 +20,7 @@
     "transferForm",
     "equipmentSearch",
     "uxChamados",
+    "uxTicket",
     "fullEquipmentSearch",
     "unitsCatalog",
     "inventoryUpload",

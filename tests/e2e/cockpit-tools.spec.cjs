@@ -134,11 +134,14 @@ test("Home ticket pills show the selected original template and copy that templa
   await page.locator("#home-equipment-list [role=option]").first().click();
   await expect(page.locator("#card-serial")).toHaveText("LENTO");
   await expect(page.locator("#home-detail-empty")).toBeHidden();
-  await page.locator("#pill-chamado-deslocamento").focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#pill-chamado-teclado-mouse")).toBeFocused();
+  await expect(page.locator("#pill-chamado-deslocamento")).toHaveCount(0);
   await expect(page.locator("#pill-chamado-teclado-mouse")).toHaveAttribute("aria-selected", "true");
-  for (const type of ["deslocamento", "teclado-mouse", "mau-funcionamento", "uso-inadequado"]) {
+  await expect(page.locator("#visualizacao-chamado-teclado-mouse")).toBeVisible();
+  await page.locator("#pill-chamado-teclado-mouse").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#pill-chamado-mau-funcionamento")).toBeFocused();
+  await expect(page.locator("#pill-chamado-mau-funcionamento")).toHaveAttribute("aria-selected", "true");
+  for (const type of ["teclado-mouse", "mau-funcionamento", "uso-inadequado"]) {
     await page.locator(`#pill-chamado-${type}`).click();
     await expect(page.locator(`#visualizacao-chamado-${type}`)).toBeVisible();
     await expect(page.locator(`#pill-chamado-${type}`)).toHaveAttribute("aria-selected", "true");
@@ -216,7 +219,7 @@ test("typing stays error-free and Home shortcuts use the selected equipment", as
   await expect(page.locator("#btn-editar-equipamento")).toHaveAttribute("aria-pressed", "false");
   await page.evaluate(() => { window.copiarTextoParaAreaTransferencia = async text => { window.reviewCopiedText = text; }; });
   await page.keyboard.press("c");
-  await expect.poll(() => page.evaluate(() => window.reviewCopiedText)).toContain("Prezados");
+  await expect.poll(() => page.evaluate(() => window.reviewCopiedText)).toContain("solicito um novo kit de teclado + mouse"); // Kit is the default tab since Deslocamento left (07/11/2026)
   await page.keyboard.press("t");
   await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
   await page.locator("#tab-home").click();

@@ -36,7 +36,6 @@ test("successful restoration clears old transfer data and refreshes inventory vi
   });
   harness.selectEquipment(priorEquipment);
   harness.element("textarea-resumo-preview").value = "Resumo antigo";
-  harness.element("textarea-texto-transporte").value = "Transporte antigo";
   const button = new FakeElement("restore-button");
   setButton(harness, button, "Restaurar versão anterior");
 
@@ -49,7 +48,6 @@ test("successful restoration clears old transfer data and refreshes inventory vi
   assert.equal(harness.element("input-serial").value, "");
   assert.equal(harness.element("retirada-endereco").value, "");
   assert.equal(harness.element("textarea-resumo-preview").value, "");
-  assert.equal(harness.element("textarea-texto-transporte").value, "");
   assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "historico"]);
   assert.equal(harness.effects.toasts.at(-1).type, "success");
   assert.match(harness.effects.toasts.at(-1).message, /12 equipamentos carregados/);

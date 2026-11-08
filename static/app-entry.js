@@ -25,6 +25,7 @@ import "./js/features/transfer-form.js";
 import "./js/ui/equipment-search-renderers.js";
 import "./js/features/equipment-search.js";
 import "./js/features/ux-chamados.js";
+import "./js/features/ux-ticket.js";
 import "./js/features/full-equipment-search.js";
 import "./js/features/units-catalog.js";
 import "./js/features/inventory-upload.js";

@@ -409,10 +409,7 @@
         <div class="ck-home-base">
         <section class="ck-cartao ck-chamado" aria-labelledby="ticket-templates-title">
           <div class="ck-chamado__abas" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
-              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Deslocamento
-            </button>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
+            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="0">
               <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Kit teclado + mouse
             </button>
             <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
@@ -431,7 +428,7 @@
                 <a class="ck-btn ck-btn--fantasma ck-btn--sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
                   <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg> Portal
                 </a>
-                <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
+                <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-teclado-mouse"]' id="btn-copiar-chamado-atual">
                   <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copiar
                   <kbd class="ck-kbd" aria-hidden="true">C</kbd>
                 </button>
@@ -439,23 +436,7 @@
               </div>
             </div>
 
-            <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="ck-chamado__painel">
-              <textarea id="texto-chamado-deslocamento" class="ck-chamado__texto" spellcheck="true">Prezados,
-
-Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
-
-Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.
-
-Em caso de dúvidas durante o processo, entre em contato com o responsável configurado para a retirada do equipamento.
-
-Contato no local:
-Colaborador(a) Novo(a):
-Data de Instalação:
-Horário da Instalação:
-
-Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
-            </div>
-            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="ck-chamado__painel" hidden>
+            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="ck-chamado__painel">
               <textarea id="texto-chamado-teclado-mouse" class="ck-chamado__texto" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
 
 Nome do(a) Colaborador(a):
@@ -718,25 +699,6 @@ Horário disponível para atendimento:</textarea>
       >
         <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span>Gerar Planilha</span>
       </button>
-
-      <button type="button" id="btn-copiar-resumo-cockpit" data-on-click="copiarResumoCockpit" class="ck-btn ck-btn--secundario">
-        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Copiar texto</span>
-      </button>
-
-      <button type="button" data-on-click="gerarTextoSolicitacaoTransporte" class="ck-btn ck-btn--secundario" title="Gerar texto de solicitação de transporte">
-        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-text"></use></svg><span>Texto para Transporte</span>
-      </button>
-
-      <a
-        href="https://ux.simpress.com.br/ng/gerar-ticket/consulta"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Abrir chamado no site Simpress (abre em nova aba)"
-        title="Abrir site Simpress para gerar chamado"
-        class="ck-btn ck-btn--secundario"
-      >
-        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg><span>Abrir chamado</span>
-      </a>
     </aside>
 
     </section>
@@ -1409,48 +1371,54 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL DE TEXTO PARA SOLICITAÇÃO DE TRANSPORTE -->
+  <!-- MODAL DE TICKET NO UX (TRANSPORTE)          -->
   <!-- ========================================== -->
-  <div id="modal-texto-transporte" class="modal-overlay ck-veu hidden">
+  <div id="modal-ticket-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-ticket-ux">
     <div class="ck-dialogo">
-      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
-        <div class="flex items-center space-x-2.5">
-          <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
-          <h3 class="text-base font-bold text-white">Solicitação de Transporte <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Solicitação de Transporte" aria-describedby="tip-solicitacao-transporte"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-solicitacao-transporte" role="tooltip" class="info-tip-text">Confira os endereços e copie o texto para sua solicitação.</span></span></h3>
+      <h3 id="titulo-ticket-ux" class="text-base font-bold">Gerar ticket no UX</h3>
+      <p id="ux-ticket-status" role="status" aria-live="polite"><strong id="ux-ticket-estado"></strong><span id="ux-ticket-status-detalhe"></span></p>
+      <p id="ux-ticket-erro" class="ux-ticket-erro" role="alert" hidden></p>
+      <p id="ux-ticket-ultimo-envio" class="ux-ticket-aviso" hidden></p>
+      <dl class="ux-ticket-resumo">
+        <dt>Série</dt><dd id="ux-ticket-serie">—</dd>
+        <dt>Modelo</dt><dd id="ux-ticket-modelo">—</dd>
+        <dt>Endereço escolhido</dt><dd id="ux-ticket-endereco">—</dd>
+        <dt>CNPJ de Instalação</dt><dd id="ux-ticket-cnpj-instalacao">—</dd>
+        <dt>CNPJ de Faturamento</dt><dd id="ux-ticket-cnpj-faturamento">—</dd>
+        <dt>Anexo</dt><dd id="ux-ticket-anexo">—</dd>
+      </dl>
+      <fieldset id="ux-ticket-enderecos" class="ux-ticket-enderecos" data-on-change="atualizarTicketUX" hidden disabled>
+        <legend class="font-bold">Escolha o endereço</legend>
+        <div id="ux-ticket-enderecos-lista" class="ux-ticket-enderecos__lista"></div>
+        <p id="ux-ticket-enderecos-vazio" hidden>O UX não listou nenhum endereço para este CEP. Cadastre o endereço em Meus Endereços no UX e use Preparar novamente.</p>
+        <div class="flex justify-end">
+          <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-confirmar-endereco" data-on-click="confirmarEnderecoTicketUX" disabled>Confirmar endereço</button>
         </div>
-        <button type="button" data-on-click="fecharModalTextoTransporte" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar texto de solicitação">
-          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
-        </button>
-      </div>
-
-      <div class="py-4 overflow-y-auto flex-1">
-        <textarea
-          id="textarea-texto-transporte"
-          rows="10"
-          readonly
-          aria-label="Texto gerado para solicitação de transporte"
-          class="w-full bg-surface/80 border border-line-quiet rounded-xl p-4 text-fg-tertiary text-sm leading-relaxed focus:outline-none"
-        ></textarea>
-      </div>
-
-      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end items-center gap-3">
-        <div class="flex space-x-2">
-          <button
-            type="button"
-            data-on-click="copiarTextoSolicitacaoTransporte"
-            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
-          >
-            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-            <span>Copiar Texto</span>
-          </button>
-          <button
-            type="button"
-            data-on-click="fecharModalTextoTransporte"
-            class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition"
-          >
-            Fechar
-          </button>
+      </fieldset>
+      <fieldset id="ux-ticket-formulario" class="ux-ticket-formulario" disabled>
+        <legend class="sr-only">Dados do ticket</legend>
+        <label for="ux-ticket-registro" class="font-bold">Registro</label>
+        <textarea id="ux-ticket-registro" class="ck-input ux-ticket-registro" rows="10" maxlength="2500" aria-describedby="ux-ticket-registro-contador" data-on-input="atualizarTicketUX"></textarea>
+        <p id="ux-ticket-registro-contador" class="ux-ticket-contador">0/2500</p>
+        <div id="ux-ticket-solicitante" class="ux-chamado-solicitante" role="group" aria-labelledby="ux-ticket-solicitante-titulo">
+          <p id="ux-ticket-solicitante-titulo" class="font-bold">Solicitante</p>
+          <label for="ux-ticket-nome">Nome</label>
+          <input type="text" id="ux-ticket-nome" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-email">E-mail</label>
+          <input type="email" id="ux-ticket-email" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-telefone">Contato</label>
+          <input type="tel" id="ux-ticket-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-chamado-interno">Nº de chamado interno</label>
+          <input type="text" id="ux-ticket-chamado-interno" class="ck-input" maxlength="10" autocomplete="off" placeholder="Opcional" data-on-input="atualizarTicketUX">
         </div>
+      </fieldset>
+      <p id="ux-ticket-motivo" class="font-bold" hidden></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-cancelar" data-on-click="fecharTicketUX">Cancelar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-preparar" data-on-click="prepararNovamenteTicketUX" hidden>Preparar novamente</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-conferido" data-on-click="conferirTicketUX" hidden>Conferi no UX; preparar de novo</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-simular" data-on-click="executarTicketUX" data-args='[false]' aria-describedby="ux-ticket-motivo" disabled>Simular preenchimento</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="ux-ticket-finalizar" data-on-click="executarTicketUX" data-args='[true]' aria-describedby="ux-ticket-motivo" disabled>Revisar e finalizar</button>
       </div>
     </div>
   </div>

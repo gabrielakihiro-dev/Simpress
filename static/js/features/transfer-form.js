@@ -303,7 +303,8 @@
   function alternarChamadosManuais(tipo) {
     const pills = document.querySelectorAll(".ck-modelo-aba");
     if (pills.length) {
-      const selected = tipo || "deslocamento";
+      // A aba Deslocamento saiu (07/11/2026): estado salvo antigo ou desconhecido cai em Kit.
+      const selected = ["teclado-mouse", "mau-funcionamento", "uso-inadequado"].includes(tipo) ? tipo : "teclado-mouse";
       const content = document.getElementById("ticket-templates-content");
       content.hidden = false;
       pills.forEach(pill => {
@@ -513,17 +514,6 @@
     }
   }
 
-  async function copiarResumoCockpit() {
-    const payload = construirPayload();
-    if (!payload) return;
-    try {
-      await app.copiarTextoParaAreaTransferencia(gerarTextoResumo(payload));
-      app.showToast("Resumo copiado para a área de transferência.", "success");
-    } catch (error) {
-      app.showToast("Não foi possível copiar o resumo. Abra o texto para Transporte e tente novamente.", "error");
-    }
-  }
-
   const transportPreviewRoot = document.querySelector(".ck-transp");
   if (transportPreviewRoot && !transportPreviewRoot.dataset.previewBound) {
     transportPreviewRoot.dataset.previewBound = "true";
@@ -553,40 +543,6 @@
     }).catch(err => {
       app.showToast("Erro ao copiar texto: " + err, "error");
     });
-  }
-
-  function cidadeComUf(cidade) {
-    const valor = String(cidade || "").trim();
-    if (!valor) return "";
-    if (/\/\s*PR$/i.test(valor)) return valor.replace(/\s*\/\s*PR$/i, "/PR");
-    return `${valor}/PR`;
-  }
-
-  function gerarTextoSolicitacaoTransporte() {
-    const retiradaEndereco = document.getElementById("retirada-endereco").value.trim();
-    const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
-    const unidadeDestino = appState.unidadesList.find(
-      unit => String(unit.id) === String(document.getElementById("select-unidade-destino").value)
-    );
-    const retiradaCidade = cidadeComUf(appState.retiradaCidadeSelecionada);
-    const entregaCidade = cidadeComUf(unidadeDestino?.cidade);
-
-    if (!retiradaEndereco || !entregaEndereco) {
-      app.showToast("Selecione o equipamento de origem e a unidade de destino para carregar os endereços.", "warning");
-      return;
-    }
-    if (!retiradaCidade || !entregaCidade) {
-      app.showToast("Não foi possível identificar as cidades de origem e destino.", "warning");
-      return;
-    }
-
-    const texto = `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}`;
-    document.getElementById("textarea-texto-transporte").value = texto;
-    app.abrirModalAcessivel("modal-texto-transporte", "#textarea-texto-transporte", "fecharModalTextoTransporte");
-  }
-
-  function fecharModalTextoTransporte() {
-    app.fecharModalAcessivel("modal-texto-transporte");
   }
 
   async function copiarSerieAtual() {
@@ -660,21 +616,6 @@
       app.showToast(`${dado.nome}${unidade} copiado para a área de transferência.`, "success");
     } catch (err) {
       app.showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()} da entrega.`, "error");
-    }
-  }
-
-  async function copiarTextoSolicitacaoTransporte() {
-    const texto = document.getElementById("textarea-texto-transporte").value;
-    if (!texto.trim()) {
-      app.showToast("Gere o texto da solicitação antes de copiar.", "warning");
-      return;
-    }
-
-    try {
-      await app.copiarTextoParaAreaTransferencia(texto);
-      app.showToast("Texto da solicitação copiado para a área de transferência.", "success");
-    } catch (err) {
-      app.showToast("Não foi possível copiar o texto. Selecione-o e copie com Ctrl+C.", "error");
     }
   }
 
@@ -851,10 +792,10 @@
     abrirHomeParaPesquisarEquipamento, controlarAbasTransferencia, forcarSedePradoVelho,
     atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
-    abrirModalPreview, fecharModalPreview, copiarTextoDoModal, gerarTextoSolicitacaoTransporte,
-    atualizarPreviaTransporteCockpit, copiarResumoCockpit,
-    fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
-    copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
+    abrirModalPreview, fecharModalPreview, copiarTextoDoModal,
+    atualizarPreviaTransporteCockpit,
+    copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
+    validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
     prepararTransporte,
   };
 });
