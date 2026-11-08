@@ -31,7 +31,11 @@ SECURITY_RESPONSE_HEADERS = (
     (b"x-frame-options", b"DENY"),
     (b"cross-origin-opener-policy", b"same-origin"),
     (b"cross-origin-resource-policy", b"same-origin"),
+    # The assistant records voice messages; nothing else needs a device.
+    (b"permissions-policy", b"camera=(), geolocation=(), microphone=(self)"),
 )
+# API answers carry inventory data; routes that want caching set their own Cache-Control.
+API_CACHE_HEADER = (b"cache-control", b"no-store")
 # Sec-Fetch-Site values for the app's own pages and URLs typed or bookmarked by the user.
 ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
 
@@ -115,12 +119,14 @@ def parse_request_authority(
     return hostname.rstrip(".").lower(), port
 
 
-def send_with_security_headers(send: Send) -> Send:
+def send_with_security_headers(send: Send, *, api: bool = False) -> Send:
+    extra = SECURITY_RESPONSE_HEADERS + ((API_CACHE_HEADER,) if api else ())
+
     async def send_with_headers(message: Message) -> None:
         if message["type"] == "http.response.start":
             headers = list(message.get("headers", []))
             present = {name.lower() for name, _ in headers}
-            headers.extend(header for header in SECURITY_RESPONSE_HEADERS if header[0] not in present)
+            headers.extend(header for header in extra if header[0] not in present)
             message = {**message, "headers": headers}
         await send(message)
 
@@ -162,7 +168,7 @@ class LocalRequestSafetyMiddleware:
             await self.app(scope, receive, send)
             return
 
-        send = send_with_security_headers(send)
+        send = send_with_security_headers(send, api=scope.get("path", "").startswith("/api/"))
         if not is_direct_loopback_request(scope):
             response = JSONResponse(
                 status_code=403,

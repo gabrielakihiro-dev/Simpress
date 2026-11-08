@@ -269,7 +269,8 @@ def gerar_planilha_transferencia_bytes(payload: TransferenciaPayload, template_f
             )
             wb.close()
 
-        safe_serial = re.sub(r"[^\w\-]", "_", serial_val)
+        # ASCII only: the name goes into a latin-1 Content-Disposition header.
+        safe_serial = re.sub(r"[^A-Za-z0-9-]", "_", serial_val)
 
         def safe_city(value: str) -> str:
             normalized = unicodedata.normalize("NFKD", value.strip())

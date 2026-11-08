@@ -1690,6 +1690,12 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(generated_workbook["Transferência"]["J31"].value, "")
         generated_workbook.close()
 
+    def test_non_latin_serial_still_yields_a_valid_download_name(self):
+        template = make_transfer_template(self.input_dir / "modelo-serial-unicode-ficticio.xlsx")
+        with patch.object(main, "TEMPLATE_FILE", template):
+            response = main.gerar_planilha(make_transfer_payload(serial="A中"))
+        self.assertIn('filename="Transferencia_A__', response.headers["content-disposition"])
+
     def test_transfer_rejects_empty_essential_fields_before_opening_the_template(self):
         template = make_transfer_template(self.input_dir / "modelo-validacao-ficticio.xlsx")
         invalid_fields = (

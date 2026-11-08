@@ -18,6 +18,7 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1143,6 +1144,19 @@ app = FastAPI(
 async def domain_error_handler(_request: Request, error: DomainError) -> JSONResponse:
     """Answer domain errors with the same body FastAPI produces for HTTPException."""
     return JSONResponse({"detail": error.detail}, status_code=error.status_code)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request: Request, error: RequestValidationError) -> JSONResponse:
+    """422 without FastAPI's ``input`` echo, which would repeat the submitted data back."""
+    detail = [
+        {
+            "campo": ".".join(str(parte) for parte in item.get("loc", ())[1:] or item.get("loc", ())),
+            "msg": str(item.get("msg", "Valor inválido.")),
+        }
+        for item in error.errors()
+    ]
+    return JSONResponse({"detail": detail}, status_code=422)
 
 app.add_middleware(InventoryUpdateMiddleware)
 
