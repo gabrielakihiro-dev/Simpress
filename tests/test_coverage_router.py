@@ -255,7 +255,6 @@ class CoverageRouterTests(unittest.TestCase):
         resposta = self.client.post("/api/cobertura/reservas/res-x/cancelar", json={"rev": 1, "extra": True})
         self.assertEqual(resposta.status_code, 422)
 
-
     def test_tipos_estritos_sem_coercao(self):
         base = {"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 3}
         self.post("/api/cobertura/demandas", {**base, "quantidade": "3"}, 422)
@@ -269,6 +268,10 @@ class CoverageRouterTests(unittest.TestCase):
         self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": "1"}, 422)
         self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": "1"}, 422)
         self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": None})
+        # O corpo é validado antes da rota: ids inexistentes bastam para provar o 422.
+        self.post("/api/cobertura/reservas", {"demanda_id": "x", "manutencao_conferida": "true"}, 422)
+        self.post("/api/cobertura/reservas/x/kit", {"item": "monitor", "marcado": 1, "rev": 1}, 422)
+        self.post("/api/cobertura/movimentacoes/x/vincular-historico", {"historico_id": "h", "rev": "1"}, 422)
         self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": demanda["rev"]})
 
     def test_falha_de_gravacao_500_nao_expoe_a_excecao(self):
