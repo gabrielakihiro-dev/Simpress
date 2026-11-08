@@ -128,6 +128,10 @@ def _unit_identity_key(unit: Dict[str, Any]) -> str:
     )
 
 
+def _cnpj_vote_key(cidade: Any, endereco: Any) -> Tuple[str, str]:
+    return tuple(unicodedata.normalize("NFKC", str(value or "")).strip().casefold() for value in (cidade, endereco))
+
+
 def _stable_unit_source_key(unit: Dict[str, Any]) -> str:
     """Keep inventory identity stable while editable location fields change."""
     return hashlib.sha256(_unit_identity_key(unit).encode("utf-8")).hexdigest()
@@ -284,6 +288,8 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
 
     unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     sede_cnpjs = set()
+    # Same address with conflicting CNPJs is a UX record error (Toledo BRJ5512GCT): the majority wins.
+    cnpj_votos: Dict[Tuple[str, str], Counter] = {}
 
     rows_without_serial = 0
     for row in records:
@@ -334,6 +340,8 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
             retirada_endereco = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300"
         else:
             retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
+            if cnpj_instalacao:
+                cnpj_votos.setdefault(_cnpj_vote_key(cidade, endereco), Counter())[cnpj_instalacao.strip()] += 1
 
         # Suggested description
         desc_sugerida = get_suggested_description(tipo, modelo)
@@ -375,6 +383,19 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
     if not new_equipamentos_cache:
         logger.error("%s não contém equipamentos com número de série; os dados atuais foram mantidos.", active_details_file.name)
         return False
+
+    cnpj_majoritario = {key: votes.most_common(1)[0][0] for key, votes in cnpj_votos.items() if len(votes) > 1}
+    for key, cnpj in cnpj_majoritario.items():
+        logger.warning("CNPJ de instalação divergente no mesmo endereço (%s); usando o majoritário %s.", key[0], cnpj)
+    for equipment in new_equipamentos_cache.values():
+        endereco_equip = str(equipment.get("endereco_instalacao") or "")
+        cnpj = cnpj_majoritario.get(_cnpj_vote_key(equipment.get("retirada_cidade"), endereco_equip))
+        if cnpj:
+            equipment["retirada_cnpj"] = cnpj
+    for unit in unidades_dict.values():
+        cnpj = cnpj_majoritario.get(_cnpj_vote_key(unit["cidade"], unit["endereco"]))
+        if cnpj:
+            unit["cnpj"] = cnpj
 
     # Filter units according to user specifications:
     filtered_units: List[Dict[str, Any]] = []
