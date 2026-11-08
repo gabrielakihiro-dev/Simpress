@@ -49,7 +49,7 @@
     return { ok: resposta.ok, status: resposta.status, corpo: json };
   }
 
-  // Toda escrita leva o rev do registro; 409 recarrega antes de mostrar a mensagem do servidor.
+  // Toda escrita leva o rev do registro; 404, 409 e 503 recarregam antes de mostrar a mensagem do servidor.
   async function escrever(url, corpo, sucesso) {
     if (!dados) {
       avisar("A cobertura não está carregada; nada foi gravado.", "error");
@@ -61,7 +61,7 @@
       if (sucesso) avisar(sucesso, "success");
       return r.corpo || {};
     }
-    if (r.status === 409 || r.status === 503) await carregarCobertura();
+    if (r.status === 404 || r.status === 409 || r.status === 503) await carregarCobertura();
     avisar(modelo().mensagemErro(r.corpo, r.status), "error");
     return null;
   }

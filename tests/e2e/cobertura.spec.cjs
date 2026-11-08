@@ -315,6 +315,26 @@ test("409 recarrega a cobertura e mostra a mensagem do servidor", async ({ page 
   await expect(page.locator("#cobertura-lista-disponiveis")).toContainText("Em manutenção");
 });
 
+test("404 recarrega a cobertura: a reserva que sumiu do servidor some da tela", async ({ page }) => {
+  await cenario(page);
+  const leitura = await api(page, "/api/cobertura");
+  const vaga = leitura.vagas.find(v => v.serie === "SINT-001");
+  await api(page, "/api/cobertura/reservas", { demanda_id: vaga.demanda_id, serie: "SINT-001" });
+  await page.goto("/");
+  await abrirCobertura(page);
+  await aba(page, "reservas");
+  const reservas = page.locator("#cobertura-lista-reservas");
+  await expect(reservas.getByRole("checkbox", { name: "Notebook" })).toBeVisible();
+  await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
+
+  // O cenário recria o estado do servidor: a reserva deixa de existir, mas continua na tela.
+  await cenario(page);
+  await reservas.getByRole("checkbox", { name: "Notebook" }).check();
+  await expect(page.locator("#cobertura-status")).toHaveText("Reserva não encontrada.");
+  await expect(reservas.getByRole("checkbox", { name: "Notebook" })).toHaveCount(0);
+  await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("0");
+});
+
 test("tabela no desktop, cards com os mesmos dados e ações no celular", async ({ page }, testInfo) => {
   await cenario(page);
   await page.goto("/");
