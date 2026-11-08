@@ -68,6 +68,7 @@ _ID_ROTA = re.compile(r"^[^/?#\s]{1,128}$")
 
 # comparar_periodos(): examples per list and size of the answer. The chat cuts any result above
 # MAX_CARACTERES_RESPOSTA (6000, assistant_chat) in the middle, so the examples shrink first and the JSON stays whole.
+MAX_LINHAS_SEBRAE_MENSAL = 5  # obter_relatorio_mensal: tickets of the month sent along with the F5 counts
 MAX_EXEMPLOS_COMPARACAO = 10
 ORCAMENTO_COMPARACAO = 5000
 _PONTO_PERIODO = re.compile(r"^\d{4}-\d{2}(-\d{2})?$")
@@ -1090,7 +1091,17 @@ class SimpressApi:
         mes = mes.strip()
         if len(mes) != 7 or mes[4] != "-":
             return {"erro": "Informe o mês no formato AAAA-MM (ex.: 2026-10)."}
-        return self._leitura("/api/relatorio-mensal/dados", params={"mes": mes})
+        ok, dados = self._chamar("GET", "/api/relatorio-mensal/dados", params={"mes": mes})
+        if not ok:
+            return {"erro": dados}
+        dados = dict(_dict(dados))
+        sebrae = dados.pop("sebrae", None)
+        if isinstance(sebrae, dict) and isinstance(sebrae.get("linhas"), list):
+            linhas = sebrae["linhas"]
+            sebrae = {**sebrae, "linhas": linhas[:MAX_LINHAS_SEBRAE_MENSAL],
+                      "linhas_omitidas": max(0, len(linhas) - MAX_LINHAS_SEBRAE_MENSAL)}
+        # The chat keeps only the first MAX_CARACTERES_RESPOSTA characters and the rest of the report is longer: F5 first.
+        return {"dados": _aparar({"sebrae": sebrae, **dados})}
 
     def listar_historico_automacao(self) -> Dict[str, Any]:
         ok, dados = self._chamar("GET", "/api/automacao/historico")

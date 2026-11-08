@@ -16,12 +16,15 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from core.errors import DomainError
+from core.errors import DomainBusyError, DomainError
 from domains.inventory_comparison import comparison_history_for_display
 from domains.monthly_report import (
     CLOSED,
     OPENED,
     PENDING,
+    SEBRAE_CLOSED,
+    SEBRAE_FINISHED_OK,
+    SEBRAE_OPENED,
     SECTION_ENDPOINT,
     SECTION_LOCATION,
     SECTION_SIMPRESS,
@@ -31,9 +34,13 @@ from domains.monthly_report import (
     comparison_section,
     inventory_section,
     parse_report_month,
+    sebrae_sources_from_state,
+    sebrae_tickets_section,
     summary_rows,
     tickets_section,
 )
+from domains.sebrae_chamados import ChamadoSoftExpert
+from domains.sebrae_dashboard import ler_datas_chamados
 from routers.monthly_report import (
     MonthlyReportServices,
     create_monthly_report_router,
@@ -488,7 +495,7 @@ class MonthlyReportRouteTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def client(self):
+    def client(self, **services):
         app = FastAPI()
 
         @app.exception_handler(DomainError)
@@ -502,6 +509,7 @@ class MonthlyReportRouteTests(unittest.TestCase):
             ticket_report_path=lambda: self.ticket_path,
             today=lambda: TODAY,
             now=lambda: datetime(2026, 10, 17, 9, 30),
+            **services,
         )))
         return TestClient(app)
 
@@ -545,6 +553,47 @@ class MonthlyReportRouteTests(unittest.TestCase):
         self.ticket_path.unlink()
         response = self.client().get("/api/relatorio-mensal", params={"mes": "2026-10"})
         self.assertEqual(response.status_code, 200)
+
+    def test_data_route_without_imported_dashboard_has_no_sebrae_section(self):
+        report = self.client().get("/api/relatorio-mensal/dados", params={"mes": "2026-10"}).json()
+        self.assertIsNone(report["sebrae"])
+
+    def test_data_route_counts_the_f5_tickets_of_the_month(self):
+        sources = {"dashboard": [dashboard_row(5, "UTIC-2026-0100", abertura="10/10/2026 08:00")]}
+        report = self.client(sebrae_sources=lambda: sources).get(
+            "/api/relatorio-mensal/dados", params={"mes": "2026-10"}).json()
+        self.assertEqual((report["sebrae"]["abertos"], report["sebrae"]["finalizados"]), (1, 0))
+        self.assertEqual(report["sebrae"]["linhas"][0]["abertura"], "2026-10-10")
+
+    def test_f5_failure_stays_inside_the_sebrae_section(self):
+        def busy():
+            raise DomainBusyError("A cópia do Dashboard importado não foi encontrada.")
+
+        def broken():
+            raise RuntimeError("C:/caminho/interno")
+
+        for service, message in ((busy, "A cópia do Dashboard importado não foi encontrada."),
+                                 (broken, "Não foi possível ler os chamados da aba Chamados (F5).")):
+            with self.subTest(message=message):
+                response = self.client(sebrae_sources=service).get("/api/relatorio-mensal/dados", params={"mes": "2026-10"})
+                self.assertEqual(response.status_code, 200)
+                report = response.json()
+                self.assertEqual(report["sebrae"], {"erro": message})
+                self.assertEqual(report["inventario"]["total"], len(EQUIPMENT))
+                self.assertEqual(report["os"]["oracle"]["concluidas"], 1)
+
+    def test_workbook_never_reads_the_f5_tickets(self):
+        def forbidden():
+            raise AssertionError("the XLSX must not read the Chamados tab")
+
+        def cells(response):
+            self.assertEqual(response.status_code, 200)
+            workbook = openpyxl.load_workbook(BytesIO(response.content))
+            return {sheet.title: list(sheet.iter_rows(values_only=True)) for sheet in workbook}
+
+        params = {"mes": "2026-10"}
+        with_service = cells(self.client(sebrae_sources=forbidden).get("/api/relatorio-mensal", params=params))
+        self.assertEqual(with_service, cells(self.client().get("/api/relatorio-mensal", params=params)))
 
 
 class AutomaticMonthlyReportTests(unittest.TestCase):
@@ -604,6 +653,174 @@ class AutomaticMonthlyReportTests(unittest.TestCase):
         self.ticket_path.write_text("{", encoding="utf-8")
         self.assertIsNone(self.generate())
         self.assertFalse(self.reports_dir.exists())
+
+
+# Chamados (F5) ------------------------------------------------------------ fictitious tickets and serials
+
+DASHBOARD_HEADER = [
+    "RESPONSÁVEL", "Categoria", "CHAMADO", "STATUS CHAMADO", "OS", "Atendimento Realizado", "Título",
+    "Descrição Chamado", "Nome Usuário", "TIPO DO CHAMADO", "Série", "MODELO", "UNIDADE", "CIDADE", "UF",
+    "DATA ABERTURA", "Mês", "DT ENCERRAMENTO", "TIPO SLA", "DIAS ABERTOS", "AGING", "HR CONSUMIDA", "PRODUZINDO",
+]
+
+
+def dashboard_row(line, number, abertura=None, encerramento=None, titulo="Troca de teclado", serie="SN-FIC-500"):
+    return {"linha": line, "chamado": number, "titulo": titulo, "serie": serie,
+            "abertura": abertura, "encerramento": encerramento}
+
+
+def finished(status=SEBRAE_FINISHED_OK, encerrado_em="", em="", titulo="Liberação de acesso", serie="SN-FIC-600"):
+    return {"finalizacao": {"status": status, "encerrado_em": encerrado_em, "em": em},
+            "ficha": {"titulo": titulo, "fatos": [["Série", serie], ["Solicitante", "Pessoa Fictícia"]]}}
+
+
+def sebrae(month=OCTOBER, dashboard=(), novos=(), finalizacao=None):
+    return sebrae_tickets_section({"dashboard": list(dashboard), "novos": list(novos),
+                                   "finalizacao": finalizacao or {}}, month)
+
+
+def by_key(section):
+    return {row["chave"]: row for row in section["linhas"]}
+
+
+class SebraeTicketSectionTests(unittest.TestCase):
+    def test_one_ticket_per_utic_even_in_a_composite_cell(self):
+        section = sebrae(dashboard=[
+            dashboard_row(2, "UTIC-2026-0100", abertura="05/10/2026 09:00"),
+            dashboard_row(3, "27371 / UTIC-2026-0100", abertura="03/10/2026 10:00"),
+        ])
+        self.assertEqual(section["abertos"], 1)
+        self.assertEqual(by_key(section)["UTIC-2026-0100"]["abertura"], "2026-10-03")
+
+    def test_old_number_is_the_key_and_a_repeated_one_keeps_first_opening_and_last_closing(self):
+        section = sebrae(dashboard=[
+            dashboard_row(176, 27206.0, abertura=datetime(2026, 10, 5, 9, 0), encerramento="08/10/2026 10:00"),
+            dashboard_row(177, "27206", abertura=datetime(2026, 10, 3, 9, 0), encerramento=datetime(2026, 10, 12, 16, 0)),
+        ])
+        row = by_key(section)["27206"]
+        self.assertEqual((row["chamado"], row["abertura"], row["finalizacao"]), ("27206", "2026-10-03", "2026-10-12"))
+        self.assertEqual(row["situacoes"], [SEBRAE_OPENED, SEBRAE_CLOSED])
+        self.assertEqual((section["abertos"], section["finalizados"]), (1, 1))
+
+    def test_row_without_utic_or_old_number_is_keyed_by_its_line(self):
+        section = sebrae(dashboard=[dashboard_row(284, "PRT-000017/26", abertura="10/10/2026 08:00"),
+                                    dashboard_row(331, "Sem chamado", abertura="11/10/2026 08:00")])
+        self.assertEqual(by_key(section)["linha:284"]["chamado"], "PRT-000017/26")
+        self.assertIn("linha:331", by_key(section))
+
+    def test_site_finish_wins_over_column_r(self):
+        section = sebrae(
+            dashboard=[dashboard_row(9, "UTIC-2026-0101", abertura="20/09/2026 08:00", encerramento="30/09/2026 17:00")],
+            finalizacao={
+                "UTIC-2026-0101": finished(encerrado_em="06/10/2026 14:00", em="2026-10-06T17:01:00+00:00"),
+                "UTIC-2026-0102": finished(status="erro", encerrado_em="07/10/2026 14:00"),
+                "linha:3": finished(encerrado_em="07/10/2026 14:00"),
+            },
+        )
+        self.assertEqual(list(by_key(section)), ["UTIC-2026-0101"])
+        row = by_key(section)["UTIC-2026-0101"]
+        self.assertEqual((row["finalizacao"], row["situacoes"]), ("2026-10-06", [SEBRAE_CLOSED]))
+        self.assertEqual(row["titulo"], "Troca de teclado")  # the Dashboard title is kept
+
+    def test_site_finish_without_dashboard_row_uses_the_ficha_and_never_personal_fields(self):
+        section = sebrae(finalizacao={"UTIC-2026-0103": finished(em="2026-10-08T12:00:00-03:00")})
+        row = by_key(section)["UTIC-2026-0103"]
+        self.assertEqual((row["titulo"], row["serie"], row["abertura"]), ("Liberação de acesso", "SN-FIC-600", None))
+        self.assertEqual(set(row), {"chave", "chamado", "titulo", "serie", "abertura", "finalizacao", "situacoes"})
+        self.assertNotIn("Pessoa Fictícia", json.dumps(section, ensure_ascii=False))
+
+    def test_new_ticket_opens_on_habilitada_em(self):
+        section = sebrae(novos=[ChamadoSoftExpert(numero="UTIC-2026-0104", titulo="Monitor sem imagem",
+                                                  descricao="CPF 123.456.789-09", habilitada_em="12/10/2026 08:00"),
+                                ChamadoSoftExpert(numero="linha:5", habilitada_em="12/10/2026 08:00")])
+        self.assertEqual(list(by_key(section)), ["UTIC-2026-0104"])
+        self.assertEqual(by_key(section)["UTIC-2026-0104"]["situacoes"], [SEBRAE_OPENED])
+        self.assertNotIn("123.456", json.dumps(section))
+
+    def test_titles_are_masked(self):
+        section = sebrae(dashboard=[dashboard_row(4, "UTIC-2026-0105", abertura="10/10/2026",
+                                                  titulo="Acesso do CPF 123.456.789-09")])
+        self.assertNotIn("123.456.789-09", by_key(section)["UTIC-2026-0105"]["titulo"])
+
+    def test_tickets_without_any_date_are_counted_apart(self):
+        section = sebrae(dashboard=[dashboard_row(327, "UTIC-2026-0106"), dashboard_row(332, "Sem chamado"),
+                                    dashboard_row(10, "UTIC-2026-0107", abertura="sem data")])
+        self.assertEqual((section["abertos"], section["finalizados"], section["sem_data"], section["linhas"]), (0, 0, 3, []))
+
+    def test_utc_instants_fall_on_the_sao_paulo_day(self):
+        section = sebrae(finalizacao={
+            "UTIC-2026-0108": finished(em="2026-11-01T02:30:00+00:00"),  # 31/10 23:30 in São Paulo
+            "UTIC-2026-0109": finished(em="2026-10-01T02:30:00+00:00"),  # 30/09 23:30 in São Paulo
+        }, month=parse_report_month("2026-10", date(2026, 11, 7)))
+        self.assertEqual(list(by_key(section)), ["UTIC-2026-0108"])
+        self.assertEqual(by_key(section)["UTIC-2026-0108"]["finalizacao"], "2026-10-31")
+
+    def test_month_limits(self):
+        section = sebrae(month=SEPTEMBER, dashboard=[
+            dashboard_row(2, "UTIC-2026-0110", abertura=datetime(2026, 8, 31, 23, 59)),
+            dashboard_row(3, "UTIC-2026-0111", abertura=datetime(2026, 9, 1, 0, 0)),
+            dashboard_row(4, "UTIC-2026-0112", abertura="30/09/2026 23:59"),
+            dashboard_row(5, "UTIC-2026-0113", abertura="01/10/2026 00:00"),
+        ])
+        self.assertEqual(list(by_key(section)), ["UTIC-2026-0112", "UTIC-2026-0111"])  # most recent first
+
+    def test_partial_month_stops_at_today(self):
+        section = sebrae(month=OCTOBER, dashboard=[
+            dashboard_row(2, "UTIC-2026-0114", abertura="17/10/2026 18:00"),
+            dashboard_row(3, "UTIC-2026-0115", abertura="18/10/2026 08:00"),
+        ])
+        self.assertEqual(list(by_key(section)), ["UTIC-2026-0114"])
+
+    def test_dashboard_dates_are_read_with_their_real_line_numbers(self):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "CHAMADOS"
+        sheet.append(DASHBOARD_HEADER)
+        row = [None] * len(DASHBOARD_HEADER)
+        first, last = list(row), list(row)
+        first[2], first[6], first[10], first[15] = "UTIC-2026-0116", "Teclado", " SN-FIC-700 ", datetime(2026, 10, 2, 9, 0)
+        last[2], last[17] = "PRT-000017/26", "05/10/2026 10:00"
+        sheet.append(first)
+        sheet.append(row)  # blank line in the middle
+        sheet.append(last)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        rows = ler_datas_chamados(buffer.getvalue())
+        self.assertEqual([item["linha"] for item in rows], [2, 4])
+        self.assertEqual((rows[0]["titulo"], rows[0]["serie"]), ("Teclado", "SN-FIC-700"))
+        section = sebrae(dashboard=rows)
+        self.assertEqual(set(by_key(section)), {"UTIC-2026-0116", "linha:4"})
+
+    def test_dashboard_day_typed_without_time_is_counted(self):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "CHAMADOS"
+        sheet.append(DASHBOARD_HEADER)
+        row = [None] * len(DASHBOARD_HEADER)
+        row[2], row[15], row[17] = "UTIC-2026-0117", "05/10/2026", " 15/10/2026 "
+        sheet.append(row)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        section = sebrae(dashboard=ler_datas_chamados(buffer.getvalue()))
+        self.assertEqual((section["abertos"], section["finalizados"], section["sem_data"]), (1, 1, 0))
+
+
+class SebraeSourcesFromStateTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_without_imported_dashboard_returns_none(self):
+        self.assertIsNone(sebrae_sources_from_state(self.state))
+
+    def test_missing_dashboard_copy_is_a_busy_error(self):
+        (self.state / "sebrae_dashboard_existentes.json").write_text(
+            json.dumps({"numeros": ["UTIC-2026-0100"], "sha256": "0" * 64}), encoding="utf-8")
+        with self.assertRaises(DomainBusyError):
+            sebrae_sources_from_state(self.state)
 
 
 if __name__ == "__main__":

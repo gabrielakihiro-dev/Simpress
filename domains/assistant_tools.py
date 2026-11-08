@@ -667,7 +667,10 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "obter_relatorio_mensal",
-        "Dados do relatório mensal de um mês.",
+        "Dados do relatório mensal de um mês: inventário, comparação, OS e `sebrae` (chamados da aba Chamados, F5: "
+        "`abertos` e `finalizados` no mês, `sem_data` fora da contagem e até 5 `linhas` com chamado, título, série e datas, "
+        "mais `linhas_omitidas`; a lista completa fica no Relatório mensal, F8; null sem Dashboard importado; `erro` quando "
+        "a leitura falhou, sem afetar o resto).",
         lambda c, a: c.obter_relatorio_mensal(str(a.get("mes", ""))),
         {"mes": {"type": "string", "description": "Mês no formato AAAA-MM (ex.: '2026-10')."}}, ["mes"],
     ),
@@ -1455,7 +1458,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
         r"\bsebrae|\bdashboard|sharepoint|\bsoftexpert|\bfinaliz|\bencerr|\bdescricao\b|\bchamados? antigos?\b|\b(?:ler|leitura|leu|lei[ao]|lidos?) (?:d?os? )?antigos\b|\bantigos em aberto\b|\bdestaque|\bobservac|\banotei\b",
         ("resumo_sebrae", "chamados_novos_sebrae", "proximo_passo_sebrae", "chamados_antigos_abertos_sebrae", "chamados_destaque_sebrae", "historico_sebrae",
          "situacao_finalizacao_sebrae", "status_leitura_antigos_sebrae", "finalizar_chamado_softexpert",
-         "editar_descricao_chamado_sebrae", "ler_chamados_antigos_softexpert"),
+         "editar_descricao_chamado_sebrae", "ler_chamados_antigos_softexpert", "obter_relatorio_mensal"),
     ),
     "historico": (
         r"\bhistoric|\bcompar|\bplanilha|\batualizacao|\batualizacoes|\bevolu|\bperiodo|\bevento|\brestaur|\bdivergen|\banotac|\banot(?:e|ar)\b|\bdesfaz|\bdesfazer",
