@@ -16,6 +16,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, File, Query, UploadFile
@@ -292,19 +293,71 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainValidationError(str(erro), status_code=422) from None
         return await asyncio.to_thread(_importar_bloqueado, conteudo, numeros, nome, automatico)
 
+    def _valores_ou_none(conteudo: Optional[bytes]) -> Optional[Dict[int, Any]]:
+        """Row values of a Dashboard copy; ``None`` when it is missing or unreadable, so it never equals anything."""
+        if conteudo is None:
+            return None
+        try:
+            return sebrae_dashboard_gravacao.valores_dos_chamados(conteudo)
+        except (OSError, ValueError, KeyError):  # DashboardInvalido and GravacaoInvalida are ValueError
+            return None
+
+    def _mesma_planilha(baixada: bytes, referencia: Optional[bytes]) -> bool:
+        """Same bytes, or same ticket-row values (a re-save in Excel changes bytes, not data)."""
+        if referencia is None:
+            return False
+        if hashlib.sha256(baixada).digest() == hashlib.sha256(referencia).digest():
+            return True
+        valores = _valores_ou_none(baixada)
+        return valores is not None and valores == _valores_ou_none(referencia)
+
+    def _classificar_saida_pendente(conteudo: bytes) -> str:
+        """Compare the Dashboard just downloaded with the pending output and with the imported base (read only):
+        ``igual_saida`` (the output is already there), ``igual_base`` (nothing changed, the output can still be sent)
+        or ``divergente`` (edited after the import, or no readable base: the output can no longer be sent)."""
+        caminhos = services.caminhos()
+        try:
+            saida = sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).read_bytes()
+        except OSError:
+            saida = None
+        if _mesma_planilha(conteudo, saida):
+            return "igual_saida"
+        importado = sebrae_novos.ler_existentes(caminhos.existentes)
+        base = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) if importado else None
+        if _mesma_planilha(conteudo, base):
+            return "igual_base"
+        # Same acceptance as the check of ``enviar``: the file this site last put on SharePoint (hash, or values after SharePoint re-saved it).
+        pasta = _pasta_estado()
+        enviado = fin.ler_enviado(pasta)
+        if (enviado and hashlib.sha256(conteudo).hexdigest() == enviado) or _mesma_planilha(conteudo, fin.ler_copia_enviada(pasta)):
+            return "igual_base"
+        return "divergente"
+
     def _importar_bloqueado(conteudo: bytes, numeros: Any, nome: str, automatico: bool):
         with lock_paths([_base_guard()]):
-            if automatico and sebrae_novos.dashboard_saida_pendente(services.caminhos()):
-                raise DomainConflictError("Há um Dashboard atualizado aguardando envio. Envie ou preserve e confira essa cópia antes de repetir Baixar, importar e buscar; a importação automática foi impedida para não perder alterações.")
             ativa = _rotina_em_andamento()
             if fin.job_pendente(_pasta_estado()) or (ativa is not None and ativa.get("rotina") in ("fechar", "enviar")):
                 raise DomainConflictError("Aguarde a finalização em andamento antes de reimportar o Dashboard.")
+            substituida = False
+            if automatico and sebrae_novos.dashboard_saida_pendente(services.caminhos()):
+                situacao = _classificar_saida_pendente(conteudo)  # before _guardar_importado replaces the base
+                if situacao == "igual_base":
+                    raise DomainConflictError("Há um Dashboard atualizado aguardando envio e o Dashboard do SharePoint não mudou desde a importação. Clique em Enviar ao SharePoint; a importação automática foi impedida para não perder alterações.")
+                substituida = situacao == "divergente"
             anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes)
             _arquivar_encerrados(conteudo, anteriores)
-            preservada = sebrae_novos.caminho_saida(services.caminhos(), NOME_ATUALIZADO).is_file()
-            _guardar_importado(conteudo, numeros, nome)
+            preservada = _guardar_importado(conteudo, numeros, nome)
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
-            return JSONResponse({**_estado(), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada}, headers={"Cache-Control": "no-store"})
+            corpo = {**_estado(), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
+            if substituida and preservada is not None:
+                corpo["saida_pendente_substituida"] = True
+                corpo["aviso"] = (
+                    "O Dashboard no SharePoint foi editado depois da última importação (por exemplo, linha preenchida à mão ou linhas reordenadas). "
+                    "A cópia gerada por Atualizar Dashboard não podia mais ser enviada sem apagar essas edições; "
+                    f"ela foi guardada em data/state/sebrae_dashboard_saida/preservados/{preservada.name}. "
+                    "O rascunho da tela continua: confira os cartões, clique em Atualizar Dashboard e depois em Enviar ao SharePoint."
+                )
+            return JSONResponse(corpo, headers={"Cache-Control": "no-store"})
 
     def _arquivar_encerrados(conteudo: bytes, anteriores: Optional[Mapping[str, Any]]) -> None:
         """Tickets that left the open list go to the permanent archive; unlike the history, a failure blocks the import
@@ -361,10 +414,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainValidationError("Entrada do histórico não encontrada.", status_code=404)
         return JSONResponse(entrada, headers={"Cache-Control": "no-store"})
 
-    def _guardar_importado(conteudo: bytes, numeros: Any, nome: str) -> None:
+    def _guardar_importado(conteudo: bytes, numeros: Any, nome: str) -> Optional[Path]:
         """Numbers, A/B lists and open tickets go to the JSON; the file itself is kept for "Atualizar Dashboard".
-        A Dashboard the writer cannot read still imports, so the paste flow keeps working."""
+        A Dashboard the writer cannot read still imports, so the paste flow keeps working.
+        Returns the path the old output was moved to, or ``None`` when there was none."""
         caminhos = services.caminhos()
+        preservada = None
         # a saída antiga vem da importação anterior; enviá-la ao SharePoint apagaria o que entrou desde então
         saida = sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO)
         if saida.is_file():
@@ -379,6 +434,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except DashboardInvalido:
             listas, abertos, sha256 = {}, [], ""
         sebrae_novos.salvar_existentes(caminhos.existentes, numeros, nome, sha256=sha256, listas=listas, abertos=abertos)
+        return preservada
 
     @router.post("/api/sebrae/exportar")
     def exportar(payload: ExportarPayload):
@@ -750,6 +806,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         escolhidos = [c for c in novos["chamados"] if c.numero in manuais]
         desconhecidos = sorted(set(manuais) - {c.numero for c in escolhidos})
         if desconhecidos:
+            ja_no_dashboard = next((n for n in desconhecidos if n in importado["numeros"]), None)
+            if ja_no_dashboard:  # typed into the Dashboard by hand after the search
+                raise DomainValidationError(f"{ja_no_dashboard} já está no Dashboard (incluído à mão depois da busca); confira-o em Chamados antigos em aberto e atualize de novo.", status_code=422)
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
         return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False, vinculos=services.vinculos_os())
 

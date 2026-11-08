@@ -522,6 +522,43 @@ class ReenviarTest(FecharBase):
         self.assertTrue(aviso["limpeza_pendente"])
         self.assertTrue(pendente.exists())
 
+    def test_reenvio_recusa_copia_pendente_montada_sobre_importacao_antiga(self):
+        pendente = self.criar_pendente()
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, [A, B, C], "Dashboard.xlsx", sha256="b" * 64)  # reimportou depois
+        with self.assertRaisesRegex(Rotinas.RotinaErro, "gerada antes da última importação"):
+            self.pedir()
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertTrue(pendente.exists())
+        self.assertFalse(self.resultado()["em_andamento"])
+
+    def test_reenvio_recusa_copia_pendente_sem_base_registrada(self):
+        pendente = self.criar_pendente()
+        registro = fin.pendente_mais_recente(self.dir)[1]
+        registro.pop("base_sha256")
+        fin.atomic_write_json(pendente.with_suffix(".json"), registro)
+        with self.assertRaisesRegex(Rotinas.RotinaErro, "gerada antes da última importação"):
+            self.pedir()
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertTrue(pendente.exists())
+
+    def test_reenvio_da_snapshot_recusa_importacao_posterior_ao_job(self):
+        for alterar_base in (False, True):
+            with self.subTest(alterar_base=alterar_base):
+                self.setUp()
+                envio = fin.preparar_envio(self.dir, self.importado)
+                sha = fin.ler_envio(self.dir)["sha256"]
+                fin.marcar_envio_incerto(self.dir, envio)
+                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+                fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+                if alterar_base:
+                    sebrae_novos.salvar_existentes(self.caminhos.existentes, [A, B, C], "Dashboard.xlsx", sha256="b" * 64)
+                    with self.assertRaises(DomainConflictError):
+                        sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir)
+                    self.assertEqual(self.rotinas.enviadas, [])
+                else:
+                    self.assertEqual(sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir), 0)
+                    self.assertEqual(self.rotinas.enviadas, [(fin.NOME_DASHBOARD, self.importado)])
+
     def pedir(self):
         fin.gravar_job(self.dir, [], acao=fin.ACAO_REENVIAR)
         return sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir, modulo=modulo({}, self.aba), agora=lambda: AGORA)

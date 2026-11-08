@@ -340,7 +340,8 @@ MOTIVOS_AUTOMACAO: Dict[str, str] = {
     "chrome_sem_conexao": "O Chrome de automação não abriu ou não aceitou a conexão da rotina.",
     "playwright_ausente": "O pacote Playwright não está instalado no ambiente Python do projeto.",
     "envio_sharepoint_nao_confirmado": "O aviso de envio concluído não apareceu; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.",
-    "dashboard_sharepoint_mudou": "O Dashboard no SharePoint mudou depois da importação; é preciso importar de novo.",
+    "dashboard_sharepoint_mudou": "O Dashboard no SharePoint mudou depois da importação, então o envio parou sem substituir nada. É preciso importar de novo: "
+    "Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint (a cópia gerada antes fica guardada, nada é apagado).",
     "duplicata_nao_criada": "A cópia de segurança (Duplicata) não apareceu no SharePoint; o Dashboard não foi substituído.",
     "sharepoint_so_manter_ambos": "O SharePoint só ofereceu manter os dois arquivos; nada foi enviado.",
     "dashboard_em_uso_no_sharepoint": "O Dashboard estava em uso ou bloqueado no SharePoint.",
@@ -1564,7 +1565,8 @@ class SimpressApi:
             passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados.", "usuario"
         else:
             passo, quem = ("O Dashboard atualizado já foi gerado. Se ainda não foi ao SharePoint, usar \"Enviar ao SharePoint\" "
-                           "no painel Chamados (o login é manual).", "usuario")
+                           "no painel Chamados (o login é manual). Se o envio avisar que o SharePoint mudou, o arquivo gerado não vale mais: "
+                           "repetir Baixar, importar e buscar, Atualizar Dashboard e Enviar ao SharePoint.", "usuario")
         return {
             "dashboard_importado": importado is not None,
             "atualizavel": bool(importado and importado.get("atualizavel")),

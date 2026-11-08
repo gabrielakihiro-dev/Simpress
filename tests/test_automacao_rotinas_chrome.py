@@ -1,6 +1,8 @@
+import hashlib
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -1115,6 +1117,184 @@ class EnviarDashboardTests(unittest.TestCase):
 
                 sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(enviado).hexdigest(), enviado)
                 automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    # Edição manual no SharePoint entre "Atualizar Dashboard" e "Enviar ao SharePoint": a mensagem diz o que mudou
+    # (só números de linha) e a rotina não repete em vão uma divergência que é real.
+
+    @staticmethod
+    def _edicao():
+        from tests import test_sebrae_dashboard_edicao_manual as edicao
+
+        return edicao
+
+    def _divergencia(self, baixado: bytes, importado: bytes):
+        with self.assertRaises(automacao.DashboardDivergente) as contexto:
+            self._confere(baixado, importado)
+        return contexto.exception
+
+    def test_precheck_passes_when_nothing_changed_even_if_the_sharepoint_resaved_the_file(self):
+        base = self._edicao().dashboard()
+        regravado = self._edicao().regravar(base, lambda folha: folha.replace(' s="60"', ' s="61"'))
+        self.assertNotEqual(regravado, base)
+        for nome, baixado in (("mesmo arquivo", base), ("regravado", regravado)):
+            with self.subTest(nome):
+                self._confere(baixado, base)
+
+    def test_precheck_says_only_the_order_changed(self):
+        edicao = self._edicao()
+        base = edicao.dashboard()
+        baixado = edicao.reordenar(base, [5, 4, 3, 2])
+        erro = self._divergencia(baixado, base)
+        self.assertIsInstance(erro, automacao.RotinaErro)
+        self.assertTrue(str(erro).startswith(automacao.MSG_SHAREPOINT_MUDOU))
+        self.assertIn("Só a ordem das linhas mudou", str(erro))
+        self.assertIn("Baixar, importar e buscar", str(erro))
+        self.assertIn("Nada foi substituído no SharePoint", str(erro))
+        self.assertEqual(erro.sha256, hashlib.sha256(baixado).hexdigest())
+
+    def test_precheck_names_only_the_row_number_of_a_row_filled_by_hand_after_sorting(self):
+        edicao = self._edicao()
+        base = edicao.dashboard()
+        mensagem = str(self._divergencia(edicao.linha_preenchida_a_mao(edicao.reordenar(base, [5, 4, 3, 2])), base))
+        self.assertIn("Linhas diferentes da importação: 9.", mensagem)
+        self.assertEqual(re.findall(r"\d+", mensagem), ["9"])  # nenhum número UTIC nem outro dígito
+        for conteudo in (edicao.TICKET_A_MAO, edicao.TITULO_A_MAO, "UTIC", "CLIENTE", "titulo", "EM ABERTO"):
+            self.assertNotIn(conteudo, mensagem)
+
+    def test_precheck_names_the_row_edited_in_place(self):
+        edicao = self._edicao()
+        base = edicao.dashboard()
+        mensagem = str(self._divergencia(edicao.preencher(base, 3, {"B": "REDE"}), base))
+        self.assertIn("Linhas diferentes da importação: 3.", mensagem)
+        self.assertNotIn("REDE", mensagem)
+
+    def test_precheck_lists_five_rows_and_counts_the_rest(self):
+        edicao = self._edicao()
+        base = edicao.dashboard(ultima=14)
+        baixado = base
+        for linha in range(6, 13):
+            baixado = edicao.preencher(baixado, linha, {"A": "CLIENTE", "C": f"UTIC-2026-08{linha:02d}", "D": "EM ABERTO"})
+        mensagem = str(self._divergencia(baixado, base))
+        self.assertIn("Linhas diferentes da importação: 6, 7, 8, 9, 10 (+2).", mensagem)
+        self.assertEqual(re.findall(r"\d+", mensagem), ["6", "7", "8", "9", "10", "2"])
+        self.assertNotIn("UTIC", mensagem)
+
+    def test_precheck_explains_by_the_closest_reference_when_the_sent_copy_is_older_than_the_imported_one(self):
+        from domains import sebrae_finalizacao
+
+        edicao = self._edicao()
+        importada = edicao.dashboard()
+        enviada = importada
+        for linha in (2, 3, 4):  # cópia enviada em 06/11: três linhas já diferem da importada em 08/11
+            enviada = edicao.preencher(enviada, linha, {"B": "REDE"})
+        baixado = edicao.preencher(importada, 5, {"B": "SOFTWARE"})  # importada + uma linha editada à mão
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "baixado.xlsx"
+            arquivo.write_bytes(baixado)
+            self._estado(Path(pasta), importada)
+            sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(enviada).hexdigest(), enviada)
+            self.assertEqual(sebrae_finalizacao.ler_copia_enviada(Path(pasta)), enviada)  # a cópia enviada entra mesmo na conferência
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                with self.assertRaises(automacao.DashboardDivergente) as contexto:
+                    automacao.conferir_dashboard_do_sharepoint(arquivo)
+        mensagem = str(contexto.exception)
+        self.assertIn("Linhas diferentes da importação: 5.", mensagem)  # só a editada; pela enviada seriam 2, 3, 4 e 5
+        self.assertEqual(re.findall(r"\d+", mensagem), ["5"])
+        self.assertNotIn("SOFTWARE", mensagem)
+
+    def test_divergence_reason_uses_the_closest_of_several_references(self):
+        baixado = {2: ("a",), 3: ("b",), 4: ("c",)}
+        distante = {2: ("x",), 3: ("y",), 4: ("z",)}
+        proxima = {2: ("a",), 3: ("b",), 4: ("d",)}
+        for referencias in ([distante, proxima], [proxima, distante]):
+            with self.subTest(ordem=[referencias.index(proxima)]):
+                self.assertEqual(automacao._motivo_da_divergencia(baixado, referencias), "Linhas diferentes da importação: 4.")
+        self.assertEqual(automacao._motivo_da_divergencia(baixado, [distante]), "Linhas diferentes da importação: 2, 3, 4.")
+        reordenada = {2: ("c",), 3: ("a",), 4: ("b",)}
+        self.assertEqual(automacao._motivo_da_divergencia(baixado, [distante, reordenada]), "Só a ordem das linhas mudou (filtro/ordenação no Excel).")
+
+    def _rodar_baixar_e_conferir(self, conferir, baixar=None):
+        """Roda a rotina enviar com download e conferência simulados; devolve (código ou exceção, mocks)."""
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta") as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=baixar or (lambda p: Path("baixado.xlsx"))) as baixar_mock, \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=conferir) as conferir_mock, \
+                    patch.object(automacao, "guardar_backup_do_dashboard") as backup, \
+                    patch.object(automacao, "enviar_arquivo_para_pasta") as enviar, \
+                    patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
+                try:
+                    resultado = automacao.rodar_rotina_enviar(MagicMock())
+                except Exception as erro:
+                    resultado = erro
+        return resultado, {"duplicar": duplicar, "baixar": baixar_mock, "conferir": conferir_mock, "backup": backup, "enviar": enviar}
+
+    def test_routine_stops_at_the_second_attempt_when_the_same_divergence_repeats(self):
+        mensagem = automacao.MSG_SHAREPOINT_MUDOU + " Linhas diferentes da importação: 9."
+        resultado, mocks = self._rodar_baixar_e_conferir(automacao.DashboardDivergente(mensagem, "a" * 64))
+        self.assertIs(type(resultado), automacao.RotinaErro)  # terminal: não é EtapaInstavel, então não há 3ª tentativa
+        self.assertEqual(str(resultado), mensagem)
+        self.assertEqual(mocks["conferir"].call_count, 2)
+        self.assertEqual(mocks["baixar"].call_count, 2)
+        mocks["duplicar"].assert_called_once()  # nenhuma Duplicata extra
+        mocks["backup"].assert_not_called()
+        mocks["enviar"].assert_not_called()  # nenhum Replace
+
+    def test_routine_keeps_trying_when_each_download_diverges_differently(self):
+        divergencias = [automacao.DashboardDivergente(automacao.MSG_SHAREPOINT_MUDOU, letra * 64) for letra in "abc"]
+        resultado, mocks = self._rodar_baixar_e_conferir(divergencias)
+        self.assertIsInstance(resultado, automacao.EtapaInstavel)
+        self.assertIn("mudou depois da importação", str(resultado))
+        self.assertEqual(mocks["conferir"].call_count, 3)
+        mocks["duplicar"].assert_called_once()
+        mocks["enviar"].assert_not_called()
+
+    def test_routine_goes_on_when_a_divergence_does_not_repeat(self):
+        resultado, mocks = self._rodar_baixar_e_conferir([automacao.DashboardDivergente(automacao.MSG_SHAREPOINT_MUDOU, "a" * 64), None])
+        self.assertEqual(resultado, 0)
+        self.assertEqual(mocks["conferir"].call_count, 2)
+        mocks["duplicar"].assert_called_once()
+        mocks["backup"].assert_called_once()
+        mocks["enviar"].assert_called_once()
+
+    def test_routine_tries_three_times_on_a_common_transient_error(self):
+        resultado, mocks = self._rodar_baixar_e_conferir(RuntimeError("falha transitória"))
+        self.assertIsInstance(resultado, automacao.EtapaInstavel)
+        self.assertIn("falha transitória", str(resultado))
+        self.assertEqual(mocks["conferir"].call_count, 3)
+        self.assertEqual(mocks["baixar"].call_count, 3)
+        mocks["duplicar"].assert_called_once()
+        mocks["enviar"].assert_not_called()
+
+    def test_routine_downloads_again_after_a_corrupted_file_and_passes_the_real_precheck(self):
+        base = self._edicao().dashboard()
+        baixados = [b"isto nao e um xlsx", base]
+        with tempfile.TemporaryDirectory() as pasta:
+            self._estado(Path(pasta), base)
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+
+            def _baixar(pagina):
+                destino = Path(pasta) / f"baixado{len(baixados)}.xlsx"
+                destino.write_bytes(baixados.pop(0))
+                return destino
+
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta") as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=_baixar), \
+                    patch.object(automacao, "guardar_backup_do_dashboard"), patch.object(automacao, "enviar_arquivo_para_pasta") as enviar, \
+                    patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
+                codigo = automacao.rodar_rotina_enviar(MagicMock())
+        self.assertEqual(codigo, 0)
+        self.assertEqual(baixados, [])
+        duplicar.assert_called_once()
+        enviar.assert_called_once()
 
     def _rodar_enviar(self, pasta: str, falha_no_envio: bool, ao_enviar=None, falha_close=False):
         arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
