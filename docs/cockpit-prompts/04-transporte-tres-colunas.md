@@ -139,13 +139,12 @@ Mesmos `data-on-click="adicionarObsChamado"` e `data-args` atuais.
 
 #### Rodapé
 
-- Botão **Copiar texto** — ligado ao handler existente (`copiarTextoSolicitacaoTransporte` ou `gerarTextoSolicitacaoTransporte`)
+- ~~Botões **Copiar texto**, **Texto para Transporte** e o link **Abrir chamado**~~ (removidos em 07/11/2026: depois do download, **Gerar planilha** abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
 - Botão **Gerar planilha** — ligado ao handler existente (`gerarPlanilhaExcel`)
 
 #### IDs preservados
 
 - `#textarea-resumo-preview` (pode alimentar a pré-visualização)
-- `#textarea-texto-transporte`
 - `#btn-gerar-planilha`
 - `#status-indicator`, `#status-summary`
 - Todos os `data-on-click` dos botões de ação
@@ -171,7 +170,7 @@ O `#transfer-equipment-banner` continua no topo, acima das 3 colunas, mostrando 
 - Rode `npx playwright test tests/e2e/ui.spec.cjs` — formulário de transferência deve funcionar.
 - Confirme que selecionar uma unidade preenche os campos de destino.
 - Confirme que a pré-visualização atualiza ao digitar.
-- Confirme que "Gerar planilha" e "Copiar texto" funcionam.
+- Confirme que "Gerar planilha" baixa a planilha e abre "Gerar ticket no UX" (`tests/e2e/ux-ticket.spec.cjs`, com `/api/ux/gerar-ticket/*` simulado).
 - Confirme que os chips de observação rápida adicionam texto.
 
 **Commit:** `style(cockpit): Transporte em 3 colunas com pré-visualização ao vivo`

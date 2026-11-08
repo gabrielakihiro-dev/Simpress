@@ -73,24 +73,27 @@ class CancelarPayload(BaseModel):
     session_id: str = Field(pattern=r"^[0-9a-f]{32}$")
 
 
+def executar_ux(acao: Callable[[], T]) -> T | JSONResponse:
+    """Map ErroUX to {detail, codigo}; also used by the UX "Gerar ticket" router."""
+    try:
+        return acao()
+    except ErroUX as falha:
+        return JSONResponse(status_code=falha.status, content={"detail": str(falha), "codigo": falha.codigo})
+    except HTTPException:
+        raise
+    except Exception as erro:
+        # Playwright errors can include selectors, profile values and form contents: log only the class name.
+        nome = type(erro).__name__
+        logger.warning("UX: %s", nome)
+        codigo, mensagem = MENSAGENS_FALHA_UX.get(nome, MENSAGEM_FALHA_UX_GENERICA)
+        return JSONResponse(status_code=503, content={"detail": mensagem, "codigo": codigo})
+
+
 def create_ux_chamados_router(
     servico: ChamadosUX, buscar_equipamento: Callable[[str], dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/ux/abrir-chamado")
-
-    def executar(acao: Callable[[], T]) -> T | JSONResponse:
-        try:
-            return acao()
-        except ErroUX as falha:
-            return JSONResponse(status_code=falha.status, content={"detail": str(falha), "codigo": falha.codigo})
-        except HTTPException:
-            raise
-        except Exception as erro:
-            # Playwright errors can include selectors, profile values and form contents: log only the class name.
-            nome = type(erro).__name__
-            logger.warning("UX: %s", nome)
-            codigo, mensagem = MENSAGENS_FALHA_UX.get(nome, MENSAGEM_FALHA_UX_GENERICA)
-            return JSONResponse(status_code=503, content={"detail": mensagem, "codigo": codigo})
+    executar = executar_ux
 
     @router.post("/preparar", response_model=None)
     def preparar(payload: PrepararPayload) -> dict[str, Any] | JSONResponse:

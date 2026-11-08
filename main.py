@@ -221,6 +221,9 @@ from routers.endpoint_lookup import create_endpoint_lookup_router
 from routers.ux_chamados import create_ux_chamados_router
 from domains.ux_chamados import ChamadosUX
 from domains.ux_chamados_browser import conectar_ux
+from routers.ux_ticket import create_ux_ticket_router
+from domains.ux_ticket import TicketsUX
+from domains.ux_ticket_browser import conectar_ux_ticket
 from domains.assistant_api import asgi_transport
 from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
@@ -1920,6 +1923,7 @@ def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
 
 app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
 app.include_router(create_ux_chamados_router(ChamadosUX(STATE_DIR, conectar_ux), _endpoint_lookup_snapshot))
+app.include_router(create_ux_ticket_router(TicketsUX(STATE_DIR, conectar_ux_ticket), get_local_transfer_template))
 
 
 @app.post("/api/equipamento/salvar")

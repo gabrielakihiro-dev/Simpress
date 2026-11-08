@@ -82,6 +82,7 @@ __pycache__/
 /data/state/historico_chamados.json
 /data/state/ux_solicitante.json
 /data/state/ux_chamados_historico.json
+/data/state/ux_tickets_historico.json
 /data/state/apelidos_modificados.json
 /data/state/historico_comparacoes.json
 /data/state/automacao_chrome.cancelar
