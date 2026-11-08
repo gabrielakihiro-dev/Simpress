@@ -11,7 +11,7 @@ description: >-
 
 Use esta skill quando o usuário solicitar o acompanhamento de sessões ativas do Claude Code, monitoramento de PRs abertos e pipelines de integração contínua (CI) no repositório `Simpress`.
 
-Consulte a referência completa em [MONITORAMENTO_PR_CI.md](../../MONITORAMENTO_PR_CI.md).
+Consulte a referência completa em [MONITORAMENTO_PR_CI.md](./MONITORAMENTO_PR_CI.md) (ou no documento raiz [MONITORAMENTO_PR_CI.md](../../MONITORAMENTO_PR_CI.md)).
 
 ## Protocolo de Execução
 

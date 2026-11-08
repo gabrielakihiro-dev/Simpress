@@ -119,7 +119,7 @@ echo.
 rem ---------------------------------------------------------------
 rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify e Node.js (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais ^(ripgrep, RTK, graphify e Node.js; so para desenvolvimento^)...
+echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js e skills dos agentes^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
@@ -201,20 +201,38 @@ where npm >nul 2>nul
 if errorlevel 1 (
     echo   Node.js nao encontrado. O servidor e a automacao funcionam sem ele.
     echo   Para rodar "npm run test:ui:e2e", instale o Node.js LTS ^(winget install -e --id OpenJS.NodeJS.LTS^).
-    goto resumo
+    goto checar_skills
 )
-if not exist "%PROJECT_DIR%package-lock.json" goto resumo
+if not exist "%PROJECT_DIR%package-lock.json" goto checar_skills
 pushd "%PROJECT_DIR%"
 call npm ci --no-audit --no-fund
 if errorlevel 1 (
     echo   [AVISO] npm ci falhou; os testes de interface nao estao prontos. O servidor nao e afetado.
     popd
-    goto resumo
+    goto checar_skills
 )
 call npx playwright install chromium
 if errorlevel 1 echo   [AVISO] Chromium dos testes de interface nao foi baixado; o servidor nao e afetado.
 popd
 echo   OK: dependencias dos testes de interface instaladas.
+
+:checar_skills
+echo   Sincronizando skills de agentes (Claude Code e Antigravity)...
+set "CLAUDE_USER_SKILLS=%USERPROFILE%\.claude\skills"
+if not exist "%CLAUDE_USER_SKILLS%" mkdir "%CLAUDE_USER_SKILLS%" >nul 2>nul
+if exist "%PROJECT_DIR%.claude\skills" (
+    xcopy /e /i /y /q "%PROJECT_DIR%.claude\skills\*" "%CLAUDE_USER_SKILLS%\" >nul 2>nul
+    if not errorlevel 1 (
+        echo   OK: skills do projeto instaladas em %%USERPROFILE%%\.claude\skills ^(inclui monitoramento-pr-ci^).
+    ) else (
+        echo   [AVISO] Nao foi possivel copiar as skills para %%USERPROFILE%%\.claude\skills.
+    )
+)
+set "GEMINI_USER_SKILLS=%USERPROFILE%\.gemini\config\skills"
+if exist "%PROJECT_DIR%.agents\skills" (
+    if not exist "%GEMINI_USER_SKILLS%" mkdir "%GEMINI_USER_SKILLS%" >nul 2>nul
+    xcopy /e /i /y /q "%PROJECT_DIR%.agents\skills\*" "%GEMINI_USER_SKILLS%\" >nul 2>nul
+)
 
 :resumo
 echo.
