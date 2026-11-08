@@ -13,7 +13,10 @@ on:
       - "package-lock.json"
       - "config/**"
       - "scripts/build/**"
-      - "domains/frontend_assets.py"
+      - "domains/**"
+      - "routers/**"
+      - "core/**"
+      - "requirements*.txt"
       - ".github/workflows/ui-browser.yml"
   pull_request:
     paths:
@@ -25,7 +28,10 @@ on:
       - "package-lock.json"
       - "config/**"
       - "scripts/build/**"
-      - "domains/frontend_assets.py"
+      - "domains/**"
+      - "routers/**"
+      - "core/**"
+      - "requirements*.txt"
       - ".github/workflows/ui-browser.yml"
   workflow_dispatch:
 

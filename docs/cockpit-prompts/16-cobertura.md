@@ -38,8 +38,8 @@ Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_sto
 Backlog, não regra: itens conferidos no código (07/11/2026) e ainda sem decisão ou correção.
 
 1. O `localStorage` `simpress:cobertura:sem-vinculo` (`static/js/ui/transfer-history.js`) guarda o pedido da planilha, com nome, e-mail e telefone do destinatário, até a nova tentativa dar certo. É dado pessoal guardado no navegador (LGPD): a decidir se fica, se expira ou se guarda só o mínimo.
-2. `selecionarUnidadePorCidade` (`static/js/features/transfer-form.js`) compara com `includes` sensível a acento: "Sao Jose" não acha "São José", e um nome contido em outro pode escolher a unidade errada. O operador confere o destino antes de gerar a planilha.
-3. Rótulos criados sem definição no plano aguardam aprovação do usuário: `Entregue`, `Vincular`, `Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Tentar de novo`, `Nova data`, `Recebido por`, `Data do recebimento` e `Cancelar movimentação`.
+2. (Corrigido em 08/11/2026) `selecionarUnidadePorCidade` (`static/js/features/transfer-form.js`) comparava com `includes` sensível a acento. Agora compara a cidade inteira, sem acento, sem caixa e com espaços aparados (`dobrarCidadeTransporte`): "Sao Jose" acha "São José", e "Campo" não escolhe "Campo Grande"; sem unidade igual, o destino não é escolhido e o que já estava no campo continua lá. O operador continua conferindo o destino antes de gerar a planilha.
+3. Rótulos criados sem definição no plano aguardam aprovação do usuário: `Entregue`, `Vincular`, `Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Tentar de novo`, `Nova data`, `Recebido por`, `Data do recebimento` e `Cancelar movimentação`. A mensagem do erro 500, `Erro interno na Cobertura. Tente novamente.` (08/11/2026, troca o texto da exceção), também aguarda aprovação.
 4. (Corrigido em 07/11/2026) A transição `recebida` → `encerrada` foi removida: `recebida` já fecha o caso. O estado `encerrada` continua sendo lido (legado) como entregue e fechado, caso exista em dados antigos.
 
 ## Testes
