@@ -71,12 +71,15 @@ test("chamado antigo sem UTIC mostra o texto da coluna C e a linha; o botão con
 test("dadosAntigo: o Dashboard manda; título e solicitante vazios usam a leitura do SoftExpert", () => {
   const leitura = { titulo: " Monitor sem imagem ", solicitante: "Bruna", descricao: "Sem imagem.", atendimento: "", habilitada_em: "20/10/2026 09:15" };
   assert.deepEqual(dadosAntigo({ titulo: "", usuario: "", leitura_softexpert: leitura }),
-    { lido: true, titulo: "Monitor sem imagem", solicitante: "Bruna", descricao: "Sem imagem.", atendimento: "", abertura: "20/10/2026 09:15" });
+    { lido: true, naoEncontrado: false, titulo: "Monitor sem imagem", solicitante: "Bruna", descricao: "Sem imagem.", atendimento: "", abertura: "20/10/2026 09:15" });
   const comDashboard = dadosAntigo({ titulo: "Do Dashboard", usuario: "Camila", leitura_softexpert: leitura });
   assert.equal(comDashboard.titulo, "Do Dashboard");
   assert.equal(comDashboard.solicitante, "Camila");
   assert.deepEqual(dadosAntigo({ titulo: "T", usuario: "U", leitura_softexpert: null }),
-    { lido: false, titulo: "T", solicitante: "U", descricao: "", atendimento: "", abertura: "" });
+    { lido: false, naoEncontrado: false, titulo: "T", solicitante: "U", descricao: "", atendimento: "", abertura: "" });
+  // 08/11/2026: não encontrado na última leitura (ex.: finalizado por outro técnico) só vale sem leitura no cache.
+  assert.equal(dadosAntigo({ nao_encontrado_softexpert: true, leitura_softexpert: null }).naoEncontrado, true);
+  assert.equal(dadosAntigo({ nao_encontrado_softexpert: true, leitura_softexpert: leitura }).naoEncontrado, false);
   // 05/11/2026: sem leitura, a descrição vem da coluna H do Dashboard (item.descricao); com leitura, o Dashboard ainda manda.
   assert.equal(dadosAntigo({ titulo: "T", usuario: "U", descricao: "Falha no teclado.", leitura_softexpert: null }).descricao, "Falha no teclado.");
   assert.equal(dadosAntigo({ titulo: "T", usuario: "U", descricao: "Da planilha.", leitura_softexpert: leitura }).descricao, "Da planilha.");

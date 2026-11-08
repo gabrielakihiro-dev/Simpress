@@ -188,6 +188,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos())) if abertos else {}
         if antigos:
             antigos = sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado()))
+        # Not in SoftExpert's task center on the last read (e.g. closed by another technician): the F5 card is tinted to check later.
+        nao_encontrados = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or []) if abertos else set()
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os(), _indice_endpoint()) if abertos else {}
@@ -200,6 +202,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
+             "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados and str(a.get("numero")) not in antigos,
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
              "destaque": _destacado(obs_map, a.get("numero"))}  # ``softexpert`` is the finalization state; this is the read data
             for a, e in zip(abertos, efetivos)

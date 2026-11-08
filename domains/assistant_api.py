@@ -1596,6 +1596,8 @@ class SimpressApi:
                 "serie": str(_dict(a.get("automaticos")).get("K") or ""),
                 "os": str(_dict(a.get("automaticos")).get("E") or ""),
                 "os_sugerida": str(_dict(a.get("automaticos_sugeridos")).get("E") or ""),
+                # True: not in SoftExpert's task center on the last read (e.g. closed by another technician); the F5 card is red.
+                "nao_encontrado_softexpert": a.get("nao_encontrado_softexpert") is True,
             })
         return _aparar({
             "dashboard_importado": {k: importado.get(k, "") for k in ("arquivo", "importado_em", "total")},

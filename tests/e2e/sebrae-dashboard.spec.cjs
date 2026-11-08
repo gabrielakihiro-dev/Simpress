@@ -572,6 +572,28 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
 });
 
+test("antigo não encontrado no SoftExpert na última leitura fica vermelho, com selo e aviso para conferir depois", async ({ page, request }) => {
+  await page.route("**/api/sebrae/novos", async rota => {
+    const resposta = await rota.fetch();
+    const corpo = await resposta.json();
+    corpo.importado.abertos.forEach(a => { if (a.numero === "UTIC-2026-1211") a.nao_encontrado_softexpert = true; });
+    await rota.fulfill({ response: resposta, json: corpo });
+  });
+  const { painel } = await abrirPainel(page, request, "", "leitura");
+  await painel.locator("#sebrae-aba-antigos").click();
+  const lista = painel.locator("#sebrae-antigos-lista");
+  const linha = numero => lista.locator(`details.sebrae-antigo:has(.sebrae-chamado[data-numero="${numero}"])`);
+  const vermelho = await linha("UTIC-2026-1211").evaluate(no => getComputedStyle(no).borderLeftWidth);
+  expect(vermelho).toBe("4px");
+  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto)")).toHaveText("Não encontrado");
+  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto)")).toHaveAttribute("data-status", "erro");
+  const cartao = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1211"]');
+  await abrirItemAntigo(cartao);
+  await expect(cartao.locator("[data-leitura='nao_encontrado']")).toContainText("pode ter sido finalizado por outro técnico");
+  await expect(cartao.locator("[data-leitura='pendente']")).toHaveCount(0);
+  expect(await linha("UTIC-2026-1210").evaluate(no => getComputedStyle(no).borderLeftWidth)).toBe("1px"); // o lido segue normal
+});
+
 test("o lápis da Descrição do antigo lido edita o texto só no site e Restaurar original volta ao lido", async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request, "", "leitura");
   await painel.locator("#sebrae-aba-antigos").click();
