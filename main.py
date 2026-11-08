@@ -2648,6 +2648,12 @@ def _chrome_session_alive() -> bool:
     return _ux_chamados.tem_sessao_viva() or _ux_tickets.tem_sessao_viva() or endpoint_lookup_domain.sessao_viva()
 
 
+def _automation_run_starting() -> bool:
+    """A site run counts from its Popen, before the child script takes the lock."""
+    runner = _chrome_automation_runner
+    return runner is not None and runner.state().get("estado") != "livre"
+
+
 def _build_chrome_idle_close() -> Optional[chrome_ocioso.FechamentoOcioso]:
     limite = chrome_ocioso.limite_configurado()
     if limite <= 0:
@@ -2656,7 +2662,7 @@ def _build_chrome_idle_close() -> Optional[chrome_ocioso.FechamentoOcioso]:
     return chrome_ocioso.FechamentoOcioso(
         limite=limite,
         ultimo_uso=automation.ultimo_uso,
-        ocupado=lambda: automation.ler_trava() is not None or _chrome_session_alive(),
+        ocupado=lambda: automation.ler_trava() is not None or _automation_run_starting() or _chrome_session_alive(),
         cdp_ativo=automation.cdp_ativo,
         fechar=lambda: chrome_ocioso.fechar_chrome_de_automacao(_chrome_session_alive),
     )

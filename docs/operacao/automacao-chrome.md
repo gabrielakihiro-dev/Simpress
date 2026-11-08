@@ -267,7 +267,7 @@ O Chrome de automação escuta a porta de depuração 9333 enquanto está aberto
 - **Reabrir:** a próxima rotina, consulta do Endpoint ou preparação UX chama `garantir_chrome` e reabre o Chrome. O login pode ser pedido de novo se a sessão do site tiver expirado.
 - **Limites conhecidos:** navegar à mão nesse Chrome sem rotina não conta como uso, então ele fecha depois de 10 min. Um `Controle remoto` que não abre aba nova (visualizador na mesma página ou aplicativo nativo) não é registrado.
 - **Configuração:** `SIMPRESS_CHROME_OCIOSO_S` troca os 600 s; `0` ou negativo desliga (a suíte de testes desliga em `tests/run_tests.py`).
-- **Pendente:** trocar a porta TCP por `--remote-debugging-pipe` ou por `launch_persistent_context` do Playwright. Não faz parte deste trabalho.
+- **Limite conhecido:** o Chrome aberto ainda escuta a porta TCP 9333. Trocar por `--remote-debugging-pipe` ou por `launch_persistent_context` do Playwright depende de decisão do usuário; não faça sem pedido.
 
 ## Aviso "New Hotfix Available" do Endpoint
 

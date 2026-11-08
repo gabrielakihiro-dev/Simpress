@@ -161,9 +161,12 @@ class FecharChromeTests(unittest.TestCase):
         self.assertFalse(automation.TRAVA_PATH.exists())
 
     def test_port_still_open_falls_back_to_the_profile_processes(self):
-        with patch.object(automation, "cdp_ativo", return_value=True), patch.object(automation, "encerrar_chrome_do_perfil") as matar:
+        with patch.object(automation, "cdp_ativo", return_value=True), patch.object(automation, "encerrar_chrome_do_perfil") as matar, \
+                self.assertLogs(chrome_ocioso.logger, "INFO") as logs:
             chrome_ocioso.fechar_chrome_de_automacao(lambda: False)
         matar.assert_called_once_with()
+        self.assertIn("continua aberto", logs.output[-1])
+        self.assertNotIn("fechado após", "\n".join(logs.output))
 
     def test_session_opened_meanwhile_or_busy_lock_keeps_chrome(self):
         with patch.object(automation, "encerrar_chrome_do_perfil") as matar:
@@ -172,6 +175,22 @@ class FecharChromeTests(unittest.TestCase):
                 chrome_ocioso.fechar_chrome_de_automacao(lambda: False)
         self.pw.chromium.connect_over_cdp.assert_not_called()
         matar.assert_not_called()
+
+
+class MontagemNoServidorTests(unittest.TestCase):
+    def test_site_run_before_the_child_takes_the_lock_keeps_chrome(self):
+        import main
+
+        runner = MagicMock()
+        runner.state.return_value = {"estado": "em_andamento"}
+        with patch.dict(os.environ, {"SIMPRESS_CHROME_OCIOSO_S": "1"}), patch.object(main, "_chrome_automation_runner", runner), \
+                patch.object(automation, "ler_trava", return_value=None), patch.object(main, "_chrome_session_alive", return_value=False):
+            ocupado = main._build_chrome_idle_close()._ocupado
+            self.assertTrue(ocupado())  # Popen done, child script has not taken the lock yet
+            runner.state.return_value = {"estado": "livre"}
+            self.assertFalse(ocupado())
+            with patch.object(main, "_chrome_automation_runner", None):
+                self.assertFalse(ocupado())  # no site run yet: the runner is not created just to ask
 
 
 class EndpointReabreChromeTests(unittest.TestCase):
