@@ -124,6 +124,24 @@ test("dados mudados: evento sem movimentação, aviso exato e pendência descart
   assert.equal("movimentacao" in segunda.detail, false);
 });
 
+test("selecionarUnidadePorCidade compara a cidade inteira, sem acento e sem caixa", () => {
+  const env = bootTransferForm();
+  const escolhidas = [];
+  env.app.handleUnidadeDestinoChange = id => escolhidas.push(id);
+  const select = env.document.getElementById("select-unidade-destino");
+  env.appState.unidadesList = [{ id: 1, cidade: "Campo Grande" }, { id: 2, cidade: "Campo" }, { id: 3, cidade: "São Paulo" }];
+  env.form.selecionarUnidadePorCidade("Campo");
+  env.form.selecionarUnidadePorCidade("  sao  PAULO ");
+  assert.deepEqual(escolhidas, [2, 3]);
+
+  env.appState.unidadesList = [{ id: 1, cidade: "Campo Grande" }, { id: 4, cidade: "" }];
+  select.value = "";
+  env.form.selecionarUnidadePorCidade("Campo");
+  env.form.selecionarUnidadePorCidade("   ");
+  assert.equal(select.value, "");
+  assert.deepEqual(escolhidas, [2, 3]);
+});
+
 // ------------------------------------------------------------------ transfer-history: vínculo com a cobertura
 
 function fakeStorage({ throws = false } = {}) {
