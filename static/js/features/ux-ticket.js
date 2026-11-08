@@ -31,6 +31,8 @@
   const CAMPOS = { nome: "ux-ticket-nome", email: "ux-ticket-email", telefone: "ux-ticket-telefone" };
   const byId = id => document.getElementById(id);
   let vigente = null;
+  // Default solicitante, read once from the server (no corporate e-mail in front-end files); shown before /preparar ends.
+  let padrao = null;
 
   function textoDeslocamento(payload) {
     const contato = [payload?.entrega_contato, payload?.entrega_telefone].map(v => String(v || "").trim()).filter(Boolean).join(" - ");
@@ -102,8 +104,10 @@
       byId(id).title = pronto ? "" : motivo;
     }
     const editavel = Boolean(pedido?.session_id) && !ocupado;
-    // The Registro and the solicitante stay editable after a failure, so nothing typed is lost before "Preparar novamente".
-    byId("ux-ticket-formulario").disabled = !pedido || ocupado || Boolean(pedido.concluido);
+    // The Registro and the solicitante stay editable after a failure and while preparing (it takes minutes), never while simulating or sending.
+    byId("ux-ticket-formulario").disabled = !pedido || (ocupado && !pedido.preparando) || Boolean(pedido.concluido);
+    const registro = byId("ux-ticket-registro");
+    registro.setAttribute("aria-invalid", String(Boolean(pedido) && PLACEHOLDER.test(registro.value)));
     byId("ux-ticket-enderecos").disabled = !editavel;
     byId("ux-ticket-confirmar-endereco").disabled = !editavel || !byId("ux-ticket-enderecos").querySelector("input:checked");
     const tamanho = byId("ux-ticket-registro").value.length;
@@ -170,10 +174,12 @@
     renderizarResumo(pedido);
     renderizarEnderecos(pedido);
     for (const [campo, id] of Object.entries(CAMPOS)) {
-      if (!byId(id).value.trim()) byId(id).value = dados.solicitante?.[campo] || "";
+      const valor = byId(id).value.trim();
+      // The server value only replaces an empty or untouched default, never what the user typed.
+      if ((!valor || valor === padrao?.[campo]) && dados.solicitante?.[campo]) byId(id).value = dados.solicitante[campo];
     }
     if (pedido.dados.endereco) {
-      mostrarEstado("Pronto para simular ou finalizar", "Revise o Registro e o solicitante; nada foi enviado ao UX.");
+      mostrarEstado("Pronto para simular ou finalizar", "No UX o formulário está preenchido até Meus Endereços; Simular preenchimento completa os CNPJs, o Registro, o anexo e o solicitante. Nada foi enviado ao UX.");
     } else if (pedido.dados.opcoes_endereco?.length) {
       mostrarEstado("Escolha o endereço", "O UX listou mais de um endereço para o CEP da unidade de entrega. Escolha o correto e confirme.");
     } else {
@@ -193,6 +199,7 @@
 
   async function preparar(pedido, conferido) {
     pedido.ocupado = true;
+    pedido.preparando = true;
     pedido.falha = false;
     pedido.incerto = false;
     pedido.concluido = false; // "Conferi no UX; preparar de novo" after an uncertain submission reopens the form
@@ -213,6 +220,7 @@
     } finally {
       if (atual(pedido)) {
         pedido.ocupado = false;
+        pedido.preparando = false;
         controles();
       }
     }
@@ -232,6 +240,20 @@
     mostrarErro("");
   }
 
+  // Fills only fields still empty, so nothing typed meanwhile is overwritten; a failure is silent (/preparar returns it too).
+  async function preencherPadrao(pedido) {
+    try {
+      padrao ||= await app.apiFetch(API + "/solicitante", { errorMessage: "Não foi possível carregar o solicitante padrão." });
+    } catch {
+      return;
+    }
+    if (!atual(pedido)) return;
+    for (const [campo, id] of Object.entries(CAMPOS)) {
+      if (!byId(id).value.trim() && padrao?.[campo]) byId(id).value = padrao[campo];
+    }
+    controles();
+  }
+
   async function prepararTicketUX(payload) {
     try {
       if (!payload?.serial) return;
@@ -244,6 +266,7 @@
       const pedido = vigente = { corpo: { ...payload, entrega_cep }, dados: null, session_id: null };
       limparModal(payload);
       app.abrirModalAcessivel(MODAL, "#ux-ticket-cancelar", "fecharTicketUX");
+      void preencherPadrao(pedido);
       if (entrega_cep.replace(/\D/g, "").length !== 8) {
         pedido.falha = true;
         mostrarEstado("Erro", "O ticket não foi preparado.");
