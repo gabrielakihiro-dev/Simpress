@@ -296,6 +296,7 @@ class SchemasPorMensagemTests(unittest.TestCase):
             "o que mudou no sebrae?": "proximo_passo_sebrae",
             "finalize o UTIC-2026-1253 no SoftExpert": "finalizar_chamado_softexpert",
             "deu certo a finalização?": "situacao_finalizacao_sebrae",
+            "quantos chamados do Sebrae foram finalizados em outubro?": "obter_relatorio_mensal",
             "compare o histórico de planilhas": "listar_eventos_comparacao",
             "registre a transferência da ABC123": "registrar_transferencia",
             "rode a rotina de inventários no Chrome": "executar_automacao_chrome",

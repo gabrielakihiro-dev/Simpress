@@ -110,7 +110,9 @@
 
   function displayCount(value) { return Number.isFinite(value) ? new Intl.NumberFormat("pt-BR").format(value) : "—"; }
 
-  function monthlyPreviewText(report) {
+  // Prévia copiável (Copiar resumo): mesmos números da tela e da XLSX; sem linhas "indisponível" (decisão de 07/11/2026).
+  // `sebrae`: resposta de GET /api/sebrae/novos (situação atual); null quando não carregou. A contagem do mês vem de report.sebrae.
+  function monthlyPreviewText(report, sebrae = null) {
     const month = report?.mes?.label || report?.mes?.key || "mês selecionado";
     const inventory = report?.inventario || {};
     const comparison = report?.comparacao || {};
@@ -118,32 +120,42 @@
     const oracle = tickets.oracle || {};
     const simpress = tickets.simpress || {};
     const counts = comparison.contagens || {};
+    const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes.length : 0;
     const topUnits = Array.isArray(inventory.por_unidade) ? inventory.por_unidade.slice(0, 3) : [];
+    const period = typeof report?.mes?.parcial === "boolean" ? ` · ${monthlyPeriodLabel(report)}` : "";
     const lines = [
-      `Relatório mensal Simpress · ${month}`,
+      `Relatório mensal Simpress · ${month}${period}`,
       "",
-      `Equipamentos na base atual: ${displayCount(inventory.total)}`,
-      `Unidades na base atual: ${displayCount(inventory.unidades)}`,
-      `Atualizações de inventário no mês: ${displayCount(comparison.atualizacoes_no_mes)}`,
-      `OS Oracle abertas: ${displayCount(oracle.abertas)}`,
-      `OS Oracle concluídas: ${displayCount(oracle.concluidas)}`,
-      `OS Oracle pendentes no fim do mês: ${displayCount(oracle.pendentes)}`,
-      `Pedidos Simpress abertos: ${displayCount(simpress.abertas)}`,
-      `Pedidos Simpress concluídos: ${displayCount(simpress.concluidas)}`,
-      `Pedidos Simpress em andamento no fim do mês: ${displayCount(simpress.pendentes)}`,
+      `OS Oracle abertas no mês: ${displayCount(oracle.abertas)}`,
+      `OS Oracle concluídas no mês: ${displayCount(oracle.concluidas)}`,
+      `OS Oracle pendentes no fim do período: ${displayCount(oracle.pendentes)}`,
+      `Pedidos Simpress abertos no mês: ${displayCount(simpress.abertas)}`,
+      `Pedidos Simpress entregues no mês: ${displayCount(simpress.concluidas)}`,
+      `Pedidos Simpress em andamento no fim do período: ${displayCount(simpress.pendentes)}`,
+      ...(insufficient ? [`Fora das contagens: ${insufficient} ${plural(insufficient, "registro", "registros")} com dados insuficientes`] : []),
+      "",
+      comparisonUsedText(comparison),
       `Sem correspondência — no endpoint: ${displayCount(counts["Sem correspondência — no endpoint"])}`,
       `Sem correspondência — na Simpress: ${displayCount(counts["Sem correspondência — na Simpress"])}`,
       `Localidade divergente: ${displayCount(counts["Localidade divergente"])}`,
-      "Transportes solicitados: indisponível nesta fonte de dados",
-      "Tempo médio até fechar: indisponível nesta fonte de dados",
-      "Alterações de apelido: indisponível nesta fonte de dados",
+    ];
+    const ticketLines = [];
+    if (sebrae && (sebrae.importado || sebrae.novos)) {
+      const lists = sebraeOpenLists(sebrae);
+      const novos = lists.novos.length;
+      const antigos = lists.antigos.length;
+      ticketLines.push(`Chamados (F5), situação atual: ${displayCount(novos)} ${plural(novos, "novo", "novos")} · ${displayCount(antigos)} ${plural(antigos, "antigo", "antigos")} em aberto`);
+    }
+    // Contagem do mês (report.sebrae); some com erro ou sem Dashboard importado.
+    const monthTickets = sebraeMonthCounts(report);
+    if (monthTickets) ticketLines.push(`Chamados (F5), com data em ${month}: Abertos no mês ${displayCount(monthTickets.abertos)} · Finalizados no mês ${displayCount(monthTickets.finalizados)} · Sem data de abertura ou de encerramento: ${displayCount(monthTickets.sem_data)} (fora da contagem)`);
+    if (ticketLines.length) lines.push("", ...ticketLines);
+    lines.push(
       "",
+      `Base atual (não muda com o mês): ${displayCount(inventory.total)} equipamentos em ${displayCount(inventory.unidades)} unidades`,
       "Unidades com mais equipamentos (base atual):",
       ...(topUnits.length ? topUnits.map(([city, address, total]) => `- ${[city, address].filter(Boolean).join(" · ")}: ${displayCount(total)}`) : ["- Sem dados de unidade."]),
-    ];
-    if (Array.isArray(tickets.dados_insuficientes) && tickets.dados_insuficientes.length) {
-      lines.push(`Registros com dados insuficientes: ${tickets.dados_insuficientes.length}`);
-    }
+    );
     return lines.join("\n");
   }
 
@@ -959,179 +971,552 @@
     }));
   }
 
-  function reportRows(title, rows, labels) {
-    const section = element("section", "ck-det-bloco");
-    section.append(element("h3", "", title));
-    if (!Array.isArray(rows) || !rows.length) {
-      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
-      return section;
-    }
-    const list = element("ul", "ck-det-lista");
-    rows.forEach(row => list.append(element("li", "", labels(row))));
-    section.append(list);
+  // ---- Relatório mensal (F8): layout operacional (07/11/2026) ----
+  // Ordem: Precisa de atenção → Movimento do mês → OS e pedidos → Pendências da comparação → Chamados (F5: situação atual
+  // e contagem do mês, report.sebrae) → Base atual → Prévia. Cada número aparece uma vez; os links só navegam (Home, OS, Resumo, Chamados), nada é gravado.
+  const MONTHLY_PAGE = 25;
+  const MONTHLY_TOP_UNITS = 8;
+  const monthlyView = { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false };
+  const monthlySituationTone = { "Aberta no mês": "info", "Concluída no mês": "success", "Pendente no fim do mês": "warning" };
+  const monthlyFilters = [["todas", "Todas", ""], ["abertas", "Abertas", "Aberta no mês"], ["concluidas", "Concluídas", "Concluída no mês"], ["pendentes", "Pendentes", "Pendente no fim do mês"]];
+  const monthlySectionTone = { "Sem correspondência — no endpoint": "error", "Sem correspondência — na Simpress": "warning" };
+  const monthlyBadgeStatus = { ...badgeStatus, info: "info" };
+
+  function monthlyBadge(text, tone) {
+    const node = element("span", "ck-badge", text);
+    if (monthlyBadgeStatus[tone]) node.dataset.status = monthlyBadgeStatus[tone];
+    return node;
+  }
+
+  // Datas da API ("2026-11-05T14:12:00" ou "2026-11-05") viram texto pt-BR sem conversão de fuso: mostra o horário salvo.
+  function monthlyDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(String(value || ""));
+    if (!match) return "";
+    const [, year, month, day, hour, minute] = match;
+    return hour ? `${day}/${month}/${year} às ${hour}:${minute}` : `${day}/${month}/${year}`;
+  }
+
+  function plural(count, singular, pluralText) { return Number(count) === 1 ? singular : pluralText; }
+
+  function monthlyPeriodLabel(report) {
+    const cutoff = monthlyDate(report?.mes?.data_corte);
+    return report?.mes?.parcial ? `Parcial até ${cutoff || "data indisponível"}` : "Mês encerrado";
+  }
+
+  function comparisonUsedText(comparison) {
+    const updates = Number(comparison?.atualizacoes_no_mes) || 0;
+    const when = monthlyDate(comparison?.horario) || "nenhuma até o fim do período";
+    return `Comparação usada: ${when} · ${displayCount(updates)} ${plural(updates, "atualização", "atualizações")} de inventário no mês`;
+  }
+
+  // Uma série só (pedidos Simpress podem reunir várias, separadas por vírgula): sem série única não há link.
+  function singleSerial(value) {
+    const text = String(value || "").trim();
+    return text && !text.includes(",") ? text : "";
+  }
+
+  function monthlyButton(text, onClick, { className = "ck-btn ck-btn--secundario ck-btn--sm", label = "", arrow = false } = {}) {
+    const button = element("button", className, text);
+    button.type = "button";
+    if (arrow) button.append(element("span", "ck-rel__seta", " ↓"));
+    if (arrow) button.lastChild.setAttribute("aria-hidden", "true");
+    if (label) button.setAttribute("aria-label", label);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  function monthlyLink(text, label, onClick) { return monthlyButton(text, onClick, { className: "ck-rel__link ck-mono", label }); }
+
+  function monthlyJump(headingId) {
+    const heading = byId(headingId);
+    if (!heading) return;
+    heading.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    heading.focus({ preventScroll: true });
+  }
+
+  // Abre a aba OS (F6) filtrada pela série (a busca da F6 procura série, OS, usuário, hostname, modelo e UTIC).
+  async function openSerialInTickets(serial) {
+    const search = byId("cockpit-tickets-search");
+    if (search) search.value = String(serial || "").trim().toUpperCase();
+    await openPanel("chamados");
+    search?.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  // Abre a aba Chamados (F5) numa sub-aba (Novos, Antigos…) sem filtro de chamado.
+  async function openSebraeTab(tab) {
+    await openPanel("sebrae-chamados");
+    byId(`sebrae-aba-${tab}`)?.click();
+  }
+
+  function monthlyNumbers(entries) {
+    const grid = element("dl", "ck-rel__numeros");
+    entries.forEach(([label, value, tone]) => {
+      const cell = element("div", "ck-rel__numero");
+      if (tone) cell.dataset.status = tone;
+      cell.append(element("dt", "ck-rel__rotulo", label), element("dd", "ck-rel__valor", displayCount(value)));
+      grid.append(cell);
+    });
+    return grid;
+  }
+
+  function monthlyCard(title, tone) {
+    const card = element("article", "ck-rel__cartao ck-rel__atencao");
+    if (tone) card.dataset.status = tone;
+    card.append(element("h4", "ck-rel__cartao-titulo", title));
+    return card;
+  }
+
+  function monthlyOutsideCard(rows) {
+    const card = monthlyCard("Fora das contagens", "alerta");
+    const total = element("p", "ck-rel__total");
+    total.append(element("strong", "ck-rel__valor", displayCount(rows.length)), document.createTextNode(` ${plural(rows.length, "registro", "registros")}`));
+    const list = element("ul", "ck-rel__fora");
+    list.id = "cockpit-monthly-fora";
+    list.hidden = !monthlyView.foraAberto;
+    rows.forEach(row => list.append(element("li", "", `${row.fonte || "Fonte indisponível"} · ${(row.identificadores || []).filter(Boolean).join(", ") || "Identificador indisponível"} · ${row.serie || "Série indisponível"} — ${row.motivo || "Motivo indisponível"}`)));
+    const toggle = monthlyButton(monthlyView.foraAberto ? "Ocultar registros" : "Mostrar registros", () => {
+      monthlyView.foraAberto = !monthlyView.foraAberto;
+      list.hidden = !monthlyView.foraAberto;
+      toggle.textContent = monthlyView.foraAberto ? "Ocultar registros" : "Mostrar registros";
+      toggle.setAttribute("aria-expanded", String(monthlyView.foraAberto));
+    });
+    toggle.setAttribute("aria-expanded", String(monthlyView.foraAberto));
+    toggle.setAttribute("aria-controls", list.id);
+    card.append(total, element("p", "ck-rel__nota", "Datas ou vínculo insuficientes: não entram nos números do mês."), toggle, list);
+    return card;
+  }
+
+  function renderMonthlyAttention(report) {
+    const tickets = report.os || {};
+    const comparison = report.comparacao || {};
+    const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
+    const pending = monthlyCard("OS pendentes no fim do período");
+    pending.append(
+      monthlyNumbers([["OS Oracle", tickets.oracle?.pendentes], ["Pedidos Simpress", tickets.simpress?.pendentes]]),
+      element("p", "ck-rel__nota", "Criados até o corte e ainda sem conclusão ou entrega."),
+      monthlyButton("Ver lista", () => {
+        monthlyView.filtro = "pendentes";
+        monthlyView.limiteOs = MONTHLY_PAGE;
+        refreshMonthlySection("os");
+        monthlyJump("cockpit-monthly-os-title");
+      }, { className: "ck-rel__link", label: "Ver lista de OS e pedidos pendentes", arrow: true }),
+    );
+    const counts = element("dl", "ck-rel__contagens");
+    Object.entries(comparison.contagens || {}).forEach(([label, value]) => {
+      const row = element("div", "ck-rel__contagem");
+      row.append(element("dt", "", label), element("dd", "ck-num", displayCount(value)));
+      counts.append(row);
+    });
+    const inventory = monthlyCard("Comparação de inventário");
+    inventory.append(
+      counts,
+      element("p", "ck-rel__nota", `${comparisonUsedText(comparison)}.`),
+      monthlyButton("Ver lista", () => monthlyJump("cockpit-monthly-comp-title"), { className: "ck-rel__link", label: "Ver lista de pendências da comparação", arrow: true }),
+    );
+    const cards = [pending, inventory];
+    if (insufficient.length) cards.push(monthlyOutsideCard(insufficient));
+    byId("cockpit-monthly-kpis").replaceChildren(...cards);
+  }
+
+  function monthlySection(key, title, actions = []) {
+    const section = element("section", "ck-det-bloco ck-rel__secao");
+    section.dataset.relSecao = key;
+    const head = element("div", "ck-rel__secao-cab");
+    const heading = element("h3", "ck-det__titulo", title);
+    heading.id = `cockpit-monthly-${key}-title`;
+    heading.tabIndex = -1;
+    section.setAttribute("aria-labelledby", heading.id);
+    head.append(heading, ...actions);
+    section.append(head);
     return section;
   }
 
-  // Barras do gráfico: altura proporcional ao maior valor real (0–100); sem valores, fica tudo em 0.
-  function monthlyChartBars(oracle = {}, simpress = {}) {
-    const bars = [
-      ["Oracle", "abertos", oracle.abertas], ["Oracle", "concluidos", oracle.concluidas],
-      ["Simpress", "abertos", simpress.abertas], ["Simpress", "concluidos", simpress.concluidas],
-    ].map(([source, kind, value]) => ({ source, kind, value: Number.isFinite(Number(value)) ? Number(value) : 0 }));
-    const max = Math.max(1, ...bars.map(bar => bar.value));
-    return bars.map(bar => ({ ...bar, height: Math.round((bar.value / max) * 100) }));
-  }
-
-  function monthlyChart(bars) {
-    const section = element("section", "ck-det-bloco ck-rel__largo");
-    section.append(element("h3", "ck-det__titulo", "Ordens do mês"));
-    const legend = element("div", "ck-legenda");
-    [["abertos", "Abertas"], ["concluidos", "Concluídas"]].forEach(([kind, label]) => {
-      const item = element("span", "ck-legenda__item");
-      item.append(element("span", `ck-legenda__cor ck-legenda__cor--${kind}`), document.createTextNode(label));
-      legend.append(item);
-    });
-    const svgNs = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNs, "svg");
-    svg.setAttribute("class", "ck-graf");
-    svg.setAttribute("viewBox", "0 0 400 150");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", `Ordens do mês: ${bars.map(bar => `${bar.source} ${bar.kind === "abertos" ? "abertas" : "concluídas"} ${bar.value}`).join(", ")}`);
-    bars.forEach((bar, index) => {
-      const height = Math.max(bar.value > 0 ? 2 : 0, (bar.height / 100) * 140);
-      const rect = document.createElementNS(svgNs, "rect");
-      rect.setAttribute("class", `ck-graf__${bar.kind}`);
-      rect.setAttribute("x", String(index * 100 + 25));
-      rect.setAttribute("y", String(145 - height));
-      rect.setAttribute("width", "50");
-      rect.setAttribute("height", String(height));
-      svg.append(rect);
-    });
-    const base = document.createElementNS(svgNs, "line");
-    base.setAttribute("class", "ck-graf__base");
-    ["x1", "x2"].forEach((attr, index) => base.setAttribute(attr, index ? "400" : "0"));
-    ["y1", "y2"].forEach(attr => base.setAttribute(attr, "145"));
-    svg.append(base);
-    const labels = element("div", "ck-graf__rotulos");
-    bars.forEach(bar => {
-      const label = element("span", "", `${bar.source} · ${bar.kind === "abertos" ? "abertas" : "concluídas"}`);
-      label.prepend(element("strong", "", displayCount(bar.value)));
-      labels.append(label);
-    });
-    section.append(legend, svg, labels);
-    return section;
-  }
-
-  function unitsTable(rows) {
-    const section = element("section", "ck-det-bloco ck-rel__largo");
-    section.append(element("h3", "ck-det__titulo", "Inventário por unidade · base atual"));
-    if (!Array.isArray(rows) || !rows.length) {
-      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
-      return section;
-    }
-    const columns = ["Cidade", "Endereço", "Equipamentos"];
+  // Tabela que vira cartões no celular (ck-tabela--cards). Célula: texto ou nó pronto; `numeric`: colunas à direita.
+  function monthlyTable(columns, rows, numeric = []) {
+    const wrap = element("div", "ck-rel__tabela");
     const table = element("table", "ck-tabela ck-tabela--cards");
     const head = element("tr");
-    columns.forEach((label, index) => head.append(element("th", index === 2 ? "ck-th--dir" : "", label)));
+    columns.forEach((label, index) => {
+      const th = element("th", numeric.includes(index) ? "ck-th--dir" : "", label);
+      th.scope = "col";
+      head.append(th);
+    });
     const thead = element("thead");
     thead.append(head);
-    table.append(thead);
     const body = element("tbody");
-    rows.forEach(row => {
+    rows.forEach(cells => {
       const line = element("tr");
-      line.append(element("td", "", row[0]), element("td", "ck-td--largo", row[1] || "—"), element("td", "ck-td--dir", displayCount(row[2])));
-      Array.from(line.children).forEach((cell, index) => { cell.dataset.label = columns[index]; });
+      cells.forEach((cell, index) => {
+        const td = element("td", numeric.includes(index) ? "ck-td--dir" : "");
+        td.dataset.label = columns[index];
+        if (cell && typeof cell === "object") td.append(cell);
+        else td.textContent = String(cell ?? "") || "—";
+        line.append(td);
+      });
       body.append(line);
     });
-    table.append(body);
-    section.append(table);
+    table.append(thead, body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  // Rodapé só quando há mais a carregar ou já se carregou além da primeira página ("Mostrando 1 de 1" seria ruído).
+  function monthlyMore(shown, total, onMore) {
+    if (shown >= total && total <= MONTHLY_PAGE) return document.createDocumentFragment();
+    const foot = element("div", "ck-rel__rodape");
+    foot.append(element("span", "ck-rel__nota", `Mostrando ${displayCount(shown)} de ${displayCount(total)}`));
+    if (shown < total) {
+      const more = monthlyButton("Carregar mais", onMore);
+      more.dataset.relMais = "";
+      foot.append(more);
+    }
+    return foot;
+  }
+
+  function monthlyMovementSection(tickets) {
+    const section = monthlySection("movimento", "Movimento do mês");
+    const rows = [["OS Oracle", tickets.oracle || {}], ["Pedidos Simpress", tickets.simpress || {}]]
+      .map(([label, counts]) => [label, displayCount(counts.abertas), displayCount(counts.concluidas), displayCount(counts.encerradas_sem_data)]);
+    section.append(monthlyTable(["Fonte", "Abertas", "Concluídas", "Encerradas sem data"], rows, [1, 2, 3]));
     return section;
   }
 
-  // Cartão compacto: número grande + rótulo por par [rótulo, valor]; `extra` anexa um bloco opcional.
-  function statCard(title, pairs, extra) {
-    const section = element("section", "ck-det-bloco ck-rel__cartao");
-    section.append(element("h3", "", title));
-    if (!pairs.length) section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
-    else {
-      const grid = element("dl", "ck-rel__numeros");
-      pairs.forEach(([label, value]) => {
-        const cell = element("div", "ck-rel__numero");
-        cell.append(element("dt", "ck-rel__rotulo", label), element("dd", "ck-rel__valor", displayCount(value)));
-        grid.append(cell);
+  function monthlyOsSection(tickets) {
+    const all = Array.isArray(tickets.linhas) ? tickets.linhas : [];
+    const filter = monthlyFilters.find(([key]) => key === monthlyView.filtro) || monthlyFilters[0];
+    const rows = filter[2] ? all.filter(row => (row.situacao || []).includes(filter[2])) : all;
+    const group = element("div", "ck-rel__filtros");
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "Filtrar por situação");
+    monthlyFilters.forEach(([key, label]) => {
+      const button = monthlyButton(label, () => {
+        monthlyView.filtro = key;
+        monthlyView.limiteOs = MONTHLY_PAGE;
+        refreshMonthlySection("os", `[data-rel-filtro="${key}"]`);
       });
-      section.append(grid);
+      button.dataset.relFiltro = key;
+      button.setAttribute("aria-pressed", String(key === filter[0]));
+      group.append(button);
+    });
+    const section = monthlySection("os", "OS e pedidos do mês", [group, monthlyButton("Ver na aba OS (F6)", () => openPanel("chamados"))]);
+    if (!rows.length) {
+      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return section;
     }
-    if (extra && extra.querySelector("li")) section.append(extra);
+    const shown = rows.slice(0, monthlyView.limiteOs);
+    const columns = ["Fonte", "OS/Pedido", "Série", "Status", "Criação", "Conclusão", "Situação no mês"];
+    section.append(monthlyTable(columns, shown.map(row => {
+      const serial = singleSerial(row.serie);
+      const id = String(row.identificador || "") || "—";
+      const situations = element("span", "ck-rel__selos");
+      (row.situacao || []).forEach(text => situations.append(monthlyBadge(text, monthlySituationTone[text])));
+      return [
+        row.fonte || "—",
+        serial ? monthlyLink(id, `Ver ${id} na aba OS (F6), pela série ${serial}`, () => openSerialInTickets(serial)) : element("span", "ck-mono", id),
+        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : element("span", "ck-mono", row.serie || "—"),
+        row.status || "—",
+        monthlyDate(row.criacao) || "—",
+        monthlyDate(row.conclusao) || "—",
+        situations,
+      ];
+    })), monthlyMore(shown.length, rows.length, () => {
+      monthlyView.limiteOs += MONTHLY_PAGE;
+      refreshMonthlySection("os", "[data-rel-mais]");
+    }));
     return section;
+  }
+
+  function monthlyComparisonSection(comparison) {
+    const rows = Array.isArray(comparison.linhas) ? comparison.linhas : [];
+    const eventId = String(comparison.evento_id || "");
+    const actions = eventId ? [monthlyButton("Abrir no Resumo (F3)", () => mostrarResultadoNaAbaComparacao({ evento_id: eventId }))] : [];
+    const section = monthlySection("comp", "Pendências da comparação", actions);
+    if (!rows.length) {
+      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return section;
+    }
+    const shown = rows.slice(0, monthlyView.limiteComp);
+    section.append(monthlyTable(["Seção", "Hostname", "Série", "Local previsto", "Local na Simpress"], shown.map(row => {
+      const serial = singleSerial(row.serie);
+      return [
+        monthlyBadge(row.secao || "Seção indisponível", monthlySectionTone[row.secao]),
+        element("span", "ck-mono", row.hostname || "—"),
+        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : "—",
+        row.local_previsto || "—",
+        row.local_simpress || "—",
+      ];
+    })), monthlyMore(shown.length, rows.length, () => {
+      monthlyView.limiteComp += MONTHLY_PAGE;
+      refreshMonthlySection("comp", "[data-rel-mais]");
+    }));
+    return section;
+  }
+
+  // Chamados da aba Chamados (F5), lidos de GET /api/sebrae/novos (só leitura). Mesma regra do F5 (sebrae-dashboard.js):
+  // um chamado que o site finalizou sai de Novos e de Antigos na hora, mesmo antes de reimportar o Dashboard.
+  function sebraeOpenLists(data) {
+    const finalizados = data?.importado?.finalizados || [];
+    const done = new Set(finalizados.map(item => item.numero));
+    const open = item => !done.has(item.numero);
+    return { novos: (data?.novos?.formulario || []).filter(open), antigos: (data?.importado?.abertos || []).filter(open), finalizados };
+  }
+
+  // Liga uma linha da contagem do mês (report.sebrae, chave do F8) aos dados do F5 já carregados.
+  // A chave do F8 nem sempre é a do F5: número antigo (5 dígitos) ou `linha:N` do F8 casam com o antigo `linha:N` do F5
+  // pelo texto da coluna C (`item.chamado`), só quando o resultado é único. `chaveF5` vazia = sem link.
+  function sebraeMonthMatch(row, data) {
+    const chave = String(row?.chave || "");
+    const chamado = String(row?.chamado || "").trim();
+    const novos = data?.novos?.formulario || [];
+    const abertos = data?.importado?.abertos || [];
+    const finalizados = data?.importado?.finalizados || [];
+    const serie = String(row?.serie || "").trim() || String(novos.find(item => item.numero === chave)?.linha?.K || "").trim();
+    let chaveF5 = "";
+    if (chave && !chave.startsWith("linha:") && [...novos, ...abertos, ...finalizados].some(item => item.numero === chave)) chaveF5 = chave;
+    else if (chamado) {
+      const old = /^\d{5}$/.test(chave);
+      const same = item => old ? /(?<!\d)\d{5}(?!\d)/.exec(String(item.chamado || ""))?.[0] === chave : String(item.chamado || "").trim() === chamado;
+      const found = abertos.filter(item => String(item.numero || "").startsWith("linha:") && same(item));
+      if (found.length === 1) chaveF5 = found[0].numero;
+    }
+    return { chaveF5, serie };
+  }
+
+  // Números da contagem do mês (report.sebrae); null quando não há Dashboard importado ou a leitura falhou.
+  function sebraeMonthCounts(report) {
+    const data = report?.sebrae;
+    return data && !data.erro && Number.isFinite(data.abertos) ? data : null;
+  }
+
+  function monthlySebraeCurrent(section) {
+    if (monthlyView.sebraeErro) {
+      section.append(element("p", "ck-nota ck-nota--erro", monthlyView.sebraeErro));
+      return true;
+    }
+    const data = monthlyView.sebrae;
+    if (!data?.importado && !data?.novos) return false;
+    const lists = sebraeOpenLists(data);
+    const totals = element("div", "ck-rel__sebrae-totais");
+    totals.append(
+      monthlyNumbers([["Chamados novos", lists.novos.length], ["Antigos em aberto", lists.antigos.length]]),
+      monthlyButton("Ver novos", () => openSebraeTab("novos")),
+      monthlyButton("Ver antigos", () => openSebraeTab("antigos")),
+    );
+    section.append(totals);
+    return true;
+  }
+
+  // Duas partes independentes: "Situação atual" (GET /api/sebrae/novos) e a contagem do mês (report.sebrae, do servidor).
+  function monthlySebraeSection(report) {
+    const section = monthlySection("sebrae", "Chamados (F5)", [monthlyBadge("Situação atual")]);
+    section.classList.add("ck-rel__atual");
+    const empty = "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).";
+    const month = report?.sebrae;
+    const hasCurrent = monthlySebraeCurrent(section);
+    if (!hasCurrent) section.append(element("p", "ck-lista__vazio", empty));
+    if (!hasCurrent && !month) return section;
+    section.append(element("h4", "ck-rel__cartao-titulo", `Com data em ${report?.mes?.label || "mês selecionado"}`));
+    if (!month) {
+      section.append(element("p", "ck-lista__vazio", empty));
+      return section;
+    }
+    const counts = sebraeMonthCounts(report);
+    if (!counts) {
+      section.append(element("p", "ck-nota ck-nota--erro", month.erro || "Não foi possível contar os chamados do mês."));
+      return section;
+    }
+    const noDate = element("p", "ck-rel__nota", `Sem data de abertura ou de encerramento: ${displayCount(counts.sem_data)} `);
+    noDate.append(element("span", "ck-mudo", "(fora da contagem)"));
+    section.append(
+      monthlyNumbers([["Abertos no mês", counts.abertos], ["Finalizados no mês", counts.finalizados]]),
+      noDate,
+      element("p", "ck-rel__nota", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site."),
+    );
+    const rows = Array.isArray(counts.linhas) ? counts.linhas : [];
+    if (!rows.length) {
+      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return section;
+    }
+    const shown = rows.slice(0, monthlyView.limiteSebrae);
+    section.append(monthlyTable(["Chamado", "Título", "Série", "Abertura", "Finalização", "Situação no mês"], shown.map(row => {
+      const { chaveF5, serie } = sebraeMonthMatch(row, monthlyView.sebrae);
+      const serial = singleSerial(serie);
+      const number = String(row.chamado || "").trim() || "Sem UTIC";
+      const situations = element("span", "ck-rel__selos");
+      (row.situacoes || []).forEach(text => situations.append(monthlyBadge(text, text === "Finalizado no mês" ? "success" : "info")));
+      return [
+        chaveF5 ? monthlyLink(number, `Abrir ${number} na aba Chamados (F5)`, () => app.abrirChamadoSebraeNoF5?.(chaveF5)) : element("span", "ck-mono", number),
+        row.titulo || "—",
+        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : element("span", "ck-mono", serie || "—"),
+        monthlyDate(row.abertura) || "—",
+        monthlyDate(row.finalizacao) || "—",
+        situations,
+      ];
+    })), monthlyMore(shown.length, rows.length, () => {
+      monthlyView.limiteSebrae += MONTHLY_PAGE;
+      refreshMonthlySection("sebrae", "[data-rel-mais]");
+    }));
+    return section;
+  }
+
+  function monthlyTypesCard(rows) {
+    const card = element("section", "ck-rel__cartao");
+    card.append(element("h4", "ck-rel__cartao-titulo", "Inventário por tipo"));
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+      card.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return card;
+    }
+    const max = Math.max(1, ...list.map(([, count]) => Number(count) || 0));
+    const items = element("ul", "ck-rel__tipos");
+    list.forEach(([name, count]) => {
+      const item = element("li", "ck-rel__tipo");
+      const line = element("span", "ck-rel__tipo-linha");
+      line.append(element("span", "", name || "Sem tipo"), element("strong", "ck-num", displayCount(count)));
+      const track = element("span", "ck-rel__trilho");
+      track.setAttribute("aria-hidden", "true");
+      const fill = element("span", "ck-rel__trilho-valor");
+      fill.style.width = `${Math.round(((Number(count) || 0) / max) * 100)}%`;
+      track.append(fill);
+      item.append(line, track);
+      items.append(item);
+    });
+    card.append(items);
+    return card;
+  }
+
+  function monthlyUnitsCard(rows) {
+    const card = element("section", "ck-rel__cartao");
+    card.append(element("h4", "ck-rel__cartao-titulo", "Unidades com mais equipamentos"));
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+      card.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return card;
+    }
+    const items = element("ol", "ck-rel__unidades");
+    (monthlyView.unidadesTodas ? list : list.slice(0, MONTHLY_TOP_UNITS)).forEach(([city, address, total]) => {
+      const item = element("li", "ck-rel__unidade");
+      const name = element("span", "ck-rel__unidade-nome");
+      name.append(element("strong", "", city || "Sem cidade"));
+      if (address) name.append(element("span", "ck-mudo", ` · ${address}`));
+      item.append(name, element("strong", "ck-num", displayCount(total)));
+      items.append(item);
+    });
+    card.append(items);
+    if (list.length > MONTHLY_TOP_UNITS) {
+      const toggle = monthlyButton(monthlyView.unidadesTodas ? "Ver menos" : `Ver todas as ${displayCount(list.length)} unidades`, () => {
+        monthlyView.unidadesTodas = !monthlyView.unidadesTodas;
+        refreshMonthlySection("base", "[data-rel-unidades]");
+      });
+      toggle.dataset.relUnidades = "";
+      toggle.setAttribute("aria-expanded", String(monthlyView.unidadesTodas));
+      card.append(toggle);
+    }
+    return card;
+  }
+
+  function monthlyBaseSection(inventory) {
+    const section = monthlySection("base", "Base atual", [monthlyBadge("Não muda com o mês")]);
+    section.classList.add("ck-rel__atual");
+    const origin = [inventory.arquivo_origem, inventory.carregada_em ? `carregada em ${inventory.carregada_em}` : ""].filter(Boolean).join(" · ");
+    if (origin) section.append(element("p", "ck-rel__nota", origin));
+    const duplicates = Array.isArray(inventory.series_duplicadas) ? inventory.series_duplicadas.length : undefined;
+    const numbers = element("section", "ck-rel__cartao");
+    numbers.append(monthlyNumbers([
+      ["Equipamentos", inventory.total], ["Unidades", inventory.unidades],
+      ["Linhas sem série", inventory.linhas_sem_serie, inventory.linhas_sem_serie > 0 ? "alerta" : ""],
+      ["Séries duplicadas", duplicates, duplicates > 0 ? "alerta" : ""],
+    ]));
+    numbers.setAttribute("aria-label", "Totais da base atual");
+    const grid = element("div", "ck-rel__base-grade");
+    grid.append(numbers, monthlyTypesCard(inventory.por_tipo), monthlyUnitsCard(inventory.por_unidade));
+    section.append(grid);
+    return section;
+  }
+
+  const monthlySectionBuilders = {
+    os: report => monthlyOsSection(report.os || {}),
+    comp: report => monthlyComparisonSection(report.comparacao || {}),
+    sebrae: report => monthlySebraeSection(report),
+    base: report => monthlyBaseSection(report.inventario || {}),
+  };
+
+  // Refaz uma seção (filtro, "Carregar mais", "Ver todas") e devolve o foco ao controle equivalente ou ao título.
+  function refreshMonthlySection(key, focusSelector = "") {
+    const report = monthlyView.report;
+    const current = byId("cockpit-monthly-details")?.querySelector(`[data-rel-secao="${key}"]`);
+    if (!report || !current) return;
+    const next = monthlySectionBuilders[key](report);
+    current.replaceWith(next);
+    const target = (focusSelector && next.querySelector(focusSelector)) || (focusSelector ? next.querySelector("h3") : null);
+    target?.focus();
   }
 
   function renderMonthly(report) {
-    const inventory = report.inventario || {};
-    const comparison = report.comparacao || {};
-    const tickets = report.os || {};
-    const oracle = tickets.oracle || {};
-    const simpress = tickets.simpress || {};
-    renderKpis(byId("cockpit-monthly-kpis"), [
-      ["Ordens abertas", `${displayCount(oracle.abertas)} / ${displayCount(simpress.abertas)}`, "Oracle / Simpress"],
-      ["Ordens concluídas", `${displayCount(oracle.concluidas)} / ${displayCount(simpress.concluidas)}`, "Oracle / Simpress · percentual indisponível"],
-      ["Tempo médio até fechar", "—", "Não calculado sem datas individuais compatíveis"],
-      ["Transportes", "—", "Esta fonte não fornece a contagem mensal"],
-    ]);
-    const details = byId("cockpit-monthly-details");
-    const counts = comparison.contagens || {};
-    const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
-    const left = element("div", "ck-rel__col");
-    left.append(monthlyChart(monthlyChartBars(oracle, simpress)), unitsTable(inventory.por_unidade));
-    const right = element("div", "ck-rel__col");
-    right.append(
-      statCard("Resumo da base atual", [
-        ["Equipamentos", inventory.total], ["Unidades", inventory.unidades], ["Atualizações no mês", comparison.atualizacoes_no_mes],
-      ]),
-      statCard("Inventário por tipo", Array.isArray(inventory.por_tipo) ? inventory.por_tipo : []),
-      statCard("Divergências", Object.entries(counts), reportRows("Linhas da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`)),
-      statCard("Ordens do mês", [
-        ["Oracle abertas", oracle.abertas], ["Oracle concluídas", oracle.concluidas], ["Oracle pendentes", oracle.pendentes],
-        ["Simpress abertas", simpress.abertas], ["Simpress concluídas", simpress.concluidas], ["Simpress pendentes", simpress.pendentes],
-      ], reportRows("Linhas das ordens", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`)),
+    monthlyView.report = report;
+    renderMonthlyAttention(report);
+    byId("cockpit-monthly-attention").hidden = false;
+    byId("cockpit-monthly-details").replaceChildren(
+      monthlyMovementSection(report.os || {}),
+      monthlyOsSection(report.os || {}),
+      monthlyComparisonSection(report.comparacao || {}),
+      monthlySebraeSection(report),
+      monthlyBaseSection(report.inventario || {}),
     );
-    const parts = [];
-    if (insufficient.length) {
-      const notice = element("p", "ck-rel__aviso ck-rel__largo", `${insufficient.length} registro(s) com dados insuficientes nas ordens do mês.`);
-      notice.setAttribute("role", "status");
-      notice.title = insufficient.map(row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`).join("\n");
-      parts.push(notice);
-    }
-    details.replaceChildren(...parts, left, right);
-    byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report);
-    const cutoff = report.mes?.data_corte;
-    const cutoffLabel = /^\d{4}-\d{2}-\d{2}$/.test(cutoff || "")
-      ? new Intl.DateTimeFormat("pt-BR").format(new Date(`${cutoff}T00:00:00`)) : "data indisponível";
-    const period = report.mes?.parcial ? `Parcial até ${cutoffLabel}` : "Mês encerrado";
-    byId("cockpit-monthly-status").textContent = `Relatório de ${report.mes?.label || report.mes?.key || "mês selecionado"} · ${period} · gerado ${report.gerado_em || "data indisponível"}`;
+    byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report, monthlyView.sebraeErro ? null : monthlyView.sebrae);
+    const period = monthlyPeriodLabel(report);
+    const badgeNode = byId("cockpit-monthly-period");
+    badgeNode.textContent = period;
+    badgeNode.dataset.status = report.mes?.parcial ? "info" : "";
+    badgeNode.hidden = false;
+    byId("cockpit-monthly-status").textContent = `Relatório de ${report.mes?.label || report.mes?.key || "mês selecionado"} · ${period} · gerado em ${monthlyDate(report.gerado_em) || "data indisponível"}`;
   }
 
-  async function loadMonthlyReport(month) {
+  // `quiet`: recarga depois de importar OS ou de nova comparação; mantém filtros e páginas e não pisca "Carregando".
+  async function loadMonthlyReport(month, { quiet = false } = {}) {
     const current = ++monthlyRequest;
     const target = byId("cockpit-monthly-details");
-    byId("cockpit-monthly-preview").textContent = "";
-    byId("cockpit-monthly-kpis").replaceChildren();
-    byId("cockpit-monthly-copy").disabled = true;
-    renderMonthlyPeriods(month);
-    byId("cockpit-monthly-status").textContent = "Carregando dados do relatório…";
-    renderEmpty(target, "Carregando relatório mensal local…");
+    if (!quiet) {
+      Object.assign(monthlyView, { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false });
+      byId("cockpit-monthly-preview").textContent = "";
+      byId("cockpit-monthly-kpis").replaceChildren();
+      byId("cockpit-monthly-attention").hidden = true;
+      byId("cockpit-monthly-period").hidden = true;
+      byId("cockpit-monthly-copy").disabled = true;
+      renderMonthlyPeriods(month);
+      byId("cockpit-monthly-status").textContent = "Carregando dados do relatório…";
+      renderEmpty(target, "Carregando relatório mensal local…");
+    }
+    // Os chamados do Sebrae são opcionais: falha neles não impede o relatório.
+    const sebrae = apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados do Sebrae." })
+      .then(data => ({ data, error: "" }), error => ({ data: null, error: error?.message || "Não foi possível consultar os chamados do Sebrae." }));
     try {
       const report = await apiFetch(`/api/relatorio-mensal/dados?mes=${encodeURIComponent(month)}`, { errorMessage: "Não foi possível carregar o relatório mensal." });
+      const sebraeResult = await sebrae;
       if (current !== monthlyRequest || activeTool !== "relatorio") return;
+      const focused = document.activeElement;
+      const focusedSection = quiet ? focused?.closest?.("[data-rel-secao]")?.dataset.relSecao : "";
+      const focusedAttention = quiet && byId("cockpit-monthly-attention")?.contains(focused);
+      monthlyView.sebrae = sebraeResult.data;
+      monthlyView.sebraeErro = sebraeResult.error;
       renderMonthly(report);
       byId("cockpit-monthly-copy").disabled = false;
+      if (focusedSection) byId(`cockpit-monthly-${focusedSection}-title`)?.focus();
+      else if (focusedAttention) byId("cockpit-monthly-attention-title")?.focus();
     } catch (error) {
       if (current !== monthlyRequest || activeTool !== "relatorio") return;
       byId("cockpit-monthly-status").textContent = error.message || "Falha ao carregar o relatório.";
+      if (quiet && monthlyView.report) return;
       renderError(target, error, "Falha ao carregar o relatório.");
       byId("cockpit-monthly-preview").textContent = "";
     }
+  }
+
+  // Importar OS (F6) ou nova comparação com o F8 aberto: recarrega o mês exibido sem perder filtros.
+  function refreshMonthlyAfterChange() {
+    if (activeTool !== "relatorio") return;
+    const month = byId("cockpit-monthly-month")?.value;
+    if (month) void loadMonthlyReport(month, { quiet: true });
   }
 
   async function copyMonthlyPreview() {
@@ -1408,6 +1793,8 @@
     byId("cockpit-monthly-month").addEventListener("change", event => loadMonthlyReport(event.currentTarget.value));
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
+    document.addEventListener("simpress:chamados-atualizados", refreshMonthlyAfterChange);
+    document.addEventListener("simpress:painel-atualizado", refreshMonthlyAfterChange);
     byId("cockpit-sheets-refresh").addEventListener("click", loadSheets);
     byId("cockpit-units-search").addEventListener("input", renderUnits);
     byId("cockpit-units-copy-cnpj").addEventListener("click", () => app.copiarDadoUnidade(selectedUnit()?.cnpj, "CNPJ"));
@@ -1525,11 +1912,8 @@
   }
 
   // "OS deste equipamento" (Transporte): abre Chamados já filtrado pela série; a busca filtra a tabela de OS.
-  async function abrirChamadosDoEquipamento() {
-    const search = byId("cockpit-tickets-search");
-    if (search) search.value = String(byId("transfer-serial")?.textContent || "").trim().toUpperCase();
-    await openPanel("chamados");
-    search?.dispatchEvent(new Event("input", { bubbles: true }));
+  function abrirChamadosDoEquipamento() {
+    return openSerialInTickets(byId("transfer-serial")?.textContent);
   }
 
   // Botão da OS (tabela de Chamados): garante o painel aberto, mostra a linha da OS, abre o Andamento da série e destaca.
@@ -1583,6 +1967,7 @@
     comparisonMetrics,
     aliasMetrics,
     monthlyPreviewText,
-    monthlyChartBars,
+    sebraeOpenLists,
+    sebraeMonthMatch,
   };
 });

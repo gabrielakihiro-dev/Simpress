@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from io import BytesIO
+from pathlib import Path
 import re
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -18,12 +19,15 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from core.config import SUPPORTED_CONTRACT, SUPPORTED_CONTRACT_LEGAL_NAME
-from core.errors import DomainValidationError
+from core.errors import DomainBusyError, DomainValidationError
+from domains import sebrae_finalizacao, sebrae_novos
 from domains.history_insights import is_restoration, PINNED_BASELINE_ID
 from domains.inventory_comparison import (
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
 )
+from domains.sebrae_chamados import chave_do_numero, extrair_numeros, interpretar_data, mascarar_cpfs
+from domains.sebrae_dashboard import ler_datas_chamados, omitir_credenciais
 from domains.ticket_reporting import (
     _is_closed,
     _parse_date,
@@ -42,6 +46,11 @@ CLOSED = "Concluída no mês"
 PENDING = "Pendente no fim do mês"
 NO_RECORDS = "Sem registros no mês"
 _SIMPRESS_FINISHED_TOKENS = ("entreg", "cancel", "conclu", "finaliz", "encerr")
+SEBRAE_OPENED = "Aberto no mês"
+SEBRAE_CLOSED = "Finalizado no mês"
+SEBRAE_FINISHED_OK = sebrae_finalizacao.STATUS_OK
+SAO_PAULO = sebrae_finalizacao.FUSO
+_SEBRAE_OLD_NUMBER = re.compile(r"(?<!\d)\d{5}(?!\d)")  # pre-UTIC SoftExpert numbers (e.g. 27206)
 
 
 class InvalidReportMonthError(DomainValidationError):
@@ -146,7 +155,7 @@ def comparison_section(
             updates.append((moment, event))
     in_month = sum(1 for moment, _event in updates if month.contains(moment.date()))
     if not updates:
-        return {"horario": None, "atualizacoes_no_mes": 0, "linhas": [], "contagens": {
+        return {"horario": None, "evento_id": None, "atualizacoes_no_mes": 0, "linhas": [], "contagens": {
             SECTION_ENDPOINT: 0, SECTION_SIMPRESS: 0, SECTION_LOCATION: 0,
         }}
     moment, latest = max(updates, key=lambda entry: entry[0])
@@ -175,6 +184,8 @@ def comparison_section(
     ]
     return {
         "horario": moment,
+        # Read-only link for the screen: lets F8 open this exact event in the Resumo (F3).
+        "evento_id": str(latest.get("id") or "") or None,
         "atualizacoes_no_mes": in_month,
         "linhas": lines,
         "contagens": {section: len(items) for section, items in sections},
@@ -493,6 +504,136 @@ def build_monthly_report(
         "inventario": inventory_section(equipment, stats),
         "comparacao": comparison_section(comparison_history, month, comparison_display),
         "os": tickets_section(ticket_report, month),
+    }
+
+
+# Chamados (F5) -----------------------------------------------------------
+# Only on GET /api/relatorio-mensal/dados: summary_rows and the workbook never read the "sebrae" key.
+
+def _sebrae_text(value: Any) -> str:
+    return " ".join(mascarar_cpfs(omitir_credenciais(value)).split())
+
+
+def _sebrae_ticket_key(cell: Any, row: Any) -> Tuple[str, str]:
+    """(chave, chamado) of a Dashboard row: its first UTIC, else an old 5-digit number, else ``linha:N``."""
+    if isinstance(cell, float) and cell.is_integer():
+        cell = int(cell)
+    text = "" if cell is None else str(cell).strip()
+    utics = extrair_numeros(text)
+    if utics:
+        return utics[0], utics[0]
+    old = _SEBRAE_OLD_NUMBER.search(text)
+    if old:
+        return old.group(0), old.group(0)
+    return f"linha:{row}", _sebrae_text(text)
+
+
+def _sebrae_utic(value: Any) -> str:
+    try:
+        return chave_do_numero(str(value or ""))
+    except ValueError:
+        return ""  # a stale ``linha:N`` key would point at a row that may have moved since
+
+
+def _sebrae_date(value: Any) -> Optional[date]:
+    """São Paulo calendar day of a ticket date; naive values (Dashboard, SoftExpert) already are São Paulo time."""
+    if isinstance(value, datetime):
+        return value.astimezone(SAO_PAULO).date() if value.tzinfo else value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    parsed = interpretar_data(text)
+    if parsed is None:
+        try:
+            parsed = datetime.fromisoformat(text)  # site timestamps
+        except ValueError:
+            try:
+                parsed = datetime.strptime(text, "%d/%m/%Y")  # day typed by hand in the Dashboard
+            except ValueError:
+                return None
+    return parsed.astimezone(SAO_PAULO).date() if parsed.tzinfo else parsed.date()
+
+
+def _ficha_serial(ficha: Mapping[str, Any]) -> str:
+    for fact in ficha.get("fatos") or ():
+        if isinstance(fact, (list, tuple)) and len(fact) >= 2 and re.fullmatch(r"s[ée]rie", str(fact[0]).strip(), re.I):
+            return str(fact[1] or "").strip()
+    return ""
+
+
+def sebrae_tickets_section(sources: Mapping[str, Any], month: ReportMonth) -> Dict[str, Any]:
+    """Tickets of the Chamados tab (F5) opened or finished in ``month``.
+
+    ``sources``: ``dashboard`` (rows of ``sebrae_dashboard.ler_datas_chamados``), ``novos`` (``ChamadoSoftExpert``
+    of the last search) and ``finalizacao`` (``sebrae_finalizacao.ler_estado``). One ticket per key: the UTIC of
+    column C, else its old 5-digit number, else ``linha:N``; a repeated key keeps its first opening and last
+    closing. A finish by the site (status ``ok``) wins over column R. ``sem_data`` counts tickets without any date.
+    """
+    tickets: Dict[str, Dict[str, Any]] = {}
+
+    def ticket(key: str, shown: str, title: Any, serial: Any) -> Dict[str, Any]:
+        item = tickets.setdefault(key, {"chave": key, "chamado": shown, "titulo": "", "serie": "",
+                                        "abertura": None, "finalizacao": None})
+        item["titulo"] = item["titulo"] or _sebrae_text(title)
+        item["serie"] = item["serie"] or str(serial or "").strip()
+        return item
+
+    for row in sources.get("dashboard") or ():
+        item = ticket(*_sebrae_ticket_key(row.get("chamado"), row.get("linha")), row.get("titulo"), row.get("serie"))
+        item["abertura"] = min(filter(None, (item["abertura"], _sebrae_date(row.get("abertura")))), default=None)
+        item["finalizacao"] = max(filter(None, (item["finalizacao"], _sebrae_date(row.get("encerramento")))), default=None)
+    for novo in sources.get("novos") or ():
+        key = _sebrae_utic(getattr(novo, "numero", ""))
+        if key:
+            item = ticket(key, key, getattr(novo, "titulo", ""), "")
+            item["abertura"] = item["abertura"] or _sebrae_date(getattr(novo, "habilitada_em", ""))
+    for number, record in (sources.get("finalizacao") or {}).items():
+        record = record if isinstance(record, Mapping) else {}
+        finish_raw = record.get("finalizacao")
+        finish = finish_raw if isinstance(finish_raw, Mapping) else {}
+        closed = _sebrae_date(finish.get("encerrado_em")) or _sebrae_date(finish.get("em"))
+        key = _sebrae_utic(number)
+        if finish.get("status") == SEBRAE_FINISHED_OK and closed and key:
+            ficha_raw = record.get("ficha")
+            ficha = ficha_raw if isinstance(ficha_raw, Mapping) else {}
+            ticket(key, key, ficha.get("titulo"), _ficha_serial(ficha))["finalizacao"] = closed
+
+    rows: List[Dict[str, Any]] = []
+    undated = 0
+    for item in tickets.values():
+        opened, closed = item["abertura"], item["finalizacao"]
+        if opened is None and closed is None:
+            undated += 1
+            continue
+        in_month = [(label, day) for label, day in ((SEBRAE_OPENED, opened), (SEBRAE_CLOSED, closed)) if month.contains(day)]
+        if in_month:
+            rows.append({**item, "abertura": opened.isoformat() if opened else None,
+                         "finalizacao": closed.isoformat() if closed else None,
+                         "situacoes": [label for label, _day in in_month], "_recente": max(day for _label, day in in_month)})
+    rows.sort(key=lambda row: row["chave"])
+    rows.sort(key=lambda row: row.pop("_recente"), reverse=True)  # most recent date of the month first
+    return {
+        "abertos": sum(SEBRAE_OPENED in row["situacoes"] for row in rows),
+        "finalizados": sum(SEBRAE_CLOSED in row["situacoes"] for row in rows),
+        "sem_data": undated,
+        "linhas": rows,
+    }
+
+
+def sebrae_sources_from_state(state_dir: Path) -> Optional[Dict[str, Any]]:
+    """The three local sources of ``sebrae_tickets_section``; ``None`` without an imported Dashboard. Reads only."""
+    caminhos = sebrae_novos.caminhos_padrao(state_dir)
+    existentes = sebrae_novos.ler_existentes(caminhos.existentes)
+    if existentes is None:
+        return None
+    conteudo = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
+    if conteudo is None:
+        raise DomainBusyError("A cópia do Dashboard importado não foi encontrada; importe-o de novo na aba Automação (F4).")
+    novos = sebrae_novos.ler_novos(caminhos.novos, existentes["numeros"]) or {}
+    return {
+        "dashboard": ler_datas_chamados(conteudo),
+        "novos": novos.get("chamados") or [],
+        "finalizacao": sebrae_finalizacao.ler_estado(sebrae_finalizacao.pasta_estado(caminhos.existentes)),
     }
 
 
