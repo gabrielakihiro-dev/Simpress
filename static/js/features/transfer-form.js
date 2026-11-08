@@ -188,7 +188,9 @@
   }
 
   function selecionarUnidadePorCidade(cidadeNome) {
-    const unit = appState.unidadesList.find(u => u.cidade.toLowerCase().includes(cidadeNome.toLowerCase()));
+    // Cidade inteira, sem acento e sem caixa: "Campo" não escolhe "Campo Grande".
+    const alvo = dobrarCidadeTransporte(cidadeNome);
+    const unit = alvo ? appState.unidadesList.find(u => dobrarCidadeTransporte(u.cidade) === alvo) : null;
     if (unit) {
       document.getElementById("select-unidade-destino").value = unit.id;
       app.handleUnidadeDestinoChange(unit.id);
