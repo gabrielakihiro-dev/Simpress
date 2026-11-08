@@ -80,7 +80,7 @@ test("Gerar Planilha opens the ticket; an ambiguous address needs a choice; Simu
   expect(chamadas[0].corpo).not.toHaveProperty("conferido");
   await expect(modal.getByRole("status")).toContainText("Escolha o endereço");
   const registro = modal.getByLabel("Registro");
-  await expect(registro).toHaveValue(/Contato no local: Maria Teste - \(41\) 3333-0000/);
+  await expect(registro).toHaveValue(""); // the Deslocamento text lives in the Home (F1) again
   await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
   await semRolagemHorizontal(page);
   // Layout only (not a visual review): the open modal fits 320 to 2560 px in dark mode with reduced motion.
@@ -103,7 +103,10 @@ test("Gerar Planilha opens the ticket; an ambiguous address needs a choice; Simu
   await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
   expect(chamadas[1]).toEqual({ etapa: "escolher-endereco", corpo: { session_id: SESSION, serial: "LENTO", endereco: opcoes[1] } });
 
-  // The template still has lines ending in ":" (Colaborador, Data, Horário): blocked with a visible reason.
+  // An empty Registro, or one with a line ending in ":", stays blocked with a visible reason.
+  await expect(simular).toBeDisabled();
+  await expect(modal.locator("#ux-ticket-motivo")).toHaveText("Preencha o Registro.");
+  await registro.fill("Prezados,\nColaborador(a) Novo(a):");
   await expect(simular).toBeDisabled();
   await expect(modal.locator("#ux-ticket-motivo")).toContainText("terminam com “:”");
   await registro.fill(REGISTRO_OK);
@@ -159,4 +162,17 @@ test("ux_tentativas_esgotadas on Simular shows its detail; Cancelar calls /cance
   await modal.getByRole("button", { name: "Cancelar" }).click();
   await expect(modal).toBeHidden();
   await expect.poll(() => chamadas.at(-1)).toEqual({ etapa: "cancelar", corpo: { session_id: SESSION } });
+});
+
+test("Texto para Transporte (F2) fills the request text with the pickup and delivery addresses", async ({ page }) => {
+  const chamadas = await prepararTela(page, () => [200, PREPARADO]);
+  await page.getByRole("button", { name: "Texto para Transporte" }).click();
+  const texto = page.locator("#textarea-texto-transporte");
+  await expect(page.locator("#modal-texto-transporte")).toBeVisible();
+  await expect(texto).toBeFocused();
+  await expect(texto).toHaveValue(/^Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de .+ para a unidade do Sebrae de Cidade Teste/);
+  await expect(texto).toHaveValue(/\nEndereço para Retirada: \S.*\nEndereço para Entrega: Rua Fictícia, 100/);
+  expect(chamadas).toEqual([]); // the text is local: no UX ticket call
+  await page.getByRole("button", { name: "Fechar texto de solicitação" }).click();
+  await expect(page.locator("#modal-texto-transporte")).toBeHidden();
 });

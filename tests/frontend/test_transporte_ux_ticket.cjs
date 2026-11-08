@@ -81,20 +81,23 @@ test("Gerar Planilha opens the modal and prepares with the payload plus the deli
   assert.equal(h.el("ux-ticket-modelo").textContent, "Modelo X");
   assert.equal(h.el("ux-ticket-endereco").textContent, "Rua Um, 1");
   assert.equal(h.el("ux-ticket-nome").value, SOLICITANTE.nome);
-  // Deslocamento text with "Contato no local:" filled from the delivery contact and phone.
-  assert.match(h.el("ux-ticket-registro").value, /^Prezados,\n/);
-  assert.match(h.el("ux-ticket-registro").value, /\nContato no local: Maria Teste - \(41\) 3333-0000\n/);
+  // The Deslocamento text went back to the Home (F1) on 08/11/2026: the Registro starts empty.
+  assert.equal(h.el("ux-ticket-registro").value, "");
   assert.equal(h.el("ux-ticket-erro").hidden, true);
 });
 
 test("a Registro line ending in ':' blocks Simular and Finalizar with a visible reason", async () => {
   const h = criar({ responder: () => PREPARADO });
   await h.gerar();
-  // "Colaborador(a) Novo(a):" and the other template lines are still empty.
+  // The Registro starts empty, so both buttons start blocked with a visible reason.
   assert.equal(h.el("ux-ticket-simular").disabled, true);
   assert.equal(h.el("ux-ticket-finalizar").disabled, true);
-  assert.match(h.el("ux-ticket-motivo").textContent, /terminam com “:”/);
+  assert.equal(h.el("ux-ticket-motivo").textContent, "Preencha o Registro.");
   assert.equal(h.el("ux-ticket-motivo").hidden, false);
+  h.el("ux-ticket-registro").value = "Prezados,\nColaborador(a) Novo(a):";
+  h.acoes.atualizarTicketUX();
+  assert.equal(h.el("ux-ticket-simular").disabled, true);
+  assert.match(h.el("ux-ticket-motivo").textContent, /terminam com “:”/);
   h.el("ux-ticket-registro").value = REGISTRO_OK;
   h.acoes.atualizarTicketUX();
   assert.equal(h.el("ux-ticket-simular").disabled, false);
@@ -308,11 +311,14 @@ test("closing is ignored while the final submission is in flight", async () => {
   assert.equal(h.el("ux-ticket-cancelar").disabled, false);
 });
 
-test("the modal markup keeps the visible alert and the Deslocamento tab and old F2 buttons are gone", () => {
+test("the modal markup keeps the visible alert; Deslocamento is the Home default and Texto para Transporte is in F2", () => {
   assert.match(html, /<p id="ux-ticket-erro"[^>]*role="alert"/);
   assert.match(html, /id="modal-ticket-ux"/);
-  assert.doesNotMatch(html, /deslocamento/i);
-  assert.doesNotMatch(html, /btn-copiar-resumo-cockpit|gerarTextoSolicitacaoTransporte|modal-texto-transporte/);
-  assert.doesNotMatch(html, />\s*Texto para Transporte\s*</);
-  assert.match(html, /aria-selected="true"[^>]*id="pill-chamado-teclado-mouse"/);
+  // Restored on 08/11/2026 at the user's request (the 07/11 migration to the ticket Registro was undone).
+  assert.match(html, /aria-selected="true"[^>]*id="pill-chamado-deslocamento"/);
+  assert.match(html, /id="texto-chamado-deslocamento"[^>]*>Prezados,/);
+  assert.match(html, /data-on-click="gerarTextoSolicitacaoTransporte"/);
+  assert.match(html, /id="modal-texto-transporte"/);
+  // Copiar texto stays out of the F2 aside (not requested back).
+  assert.doesNotMatch(html, /btn-copiar-resumo-cockpit/);
 });
