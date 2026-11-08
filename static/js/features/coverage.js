@@ -49,7 +49,7 @@
     return { ok: resposta.ok, status: resposta.status, corpo: json };
   }
 
-  // Toda escrita leva o rev do registro; 409 recarrega antes de mostrar a mensagem do servidor.
+  // Toda escrita leva o rev do registro; 404, 409 e 503 recarregam antes de mostrar a mensagem do servidor.
   async function escrever(url, corpo, sucesso) {
     if (!dados) {
       avisar("A cobertura não está carregada; nada foi gravado.", "error");
@@ -61,7 +61,7 @@
       if (sucesso) avisar(sucesso, "success");
       return r.corpo || {};
     }
-    if (r.status === 409 || r.status === 503) await carregarCobertura();
+    if (r.status === 404 || r.status === 409 || r.status === 503) await carregarCobertura();
     avisar(modelo().mensagemErro(r.corpo, r.status), "error");
     return null;
   }
@@ -87,21 +87,30 @@
     return vez;
   }
 
+  // aria-busy só nos painéis e nos alertas: nunca no ancestral de #cobertura-status (aria-live), que engoliria o anúncio.
+  const regioesOcupadas = () => [...document.querySelectorAll(".cob__painel"), byId("cobertura-alertas")].filter(Boolean);
+
   async function lerCobertura() {
-    const r = await requisitar("GET", "/api/cobertura");
-    carregouAlgumaVez = true;
-    if (!r.ok || !r.corpo) {
-      dados = null;
-      bloquearEscrita(true);
-      limparListas();
-      status(modelo().mensagemErro(r.corpo, r.status), "erro");
-      return false;
+    status("Carregando…");
+    regioesOcupadas().forEach(regiao => regiao.setAttribute("aria-busy", "true"));
+    try {
+      const r = await requisitar("GET", "/api/cobertura");
+      carregouAlgumaVez = true;
+      if (!r.ok || !r.corpo) {
+        dados = null;
+        bloquearEscrita(true);
+        limparListas();
+        status(modelo().mensagemErro(r.corpo, r.status), "erro");
+        return false;
+      }
+      dados = r.corpo;
+      bloquearEscrita(false);
+      renderizar();
+      status(`Cobertura atualizada em ${modelo().formatarData(dados.hoje)}.`);
+      return true;
+    } finally {
+      regioesOcupadas().forEach(regiao => regiao.removeAttribute("aria-busy"));
     }
-    dados = r.corpo;
-    bloquearEscrita(false);
-    renderizar();
-    status(`Cobertura atualizada em ${modelo().formatarData(dados.hoje)}.`);
-    return true;
   }
 
   // ------------------------------------------------------------------ montagem
@@ -199,7 +208,7 @@
       if (alerta.detalhe && alerta.detalhe !== alerta.texto) aviso.append(el("p", "ck-aviso__texto", alerta.detalhe));
       if (alerta.tipo === "sem_vinculo") {
         aviso.append(el("p", "ck-aviso__texto", `Série ${alerta.serie}`));
-        const tentar = botao("Tentar de novo", "secundario", () => tentarDeNovo(alerta.movimentacaoId), `Tentar de novo — série ${alerta.serie}`);
+        const tentar = botao("Tentar vincular de novo", "secundario", () => tentarDeNovo(alerta.movimentacaoId), `Tentar vincular de novo — série ${alerta.serie}`);
         tentar.classList.add("ck-aviso__acao");
         aviso.append(tentar);
       }
@@ -395,8 +404,8 @@
         const area = grupo("cob__sub");
         caixa.append(botao("Vincular transferência já gerada", "secundario", () => mostrarCandidatos(mov, area), `Vincular transferência já gerada — ${mov.serie}`), area);
       }
-      if (acao === "coletada") caixa.append(botao("Coletada", "secundario", () => mudarEstado(mov, "coletada", {}, "Movimentação coletada."), `Coletada — ${mov.serie}`));
-      if (acao === "em_transito") caixa.append(botao("Em trânsito", "secundario", () => mudarEstado(mov, "em_transito", {}, "Movimentação em trânsito."), `Em trânsito — ${mov.serie}`));
+      if (acao === "coletada") caixa.append(botao("Marcar coletada", "secundario", () => mudarEstado(mov, "coletada", {}, "Movimentação coletada."), `Marcar coletada — ${mov.serie}`));
+      if (acao === "em_transito") caixa.append(botao("Marcar em trânsito", "secundario", () => mudarEstado(mov, "em_transito", {}, "Movimentação em trânsito."), `Marcar em trânsito — ${mov.serie}`));
       if (acao === "receber") caixa.append(formularioRecebimento(mov));
       if (acao === "cancelar") {
         caixa.append(botao("Cancelar movimentação", "perigo", async () => {
@@ -442,9 +451,9 @@
     const itens = candidatos.map(c => {
       const quando = new Date(String(c.criado_em));
       const texto = `${Number.isNaN(quando.getTime()) ? c.criado_em : quando.toLocaleString("pt-BR")} · ${c.retirada_cidade || "—"} → ${c.entrega_cidade || "—"}`;
-      return grupo("cob__candidato", el("span", "", texto), botao("Vincular", "primario",
+      return grupo("cob__candidato", el("span", "", texto), botao("Vincular esta planilha", "primario",
         () => escrever(`/api/cobertura/movimentacoes/${encodeURIComponent(mov.id)}/vincular-historico`, { historico_id: c.id, rev: mov.rev }, "Transferência vinculada."),
-        `Vincular planilha de ${texto}`));
+        `Vincular esta planilha — ${texto}`));
     });
     area.replaceChildren(...itens);
   }
@@ -463,12 +472,12 @@
     const recebimento = () => ({ recebido_por: recebidoPor.value.trim(), data: data.value, comprovante: comprovante.value.trim() || null });
     form.append(
       campo("Recebido por", recebidoPor), campo("Data do recebimento", data), campo("Comprovante (opcional)", comprovante),
-      botao("Recebida", "primario", () => mudarEstado(mov, "recebida", recebimento(), "Recebimento registrado."), `Recebida — ${mov.serie}`),
+      botao("Confirmar recebimento", "primario", () => mudarEstado(mov, "recebida", recebimento(), "Recebimento registrado."), `Confirmar recebimento — ${mov.serie}`),
       campo("Tipo da divergência", tipo), campo("Descrição", descricao), campo("Série recebida", serieRecebida),
-      botao("Recebida com divergência", "secundario", () => mudarEstado(mov, "recebida_com_divergencia", {
+      botao("Registrar divergência", "secundario", () => mudarEstado(mov, "recebida_com_divergencia", {
         ...recebimento(),
         divergencia: { tipo: tipo.value, descricao: descricao.value.trim(), serie_recebida: serieRecebida.value.trim() || null },
-      }, "Divergência registrada."), `Recebida com divergência — ${mov.serie}`),
+      }, "Divergência registrada."), `Registrar divergência — ${mov.serie}`),
     );
     return form;
   }
@@ -479,7 +488,7 @@
       const url = sufixo => `/api/cobertura/devolucoes/${encodeURIComponent(dev.id)}/${sufixo}`;
       const novaData = entrada("date", dev.data_prevista || "", { name: "data_prevista" });
       const acoes = grupo("cob__acoes",
-        campo("Nova data", novaData),
+        campo("Nova data prevista", novaData),
         botao("Reprogramar devolução", "secundario", () => escrever(url("reprogramar"), { rev: dev.rev, data_prevista: novaData.value }, "Devolução reprogramada."), `Reprogramar devolução — ${dev.serie}`),
         botao("Receber devolução", "primario", () => escrever(url("receber"), { rev: dev.rev }, "Devolução recebida."), `Receber devolução — ${dev.serie}`),
         botao("Cancelar devolução", "perigo", async () => {

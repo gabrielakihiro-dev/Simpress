@@ -171,7 +171,7 @@ def _falhar(error: BaseException) -> NoReturn:
     # O texto da exceção pode ter caminho local: fica só no log do servidor.
     logger.error("Falha ao gravar a cobertura.", exc_info=error)
     raise HTTPException(status_code=500, detail={
-        "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
+        "codigo": "falha_gravacao", "mensagem": "Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.",
     }) from error
 
 

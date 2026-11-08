@@ -88,6 +88,13 @@ test("necessidade até o recebimento sem Transporte", async ({ page }) => {
   await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
   await aba(page, "reservas");
   const reservas = page.locator("#cobertura-lista-reservas");
+  // Rótulo do kit numa linha só: a célula herda overflow-wrap:anywhere e partia "Note book".
+  const linhasPorRotulo = await reservas.locator(".cob__check span").evaluateAll(spans => spans.map(span => {
+    const faixa = document.createRange();
+    faixa.selectNodeContents(span);
+    return new Set([...faixa.getClientRects()].map(r => Math.round(r.top))).size;
+  }));
+  expect(linhasPorRotulo).toEqual([1, 1, 1]);
   for (const rotulo of ["Notebook", "Carregador", "Preparação"]) {
     await reservas.getByRole("checkbox", { name: rotulo }).check();
     await expect(reservas.getByRole("checkbox", { name: rotulo })).toBeChecked();
@@ -102,7 +109,7 @@ test("necessidade até o recebimento sem Transporte", async ({ page }) => {
   await expect(movimento).toContainText("Sem Transporte");
   await movimento.getByLabel("Recebido por").fill("Pessoa Sintética");
   await expect(movimento.getByLabel("Data do recebimento")).toHaveValue("2026-11-06");
-  await movimento.getByRole("button", { name: "Recebida — SINT-001" }).click();
+  await movimento.getByRole("button", { name: "Confirmar recebimento — SINT-001" }).click();
   await expect(page.locator("[data-cobertura-n='movimento']")).toHaveText("0");
   await aba(page, "necessidades");
   await expect(page.locator("#cobertura-lista-necessidades").getByText("Entregue", { exact: true })).toBeVisible();
@@ -119,7 +126,7 @@ test("divergência no recebimento oferece as três resoluções", async ({ page 
   await movimento.getByLabel("Recebido por").fill("Pessoa Sintética");
   await movimento.getByLabel("Tipo da divergência").selectOption("serie_diferente");
   await movimento.getByLabel("Série recebida").fill("SINT-009");
-  await movimento.getByRole("button", { name: "Recebida com divergência — SINT-001" }).click();
+  await movimento.getByRole("button", { name: "Registrar divergência — SINT-001" }).click();
   await expect(movimento.getByText("Recebida com divergência", { exact: true })).toBeVisible();
   await expect(movimento).toContainText("Série diferente");
   for (const rotulo of ["Aceitar e encerrar", "Corrigir série recebida", "Cancelar e reabrir vaga"]) {
@@ -158,13 +165,13 @@ test("Preparar Transporte só preenche o Transporte e o vínculo usa a planilha 
   await abrirCobertura(page);
   await aba(page, "movimento");
   await movimento.getByRole("button", { name: "Vincular transferência já gerada — SINT-002" }).click();
-  await movimento.getByRole("button", { name: /^Vincular planilha de / }).click();
+  await movimento.getByRole("button", { name: /^Vincular esta planilha — / }).click();
   await expect(movimento.getByText("Planilha gerada", { exact: true })).toBeVisible();
-  await expect(movimento.getByRole("button", { name: "Coletada — SINT-002" })).toBeVisible();
+  await expect(movimento.getByRole("button", { name: "Marcar coletada — SINT-002" })).toBeVisible();
   expect(geracoes).toEqual([]);
 });
 
-test("planilha baixada sem vínculo fica pendente e Tentar de novo liga a movimentação", async ({ page }) => {
+test("planilha baixada sem vínculo fica pendente e Tentar vincular de novo liga a movimentação", async ({ page }) => {
   await cenario(page);
   const reserva = await reservaPronta(page, "SINT-002");
   const mov = await api(page, "/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" });
@@ -182,7 +189,7 @@ test("planilha baixada sem vínculo fica pendente e Tentar de novo liga a movime
   await abrirCobertura(page);
   const alerta = page.locator('[data-cobertura-alerta="sem_vinculo"]');
   await expect(alerta).toContainText("Planilha baixada sem vínculo");
-  await alerta.getByRole("button", { name: "Tentar de novo — série SINT-002" }).click();
+  await alerta.getByRole("button", { name: "Tentar vincular de novo — série SINT-002" }).click();
   await expect(alerta).toHaveCount(0);
   await aba(page, "movimento");
   await expect(page.locator("#cobertura-lista-movimento").getByText("Planilha gerada", { exact: true })).toBeVisible();
@@ -271,6 +278,34 @@ test("estado ilegível (503) mostra o erro e não oferece nenhuma escrita", asyn
   for (const form of await painel.locator("form[data-cobertura-escrita]").all()) await expect(form).toBeHidden();
   await expect(painel.locator(".cob__lista button")).toHaveCount(0);
   await expect(painel.getByRole("button", { name: /Registrar|Reservar|Confirmar disponível|Marcar/ })).toHaveCount(0);
+  // O erro também encerra o carregamento: nenhum painel fica preso em aria-busy.
+  await expect(painel.locator(".cob__painel[aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
+});
+
+test("enquanto lê a cobertura o status mostra Carregando… e os painéis ficam com aria-busy", async ({ page }) => {
+  await cenario(page);
+  let soltar;
+  const portao = new Promise(resolve => { soltar = resolve; });
+  await page.route("**/api/cobertura", async route => {
+    await portao;
+    await route.continue();
+  });
+  try {
+    await page.goto("/");
+    await page.locator("#input-serial").focus();
+    await page.keyboard.press("F10");
+    await expect(page.locator('[data-cockpit-tool-panel="cobertura"]')).toBeVisible();
+    const status = page.locator("#cobertura-status");
+    await expect(status).toHaveText("Carregando…");
+    await expect(page.locator("#cobertura-painel-necessidades")).toHaveAttribute("aria-busy", "true");
+    await expect(page.locator("#cobertura-alertas")).toHaveAttribute("aria-busy", "true");
+    // O aria-busy não pode subir para o aria-live: ancestral ocupado engole o anúncio.
+    await expect(page.locator("[aria-busy]:has(#cobertura-status)")).toHaveCount(0);
+  } finally {
+    soltar();
+  }
+  await expect(page.locator("#cobertura-status")).toContainText("Cobertura atualizada");
+  await expect(page.locator(".cob__painel[aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
 });
 
 test("409 recarrega a cobertura e mostra a mensagem do servidor", async ({ page }) => {
@@ -285,6 +320,26 @@ test("409 recarrega a cobertura e mostra a mensagem do servidor", async ({ page 
   // Recarregou: o rev novo já está na tela e a mesma ação agora grava.
   await page.getByRole("button", { name: "Marcar manutenção — SINT-001" }).click();
   await expect(page.locator("#cobertura-lista-disponiveis")).toContainText("Em manutenção");
+});
+
+test("404 recarrega a cobertura: a reserva que sumiu do servidor some da tela", async ({ page }) => {
+  await cenario(page);
+  const leitura = await api(page, "/api/cobertura");
+  const vaga = leitura.vagas.find(v => v.serie === "SINT-001");
+  await api(page, "/api/cobertura/reservas", { demanda_id: vaga.demanda_id, serie: "SINT-001" });
+  await page.goto("/");
+  await abrirCobertura(page);
+  await aba(page, "reservas");
+  const reservas = page.locator("#cobertura-lista-reservas");
+  await expect(reservas.getByRole("checkbox", { name: "Notebook" })).toBeVisible();
+  await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
+
+  // O cenário recria o estado do servidor: a reserva deixa de existir, mas continua na tela.
+  await cenario(page);
+  await reservas.getByRole("checkbox", { name: "Notebook" }).check();
+  await expect(page.locator("#cobertura-status")).toHaveText("Reserva não encontrada.");
+  await expect(reservas.getByRole("checkbox", { name: "Notebook" })).toHaveCount(0);
+  await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("0");
 });
 
 test("tabela no desktop, cards com os mesmos dados e ações no celular", async ({ page }, testInfo) => {
