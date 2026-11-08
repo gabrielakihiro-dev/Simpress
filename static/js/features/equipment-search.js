@@ -246,7 +246,7 @@
     document.getElementById("retirada-cnpj").value = "";
     document.getElementById("retirada-endereco").value = "";
     document.getElementById("retirada-obs").value = "";
-    ["textarea-resumo-preview"].forEach(id => {
+    ["textarea-resumo-preview", "textarea-texto-transporte"].forEach(id => {
       const field = document.getElementById(id);
       if (field) field.value = "";
     });

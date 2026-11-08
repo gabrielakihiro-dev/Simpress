@@ -11,33 +11,11 @@
   const INTERNO_MAX = 10;
   // Same pattern as PLACEHOLDER in domains/ux_chamados.py: keep both in sync.
   const PLACEHOLDER = /\[[^\]\n]*\]|:[ \t]*$/m;
-  // Single source of the "Deslocamento" text (it left the Home tabs). "Contato no local:" is filled from the delivery contact.
-  const TEXTO_DESLOCAMENTO = [
-    "Prezados,",
-    "",
-    "Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.",
-    "",
-    "Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.",
-    "",
-    "Em caso de dúvidas durante o processo, entre em contato com o responsável configurado para a retirada do equipamento.",
-    "",
-    "Contato no local:",
-    "Colaborador(a) Novo(a):",
-    "Data de Instalação:",
-    "Horário da Instalação:",
-    "",
-    "Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.",
-  ].join("\n");
   const CAMPOS = { nome: "ux-ticket-nome", email: "ux-ticket-email", telefone: "ux-ticket-telefone" };
   const byId = id => document.getElementById(id);
   let vigente = null;
   // Default solicitante, read once from the server (no corporate e-mail in front-end files); shown before /preparar ends.
   let padrao = null;
-
-  function textoDeslocamento(payload) {
-    const contato = [payload?.entrega_contato, payload?.entrega_telefone].map(v => String(v || "").trim()).filter(Boolean).join(" - ");
-    return contato ? TEXTO_DESLOCAMENTO.replace("Contato no local:", "Contato no local: " + contato) : TEXTO_DESLOCAMENTO;
-  }
 
   function cepDaEntrega() {
     const valor = byId("select-unidade-destino")?.value;
@@ -234,7 +212,8 @@
     byId("ux-ticket-ultimo-envio").hidden = true;
     byId("ux-ticket-enderecos").hidden = true;
     byId("ux-ticket-enderecos-lista").replaceChildren();
-    byId("ux-ticket-registro").value = textoDeslocamento(payload);
+    // Default Registro = the F2 "Texto para Transporte" (same function); empty when the addresses are missing.
+    byId("ux-ticket-registro").value = app.montarTextoSolicitacaoTransporte?.().texto || "";
     for (const id of Object.values(CAMPOS)) byId(id).value = "";
     byId("ux-ticket-chamado-interno").value = "";
     mostrarErro("");
