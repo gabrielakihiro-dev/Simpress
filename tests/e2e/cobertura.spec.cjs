@@ -88,6 +88,13 @@ test("necessidade até o recebimento sem Transporte", async ({ page }) => {
   await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
   await aba(page, "reservas");
   const reservas = page.locator("#cobertura-lista-reservas");
+  // Rótulo do kit numa linha só: a célula herda overflow-wrap:anywhere e partia "Note book".
+  const linhasPorRotulo = await reservas.locator(".cob__check span").evaluateAll(spans => spans.map(span => {
+    const faixa = document.createRange();
+    faixa.selectNodeContents(span);
+    return new Set([...faixa.getClientRects()].map(r => Math.round(r.top))).size;
+  }));
+  expect(linhasPorRotulo).toEqual([1, 1, 1]);
   for (const rotulo of ["Notebook", "Carregador", "Preparação"]) {
     await reservas.getByRole("checkbox", { name: rotulo }).check();
     await expect(reservas.getByRole("checkbox", { name: rotulo })).toBeChecked();
@@ -272,7 +279,7 @@ test("estado ilegível (503) mostra o erro e não oferece nenhuma escrita", asyn
   await expect(painel.locator(".cob__lista button")).toHaveCount(0);
   await expect(painel.getByRole("button", { name: /Registrar|Reservar|Confirmar disponível|Marcar/ })).toHaveCount(0);
   // O erro também encerra o carregamento: nenhum painel fica preso em aria-busy.
-  await expect(painel.locator(".cob__painel[aria-busy]")).toHaveCount(0);
+  await expect(painel.locator(".cob__painel[aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
 });
 
 test("enquanto lê a cobertura o status mostra Carregando… e os painéis ficam com aria-busy", async ({ page }) => {
@@ -293,7 +300,7 @@ test("enquanto lê a cobertura o status mostra Carregando… e os painéis ficam
     await expect(page.locator("#cobertura-painel-necessidades")).toHaveAttribute("aria-busy", "true");
     await expect(page.locator("#cobertura-alertas")).toHaveAttribute("aria-busy", "true");
     // O aria-busy não pode subir para o aria-live: ancestral ocupado engole o anúncio.
-    await expect(status).not.toHaveAttribute("aria-busy", /.*/);
+    await expect(page.locator("[aria-busy]:has(#cobertura-status)")).toHaveCount(0);
   } finally {
     soltar();
   }
