@@ -20,6 +20,7 @@ Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_sto
 - Abas: `Necessidades`, `Disponíveis`, `Reservas`, `Em movimento`, `Devoluções`.
 - Situações das vagas: `Atendível`, `Condicionada`, `Sem cobertura`, `Entregue`. Selos: `Transferência` (a série está em outra cidade), `Prazo perdido`, `Kit pronto`, `Reserva vencida`, `Em movimento`, `Recebida com divergência`.
 - Alertas: `Vagas sem cobertura: N`, `Reservas vencidas — revisar`, `Manutenção não verificada` e `Planilha baixada sem vínculo`.
+- Enquanto lê `GET /api/cobertura`, o status mostra `Carregando…` e os painéis das abas e a área de alertas ficam com `aria-busy="true"` (removido ao terminar, com sucesso ou erro; nunca no ancestral do status, que é `aria-live`).
 - Cálculo das vagas (`build_coverage`): primeiro as reservas; depois cada vaga livre recebe uma série disponível (da mesma cidade antes de outra); se não houver, uma devolução prevista que chegue com 2 dias de preparo antes da data (vaga `Condicionada`); o resto fica `Sem cobertura`. Cada série ou devolução cobre no máximo uma vaga.
 
 ## Transporte (F2) a partir da Cobertura
