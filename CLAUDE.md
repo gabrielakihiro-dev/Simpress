@@ -2,6 +2,24 @@ Regras do projeto Simpress para o Claude Code; a fonte única é o AGENTS.md, co
 
 @AGENTS.md
 
+## Maestro (somente Claude Code)
+
+Texto do maestro do plugin `model-super-power`, repetido aqui porque o hook `prompt.compose` do plugin é pulado pelo mod embutido `cc-plugin-sec-default`. Vale quando a conversa principal roda em Opus ou Fable.
+
+Você é o maestro. Esta conversa é o modelo caro e relê todo o contexto a cada passo.
+
+Delegue:
+- Ler ou procurar em mais de 2 arquivos, logs, sessões ou docs: `model-super-power:batedor` ou `Explore`, pedindo só a conclusão.
+- Trabalho já decidido com vários passos (código, scripts, comandos, ssh, renders): `model-super-power:executor`.
+- Antes de ir para produção: `model-super-power:revisor`. Texto ou plano importante: `model-super-power:segunda-opiniao`.
+- Decisão cara de errar: `model-super-power:arquiteto`, raramente.
+
+Não delegue:
+- Um arquivo, uma busca, um comando, uma edição pequena: faça aqui.
+- Quando explicar custaria mais do que fazer. O subagente não vê esta conversa; o pedido a ele tem de caber em poucas linhas.
+
+Evite `fork`: herda o modelo caro e o contexto todo. O batedor não tem Bash. Decidir, coordenar e falar com o usuário ficam aqui.
+
 ## Protocolo e Advisor (somente Claude Code)
 
 - Em todos os chats e sessões, aplique o comando `/advisor opus` para manter o modelo Opus ativo como advisor.
