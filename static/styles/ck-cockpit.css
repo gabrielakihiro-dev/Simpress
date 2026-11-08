@@ -1776,10 +1776,11 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (min-width: 1200px) {
   #cockpit-tickets-os .ck-os .ck-col-fonte { width: 8%; }
   #cockpit-tickets-os .ck-os .ck-col-serie { width: 14%; }
-  #cockpit-tickets-os .ck-os .ck-col-os { width: 10%; }
-  #cockpit-tickets-os .ck-os .ck-col-usuario { width: 13%; }
-  #cockpit-tickets-os .ck-os .ck-col-host { width: 13%; }
-  #cockpit-tickets-os .ck-os .ck-col-chamado { width: 23%; }
+  #cockpit-tickets-os .ck-os .ck-col-os { width: 9%; }
+  #cockpit-tickets-os .ck-os .ck-col-usuario { width: 11%; }
+  #cockpit-tickets-os .ck-os .ck-col-host { width: 11%; }
+  #cockpit-tickets-os .ck-os .ck-col-chamado { width: 21%; }
+  #cockpit-tickets-os .ck-os .ck-col-obs { width: 13%; }
   #cockpit-tickets-os .ck-os .ck-tabela thead th { position: sticky; top: 0; z-index: 2; background: var(--cor-superficie); border-bottom: 0; box-shadow: 0 1px 0 var(--cor-borda); }
 }
 /* Série e OS: primeira linha com a mesma altura (série + "Andamento" na mesma linha; OS no mesmo nível), etiqueta embaixo; vale em tabela e em cartões */
@@ -1891,6 +1892,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-tickets-os .ck-os tbody td[data-label="Fonte"]::before { margin-right: 2px; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { order: 6; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Descrição"] { order: 7; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="Observação do andamento"] { order: 8; }
   #cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"],
   #cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] { box-shadow: inset 3px 0 0 var(--cor-alerta-texto); }
   #cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] > td:first-child,
@@ -2116,3 +2118,20 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* Usuário e Nome em linhas separadas: o .logged-user-row do app é inline-flex e as duas linhas ficavam lado a lado ("Usuário: xNome: y") */
 #comparacao-planilhas-conteudo .logged-user > .logged-user-row { display: flex; }
 #comparacao-planilhas-conteudo .logged-user > .logged-user-row + .logged-user-row { margin-top: 2px; }
+
+/* ---------- Chamados × OS (painel chamados-os; abre pelo F5 e pelo F6) ----------
+   Só leitura. Desktop: tabela com os grupos Chamado | OS; abaixo de 1200 px vira cartões (.ck-tabela--cards).
+   Sem transição própria: nada anima aqui, então não há o que desligar em prefers-reduced-motion. */
+.ck-chos { min-width: 0; margin-top: 12px; }
+.ck-chos__tabela thead tr:first-child th { border-bottom-color: var(--cor-borda-suave); color: var(--cor-texto); }
+.ck-chos__tabela td { vertical-align: top; }
+.ck-chos__celula { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; overflow-wrap: anywhere; }
+.ck-chos__titulo { flex-basis: 100%; min-width: 0; color: var(--cor-texto-mudo); font-size: var(--fs-sm); }
+.ck-chos .ck-nota { flex-basis: 100%; margin: 0; }
+/* Mesmo visual dos indicadores Manual / Automático · Dashboard da aba OS (F6). */
+.ck-chos__vinculo[data-vinculo="manual"] { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border: 1px solid var(--cor-destaque); border-radius: var(--raio-sm); color: var(--cor-destaque-texto); font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase; }
+.ck-chos__vinculo[data-vinculo="dashboard"] { flex-basis: 100%; font-size: var(--fs-xs); color: var(--cor-destaque-texto); }
+@media (pointer: coarse) {
+  .ck-chos .ck-link-btn, #cockpit-chamados-os-busca { min-height: 44px; }
+  #cockpit-chamados-os-mais .ck-btn { min-height: 44px; }
+}

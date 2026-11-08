@@ -105,6 +105,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | `apelidos_modificados.json` | `data/state/apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_chamados.json` | `data/state` | Até 50 versões importadas da relação Simpress/Oracle, com comparação, fila de atenção e exportação filtrada; o arquivo, temporários e bloqueios não são versionados. |
+| `os_observacoes.json` | `data/state` | Observação do andamento por OS da aba **OS** (F6), por série e OS, com CPF mascarado e senhas omitidas; o arquivo, temporários e bloqueios não são versionados. |
 | Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
 | Lotes para chamados Simpress/Oracle | `data/state/entrada_chamados` | Fila local para importar automaticamente o par de planilhas de chamados; os arquivos e resultados ficam fora do Git. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
@@ -352,6 +353,7 @@ Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Da
 O painel **Chamados** (F5) separa os chamados nas sub-abas **Novos**, **Antigos**, **Destaques** e **Finalizados** (abre em Novos; a lupa **Filtrar chamados** procura nas quatro). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
 
 - **Ler chamados antigos**, no topo, lê no SoftExpert os chamados antigos ainda em aberto, sem gravar nada.
+- **Chamados × OS**, no topo (e também na aba **OS**), mostra os chamados em aberto que têm OS lado a lado com a OS da aba **OS**, com busca por UTIC, série ou OS. Só consulta: não grava nada.
 - O lápis no bloco **Descrição** edita o texto do chamado (até 4.000 caracteres), com **Salvar**, **Cancelar** e **Restaurar original**. O texto fica só no site, em `data/state/sebrae_finalizacao.json`; no chamado novo, ele vira a coluna H no próximo **Atualizar Dashboard**.
 - Chamados do solicitante `API SEBRAE` já vêm com A `CLIENTE`, B `OUTRO`, D `EM ABERTO`, J `INCIDENTE` e a descrição para finalizar `Revisado.`.
 - As seleções ficam como rascunho no navegador até **Descartar rascunho**.

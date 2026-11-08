@@ -385,6 +385,83 @@
       return JSON.stringify([record.fonte, serialKey(record.serie), orderKey(record.os)]);
     }
 
+    // Observação do andamento por série+OS (igual à do F5). Fica fora da tabela: recriar a tabela não perde o que ainda não foi salvo.
+    const osObs = new Map();
+    let osObsSeq = 0;
+    const osObsKey = (serie, os) => JSON.stringify([serialKey(serie), orderKey(os)]);
+    const feedbackOs = (node, texto, situacao = "") => { node.textContent = texto; node.dataset.estado = situacao; };
+
+    // notas: { itens: Map(chave → texto salvo), seq } ou null quando a leitura falhou (caixa só leitura).
+    function renderOsObservacao(serie, os, notas) {
+      const textarea = el("textarea", "ck-entrada");
+      textarea.rows = 2;
+      textarea.maxLength = 4000;
+      textarea.setAttribute("aria-label", "Observação do andamento");
+      const key = osObsKey(serie, os);
+      let reg = osObs.get(key);
+      if (notas) {
+        const salvo = notas.itens.get(key) || "";
+        if (!reg) osObs.set(key, reg = { texto: salvo, enviado: salvo, seq: 0, emVoo: 0, timer: 0, fila: null });
+        // Só troca pelo servidor sem rascunho nem envio posterior à leitura.
+        else if (reg.texto === reg.enviado && !reg.emVoo && reg.seq <= notas.seq) reg.texto = reg.enviado = salvo;
+      }
+      textarea.value = reg ? reg.texto : "";
+      if (!notas) {
+        textarea.readOnly = true;
+        return [textarea];
+      }
+      const pendente = reg.texto !== reg.enviado;
+      const feedback = el("p", "ck-campo__ajuda sebrae-obs__feedback", pendente ? "Alteração ainda não salva…" : "Salva automaticamente.");
+      feedback.setAttribute("role", "status");
+      feedback.dataset.estado = pendente ? "pendente" : "";
+      Object.assign(reg, { serie, os, textarea, feedback });
+      textarea.addEventListener("input", () => {
+        reg.texto = textarea.value;
+        clearTimeout(reg.timer);
+        reg.timer = setTimeout(() => salvarOsObservacao(reg), 800);
+        feedbackOs(feedback, "Alteração ainda não salva…", "pendente");
+      });
+      textarea.addEventListener("change", () => salvarOsObservacao(reg));
+      textarea.addEventListener("blur", () => salvarOsObservacao(reg));
+      return [textarea, feedback];
+    }
+
+    function salvarOsObservacao(reg) {
+      clearTimeout(reg.timer);
+      reg.fila = (reg.fila || Promise.resolve(true)).then(() => enviarOsObservacao(reg));
+      return reg.fila;
+    }
+
+    async function enviarOsObservacao(reg) {
+      const texto = reg.texto;
+      if (texto === reg.enviado) {
+        if (reg.feedback.dataset.estado === "pendente") feedbackOs(reg.feedback, "Salva automaticamente.");
+        return true;
+      }
+      feedbackOs(reg.feedback, "Salvando…", "salvando");
+      reg.seq = ++osObsSeq;
+      reg.emVoo += 1;
+      try {
+        const dados = await osSummaryRequest("/api/operacoes/chamados/observacoes", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serie: reg.serie, os: reg.os, observacao: texto }),
+        });
+        reg.enviado = typeof dados.observacao === "string" ? dados.observacao : texto;
+        if (reg.texto === texto) {
+          reg.texto = reg.enviado;
+          if (reg.textarea.value === texto) reg.textarea.value = reg.enviado;
+        }
+        feedbackOs(reg.feedback, "Salva.", "ok");
+        return true;
+      } catch (error) {
+        feedbackOs(reg.feedback, `Não foi possível salvar: ${error.message}`, "erro");
+        return false;
+      } finally {
+        reg.emVoo -= 1;
+      }
+    }
+
     function ticketSummarySourceLabel(sources) {
       const selected = Array.isArray(sources) ? sources : [sources];
       const labels = [];
@@ -589,7 +666,7 @@
       }
     }
 
-    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map()) {
+    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map(), notas = null) {
       const status = section.querySelector(".ticket-summary-status");
       const content = el("div", "ck-os__corpo ticket-summary-content");
       const externa = osExternas.get(section);
@@ -608,12 +685,12 @@
         : formatNumber(orderCount) + " OS · " + pluralize(records.length, "série", "séries");
       const table = el("table", "ck-tabela ck-tabela--cards ticket-summary-table");
       const cols = el("colgroup");
-      ["fonte", "serie", "os", "usuario", "host", "chamado", ""].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
+      ["fonte", "serie", "os", "usuario", "host", "chamado", "", "obs"].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
       table.append(cols);
       table.append(el("caption", "ck-sr", "Ordens de serviço associadas a equipamentos"));
       const header = doc.createElement("thead");
       const headRow = doc.createElement("tr");
-      ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"].forEach(title => {
+      ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição", "Observação do andamento"].forEach(title => {
         const cell = el("th", "", title);
         cell.scope = "col";
         headRow.append(cell);
@@ -673,6 +750,7 @@
           });
           const descCell = cell("Descrição", "ck-td--largo");
           descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
+          cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas));
           body.append(row);
         });
       });
@@ -732,7 +810,7 @@
       detail.id = "ck-os-andamento-" + (++andamentoSeq);
       detail.dataset.andamento = serie;
       const cell = el("td", "ck-td--largo ck-td--sem-rotulo");
-      cell.colSpan = 7;
+      cell.colSpan = 8;
       cell.setAttribute("role", "region");
       cell.setAttribute("aria-label", "Andamento registrado da série " + serie);
       detail.append(cell);
@@ -758,10 +836,17 @@
         section.querySelector(".ticket-summary-status").textContent = "Carregando OS…";
       });
       try {
-        const [report, linksData] = await Promise.all([
+        const notasSeq = osObsSeq;
+        const [report, linksData, notasData] = await Promise.all([
           osSummaryRequest("/api/operacoes/chamados"),
           osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
+          // Falha nas observações não derruba a tabela: a caixa fica só leitura.
+          osSummaryRequest("/api/operacoes/chamados/observacoes").catch(() => null),
         ]);
+        const notas = Array.isArray(notasData?.observacoes) ? {
+          seq: notasSeq,
+          itens: new Map(notasData.observacoes.map(item => [osObsKey(item.serie, item.os), String(item.observacao || "")])),
+        } : null;
         const records = groupTicketOsRows(collectTicketOsRows(report));
         const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
           .map(ticket => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
@@ -789,7 +874,7 @@
           st?.aoCarregar?.(report);
           const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
             .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
-          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos, modelos);
+          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos, modelos, notas);
         });
       } catch (error) {
         vivos().forEach(section => {

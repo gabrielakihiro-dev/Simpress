@@ -57,6 +57,7 @@ FIXTURE_MANUAL_DATES = {}
 # Fictional series repeated in the Endpoint: its users are listed, none is chosen.
 FIXTURE_AMBIGUOUS_USERS = {"DEMO-SN-001": ["usuario.a", "usuario.b"]}
 FIXTURE_TICKET_OS_LINKS = {}
+FIXTURE_OS_OBSERVACOES = {}
 TICKET_REPORT = {
     "snapshot_id": "20261009_120000",
     "atualizado_em": "2026-10-09T12:00:00Z",
@@ -747,6 +748,8 @@ class Handler(BaseHTTPRequestHandler):
                  "atualizado_em": "02/10/2026 09:00", "anotacao": "", "mudancas": []}]})
         elif path == "/api/operacoes/chamados/vinculos-os":
             self.send({"vinculos": list(FIXTURE_TICKET_OS_LINKS.values())})
+        elif path == "/api/operacoes/chamados/observacoes":
+            self.send({"observacoes": list(FIXTURE_OS_OBSERVACOES.values())})
         elif path == "/__ticket_import_state":
             self.send({"imports": ticket_import_count})
         elif path == f"/api/historico-comparacoes/{DEMO_EVENT_ID}":
@@ -817,6 +820,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         global DEMO_ANNOTATION
         path = urlsplit(self.path).path
+        if path == "/api/operacoes/chamados/observacoes":
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            key = ("".join(ch for ch in str(payload.get("serie") or "").upper() if ch.isalnum()),
+                   "".join(str(payload.get("os") or "").upper().split()))
+            item = {"serie": payload.get("serie"), "os": payload.get("os"),
+                    "observacao": str(payload.get("observacao") or "").strip(), "atualizado_em": "2026-10-20T09:00:00-03:00"}
+            if item["observacao"]:
+                FIXTURE_OS_OBSERVACOES[key] = item
+            else:
+                FIXTURE_OS_OBSERVACOES.pop(key, None)
+            self.send(item)
+            return
         if path == "/api/operacoes/chamados/vinculos-os":
             size = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(size) or b"{}")

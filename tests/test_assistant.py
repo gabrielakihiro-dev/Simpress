@@ -1631,6 +1631,107 @@ class OsDosAntigosTests(unittest.TestCase):
         self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")
 
 
+class ChamadosOsSimpress(FakeSimpress):
+    """GET /api/sebrae/novos, the OS report and the F6 notes: the three reads of the "Chamados × OS" panel."""
+
+    def __init__(self, novos: Optional[List[Dict[str, Any]]] = None, observacoes_status: int = 200) -> None:
+        super().__init__()
+        self.novos = novos if novos is not None else [
+            {"numero": "UTIC-2026-2000", "linha": {"G": f"Tela quebrada, Maria Souza, CPF {CPF}", "I": "Maria Souza", "K": "abc123", "E": "os 100"}},
+            {"numero": "UTIC-2026-2001", "linha": {"G": "Traço", "K": "ABC123", "E": "—"}},
+            {"numero": "UTIC-2026-2002", "linha": {"G": "Sem OS", "K": "ABC123", "E": ""}},
+        ]
+        self.observacoes_status = observacoes_status
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"novos": {"formulario": self.novos}, "importado": {
+                "abertos": [
+                    {"numero": "UTIC-2026-0094", "titulo": "", "leitura_softexpert": {"titulo": "Teclado"}, "valores": {"A": "Maria Souza"},
+                     "automaticos": {"K": "", "E": ""}, "automaticos_sugeridos": {"K": "CXC9F072K1", "E": "77"}},
+                    {"numero": "UTIC-2026-0095", "titulo": "Lento", "automaticos": {"K": "ZZZ999", "E": "55"}},
+                    {"numero": "UTIC-2026-0096", "titulo": "Já finalizado", "automaticos": {"K": "ABC123", "E": "OS100"}},
+                    {"numero": "linha:12", "chamado": "27371", "titulo": "Linha sem UTIC", "automaticos": {"K": "ABC123", "E": "OS100"}},
+                ],
+                "finalizados": [{"numero": "UTIC-2026-0096"}],
+            }}
+        if path == "/api/operacoes/chamados":
+            self.calls.append((method, path, params, body))
+            return 200, {"chamados": [
+                {"serie": "ABC123", "relacao": "conferida", "oracle": [{"ordem_servico": "OS100", "status": "Aberta", "sub_status": "Aguardando peça"}],
+                 "simpress": {"ordens_servico": ["OS 100"], "status": ["Em atendimento"]}},
+                {"serie": "SCXC9F072K1", "relacao": "so_oracle", "oracle": [{"ordem_servico": "77", "status": "Aberta"}], "simpress": {}},
+            ]}
+        if path == "/api/operacoes/chamados/observacoes":
+            self.calls.append((method, path, params, body))
+            if self.observacoes_status != 200:
+                return self.observacoes_status, {"detail": "O registro de observações está ilegível e foi preservado."}
+            return 200, {"observacoes": [
+                {"serie": " abc 123 ", "os": "os100", "observacao": f"Peça chega sexta; CPF {CPF}"},
+                {"serie": "SCXC9F072K1", "os": "77", "observacao": "Mac aguardando"},
+            ]}
+        return super().__call__(method, path, params, body)
+
+
+class ChamadosComOsToolTests(unittest.TestCase):
+    def test_same_list_as_the_panel_with_the_f6_note(self) -> None:
+        dados = SimpressApi(ChamadosOsSimpress()).chamados_com_os_sebrae()
+        itens = {i["utic"]: i for i in dados["chamados"]}
+        # New with OS enters without any link; old enters by `os_sugerida`; finalized and without OS ("" or "—") stay out.
+        self.assertEqual(list(itens), ["UTIC-2026-2000", "UTIC-2026-0094", "UTIC-2026-0095", "27371"])
+        self.assertEqual((dados["total"], dados["encontradas"], dados["omitidos"]), (4, 3, 0))
+        novo = itens["UTIC-2026-2000"]
+        self.assertEqual((novo["situacao"], novo["serie"], novo["os"], novo["encontrada"], novo["fontes"]),
+                         ("novo", "abc123", "os 100", True, ["oracle", "simpress"]))
+        self.assertEqual((novo["status_oracle"], novo["status_simpress"], novo["relacao"]), ("Aberta · Aguardando peça", "Em atendimento", "conferida"))
+        # F6 note found with the normalized key (spaces and lower case on both sides); CPF masked in title and note.
+        self.assertEqual(novo["observacao_os"], "Peça chega sexta; CPF ***.***.***-**")
+        self.assertIn("***.***.***-**", novo["titulo"])
+        antigo = itens["UTIC-2026-0094"]
+        self.assertEqual((antigo["situacao"], antigo["titulo"], antigo["os"], antigo["fontes"]), ("em aberto", "Teclado", "77", ["oracle"]))
+        self.assertEqual(antigo["observacao_os"], "Mac aguardando")  # MacBook fallback: note saved with the report's serial
+        ausente = itens["UTIC-2026-0095"]
+        self.assertEqual((ausente["encontrada"], ausente["fontes"], ausente["relacao"], ausente["observacao_os"]), (False, [], "", ""))
+        self.assertEqual(ausente["mensagem"], "Série não encontrada na importação atual.")
+        texto = json.dumps(dados, ensure_ascii=False)
+        self.assertNotIn(CPF, texto)
+        self.assertNotIn("solicitante", texto)
+        self.assertNotIn("responsavel", texto)
+        self.assertFalse(TOOLS["chamados_com_os_sebrae"].changes_data)
+
+    def test_person_name_never_reaches_the_model(self) -> None:
+        model = FakeModel(calls(call("chamados_com_os_sebrae")), text("ok"))
+        conversation, simpress = make_conversation(model, ChamadosOsSimpress())
+        reply = conversation.enviar_mensagem("quais chamados em aberto têm OS?")
+        self.assertEqual(reply.ferramentas, ["chamados_com_os_sebrae"])
+        self.assertNotIn("Maria", json.dumps(model.sent, ensure_ascii=False))
+        self.assertNotIn(CPF, json.dumps(model.sent, ensure_ascii=False))
+        self.assertEqual(simpress.writes(), [])
+        self.assertIn("chamados", grupos_da_mensagem("quais chamados em aberto têm OS?"))
+
+    def test_cut_at_max_items_with_the_usual_warning(self) -> None:
+        novos = [{"numero": f"UTIC-2026-{3000 + n}", "linha": {"G": "x", "K": "ABC123", "E": "OS100"}} for n in range(25)]
+        dados = SimpressApi(ChamadosOsSimpress(novos=novos)).chamados_com_os_sebrae()
+        self.assertEqual((dados["total"], len(dados["chamados"]), dados["omitidos"]), (28, 20, 8))
+        self.assertIn("Mostrando só os 20 primeiros", dados["aviso"])
+
+    def test_failed_note_read_keeps_the_list(self) -> None:
+        dados = SimpressApi(ChamadosOsSimpress(observacoes_status=503)).chamados_com_os_sebrae()
+        self.assertEqual(dados["total"], 4)
+        self.assertEqual({i["observacao_os"] for i in dados["chamados"]}, {""})
+        self.assertIn("observações da aba OS", dados["aviso_observacoes"])
+
+    def test_os_tab_list_gains_the_note_per_os(self) -> None:
+        dados = SimpressApi(ChamadosOsSimpress()).listar_chamados_abertos()
+        por_serie = {c["serie"]: c["observacao_os"] for c in dados["chamados"]}
+        self.assertEqual(por_serie["ABC123"], {"OS100": "Peça chega sexta; CPF ***.***.***-**", "OS 100": "Peça chega sexta; CPF ***.***.***-**"})
+        self.assertEqual(por_serie["SCXC9F072K1"], {"77": "Mac aguardando"})
+        falha = SimpressApi(ChamadosOsSimpress(observacoes_status=409)).listar_chamados_abertos()
+        self.assertTrue(all(c["observacao_os"] == {} for c in falha["chamados"]))
+        self.assertIn("aviso_observacoes", falha)
+
+
 class EditDescriptionSimpress(FakeSimpress):
     """GET /api/sebrae/novos (one read old ticket, one unread, one finalized, one new) and the PUT of the edited description."""
 
