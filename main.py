@@ -18,7 +18,7 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
@@ -247,6 +247,7 @@ from security.local_requests import (
     allowed_local_authorities,
     parse_request_authority,
 )
+from security import sessao_local
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 # Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
@@ -1167,6 +1168,7 @@ _local_request_safety_services = LocalRequestSafetyServices(
     upload_admission=lambda: UPLOAD_ADMISSION,
     idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
     service_unavailable_errors=(LocalJsonCorruptionError,),
+    session_port=lambda: SERVER_PORT,
 )
 
 
@@ -2712,6 +2714,39 @@ app.mount("/static", RevalidatingStaticFiles(directory=str(STATIC_DIR)), name="s
 def serve_favicon():
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
+@app.get("/bootstrap", include_in_schema=False)
+def bootstrap_session(t: str = ""):
+    """Turn the launcher's per-boot secret into the session cookie that /api/* requires."""
+    if not sessao_local.valido(t):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Link de abertura inválido. Abra o Simpress pelo iniciar_servidor.bat."},
+            headers={"Cache-Control": "no-store"},
+        )
+    response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+    response.set_cookie(
+        sessao_local.nome_cookie(SERVER_PORT), sessao_local.SEGREDO,
+        httponly=True, samesite="strict", path="/",
+    )
+    return response
+
+
+def _open_browser_when_listening(port: int) -> None:
+    """Open the bootstrap URL once uvicorn accepts connections (the launcher no longer does it on a fresh start)."""
+    import socket
+    import webbrowser
+
+    for _ in range(600):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
+    else:
+        return
+    webbrowser.open(f"http://127.0.0.1:{port}/bootstrap?t={sessao_local.SEGREDO}")
+
+
 @app.get("/")
 def read_root():
     index_file = STATIC_DIR / "index.html"
@@ -2735,5 +2770,8 @@ if __name__ == "__main__":
     logger.info("Fonte EquipamentosDetalhes: %s", equipment_source or "AUSENTE")
     logger.info("Porta local: %s", SERVER_PORT)
     logger.info("Log local: %s", log_file)
-    # Access lines would carry ?q= searches (serials, hostnames) to the console.
+    sessao_local.gravar_segredo(SERVER_PORT)
+    if os.environ.get("SIMPRESS_NAO_ABRIR_NAVEGADOR") != "1":
+        threading.Thread(target=_open_browser_when_listening, args=(SERVER_PORT,), daemon=True).start()
+    # Access lines would carry ?q= searches (serials, hostnames) and the bootstrap token to the console.
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)

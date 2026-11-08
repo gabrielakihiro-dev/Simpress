@@ -20,13 +20,15 @@ if HTTP_TEST_AVAILABLE:
     from fastapi.testclient import TestClient
 from core.integrity import FileBusyError
 from core.inventory_requests import InventoryUpdateMiddleware
-from security import local_requests
+from security import local_requests, sessao_local
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+SESSION_COOKIE = (b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii"))
 
 
 def run_boundary(
     client, *, headers=(), proxy=False,
-    path="/api/stats", method="GET",
+    path="/api/stats", method="GET", session=True,
 ):
     messages = []
     reached = []
@@ -48,13 +50,13 @@ def run_boundary(
         app = ProxyHeadersMiddleware(app, trusted_hosts="*")
     scope = {"type": "http", "path": path, "method": method,
              "scheme": "http", "client": client,
-             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *headers]}
+             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *([SESSION_COOKIE] if session else []), *headers]}
     asyncio.run(app(scope, receive, send))
     return next(message["status"] for message in messages
                 if message["type"] == "http.response.start"), bool(reached)
 
 
-def run_endpoint(endpoint, *, headers=(), path="/api/stats", method="GET", client=("127.0.0.1", 1234)):
+def run_endpoint(endpoint, *, headers=(), path="/api/stats", method="GET", client=("127.0.0.1", 1234), session=True):
     messages = []
 
     async def receive():
@@ -65,7 +67,7 @@ def run_endpoint(endpoint, *, headers=(), path="/api/stats", method="GET", clien
 
     scope = {"type": "http", "path": path, "method": method,
              "scheme": "http", "client": client,
-             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *headers]}
+             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *([SESSION_COOKIE] if session else []), *headers]}
     asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
     start = next(message for message in messages if message["type"] == "http.response.start")
     body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
@@ -90,7 +92,8 @@ class LocalRequestSecurityTests(unittest.TestCase):
 
         for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/{numero}/anexo"):
             app.add_api_route(path, consume, methods=["POST"])
-        client = TestClient(app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        client = TestClient(app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234),
+                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(client.close)
         for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/UTIC-2026-1/anexo"):
             with self.subTest(path=path):
@@ -186,7 +189,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
             async def send(message):
                 messages.append(message)
 
-            headers = [(b"host", f"localhost:{main.SERVER_PORT}".encode())]
+            headers = [(b"host", f"localhost:{main.SERVER_PORT}".encode()), SESSION_COOKIE]
             if declared_size is not None:
                 headers.append((b"content-length", str(declared_size).encode("ascii")))
             scope = {"type": "http", "path": "/api/usuarios-entra/importar",
@@ -227,7 +230,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
             messages.append(message)
 
         scope = {"type": "http", "path": path, "method": "POST", "client": ("127.0.0.1", 1234),
-                 "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode())]}
+                 "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), SESSION_COOKIE]}
         asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
         return next(m["status"] for m in messages if m["type"] == "http.response.start")
 
@@ -313,6 +316,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
                 "headers": [
                     (b"host", f"localhost:{main.SERVER_PORT}".encode()),
                     (b"idempotency-key", b"retry-01"),
+                    SESSION_COOKIE,
                 ],
             }
             app = main.LocalRequestSafetyMiddleware(endpoint)
@@ -414,7 +418,8 @@ class LocalRequestSecurityTests(unittest.TestCase):
     @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
     def test_removed_login_and_pilot_routes_are_unavailable(self):
         client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
-                            client=("127.0.0.1", 1234))
+                            client=("127.0.0.1", 1234),
+                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(client.close)
         for path in ("/login", "/api/auth/session", "/api/piloto/operacoes",
                      "/static/pages/login.html", "/static/js/auth/auth-session.js"):
@@ -434,6 +439,63 @@ class LocalRequestSecurityTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(client.get(path).status_code, 404)
         self.assertIn("/api/buscar", main.app.openapi()["paths"])
+
+    def test_api_requires_the_local_session_cookie(self):
+        nome = sessao_local.nome_cookie(main.SERVER_PORT)
+        cases = (
+            ([], 401),
+            ([(b"cookie", f"{nome}=errado".encode())], 401),
+            ([(b"cookie", f"simpress_sessao_1={sessao_local.SEGREDO}".encode())], 401),
+            ([(b"cookie", f"outro=1; {nome}={sessao_local.SEGREDO}".encode())], 200),
+        )
+        for headers, expected in cases:
+            with self.subTest(headers=headers):
+                status, _, body = run_endpoint(ok_endpoint, headers=headers, session=False)
+                self.assertEqual(status, expected)
+                if expected == 401:
+                    self.assertNotIn(sessao_local.SEGREDO.encode(), body)
+        # Pages and static files stay reachable so /bootstrap can be opened first.
+        self.assertEqual(run_endpoint(ok_endpoint, path="/", session=False)[0], 200)
+        self.assertEqual(run_endpoint(ok_endpoint, path="/static/index.html", session=False)[0], 200)
+
+    def test_session_secret_validation_is_exact(self):
+        self.assertTrue(sessao_local.valido(sessao_local.SEGREDO))
+        for valor in (None, "", sessao_local.SEGREDO[:-1], sessao_local.SEGREDO + "x", "çã"):
+            with self.subTest(valor=valor):
+                self.assertFalse(sessao_local.valido(valor))
+
+    def test_child_scripts_read_the_secret_for_their_port_only(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as pasta, patch.dict(os.environ, {"LOCALAPPDATA": pasta}):
+            self.assertIsNone(sessao_local.ler_segredo(8123))
+            caminho = sessao_local.gravar_segredo(8123)
+            self.assertEqual(caminho.parent.name, "Simpress")
+            self.assertEqual(sessao_local.ler_segredo(8123), sessao_local.SEGREDO)
+            self.assertIsNone(sessao_local.ler_segredo(8124))
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_bootstrap_sets_a_strict_httponly_cookie_and_hides_from_schema(self):
+        origin = f"http://127.0.0.1:{main.SERVER_PORT}"
+        client = TestClient(main.app, base_url=origin, client=("127.0.0.1", 1234), follow_redirects=False)
+        self.addCleanup(client.close)
+        self.assertEqual(client.get("/api/stats").status_code, 401)
+        for url in ("/bootstrap", "/bootstrap?t=errado"):
+            with self.subTest(url=url):
+                response = client.get(url)
+                self.assertEqual(response.status_code, 403)
+                self.assertNotIn("set-cookie", response.headers)
+        response = client.get(f"/bootstrap?t={sessao_local.SEGREDO}")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        cookie = response.headers["set-cookie"].lower()
+        self.assertIn(f"{sessao_local.nome_cookie(main.SERVER_PORT)}=", cookie)
+        for flag in ("httponly", "samesite=strict", "path=/"):
+            self.assertIn(flag, cookie)
+        self.assertNotEqual(client.get("/api/stats").status_code, 401)
+        self.assertNotIn("/bootstrap", main.app.openapi()["paths"])
 
     def test_websocket_handshake_requires_loopback_host_and_same_origin(self):
         authority = f"localhost:{main.SERVER_PORT}".encode()

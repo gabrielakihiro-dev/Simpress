@@ -18,6 +18,7 @@ with (
     import main
 
 from core.errors import DomainBusyError, DomainConflictError
+from security import sessao_local
 from domains import sebrae_agendamento as agenda
 from domains.sebrae_agendamento import FUSO, AgendadorSebrae, caminhos_padrao
 
@@ -220,7 +221,7 @@ class SebraeRouteTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.origin = f"http://127.0.0.1:{main.SERVER_PORT}"
-        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234))
+        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(self.client.close)
 
     def test_summary(self):
