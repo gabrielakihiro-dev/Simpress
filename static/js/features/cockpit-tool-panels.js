@@ -16,7 +16,6 @@
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
     "sebrae-chamados": ["Chamados", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
-    "chamados-os": ["Chamados × OS", "Chamados em aberto com OS vinculada, lado a lado."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -255,7 +254,8 @@
   }
 
   // Conteúdo da linha "Andamento" de uma série (callback aoExpandirSerie da tabela de OS).
-  function renderTicketDetail(record, target) {
+  // opcoes (janela Chamado × OS): { snapshotId, somenteLeitura } = relatório próprio e anotações só leitura.
+  function renderTicketDetail(record, target, opcoes = {}) {
     if (!record) return renderEmpty(target, "Série não encontrada na importação atual.");
     const { oracle, simpress } = ticketOrders(record);
     const oracleRecords = Array.isArray(record.oracle) ? record.oracle : [];
@@ -284,7 +284,7 @@
     const painel = element("div", "ck-os-andamento");
     painel.append(dados, tempo);
     target.replaceChildren(painel);
-    loadTicketTimeline(record, events);
+    loadTicketTimeline(record, events, opcoes);
   }
 
   function expandTicketSeries(serie, target) {
@@ -296,7 +296,7 @@
     return Array.isArray(value) ? value.filter(Boolean).join(", ") : String(value ?? "");
   }
 
-  function renderTicketTimeline(target, events) {
+  function renderTicketTimeline(target, events, somenteLeitura = false) {
     if (!events.length) return renderEmpty(target, "Não há versões anteriores para esta série.");
     const list = element("ol", "ck-tempo");
     events.forEach(event => {
@@ -309,14 +309,14 @@
       if (changes.length) body.append(element("p", "ck-tempo__meta", changes.map(change =>
         `${change.campo || "Campo"}: ${timelineValue(change.anterior) || "(vazio)"} → ${timelineValue(change.atual) || "(vazio)"}`,
       ).join(" · ")));
-      body.append(ticketAnnotationField(event));
+      body.append(ticketAnnotationField(event, somenteLeitura));
       list.append(item);
     });
     target.replaceChildren(list);
   }
 
   // Anotação por versão da linha do tempo (próxima ação ou o que já foi feito), salva sozinha com o limite de 2.000 caracteres.
-  function ticketAnnotationField(event) {
+  function ticketAnnotationField(event, somenteLeitura = false) {
     const field = element("label", "ck-chamados-anotacao");
     field.append(element("span", "ck-chamados-anotacao__rotulo", "Próxima ação ou o que já foi feito"));
     const textarea = element("textarea", "annotation-field");
@@ -339,7 +339,7 @@
     retry.setAttribute("aria-label", "Tentar novamente a sincronização desta anotação");
     field.append(textarea, status, retry);
     const autosave = globalThis.HistoryAnnotationAutosave;
-    if (autosave && event.snapshot_id && event.item_id) {
+    if (!somenteLeitura && autosave && event.snapshot_id && event.item_id) {
       autosave.attachAnnotationAutosave({
         textarea, status, retryButton: retry, eventId: event.snapshot_id, itemId: event.item_id,
         send: ({ eventId, itemId, annotation, revisionId, baseRevisions, resolveConflict }) => fetch(
@@ -353,19 +353,20 @@
     return field;
   }
 
-  async function loadTicketTimeline(record, target) {
+  async function loadTicketTimeline(record, target, opcoes = {}) {
     const serial = String(record.serie || "");
-    const snapshotId = String(ticketData?.snapshot_id || "");
+    const proprio = "snapshotId" in opcoes;
+    const snapshotId = String((proprio ? opcoes.snapshotId : ticketData?.snapshot_id) || "");
     renderEmpty(target, "Carregando histórico da série…");
     if (!serial || !snapshotId) return renderEmpty(target, "O histórico desta série não está disponível nesta importação.");
     // Cada linha aberta tem o próprio destino; recolher/recriar a tabela o desconecta e descarta a resposta.
-    const stale = () => !target.isConnected || activeTool !== "chamados";
+    const stale = () => !target.isConnected || (!proprio && activeTool !== "chamados");
     try {
       const params = new URLSearchParams({ snapshot_id: snapshotId });
       const data = await apiFetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params}`, {
         errorMessage: "Não foi possível carregar o histórico desta série.",
       });
-      if (!stale()) renderTicketTimeline(target, Array.isArray(data.eventos) ? data.eventos : []);
+      if (!stale()) renderTicketTimeline(target, Array.isArray(data.eventos) ? data.eventos : [], opcoes.somenteLeitura);
     } catch (error) {
       if (!stale()) renderError(target, error, "Não foi possível carregar o histórico desta série.");
     }
@@ -471,140 +472,6 @@
     filterTicketTable();
     // Recém-montada já está carregando; só recarrega à força se já existia.
     if (mounted) await panels.atualizarTabelaOs(true);
-  }
-
-  // Chamados × OS: chamados em aberto do F5 com OS, lado a lado com a OS do F6. Só leitura; recarrega a cada abertura.
-  const CHAMADOS_OS_POR_PAGINA = 25;
-  let chamadosOsRequest = 0;
-  let chamadosOsPares = [];
-  let chamadosOsLimite = CHAMADOS_OS_POR_PAGINA;
-  let chamadosOsTimer = 0;
-
-  async function loadChamadosOs() {
-    const lista = byId("cockpit-chamados-os-lista");
-    const request = ++chamadosOsRequest;
-    lista.setAttribute("aria-busy", "true");
-    try {
-      const model = globalThis.SimpressChamadosOsModel;
-      const [sebrae, relatorio, vinculos] = await Promise.all([
-        apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados novos." }),
-        apiFetch("/api/operacoes/chamados", { errorMessage: "Não foi possível carregar as OS." }),
-        apiFetch("/api/operacoes/chamados/vinculos-os", { errorMessage: "Não foi possível carregar as OS." }),
-      ]);
-      if (request !== chamadosOsRequest || activeTool !== "chamados-os") return;
-      chamadosOsPares = model.montarParesChamadoOs({ sebrae, relatorio, vinculos });
-      chamadosOsLimite = CHAMADOS_OS_POR_PAGINA;
-      renderChamadosOs();
-    } catch (error) {
-      if (request !== chamadosOsRequest || activeTool !== "chamados-os") return;
-      byId("cockpit-chamados-os-mais").hidden = true;
-      renderError(lista, error, "Não foi possível carregar as OS.");
-    } finally {
-      if (request === chamadosOsRequest) lista.removeAttribute("aria-busy");
-    }
-  }
-
-  function chamadosOsCelula(row, label, ...conteudo) {
-    const td = element("td");
-    td.dataset.label = label;
-    const caixa = element("div", "ck-chos__celula");
-    caixa.append(...conteudo.filter(Boolean));
-    td.append(caixa);
-    row.append(td);
-    return td;
-  }
-
-  function chamadosOsLinha(par) {
-    const row = element("tr");
-    row.dataset.chave = String(par.chave);
-    const chamado = element("button", "ck-link-btn", par.numero || "Sem UTIC");
-    chamado.type = "button";
-    if (par.numero) chamado.setAttribute("aria-label", `Abrir o chamado ${par.numero} na aba Chamados (F5)`);
-    chamado.addEventListener("click", () => app.abrirChamadoSebraeNoF5?.(par.chave));
-    const selo = element("span", "ck-badge sebrae-selo", par.situacao === "novo" ? "Novo" : "Em aberto");
-    if (par.situacao === "novo") selo.dataset.status = "info";
-    chamadosOsCelula(row, "Chamado", chamado, element("span", "ck-chos__titulo", par.titulo || "Sem título"), selo);
-    chamadosOsCelula(row, "Abertura", element("span", "", par.abertura || "—"));
-    chamadosOsCelula(row, "Série", element("span", "", par.serie || "—"));
-    if (!par.encontrada) {
-      const td = chamadosOsCelula(row, "OS", element("span", "", par.os),
-        element("span", "ck-nota", "Série não encontrada na importação atual."));
-      td.colSpan = 4;
-      td.classList.add("ck-td--largo");
-      row.dataset.encontrada = "false";
-      return row;
-    }
-    const os = element("button", "ck-link-btn", par.os);
-    os.type = "button";
-    os.setAttribute("aria-label", `Abrir a OS ${par.os} na aba OS (F6)`);
-    os.addEventListener("click", () => app.abrirChamadoDaOs?.([], par.serieRelatorio || par.serie, par.osRelatorio || par.os));
-    let vinculo = null;
-    if (par.vinculo) {
-      vinculo = element("span", "ck-chos__vinculo", par.vinculo === "manual" ? "Manual" : "Automático · Dashboard");
-      vinculo.dataset.vinculo = par.vinculo;
-    }
-    chamadosOsCelula(row, "OS", os, vinculo);
-    chamadosOsCelula(row, "Status Oracle", element("span", "", par.statusOracle || "—"));
-    chamadosOsCelula(row, "Status Simpress", element("span", "", par.statusSimpress || "—"));
-    const relacao = badge(relationText(par.registro), ownEntry(relationTones, par.relacao));
-    // Selo da triagem do F6 (ticketTriageGroups). Ele já é a Atenção: em atenção = "3+ dias" ou "Sem data",
-    // o mesmo critério do filtro Atenção do F6 (data-panels.js), por isso não há um terceiro selo.
-    const grupo = app.grupoTriagemChamado?.(par.registro);
-    const triagem = ticketTriageGroups.find(([key]) => key === grupo && key !== "ativos");
-    let triagemBadge = null;
-    if (triagem) {
-      triagemBadge = element("span", "ck-badge", triagem[1]);
-      if (triagem[2]) triagemBadge.dataset.status = triagem[2];
-    }
-    chamadosOsCelula(row, "Relação", relacao, triagemBadge);
-    return row;
-  }
-
-  function renderChamadosOs() {
-    const lista = byId("cockpit-chamados-os-lista");
-    const mais = byId("cockpit-chamados-os-mais");
-    const filtrados = globalThis.SimpressChamadosOsModel.filtrarParesChamadoOs(chamadosOsPares, byId("cockpit-chamados-os-busca").value);
-    const visiveis = filtrados.slice(0, chamadosOsLimite);
-    mais.hidden = filtrados.length <= visiveis.length;
-    byId("cockpit-chamados-os-mostrando").textContent = `Mostrando ${displayCount(visiveis.length)} de ${displayCount(filtrados.length)}`;
-    if (!visiveis.length) return renderEmpty(lista, "Nenhum chamado em aberto com OS vinculada.");
-    const table = element("table", "ck-tabela ck-tabela--cards ck-chos__tabela");
-    table.append(element("caption", "sr-only", "Chamados × OS"));
-    [3, 4].forEach(span => { const col = element("colgroup"); col.span = span; table.append(col); });
-    const thead = element("thead");
-    const grupos = element("tr");
-    [["Chamado", 3], ["OS", 4]].forEach(([texto, span]) => {
-      const th = element("th", "", texto);
-      th.scope = "colgroup";
-      th.colSpan = span;
-      grupos.append(th);
-    });
-    const colunas = element("tr");
-    ["Chamado", "Abertura", "Série", "OS", "Status Oracle", "Status Simpress", "Relação"].forEach(texto => {
-      const th = element("th", "", texto);
-      th.scope = "col";
-      colunas.append(th);
-    });
-    thead.append(grupos, colunas);
-    const tbody = element("tbody");
-    tbody.append(...visiveis.map(chamadosOsLinha));
-    table.append(thead, tbody);
-    lista.replaceChildren(table);
-  }
-
-  function filtrarChamadosOsSoon() {
-    clearTimeout(chamadosOsTimer);
-    chamadosOsTimer = setTimeout(() => { chamadosOsLimite = CHAMADOS_OS_POR_PAGINA; renderChamadosOs(); }, 150);
-  }
-
-  function carregarMaisChamadosOs() {
-    const antes = chamadosOsLimite;
-    chamadosOsLimite += CHAMADOS_OS_POR_PAGINA;
-    renderChamadosOs();
-    // Como no F5: acabou a lista, o botão some e o foco vai para o primeiro item novo.
-    if (byId("cockpit-chamados-os-mais").hidden) {
-      byId("cockpit-chamados-os-lista").querySelectorAll("tbody tr")[antes]?.querySelector("button")?.focus();
-    }
   }
 
   function destacarLinhaCockpit(element) {
@@ -1902,8 +1769,6 @@
     byId("cockpit-tickets-attention").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-clear").addEventListener("click", clearTicketFilters);
     byId("cockpit-tickets-triage").addEventListener("click", selectTicketTriage);
-    byId("cockpit-chamados-os-busca").addEventListener("input", filtrarChamadosOsSoon);
-    byId("cockpit-chamados-os-mais-botao").addEventListener("click", carregarMaisChamadosOs);
     byId("cockpit-comparison-new").addEventListener("click", openNewComparison);
     byId("cockpit-comparison-event").addEventListener("change", event => {
       selectedComparisonId = String(event.currentTarget.value || "");
@@ -2026,7 +1891,6 @@
     document.querySelectorAll("[data-cockpit-tool-panel]").forEach(panel => { panel.hidden = panel.dataset.cockpitToolPanel !== tool; });
     byId("cockpit-tool-title").focus();
     if (tool === "chamados") await loadTickets();
-    if (tool === "chamados-os") await loadChamadosOs();
     if (tool === "comparacao") {
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
@@ -2079,6 +1943,61 @@
     destacarLinhaCockpit(row);
   }
 
+  // Janela "Chamado × OS" (botão da OS no cartão do F5): chamado à esquerda, OS à direita, tudo só leitura.
+  // Aceita só o número do chamado (série e OS vêm do cartão) ou série + OS.
+  let janelaChamadoOs = { pedido: 0, gatilho: null, chamado: "" };
+  async function abrirJanelaChamadoOs({ chamado = "", serie = "", os = "" } = {}, gatilho = null) {
+    const pedido = janelaChamadoOs.pedido + 1;
+    janelaChamadoOs = { pedido, gatilho, chamado: String(chamado || "") };
+    const hostChamado = byId("chamado-os-janela-chamado");
+    const hostOs = byId("chamado-os-janela-os");
+    const linkF6 = byId("chamado-os-janela-f6");
+    hostChamado.replaceChildren(element("p", "ck-lista__vazio", "Carregando…"));
+    hostOs.replaceChildren();
+    linkF6.hidden = true;
+    app.abrirModalAcessivel("modal-chamado-os", "#chamado-os-janela-fechar", "fecharJanelaChamadoOs");
+    const cartao = chamado ? await app.cartaoChamadoSebraeLeitura?.(chamado) : null;
+    if (pedido !== janelaChamadoOs.pedido) return;
+    if (cartao) hostChamado.replaceChildren(cartao);
+    else if (chamado) renderEmpty(hostChamado, "Chamado não encontrado na aba Chamados (F5).");
+    else hostChamado.replaceChildren();
+    const alvo = { serie: String(serie || cartao?.dataset.serie || ""), os: String(os || cartao?.dataset.os || "") };
+    if (!alvo.os) return renderEmpty(hostOs, "Nenhuma OS vinculada por série na importação atual.");
+    let relatorio = null;
+    const section = dataPanels()?.montarTabelaOs?.(hostOs, {
+      semBusca: true, soOs: alvo, somenteLeitura: true,
+      aoCarregar: report => { relatorio = report; },
+      aoExpandirSerie: (serieLinha, cell) => renderTicketDetail(
+        (Array.isArray(relatorio?.chamados) ? relatorio.chamados : []).find(record => String(record.serie || "") === serieLinha),
+        cell, { snapshotId: relatorio?.snapshot_id || "", somenteLeitura: true }),
+    });
+    linkF6.hidden = false;
+    // Vai para a aba OS com a grafia da linha (série/OS como no relatório), senão com a pedida.
+    linkF6.onclick = () => {
+      const row = section?.querySelector("tbody tr[data-serial]");
+      fecharJanelaChamadoOs();
+      return abrirChamadoDaOs([], row?.dataset.serial || alvo.serie, row?.dataset.os || alvo.os);
+    };
+  }
+
+  function fecharJanelaChamadoOs() {
+    const { gatilho, chamado } = janelaChamadoOs;
+    janelaChamadoOs = { pedido: janelaChamadoOs.pedido + 1, gatilho: null, chamado: "" };
+    app.fecharModalAcessivel("modal-chamado-os");
+    byId("chamado-os-janela-chamado").replaceChildren();
+    byId("chamado-os-janela-os").replaceChildren();
+    // A F5 ou a F6 pode ter se redesenhado com a janela aberta: o foco volta ao botão equivalente.
+    if (gatilho && !gatilho.isConnected && gatilho.matches?.(".ticket-os-link-goto")) {
+      const args = gatilho.getAttribute("data-args");
+      [...document.querySelectorAll("button.ticket-os-link-goto")].find(botao => botao.getAttribute("data-args") === args)?.focus();
+    } else if (gatilho && !gatilho.isConnected && chamado) {
+      const artigo = [...document.querySelectorAll("article.sebrae-chamado[data-numero]")].find(item => item.dataset.numero === chamado);
+      const destino = artigo?.querySelector(".sebrae-chamado__os");
+      if (destino && !destino.closest("details:not([open])")) destino.focus();
+      else artigo?.closest("details")?.querySelector("summary")?.focus();
+    }
+  }
+
   // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
   function goBack(restoreFocus = true) {
     const target = previousTool;
@@ -2097,6 +2016,8 @@
     abrirComparacaoDaSerie,
     abrirChamadosDoEquipamento,
     abrirChamadoDaOs,
+    abrirJanelaChamadoOs,
+    fecharJanelaChamadoOs,
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     recarregarUnidadesCockpit: loadUnits,

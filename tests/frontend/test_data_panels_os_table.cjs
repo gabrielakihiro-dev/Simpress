@@ -21,6 +21,8 @@ let falhar = false;
 // Observações da aba OS: null faz o GET falhar (caixa só leitura); os PUTs ficam em putsObs.
 let observacoes = null;
 const putsObs = [];
+// Corpos do POST de usuários logados: a janela Chamado × OS pede só as séries dela.
+const corposUsuarios = [];
 const win = {
   document: doc,
   MutationObserver: class { observe() {} },
@@ -29,6 +31,7 @@ const win = {
   console: { warn() {} },
   fetch: async (url, options = {}) => {
     requests.push([options.method || "GET", url]);
+    if (url === "/api/equipamentos/usuarios-logados") corposUsuarios.push(JSON.parse(options.body));
     if (falhar) throw new Error("Failed to fetch");
     if (url === "/api/operacoes/chamados/observacoes") {
       if (options.method === "PUT") {
@@ -229,9 +232,10 @@ test("data-origem marca o vínculo do Dashboard e aria-invalid o número inváli
     assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-editor").dataset.origem, "dashboard");
     assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-editor").dataset.origem, undefined, "sem vínculo, sem origem");
 
-    const irF5 = linha("SN-SOR").querySelector("button.ticket-os-link-goto");
-    assert.equal(irF5.getAttribute("data-on-click"), "abrirChamadoSebraeNoF5");
-    assert.deepEqual(JSON.parse(irF5.getAttribute("data-args")), ["UTIC-2026-3290"]);
+    const janela = linha("SN-SOR").querySelector("button.ticket-os-link-goto");
+    assert.equal(janela.getAttribute("data-on-click"), "abrirJanelaChamadoOs");
+    assert.deepEqual(JSON.parse(janela.getAttribute("data-args")), [{ chamado: "UTIC-2026-3290", serie: "SN-SOR", os: "9002" }, "$this"]);
+    assert.equal(janela.getAttribute("aria-haspopup"), "dialog");
     assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-goto"), null, "sem vínculo, o prefixo não é link");
 
     const input = linha("SN-CONF").querySelector(".ticket-os-link-input");
@@ -395,4 +399,51 @@ test("Observação do andamento fica só leitura quando a leitura falha, sem der
   const caixa = section.querySelector('tbody tr[data-serial="SN-SOR"]').children.at(-1).querySelector("textarea");
   assert.equal(caixa.readOnly, true);
   assert.equal(section.querySelector(".sebrae-obs__feedback"), null);
+});
+
+test("soOs mostra só a OS pedida, fora dos filtros da F6, e pede o usuário só dessa série", async () => {
+  corposUsuarios.length = 0;
+  const { section, status } = await montar({ semBusca: true, soOs: { serie: "sn conf", os: "9001" } });
+  assert.deepEqual(visiveis(section), ["SN-CONF"]);
+  assert.equal(section.querySelectorAll("tbody tr[data-serial]").length, 1);
+  assert.equal(status.textContent, "1 OS · 1 série");
+  assert.equal(section.querySelector("[data-os-mais]"), null, "sem Carregar mais");
+  assert.equal(status.id || "", "", "não toma o id da contagem da F6");
+  assert.deepEqual(corposUsuarios, [{ series: ["SN-CONF"] }]);
+
+  panels.filtrarTabelaOs({ busca: "9002", relacao: "" });
+  assert.deepEqual(visiveis(section), ["SN-CONF"], "filtrarTabelaOs ignora a janela");
+  assert.equal(panels.seriesFiltradasOs().includes("SN-CONF"), false, "seriesFiltradasOs ignora a janela");
+  panels.filtrarTabelaOs({ busca: "" });
+});
+
+test("soOs sem a OS no relatório avisa que a série não foi encontrada", async () => {
+  const host = novoHost();
+  const section = panels.montarTabelaOs(host, { semBusca: true, soOs: { serie: "SN-CONF", os: "9002" } });
+  const status = section.querySelector(".ticket-summary-status");
+  await waitFor(() => status.textContent === "Série não encontrada na importação atual.");
+  assert.equal(section.querySelectorAll("tbody tr[data-serial]").length, 0);
+});
+
+test("somenteLeitura: OS em texto, observação só leitura e nada é gravado", async () => {
+  observacoes = [{ serie: "SN-SOR", os: "9002", observacao: "Peça pedida" }];
+  const putsAntes = requests.filter(([method]) => method === "PUT").length;
+  try {
+    const { section } = await montar({ semBusca: true, soOs: { serie: "", os: "9002" }, somenteLeitura: true });
+    const linha = section.querySelector('tbody tr[data-serial="SN-SOR"]');
+    assert.ok(linha, "sem série, liga pela OS única");
+    assert.equal(linha.querySelector("button.ticket-summary-order-link"), null);
+    assert.equal(linha.querySelector("span.ticket-summary-order-link").textContent, "9002");
+    assert.equal(section.querySelectorAll("button").length, 0, "nenhum botão de edição");
+    const caixa = linha.children.at(-1).querySelector("textarea");
+    assert.equal(caixa.readOnly, true);
+    assert.equal(caixa.value, "Peça pedida");
+    assert.equal(section.querySelector(".sebrae-obs__feedback"), null);
+    caixa.value = "Outro texto";
+    caixa.dispatchEvent({ type: "input" });
+    caixa.dispatchEvent({ type: "blur" });
+    await new Promise(resolve => setTimeout(resolve, 850));
+    assert.equal(putsObs.length, 0, "a janela não salva observação");
+    assert.equal(requests.filter(([method]) => method === "PUT").length, putsAntes);
+  } finally { observacoes = null; putsObs.length = 0; }
 });

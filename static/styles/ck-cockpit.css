@@ -860,6 +860,28 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-os__andamento-btn { display: block; text-align: left; }
 .ck-os tr[data-andamento] .ck-det-campos { grid-template-columns: minmax(80px, min(12rem, 34%)) minmax(0, 1fr); }
 
+/* Janela Chamado × OS (#modal-chamado-os): cartão do chamado (visual do F5) à esquerda e a OS (tabela da F6, sempre em cards) à direita; empilha abaixo de 900px. */
+#modal-chamado-os > .ck-dialogo { width: min(1200px, calc(100vw - 32px)); max-width: none; max-height: min(90vh, 960px); overflow-y: hidden; }
+#modal-chamado-os .chamado-os-janela__corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 4px; }
+#modal-chamado-os .chamado-os-janela__lado { min-width: 0; }
+@media (max-width: 899.98px) {
+  #modal-chamado-os .chamado-os-janela__corpo { grid-template-columns: minmax(0, 1fr); }
+}
+#modal-chamado-os .ck-tabela--cards, #modal-chamado-os .ck-tabela--cards tbody { display: block; }
+#modal-chamado-os .ck-tabela--cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#modal-chamado-os .ck-tabela--cards colgroup { display: none; }
+#modal-chamado-os .ck-tabela--cards tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+#modal-chamado-os .ck-tabela--cards td { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0; border: 0; }
+#modal-chamado-os .ck-tabela--cards td::before { content: attr(data-label); font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+#modal-chamado-os .ck-tabela--cards td.ck-td--largo { grid-column: 1 / -1; }
+#modal-chamado-os .ck-tabela--cards td.ck-td--sem-rotulo::before { display: none; }
+#modal-chamado-os .ck-tabela--cards .ck-td--dir { text-align: left; }
+#modal-chamado-os .chamado-os-janela__lado .ck-os-andamento { grid-template-columns: minmax(0, 1fr); }
+#modal-chamado-os .ck-os tbody td[data-label] { order: 5; }
+#modal-chamado-os .ck-os tbody td[data-label="Série"] { order: 1; }
+#modal-chamado-os .ck-os tbody td[data-label="OS"] { order: 2; }
+#modal-chamado-os .ck-os tbody td[data-label="Fonte"] { order: 3; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+
 /* Região 3F: Automação. Seletores com id vencem as regras legadas de cockpit-pages.css (#automacao-cards em grid de áreas). */
 .cockpit-shell #automacao-cards.ck-auto { display: grid; height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr) var(--largura-console); grid-template-rows: none; grid-template-areas: none; gap: 0; padding: 0; overflow: visible; }
 .cockpit-shell #automacao-cards > #automacao-andamento-painel.ck-console { grid-area: auto; display: flex; }
@@ -1357,7 +1379,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__feedback[data-estado="erro"]::before { content: "×"; font-weight: var(--peso-marca); }
 
 .sebrae-chamado__observacao { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-.sebrae-chamado__observacao .ck-campo__rotulo { color: var(--cor-texto-suave); }
+.sebrae-chamado__observacao .ck-campo__rotulo { position: relative; color: var(--cor-texto-suave); }
 .sebrae-chamado__observacao textarea.ck-entrada { min-height: 52px; resize: vertical; line-height: 1.4; font-size: var(--fs-sm); }
 .sebrae-obs__feedback { min-height: 16px; color: var(--cor-texto-mudo); font-size: var(--fs-xs); display: flex; align-items: center; gap: 6px; }
 .sebrae-obs__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
@@ -1810,73 +1832,73 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #cockpit-tickets-os .ck-os tbody td[data-label="Hostname"] { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
 
 /* Sinais da linha, sem JavaScript: faixa à esquerda (3+ dias e Sem data) e etiquetas geradas dos data-* que a tabela já grava */
-#cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] > td:first-child,
-#cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] > td:first-child { box-shadow: inset 3px 0 0 var(--cor-alerta-texto); }
-#cockpit-tickets-os .ck-os tbody td[data-label="Série"]::after,
-#cockpit-tickets-os .ck-os tbody td[data-label="OS"]::after {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="atrasados"] > td:first-child,
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="sem_data"] > td:first-child { box-shadow: inset 3px 0 0 var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="Série"]::after,
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"]::after {
   display: none; align-items: center; align-self: flex-start; width: max-content; max-width: 100%; height: 20px; margin-top: 4px; padding: 0 7px;
   border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto);
   font: var(--peso-medio) var(--fs-xs)/1 var(--fonte-corpo);
 }
-#cockpit-tickets-os .ck-os tbody tr[data-relacao="conferida"] td[data-label="Série"]::after { content: "Conferida"; display: flex; background: var(--cor-ok-fundo); color: var(--cor-ok-texto); } /* [TEXTO NOVO]: confirmar com relationLabels */
-#cockpit-tickets-os .ck-os tbody tr[data-relacao="divergente"] td[data-label="Série"]::after { content: "Divergente"; display: flex; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
-#cockpit-tickets-os .ck-os tbody tr[data-relacao="somente_simpress"] td[data-label="Série"]::after { content: "Só Simpress"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
-#cockpit-tickets-os .ck-os tbody tr[data-relacao="somente_oracle"] td[data-label="Série"]::after { content: "Só Oracle"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
-#cockpit-tickets-os .ck-os tbody tr[data-triagem="atrasados"] td[data-label="OS"]::after { content: "3+ dias"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
-#cockpit-tickets-os .ck-os tbody tr[data-triagem="sem_data"] td[data-label="OS"]::after { content: "Sem data"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="conferida"] td[data-label="Série"]::after { content: "Conferida"; display: flex; background: var(--cor-ok-fundo); color: var(--cor-ok-texto); } /* [TEXTO NOVO]: confirmar com relationLabels */
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="divergente"] td[data-label="Série"]::after { content: "Divergente"; display: flex; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="somente_simpress"] td[data-label="Série"]::after { content: "Só Simpress"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="somente_oracle"] td[data-label="Série"]::after { content: "Só Oracle"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="atrasados"] td[data-label="OS"]::after { content: "3+ dias"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="sem_data"] td[data-label="OS"]::after { content: "Sem data"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 
 /* ---------- 8. Manual × automático ---------- */
 /* Tudo na tabela vem das importações (Oracle, Simpress, Endpoint). A coluna Chamado é preenchimento manual. */
-#cockpit-tickets-os .ck-os thead th:nth-child(6)::after {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os thead th:nth-child(6)::after {
   content: "Manual"; /* [TEXTO NOVO] */
   display: inline-flex; align-items: center; height: 16px; margin-left: 6px; padding: 0 5px; vertical-align: 1px;
   border: 1px solid var(--cor-destaque); border-radius: var(--raio-sm); color: var(--cor-destaque-texto);
   font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase;
 }
-#cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { background: var(--cor-campo); }
-#cockpit-tickets-os .ck-os .ticket-os-link-controls { flex-wrap: wrap; gap: 6px; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="Chamado"] { background: var(--cor-campo); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-controls { flex-wrap: wrap; gap: 6px; }
 /* vazio: campo tracejado, ações escondidas até o foco */
-#cockpit-tickets-os .ck-os .ticket-os-link-input { flex: 0 0 5rem; border-style: dashed; background: var(--cor-superficie); }
-#cockpit-tickets-os .ck-os .ticket-os-link-input:focus { border-style: solid; }
-#cockpit-tickets-os .ck-os .ticket-os-link-save,
-#cockpit-tickets-os .ck-os .ticket-os-link-remove { display: none; }
-#cockpit-tickets-os .ck-os .ticket-os-link-form:focus-within .ticket-os-link-save,
-#cockpit-tickets-os .ck-os .ticket-os-link-form:focus-within .ticket-os-link-remove,
-#cockpit-tickets-os .ck-os tr:hover .ticket-os-link-remove { display: inline-flex; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-input { flex: 0 0 5rem; border-style: dashed; background: var(--cor-superficie); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-input:focus { border-style: solid; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-save,
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-remove { display: none; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-form:focus-within .ticket-os-link-save,
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-form:focus-within .ticket-os-link-remove,
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tr:hover .ticket-os-link-remove { display: inline-flex; }
 @media (hover: none) {
-  #cockpit-tickets-os .ck-os .ticket-os-link-save,
-  #cockpit-tickets-os .ck-os .ticket-os-link-remove { display: inline-flex; }
+  :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-save,
+  :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-remove { display: inline-flex; }
 }
 /* salvo (existe "Remover vínculo"): valor travado visualmente em verde */
-#cockpit-tickets-os .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
   border-style: solid; border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); font-weight: var(--peso-medio);
 }
-#cockpit-tickets-os .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-ok-texto); }
-#cockpit-tickets-os .ck-os .ticket-os-link-remove:hover { color: var(--cor-erro-texto); }
-#cockpit-tickets-os .ck-os .ticket-os-link-input[aria-invalid="true"] { border-style: solid; border-color: var(--cor-erro-texto); background: var(--cor-erro-fundo); }
-#cockpit-tickets-os .ck-os .ticket-os-link-save[aria-busy="true"] { opacity: .6; cursor: progress; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-ok-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-remove:hover { color: var(--cor-erro-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-input[aria-invalid="true"] { border-style: solid; border-color: var(--cor-erro-texto); background: var(--cor-erro-fundo); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-save[aria-busy="true"] { opacity: .6; cursor: progress; }
 /* vindo do Dashboard (precisa de data-origem="dashboard" em .ticket-os-link-editor; o manual vence) */
-#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-input {
   border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto);
 }
-#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-destaque-texto); }
-#cockpit-tickets-os .ck-os .ticket-os-link-editor[data-origem="dashboard"]::after {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-destaque-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-editor[data-origem="dashboard"]::after {
   content: "Automático · Dashboard"; /* [TEXTO NOVO] */
   display: block; margin-top: 4px; font-size: var(--fs-xs); color: var(--cor-destaque-texto);
 }
 
 /* ---------- 9. Andamento: botão com seta e painel em duas colunas ---------- */
-#cockpit-tickets-os .ck-os__andamento-btn { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: var(--fs-xs); }
-#cockpit-tickets-os .ck-os__andamento-btn::before {
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os__andamento-btn { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: var(--fs-xs); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os__andamento-btn::before {
   content: ""; flex: none; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
   transform: rotate(-45deg); transition: transform var(--duracao) var(--curva);
 }
-#cockpit-tickets-os .ck-os__andamento-btn[aria-expanded="true"]::before { transform: rotate(45deg); }
-#cockpit-tickets-os .ck-os tbody tr[data-andamento] > td.ck-td--largo { background: var(--cor-superficie-funda); box-shadow: inset 3px 0 0 var(--cor-destaque); }
-#cockpit-tickets-os .ck-os-andamento { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px 28px; }
-#cockpit-tickets-os .ck-os-andamento > * { min-width: 0; margin-top: 0; }
-#cockpit-tickets-os .ck-os-andamento__dados { display: flex; flex-direction: column; gap: 12px; }
-#cockpit-tickets-os .ck-os-andamento__dados > * { margin-top: 0; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os__andamento-btn[aria-expanded="true"]::before { transform: rotate(45deg); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-andamento] > td.ck-td--largo { background: var(--cor-superficie-funda); box-shadow: inset 3px 0 0 var(--cor-destaque); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px 28px; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento > * { min-width: 0; margin-top: 0; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento__dados { display: flex; flex-direction: column; gap: 12px; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento__dados > * { margin-top: 0; }
 @media (min-width: 1200px) {
   #cockpit-tickets-os .ck-os-andamento__tempo { padding-left: 28px; border-left: 1px solid var(--cor-borda-suave); }
 }
@@ -2120,20 +2142,3 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* Usuário e Nome em linhas separadas: o .logged-user-row do app é inline-flex e as duas linhas ficavam lado a lado ("Usuário: xNome: y") */
 #comparacao-planilhas-conteudo .logged-user > .logged-user-row { display: flex; }
 #comparacao-planilhas-conteudo .logged-user > .logged-user-row + .logged-user-row { margin-top: 2px; }
-
-/* ---------- Chamados × OS (painel chamados-os; abre pelo F5 e pelo F6) ----------
-   Só leitura. Desktop: tabela com os grupos Chamado | OS; abaixo de 1200 px vira cartões (.ck-tabela--cards).
-   Sem transição própria: nada anima aqui, então não há o que desligar em prefers-reduced-motion. */
-.ck-chos { min-width: 0; margin-top: 12px; }
-.ck-chos__tabela thead tr:first-child th { border-bottom-color: var(--cor-borda-suave); color: var(--cor-texto); }
-.ck-chos__tabela td { vertical-align: top; }
-.ck-chos__celula { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; overflow-wrap: anywhere; }
-.ck-chos__titulo { flex-basis: 100%; min-width: 0; color: var(--cor-texto-mudo); font-size: var(--fs-sm); }
-.ck-chos .ck-nota { flex-basis: 100%; margin: 0; }
-/* Mesmo visual dos indicadores Manual / Automático · Dashboard da aba OS (F6). */
-.ck-chos__vinculo[data-vinculo="manual"] { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border: 1px solid var(--cor-destaque); border-radius: var(--raio-sm); color: var(--cor-destaque-texto); font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase; }
-.ck-chos__vinculo[data-vinculo="dashboard"] { flex-basis: 100%; font-size: var(--fs-xs); color: var(--cor-destaque-texto); }
-@media (pointer: coarse) {
-  .ck-chos .ck-link-btn, #cockpit-chamados-os-busca { min-height: 44px; }
-  #cockpit-chamados-os-mais .ck-btn { min-height: 44px; }
-}

@@ -298,7 +298,7 @@
       let carregada = false;
       const series = new Set();
       osExternas.forEach((st, section) => {
-        if (!section.isConnected || !(st.renderizada || section.dataset.estado === "vazio")) return;
+        if (st.soOs || !section.isConnected || !(st.renderizada || section.dataset.estado === "vazio")) return;
         carregada = true;
         const termo = textoOs(st.busca.trim());
         section.querySelectorAll("tbody tr[data-serial]").forEach(item => { if (casaOs(st, termo, item)) series.add(item.dataset.serial); });
@@ -308,6 +308,7 @@
 
     function filtrarTabelaOs(filtro = {}) {
       osExternas.forEach((st, section) => {
+        if (st.soOs) return; // janela Chamado × OS: mostra só a OS pedida, sem filtro da F6
         const antes = [st.busca, st.relacao, st.triagem, st.atencao].join("|");
         if ("busca" in filtro) {
           st.busca = String(filtro.busca || "");
@@ -338,9 +339,11 @@
       status.setAttribute("aria-live", "polite");
       // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). aoExpandirSerie(serie, celula) preenche o "Andamento";
       // grupoSerie(chamado) devolve o grupo de triagem da série (data-triagem); aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
+      // soOs { serie, os }: só essa OS (janela Chamado × OS), fora dos filtros da F6; somenteLeitura: sem edição nem autosave.
       const st = {
         busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, carregada: false,
         aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
+        soOs: opcoes.soOs || null, somenteLeitura: Boolean(opcoes.somenteLeitura),
       };
       const head = el("div", "ck-cartao__cab");
       head.append(title, status);
@@ -358,7 +361,7 @@
       section.append(head);
       osExternas.set(section, st);
       host.append(section);
-      idLivre(status, "ck-os-contagem");
+      if (!st.soOs) idLivre(status, "ck-os-contagem");
       refreshTicketSummary(false);
       return section;
     }
@@ -381,6 +384,22 @@
       return String(value || "").replace(/\s+/g, "").toUpperCase();
     }
 
+    // Janela Chamado × OS (mesmo critério de chamados-os-model.js): MacBook, a outra grafia só sem a série exata;
+    // sem série (ou série fora do relatório), pela OS só se ela está em uma única série. seriesRelatorio: chaves de todas as séries do relatório.
+    function soEssaOs(records, { serie, os }, seriesRelatorio) {
+      const alvo = orderKey(os);
+      const chave = serialKey(serie);
+      const outra = chave.startsWith("S") ? chave.slice(1) : `S${chave}`;
+      const achada = !chave ? "" : seriesRelatorio.has(chave) ? chave : seriesRelatorio.has(outra) ? outra : "";
+      let registro = achada ? records.find(record => serialKey(record.serie) === achada) : null;
+      if (!achada) {
+        const comOs = records.filter(record => record.ordens.some(order => orderKey(order.os) === alvo));
+        if (new Set(comOs.map(record => serialKey(record.serie))).size === 1) registro = comOs[0];
+      }
+      const ordens = registro ? registro.ordens.filter(order => orderKey(order.os) === alvo) : [];
+      return ordens.length ? [{ ...registro, ordens }] : [];
+    }
+
     function ticketOsLinkKey(record) {
       return JSON.stringify([record.fonte, serialKey(record.serie), orderKey(record.os)]);
     }
@@ -392,13 +411,19 @@
     const feedbackOs = (node, texto, situacao = "") => { node.textContent = texto; node.dataset.estado = situacao; };
 
     // notas: { itens: Map(chave → texto salvo), seq } ou null quando a leitura falhou (caixa só leitura).
-    function renderOsObservacao(serie, os, notas) {
+    function renderOsObservacao(serie, os, notas, somenteLeitura = false) {
       const textarea = el("textarea", "ck-entrada");
       textarea.rows = 2;
       textarea.maxLength = 4000;
       textarea.setAttribute("aria-label", "Observação do andamento");
       const key = osObsKey(serie, os);
       let reg = osObs.get(key);
+      // Só leitura (janela Chamado × OS): não entra em osObs, para não tomar a caixa da F6 nem salvar nada.
+      if (somenteLeitura) {
+        textarea.readOnly = true;
+        textarea.value = notas?.itens.get(key) ?? reg?.enviado ?? "";
+        return [textarea];
+      }
       if (notas) {
         const salvo = notas.itens.get(key) || "";
         if (!reg) osObs.set(key, reg = { texto: salvo, enviado: salvo, seq: 0, emVoo: 0, timer: 0, fila: null });
@@ -601,15 +626,16 @@
       const year = Number(saved?.ano) || new Date().getFullYear();
       const label = el("label", "ck-sr ticket-os-link-label", "Número do chamado UTIC");
       const controls = el("div", "ck-utic ticket-os-link-controls");
-      // Vínculo salvo: o prefixo vira botão que abre o chamado na aba Chamados (F5); o campo continua editável.
+      // Vínculo salvo: o prefixo vira botão que abre a janela Chamado × OS (chamado da F5 + esta OS); o campo continua editável.
       const prefix = el(saved?.numero ? "button" : "span", "ticket-os-link-prefix", `UTIC-${year}-`);
       if (saved?.numero) {
         const chamado = `UTIC-${year}-${saved.numero}`;
         prefix.className = "ck-link-btn ticket-os-link-prefix ticket-os-link-goto";
         prefix.type = "button";
-        prefix.setAttribute("aria-label", `Abrir o chamado ${chamado} na aba Chamados (F5)`);
-        prefix.setAttribute("data-on-click", "abrirChamadoSebraeNoF5");
-        prefix.setAttribute("data-args", JSON.stringify([chamado]));
+        prefix.setAttribute("aria-label", `Abrir o chamado ${chamado} e a OS ${record.os} na janela Chamado × OS`);
+        prefix.setAttribute("aria-haspopup", "dialog");
+        prefix.setAttribute("data-on-click", "abrirJanelaChamadoOs");
+        prefix.setAttribute("data-args", JSON.stringify([{ chamado, serie: record.serie, os: record.os }, "$this"]));
       }
       const input = el("input", "ck-entrada ck-entrada--sm ticket-os-link-input");
       input.type = "text";
@@ -672,7 +698,7 @@
       const externa = osExternas.get(section);
       if (externa) { externa.renderizada = records.length > 0; externa.falhaUsuarios = Boolean(userFailure); }
       if (!records.length) {
-        status.textContent = "Nenhuma OS vinculada por série na importação atual.";
+        status.textContent = externa?.soOs ? "Série não encontrada na importação atual." : "Nenhuma OS vinculada por série na importação atual.";
         section.setAttribute("aria-busy", "false");
         section.dataset.estado = "vazio";
         section.querySelector(".ticket-summary-content")?.remove();
@@ -728,9 +754,12 @@
           // Um botão por série (na primeira OS) abre a linha extra com o andamento.
           if (externa?.aoExpandirSerie && orderIndex === 0) serieCell.append(renderAndamentoToggle(externa, record.serie));
           const osCell = cell("OS", "ck-mono");
-          const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
-          osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
-          osCell.append(osButton);
+          if (externa?.somenteLeitura) osCell.append(el("span", "ck-mono ticket-summary-order-link", order.os));
+          else {
+            const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
+            osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
+            osCell.append(osButton);
+          }
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
@@ -750,13 +779,13 @@
           });
           const descCell = cell("Descrição", "ck-td--largo");
           descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
-          cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas));
+          cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas, externa?.somenteLeitura));
           body.append(row);
         });
       });
       table.append(body);
       content.append(table);
-      if (externa) {
+      if (externa && !externa.soOs) {
         const mais = el("div", "sebrae-mais ck-os__mais");
         mais.dataset.osMais = "";
         mais.hidden = true;
@@ -777,7 +806,7 @@
       section.append(content);
       section.setAttribute("aria-busy", "false");
       section.dataset.estado = "pronto";
-      idLivre(table, "ck-os-tabela");
+      if (!externa?.soOs) idLivre(table, "ck-os-tabela");
       // Salvar um vínculo recria a tabela: reabre as linhas de andamento que estavam abertas.
       externa?.abertas.forEach(serie => {
         const toggle = [...table.querySelectorAll(".ck-os__andamento-btn")].find(btn => btn.dataset.serie === serie);
@@ -852,14 +881,21 @@
           .map(ticket => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
         const modelos = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
           .map(ticket => [serialKey(ticket?.serie), (Array.isArray(ticket?.simpress?.modelos) ? ticket.simpress.modelos : []).join(" ")]));
+        // Registros de cada seção: a da janela Chamado × OS fica só com a OS pedida.
+        const proprios = new Map(alvos.map(section => {
+          const st = osExternas.get(section);
+          return [section, st?.soOs ? soEssaOs(records, st.soOs, relacoes) : records];
+        }));
+        // Só janelas na carga: o usuário logado é pedido só para as séries delas.
+        const pedidas = [...new Set([...proprios.values()].flat().map(item => item.serie))];
         let users = {};
         let userFailure = false;
-        if (records.length) {
+        if (pedidas.length) {
           try {
             const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ series: [...new Set(records.map(item => item.serie))] }),
+              body: JSON.stringify({ series: pedidas }),
             });
             users = userData.usuarios || {};
           } catch (_) {
@@ -874,7 +910,7 @@
           st?.aoCarregar?.(report);
           const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
             .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
-          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos, modelos, notas);
+          renderTicketSummary(section, proprios.get(section) || records, users, links, !st?.somenteLeitura, userFailure, relacoes, grupos, modelos, notas);
         });
       } catch (error) {
         vivos().forEach(section => {
