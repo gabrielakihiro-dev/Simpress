@@ -1054,7 +1054,7 @@ def ux_entrar(page: "Page") -> bool:
         return False
     botao = page.locator("#loginAzID")
     if not visivel(botao):
-        botao = page.get_by_role("button", name=re.compile(r"acesso\s+time\s+simpress", re.IGNORECASE))
+        botao = page.get_by_role("button", name=re.compile(r"acesso\s+times?\s+simpress", re.IGNORECASE))
     if not visivel(botao):
         return False
     log("UX Simpress", "Tela de login: clicando em 'Acesso Time Simpress' com a conta conectada...")

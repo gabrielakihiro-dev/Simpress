@@ -61,8 +61,9 @@ O teste ao vivo da série de validação deve sempre usar simulação.
 Autorizado pelo usuário em 07/11/2026 (regras em `AGENTS.md`, seção "Ticket de Atualização Cadastral no UX").
 Depois de cada `Gerar Planilha` bem-sucedido, o Transporte abre o modal `#modal-ticket-ux` e chama
 `POST /api/ux/gerar-ticket/preparar` com o mesmo corpo de `/api/gerar-planilha` + `entrega_cep`; a planilha é
-regerada no servidor e vira o anexo. Mesmo Chrome de automação (CDP 9333), trava, `garantir_chrome` e login manual
-da abertura de chamados acima; aba própria (achada por `window.name`), sessão opaca de 30 min. Código em
+regerada no servidor e vira o anexo. Mesmo Chrome de automação (CDP 9333), trava, `garantir_chrome` e login
+da abertura de chamados acima (fora do login, `ux_entrar` clica uma vez em `Acesso Time(s) Simpress` e escolhe
+`gansouza@simpress.com.br`, sem senha nem MFA; pedido do usuário de 08/11/2026); aba própria (achada por `window.name`), sessão opaca de 30 min. Código em
 `domains/ux_ticket.py` (serviço, histórico) e `domains/ux_ticket_browser.py` (`PortalTicketUXChrome`).
 
 Passos nomeados (cada um com guarda de rota antes e depois):
@@ -75,8 +76,11 @@ Passos nomeados (cada um com guarda de rota antes e depois):
 3. `Incidente` (`input#selectIncidente`): `Atualização Cadastral`; `Motivo` (`input#selectMotivo`): `Alteração de
    Endereço ou Razão Social`. Cada `ng-select` exige uma única opção igual e relê o rótulo escolhido.
 4. `CEP` (`input#cep-novo-endereco`, só dígitos) → `Buscar meus Endereços` → `Meus Endereços` (`input#novo-endereco`)
-   lê todas as opções. O serviço só escolhe sozinho com exatamente uma opção igual à unidade de entrega; senão
-   devolve `endereco_ambiguo` com a lista e o usuário escolhe no modal (`/escolher-endereco`). Nunca se infere.
+   lê todas as opções; rótulos idênticos (o UX lista Irati duas vezes) viram uma opção só (08/11/2026). O serviço só escolhe sozinho quando sobra exatamente uma opção da unidade de entrega
+   (`enderecos_correspondentes`: logradouro + número, cidade e CEP; complemento do UX igual ao da unidade vence; sem
+   ele, só opções sem complemento; rótulos que só mudam maiúsculas/acentos ou bairro abreviado palavra por palavra,
+   como `AER`/`AEROPORTO`, contam como um endereço; 08/11/2026, 30/30 unidades na simulação real); senão devolve
+   `endereco_ambiguo` com a lista e o usuário escolhe no modal (`/escolher-endereco`).
 5. `CNPJ de instalação` (`input#atualizarCnpjInstalacao`) = CNPJ da entrega; `CNPJ de faturamento`
    (`input#atualizarCnpjFaturamento`) = `75.110.585/0001-00`; ambos relidos por dígitos.
 6. Registro: o único `textarea[placeholder="Nos conte, em detalhes, o que houve."]` recebe o texto escrito
