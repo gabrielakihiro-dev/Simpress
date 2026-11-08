@@ -261,15 +261,23 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 
 | Papel | Claude Code (plugin `model-super-power`) | Codex |
 |---|---|---|
-| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` |
-| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Sol |
+| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna |
+| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Terra |
 | Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra |
 | Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 4.6) | GPT-6 Luna, esforço `max` |
-| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6.1 Terra |
+| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6 Astra |
 
 - Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
 - O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
 - Trabalho independente que termina em algo próprio (branch, PR) vai para uma sessão separada, em seu próprio worktree.
+
+### Maestro no Codex
+
+- Esta seção adapta para Codex o maestro do [Claude Code Super Power](https://github.com/johnnyhelder/claude-code-super-power). O plugin e os comandos `/super-power:*` do repositório são exclusivos do Claude Code e não são carregados pelo Codex.
+- Use a skill local `$maestro-superpower` para aplicar o fluxo de orquestração e as preferências de modelo no Codex. O modelo preferido para a conversa principal é GPT-6.1 Sol, com esforço médio, alto ou extra high conforme a complexidade; a skill não troca o modelo da sessão.
+- A conversa principal atua como maestro: define o escopo, toma as decisões, coordena subagentes, integra o trabalho e faz a verificação final.
+- Para trabalho grande, use subagentes sucessivos com os papéis e modelos Codex da tabela acima, na sequência análise → implementação → revisão independente quando fizer sentido. Aguarde uma etapa terminar antes de iniciar a próxima.
+- Faça diretamente tarefas pequenas (um arquivo, uma busca, um comando ou uma edição curta). Ao delegar, forneça apenas o contexto necessário e peça uma conclusão objetiva; não delegue decisões nem a comunicação final com o usuário.
 
 ## Git
 
