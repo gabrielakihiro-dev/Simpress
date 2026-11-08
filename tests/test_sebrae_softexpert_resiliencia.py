@@ -310,6 +310,48 @@ class GuardPreCliqueTests(unittest.TestCase):
         self._confere(contexto)
         self.assertEqual(cliques, ["Incluir anexo"])  # só o "+" foi clicado, nunca o Enviar
 
+    def test_anexo_nunca_usa_o_campo_da_grade(self):
+        # A área "Arraste um arquivo" da grade sobe o PDF na hora, sem Enviar; sem o modal, nada é posto em campo nenhum.
+        campo_da_grade = mock.MagicMock()
+        sem_modal = mock.MagicMock()
+        sem_modal.filter.return_value.count.return_value = 0
+        frame = mock.MagicMock()
+        frame.locator.side_effect = lambda seletor: campo_da_grade if "file" in seletor else sem_modal
+        pagina = mock.MagicMock()
+        with (
+            mock.patch.object(S, "_ir_para_menu"),
+            mock.patch.object(S, "_botao_unico"),
+            mock.patch.object(S, "_frames", return_value=[frame]),
+            mock.patch.object(S, "_esperar", side_effect=lambda _p, condicao, _t: condicao()),
+            mock.patch.object(S, "clicar"),
+            mock.patch.object(R, "etapa_resiliente", side_effect=lambda etapa, _d: etapa()),
+        ):
+            with self.assertRaises(S.EtapaInstavelSX):
+                S._anexar_pdf(pagina, Path("anexo.pdf"), [])
+        campo_da_grade.set_input_files.assert_not_called()
+
+    def test_anexo_recusa_seletor_nativo_sem_modal(self):
+        # Se o + abrir o seletor de arquivo (campo da grade) em vez do modal, nada é escolhido nele.
+        seletor = mock.MagicMock()
+        sem_modal = mock.MagicMock()
+        sem_modal.filter.return_value.count.return_value = 0
+        frame = mock.MagicMock()
+        frame.locator.return_value = sem_modal
+        pagina = mock.MagicMock()
+        pagina.on.side_effect = lambda _evento, guardar: guardar(seletor)
+        with (
+            mock.patch.object(S, "_ir_para_menu"),
+            mock.patch.object(S, "_botao_unico"),
+            mock.patch.object(S, "_frames", return_value=[frame]),
+            mock.patch.object(S, "_esperar", side_effect=lambda _p, condicao, _t: condicao()),
+            mock.patch.object(S, "clicar"),
+            mock.patch.object(R, "etapa_resiliente", side_effect=lambda etapa, _d: etapa()),
+        ):
+            with self.assertRaises(S.SoftExpertErro) as contexto:
+                S._anexar_pdf(pagina, Path("anexo.pdf"), [])
+        self.assertNotIsInstance(contexto.exception, S.EtapaInstavelSX)  # não repete o +
+        seletor.set_files.assert_not_called()
+
     def test_confirmacao_de_finalizar(self):
         dialogo = mock.MagicMock()
         dialogo.inner_text.return_value = "Deseja finalizar a atividade?"

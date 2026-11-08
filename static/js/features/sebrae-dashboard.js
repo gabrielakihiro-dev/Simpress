@@ -81,7 +81,7 @@
     const leitura = item.leitura_softexpert || null;
     const texto = valor => String(valor ?? "").trim();
     return {
-      lido: Boolean(leitura),
+      lido: Boolean(leitura), naoEncontrado: !leitura && item.nao_encontrado_softexpert === true,
       titulo: texto(item.titulo) || texto(leitura?.titulo),
       solicitante: texto(item.usuario) || texto(leitura?.solicitante),
       descricao: texto(item.descricao) || texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
@@ -894,8 +894,8 @@
     /** Selo de leitura do resumo: só chamado com UTIC pode ser lido no SoftExpert; sem UTIC nada é prometido. */
     function seloLeitura(item, dados) {
       if (!NUMERO_UTIC.test(item.numero)) return null;
-      const selo = dom.createTextElement("span", "ck-badge sebrae-selo", dados.lido ? "Lido" : "Não lido");
-      selo.dataset.status = dados.lido ? "info" : "";
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo", dados.lido ? "Lido" : dados.naoEncontrado ? "Não encontrado" : "Não lido");
+      selo.dataset.status = dados.lido ? "info" : dados.naoEncontrado ? "erro" : "";
       return selo;
     }
 
@@ -958,8 +958,11 @@
         // Ainda não lido no SoftExpert: mostra a descrição da planilha Dashboard (coluna H) quando houver, só leitura.
         if (dados.descricao) detalhes.push(blocoDetalhe("Descrição", dados.descricao));
         if (NUMERO_UTIC.test(item.numero)) {
-          const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", "Ainda não lido no SoftExpert: use Ler chamados antigos.");
-          dica.dataset.leitura = "pendente";
+          // Não encontrado na última leitura (ex.: finalizado por outro técnico): o CSS pinta a linha para conferir depois.
+          const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", dados.naoEncontrado
+            ? "Não encontrado no SoftExpert na última leitura: pode ter sido finalizado por outro técnico. Confira depois."
+            : "Ainda não lido no SoftExpert: use Ler chamados antigos.");
+          dica.dataset.leitura = dados.naoEncontrado ? "nao_encontrado" : "pendente";
           notas.push(dica);
         }
       }
