@@ -119,6 +119,24 @@ class ExportarOracleRetryTests(unittest.TestCase):
         campo2.press_sequentially.assert_called_once()  # preenche o campo reaberto, não o antigo (campo1)
         page.close.assert_called_once()
 
+    def test_volta_ao_link_do_oracle_com_goto_e_nunca_recarrega(self):
+        # page.reload() na tela da Microsoft perde o SAMLRequest (AADSTS750054); a volta é sempre goto(ORACLE_URL).
+        page = unittest.mock.MagicMock()
+        with (
+            unittest.mock.patch.object(automacao, "esperar_visivel", return_value=False),
+            unittest.mock.patch.object(automacao, "reabrir_filtros_oracle", return_value=False),
+            unittest.mock.patch.object(automacao, "abrir_pelo_menu_oracle"),
+            unittest.mock.patch.object(automacao, "aguardar_login") as login,
+            unittest.mock.patch.object(automacao, "log"),
+        ):
+            with self.assertRaises(automacao.RotinaErro):
+                automacao.abrir_gestao_solicitacoes(page, tentativas=3)
+
+        page.reload.assert_not_called()
+        self.assertEqual(page.goto.call_count, 2)
+        page.goto.assert_called_with(automacao.ORACLE_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        self.assertEqual(login.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -264,6 +264,30 @@ Vale igual para o painel e para o `executar_automacao.bat`, porque os dois rodam
 - **Download vazio:** se outra conexão à porta 9333 trocar o destino dos downloads, o Chrome grava o arquivo direto na pasta dele e o Playwright recebe 0 bytes ou nenhum aviso. A rotina confere o arquivo (não vazio; XLSX/ZIP com assinatura de ZIP) e, nesses casos, usa a cópia gravada pelo Chrome a partir do clique, sem repetir a exportação. O arquivo vazio é apagado, e um arquivo inválido com conteúdo é renomeado para `.invalido`. A preparação dos lotes também ignora downloads de 0 bytes.
 - **Testes:** `tests/test_automacao_telas_browser.py` roda as exportações reais do UX e do Endpoint contra uma bancada local, num Chrome iniciado como o de automação, em janelas pequenas, médias e grandes. `SIMPRESS_TESTE_TODAS_TELAS=1` roda as 15 resoluções (de 500×400 a 3840×2160, com escalas de 125%, 150% e 200%), e `SIMPRESS_TESTE_COM_JANELA=1` mostra o Chrome em vez do modo headless.
 
+## Clique acidental: voltar ao mesmo link e retomar (07/11/2026)
+
+Pedido do usuário de 07/11/2026: se ele clicar ou mexer o mouse por acidente durante uma rotina (outro link, outro filtro, outra visão), a rotina volta ao endereço da etapa e retoma, em vez de falhar ou seguir com dado errado.
+
+- **Como funciona:** a etapa repetida (`etapa_resiliente`, até 3 tentativas) começa pelo `goto` do endereço da etapa e por `aguardar_login`. Oracle e UX nunca usam `page.reload` (AADSTS750054). Esgotadas as tentativas, a rotina para com a mensagem da última falha. Login, senha e MFA continuam com o usuário.
+- **Cliques irreversíveis nunca se repetem:** `Salvar edições` (apelidos no UX), `Enviar` do chamado no UX, `Finalizar` e `Enviar` do anexo no SoftExpert, `Replace` no SharePoint, `Conectar` do Controle remoto e `Duplicata` do Dashboard. Antes de cada um, `aguardar_estabilidade_pre_clique` espera até ~12 s o mouse parar e a conferência abaixo passar, e então clica uma única vez; se não passar, a rotina para sem clicar. O que cada conferência cobre:
+  - `Salvar edições`: a tela de equipamentos e o contrato.
+  - `Enviar` do chamado no UX: todos os campos relidos.
+  - `Finalizar`: botão habilitado e cabeçalho sem outro número de chamado.
+  - `Conectar`: motivo preenchido e a linha ou o detalhe do computador ainda na tela. Logo depois, o pedido é conferido de novo: se foi cancelado, ou se a base local mudou no fallback de MacBook, fecha o diálogo sem conectar.
+  - `Duplicata`: só o menu aberto. Um clique fora do menu o fecha, e então a rotina para sem clicar.
+  - `Replace` e `Enviar` do anexo: só a presença do botão, porque eles ficam em diálogos do próprio envio.
+- **Endpoint, inventário e verificar usuários (F4):** se a grade sair de `Todos os computadores` (por exemplo, um clique em `Computadores verificados`), volta a ela; se a aba sair da grade, volta ao mesmo endereço. Antes de exportar, limpa filtros preenchidos e confere o total da tela com o do arquivo (tolerância de 10%, mínimo 5).
+- **Endpoint na Home (F1):** a linha do computador é identificada pelo link achado pela série, não pela posição na grade. Se o hostname dessa linha mudar, `Controle remoto` para sem conectar. Se abrir o diálogo do motivo falhar, a nova tentativa fecha o menu ou o diálogo que estiver aberto (que pode ser de outra linha) e reabre pelo menu deste computador. `PowerShell no Endpoint` reabre a aba do terminal do zero e fecha a que sobrou; continua só inserindo o comando, sem Enter.
+- **Oracle:** volta pelo endereço (`goto`), nunca por recarregar.
+- **UX pedidos, equipamentos e apelidos (F4/F7):** fora da rota ou do contrato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, volta ao endereço, espera o login e seleciona o contrato de novo antes de pesquisar ou exportar. `Salvar edições` só clica com a tela e o contrato conferidos.
+- **Dashboard Sebrae (SharePoint):** fora da pasta `DASHBOARD SEBRAE`, volta a ela antes de baixar, de abrir o menu da duplicata, de conferir e de abrir o `Carregar`.
+- **Abrir chamado no UX (F1):** se o formulário sumir, volta a ele e preenche de novo; antes do `Enviar`, relê todos os campos. Com a OS já na tela ou em outra rota de solicitação, não navega (409), para não arriscar chamado duplicado.
+- **SoftExpert:** ver "Interferência durante a leitura da lista" em [sincronizar-chamados-sebrae.md](sincronizar-chamados-sebrae.md).
+- **Limites:**
+  - Nada disso foi executado nos sites reais; os testes usam páginas falsas e a bancada local.
+  - Na `Duplicata`, um clique no `...` de outro arquivo da mesma pasta durante a espera duplicaria esse arquivo: o SharePoint não liga o menu à linha. Só cria uma cópia; nada é apagado.
+  - Se a guarda do `Enviar` do chamado no UX abortar, o pedido fica como resultado incerto e bloqueia o reenvio até a conferência manual no UX.
+
 ## Ajustes depois de integrar os branches da automação
 
 - Conferir em `ScriptContract` os nomes reais da trava, do sinal, da pasta de logs, dos códigos `2`/`130` e das frases de login.

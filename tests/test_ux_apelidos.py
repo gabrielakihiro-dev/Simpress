@@ -191,8 +191,24 @@ class FluxoUxBrowserTests(unittest.TestCase):
                     if modo == "cancelar_apos_salvar" and pagina.evaluate("window.salvos > 0"):
                         raise automacao.RotinaCancelada("pedido durante a confirmação")
 
+                guarda_real = automacao.aguardar_estabilidade_pre_clique
+
+                def guarda(verificar, descricao, **kwargs):
+                    if modo == "contrato_na_guarda" and descricao.startswith("Salvar"):
+                        # Durante a espera antes de Salvar, o usuário troca o contrato no filtro (cursor parado).
+                        pagina.locator("#CodigosContratosFiltro").evaluate("e=>e.dataset.valor='99999'")
+                        with patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)):
+                            return guarda_real(verificar, descricao, espera_s=0.01, janelas=1)
+                    return guarda_real(verificar, descricao, **kwargs)
+
+                # A página local fica em about:blank: é o "mesmo link" da rotina neste teste.
                 with patch.object(automacao, "abrir_ux", return_value=pagina), patch.object(automacao, "registrar_erro"), patch.object(automacao, "log"), \
-                     patch.object(automacao, "verificar_cancelamento", side_effect=cancelar_apos_upload), patch.object(automacao, "UX_EDICOES_TIMEOUT_MS", 1000):
+                     patch.object(automacao, "verificar_cancelamento", side_effect=cancelar_apos_upload), patch.object(automacao, "UX_EDICOES_TIMEOUT_MS", 1000), \
+                     patch.object(automacao, "UX_EQUIPAMENTOS_URL", pagina.url), \
+                     patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                     patch.object(automacao, "voltar_ao_contrato_ux", wraps=automacao.voltar_ao_contrato_ux) as voltar:
+                    if modo == "login_expirado":  # o retorno ao link esperou o login 10 min e desistiu: não repete
+                        voltar.side_effect = automacao.RotinaErro("Tempo esgotado aguardando o login no UX Simpress.")
                     if modo == "ok":
                         automacao.atualizar_apelidos_ux(contexto, arquivo)
                     elif modo == "cancelar":
@@ -207,6 +223,10 @@ class FluxoUxBrowserTests(unittest.TestCase):
                 self.assertEqual(pagina.evaluate("window.salvos"), 1 if modo in ("ok", "confirmacao", "cancelar_apos_salvar") else 0)
                 if modo == "ok":
                     self.assertEqual(bytes(pagina.evaluate("window.recebido")), dados)
+                    # A abertura do editor (repetível) confere a tela e o contrato e retoma no mesmo link se preciso.
+                    voltar.assert_called_with(pagina, pagina.url)
+                if modo == "login_expirado":
+                    self.assertEqual(voltar.call_count, 1)
             finally:
                 browser.close()
 
@@ -214,9 +234,13 @@ class FluxoUxBrowserTests(unittest.TestCase):
         self.rodar()
 
     def test_falha_segura_antes_de_salvar(self):
-        for modo in ("contrato", "contrato_duplicado", "sem_upload", "save_duplicado", "arquivo"):
+        for modo in ("contrato", "contrato_duplicado", "sem_upload", "save_duplicado", "arquivo", "login_expirado"):
             with self.subTest(modo=modo):
                 self.rodar(modo)
+
+    def test_contrato_trocado_na_espera_antes_de_salvar_aborta_sem_salvar(self):
+        # Salvar edições nunca é repetido: a guarda só confere tela e contrato e aborta (RotinaErro, salvos == 0).
+        self.rodar("contrato_na_guarda")
 
     def test_nao_repete_salvar_quando_confirmacao_nao_chega(self):
         self.rodar("confirmacao")

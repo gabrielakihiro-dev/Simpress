@@ -1,4 +1,5 @@
 """Read-only, serial-scoped Endpoint lookup in a private Chrome tab."""
+import re
 import unicodedata
 from typing import Any, Collection
 from importlib import import_module
@@ -42,6 +43,10 @@ def consultar_grade(page: Any, automacao: Any, serial: str, macbook: bool, detai
             result: dict[str, Any] = {"status": "found", "serial": serial, "ultimo_logon": grid.valor_da_coluna(linhas[0], cab_usuario)}
             if valor != serial:
                 result["_fallback_mac"] = True
+            href = next((c.get("href") for c in linhas[0] if c.get("href")), "")
+            if href:  # identidade da linha para o controle remoto; uso interno, nunca sai na resposta
+                result["_href"] = href
+                result["_hostname"] = grid.valor_da_coluna(linhas[0], grid.achar_cabecalho(grade, grid.COLUNA_NOME))
             return result
     return {"status": "not_found", "serial": serial}
 
@@ -104,7 +109,10 @@ def consultar(serial: str, macbook: bool, details_serials: Collection[str] = ())
         setattr(automation, "_inicio_execucao", automation.time.time())
         with sync_playwright() as pw:
             page = _preparar_aba(pw)
-            return consultar_grade(page, automation, serial, macbook, details_serials)
+            result = consultar_grade(page, automation, serial, macbook, details_serials)
+            result.pop("_href", None)
+            result.pop("_hostname", None)
+            return result
 
 
 MOTIVO_CONTROLE_REMOTO = "acesso"
@@ -133,12 +141,45 @@ def _clicar_resiliente(acao: Any, descricao: str) -> None:
     automation.etapa_resiliente(_etapa, descricao)
 
 
-def _conectar_controle_remoto(page: Any) -> None:
-    page.locator(_ITEM_CONTROLE_REMOTO).first.click(timeout=10000)
-    page.locator('textarea[name="reasonMessage"]:visible').fill(MOTIVO_CONTROLE_REMOTO, timeout=15000)
-    page.locator("button.button-primary-form:visible", has_text="Conectar").click(timeout=10000)
+def _conectar_controle_remoto(page: Any, abrir_menu: Any, mesmo_contexto: Any, ainda_vale: Any = lambda: True) -> bool:
+    """Devolve False, sem clicar, se ``ainda_vale`` recusar logo antes do Conectar."""
+    motivo = page.locator('textarea[name="reasonMessage"]:visible')
+    conectar = page.locator("button.button-primary-form:visible", has_text="Conectar")
+    item = page.locator(_ITEM_CONTROLE_REMOTO)
+    tentativas = [0]
+
+    def _abrir_e_preencher() -> None:
+        # Reversível. Na 1ª vez o menu deste computador acabou de abrir; ao refazer, um menu ou diálogo visível
+        # pode ser de outra linha que o usuário abriu: fecha e reabre sempre pelo menu deste computador.
+        tentativas[0] += 1
+        if tentativas[0] > 1:
+            if motivo.count() or item.count():
+                page.keyboard.press("Escape")
+            abrir_menu()
+            item.first.click(timeout=10000)
+        elif not motivo.count():
+            if not item.count():
+                abrir_menu()
+            item.first.click(timeout=10000)
+        motivo.fill(MOTIVO_CONTROLE_REMOTO, timeout=15000)
+
+    _clicar_resiliente(_abrir_e_preencher, "Abrir o Controle remoto e preencher o motivo")
+
+    def _pronto() -> bool:
+        try:
+            return bool(conectar.count()) and motivo.input_value(timeout=2000) == MOTIVO_CONTROLE_REMOTO and mesmo_contexto()
+        except Exception:
+            return False
+
+    automation.aguardar_estabilidade_pre_clique(_pronto, "Conectar o controle remoto")
+    if not ainda_vale():  # o pedido foi cancelado ou a base mudou durante a espera: fecha o diálogo sem conectar
+        page.keyboard.press("Escape")
+        return False
+    # Irreversível: um único clique, fora de qualquer etapa que refaça.
+    conectar.click(timeout=10000)
     # Dá tempo de o clique ser processado; nada é fechado depois (o usuário continua a sessão).
     page.wait_for_timeout(2000)
+    return True
 
 
 def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str] = (), antes_de_conectar: Any = None) -> dict[str, Any]:
@@ -152,27 +193,58 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
             achado = consultar_grade(page, automation, serial, macbook, details_serials)
             if achado["status"] != "found":
                 return achado
-            # Última checagem antes do clique: o pedido ainda vale e, no fallback de MacBook, a base local não mudou.
+            # O pedido ainda vale e, no fallback de MacBook, a base local não mudou: confere agora e de novo logo antes do Conectar.
             fallback = bool(achado.get("_fallback_mac"))
-            if antes_de_conectar is not None and not antes_de_conectar(fallback):
-                return {"status": "ambiguous", "serial": serial, "origem": "base_local" if fallback else "pedido_cancelado"}
-            linha = page.locator(_LINHA).first
-            hostname = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
-            _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")
+            recusado = {"status": "ambiguous", "serial": serial, "origem": "base_local" if fallback else "pedido_cancelado"}
+
+            def _ainda_vale() -> bool:
+                return antes_de_conectar is None or bool(antes_de_conectar(fallback))
+
+            if not _ainda_vale():
+                return recusado
+            # Identidade pelo link da linha achada pela série, nunca pela posição na grade.
+            href = str(achado.get("_href") or "")
+            if not grid.HREF_DETALHE.match(href):
+                raise automation.RotinaErro(f"O link do computador da série {serial} não foi identificado na grade do Endpoint.")
+            link = f'a.anchor-text[href="{href}"]'
+            linha = page.locator(f"{_LINHA}:has({link})")
+            hostname = linha.first.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
+            if grid.normalizar(hostname) != grid.normalizar(achado.get("_hostname")):
+                raise automation.RotinaErro(
+                    f"A linha da série {serial} mudou no Endpoint ({hostname} em vez de {achado.get('_hostname')}); não abri o controle remoto.")
+
+            def _no_detalhe() -> bool:
+                return bool(re.search(re.escape(href) + r"(/|$)", page.url))
+
+            def _abrir_menu_na_grade() -> None:
+                if not linha.count():
+                    raise automation.EtapaInstavel(f"a linha de {hostname} não está mais na grade")
+                linha.first.locator(".resource-action--button").first.click(timeout=10000)
+
+            def _abrir_menu_na_pagina() -> None:
+                if not _no_detalhe():  # outro computador aberto ou ainda na grade: vai ao detalhe deste link
+                    if page.locator(link).count():
+                        page.locator(link).first.click(timeout=10000)
+                    else:
+                        page.goto(automation.ENDPOINT_URL.split("#")[0] + href, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+                    automation.acionar_quando_pronto(lambda: None, "A página do computador não abriu", confirmar=_no_detalhe)
+                page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000)
+
+            abrir_menu = _abrir_menu_na_grade
+            _clicar_resiliente(abrir_menu, "Abrir menu de ações do computador")
             if not _menu_com_controle_remoto(page):
                 # Monitor vermelho ou sem a opção: tenta o menu "Ações" da página do computador.
                 page.keyboard.press("Escape")
-                def _abrir_pagina_computador() -> None:
-                    if grid.URL_DETALHE.search(page.url):
-                        return  # tentativa anterior já navegou; o clique a seguir buscaria "linha" de novo, que não existe mais.
-                    linha.locator("a.anchor-text").first.click(timeout=10000)
-
-                _clicar_resiliente(_abrir_pagina_computador, "Abrir a página do computador")
-                _clicar_resiliente(lambda: page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000), "Abrir menu de ações na página do computador")
+                abrir_menu = _abrir_menu_na_pagina
+                _clicar_resiliente(abrir_menu, "Abrir menu de ações na página do computador")
                 if not _menu_com_controle_remoto(page):
                     page.keyboard.press("Escape")
                     return {"status": "offline", "serial": serial, "hostname": hostname}
-            _conectar_controle_remoto(page)
+            def _mesmo_contexto() -> bool:
+                return bool(linha.count()) or _no_detalhe()
+
+            if not _conectar_controle_remoto(page, abrir_menu, _mesmo_contexto, _ainda_vale):
+                return recusado
             return {"status": "connected", "serial": serial, "hostname": hostname}
 
 
@@ -200,17 +272,19 @@ def validar_comando(comando: str) -> str:
     return comando
 
 
-def _linhas_do_filtro(page: Any) -> list[tuple[str, bool, Any]]:
-    """(hostname, ícone 'Ao vivo', linha) de cada linha da grade; o ícone é só uma dica e pode estar defasado."""
+def _linhas_do_filtro(page: Any) -> list[tuple[str, bool, str]]:
+    """(hostname, ícone 'Ao vivo', link) de cada linha; o link identifica o computador mesmo se a grade se mexer."""
     saida = []
     for i in range(page.locator(_LINHA).count()):
         linha = page.locator(_LINHA).nth(i)
-        nome = linha.locator("a.anchor-text").first.inner_text(timeout=10000).strip()
+        ancora = linha.locator("a.anchor-text").first
+        nome = ancora.inner_text(timeout=10000).strip()
+        href = ancora.get_attribute("href", timeout=2000) or ""
         try:
             alt = linha.locator(".resource-action--button img").first.get_attribute("alt", timeout=2000) or ""
         except Exception:
             alt = ""
-        saida.append((nome, alt == "Ao vivo", linha))
+        saida.append((nome, alt == "Ao vivo", href))
     return saida
 
 
@@ -221,13 +295,13 @@ def _escolher_host(page: Any, hostname: str, explicito: bool) -> dict[str, Any]:
     if alvo is None:
         return {"status": "not_found", "hostname": hostname}
     if explicito or alvo[1]:
-        return {"hostname": alvo[0], "linha": alvo[2]}
+        return {"hostname": alvo[0], "href": alvo[2]}
     grid.limpar_filtro(page, automation, grid.COLUNA_NOME)
     grid.aplicar_filtro(page, automation, grid.COLUNA_NOME, _PREFIXO_FALLBACK_POWERSHELL)
     online = next((l for l in _linhas_do_filtro(page) if l[1]), None)
     if online is None:
         return {"status": "sem_host_online", "hostname": hostname, "hostname_padrao_offline": True}
-    return {"hostname": online[0], "linha": online[2], "hostname_padrao_offline": True}
+    return {"hostname": online[0], "href": online[2], "hostname_padrao_offline": True}
 
 
 def _texto_da_aba(aba: Any) -> str:
@@ -297,15 +371,32 @@ def _fechar_aba(aba: Any) -> None:
 
 def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: str, comando: str, usuario: str | None) -> dict[str, Any]:
     escolha = _escolher_host(page, hostname, explicito)
-    if "linha" not in escolha:
+    if "href" not in escolha:
         return escolha
-    usado, linha = escolha["hostname"], escolha["linha"]
+    usado, href = escolha["hostname"], escolha["href"]
+    if not grid.HREF_DETALHE.match(href):
+        raise automation.RotinaErro(f"O link do computador {usado} não foi identificado na grade do Endpoint; o PowerShell não foi aberto.")
+    linha = page.locator(f'{_LINHA}:has(a.anchor-text[href="{href}"])')
     extra = {"hostname_padrao_offline": True} if escolha.get("hostname_padrao_offline") else {}
-    _clicar_resiliente(lambda: linha.locator(".resource-action--button").first.click(timeout=10000), "Abrir menu de ações do computador")
-    _clicar_resiliente(lambda: page.locator(_ITEM_GERENTE).first.hover(timeout=10000), "Abrir Gerente do Sistema")
-    with page.context.expect_page(timeout=20000) as nova:
-        page.locator(_ITEM_POWERSHELL).first.click(timeout=10000)
-    aba = nova.value
+
+    def _abrir_aba() -> Any:
+        # Refeito do zero se falhar: aba nova que sobrar desta tentativa é fechada antes da próxima.
+        antes = list(page.context.pages)
+        try:
+            if not linha.count():
+                raise automation.EtapaInstavel(f"a linha de {usado} não está mais na grade")
+            linha.first.locator(".resource-action--button").first.click(timeout=10000)
+            page.locator(_ITEM_GERENTE).first.hover(timeout=10000)
+            with page.context.expect_page(timeout=20000) as nova:
+                page.locator(_ITEM_POWERSHELL).first.click(timeout=10000)
+            return nova.value
+        except Exception as erro:
+            for sobra in page.context.pages:
+                if sobra is not page and sobra not in antes:
+                    _fechar_aba(sobra)
+            raise automation.EtapaInstavel(str(erro)) from erro
+
+    aba = automation.etapa_resiliente(_abrir_aba, "Abrir o PowerShell do computador")
     conectado, erro = _preparar_terminal(aba, modo, usuario)
     if erro:
         _fechar_aba(aba)

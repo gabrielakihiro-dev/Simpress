@@ -94,6 +94,7 @@ Detalhes (passos, seletores, códigos de erro): `docs/operacao/automacao-chrome.
 - Importe os arquivos de OS somente pela pasta local `data/state/entrada_chamados`, sem formulários, API, HTTP/HTTPS nem mudança de permissões do Chrome. A conclusão é confirmada pelo `_resultado.json` com `status: concluido` e pelo histórico atualizado.
 - Se uma exportação (inclusive do Endpoint Central) for bloqueada, não tente contornar o bloqueio nem repita cliques às cegas. Use arquivo manual somente quando o usuário identificar sua origem.
 - Interrompa se o usuário disser "pare" ou "cancelar". Passos em `.claude/skills/rotina-os-chamados`; contas e rotina `login` em `docs/operacao/automacao-chrome.md`.
+- Clique acidental (07/11/2026, pedido do usuário): em todas as automações do Chrome (F4 e Home/F1), se a página sair do lugar, a etapa volta ao mesmo link (`goto`, nunca `reload` no Oracle e no UX) e retoma, até 3 vezes. Cliques irreversíveis (`Salvar edições`, `Enviar` do chamado UX, `Finalizar` e `Enviar` do anexo no SoftExpert, `Replace`, `Conectar`, `Duplicata`) nunca se repetem e só acontecem depois de `aguardar_estabilidade_pre_clique` passar pela conferência própria de cada um. No `Conectar`, o pedido é conferido de novo logo antes do clique. Detalhes em `docs/operacao/automacao-chrome.md`, seção "Clique acidental".
 
 ## Rotina de exportação de inventários
 

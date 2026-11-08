@@ -832,6 +832,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
+                patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             automacao.duplicar_dashboard_na_pasta(page)
         abrir.assert_called_once()
@@ -843,6 +844,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=copias), \
+                patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log:
             automacao.duplicar_dashboard_na_pasta(MagicMock())
         return "\n".join(str(c.args[1]) for c in log.call_args_list)
@@ -876,6 +878,7 @@ class EnviarDashboardTests(unittest.TestCase):
                 patch.object(automacao, "_quantos_dashboards_na_lista", return_value=1), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao.time, "time", side_effect=[0, 1, 99, 99]), \
+                patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             with self.assertRaisesRegex(automacao.RotinaErro, "não substituí"):
                 automacao.duplicar_dashboard_na_pasta(page)
@@ -1243,6 +1246,169 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(sebrae_fechar, "executar", return_value=0) as executar:
                 self.assertEqual(automacao.rodar_rotina_fechar(context, valor), 0)
             executar.assert_called_once_with(context, sys.modules[automacao.__name__], sem_finalizar=valor)
+
+
+class RetomadaNoMesmoLinkTests(unittest.TestCase):
+    """Clique acidental em outro link (ou troca de contrato): a etapa volta ao mesmo link e retoma."""
+
+    def _pagina_ux(self, url):
+        page = MagicMock()
+        page.url = url
+        page.goto.side_effect = lambda destino, **_: setattr(page, "url", destino)
+        campo = page.locator.return_value  # #CodigosContratosFiltro (o fake devolve o mesmo locator para todo seletor)
+        campo.count.return_value = 1
+        campo.input_value.return_value = automacao.CONTRATO_NOME
+        campo.get_attribute.return_value = automacao.CONTRATO
+        campo.locator.return_value.all_inner_texts.return_value = [f"Contrato: {automacao.CONTRATO_NOME}"]
+        return page, campo
+
+    def _rodar_ux(self, rotina, page, campo):
+        def selecionar(_pagina):  # a seleção real deixa o contrato certo no campo
+            campo.input_value.return_value = automacao.CONTRATO_NOME
+
+        with patch.object(automacao, "abrir_ux", return_value=page), \
+                patch.object(automacao, "selecionar_contrato_ux", side_effect=selecionar) as selecionar_mock, \
+                patch.object(automacao, "aguardar_login") as login, patch.object(automacao, "aguardar_estado"), \
+                patch.object(automacao, "exportar_com_download", return_value=Path("ux.xlsx")) as exportar, \
+                patch.object(automacao, "definir_pagina_ativa_para_recuperacao"), patch.object(automacao, "registrar_erro"), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                patch.object(automacao.time, "sleep"):
+            self.assertEqual(rotina(MagicMock()), Path("ux.xlsx"))
+        exportar.assert_called_once()
+        return selecionar_mock, login
+
+    def test_mesma_tela_ux_tolera_caixa_query_barra_e_index_mas_nao_outro_link(self):
+        # Falso "saiu da tela" travaria o Salvar edições e as exportações: só outro link conta.
+        base = "https://ux.simpress.com.br"
+        for url in ("/MeusEquipamentos/Index", "/MeusEquipamentos", "/meusequipamentos/index/?pagina=2", "/MeusEquipamentos/#topo"):
+            with self.subTest(url=url):
+                page, _ = self._pagina_ux(base + url)
+                self.assertTrue(automacao.ux_no_contrato(page, automacao.UX_EQUIPAMENTOS_URL))
+        page, _ = self._pagina_ux(automacao.UX_PEDIDOS_URL + "?status=aberto")
+        self.assertTrue(automacao.ux_no_contrato(page, automacao.UX_PEDIDOS_URL))
+        for url in ("/Dashboard", "/equipamentos/acompanhamento"):
+            with self.subTest(url=url):
+                page, _ = self._pagina_ux(base + url)
+                self.assertFalse(automacao.ux_no_contrato(page, automacao.UX_EQUIPAMENTOS_URL))
+
+    def test_equipamentos_volta_ao_link_e_ao_contrato_quando_o_usuario_abre_outra_tela(self):
+        page, campo = self._pagina_ux("https://ux.simpress.com.br/Dashboard")  # clicou em outro link do menu
+        selecionar, login = self._rodar_ux(automacao.exportar_ux_equipamentos, page, campo)
+        page.goto.assert_called_once_with(automacao.UX_EQUIPAMENTOS_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        self.assertEqual(selecionar.call_count, 2)
+        login.assert_called_once()
+        self.assertIs(login.call_args.kwargs["entrar"], automacao.ux_entrar)
+
+    def test_pedidos_refaz_contrato_e_busca_quando_o_contrato_muda_antes_do_excel(self):
+        page, campo = self._pagina_ux(automacao.UX_PEDIDOS_URL)
+        cliques = []
+
+        def clicar(*_args, **_kwargs):
+            cliques.append(1)
+            if len(cliques) == 1:  # logo depois de Buscar, o usuário troca o contrato no filtro
+                campo.input_value.return_value = "OUTRO CONTRATO"
+
+        page.get_by_role.return_value.filter.return_value.first.click.side_effect = clicar
+        selecionar, _ = self._rodar_ux(automacao.exportar_ux_pedidos, page, campo)
+        page.goto.assert_called_once_with(automacao.UX_PEDIDOS_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        self.assertEqual(selecionar.call_count, 2)
+        self.assertEqual(len(cliques), 3)  # Buscar, Buscar de novo no contrato certo, Baixar detalhes
+
+    def test_endpoint_volta_a_grade_de_todos_limpa_filtros_e_confere_o_total_da_tela(self):
+        from scripts import verificar_usuarios_endpoint as usuarios
+        page = MagicMock()
+        page.url = automacao.ENDPOINT_URL
+        page.goto.side_effect = lambda destino, **_: setattr(page, "url", destino)
+        ordem = []
+
+        def clicou_em_outro_link(_pagina):  # entre o login e a exportação o usuário abre outra tela do Endpoint
+            page.url = automacao.ENDPOINT_URL.replace("inventory/computers", "patch/missingpatches")
+        with patch.object(automacao, "nova_aba", return_value=page), patch.object(automacao, "endpoint_vigiar_avisos"), \
+                patch.object(automacao, "aguardar_login") as login, \
+                patch.object(automacao, "definir_pagina_ativa_para_recuperacao", side_effect=clicou_em_outro_link), \
+                patch.object(automacao, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("todos")), \
+                patch.object(automacao, "confirmar_modo_todos"), patch.object(automacao, "aguardar_estado"), \
+                patch.object(usuarios, "_limpar_caixas_preenchidas", side_effect=lambda *_: ordem.append("limpar")), \
+                patch.object(usuarios, "ler_grade", return_value={"total": 120, "carregando": False}), \
+                patch.object(automacao, "exportar_com_download", side_effect=lambda *_: ordem.append("baixar") or Path("ep.xlsx")), \
+                patch.object(automacao, "validar_xlsx_endpoint") as validar, patch.object(automacao, "registrar_erro"), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                patch.object(automacao.time, "sleep"):
+            self.assertEqual(automacao.exportar_endpoint(MagicMock()), Path("ep.xlsx"))
+        page.goto.assert_called_once_with(automacao.ENDPOINT_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        self.assertEqual(login.call_count, 2)
+        self.assertIs(login.call_args.kwargs["entrar"], automacao.endpoint_entrar)
+        self.assertEqual(ordem, ["todos", "limpar", "baixar"])
+        validar.assert_called_once_with(Path("ep.xlsx"), total_tela=120)
+
+    def _fora_da_pasta_ate_voltar(self, page):
+        """A linha do Dashboard só aparece depois do goto: o usuário tinha saído da pasta DASHBOARD SEBRAE."""
+        return patch.object(automacao, "esperar_visivel", side_effect=lambda *_: page.goto.called)
+
+    def test_dashboard_volta_a_pasta_antes_de_baixar(self):
+        page = MagicMock()
+        with patch.object(automacao, "nova_aba", return_value=page), patch.object(automacao, "aguardar_login") as login, \
+                patch.object(automacao, "definir_pagina_ativa_para_recuperacao"), patch.object(automacao, "registrar_erro"), \
+                self._fora_da_pasta_ate_voltar(page), patch.object(automacao, "log"), patch.object(automacao.time, "sleep"), \
+                patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=lambda p: Path("d.xlsx") if p.goto.called else None):
+            self.assertEqual(automacao.exportar_dashboard_sebrae(MagicMock()), Path("d.xlsx"))
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        self.assertEqual(login.call_count, 2)
+        self.assertIs(login.call_args.kwargs["entrar"], automacao.pasta_dashboard_entrar)
+
+    def test_enviar_volta_a_pasta_antes_de_baixar_e_conferir(self):
+        page = MagicMock()
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba", return_value=page), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta"), self._fora_da_pasta_ate_voltar(page), \
+                    patch.object(automacao, "baixar_dashboard_da_pasta", return_value=Path(pasta) / "baixado.xlsx"), \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint"), patch.object(automacao, "guardar_backup_do_dashboard"), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta"), patch.object(automacao, "log"), redirect_stdout(io.StringIO()):
+                self.assertEqual(automacao.rodar_rotina_enviar(MagicMock()), 0)
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+
+    def test_duplicata_volta_a_pasta_e_so_clica_uma_vez_depois_da_guarda(self):
+        page = MagicMock()
+        ordem = []
+        page.goto.side_effect = lambda *_a, **_k: ordem.append("goto")
+        duplicata = page.get_by_role.return_value.first
+        duplicata.click.side_effect = lambda *_a, **_k: ordem.append("clique")
+        contagens = iter([1, 2])
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+                patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), self._fora_da_pasta_ate_voltar(page), \
+                patch.object(automacao, "aguardar_login"), \
+                patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=lambda *_a: ordem.append("guarda")) as guarda, \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
+            automacao.duplicar_dashboard_na_pasta(page)
+        self.assertEqual(ordem, ["goto", "guarda", "clique"])  # a guarda só confere; o clique que cria a cópia é único
+        self.assertEqual(guarda.call_args.args[0], duplicata.is_visible)
+
+    def test_upload_volta_a_pasta_antes_de_abrir_o_carregar(self):
+        page = MagicMock()
+        ordem = []
+        page.goto.side_effect = lambda *_a, **_k: ordem.append("goto")
+        botao = MagicMock()
+        botao.click.side_effect = lambda *_a, **_k: ordem.append("carregar")
+
+        def esperar(_loc, ms):
+            if ms == 8000:  # já escolheu o arquivo: o resto do envio não importa aqui
+                raise automacao.RotinaErro("fim do teste")
+            return page.goto.called  # a linha do Dashboard só aparece depois do goto
+
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "esperar_visivel", side_effect=esperar), patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "_botao_enviar", return_value=botao), patch.object(automacao, "log"), \
+                    patch.object(automacao, "definir_pagina_ativa_para_recuperacao"):
+                with self.assertRaisesRegex(automacao.RotinaErro, "fim do teste"):
+                    automacao.enviar_arquivo_para_pasta(page, arquivo)
+        self.assertEqual(ordem, ["goto", "carregar"])
 
 
 if __name__ == "__main__":
