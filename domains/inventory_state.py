@@ -129,7 +129,9 @@ def _unit_identity_key(unit: Dict[str, Any]) -> str:
 
 
 def _cnpj_vote_key(cidade: Any, endereco: Any) -> Tuple[str, str]:
-    return tuple(unicodedata.normalize("NFKC", str(value or "")).strip().casefold() for value in (cidade, endereco))
+    def norm(value: Any) -> str:
+        return unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+    return norm(cidade), norm(endereco)
 
 
 def _stable_unit_source_key(unit: Dict[str, Any]) -> str:
