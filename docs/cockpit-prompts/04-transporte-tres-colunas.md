@@ -139,12 +139,14 @@ Mesmos `data-on-click="adicionarObsChamado"` e `data-args` atuais.
 
 #### Rodapé
 
-- ~~Botões **Copiar texto**, **Texto para Transporte** e o link **Abrir chamado**~~ (removidos em 07/11/2026: depois do download, **Gerar planilha** abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
+- Botão **Texto para Transporte** — `gerarTextoSolicitacaoTransporte`, texto com os endereços de retirada e entrega em `#modal-texto-transporte` (removido em 07/11/2026 e restaurado em 08/11/2026)
+- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Gerar planilha** abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
 - Botão **Gerar planilha** — ligado ao handler existente (`gerarPlanilhaExcel`)
 
 #### IDs preservados
 
 - `#textarea-resumo-preview` (pode alimentar a pré-visualização)
+- `#textarea-texto-transporte`
 - `#btn-gerar-planilha`
 - `#status-indicator`, `#status-summary`
 - Todos os `data-on-click` dos botões de ação

@@ -110,9 +110,11 @@ class AssistantUXTests(unittest.TestCase):
     def test_system_prompt_points_the_cadastral_ticket_to_transporte(self):
         from domains.assistant_chat import SYSTEM_PROMPT
         for trecho in ("Gerar Planilha", "Transporte (F2)", "Gerar ticket no UX", "Revisar e finalizar",
-                       "Você não abre nem finaliza esse ticket", "não tem mais o modelo \"Deslocamento\"",
-                       "\"Texto para Transporte\""):
+                       "Você não abre nem finaliza esse ticket", "O Registro já vem preenchido com o Texto para Transporte",
+                       "modelo de chamado \"Deslocamento\"", "botão \"Texto para Transporte\" da aba Transporte (F2)",
+                       "retirada e entrega"):
             self.assertIn(trecho, SYSTEM_PROMPT)
+        self.assertNotIn("não tem mais o modelo", SYSTEM_PROMPT)
 
     def test_other_message_while_preparing_cancels_it_and_goes_to_the_model(self):
         rotas = []
