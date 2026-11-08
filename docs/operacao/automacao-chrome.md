@@ -208,7 +208,7 @@ Pedido do usuário de 07/11/2026: se ele clicar ou mexer o mouse por acidente du
   - `Enviar` do chamado no UX: todos os campos relidos.
   - `Finalizar`: botão habilitado e cabeçalho sem outro número de chamado.
   - `Conectar`: motivo preenchido e a linha ou o detalhe do computador ainda na tela. Logo depois, o pedido é conferido de novo: se foi cancelado, ou se a base local mudou no fallback de MacBook, fecha o diálogo sem conectar.
-  - `Duplicata`: o menu aberto e a aba ainda na pasta do Dashboard.
+  - `Duplicata`: só o menu aberto. Um clique fora do menu o fecha, e então a rotina para sem clicar.
   - `Replace` e `Enviar` do anexo: só a presença do botão, porque eles ficam em diálogos do próprio envio.
 - **Endpoint, inventário e verificar usuários (F4):** se a grade sair de `Todos os computadores` (por exemplo, um clique em `Computadores verificados`), volta a ela; se a aba sair da grade, volta ao mesmo endereço. Antes de exportar, limpa filtros preenchidos e confere o total da tela com o do arquivo (tolerância de 10%, mínimo 5).
 - **Endpoint na Home (F1):** a linha do computador é identificada pelo link achado pela série, não pela posição na grade. Se o hostname dessa linha mudar, `Controle remoto` para sem conectar. Se abrir o diálogo do motivo falhar, a nova tentativa fecha o menu ou o diálogo que estiver aberto (que pode ser de outra linha) e reabre pelo menu deste computador. `PowerShell no Endpoint` reabre a aba do terminal do zero e fecha a que sobrou; continua só inserindo o comando, sem Enter.
