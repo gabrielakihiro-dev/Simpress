@@ -14,14 +14,16 @@ from fastapi.responses import StreamingResponse
 
 import openpyxl
 
-from core.errors import DomainBusyError
+from core.errors import DomainBusyError, DomainError
 from core.integrity import AtomicFileTransaction
+from domains.sebrae_dashboard import DashboardInvalido
 from domains.monthly_report import (
     ReportMonth,
     build_monthly_report,
     build_monthly_report_workbook,
     parse_report_month,
     report_filename,
+    sebrae_tickets_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,8 @@ class MonthlyReportServices:
     ticket_report_path: Callable[[], Path]
     today: Callable[[], date] = date.today
     now: Callable[[], datetime] = datetime.now
+    # Sources of the Chamados tab (F5) for the data route only; None = no Dashboard imported.
+    sebrae_sources: Callable[[], Optional[Dict[str, Any]]] = lambda: None
 
 
 def _read_ticket_report(path: Path) -> Dict[str, Any]:
@@ -63,6 +67,20 @@ def _build_report(services: MonthlyReportServices, month: ReportMonth) -> Dict[s
         ticket_report=_read_ticket_report(services.ticket_report_path()),
         generated_at=services.now(),
     )
+
+
+def _sebrae_section(services: MonthlyReportServices, month: ReportMonth) -> Optional[Dict[str, Any]]:
+    """Monthly count of the F5 tickets; a failure is reported in the section and never blocks the report."""
+    try:
+        sources = services.sebrae_sources()
+        return None if sources is None else sebrae_tickets_section(sources, month)
+    except DomainError as error:
+        return {"erro": str(error.detail)}
+    except DashboardInvalido as error:  # its message is written for the user
+        return {"erro": str(error)}
+    except Exception as error:  # noqa: BLE001 - any read failure of the F5 files stays inside this section
+        logger.warning("Chamados (F5) fora do relatório mensal: %s", type(error).__name__)
+        return {"erro": "Não foi possível ler os chamados da aba Chamados (F5)."}
 
 
 def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tuple[BytesIO, str]:
@@ -121,6 +139,7 @@ def create_monthly_report_router(services: MonthlyReportServices) -> APIRouter:
             "year": month.year, "month": month.month, "key": month.key, "label": month.label,
             "parcial": month.is_partial, "data_corte": month.end.isoformat(),
         }
+        report["sebrae"] = _sebrae_section(services, month)
         return jsonable_encoder(report)
 
     @router.get("/api/relatorio-mensal")

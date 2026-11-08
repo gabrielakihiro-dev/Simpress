@@ -38,6 +38,17 @@ function monthlyReport(month) {
       ],
       dados_insuficientes: [{ fonte: "Oracle", serie: "ABC123", identificadores: ["OS-1"], motivo: "Sem data" }],
     },
+    // Contagem do mês feita no servidor (etapa 2). 27206 (número antigo) não existe no F5: sem link.
+    // UTIC-2026-11 é chamado novo da busca, com série vazia: a tela completa pela série do F5 (SN-UTIC-11).
+    sebrae: {
+      abertos: 3, finalizados: 2, sem_data: 4,
+      linhas: [
+        { chave: "27206", chamado: "27206", titulo: "Chamado antigo", serie: "SN-ANTIGO", abertura: null, finalizacao: "2026-10-08", situacoes: ["Finalizado no mês"] },
+        { chave: "UTIC-2026-10", chamado: "UTIC-2026-10", titulo: "Notebook sem rede", serie: "SN-UTIC-10", abertura: "2026-10-12", finalizacao: null, situacoes: ["Aberto no mês"] },
+        { chave: "UTIC-2026-11", chamado: "UTIC-2026-11", titulo: "Monitor apagado", serie: "", abertura: "2026-10-02", finalizacao: null, situacoes: ["Aberto no mês"] },
+        { chave: "UTIC-2026-12", chamado: "UTIC-2026-12", titulo: "Já finalizado", serie: "SN-UTIC-12", abertura: "2026-10-01", finalizacao: "2026-10-20", situacoes: ["Aberto no mês", "Finalizado no mês"] },
+      ],
+    },
   };
 }
 
@@ -181,6 +192,7 @@ test("the Cockpit report detail keeps card rows on phones without horizontal scr
   const details = page.locator("#cockpit-monthly-details");
   await expect(details.locator('[data-rel-secao="os"] td[data-label="Série"]').first()).toHaveText("SN-OS-1");
   await expect(details.locator('[data-rel-secao="comp"] td[data-label="Local na Simpress"]').first()).toHaveText("Maringá");
+  await expect(details.locator('[data-rel-secao="sebrae"] td[data-label="Situação no mês"]').first()).toHaveText("Finalizado no mês");
   const { width } = page.viewportSize();
   const grid = (await details.locator(".ck-rel__base-grade").evaluate(el => getComputedStyle(el).gridTemplateColumns)).trim().split(/\s+/);
   expect(grid).toHaveLength(width < 1200 ? 1 : 3);
@@ -204,13 +216,27 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
   await expect(sebrae).toContainText("Situação atual");
   await expect(sebrae.locator(".ck-rel__numero").first()).toContainText("1");
   await expect(sebrae.locator(".ck-rel__numero").nth(1)).toContainText("2");
-  await page.locator("#cockpit-monthly-month").fill("2026-10");
-  await expect(sebrae.locator("tbody tr")).toHaveCount(2);
-  await expect(sebrae.locator("tbody tr").first()).toContainText("UTIC-2026-10");
+  // Contagem do mês (report.sebrae), depois da situação atual.
+  await expect(sebrae.locator("h4")).toHaveText("Com data em outubro de 2026");
+  await expect(sebrae.locator(".ck-rel__numero").nth(2)).toHaveText(/Abertos no mês\s*3/);
+  await expect(sebrae.locator(".ck-rel__numero").nth(3)).toHaveText(/Finalizados no mês\s*2/);
+  await expect(sebrae).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
+  await expect(sebrae).toContainText("Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.");
+  await expect(sebrae).not.toContainText("Só entram chamados com data conhecida");
+  await expect(sebrae.locator("tbody tr")).toHaveCount(4);
+  const old = sebrae.locator("tbody tr").first();
+  await expect(old).toContainText("27206");
+  await expect(old.getByRole("button", { name: /na aba Chamados \(F5\)/ })).toHaveCount(0);
+  await expect(old.getByRole("button", { name: "Abrir SN-ANTIGO na Home" })).toBeVisible();
+  const fresh = sebrae.locator("tbody tr", { hasText: "UTIC-2026-11" });
+  await expect(fresh.locator('td[data-label="Série"]')).toHaveText("SN-UTIC-11");
+  await expect(fresh.locator('td[data-label="Abertura"]')).toHaveText("02/10/2026");
   const both = sebrae.locator("tbody tr", { hasText: "UTIC-2026-12" });
   await expect(both).toContainText("Aberto no mês");
   await expect(both).toContainText("Finalizado no mês");
+  await expect(both.locator('td[data-label="Finalização"]')).toHaveText("20/10/2026");
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), situação atual: 1 novo · 2 antigos em aberto");
+  await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), com data em outubro de 2026: Abertos no mês 3 · Finalizados no mês 2 · Sem data de abertura ou de encerramento: 4 (fora da contagem)");
 
   await details.getByRole("button", { name: "Abrir no Resumo (F3)" }).click();
   await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
@@ -261,5 +287,31 @@ test("a Sebrae failure keeps the monthly report and explains it in the Chamados 
   await expect(page.locator('[data-rel-secao="sebrae"] .ck-nota--erro')).toHaveText("Estado do Sebrae ilegível.");
   await expect(page.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(2);
   await expect(page.locator("#cockpit-monthly-copy")).toBeEnabled();
-  await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("Chamados (F5)");
+  await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("Chamados (F5), situação atual");
+  // A contagem do mês vem do relatório, não do F5: continua na tela e na prévia, sem link para o F5.
+  await expect(page.locator('[data-rel-secao="sebrae"]')).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
+  await expect(page.locator('[data-rel-secao="sebrae"]').getByRole("button", { name: /na aba Chamados \(F5\)/ })).toHaveCount(0);
+  await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), com data em outubro de 2026: Abertos no mês 3");
+});
+
+test("a failed or missing month count keeps the current situation and the rest of the report", async ({ page }) => {
+  let sebrae = { erro: "Não foi possível ler o Dashboard importado." };
+  await page.route(/\/api\/relatorio-mensal\/dados(?:\?|$)/, route => route.fulfill({ json: { ...monthlyReport(new URL(route.request().url()).searchParams.get("mes")), sebrae } }));
+  await page.route("**/api/sebrae/novos", route => route.fulfill({ json: sebraeNovos() }));
+  await page.goto("/");
+  await openMonthlyReport(page);
+  const block = page.locator('[data-rel-secao="sebrae"]');
+  await expect(block.locator(".ck-nota--erro")).toHaveText("Não foi possível ler o Dashboard importado.");
+  await expect(block.locator(".ck-rel__numero")).toHaveCount(2);
+  await expect(block).toContainText("Chamados novos");
+  await expect(page.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(2);
+  await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), situação atual");
+  await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("com data em");
+
+  sebrae = null;
+  await page.locator("#cockpit-monthly-month").fill("2026-09");
+  await expect(block.locator("h4")).toHaveText("Com data em setembro de 2026");
+  await expect(block.locator(".ck-lista__vazio")).toHaveText("Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).");
+  await expect(block.locator(".ck-nota--erro")).toHaveCount(0);
+  await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("com data em");
 });

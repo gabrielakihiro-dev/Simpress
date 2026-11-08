@@ -111,7 +111,7 @@
   function displayCount(value) { return Number.isFinite(value) ? new Intl.NumberFormat("pt-BR").format(value) : "—"; }
 
   // Prévia copiável (Copiar resumo): mesmos números da tela e da XLSX; sem linhas "indisponível" (decisão de 07/11/2026).
-  // `sebrae`: resposta de GET /api/sebrae/novos (situação atual); null quando não carregou.
+  // `sebrae`: resposta de GET /api/sebrae/novos (situação atual); null quando não carregou. A contagem do mês vem de report.sebrae.
   function monthlyPreviewText(report, sebrae = null) {
     const month = report?.mes?.label || report?.mes?.key || "mês selecionado";
     const inventory = report?.inventario || {};
@@ -139,12 +139,17 @@
       `Sem correspondência — na Simpress: ${displayCount(counts["Sem correspondência — na Simpress"])}`,
       `Localidade divergente: ${displayCount(counts["Localidade divergente"])}`,
     ];
+    const ticketLines = [];
     if (sebrae && (sebrae.importado || sebrae.novos)) {
       const lists = sebraeOpenLists(sebrae);
       const novos = lists.novos.length;
       const antigos = lists.antigos.length;
-      lines.push("", `Chamados (F5), situação atual: ${displayCount(novos)} ${plural(novos, "novo", "novos")} · ${displayCount(antigos)} ${plural(antigos, "antigo", "antigos")} em aberto`);
+      ticketLines.push(`Chamados (F5), situação atual: ${displayCount(novos)} ${plural(novos, "novo", "novos")} · ${displayCount(antigos)} ${plural(antigos, "antigo", "antigos")} em aberto`);
     }
+    // Contagem do mês (report.sebrae); some com erro ou sem Dashboard importado.
+    const monthTickets = sebraeMonthCounts(report);
+    if (monthTickets) ticketLines.push(`Chamados (F5), com data em ${month}: Abertos no mês ${displayCount(monthTickets.abertos)} · Finalizados no mês ${displayCount(monthTickets.finalizados)} · Sem data de abertura ou de encerramento: ${displayCount(monthTickets.sem_data)} (fora da contagem)`);
+    if (ticketLines.length) lines.push("", ...ticketLines);
     lines.push(
       "",
       `Base atual (não muda com o mês): ${displayCount(inventory.total)} equipamentos em ${displayCount(inventory.unidades)} unidades`,
@@ -967,8 +972,8 @@
   }
 
   // ---- Relatório mensal (F8): layout operacional (07/11/2026) ----
-  // Ordem: Precisa de atenção → Movimento do mês → OS e pedidos → Pendências da comparação → Chamados (F5, situação atual)
-  // → Base atual → Prévia. Cada número aparece uma vez; os links só navegam (Home, OS, Resumo, Chamados), nada é gravado.
+  // Ordem: Precisa de atenção → Movimento do mês → OS e pedidos → Pendências da comparação → Chamados (F5: situação atual
+  // e contagem do mês, report.sebrae) → Base atual → Prévia. Cada número aparece uma vez; os links só navegam (Home, OS, Resumo, Chamados), nada é gravado.
   const MONTHLY_PAGE = 25;
   const MONTHLY_TOP_UNITS = 8;
   const monthlyView = { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false };
@@ -989,15 +994,6 @@
     if (!match) return "";
     const [, year, month, day, hour, minute] = match;
     return hour ? `${day}/${month}/${year} às ${hour}:${minute}` : `${day}/${month}/${year}`;
-  }
-
-  // Mês ("AAAA-MM") de uma data do Sebrae: "dd/mm/aaaa HH:mm" (colunas P/R, SoftExpert) ou ISO; sem data reconhecível, "".
-  function sebraeMonthKey(value) {
-    const text = String(value || "").trim();
-    const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
-    if (br) return `${br[3]}-${br[2].padStart(2, "0")}`;
-    const iso = /^(\d{4})-(\d{2})-\d{2}/.exec(text);
-    return iso ? `${iso[1]}-${iso[2]}` : "";
   }
 
   function plural(count, singular, pluralText) { return Number(count) === 1 ? singular : pluralText; }
@@ -1265,82 +1261,95 @@
     return { novos: (data?.novos?.formulario || []).filter(open), antigos: (data?.importado?.abertos || []).filter(open), finalizados };
   }
 
-  // Lista do mês: só chamados com data conhecida no mês: abertura (P dos novos, "Habilitada em" dos antigos já lidos)
-  // ou finalização feita pelo site. Um chamado aberto e finalizado no mesmo mês é uma linha só, com os dois selos.
-  function sebraeMonthRows(data, monthKey) {
-    const rows = new Map();
-    const row = (chave, base) => rows.get(chave) || rows.set(chave, { chave, abertura: "", finalizacao: "", situacoes: [], ...base }).get(chave);
-    const opened = (chave, base, date) => {
-      if (sebraeMonthKey(date) !== monthKey) return;
-      const item = row(chave, base);
-      item.abertura = date;
-      item.situacoes.unshift("Aberto no mês");
-    };
-    (data?.novos?.formulario || []).forEach(item => opened(item.numero, { numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }, item.linha?.P));
-    (data?.importado?.abertos || []).forEach(item => opened(item.numero, {
-      numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero,
-      titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K,
-    }, item.leitura_softexpert?.habilitada_em));
-    (data?.importado?.finalizados || []).forEach(item => {
-      const closed = item.encerrado_em || item.em;
-      if (sebraeMonthKey(closed) !== monthKey) return;
-      const entry = row(item.numero, { numero: item.numero, titulo: item.ficha?.titulo || "", serie: fichaSerial(item.ficha) });
-      entry.finalizacao = closed;
-      entry.situacoes.push("Finalizado no mês");
-    });
-    return [...rows.values()];
+  // Liga uma linha da contagem do mês (report.sebrae, chave do F8) aos dados do F5 já carregados.
+  // A chave do F8 nem sempre é a do F5: número antigo (5 dígitos) ou `linha:N` do F8 casam com o antigo `linha:N` do F5
+  // pelo texto da coluna C (`item.chamado`), só quando o resultado é único. `chaveF5` vazia = sem link.
+  function sebraeMonthMatch(row, data) {
+    const chave = String(row?.chave || "");
+    const chamado = String(row?.chamado || "").trim();
+    const novos = data?.novos?.formulario || [];
+    const abertos = data?.importado?.abertos || [];
+    const finalizados = data?.importado?.finalizados || [];
+    const serie = String(row?.serie || "").trim() || String(novos.find(item => item.numero === chave)?.linha?.K || "").trim();
+    let chaveF5 = "";
+    if (chave && !chave.startsWith("linha:") && [...novos, ...abertos, ...finalizados].some(item => item.numero === chave)) chaveF5 = chave;
+    else if (chamado) {
+      const old = /^\d{5}$/.test(chave);
+      const same = item => old ? /(?<!\d)\d{5}(?!\d)/.exec(String(item.chamado || ""))?.[0] === chave : String(item.chamado || "").trim() === chamado;
+      const found = abertos.filter(item => String(item.numero || "").startsWith("linha:") && same(item));
+      if (found.length === 1) chaveF5 = found[0].numero;
+    }
+    return { chaveF5, serie };
   }
 
-  function fichaSerial(ficha) {
-    const pair = (Array.isArray(ficha?.fatos) ? ficha.fatos : []).find(entry => Array.isArray(entry) && /^s[ée]rie$/i.test(String(entry[0] || "").trim()));
-    return pair ? String(pair[1] || "") : "";
+  // Números da contagem do mês (report.sebrae); null quando não há Dashboard importado ou a leitura falhou.
+  function sebraeMonthCounts(report) {
+    const data = report?.sebrae;
+    return data && !data.erro && Number.isFinite(data.abertos) ? data : null;
   }
 
-  function sebraeDateText(value) {
-    const text = String(value || "").trim();
-    return /^\d{4}-\d{2}-\d{2}/.test(text) ? monthlyDate(text) : (text.match(/^\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2})?/)?.[0] || "—");
-  }
-
-  function monthlySebraeSection(report) {
-    const section = monthlySection("sebrae", "Chamados (F5)", [monthlyBadge("Situação atual")]);
-    section.classList.add("ck-rel__atual");
+  function monthlySebraeCurrent(section) {
     if (monthlyView.sebraeErro) {
       section.append(element("p", "ck-nota ck-nota--erro", monthlyView.sebraeErro));
-      return section;
+      return true;
     }
     const data = monthlyView.sebrae;
-    if (!data?.importado && !data?.novos) {
-      section.append(element("p", "ck-lista__vazio", "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4)."));
-      return section;
-    }
+    if (!data?.importado && !data?.novos) return false;
     const lists = sebraeOpenLists(data);
-    const novos = lists.novos.length;
-    const antigos = lists.antigos.length;
     const totals = element("div", "ck-rel__sebrae-totais");
     totals.append(
-      monthlyNumbers([["Chamados novos", novos], ["Antigos em aberto", antigos]]),
+      monthlyNumbers([["Chamados novos", lists.novos.length], ["Antigos em aberto", lists.antigos.length]]),
       monthlyButton("Ver novos", () => openSebraeTab("novos")),
       monthlyButton("Ver antigos", () => openSebraeTab("antigos")),
     );
     section.append(totals);
-    const rows = sebraeMonthRows(data, report?.mes?.key || "");
+    return true;
+  }
+
+  // Duas partes independentes: "Situação atual" (GET /api/sebrae/novos) e a contagem do mês (report.sebrae, do servidor).
+  function monthlySebraeSection(report) {
+    const section = monthlySection("sebrae", "Chamados (F5)", [monthlyBadge("Situação atual")]);
+    section.classList.add("ck-rel__atual");
+    const empty = "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).";
+    const month = report?.sebrae;
+    const hasCurrent = monthlySebraeCurrent(section);
+    if (!hasCurrent) section.append(element("p", "ck-lista__vazio", empty));
+    if (!hasCurrent && !month) return section;
     section.append(element("h4", "ck-rel__cartao-titulo", `Com data em ${report?.mes?.label || "mês selecionado"}`));
-    section.append(element("p", "ck-rel__nota", "Só entram chamados com data conhecida: abertura (novos e antigos já lidos no SoftExpert) ou finalização feita pelo site."));
+    if (!month) {
+      section.append(element("p", "ck-lista__vazio", empty));
+      return section;
+    }
+    const counts = sebraeMonthCounts(report);
+    if (!counts) {
+      section.append(element("p", "ck-nota ck-nota--erro", month.erro || "Não foi possível contar os chamados do mês."));
+      return section;
+    }
+    const noDate = element("p", "ck-rel__nota", `Sem data de abertura ou de encerramento: ${displayCount(counts.sem_data)} `);
+    noDate.append(element("span", "ck-mudo", "(fora da contagem)"));
+    section.append(
+      monthlyNumbers([["Abertos no mês", counts.abertos], ["Finalizados no mês", counts.finalizados]]),
+      noDate,
+      element("p", "ck-rel__nota", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site."),
+    );
+    const rows = Array.isArray(counts.linhas) ? counts.linhas : [];
     if (!rows.length) {
       section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return section;
     }
     const shown = rows.slice(0, monthlyView.limiteSebrae);
     section.append(monthlyTable(["Chamado", "Título", "Série", "Abertura", "Finalização", "Situação no mês"], shown.map(row => {
-      const serial = singleSerial(row.serie);
+      const { chaveF5, serie } = sebraeMonthMatch(row, monthlyView.sebrae);
+      const serial = singleSerial(serie);
+      const number = String(row.chamado || "").trim() || "Sem UTIC";
       const situations = element("span", "ck-rel__selos");
-      row.situacoes.forEach(text => situations.append(monthlyBadge(text, text === "Finalizado no mês" ? "success" : "info")));
+      (row.situacoes || []).forEach(text => situations.append(monthlyBadge(text, text === "Finalizado no mês" ? "success" : "info")));
       return [
-        monthlyLink(row.numero || "—", `Abrir ${row.numero || "chamado"} na aba Chamados (F5)`, () => app.abrirChamadoSebraeNoF5?.(row.chave)),
+        chaveF5 ? monthlyLink(number, `Abrir ${number} na aba Chamados (F5)`, () => app.abrirChamadoSebraeNoF5?.(chaveF5)) : element("span", "ck-mono", number),
         row.titulo || "—",
-        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : "—",
-        row.abertura ? sebraeDateText(row.abertura) : "—",
-        row.finalizacao ? sebraeDateText(row.finalizacao) : "—",
+        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : element("span", "ck-mono", serie || "—"),
+        monthlyDate(row.abertura) || "—",
+        monthlyDate(row.finalizacao) || "—",
         situations,
       ];
     })), monthlyMore(shown.length, rows.length, () => {
@@ -1958,8 +1967,7 @@
     comparisonMetrics,
     aliasMetrics,
     monthlyPreviewText,
-    sebraeMonthKey,
     sebraeOpenLists,
-    sebraeMonthRows,
+    sebraeMonthMatch,
   };
 });

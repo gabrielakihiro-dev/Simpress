@@ -109,6 +109,7 @@ from domains.coverage_store import manutencao_dos_chamados
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
+from domains.monthly_report import sebrae_sources_from_state
 from routers.monthly_report import (
     MonthlyReportServices,
     create_monthly_report_router,
@@ -2599,6 +2600,7 @@ _monthly_report_services = MonthlyReportServices(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=comparison_history_for_display,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
+    sebrae_sources=lambda: sebrae_sources_from_state(STATE_DIR),
 )
 app.include_router(create_monthly_report_router(_monthly_report_services))
 

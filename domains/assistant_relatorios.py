@@ -157,12 +157,27 @@ def _comparacao(api: SimpressApi) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     return evento, _dict(_dict(detalhe.get("evento")).get("comparacao"))
 
 
+def _chamados_f5_mensal(sebrae: Any) -> List[List[Any]]:
+    """Monthly count of the Chamados tab (F5); only the data route has it, never the monthly XLSX."""
+    bloco, origem = "Chamados (F5)", "Dashboard importado, chamados novos e finalizados pelo site."
+    if sebrae is None:
+        return [[bloco, "Contagem mensal", "Nenhum Dashboard importado na aba Automação (F4).", origem]]
+    sebrae = _dict(sebrae)
+    if "erro" in sebrae:
+        return [[bloco, "Contagem mensal", str(sebrae["erro"]), origem]]
+    return [
+        [bloco, "Abertos no mês", sebrae.get("abertos", 0), origem],
+        [bloco, "Finalizados no mês", sebrae.get("finalizados", 0), origem],
+        [bloco, "Sem data de abertura ou de encerramento", sebrae.get("sem_data", 0), "Fora da contagem do mês."],
+    ]
+
+
 def _resumo_mensal(api: SimpressApi, mes: str) -> Relatorio:
     if not mes:
         raise RelatorioRecusado("Informe o mês do resumo mensal no formato AAAA-MM (ex.: 2026-10).")
     dados = _ler(api, "/api/relatorio-mensal/dados", {"mes": mes})
     rotulo = str(_dict(dados.get("mes")).get("label") or mes)
-    linhas = [list(linha) for linha in summary_rows(dados)]
+    linhas = [list(linha) for linha in summary_rows(dados)] + _chamados_f5_mensal(dados.get("sebrae"))
     return Relatorio(f"Resumo mensal — {rotulo}", "", [_tabela("Resumo", ["Bloco", "Indicador", "Valor", "Origem"], linhas)])
 
 

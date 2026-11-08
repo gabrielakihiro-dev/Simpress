@@ -40,6 +40,7 @@ class FakeTransport:
             "ausentes_no_endpoint": [{"serie": SEBRAE_SERIE, "computador": "PRNOTESB"}, {"serie": "CCC333", "computador": "PRNOTE03"}],
             "series_sem_mapeamento": [{"serie": "DDD444"}],
         }
+        self.sebrae: Any = {"abertos": 7, "finalizados": 5, "sem_data": 2, "linhas": []}
 
     def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         self.calls.append((method, path))
@@ -52,6 +53,7 @@ class FakeTransport:
                     "contagens": {"Sem correspondência — no endpoint": 1, "Sem correspondência — na Simpress": 2, "Localidade divergente": 3},
                 },
                 "os": {"oracle": _os(4), "simpress": _os(5), "dados_insuficientes": []},
+                "sebrae": self.sebrae,
             }
         if path == "/api/stats":
             return 200, {"total_equipamentos": 10, "total_unidades": 3, "base_importada": True, "arquivo_origem": "base.xlsx",
@@ -128,10 +130,35 @@ class GenerationTests(unittest.TestCase):
         resumo = todo_o_texto(g, g.gerar("resumo_mensal", "xlsx", "2026-09"))
         self.assertIn("Equipamentos na base", resumo)
         self.assertIn("Sem correspondência — na Simpress", resumo)
-        diverg = todo_o_texto(g, g.gerar("divergencias_localidade", "docx"))
+        linhas = textos_xlsx(g.obter(g.gerar("resumo_mensal", "xlsx", "2026-09")["id"]).dados)  # type: ignore[union-attr]
+        f5 = {linha[1]: linha[2] for linha in linhas if linha[0] == "Chamados (F5)"}
+        self.assertEqual(f5, {"Abertos no mês": 7, "Finalizados no mês": 5, "Sem data de abertura ou de encerramento": 2})
+        diverg =todo_o_texto(g, g.gerar("divergencias_localidade", "docx"))
         self.assertIn("AAA111", diverg)
         self.assertIn("Local na Simpress", diverg)
         self.assertIn("Comparação de 2026-10-20T10:00:00", diverg)
+
+    def test_monthly_data_tool_sends_the_f5_count_first_with_a_short_list(self) -> None:
+        transporte = FakeTransport()
+        linha = {"chave": "UTIC-2026-0100", "chamado": "UTIC-2026-0100", "titulo": "Teclado", "serie": "SN-FIC-1",
+                 "abertura": "2026-09-02", "finalizacao": None, "situacoes": ["Aberto no mês"]}
+        transporte.sebrae = {"abertos": 8, "finalizados": 0, "sem_data": 1, "linhas": [linha] * 8}
+        dados = SimpressApi(transporte).obter_relatorio_mensal("2026-09")["dados"]
+        self.assertEqual(list(dados)[0], "sebrae")  # the chat keeps only the start of a long tool result
+        self.assertEqual((len(dados["sebrae"]["linhas"]), dados["sebrae"]["linhas_omitidas"], dados["sebrae"]["abertos"]), (5, 3, 8))
+        self.assertIn("inventario", dados)
+        transporte.sebrae = None
+        self.assertIsNone(SimpressApi(transporte).obter_relatorio_mensal("2026-09")["dados"]["sebrae"])
+
+    def test_monthly_summary_reports_missing_or_failed_f5_count(self) -> None:
+        for sebrae, esperado in ((None, "Nenhum Dashboard importado na aba Automação (F4)."),
+                                 ({"erro": "Não foi possível ler os chamados da aba Chamados (F5)."},
+                                  "Não foi possível ler os chamados da aba Chamados (F5).")):
+            with self.subTest(sebrae=sebrae):
+                transporte = FakeTransport()
+                transporte.sebrae = sebrae
+                g = gerador(transporte)
+                self.assertIn(esperado, todo_o_texto(g, g.gerar("resumo_mensal", "xlsx", "2026-09")))
 
     def test_formula_injection_is_neutralised_in_both_formats(self) -> None:
         g = gerador()

@@ -93,8 +93,11 @@ def _validar_pacote(arquivo: zipfile.ZipFile) -> None:
         raise DashboardInvalido("O arquivo enviado não é uma planilha .xlsx válida.")
 
 
-def ler_coluna_c(conteudo: bytes) -> frozenset[str]:
-    """Ticket numbers of column C of the ``CHAMADOS`` sheet (hidden rows included), headers checked first."""
+def _linhas_preenchidas(conteudo: bytes) -> List[Tuple[int, Tuple[Any, ...]]]:
+    """``(sheet row number, A:W values)`` of every row of ``CHAMADOS`` whose column C is filled (hidden rows included).
+
+    Package and header checks first; reading stops after ``LINHAS_VAZIAS_PARA_PARAR`` empty C cells in a row.
+    """
     from openpyxl import load_workbook
 
     try:
@@ -107,14 +110,15 @@ def ler_coluna_c(conteudo: bytes) -> frozenset[str]:
         if isinstance(erro, DashboardInvalido):
             raise
         raise DashboardInvalido("O arquivo enviado não é uma planilha .xlsx válida.") from erro
+    preenchidas: List[Tuple[int, Tuple[Any, ...]]] = []
     try:
         if ABA not in livro.sheetnames:
             raise DashboardInvalido(f"A planilha não tem a aba {ABA}.")
         linhas = livro[ABA].iter_rows(min_row=1, max_col=len(CABECALHOS), values_only=True)
         conferir_cabecalhos(next(linhas, ()))
-        valores: List[Any] = []
         vazias = 0
-        for linha in linhas:
+        # read_only openpyxl yields gap rows as empty, so the count matches the sheet row (and F5's ``linha:N``).
+        for numero_linha, linha in enumerate(linhas, start=2):
             valor = linha[2] if len(linha) > 2 else None
             if valor in (None, ""):
                 vazias += 1
@@ -122,10 +126,15 @@ def ler_coluna_c(conteudo: bytes) -> frozenset[str]:
                     break  # the table ends long before the formatted-but-empty rows of the sheet
                 continue
             vazias = 0
-            valores.append(valor)
-        numeros = numeros_do_dashboard(valores)
+            preenchidas.append((numero_linha, tuple(linha)))
     finally:
         livro.close()
+    return preenchidas
+
+
+def ler_coluna_c(conteudo: bytes) -> frozenset[str]:
+    """Ticket numbers of column C of the ``CHAMADOS`` sheet (hidden rows included), headers checked first."""
+    numeros = numeros_do_dashboard([linha[2] for _, linha in _linhas_preenchidas(conteudo)])
     if not numeros:
         raise DashboardInvalido("A coluna C não trouxe nenhum número UTIC; a planilha parece vazia ou incorreta.")
     return numeros
@@ -139,8 +148,23 @@ def _status_da_celula(valor: Any) -> str:
     return texto if texto in STATUS_VALIDOS else ""  # any other text of column D is never kept
 
 
+def _data_da_celula(valor: Any) -> Optional[datetime]:
+    return valor if isinstance(valor, datetime) else interpretar_data(valor)
+
+
+def _data_ou_dia_da_celula(valor: Any) -> Optional[datetime]:
+    """Like ``_data_da_celula``, also accepting a day typed as text without time (``dd/mm/aaaa``)."""
+    data = _data_da_celula(valor)
+    if data is None and isinstance(valor, str):
+        try:
+            return datetime.strptime(valor.strip(), "%d/%m/%Y")
+        except ValueError:
+            return None
+    return data
+
+
 def _encerramento_da_celula(valor: Any) -> str:
-    data = valor if isinstance(valor, datetime) else interpretar_data(valor)
+    data = _data_da_celula(valor)
     return data.strftime(FORMATO_DATA) if data else ""
 
 
@@ -150,42 +174,33 @@ def ler_status_chamados(conteudo: bytes) -> Dict[str, Dict[str, str]]:
     Same package checks, header check and stopping rule as ``ler_coluna_c``. Only the two valid statuses and a
     ``dd/MM/yyyy HH:mm`` date are kept; no other cell is read into the result.
     """
-    from openpyxl import load_workbook
-
-    try:
-        with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
-            _validar_pacote(arquivo)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            livro = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
-    except (zipfile.BadZipFile, OSError, KeyError, ValueError) as erro:
-        if isinstance(erro, DashboardInvalido):
-            raise
-        raise DashboardInvalido("O arquivo enviado não é uma planilha .xlsx válida.") from erro
     resultado: Dict[str, Dict[str, str]] = {}
-    try:
-        if ABA not in livro.sheetnames:
-            raise DashboardInvalido(f"A planilha não tem a aba {ABA}.")
-        linhas = livro[ABA].iter_rows(min_row=1, max_col=len(CABECALHOS), values_only=True)
-        conferir_cabecalhos(next(linhas, ()))
-        vazias = 0
-        for linha in linhas:
-            valor = linha[2] if len(linha) > 2 else None
-            if valor in (None, ""):
-                vazias += 1
-                if vazias > LINHAS_VAZIAS_PARA_PARAR:
-                    break
-                continue
-            vazias = 0
-            item = {
-                "status": _status_da_celula(linha[3] if len(linha) > 3 else None),
-                "encerramento": _encerramento_da_celula(linha[17] if len(linha) > 17 else None),
-            }
-            for numero in numeros_do_dashboard([valor]):
-                resultado[numero] = dict(item)
-    finally:
-        livro.close()
+    for _, linha in _linhas_preenchidas(conteudo):
+        item = {
+            "status": _status_da_celula(linha[3] if len(linha) > 3 else None),
+            "encerramento": _encerramento_da_celula(linha[17] if len(linha) > 17 else None),
+        }
+        for numero in numeros_do_dashboard([linha[2]]):
+            resultado[numero] = dict(item)
     return resultado
+
+
+def ler_datas_chamados(conteudo: bytes) -> List[Dict[str, Any]]:
+    """Per filled row of ``CHAMADOS``: ``{"linha", "chamado", "titulo", "serie", "abertura", "encerramento"}``.
+
+    ``chamado`` is column C as stored (number or text), ``titulo`` G, ``serie`` K; ``abertura`` (P) and
+    ``encerramento`` (R) are naive São Paulo datetimes or ``None``. Same checks and stopping rule as ``ler_coluna_c``;
+    no other column is read into the result.
+    """
+    def celula(linha: Tuple[Any, ...], indice: int) -> Any:
+        return linha[indice] if len(linha) > indice else None
+
+    return [
+        {"linha": numero_linha, "chamado": linha[2], "titulo": str(celula(linha, 6) or ""),
+         "serie": str(celula(linha, 10) or "").strip(),
+         "abertura": _data_ou_dia_da_celula(celula(linha, 15)), "encerramento": _data_ou_dia_da_celula(celula(linha, 17))}
+        for numero_linha, linha in _linhas_preenchidas(conteudo)
+    ]
 
 
 # ---------------------------------------------------------------------------- triage
@@ -326,5 +341,5 @@ def linhas_para_colar(linhas: Sequence[Mapping[str, str]]) -> Tuple[str, str]:
 __all__ = [
     "ABA", "CABECALHOS", "CRUZ_AMBIGUO", "CRUZ_AUSENTE", "CRUZ_UNICO", "Cruzamento", "DashboardInvalido",
     "FORMULAS", "INTOCADAS", "MANUAIS", "NovosChamados", "PENDENCIAS_DEFINIDAS", "conferir_cabecalhos",
-    "cruzar_por_nome", "ler_coluna_c", "ler_status_chamados", "linhas_para_colar", "montar_linha", "omitir_credenciais", "triar_novos",
+    "cruzar_por_nome", "ler_coluna_c", "ler_datas_chamados", "ler_status_chamados", "linhas_para_colar", "montar_linha", "omitir_credenciais", "triar_novos",
 ]
