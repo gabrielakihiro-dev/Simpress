@@ -3,18 +3,20 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from core.errors import DomainError
-from domains import sebrae_dashboard_gravacao as G
-from domains import sebrae_novos
+from core.errors import DomainBusyError, DomainError
+from domains import assistant_relatorios, sebrae_dashboard_gravacao as G, sebrae_finalizacao as fin
+from domains import sebrae_novos, sebrae_observacoes as obs
+from domains.assistant_api import MAX_ITENS_LISTA, SimpressApi
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard import CABECALHO, planilha
-from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, montar, texto
+from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, _trocar_na_folha, montar, texto
 from tests.test_sebrae_historico import planilha_com_status
 
 CHAMADO = ChamadoSoftExpert(
@@ -270,6 +272,140 @@ class RotasSebraeTest(RotasBase):
         resposta = self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
         self.assertEqual(resposta.status_code, 422)
         self.assertIn("não está entre os chamados novos", resposta.json()["detail"])
+
+
+class OrdemDaColunaCTest(RotasBase):
+    """The F5 lists and the Assistant show the tickets in the order of the Tabela3 sorted by column C ascending."""
+
+    def setUp(self):
+        super().setUp()
+        total = MAX_ITENS_LISTA + 5
+        self.fora_de_ordem = [f"UTIC-2026-{n:04d}" for n in range(total, 0, -1)]  # stored descending
+        self.esperados = [f"UTIC-2026-{n:04d}" for n in range(1, total + 1)]
+        abertos = [G.ChamadoAberto(c, 2 + i, f"Antigo {c}", {}, chamado=c).como_dict() for i, c in enumerate(self.fora_de_ordem)]
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, self.fora_de_ordem, "Dashboard.xlsx", abertos=abertos)
+        self.novos = [c.replace("2026", "2027") for c in self.fora_de_ordem]
+        sebrae_novos.salvar_novos(self.caminhos.novos, [ChamadoSoftExpert(c, titulo=f"Novo {c}") for c in self.novos], [], 0, {})
+        for n, c in enumerate(self.fora_de_ordem):  # the most recently finalized has the highest C
+            fin._alterar(fin.pasta_estado(self.caminhos.existentes), f"UTIC-2025-{n:04d}", lambda item, n=n: item.update(
+                finalizacao={"status": fin.STATUS_OK, "em": f"2026-10-30T10:00:{n:02d}", "encerrado_em": ""}))
+        self.api = SimpressApi(lambda metodo, caminho, params, corpo: self._resposta(caminho))
+
+    def _resposta(self, caminho):
+        resposta = self.cliente.get(caminho)
+        return resposta.status_code, resposta.json()
+
+    def test_a_tela_recebe_antigos_novos_e_finalizados_na_ordem_da_coluna_c(self):
+        estado = self.cliente.get("/api/sebrae/novos").json()
+        self.assertEqual([a["numero"] for a in estado["importado"]["abertos"]], self.esperados)
+        self.assertEqual([f["numero"] for f in estado["novos"]["formulario"]], [c.replace("2026", "2027") for c in self.esperados])
+        finalizados = [f["numero"] for f in estado["importado"]["finalizados"]]
+        self.assertEqual(finalizados, sorted(finalizados))
+        self.assertEqual(len(finalizados), len(self.esperados))
+
+    def test_o_assistente_corta_as_listas_depois_da_ordem_da_coluna_c(self):
+        antigos = self.api.chamados_antigos_abertos_sebrae()
+        self.assertEqual([a["numero"] for a in antigos["abertos"]], self.esperados[:MAX_ITENS_LISTA])
+        self.assertEqual((antigos["total_abertos"], antigos["omitidos"]), (len(self.esperados), len(self.esperados) - MAX_ITENS_LISTA))
+        novos = self.api.chamados_novos_sebrae()
+        self.assertEqual([c["numero"] for c in novos["chamados"]], [c.replace("2026", "2027") for c in self.esperados[:MAX_ITENS_LISTA]])
+
+    def test_o_relatorio_de_abertos_do_assistente_segue_a_ordem_da_coluna_c(self):
+        relatorio = assistant_relatorios.coletar(self.api, "chamados_sebrae_abertos", "")
+        self.assertEqual([linha[0] for linha in relatorio.tabelas[0].linhas], self.esperados)
+
+
+class ChavesDeLinhaAposOrdenarTest(RotasBase):
+    """Atualizar Dashboard sorts by C, so after the sorted file is imported a ``linha:<n>`` ticket sits on another row:
+    its observation and destaque must follow the ticket (same C, G, I, H), never a row number."""
+
+    def base(self, g3="Impressora parada", g4="Monitor sem imagem", h3=""):
+        """Rows 3 and 4 are "Sem chamado" (no UTIC, keys linha:3 and linha:4); the sort moves them up to rows 2 and 3."""
+        conteudo = montar(("UTIC-2026-0003", "Sem chamado", "Sem chamado"), status=("EM ABERTO",) * 3)
+        for linha, titulo in ((3, g3), (4, g4)):
+            conteudo = _trocar_na_folha(conteudo, texto(f"G{linha}", "titulo Sem chamado"), texto(f"G{linha}", titulo))
+        return _antes_da_coluna_p(conteudo, 3, texto("H3", h3)) if h3 else conteudo
+
+    def pasta(self):
+        return fin.pasta_estado(self.caminhos.existentes)
+
+    def anotar(self, numero, observacao, destaque=False):
+        self.assertEqual(self.cliente.put(f"/api/sebrae/chamados/{numero}/observacao", json={"observacao": observacao}).status_code, 200)
+        if destaque:
+            self.assertEqual(self.cliente.put(f"/api/sebrae/chamados/{numero}/destaque", json={"destaque": True}).status_code, 200)
+
+    def abertos(self, resposta):
+        return {a["titulo"]: a for a in resposta.json()["importado"]["abertos"]}
+
+    def test_observacao_e_destaque_seguem_o_chamado_depois_de_ordenar_e_reimportar(self):
+        base = self.base()
+        antes = self.abertos(self.importar(base))
+        self.assertEqual((antes["Impressora parada"]["numero"], antes["Monitor sem imagem"]["numero"]), ("linha:3", "linha:4"))
+        self.anotar("linha:3", "Aguardando peça", destaque=True)
+        self.anotar("linha:4", "Trocar o cabo")
+        self.anotar("UTIC-2026-0003", "Fica onde está")
+        resposta = self.importar(G.atualizar(base).conteudo)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertNotIn("aviso", resposta.json())
+        depois = self.abertos(resposta)
+        self.assertEqual((depois["Impressora parada"]["numero"], depois["Monitor sem imagem"]["numero"]), ("linha:2", "linha:3"))
+        self.assertEqual((depois["Impressora parada"]["observacao"], depois["Impressora parada"]["destaque"]), ("Aguardando peça", True))
+        self.assertEqual((depois["Monitor sem imagem"]["observacao"], depois["Monitor sem imagem"]["destaque"]), ("Trocar o cabo", False))
+        self.assertEqual(depois["titulo UTIC-2026-0003"]["observacao"], "Fica onde está")
+        self.assertEqual(sorted(obs.ler_observacoes(self.pasta())), ["UTIC-2026-0003", "linha:2", "linha:3"])  # nothing left on linha:4
+
+    def test_mascara_do_cpf_na_descricao_nao_atrapalha_o_acompanhamento(self):
+        base = self.base(h3="CPF 123.456.789-09 senha: Segredo123")
+        self.importar(base)
+        self.anotar("linha:3", "Com CPF na descrição")
+        resposta = self.importar(G.atualizar(base).conteudo)
+        self.assertNotIn("aviso", resposta.json())
+        self.assertEqual(self.abertos(resposta)["Impressora parada"]["observacao"], "Com CPF na descrição")
+        self.assertNotIn("123.456.789-09", self.caminhos.existentes.read_text(encoding="utf-8"))
+
+    def test_chamado_repetido_nao_e_adivinhado_e_o_aviso_diz_qual(self):
+        base = self.base(g3="Mesmo título", g4="Mesmo título")  # same C, G, I and H: no way to tell which is which
+        self.importar(base)
+        self.anotar("linha:3", "Não sei de qual dos dois")
+        self.anotar("UTIC-2026-0003", "Fica onde está")
+        resposta = self.importar(G.atualizar(base).conteudo)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertIn("linha:3", resposta.json()["aviso"])
+        self.assertNotIn("linha:4", resposta.json()["aviso"])  # no entry there: nothing was lost
+        self.assertEqual(sorted(obs.ler_observacoes(self.pasta())), ["UTIC-2026-0003", "linha:3"])  # left alone
+        self.assertEqual(obs.ler_observacoes(self.pasta())["linha:3"]["observacao"], "Não sei de qual dos dois")
+
+    def test_chamado_que_saiu_da_planilha_fica_com_aviso(self):
+        base = self.base()
+        self.importar(base)
+        self.anotar("linha:4", "Era do monitor")
+        sem_o_monitor = G.atualizar(self.base(g4="Outro chamado")).conteudo  # nothing in the new sheet has the old content of row 4
+        resposta = self.importar(sem_o_monitor)
+        self.assertIn("linha:4", resposta.json()["aviso"])
+        self.assertEqual(obs.ler_observacoes(self.pasta())["linha:4"]["observacao"], "Era do monitor")
+
+    def test_reimportar_sem_mudar_a_ordem_nao_mexe_nas_observacoes_nem_avisa(self):
+        ordenada = G.atualizar(self.base()).conteudo
+        self.assertNotIn("aviso", self.importar(ordenada).json())  # first import: nothing before it
+        self.anotar("linha:2", "Impressora", destaque=True)
+        antes = obs.caminho_observacoes(self.pasta()).read_bytes()
+        resposta = self.importar(ordenada)
+        self.assertNotIn("aviso", resposta.json())
+        self.assertEqual(obs.caminho_observacoes(self.pasta()).read_bytes(), antes)
+
+    def test_falha_ao_mover_nao_derruba_a_importacao_ja_guardada_e_avisa(self):
+        for erro in (DomainBusyError("ocupado"), PermissionError("antivírus segurando o arquivo")):
+            with self.subTest(erro=type(erro).__name__):
+                self.setUp()  # a fresh state directory for each error
+                base = self.base()
+                self.importar(base)
+                self.anotar("linha:3", "Aguardando peça")
+                with patch.object(obs, "acompanhar_chaves", side_effect=erro):
+                    resposta = self.importar(G.atualizar(base).conteudo)
+                self.assertEqual(resposta.status_code, 200, resposta.text)
+                self.assertIn("Não consegui mover", resposta.json()["aviso"])
+                self.assertEqual(sebrae_novos.ler_existentes(self.caminhos.existentes)["abertos"][0]["numero"], "linha:2")  # the new Dashboard is the stored one
+                self.assertEqual(obs.ler_observacoes(self.pasta())["linha:3"]["observacao"], "Aguardando peça")  # and the old entry is untouched
 
 
 class HistoricoRotasTest(RotasBase):

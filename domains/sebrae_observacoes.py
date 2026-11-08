@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainValidationError
@@ -180,3 +180,33 @@ def definir_destaque(state_dir: Path, numero: str, destaque: bool) -> Dict[str, 
 
     entrada = _gravar(state_dir, chave, alterar)
     return {"numero": chave, "destaque": entrada["destaque"], "destaque_em": entrada["destaque_em"]}
+
+
+def acompanhar_chaves(state_dir: Path, mapa: Mapping[str, Optional[str]]) -> List[str]:
+    """Moves the entries of the old keys in ``mapa`` (old key -> new key, ``None`` when unknown) to their new keys, under lock.
+
+    Used after a re-import, when a ``linha:<n>`` key no longer points at the same ticket. Returns the old keys that hold an
+    observation or destaque and could not be followed (``None``, or the new key already holds another entry): those stay as they were.
+    Keys that swap places move together; entries with an invalid key are never touched."""
+    arquivo = caminho_observacoes(state_dir)
+    try:
+        with lock_paths([arquivo]):
+            dados = _carregar(state_dir)
+            presentes = [antiga for antiga in mapa if antiga in dados]
+            movem = {antiga: mapa[antiga] for antiga in presentes if mapa[antiga] not in (None, antiga)}
+            sem_rastro = [antiga for antiga in presentes if mapa[antiga] is None]
+            avancou = True
+            while avancou:  # a destination that holds an entry staying put blocks the move; the blocked one stays too
+                avancou = False
+                for antiga, nova in list(movem.items()):
+                    if nova in dados and nova not in movem:
+                        del movem[antiga]
+                        sem_rastro.append(antiga)
+                        avancou = True
+            resultado = {chave: item for chave, item in dados.items() if chave not in movem}
+            resultado.update({nova: dados[antiga] for antiga, nova in movem.items()})
+            if resultado != dados:
+                atomic_write_json(arquivo, resultado)
+    except FileBusyError as error:
+        raise DomainBusyError("O registro de observações está ocupado no momento. Tente novamente em instantes.") from error
+    return sorted(sem_rastro)

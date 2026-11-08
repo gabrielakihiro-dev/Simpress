@@ -180,5 +180,62 @@ class SebraeObservacoesTests(unittest.TestCase):
         self.assertEqual(obs.caminho_observacoes(self.state_dir).read_text(encoding="utf-8"), "corrompido...")
 
 
+class AcompanharChavesTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.state_dir = Path(self.temp_dir.name)
+        self.arquivo = obs.caminho_observacoes(self.state_dir)
+
+    def gravar(self, entradas):
+        self.arquivo.write_text(json.dumps({chave: {"observacao": texto, "destaque": destaque} for chave, (texto, destaque) in entradas.items()}), encoding="utf-8")
+
+    def lido(self):
+        return {chave: (item["observacao"], item["destaque"]) for chave, item in json.loads(self.arquivo.read_text(encoding="utf-8")).items()}
+
+    def test_move_a_entrada_inteira_e_nao_deixa_a_chave_antiga(self):
+        self.gravar({"linha:3": ("Impressora", True), "UTIC-2026-0003": ("fica", False)})
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:2", "linha:4": "linha:3"}), [])
+        self.assertEqual(self.lido(), {"linha:2": ("Impressora", True), "UTIC-2026-0003": ("fica", False)})
+
+    def test_chaves_que_trocam_de_lugar_andam_juntas(self):
+        self.gravar({"linha:3": ("A", False), "linha:4": ("B", True), "linha:5": ("C", False)})
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:4", "linha:4": "linha:3", "linha:5": "linha:6"}), [])
+        self.assertEqual(self.lido(), {"linha:4": ("A", False), "linha:3": ("B", True), "linha:6": ("C", False)})
+
+    def test_destino_ocupado_por_entrada_que_nao_sai_bloqueia_so_aquele_movimento(self):
+        self.gravar({"linha:3": ("A", False), "linha:4": ("B", False), "linha:9": ("C", False)})
+        mapa = {"linha:3": "linha:4", "linha:4": None, "linha:9": "linha:10"}
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, mapa), ["linha:3", "linha:4"])  # 4 is unknown, so 3 cannot land on it
+        self.assertEqual(self.lido(), {"linha:3": ("A", False), "linha:4": ("B", False), "linha:10": ("C", False)})
+
+    def test_cadeia_bloqueada_inteira_fica_onde_estava(self):
+        self.gravar({"linha:2": ("X", False), "linha:3": ("A", False), "linha:4": ("B", False)})
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, {"linha:2": "linha:3", "linha:3": "linha:4", "linha:4": None}), ["linha:2", "linha:3", "linha:4"])
+        self.assertEqual(self.lido(), {"linha:2": ("X", False), "linha:3": ("A", False), "linha:4": ("B", False)})
+
+    def test_sem_mudanca_nao_cria_nem_regrava_o_arquivo(self):
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:2"}), [])
+        self.assertFalse(self.arquivo.exists())
+        self.gravar({"linha:3": ("A", False)})
+        antes = self.arquivo.read_bytes()
+        self.assertEqual(obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:3", "linha:8": "linha:9"}), [])
+        self.assertEqual(self.arquivo.read_bytes(), antes)
+
+    def test_entrada_de_chave_invalida_e_o_texto_original_nao_mudam(self):
+        manual = {"qualquer coisa": {"observacao": "à mão", "destaque": True}}
+        self.arquivo.write_text(json.dumps({**manual, "linha:3": {"observacao": "A", "destaque": False}}), encoding="utf-8")
+        obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:2"})
+        gravado = json.loads(self.arquivo.read_text(encoding="utf-8"))
+        self.assertEqual(gravado["qualquer coisa"], manual["qualquer coisa"])
+        self.assertEqual(gravado["linha:2"]["observacao"], "A")
+
+    def test_arquivo_ilegivel_e_preservado(self):
+        self.arquivo.write_text("corrompido...", encoding="utf-8")
+        with self.assertRaises(DomainBusyError):
+            obs.acompanhar_chaves(self.state_dir, {"linha:3": "linha:2"})
+        self.assertEqual(self.arquivo.read_text(encoding="utf-8"), "corrompido...")
+
+
 if __name__ == "__main__":
     unittest.main()
