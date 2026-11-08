@@ -79,18 +79,46 @@ def _chave(texto: str) -> str:
 
 def enderecos_correspondentes(opcoes: list[str], endereco: str, cidade: str, cep: str) -> list[str]:
     """Options matching street + number, city and CEP digits. Portal format:
-    "<LOGRADOURO>, <NÚMERO> - <BAIRRO>, <Cidade> - <UF>, <CEP>"; the unit: "<endereco> - <cidade>/<UF> - CEP <cep>"."""
-    logradouro = _chave(endereco.split(" - ", 1)[0])
+    "<LOGRADOURO>, <NÚMERO>[ , <COMPLEMENTO>] - <BAIRRO>, <Cidade> - <UF>, <CEP>";
+    the unit: "<endereco>[ - <complemento>] - <cidade>/<UF> - CEP <cep>".
+    Among street matches, the option whose complement equals the unit's wins (Barracão "SALA 02", Maringá "TERREO");
+    without one, only options with no complement count (the rule before 08/11/2026). Two records that differ only by an
+    abbreviated neighbourhood (Londrina "AER"/"AEROPORTO") are one address: the full form is picked."""
+    partes = endereco.split(" - ")
+    logradouro = _chave(partes[0])
     cidade_chave = _chave(cidade)
     digitos_cep = re.sub(r"\D", "", cep)
     if not logradouro or not cidade_chave or len(digitos_cep) != 8:
         return []
-    return [
+    complemento = " ".join(
+        _chave(p) for p in partes[1:]
+        if not re.match(r"\s*cep\b", p, re.IGNORECASE) and not re.fullmatch(rf"{re.escape(cidade_chave)} [a-z]{{2}}", _chave(p))
+    )
+
+    def campos(opcao: str) -> tuple[str, str, str]:
+        primeiro, _, resto = opcao.partition(" - ")
+        rua, _, compl = primeiro.partition(" , ")
+        return _chave(rua), _chave(compl), _chave(resto.split(",", 1)[0])
+
+    base = [
         opcao for opcao in opcoes
-        if _chave(opcao.split(" - ", 1)[0]) == logradouro
+        if campos(opcao)[0] == logradouro
         and f" {cidade_chave} " in f" {_chave(opcao)} "
         and re.sub(r"\D", "", opcao.rsplit(",", 1)[-1]) == digitos_cep
     ]
+    achados = [o for o in base if complemento and campos(o)[1] == complemento] or [o for o in base if not campos(o)[1]]
+    if len(achados) > 1 and len({_chave(o) for o in achados}) == 1:
+        # Only case/accents differ (Toledo "AV Parigot de Souza" / "AV PARIGOT DE SOUZA"): one address; prefer the unit's spelling.
+        return [next((o for o in achados if o.startswith(partes[0].strip() + " ")), achados[0])]
+    if len(achados) > 1:
+        bairros = [campos(o)[2] for o in achados]
+        maior = max(bairros, key=len)
+        # Word by word ("aer" -> "aeroporto"), so "BORTOT" is never read as "BORTOT II".
+        abrevia = lambda curto, longo: len(curto.split()) == len(longo.split()) and all(
+            l.startswith(c) for c, l in zip(curto.split(), longo.split()))
+        if len({campos(o)[1] for o in achados}) == 1 and all(abrevia(b, maior) for b in bairros) and bairros.count(maior) == 1:
+            return [achados[bairros.index(maior)]]
+    return achados
 
 
 def validar_descricao_ticket(descricao: str) -> str:
@@ -201,7 +229,7 @@ class TicketsUX:
             modelo, opcoes = portal.preparar(serial, aba, cep_ux)
             if not modelo.strip():
                 raise ErroUX(409, "O UX não mostrou o modelo do equipamento.")
-            # Never infer: only a single option matching street + number, city and CEP is chosen automatically.
+            # Only a single option matching street + number (+ complement), city and CEP is chosen automatically.
             achados = enderecos_correspondentes(opcoes, entrega_endereco, entrega_cidade, cep)
             endereco = achados[0] if len(achados) == 1 else None
             if endereco is not None:
