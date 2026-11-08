@@ -2,7 +2,7 @@
 
 Any use of the shared lock (routine, Endpoint lookup, PowerShell, UX) resets the clock. A prepared UX
 session or a PowerShell/remote-control tab left open for the user keeps Chrome open. Chrome still
-listens on the TCP debugging port while open; moving to --remote-debugging-pipe is a pending item.
+listens on the TCP debugging port while open; switching transport needs the user's decision (docs).
 """
 
 import logging
@@ -88,6 +88,9 @@ def fechar_chrome_de_automacao(sessao_viva: Callable[[], bool]) -> None:
                 time.sleep(0.5)
             if automation.cdp_ativo():
                 automation.encerrar_chrome_do_perfil()
+            if automation.cdp_ativo():
+                logger.warning("O Chrome de automação ocioso continua aberto na porta CDP; nova tentativa no próximo período sem uso.")
+                return
             logger.info("Chrome de automação fechado após %s minutos sem uso.", int(limite_configurado() // 60))
     except automation.TravaOcupada:
         return  # a routine started meanwhile; its lock use resets the clock
