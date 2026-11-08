@@ -10,6 +10,7 @@ from unittest.mock import patch
 from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
 from domains import sebrae_dashboard_gravacao as G
 from domains import sebrae_finalizacao as fin
+from domains import sebrae_novos
 from domains.sebrae_dashboard import ler_coluna_c
 from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
 
@@ -545,6 +546,10 @@ class EnvioDuravelTest(unittest.TestCase):
         self.dir = Path(tempfile.mkdtemp())
         self.origem = self.dir / "saida.xlsx"
         self.origem.write_bytes(b"snapshot")
+        self.importar("a" * 64)
+
+    def importar(self, sha256):
+        sebrae_novos.salvar_existentes(sebrae_novos.caminhos_padrao(self.dir).existentes, [], "Dashboard.xlsx", sha256=sha256)
 
     def preparar(self):
         return fin.preparar_envio(self.dir, self.origem.read_bytes())
@@ -578,6 +583,32 @@ class EnvioDuravelTest(unittest.TestCase):
         fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
         job = fin.consumir_job(self.dir)
         self.assertEqual((job["acao"], job["envio_id"], job["sha256"]), ("reenviar_snapshot", envio, sha))
+
+    def test_snapshot_so_e_reenviada_sobre_a_importacao_em_que_foi_montada(self):
+        envio = self.preparar()
+        sha = fin.ler_envio(self.dir)["sha256"]
+        self.assertEqual(fin.ler_envio(self.dir)["base_sha256"], "a" * 64)
+        fin.marcar_envio_incerto(self.dir, envio)
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        self.importar("b" * 64)  # o site importou de novo: a snapshot vem de uma base antiga
+        with self.assertRaisesRegex(DomainConflictError, "antes da última importação"):
+            fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+        with self.assertRaisesRegex(DomainConflictError, "antes da última importação"):
+            fin.retomar_envio_snapshot(self.dir, envio, sha)
+        self.assertTrue(fin.snapshot_envio(self.dir, envio).exists())  # nada foi apagado
+        self.importar("a" * 64)
+        fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
+
+    def test_snapshot_sem_base_registrada_e_recusada(self):
+        envio = self.preparar()
+        sha = fin.ler_envio(self.dir)["sha256"]
+        fin.marcar_envio_incerto(self.dir, envio)
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        registro = fin.ler_envio(self.dir)
+        registro.pop("base_sha256")
+        fin.atomic_write_json(fin.caminho_envio(self.dir), registro)
+        with self.assertRaises(DomainConflictError):
+            fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
 
     def test_legado_confirmado_vazio_exige_frase_e_e_idempotente_sem_apagar(self):
         fin.gravar_resultado(self.dir, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})

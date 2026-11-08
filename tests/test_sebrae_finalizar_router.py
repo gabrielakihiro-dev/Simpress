@@ -79,6 +79,7 @@ class RecuperacaoEnvioTest(unittest.TestCase):
             caminhos=lambda: caminhos, max_upload_bytes=lambda: 1024, registros=lambda: [],
             relatorio_chamados=lambda: None, runner=lambda: self.runner,
         ))
+        sebrae_novos.salvar_existentes(caminhos.existentes, [], "Dashboard.xlsx", sha256="a" * 64)
         self.envio = fin.preparar_envio(self.dir, b"snapshot")
         fin.marcar_envio_incerto(self.dir, self.envio)
 
