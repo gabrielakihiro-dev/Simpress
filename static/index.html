@@ -880,7 +880,6 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label class="ckp-alternar" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="cockpit-tickets-attention" type="checkbox">Atenção · 3+ dias</label>
             <button type="button" id="cockpit-tickets-export" class="ck-btn ck-btn--secundario" data-on-click="exportarChamadosCockpit" disabled>Exportar Excel</button>
-            <button type="button" id="btn-chamados-os-f6" class="ck-btn ck-btn--secundario" data-on-click="abrirPainelCockpit" data-args='["chamados-os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span>Chamados × OS</span></button>
             <button type="button" id="cockpit-tickets-clear" class="ck-btn ck-btn--fantasma">Limpar filtros</button>
             <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario" data-on-click="abrirGestaoChamadosCockpit">Importar e gerenciar</button>
           </div>
@@ -924,15 +923,6 @@ Horário disponível para atendimento:</textarea>
             </div>
           </details>
           <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
-        </section>
-
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados-os" aria-labelledby="cockpit-chamados-os-heading" hidden>
-          <h2 id="cockpit-chamados-os-heading" class="sr-only">Chamados × OS</h2>
-          <div class="ck-barra-ferr">
-            <input id="cockpit-chamados-os-busca" class="ck-entrada" type="search" autocomplete="off" placeholder="Buscar UTIC, série ou OS" aria-label="Buscar UTIC, série ou OS">
-          </div>
-          <div id="cockpit-chamados-os-lista" class="ck-chos" aria-live="polite"></div>
-          <div id="cockpit-chamados-os-mais" class="sebrae-mais" hidden><button type="button" id="cockpit-chamados-os-mais-botao" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span id="cockpit-chamados-os-mostrando" class="sebrae-mais__n"></span></div>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>
@@ -1101,7 +1091,6 @@ Horário disponível para atendimento:</textarea>
                 </div>
                 <div class="ck-grupo-botoes" role="group" aria-label="Chamados antigos">
                   <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
-                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-chamados-os-f5" data-on-click="abrirPainelCockpit" data-args='["chamados-os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span>Chamados × OS</span></button>
                 </div>
                 <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
                   <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
@@ -1358,6 +1347,28 @@ Horário disponível para atendimento:</textarea>
       <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
       <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
         <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CHAMADO × OS (só leitura; abre pela OS do cartão no F5) -->
+  <!-- ========================================== -->
+  <div id="modal-chamado-os" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-os">
+    <div class="ck-dialogo">
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
+        <h3 id="titulo-chamado-os" class="text-base font-bold text-white">Chamado × OS</h3>
+        <button type="button" id="chamado-os-janela-fechar" data-on-click="fecharJanelaChamadoOs" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="chamado-os-janela__corpo">
+        <div id="chamado-os-janela-chamado" class="chamado-os-janela__lado"></div>
+        <div id="chamado-os-janela-os" class="chamado-os-janela__lado"></div>
+      </div>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
+        <button type="button" id="chamado-os-janela-f6" class="ck-link-btn" hidden>Abrir na aba OS (F6)</button>
+        <button type="button" data-on-click="fecharJanelaChamadoOs" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>

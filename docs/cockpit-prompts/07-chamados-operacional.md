@@ -44,18 +44,17 @@ Correção dos achados da auditoria da aba OS (07/11/2026). Só apresentação e
 
 ## Chamados × OS e observação por OS (F5/F6, 07/11/2026)
 
-Pedido do usuário (07/11/2026). O painel é só leitura; a observação por OS é a única escrita nova da aba OS e fica só no computador.
+Pedido do usuário (07/11/2026). A janela `Chamado × OS` é só leitura; a observação por OS é a única escrita nova da aba OS e fica só no computador.
 
-**Painel `Chamados × OS`** (`section[data-cockpit-tool-panel="chamados-os"]`, subtítulo `Chamados em aberto com OS vinculada, lado a lado.`):
+**Janela `Chamado × OS`** (08/11/2026, pedido do usuário; substitui o painel `Chamados × OS` de 07/11/2026):
 
-- Onde clicar: botão `Chamados × OS` no topo do F5, logo depois de `Ler chamados antigos` (`#btn-chamados-os-f5`), e na barra da aba OS, entre `Exportar Excel` e `Limpar filtros` (`#btn-chamados-os-f6`). `Voltar` volta à aba de onde veio.
-- Dados: recarrega a cada abertura com três GETs que já existiam (`/api/sebrae/novos`, `/api/operacoes/chamados`, `/api/operacoes/chamados/vinculos-os`). Falha mostra `Não foi possível carregar as OS.`.
-- Quem entra: chamados em aberto do F5 com OS. Novos usam a OS da coluna E (`linha.E`); antigos, a OS gravada ou sugerida (`automaticos.E` ou `automaticos_sugeridos.E`). Finalizados (`importado.finalizados`) e chamados sem OS ou com `—` ficam fora.
-- Cruzamento: série normalizada (sem acento, espaço nem pontuação, em maiúsculas) e OS sem espaços, em maiúsculas. MacBook: a outra grafia (com ou sem `S` inicial) só quando a série exata não está no relatório. Série sem a OS no relatório mostra `Série não encontrada na importação atual.`.
-- Tabela: grupos `Chamado` e `OS`; colunas `Chamado` (UTIC, título e selo `Novo` ou `Em aberto`), `Abertura` (P no novo; `Habilitada em` da leitura no antigo), `Série`, `OS` (com o selo `Manual` ou `Automático · Dashboard` quando há vínculo), `Status Oracle`, `Status Simpress` e `Relação` (com o selo da triagem do F6). Abaixo de 1200 px vira cartões com os mesmos dados.
-- Busca `Buscar UTIC, série ou OS` (150 ms depois da última tecla, sem acento nem maiúscula); 25 por vez com `Carregar mais` e `Mostrando N de M`; lista vazia `Nenhum chamado em aberto com OS vinculada.`.
-- Clicar no UTIC abre o chamado no F5 (`abrirChamadoSebraeNoF5`); clicar na OS abre a OS no F6 (`abrirChamadoDaOs`). Só navegação: o painel não grava, não cria vínculo e não altera chamado nem OS.
-- Arquivos: `static/js/shared/chamados-os-model.js` (`montarParesChamadoOs`, `filtrarParesChamadoOs`, sem DOM nem rede) e `static/js/features/cockpit-tool-panels.js` (`loadChamadosOs`, `renderChamadosOs`). Testes: `tests/frontend/test_chamados_os.cjs`, `tests/frontend/test_cockpit_tool_panels.cjs`, `tests/e2e/chamados-os.spec.cjs`.
+- Removidos em 08/11/2026, a pedido do usuário: os botões `Chamados × OS` do topo do F5 (`#btn-chamados-os-f5`) e da barra da aba OS (`#btn-chamados-os-f6`), o painel `section[data-cockpit-tool-panel="chamados-os"]` (busca `Buscar UTIC, série ou OS`, lista, `Carregar mais`), `loadChamadosOs`/`renderChamadosOs` e o CSS `.ck-chos`. Continuam `static/js/shared/chamados-os-model.js` (regra de pareamento, espelhada por `chamados_com_os_sebrae` do Assistente) e `abrirChamadoDaOs`.
+- Onde clicar: o número da OS no cartão do chamado da aba Chamados (F5); ou, na aba OS (F6), o prefixo `UTIC-AAAA-` de uma OS com vínculo salvo, botão que até 07/11/2026 abria o chamado na F5 e agora abre a janela (`aria-haspopup="dialog"`, `data-on-click="abrirJanelaChamadoOs"`; o campo do número continua editável).
+- Janela `#modal-chamado-os` (título `Chamado × OS`), aberta por `abrirJanelaChamadoOs({chamado, serie, os}, gatilho)` e fechada por `fecharJanelaChamadoOs` (`static/js/features/cockpit-tool-panels.js`). À esquerda, o cartão do chamado da F5, só leitura, procurado em novos, antigos em aberto e finalizados (`cartaoChamadoSebraeLeitura` em `static/js/features/sebrae-dashboard.js`). À direita, a tabela da aba OS só com aquela OS, só leitura e fora dos filtros da F6 (`montarTabelaOs` com `soOs` e `somenteLeitura` em `static/js/ui/data-panels.js`); série ausente mostra `Série não encontrada na importação atual.`.
+- Chamado ausente da F5: `Chamado não encontrado na aba Chamados (F5).`, e a OS continua visível.
+- Botões `Abrir na aba OS (F6)` (fecha a janela e mostra a OS na tabela da aba OS, via `abrirChamadoDaOs`) e `Fechar`. Esc fecha e o foco volta ao gatilho (ou ao botão equivalente, se a F5 ou a F6 se redesenhou com a janela aberta).
+- Só leitura: não grava nada no site, no SoftExpert, no SharePoint nem no Excel; não cria vínculo nem altera chamado ou OS. Textos aprovados, exatos: `Chamado × OS`, `Abrir na aba OS (F6)`, `Fechar`, `Chamado não encontrado na aba Chamados (F5).`.
+- Testes: `tests/frontend/test_chamados_os.cjs`, `tests/frontend/test_cockpit_tool_panels.cjs`, `tests/frontend/test_data_panels_os_table.cjs`, `tests/frontend/test_sebrae_dashboard_ui.cjs`, `tests/e2e/chamados-os.spec.cjs`.
 
 **Coluna `Observação do andamento` na tabela de OS** (`static/js/ui/data-panels.js`):
 

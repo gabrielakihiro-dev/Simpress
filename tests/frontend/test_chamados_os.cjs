@@ -1,4 +1,4 @@
-// Painel Chamados × OS (sem DOM): quais chamados em aberto do F5 entram e como a OS do F6 é achada.
+// Modelo Chamados × OS (sem DOM): quais chamados em aberto do F5 entram e como a OS do F6 é achada.
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
@@ -149,4 +149,24 @@ test("Link da OS usa a grafia do relatório (como na linha da F6), mesmo com K/E
   };
   const links = m.montarParesChamadoOs(entrada).map(par => [par.numero, par.serieRelatorio, par.osRelatorio]);
   assert.deepEqual(links, [["UTIC-2026-40", "DEMO-SN-001", "7285070"], ["UTIC-2026-41", "SC02XYZ", "50 01"], ["UTIC-2026-42", "", ""]]);
+});
+
+test("Fallback pela OS: série vazia liga quando a OS está numa única série; OS em duas séries ou série achada sem a OS não ligam", () => {
+  const chamado = (numero, serie, os) => ({ numero, linha: { E: os, K: serie, G: "Antigo" } });
+  const registro = (serie, os, relacao) => ({ serie, relacao, oracle: [{ ordem_servico: os, status: "Aberto" }], simpress: { ordens_servico: [os], status: ["Em atendimento"] } });
+  const entrada = {
+    sebrae: { novos: { formulario: [chamado("27655", "", "7231981"), chamado("27656", "", "7300000"), chamado("27657", "SINT-050", "7231981")] } },
+    relatorio: { chamados: [
+      registro("SINT-040", "7231981", "conferida"), registro("sint040", "7231981", "repetida"),
+      registro("SINT-041", "7300000", "a"), registro("SINT-042", "73 00000", "b"),
+      registro("SINT-050", "1111", "outra_os"),
+    ] },
+    vinculos: [],
+  };
+  const [unica, ambigua, divergente] = m.montarParesChamadoOs(entrada);
+  // linhas repetidas com a mesma série contam como uma só e o primeiro registro vence
+  assert.deepEqual([unica.encontrada, unica.serie, unica.serieRelatorio, unica.osRelatorio, unica.relacao, unica.registro],
+    [true, "", "SINT-040", "7231981", "conferida", entrada.relatorio.chamados[0]]);
+  assert.deepEqual([ambigua.encontrada, ambigua.registro, ambigua.serieRelatorio], [false, null, ""]);
+  assert.deepEqual([divergente.encontrada, divergente.registro, divergente.serieRelatorio], [false, null, ""]);
 });

@@ -1606,7 +1606,7 @@ class SimpressApi:
         })
 
     def chamados_com_os_sebrae(self) -> Dict[str, Any]:
-        """Same list as the "Chamados × OS" panel (montarParesChamadoOs in static/js/shared/chamados-os-model.js), plus the F6 note. Read only."""
+        """Same pairing rules as montarParesChamadoOs in static/js/shared/chamados-os-model.js, plus the F6 note. Read only (the screen shows one pair at a time in the "Chamado × OS" window)."""
         ok, sebrae = self._chamar("GET", "/api/sebrae/novos")
         if not ok:
             return {"erro": sebrae}
@@ -1638,10 +1638,17 @@ class SimpressApi:
             candidatos.append((chave, numero, titulo, "em aberto", texto(auto.get("K") or sug.get("K")), texto(auto.get("E") or sug.get("E"))))
 
         registros: Dict[str, Dict[str, Any]] = {}
+        series_por_os: Dict[str, set] = {}
         for r in _dict(relatorio).get("chamados") or []:
-            chave_serie = normalize_reference_value(_dict(r).get("serie"))
-            if chave_serie and chave_serie not in registros:
-                registros[chave_serie] = _dict(r)
+            r = _dict(r)
+            chave_serie = normalize_reference_value(r.get("serie"))
+            if not chave_serie:
+                continue
+            registros.setdefault(chave_serie, r)
+            ordens = [_dict(o).get("ordem_servico") for o in r.get("oracle") or []] + list(_dict(r.get("simpress")).get("ordens_servico") or [])
+            for o in ordens:
+                if ordem(o):
+                    series_por_os.setdefault(ordem(o), set()).add(chave_serie)
 
         itens = []
         for chave, numero, titulo, situacao, serie, os_ in candidatos:
@@ -1651,6 +1658,10 @@ class SimpressApi:
             # MacBook: the other spelling (with/without the leading `S`) only when the exact serial is not in the report.
             registro = registros.get(chave_serie) or (
                 registros.get(chave_serie[1:] if chave_serie.startswith("S") else f"S{chave_serie}") if chave_serie else None) or {}
+            if not registro:
+                # No serial (or serial not in the report): link by the OS only when it is in a single serial; a found serial without the OS is a real mismatch.
+                series = series_por_os.get(alvo) or set()
+                registro = registros[next(iter(series))] if len(series) == 1 else {}
             oracle = [o for o in registro.get("oracle") or [] if isinstance(o, dict) and ordem(o.get("ordem_servico")) == alvo]
             simpress = _dict(registro.get("simpress"))
             na_simpress = any(ordem(o) == alvo for o in simpress.get("ordens_servico") or [])
@@ -1665,6 +1676,7 @@ class SimpressApi:
                 "titulo": limpar_texto_sensivel(titulo)[:MAX_TEXTO_CHAMADO],
                 "situacao": situacao,
                 "serie": serie,
+                "serie_relatorio": texto(registro.get("serie")) if encontrada else "",
                 "os": os_,
                 "encontrada": encontrada,
                 "mensagem": "" if encontrada else "Série não encontrada na importação atual.",
@@ -1682,7 +1694,7 @@ class SimpressApi:
             "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
         }
         if len(itens) > MAX_ITENS_LISTA:
-            resultado["aviso"] = f"Mostrando só os {MAX_ITENS_LISTA} primeiros; a lista completa está no painel \"Chamados × OS\"."
+            resultado["aviso"] = f"Mostrando só os {MAX_ITENS_LISTA} primeiros; peça um chamado específico. Na tela, cada chamado abre ao lado da OS na janela \"Chamado × OS\" (botão da OS no cartão do chamado na aba Chamados, F5, ou UTIC da OS na aba OS, F6)."
         if aviso_notas:
             resultado["aviso_observacoes"] = aviso_notas
         return _aparar(resultado)
