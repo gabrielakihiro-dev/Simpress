@@ -308,6 +308,11 @@ class RouterTests(unittest.TestCase):
             "solicitante": {"nome": "Pessoa", "email": "p@example.test", "telefone": "41999990000"}, **alteracoes,
         })
 
+    def test_default_solicitante_route_serves_the_backend_constant_without_touching_chrome(self):
+        resposta = self.client.get("/api/ux/gerar-ticket/solicitante")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {campo: ux_chamados.SOLICITANTE_PADRAO[campo] for campo in ("nome", "email", "telefone")})
+
     def test_routes_prepare_simulate_and_cancel(self):
         resposta = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo)
         self.assertEqual(resposta.status_code, 200, resposta.text)
@@ -320,6 +325,22 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(self.enviar(sessao, solicitante={"nome": "", "email": "p@example.test", "telefone": "1"}).status_code, 422)
         resposta = self.client.post("/api/ux/gerar-ticket/cancelar", json={"session_id": sessao["session_id"]})
         self.assertEqual(resposta.json(), {"status": "cancelado"})
+
+    def test_transport_request_text_is_accepted_as_the_ticket_description_unchanged(self):
+        # Default Registro of "Gerar ticket no UX" = the F2 "Texto para Transporte" (montarTextoSolicitacaoTransporte).
+        texto = (
+            "Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de Curitiba/PR para a unidade do Sebrae"
+            " de Pato Branco/PR\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\n"
+            "Endereço para Retirada: Rua Fictícia, 1 - Centro - Curitiba/PR\n"
+            "Endereço para Entrega: Av. Tupi, 333 - Bortot - Pato Branco/PR - CEP 85504-000"
+        )
+        sessao = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo).json()
+        resposta = self.enviar(sessao, descricao=texto)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["status"], "preenchido")
+        self.assertEqual(self.portal.formularios[-1].descricao, texto)
+        # Without the delivery address the text ends in ":" and stays blocked, as in the modal.
+        self.assertEqual(self.enviar(sessao, descricao=texto.split("\nEndereço para Entrega")[0] + "\nEndereço para Entrega:").status_code, 422)
 
     def test_test_series_real_send_is_refused_with_422(self):
         sessao = self.client.post("/api/ux/gerar-ticket/preparar", json={**self.corpo, "serial": "BRM551RN1Y"}).json()

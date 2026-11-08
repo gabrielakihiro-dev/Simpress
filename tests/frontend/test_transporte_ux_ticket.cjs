@@ -28,7 +28,14 @@ function fakeElement(id = "") {
   };
 }
 
-function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
+const PADRAO = { nome: "Pessoa Padrão", email: "padrao@exemplo.com", telefone: "(41) 90000-0000" };
+const TEXTO_TRANSPORTE = [
+  "Prezados,", "", "Solicito o transporte do equipamento da unidade do Sebrae de Origem/PR para a unidade do Sebrae de Destino/PR", "",
+  "O transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.", "",
+  "Endereço para Retirada: Rua A, 1", "Endereço para Entrega: Rua B, 2",
+].join(String.fromCharCode(10));
+
+function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte = "" } = {}) {
   const elementos = new Map();
   const listeners = {};
   const el = id => {
@@ -47,6 +54,8 @@ function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
   const efeitos = { chamadas: [], abertos: [], fechados: [], confirmacoes: [], toasts: [] };
   const app = {
     apiFetch(url, opcoes) {
+      // GET /solicitante: the default solicitante served by the backend.
+      if (!opcoes.method) return Promise.resolve(url === "/api/ux/gerar-ticket/solicitante" ? { ...PADRAO } : null);
       const corpo = JSON.parse(opcoes.body);
       efeitos.chamadas.push([url.replace(API, ""), corpo]);
       try {
@@ -59,6 +68,8 @@ function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
     fecharModalAcessivel: id => efeitos.fechados.push(id),
     confirmarAcao: async opcoes => { efeitos.confirmacoes.push(opcoes); return confirmar; },
     showToast: (mensagem, tipo) => efeitos.toasts.push({ mensagem, tipo }),
+    // transfer-form.js publishes this; it returns { aviso } when the F2 addresses are missing.
+    montarTextoSolicitacaoTransporte: () => textoTransporte ? { texto: textoTransporte } : { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." },
   };
   el("select-unidade-destino").value = "7";
   const acoes = createUxTicket({ app, appState: { unidadesList: [{ id: 7, cep }] } });
@@ -73,7 +84,7 @@ const esperar = () => new Promise(resolve => setImmediate(resolve));
 const etapas = efeitos => efeitos.chamadas.map(([etapa]) => etapa);
 
 test("Gerar Planilha opens the modal and prepares with the payload plus the delivery CEP", async () => {
-  const h = criar({ responder: () => PREPARADO });
+  const h = criar({ responder: () => PREPARADO, textoTransporte: TEXTO_TRANSPORTE });
   await h.gerar();
   assert.deepEqual(h.efeitos.abertos, [["modal-ticket-ux", "#ux-ticket-cancelar", "fecharTicketUX"]]);
   assert.deepEqual(h.efeitos.chamadas, [["preparar", { ...PAYLOAD, entrega_cep: "80000-000" }]]);
@@ -81,15 +92,25 @@ test("Gerar Planilha opens the modal and prepares with the payload plus the deli
   assert.equal(h.el("ux-ticket-modelo").textContent, "Modelo X");
   assert.equal(h.el("ux-ticket-endereco").textContent, "Rua Um, 1");
   assert.equal(h.el("ux-ticket-nome").value, SOLICITANTE.nome);
-  // The Deslocamento text went back to the Home (F1) on 08/11/2026: the Registro starts empty.
-  assert.equal(h.el("ux-ticket-registro").value, "");
+  // Default Registro = the F2 "Texto para Transporte" (same function as the button); Deslocamento stays in the Home (F1).
+  assert.equal(h.el("ux-ticket-registro").value, TEXTO_TRANSPORTE);
   assert.equal(h.el("ux-ticket-erro").hidden, true);
+  assert.equal(h.el("ux-ticket-simular").disabled, false);
+  assert.equal(h.el("ux-ticket-motivo").hidden, true);
+});
+
+test("the default Registro reaches /enviar unchanged when the user does not edit it", async () => {
+  const h = criar({ responder: (etapa, corpo) => etapa === "preparar" ? PREPARADO : { status: "preenchido" }, textoTransporte: TEXTO_TRANSPORTE });
+  await h.gerar();
+  await h.acoes.executarTicketUX(false);
+  assert.equal(h.efeitos.chamadas.at(-1)[0], "enviar");
+  assert.equal(h.efeitos.chamadas.at(-1)[1].descricao, TEXTO_TRANSPORTE);
 });
 
 test("a Registro line ending in ':' blocks Simular and Finalizar with a visible reason", async () => {
   const h = criar({ responder: () => PREPARADO });
   await h.gerar();
-  // The Registro starts empty, so both buttons start blocked with a visible reason.
+  // Without the F2 addresses the transport text is not built: the Registro starts empty and blocked.
   assert.equal(h.el("ux-ticket-simular").disabled, true);
   assert.equal(h.el("ux-ticket-finalizar").disabled, true);
   assert.equal(h.el("ux-ticket-motivo").textContent, "Preencha o Registro.");
@@ -286,6 +307,42 @@ test("Cancelar calls /cancelar for the open session, swallows a 409 and closes t
   assert.deepEqual(h.efeitos.fechados, ["modal-ticket-ux"]);
 });
 
+test("the default solicitante is shown at once, stays editable while preparing and survives a failure", async () => {
+  let resolver;
+  const h = criar({ responder: () => new Promise((_, rejeitar) => { resolver = rejeitar; }) });
+  await h.gerar();
+  // While /preparar runs (minutes in the real UX) the user can already fill the Registro and edit the solicitante.
+  assert.equal(h.el("ux-ticket-nome").value, PADRAO.nome);
+  assert.equal(h.el("ux-ticket-email").value, PADRAO.email);
+  assert.equal(h.el("ux-ticket-telefone").value, PADRAO.telefone);
+  assert.equal(h.el("ux-ticket-formulario").disabled, false);
+  h.el("ux-ticket-registro").value = ["Prezados,", "Colaborador(a) Novo(a):"].join(String.fromCharCode(10));
+  h.acoes.atualizarTicketUX();
+  assert.equal(h.el("ux-ticket-registro").attrs["aria-invalid"], "true");
+  assert.equal(h.el("ux-ticket-simular").disabled, true);
+  h.el("ux-ticket-email").value = "outra@exemplo.com";
+  resolver(erro("O Chrome de automação não abriu.", "chrome_indisponivel", 503));
+  await esperar();
+  assert.equal(h.el("ux-ticket-nome").value, PADRAO.nome);
+  assert.equal(h.el("ux-ticket-email").value, "outra@exemplo.com");
+  h.el("ux-ticket-registro").value = REGISTRO_OK;
+  h.acoes.atualizarTicketUX();
+  assert.equal(h.el("ux-ticket-registro").attrs["aria-invalid"], "false");
+});
+
+test("the front-end never embeds the default solicitante: it reads GET /solicitante", () => {
+  const js = fs.readFileSync(path.join(__dirname, "..", "..", "static", "js", "features", "ux-ticket.js"), "utf8");
+  assert.ok(js.includes('app.apiFetch(API + "/solicitante"'));
+  assert.doesNotMatch(js, /@simpress\.com\.br/);
+});
+
+test("the Registro alert border outranks the generic dialog field border", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "..", "static", "styles", "ck-cockpit.css"), "utf8");
+  // .ck-veu > .ck-dialogo :is(input, select, textarea) is (0,2,1); a bare .ux-ticket-registro[aria-invalid] (0,2,0) loses.
+  assert.ok(css.includes('.ck-veu > .ck-dialogo :is(input, select, textarea) {'));
+  assert.ok(css.includes('.ck-veu > .ck-dialogo .ux-ticket-registro[aria-invalid="true"] { border-color: var(--cor-alerta-texto); }'));
+});
+
 test("closing while /preparar is in flight cancels the session that arrives later", async () => {
   let resolver;
   const h = criar({ responder: etapa => etapa === "preparar" ? new Promise(resolve => { resolver = resolve; }) : { status: "cancelado" } });
@@ -313,6 +370,9 @@ test("closing is ignored while the final submission is in flight", async () => {
 
 test("the modal markup keeps the visible alert; Deslocamento is the Home default and Texto para Transporte is in F2", () => {
   assert.match(html, /<p id="ux-ticket-erro"[^>]*role="alert"/);
+  // The "Solicitante" title spans the two-column grid, so each label stays next to its field.
+  assert.match(html, /<p id="ux-ticket-solicitante-titulo" class="[^"]*ux-chamado-solicitante__titulo/);
+  assert.match(html, /<p id="ux-ticket-motivo" class="ux-ticket-aviso"/);
   assert.match(html, /id="modal-ticket-ux"/);
   // Restored on 08/11/2026 at the user's request (the 07/11 migration to the ticket Registro was undone).
   assert.match(html, /aria-selected="true"[^>]*id="pill-chamado-deslocamento"/);

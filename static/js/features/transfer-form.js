@@ -551,7 +551,8 @@
     return `${valor}/PR`;
   }
 
-  function gerarTextoSolicitacaoTransporte() {
+  // Single source of the transport request text: the F2 button and the Registro of "Gerar ticket no UX" (ux-ticket.js).
+  function montarTextoSolicitacaoTransporte() {
     const retiradaEndereco = document.getElementById("retirada-endereco").value.trim();
     const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
     const unidadeDestino = appState.unidadesList.find(
@@ -561,15 +562,21 @@
     const entregaCidade = cidadeComUf(unidadeDestino?.cidade);
 
     if (!retiradaEndereco || !entregaEndereco) {
-      app.showToast("Selecione o equipamento de origem e a unidade de destino para carregar os endereços.", "warning");
-      return;
+      return { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." };
     }
     if (!retiradaCidade || !entregaCidade) {
-      app.showToast("Não foi possível identificar as cidades de origem e destino.", "warning");
-      return;
+      return { aviso: "Não foi possível identificar as cidades de origem e destino." };
     }
 
-    const texto = `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}`;
+    return { texto: `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}` };
+  }
+
+  function gerarTextoSolicitacaoTransporte() {
+    const { texto, aviso } = montarTextoSolicitacaoTransporte();
+    if (!texto) {
+      app.showToast(aviso, "warning");
+      return;
+    }
     document.getElementById("textarea-texto-transporte").value = texto;
     app.abrirModalAcessivel("modal-texto-transporte", "#textarea-texto-transporte", "fecharModalTextoTransporte");
   }
@@ -840,7 +847,7 @@
     abrirHomeParaPesquisarEquipamento, controlarAbasTransferencia, forcarSedePradoVelho,
     atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
-    abrirModalPreview, fecharModalPreview, copiarTextoDoModal, gerarTextoSolicitacaoTransporte,
+    abrirModalPreview, fecharModalPreview, copiarTextoDoModal, montarTextoSolicitacaoTransporte, gerarTextoSolicitacaoTransporte,
     atualizarPreviaTransporteCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
