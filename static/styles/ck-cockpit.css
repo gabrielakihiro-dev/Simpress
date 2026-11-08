@@ -901,8 +901,9 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 
 #automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 #automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
+#dashboard-agendamento-intervalo { width: auto; }
 /* B4: no card de chamados novos, a opção "Repetir a cada 30 minutos" e as três linhas de status ficam juntas (6px em vez de 14px) e se leem como um só grupo; o gap de 14px continua entre os grupos. */
-#tab-panel-automacao label.ck-campo + #dashboard-agendamento-status,
+#tab-panel-automacao .ck-campo + #dashboard-agendamento-status,
 #tab-panel-automacao #dashboard-agendamento-status + #sebrae-dashboard-status,
 #tab-panel-automacao #sebrae-dashboard-status + #sebrae-novos-resumo { margin-top: -8px; }
 .ck-aviso--alerta { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }

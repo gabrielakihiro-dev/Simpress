@@ -28,6 +28,13 @@ class AgendamentoPayload(BaseModel):
     ativo: bool
 
 
+class AgendamentoDashboardPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ativo: bool
+    intervalo_minutos: Literal[30, 60, 90, 120] | None = None
+
+
 class RotinaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -112,10 +119,10 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         return JSONResponse(services.dashboard().resumo(), headers={"Cache-Control": "no-store"})
 
     @router.put("/api/automacao/dashboard/agendamento")
-    def agendamento_dashboard(payload: AgendamentoPayload) -> JSONResponse:
+    def agendamento_dashboard(payload: AgendamentoDashboardPayload) -> JSONResponse:
         if services.dashboard is None:
             raise DomainError("Agendamento indisponível.", status_code=503)
-        return JSONResponse(services.dashboard().definir_ativo(payload.ativo), headers={"Cache-Control": "no-store"})
+        return JSONResponse(services.dashboard().definir_ativo(payload.ativo, payload.intervalo_minutos), headers={"Cache-Control": "no-store"})
 
     @router.get("/api/automacao/capturas/{nome}")
     def captura_automacao(nome: str):
