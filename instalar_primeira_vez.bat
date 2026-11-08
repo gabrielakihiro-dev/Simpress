@@ -117,9 +117,9 @@ if exist "%MIGRATOR%" (
 echo.
 
 rem ---------------------------------------------------------------
-rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify e Node.js (nunca bloqueiam)
+rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify, Node.js e plugin model-super-power (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js e skills dos agentes^)...
+echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js, skills dos agentes e plugin model-super-power^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
@@ -232,6 +232,30 @@ set "GEMINI_USER_SKILLS=%USERPROFILE%\.gemini\config\skills"
 if exist "%PROJECT_DIR%.agents\skills" (
     if not exist "%GEMINI_USER_SKILLS%" mkdir "%GEMINI_USER_SKILLS%" >nul 2>nul
     xcopy /e /i /y /q "%PROJECT_DIR%.agents\skills\*" "%GEMINI_USER_SKILLS%\" >nul 2>nul
+)
+
+:checar_super_power
+rem Plugin model-super-power do Claude Code: subagentes da tabela "Delegacao em subagentes" do AGENTS.md.
+rem shortcut: instala do repositorio oficial, que ainda nao tem as correcoes do maestro no app desktop (PR #1 do upstream); trocar a fonte se o PR nao for mesclado.
+set "SUPER_POWER_INSTALAR=model-super-power --marketplace johnnyhelder/claude-model-super-power"
+where claude >nul 2>nul
+if errorlevel 1 (
+    echo   Claude Code ^(comando claude^) nao encontrado no PATH; o plugin model-super-power nao foi instalado ^(opcional^).
+    echo   No Claude Code, rode uma vez: /plugin install %SUPER_POWER_INSTALAR%
+    goto resumo
+)
+claude plugin list --json 2>nul | findstr /l /c:"model-super-power@claude-model-super-power" >nul
+if not errorlevel 1 (
+    echo   OK: plugin model-super-power do Claude Code encontrado.
+    goto resumo
+)
+echo   Plugin model-super-power do Claude Code nao encontrado; instalando ^(subagentes dos agentes; altera ~/.claude^)...
+call claude plugin install %SUPER_POWER_INSTALAR%
+if errorlevel 1 (
+    echo   [AVISO] Nao foi possivel instalar o plugin model-super-power; o servidor nao e afetado.
+    echo           No Claude Code, rode uma vez: /plugin install %SUPER_POWER_INSTALAR%
+) else (
+    echo   OK: plugin model-super-power instalado. Vale nas sessoes novas do Claude Code.
 )
 
 :resumo
