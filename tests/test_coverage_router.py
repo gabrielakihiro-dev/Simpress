@@ -254,5 +254,20 @@ class CoverageRouterTests(unittest.TestCase):
         self.assertEqual(resposta.status_code, 422)
 
 
+    def test_tipos_estritos_sem_coercao(self):
+        base = {"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 3}
+        self.post("/api/cobertura/demandas", {**base, "quantidade": "3"}, 422)
+        self.post("/api/cobertura/demandas", {**base, "quantidade": True}, 422)
+        self.post("/api/cobertura/demandas", {**base, "monitor": "true"}, 422)
+        self.post("/api/cobertura/demandas", {**base, "monitor": 1}, 422)
+        demanda = self.post("/api/cobertura/demandas", {**base, "monitor": True})
+        self.assertEqual(demanda["rev"], 1)
+        # true virava rev 1 e cancelava; "1" também.
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": True}, 422)
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": "1"}, 422)
+        self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": "1"}, 422)
+        self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": None})
+        self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": demanda["rev"]})
+
 if __name__ == "__main__":
     unittest.main()
