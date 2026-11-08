@@ -7,12 +7,14 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core.integrity import FileTransactionError
 from domains.coverage import Manutencao
 from routers.coverage import CoverageServices, create_coverage_router
 
@@ -268,6 +270,20 @@ class CoverageRouterTests(unittest.TestCase):
         self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": "1"}, 422)
         self.post("/api/cobertura/disponibilidade", {"serie": "SINT-001", "estado": "disponivel", "rev": None})
         self.post(f"/api/cobertura/demandas/{demanda['id']}/cancelar", {"rev": demanda["rev"]})
+
+    def test_falha_de_gravacao_500_nao_expoe_a_excecao(self):
+        erro = FileTransactionError("SEGREDO C:/Users/pessoa/arquivo.json")
+        with mock.patch("routers.coverage.CoberturaStore.escrever", side_effect=erro), \
+                self.assertLogs("routers.coverage", level="ERROR") as logs:
+            resposta = self.client.post("/api/cobertura/demandas", json={"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 1})
+        self.assertEqual(resposta.status_code, 500)
+        self.assertEqual(resposta.json()["detail"], {
+            "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
+        })
+        self.assertNotIn("SEGREDO", resposta.text)
+        self.assertNotIn("pessoa", resposta.text)
+        self.assertIn("FileTransactionError", "\n".join(logs.output))
+
 
 if __name__ == "__main__":
     unittest.main()

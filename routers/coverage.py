@@ -16,6 +16,7 @@ Idempotência de ``registrar-transferencia`` pela ``chave`` da movimentação: p
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -35,6 +36,8 @@ from routers.transfer_history import (
     build_record,
 )
 from routers.transfers import TransferenciaPayload
+
+logger = logging.getLogger(__name__)
 
 MENSAGEM_ILEGIVEL = "O estado da cobertura está ilegível; os dados foram preservados e nada foi gravado."
 
@@ -165,8 +168,10 @@ def _falhar(error: BaseException) -> NoReturn:
         }) from error
     if eh_ilegivel(error):
         raise HTTPException(status_code=503, detail={"codigo": "estado_ilegível", "mensagem": MENSAGEM_ILEGIVEL}) from error
+    # O texto da exceção pode ter caminho local: fica só no log do servidor.
+    logger.error("Falha ao gravar a cobertura.", exc_info=error)
     raise HTTPException(status_code=500, detail={
-        "codigo": "falha_gravacao", "mensagem": f"Falha ao gravar a cobertura: {error}",
+        "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
     }) from error
 
 
