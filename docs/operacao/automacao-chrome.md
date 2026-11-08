@@ -267,6 +267,7 @@ O Chrome de automação escuta a porta de depuração 9333 enquanto está aberto
 - **Reabrir:** a próxima rotina, consulta do Endpoint ou preparação UX chama `garantir_chrome` e reabre o Chrome. O login pode ser pedido de novo se a sessão do site tiver expirado.
 - **Limites conhecidos:** navegar à mão nesse Chrome sem rotina não conta como uso, então ele fecha depois de 10 min. Um `Controle remoto` que não abre aba nova (visualizador na mesma página ou aplicativo nativo) não é registrado.
 - **Configuração:** `SIMPRESS_CHROME_OCIOSO_S` troca os 600 s; `0` ou negativo desliga (a suíte de testes desliga em `tests/run_tests.py`).
+- **Login guardado ao fechar pelo X (08/11/2026, pedido do usuário):** fechar o Chrome pelo X apagava os cookies de sessão (Endpoint, UX, Microsoft), mesmo com `--restore-last-session`, que só os guarda no fechamento pelo CDP. Quando `garantir_chrome` abre o Chrome, `manter_login_ao_fechar` liga "Continuar de onde parou" (`session.restore_on_startup = 1`) pela página `chrome://settings/onStartup` (`chrome.settingsPrivate.setPref`), em processo próprio; o Chrome desfaz edições diretas no `Preferences`. Já ligado, nada roda; se falhar, só avisa no log. Matar o processo (Gerenciador de Tarefas, `Stop-Process -Force`) logo após o login ainda pode perder os cookies.
 - **Limite conhecido:** o Chrome aberto ainda escuta a porta TCP 9333. Trocar por `--remote-debugging-pipe` ou por `launch_persistent_context` do Playwright depende de decisão do usuário; não faça sem pedido.
 
 ## Aviso "New Hotfix Available" do Endpoint
