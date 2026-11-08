@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Superpower"
+  short_description: "Orquestra tarefas com modelos por papel e complexidade"
+  default_prompt: "Use $maestro-superpower para coordenar esta tarefa do Simpress."
