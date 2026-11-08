@@ -1620,12 +1620,13 @@ class OsDosAntigosTests(unittest.TestCase):
                 if path == "/api/sebrae/novos":
                     return 200, {"importado": {"arquivo": "d.xlsx", "total": 2, "abertos": [
                         {"numero": "UTIC-2026-0094", "automaticos": {"K": "SCXC9F072K1", "E": ""}, "automaticos_sugeridos": {"E": "77"}},
-                        {"numero": "UTIC-2026-0095", "automaticos": {"K": "ABC123", "E": "5"}, "automaticos_sugeridos": {}},
+                        {"numero": "UTIC-2026-0095", "automaticos": {"K": "ABC123", "E": "5"}, "automaticos_sugeridos": {}, "nao_encontrado_softexpert": True},
                     ]}}
                 return super().__call__(method, path, params, body)
 
         itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
         self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
+        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True])
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
         conversation, _ = make_conversation(model, Simpress())
         self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")

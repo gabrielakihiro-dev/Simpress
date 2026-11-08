@@ -252,9 +252,16 @@ li[role=option]{padding:6px;cursor:pointer;border:1px solid #ccc;width:288px}
 <option>Selecione</option><option>UTIC - N2</option><option>UTIC - N1</option></select></div>
 </section>
 <section id="p-anexo" class="oculto">
-<button type="button" id="incluir" title="Incluir" aria-label="Incluir">+</button>
-<input type="file" id="arquivo" class="oculto" accept=".pdf">
-<div id="upload" class="oculto"><span id="nome-upload"></span> <button type="button" id="enviar-anexo">Enviar</button></div>
+<!-- Como o real (08/11/2026): "+" só com ícone; a área de arrastar da grade sobe na hora (vem antes no DOM, de
+propósito); o "+" abre o modal "Anexo", que só grava no Enviar. -->
+<button type="button" id="btnInsertAttach"><span class="seicon-plus"></span></button>
+<div id="DragNdiv">Arraste um arquivo <input type="file" id="arquivo-grade" multiple></div>
+<div class="rctModal oculto" id="modal-anexo"><div class="rctModal-header">Anexo</div>
+<div class="rctModal-body"><label>ARQUIVO <input type="text" id="filebox" readonly></label>
+<input type="file" id="arquivo" accept=".pdf">
+<label>NOME <input type="text" id="idnmUploadTab"></label></div>
+<div class="rctModal-footer"><button type="button" id="btnCancel">Cancelar</button>
+<button type="button" id="btnFooter">Enviar</button></div></div>
 <ul id="anexados"></ul>
 </section>
 <script>
@@ -288,18 +295,23 @@ const painel = (qual) => {
 };
 $('m-atendimento').addEventListener('click', () => painel('atendimento'));
 $('m-anexo').addEventListener('click', () => painel('anexo'));
-$('incluir').addEventListener('click', () => $('arquivo').click());
+$('btnInsertAttach').addEventListener('click', () => $('modal-anexo').classList.remove('oculto'));
+$('arquivo-grade').addEventListener('change', () => {  // sobe sem Enviar: o teste exige que nunca aconteça
+  const arquivo = $('arquivo-grade').files[0];
+  if (arquivo) fetch('/api/anexo?numero=' + D.numero + '&nome=grade:' + encodeURIComponent(arquivo.name), {method: 'POST'});
+});
 $('arquivo').addEventListener('change', () => {
   const arquivo = $('arquivo').files[0];
   if (!arquivo) return;
-  $('nome-upload').textContent = arquivo.name;
-  $('upload').classList.remove('oculto');
+  $('filebox').value = arquivo.name;
+  $('idnmUploadTab').value = arquivo.name.replace(/[.]pdf$/i, '');
 });
-$('enviar-anexo').addEventListener('click', async () => {
-  const nome = $('nome-upload').textContent;
+$('btnCancel').addEventListener('click', () => $('modal-anexo').classList.add('oculto'));
+$('btnFooter').addEventListener('click', async () => {
+  const nome = $('filebox').value;
   await fetch('/api/anexo?numero=' + D.numero + '&nome=' + encodeURIComponent(nome), {method: 'POST'});
-  $('upload').classList.add('oculto');
-  const li = document.createElement('li'); li.textContent = nome + ' (enviado)'; $('anexados').appendChild(li);
+  $('modal-anexo').classList.add('oculto');
+  const li = document.createElement('li'); li.textContent = $('idnmUploadTab').value; $('anexados').appendChild(li);
 });
 document.querySelectorAll('.proibido').forEach((el) => el.addEventListener('click', () => {
   fetch('/api/proibido?acao=' + encodeURIComponent(el.textContent), {method: 'POST'});

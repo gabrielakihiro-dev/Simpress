@@ -264,6 +264,7 @@ class LeituraTest(unittest.TestCase):
         self.assertEqual(set(self.antigos()), {"UTIC-2026-0012"})
         resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
         self.assertEqual(resultado["falhas"], {"UTIC-2026-0010": "não achei", "UTIC-2026-0011": "RuntimeError"})
+        self.assertEqual(resultado["nao_encontrados"], ["UTIC-2026-0010"])  # só o ausente da central pinta o cartão; erro genérico não
 
     def test_antigos_cancelamento_mantem_o_que_ja_foi_lido(self):
         self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011")
