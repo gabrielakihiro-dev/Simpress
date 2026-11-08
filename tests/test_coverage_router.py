@@ -281,7 +281,7 @@ class CoverageRouterTests(unittest.TestCase):
             resposta = self.client.post("/api/cobertura/demandas", json={"data": "2026-11-20", "cidade": "Cidade A", "quantidade": 1})
         self.assertEqual(resposta.status_code, 500)
         self.assertEqual(resposta.json()["detail"], {
-            "codigo": "falha_gravacao", "mensagem": "Erro interno na Cobertura. Tente novamente.",
+            "codigo": "falha_gravacao", "mensagem": "Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.",
         })
         self.assertNotIn("SEGREDO", resposta.text)
         self.assertNotIn("pessoa", resposta.text)
