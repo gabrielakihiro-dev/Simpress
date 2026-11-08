@@ -952,7 +952,7 @@ def abrir_gestao_solicitacoes(page: "Page", tentativas: int = 3):
 
     1. Se a Gestão de Solicitações já aparece ao abrir o Oracle, segue direto para o campo.
     2. Senão, abre pelo Menu.
-    3. Se o Menu falhar, recarrega o Oracle e abre pelo Menu de novo.
+    3. Se o Menu falhar, volta ao link do Oracle e abre pelo Menu de novo.
     """
     campo = page.get_by_role("textbox", name="Contrato/Item", exact=True).filter(visible=True)
     if esperar_visivel(campo, 8000) or reabrir_filtros_oracle(page, campo):
@@ -967,9 +967,10 @@ def abrir_gestao_solicitacoes(page: "Page", tentativas: int = 3):
         except Exception as erro:
             log("Oracle", f"Falha ao abrir pelo Menu (tentativa {tentativa}/{tentativas}): {descrever_erro(erro)}")
         if tentativa < tentativas:
-            log("Oracle", "Recarregando o Oracle para abrir pelo Menu novamente...")
+            log("Oracle", "Voltando ao link do Oracle para abrir pelo Menu novamente...")
             page.keyboard.press("Escape")
-            page.reload(wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+            # Nunca page.reload(): na tela da Microsoft o SAMLRequest se perde (AADSTS750054).
+            page.goto(ORACLE_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
             aguardar_login(page, "Oracle", oracle_logado, email=EMAIL_DASHBOARD)
             if esperar_visivel(campo, 8000) or reabrir_filtros_oracle(page, campo):
                 return campo.first
@@ -1135,6 +1136,30 @@ def selecionar_contrato_ux(page: "Page") -> None:
     etapa_resiliente(_tentar, "Selecionar contrato no UX")
 
 
+def ux_no_contrato(page: "Page", url: str) -> bool:
+    """A aba continua na tela da rotina e com o contrato certo no filtro (nada de outro link nem outro contrato)."""
+    # Mesma rota com ou sem "/Index", barra final, query ou âncora; outro link do menu não passa.
+    atual, tela = (re.sub(r"(/index)?/*([?#].*)?$", "", u.lower()) for u in (page.url, url))
+    campo = page.locator("#CodigosContratosFiltro")
+    return (
+        (atual == tela or atual.startswith(tela + "/"))
+        and campo.count() == 1
+        and campo.input_value().strip() == CONTRATO_NOME
+        and campo.get_attribute("data-valor") == CONTRATO
+    )
+
+
+def voltar_ao_contrato_ux(page: "Page", url: str) -> bool:
+    """Fora da tela ou do contrato: volta ao mesmo link e seleciona o contrato de novo; True quando precisou voltar."""
+    if ux_no_contrato(page, url):
+        return False
+    log("UX Simpress", f"[AVISO] A aba saiu da tela ou do contrato ({page.url}); voltando para {url} e retomando...")
+    page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    aguardar_login(page, "UX Simpress", ux_logado, entrar=ux_entrar, email=EMAIL_DASHBOARD)
+    selecionar_contrato_ux(page)
+    return True
+
+
 UX_EDICOES_TIMEOUT_MS = 30000
 
 
@@ -1171,6 +1196,12 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
 
         def _abrir_editor():
             try:
+                voltar_ao_contrato_ux(page, UX_EQUIPAMENTOS_URL)  # outro link ou contrato antes do upload: retoma no mesmo link
+            except RotinaErro:
+                raise  # login expirado ou contrato que não confere não se resolvem repetindo
+            except Exception as erro:
+                raise EtapaInstavel(str(erro)) from erro
+            try:
                 controle(page, "Buscar").click()
                 aguardar_ux_livre(page)
                 controle(page, "Editar apelido e id").click()
@@ -1179,7 +1210,7 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
                     has=page.get_by_role("heading", name=re.compile(r"^Editar apelido e id$", re.IGNORECASE))), "Editor de apelido e id")
                 enviar = controle(editor, "Enviar planilha")
                 return editor, enviar
-            except Exception as erro:
+            except Exception as erro:  # botão sumido ou diálogo duplicado por um clique: refaz pelo mesmo link
                 raise EtapaInstavel(str(erro)) from erro
 
         editor, enviar = etapa_resiliente(_abrir_editor, "Abrir o editor de apelido e id no UX")
@@ -1208,7 +1239,9 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         if not salvar.is_enabled():
             raise RotinaErro("Salvar edições está desabilitado; nenhuma edição foi salva.")
         verificar_cancelamento()
-        aguardar_estabilidade_pre_clique(lambda: salvar.is_enabled(), "Salvar edições (UX)")
+        # Só confere (tela e contrato) e aborta; Salvar edições nunca é repetido nem retomado.
+        aguardar_estabilidade_pre_clique(
+            lambda: ux_no_contrato(page, UX_EQUIPAMENTOS_URL) and salvar.is_enabled(), "Salvar edições (UX)")
         log("UX Simpress", "Planilha conferida; clicando uma vez em Salvar edições...")
         salvamento_pedido = True
         salvar.click(timeout=UX_EDICOES_TIMEOUT_MS)
@@ -1237,27 +1270,35 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
 
         def _buscar() -> None:
             try:
+                voltar_ao_contrato_ux(page, UX_PEDIDOS_URL)
                 page.get_by_role("button", name="Buscar", exact=True).filter(visible=True).first.click()
                 aguardar_estado(resumo, "visible")
+                log("UX Simpress", f"Busca concluída: {resumo.inner_text().strip()}.")
+                contratos = page.locator("strong", has_text=re.compile(r"^\s*Contrato:\s*$")).locator("xpath=..")
+                textos = [t.replace("Contrato:", "").strip() for t in contratos.all_inner_texts()]
+                divergentes = [t for t in textos if t != CONTRATO_NOME]
+                if not textos or divergentes:
+                    raise RotinaErro(f"Cartões com contrato diferente de {CONTRATO}: {divergentes or 'nenhum cartão'}.")
+                log("UX Simpress", f"{len(textos)} cartões visíveis conferidos com o contrato {CONTRATO}.")
+            except RotinaErro:
+                raise
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
         etapa_resiliente(_buscar, "Buscar pedidos no UX")
-        log("UX Simpress", f"Busca concluída: {resumo.inner_text().strip()}.")
-        contratos = page.locator("strong", has_text=re.compile(r"^\s*Contrato:\s*$")).locator("xpath=..")
-        textos = [t.replace("Contrato:", "").strip() for t in contratos.all_inner_texts()]
-        divergentes = [t for t in textos if t != CONTRATO_NOME]
-        if not textos or divergentes:
-            raise RotinaErro(f"Cartões com contrato diferente de {CONTRATO}: {divergentes or 'nenhum cartão'}.")
-        log("UX Simpress", f"{len(textos)} cartões visíveis conferidos com o contrato {CONTRATO}.")
-
         excel = page.locator('a.export-option[data-extensao="xlsx"]').filter(visible=True).first
 
         def _abrir_exportar() -> None:
             try:
+                if voltar_ao_contrato_ux(page, UX_PEDIDOS_URL):
+                    _buscar()  # voltou ao link: a busca anterior se perdeu
                 log("UX Simpress", "Exportando: Baixar detalhes > Excel...")
                 page.get_by_role("button", name="Baixar detalhes").filter(visible=True).first.click()
                 excel.wait_for(state="visible", timeout=10000)
+                if not ux_no_contrato(page, UX_PEDIDOS_URL):
+                    raise EtapaInstavel("A tela ou o contrato mudou antes do Excel.")
+            except RotinaErro:
+                raise
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
@@ -1280,8 +1321,11 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
 
         def _buscar() -> None:
             try:
+                voltar_ao_contrato_ux(page, UX_EQUIPAMENTOS_URL)
                 page.locator("#buscar").click()
                 aguardar_estado(exportar, "visible")
+            except RotinaErro:
+                raise
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
@@ -1291,8 +1335,14 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
 
         def _abrir_exportar() -> None:
             try:
+                if voltar_ao_contrato_ux(page, UX_EQUIPAMENTOS_URL):
+                    _buscar()  # voltou ao link: a busca anterior se perdeu
                 exportar.click()
                 excel.wait_for(state="visible", timeout=10000)
+                if not ux_no_contrato(page, UX_EQUIPAMENTOS_URL):
+                    raise EtapaInstavel("A tela ou o contrato mudou antes do Excel.")
+            except RotinaErro:
+                raise
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
 
@@ -1458,6 +1508,8 @@ def confirmar_modo_todos(page: "Page") -> None:
 
 
 def exportar_endpoint(context: "BrowserContext") -> Path:
+    from scripts import verificar_usuarios_endpoint
+
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     endpoint_vigiar_avisos(page)
     try:
@@ -1465,16 +1517,29 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         if "inventory/computers" not in page.url:
             page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
 
-        log("Endpoint Central", "Selecionando 'Todos os computadores'...")
-        selecionar_todos_computadores(page)
-        confirmar_modo_todos(page)
         definir_pagina_ativa_para_recuperacao(page)
+        todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
         xlsx = page.locator('input[name="exportFormat"][value="xls"]')
         consentimento = page.locator('input[name="userConsent"]')
 
         def _abrir_exportar() -> None:
             try:
+                fora = "inventory/computers" not in page.url
+                if not fora:
+                    try:  # outra tela dentro do inventário (ex.: detalhe de um computador) não tem o seletor de modo
+                        todos.wait_for(state="attached", timeout=10000)
+                    except Exception:
+                        fora = True
+                if fora:
+                    log("Endpoint Central", "[AVISO] A aba saiu da grade de computadores; voltando ao mesmo endereço e retomando.")
+                    page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+                    aguardar_login(page, "Endpoint Central", endpoint_logado, entrar=endpoint_entrar, email=EMAIL_SOFTEXPERT)
+                log("Endpoint Central", "Selecionando 'Todos os computadores'...")
+                selecionar_todos_computadores(page)
+                confirmar_modo_todos(page)
+                # Filtro deixado na barra de pesquisa (rotina de usuários ou o próprio usuário) cortaria a exportação.
+                verificar_usuarios_endpoint._limpar_caixas_preenchidas(page)
                 aguardar_estado(exportar, "visible")
                 log("Endpoint Central", "Exportando: Exportar > XLSX + declaração de privacidade...")
                 exportar.click()
@@ -1495,7 +1560,12 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
             page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click,
             "InvAllComputersSummary",
         )
-        validar_xlsx_endpoint(arquivo)
+        try:  # total da paginação ("1 - 25 de N"); sem leitura confiável, confere só cabeçalho e linhas
+            grade = verificar_usuarios_endpoint.ler_grade(page)
+            total_tela = None if grade["carregando"] else (grade["total"] or None)
+        except Exception:
+            total_tela = None
+        validar_xlsx_endpoint(arquivo, total_tela=total_tela)
     except Exception:
         registrar_erro(page, "Endpoint Central")
         raise
@@ -1838,6 +1908,15 @@ def _linha_do_dashboard(page: "Page"):
     return linha
 
 
+def voltar_para_pasta_dashboard(page: "Page") -> None:
+    """Fora da pasta DASHBOARD SEBRAE (clique em outro link): volta ao mesmo endereço e retoma; chamada dentro das etapas repetidas."""
+    if esperar_visivel(_localizar_linha_do_dashboard(page), 15000):
+        return
+    log("Dashboard", "[AVISO] A aba saiu da pasta DASHBOARD SEBRAE; voltando ao mesmo endereço e retomando.")
+    page.goto(DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+
+
 def _abrir_mais_acoes(linha) -> None:
     linha.hover()  # os três pontinhos só aparecem com o mouse na linha (ou com ela selecionada)
     linha.get_by_role("button", name=_MENU_MAIS_ACOES).first.click()
@@ -1872,6 +1951,7 @@ def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
             # Nada irreversível acontece aqui (só download); um RotinaErro de extensão errada
             # (ex.: arquivo incompleto por desincronização) também deve repetir, não abortar.
             try:
+                voltar_para_pasta_dashboard(page)
                 return baixar_dashboard_da_pasta(page)
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
@@ -1978,6 +2058,7 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
 
     def _abrir_menu_duplicata():
         try:
+            voltar_para_pasta_dashboard(page)
             _abrir_mais_acoes(linha)
             duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first
             duplicata.wait_for(state="visible", timeout=15000)
@@ -1989,6 +2070,11 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
 
     # Só a navegação (abrir o menu) é refeita: o clique que cria a cópia nunca é repetido por conta própria.
     duplicata = etapa_resiliente(_abrir_menu_duplicata, "Abrir menu Mais ações > Duplicata")
+    # Repetir criaria outra cópia na pasta: a guarda confere o menu aberto ainda na pasta do Dashboard e aborta; nunca clica de novo.
+    # shortcut: não prova que o menu aberto é o da linha do Dashboard (o SharePoint não liga o menu à linha no DOM); um clique
+    # no "..." de outro arquivo da mesma pasta durante a espera duplicaria esse arquivo (só cria uma cópia, nada é apagado).
+    aguardar_estabilidade_pre_clique(lambda: duplicata.is_visible() and visivel(_localizar_linha_do_dashboard(page)),
+                                     "Duplicata (cópia de segurança no SharePoint)")
     duplicata.click()
     limite = time.time() + 30
     while time.time() < limite:
@@ -2062,6 +2148,7 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
 
     def _abrir_menu_e_escolher_arquivo() -> None:
         try:
+            voltar_para_pasta_dashboard(page)  # outro link antes do upload: volta à pasta e só então abre o Carregar
             _botao_enviar(page).click()
             arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
             arquivos.wait_for(state="visible", timeout=15000)
@@ -2150,6 +2237,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
             # abortar. Uma mudança real no SharePoint continua reprovando em toda tentativa, e a
             # mensagem original (MSG_SHAREPOINT_MUDOU, sem alteração) chega ao usuário do mesmo jeito.
             try:
+                voltar_para_pasta_dashboard(page)
                 baixado = baixar_dashboard_da_pasta(page)
                 conferir_dashboard_do_sharepoint(baixado)
                 return baixado

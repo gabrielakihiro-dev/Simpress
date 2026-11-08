@@ -137,6 +137,146 @@ class ProximaPaginaTests(unittest.TestCase):
         self.assertEqual(ler.call_count, 2)  # cada página lida uma única vez: nenhuma pulada
         self.assertEqual([i.numero for i in itens], ["UTIC-2026-1", "UTIC-2026-2"])
 
+    def test_paginacao_que_volta_a_pagina_ja_lida_recomeca_do_mesmo_link(self):
+        paginas = [["UTIC-2026-1 - a"], ["UTIC-2026-2 - b"], ["UTIC-2026-3 - c"]]
+        estado = {"pagina": 0, "cliques": 0}
+
+        def clicar_proxima(_botao, _descricao):
+            estado["cliques"] += 1
+            # No 2º clique o usuário clicou na página 1 ao mesmo tempo: a lista mudou, mas para trás.
+            estado["pagina"] = 0 if estado["cliques"] == 2 else estado["pagina"] + 1
+
+        page = mock.MagicMock()
+        page.goto.side_effect = lambda *_a, **_k: estado.update(pagina=0)
+        with (
+            mock.patch.object(S, "_aguardar_lista"),
+            mock.patch.object(S, "_esperar", side_effect=lambda _p, condicao, *_a, **_k: condicao()),
+            mock.patch.object(S, "_cancelamento"),
+            mock.patch.object(S, "_textos_linhas", side_effect=lambda _p: list(paginas[estado["pagina"]])),
+            mock.patch.object(S, "_botao_proxima", return_value=mock.MagicMock()),
+            mock.patch.object(S, "_proxima_disponivel", side_effect=lambda _b: estado["pagina"] < 2),
+            mock.patch.object(S, "clicar", side_effect=clicar_proxima),
+            mock.patch.object(S, "_aguardar_sem_carregamento"),
+            mock.patch.object(R, "log"),
+            mock.patch.object(R, "verificar_cancelamento"),
+            _sem_esperas(),
+        ):
+            itens = S.listar_chamados(page)
+
+        self.assertEqual(
+            [(i.numero, i.ocorrencias) for i in itens], [("UTIC-2026-1", 1), ("UTIC-2026-2", 1), ("UTIC-2026-3", 1)]
+        )
+        page.goto.assert_called_once()
+        self.assertEqual(page.goto.call_args.args[0], S.SOFTEXPERT_URL)
+
+
+class ListaComInterferenciaTests(unittest.TestCase):
+    """O usuário mexe na aba durante a leitura (rolagem, como na lista real): volta ao mesmo link e recomeça."""
+
+    TODOS = [f"UTIC-2026-{i} - chamado {i}" for i in range(1, 7)]
+
+    def setUp(self):
+        self.addCleanup(R.definir_pagina_ativa_para_recuperacao, None)
+
+    def _pagina(self, interferir):
+        """Lista que carrega lotes de 2 a cada rolagem; ``interferir(n)`` troca a tela (True) ou levanta na n-ésima."""
+        estado = {"linhas": list(self.TODOS[:2]), "rolagens": 0}
+
+        def carregar(*_a, **_k):
+            estado["linhas"] = list(self.TODOS[:2])
+
+        def rolar(*_a):
+            estado["rolagens"] += 1
+            efeito = interferir(estado["rolagens"])
+            if efeito:
+                estado["linhas"] = ["Outra tela aberta pelo usuário"]  # clicou em outro link
+                if isinstance(efeito, Exception):
+                    raise efeito
+            elif estado["linhas"][0] in self.TODOS:  # fora da central de tarefas a rolagem não faz nada
+                estado["linhas"] = list(self.TODOS[: len(estado["linhas"]) + 2])
+
+        page = mock.MagicMock()
+        page.goto.side_effect = carregar
+        page.evaluate.side_effect = rolar
+        return page, estado
+
+    def _listar(self, page, estado, **kwargs):
+        with (
+            mock.patch.object(S, "_aguardar_lista"),
+            mock.patch.object(S, "_esperar", side_effect=lambda _p, condicao, *_a, **_k: condicao()),
+            mock.patch.object(S, "_cancelamento"),
+            mock.patch.object(S, "_textos_linhas", side_effect=lambda _p: list(estado["linhas"])),
+            mock.patch.object(S, "_botao_proxima", return_value=None),
+            mock.patch.object(S, "_lista_declarada_vazia", return_value=False),
+            mock.patch.object(R, "log"),
+            mock.patch.object(R, "verificar_cancelamento"),
+            _sem_esperas(),
+        ):
+            return S.listar_chamados(page, **kwargs)
+
+    def _numeros(self):
+        return [texto.split(" - ")[0] for texto in self.TODOS]
+
+    def test_outro_link_no_meio_da_rolagem_volta_ao_mesmo_link_e_le_tudo(self):
+        page, estado = self._pagina(lambda n: n == 2)
+        itens = self._listar(page, estado)
+        self.assertEqual([i.numero for i in itens], self._numeros())
+        page.goto.assert_called_once()
+        self.assertEqual(page.goto.call_args.args[0], S.SOFTEXPERT_URL)
+
+    def test_erro_do_navegador_ao_rolar_volta_ao_mesmo_link_e_le_tudo(self):
+        page, estado = self._pagina(lambda n: RuntimeError("Execution context was destroyed") if n == 2 else False)
+        itens = self._listar(page, estado)
+        self.assertEqual([i.numero for i in itens], self._numeros())
+        page.goto.assert_called_once()
+
+    def test_interferencia_persistente_vira_erro_e_nunca_lista_parcial(self):
+        page, estado = self._pagina(lambda n: n % 2 == 0)
+        with self.assertRaises(S.SoftExpertErro) as contexto:
+            self._listar(page, estado)
+        self.assertNotIsInstance(contexto.exception, R.EtapaInstavel)
+        self.assertEqual(page.goto.call_count, 2)  # 3 tentativas: a 1ª sem recarregar, as outras no mesmo link
+
+    def test_lista_filtrada_nao_recarrega_o_link_e_falha(self):
+        # Recarregar perderia o filtro da pesquisa e o chamado pareceria ausente (falso "finalizado").
+        page, estado = self._pagina(lambda n: n == 2)
+        with self.assertRaises(S.SoftExpertErro) as contexto:
+            self._listar(page, estado, recomecar=False)
+        self.assertNotIsInstance(contexto.exception, R.EtapaInstavel)
+        page.goto.assert_not_called()
+
+    def test_localizar_le_o_resultado_da_pesquisa_sem_recarregar(self):
+        page = mock.MagicMock()
+        page.locator.return_value.filter.return_value.count.return_value = 1  # campo de pesquisa único
+        chamadas = []
+
+        def listar(_page, *args, **kwargs):
+            chamadas.append(kwargs)
+            return []
+
+        with (
+            mock.patch.object(S, "listar_chamados", side_effect=listar),
+            mock.patch.object(S, "_textos_linhas", return_value=["UTIC-2026-9 - resultado da pesquisa"]),
+            mock.patch.object(S, "_esperar", return_value=True),
+            mock.patch.object(S, "_log"),
+            mock.patch.object(R, "log"),
+            _sem_esperas(),
+        ):
+            self.assertIsNone(S._localizar_chamado(page, "UTIC-2026-9"))
+        self.assertEqual(chamadas, [{}, {"recomecar": False}])
+
+
+class DicaExecutarTests(unittest.TestCase):
+    def test_dica_que_nao_aparece_e_instavel_e_nada_e_clicado(self):
+        # Nada foi clicado ainda: a etapa de abrir o formulário pode refazer do zero.
+        with (
+            mock.patch.object(S, "_esperar", return_value=None),
+            mock.patch.object(S, "clicar") as clique,
+        ):
+            with self.assertRaises(R.EtapaInstavel):
+                S._clicar_icone_executar(mock.MagicMock(), mock.MagicMock(), "UTIC-2026-1")
+        clique.assert_not_called()
+
 
 class GuardPreCliqueTests(unittest.TestCase):
     """O guard pré-clique aborta com SoftExpertErro (motivo estável) e o clique irreversível não acontece."""
@@ -195,10 +335,52 @@ class GuardPreCliqueTests(unittest.TestCase):
             self._guard_aborta(),
         ):
             with self.assertRaises(S.SoftExpertErro) as contexto:
-                S._clicar_finalizar(mock.MagicMock(), mock.MagicMock(), escritas)
+                S._clicar_finalizar(mock.MagicMock(), mock.MagicMock(), "UTIC-2026-1", escritas)
         self._confere(contexto)
         clique.assert_not_called()
         self.assertEqual(escritas, [])
+
+    def test_finalizar_com_outro_chamado_na_janela_nao_clica(self):
+        # O botão é um localizador "preguiçoso": se o usuário levou a janela para outro chamado, o Finalizar
+        # seria o desse outro chamado. O guard confere o número do cabeçalho e aborta sem clicar.
+        def guard(verificar, descricao):
+            if not verificar():
+                raise R.RotinaErro(f"{descricao}: o estado mudou antes do clique; não cliquei.")
+
+        for lido in ("UTIC-2026-2",):
+            with self.subTest(cabecalho=lido):
+                escritas: list[str] = []
+                with (
+                    mock.patch.object(S, "_botao_unico", return_value=mock.MagicMock()),
+                    mock.patch.object(S, "_cabecalho", return_value={"numero": lido, "titulo": "", "solicitante": ""}),
+                    mock.patch.object(S, "clicar") as clique,
+                    mock.patch.object(S, "_log"),
+                    mock.patch.object(R, "aguardar_estabilidade_pre_clique", side_effect=guard),
+                ):
+                    with self.assertRaises(S.SoftExpertErro):
+                        S._clicar_finalizar(mock.MagicMock(), mock.MagicMock(), "UTIC-2026-1", escritas)
+                clique.assert_not_called()
+                self.assertEqual(escritas, [])
+
+    def test_guarda_do_finalizar_so_bloqueia_quando_o_cabecalho_mostra_outro_chamado(self):
+        # Cabeçalho ilegível (visão Atendimento não conferida no site real) não pode bloquear todo Finalizar.
+        lidos: list[bool] = []
+
+        def guard(verificar, descricao):
+            lidos.append(verificar())
+            raise R.RotinaErro("parar antes do clique")
+
+        for cabecalho in ("UTIC-2026-1", "", "UTIC-2026-2"):
+            with (
+                mock.patch.object(S, "_botao_unico", return_value=mock.MagicMock(**{"is_enabled.return_value": True})),
+                mock.patch.object(S, "_cabecalho", return_value={"numero": cabecalho, "titulo": "", "solicitante": ""}),
+                mock.patch.object(S, "clicar"),
+                mock.patch.object(S, "_log"),
+                mock.patch.object(R, "aguardar_estabilidade_pre_clique", side_effect=guard),
+                self.assertRaises(S.SoftExpertErro),
+            ):
+                S._clicar_finalizar(mock.MagicMock(), mock.MagicMock(), "UTIC-2026-1", [])
+        self.assertEqual(lidos, [True, True, False])
 
 
 if __name__ == "__main__":

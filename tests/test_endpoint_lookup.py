@@ -53,6 +53,17 @@ class LookupTests(unittest.TestCase):
                 {"status": "found", "serial": "ABC", "ultimo_logon": "last-user"},
             )
 
+    def test_found_keeps_row_link_internally_and_consultar_never_returns_it(self):
+        data = grade([("ABC", "logged", "last")])
+        data["linhas"][0][3]["href"] = H1
+        with patch.object(grid, "aplicar_filtro", return_value=data):
+            achado = endpoint_lookup.consultar_grade(MagicMock(), automation, "ABC", False)
+        self.assertEqual((achado["_href"], achado["_hostname"]), (H1, "PRMAC-TEST"))
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
+                patch("playwright.sync_api.sync_playwright"), patch.object(endpoint_lookup, "_preparar_aba"), \
+                patch.object(endpoint_lookup, "consultar_grade", return_value=dict(achado)):
+            self.assertEqual(endpoint_lookup.consultar("ABC", False), {"status": "found", "serial": "ABC", "ultimo_logon": "last"})
+
     def test_mac_retry_only_when_authorized_and_exact_missing(self):
         for mac, count, status in [(False, 1, "not_found"), (True, 2, "found")]:
             with self.subTest(mac=mac), patch.object(grid, "limpar_filtro"), patch.object(grid, "aplicar_filtro", side_effect=[grade([]), grade([("ABC", "wrong", "user")])]) as search:
@@ -174,6 +185,9 @@ class LookupTests(unittest.TestCase):
             self.assertTrue(ready.call_args.kwargs["confirmar"]())
 
 
+ACHADO_PC1 = {"status": "found", "serial": "ABC", "_href": "#/uems/inventory/computers/1", "_hostname": "PC1"}
+
+
 class RemoteControlTests(unittest.TestCase):
     def run_remote(self, found, menus=(True,), **kwargs):
         pw = MagicMock()
@@ -181,25 +195,26 @@ class RemoteControlTests(unittest.TestCase):
         page = pw.chromium.connect_over_cdp.return_value.contexts[0].new_page.return_value
         page.locator.return_value.first.locator.return_value.first.inner_text.return_value = " PC1 "
         page.url = ""
-        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "aguardar_login"), patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"),              patch("playwright.sync_api.sync_playwright") as factory,              patch.object(automation, "aguardar_login"), patch.object(automation, "selecionar_todos_computadores"), patch.object(automation, "confirmar_modo_todos"),              patch.object(automation, "acionar_quando_pronto"),              patch.object(endpoint_lookup, "consultar_grade", return_value=found),              patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=list(menus)), \
+             patch.object(automation, "aguardar_estabilidade_pre_clique"):
             factory.return_value.__enter__.return_value = pw
             result = endpoint_lookup.controle_remoto("ABC", False, **kwargs)
         return result, page
 
     def test_connects_with_reason_acesso_and_closes_nothing(self):
-        result, page = self.run_remote({"status": "found", "serial": "ABC"})
+        result, page = self.run_remote(ACHADO_PC1)
         self.assertEqual(result, {"status": "connected", "serial": "ABC", "hostname": "PC1"})
         page.locator.assert_any_call('textarea[name="reasonMessage"]:visible')
         page.locator.return_value.fill.assert_called_once_with("acesso", timeout=15000)
         page.close.assert_not_called()
 
     def test_red_monitor_falls_back_to_actions_menu_then_connects(self):
-        result, page = self.run_remote({"status": "found", "serial": "ABC"}, menus=(False, True))
+        result, page = self.run_remote(ACHADO_PC1, menus=(False, True))
         self.assertEqual(result["status"], "connected")
         page.locator.assert_any_call(".resource-action--tab .resource-action--button")
 
     def test_offline_when_no_menu_shows_remote_control(self):
-        result, page = self.run_remote({"status": "found", "serial": "ABC"}, menus=(False, False))
+        result, page = self.run_remote(ACHADO_PC1, menus=(False, False))
         self.assertEqual(result, {"status": "offline", "serial": "ABC", "hostname": "PC1"})
         page.locator.return_value.fill.assert_not_called()
 
@@ -217,12 +232,13 @@ class RemoteControlTests(unittest.TestCase):
              patch.object(automation, "endpoint_logado", return_value=True), \
              patch.object(automation, "selecionar_todos_computadores", side_effect=lambda *_: ordem.append("grade")), \
              patch.object(automation, "confirmar_modo_todos"), patch.object(automation, "acionar_quando_pronto"), \
-             patch.object(endpoint_lookup, "consultar_grade", return_value={"status": "found", "serial": "ABC"}), \
-             patch.object(endpoint_lookup, "_menu_com_controle_remoto", return_value=True):
+             patch.object(endpoint_lookup, "consultar_grade", return_value=dict(ACHADO_PC1)), \
+             patch.object(endpoint_lookup, "_menu_com_controle_remoto", return_value=True), \
+             patch.object(automation, "aguardar_estabilidade_pre_clique", side_effect=lambda *a, **k: ordem.append("guarda")):
             factory.return_value.__enter__.return_value = pw
             result = endpoint_lookup.controle_remoto("ABC", False)
         self.assertEqual(result["status"], "connected")
-        self.assertEqual(ordem, ["login", "grade", "conectar"])
+        self.assertEqual(ordem, ["login", "grade", "guarda", "conectar"])
         self.assertEqual(login.call_args.args[1], "Endpoint Central")
         self.assertIs(login.call_args.kwargs["entrar"], automation.endpoint_entrar)
 
@@ -243,6 +259,184 @@ class RemoteControlTests(unittest.TestCase):
         result, page = self.run_remote({"status": "found", "serial": "ABC"}, antes_de_conectar=lambda fallback: False)
         self.assertEqual(result, {"status": "ambiguous", "serial": "ABC", "origem": "pedido_cancelado"})
         page.locator.return_value.fill.assert_not_called()
+
+    def test_cancel_during_the_guard_closes_the_dialog_without_connecting(self):
+        # Cancelado depois de abrir o diálogo (durante a guarda): a 2ª checagem, logo antes do Conectar, recusa.
+        antes = MagicMock(side_effect=[True, False])
+        result, page = self.run_remote(dict(ACHADO_PC1), antes_de_conectar=antes)
+        self.assertEqual(result, {"status": "ambiguous", "serial": "ABC", "origem": "pedido_cancelado"})
+        page.locator.return_value.fill.assert_called_once_with("acesso", timeout=15000)
+        page.locator.return_value.click.assert_not_called()  # o Conectar
+        page.keyboard.press.assert_called_once_with("Escape")
+        self.assertEqual(antes.call_count, 2)
+
+
+H1, H2 = "#/uems/inventory/computers/111", "#/uems/inventory/computers/222"
+ACHADO_PC2 = {"status": "found", "serial": "ABC", "ultimo_logon": "ana", "_href": H2, "_hostname": "PC2"}
+
+
+class TelaControle:
+    """Endpoint falso do Controle remoto; os locators se resolvem na hora da ação, como no Playwright.
+
+    ``linhas`` = [(hostname, href)] da grade; ``vermelhos`` = hosts cujo menu da grade não tem Controle remoto;
+    ``ao_escape`` = interferência do usuário logo depois de um Escape."""
+
+    def __init__(self, linhas, vermelhos=(), ao_escape=None):
+        self.linhas, self.vermelhos, self.ao_escape = list(linhas), set(vermelhos), ao_escape
+        self.url, self.ordem = automation.ENDPOINT_URL, []
+        self.menu, self.dialogo, self.motivo, self.falhas_fill = None, None, "", 0
+        tela = self
+
+        class Teclado:
+            def press(self, tecla):
+                tela.ordem.append(("tecla", tecla))
+                tela.menu, tela.dialogo, tela.motivo = None, None, ""
+                if tela.ao_escape:
+                    tela.ao_escape(tela)
+                    tela.ao_escape = None
+
+        self.keyboard = Teclado()
+
+    def locator(self, seletor, has_text=None):
+        return LocTela(self, seletor)
+
+    def goto(self, url, **kw):
+        self.ordem.append(("goto", "#" + url.split("#", 1)[1]))
+        self.url = url
+
+    def wait_for_timeout(self, ms):
+        pass
+
+
+class LocTela:
+    def __init__(self, tela, seletor, linha=None):
+        self.t, self.seletor, self.linha = tela, seletor, linha  # linha: seletor da linha que contém este
+
+    first = property(lambda self: self)
+
+    def _linhas(self):
+        if self.t.url != automation.ENDPOINT_URL:
+            return []  # dentro de um detalhe não há grade
+        alvo = self.linha or self.seletor
+        return [l for l in self.t.linhas if alvo == endpoint_lookup._LINHA or f'href="{l[1]}"' in alvo]
+
+    def locator(self, seletor):
+        return LocTela(self.t, seletor, self.seletor)
+
+    def count(self):
+        if self.seletor == endpoint_lookup._ITEM_CONTROLE_REMOTO:
+            return int(bool(self.t.menu and self.t.menu[1]))
+        if "reasonMessage" in self.seletor or "button-primary-form" in self.seletor:
+            return int(self.t.dialogo is not None)
+        return len(self._linhas())
+
+    def inner_text(self, **kw):
+        return f" {self._linhas()[0][0]} "
+
+    def click(self, **kw):
+        t = self.t
+        if self.seletor == ".resource-action--tab .resource-action--button":
+            nome = next(n for n, h in t.linhas if t.url.endswith(h))
+            t.menu, registro = (nome, True), ("acoes", nome)  # o menu Ações da página do computador tem o Controle remoto
+        elif self.seletor == ".resource-action--button":
+            nome = self._linhas()[0][0]
+            t.menu, registro = (nome, nome not in t.vermelhos), ("menu", nome)
+        elif self.seletor.startswith("a.anchor-text"):
+            nome, href = self._linhas()[0]
+            t.url, registro = automation.ENDPOINT_URL.split("#")[0] + href, ("link", nome)
+        elif self.seletor == endpoint_lookup._ITEM_CONTROLE_REMOTO:
+            assert t.menu and t.menu[1], "o item Controle remoto não está visível"
+            t.dialogo, t.menu, registro = t.menu[0], None, ("item", t.menu[0])
+        elif "button-primary-form" in self.seletor:
+            registro = ("conectar", t.dialogo)
+        else:
+            raise AssertionError(self.seletor)
+        t.ordem.append(registro)
+
+    def fill(self, valor, **kw):
+        if self.t.falhas_fill:
+            self.t.falhas_fill -= 1
+            raise TimeoutError("o diálogo do motivo demorou")
+        self.t.motivo = valor
+
+    def input_value(self, **kw):
+        return self.t.motivo
+
+
+def controlar(tela, achado, interferir=None):
+    """Roda controle_remoto na tela falsa; a guarda falsa registra "guarda" e confere ``verificar`` uma vez."""
+    def guarda(verificar, descricao, **kw):
+        tela.ordem.append("guarda")
+        if interferir:
+            interferir(tela)
+        if not verificar():
+            raise automation.RotinaErro(f"{descricao}: o estado mudou antes do clique")
+
+    with tempfile.TemporaryDirectory() as tmp, patch.object(automation, "TRAVA_PATH", Path(tmp) / "lock"), \
+            patch("playwright.sync_api.sync_playwright"), patch.object(endpoint_lookup, "_preparar_aba", return_value=tela), \
+            patch.object(endpoint_lookup, "consultar_grade", return_value=dict(achado)), \
+            patch.object(endpoint_lookup, "_menu_com_controle_remoto", side_effect=lambda page, *a, **k: bool(page.menu and page.menu[1])), \
+            patch.object(automation, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+            patch.object(automation, "_pagina_ativa_recuperacao", tela), patch.object(automation.time, "sleep"):
+        return endpoint_lookup.controle_remoto("ABC", False)
+
+
+class RemoteControlIdentityTests(unittest.TestCase):
+    """O Conectar é irreversível: só no computador do link achado pela série, uma única vez e depois da guarda."""
+
+    def test_shifted_row_uses_the_href_row_and_connects_once_after_guard(self):
+        tela = TelaControle([("PC1", H1), ("PC2", H2)])  # outra linha ficou em primeiro na grade
+        self.assertEqual(controlar(tela, ACHADO_PC2), {"status": "connected", "serial": "ABC", "hostname": "PC2"})
+        self.assertEqual(tela.ordem, [("menu", "PC2"), ("item", "PC2"), "guarda", ("conectar", "PC2")])
+
+    def test_different_hostname_or_missing_link_never_connects(self):
+        sem_link = {k: v for k, v in ACHADO_PC2.items() if k != "_href"}
+        for achado in (dict(ACHADO_PC2, _hostname="PC9"), sem_link):
+            with self.subTest(achado=achado):
+                tela = TelaControle([("PC1", H1), ("PC2", H2)])
+                with self.assertRaises(automation.RotinaErro):
+                    controlar(tela, achado)
+                self.assertEqual(tela.ordem, [])
+
+    def test_interference_before_connect_blocks_the_click(self):
+        casos = {
+            "outro detalhe aberto": lambda t: setattr(t, "url", automation.ENDPOINT_URL.split("#")[0] + H1),
+            "motivo apagado": lambda t: setattr(t, "motivo", ""),
+            "diálogo fechado": lambda t: setattr(t, "dialogo", None),
+            "linha sumiu da grade": lambda t: t.linhas.pop(),
+        }
+        for nome, interferir in casos.items():
+            with self.subTest(nome):
+                tela = TelaControle([("PC1", H1), ("PC2", H2)])
+                with self.assertRaises(automation.RotinaErro):
+                    controlar(tela, ACHADO_PC2, interferir)
+                self.assertNotIn("conectar", [o[0] for o in tela.ordem if isinstance(o, tuple)])
+
+    def test_unstable_reason_dialog_is_redone_but_connect_is_clicked_once(self):
+        tela = TelaControle([("PC1", H1), ("PC2", H2)])
+        tela.falhas_fill = 1  # a recuperação (Escape) fecha o diálogo; a etapa reabre menu e item
+        self.assertEqual(controlar(tela, ACHADO_PC2)["status"], "connected")
+        self.assertEqual(tela.ordem, [("menu", "PC2"), ("item", "PC2"), ("tecla", "Escape"),
+                                      ("menu", "PC2"), ("item", "PC2"), "guarda", ("conectar", "PC2")])
+
+    def test_redo_never_reuses_a_menu_or_dialog_of_another_row(self):
+        # Durante a repetição o usuário abriu o menu (ou o diálogo) do PC1: fecha e reabre pela linha do PC2.
+        abertos = {"menu do PC1": lambda t: setattr(t, "menu", ("PC1", True)),
+                   "diálogo do PC1": lambda t: setattr(t, "dialogo", "PC1")}
+        for nome, abrir in abertos.items():
+            with self.subTest(nome):
+                tela = TelaControle([("PC1", H1), ("PC2", H2)], ao_escape=abrir)
+                tela.falhas_fill = 1
+                self.assertEqual(controlar(tela, ACHADO_PC2)["status"], "connected")
+                self.assertEqual(tela.ordem, [("menu", "PC2"), ("item", "PC2"), ("tecla", "Escape"), ("tecla", "Escape"),
+                                              ("menu", "PC2"), ("item", "PC2"), "guarda", ("conectar", "PC2")])
+
+    def test_red_monitor_with_another_detail_open_returns_to_the_href_detail(self):
+        abrir_pc1 = lambda t: setattr(t, "url", automation.ENDPOINT_URL.split("#")[0] + H1)  # usuário abriu o PC1
+        tela = TelaControle([("PC1", H1), ("PC2", H2)], vermelhos={"PC2"}, ao_escape=abrir_pc1)
+        self.assertEqual(controlar(tela, ACHADO_PC2)["status"], "connected")
+        self.assertEqual(tela.ordem, [("menu", "PC2"), ("tecla", "Escape"), ("goto", H2), ("acoes", "PC2"),
+                                      ("item", "PC2"), "guarda", ("conectar", "PC2")])
 
 
 class RouteTests(unittest.TestCase):

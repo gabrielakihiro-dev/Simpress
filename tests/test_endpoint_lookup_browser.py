@@ -16,6 +16,7 @@ HTML = """<!doctype html><html><head><style>
 <div class="ember-table-header-cell">Usuário do último logon</div></div>
 <div style="display:flex"><input class="search-text-box" style="width:212px"><input class="search-text-box" style="width:212px"><input class="search-text-box" style="width:212px"></div>
 <div id="rows"></div><p id="count"></p>
+<input type="radio" name="view" value="InvAllComputersSummary" checked>
 <script>
 let records=[];
 function render() {
