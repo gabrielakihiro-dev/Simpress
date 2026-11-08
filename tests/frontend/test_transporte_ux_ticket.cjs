@@ -28,6 +28,8 @@ function fakeElement(id = "") {
   };
 }
 
+const PADRAO = { nome: "Pessoa Padrão", email: "padrao@exemplo.com", telefone: "(41) 90000-0000" };
+
 function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
   const elementos = new Map();
   const listeners = {};
@@ -47,6 +49,8 @@ function criar({ responder, cep = "80000-000", confirmar = true } = {}) {
   const efeitos = { chamadas: [], abertos: [], fechados: [], confirmacoes: [], toasts: [] };
   const app = {
     apiFetch(url, opcoes) {
+      // GET /solicitante: the default solicitante served by the backend.
+      if (!opcoes.method) return Promise.resolve(url === "/api/ux/gerar-ticket/solicitante" ? { ...PADRAO } : null);
       const corpo = JSON.parse(opcoes.body);
       efeitos.chamadas.push([url.replace(API, ""), corpo]);
       try {
@@ -283,6 +287,40 @@ test("Cancelar calls /cancelar for the open session, swallows a 409 and closes t
   assert.deepEqual(h.efeitos.fechados, ["modal-ticket-ux"]);
 });
 
+test("the default solicitante is shown at once, stays editable while preparing and survives a failure", async () => {
+  let resolver;
+  const h = criar({ responder: () => new Promise((_, rejeitar) => { resolver = rejeitar; }) });
+  await h.gerar();
+  // While /preparar runs (minutes in the real UX) the user can already fill the Registro and edit the solicitante.
+  assert.equal(h.el("ux-ticket-nome").value, PADRAO.nome);
+  assert.equal(h.el("ux-ticket-email").value, PADRAO.email);
+  assert.equal(h.el("ux-ticket-telefone").value, PADRAO.telefone);
+  assert.equal(h.el("ux-ticket-formulario").disabled, false);
+  assert.equal(h.el("ux-ticket-registro").attrs["aria-invalid"], "true");
+  assert.equal(h.el("ux-ticket-simular").disabled, true);
+  h.el("ux-ticket-email").value = "outra@exemplo.com";
+  resolver(erro("O Chrome de automação não abriu.", "chrome_indisponivel", 503));
+  await esperar();
+  assert.equal(h.el("ux-ticket-nome").value, PADRAO.nome);
+  assert.equal(h.el("ux-ticket-email").value, "outra@exemplo.com");
+  h.el("ux-ticket-registro").value = REGISTRO_OK;
+  h.acoes.atualizarTicketUX();
+  assert.equal(h.el("ux-ticket-registro").attrs["aria-invalid"], "false");
+});
+
+test("the front-end never embeds the default solicitante: it reads GET /solicitante", () => {
+  const js = fs.readFileSync(path.join(__dirname, "..", "..", "static", "js", "features", "ux-ticket.js"), "utf8");
+  assert.ok(js.includes('app.apiFetch(API + "/solicitante"'));
+  assert.doesNotMatch(js, /@simpress\.com\.br/);
+});
+
+test("the Registro alert border outranks the generic dialog field border", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "..", "static", "styles", "ck-cockpit.css"), "utf8");
+  // .ck-veu > .ck-dialogo :is(input, select, textarea) is (0,2,1); a bare .ux-ticket-registro[aria-invalid] (0,2,0) loses.
+  assert.ok(css.includes('.ck-veu > .ck-dialogo :is(input, select, textarea) {'));
+  assert.ok(css.includes('.ck-veu > .ck-dialogo .ux-ticket-registro[aria-invalid="true"] { border-color: var(--cor-alerta-texto); }'));
+});
+
 test("closing while /preparar is in flight cancels the session that arrives later", async () => {
   let resolver;
   const h = criar({ responder: etapa => etapa === "preparar" ? new Promise(resolve => { resolver = resolve; }) : { status: "cancelado" } });
@@ -310,6 +348,9 @@ test("closing is ignored while the final submission is in flight", async () => {
 
 test("the modal markup keeps the visible alert and the Deslocamento tab and old F2 buttons are gone", () => {
   assert.match(html, /<p id="ux-ticket-erro"[^>]*role="alert"/);
+  // The "Solicitante" title spans the two-column grid, so each label stays next to its field.
+  assert.match(html, /<p id="ux-ticket-solicitante-titulo" class="[^"]*ux-chamado-solicitante__titulo/);
+  assert.match(html, /<p id="ux-ticket-motivo" class="ux-ticket-aviso"/);
   assert.match(html, /id="modal-ticket-ux"/);
   assert.doesNotMatch(html, /deslocamento/i);
   assert.doesNotMatch(html, /btn-copiar-resumo-cockpit|gerarTextoSolicitacaoTransporte|modal-texto-transporte/);

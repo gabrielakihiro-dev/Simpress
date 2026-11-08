@@ -1417,7 +1417,7 @@ Horário disponível para atendimento:</textarea>
         <textarea id="ux-ticket-registro" class="ck-input ux-ticket-registro" rows="10" maxlength="2500" aria-describedby="ux-ticket-registro-contador" data-on-input="atualizarTicketUX"></textarea>
         <p id="ux-ticket-registro-contador" class="ux-ticket-contador">0/2500</p>
         <div id="ux-ticket-solicitante" class="ux-chamado-solicitante" role="group" aria-labelledby="ux-ticket-solicitante-titulo">
-          <p id="ux-ticket-solicitante-titulo" class="font-bold">Solicitante</p>
+          <p id="ux-ticket-solicitante-titulo" class="font-bold ux-chamado-solicitante__titulo">Solicitante</p>
           <label for="ux-ticket-nome">Nome</label>
           <input type="text" id="ux-ticket-nome" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
           <label for="ux-ticket-email">E-mail</label>
@@ -1428,7 +1428,7 @@ Horário disponível para atendimento:</textarea>
           <input type="text" id="ux-ticket-chamado-interno" class="ck-input" maxlength="10" autocomplete="off" placeholder="Opcional" data-on-input="atualizarTicketUX">
         </div>
       </fieldset>
-      <p id="ux-ticket-motivo" class="font-bold" hidden></p>
+      <p id="ux-ticket-motivo" class="ux-ticket-aviso" hidden></p>
       <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-cancelar" data-on-click="fecharTicketUX">Cancelar</button>
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-preparar" data-on-click="prepararNovamenteTicketUX" hidden>Preparar novamente</button>

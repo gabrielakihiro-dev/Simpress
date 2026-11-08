@@ -370,7 +370,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-chamado__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
 #ux-chamado-descricao { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ux-chamado-solicitante { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
-@media (min-width: 640px) { .ux-chamado-solicitante { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; } .ux-chamado-solicitante legend { grid-column: 1 / -1; } }
+@media (min-width: 640px) { .ux-chamado-solicitante { grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 12px; } .ux-chamado-solicitante legend, .ux-chamado-solicitante__titulo { grid-column: 1 / -1; } }
 /* Ticket no UX (Transporte, F2): resumo, aviso, erro visível e Registro com contador. */
 .ux-ticket-resumo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 12px; margin: 0; min-width: 0; }
 .ux-ticket-resumo dt { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
@@ -383,6 +383,8 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ux-ticket-opcao { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); overflow-wrap: anywhere; cursor: pointer; }
 .ux-ticket-opcao input { flex: none; margin-top: 3px; }
 .ux-ticket-registro { width: 100%; min-height: 12rem; resize: vertical; white-space: pre-wrap; }
+/* Beats the generic dialog field border (.ck-veu > .ck-dialogo textarea). */
+.ck-veu > .ck-dialogo .ux-ticket-registro[aria-invalid="true"] { border-color: var(--cor-alerta-texto); }
 .ux-ticket-contador { margin: 0; text-align: right; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-chamado__texto { padding: 12px 14px 14px; font-size: var(--fs-md); line-height: 1.7; color: var(--cor-texto-forte); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ck-var { padding: 1px 5px; border-radius: 3px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
