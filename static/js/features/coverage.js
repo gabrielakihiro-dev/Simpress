@@ -453,7 +453,7 @@
       const texto = `${Number.isNaN(quando.getTime()) ? c.criado_em : quando.toLocaleString("pt-BR")} · ${c.retirada_cidade || "—"} → ${c.entrega_cidade || "—"}`;
       return grupo("cob__candidato", el("span", "", texto), botao("Vincular esta planilha", "primario",
         () => escrever(`/api/cobertura/movimentacoes/${encodeURIComponent(mov.id)}/vincular-historico`, { historico_id: c.id, rev: mov.rev }, "Transferência vinculada."),
-        `Vincular planilha de ${texto}`));
+        `Vincular esta planilha — ${texto}`));
     });
     area.replaceChildren(...itens);
   }
