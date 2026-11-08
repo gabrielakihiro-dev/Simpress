@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from unittest import mock
 
 from fastapi import FastAPI
+from security import sessao_local
 from pydantic import BaseModel
 
 from domains.assistant_api import SimpressApi, asgi_transport
@@ -275,7 +276,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
             with mock.patch.object(OpenRouterClient, "complete", fake_complete):
                 started = time.monotonic()
                 response = client.post("/api/assistente/mensagem", json={"texto": "quantos equipamentos?"})
@@ -285,7 +286,7 @@ class RealAppTests(unittest.TestCase):
         self.assertLess(elapsed, 20)
         result = sent[1][-1]
         self.assertEqual(result["role"], "tool")
-        for failure in ("403", "500", "tempo", "Falha"):
+        for failure in ("401", "403", "500", "tempo", "Falha", "Sessão"):
             self.assertNotIn(failure, result["content"][:80], result["content"][:200])
 
     def test_audio_route_accepts_up_to_its_own_limit_and_rejects_beyond(self) -> None:
@@ -301,7 +302,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
             headers = {"Content-Type": "audio/wav"}
             wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(MAX_API_REQUEST_BYTES)  # above the generic /api/ limit
             with mock.patch.object(OpenRouterClient, "transcribe", fake_transcribe):
@@ -334,7 +335,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
             headers = {"X-Nome-Arquivo": quote("ata final.docx")}
             ok = client.post("/api/assistente/anexo", content=big_docx, headers=headers)
             too_big = client.post(

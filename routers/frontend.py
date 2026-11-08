@@ -30,4 +30,6 @@ class RevalidatingStaticFiles(StaticFiles):
             if response.status_code in {200, 304} and versioned
             else "no-cache"
         )
+        if path.lower().endswith((".html", ".htm")):
+            response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         return response

@@ -91,7 +91,7 @@ if errorlevel 11 goto outdated_running
 if errorlevel 10 goto already_running
 if errorlevel 1 goto port_selection_failed
 
-echo   Site:         http://127.0.0.1:%SIMPRESS_PORT%
+echo   Site:         http://127.0.0.1:%SIMPRESS_PORT%  (o navegador abre sozinho com a sessao local)
 echo   Documentacao: http://127.0.0.1:%SIMPRESS_PORT%/docs
 echo.
 
@@ -152,7 +152,14 @@ exit /b 1
 echo.
 echo [INFO] O Simpress ja esta em execucao na porta %SIMPRESS_PORT%.
 echo Abrindo a instancia existente sem iniciar uma segunda copia.
-start "" "http://127.0.0.1:%SIMPRESS_PORT%"
+rem /api/* exige o cookie da sessao local; /bootstrap o cria a partir do segredo gravado pelo servidor.
+set "SIMPRESS_SESSAO="
+if exist "%LOCALAPPDATA%\Simpress\sessao_%SIMPRESS_PORT%.txt" set /p SIMPRESS_SESSAO=<"%LOCALAPPDATA%\Simpress\sessao_%SIMPRESS_PORT%.txt"
+if defined SIMPRESS_SESSAO (
+    start "" "http://127.0.0.1:%SIMPRESS_PORT%/bootstrap?t=%SIMPRESS_SESSAO%"
+) else (
+    start "" "http://127.0.0.1:%SIMPRESS_PORT%"
+)
 exit /b 0
 
 :outdated_running

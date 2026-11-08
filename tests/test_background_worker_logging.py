@@ -20,6 +20,7 @@ WORKER_NAMES = (
     "_external_change_reload_worker",
     "_monthly_report_worker",
     "_sebrae_scheduler_worker",
+    "_chrome_idle_close_worker",
 )
 
 

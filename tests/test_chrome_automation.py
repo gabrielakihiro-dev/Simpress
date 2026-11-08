@@ -22,6 +22,8 @@ with (
     import main
 
 from core.errors import DomainConflictError, DomainError
+from security import sessao_local
+from security.limite_taxa import LimiteTaxa
 from domains import chrome_automation
 from domains.chrome_automation import ChromeAutomationRunner, ScriptContract, read_log_chunk
 
@@ -461,8 +463,12 @@ class AutomationRouteTests(unittest.TestCase):
         patcher = patch.object(main, "_chrome_automation_runner", self.runner)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # main.app keeps one per-minute window for the whole run; tests/test_limite_taxa.py covers the cap.
+        limite = patch.object(LimiteTaxa, "exigir", lambda _self: None)
+        limite.start()
+        self.addCleanup(limite.stop)
         self.origin = f"http://127.0.0.1:{main.SERVER_PORT}"
-        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234))
+        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(self.client.close)
 
     def test_start_accepts_only_the_whitelist(self):
@@ -512,7 +518,7 @@ class AutomationRouteTests(unittest.TestCase):
         remote = TestClient(main.app, base_url=self.origin, client=("192.0.2.10", 1234))
         self.addCleanup(remote.close)
         self.assertEqual(remote.post("/api/automacao/executar", json={"rotina": "os"}).status_code, 403)
-        foreign_host = TestClient(main.app, base_url=f"http://simpress.example:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        foreign_host = TestClient(main.app, base_url=f"http://simpress.example:{main.SERVER_PORT}", client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         self.addCleanup(foreign_host.close)
         self.assertEqual(foreign_host.post("/api/automacao/executar", json={"rotina": "os"}).status_code, 403)
         self.assertEqual(self.runner.started, [])

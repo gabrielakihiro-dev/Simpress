@@ -1654,6 +1654,25 @@ TRAVA_PATH = ROOT / "data" / "state" / "automacao_chrome.lock"
 TRAVA_GRAVACAO_S = 10
 
 
+def caminho_ultimo_uso() -> Path:
+    """Carimbo tocado a cada aquisição/liberação da trava; o servidor mede a ociosidade do Chrome por ele."""
+    return TRAVA_PATH.with_name(TRAVA_PATH.name + ".ultimo_uso")
+
+
+def marcar_uso() -> None:
+    try:
+        caminho_ultimo_uso().touch()
+    except OSError:
+        pass  # só adia o fechamento por ociosidade; nunca deve derrubar a rotina
+
+
+def ultimo_uso() -> float | None:
+    try:
+        return caminho_ultimo_uso().stat().st_mtime
+    except OSError:
+        return None
+
+
 class TravaOcupada(RuntimeError):
     """Outra execução viva já controla o Chrome de automação."""
 
@@ -1736,6 +1755,7 @@ def adquirir_trava(rotina: str) -> None:
             continue
         with os.fdopen(fd, "w", encoding="utf-8") as arquivo:
             json.dump({"pid": os.getpid(), "rotina": rotina, "inicio": agora_iso()}, arquivo)
+        marcar_uso()
         return
     raise TravaOcupada("Não foi possível obter a trava da automação; tente de novo em instantes.")
 
@@ -1747,6 +1767,7 @@ def liberar_trava() -> None:
             TRAVA_PATH.unlink()
         except FileNotFoundError:
             pass
+        marcar_uso()
 
 
 class trava_execucao:
@@ -1976,10 +1997,23 @@ def montar_multipart(nome: str, conteudo: bytes) -> tuple[bytes, str]:
     return corpo, f"multipart/form-data; boundary={limite}"
 
 
+def cabecalho_sessao_simpress() -> dict[str, str]:
+    """Cookie da sessão local para chamar /api/* do servidor que iniciou esta rotina (security/sessao_local.py)."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from security import sessao_local
+
+    porta = int(os.environ.get("SIMPRESS_PORT", "8000"))
+    segredo = sessao_local.ler_segredo(porta)
+    return {"Cookie": sessao_local.cabecalho_cookie(porta, segredo)} if segredo else {}
+
+
 def importar_dashboard_no_site(arquivo: Path) -> dict:
     corpo, tipo = montar_multipart(arquivo.name, arquivo.read_bytes())
     url = f"http://127.0.0.1:{int(os.environ.get('SIMPRESS_PORT', '8000'))}/api/sebrae/dashboard?automatico=true"
-    pedido = urllib.request.Request(url, data=corpo, method="POST", headers={"Content-Type": tipo})
+    pedido = urllib.request.Request(
+        url, data=corpo, method="POST", headers={"Content-Type": tipo, **cabecalho_sessao_simpress()}
+    )
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=120) as resposta:
             return json.load(resposta)

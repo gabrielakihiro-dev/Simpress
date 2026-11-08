@@ -14,7 +14,7 @@ Data: 12/10/2026. Fase 1, concluída antes de alterar código.
 
 O inventário de `git ls-files` contém 210 arquivos: 18 na raiz, 30 em `static`, 39 em `tests`, 32 em `docs`, 21 em `scripts`, 13 em `domains`, 13 em `persistence`, 9 em `routers`, 7 em `security`, 9 em `supabase`, 12 em `data`, um modelo legado em `planilhas_entrada` e seis arquivos nas pastas de ferramentas. Dependências e dados locais não entram na reorganização.
 
-O servidor é Python/FastAPI, com inicialização em `main.py` e caminhos em `app_config.py`. `routers/` delimita HTTP, `domains/` contém regras de comparação/importação/relatórios, `persistence/` oferece arquivos e o piloto PostgreSQL, e `security/` implementa sessão, CSRF e restrição local. Esses limites já são úteis e serão mantidos.
+O servidor é Python/FastAPI, com inicialização em `main.py` e caminhos em `app_config.py`. `routers/` delimita HTTP, `domains/` contém regras de comparação/importação/relatórios, `persistence/` oferece arquivos e o piloto PostgreSQL, e `security/` implementa a sessão local por cookie (`sessao_local.py`) e a restrição local; não há login nem CSRF (o piloto com `security/routes.py` foi removido). Esses limites já são úteis e serão mantidos.
 
 O front-end usa scripts clássicos sem framework, duas páginas HTML e CSS próprio sobre Tailwind. `package.json` usa Tailwind 4 e copia Lucide/fontes para `static/vendor`; os assets de terceiros são locais. `playwright.config.cjs` executa Chromium desktop/mobile e um perfil de desempenho, com servidor de dados sintéticos. A CI também executa unittest, testes Node, sintaxe, mypy e verificação de credenciais.
 
@@ -30,7 +30,7 @@ O front-end usa scripts clássicos sem framework, duas páginas HTML e CSS próp
 | Operações | `abrirCentralPendencias`, `compararEvolucaoSelecionada` | `/api/operacoes/pendencias`, `/api/operacoes/evolucao`; notas por ocorrência |
 | Chamados | `selecionarVersaoChamados`, `carregarEvolucaoChamados`, `carregarLinhaDoTempoChamado` | snapshots, filtros, triagem, exportação e linha do tempo por série |
 | Acessibilidade | `accessible-dialogs.js`, `ui-motion.js`, `sidebar-navigation.js` | foco inicial/restaurado, Escape, teclado, `inert`, estados ocupados e movimento reduzido |
-| Autenticação | `login.html`, `login.js`, `auth-session.js`, `security/routes.py` | `/login`, `/api/auth/session`, login/logout e CSRF; nenhuma credencial no browser |
+| Sessão local | `security/sessao_local.py`, `main.py` (`/bootstrap`) | sem login nem CSRF (login, `auth-session.js` e `security/routes.py` foram removidos); o iniciador abre `/bootstrap?t=` e o cookie HttpOnly autoriza `/api/*` |
 
 ## Achados comprovados e decisões
 

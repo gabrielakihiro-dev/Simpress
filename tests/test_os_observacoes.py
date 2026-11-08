@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from fastapi.testclient import TestClient
+from security import sessao_local
 from pydantic import ValidationError
 
 from core.errors import DomainBusyError, DomainValidationError
@@ -78,7 +79,7 @@ class OsObservacoesHttpTests(unittest.TestCase):
     def test_rota_recusa_origem_externa_e_texto_longo_sem_gravar(self):
         import main
 
-        client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+        client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         with mock.patch("routers.operations.salvar_observacao") as salvar:
             externo = client.put(ROTA, json={"serie": "SN-1", "os": "7285", "observacao": "x"},
                                  headers={"Sec-Fetch-Site": "cross-site"})

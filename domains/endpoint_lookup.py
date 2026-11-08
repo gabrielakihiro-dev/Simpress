@@ -1,6 +1,9 @@
 """Read-only, serial-scoped Endpoint lookup in a private Chrome tab."""
+import json
 import re
+import threading
 import unicodedata
+import urllib.request
 from typing import Any, Collection
 from importlib import import_module
 
@@ -10,6 +13,43 @@ from domains.inventory_comparison import normalize_reference_value
 # The legacy scripts remain outside the application's gradual typing boundary.
 automation = import_module("scripts.automacao_rotinas_chrome")
 grid = import_module("scripts.verificar_usuarios_endpoint")
+
+# CDP target ids of the PowerShell/remote-control tabs left open for the user; the idle Chrome stays open while one exists.
+_abas_de_sessao: set[str] = set()
+_abas_de_sessao_trava = threading.Lock()
+
+
+def _registrar_sessao(aba: Any) -> None:
+    try:
+        cdp = aba.context.new_cdp_session(aba)
+        alvo = str(cdp.send("Target.getTargetInfo")["targetInfo"]["targetId"])
+        cdp.detach()
+    except Exception:
+        return  # best effort: an unregistered tab only loses the idle-close protection
+    with _abas_de_sessao_trava:
+        _abas_de_sessao.add(alvo)
+
+
+def _abas(page: Any) -> list[Any]:
+    try:
+        return list(page.context.pages)
+    except Exception:
+        return []
+
+
+def sessao_viva() -> bool:
+    """True while a registered PowerShell/remote-control tab is still open in the automation Chrome."""
+    with _abas_de_sessao_trava:
+        if not _abas_de_sessao:
+            return False
+    try:
+        with urllib.request.urlopen(f"{automation.CDP_URL}/json/list", timeout=2) as resposta:
+            abertas = {str(alvo.get("id")) for alvo in json.load(resposta) if isinstance(alvo, dict)}
+    except (OSError, ValueError):
+        return True  # unknown: never close over a session that may be open
+    with _abas_de_sessao_trava:
+        _abas_de_sessao.intersection_update(abertas)
+        return bool(_abas_de_sessao)
 
 
 def consultar_grade(page: Any, automacao: Any, serial: str, macbook: bool, details_serials: Collection[str] = ()) -> dict[str, Any]:
@@ -63,6 +103,7 @@ def _e_aba_da_consulta(aba: Any) -> bool:
 
 def _preparar_aba(pw: Any) -> Any:
     """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (porta 9333), com a grade completa pronta."""
+    automation.garantir_chrome()  # reopens the automation Chrome after the idle close
     browser = pw.chromium.connect_over_cdp("http://127.0.0.1:9333", timeout=10000)
     if not browser.contexts:
         raise RuntimeError("Chrome sem contexto de navegação.")
@@ -175,10 +216,14 @@ def _conectar_controle_remoto(page: Any, abrir_menu: Any, mesmo_contexto: Any, a
     if not ainda_vale():  # o pedido foi cancelado ou a base mudou durante a espera: fecha o diálogo sem conectar
         page.keyboard.press("Escape")
         return False
+    antes = _abas(page)
     # Irreversível: um único clique, fora de qualquer etapa que refaça.
     conectar.click(timeout=10000)
     # Dá tempo de o clique ser processado; nada é fechado depois (o usuário continua a sessão).
     page.wait_for_timeout(2000)
+    for aba in _abas(page):
+        if aba not in antes:
+            _registrar_sessao(aba)
     return True
 
 
@@ -416,6 +461,7 @@ def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: 
         _fechar_aba(aba)
         return {"status": "erro_terminal", "hostname": usado, "modo": modo, **extra,
                 "mensagem": f"O comando não foi confirmado no campo do PowerShell de {usado}; a execução foi cancelada."}
+    _registrar_sessao(aba)
     return {"status": "inserido", "hostname": usado, "modo": modo, "usuario": conectado, "inserido": True, "enter_enviado": False, **extra}
 
 

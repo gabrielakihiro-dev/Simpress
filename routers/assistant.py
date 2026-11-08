@@ -24,6 +24,7 @@ from domains.assistant_instrucoes import LIMITE_INSTRUCOES, ler_instrucoes, salv
 from domains.assistant_notas import LIMITE_NOTAS, LIMITE_TEXTO, NotasStore
 from domains.assistant_openrouter import ModelClient, OpenRouterClient, OpenRouterError, OpenRouterSettings
 from domains.assistant_relatorios import FORMATOS
+from security.limite_taxa import LimiteTaxa
 
 # RIFF header (12) + fmt chunk (24) + data chunk header (8).
 MIN_WAV_BYTES = 44
@@ -99,6 +100,8 @@ def _reply(resposta: Resposta) -> Dict[str, Any]:
 def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     router = APIRouter()
     guard = threading.Lock()
+    # Each message is a paid model call; a person does not send 20 a minute.
+    limite_mensagens = LimiteTaxa(20)
     notas = NotasStore(services.notes_file or services.instructions_file.with_name("assistente_notas.json"))
     web_file = services.web_search_file or services.instructions_file.with_name("assistente_busca_web.json")
     conversas = ConversasStore(services.conversations_file or services.instructions_file.with_name("assistente_conversas.json"))
@@ -134,6 +137,7 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     @router.post("/api/assistente/mensagem")
     def enviar_mensagem(payload: MensagemPayload):
         current = ready()
+        limite_mensagens.exigir()
         try:
             return _reply(current.enviar_mensagem(payload.texto, contexto_ux=payload.contexto_ux.model_dump() if payload.contexto_ux else None))
         except AssistantBusy:

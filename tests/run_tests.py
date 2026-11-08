@@ -1,6 +1,7 @@
 """Run tests without loading or recovering local Simpress data at import time."""
 
 import importlib
+import os
 import shutil
 import sys
 import tempfile
@@ -13,6 +14,8 @@ from unittest.mock import patch
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = PROJECT_ROOT / "tests"
 TEMP_ROOT = PROJECT_ROOT / "TEMP"
+# The idle-close worker must not touch the real automation Chrome during the suite.
+os.environ.setdefault("SIMPRESS_CHROME_OCIOSO_S", "0")
 sys.path.insert(0, str(PROJECT_ROOT))
 from core.local_paths import is_link_or_junction
 

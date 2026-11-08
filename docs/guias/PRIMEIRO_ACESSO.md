@@ -3,7 +3,7 @@
 Estas instruções se aplicam ao modo padrão de arquivos locais.
 
 1. Depois do `git clone`, execute `iniciar_servidor.bat`. O inicializador prepara o ambiente e inicia o servidor mesmo sem os inventários operacionais.
-2. Acesse o endereço informado pelo inicializador, normalmente `http://localhost:8000`. Clonar o repositório, sozinho, não inicia o servidor. Se a porta estiver ocupada, o inicializador pode informar outra porta.
+2. Quando o servidor estiver pronto, o navegador abre o Simpress sozinho (o inicializador mostra o endereço, normalmente `http://127.0.0.1:8000`, ou outra porta se a 8000 estiver ocupada). Clonar o repositório, sozinho, não inicia o servidor. Não digite o endereço à mão: só o navegador aberto pelo inicializador recebe a sessão local, e sem ela a página mostra **"Sessão local ausente ou expirada"**.
 3. O painel de disponibilidade abre automaticamente quando há pendências. A base começa com zero equipamentos e a mensagem **Base ainda não importada**.
 4. Use os botões de importação em **Funções**. Após cada importação, os indicadores e a disponibilidade são atualizados sem reiniciar o servidor.
 

@@ -236,7 +236,7 @@ def chamar_api(automacao: ModuleType, metodo: str, caminho: str, corpo: dict | N
     pedido = urllib.request.Request(
         url_servidor() + caminho, method=metodo,
         data=json.dumps(corpo).encode("utf-8") if corpo is not None else None,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **automacao.cabecalho_sessao_simpress()},
     )
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=30) as resposta:
