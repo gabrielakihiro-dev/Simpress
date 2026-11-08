@@ -2070,11 +2070,10 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
 
     # Só a navegação (abrir o menu) é refeita: o clique que cria a cópia nunca é repetido por conta própria.
     duplicata = etapa_resiliente(_abrir_menu_duplicata, "Abrir menu Mais ações > Duplicata")
-    # Repetir criaria outra cópia na pasta: a guarda confere o menu aberto ainda na pasta do Dashboard e aborta; nunca clica de novo.
+    # Repetir criaria outra cópia na pasta: a guarda só confere o menu aberto e aborta; nunca clica de novo.
     # shortcut: não prova que o menu aberto é o da linha do Dashboard (o SharePoint não liga o menu à linha no DOM); um clique
     # no "..." de outro arquivo da mesma pasta durante a espera duplicaria esse arquivo (só cria uma cópia, nada é apagado).
-    aguardar_estabilidade_pre_clique(lambda: duplicata.is_visible() and visivel(_localizar_linha_do_dashboard(page)),
-                                     "Duplicata (cópia de segurança no SharePoint)")
+    aguardar_estabilidade_pre_clique(duplicata.is_visible, "Duplicata (cópia de segurança no SharePoint)")
     duplicata.click()
     limite = time.time() + 30
     while time.time() < limite:

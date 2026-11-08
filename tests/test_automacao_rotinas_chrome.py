@@ -829,19 +829,19 @@ class EnviarDashboardTests(unittest.TestCase):
     def test_duplicate_clicks_the_menu_and_waits_for_the_copy(self):
         page = MagicMock()
         contagens = iter([1, 1, 2])
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "visivel", return_value=True), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             automacao.duplicar_dashboard_na_pasta(page)
         abrir.assert_called_once()
-        page.get_by_role.assert_any_call("menuitem", name=automacao._MENU_DUPLICATA)
+        self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
         page.get_by_role.return_value.first.click.assert_called_once()
 
     def _logs_da_duplicata(self, copias: int) -> str:
         contagens = iter([copias + 1, copias + 2])  # original + cópias, depois a nova
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "visivel", return_value=True), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=copias), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
@@ -874,7 +874,7 @@ class EnviarDashboardTests(unittest.TestCase):
 
     def test_duplicate_stops_without_overwriting_when_the_copy_does_not_appear(self):
         page = MagicMock()
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "visivel", return_value=True), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", return_value=1), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao.time, "time", side_effect=[0, 1, 99, 99]), \
@@ -1386,11 +1386,7 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             automacao.duplicar_dashboard_na_pasta(page)
         self.assertEqual(ordem, ["goto", "guarda", "clique"])  # a guarda só confere; o clique que cria a cópia é único
-        verificar = guarda.call_args.args[0]
-        with patch.object(automacao, "visivel", return_value=True):
-            self.assertTrue(verificar())
-        with patch.object(automacao, "visivel", return_value=False):  # a aba saiu da pasta do Dashboard durante a espera
-            self.assertFalse(verificar())
+        self.assertEqual(guarda.call_args.args[0], duplicata.is_visible)
 
     def test_upload_volta_a_pasta_antes_de_abrir_o_carregar(self):
         page = MagicMock()
