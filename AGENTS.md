@@ -249,6 +249,23 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Para mudanças de interface, rode também `npm run test:ui:e2e`.
 - Ao incluir um módulo no escopo do `mypy` ou um alvo novo de `compileall`, altere a lista em `scripts/verify.cjs`; arquivos JavaScript e testes em `tests/frontend/test_*.cjs` são descobertos automaticamente.
 
+## Delegação em subagentes
+
+- Conduza trabalho grande com subagentes sucessivos, um papel por vez, na sequência análise → implementação → revisão independente quando fizer sentido. Aguarde cada etapa terminar antes de iniciar a próxima e não paralelize etapas que dependam umas das outras ou que toquem os mesmos arquivos.
+- Escolha o subagente pelo papel, não pelo nome do modelo:
+
+| Papel | Claude Code (plugin `model-super-power`) | Codex |
+|---|---|---|
+| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` |
+| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Sol |
+| Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra |
+| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 4.6) | GPT-6 Luna, esforço `max` |
+| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6.1 Terra |
+
+- Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
+- O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
+- Trabalho independente que termina em algo próprio (branch, PR) vai para uma sessão separada, em seu próprio worktree.
+
 ## Git
 
 - Autorização para commit não autoriza push. Confirme destino e autorização e informe claramente se houve commit, push e sincronização com o remoto.
