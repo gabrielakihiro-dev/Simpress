@@ -1,11 +1,15 @@
 """Writes tickets into a COPY of the imported Dashboard (docs/operacao/sincronizar-chamados-sebrae.md).
 
-A ``.xlsx`` is a ZIP of XML parts. Only the text of the CHAMADOS sheet, ``workbook.xml``, ``calcChain.xml`` and the
-``Tabela3`` pivot cache are edited here, by plain text splicing: every other part is copied byte for byte, so the
-validations (x14 extension), pivots, charts and comments survive. openpyxl is never used to write: it would drop them.
+A ``.xlsx`` is a ZIP of XML parts. Only the text of the CHAMADOS sheet, ``workbook.xml`` and the ``Tabela3`` pivot cache
+are edited here (``calcChain.xml`` is dropped when rows move), by plain text splicing: every other part is copied byte for
+byte, so the validations (x14 extension), pivots, charts and comments survive. openpyxl is never used to write: it would drop them.
 
 One primitive sets cells in a row; it serves new tickets (first free rows of ``Tabela3``) and edits of the manual
 columns of tickets already in the sheet. Ticket content is data; nothing here interprets it.
+
+Every copy leaves with the data rows of ``Tabela3`` sorted by column C, like Excel's "Classificar do Menor para o Maior"
+(``chave_coluna_c``): the cells of columns A:W move with their style, the row attributes and the cells right of W stay by
+position, and ``hidden`` follows the saved filter of column D.
 """
 
 from __future__ import annotations
@@ -13,10 +17,11 @@ from __future__ import annotations
 import io
 import re
 import zipfile
-from dataclasses import dataclass, field
+from collections import Counter
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from html import unescape
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from xml.etree import ElementTree
 
 from domains.sebrae_chamados import extrair_numeros
@@ -31,6 +36,7 @@ COLUNAS_DE_TABELA = tuple("ABCDEFGHIJKLMNOPQRSTUV")
 COLUNAS_DE_DATA = ("P", "R")
 FORMULAS_DA_LINHA = ("Q", "T", "U", "V")
 MAX_CARACTERES_CELULA = 32_767
+INDICE_DA_COLUNA_W = 23
 
 _SHEET_TAG = re.compile(r"<sheet\b[^>]*/>")
 _ATRIBUTO = re.compile(r'([\w:]+)="([^"]*)"')
@@ -40,6 +46,7 @@ _SI = re.compile(r"<si\b[^>]*?(?:/>|>(.*?)</si>)", re.DOTALL)
 _TEXTO = re.compile(r"<t\b[^>]*?(?:/>|>(.*?)</t>)", re.DOTALL)
 _PROIBIDOS_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
 _ESCAPE_LITERAL = re.compile(r"_x(?=[0-9A-Fa-f]{4}_)")
+_REFERENCIA_DE_LINHA = re.compile(r"(?<![A-Za-z0-9_.])\$?[A-Z]{1,3}\$?\d+(?![\dA-Za-z_(])")  # A1, $B$7 (not LOG10( or Tabela3)
 
 
 class GravacaoInvalida(DashboardInvalido):
@@ -100,6 +107,7 @@ class _Pacote:
     aba: str
     tabela_ultima_linha: int
     compartilhadas: List[str]
+    tabela: str = ""  # path of the ``Tabela3`` table part
 
     def texto(self, nome: str) -> str:
         return self.partes[nome].decode("utf-8")
@@ -124,6 +132,7 @@ def _ler_pacote(conteudo: bytes) -> _Pacote:
         pacote.aba = aba
         base_rels = aba.rsplit("/", 1)[0] + "/_rels/" + aba.rsplit("/", 1)[1] + ".rels"
         ultima = 0
+        parte_da_tabela = ""
         for tipo, destino in _relacoes(pacote.texto(base_rels), aba).values():
             if not tipo.endswith("/table"):
                 continue
@@ -134,9 +143,11 @@ def _ler_pacote(conteudo: bytes) -> _Pacote:
                 if not referencia:
                     raise GravacaoInvalida(f"A {TABELA} não cobre as colunas A:W; atualize o Dashboard.")
                 ultima = int(referencia.group(1))
+                parte_da_tabela = destino
         if not ultima:
             raise GravacaoInvalida(f"A aba {ABA} não tem a tabela {TABELA}.")
         pacote.tabela_ultima_linha = ultima
+        pacote.tabela = parte_da_tabela
         if "xl/sharedStrings.xml" in partes:
             pacote.compartilhadas = [
                 unescape("".join(_TEXTO.findall(re.sub(r"<rPh\b.*?</rPh>", "", corpo or "", flags=re.DOTALL))))
@@ -166,11 +177,15 @@ def _linhas_da_aba(texto: str) -> Tuple[int, int, Dict[int, _Linha]]:
     inicio += len("<sheetData>")
     linhas: Dict[int, _Linha] = {}
     for achado in _LINHA.finditer(texto, inicio, fim):
-        numero = int(achado.group(1))
-        celulas = {m.group(1): m.group(0) for m in _CELULA.finditer(achado.group(3) or "")}
-        abertura = achado.group(0)[: achado.group(0).find(">") + 1].replace("/>", ">")
-        linhas[numero] = _Linha(numero, abertura, celulas, achado.start(), achado.end())
+        linha = _linha_de(achado)
+        linhas[linha.numero] = linha
     return inicio, fim, linhas
+
+
+def _linha_de(achado: "re.Match[str]") -> _Linha:
+    celulas = {m.group(1): m.group(0) for m in _CELULA.finditer(achado.group(3) or "")}
+    abertura = achado.group(0)[: achado.group(0).find(">") + 1].replace("/>", ">")
+    return _Linha(int(achado.group(1)), abertura, celulas, achado.start(), achado.end())
 
 
 def _valor_celula(bruto: str, compartilhadas: Sequence[str]) -> Optional[str]:
@@ -412,6 +427,119 @@ def _reescrever_linha(
     return f"{linha.abertura}{ordenadas}</row>"
 
 
+# ---------------------------------------------------------------------------- sorting by column C
+
+def chave_coluna_c(valor: Optional[str], numerico: Optional[bool] = None) -> Tuple[int, Union[float, str]]:
+    """Sort key of a column C cell, like Excel's "Classificar do Menor para o Maior": numbers by value, then text, then empty.
+
+    Text compares without case and ignoring hyphens and apostrophes (Excel ignores them). ``numerico`` says the cell is a
+    number cell (no ``t`` attribute); ``None`` infers it from the digits of ``valor``.
+    """
+    if valor is None or not valor.strip():
+        return (2, "")
+    if numerico is None:
+        numerico = valor.isdigit()
+    if numerico:
+        try:
+            return (0, float(valor))
+        except ValueError:
+            pass
+    return (1, valor.casefold().replace("-", "").replace("'", ""))
+
+
+def _chave_da_linha(linha: _Linha, compartilhadas: Sequence[str]) -> Tuple[int, Union[float, str]]:
+    bruto = linha.celulas.get("C", "")
+    valor = _valor_celula(bruto, compartilhadas)  # raw text: Excel compares the real spaces
+    achado = _CELULA.fullmatch(bruto)
+    return chave_coluna_c(valor, bool(achado) and _atributos(achado.group(2)).get("t", "n") == "n")
+
+
+def _assinatura(linha: _Linha) -> Tuple[Tuple[str, str], ...]:
+    """Cells A:W of a row as stored (value, formula, style), without the row number: what a sort must only move."""
+    return tuple(
+        (letra, re.sub(r' r="[A-Z]+\d+"', "", linha.celulas[letra], count=1))
+        for letra in sorted(linha.celulas, key=_letra_para_indice) if _letra_para_indice(letra) <= INDICE_DA_COLUNA_W
+    )
+
+
+def _formula_presa_a_linha(bruto: str) -> bool:
+    """True when moving the cell to another row would change what its formula means."""
+    if re.search(r'<f\b[^>]*\bt="(?:shared|array)"', bruto):
+        return True
+    for formula in re.findall(r"<f\b[^>]*>(.*?)</f>", bruto, re.DOTALL):
+        limpa = re.sub(r'"(?:[^"]|"")*"', "", unescape(formula))
+        while (menor := re.sub(r"\[[^\[\]]*\]", "", limpa)) != limpa:  # Tabela3[[#This Row],[X]] needs no rewrite
+            limpa = menor
+        if _REFERENCIA_DE_LINHA.search(limpa):
+            return True
+    return False
+
+
+def _filtro_da_coluna_d(pacote: _Pacote) -> Optional[Tuple[frozenset, bool]]:
+    """Values (upper case) the saved filter of column D lets through, and whether blanks pass; ``None`` without such filter."""
+    for achado in re.finditer(r"<filterColumn\b([^>]*?)(?:/>|>(.*?)</filterColumn>)", pacote.texto(pacote.tabela), re.DOTALL):
+        if _atributos(achado.group(1)).get("colId") != "3":
+            continue
+        filtros = re.search(r"<filters\b([^>]*?)(?:/>|>(.*?)</filters>)", achado.group(2) or "", re.DOTALL)
+        if filtros is None or "<dateGroupItem" in (filtros.group(2) or ""):
+            return None
+        valores = frozenset(" ".join(unescape(v).split()).upper() for v in re.findall(r'<filter\b[^>]*\bval="([^"]*)"', filtros.group(2) or ""))
+        return valores, _atributos(filtros.group(1)).get("blank") in ("1", "true")
+    return None
+
+
+def _com_oculta(abertura: str, ocultar: bool) -> str:
+    if (_atributos(abertura).get("hidden") in ("1", "true")) == ocultar:
+        return abertura
+    sem = re.sub(r'\s+hidden="[^"]*"', "", abertura)
+    return sem[:-1] + ' hidden="1">' if ocultar else sem
+
+
+@dataclass(frozen=True)
+class _Ordem:
+    substituicoes: Mapping[int, str]
+    mapa: Mapping[int, int]  # row before the sort -> row after it, for the rows of the sorted range
+    ultimo: int  # last row of the sorted range (0: nothing to sort)
+    esperado: Mapping[Tuple[Tuple[str, str], ...], int]  # multiset of ``_assinatura`` the sorted range must keep
+
+
+def _ordenar(pacote: _Pacote, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str]) -> _Ordem:
+    """Sorts the data rows (2 .. last) by column C, stable, over the rows as they will be written (``substituicoes`` applied)."""
+    compartilhadas = pacote.compartilhadas
+    finais = dict(linhas)
+    for numero, bruto in substituicoes.items():
+        finais[numero] = replace(_linha_de(_LINHA.fullmatch(bruto)), inicio=linhas[numero].inicio, fim=linhas[numero].fim)
+    dados = [n for n in sorted(finais) if n >= 2 and _tem_dado(finais[n], compartilhadas)]
+    if not dados:
+        return _Ordem(substituicoes, {}, 0, Counter())
+    faixa = range(2, dados[-1] + 1)
+    if any(n not in finais for n in faixa):
+        raise GravacaoInvalida("A aba CHAMADOS tem linhas faltando entre os chamados; não foi possível ordenar a coluna C. Nada foi entregue.")
+    ordem = sorted(faixa, key=lambda n: _chave_da_linha(finais[n], compartilhadas))  # stable: ties keep the sheet order
+    for destino, origem in zip(faixa, ordem):
+        if origem == destino:
+            continue
+        for letra, bruto in finais[origem].celulas.items():
+            if _letra_para_indice(letra) <= INDICE_DA_COLUNA_W and _formula_presa_a_linha(bruto):
+                raise GravacaoInvalida(f"A fórmula de {letra}{origem} depende do número da linha; não dá para ordenar a coluna C sem quebrá-la. Nada foi entregue.")
+    filtro = _filtro_da_coluna_d(pacote)
+    novas: Dict[int, str] = {}
+    for destino, origem in zip(faixa, ordem):
+        alvo, fonte = finais[destino], finais[origem]
+        celulas = {l: re.sub(r'^<c r="([A-Z]+)\d+"', rf'<c r="\g<1>{destino}"', c, count=1) for l, c in fonte.celulas.items() if _letra_para_indice(l) <= INDICE_DA_COLUNA_W}
+        celulas.update({l: c for l, c in alvo.celulas.items() if _letra_para_indice(l) > INDICE_DA_COLUNA_W})  # right of W stays by position
+        abertura = alvo.abertura
+        if filtro is not None:
+            status = _valor_legivel("D", celulas.get("D", ""), compartilhadas).upper()
+            abertura = _com_oculta(abertura, status not in filtro[0] and not (status == "" and filtro[1]))
+        if origem == destino and abertura == alvo.abertura:
+            if destino in substituicoes:
+                novas[destino] = substituicoes[destino]
+            continue
+        novas[destino] = abertura + "".join(celulas[l] for l in sorted(celulas, key=_letra_para_indice)) + "</row>"
+    return _Ordem(novas, dict(zip(ordem, faixa)), dados[-1], Counter(_assinatura(finais[n]) for n in faixa))
+
+
 # ---------------------------------------------------------------------------- entry point
 
 def atualizar(
@@ -480,13 +608,25 @@ def atualizar(
                 substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
                 gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))
 
-    resultado = _montar(pacote, texto, linhas, substituicoes)
-    _conferir(resultado, anteriores, [str(l.get("C", "")) for l in novas], pacote.aba)
-    return Resultado(resultado, tuple(gravadas))
+    resultado, mapa = _entregar(pacote, texto, linhas, substituicoes, anteriores, [str(l.get("C", "")) for l in novas])
+    return Resultado(resultado, tuple(replace(g, linha=mapa.get(g.linha, g.linha)) for g in gravadas))
 
 
-def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str]) -> bytes:
-    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was."""
+def _entregar(
+    pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], anteriores: frozenset[str], novos: Sequence[str],
+) -> Tuple[bytes, Mapping[int, int]]:
+    """Sorts by column C, builds the workbook and checks it; the map gives the final row of every row of the sorted range."""
+    ordem = _ordenar(pacote, linhas, substituicoes)
+    conteudo = _montar(pacote, texto, linhas, ordem.substituicoes, any(antes != depois for antes, depois in ordem.mapa.items()))
+    _conferir(conteudo, anteriores, novos, pacote, ordem)
+    return conteudo, ordem.mapa
+
+
+def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], sem_calc_chain: bool = False) -> bytes:
+    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was.
+
+    ``sem_calc_chain``: rows moved, so the calculation chain (which lists cells by address) is dropped with its
+    content type and relationship; Excel rebuilds it on load."""
     novo_texto = ""
     cursor = 0
     for numero_linha in sorted(substituicoes):
@@ -495,8 +635,15 @@ def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substitui
         cursor = original.fim
     novo_texto += texto[cursor:]
 
-    # calcChain is left alone: fullCalcOnLoad makes Excel rebuild it (shortcut: if Excel asks to repair, drop the part).
     partes = dict(pacote.partes)
+    if sem_calc_chain:
+        partes.pop("xl/calcChain.xml", None)
+        for nome, padrao in (
+            ("[Content_Types].xml", r'<Override\b[^>]*\bPartName="/xl/calcChain\.xml"[^>]*/>'),
+            ("xl/_rels/workbook.xml.rels", r'<Relationship\b[^>]*\bType="[^"]*/calcChain"[^>]*/>'),
+        ):
+            if nome in partes:
+                partes[nome] = re.sub(padrao, "", partes[nome].decode("utf-8")).encode("utf-8")
     partes[pacote.aba] = novo_texto.encode("utf-8")
     partes["xl/workbook.xml"] = _recalcular_ao_abrir(pacote.texto("xl/workbook.xml")).encode("utf-8")
     for nome, dados in pacote.partes.items():
@@ -506,6 +653,8 @@ def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substitui
     saida = io.BytesIO()
     with zipfile.ZipFile(saida, "w") as destino:
         for entrada in pacote.entradas:
+            if entrada.filename not in partes:
+                continue
             copia = zipfile.ZipInfo(entrada.filename, entrada.date_time)
             copia.compress_type = entrada.compress_type
             copia.external_attr = entrada.external_attr
@@ -555,9 +704,8 @@ def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -
             estados[utic] = ENCERRAMENTO_GRAVADO
     if not substituicoes:
         return Resultado(conteudo), estados
-    novo = _montar(pacote, texto, linhas, substituicoes)
-    _conferir(novo, anteriores, [], pacote.aba)
-    return Resultado(novo, tuple(gravadas)), estados
+    novo, mapa = _entregar(pacote, texto, linhas, substituicoes, anteriores, [])
+    return Resultado(novo, tuple(replace(g, linha=mapa.get(g.linha, g.linha)) for g in gravadas)), estados
 
 
 def _recalcular_ao_abrir(workbook: str) -> str:
@@ -574,22 +722,34 @@ def _atualizar_ao_abrir(cache: str) -> str:
     return cache.replace(achado.group(0), achado.group(0)[:-1] + ' refreshOnLoad="1">', 1)
 
 
-def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str], aba: str) -> None:
-    """Self-check before handing the file over: it must reopen, be well formed and keep column C coherent."""
+def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str], pacote: _Pacote, ordem: _Ordem) -> None:
+    """Self-check before handing the file over: it must reopen, be well formed, keep column C coherent and be a pure reordering of the rows."""
     try:
         with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
             if arquivo.testzip() is not None:
                 raise GravacaoInvalida("A cópia gerada ficou corrompida; nada foi entregue.")
-            ElementTree.fromstring(arquivo.read(aba))
+            folha = arquivo.read(pacote.aba).decode("utf-8")
+            ElementTree.fromstring(folha)
             ElementTree.fromstring(arquivo.read("xl/workbook.xml"))
         if ler_coluna_c(conteudo) != anteriores | frozenset(novos):
             raise GravacaoInvalida("A coluna C da cópia não confere com o esperado; nada foi entregue.")
     except (zipfile.BadZipFile, ElementTree.ParseError) as erro:
         raise GravacaoInvalida("A cópia gerada não passou na conferência; nada foi entregue.") from erro
+    if not ordem.ultimo:
+        return
+    _, _, linhas = _linhas_da_aba(folha)
+    faixa = range(2, ordem.ultimo + 1)
+    if any(n not in linhas for n in faixa) or Counter(_assinatura(linhas[n]) for n in faixa) != ordem.esperado:
+        raise GravacaoInvalida("As linhas da cópia não conferem com as originais depois de ordenar; nada foi entregue.")
+    if any(int(re.match(r'<c r="[A-Z]+(\d+)"', c).group(1)) != n for n in faixa for c in linhas[n].celulas.values()):
+        raise GravacaoInvalida("Uma célula da cópia ficou na linha errada depois de ordenar; nada foi entregue.")
+    chaves = [_chave_da_linha(linhas[n], pacote.compartilhadas) for n in faixa]
+    if any(a > b for a, b in zip(chaves, chaves[1:])):
+        raise GravacaoInvalida("A coluna C da cópia não ficou em ordem crescente; nada foi entregue.")
 
 
 __all__ = [
     "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO",
     "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado",
-    "atualizar", "chamados_para_editar", "ler_listas", "registrar_encerramentos",
+    "atualizar", "chamados_para_editar", "chave_coluna_c", "ler_listas", "registrar_encerramentos",
 ]
