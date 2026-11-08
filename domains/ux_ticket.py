@@ -163,6 +163,12 @@ class TicketsUX:
         self._a_fechar += [sessao.aba for sessao in self._sessoes.values() if sessao.expira <= agora]
         self._sessoes = {sid: sessao for sid, sessao in self._sessoes.items() if sessao.expira > agora}
 
+    def tem_sessao_viva(self) -> bool:
+        """True while a prepared session may still be finished in its Chrome tab (keeps the idle Chrome open)."""
+        with self._lock:
+            self._limpar_expiradas()
+            return bool(self._sessoes)
+
     @staticmethod
     def _fechar(portal: PortalTicket, aba: str) -> None:
         try:

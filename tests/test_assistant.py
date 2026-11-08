@@ -592,6 +592,14 @@ class AssistantRouteTests(unittest.TestCase):
         response = client.post("/api/assistente/mensagem", json={"texto": "olá"})
         self.assertEqual(response.json(), {"texto": "oi", "ferramentas": ["obter_totais_inventario"], "pendente": None})
 
+    def test_mensagem_is_capped_per_minute(self) -> None:
+        client, _, _ = make_client(FakeModel(*[text("oi")] * 21))
+        for _ in range(20):
+            self.assertEqual(client.post("/api/assistente/mensagem", json={"texto": "olá"}).status_code, 200)
+        response = client.post("/api/assistente/mensagem", json={"texto": "olá"})
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("Retry-After", response.headers)
+
     def test_confirm_flow_and_state_survive_reload(self) -> None:
         client, simpress, _ = make_client(FakeModel(calls(call("atualizar_apelido", serial="ABC123", apelido="X")), ))
         body = client.post("/api/assistente/mensagem", json={"texto": "mude"}).json()

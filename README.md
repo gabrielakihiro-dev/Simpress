@@ -173,7 +173,7 @@ O inicializador cria ou atualiza o ambiente `.venv` quando necessário, executa 
 .\.venv\Scripts\python.exe main.py
 ```
 
-Abra no navegador:
+O navegador abre sozinho com a sessão local (`/bootstrap`). Digitar o endereço à mão dá 401 em `/api/*`, porque a sessão local muda a cada início do servidor.
 
 - Aplicação (porta padrão): <http://127.0.0.1:8000>
 - Documentação interativa da API: desligada por padrão. Para desenvolvimento, defina `$env:SIMPRESS_ENABLE_DOCS = "1"` antes de iniciar e abra <http://127.0.0.1:8000/docs>.

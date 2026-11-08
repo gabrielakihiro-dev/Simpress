@@ -23,6 +23,7 @@ from domains import sebrae_finalizacao as fin
 from domains.sebrae_observacoes import numero_observacao_valido
 from domains.os_observacoes import chave_os
 from core.errors import DomainValidationError
+from security import sessao_local
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.coverage import dobrar
@@ -143,6 +144,8 @@ async def _asgi_call(
     headers: List[Tuple[bytes, bytes]] = [
         (b"host", f"127.0.0.1:{port}".encode("ascii")),
         (b"accept", b"application/json"),
+        # Same process as the server, so this SEGREDO is the live one (security/sessao_local.py).
+        (b"cookie", sessao_local.cabecalho_cookie(port).encode("ascii")),
     ]
     if body is not None:
         headers += [(b"content-type", b"application/json"), (b"content-length", str(len(payload)).encode("ascii"))]

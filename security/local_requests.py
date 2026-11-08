@@ -19,6 +19,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from core.config import REQUEST_BODY_IDLE_TIMEOUT_SECONDS, MAX_UX_ALIAS_BYTES
 from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_ERROR, IDEMPOTENCY_KEY_PATTERN
+from security import sessao_local
 from security.network import is_direct_loopback_request
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,11 @@ SECURITY_RESPONSE_HEADERS = (
     (b"x-frame-options", b"DENY"),
     (b"cross-origin-opener-policy", b"same-origin"),
     (b"cross-origin-resource-policy", b"same-origin"),
+    # The assistant records voice messages; nothing else needs a device.
+    (b"permissions-policy", b"camera=(), geolocation=(), microphone=(self)"),
 )
+# API answers carry inventory data; routes that want caching set their own Cache-Control.
+API_CACHE_HEADER = (b"cache-control", b"no-store")
 # Sec-Fetch-Site values for the app's own pages and URLs typed or bookmarked by the user.
 ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
 
@@ -62,6 +67,8 @@ class LocalRequestSafetyServices:
     upload_admission: Callable[[], Any]
     idempotent_upload_wait_seconds: Callable[[], float]
     service_unavailable_errors: Tuple[Type[Exception], ...]
+    # Port that names the session cookie (security/sessao_local.py); /api/* needs it.
+    session_port: Callable[[], int]
 
 
 def allowed_local_authorities(port: int) -> FrozenSet[Tuple[str, int]]:
@@ -112,12 +119,14 @@ def parse_request_authority(
     return hostname.rstrip(".").lower(), port
 
 
-def send_with_security_headers(send: Send) -> Send:
+def send_with_security_headers(send: Send, *, api: bool = False) -> Send:
+    extra = SECURITY_RESPONSE_HEADERS + ((API_CACHE_HEADER,) if api else ())
+
     async def send_with_headers(message: Message) -> None:
         if message["type"] == "http.response.start":
             headers = list(message.get("headers", []))
             present = {name.lower() for name, _ in headers}
-            headers.extend(header for header in SECURITY_RESPONSE_HEADERS if header[0] not in present)
+            headers.extend(header for header in extra if header[0] not in present)
             message = {**message, "headers": headers}
         await send(message)
 
@@ -159,7 +168,7 @@ class LocalRequestSafetyMiddleware:
             await self.app(scope, receive, send)
             return
 
-        send = send_with_security_headers(send)
+        send = send_with_security_headers(send, api=scope.get("path", "").startswith("/api/"))
         if not is_direct_loopback_request(scope):
             response = JSONResponse(
                 status_code=403,
@@ -193,6 +202,16 @@ class LocalRequestSafetyMiddleware:
             response = JSONResponse(
                 status_code=403,
                 content={"detail": "O Host não está autorizado para a aplicação local."},
+            )
+            await response(scope, receive, send)
+            return
+
+        if path.startswith("/api/") and not sessao_local.valido(
+            sessao_local.cookie_do_scope(scope, services.session_port())
+        ):
+            response = JSONResponse(
+                status_code=401,
+                content={"detail": "Sessão local ausente ou expirada. Abra o Simpress pelo iniciar_servidor.bat."},
             )
             await response(scope, receive, send)
             return

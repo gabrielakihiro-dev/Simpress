@@ -14,6 +14,7 @@ import openpyxl
 from starlette.datastructures import UploadFile
 
 from core.config import format_size_limit
+from security import sessao_local
 from core.errors import DomainError
 from domains import inventory_state
 from domains.local_setup import TRANSFER_CELLS, unpack_simpress_zip, validate_local_model
@@ -279,7 +280,7 @@ class FirstAccessTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(valid_xlsx)) as archive:
             parts = [(name, archive.read(name)) for name in archive.namelist()]
         # No lifespan: all request state is supplied by temporary fixtures.
-        client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 1234))
+        client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
         try:
             for compression in (zipfile.ZIP_DEFLATED, zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA):
                 corrupt_zip = corrupt_compressed_member(
@@ -356,7 +357,7 @@ class FirstAccessTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec("httpx"), "optional HTTP test dependency not installed")
     def test_http_first_access_upload_pair_validation_and_model_replacement(self):
         from fastapi.testclient import TestClient
-        with TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 1234)) as client:
+        with TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO}) as client:
             self.assertEqual(client.get("/").status_code, 200)
             self.assertEqual(client.get("/api/stats").json()["total_equipamentos"], 0)
             self.assertEqual(client.post("/api/planilhas/atualizar", files={

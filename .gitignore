@@ -157,6 +157,7 @@ __pycache__/
 /data/logs/
 /data/state/inventory_update_idempotency.json
 /data/state/automacao_chrome.lock
+/data/state/automacao_chrome.lock.ultimo_uso
 # Manually entered logged users (personal data) and local usage metrics.
 /data/state/usuarios_manuais/
 /data/state/metricas_uso.json

@@ -6,6 +6,7 @@ import json
 import socket
 import subprocess
 import sys
+from urllib.error import HTTPError
 from urllib.request import ProxyHandler, build_opener
 
 
@@ -36,10 +37,16 @@ def _probe_simpress(port: int) -> dict | None:
             f"http://{HOST}:{port}/openapi.json", timeout=HTTP_PROBE_TIMEOUT
         ) as response:
             document = json.load(response)
-        with opener.open(
-            f"http://{HOST}:{port}/api/stats", timeout=HTTP_PROBE_TIMEOUT
-        ) as response:
-            stats = json.load(response)
+        try:
+            with opener.open(
+                f"http://{HOST}:{port}/api/stats", timeout=HTTP_PROBE_TIMEOUT
+            ) as response:
+                stats = json.load(response)
+        except HTTPError as error:
+            # Current servers answer 401 without the local session cookie; that still identifies Simpress.
+            if error.code != 401:
+                raise
+            stats = {}
     except Exception:
         return None
 

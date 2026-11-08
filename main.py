@@ -18,7 +18,8 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
@@ -219,6 +220,8 @@ from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
 from routers.endpoint_lookup import create_endpoint_lookup_router
+from domains import chrome_ocioso
+from domains import endpoint_lookup as endpoint_lookup_domain
 from routers.ux_chamados import create_ux_chamados_router
 from domains.ux_chamados import ChamadosUX
 from domains.ux_chamados_browser import conectar_ux
@@ -247,6 +250,7 @@ from security.local_requests import (
     allowed_local_authorities,
     parse_request_authority,
 )
+from security import sessao_local
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 # Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
@@ -995,6 +999,7 @@ async def lifespan(app: FastAPI):
             _external_change_reload_worker,
             _monthly_report_worker,
             _sebrae_scheduler_worker,
+            _chrome_idle_close_worker,
         ):
             task = asyncio.create_task(worker(), name=worker.__name__)
             task.add_done_callback(_log_background_task_failure)
@@ -1143,6 +1148,19 @@ async def domain_error_handler(_request: Request, error: DomainError) -> JSONRes
     """Answer domain errors with the same body FastAPI produces for HTTPException."""
     return JSONResponse({"detail": error.detail}, status_code=error.status_code)
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request: Request, error: RequestValidationError) -> JSONResponse:
+    """422 without FastAPI's ``input`` echo, which would repeat the submitted data back."""
+    detail = [
+        {
+            "campo": ".".join(str(parte) for parte in item.get("loc", ())[1:] or item.get("loc", ())),
+            "msg": str(item.get("msg", "Valor inválido.")),
+        }
+        for item in error.errors()
+    ]
+    return JSONResponse({"detail": detail}, status_code=422)
+
 app.add_middleware(InventoryUpdateMiddleware)
 
 
@@ -1167,6 +1185,7 @@ _local_request_safety_services = LocalRequestSafetyServices(
     upload_admission=lambda: UPLOAD_ADMISSION,
     idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
     service_unavailable_errors=(LocalJsonCorruptionError,),
+    session_port=lambda: SERVER_PORT,
 )
 
 
@@ -1922,9 +1941,11 @@ def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
         }
 
 
+_ux_chamados = ChamadosUX(STATE_DIR, conectar_ux)
+_ux_tickets = TicketsUX(STATE_DIR, conectar_ux_ticket)
 app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
-app.include_router(create_ux_chamados_router(ChamadosUX(STATE_DIR, conectar_ux), _endpoint_lookup_snapshot))
-app.include_router(create_ux_ticket_router(TicketsUX(STATE_DIR, conectar_ux_ticket), get_local_transfer_template))
+app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
+app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
 
 
 @app.post("/api/equipamento/salvar")
@@ -2622,6 +2643,43 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
         return _chrome_automation_runner
 
 
+def _chrome_session_alive() -> bool:
+    """A prepared UX session or an open PowerShell/remote-control tab keeps the idle automation Chrome open."""
+    return _ux_chamados.tem_sessao_viva() or _ux_tickets.tem_sessao_viva() or endpoint_lookup_domain.sessao_viva()
+
+
+def _automation_run_starting() -> bool:
+    """A site run counts from its Popen, before the child script takes the lock."""
+    runner = _chrome_automation_runner
+    return runner is not None and runner.state().get("estado") != "livre"
+
+
+def _build_chrome_idle_close() -> Optional[chrome_ocioso.FechamentoOcioso]:
+    limite = chrome_ocioso.limite_configurado()
+    if limite <= 0:
+        return None
+    automation = endpoint_lookup_domain.automation
+    return chrome_ocioso.FechamentoOcioso(
+        limite=limite,
+        ultimo_uso=automation.ultimo_uso,
+        ocupado=lambda: automation.ler_trava() is not None or _automation_run_starting() or _chrome_session_alive(),
+        cdp_ativo=automation.cdp_ativo,
+        fechar=lambda: chrome_ocioso.fechar_chrome_de_automacao(_chrome_session_alive),
+    )
+
+
+async def _chrome_idle_close_worker() -> None:
+    fechamento = _build_chrome_idle_close()
+    if fechamento is None:
+        return  # turned off with SIMPRESS_CHROME_OCIOSO_S=0
+    while True:
+        await asyncio.sleep(chrome_ocioso.VERIFICAR_A_CADA_S)
+        try:
+            await asyncio.to_thread(fechamento.verificar)
+        except Exception as error:
+            logger.warning("A verificação de ociosidade do Chrome de automação falhou (erro=%s).", type(error).__name__)
+
+
 _sebrae_scheduler: Optional[AgendadorSebrae] = None
 _sebrae_scheduler_lock = threading.Lock()
 SEBRAE_SCHEDULER_CHECK_SECONDS = 20
@@ -2712,6 +2770,39 @@ app.mount("/static", RevalidatingStaticFiles(directory=str(STATIC_DIR)), name="s
 def serve_favicon():
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
+@app.get("/bootstrap", include_in_schema=False)
+def bootstrap_session(t: str = ""):
+    """Turn the launcher's per-boot secret into the session cookie that /api/* requires."""
+    if not sessao_local.valido(t):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Link de abertura inválido. Abra o Simpress pelo iniciar_servidor.bat."},
+            headers={"Cache-Control": "no-store"},
+        )
+    response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+    response.set_cookie(
+        sessao_local.nome_cookie(SERVER_PORT), sessao_local.SEGREDO,
+        httponly=True, samesite="strict", path="/",
+    )
+    return response
+
+
+def _open_browser_when_listening(port: int) -> None:
+    """Open the bootstrap URL once uvicorn accepts connections (the launcher no longer does it on a fresh start)."""
+    import socket
+    import webbrowser
+
+    for _ in range(600):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
+    else:
+        return
+    webbrowser.open(f"http://127.0.0.1:{port}/bootstrap?t={sessao_local.SEGREDO}")
+
+
 @app.get("/")
 def read_root():
     index_file = STATIC_DIR / "index.html"
@@ -2735,5 +2826,8 @@ if __name__ == "__main__":
     logger.info("Fonte EquipamentosDetalhes: %s", equipment_source or "AUSENTE")
     logger.info("Porta local: %s", SERVER_PORT)
     logger.info("Log local: %s", log_file)
-    # Access lines would carry ?q= searches (serials, hostnames) to the console.
+    sessao_local.gravar_segredo(SERVER_PORT)
+    if os.environ.get("SIMPRESS_NAO_ABRIR_NAVEGADOR") != "1":
+        threading.Thread(target=_open_browser_when_listening, args=(SERVER_PORT,), daemon=True).start()
+    # Access lines would carry ?q= searches (serials, hostnames) and the bootstrap token to the console.
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)

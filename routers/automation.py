@@ -17,6 +17,7 @@ from core.errors import DomainError
 from domains.chrome_automation import ChromeAutomationRunner, MAX_UX_ALIAS_BYTES
 from domains.sebrae_agendamento import AgendadorSebrae
 from domains.dashboard_agendamento import AgendadorDashboard
+from security.limite_taxa import LimiteTaxa
 
 RotinaNome = Literal["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"]
 
@@ -42,6 +43,8 @@ class AutomationRouteServices:
 
 def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     router = APIRouter()
+    # Each start opens or drives Chrome; a stuck client must not loop on it.
+    limite_execucoes = LimiteTaxa(10)
 
     @router.post("/api/automacao/ux-apelidos", status_code=202)
     async def atualizar_apelidos_ux(request: Request):
@@ -60,6 +63,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     @router.post("/api/automacao/executar", status_code=202)
     def executar_automacao(payload: RotinaPayload):
         """Inicia uma rotina; 409 quando já há uma execução (do site ou do .bat)."""
+        limite_execucoes.exigir()
         return services.runner().start(payload.rotina)
 
     @router.post("/api/automacao/cancelar", status_code=202)
