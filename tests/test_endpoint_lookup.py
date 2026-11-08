@@ -22,6 +22,17 @@ def grade(rows, total=None):
     }
 
 
+_garantir = patch.object(automation, "garantir_chrome")  # _preparar_aba must never probe or launch the real port 9333
+
+
+def setUpModule():
+    _garantir.start()
+
+
+def tearDownModule():
+    _garantir.stop()
+
+
 class LookupTests(unittest.TestCase):
     def lookup(self, rows, serial="ABC", mac=False, total=None):
         with patch.object(grid, "aplicar_filtro", return_value=grade(rows, total)):
