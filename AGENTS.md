@@ -176,6 +176,7 @@ Painel `Cobertura` (F10) do plano aprovado pelo usuário: necessidades de equipa
 - Arquivamento D6: casos fechados há mais de 30 dias vão para o arquivo de arquivados na mesma transação de uma escrita; a leitura (`GET /api/cobertura`) não grava.
 - Nada é escrito em SoftExpert, SharePoint, UX, Endpoint ou outro sistema externo.
 - Assistente: `listar_cobertura` só consulta (autorizada pelo usuário em 07/11/2026), com os mesmos números da tela e sem dados pessoais; não há ferramenta de escrita na Cobertura.
+- Textos aprovados (08/11/2026, aprovados pelo usuário): os botões são `Vincular esta planilha`, `Marcar coletada`, `Marcar em trânsito`, `Confirmar recebimento`, `Registrar divergência` e `Tentar vincular de novo`, e o campo da devolução é `Nova data prevista`. Os selos de situação (`Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Entregue`) não mudam. O erro 500 (`falha_gravacao`) mostra `Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.`
 
 Detalhes, rótulos e "Riscos conhecidos": `docs/cockpit-prompts/16-cobertura.md`; rotas: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos".
 
