@@ -10,6 +10,10 @@ against the target threat and would break reopening a running instance from the 
 
 The file and the cookie name carry the port, because cookies on 127.0.0.1 ignore the port and
 two Simpress servers (e.g. a worktree on 8001) would otherwise overwrite each other's session.
+
+shortcut: the cookie is not port-isolated (RFC 6265), so it leaks if the user opens a link to another
+user's server on another 127.0.0.1 port; migrate to an `X-Simpress-Sessao` header kept in per-origin
+storage when that risk stops being acceptable (accepted by the user on 08/11/2026).
 """
 
 from __future__ import annotations
