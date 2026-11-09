@@ -1870,15 +1870,7 @@ def conectar(p):
     if not browser.contexts:
         raise RotinaErro("O Chrome de automação não expôs nenhum contexto de navegação.")
     context = browser.contexts[0]
-    # Fecha abas de sessões anteriores (reaproveitadas ou restauradas por --restore-last-session).
-    antigas = list(context.pages)
-    # Fechar a última aba encerra o Chrome (TargetClosedError em new_page): mantém uma aba nova aberta.
-    context.new_page()
-    for pagina in antigas:
-        try:
-            pagina.close()
-        except Exception:
-            pass
+    # Abas anteriores ficam abertas (pedido do usuário, 09/11/2026): preservam sessão, cache e cookies.
     return browser, context
 
 
