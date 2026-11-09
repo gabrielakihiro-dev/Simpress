@@ -27,8 +27,8 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError, Domai
 from core.config import format_size_limit
 from core.integrity import lock_paths
 from domains import (
-    sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin, sebrae_historico, sebrae_novos,
-    sebrae_observacoes as obs,
+    os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
+    sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_vinculos,
 )
 from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_chamados import chave_do_numero
@@ -345,7 +345,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     raise DomainConflictError("Há um Dashboard atualizado aguardando envio e o Dashboard do SharePoint não mudou desde a importação. Clique em Enviar ao SharePoint; a importação automática foi impedida para não perder alterações.")
                 substituida = situacao == "divergente"
             anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes)
-            _arquivar_encerrados(conteudo, anteriores)
+            arquivo_marcas = marcas.caminho_marcas(_pasta_estado())
+            marcas.validar_legivel(arquivo_marcas)  # marks unreadable: stop before anything of this import is written
+            mapa = _arquivar_encerrados(conteudo, anteriores)
+            _registrar_marcas(arquivo_marcas, mapa, anteriores)
             preservada = _guardar_importado(conteudo, numeros, nome)
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
             corpo = {**_estado(), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
@@ -359,9 +362,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 )
             return JSONResponse(corpo, headers={"Cache-Control": "no-store"})
 
-    def _arquivar_encerrados(conteudo: bytes, anteriores: Optional[Mapping[str, Any]]) -> None:
+    def _arquivar_encerrados(conteudo: bytes, anteriores: Optional[Mapping[str, Any]]) -> Mapping[str, Mapping[str, str]]:
         """Tickets that left the open list go to the permanent archive; unlike the history, a failure blocks the import
-        (the previous Dashboard stays in place, so a retry still sees the same tickets leaving)."""
+        (the previous Dashboard stays in place, so a retry still sees the same tickets leaving). Returns the new Dashboard's
+        ticket statuses, which the marks of the OS tab reuse."""
         try:
             mapa = ler_status_chamados(conteudo)
         except DashboardInvalido as erro:
@@ -378,6 +382,43 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "Não foi possível guardar os chamados encerrados; o Dashboard não foi importado e o anterior foi mantido. "
                 "Tente novamente."
             ) from None
+        return mapa
+
+    def _resolvedor_os(abertos: Sequence[Mapping[str, Any]]) -> marcas.Resolvedor:
+        """Link UTIC -> OS for the mark of the OS tab: manual wins over the one derived from ``abertos``; several OS give the highest."""
+        return marcas.resolvedor(
+            list(services.vinculos_os()),
+            lambda: sebrae_vinculos.vinculos_derivados(abertos, _relatorio(), _indice_endpoint()),
+        )
+
+    def _registrar_marcas(arquivo, mapa: Mapping[str, Mapping[str, str]], anteriores: Optional[Mapping[str, Any]]) -> None:
+        """Source c of the marks: a UTIC open in the previous import, gone from the new one and not finalized by this site.
+        Only an unreadable or busy marks file (``DomainBusyError``) blocks the import; any other failure is logged and the import goes on."""
+        if not anteriores or not anteriores.get("abertos"):
+            return
+        try:
+            saidas = marcas.detectar_saidas(
+                anteriores["abertos"], mapa, fin.ler_estado(_pasta_estado()), _resolvedor_os(anteriores["abertos"]),
+            )
+            marcas.registrar_saidas(arquivo, saidas)
+        except DomainBusyError:
+            raise
+        except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Marcas de OS finalizada não registradas na importação (%s).", type(erro).__name__)
+
+    def _congelar_os_vinculada(pasta, numeros: Sequence[str]) -> None:
+        """Photo of the OS linked to each ticket whose finalization was just requested; it never blocks the finalization."""
+        try:
+            importado = sebrae_novos.ler_existentes(services.caminhos().existentes)
+            resolver = _resolvedor_os(importado["abertos"] if importado else [])
+        except Exception as erro:  # noqa: BLE001
+            logger.warning("OS vinculada não congelada (%s).", type(erro).__name__)
+            return
+        for numero in numeros:
+            try:
+                fin.congelar_os_vinculada(pasta, numero, resolver(numero))
+            except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+                logger.warning("OS vinculada não congelada (%s).", type(erro).__name__)
 
     def _registrar_historico(conteudo: bytes, nome: str, anteriores: Optional[Mapping[str, Any]]) -> bool:
         """The history never blocks an import: a failure only turns ``historico_ok`` false."""
@@ -599,6 +640,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     raise DomainConflictError("Aguarde a rotina em andamento antes de reenviar esta cópia.")
                 fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, envio_id=envio_id, sha256=sha256)
             else:
+                if acao == fin.ACAO_FINALIZAR:
+                    _congelar_os_vinculada(pasta, numeros)  # before the job: the link may change while the routine runs
                 fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
             try:
                 runner.start("fechar")

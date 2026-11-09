@@ -7,7 +7,7 @@ proposes links in the store's format; ``os_do_chamado`` goes the other way, givi
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Mapping, Sequence, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from domains.sebrae_chamados import NUMERO_UTIC
 from domains.sebrae_cruzamento import _chave_serie, _numero_da_os, serie_equivalente_macbook
@@ -75,11 +75,17 @@ def vinculos_derivados(
     return [entrada for chave, entrada in entradas.items() if len(donos[chave]) == 1]
 
 
-def os_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> str:
-    """OS of the links whose ``chamado`` is ``numero``; with several, the highest one (as ``os_da_serie``); empty if none."""
+def vinculo_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> Optional[Mapping[str, Any]]:
+    """Link whose ``chamado`` is ``numero``; with several, the one with the highest OS (as ``os_da_serie``); ``None`` if none."""
     alvo = str(numero or "").strip().upper()
-    ordens = [
-        str(v.get("os") or "").strip() for v in vinculos
+    achados = [
+        v for v in vinculos
         if alvo and str(v.get("chamado") or "").strip().upper() == alvo and str(v.get("os") or "").strip()
     ]
-    return max(ordens, key=_numero_da_os) if ordens else ""
+    return max(achados, key=lambda v: _numero_da_os(str(v.get("os")).strip())) if achados else None
+
+
+def os_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> str:
+    """OS of the links whose ``chamado`` is ``numero``; with several, the highest one (as ``os_da_serie``); empty if none."""
+    achado = vinculo_do_chamado(vinculos, numero)
+    return str(achado.get("os") or "").strip() if achado else ""

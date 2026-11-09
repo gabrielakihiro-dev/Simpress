@@ -722,6 +722,23 @@ def _observacao_de(notas: Dict[str, str], serie: Any, ordem: Any) -> str:
         return ""
 
 
+# Same texts as the OS tab (F6); an unknown code gives "", so no free text from the registry reaches the model.
+MOTIVOS_MARCA_OS = {
+    "saiu_do_dashboard": "Saiu da lista de abertos do Dashboard sem finalização pelo site.",
+    "nao_encontrado_softexpert": "Não encontrado no SoftExpert na última leitura.",
+}
+
+
+def _marcas_de(marcas: Dict[str, List[Dict[str, Any]]], serie: Any, ordem: Any, chamado: Any = None) -> List[Dict[str, Any]]:
+    """Marks of the OS tab (F6) for this serial+OS, by `chave_os`; only the given ticket when `chamado` is set; [] when none."""
+    try:
+        achadas = marcas.get(chave_os(serie, ordem), [])
+    except DomainValidationError:
+        return []
+    alvo = str(chamado or "").strip().upper()
+    return [m for m in achadas if not alvo or m["chamado"].upper() == alvo]
+
+
 def _instante(horario: Any) -> float:
     try:
         valor = datetime.fromisoformat(str(horario or "").replace("Z", "+00:00"))
@@ -1019,6 +1036,7 @@ class SimpressApi:
         dados = _dict(dados)
         chamados = dados.get("chamados", [])
         notas, aviso_notas = self._observacoes_os()
+        marcas, aviso_marcas = self._marcas_finalizacao()
         itens = []
         for ch in chamados[:MAX_ITENS_LISTA]:
             item = sanitizar_chamado(ch)
@@ -1027,6 +1045,8 @@ class SimpressApi:
                 # Same key as the "Observação do andamento" box of the OS tab (F6): only the OS of this serial that have a note.
                 item["observacao_os"] = {str(o): limpar_texto_sensivel(n)[:MAX_TEXTO_CHAMADO]
                                          for o in ordens if (n := _observacao_de(notas, ch.get("serie"), o))}
+                # Marks "OS finalizada" of the same tab, per OS of this serial (several tickets can mark one OS).
+                item["marcas_finalizacao"] = {str(o): m for o in ordens if (m := _marcas_de(marcas, ch.get("serie"), o))}
             itens.append(item)
         resultado = {
             "atualizado_em": dados.get("atualizado_em", ""),
@@ -1036,6 +1056,8 @@ class SimpressApi:
         }
         if aviso_notas:
             resultado["aviso_observacoes"] = aviso_notas
+        if aviso_marcas:
+            resultado["aviso_marcas"] = aviso_marcas
         return resultado
 
     def consultar_agendamento_dashboard(self) -> Dict[str, Any]:
@@ -1445,6 +1467,28 @@ class SimpressApi:
                     continue
         return notas, None
 
+    def _marcas_finalizacao(self) -> Tuple[Dict[str, List[Dict[str, Any]]], Optional[str]]:
+        """(marks per `chave_os`, None) or ({}, short warning): a failed read never breaks the tool that asked. Read only."""
+        ok, dados = self._chamar("GET", "/api/operacoes/chamados/marcas-finalizacao")
+        if not ok:
+            return {}, "Não foi possível consultar as marcas de OS finalizada da aba OS (F6) agora."
+        marcas: Dict[str, List[Dict[str, Any]]] = {}
+        for m in _dict(dados).get("marcas") or []:
+            if not isinstance(m, dict):
+                continue
+            try:
+                chave = chave_os(m.get("serie"), m.get("os"))
+            except DomainValidationError:
+                continue
+            marcas.setdefault(chave, []).append({
+                "chamado": str(m.get("chamado") or ""),
+                "origem": "outro_tecnico" if m.get("origem") == "outro_tecnico" else "site",
+                "motivo": MOTIVOS_MARCA_OS.get(str(m.get("motivo") or ""), ""),
+                "ativa": m.get("ativa") is not False,
+                "conferido": bool(m.get("conferido_em")),
+            })
+        return marcas, None
+
     def listar_vinculos_os(self, serie: Any = "", chamado: Any = "") -> Dict[str, Any]:
         """Manual links ticket <-> OS, optionally filtered by serial or ticket (the route has no filter)."""
         ok, vinculos = self._vinculos_os()
@@ -1621,6 +1665,7 @@ class SimpressApi:
         if not ok:
             return {"erro": relatorio}
         notas, aviso_notas = self._observacoes_os()
+        marcas, aviso_marcas = self._marcas_finalizacao()
         sebrae = _dict(sebrae)
         importado = _dict(sebrae.get("importado"))
 
@@ -1678,6 +1723,7 @@ class SimpressApi:
                 s for s in (" · ".join(str(v) for v in (o.get("status"), o.get("sub_status")) if v) for o in oracle) if s)
             # The F6 saves the note with the report's serial, which differs from K in the MacBook fallback.
             nota = _observacao_de(notas, registro.get("serie") or serie, os_)
+            marca = _marcas_de(marcas, registro.get("serie") or serie, os_, numero)
             itens.append({
                 "utic": numero,
                 "titulo": limpar_texto_sensivel(titulo)[:MAX_TEXTO_CHAMADO],
@@ -1693,6 +1739,7 @@ class SimpressApi:
                 "status_simpress": " / ".join(str(s) for s in simpress.get("status") or [] if s) if na_simpress else "",
                 "relacao": texto(registro.get("relacao")) if encontrada else "",
                 "observacao_os": limpar_texto_sensivel(nota)[:MAX_TEXTO_CHAMADO],
+                "marca_finalizacao": marca[0] if marca else None,
             })
         resultado: Dict[str, Any] = {
             "total": len(itens),
@@ -1704,6 +1751,8 @@ class SimpressApi:
             resultado["aviso"] = f"Mostrando só os {MAX_ITENS_LISTA} primeiros; peça um chamado específico. Na tela, cada chamado abre ao lado da OS na janela \"Chamado × OS\" (botão da OS no cartão do chamado na aba Chamados, F5, ou UTIC da OS na aba OS, F6)."
         if aviso_notas:
             resultado["aviso_observacoes"] = aviso_notas
+        if aviso_marcas:
+            resultado["aviso_marcas"] = aviso_marcas
         return _aparar(resultado)
 
     def chamados_destaque_sebrae(self) -> Dict[str, Any]:

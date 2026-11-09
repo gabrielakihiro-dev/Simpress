@@ -1641,12 +1641,25 @@ class OsDosAntigosTests(unittest.TestCase):
 
 
 class ChamadosOsSimpress(FakeSimpress):
-    """GET /api/sebrae/novos, the OS report and the F6 notes: the three reads of chamados_com_os_sebrae (the screen shows each pair in the "Chamado × OS" window)."""
+    """GET /api/sebrae/novos, the OS report, the F6 notes and the F6 marks: the reads of chamados_com_os_sebrae (the screen shows each pair in the "Chamado × OS" window)."""
 
     def __init__(self, novos: Optional[List[Dict[str, Any]]] = None, observacoes_status: int = 200,
-                 relatorio_extra: Optional[List[Dict[str, Any]]] = None) -> None:
+                 relatorio_extra: Optional[List[Dict[str, Any]]] = None, marcas_status: int = 200,
+                 marcas: Optional[List[Dict[str, Any]]] = None) -> None:
         super().__init__()
         self.relatorio_extra = relatorio_extra or []
+        self.marcas_status = marcas_status
+        # Same shape as GET /api/operacoes/chamados/marcas-finalizacao (motivo is the code; the Assistant turns it into the screen's text).
+        self.marcas = marcas if marcas is not None else [
+            {"serie": "abc 123", "os": "os100", "chamado": "UTIC-2026-2000", "origem": "outro_tecnico", "motivo": "saiu_do_dashboard",
+             "finalizado_em": "", "ativa": True, "conferido_em": "", "historico": [{"acao": "marcada", "origem": "auto", "em": "2026-11-08T10:00:00-03:00"}]},
+            {"serie": "SCXC9F072K1", "os": "77", "chamado": "UTIC-2026-0094", "origem": "outro_tecnico", "motivo": "nao_encontrado_softexpert",
+             "finalizado_em": "", "ativa": True, "conferido_em": "2026-11-08T11:00:00-03:00", "historico": []},
+            {"serie": "ABC123", "os": "OS100", "chamado": "UTIC-2026-0096", "origem": "site", "motivo": "",
+             "finalizado_em": "2026-11-07T09:00:00-03:00", "ativa": True, "conferido_em": "", "historico": []},
+            {"serie": "ABC123", "os": "OS 100", "chamado": "UTIC-2026-0099", "origem": "outro_tecnico", "motivo": "saiu_do_dashboard",
+             "finalizado_em": "", "ativa": False, "conferido_em": "", "historico": []},
+        ]
         self.novos = novos if novos is not None else [
             {"numero": "UTIC-2026-2000", "linha": {"G": f"Tela quebrada, Maria Souza, CPF {CPF}", "I": "Maria Souza", "K": "abc123", "E": "os 100"}},
             {"numero": "UTIC-2026-2001", "linha": {"G": "Traço", "K": "ABC123", "E": "—"}},
@@ -1675,6 +1688,11 @@ class ChamadosOsSimpress(FakeSimpress):
                 {"serie": "SCXC9F072K1", "relacao": "so_oracle", "oracle": [{"ordem_servico": "77", "status": "Aberta"}], "simpress": {}},
                 *self.relatorio_extra,
             ]}
+        if path == "/api/operacoes/chamados/marcas-finalizacao":
+            self.calls.append((method, path, params, body))
+            if self.marcas_status != 200:
+                return self.marcas_status, {"detail": "O registro de marcas de OS finalizada está ilegível e foi preservado."}
+            return 200, {"marcas": self.marcas}
         if path == "/api/operacoes/chamados/observacoes":
             self.calls.append((method, path, params, body))
             if self.observacoes_status != 200:
@@ -1764,6 +1782,83 @@ class ChamadosComOsToolTests(unittest.TestCase):
         falha = SimpressApi(ChamadosOsSimpress(observacoes_status=409)).listar_chamados_abertos()
         self.assertTrue(all(c["observacao_os"] == {} for c in falha["chamados"]))
         self.assertIn("aviso_observacoes", falha)
+
+
+MOTIVO_SAIU = "Saiu da lista de abertos do Dashboard sem finalização pelo site."
+MOTIVO_NAO_ACHADO = "Não encontrado no SoftExpert na última leitura."
+
+
+class MarcaOsFinalizadaToolTests(unittest.TestCase):
+    """Marca de OS finalizada (F6, 08/11/2026): o Assistente só lê a marca onde já mostra o chamado e a OS."""
+
+    def test_ticket_with_os_carries_its_own_mark_only(self) -> None:
+        simpress = ChamadosOsSimpress()
+        dados = SimpressApi(simpress).chamados_com_os_sebrae()
+        itens = {i["utic"]: i for i in dados["chamados"]}
+        # OS 100 has three marks (two tickets, one undone); the item gets only the one of its own ticket.
+        self.assertEqual(itens["UTIC-2026-2000"]["marca_finalizacao"], {
+            "chamado": "UTIC-2026-2000", "origem": "outro_tecnico", "motivo": MOTIVO_SAIU, "ativa": True, "conferido": False})
+        # MacBook fallback: mark saved with the report's serial, already checked, motivo as the screen's text.
+        self.assertEqual(itens["UTIC-2026-0094"]["marca_finalizacao"], {
+            "chamado": "UTIC-2026-0094", "origem": "outro_tecnico", "motivo": MOTIVO_NAO_ACHADO, "ativa": True, "conferido": True})
+        self.assertIsNone(itens["UTIC-2026-0095"]["marca_finalizacao"])
+        self.assertNotIn("aviso_marcas", dados)
+        self.assertIn(("GET", "/api/operacoes/chamados/marcas-finalizacao"), [(m, p) for m, p, _, _ in simpress.calls])
+        self.assertEqual(simpress.writes(), [])
+        self.assertFalse(TOOLS["chamados_com_os_sebrae"].changes_data)
+
+    def test_os_tab_list_gains_the_marks_per_os(self) -> None:
+        dados = SimpressApi(ChamadosOsSimpress()).listar_chamados_abertos()
+        por_serie = {c["serie"]: c["marcas_finalizacao"] for c in dados["chamados"]}
+        por_chamado = {m["chamado"]: m for m in por_serie["ABC123"]["OS100"]}
+        self.assertEqual(set(por_chamado), {"UTIC-2026-2000", "UTIC-2026-0096", "UTIC-2026-0099"})
+        site = por_chamado["UTIC-2026-0096"]
+        self.assertEqual((site["origem"], site["motivo"], site["ativa"]), ("site", "", True))
+        self.assertFalse(por_chamado["UTIC-2026-0099"]["ativa"])  # undone on the screen: the model can tell it
+        self.assertEqual([m["chamado"] for m in por_serie["SCXC9F072K1"]["77"]], ["UTIC-2026-0094"])
+        self.assertNotIn("aviso_marcas", dados)
+        self.assertFalse(TOOLS["listar_chamados_abertos"].changes_data)
+
+    def test_failed_marks_read_keeps_both_lists_with_a_warning(self) -> None:
+        for status in (503, 404):
+            com_os = SimpressApi(ChamadosOsSimpress(marcas_status=status)).chamados_com_os_sebrae()
+            self.assertEqual(com_os["total"], 4)
+            self.assertTrue(all(i["marca_finalizacao"] is None for i in com_os["chamados"]))
+            self.assertIn("marcas de OS finalizada", com_os["aviso_marcas"])
+            abertos = SimpressApi(ChamadosOsSimpress(marcas_status=status)).listar_chamados_abertos()
+            self.assertTrue(all(c["marcas_finalizacao"] == {} for c in abertos["chamados"]))
+            self.assertIn("aviso_marcas", abertos)
+            self.assertNotIn("aviso_observacoes", abertos)  # the notes still read fine
+
+    def test_free_text_of_the_registry_never_reaches_the_model(self) -> None:
+        marcas = [{"serie": "ABC123", "os": "OS100", "chamado": "UTIC-2026-2000", "origem": "outro_tecnico",
+                   "motivo": f"Maria Souza, CPF {CPF}", "ativa": True, "conferido_em": "", "historico": [{"acao": f"CPF {CPF}"}]}]
+        dados = SimpressApi(ChamadosOsSimpress(marcas=marcas)).chamados_com_os_sebrae()
+        marca = dados["chamados"][0]["marca_finalizacao"]
+        self.assertEqual(marca["motivo"], "")  # unknown code: no free text from the registry
+        texto = json.dumps(marca, ensure_ascii=False)
+        for proibido in (CPF, "Maria", "historico", "CPF"):
+            self.assertNotIn(proibido, texto)
+
+    def test_model_reads_the_mark_and_nothing_is_written(self) -> None:
+        model = FakeModel(calls(call("chamados_com_os_sebrae")), text("ok"))
+        conversation, simpress = make_conversation(model, ChamadosOsSimpress())
+        reply = conversation.enviar_mensagem("o chamado UTIC-2026-2000 foi finalizado por outro técnico?")
+        self.assertEqual(reply.ferramentas, ["chamados_com_os_sebrae"])
+        enviado = json.dumps(model.sent[-1], ensure_ascii=False)
+        self.assertIn("outro_tecnico", enviado)
+        self.assertIn("marca_finalizacao", enviado)
+        self.assertEqual(simpress.writes(), [])
+
+    def test_descriptions_and_prompt_cite_the_mark_as_read_only(self) -> None:
+        for nome, termos in {
+            "listar_chamados_abertos": ("marcas_finalizacao", "outro_tecnico", "Só leitura"),
+            "chamados_com_os_sebrae": ("marca_finalizacao", "outro_tecnico", "só se alteram na tela"),
+        }.items():
+            for termo in termos:
+                self.assertIn(termo, TOOLS[nome].description, f"{nome}: {termo}")
+        for termo in ("marca_finalizacao", "chamados_outro_tecnico", "só lê as marcas", "nem escreve no SoftExpert"):
+            self.assertIn(termo, SYSTEM_PROMPT)
 
 
 class EditDescriptionSimpress(FakeSimpress):
@@ -1925,6 +2020,22 @@ class PanelRegionalToolTests(unittest.TestCase):
         descricao = TOOLS["obter_painel"].description
         for termo in ("sem_acesso_60_dias", "55 dias", "60 dias", "Ausentes no Endpoint"):
             self.assertIn(termo, descricao)
+
+    def test_description_mentions_the_other_technician_alert_and_stays_read_only(self) -> None:
+        descricao = TOOLS["obter_painel"].description
+        self.assertFalse(TOOLS["obter_painel"].changes_data)
+        for termo in ("chamados_outro_tecnico", "indisponivel", "SoftExpert", "Conferido", "aba OS (F6)", "não marca, desfaz nem confere"):
+            self.assertIn(termo, descricao)
+
+    def test_tool_returns_the_other_technician_alert(self) -> None:
+        painel = {"chamados_outro_tecnico": {"total": 1, "itens": [
+            {"chamado": "UTIC-2026-2000", "serie": "ABC123", "os": "OS100", "motivo": "saiu_do_dashboard"}]}}
+        dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
+        alerta = dados["dados"]["chamados_outro_tecnico"]
+        self.assertEqual((alerta["total"], alerta["itens"][0]["chamado"]), (1, "UTIC-2026-2000"))
+        falha = {"chamados_outro_tecnico": {"total": 0, "itens": [], "indisponivel": True}}
+        dados = SimpressApi(lambda method, path, params, body: (200, falha)).obter_painel()
+        self.assertTrue(dados["dados"]["chamados_outro_tecnico"]["indisponivel"])
 
     def test_tool_returns_the_long_unused_alert(self) -> None:
         painel = {"sem_acesso_60_dias": {"estado": "passou_60", "total_passou": 2, "total_limite": 1}}

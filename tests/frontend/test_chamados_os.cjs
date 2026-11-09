@@ -170,3 +170,54 @@ test("Fallback pela OS: série vazia liga quando a OS está numa única série; 
   assert.deepEqual([ambigua.encontrada, ambigua.registro, ambigua.serieRelatorio], [false, null, ""]);
   assert.deepEqual([divergente.encontrada, divergente.registro, divergente.serieRelatorio], [false, null, ""]);
 });
+
+// ----- marca de OS finalizada -----
+test("Marca: a chave normaliza série e OS como osObsKey e marcasPorOs agrupa por chave, uma marca por chamado", () => {
+  assert.equal(m.chaveMarca("sn-conf", " os 9001 "), m.chaveMarca("SN CONF", "OS9001"));
+  assert.notEqual(m.chaveMarca("SN-CONF", "9001"), m.chaveMarca("SN-CONF", "9002"));
+  const mapa = m.marcasPorOs([
+    { serie: "SN-CONF", os: "9001", chamado: "UTIC-1" }, { serie: "sn conf", os: "9001", chamado: "UTIC-2" },
+    { serie: "SN-OUTRA", os: "9001", chamado: "UTIC-3" }, null, "texto",
+  ]);
+  assert.deepEqual(mapa.get(m.chaveMarca("SN-CONF", "9001")).map(marca => marca.chamado), ["UTIC-1", "UTIC-2"]);
+  assert.equal(mapa.size, 2);
+  assert.equal(m.marcasPorOs(undefined).size, 0);
+});
+
+test("Marca: selo, dica, motivo e botões seguem a origem, o estado ativo e a conferência", () => {
+  const base = { serie: "S", os: "1", chamado: "UTIC-1", ativa: true, conferido_em: "", motivo: "", historico: [] };
+  const site = m.descreverMarca({ ...base, origem: "site" });
+  assert.deepEqual([site.selo, site.dica, site.motivo, site.podeDesfazer, site.podeRefazer, site.podeConferir],
+    ["Chamado finalizado", "", "", true, false, false]);
+
+  const outro = m.descreverMarca({ ...base, origem: "outro_tecnico", motivo: "saiu_do_dashboard" });
+  assert.deepEqual([outro.selo, outro.dica, outro.motivo, outro.podeConferir],
+    ["Finalizado por outro técnico", "Conferir no SoftExpert", "Saiu da lista de abertos do Dashboard sem finalização pelo site.", true]);
+  assert.equal(m.descreverMarca({ ...base, origem: "outro_tecnico", motivo: "nao_encontrado_softexpert" }).motivo,
+    "Não encontrado no SoftExpert na última leitura.");
+
+  const conferida = m.descreverMarca({ ...base, origem: "outro_tecnico", motivo: "saiu_do_dashboard", conferido_em: "2026-11-08T11:00:00-03:00" });
+  assert.deepEqual([conferida.selo, conferida.dica, conferida.podeConferir, conferida.podeDesfazer], ["Finalizado por outro técnico", "", false, true]);
+
+  const desfeita = m.descreverMarca({ ...base, origem: "outro_tecnico", motivo: "saiu_do_dashboard", ativa: false });
+  assert.deepEqual([desfeita.ativa, desfeita.selo, desfeita.dica, desfeita.motivo, desfeita.podeDesfazer, desfeita.podeRefazer, desfeita.podeConferir],
+    [false, "", "", "", false, true, false]);
+  assert.equal(m.descreverMarca({ ...base, origem: "outro_tecnico", motivo: "inventado" }).motivo, "", "motivo desconhecido não vira texto");
+  assert.deepEqual(m.descreverMarca(null).historico, []);
+});
+
+test("Marca: histórico em texto com data e hora, evento e origem; data fora do padrão segue como veio", () => {
+  const info = m.descreverMarca({ ativa: true, historico: [
+    { acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" },
+    { acao: "desfeita", origem: "manual", em: "2026-11-08T12:00:00" },
+    { acao: "refeita", origem: "manual", em: "sem data" },
+    { acao: "conferida", origem: "manual", em: "2026-11-09T08:05:00Z" },
+    { acao: "outra", origem: "x", em: "" },
+  ] });
+  assert.deepEqual(info.historico, [
+    "08/11/2026 às 10:30 · Marcada (automática)", "08/11/2026 às 12:00 · Desfeita (manual)", "sem data · Refeita (manual)",
+    "09/11/2026 às 08:05 · Conferida (manual)", " · outra (x)",
+  ]);
+  assert.equal(m.formatarDataHora("2026-01-02T03:04:05+00:00"), "02/01/2026 às 03:04");
+  assert.equal(m.formatarDataHora(undefined), "");
+});

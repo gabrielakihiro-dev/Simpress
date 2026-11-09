@@ -23,10 +23,19 @@ let observacoes = null;
 const putsObs = [];
 // Corpos do POST de usuários logados: a janela Chamado × OS pede só as séries dela.
 const corposUsuarios = [];
+// Marcas de OS finalizada: [] por padrão; null faz o GET falhar; o PUT guarda o corpo em putsMarcas e, com falhaMarca, responde esse erro.
+let marcas = [];
+let falhaMarca = null;
+const putsMarcas = [];
+// Confirmação: confirmarAcao devolve `confirmar` e registra o que foi mostrado.
+let confirmar = true;
+const confirmacoes = [];
+const eventos = [];
 const win = {
   document: doc,
   MutationObserver: class { observe() {} },
   CustomEvent: class { constructor(type) { this.type = type; } },
+  confirmarAcao: async opcoes => { confirmacoes.push(opcoes); return confirmar; },
   getComputedStyle: () => ({ display: "" }),
   console: { warn() {} },
   fetch: async (url, options = {}) => {
@@ -41,6 +50,15 @@ const win = {
       }
       return { ok: observacoes !== null, json: async () => (observacoes ? { observacoes } : { detail: "Falha" }) };
     }
+    if (url === "/api/operacoes/chamados/marcas-finalizacao") {
+      if (options.method === "PUT") {
+        const body = JSON.parse(options.body);
+        putsMarcas.push(body);
+        if (falhaMarca) return { ok: false, status: falhaMarca.status, json: async () => ({ detail: falhaMarca.detail }) };
+        return { ok: true, json: async () => ({ marca: body }) };
+      }
+      return { ok: marcas !== null, json: async () => (marcas ? { marcas } : { detail: "Falha" }) };
+    }
     const json = url === "/api/operacoes/chamados" ? report
       : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
       : url === "/api/equipamentos/usuarios-logados" ? { usuarios }
@@ -48,6 +66,7 @@ const win = {
     return { ok: json !== null, json: async () => json || {} };
   },
 };
+doc.dispatchEvent = evento => { eventos.push(evento.type); return true; };
 panels.install(win);
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -446,4 +465,179 @@ test("somenteLeitura: OS em texto, observação só leitura e nada é gravado", 
     assert.equal(putsObs.length, 0, "a janela não salva observação");
     assert.equal(requests.filter(([method]) => method === "PUT").length, putsAntes);
   } finally { observacoes = null; putsObs.length = 0; }
+});
+
+// ----- marca de OS finalizada -----
+const novaMarca = (extra = {}) => ({
+  serie: "SN-CONF", os: "9001", chamado: "UTIC-2026-1", origem: "site", motivo: "", finalizado_em: "2026-11-08T10:30:00-03:00",
+  ativa: true, conferido_em: "", historico: [{ acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" }], ...extra,
+});
+const blocosMarca = (section, serie) => section.querySelectorAll(`tbody tr[data-serial="${serie}"] .ck-os-marca`);
+const botoesMarca = bloco => bloco.querySelectorAll("button").map(botao => botao.textContent);
+const restaurarMarcas = () => {
+  marcas = []; falhaMarca = null; confirmar = true;
+  putsMarcas.length = 0; confirmacoes.length = 0; eventos.length = 0;
+};
+
+test("Marca de OS finalizada: selo, botões e histórico por chamado; a chave normaliza série e OS", async () => {
+  marcas = [
+    novaMarca({ serie: "sn conf", os: " 9001 " }),
+    novaMarca({ chamado: "UTIC-2026-7", origem: "outro_tecnico", motivo: "nao_encontrado_softexpert", historico: [] }),
+    novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard",
+      conferido_em: "2026-11-08T11:00:00-03:00", historico: [{ acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" },
+        { acao: "conferida", origem: "manual", em: "2026-11-08T11:00:00-03:00" }] }),
+  ];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const [site, outro] = blocosMarca(section, "SN-CONF");
+    assert.equal(blocosMarca(section, "SN-CONF").length, 2, "uma marca por chamado na mesma OS");
+    assert.equal(site.querySelector(".ck-badge").textContent, "Chamado finalizado");
+    assert.equal(site.querySelector(".ck-badge").dataset.status, "ok");
+    assert.equal(site.querySelector(".ck-os-marca__chamado").textContent, "UTIC-2026-1");
+    assert.deepEqual(botoesMarca(site), ["Desfazer"]);
+    assert.equal(site.querySelector(".ck-os-marca__dica"), null);
+    assert.equal(site.querySelector("summary").textContent, "Histórico da marca");
+    assert.deepEqual(site.querySelectorAll("li").map(item => item.textContent), ["08/11/2026 às 10:30 · Marcada (automática)"]);
+
+    assert.equal(outro.querySelector(".ck-badge").textContent, "Finalizado por outro técnico");
+    assert.equal(outro.querySelector(".ck-badge").dataset.status, "alerta");
+    assert.equal(outro.querySelector(".ck-os-marca__dica").textContent, "Conferir no SoftExpert");
+    assert.equal(outro.querySelector(".ck-os-marca__motivo").textContent, "Não encontrado no SoftExpert na última leitura.");
+    assert.deepEqual(botoesMarca(outro), ["Conferido", "Desfazer"]);
+    assert.equal(outro.querySelector("details"), null, "sem histórico não há bloco de histórico");
+
+    const [conferida] = blocosMarca(section, "SN-SOR");
+    assert.equal(conferida.querySelector(".ck-badge").textContent, "Finalizado por outro técnico");
+    assert.equal(conferida.querySelector(".ck-os-marca__dica"), null, "conferida: sem dica");
+    assert.equal(conferida.querySelector(".ck-os-marca__motivo").textContent, "Saiu da lista de abertos do Dashboard sem finalização pelo site.");
+    assert.deepEqual(botoesMarca(conferida), ["Desfazer"]);
+    assert.deepEqual(conferida.querySelectorAll("li").map(item => item.textContent),
+      ["08/11/2026 às 10:30 · Marcada (automática)", "08/11/2026 às 11:00 · Conferida (manual)"]);
+  } finally { restaurarMarcas(); }
+});
+
+test("Marca desfeita: sem selo, com Refazer e histórico; texto do servidor entra como texto", async () => {
+  marcas = [novaMarca({ chamado: "<img src=x onerror=1>", ativa: false, historico: [
+    { acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" }, { acao: "desfeita", origem: "manual", em: "2026-11-08T12:00:00-03:00" }] })];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const [bloco] = blocosMarca(section, "SN-CONF");
+    assert.equal(bloco.querySelector(".ck-badge"), null, "desfeita não mostra selo");
+    assert.deepEqual(botoesMarca(bloco), ["Refazer"]);
+    assert.equal(bloco.querySelectorAll("li").length, 2);
+    assert.equal(bloco.querySelector(".ck-os-marca__chamado").textContent, "<img src=x onerror=1>");
+    assert.equal(section.querySelectorAll("img").length, 0);
+  } finally { restaurarMarcas(); }
+});
+
+test("Marca fora da busca, dos filtros, da contagem e da lista exportada da F6", async () => {
+  marcas = [novaMarca(), novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard" })];
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    assert.equal(status.textContent, "2 OS · 2 séries");
+    for (const termo of ["finalizado", "UTIC-2026-1", "outro técnico", "SoftExpert", "Histórico"]) {
+      panels.filtrarTabelaOs({ busca: termo, relacao: "" });
+      assert.deepEqual(visiveis(section), [], `a busca "${termo}" não casa com a marca`);
+    }
+    panels.filtrarTabelaOs({ busca: "", relacao: "" });
+    assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+    assert.deepEqual(panels.seriesFiltradasOs().sort(), ["SN-CONF", "SN-SOR"]);
+    assert.equal(status.textContent, "2 OS · 2 séries");
+  } finally { restaurarMarcas(); }
+});
+
+test("Desfazer pede confirmação, envia a marca ao PUT, recria a tabela e avisa o sino", async () => {
+  marcas = [novaMarca()];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const pedidosAntes = requests.filter(([method]) => method === "PUT").length;
+
+    confirmar = false;
+    blocosMarca(section, "SN-CONF")[0].querySelector("button").dispatchEvent({ type: "click" });
+    await waitFor(() => confirmacoes.length === 1);
+    assert.equal(confirmacoes[0].titulo, "Desfazer a marca de finalização?");
+    assert.match(confirmacoes[0].mensagem, /não é reaberto no SoftExpert/);
+    await settle();
+    assert.equal(putsMarcas.length, 0, "cancelar a confirmação não grava");
+    assert.equal(blocosMarca(section, "SN-CONF")[0].querySelector("button").disabled, undefined);
+
+    confirmar = true;
+    marcas = [novaMarca({ ativa: false, historico: [{ acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" },
+      { acao: "desfeita", origem: "manual", em: "2026-11-08T12:00:00-03:00" }] })];
+    blocosMarca(section, "SN-CONF")[0].querySelector("button").dispatchEvent({ type: "click" });
+    await waitFor(() => eventos.includes("simpress:atualizar-notificacoes"));
+    assert.deepEqual(putsMarcas, [{ serie: "SN-CONF", os: "9001", chamado: "UTIC-2026-1", acao: "desfazer" }]);
+    assert.equal(requests.filter(([method]) => method === "PUT").length, pedidosAntes + 1, "só o PUT da marca; nada em outro endpoint");
+    const [depois] = blocosMarca(section, "SN-CONF");
+    assert.equal(depois.querySelector(".ck-badge"), null, "a tabela mostra o estado devolvido pelo servidor");
+    assert.deepEqual(botoesMarca(depois), ["Refazer"]);
+    assert.equal(doc.activeElement.textContent, "Refazer", "o foco volta ao botão da mesma marca");
+  } finally { restaurarMarcas(); }
+});
+
+test("Refazer confirma; Conferido grava sem confirmação", async () => {
+  marcas = [novaMarca({ ativa: false }), novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard" })];
+  try {
+    const { section } = await montar({ semBusca: true });
+    blocosMarca(section, "SN-CONF")[0].querySelector("button").dispatchEvent({ type: "click" });
+    await waitFor(() => putsMarcas.length === 1);
+    assert.equal(confirmacoes[0].titulo, "Refazer a marca de finalização?");
+    assert.equal(putsMarcas[0].acao, "refazer");
+
+    confirmacoes.length = 0;
+    const conferido = blocosMarca(section, "SN-SOR")[0].querySelectorAll("button").find(botao => botao.textContent === "Conferido");
+    conferido.dispatchEvent({ type: "click" });
+    await waitFor(() => putsMarcas.length === 2);
+    assert.deepEqual(putsMarcas[1], { serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", acao: "conferir" });
+    assert.equal(confirmacoes.length, 0, "Conferido não pede confirmação");
+    // O aviso ao sino sai depois do refresh; espera para não vazar para o próximo teste.
+    await waitFor(() => eventos.length === 2);
+  } finally { restaurarMarcas(); }
+});
+
+test("Erro 422 ou 503 no PUT da marca aparece no status e a tabela segue de pé", async () => {
+  marcas = [novaMarca()];
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    for (const falha of [{ status: 422, detail: "Marca inexistente ou ação inválida." }, { status: 503, detail: "Arquivo de marcas indisponível." }]) {
+      falhaMarca = falha;
+      const botao = blocosMarca(section, "SN-CONF")[0].querySelector("button");
+      botao.dispatchEvent({ type: "click" });
+      await waitFor(() => status.textContent === falha.detail);
+      assert.equal(botao.disabled, false, "o botão volta a valer");
+      assert.equal(botao.getAttribute("aria-busy"), null);
+      assert.equal(visiveis(section).length, 2, "a tabela não é recriada nem quebra");
+      assert.equal(eventos.length, 0, "falha não avisa o sino");
+    }
+    assert.equal(putsMarcas.length, 2);
+  } finally { restaurarMarcas(); }
+});
+
+test("Falha ao ler as marcas não derruba a tabela e o status avisa", async () => {
+  marcas = null;
+  try {
+    const { section, status } = await montar({ semBusca: true });
+    assert.equal(status.textContent, "2 OS · 2 séries; marcas de OS finalizada indisponíveis.");
+    assert.equal(section.querySelectorAll(".ck-os-marca").length, 0);
+    assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+  } finally { restaurarMarcas(); }
+});
+
+test("Janela somente leitura: só o selo das marcas ativas do chamado pedido, sem botões nem histórico", async () => {
+  marcas = [
+    novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard" }),
+    novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-3" }),
+    novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-4", ativa: false }),
+  ];
+  try {
+    const { section } = await montar({ semBusca: true, soOs: { serie: "", os: "9002", chamado: " utic-2026-2 " }, somenteLeitura: true });
+    const blocos = blocosMarca(section, "SN-SOR");
+    assert.equal(blocos.length, 1, "só a marca ativa do chamado pedido");
+    assert.equal(blocos[0].querySelector(".ck-badge").textContent, "Finalizado por outro técnico");
+    assert.equal(section.querySelectorAll("button").length, 0, "nenhum botão");
+    assert.equal(section.querySelectorAll("details").length, 0, "sem histórico");
+
+    const outra = await montar({ semBusca: true, soOs: { serie: "", os: "9002" }, somenteLeitura: true });
+    assert.equal(blocosMarca(outra.section, "SN-SOR").length, 2, "sem chamado pedido, todas as ativas");
+  } finally { restaurarMarcas(); }
 });

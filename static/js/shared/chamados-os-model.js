@@ -96,5 +96,51 @@
     return lista(pares).filter(par => [par?.numero, par?.serie, par?.os].some(valor => busca.normalizeSearchText(valor).includes(alvo)));
   }
 
-  return Object.freeze({ montarParesChamadoOs, filtrarParesChamadoOs });
+  // ----- marca de OS finalizada (GET /api/operacoes/chamados/marcas-finalizacao): só apresentação, nada é gravado aqui -----
+  const SELOS = Object.freeze({ site: "Chamado finalizado", outro_tecnico: "Finalizado por outro técnico" });
+  const MOTIVOS_MARCA = Object.freeze({
+    saiu_do_dashboard: "Saiu da lista de abertos do Dashboard sem finalização pelo site.",
+    nao_encontrado_softexpert: "Não encontrado no SoftExpert na última leitura.",
+  });
+  const EVENTOS_MARCA = Object.freeze({ marcada: "Marcada", desfeita: "Desfeita", refeita: "Refeita", conferida: "Conferida" });
+  const ORIGENS_EVENTO = Object.freeze({ auto: "automática", manual: "manual" });
+
+  // Mesma chave de osObsKey (data-panels.js) e de chave_os (domains/os_observacoes.py): série e OS normalizadas.
+  const chaveMarca = (serie, os) => JSON.stringify([serialKey(serie), orderKey(os)]);
+
+  /** Marcas agrupadas pela chave série+OS (várias marcas por OS quando há mais de um chamado), na ordem recebida. */
+  function marcasPorOs(marcas) {
+    const mapa = new Map();
+    lista(marcas).filter(marca => marca && typeof marca === "object").forEach(marca => {
+      const chave = chaveMarca(marca.serie, marca.os);
+      mapa.set(chave, [...(mapa.get(chave) || []), marca]);
+    });
+    return mapa;
+  }
+
+  // ISO do servidor -> dd/mm/aaaa às HH:MM (mesmo recorte do aviso de divergências no sino); texto que não é ISO segue como veio.
+  function formatarDataHora(iso) {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(texto(iso));
+    return partes ? `${partes[3]}/${partes[2]}/${partes[1]} às ${partes[4]}:${partes[5]}` : texto(iso);
+  }
+
+  /** O que a linha da F6 mostra de uma marca: selo (só se ativa), dica, motivo, quais botões valem e o histórico em texto. */
+  function descreverMarca(marca) {
+    const outro = marca?.origem === "outro_tecnico";
+    const ativa = Boolean(marca?.ativa);
+    const aConferir = ativa && outro && !texto(marca?.conferido_em);
+    return {
+      ativa,
+      selo: ativa ? SELOS[outro ? "outro_tecnico" : "site"] : "",
+      dica: aConferir ? "Conferir no SoftExpert" : "",
+      motivo: ativa && outro ? MOTIVOS_MARCA[marca?.motivo] || "" : "",
+      podeDesfazer: ativa,
+      podeRefazer: !ativa,
+      podeConferir: aConferir,
+      historico: lista(marca?.historico).map(evento => `${formatarDataHora(evento?.em)} · ${EVENTOS_MARCA[evento?.acao] || texto(evento?.acao)}`
+        + ` (${ORIGENS_EVENTO[evento?.origem] || texto(evento?.origem)})`),
+    };
+  }
+
+  return Object.freeze({ montarParesChamadoOs, filtrarParesChamadoOs, chaveMarca, marcasPorOs, descreverMarca, formatarDataHora });
 });
