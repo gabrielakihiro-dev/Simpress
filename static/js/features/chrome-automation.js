@@ -662,13 +662,20 @@
     }
   }
 
+  // Último estado confirmado pelo servidor; restaura os controles se o PUT falhar.
+  const agendamentoDashboard = { ativo: false, intervalo: 30 };
+
   async function carregarAgendamentoDashboard() {
     const controle = document.getElementById("dashboard-agendamento-ativo");
+    const intervalo = document.getElementById("dashboard-agendamento-intervalo");
     const texto = document.getElementById("dashboard-agendamento-status");
-    if (!controle || !texto) return;
+    if (!controle || !intervalo || !texto) return;
     try {
       const dados = await consultarAutomacao("/api/automacao/dashboard/agendamento", { errorMessage: "Não foi possível consultar o agendamento." });
-      controle.checked = dados.ativo;
+      agendamentoDashboard.ativo = dados.ativo;
+      agendamentoDashboard.intervalo = dados.intervalo_minutos || 30;
+      controle.checked = agendamentoDashboard.ativo;
+      intervalo.value = String(agendamentoDashboard.intervalo);
       texto.textContent = (dados.ativo ? `Ativo. Próxima tentativa: ${formatarHora(dados.proxima_execucao)}.` : "Pausado.")
         + ` ${dados.aviso}` + (dados.bloqueio ? ` ${dados.bloqueio}` : "") + (dados.ultimo_disparo ? ` Última tentativa: ${dados.ultimo_disparo.resultado}.` : "");
     } catch (erro) { texto.textContent = erro.message; }
@@ -676,15 +683,21 @@
 
   async function alterarAgendamentoDashboard() {
     const controle = document.getElementById("dashboard-agendamento-ativo");
+    const intervalo = document.getElementById("dashboard-agendamento-intervalo");
     const ativo = controle.checked;
-    controle.disabled = true;
+    const intervaloMinutos = Number(intervalo.value);
+    controle.disabled = intervalo.disabled = true;
     try {
       await consultarAutomacao("/api/automacao/dashboard/agendamento", {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo }),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo, intervalo_minutos: intervaloMinutos }),
         errorMessage: "Não foi possível alterar o agendamento.",
       });
-    } catch (erro) { controle.checked = !ativo; avisarErro(erro); }
-    finally { controle.disabled = false; await carregarAgendamentoDashboard(); }
+    } catch (erro) {
+      controle.checked = agendamentoDashboard.ativo;
+      intervalo.value = String(agendamentoDashboard.intervalo);
+      avisarErro(erro);
+    }
+    finally { controle.disabled = intervalo.disabled = false; await carregarAgendamentoDashboard(); }
   }
 
   async function atualizarEstadoAutomacao() {
