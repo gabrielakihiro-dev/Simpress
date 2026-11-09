@@ -1,12 +1,17 @@
 """Synthetic clock, local temporary state and fake runner: no Chrome or operational data."""
+import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock
 
-from core.errors import DomainConflictError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from core.errors import DomainConflictError, DomainValidationError
 from domains.dashboard_agendamento import AgendadorDashboard
+from routers.automation import AutomationRouteServices, create_automation_router
 from domains.sebrae_agendamento import FUSO
 from domains.assistant_api import SimpressApi
 from domains.assistant_tools import TOOLS, grupos_da_mensagem
@@ -53,16 +58,115 @@ class DashboardAgendamentoTests(unittest.TestCase):
         self.now += timedelta(minutes=10)
         self.assertEqual(self.scheduler.definir_ativo(True)["proxima_execucao"], next_run)
 
-    def test_assistant_requires_confirmation_and_sends_boolean_body(self):
+    def test_default_interval_is_30_when_absent_or_invalid(self):
+        self.assertEqual(self.scheduler.resumo()["intervalo_minutos"], 30)
+        for invalid in (45, "60", 60.0, True, None, [60]):
+            with self.subTest(invalid=invalid):
+                self.path.write_text(json.dumps({"ativo": False, "intervalo_minutos": invalid}), encoding="utf-8")
+                self.assertEqual(self.scheduler.resumo()["intervalo_minutos"], 30)
+        self.assertEqual(self.scheduler.definir_ativo(True)["intervalo_minutos"], 30)
+
+    def test_each_allowed_interval_is_saved_and_survives_restart(self):
+        for minutes in (60, 90, 120, 30):
+            with self.subTest(minutes=minutes):
+                result = self.scheduler.definir_ativo(True, minutes)
+                self.assertEqual(result["intervalo_minutos"], minutes)
+                self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["intervalo_minutos"], minutes)
+                restarted = AgendadorDashboard(self.path, self.start, agora=lambda: self.now)
+                self.assertEqual(restarted.resumo()["intervalo_minutos"], minutes)
+
+    def test_invalid_interval_is_refused_before_touching_the_file(self):
+        self.scheduler.definir_ativo(True, 60)
+        saved = self.path.read_text(encoding="utf-8")
+        for invalid in (0, 45, 150, -30, "60", 60.0, True):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(DomainValidationError) as error:
+                    self.scheduler.definir_ativo(True, invalid)
+                self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), saved)
+
+    def test_changing_interval_rearms_only_when_active(self):
+        first = self.scheduler.definir_ativo(True, 60)
+        self.assertEqual(first["proxima_execucao"], (self.now + timedelta(minutes=60)).isoformat())
+        self.now += timedelta(minutes=10)
+        same = self.scheduler.definir_ativo(True, 60)
+        self.assertEqual(same["proxima_execucao"], first["proxima_execucao"])
+        omitted = self.scheduler.definir_ativo(True)
+        self.assertEqual(omitted["proxima_execucao"], first["proxima_execucao"])
+        self.assertEqual(omitted["intervalo_minutos"], 60)
+        changed = self.scheduler.definir_ativo(True, 120)
+        self.assertEqual(changed["proxima_execucao"], (self.now + timedelta(minutes=120)).isoformat())
+        paused = self.scheduler.definir_ativo(False, 90)
+        self.assertFalse(paused["ativo"])
+        self.assertIsNone(paused["proxima_execucao"])
+        self.assertEqual(paused["intervalo_minutos"], 90)
+        resumed = self.scheduler.definir_ativo(True)
+        self.assertEqual(resumed["proxima_execucao"], (self.now + timedelta(minutes=90)).isoformat())
+
+    def test_verify_uses_the_saved_interval(self):
+        self.scheduler.definir_ativo(True, 90)
+        self.now += timedelta(minutes=30)
+        self.assertIsNone(self.scheduler.verificar())
+        self.now += timedelta(minutes=60)
+        self.assertEqual(self.scheduler.verificar(), "iniciada")
+        self.assertEqual(self.scheduler.resumo()["proxima_execucao"], (self.now + timedelta(minutes=90)).isoformat())
+        self.now += timedelta(minutes=89)
+        self.assertIsNone(self.scheduler.verificar())
+        self.start.assert_called_once_with("dashboard")
+        # A broken next-run time is rearmed with the saved interval too.
+        self.path.write_text(json.dumps({"ativo": True, "intervalo_minutos": 120, "proxima_execucao": "garbage"}),
+                             encoding="utf-8")
+        self.assertIsNone(self.scheduler.verificar())
+        self.assertEqual(self.scheduler.resumo()["proxima_execucao"], (self.now + timedelta(minutes=120)).isoformat())
+
+    def test_router_accepts_the_interval_and_refuses_other_bodies(self):
+        app = FastAPI()
+        app.include_router(create_automation_router(AutomationRouteServices(
+            runner=lambda: None, sebrae=lambda: None, dashboard=lambda: self.scheduler)))  # type: ignore[arg-type]
+        client = TestClient(app)
+        url = "/api/automacao/dashboard/agendamento"
+        ok = client.put(url, json={"ativo": True, "intervalo_minutos": 90})
+        self.assertEqual((ok.status_code, ok.json()["intervalo_minutos"], ok.json()["ativo"]), (200, 90, True))
+        self.assertEqual(client.get(url).json()["intervalo_minutos"], 90)
+        kept = client.put(url, json={"ativo": False})
+        self.assertEqual((kept.status_code, kept.json()["intervalo_minutos"]), (200, 90))
+        for body in ({"ativo": True, "intervalo_minutos": 45}, {"ativo": True, "intervalo_minutos": "x"},
+                     {"ativo": True, "intervalo_minutos": 150}, {"ativo": True, "extra": 1}, {"intervalo_minutos": 60}):
+            with self.subTest(body=body):
+                self.assertEqual(client.put(url, json=body).status_code, 422)
+        self.assertEqual(self.scheduler.resumo()["intervalo_minutos"], 90)
+
+    def test_assistant_requires_confirmation_and_sends_interval_only_when_given(self):
         tool = TOOLS["definir_agendamento_dashboard"]
         self.assertTrue(tool.changes_data)
         self.assertIn("30 minutos", tool.describe({"ativo": True}))
-        self.assertIn("automacao", grupos_da_mensagem("agendar a cada 30 minutos"))
+        for minutes, label in ((30, "30 minutos"), (60, "1h"), (90, "1h30"), (120, "2h")):
+            self.assertIn(f"a cada {label}", tool.describe({"ativo": True, "intervalo_minutos": minutes}))
+        self.assertEqual(tool.properties["intervalo_minutos"]["enum"], [30, 60, 90, 120])
+        self.assertEqual(tool.required, ["ativo"])
+        for message in ("agendar a cada 30 minutos", "repetir a cada 1h30", "repetir a cada 2h",
+                        "repetir a cada 90 minutos", "repetir a cada hora e meia"):
+            self.assertIn("automacao", grupos_da_mensagem(message))
+        for message in ("reunião às 1h", "o prazo é de 2h", "tenho 60 minutos"):
+            self.assertNotIn("automacao", grupos_da_mensagem(message))
         api = SimpressApi.__new__(SimpressApi)
-        api._chamar = Mock(return_value=(True, {"ativo": True, "caminho": "private"}))
+        api._chamar = Mock(return_value=(True, {"ativo": True, "intervalo_minutos": 30, "caminho": "private"}))
         self.assertTrue(api.definir_agendamento_dashboard(True)["ativo"])
         api._chamar.assert_called_once_with("PUT", "/api/automacao/dashboard/agendamento", corpo={"ativo": True})
-        self.assertNotIn("caminho", str(api.consultar_agendamento_dashboard()))
+        api._chamar = Mock(return_value=(True, {"ativo": True, "intervalo_minutos": 120}))
+        self.assertEqual(api.definir_agendamento_dashboard(True, 120)["intervalo_minutos"], 120)
+        api._chamar.assert_called_once_with("PUT", "/api/automacao/dashboard/agendamento",
+                                            corpo={"ativo": True, "intervalo_minutos": 120})
+        api._chamar = Mock()
+        for invalid in (45, "60", True):
+            self.assertIn("erro", api.definir_agendamento_dashboard(True, invalid))
+        api._chamar.assert_not_called()
+        api._chamar = Mock(return_value=(True, {"ativo": True, "intervalo_minutos": 90, "caminho": "private"}))
+        consulta = api.consultar_agendamento_dashboard()
+        self.assertEqual(consulta["intervalo_minutos"], 90)
+        self.assertNotIn("caminho", str(consulta))
+        api._chamar = Mock(return_value=(True, {"ativo": True}))
+        self.assertEqual(api.consultar_agendamento_dashboard()["intervalo_minutos"], 30)
 
     def test_two_scheduler_instances_share_the_file_lock(self):
         from concurrent.futures import ThreadPoolExecutor
