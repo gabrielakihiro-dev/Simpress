@@ -22,12 +22,15 @@ function relativeToProject(filePath, projectDir) {
   return relative.split(path.sep).join("/").toLowerCase();
 }
 
-// Retorna o motivo do bloqueio ou null quando a edição é permitida.
-function blockReason(filePath, projectDir) {
-  const relative = relativeToProject(filePath, projectDir);
-  if (!relative) return null;
-  const name = path.posix.basename(relative);
+// Em worktree (<principal>/.claude/worktrees/<nome>), devolve a raiz do checkout principal.
+function mainCheckoutRoot(projectDir) {
+  const root = path.resolve(fromPosixDrive(projectDir));
+  const match = root.split(path.sep).join("/").match(/^(.*?)\/\.claude\/worktrees\/[^/]+(?:\/|$)/i);
+  return match ? path.resolve(match[1]) : null;
+}
 
+function reasonForRelative(relative) {
+  const name = path.posix.basename(relative);
   if (relative.startsWith("data/state/")) {
     return ALLOWED_STATE_FILES.has(name) ? null : "históricos, anotações e filas em data/state";
   }
@@ -36,6 +39,19 @@ function blockReason(filePath, projectDir) {
     if (!relative.startsWith(root)) continue;
     if (relative.startsWith(`${root}_backups/`)) return "backups de planilhas";
     if (SPREADSHEET_EXTENSIONS.has(path.posix.extname(relative))) return "planilhas operacionais";
+  }
+  return null;
+}
+
+// Retorna o motivo do bloqueio ou null quando a edição é permitida.
+// Vale para o projeto atual e, em worktree, também para o checkout principal (onde ficam os dados reais).
+function blockReason(filePath, projectDir) {
+  const roots = [projectDir];
+  const main = mainCheckoutRoot(projectDir);
+  if (main) roots.push(main);
+  for (const root of roots) {
+    const relative = relativeToProject(filePath, root);
+    if (relative) return reasonForRelative(relative);
   }
   return null;
 }
