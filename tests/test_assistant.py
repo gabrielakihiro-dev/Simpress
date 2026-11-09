@@ -1425,6 +1425,8 @@ class AnnotationSimpress(FakeSimpress):
             return 200, {"evento": {"comparacao": {"divergencias_local": [
                 {"serie": "ABC123", "anotacao_id": "it1", "anotacao": f"Falar com Maria Souza CPF {CPF}"},
                 {"serie": "XYZ999", "anotacao_id": "it2"},
+            ], "sem_acesso_60_dias": [
+                {"serie": "NOTE60", "dias": 64, "situacao": "saiu_endpoint", "anotacao_id": "it60"},
             ]}}}
         if path == "/api/operacoes/chamados/linha-do-tempo/ABC123":
             self.calls.append((method, path, params, body))
@@ -1454,6 +1456,15 @@ class AnnotationToolTests(unittest.TestCase):
         conversation.resolver_confirmacao(True)
         self.assertEqual(simpress.writes(), [("PUT", "/api/historico-comparacoes/ev1/anotacoes/it2")])
         self.assertEqual(simpress.calls[-1][3], {"anotacao": "Conferido"})
+
+    def test_note_on_a_60_day_row_gets_a_card_then_put(self) -> None:
+        model = FakeModel(calls(call("anotar_linha_historico", evento_id="ev1", item_id="it60", anotacao="Achado no Staged")), text("feito"))
+        conversation, simpress = make_conversation(model, AnnotationSimpress())
+        reply = conversation.enviar_mensagem("anote Achado no Staged")
+        self.assertIn("NOTE60", reply.pendente["descricao"])  # type: ignore[index]
+        self.assertIn("Passou de 60 dias sem acesso", reply.pendente["descricao"])  # type: ignore[index]
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("PUT", "/api/historico-comparacoes/ev1/anotacoes/it60")])
 
     def test_timeline_note_card_then_put(self) -> None:
         model = FakeModel(calls(call("anotar_linha_do_tempo", serie="abc123", evento_id="s1", item_id="t1", anotacao="Peça chegou")), text("feito"))

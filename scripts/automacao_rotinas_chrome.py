@@ -1904,6 +1904,7 @@ def rodar_rotina_inventarios(context: "BrowserContext") -> int:
     print("\n[SUCESSO] Rotina de inventários concluída." if codigo == 0 else "\n[FALHA] Rotina de inventários não foi concluída.")
     if codigo == 0:
         verificar_usuarios_apos_inventarios(context)
+        verificar_staged_computers_apos_inventarios(context)
     return codigo
 
 
@@ -1922,6 +1923,23 @@ def verificar_usuarios_apos_inventarios(context: "BrowserContext") -> None:
         rodar_rotina_usuarios(context)
     except Exception as erro:
         print(f"\n[AVISO] Verificação de usuários não concluída: {descrever_erro(erro)}", flush=True)
+
+
+def rodar_rotina_staged_computers(context: "BrowserContext") -> int:
+    from scripts import staged_computers_endpoint
+
+    print(f"\n=== STAGED COMPUTERS (início {agora_iso()}) ===", flush=True)
+    codigo = staged_computers_endpoint.verificar_staged_computers(context, sys.modules[__name__])
+    print("\n[SUCESSO] Busca em Staged Computers concluída.", flush=True)
+    return codigo
+
+
+def verificar_staged_computers_apos_inventarios(context: "BrowserContext") -> None:
+    """Depois da verificação de usuários: falha aqui também só vira aviso (a importação já está confirmada)."""
+    try:
+        rodar_rotina_staged_computers(context)
+    except Exception as erro:
+        print(f"\n[AVISO] Busca em Staged Computers não concluída: {descrever_erro(erro)}", flush=True)
 
 
 def rodar_rotina_sebrae(context: "BrowserContext") -> int:

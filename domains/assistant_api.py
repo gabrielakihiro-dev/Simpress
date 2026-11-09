@@ -62,6 +62,7 @@ MAX_ANOTACAO = 2000  # same limit as the annotation routes (history_annotations.
 _SECOES_ANOTAVEIS = {
     "apelidos_sem_atualizacao": "Linhas mantidas para conferência",
     "sem_acesso_7_dias": "Sem acesso há 7 dias ou mais",
+    "sem_acesso_60_dias": "Passou de 60 dias sem acesso",
     "ausentes_no_endpoint": "Equipamentos sem correspondência por fonte (Endpoint)",
     "ausentes_em_detalhes": "Equipamentos sem correspondência por fonte (Simpress)",
     "divergencias_local": "Localidade divergente",
@@ -93,6 +94,7 @@ _SECOES_COMPARACAO = {
     "apelidos_atualizados": ("apelidos_atualizados",),
     "divergencias_apelidos_manuais": ("divergencias_apelidos_manuais",),
     "mudancas_usuarios": ("mudancas_usuarios",),
+    "sem_acesso_60_dias": ("sem_acesso_60_dias",),
 }
 # explicar_divergencia(): same size budget as comparar_periodos (the section items shrink first).
 _SERIE_VALIDA = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")

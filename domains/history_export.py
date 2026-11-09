@@ -350,6 +350,7 @@ def build_history_export_workbook(
         "Apelidos para conferência": 0,
         "Divergências manuais": 0,
         "Sem verificação há 7+ dias": 0,
+        "Passou de 60 dias sem acesso": 0,
         "Ausentes no endpoint": 0,
         "Ausentes na Simpress": 0,
         "Divergências de localidade": 0,
@@ -361,6 +362,7 @@ def build_history_export_workbook(
     alias_rows = []
     absence_rows = []
     no_access_rows = []
+    long_unused_rows = []
     location_rows = []
     ambiguity_rows = []
     user_rows = []
@@ -381,6 +383,7 @@ def build_history_export_workbook(
         absent_endpoint = _export_rows(comparison, "ausentes_no_endpoint")
         absent_simpress = _export_rows(comparison, "ausentes_em_detalhes")
         no_recent_verification = _export_rows(comparison, "sem_acesso_7_dias")
+        long_unused = _export_rows(comparison, "sem_acesso_60_dias")
         local_divergences = _export_rows(comparison, "divergencias_local")
         unmapped_series = _export_rows(comparison, "series_sem_mapeamento")
         ambiguities = _export_rows(comparison, "correspondencias_ambiguas")
@@ -395,6 +398,7 @@ def build_history_export_workbook(
         category_counts["Apelidos para conferência"] += len(alias_reviews)
         category_counts["Divergências manuais"] += len(manual_alias_conflicts)
         category_counts["Sem verificação há 7+ dias"] += len(no_recent_verification)
+        category_counts["Passou de 60 dias sem acesso"] += len(long_unused)
         category_counts["Ausentes no endpoint"] += len(absent_endpoint)
         category_counts["Ausentes na Simpress"] += len(absent_simpress)
         category_counts["Divergências de localidade"] += len(local_divergences)
@@ -514,6 +518,15 @@ def build_history_export_workbook(
                 _export_note(comparison, "sem_acesso_7_dias", index, item),
             ))
 
+        for index, item in enumerate(long_unused):
+            estimated = item.get("situacao") == "saiu_endpoint"
+            long_unused_rows.append((
+                timestamp, event_type_label, item.get("computador"), item.get("serie"),
+                ("~" if estimated else "") + _export_text(item.get("dias")),
+                "Saiu para Ausentes no Endpoint" if estimated else "Ainda em Sem acesso há 7 dias ou mais",
+                _export_note(comparison, "sem_acesso_60_dias", index, item),
+            ))
+
         for index, item in enumerate(local_divergences):
             location_rows.append((
                 timestamp, "Localidade divergente", item.get("computador"),
@@ -610,6 +623,13 @@ def build_history_export_workbook(
          "Dias sem verificação", "Linha no endpoint", "Usuário logado", "Origem do usuário", "Anotação"],
         no_access_rows, "tblHistoricoSemAcesso",
         [20, 16, 32, 20, 26, 20, 16, 28, 18, 42],
+    )
+    _write_export_table_sheet(
+        workbook, "Passou de 60 dias", "Notebooks que passaram de 60 dias sem acesso",
+        "Dias estimados (~) para notebooks que já saíram para Ausentes no Endpoint.",
+        ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Dias sem acesso", "Situação", "Anotação"],
+        long_unused_rows, "tblHistoricoSem60Dias",
+        [20, 16, 32, 20, 16, 38, 42],
     )
     _write_export_table_sheet(
         workbook, "Localidades", "Divergências e séries sem local",
