@@ -1,7 +1,8 @@
 """History of the assistant's conversations: a local JSON file the user can read back and delete.
 
 Only the visible text of each turn is kept, and only in its masked form (the same text the model got),
-so no CPF, e-mail, phone, password or known name is written to disk. Placeholders such as `[PESSOA_1]`
+so no CPF, e-mail, phone, password or known name is written to disk. The first name that the chat lets the
+model see ("Marina [PESSOA_3]", 08/11/2026) is masked again before it is saved. Placeholders such as `[PESSOA_1]`
 are not turned back into names here: the mapping lives in memory and ends with the conversation.
 Attachments, reports and tool results are never stored. The history is read-only: nothing here resumes a conversation.
 """
