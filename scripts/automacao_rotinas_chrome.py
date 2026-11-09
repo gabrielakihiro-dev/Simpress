@@ -1978,6 +1978,13 @@ _AVISO_ENVIO_CONCLUIDO = re.compile(
     re.IGNORECASE,
 )
 _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloquead|em uso|sendo usado|sendo editado", re.IGNORECASE)
+# "Save Conflict: Your changes conflict with those made concurrently by another user": o Replace foi recusado. Estreito de
+# propósito: get_by_text também lê os nomes dos arquivos da pasta.
+_AVISO_CONFLITO = re.compile(r"save conflict|changes conflict with|conflito (?:de|ao) (?:salva|grava)", re.IGNORECASE)
+# Fim real da Duplicata ("Copied 1 item"): a linha da cópia aparece antes de o SharePoint terminar de copiar.
+_AVISO_COPIA_CONCLUIDA = re.compile(r"copied \d+ items?|copiad[oa]s? \d+ ite|\d+ ite(?:m|ns) copiad", re.IGNORECASE)
+# Cópia em andamento ("Copying 1 item"): no teste real de 08/11/2026 durou mais de 30 s e a linha só surgiu no fim.
+_AVISO_COPIANDO = re.compile(r"copying \d+ items?|copiando \d+ ite", re.IGNORECASE)
 # Cópia local do que estava no SharePoint antes de sobrepor (a cópia "Duplicata" fica lá, intocada).
 DASHBOARD_BACKUPS_DIR = ROOT / "data" / "state" / "sebrae_backups"
 DASHBOARD_BACKUPS_MAX = 20
@@ -2146,6 +2153,10 @@ LIMITE_AVISO_COPIAS = 5
 _COPIA_DO_DASHBOARD = re.compile(re.escape(Path(DASHBOARD_FINAL).stem) + r"\s*(?:[-–]\s*)?(?:(?:Copiar|C[óo]pia|Copy)\b|\(\d+\))", re.IGNORECASE)
 
 
+ESPERA_COPIA_NA_LISTA_S = 30
+ESPERA_COPIA_CONCLUIDA_S = 300
+
+
 def _quantos_dashboards_na_lista(page: "Page") -> int:
     """Linhas cujo nome contém o nome do Dashboard: o original e cópias ("... (1)", "... - Cópia")."""
     return page.get_by_role("row").filter(has_text=re.compile(re.escape(Path(DASHBOARD_FINAL).stem), re.IGNORECASE)).count()
@@ -2184,14 +2195,30 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     # no "..." de outro arquivo da mesma pasta durante a espera duplicaria esse arquivo (só cria uma cópia, nada é apagado).
     aguardar_estabilidade_pre_clique(duplicata.is_visible, "Duplicata (cópia de segurança no SharePoint)")
     duplicata.click()
-    limite = time.time() + 30
-    while time.time() < limite:
+    inicio = time.time()
+    linha_nova = copia_concluida = copiando = False
+    # Sobrepor o original enquanto o SharePoint ainda copia gera "Save Conflict" (08/11/2026): espera o aviso "Copied 1 item".
+    while time.time() < inicio + ESPERA_COPIA_CONCLUIDA_S:
         verificar_cancelamento()
-        if _quantos_dashboards_na_lista(page) > antes:
+        copia_concluida = copia_concluida or visivel(page.get_by_text(_AVISO_COPIA_CONCLUIDA).first)
+        copiando = visivel(page.get_by_text(_AVISO_COPIANDO).first)
+        linha_nova = linha_nova or _quantos_dashboards_na_lista(page) > antes
+        if linha_nova and copia_concluida:
             log("Dashboard", "Cópia de segurança criada na pasta (não será alterada).")
             return
+        # Sem linha nova nem "Copying 1 item" em 30 s: o clique não iniciou cópia nenhuma.
+        if not linha_nova and not copiando and not copia_concluida and time.time() >= inicio + ESPERA_COPIA_NA_LISTA_S:
+            raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
         page.wait_for_timeout(1000)
-    raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
+    if copiando:
+        raise RotinaErro(
+            f"A cópia (Duplicata) ainda estava em andamento depois de {ESPERA_COPIA_CONCLUIDA_S} s; não substituí o Dashboard. "
+            "Espere a cópia terminar e tente de novo."
+        )
+    if not linha_nova:
+        raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
+    # Aviso perdido entre duas leituras ou em outro idioma: segue; um conflito no envio é detectado e nada é repetido.
+    log("Dashboard", f"Cópia de segurança na pasta, sem o aviso de cópia concluída em {ESPERA_COPIA_CONCLUIDA_S} s; seguindo.")
 
 
 def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
@@ -2273,6 +2300,13 @@ def guardar_backup_do_dashboard(baixado: Path) -> Path:
     return destino
 
 
+MSG_CONFLITO_SHAREPOINT = (
+    "O SharePoint recusou a substituição por conflito de gravação (Save Conflict): outra alteração no Dashboard ao mesmo tempo, "
+    "como a cópia de segurança ainda em andamento ou o arquivo aberto no Excel Online. Feche o Dashboard no Excel Online, "
+    "confira a pasta DASHBOARD SEBRAE e registre a conferência na tela antes de enviar de novo."
+)
+
+
 def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
     """Carregar > Carregamento de arquivos (na tela Shared: Criar ou carregar > Carregamento de arquivos) na pasta aberta, sobrepondo o original com "Replace".
 
@@ -2313,6 +2347,9 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
         verificar_cancelamento()
         if visivel(aviso_uso.first):
             raise RotinaErro("O SharePoint não deixou substituir: o Dashboard está em uso ou bloqueado por outra pessoa. Feche-o e envie de novo.")
+        # Antes do aviso de concluído; nunca clica em "Retry"/"Tentar de novo" do aviso.
+        if visivel(page.get_by_text(_AVISO_CONFLITO).first):
+            raise RotinaErro(MSG_CONFLITO_SHAREPOINT)
         # Só o aviso confirma: o texto da linha muda sozinho (data relativa) mesmo se o envio falhar.
         if visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
             return
