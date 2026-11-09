@@ -836,6 +836,10 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertFalse(automacao._AVISO_CONFLITO.search("Dashboard Operacional_SEBRAE.xlsx"))
         for aviso in ("Copied 1 item", "Copied 2 items", "1 item copiado", "Copiado 1 item"):
             self.assertTrue(automacao._AVISO_COPIA_CONCLUIDA.search(aviso), aviso)
+            self.assertFalse(automacao._AVISO_COPIANDO.search(aviso), aviso)
+        for aviso in ("Copying 1 item", "Copying 2 items", "Copiando 1 item"):
+            self.assertTrue(automacao._AVISO_COPIANDO.search(aviso), aviso)
+            self.assertFalse(automacao._AVISO_COPIA_CONCLUIDA.search(aviso), aviso)
         self.assertFalse(automacao._AVISO_COPIA_CONCLUIDA.search("Dashboard Operacional_SEBRAE Copiar.xlsx"))
 
     def test_upload_fails_without_the_completion_notice_even_if_the_row_text_changes(self):
@@ -861,16 +865,20 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
         page.get_by_role.return_value.first.click.assert_called_once()
 
-    def _duplicar_com_aviso(self, avisos, tempo=None):
-        """Duplicata com a linha nova já na lista e o aviso "Copied 1 item" seguindo ``avisos`` (True/False por leitura)."""
+    def _duplicar_com_aviso(self, avisos, tempo=None, contagens=None, copiando=()):
+        """Duplicata com "Copied 1 item" seguindo ``avisos`` e "Copying 1 item" seguindo ``copiando`` (True/False por leitura)."""
         page = MagicMock()
-        contagens = iter([1] + [2] * 1000)
-        leituras = iter(avisos)
+        contagens = iter(contagens if contagens is not None else [1] + [2] * 1000)
+        leituras = {automacao._AVISO_COPIA_CONCLUIDA: iter(avisos), automacao._AVISO_COPIANDO: iter(copiando)}
+
+        def visivel(_loc):
+            return next(leituras[page.get_by_text.call_args.args[0]], False)
+
         relogio = patch.object(automacao.time, "time", side_effect=tempo) if tempo is not None else contextlib.nullcontext()
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
-                patch.object(automacao, "visivel", side_effect=lambda _loc: next(leituras, False)), \
+                patch.object(automacao, "visivel", side_effect=visivel), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log, relogio:
             automacao.duplicar_dashboard_na_pasta(page)
@@ -887,6 +895,19 @@ class EnviarDashboardTests(unittest.TestCase):
         page, textos = self._duplicar_com_aviso([], tempo=itertools.count(0, 10))
         page.get_by_role.return_value.first.click.assert_called_once()  # a Duplicata nunca se repete
         self.assertIn("sem o aviso de cópia concluída", textos)
+
+    def test_duplicate_keeps_waiting_while_sharepoint_shows_copying(self):
+        # Teste real de 08/11/2026: "Copying 1 item" por mais de 30 s e a linha da cópia só no fim; não é falha.
+        n = 60
+        page, textos = self._duplicar_com_aviso(
+            [False] * n + [True], tempo=itertools.count(0, 1), contagens=[1] * (n + 1) + [2] * 10, copiando=[True] * n,
+        )
+        page.get_by_role.return_value.first.click.assert_called_once()
+        self.assertIn("Cópia de segurança criada", textos)
+
+    def test_duplicate_stops_when_the_copy_is_still_running_at_the_deadline(self):
+        with self.assertRaisesRegex(automacao.RotinaErro, "ainda estava em andamento"):
+            self._duplicar_com_aviso([], tempo=itertools.count(0, 10), contagens=[1] * 1000, copiando=[True] * 1000)
 
     def _logs_da_duplicata(self, copias: int) -> str:
         contagens = iter([copias + 1, copias + 2])  # original + cópias, depois a nova
