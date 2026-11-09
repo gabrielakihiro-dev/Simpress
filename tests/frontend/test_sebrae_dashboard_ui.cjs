@@ -506,10 +506,13 @@ test("declaração de não enviado exige texto forte e nunca dispara upload auto
   assert.equal(botao.disabled, true);
   entrada.value = `CONFIRMO NAO APLICADO ${envio}`;
   entrada.dispatchEvent({ type: "input" });
+  assert.equal(botao.disabled, true, "a frase antiga com ID não vale mais");
+  entrada.value = "CONFIRMO NAO APLICADO";
+  entrada.dispatchEvent({ type: "input" });
   assert.equal(botao.disabled, false);
   botao.click();
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(pedidos, [["/api/sebrae/dashboard/envio/recuperar", { envio_id: envio, acao: "declarar_nao_enviado", confirmacao: `CONFIRMO NAO APLICADO ${envio}` }]]);
+  assert.deepEqual(pedidos, [["/api/sebrae/dashboard/envio/recuperar", { envio_id: envio, acao: "declarar_nao_enviado", confirmacao: "CONFIRMO NAO APLICADO" }]]);
   assert.match(aviso.textContent, /Nenhum upload foi disparado/);
   assert.match(aviso.textContent, /declarou/);
 });
@@ -556,6 +559,9 @@ test("legado confirmado mostra pasta e só conclui após declaração forte de p
   const entrada = aviso.querySelector("input");
   assert.equal(botao.disabled, true);
   entrada.value = `CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS ${envio}`;
+  entrada.dispatchEvent({ type: "input" });
+  assert.equal(botao.disabled, true, "a frase antiga com ID não vale mais");
+  entrada.value = "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS";
   entrada.dispatchEvent({ type: "input" });
   assert.equal(botao.disabled, false);
   botao.click();
