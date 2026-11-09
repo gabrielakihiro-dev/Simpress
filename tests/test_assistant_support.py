@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 from unittest import mock
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from security import sessao_local
 from pydantic import BaseModel
 
-from domains.assistant_api import SimpressApi, asgi_transport
+from domains.assistant_api import ArquivoUpload, SimpressApi, asgi_transport
 from domains.assistant_lgpd import CPF_MASCARA, Mascara
 from domains.assistant_openrouter import (
     OpenRouterClient,
@@ -217,8 +217,153 @@ class MaskTests(unittest.TestCase):
         masked = mask.mascarar({"usuarios_logados": "Maria Souza"})
         marker = masked["usuarios_logados"]
         self.assertTrue(Mascara.tem_marcador(marker))
-        self.assertNotIn("Maria", marker)
+        self.assertTrue(marker.startswith("Maria [PESSOA_"))  # first name visible (08/11/2026), surname hidden
+        self.assertNotIn("Souza", marker)
         self.assertEqual(mask.restaurar(f"Olá {marker}"), "Olá Maria Souza")
+
+    # First name visible in the mask (08/11/2026, pedido do usuário): only plain names of 2+ words; the rest stays hidden.
+    NOME_LONGO = "Marina Beatriz Teixeira da Costa"
+
+    def test_first_name_is_shown_the_rest_is_hidden_and_the_round_trip_is_exact(self) -> None:
+        mask = Mascara()
+        original = {"usuarios_logados": self.NOME_LONGO, "lista": [{"nome": self.NOME_LONGO}]}
+        masked = mask.mascarar(original)
+        texto = masked["usuarios_logados"]
+        self.assertRegex(texto, r"^Marina \[PESSOA_\d+\]$")
+        for escondido in ("Beatriz", "Teixeira", "Costa"):
+            self.assertNotIn(escondido, json.dumps(masked, ensure_ascii=False))
+        self.assertEqual(mask.restaurar(masked), original)
+        marcador = texto.split(" ", 1)[1]
+        self.assertEqual(mask.restaurar(marcador), self.NOME_LONGO)  # the bare marker is accepted too
+        self.assertEqual(mask.restaurar(f"Pediu ao {marcador}."), f"Pediu ao {self.NOME_LONGO}.")
+        self.assertEqual(mask.restaurar(f"Pediu à {texto}."), f"Pediu à {self.NOME_LONGO}.")  # no "Marina Marina"
+        self.assertEqual(mask.restaurar(f"marina {marcador}"), self.NOME_LONGO)
+
+    def test_logins_emails_nicknames_hostnames_and_single_words_keep_the_full_mask(self) -> None:
+        casos = [
+            ("login", "mbteixeira"),
+            ("usuario", "PR-SEBRAE\\mbteixeira"),
+            ("usuario", "ana.souza"),
+            ("email", "marina.costa@sebrae.com.br"),
+            ("apelido", "Marina Costa notebook"),
+            ("computador", "PRNOTEUMU005"),
+            ("nome", "Marina"),
+            ("nome", "Maria-Clara Souza"),
+            ("usuario_logado", "de Souza Pedro"),
+        ]
+        for chave, valor in casos:
+            with self.subTest(chave=chave, valor=valor):
+                mask = Mascara()
+                saida = mask.mascarar({chave: valor})[chave]
+                self.assertRegex(saida, r"^\[PESSOA_\d+\]$")
+                self.assertEqual(mask.restaurar(saida), valor)
+
+    def test_first_name_alone_stays_readable_but_the_other_parts_become_markers(self) -> None:
+        mask = Mascara()
+        mask.mascarar({"usuario_logado": self.NOME_LONGO})
+        frase = "Marina pediu. Beatriz Costa ligou depois."
+        saida = mask.mascarar({"mensagem": frase})["mensagem"]
+        self.assertTrue(saida.startswith("Marina pediu. "))
+        self.assertNotIn("Beatriz", saida)
+        self.assertNotIn("Costa", saida)
+        self.assertEqual(mask.restaurar(saida), frase)
+
+    def test_ocultar_conhecidos_ignores_case_and_keeps_the_first_name_as_written(self) -> None:
+        mask = Mascara()
+        marcador = mask.mascarar({"usuario_logado": self.NOME_LONGO})["usuario_logado"].split(" ", 1)[1]
+        self.assertEqual(mask.ocultar_conhecidos("MARINA BEATRIZ TEIXEIRA DA COSTA ligou"), f"MARINA {marcador} ligou")
+        self.assertEqual(mask.ocultar_conhecidos("marina beatriz teixeira da costa ligou"), f"marina {marcador} ligou")
+        # What leaves the computer (web search) shows nothing: the whole name is its marker, a lone first name is omitted.
+        self.assertEqual(
+            mask.ocultar_conhecidos(f"{self.NOME_LONGO} ligou; Marina voltou", completo=True),
+            f"{marcador} ligou; [PESSOA] voltou",
+        )
+
+    def test_ocultar_conhecidos_completo_drops_a_visible_first_name_of_any_length(self) -> None:
+        # Disk history and web search: "Ana [PESSOA_n]" (3 letters) must lose "Ana" too, not only 4+ letter names.
+        mask = Mascara()
+        visivel = mask.mascarar({"usuario_logado": "Ana Souza Lima"})["usuario_logado"]
+        self.assertRegex(visivel, r"^Ana \[PESSOA_\d+\]$")
+        marcador = visivel.split(" ", 1)[1]
+        self.assertEqual(mask.ocultar_conhecidos(f"{visivel} ligou", completo=True), f"{marcador} ligou")
+        self.assertEqual(mask.ocultar_conhecidos(f"ANA {marcador} ligou", completo=True), f"{marcador} ligou")
+        # A word that is not the registered first name stays in front of the marker.
+        self.assertEqual(mask.ocultar_conhecidos(f"Falou {marcador}", completo=True), f"Falou {marcador}")
+        # Without `completo` the first name is still shown.
+        self.assertEqual(mask.ocultar_conhecidos("Ana Souza Lima ligou"), f"Ana {marcador} ligou")
+
+    def test_base_names_show_the_first_name_and_survive_limpar(self) -> None:
+        texto = f"{self.NOME_LONGO} ligou"
+        mask = Mascara()
+        mask.registrar_base([self.NOME_LONGO, "TI"])
+        antes = mask.ocultar_conhecidos(texto)
+        self.assertRegex(antes, r"^Marina \[PESSOA_\d+\] ligou$")
+        self.assertEqual(mask.restaurar(antes), texto)
+        mask.limpar()
+        self.assertEqual(mask.ocultar_conhecidos(texto), antes)
+        sem_base = Mascara()
+        sem_base.mascarar({"usuario_logado": self.NOME_LONGO})
+        sem_base.limpar()
+        self.assertEqual(sem_base.ocultar_conhecidos(texto), texto)
+
+    def test_surname_equal_to_another_first_name_keeps_that_name_masked(self) -> None:
+        # Known limit: a text already rendered before the collision was known keeps what it showed.
+        # Inside one call the result does not depend on the order.
+        a, b = "Marina Costa", "Costa Silva"
+        for ordem in ((a, b), (b, a)):
+            with self.subTest(ordem=ordem):
+                mask = Mascara()
+                original = [{"nome": nome} for nome in ordem]
+                saida = mask.mascarar(original)
+                por_nome = {nome: item["nome"] for nome, item in zip(ordem, saida)}
+                self.assertRegex(por_nome[b], r"^\[PESSOA_\d+\]$")
+                self.assertRegex(por_nome[a], r"^Marina \[PESSOA_\d+\]$")
+                self.assertNotIn("Costa", json.dumps(saida))
+                self.assertEqual(mask.restaurar(saida), original)
+
+    def test_unknown_marker_is_left_alone_and_still_detected(self) -> None:
+        mask = Mascara()
+        marcado = mask.mascarar({"usuario_logado": self.NOME_LONGO})["usuario_logado"]
+        self.assertTrue(Mascara.tem_marcador(marcado))
+        self.assertEqual(mask.restaurar("Marina [PESSOA_99]"), "Marina [PESSOA_99]")
+        self.assertTrue(Mascara.tem_marcador("Marina [PESSOA_99]"))
+
+    def test_modo_normal_protege_primeiro_nome_junto_do_proprio_marcador(self) -> None:
+        mask = Mascara()
+        marcador = mask.mascarar({"usuario_logado": self.NOME_LONGO})["usuario_logado"].split(" ", 1)[1]
+        mask.mascarar({"nome": "Marina"})  # "marina" passa a ser um valor conhecido de uma palavra
+        oculto = mask.ocultar_conhecidos(f"Marina {marcador} ligou")
+        self.assertEqual(oculto, f"{marcador} ligou")
+        self.assertEqual(mask.restaurar(oculto), f"{self.NOME_LONGO} ligou")
+
+    def test_restaurar_nao_duplica_primeiro_nome_com_formatacao_no_meio(self) -> None:
+        mask = Mascara()
+        marcador = mask.mascarar({"usuario_logado": self.NOME_LONGO})["usuario_logado"].split(" ", 1)[1]
+        self.assertEqual(
+            mask.restaurar(f"**Marina** {marcador}"), f"**{self.NOME_LONGO}**"
+        )
+        for texto in (f"Marina ({marcador})", f"Marina\n{marcador}"):
+            with self.subTest(texto=texto):
+                restaurado = mask.restaurar(texto)
+                self.assertEqual(restaurado.count("Marina"), 1)
+                self.assertIn(self.NOME_LONGO, restaurado)
+
+    def test_modo_completo_oculta_primeiro_nome_de_qualquer_tamanho(self) -> None:
+        mask = Mascara()
+        mask.mascarar({"nome": "Ana Paula Souza"})
+        oculto = mask.ocultar_conhecidos("a Ana pediram", completo=True)
+        self.assertNotIn("Ana", oculto)
+        self.assertEqual(oculto, "a [PESSOA] pediram")
+
+    def test_solicitante_do_sistema_fica_fora_da_mascara(self) -> None:
+        mask = Mascara()
+        saida = mask.mascarar({"solicitante": "API SEBRAE", "usuario": "Api  Sébrae"})
+        self.assertEqual(saida, {"solicitante": "API SEBRAE", "usuario": "Api  Sébrae"})
+        self.assertFalse(Mascara.tem_marcador(json.dumps(saida)))
+        self.assertEqual(mask.mascarar("o Sebrae pediu"), "o Sebrae pediu")
+        mask.registrar_base(["API SEBRAE", "Ana Paula Souza"])
+        oculto = mask.ocultar_conhecidos("API SEBRAE abriu; Ana Paula Souza", completo=True)
+        self.assertEqual(oculto, "API SEBRAE abriu; [PESSOA_1]")
 
 
 class PingBody(BaseModel):
@@ -239,11 +384,27 @@ class TransportTests(unittest.TestCase):
         def eco(body: PingBody) -> Dict[str, Any]:
             return {"nome": body.nome}
 
+        @app.post("/api/envio")
+        async def envio(file: UploadFile = File(...)) -> Dict[str, Any]:
+            dados = await file.read()
+            return {"nome": file.filename, "tipo": file.content_type, "tamanho": len(dados), "inicio": dados[:5].decode("latin-1")}
+
         self.transport = asgi_transport(lambda: app, 8000)
 
     def test_get_with_params_and_post_with_body(self) -> None:
         self.assertEqual(self.transport("GET", "/api/ping", {"q": "açaí"}, None), (200, {"q": "açaí"}))
         self.assertEqual(self.transport("POST", "/api/eco", None, {"nome": "Ana"}), (200, {"nome": "Ana"}))
+
+    def test_multipart_file_goes_in_the_body_slot(self) -> None:
+        conteudo = b"%PDF-1.4\n" + bytes(range(256))
+        resposta = self.transport("POST", "/api/envio", None, ArquivoUpload("file", "laudo.pdf", conteudo))
+        esperado = {"nome": "laudo.pdf", "tipo": "application/pdf", "tamanho": len(conteudo), "inicio": "%PDF-"}
+        self.assertEqual(resposta, (200, esperado))
+
+    def test_multipart_file_name_cannot_break_the_header_and_the_repr_hides_the_content(self) -> None:
+        status, data = self.transport("POST", "/api/envio", None, ArquivoUpload("file", 'a"b\r\nX: y.pdf', b"%PDF-1.4"))
+        self.assertEqual((status, data["nome"]), (200, "a_b__X: y.pdf"))
+        self.assertNotIn("segredo", repr(ArquivoUpload("file", "a.pdf", b"segredo")))
 
     def test_missing_route_returns_404_and_api_turns_it_into_text(self) -> None:
         self.assertEqual(self.transport("GET", "/api/nada", None, None)[0], 404)

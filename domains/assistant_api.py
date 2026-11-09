@@ -11,10 +11,12 @@ import calendar
 import json
 import logging
 import re
+import secrets
 import unicodedata
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import quote, urlencode
 
 from pydantic import ValidationError
@@ -24,7 +26,7 @@ from domains.sebrae_observacoes import numero_observacao_valido
 from domains.os_observacoes import chave_os
 from core.errors import DomainValidationError
 from security import sessao_local
-from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
+from domains.assistant_lgpd import SEM_USUARIO, e_solicitante_sistema, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.coverage import dobrar
 from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDOS
@@ -36,8 +38,8 @@ from routers.transfers import TransferenciaPayload, formatar_telefone_brasileiro
 
 logger = logging.getLogger(__name__)
 
-# (method, path, query params, JSON body) -> (HTTP status, decoded JSON or text)
-Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Tuple[int, Any]]
+# (method, path, query params, JSON body or an ArquivoUpload for multipart) -> (HTTP status, decoded JSON or text)
+Transport = Callable[[str, str, Optional[Dict[str, Any]], Any], Tuple[int, Any]]
 
 CALL_TIMEOUT_SECONDS = 30.0
 ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 1200.0  # Endpoint login wait (600 s) + navigation and filters (480 s); keeps the route thread from outliving the call.
@@ -138,18 +140,50 @@ _ROTULOS_SECAO = {
 }
 
 
+@dataclass(frozen=True)
+class ArquivoUpload:
+    """A file for a multipart/form-data call (08/11/2026): goes in the `corpo` slot of a Transport call, instead of a JSON dict.
+
+    Kept in memory only; `conteudo` stays out of repr so a log line or a traceback never prints it.
+    """
+
+    campo: str
+    nome: str
+    conteudo: bytes = field(repr=False)
+    tipo: str = "application/pdf"
+
+
+def _corpo_multipart(arquivo: ArquivoUpload) -> Tuple[bytes, str]:
+    """(body, content-type) of a one-field multipart request, as a browser would send it."""
+    fronteira = "simpress" + secrets.token_hex(16)
+    # The name comes from the user: no quote, backslash or line break may reach the Content-Disposition header.
+    nome = re.sub(r'[\r\n"\\\x00-\x1f\x7f]', "_", arquivo.nome)
+    cabecalho = (
+        f"--{fronteira}\r\n"
+        f'Content-Disposition: form-data; name="{arquivo.campo}"; filename="{nome}"\r\n'
+        f"Content-Type: {arquivo.tipo}\r\n\r\n"
+    ).encode("utf-8")
+    return cabecalho + arquivo.conteudo + f"\r\n--{fronteira}--\r\n".encode("ascii"), f"multipart/form-data; boundary={fronteira}"
+
+
 async def _asgi_call(
-    app: Any, port: int, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]],
+    app: Any, port: int, method: str, path: str, params: Optional[Dict[str, Any]], body: Union[Dict[str, Any], ArquivoUpload, None],
 ) -> Tuple[int, Any]:
-    payload = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else b""
+    tipo_corpo = ""
+    if isinstance(body, ArquivoUpload):
+        payload, tipo_corpo = _corpo_multipart(body)
+    elif body is not None:
+        payload, tipo_corpo = json.dumps(body, ensure_ascii=False).encode("utf-8"), "application/json"
+    else:
+        payload = b""
     headers: List[Tuple[bytes, bytes]] = [
         (b"host", f"127.0.0.1:{port}".encode("ascii")),
         (b"accept", b"application/json"),
         # Same process as the server, so this SEGREDO is the live one (security/sessao_local.py).
         (b"cookie", sessao_local.cabecalho_cookie(port).encode("ascii")),
     ]
-    if body is not None:
-        headers += [(b"content-type", b"application/json"), (b"content-length", str(len(payload)).encode("ascii"))]
+    if tipo_corpo:
+        headers += [(b"content-type", tipo_corpo.encode("ascii")), (b"content-length", str(len(payload)).encode("ascii"))]
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
@@ -209,7 +243,7 @@ async def _asgi_call(
 def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
     """A Transport that runs the request inside the FastAPI app. Meant for a worker thread (sync routes)."""
 
-    def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+    def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Union[Dict[str, Any], ArquivoUpload, None]) -> Tuple[int, Any]:
         async def run() -> Tuple[int, Any]:
             timeout = CALL_TIMEOUT_SECONDS
             if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto", "/api/endpoint/powershell"):
@@ -781,7 +815,7 @@ class SimpressApi:
     # --- plumbing ---------------------------------------------------------
 
     def _chamar(
-        self, metodo: str, caminho: str, params: Optional[Dict[str, Any]] = None, corpo: Optional[Dict[str, Any]] = None,
+        self, metodo: str, caminho: str, params: Optional[Dict[str, Any]] = None, corpo: Union[Dict[str, Any], ArquivoUpload, None] = None,
     ) -> Tuple[bool, Any]:
         """Return (True, data) or (False, error text). Never raises."""
         try:
@@ -1002,6 +1036,25 @@ class SimpressApi:
         padrao = [REGIONAL_REPRESENTATIVE_DEFAULTS[c]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
         editados = [representante_efetivo(c, salvos)[0]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
         return list(dict.fromkeys(n for n in padrao + editados if n))
+
+    def listar_nomes_solicitantes_sebrae(self) -> Optional[List[str]]:
+        """Requesters of the Sebrae tickets (old open and new), so the mask knows their full names inside free text. None on failure.
+
+        Same route the ticket tools read. Only values with a space (a full name) go in: a lone word such as "SEBRAE" or a login
+        would turn into a marker everywhere in the conversation.
+        """
+        ok, dados = self._chamar("GET", "/api/sebrae/novos")
+        if not ok:
+            return None
+        dados = _dict(dados)
+        valores: List[Any] = []
+        for aberto in _dict(dados.get("importado")).get("abertos") or []:
+            aberto = _dict(aberto)
+            valores += [aberto.get("usuario"), _dict(aberto.get("leitura_softexpert")).get("solicitante")]
+        for novo in _dict(dados.get("novos")).get("formulario") or []:
+            valores.append(_dict(_dict(novo).get("linha")).get("I"))
+        # "API SEBRAE" é solicitante de sistema, não pessoa: entrar na base mascararia "Sebrae" em todo o texto.
+        return list(dict.fromkeys(v.strip() for v in valores if isinstance(v, str) and len(v.split()) > 1 and not e_solicitante_sistema(v)))
 
     def obter_totais_inventario(self) -> Dict[str, Any]:
         ok, stats = self._chamar("GET", "/api/stats")
@@ -1587,8 +1640,12 @@ class SimpressApi:
             "quem_executa": quem,
         }
 
-    def chamados_antigos_abertos_sebrae(self) -> Dict[str, Any]:
-        """Old Dashboard tickets with Status EM ABERTO or empty (OS: E in the sheet, `os_sugerida` found by the serial). Read only."""
+    def chamados_antigos_abertos_sebrae(self, busca: Any = None) -> Dict[str, Any]:
+        """Old Dashboard tickets with Status EM ABERTO or empty (OS: E in the sheet, `os_sugerida` found by the serial). Read only.
+
+        `busca` (optional) keeps only the tickets whose number, title, description, requester, serial or OS has every word of it
+        (case and accents ignored). The list keeps the column C order of the F5 and is cut at MAX_ITENS_LISTA.
+        """
         ok, dados = self._chamar("GET", "/api/sebrae/novos")
         if not ok:
             return {"erro": dados}
@@ -1601,10 +1658,15 @@ class SimpressApi:
             if not isinstance(a, dict):
                 continue
             v = _dict(a.get("valores"))
+            leitura = _dict(a.get("leitura_softexpert"))
             itens.append({
                 "numero": str(a.get("numero") or ""),
+                # The only opening date an old ticket has (SoftExpert read); empty when it was not read.
+                "data": str(leitura.get("habilitada_em") or ""),
                 "titulo": limpar_texto_sensivel(a.get("titulo"))[:MAX_TEXTO_CHAMADO],
                 "descricao": limpar_texto_sensivel(a.get("descricao"))[:MAX_TEXTO_CHAMADO],
+                # Column I of the sheet; the mask needs this key to hide the name wherever it shows up in the free text.
+                "solicitante": limpar_texto_sensivel(a.get("usuario") or leitura.get("solicitante"))[:MAX_TEXTO_CHAMADO],
                 "responsavel": limpar_texto_sensivel(v.get("A")),
                 "categoria": limpar_texto_sensivel(v.get("B")),
                 "status": str(v.get("D") or ""),
@@ -1615,12 +1677,21 @@ class SimpressApi:
                 # True: not in SoftExpert's task center on the last read (e.g. closed by another technician); the F5 card is red.
                 "nao_encontrado_softexpert": a.get("nao_encontrado_softexpert") is True,
             })
+        palavras = dobrar(busca).split() if isinstance(busca, str) else []
+        encontrados = [
+            i for i in itens
+            if not palavras or all(p in dobrar(" ".join(str(i[k]) for k in ("numero", "titulo", "descricao", "solicitante", "serie", "os"))) for p in palavras)
+        ]
+        # Same order as the F5 (Tabela3 sorted by column C), cut at the start; the counts come before the list because _msg_tool cuts the end
+        # of a big answer at MAX_CARACTERES_RESPOSTA. `busca` finds a ticket that falls outside the first twenty.
+        primeiros = encontrados[:MAX_ITENS_LISTA]
         return _aparar({
             "dashboard_importado": {k: importado.get(k, "") for k in ("arquivo", "importado_em", "total")},
             "total_abertos": len(itens),
             "sem_responsavel": sum(1 for i in itens if not i["responsavel"]),
-            "abertos": [_aparar(i) for i in itens[:MAX_ITENS_LISTA]],
-            "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
+            "encontrados": len(encontrados),
+            "omitidos": len(encontrados) - len(primeiros),
+            "abertos": [_aparar(i) for i in primeiros],
         })
 
     def chamados_com_os_sebrae(self) -> Dict[str, Any]:
@@ -1819,10 +1890,10 @@ class SimpressApi:
             "pdf": str(_dict(se.get("pdf")).get("nome") or ""),
         }
 
-    def chamado_para_editar_descricao(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
-        """Data for the card and the action of "editar descrição" (lápis da tela Chamados). ValueError (shown to the user) when it cannot be edited.
+    def _localizar_chamado_sebrae(self, numero: Any) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """(number, old open ticket or None, new ticket of the last search or None); at least one is set.
 
-        Works on an old open ticket already read from SoftExpert or on a new ticket of the last search; empty text restores the original."""
+        ValueError (shown to the user) when the number is malformed, the Dashboard was not imported or the ticket is in neither list."""
         numero = str(numero or "").strip().upper()
         if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
             raise ValueError("Informe o número do chamado no formato UTIC-AAAA-NNNN.")
@@ -1835,15 +1906,43 @@ class SimpressApi:
             raise ValueError("Importe o Dashboard na tela Chamados antes. Nada foi feito.")
         antigo = next((a for a in importado.get("abertos") or [] if isinstance(a, dict) and a.get("numero") == numero), None)
         novo = next((f for f in _dict(dados.get("novos")).get("formulario") or [] if isinstance(f, dict) and f.get("numero") == numero), None)
+        if antigo is None and novo is None:
+            raise ValueError(f"{numero} não está entre os chamados em aberto nem entre os novos da última busca. Nada foi feito.")
+        return numero, antigo, novo
+
+    def chamado_para_anexar_pdf(self, numero: Any) -> Dict[str, Any]:
+        """Data for the card and the action of "anexar PDF ao chamado" (08/11/2026). ValueError (shown to the user) when it cannot be attached.
+
+        Same tickets the screen accepts: old open ticket of the imported Dashboard (read or not) or new ticket of the last search."""
+        numero, antigo, novo = self._localizar_chamado_sebrae(numero)
+        se = _dict(_dict(antigo if antigo is not None else novo).get("softexpert"))
+        if _dict(se.get("finalizacao")).get("status") == "ok":
+            raise ValueError(f"{numero} já foi finalizado no SoftExpert; não dá mais para anexar PDF. Nada foi feito.")
+        return {"numero": numero, "pdf_atual": str(_dict(se.get("pdf")).get("nome") or "")}
+
+    def anexar_pdf_chamado_sebrae(self, numero: Any, nome: str, dados: bytes) -> Dict[str, Any]:
+        """Same call as the PDF field of the ticket card: the existing route validates, stores and replaces. Local only until the ticket is finalized."""
+        try:
+            alvo = self.chamado_para_anexar_pdf(numero)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        ok, resposta = self._chamar("POST", f"/api/sebrae/chamados/{alvo['numero']}/anexo", corpo=ArquivoUpload("file", nome, dados))
+        if not ok:
+            return {"sucesso": False, "erro": resposta}
+        return {"sucesso": True, "mensagem": f"PDF anexado a {alvo['numero']}, só neste site. Ele vai ao SoftExpert apenas quando o chamado for finalizado."}
+
+    def chamado_para_editar_descricao(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+        """Data for the card and the action of "editar descrição" (lápis da tela Chamados). ValueError (shown to the user) when it cannot be edited.
+
+        Works on an old open ticket already read from SoftExpert or on a new ticket of the last search; empty text restores the original."""
+        numero, antigo, novo = self._localizar_chamado_sebrae(numero)
         if antigo is not None:
             leitura = antigo.get("leitura_softexpert")
             if not isinstance(leitura, dict):
                 raise ValueError(f"{numero} ainda não foi lido no SoftExpert (Ler chamados antigos); não há descrição para editar. Nada foi feito.")
             se, atual = _dict(antigo.get("softexpert")), str(leitura.get("descricao") or "")
-        elif novo is not None:
-            se, atual = _dict(novo.get("softexpert")), str(_dict(novo.get("linha")).get("H") or "")
         else:
-            raise ValueError(f"{numero} não está entre os chamados em aberto nem entre os novos da última busca. Nada foi feito.")
+            se, atual = _dict(_dict(novo).get("softexpert")), str(_dict(_dict(novo).get("linha")).get("H") or "")
         if _dict(se.get("finalizacao")).get("status") == "ok":
             raise ValueError(f"{numero} já foi finalizado no SoftExpert; a descrição não pode mais ser editada. Nada foi feito.")
         texto = str(descricao or "").strip()

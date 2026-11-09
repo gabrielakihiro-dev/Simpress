@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from core.errors import DomainBusyError, DomainConflictError, DomainError
 from domains import sebrae_finalizacao as fin
 from domains import sebrae_novos
+from domains.assistant_api import SimpressApi, asgi_transport
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import FichaPayload, SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
@@ -148,6 +149,7 @@ class FinalizarBase(unittest.TestCase):
             caminhos=lambda: self.caminhos, max_upload_bytes=lambda: self.limite, registros=lambda: [],
             relatorio_chamados=lambda: {"chamados": []}, runner=(lambda: self.runner) if self.com_runner else None,
         )))
+        self.app = app
         self.cliente = TestClient(app)
 
     def post(self, url, **kwargs):
@@ -468,6 +470,18 @@ class ChamadoNovoTest(FinalizarBase):
         self.assertEqual(self.job()["numeros"], [self.N])
         self.assertEqual(self.put("UTIC-2026-9999", "x").status_code, 422)
         self.assertEqual(self.post(FINALIZAR, json={"numero": "UTIC-2026-9999", "confirmado": True}).status_code, 422)
+
+    def test_assistente_anexa_o_pdf_pelo_transporte_na_rota_real(self):
+        # 08/11/2026: the Assistant sends the PDF through the same route as the screen, via the in-process transport.
+        api = SimpressApi(asgi_transport(lambda: self.app, 8000))
+        for numero, nome, dados in ((self.N, "laudo.pdf", PDF), (self.N, 'ou"tro\r\n.pdf', PDF + b"\x00\xff1")):
+            self.assertEqual(api.anexar_pdf_chamado_sebrae(numero, nome, dados)["sucesso"], True)
+            guardado = fin.dados_para_finalizar(self.dir, numero)[1]
+            self.assertEqual(guardado.read_bytes(), dados)
+        self.assertTrue(guardado.name.endswith(".pdf") and "\n" not in guardado.name)
+        recusado = api.anexar_pdf_chamado_sebrae(self.N, "laudo.pdf", b"MZ not a pdf")
+        self.assertEqual((recusado["sucesso"], recusado["erro"].startswith("Erro 422")), (False, True))
+        self.assertEqual(api.anexar_pdf_chamado_sebrae("UTIC-2026-9999", "laudo.pdf", PDF)["sucesso"], False)
 
     def test_em_massa_chamado_novo_marcado_finalizado_com_descricao_vai_para_a_rotina(self):
         self.descrever(self.N)
