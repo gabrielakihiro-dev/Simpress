@@ -15,18 +15,21 @@ position, and ``hidden`` follows the saved filter of column D.
 from __future__ import annotations
 
 import io
+import logging
 import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from html import unescape
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from xml.etree import ElementTree
 
 from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, MANUAIS, _validar_pacote, ler_coluna_c
 from domains.sebrae_novos import STATUS_FINALIZADO
+
+logger = logging.getLogger(__name__)
 
 TABELA = "Tabela3"
 FORMATO_DATA_HORA = "%d/%m/%Y %H:%M"
@@ -543,6 +546,156 @@ def _ordenar(pacote: _Pacote, linhas: Mapping[int, _Linha], substituicoes: Mappi
     return _Ordem(novas, dict(zip(ordem, faixa)), dados[-1], Counter(_assinatura(finais[n]) for n in faixa))
 
 
+# ---------------------------------------------------------------------------- categories (LISTAS!D)
+
+# Users of the list: validations of CHAMADOS (x14 ``xm:f`` or plain ``formula1``) and defined names, as ``LISTAS!$D$2:$D$<last row>``.
+_VALIDACAO_D = re.compile(r"((?:<xm:f>|<formula1>)\s*'?LISTAS'?!\$D\$2:\$D\$)(\d+)(\s*</(?:xm:f|formula1)>)")
+_NOME_D = re.compile(r"(<definedName\b[^>]*>\s*'?LISTAS'?!\$D\$2:\$D\$)(\d+)(\s*</definedName>)")
+
+
+def _categorias() -> Tuple[Tuple[str, ...], Callable[[Any], str]]:
+    from domains.sebrae_categoria import CATEGORIAS_NOVAS, normalizar  # sebrae_categoria imports this module: a top-level import would be circular
+
+    return CATEGORIAS_NOVAS, normalizar
+
+
+def _parte_da_aba(ler: Callable[[str], bytes], nome: str) -> str:
+    """Path of the sheet called ``nome`` (``workbook.xml`` plus its relationships); ``""`` when there is none."""
+    try:
+        livro = ler("xl/workbook.xml").decode("utf-8")
+        rel_id = next(_atributos(tag).get("r:id", "") for tag in _SHEET_TAG.findall(livro) if unescape(_atributos(tag).get("name", "")) == nome)
+        return _relacoes(ler("xl/_rels/workbook.xml.rels").decode("utf-8"), "xl/workbook.xml")[rel_id][1]
+    except (StopIteration, KeyError, UnicodeDecodeError):
+        return ""
+
+
+def _coluna_d(texto: str, compartilhadas: Sequence[str]) -> Optional[List[str]]:
+    """Values of ``LISTAS!D`` under the header ``CATEGORIA``; ``None`` when the sheet is not what this module expects.
+
+    Not expected: another header, a gap in the list, a value below the gap, or a formula in the list."""
+    _, normalizar = _categorias()
+    try:
+        _, _, linhas = _linhas_da_aba(texto)
+    except GravacaoInvalida:
+        return None
+    cabecalho = linhas.get(1)
+    if cabecalho is None or normalizar(_valor_celula(cabecalho.celulas.get("D", ""), compartilhadas)) != "categoria":
+        return None
+    ocupadas: List[int] = []
+    valores: List[str] = []
+    for numero in sorted(n for n in linhas if n >= 2):
+        bruto = linhas[numero].celulas.get("D", "")
+        if "<f" in bruto:
+            return None
+        valor = _valor_celula(bruto, compartilhadas)
+        if valor is not None:  # blank or absent cells are the gap the checks below look for
+            ocupadas.append(numero)
+            valores.append(valor)
+    return valores if ocupadas == list(range(2, 2 + len(ocupadas))) else None
+
+
+def _ler_listas_d(ler: Callable[[str], bytes], compartilhadas: Sequence[str]) -> Optional[Tuple[str, str, List[str]]]:
+    """``(part, sheet text, values of LISTAS!D)``, or ``None`` when there is no usable LISTAS sheet."""
+    parte = _parte_da_aba(ler, "LISTAS")
+    if not parte:
+        return None
+    try:
+        texto = ler(parte).decode("utf-8")
+    except (KeyError, UnicodeDecodeError):
+        return None
+    valores = _coluna_d(texto, compartilhadas)
+    return None if valores is None else (parte, texto, valores)
+
+
+def _alargar_spans(abertura: str) -> str:
+    achado = re.search(r'\bspans="(\d+):(\d+)"', abertura)
+    if achado is None or int(achado.group(1)) <= 4 <= int(achado.group(2)):
+        return abertura
+    return abertura.replace(achado.group(0), f'spans="{min(4, int(achado.group(1)))}:{max(4, int(achado.group(2)))}"', 1)
+
+
+def _inserir_em_d(texto: str, valores: Sequence[str], ultima: int) -> str:
+    """The LISTAS sheet with ``valores`` as inline strings in D, right under row ``ultima``; rows keep their order, other cells stay."""
+    _, fim, linhas = _linhas_da_aba(texto)
+    estilo_da_lista = _estilo_da_celula(linhas[ultima].celulas.get("D", "")) if ultima > 1 and ultima in linhas else ""  # never the header's style
+    edicoes: List[Tuple[int, int, int, str]] = []  # (start, end, row number, new text); start == end inserts
+    for deslocamento, valor in enumerate(valores):
+        numero = ultima + 1 + deslocamento
+        existente = linhas.get(numero)
+        estilo = (_estilo_da_celula(existente.celulas.get("D", "")) if existente else "") or estilo_da_lista
+        celula = f'<c r="D{numero}"' + (f' s="{estilo}"' if estilo else "") + f' t="inlineStr"><is><t>{_texto_xml(valor)}</t></is></c>'
+        if existente is not None:
+            celulas = {**existente.celulas, "D": celula}
+            novo = _alargar_spans(existente.abertura) + "".join(celulas[l] for l in sorted(celulas, key=_letra_para_indice)) + "</row>"
+            edicoes.append((existente.inicio, existente.fim, numero, novo))
+        else:
+            seguinte = min((n for n in linhas if n > numero), default=None)
+            posicao = linhas[seguinte].inicio if seguinte is not None else fim
+            edicoes.append((posicao, posicao, numero, f'<row r="{numero}">{celula}</row>'))
+    saida = ""
+    cursor = 0
+    for inicio, ate, _, novo in sorted(edicoes, key=lambda e: (e[0], e[2])):
+        saida += texto[cursor:inicio] + novo
+        cursor = ate
+    saida += texto[cursor:]
+    achado = re.search(r'<dimension ref="([A-Z]+\d+:[A-Z]+)(\d+)"', saida)
+    if achado and int(achado.group(2)) < ultima + len(valores):
+        saida = saida.replace(achado.group(0), f'<dimension ref="{achado.group(1)}{ultima + len(valores)}"', 1)
+    return saida
+
+
+def _estender_lista(texto: str, padrao: "re.Pattern[str]", ultima: int, nova: int) -> str:
+    """Moves ``$D$<n>`` to ``nova`` where the reference ends at the old last row (or inside the new rows); a longer or shorter range is the user's."""
+    return padrao.sub(lambda m: f"{m.group(1)}{nova}{m.group(3)}" if ultima <= int(m.group(2)) < nova else m.group(0), texto)
+
+
+def _acrescentar_categorias(pacote: _Pacote, partes: Dict[str, bytes]) -> None:
+    """Adds the categories of ``CATEGORIAS_NOVAS`` that LISTAS!D lacks (user's authorization of 09/11/2026: only add, never remove) and widens the B validation.
+
+    No-op (with a warning in the log, no data) when there is no LISTAS sheet, no column D under ``CATEGORIA`` or no validation that reads it: the copy must still be generated.
+    Names compare without accent or case. Nothing but ``partes`` is touched (``sharedStrings`` stays as it was)."""
+    categorias, normalizar = _categorias()
+    lida = _ler_listas_d(partes.__getitem__, pacote.compartilhadas)
+    if lida is None:
+        logger.warning("Categorias novas não acrescentadas: LISTAS!D ausente ou fora do formato esperado.")
+        return
+    parte, texto, atuais = lida
+    existentes = {normalizar(valor) for valor in atuais}
+    faltam = [categoria for categoria in categorias if normalizar(categoria) not in existentes]
+    folha = partes[pacote.aba].decode("utf-8")
+    livro = partes["xl/workbook.xml"].decode("utf-8")
+    if not faltam:
+        return
+    if not (_VALIDACAO_D.search(folha) or _NOME_D.search(livro)):
+        logger.warning("Categorias novas não acrescentadas: nenhuma validação de dados lê LISTAS!D.")
+        return
+    ultima = 1 + len(atuais)
+    nova = ultima + len(faltam)
+    novo_texto = _inserir_em_d(texto, faltam, ultima)
+    partes[parte] = novo_texto.encode("utf-8")
+    partes[pacote.aba] = _estender_lista(folha, _VALIDACAO_D, ultima, nova).encode("utf-8")
+    partes["xl/workbook.xml"] = _estender_lista(livro, _NOME_D, ultima, nova).encode("utf-8")
+    rels = parte.rsplit("/", 1)[0] + "/_rels/" + parte.rsplit("/", 1)[1] + ".rels"
+    if rels in partes:  # a table that is exactly D1:D<last> grows with the list; any other shape is left alone
+        for tipo, destino in _relacoes(partes[rels].decode("utf-8"), parte).values():
+            if tipo.endswith("/table") and destino in partes:
+                partes[destino] = partes[destino].decode("utf-8").replace(f'ref="D1:D{ultima}"', f'ref="D1:D{nova}"').encode("utf-8")
+
+
+def _categorias_conferem(arquivo: zipfile.ZipFile, pacote: _Pacote) -> bool:
+    """LISTAS!D of the copy keeps every original value in place and adds only categories of ``CATEGORIAS_NOVAS`` that were missing, once each."""
+    categorias, normalizar = _categorias()
+    antes = _ler_listas_d(pacote.partes.__getitem__, pacote.compartilhadas)
+    depois = _ler_listas_d(arquivo.read, pacote.compartilhadas)
+    if antes is None or depois is None:
+        return antes is None and depois is None
+    ElementTree.fromstring(depois[1])  # ParseError is handled by ``_conferir``
+    originais, finais = antes[2], depois[2]
+    acrescentadas = [normalizar(valor) for valor in finais[len(originais):]]
+    permitidas = {normalizar(c) for c in categorias} - {normalizar(valor) for valor in originais}
+    return finais[: len(originais)] == originais and len(set(acrescentadas)) == len(acrescentadas) and set(acrescentadas) <= permitidas
+
+
 # ---------------------------------------------------------------------------- entry point
 
 def atualizar(
@@ -611,21 +764,26 @@ def atualizar(
                 substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
                 gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))
 
-    resultado, mapa = _entregar(pacote, texto, linhas, substituicoes, anteriores, [str(l.get("C", "")) for l in novas])
+    resultado, mapa = _entregar(pacote, texto, linhas, substituicoes, anteriores, [str(l.get("C", "")) for l in novas], True)
     return Resultado(resultado, tuple(replace(g, linha=mapa.get(g.linha, g.linha)) for g in gravadas))
 
 
 def _entregar(
     pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], anteriores: frozenset[str], novos: Sequence[str],
+    categorias: bool = False,
 ) -> Tuple[bytes, Mapping[int, int]]:
-    """Sorts by column C, builds the workbook and checks it; the map gives the final row of every row of the sorted range."""
+    """Sorts by column C, builds the workbook and checks it; the map gives the final row of every row of the sorted range.
+
+    ``categorias``: also completes LISTAS!D (only ``atualizar``; closing a ticket must not touch the lists)."""
     ordem = _ordenar(pacote, linhas, substituicoes)
-    conteudo = _montar(pacote, texto, linhas, ordem.substituicoes, any(antes != depois for antes, depois in ordem.mapa.items()))
-    _conferir(conteudo, anteriores, novos, pacote, ordem)
+    conteudo = _montar(pacote, texto, linhas, ordem.substituicoes, any(antes != depois for antes, depois in ordem.mapa.items()), categorias)
+    _conferir(conteudo, anteriores, novos, pacote, ordem, categorias)
     return conteudo, ordem.mapa
 
 
-def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], sem_calc_chain: bool = False) -> bytes:
+def _montar(
+    pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], sem_calc_chain: bool = False, categorias: bool = False,
+) -> bytes:
     """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was.
 
     ``sem_calc_chain``: rows moved, so the calculation chain (which lists cells by address) is dropped with its
@@ -649,6 +807,8 @@ def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substitui
                 partes[nome] = re.sub(padrao, "", partes[nome].decode("utf-8")).encode("utf-8")
     partes[pacote.aba] = novo_texto.encode("utf-8")
     partes["xl/workbook.xml"] = _recalcular_ao_abrir(pacote.texto("xl/workbook.xml")).encode("utf-8")
+    if categorias:
+        _acrescentar_categorias(pacote, partes)
     for nome, dados in pacote.partes.items():
         if nome.startswith("xl/pivotCache/pivotCacheDefinition") and nome.endswith(".xml") and f'name="{TABELA}"' in dados.decode("utf-8", "ignore"):
             partes[nome] = _atualizar_ao_abrir(dados.decode("utf-8")).encode("utf-8")
@@ -725,8 +885,10 @@ def _atualizar_ao_abrir(cache: str) -> str:
     return cache.replace(achado.group(0), achado.group(0)[:-1] + ' refreshOnLoad="1">', 1)
 
 
-def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str], pacote: _Pacote, ordem: _Ordem) -> None:
-    """Self-check before handing the file over: it must reopen, be well formed, keep column C coherent and be a pure reordering of the rows."""
+def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str], pacote: _Pacote, ordem: _Ordem, categorias: bool = False) -> None:
+    """Self-check before handing the file over: it must reopen, be well formed, keep column C coherent and be a pure reordering of the rows.
+
+    ``categorias``: LISTAS!D must keep its original values in order and only gain ``CATEGORIAS_NOVAS``."""
     try:
         with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
             if arquivo.testzip() is not None:
@@ -734,6 +896,8 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
             folha = arquivo.read(pacote.aba).decode("utf-8")
             ElementTree.fromstring(folha)
             ElementTree.fromstring(arquivo.read("xl/workbook.xml"))
+            if categorias and not _categorias_conferem(arquivo, pacote):
+                raise GravacaoInvalida("A lista de categorias da cópia não confere com a original; nada foi entregue.")
         if ler_coluna_c(conteudo) != anteriores | frozenset(novos):
             raise GravacaoInvalida("A coluna C da cópia não confere com o esperado; nada foi entregue.")
     except (zipfile.BadZipFile, ElementTree.ParseError) as erro:
