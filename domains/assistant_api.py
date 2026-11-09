@@ -1644,7 +1644,7 @@ class SimpressApi:
         """Old Dashboard tickets with Status EM ABERTO or empty (OS: E in the sheet, `os_sugerida` found by the serial). Read only.
 
         `busca` (optional) keeps only the tickets whose number, title, description, requester, serial or OS has every word of it
-        (case and accents ignored). The list is cut at MAX_ITENS_LISTA keeping the most recent ones.
+        (case and accents ignored). The list keeps the column C order of the F5 and is cut at MAX_ITENS_LISTA.
         """
         ok, dados = self._chamar("GET", "/api/sebrae/novos")
         if not ok:
@@ -1682,16 +1682,16 @@ class SimpressApi:
             i for i in itens
             if not palavras or all(p in dobrar(" ".join(str(i[k]) for k in ("numero", "titulo", "descricao", "solicitante", "serie", "os"))) for p in palavras)
         ]
-        # shortcut: the sheet order stands for age (new tickets go to the bottom), so the last ones are the most recent; upgrade to `data` if that changes.
-        # Newest first, with the counts before the list: _msg_tool cuts the answer at MAX_CARACTERES_RESPOSTA, and the cut must eat the oldest items.
-        recentes = encontrados[-MAX_ITENS_LISTA:][::-1]
+        # Same order as the F5 (Tabela3 sorted by column C), cut at the start; the counts come before the list because _msg_tool cuts the end
+        # of a big answer at MAX_CARACTERES_RESPOSTA. `busca` finds a ticket that falls outside the first twenty.
+        primeiros = encontrados[:MAX_ITENS_LISTA]
         return _aparar({
             "dashboard_importado": {k: importado.get(k, "") for k in ("arquivo", "importado_em", "total")},
             "total_abertos": len(itens),
             "sem_responsavel": sum(1 for i in itens if not i["responsavel"]),
             "encontrados": len(encontrados),
-            "omitidos": len(encontrados) - len(recentes),
-            "abertos": [_aparar(i) for i in recentes],
+            "omitidos": len(encontrados) - len(primeiros),
+            "abertos": [_aparar(i) for i in primeiros],
         })
 
     def chamados_com_os_sebrae(self) -> Dict[str, Any]:

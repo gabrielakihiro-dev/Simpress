@@ -1634,9 +1634,8 @@ class OsDosAntigosTests(unittest.TestCase):
                 return super().__call__(method, path, params, body)
 
         itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
-        # 08/11/2026: the list comes newest first (the last row of the sheet is the most recent).
-        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("ABC123", "5", ""), ("SCXC9F072K1", "", "77")])
-        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [True, False])
+        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
+        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True])
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
         conversation, _ = make_conversation(model, Simpress())
         self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")
@@ -2142,18 +2141,18 @@ class SolicitanteDoSistemaTests(unittest.TestCase):
 
 
 class ChamadosAntigosListaTests(unittest.TestCase):
-    """The list of old open tickets names the requester and the date, keeps the most recent ones and can be filtered."""
+    """The list of old open tickets names the requester and the date, keeps the F5 order (column C) and can be filtered."""
 
     def abertos(self) -> List[Dict[str, Any]]:
         itens = [_aberto(f"{n:04d}", usuario=f"Pessoa{n} Sobrenome{n}") for n in range(1, 36)]
         itens[2] = _aberto("0003", usuario=SebraeSolicitantesSimpress.NOME, leitura_softexpert={"habilitada_em": "2026-10-05 09:12"})
         return itens
 
-    def test_keeps_the_most_recent_twenty_newest_first_and_says_how_many_were_left_out(self) -> None:
+    def test_keeps_the_first_twenty_in_the_f5_order_and_says_how_many_were_left_out(self) -> None:
         dados = SimpressApi(SebraeSolicitantesSimpress(abertos=self.abertos())).chamados_antigos_abertos_sebrae()
-        self.assertEqual([i["numero"] for i in dados["abertos"]], [f"UTIC-2026-{n:04d}" for n in range(35, 15, -1)])
+        self.assertEqual([i["numero"] for i in dados["abertos"]], [f"UTIC-2026-{n:04d}" for n in range(1, 21)])
         self.assertEqual((dados["total_abertos"], dados["encontrados"], dados["omitidos"]), (35, 35, 15))
-        self.assertEqual(dados["abertos"][-1]["solicitante"], "Pessoa16 Sobrenome16")
+        self.assertEqual(dados["abertos"][-1]["solicitante"], "Pessoa20 Sobrenome20")
         self.assertLess(list(dados).index("omitidos"), list(dados).index("abertos"))  # the counts come before the list
 
     def test_search_finds_an_old_ticket_by_requester_ignoring_case_and_accents(self) -> None:
@@ -2166,12 +2165,12 @@ class ChamadosAntigosListaTests(unittest.TestCase):
         self.assertEqual((item["solicitante"], item["data"]), (SebraeSolicitantesSimpress.NOME, "2026-10-05 09:12"))
         self.assertEqual(api.chamados_antigos_abertos_sebrae("helga ninguem")["abertos"], [])  # every word has to appear
 
-    def test_search_that_still_matches_many_keeps_the_most_recent(self) -> None:
+    def test_search_that_still_matches_many_keeps_the_f5_order(self) -> None:
         dados = SimpressApi(SebraeSolicitantesSimpress(abertos=self.abertos())).chamados_antigos_abertos_sebrae("remoção")
         self.assertEqual((len(dados["abertos"]), dados["encontrados"], dados["omitidos"]), (20, 35, 15))
-        self.assertEqual(dados["abertos"][0]["numero"], "UTIC-2026-0035")
+        self.assertEqual(dados["abertos"][0]["numero"], "UTIC-2026-0001")
 
-    def test_the_cut_of_a_big_answer_drops_the_oldest_tickets_and_keeps_the_counts(self) -> None:
+    def test_the_cut_of_a_big_answer_drops_the_end_of_the_list_and_keeps_the_counts(self) -> None:
         # Real titles and descriptions run to 300 characters: 20 of them are far past MAX_CARACTERES_RESPOSTA.
         abertos = [_aberto(f"{n:04d}", titulo="T" * 300, descricao="D" * 300, usuario=f"Pessoa{n} Sobrenome{n}") for n in range(1, 36)]
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
@@ -2179,9 +2178,9 @@ class ChamadosAntigosListaTests(unittest.TestCase):
         conversation.enviar_mensagem("lista os chamados antigos")
         resultado = model.sent[1][-1]["content"]
         self.assertIn("Resposta grande", resultado)  # the cut did happen
-        for esperado in ("UTIC-2026-0035", "UTIC-2026-0034", "omitidos", "encontrados"):
+        for esperado in ("UTIC-2026-0001", "UTIC-2026-0002", "omitidos", "encontrados"):
             self.assertIn(esperado, resultado)
-        self.assertNotIn("UTIC-2026-0016", resultado)  # the oldest of the twenty went first
+        self.assertNotIn("UTIC-2026-0020", resultado)  # the last of the twenty went first
 
     def test_the_model_can_pass_the_search_through_the_tool(self) -> None:
         simpress = SebraeSolicitantesSimpress(abertos=self.abertos())

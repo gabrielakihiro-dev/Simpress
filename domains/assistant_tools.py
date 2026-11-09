@@ -908,7 +908,7 @@ QUERY_TOOLS: List[Tool] = [
         "`nao_encontrado_softexpert: true` = a última leitura (Ler chamados antigos) não achou o chamado na central de tarefas do "
         "SoftExpert (pode ter sido finalizado por outro técnico); o cartão fica vermelho com o selo `Não encontrado` para conferir "
         "depois; não diga que foi finalizado, só que não foi encontrado. `solicitante` é quem abriu o chamado (coluna I) e `data` a "
-        "data de abertura lida do SoftExpert (vazia se o chamado não foi lido). A lista traz no máximo 20 itens, os mais recentes primeiro: "
+        "data de abertura lida do SoftExpert (vazia se o chamado não foi lido). A lista traz no máximo 20 itens, na ordem da coluna C (a mesma da F5): "
         "`total_abertos` é o total, `encontrados` quantos passaram pela `busca` e `omitidos` quantos ficaram de fora. Para achar um "
         "chamado por pessoa, número, série ou palavra do título, passe `busca` (todas as palavras precisam aparecer); com o primeiro nome "
         "que aparece ao lado do [PESSOA_n] já basta. Só "
