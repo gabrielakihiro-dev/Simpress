@@ -1802,7 +1802,7 @@
         if (!aviso.snapshot_disponivel) {
           if (aviso.legado && aviso.status === "confirmado" && !aviso.incerto) {
             host.appendChild(dom.createTextElement("p", "", `Confira o Dashboard no SharePoint e preserve/mova manualmente todos os arquivos, sidecars e subpastas para fora de ${aviso.pasta_pendente}. O sistema só conclui com a pasta vazia; não move nem exclui arquivos.`));
-            const frase = `CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS ${aviso.envio_id}`;
+            const frase = "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS";
             const entrada = document.createElement("input");
             entrada.type = "text";
             entrada.className = "ck-entrada";
@@ -1840,7 +1840,7 @@
         entrada.className = "ck-entrada";
         entrada.type = "text";
         entrada.autocomplete = "off";
-        const label = dom.createTextElement("label", "", `Digite CONFIRMO APLICADO ${aviso.envio_id} ou CONFIRMO NAO APLICADO ${aviso.envio_id}, conforme a conferência realizada.`);
+        const label = dom.createTextElement("label", "", "Digite CONFIRMO APLICADO ou CONFIRMO NAO APLICADO, conforme a conferência realizada.");
         label.setAttribute("for", entrada.id);
         host.append(label, entrada);
         for (const [acao, frase, texto] of [["confirmar_recebimento", "CONFIRMO APLICADO", "Declaro que está aplicado no SharePoint"], ["declarar_nao_enviado", "CONFIRMO NAO APLICADO", "Declaro que não está aplicado no SharePoint"]]) {
@@ -1848,7 +1848,7 @@
           botao.type = "button";
           botao.dataset.sebraeEnvioAcao = acao;
           botao.disabled = true;
-          const atualizar = () => { botao.disabled = estado.fechar.emAndamento || entrada.value !== `${frase} ${aviso.envio_id}`; };
+          const atualizar = () => { botao.disabled = estado.fechar.emAndamento || entrada.value !== frase; };
           entrada.addEventListener("input", atualizar);
           botao.addEventListener("click", async () => { if (botao.disabled) return; botao.disabled = true; await recuperar(acao, entrada.value); atualizar(); });
           host.appendChild(botao);

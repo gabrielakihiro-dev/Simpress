@@ -695,8 +695,8 @@ def recuperar_envio(
         if acao == "concluir_legado":
             resolvido = registro["status"] == "concluido" and (registro.get("recuperacao") or {}).get("acao") == acao
             if (registro.get("legado") is not True or registro.get("snapshot") or (registro["status"] != "confirmado" and not resolvido)
-                    or confirmacao != f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio_id}"):
-                raise DomainConflictError("Confira o legado confirmado e declare o ID e a preservação dos arquivos antes de concluir.")
+                    or confirmacao != "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS"):
+                raise DomainConflictError("Confira o legado confirmado e declare a preservação dos arquivos antes de concluir.")
             try:
                 pasta = pasta_pendente(state_dir)
                 if pasta.exists() and any(pasta.iterdir()):
@@ -716,8 +716,8 @@ def recuperar_envio(
             if registro["status"] not in ("incerto", "preparado"):
                 raise DomainConflictError("Este envio já foi reconciliado. Recarregue a tela.")
             frase = "CONFIRMO APLICADO" if acao == "confirmar_recebimento" else "CONFIRMO NAO APLICADO"
-            if confirmacao != f"{frase} {envio_id}":
-                raise DomainConflictError("Digite a declaração completa com o ID deste envio após conferir seu conteúdo no SharePoint.")
+            if confirmacao != frase:
+                raise DomainConflictError("Digite a declaração completa após conferir o conteúdo no SharePoint.")
             if acao == "confirmar_recebimento":
                 gravar_enviado(state_dir, registro["sha256"], conteudo)
             registro.update(status="confirmado" if acao == "confirmar_recebimento" else "falhou", limpeza_pendente=acao == "confirmar_recebimento")
