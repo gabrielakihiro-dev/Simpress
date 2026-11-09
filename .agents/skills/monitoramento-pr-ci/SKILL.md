@@ -11,7 +11,7 @@ description: >-
 
 Use esta skill quando o usuário solicitar o acompanhamento de sessões ativas do Claude Code, monitoramento de PRs abertos e pipelines de integração contínua (CI) no repositório `Simpress`.
 
-Consulte a referência completa em [MONITORAMENTO_PR_CI.md](./MONITORAMENTO_PR_CI.md) (ou no documento raiz [MONITORAMENTO_PR_CI.md](../../MONITORAMENTO_PR_CI.md)).
+Consulte o documento completo em [`Simpress/MONITORAMENTO_PR_CI.md`](file:///c:/Users/Gabriel/Desktop/Empresa/Simpress/MONITORAMENTO_PR_CI.md).
 
 ## Protocolo de Execução
 
@@ -29,19 +29,21 @@ Consulte a referência completa em [MONITORAMENTO_PR_CI.md](./MONITORAMENTO_PR_C
 - As sessões do Claude Code contam com auto-fix habilitado e farão as alterações necessárias autonomamente.
 - O Antigravity atua apenas como monitorador e orquestrador dos merges.
 
-### 3. Critérios de Merge
+### 3. Critérios de Merge e Sequenciamento (NUNCA ao mesmo tempo)
+- **Merge estritamente sequencial:** Se houver múltiplos PRs prontos e verdes, mescle **um PR por vez**. NUNCA efetue merges simultâneos ou em sequência sem aguardar o ciclo da `main`.
 - Apenas efetuar o merge (`gh pr merge <numero> --merge`) quando **100% dos checks de CI estiverem verdes**:
   - `verify (3.12)` (aprovado)
   - `verify (3.14)` (aprovado)
   - `ui-browser` (aprovado)
 - Se houver conflito de merge (`DIRTY` ou `CONFLICTING`), não mexa: a sessão do Claude resolverá o merge com a `main`.
 
-### 4. Acompanhamento Pós-Merge e Finalização
+### 4. Acompanhamento Pós-Merge e `git pull` a CADA #PR
 - Capture o commit de merge gerado na `main` (`gh pr view <numero> --json mergeCommit`) e acompanhe a CI desse commit (`gh run list --commit <hash>`).
-- Após todos os PRs serem mesclados e todas as CIs na `main` concluírem com sucesso verde:
+- **Aguarde o ciclo completo da `main` antes do próximo PR:** Aguarde 100% dos checks disparados na `main` concluírem com sucesso verde.
+- **Sincronize a cada PR:** Imediatamente após a CI na `main` concluir verde:
   ```powershell
   cd Simpress
   git checkout main
   git pull
   ```
-- Confirme a working tree limpa e sincronizada com `origin/main`.
+- Confirme a working tree limpa e sincronizada com `origin/main` a cada #PR concluído antes de prosseguir com qualquer outro merge.

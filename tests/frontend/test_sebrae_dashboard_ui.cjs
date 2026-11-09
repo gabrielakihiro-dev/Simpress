@@ -1036,25 +1036,25 @@ test("destaque vindo das listas: antigo UTIC e linha:N mostram selo e classe, en
   assert.ok(cartaoDaSecao(el, "linha:27").textContent.includes("Impressora offline"));
 });
 
-test("chamado finalizado em destaque vai para o topo; o botão funciona com a observação só leitura", async () => {
+test("chamado finalizado em destaque fica na ordem de C; o botão funciona com a observação só leitura", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   carga.importado.finalizados.unshift({ ...structuredClone(carga.importado.finalizados[0]), numero: "UTIC-2026-1090", ficha: { titulo: "Mouse", solicitante: "Bia", fatos: [], detalhes: [], manuais: {} } });
   carga.importado.finalizados[1].destaque = true;
   const chamadas = [];
   const { el } = await renderizarCartoes(carga, null, chamadas);
   const ordem = () => el["sebrae-finalizados-lista"].children.map(li => li.dataset.numero);
-  assert.deepEqual(ordem(), ["UTIC-2026-1100", "UTIC-2026-1090"], "o destaque sobe, o resto mantém a ordem");
-  const detalhe = el["sebrae-finalizados-lista"].children[0].querySelector("details.sebrae-finalizado");
+  assert.deepEqual(ordem(), ["UTIC-2026-1090", "UTIC-2026-1100"], "o destaque não sobe: a ordem é a do servidor");
+  const detalhe = el["sebrae-finalizados-lista"].children[1].querySelector("details.sebrae-finalizado");
   assert.ok(detalhe.querySelector("article").className.includes("sebrae-chamado--destaque"));
   assert.equal(detalhe.querySelector(".sebrae-finalizado__resumo .sebrae-selo-destaque").hidden, false, "o selo do resumo acende");
 
-  const outro = el["sebrae-finalizados-lista"].children[1];
+  const outro = el["sebrae-finalizados-lista"].children[0];
   const [botao] = botoesDestaque(outro, "UTIC-2026-1090");
   assert.equal(outro.querySelector("textarea[data-sebrae-observacao]").readOnly, true);
   botao.click();
   await esvaziarFila();
   assert.deepEqual(putsDestaque(chamadas).map(c => c.url), ["/api/sebrae/chamados/UTIC-2026-1090/destaque"]);
-  assert.deepEqual(ordem(), ["UTIC-2026-1090", "UTIC-2026-1100"], "os dois em destaque seguem a ordem original");
+  assert.deepEqual(ordem(), ["UTIC-2026-1090", "UTIC-2026-1100"], "marcar destaque não muda a ordem");
   assert.ok(outro.querySelector("article").className.includes("sebrae-chamado--destaque"));
   assert.equal(el["sebrae-destaques-contagem"].textContent, "2");
   assert.ok(cartaoDaSecao(el, "UTIC-2026-1090").textContent.includes("Mouse"));

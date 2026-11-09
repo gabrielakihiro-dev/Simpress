@@ -314,3 +314,5 @@ echo ERRO: dados locais nao foram alterados com seguranca.
 echo Resolva o aviso acima e execute novamente.
 pause
 exit /b 1
+
+pause > nul

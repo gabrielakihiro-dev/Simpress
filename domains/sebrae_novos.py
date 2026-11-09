@@ -17,7 +17,7 @@ import tempfile
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.integrity import lock_paths
 from domains import sebrae_cruzamento, sebrae_vinculos
@@ -142,6 +142,36 @@ def salvar_existentes(
     return len(ordenados)
 
 
+def mapear_chaves_de_linha(antes: Iterable[Mapping[str, Any]], depois: Iterable[Mapping[str, Any]]) -> Dict[str, Optional[str]]:
+    """Each old ``linha:<n>`` key -> the key the same ticket has after a new import, ``None`` when it cannot be told.
+
+    A row is the same ticket when C, G, I and H are equal in both imports and that content is unique on both sides:
+    the row number alone says nothing once the sheet was sorted or reordered. Repeated or missing content is never guessed.
+    Both sides must come from the stored copy (``ler_existentes``), so the CPF/password masking is the same."""
+    from domains.sebrae_dashboard_gravacao import CHAVE_DE_LINHA  # imported here: that module imports this one
+
+    def agrupar(itens: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, ...], List[str]]:
+        grupos: Dict[Tuple[str, ...], List[str]] = {}
+        for item in itens:
+            conteudo = tuple(str(item.get(campo) or "") for campo in ("chamado", "titulo", "usuario", "descricao"))
+            grupos.setdefault(conteudo, []).append(str(item.get("numero") or ""))
+        return grupos
+
+    anteriores, atuais = agrupar(antes), agrupar(depois)
+    return {
+        chave: atuais[conteudo][0] if len(chaves) == 1 and len(atuais.get(conteudo, ())) == 1 else None
+        for conteudo, chaves in anteriores.items() for chave in chaves if chave.startswith(CHAVE_DE_LINHA)
+    }
+
+
+def ordenar_pela_coluna_c(itens: Iterable[Any], valor_c: Callable[[Any], Optional[str]]) -> List[Any]:
+    """``itens`` in the order of Excel's "Classificar do Menor para o Maior" on column C (``valor_c`` gives each item's C); ties keep their order."""
+    # imported here: domains.sebrae_dashboard_gravacao imports this module
+    from domains.sebrae_dashboard_gravacao import chave_coluna_c
+
+    return sorted(itens, key=lambda item: chave_coluna_c(valor_c(item)))
+
+
 def ler_existentes(caminho: Path) -> Optional[Dict[str, Any]]:
     dados = _ler(caminho)
     if dados is None or not isinstance(dados.get("numeros"), list):
@@ -153,7 +183,8 @@ def ler_existentes(caminho: Path) -> Optional[Dict[str, Any]]:
     return {"versao": str(dados.get("versao") or dados.get("sha256") or ""), "arquivo": str(dados.get("arquivo") or ""), "importado_em": str(dados.get("importado_em") or ""),
             "numeros": frozenset(str(n) for n in dados["numeros"]), "sha256": str(dados.get("sha256") or ""),
             "listas": {str(k): [str(i) for i in v] for k, v in listas.items() if isinstance(v, list)},
-            "abertos": [a for a in abertos if isinstance(a, dict)]}
+            # sorted on read, so a file stored before this order existed shows it without a new import
+            "abertos": ordenar_pela_coluna_c((a for a in abertos if isinstance(a, dict)), lambda a: str(a.get("chamado") or ""))}
 
 
 def salvar_planilha(caminho: Path, conteudo: bytes) -> str:
@@ -222,6 +253,7 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
         for item in dados["chamados"]
         if isinstance(item, dict) and str(item.get("numero") or "") not in lancados
     ]
+    chamados = ordenar_pela_coluna_c(chamados, lambda c: c.numero)  # the order the Dashboard will have, column C ascending
     pendentes = [p for p in dados.get("pendentes") or [] if isinstance(p, dict) and p.get("numero") not in lancados]
     return {"lidos_em": str(dados.get("lidos_em") or ""), "ignorados": int(dados.get("ignorados") or 0),
             "pendentes": pendentes, "erros": dados.get("erros") or {}, "chamados": chamados}

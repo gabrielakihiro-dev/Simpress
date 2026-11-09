@@ -20,6 +20,7 @@ from domains.assistant_api import (
 from domains.assistant_busca_web import LIMITE_CONSULTA
 from domains.assistant_lgpd import limpar_texto_sensivel
 from domains.assistant_notas import LIMITE_TEXTO, NotasStore, formatar_prazo
+from domains.dashboard_agendamento import INTERVALOS_PERMITIDOS as INTERVALOS_AGENDAMENTO
 from domains.assistant_rascunhos import DESCRICAO_TIPOS, LIMITE_COMPLEMENTO, montar_rascunho
 from domains.assistant_relatorios import (
     DATA_PATTERN, FORMATOS, MES_PATTERN, MSG_PLANILHA_EXPORTADA, PLANILHAS, TIPOS, GeradorRelatorios, RelatorioRecusado,
@@ -82,6 +83,10 @@ def _change(
     com_api: bool = False,
 ) -> Tool:
     return Tool(name, description, run, properties or {}, required or [], changes_data=True, describe=describe, describe_com_api=com_api)
+
+
+def _texto_intervalo(minutos: int) -> str:
+    return {30: "30 minutos", 60: "1h", 90: "1h30", 120: "2h"}[minutos]
 
 
 def _serial(args: Args) -> str:
@@ -676,7 +681,7 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "consultar_agendamento_dashboard",
-        "Consulta se Baixar, importar e buscar está agendado a cada 30 minutos no servidor local e a próxima tentativa.",
+        "Consulta se Baixar, importar e buscar está agendado no servidor local, o intervalo (intervalo_minutos: 30, 60, 90 ou 120) e a próxima tentativa.",
         lambda c, a: c.consultar_agendamento_dashboard(),
     ),
     _read(
@@ -1081,15 +1086,22 @@ QUERY_TOOLS: List[Tool] = [
 CHANGE_TOOLS: List[Tool] = [
     _change(
         "definir_agendamento_dashboard",
-        "Ativa ou pausa a repetição de Baixar, importar e buscar a cada 30 minutos, todos os dias e horários. "
-        "Somente mediante pedido explícito de agendamento; primeira tentativa em 30 minutos. Login manual. "
+        "Ativa ou pausa a repetição de Baixar, importar e buscar, todos os dias e horários, a cada 30 minutos, 1h, 1h30 ou 2h. "
+        "Somente mediante pedido explícito de agendamento; primeira tentativa um intervalo depois de ativar. Login manual. "
+        "Sem intervalo_minutos, mantém o intervalo já salvo (padrão 30). Trocar o intervalo com o agendamento ativo reinicia a contagem. "
         "Não envia ao SharePoint nem finaliza chamados. Precisa do computador e servidor ligados.",
-        lambda c, a: c.definir_agendamento_dashboard(a.get("ativo")),
-        lambda a: ("Ativar" if a.get("ativo") is True else "Pausar") + " a repetição de Baixar, importar e buscar a cada 30 minutos. "
-                  "Primeira tentativa em 30 minutos após ativar. Lê SharePoint e SoftExpert e substitui a base local importada; "
+        lambda c, a: c.definir_agendamento_dashboard(a.get("ativo"), a.get("intervalo_minutos")),
+        lambda a: ("Ativar" if a.get("ativo") is True else "Pausar") + " a repetição de Baixar, importar e buscar "
+                  + (f"a cada {_texto_intervalo(a['intervalo_minutos'])}" if a.get("intervalo_minutos") in INTERVALOS_AGENDAMENTO
+                     else "no intervalo já salvo (30 minutos por padrão)") + ". "
+                  "Primeira tentativa um intervalo depois de ativar. Lê SharePoint e SoftExpert e substitui a base local importada; "
                   "rascunhos manuais ficam preservados no navegador. Não envia ao SharePoint nem finaliza chamados. "
                   "Computador e servidor precisam estar ligados; senha e MFA são manuais.",
-        {"ativo": {"type": "boolean", "description": "true para ativar; false para pausar."}}, ["ativo"],
+        {
+            "ativo": {"type": "boolean", "description": "true para ativar; false para pausar."},
+            "intervalo_minutos": {"type": "integer", "enum": list(INTERVALOS_AGENDAMENTO),
+                                  "description": "Opcional: 30, 60 (1h), 90 (1h30) ou 120 (2h). Omita para manter o intervalo atual."},
+        }, ["ativo"],
     ),
     _change(
         "atualizar_apelido",
@@ -1570,7 +1582,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
          "ver_representantes_regionais", "alterar_representante_regional", "restaurar_representante_regional"),
     ),
     "automacao": (
-        r"\bagend|\b30 minutos|\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel"
+        r"\bagend|\b30 minutos|\ba cada (?:(?:60|90|120) minutos|1h30|1h|2h|hora e meia)\b|\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel"
         r"|\brobo\b|\brobozinho\b"
         r"|\b(?:por que|pq) (?:falhou|parou|travou|deu erro)\b"
         r"|\b(?:o |a )?(?:robo\w*|rotina|automa\w+|chrome) *(?:falhou|parou|travou|deu erro)\b"
