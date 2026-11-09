@@ -12,12 +12,13 @@ Este documento define o protocolo oficial que o **Antigravity** deve seguir auto
    - O Claude Code (em suas respectivas sessões em background) está configurado com `auto_fix: true` e fará as correções necessárias de forma autônoma.
    - O papel do Antigravity é exclusivamente de **orquestrador e monitorador**.
 
-2. **Critério Rígido de Merge e Sequenciamento Estrito (NUNCA mescle ao mesmo tempo):**
-   - Execute o merge (`gh pr merge <numero> --merge`) **SOMENTE** quando **100% dos checks de CI estiverem verdes**:
+2. **Critério Rígido de Merge, Ordem Numérica e Sequenciamento Estrito (NUNCA fure a ordem nem mescle ao mesmo tempo):**
+   - **Ordem Numérica Rigorosa de #PR (NUNCA pule ou fure a ordem):** Siga sempre e rigorosamente a ordem numérica crescente das #PRs (ex.: #166 antes de #167, #168, etc.). **NUNCA faça o merge de uma #PR de número maior sem antes ter feito o merge de todas as #PRs anteriores de numeração menor**, mesmo que o PR de número maior termine os checks primeiro ou não tenha checks de código. A fila de merge deve aguardar rigorosamente a resolução e merge das PRs anteriores.
+   - Execute o merge (`gh pr merge <numero> --merge`) **SOMENTE** quando for a vez do menor número de PR pendente E **100% dos checks de CI estiverem verdes**:
      - `verify (3.12)` (aprovado)
      - `verify (3.14)` (aprovado)
      - `ui-browser` (aprovado)
-   - **NUNCA faça merge de mais de um PR simultaneamente ou em sequência imediata:** Havendo múltiplos PRs aprovados, mescle rigorosamente **um PR por vez**.
+   - **NUNCA faça merge de mais de um PR simultaneamente ou em sequência imediata:** Havendo múltiplos PRs aprovados, mescle rigorosamente **um PR por vez**, sempre respeitando a ordem crescente de numeração.
    - **Aguarde o término completo do ciclo na `main` antes do próximo merge:** Sempre aguarde a CI disparada na `main` pelo commit de merge (`verify 3.12`, `verify 3.14`, `ui-browser`) concluir 100% verde antes de mesclar o PR seguinte. Isso evita cancelamento automático de workflows por concorrência e divergências de commit na `origin/main`.
    - Se o PR estiver com status `CONFLICTING` ou `DIRTY`, não mexa: aguarde a respectiva sessão do Claude mesclar a `main` e reenviar os testes.
 
@@ -76,9 +77,10 @@ A cada despertar do `schedule`, execute a seguinte rotina:
    ```powershell
    cd Simpress; gh pr list
    ```
-2. **Se houver PR aberto:**
+2. **Se houver PR aberto (respeitando a ordem numérica estrita):**
+   - **Ordem Numérica Rigorosa:** Sempre identifique o PR aberto de **menor número** (ex.: #166 antes de #167, #168, etc.). **NUNCA faça o merge de um PR de numeração maior sem antes ter feito o merge de todos os anteriores**, mesmo que o posterior esteja pronto ou não tenha CI.
    - **Regra de 1 PR por vez:** Se já houver uma CI rodando na `main` decorrente de merge anterior, **aguarde ela terminar 100% verde e faça o `git pull` antes de mesclar qualquer outro PR**.
-   - Checar checks do PR da vez: `gh pr checks <numero>`
+   - Checar checks do PR da vez (o de menor numeração): `gh pr checks <numero>`
    - Se os 3 checks (`verify 3.12`, `verify 3.14`, `ui-browser`) estiverem `pass`/`success`:
      - Conferir se está mesclável: `gh pr view <numero> --json mergeable,mergeStateStatus`
      - Se `MERGEABLE` e `CLEAN`: executar o merge de **apenas esse PR** (`gh pr merge <numero> --merge`)
