@@ -613,8 +613,11 @@
           const os = String(request?.ordem_servico || "").trim();
           const key = orderKey(os);
           if (!key) return;
-          if (!oracleByOrder.has(key)) oracleByOrder.set(key, { fonte: "oracle", serie, os, solicitacoes: [] });
+          if (!oracleByOrder.has(key)) oracleByOrder.set(key, { fonte: "oracle", serie, os, solicitacoes: [], envioTecnico: false, diasAberta: null });
           const group = oracleByOrder.get(key);
+          if (request?.envio_tecnico === true) group.envioTecnico = true;
+          const dias = request?.dias_aberta;
+          if (Number.isFinite(dias) && (group.diasAberta === null || dias > group.diasAberta)) group.diasAberta = dias;
           const solicitacao = String(request?.solicitacao || "").trim();
           const descricao = String(request?.descricao || "").trim();
           if (solicitacao || descricao) group.solicitacoes.push({ solicitacao, descricao });
@@ -650,10 +653,14 @@
         const group = groups.get(key);
         let order = group.ordens.find(item => orderKey(item.os) === orderKey(record.os));
         if (!order) {
-          order = { serie: record.serie, os: record.os, fontes: [], descricao: "" };
+          order = { serie: record.serie, os: record.os, fontes: [], descricao: "", envioTecnico: false, diasAberta: null };
           group.ordens.push(order);
         }
         if (!order.fontes.includes(record.fonte)) order.fontes.push(record.fonte);
+        if (record.fonte === "oracle") {
+          if (record.envioTecnico) order.envioTecnico = true;
+          if (Number.isFinite(record.diasAberta) && (order.diasAberta === null || record.diasAberta > order.diasAberta)) order.diasAberta = record.diasAberta;
+        }
         if (record.fonte === "oracle" && record.descricao) {
           const descriptions = order.descricao ? order.descricao.split("\n") : [];
           if (!descriptions.includes(record.descricao)) descriptions.push(record.descricao);
@@ -847,6 +854,15 @@
             const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
             osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
             osCell.append(osButton);
+          }
+          // Selos só da Oracle: record.diasAberta e record.envioTecnico vêm de order (fontes unidas); a Simpress sozinha não ganha selo.
+          if (order.diasAberta !== null && order.diasAberta !== undefined) {
+            const dias = order.diasAberta;
+            osCell.append(el("span", "ck-os__selo ck-os__selo--dias",
+              dias === 0 ? "Aberta hoje" : dias === 1 ? "Aberta há 1 dia" : `Aberta há ${dias.toLocaleString("pt-BR")} dias`));
+          }
+          if (order.envioTecnico) {
+            osCell.append(el("span", "ck-os__selo ck-os__selo--tecnico", "Técnico"));
           }
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
