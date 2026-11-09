@@ -42,6 +42,7 @@ from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
     TicketTimelineIndex,
+    annotate_ticket_os_signals,
     build_ticket_timeline,
     build_ticket_timeline_index,
     build_ticket_workbook,
@@ -424,7 +425,7 @@ def create_operations_router(
         snapshots = displayed_ticket_snapshots(report)
         current = next((item for item in reversed(snapshots) if item), None)
         response = {key: value for key, value in report.items() if key not in {"historico", "importacoes_automaticas"}}
-        response = normalize_ticket_snapshot(response)
+        response = annotate_ticket_os_signals(normalize_ticket_snapshot(response))
         response["snapshot_id"] = current.get("id", "") if current else ""
         response["historico"] = [
             ticket_snapshot_metadata(item)
@@ -479,7 +480,7 @@ def create_operations_router(
         )
         if snapshot is None:
             raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
-        return snapshot
+        return annotate_ticket_os_signals(snapshot)
 
     @router.get("/api/operacoes/chamados/evolucao")
     def get_ticket_evolution(anterior: str, atual: str):

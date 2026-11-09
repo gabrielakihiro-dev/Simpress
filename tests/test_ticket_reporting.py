@@ -11,6 +11,7 @@ from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_TIMELINE_STATE_FIELDS,
     _stable_serial,
+    annotate_ticket_os_signals,
     build_ticket_timeline_index,
     build_ticket_timeline,
     build_ticket_workbook,
@@ -581,6 +582,50 @@ class TicketReportingTests(unittest.TestCase):
         self.assertEqual(len(snapshots), 50)
         self.assertEqual(snapshots[0]["id"], "version-10")
         self.assertEqual(snapshots[-1]["id"], "version-59")
+
+
+    def test_os_signal_envio_tecnico_matches_only_narrow_phrases(self):
+        def flag(texto):
+            snapshot = {"atualizado_em": "2026-11-09T12:00:00-03:00", "chamados": [{"serie": "S1", "oracle": [{"descricao": texto}]}]}
+            return annotate_ticket_os_signals(snapshot)["chamados"][0]["oracle"][0]["envio_tecnico"]
+
+        for texto in (
+            "Solicito o envio de um técnico", "solicito o envio de um tecnico",
+            "Preciso de um técnico para vir aqui", "Preciso de um técnico para fazer o colaborador assinar",
+            "Visita técnica agendada", "Atendimento PRESENCIAL", "Atendimento in loco",
+            "Não liga. Solicito envio de técnico", "Notebook sem rede, precisa de técnico",
+        ):
+            self.assertTrue(flag(texto), texto)
+        for texto in (
+            "vai precisar assinar o laudo técnico", "Solicito suporte para o equipamento.", "", None,
+            "Não precisa de técnico", "Sem necessidade de atendimento presencial", "nao e necessario envio de tecnico",
+        ):
+            self.assertFalse(flag(texto), texto)
+
+    def test_os_signal_dias_aberta_counts_calendar_days_to_the_import(self):
+        def days(criacao, conclusao="", atualizado="2026-11-09T12:38:17-03:00", status=""):
+            snapshot = {"atualizado_em": atualizado, "chamados": [{"serie": "S1", "oracle": [
+                {"data_criacao": criacao, "data_conclusao": conclusao, "status": status}]}]}
+            return annotate_ticket_os_signals(snapshot)["chamados"][0]["oracle"][0]["dias_aberta"]
+
+        self.assertEqual(days("03/11/2026 10:00"), 6)
+        self.assertEqual(days("03/11/2026"), 6)
+        self.assertEqual(days("09/11/2026 08:00"), 0)
+        self.assertIsNone(days("03/11/2026 10:00", conclusao="05/11/2026 09:00"))
+        self.assertIsNone(days("data inválida"))
+        self.assertIsNone(days(""))
+        self.assertIsNone(days("10/11/2026 10:00"))
+        self.assertIsNone(days("03/11/2026 10:00", atualizado=""))
+        self.assertIsNone(days("03/11/2026 10:00", status="Cancelada"))
+
+    def test_os_signals_return_a_copy_and_leave_the_input_untouched(self):
+        snapshot = {"atualizado_em": "2026-11-09", "chamados": [{"serie": "S1", "oracle": [
+            {"descricao": "Envio de técnico", "data_criacao": "08/11/2026"}]}]}
+        annotated = annotate_ticket_os_signals(snapshot)
+        self.assertEqual(annotated["chamados"][0]["oracle"][0]["dias_aberta"], 1)
+        self.assertNotIn("envio_tecnico", snapshot["chamados"][0]["oracle"][0])
+        self.assertNotIn("dias_aberta", snapshot["chamados"][0]["oracle"][0])
+        self.assertNotIn("envio_tecnico", normalize_ticket_snapshot(snapshot)["chamados"][0]["oracle"][0])
 
 
 if __name__ == "__main__":

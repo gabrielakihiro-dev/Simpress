@@ -279,6 +279,48 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+# Frases estreitas de pedido de técnico (texto sem acento, minúsculo): "laudo técnico" etc. não casam.
+_ENVIO_TECNICO_RE = re.compile(
+    r"(envio|enviar|envie)\s+(de\s+)?(um\s+)?tecnico"
+    r"|precis\w*\s+de\s+(um\s+)?tecnico"
+    r"|tecnico\s+para\s+(vir|ir|ver|avaliar|comparecer|verificar)"
+    r"|visita\s+tecnica"
+    r"|tecnico\s+(no|ao)\s+local"
+    r"|\bpresencial"
+    r"|\bin\s+loco\b"
+)
+# Negação até 3 palavras antes da frase, sem pontuação no meio: "não precisa de técnico",
+# "sem necessidade de atendimento presencial". "Sem rede" sozinho não nega.
+_NEGACAO_RE = re.compile(r"\b(nao|nem|dispensa\w*|sem\s+necessidade)\b(\s+[^\s.,;:!?]+){0,3}\s*$")
+
+
+def _pede_envio_tecnico(descricao: Any) -> bool:
+    text = _normalized_text(descricao)
+    return any(not _NEGACAO_RE.search(text[:match.start()]) for match in _ENVIO_TECNICO_RE.finditer(text))
+
+
+def annotate_ticket_os_signals(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy of the snapshot with `envio_tecnico` and `dias_aberta` on each Oracle item.
+
+    Only for outputs (never inside normalize_ticket_snapshot: annotation hashes use normalized
+    snapshots). The description is read here and never stored apart or logged.
+    """
+    annotated = deepcopy(snapshot)
+    reference = _parse_date(annotated.get("atualizado_em"))
+    tickets = annotated.get("chamados")
+    for ticket in tickets if isinstance(tickets, list) else []:
+        oracle = ticket.get("oracle") if isinstance(ticket, dict) else None
+        for item in oracle if isinstance(oracle, list) else []:
+            if not isinstance(item, dict):
+                continue
+            item["envio_tecnico"] = _pede_envio_tecnico(item.get("descricao"))
+            opened = _parse_date(item.get("data_criacao"))
+            closed = bool(str(item.get("data_conclusao") or "").strip()) or _is_closed(item)
+            days = (reference - opened).days if reference and opened and not closed else None
+            item["dias_aberta"] = days if days is not None and days >= 0 else None
+    return annotated
+
+
 def ticket_relation_provenance(ticket: Dict[str, Any]) -> Dict[str, Any]:
     """Show which source supplied each identifier without changing stored rows."""
     simpress_value = ticket.get("simpress")

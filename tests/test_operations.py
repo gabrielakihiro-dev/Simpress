@@ -21,7 +21,7 @@ from domains.history_insights import compare_updates, latest_update, pending_row
 from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.sebrae_vinculos import vinculos_derivados
-from domains.ticket_reporting import build_ticket_workbook
+from domains.ticket_reporting import annotate_ticket_os_signals, build_ticket_workbook
 from core.errors import DomainBusyError, DomainValidationError
 from domains.os_marcas_finalizacao import FontesMarcas
 from routers.operations import OsMarcaPayload, TicketExportPayload, TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
@@ -361,7 +361,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(by_serial["SN-2"]["relacao"], "divergente")
             self.assertEqual(report["fontes"]["simpress"]["linhas"], 4)
             persisted = route_handler(router, "/api/operacoes/chamados", "GET")()
-            self.assertEqual(persisted["chamados"], report["chamados"])
+            self.assertEqual(persisted["chamados"], annotate_ticket_os_signals(report)["chamados"])
             self.assertEqual(persisted["atualizado_em"], report["atualizado_em"])
 
     def test_import_keeps_highest_simpress_os_even_when_its_order_date_is_older(self):
@@ -1268,6 +1268,44 @@ class TicketImportRouteTests(unittest.TestCase):
             raw_ticket = json.loads(path.read_text(encoding="utf-8"))["chamados"][0]
             self.assertEqual(raw_ticket["simpress"]["pedidos"], ["48076976", "46735940"])
             self.assertEqual(raw_ticket["simpress"]["ordens_servico"], ["7134662", "7124895"])
+
+    def test_ticket_routes_carry_os_signals_without_storing_them(self):
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
+            path = Path(directory) / "tickets.json"
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+            ticket = {
+                "serie": "BRJ5512DK7", "relacao": "somente_oracle", "ordens_servico_conferidas": [],
+                "simpress": {"serie": "BRJ5512DK7", "pedidos": [], "ordens_servico": [], "chamados_cliente": [], "status": []},
+                "oracle": [
+                    {"ordem_servico": "7124895", "solicitacao": "REQ-1", "data_criacao": "03/11/2026 10:00",
+                     "descricao": "Solicito o envio de um técnico"},
+                    {"ordem_servico": "7124896", "solicitacao": "REQ-2", "data_criacao": "03/11/2026 10:00",
+                     "data_conclusao": "05/11/2026 09:00", "descricao": "Troca de toner"},
+                ],
+            }
+            snapshot = {
+                "id": "current", "atualizado_em": "2026-11-09T12:38:17-03:00", "fontes": {},
+                "resumo": {"series_total": 1, "somente_oracle": 1}, "chamados": [ticket],
+            }
+            report = {**snapshot, "snapshot_id": "current", "historico": [snapshot]}
+            path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+
+            displayed = route_handler(router, "/api/operacoes/chamados", "GET")()
+            from_snapshot = route_handler(router, "/api/operacoes/chamados/snapshot/{snapshot_id}", "GET")("current")
+            for payload in (displayed, from_snapshot):
+                open_item, closed_item = payload["chamados"][0]["oracle"]
+                self.assertIs(open_item["envio_tecnico"], True)
+                self.assertEqual(open_item["dias_aberta"], 6)
+                self.assertIs(closed_item["envio_tecnico"], False)
+                self.assertIsNone(closed_item["dias_aberta"])
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn("envio_tecnico", stored["chamados"][0]["oracle"][0])
+            self.assertNotIn("dias_aberta", stored["historico"][0]["chamados"][0]["oracle"][0])
 
 if __name__ == "__main__":
     unittest.main()
