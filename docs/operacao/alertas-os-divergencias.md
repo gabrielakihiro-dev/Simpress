@@ -1,6 +1,6 @@
-# Central de notificações: "OS paradas", "Divergências novas" e "Sem acesso há 60 dias"
+# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias" e "Chamados finalizados por outro técnico"
 
-Exibe três alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos três grava nada: os históricos de OS e de planilhas são apenas lidos.
+Exibe quatro alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos quatro grava nada: os históricos de OS e de planilhas e as marcas de OS finalizada são apenas lidos.
 
 ## 1. OS paradas
 
@@ -145,10 +145,49 @@ Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn
 
 `equipamentos` lista os notebooks/MacBooks do alerta, do mais antigo para o mais recente (`situacao`: `limite`, `passou` ou `saiu_endpoint`). Em `saiu_endpoint`, `dias` é estimado: dias da atualização anterior mais os dias entre as duas atualizações. O cartão mostra até 5 linhas (`série · hostname — N dias`, com `~` na estimativa) e "e mais N" para o resto.
 
+## 4. Chamados finalizados por outro técnico
+
+### Objetivo
+
+Avisar quando um chamado da lista do Dashboard foi finalizado no SoftExpert por outra pessoa, e não pelo site, para que o usuário confira e marque `Conferido` na aba OS (F6). Pedido do usuário, 08/11/2026.
+
+### Dados
+
+- Fonte: `chamados_outro_tecnico` em `GET /api/painel`, montado por `_other_technician_summary` (`routers/dashboard.py`) a partir das marcas de OS finalizada (`domains/os_marcas_finalizacao.py`). Entram as marcas ativas de origem `outro_tecnico` que ainda não têm `conferido_em`.
+- Cada item traz `chamado`, `serie`, `os` e `motivo` (`saiu_do_dashboard` ou `nao_encontrado_softexpert`). `total` é o número de itens.
+- Só leitura: nada é regravado. `Conferido` e `Desfazer` são feitos na aba OS (F6) e tiram o chamado do aviso.
+
+### Quando aparece e quando some
+
+- Aparece com `total` maior que zero. Some com a lista vazia, quando o campo falta ou quando vem `indisponivel: true` (falha ao ler as marcas); o resto do painel continua carregando.
+- Selo `Atenção` (`data-gravidade="atencao"`). Não há nível `Urgente`.
+
+### Texto
+
+| Título | Texto | Botão |
+| --- | --- | --- |
+| Chamados finalizados por outro técnico | Confira no SoftExpert e marque Conferido na aba OS (F6). | Ver na aba OS |
+
+O texto é o mesmo para um ou vários chamados. O cartão é `#alerta-chamados-outro-tecnico` (`data-state` `outro_tecnico`, `vazio` ou `indisponivel`; texto em `#alerta-chamados-outro-tecnico-texto`). O botão `#btn-alerta-chamados-outro-tecnico` abre a aba OS (`abrirPainelCockpit` com `["chamados"]`). Título padrão do cartão oculto: `Chamados finalizados por outro técnico`.
+
+### Contrato da API
+
+```json
+{
+  "total": 2,
+  "itens": [
+    {"chamado": "UTIC-2026-1378", "serie": "BRJ111AAAA", "os": "1234567", "motivo": "saiu_do_dashboard"},
+    {"chamado": "UTIC-2026-1379", "serie": "BRJ222BBBB", "os": "7654321", "motivo": "nao_encontrado_softexpert"}
+  ]
+}
+```
+
+Com falha ao ler as marcas: `{"total": 0, "itens": [], "indisponivel": true}`. Sem a fonte configurada: `{"total": 0, "itens": []}`. Implementação do cartão: `renderizarAlertaChamadosOutroTecnico` em `static/js/features/dashboard.js`.
+
 ## Interface
 
-- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 3 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
-- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas` e `#alerta-divergencias-novas` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 4 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas` e `#alerta-chamados-outro-tecnico` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
 - Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
@@ -163,3 +202,4 @@ Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn
 8. Nenhum histórico é regravado e o contador mostra a quantidade de avisos ativos, não a quantidade de chamados ou linhas divergentes.
 9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.
 10. Com equipamento com mais de 55 dias (e menos de 60) sem acesso, o sino mostra "Perto de 60 dias sem acesso"; com 60 dias ou mais, ou depois de sair para Ausentes no Endpoint, mostra "Passou de 60 dias sem acesso"; com tudo em dia, sem atualização ou histórico ilegível, o cartão fica oculto.
+11. Com pelo menos uma marca `Finalizado por outro técnico` ativa e sem `Conferido`, o sino mostra "Chamados finalizados por outro técnico" com `Atenção` e o botão "Ver na aba OS" abre a aba OS; depois de `Conferido` ou `Desfazer` na aba OS, ou com a lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso. Marcas de chamados finalizados pelo site nunca entram.

@@ -22,7 +22,9 @@ from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.sebrae_vinculos import vinculos_derivados
 from domains.ticket_reporting import build_ticket_workbook
-from routers.operations import TicketExportPayload, TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
+from core.errors import DomainBusyError, DomainValidationError
+from domains.os_marcas_finalizacao import FontesMarcas
+from routers.operations import OsMarcaPayload, TicketExportPayload, TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -181,6 +183,111 @@ class DashboardDerivedOsLinkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(self.get_links(Path(directory), broken), [])
+
+
+class TicketOsMarksRouteTests(unittest.TestCase):
+    """GET/PUT das marcas de OS finalizada (``/api/operacoes/chamados/marcas-finalizacao``)."""
+
+    CAMINHO = "/api/operacoes/chamados/marcas-finalizacao"
+    FINALIZACAO = {
+        "UTIC-2026-7": {
+            "finalizacao": {"status": "ok", "em": "2026-11-08T10:00:00"},
+            "os_vinculada": {"fonte": "simpress", "serie": "SN-1", "os": "7285070", "origem": "manual", "em": "2026-11-08T09:59:00"},
+        },
+    }
+    OUTRO_TECNICO = {"UTIC-2026-8": {"fonte": "oracle", "serie": "SN-2", "os": "7285071", "origem": "dashboard"}}
+
+    def setUp(self):
+        pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(pasta.cleanup)
+        self.root = Path(pasta.name)
+        self.arquivo = self.root / "marcas.json"
+        self.fontes = FontesMarcas(
+            finalizacao=self.FINALIZACAO, nao_encontrados=("UTIC-2026-8",), nao_encontrados_em="2026-11-08T11:00:00",
+            abertos=("UTIC-2026-8",), vinculo_atual=lambda numero: self.OUTRO_TECNICO.get(numero),
+        )
+
+    def router(self, fontes="padrao", arquivo="padrao"):
+        return create_operations_router(
+            load_comparison_history=lambda: [], comparison_history_for_display=lambda event: event,
+            ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
+            ticket_os_marks_file=(lambda: self.arquivo) if arquivo == "padrao" else None,
+            ticket_os_marks_sources=(lambda: self.fontes) if fontes == "padrao" else fontes,
+        )
+
+    def get(self, **kwargs):
+        return route_handler(self.router(**kwargs), self.CAMINHO, "GET")()
+
+    def put(self, acao, serie="SN-1", os="7285070", chamado="UTIC-2026-7", **kwargs):
+        carga = OsMarcaPayload(serie=serie, os=os, chamado=chamado, acao=acao)
+        return route_handler(self.router(**kwargs), self.CAMINHO, "PUT")(carga)
+
+    def test_get_lists_the_marks_from_the_server_sources(self):
+        marcas = self.get()["marcas"]
+        self.assertEqual({(m["chamado"], m["origem"], m["motivo"]) for m in marcas}, {
+            ("UTIC-2026-7", "site", ""),
+            ("UTIC-2026-8", "outro_tecnico", "nao_encontrado_softexpert"),
+        })
+        site = next(m for m in marcas if m["origem"] == "site")
+        self.assertEqual((site["serie"], site["os"], site["ativa"], site["conferido_em"]), ("SN-1", "7285070", True, ""))
+        self.assertEqual(site["historico"], [{"acao": "marcada", "origem": "auto", "em": "2026-11-08T10:00:00"}])
+
+    def test_without_a_sources_provider_there_is_nothing_to_mark(self):
+        self.assertEqual(self.get(fontes=None), {"marcas": []})
+
+    def test_marks_file_defaults_to_the_folder_of_the_ticket_report(self):
+        self.put("desfazer", arquivo=None)
+        self.assertTrue((self.root / "os_marcas_finalizacao.json").exists())
+
+    def test_undo_redo_and_confirm_return_the_mark_and_persist_the_adjustment(self):
+        desfeita = self.put("desfazer")["marca"]
+        self.assertFalse(desfeita["ativa"])
+        self.assertEqual([e["acao"] for e in desfeita["historico"]], ["marcada", "desfeita"])
+        self.assertEqual(desfeita["historico"][-1]["origem"], "manual")
+        refeita = self.put("refazer")["marca"]
+        self.assertTrue(refeita["ativa"])
+        self.assertEqual([e["acao"] for e in refeita["historico"]], ["marcada", "desfeita", "refeita"])
+        conferida = self.put("conferir", serie="SN-2", os="7285071", chamado="UTIC-2026-8")["marca"]
+        self.assertTrue(conferida["conferido_em"])
+        persistido = {m["chamado"]: m for m in self.get()["marcas"]}
+        self.assertTrue(persistido["UTIC-2026-7"]["ativa"])
+        self.assertEqual(persistido["UTIC-2026-8"]["conferido_em"], conferida["conferido_em"])
+
+    def test_missing_mark_invalid_action_and_confirming_a_site_mark_are_422(self):
+        for chamado, serie, os, acao in (
+            ("UTIC-2026-99", "SN-1", "7285070", "desfazer"),  # a marca não existe
+            ("UTIC-2026-7", "SN-1", "7285070", "apagar"),  # ação inválida
+            ("UTIC-2026-7", "SN-1", "7285070", "conferir"),  # só o outro técnico se confere
+        ):
+            with self.subTest(acao=acao, chamado=chamado):
+                with self.assertRaises(DomainValidationError) as erro:
+                    self.put(acao, serie=serie, os=os, chamado=chamado)
+                self.assertEqual(erro.exception.status_code, 422)
+        self.assertFalse(self.arquivo.exists())
+
+    def test_payload_rejects_extra_and_blank_fields(self):
+        with self.assertRaises(ValidationError):
+            OsMarcaPayload(serie="SN-1", os="7285070", chamado="UTIC-2026-7", acao="desfazer", extra="x")
+        with self.assertRaises(ValidationError):
+            OsMarcaPayload(serie="  ", os="7285070", chamado="UTIC-2026-7", acao="desfazer")
+
+    def test_unreadable_marks_file_is_503_and_stays_untouched(self):
+        self.arquivo.write_text("{quebrado", encoding="utf-8")
+        with self.assertRaises(DomainBusyError):
+            self.get()
+        with self.assertRaises(DomainBusyError):
+            self.put("desfazer")
+        self.assertEqual(self.arquivo.read_text(encoding="utf-8"), "{quebrado")
+
+    def test_failing_sources_provider_is_503_without_leaking_the_error(self):
+        def quebrada():
+            raise RuntimeError("segredo do chamado")
+
+        for chamada in (lambda: self.get(fontes=quebrada), lambda: self.put("desfazer", fontes=quebrada)):
+            with self.assertLogs("routers.operations", "WARNING") as logs, self.assertRaises(DomainBusyError) as erro:
+                chamada()
+            self.assertNotIn("segredo", str(erro.exception.detail) + " ".join(logs.output))
+        self.assertFalse(self.arquivo.exists())
 
 
 class TicketImportRouteTests(unittest.TestCase):

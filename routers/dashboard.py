@@ -64,6 +64,8 @@ class DashboardServices:
     now: Callable[[], datetime] = field(default=_local_now)
     # Stat identity of the history file; when given, the new divergences alert is reused while it matches.
     get_comparison_history_signature: Optional[Callable[[], Optional[tuple]]] = None
+    # Tickets marked as finalized by another technician and not yet checked (marks of OS finalizada, aba OS).
+    get_other_technician_marks: Optional[Callable[[], Sequence[Dict[str, Any]]]] = None
 
 
 # Reapplying the display rules to the two newest events dominated the panel time; the result
@@ -173,6 +175,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "ultima_comparacao": latest,
         "base_desatualizada": _stale_base_summary(services, history),
         "os_paradas": _stale_tickets_summary(services),
+        "chamados_outro_tecnico": _other_technician_summary(services),
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
         "sem_acesso_60_dias": _long_unused_summary(services, history),
     }
@@ -339,6 +342,26 @@ def _stale_tickets_summary(services: DashboardServices) -> Optional[Dict[str, An
             "maior_dias_sem_atualizacao": None,
             "importado_em": "",
         }
+
+
+def _other_technician_summary(services: DashboardServices) -> Dict[str, Any]:
+    if services.get_other_technician_marks is None:
+        return {"total": 0, "itens": []}
+    try:
+        itens = [
+            {
+                "chamado": str(item.get("chamado") or ""),
+                "serie": str(item.get("serie") or ""),
+                "os": str(item.get("os") or ""),
+                "motivo": str(item.get("motivo") or ""),
+            }
+            for item in services.get_other_technician_marks()
+        ]
+        return {"total": len(itens), "itens": itens}
+    except Exception as error:
+        # The alert is optional; the inventory summary must still load. Only the class is logged (no ticket data).
+        logger.warning("Falha ao calcular o aviso de chamados finalizados por outro técnico: %s.", type(error).__name__)
+        return {"total": 0, "itens": [], "indisponivel": True}
 
 
 def _without_owner_exceptions(event: Dict[str, Any]) -> Dict[str, Any]:

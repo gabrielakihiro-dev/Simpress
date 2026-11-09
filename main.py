@@ -233,7 +233,7 @@ from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
-from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos
+from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, os_marcas_finalizacao
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains.dashboard_agendamento import AgendadorDashboard
@@ -2392,6 +2392,35 @@ def _dashboard_ticket_report() -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
+def _marcas_fontes() -> os_marcas_finalizacao.FontesMarcas:
+    """What the server knows now for the OS finalizada marks: finalizations, last read of the old tickets, links."""
+    caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
+    importado = sebrae_novos.ler_existentes(caminhos.existentes)
+    abertos = [str(a.get("numero") or "") for a in (importado["abertos"] if importado else [])]
+    resultado = (sebrae_novos.ler_resultado_antigos(caminhos) or {}) if abertos else {}
+    # Same rule as the F5 card: a ticket already read in the SoftExpert is no longer "not found".
+    lidos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(caminhos)) if resultado else {}
+    return os_marcas_finalizacao.FontesMarcas(
+        finalizacao=sebrae_finalizacao.ler_estado(STATE_DIR),
+        nao_encontrados=[n for n in (resultado.get("nao_encontrados") or []) if str(n) not in lidos],
+        nao_encontrados_em=str(resultado.get("em") or ""),
+        abertos=abertos,
+        vinculo_atual=os_marcas_finalizacao.resolvedor(
+            _dashboard_manual_os_links(),
+            lambda: sebrae_vinculos.vinculos_derivados(
+                importado["abertos"] if importado else [], _dashboard_ticket_report(),
+                _dashboard_endpoint_index() if abertos else None,
+            ),
+        ),
+    )
+
+
+def _marcas_outro_tecnico_pendentes() -> List[Dict[str, str]]:
+    return os_marcas_finalizacao.pendentes_outro_tecnico(
+        os_marcas_finalizacao.caminho_marcas(STATE_DIR), _marcas_fontes(),
+    )
+
+
 dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(
     get_equipment=_dashboard_equipment_snapshot,
     get_stats=_get_stats_snapshot,
@@ -2407,6 +2436,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     long_unused_warning_days=LONG_UNUSED_WARNING_DAYS,
     long_unused_days=LONG_UNUSED_LIMIT_DAYS,
     display_comparison=comparison_history_for_display,
+    get_other_technician_marks=_marcas_outro_tecnico_pendentes,
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)
@@ -2536,6 +2566,8 @@ operations_router = create_operations_router(
     ticket_os_links_file=lambda: STATE_DIR / "os_chamados_vinculos.json",
     ticket_os_notes_file=lambda: STATE_DIR / "os_observacoes.json",
     dashboard_vinculos=_dashboard_derived_os_links,
+    ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
+    ticket_os_marks_sources=_marcas_fontes,
 )
 app.include_router(operations_router)
 

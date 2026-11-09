@@ -12,8 +12,9 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError
+from domains import os_marcas_finalizacao as marcas
 from domains import sebrae_finalizacao as fin
-from domains import sebrae_novos
+from domains import sebrae_novos, sebrae_vinculos
 from domains.assistant_api import SimpressApi, asgi_transport
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import FichaPayload, SebraeDashboardServices, create_sebrae_dashboard_router
@@ -148,9 +149,13 @@ class FinalizarBase(unittest.TestCase):
         app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
             caminhos=lambda: self.caminhos, max_upload_bytes=lambda: self.limite, registros=lambda: [],
             relatorio_chamados=lambda: {"chamados": []}, runner=(lambda: self.runner) if self.com_runner else None,
+            **self.servicos_extras(),
         )))
         self.app = app
         self.cliente = TestClient(app)
+
+    def servicos_extras(self):
+        return {}
 
     def post(self, url, **kwargs):
         if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert") and isinstance(kwargs.get("json"), dict):
@@ -682,6 +687,195 @@ class LerAntigosSemRunnerTest(FinalizarBase):
     def test_sem_runner_responde_503(self):
         self.importar()
         self.assertEqual(self.post(ANTIGOS).status_code, 503)
+
+
+def vinculo_manual(chamado, os, serie="BRX0001", fonte="simpress"):
+    return {"fonte": fonte, "serie": serie, "os": os, "chamado": chamado}
+
+
+class OsVinculadaCongeladaTest(FinalizarBase):
+    """Foto da OS vinculada ao chamado, tirada quando a finalização é pedida (marca de OS finalizada da aba OS)."""
+
+    def setUp(self):
+        self.vinculos = []
+        super().setUp()
+        self.importar()
+        self.descrever(A)
+
+    def servicos_extras(self):
+        return {"vinculos_os": lambda: self.vinculos}
+
+    def finalizar_um(self):
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+
+    def atualizar_finalizando(self):
+        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.post(ATUALIZAR, json={"edicoes": [edicao], "finalizar_softexpert": True})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertTrue(resposta.json()["fechar"]["iniciado"])
+
+    def congelada(self):
+        return fin.ler_estado(self.dir)[A]["os_vinculada"]
+
+    def test_finalizar_um_congela_o_vinculo_manual_e_a_foto_vale_mesmo_se_o_vinculo_mudar_depois(self):
+        self.vinculos = [vinculo_manual(A, "1234", serie="BRX9")]
+        self.finalizar_um()
+        foto = self.congelada()
+        self.assertEqual({k: foto[k] for k in ("fonte", "serie", "os", "origem")}, {"fonte": "simpress", "serie": "BRX9", "os": "1234", "origem": "manual"})
+        self.assertTrue(foto["em"])
+        self.vinculos = [vinculo_manual(A, "9999")]
+        self.assertEqual(self.congelada(), foto)
+
+    def test_atualizar_dashboard_com_finalizar_softexpert_congela_o_vinculo(self):
+        self.vinculos = [vinculo_manual(A, "1234")]
+        self.atualizar_finalizando()
+        self.assertEqual((self.congelada()["os"], self.congelada()["origem"]), ("1234", "manual"))
+        self.assertEqual(self.job()["numeros"], [A])
+
+    def test_atualizar_sem_finalizar_softexpert_nao_congela_nada(self):
+        self.vinculos = [vinculo_manual(A, "1234")]
+        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.post(ATUALIZAR, json={"edicoes": [edicao], "finalizar_softexpert": False})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertNotIn("os_vinculada", fin.ler_estado(self.dir).get(A, {}))
+
+    def test_vinculo_derivado_vale_quando_nao_ha_manual_e_o_manual_vence_o_derivado(self):
+        derivados = [{"fonte": "oracle", "serie": "BRX2", "os": "20", "chamado": A, "origem": "dashboard"}]
+        with patch.object(sebrae_vinculos, "vinculos_derivados", return_value=derivados):
+            self.finalizar_um()
+        self.assertEqual({k: self.congelada()[k] for k in ("fonte", "serie", "os", "origem")}, {"fonte": "oracle", "serie": "BRX2", "os": "20", "origem": "dashboard"})
+        fin.consumir_job(self.dir)  # a rotina já leu o pedido: um novo pode ser gravado
+        self.vinculos = [vinculo_manual(A, "10")]
+        with patch.object(sebrae_vinculos, "vinculos_derivados", return_value=derivados):
+            self.finalizar_um()
+        self.assertEqual((self.congelada()["os"], self.congelada()["origem"]), ("10", "manual"))
+
+    def test_varias_os_no_mesmo_chamado_congela_a_maior(self):
+        self.vinculos = [vinculo_manual(A, "10"), vinculo_manual(A, "12", serie="BRX7"), vinculo_manual(A, "11")]
+        self.finalizar_um()
+        self.assertEqual((self.congelada()["os"], self.congelada()["serie"]), ("12", "BRX7"))
+
+    def test_sem_vinculo_congela_nulo_e_a_finalizacao_segue(self):
+        self.finalizar_um()
+        self.assertIn("os_vinculada", fin.ler_estado(self.dir)[A])
+        self.assertIsNone(self.congelada())
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+
+    def test_vinculos_derivados_quebrados_nunca_bloqueiam_a_finalizacao(self):
+        with patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=RuntimeError("falha simulada")):
+            self.finalizar_um()  # só valem os manuais (nenhum): a finalização segue
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.assertEqual(self.job()["numeros"], [A])
+
+    def test_falha_no_congelamento_deixa_o_job_gravado_e_sem_foto(self):
+        with patch.object(fin, "congelar_os_vinculada", side_effect=RuntimeError("falha simulada")):
+            self.finalizar_um()
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.assertNotIn("os_vinculada", fin.ler_estado(self.dir).get(A, {}))
+        self.assertEqual(self.job()["numeros"], [A])
+
+    def test_pedido_anterior_ainda_nao_consumido_responde_409_e_nao_refaz_a_foto(self):
+        self.vinculos = [vinculo_manual(A, "1234")]
+        self.finalizar_um()
+        foto = self.congelada()
+        self.vinculos = [vinculo_manual(A, "5678")]
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        self.assertEqual(resposta.status_code, 409, resposta.text)
+        self.assertEqual(self.congelada(), foto)
+
+
+class MarcaSaiuDoDashboardTest(FinalizarBase):
+    """Fonte c da marca: chamado aberto na importação anterior que sumiu da nova, sem finalização pelo site."""
+
+    def setUp(self):
+        self.vinculos = [vinculo_manual(A, "1234", serie="BRX1"), vinculo_manual(B, "2222", serie="BRX2")]
+        super().setUp()
+        self.arquivo = marcas.caminho_marcas(self.dir)
+        self.importar()  # abertos: A e B (C já vem FINALIZADO)
+
+    def servicos_extras(self):
+        return {"vinculos_os": lambda: self.vinculos}
+
+    def importar_so(self, *numeros, status=None):
+        status = status or tuple("EM ABERTO" for _ in numeros)
+        self.importar(montar(numeros, ultima=9, status=status))
+
+    def registros(self):
+        if not self.arquivo.exists():
+            return {}
+        return json.loads(self.arquivo.read_text(encoding="utf-8"))["marcas"]
+
+    def test_chamado_que_sumiu_dos_abertos_gera_registro_congelado_com_a_os_do_vinculo(self):
+        self.importar_so(B)
+        registros = list(self.registros().values())
+        self.assertEqual(len(registros), 1)
+        registro = registros[0]
+        self.assertEqual(
+            {k: registro[k] for k in ("serie", "os", "chamado", "origem", "motivo")},
+            {"serie": "BRX1", "os": "1234", "chamado": A, "origem": "outro_tecnico", "motivo": "saiu_do_dashboard"},
+        )
+        self.assertTrue(registro["detectado_em"])
+
+    def test_chamado_que_segue_aberto_nao_gera_registro(self):
+        self.importar_so(A, B)
+        self.assertEqual(self.registros(), {})
+
+    def test_chamado_finalizado_pelo_site_nao_vira_marca_de_outro_tecnico(self):
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_OK, "30/10/2026 14:05")
+        self.importar_so(B)
+        self.assertEqual(self.registros(), {})
+
+    def test_finalizado_no_novo_dashboard_sem_ok_do_site_conta_como_saida(self):
+        self.importar_so(A, B, status=("FINALIZADO", "EM ABERTO"))
+        self.assertEqual([r["chamado"] for r in self.registros().values()], [A])
+
+    def test_sem_vinculo_nenhum_registro_e_gravado(self):
+        self.vinculos = []
+        with patch.object(sebrae_vinculos, "vinculos_derivados", return_value=[]):
+            self.importar_so(B)
+        self.assertEqual(self.registros(), {})
+
+    def test_vinculo_derivado_e_calculado_com_os_abertos_antigos(self):
+        vistos = []
+
+        def derivados(abertos, relatorio, indice=None):
+            vistos.append(sorted(a["numero"] for a in abertos))
+            return [{"fonte": "oracle", "serie": "BRX3", "os": "30", "chamado": A, "origem": "dashboard"}]
+
+        self.vinculos = []
+        with patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=derivados):
+            self.importar_so(B)
+        self.assertEqual(vistos, [[A, B]])  # os abertos ANTIGOS: a linha de A já saiu do novo Dashboard
+        self.assertEqual([(r["serie"], r["os"]) for r in self.registros().values()], [("BRX3", "30")])
+
+    def test_marcas_ilegiveis_param_a_importacao_antes_de_gravar_e_preservam_o_arquivo(self):
+        self.arquivo.write_text("{quebrado", encoding="utf-8")
+        antes = sebrae_novos.ler_existentes(self.caminhos.existentes)
+        conteudo = montar((B,), ultima=9, status=("EM ABERTO",))
+        resposta = self.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 503, resposta.text)
+        self.assertEqual(self.arquivo.read_text(encoding="utf-8"), "{quebrado")
+        self.assertEqual(sebrae_novos.ler_existentes(self.caminhos.existentes), antes)  # a importação anterior segue valendo
+
+    def test_falha_inesperada_ao_detectar_nao_bloqueia_a_importacao_e_so_registra_o_tipo_no_log(self):
+        antes = sebrae_novos.ler_existentes(self.caminhos.existentes)
+        conteudo = montar((B,), ultima=9, status=("EM ABERTO",))
+        with patch.object(marcas, "detectar_saidas", side_effect=RuntimeError("falha simulada")):
+            with self.assertLogs("routers.sebrae_dashboard", level="WARNING") as log:
+                resposta = self.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertNotIn("falha simulada", resposta.text)
+        self.assertTrue(any("RuntimeError" in r.getMessage() and "falha simulada" not in r.getMessage() for r in log.records))
+        self.assertNotEqual(sebrae_novos.ler_existentes(self.caminhos.existentes), antes)  # o novo Dashboard foi importado
+        self.assertEqual(self.registros(), {})
+
+    def test_saida_com_serie_que_normaliza_para_vazio_nao_bloqueia_a_importacao_e_as_demais_sao_gravadas(self):
+        self.vinculos = [vinculo_manual(A, "1234", serie="-"), vinculo_manual(B, "2222", serie="BRX2")]
+        with self.assertLogs(marcas.logger, level="WARNING") as log:  # prova que a saída de A chegou ao tratamento novo
+            self.importar(montar((C,), ultima=9, status=("FINALIZADO",)))  # ``importar`` exige 200; A e B saíram
+        self.assertTrue(any("erro=DomainValidationError" in r.getMessage() and A not in r.getMessage() for r in log.records))
+        self.assertEqual([(r["chamado"], r["serie"]) for r in self.registros().values()], [(B, "BRX2")])
 
 
 if __name__ == "__main__":

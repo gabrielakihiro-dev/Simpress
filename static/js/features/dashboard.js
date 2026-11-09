@@ -503,6 +503,19 @@
     mostrarAlertaPainel(card, state, textoDivergenciasNovas(info));
   }
 
+  // Chamados que saíram do Dashboard ou do SoftExpert sem finalização pelo site: o texto é fixo, o card some com total 0 ou leitura indisponível.
+  const TEXTO_OUTRO_TECNICO = "Confira no SoftExpert e marque Conferido na aba OS (F6).";
+
+  function renderizarAlertaChamadosOutroTecnico(info) {
+    const card = document.getElementById("alerta-chamados-outro-tecnico");
+    if (!card) return;
+    if (!info || typeof info !== "object" || info.indisponivel || !(Number(info.total) > 0)) {
+      ocultarAlertaPainel(card, info?.indisponivel ? "indisponivel" : "vazio");
+      return;
+    }
+    mostrarAlertaPainel(card, "outro_tecnico", TEXTO_OUTRO_TECNICO);
+  }
+
   function textoSemAcesso60(info) {
     const limit = Number(info.limite_dias);
     const warning = Number(info.limite_aviso_dias);
@@ -574,8 +587,9 @@
       renderizarAlertaSemAcesso60(event.detail?.sem_acesso_60_dias);
       renderizarAlertaOsParadas(event.detail?.os_paradas);
       renderizarAlertaDivergenciasNovas(event.detail?.divergencias_novas);
+      renderizarAlertaChamadosOutroTecnico(event.detail?.chamados_outro_tecnico);
     });
-    ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas"].forEach(id => {
+    ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico"].forEach(id => {
       document.getElementById(id)?.addEventListener("animationend", event => {
         delete event.currentTarget.dataset.enter;
       });
@@ -591,6 +605,6 @@
     carregarEstatisticas, carregarProntidao, inicializarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
-    renderizarAlertaSemAcesso60,
+    renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico,
   };
 });
