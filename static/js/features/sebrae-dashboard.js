@@ -423,7 +423,9 @@
       if (letra === "D" || letra === "J" || opcoesLista.length) {
         controle = document.createElement("select");
         const opcoes = letra === "D" ? STATUS_CHAMADO : letra === "J" ? TIPOS_CHAMADO : opcoesLista;
-        const extra = atual && !opcoes.includes(atual) ? [atual] : []; // valor que o chamado já tem e a lista não traz
+        // valor que a lista não traz: o que o antigo já tem, ou (novo, só B) a categoria nova aplicada com `Usar` e guardada no rascunho; sem a opção o select voltaria a vazio ao recarregar
+        const fora = atual || (!antigo && letra === "B" ? String(valores[letra] ?? "") : "");
+        const extra = fora && !opcoes.includes(fora) ? [fora] : [];
         [["", "Escolher"], ...[...opcoes, ...extra].map(o => [o, o])].forEach(([valor, texto]) => {
           const opcao = document.createElement("option");
           opcao.value = valor;
@@ -1000,6 +1002,53 @@
         [novo, seloDestaque(item.numero), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
     }
 
+    /** Sugestão do servidor para B (Categoria) ou J (Tipo) de chamado novo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
+    function sugestaoManual(item, letra) {
+      if (ehApiSebrae(item.linha?.I)) return "";
+      const valor = letra === "B" ? item.sugestao_categoria : letra === "J" ? item.sugestao_tipo : "";
+      return typeof valor === "string" ? valor.trim() : "";
+    }
+
+    /**
+     * Campo manual de chamado novo. Em B e J, com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
+     * `Sugestão: <valor>` + `Usar` abaixo do campo. Nada é preenchido nem salvo sem o clique em `Usar`.
+     * Escolher à mão qualquer valor esconde o chip; voltar a vazio o mostra de novo.
+     * shortcut: a sugestão de J vem do servidor já calculada com a sugestão de B; mudar B na tela não a recalcula, só ao recarregar a lista.
+     */
+    function campoManualNovo(item, letra) {
+      const controle = controleManual(item.numero, letra);
+      const rotulo = campo(ROTULOS_MANUAIS[letra], controle);
+      const sugestao = sugestaoManual(item, letra);
+      if (!sugestao || String(controle.value || "").trim() || String(estado.valores[item.numero]?.[letra] || "").trim()) return rotulo;
+      const nomeCampo = ROTULOS_MANUAIS[letra].replace(/\s*\*$/, "");
+      const chip = document.createElement("div");
+      chip.className = "sebrae-sugestao";
+      const usar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm sebrae-sugestao__usar", "Usar");
+      usar.type = "button";
+      usar.setAttribute("aria-label", `Usar sugestão ${sugestao} em ${nomeCampo}`);
+      chip.append(dom.createTextElement("span", "sebrae-sugestao__texto", `Sugestão: ${sugestao}`), usar);
+      usar.addEventListener("click", () => {
+        // B pode sugerir uma categoria que a lista do Dashboard não traz (o servidor acrescenta as categorias novas): vira opção extra.
+        if (controle.tagName === "SELECT" && ![...controle.children].some(opcao => opcao.value === sugestao)) {
+          const extra = document.createElement("option");
+          extra.value = sugestao;
+          extra.textContent = sugestao;
+          controle.appendChild(extra);
+        }
+        controle.value = sugestao;
+        aoEditar({ currentTarget: controle }); // o mesmo caminho da edição manual: estado, rascunho e botão Atualizar
+        chip.remove();
+        controle.focus();
+      });
+      const alternar = () => { chip.hidden = Boolean(String(controle.value || "").trim()); };
+      controle.addEventListener("input", alternar);
+      controle.addEventListener("change", alternar);
+      const envoltorio = document.createElement("div");
+      envoltorio.className = "sebrae-campo-sugestao";
+      envoltorio.append(rotulo, chip);
+      return envoltorio;
+    }
+
     function blocoChamado(item) {
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.linha.G || "Sem título"));
@@ -1019,7 +1068,7 @@
       }), blocoDetalhe("Atendimento realizado", item.linha.F)];
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
-      ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
+      ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualNovo(item, letra)));
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
       return artigo;

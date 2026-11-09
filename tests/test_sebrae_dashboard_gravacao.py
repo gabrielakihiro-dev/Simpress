@@ -2,6 +2,7 @@ import io
 import re
 import unittest
 import zipfile
+from xml.etree import ElementTree
 
 from domains import sebrae_dashboard_gravacao as G
 from domains.sebrae_dashboard import CABECALHOS
@@ -427,6 +428,188 @@ class OrdemDaColunaCTest(unittest.TestCase):
         for nome, conteudo in adulterados.items():
             with self.subTest(nome), self.assertRaisesRegex(G.GravacaoInvalida, "nada foi entregue"):
                 G._conferir(conteudo, anteriores, [], pacote, ordem)
+
+
+LISTAS = "xl/worksheets/sheet5.xml"
+CATEGORIAS_ORIGINAIS = (
+    "HARDWARE", "SOFTWARE", "ACESSO", "E-MAIL", "CELULAR", "TABLET", "TELEFONIA", "BACKUP", "SEGURANÇA", "IMPRESSÃO",
+    "MONITOR", "NOTEBOOK", "PERIFÉRICOS", "VPN", "OUTRO",
+)
+X14 = 'xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"'
+
+
+def com_listas(conteudo, categorias=CATEGORIAS_ORIGINAIS, validacao="LISTAS!$D$2:$D$16", simples=False, cabecalho="CATEGORIA"):
+    """Same workbook with a LISTAS sheet (header in D1, ``categorias`` in D2.., a note in A of a loose row below) and the B validation of CHAMADOS."""
+    partes = partes_de(conteudo)
+    ultima = 1 + len(categorias)
+    solta = ultima + 2
+    linhas = [f'<row r="1" spans="1:4">{texto("A1", "TIPO", 7)}{texto("D1", cabecalho, 8)}</row>']
+    for n, valor in enumerate(categorias, start=2):
+        celula = f'<c r="D{n}" s="9" t="s"><v>2</v></c>' if n == 3 else texto(f"D{n}", valor, 9)  # D3 goes through sharedStrings
+        linhas.append(f'<row r="{n}" spans="1:4">{texto("A2", "INCIDENTE", 7) if n == 2 else ""}{celula}</row>')
+    linhas.append(f'<row r="{solta}" spans="1:1">{texto(f"A{solta}", "nota", 7)}</row>')
+    partes[LISTAS] = f'<worksheet {NS}><dimension ref="A1:D{solta}"/><sheetData>{"".join(linhas)}</sheetData></worksheet>'.encode()
+    partes["xl/sharedStrings.xml"] = partes["xl/sharedStrings.xml"].replace(b"</sst>", f"<si><t>{categorias[1]}</t></si></sst>".encode())
+    partes["xl/workbook.xml"] = partes["xl/workbook.xml"].replace(b"</sheets>", b'<sheet name="LISTAS" sheetId="3" r:id="rId7"/></sheets>')
+    partes["xl/_rels/workbook.xml.rels"] = partes["xl/_rels/workbook.xml.rels"].replace(
+        b"</Relationships>", f'<Relationship Id="rId7" Type="{DOC}/worksheet" Target="worksheets/sheet5.xml"/></Relationships>'.encode()
+    )
+    partes["[Content_Types].xml"] = partes["[Content_Types].xml"].replace(
+        b"</Types>", b'<Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+    )
+    folha = partes["xl/worksheets/sheet4.xml"].decode()
+    if validacao and simples:
+        folha = folha.replace("</sheetData>", f'</sheetData><dataValidations count="1"><dataValidation type="list" sqref="B2:B8"><formula1>{validacao}</formula1></dataValidation></dataValidations>')
+    elif validacao:
+        folha = folha.replace(
+            "</extLst>",
+            f'<ext uri="{{y}}"><x14:dataValidations {X14} count="1"><x14:dataValidation type="list" allowBlank="1"><x14:formula1><xm:f>{validacao}</xm:f></x14:formula1>'
+            "<xm:sqref>B2:B8</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>",
+        )
+    partes["xl/worksheets/sheet4.xml"] = folha.encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome, dados in partes.items():
+            arquivo.writestr(nome, dados)
+    return saida.getvalue()
+
+
+def valores_d(conteudo):
+    """``(values of LISTAS!D from row 2 on, cell type by row)`` read straight from the XML, sharedStrings included."""
+    partes = partes_de(conteudo)
+    compartilhadas = [re.sub(r"<[^>]+>", "", s) for s in re.findall(r"<si>(.*?)</si>", partes["xl/sharedStrings.xml"].decode(), re.DOTALL)]
+    valores, tipos = [], {}
+    for achado in re.finditer(r'<c r="D(\d+)"([^>]*)>(.*?)</c>', partes[LISTAS].decode(), re.DOTALL):
+        linha, atributos, corpo = int(achado.group(1)), achado.group(2), achado.group(3)
+        if linha == 1:
+            continue
+        tipos[linha] = (re.search(r' t="(\w+)"', atributos) or [None, None])[1]
+        bruto = re.sub(r"<[^>]+>", "", corpo)
+        valores.append(compartilhadas[int(bruto)] if tipos[linha] == "s" else bruto)
+    return valores, tipos
+
+
+def validacoes(conteudo):
+    folha = partes_de(conteudo)["xl/worksheets/sheet4.xml"].decode()
+    return re.findall(r"LISTAS!\$D\$2:\$D\$\d+", folha)
+
+
+class CategoriasDaListaTest(unittest.TestCase):
+    def test_acrescenta_as_quatro_que_faltam_e_estende_a_validacao(self):
+        base = com_listas(montar())
+        resultado = G.atualizar(base)
+        valores, tipos = valores_d(resultado.conteudo)
+        self.assertEqual(valores, [*CATEGORIAS_ORIGINAIS, "IMPRESSORA", "LICENÇA", "SISTEMA", "REDE"])
+        self.assertEqual({tipos[n] for n in range(17, 21)}, {"inlineStr"})
+        self.assertEqual(validacoes(resultado.conteudo), ["LISTAS!$D$2:$D$20"])
+        listas = partes_de(resultado.conteudo)[LISTAS].decode()
+        self.assertIn('<dimension ref="A1:D20"/>', listas)
+        self.assertIn('<c r="D17" s="9" t="inlineStr"><is><t>IMPRESSORA</t></is></c>', listas)
+        self.assertIn('<c r="D18" s="9" t="inlineStr"><is><t>LICENÇA</t></is></c>', listas)  # the loose row 18 gains D after its A cell
+        self.assertRegex(listas, r'<row r="18" spans="1:4"><c r="A18"[^>]*>.*?</c><c r="D18"')
+        self.assertIn('<row r="19"><c r="D19" s="9"', listas)  # rows that did not exist are created in order
+        self.assertLess(listas.index('<row r="18"'), listas.index('<row r="19"'))
+        ElementTree.fromstring(listas)
+        antes, depois = partes_de(base), partes_de(resultado.conteudo)
+        self.assertEqual({nome for nome in antes if antes[nome] != depois[nome]}, {"xl/worksheets/sheet4.xml", LISTAS, "xl/workbook.xml", "xl/pivotCache/pivotCacheDefinition2.xml"})
+        self.assertEqual(antes["xl/sharedStrings.xml"], depois["xl/sharedStrings.xml"])
+
+    def test_valores_originais_ficam_iguais_e_na_mesma_ordem(self):
+        resultado = G.atualizar(com_listas(montar()), [NOVA])
+        valores, tipos = valores_d(resultado.conteudo)
+        self.assertEqual(valores[: len(CATEGORIAS_ORIGINAIS)], list(CATEGORIAS_ORIGINAIS))
+        self.assertEqual([tipos[n] for n in range(2, 17)], ["inlineStr", "s"] + ["inlineStr"] * 13)  # the originals keep their own cell types (D3 stays a sharedStrings cell)
+
+    def test_nao_duplica_a_que_ja_existe_com_outra_grafia(self):
+        for existente, faltam in (("Rede", ["IMPRESSORA", "LICENÇA", "SISTEMA"]), ("Licenca", ["IMPRESSORA", "SISTEMA", "REDE"]), (" sistema ", ["IMPRESSORA", "LICENÇA", "REDE"])):
+            with self.subTest(existente):
+                categorias = (*CATEGORIAS_ORIGINAIS[:-2], existente, "OUTRO")
+                resultado = G.atualizar(com_listas(montar(), categorias))
+                valores, _ = valores_d(resultado.conteudo)
+                self.assertEqual(valores, [*categorias, *faltam])
+                self.assertEqual(validacoes(resultado.conteudo), [f"LISTAS!$D$2:$D${16 + len(faltam)}"])
+
+    def test_segunda_geracao_nao_muda_nada(self):
+        primeira = G.atualizar(com_listas(montar()))
+        segunda = G.atualizar(primeira.conteudo)
+        self.assertEqual(partes_de(primeira.conteudo)[LISTAS], partes_de(segunda.conteudo)[LISTAS])
+        self.assertEqual(validacoes(segunda.conteudo), ["LISTAS!$D$2:$D$20"])
+        self.assertEqual(len(valores_d(segunda.conteudo)[0]), len(CATEGORIAS_ORIGINAIS) + 4)
+
+    def test_validacao_simples_tambem_e_estendida_e_a_mais_longa_fica_como_esta(self):
+        self.assertEqual(validacoes(G.atualizar(com_listas(montar(), simples=True)).conteudo), ["LISTAS!$D$2:$D$20"])
+        longa = G.atualizar(com_listas(montar(), validacao="LISTAS!$D$2:$D$30"))
+        self.assertEqual(validacoes(longa.conteudo), ["LISTAS!$D$2:$D$30"])  # the user's own range is not shortened
+        self.assertEqual(len(valores_d(longa.conteudo)[0]), len(CATEGORIAS_ORIGINAIS) + 4)
+
+    def test_sem_listas_ou_fora_do_formato_a_geracao_segue_sem_mexer(self):
+        with self.assertLogs("domains.sebrae_dashboard_gravacao", "WARNING") as aviso:
+            sem_aba = G.atualizar(montar(), [NOVA])
+        self.assertNotIn("UTIC", " ".join(aviso.output))  # the warning carries no ticket data
+        self.assertNotIn("LISTAS", b"".join(partes_de(sem_aba.conteudo).values()).decode("utf-8", "ignore"))
+        for nome, base in {
+            "sem validação": com_listas(montar(), validacao=None),
+            "outro cabeçalho": com_listas(montar(), cabecalho="TIPO"),
+        }.items():
+            with self.subTest(nome):
+                with self.assertLogs("domains.sebrae_dashboard_gravacao", "WARNING"):
+                    resultado = G.atualizar(base, [NOVA])
+                self.assertEqual(resultado.linhas[0].numero, "UTIC-2026-0099")
+                self.assertEqual(partes_de(base)[LISTAS], partes_de(resultado.conteudo)[LISTAS])
+
+    def test_lista_com_buraco_ou_formula_nao_e_tocada(self):
+        base = com_listas(montar())
+        partes = partes_de(base)
+        listas = partes[LISTAS].decode()
+        for nome, alterada in {
+            "buraco": listas.replace('<row r="9" spans="1:4">' + texto("D9", "BACKUP", 9) + "</row>", ""),
+            "fórmula": listas.replace(texto("D9", "BACKUP", 9), '<c r="D9" s="9"><f>"x"</f><v>x</v></c>'),
+        }.items():
+            with self.subTest(nome):
+                self.assertNotEqual(alterada, listas)
+                partes[LISTAS] = alterada.encode()
+                saida = io.BytesIO()
+                with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+                    for parte, dados in partes.items():
+                        arquivo.writestr(parte, dados)
+                resultado = G.atualizar(saida.getvalue())
+                self.assertEqual(partes_de(resultado.conteudo)[LISTAS], partes[LISTAS])
+                self.assertEqual(validacoes(resultado.conteudo), ["LISTAS!$D$2:$D$16"])
+
+    def test_encerrar_chamado_nao_mexe_nas_listas(self):
+        base = com_listas(montar())
+        novo, estados = G.registrar_encerramentos(base, {"UTIC-2026-0001": "09/11/2026 10:00"})
+        self.assertEqual(estados, {"UTIC-2026-0001": G.ENCERRAMENTO_GRAVADO})
+        self.assertEqual(partes_de(novo.conteudo)[LISTAS], partes_de(base)[LISTAS])
+        self.assertEqual(validacoes(novo.conteudo), ["LISTAS!$D$2:$D$16"])
+
+    def test_conferencia_recusa_lista_alterada(self):
+        base = com_listas(montar())
+        pacote = G._ler_pacote(base)
+        texto_da_aba = pacote.texto(pacote.aba)
+        _, _, linhas = G._linhas_da_aba(texto_da_aba)
+        anteriores = G.ler_coluna_c(base)
+        ordem = G._ordenar(pacote, linhas, {})
+        bom = G._montar(pacote, texto_da_aba, linhas, ordem.substituicoes, False, True)
+        G._conferir(bom, anteriores, [], pacote, ordem, True)  # the real output passes
+        listas = partes_de(bom)[LISTAS].decode()
+        adulteradas = {
+            "valor trocado": listas.replace("<t>ACESSO</t>", "<t>OUTRO ACESSO</t>"),
+            "valor removido": re.sub(r'<row r="5"[^>]*>.*?</row>', "", listas),
+            "acréscimo repetido": listas.replace("<t>LICENÇA</t>", "<t>SISTEMA</t>"),
+            "acréscimo fora da lista": listas.replace("<t>REDE</t>", "<t>OUTRA COISA</t>"),
+        }
+        for nome, alterada in adulteradas.items():
+            with self.subTest(nome):
+                self.assertNotEqual(alterada, listas)
+                partes = partes_de(bom)
+                partes[LISTAS] = alterada.encode()
+                saida = io.BytesIO()
+                with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+                    for parte, dados in partes.items():
+                        arquivo.writestr(parte, dados)
+                with self.assertRaisesRegex(G.GravacaoInvalida, "categorias"):
+                    G._conferir(saida.getvalue(), anteriores, [], pacote, ordem, True)
 
 
 if __name__ == "__main__":

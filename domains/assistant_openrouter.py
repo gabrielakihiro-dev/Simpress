@@ -262,10 +262,11 @@ class OpenRouterClient:
         payload: Dict[str, Any] = {
             "model": settings.primary_model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": TEMPERATURE,
         }
+        if tools:  # plain text completion (no tools) must not send an empty tools list
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
         if not settings.deepseek:
             # Primary model first, then the fallback; no provider may keep the prompts.
             payload["models"] = [settings.primary_model, settings.fallback_model]

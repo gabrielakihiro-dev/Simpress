@@ -408,8 +408,12 @@ def validar_manuais(manuais: Mapping[str, Any], exigir: bool = True) -> Dict[str
 
 def validar_listas(manuais: Mapping[str, str], listas: Mapping[str, Sequence[str]], atuais: Optional[Mapping[str, str]] = None) -> None:
     """A and B must come from the LISTAS sheet read at import. An old ticket may keep an off-list value it already has."""
+    from domains.sebrae_categoria import CATEGORIAS_NOVAS  # tardio: sebrae_categoria importa a gravação
+
     for letra in "AB":
         valor, opcoes = str(manuais.get(letra) or ""), listas.get(letra) or ()
+        if letra == "B" and opcoes:  # categorias aprovadas em 09/11/2026: a atualização as acrescenta em LISTAS!D
+            opcoes = [*opcoes, *CATEGORIAS_NOVAS]
         if valor and opcoes and valor not in opcoes and valor != str((atuais or {}).get(letra) or ""):
             raise ManuaisInvalidos(f"A coluna {letra} só aceita os valores da lista do Dashboard (aba LISTAS).")
 

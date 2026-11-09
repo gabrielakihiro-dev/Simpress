@@ -1603,3 +1603,146 @@ test("tirar o destaque de um finalizado além do 25º não o esconde atrás de C
     CARGA_VISAO.importado.finalizados = original;
   }
 });
+
+// ---- Sugestão de Categoria (B) e Tipo (J) em chamado novo ----
+
+const IMPORTADO_EM = CARGA_CARTOES.importado.importado_em;
+function cargaSugestao(sugestoes = { sugestao_categoria: "IMPRESSORA", sugestao_tipo: "INCIDENTE" }, solicitante = "Camila") {
+  const carga = structuredClone(CARGA_CARTOES);
+  Object.assign(carga.novos.formulario[0], sugestoes);
+  carga.novos.formulario[0].linha.I = solicitante;
+  return carga;
+}
+const campoNovo = (el, letra) => el["sebrae-novos-lista"].querySelector(`[data-sebrae-campo="${letra}"]`);
+const chipsDe = el => el["sebrae-novos-lista"].querySelectorAll(".sebrae-sugestao");
+
+test("sugestão aparece em B e J do chamado novo, com texto e rótulo exatos, sem preencher nada", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestao(), disco);
+  const chips = chipsDe(el);
+  assert.equal(chips.length, 2);
+  assert.equal(chips[0].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: IMPRESSORA");
+  assert.equal(chips[1].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: INCIDENTE");
+  const botoes = chips.map(chip => chip.querySelector("button"));
+  assert.deepEqual(botoes.map(b => b.textContent), ["Usar", "Usar"]);
+  assert.equal(botoes[0].getAttribute("aria-label"), "Usar sugestão IMPRESSORA em Categoria (B)");
+  assert.equal(botoes[1].getAttribute("aria-label"), "Usar sugestão INCIDENTE em Tipo do chamado (J)");
+  assert.equal(botoes[0].type, "button");
+  assert.equal(campoNovo(el, "B").value, "");
+  assert.equal(campoNovo(el, "J").value, "");
+  // sem o clique, nada vai ao rascunho
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"] || {}, {});
+  // outras letras nunca ganham chip
+  for (const letra of ["A", "D", "R", "S"]) assert.equal(campoNovo(el, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
+});
+
+test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascunho) e chamado antigo", async () => {
+  for (const sugestoes of [{ sugestao_categoria: null, sugestao_tipo: null }, { sugestao_categoria: "  ", sugestao_tipo: "" }, {}]) {
+    const { el } = await renderizarCartoes(cargaSugestao(sugestoes));
+    assert.equal(chipsDe(el).length, 0, JSON.stringify(sugestoes));
+  }
+  const api = await renderizarCartoes(cargaSugestao(undefined, "API SEBRAE"));
+  assert.equal(chipsDe(api.el).length, 0, "API SEBRAE já vem preenchido pelo programa");
+
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, IMPORTADO_EM, "UTIC-2026-1378", "B", "REDE", "novo");
+  gravarCampoRascunho(disco, IMPORTADO_EM, "UTIC-2026-1378", "J", "SOLICITAÇÃO", "novo");
+  const { el } = await renderizarCartoes(cargaSugestao(), disco);
+  assert.equal(chipsDe(el).length, 0, "valor do rascunho esconde os dois chips");
+  assert.equal(campoNovo(el, "B").value, "REDE");
+
+  const parcial = armazenamentoFalso();
+  gravarCampoRascunho(parcial, IMPORTADO_EM, "UTIC-2026-1378", "B", "REDE", "novo");
+  const metade = await renderizarCartoes(cargaSugestao(), parcial);
+  const chips = chipsDe(metade.el);
+  assert.equal(chips.length, 1, "só J continua vazio");
+  assert.equal(chips[0].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: INCIDENTE");
+
+  // antigo (mesmo com campo sugestao_* no item) e finalizado não têm chip
+  const carga = cargaSugestao();
+  carga.importado.abertos[0].sugestao_categoria = "IMPRESSORA";
+  carga.importado.abertos[1].sugestao_tipo = "INCIDENTE";
+  const antigos = await renderizarCartoes(carga);
+  assert.equal(antigos.el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
+  assert.equal(antigos.el["sebrae-finalizados-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
+});
+
+test("Usar preenche o campo, grava no rascunho pelo caminho da edição manual e remove o chip", async () => {
+  const disco = armazenamentoFalso();
+  const { doc, el } = await renderizarCartoes(cargaSugestao({ sugestao_categoria: "REDE", sugestao_tipo: "SOLICITAÇÃO" }), disco);
+  const selectB = campoNovo(el, "B");
+  const selectJ = campoNovo(el, "J");
+  const [chipB, chipJ] = chipsDe(el);
+  chipJ.querySelector("button").click();
+  assert.equal(selectJ.value, "SOLICITAÇÃO");
+  assert.equal(chipsDe(el).length, 1, "só o chip de J saiu");
+  assert.equal(selectB.value, "", "B continua vazio");
+  assert.ok(doc.activeElement === selectJ, "foco volta ao campo preenchido");
+  assert.equal(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"].J, "SOLICITAÇÃO");
+  chipB.querySelector("button").click();
+  assert.equal(selectB.value, "REDE");
+  assert.equal(chipsDe(el).length, 0);
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"], { B: "REDE", J: "SOLICITAÇÃO" });
+});
+
+test("Usar com valor fora da lista cria opção extra no select; em B sem lista (input) só põe o texto", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestao({ sugestao_categoria: "IMPRESSORA", sugestao_tipo: null }), disco);
+  const select = campoNovo(el, "B");
+  assert.equal(select.tagName, "SELECT");
+  assert.deepEqual(select.children.map(o => o.value), ["", "REDE"]);
+  chipsDe(el)[0].querySelector("button").click();
+  assert.deepEqual(select.children.map(o => o.value), ["", "REDE", "IMPRESSORA"]);
+  assert.equal(select.children[2].textContent, "IMPRESSORA");
+  assert.equal(select.value, "IMPRESSORA");
+  assert.equal(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"].B, "IMPRESSORA");
+
+  const semLista = cargaSugestao({ sugestao_categoria: "IMPRESSORA", sugestao_tipo: null });
+  semLista.importado.listas.B = [];
+  const discoInput = armazenamentoFalso();
+  const { el: elInput } = await renderizarCartoes(semLista, discoInput);
+  const entrada = campoNovo(elInput, "B");
+  assert.equal(entrada.tagName, "INPUT");
+  chipsDe(elInput)[0].querySelector("button").click();
+  assert.equal(entrada.value, "IMPRESSORA");
+  assert.equal(entrada.children.length, 0);
+  assert.equal(lerRascunho(discoInput, IMPORTADO_EM).valores["UTIC-2026-1378"].B, "IMPRESSORA");
+  assert.equal(chipsDe(elInput).length, 0);
+});
+
+test("escolher um valor à mão esconde o chip; esvaziar o campo o mostra de novo", async () => {
+  const { el } = await renderizarCartoes(cargaSugestao());
+  const select = campoNovo(el, "B");
+  const chip = chipsDe(el)[0];
+  assert.ok(!chip.hidden, "nasce visível");
+  select.value = "REDE";
+  select.dispatchEvent({ type: "change", currentTarget: select });
+  assert.equal(chip.hidden, true);
+  select.value = "";
+  select.dispatchEvent({ type: "change", currentTarget: select });
+  assert.equal(chip.hidden, false);
+});
+
+test("a opção extra criada por Usar sobrevive à recarga da lista: o select mostra o valor e o chip não volta", async () => {
+  const disco = armazenamentoFalso();
+  const { el, feature } = await renderizarCartoes(cargaSugestao({ sugestao_categoria: "IMPRESSORA", sugestao_tipo: null }), disco);
+  chipsDe(el)[0].querySelector("button").click();
+  await feature.carregarNovosSebrae();
+  const select = campoNovo(el, "B");
+  assert.deepEqual(select.children.map(o => o.value), ["", "REDE", "IMPRESSORA"], "a opção precisa existir; só `.value` não prova nada num select");
+  assert.equal(select.value, "IMPRESSORA");
+  assert.equal(chipsDe(el).length, 0);
+  // a mesma garantia vale para um rascunho que já nasce com valor fora da lista (recarregar a página)
+  const novoDisco = armazenamentoFalso();
+  gravarCampoRascunho(novoDisco, IMPORTADO_EM, "UTIC-2026-1378", "B", "IMPRESSORA", "novo");
+  const { el: elRascunho } = await renderizarCartoes(cargaSugestao({ sugestao_categoria: "IMPRESSORA", sugestao_tipo: null }), novoDisco);
+  assert.deepEqual(campoNovo(elRascunho, "B").children.map(o => o.value), ["", "REDE", "IMPRESSORA"]);
+  assert.equal(chipsDe(elRascunho).length, 0);
+});
+
+test("Usar em J põe INCIDENTE no select (a pendência J some só por CSS :has; não testável no DOM falso)", async () => {
+  const { el } = await renderizarCartoes(cargaSugestao());
+  const select = campoNovo(el, "J");
+  chipsDe(el)[1].querySelector("button").click();
+  assert.equal(select.value, "INCIDENTE");
+});
