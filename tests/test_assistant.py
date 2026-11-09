@@ -1796,6 +1796,36 @@ class ChamadosComOsToolTests(unittest.TestCase):
         self.assertIn("aviso_observacoes", falha)
 
 
+class SinaisOsToolTests(unittest.TestCase):
+    EXTRA = [{"serie": "SIN001", "relacao": "so_oracle", "simpress": {}, "oracle": [
+        {"ordem_servico": "OS500", "descricao": "Enviar técnico ao local.", "envio_tecnico": True, "dias_aberta": 6},
+        {"ordem_servico": "OS500", "descricao": "Outra linha.", "envio_tecnico": False, "dias_aberta": 9},
+        {"ordem_servico": "OS501", "envio_tecnico": False, "dias_aberta": None}]},
+        {"serie": "SIN002", "relacao": "so_simpress", "oracle": [], "simpress": {"ordens_servico": ["88"]}}]
+
+    def test_list_carries_the_f6_badges_per_oracle_os_and_never_the_description(self) -> None:
+        dados = SimpressApi(ChamadosOsSimpress(relatorio_extra=self.EXTRA)).listar_chamados_abertos()
+        por_serie = {c["serie"]: c for c in dados["chamados"]}
+        # Same aggregation as the OS tab: any "Técnico", the largest number of days.
+        self.assertEqual(por_serie["SIN001"]["sinais_os"], {"OS500": {"envio_tecnico": True, "dias_aberta": 9},
+                                                              "OS501": {"envio_tecnico": False, "dias_aberta": None}})
+        self.assertNotIn("sinais_os", por_serie["SIN002"])
+        self.assertNotIn("Enviar técnico", json.dumps(dados, ensure_ascii=False))
+        self.assertFalse(TOOLS["listar_chamados_abertos"].changes_data)
+
+    def test_conversation_reads_the_badges_without_writing_anything(self) -> None:
+        simpress = ChamadosOsSimpress(relatorio_extra=self.EXTRA)
+        conversation, _ = make_conversation(FakeModel(calls(call("listar_chamados_abertos")), text("ok")), simpress)
+        self.assertEqual(conversation.enviar_mensagem("quais OS pedem técnico?").texto, "ok")
+        self.assertEqual(simpress.writes(), [])
+
+    def test_description_and_prompt_explain_the_badges_as_read_only(self) -> None:
+        for termo in ("sinais_os", "envio_tecnico", "dias_aberta"):
+            self.assertIn(termo, TOOLS["listar_chamados_abertos"].description)
+        for termo in ("sinais_os", "Aberta há N dias", "a descrição nunca vem junto"):
+            self.assertIn(termo, SYSTEM_PROMPT)
+
+
 MOTIVO_SAIU = "Saiu da lista de abertos do Dashboard sem finalização pelo site."
 MOTIVO_NAO_ACHADO = "Não encontrado no SoftExpert na última leitura."
 
