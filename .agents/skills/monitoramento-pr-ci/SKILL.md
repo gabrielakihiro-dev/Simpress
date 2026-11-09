@@ -29,9 +29,10 @@ Consulte o documento completo em [`Simpress/MONITORAMENTO_PR_CI.md`](file:///c:/
 - As sessões do Claude Code contam com auto-fix habilitado e farão as alterações necessárias autonomamente.
 - O Antigravity atua apenas como monitorador e orquestrador dos merges.
 
-### 3. Critérios de Merge e Sequenciamento (NUNCA ao mesmo tempo)
-- **Merge estritamente sequencial:** Se houver múltiplos PRs prontos e verdes, mescle **um PR por vez**. NUNCA efetue merges simultâneos ou em sequência sem aguardar o ciclo da `main`.
-- Apenas efetuar o merge (`gh pr merge <numero> --merge`) quando **100% dos checks de CI estiverem verdes**:
+### 3. Critérios de Merge, Ordem Numérica e Sequenciamento (NUNCA fure a ordem nem mescle ao mesmo tempo)
+- **Ordem Numérica Rigorosa de #PR (NUNCA fure a ordem):** Siga sempre e rigorosamente a ordem crescente de numeração das #PRs (ex.: #166 antes de #167, #168, etc.). **NUNCA faça o merge de uma #PR de número maior sem antes ter feito o merge de todas as #PRs anteriores de numeração menor**, mesmo que o PR de número maior termine os checks primeiro ou não tenha checks de código. A fila de merge deve aguardar rigorosamente a resolução e merge das PRs anteriores.
+- **Merge estritamente sequencial:** Se houver múltiplos PRs prontos e verdes, mescle **um PR por vez**, sempre respeitando a ordem numérica. NUNCA efetue merges simultâneos ou em sequência sem aguardar o ciclo da `main`.
+- Apenas efetuar o merge (`gh pr merge <numero> --merge`) quando for a vez da PR pela ordem numérica E **100% dos checks de CI estiverem verdes**:
   - `verify (3.12)` (aprovado)
   - `verify (3.14)` (aprovado)
   - `ui-browser` (aprovado)

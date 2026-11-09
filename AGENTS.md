@@ -269,16 +269,16 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Conduza trabalho grande com subagentes sucessivos, um papel por vez, na sequência análise → implementação → revisão independente quando fizer sentido. Aguarde cada etapa terminar antes de iniciar a próxima e não paralelize etapas que dependam umas das outras ou que toquem os mesmos arquivos.
 - Escolha o subagente pelo papel, não pelo nome do modelo:
 
-| Papel | Claude Code (plugin `model-super-power`) | Codex |
-|---|---|---|
-| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna |
-| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Terra |
-| Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra |
-| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 4.6) | GPT-6 Luna, esforço `max` |
-| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6 Astra |
+| Papel | Claude Code (plugin `model-super-power`) | Codex | Antigravity |
+|---|---|---|---|
+| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
+| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
+| Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
+| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 4.6) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
+| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
 
 - Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
-- O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
+- O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). No Antigravity, o maestro dispara subagentes via `invoke_subagent` com o `Model` correspondente e `Workspace: branch` quando isolamento for necessário. Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
 - Trabalho independente que termina em algo próprio (branch, PR) vai para uma sessão separada, em seu próprio worktree.
 - Plano enxuto: cada passo traz Objetivo, Arquivos, Critérios de aceite e Verificar (o comando ou a checagem que prova o critério, por exemplo `npm run verify`). Sem código pronto no plano, exceto assinaturas e contratos entre arquivos. Quando houver risco de sair do escopo, o passo traz também Proibidos: os arquivos que ele não pode tocar. Plano acima de ~150 linhas é dividido em blocos. O pedido do agente principal ao executor segue o mesmo formato.
 - Dúvida de design: a sessão que executa um plano, ao encontrar dúvida de design que muda o plano, pergunta à sessão que escreveu o plano (no Claude Code, por `SendMessage`), em vez de decidir sozinha ou alterar o plano.
@@ -291,6 +291,13 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - A conversa principal atua como maestro: define o escopo, toma as decisões, coordena subagentes, integra o trabalho e faz a verificação final.
 - Para trabalho grande, use subagentes sucessivos com os papéis e modelos Codex da tabela acima, na sequência análise → implementação → revisão independente quando fizer sentido. Aguarde uma etapa terminar antes de iniciar a próxima.
 - Faça diretamente tarefas pequenas (um arquivo, uma busca, um comando ou uma edição curta). Ao delegar, forneça apenas o contexto necessário e peça uma conclusão objetiva; não delegue decisões nem a comunicação final com o usuário.
+
+### Regras de Monitoramento, Merge e CI (Antigravity)
+
+- **Ordem Numérica Rigorosa de #PR (NUNCA fure a ordem):** Siga sempre e rigorosamente a ordem crescente de numeração das #PRs (ex.: #166 antes de #167, #168, etc.). **NUNCA faça o merge de uma #PR sem antes ter feito o das anteriores de numeração menor**, mesmo que a PR de numeração maior já esteja com checks verdes ou não possua checks. PRs de numeração maior devem aguardar na fila até que todas as PRs anteriores tenham sido aprovadas e mescladas.
+- **Merge estritamente sequencial (NUNCA ao mesmo tempo):** Nunca efetue o merge de mais de um PR simultaneamente ou em sequência imediata. Havendo múltiplos PRs aprovados, mescle rigorosamente **um por vez**, sempre respeitando a ordem numérica.
+- **Aguarde o ciclo completo na `main` antes do próximo merge:** Após mesclar um PR (`gh pr merge <numero> --merge`), capture o commit gerado (`mergeCommit`) e aguarde **100% da CI disparada na `main`** (`verify 3.12`, `verify 3.14` e `ui-browser`) concluir verde com sucesso antes de efetuar o merge de qualquer outro PR. Isso impede cancelamento de jobs, divergência de commits e erros na `origin/main`.
+- **`git pull` obrigatório a cada #PR:** Assim que a CI na `main` do commit de merge for concluída com sucesso, execute imediatamente `git checkout main && git pull` no repositório local. Sincronize a `main` após **cada #PR**, e não apenas ao final de tudo.
 
 ## Git
 
