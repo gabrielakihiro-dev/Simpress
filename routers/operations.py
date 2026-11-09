@@ -12,6 +12,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from core.errors import DomainBusyError, DomainError
 from core.logging_setup import redact_reference
 from domains import ticket_import
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
@@ -34,6 +35,7 @@ from domains.ticket_import import (
     ticket_annotation_row_hash,
 )
 from domains.inventory_comparison import normalize_reference_value
+from domains.os_marcas_finalizacao import NOME_ARQUIVO as NOME_ARQUIVO_MARCAS, FontesMarcas, alterar_marca, ler_marcas
 from domains.os_observacoes import ler_observacoes, salvar_observacao
 from domains.ticket_reconciliation import _serial_key, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
@@ -93,6 +95,23 @@ class OsObservacaoPayload(BaseModel):
         return normalized
 
 
+class OsMarcaPayload(BaseModel):
+    """Ação do usuário sobre a marca de OS finalizada; a ação e a existência da marca são validadas no domínio (422)."""
+    model_config = ConfigDict(extra="forbid")
+    serie: str = Field(..., min_length=1, max_length=128)
+    os: str = Field(..., min_length=1, max_length=160)
+    chamado: str = Field(..., min_length=1, max_length=40)
+    acao: str = Field(..., max_length=20)
+
+    @field_validator("serie", "os", "chamado")
+    @classmethod
+    def trim_identifier(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Informe a série, a OS e o chamado da marca.")
+        return normalized
+
+
 class TicketExportPayload(BaseModel):
     """Exportação igual à tela da aba OS: só as séries que passam no filtro atual da tela."""
     snapshot_id: str = Field("", max_length=200)
@@ -116,10 +135,13 @@ def create_operations_router(
     ticket_os_links_file: Optional[Callable[[], Path]] = None,
     dashboard_vinculos: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
     ticket_os_notes_file: Optional[Callable[[], Path]] = None,
+    ticket_os_marks_file: Optional[Callable[[], Path]] = None,
+    ticket_os_marks_sources: Optional[Callable[[], FontesMarcas]] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
 
-    ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``)."""
+    ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``).
+    ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``)."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -284,6 +306,29 @@ def create_operations_router(
     @router.put("/api/operacoes/chamados/observacoes")
     def save_ticket_os_note(payload: OsObservacaoPayload):
         return salvar_observacao(ticket_os_notes_path(), payload.serie, payload.os, payload.observacao)
+
+    def ticket_os_marks_path() -> Path:
+        return ticket_os_marks_file() if ticket_os_marks_file else ticket_report_path().parent / NOME_ARQUIVO_MARCAS
+
+    def ticket_os_marks_fontes() -> FontesMarcas:
+        if ticket_os_marks_sources is None:
+            return FontesMarcas()
+        try:
+            return ticket_os_marks_sources()
+        except DomainError:
+            raise
+        except Exception as error:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Fontes das marcas de OS finalizada indisponíveis (%s).", type(error).__name__)
+            raise DomainBusyError("Não foi possível ler os chamados finalizados agora. Tente novamente em instantes.") from None
+
+    @router.get("/api/operacoes/chamados/marcas-finalizacao")
+    def get_ticket_os_marks():
+        return {"marcas": ler_marcas(ticket_os_marks_path(), ticket_os_marks_fontes())}
+
+    @router.put("/api/operacoes/chamados/marcas-finalizacao")
+    def save_ticket_os_mark(payload: OsMarcaPayload):
+        marca = alterar_marca(ticket_os_marks_path(), ticket_os_marks_fontes(), payload.serie, payload.os, payload.chamado, payload.acao)
+        return {"marca": marca}
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]

@@ -16,7 +16,7 @@ EXECUTAR = "/api/automacao/executar"
 CAMPOS_NAO_FERRAMENTA = {"resultado_softexpert", "proximo_passo", "resumo_divergencias", "apelidos_sem_atualizacao",
                          "causas_provaveis", "transferencias_relacionadas", "aviso_transferencias", "aguardando_login",
                          "motivo_codigo", "sem_causa_conhecida", "conteudo_externo", "quem_executa", "ultima_finalizacao.resultados",
-                         "secoes_da_ultima_comparacao", "listar_lembretes"}
+                         "secoes_da_ultima_comparacao", "listar_lembretes", "chamados_outro_tecnico"}
 
 
 def escritas(rotas) -> list:

@@ -211,6 +211,18 @@ PANEL_ALERTS = {
                                ]},
     },
 }
+# Chamados finalizados por outro técnico (4º aviso do sino): os estados acima trazem total 0; só estes dois ligam o aviso.
+PANEL_ALERTS["outro_tecnico"] = {
+    **PANEL_ALERTS["ocultos"],
+    "chamados_outro_tecnico": {"total": 2, "itens": [
+        {"chamado": "UTIC-2026-1378", "serie": "DEMO-SN-001", "os": "7285070", "motivo": "saiu_do_dashboard"},
+        {"chamado": "UTIC-2026-1379", "serie": "DEMO-SN-002", "os": "7285071", "motivo": "nao_encontrado_softexpert"},
+    ]},
+}
+PANEL_ALERTS["outro_tecnico_indisponivel"] = {
+    **PANEL_ALERTS["ocultos"],
+    "chamados_outro_tecnico": {"indisponivel": True, "total": 0, "itens": []},
+}
 panel_alerts_state = "ocultos"
 
 
@@ -225,6 +237,7 @@ def dashboard_payload():
         "ultima_comparacao": {"id": COCKPIT_COMPARISON_ID, "horario": COCKPIT_COMPARISON_EVENT["horario"]}
         if cockpit_comparison_enabled else None,
         "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
+        "chamados_outro_tecnico": {"total": 0, "itens": []},
         **PANEL_ALERTS[panel_alerts_state],
     }
 
@@ -750,6 +763,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"vinculos": list(FIXTURE_TICKET_OS_LINKS.values())})
         elif path == "/api/operacoes/chamados/observacoes":
             self.send({"observacoes": list(FIXTURE_OS_OBSERVACOES.values())})
+        elif path == "/api/operacoes/chamados/marcas-finalizacao":
+            self.send({"marcas": []})  # sem marcas por padrão; os e2e da marca usam page.route
         elif path == "/__ticket_import_state":
             self.send({"imports": ticket_import_count})
         elif path == f"/api/historico-comparacoes/{DEMO_EVENT_ID}":

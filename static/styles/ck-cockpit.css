@@ -859,6 +859,23 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-os .ck-descricao__texto { white-space: pre-line; overflow-wrap: anywhere; }
 .ck-os__andamento-btn { display: block; text-align: left; }
 .ck-os tr[data-andamento] .ck-det-campos { grid-template-columns: minmax(80px, min(12rem, 34%)) minmax(0, 1fr); }
+/* Marca de OS finalizada (célula Chamado): selo, motivo, botões e histórico. Só apresentação; as cores vêm do .ck-badge. */
+.ck-os-marca { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: 6px; padding: 6px 8px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie-funda); animation: ck-os-marca-entrada var(--duracao) var(--curva); }
+.ck-os-marca[data-ativa="false"] { border-style: dashed; }
+.ck-os-marca[data-origem="outro_tecnico"][data-ativa="true"] { border-color: var(--cor-alerta-texto); }
+.ck-os-marca__topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ck-os-marca__chamado { font-size: var(--fs-ui); overflow-wrap: anywhere; }
+.ck-os-marca__dica { font-size: var(--fs-xs); color: var(--cor-alerta-texto); }
+.ck-os-marca__motivo { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+.ck-os-marca__acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.ck-os-marca__botao { min-width: 0; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva), opacity var(--duracao) var(--curva); }
+.ck-os-marca__botao[aria-busy="true"] { opacity: .6; cursor: progress; }
+.ck-os-marca__historico { font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+.ck-os-marca__historico > summary { cursor: pointer; width: fit-content; }
+.ck-os-marca__historico > summary:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-os-marca__lista { margin: 4px 0 0; padding-left: 16px; overflow-wrap: anywhere; }
+@keyframes ck-os-marca-entrada { from { opacity: 0; } to { opacity: 1; } }
+@media (pointer: coarse) { .ck-os-marca__botao { min-height: 44px; } }
 
 /* Janela Chamado × OS (#modal-chamado-os): cartão do chamado (visual do F5) à esquerda e a OS (tabela da F6, sempre em cards) à direita; empilha abaixo de 900px. */
 #modal-chamado-os > .ck-dialogo { width: min(1200px, calc(100vw - 32px)); max-width: none; max-height: min(90vh, 960px); overflow-y: hidden; }

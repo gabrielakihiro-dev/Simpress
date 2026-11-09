@@ -241,5 +241,31 @@ class PanelAlertsTests(unittest.TestCase):
         self.assertIsNone(data["sem_acesso_60_dias"])
 
 
+    def test_panel_lists_the_tickets_marked_as_finalized_by_another_technician(self):
+        marcas = [
+            {"chamado": "UTIC-2026-8", "serie": "SN-2", "os": "7285071", "motivo": "nao_encontrado_softexpert", "ativa": True},
+            {"chamado": "UTIC-2026-9", "serie": "SN-3", "os": "7285072", "motivo": "saiu_do_dashboard"},
+        ]
+        data = self.client(get_other_technician_marks=lambda: marcas).get("/api/painel").json()
+        self.assertEqual(data["chamados_outro_tecnico"], {"total": 2, "itens": [
+            {"chamado": "UTIC-2026-8", "serie": "SN-2", "os": "7285071", "motivo": "nao_encontrado_softexpert"},
+            {"chamado": "UTIC-2026-9", "serie": "SN-3", "os": "7285072", "motivo": "saiu_do_dashboard"},
+        ]})
+
+    def test_panel_without_the_marks_provider_has_an_empty_alert(self):
+        data = self.client().get("/api/painel").json()
+        self.assertEqual(data["chamados_outro_tecnico"], {"total": 0, "itens": []})
+
+    def test_failing_marks_provider_keeps_the_panel_and_flags_the_alert(self):
+        def quebrada():
+            raise RuntimeError("segredo do chamado")
+
+        with self.assertLogs("routers.dashboard", "WARNING") as logs:
+            response = self.client(get_other_technician_marks=quebrada).get("/api/painel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["chamados_outro_tecnico"], {"total": 0, "itens": [], "indisponivel": True})
+        self.assertNotIn("segredo", " ".join(logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()
