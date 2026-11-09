@@ -26,21 +26,30 @@ def formulas(n, com_q=True):
     )
 
 
-def linha_de_chamado(n, chamado, d="EM ABERTO", a="SIMPRESS"):
-    celulas = texto(f"A{n}", a, 60) + texto(f"C{n}", chamado) + texto(f"D{n}", d, 55) + texto(f"G{n}", "titulo", 112)
-    celulas += f'<c r="P{n}" s="92"><v>46000.5</v></c>' + formulas(n)
-    return f'<row r="{n}" spans="1:22">{celulas}</row>'
+def celula_de_c(n, chamado):
+    return f'<c r="C{n}" s="112"><v>{chamado}</v></c>' if isinstance(chamado, int) else texto(f"C{n}", chamado)
+
+
+def linha_de_chamado(n, chamado, d="EM ABERTO", a="SIMPRESS", oculta=False, extra=""):
+    celulas = texto(f"A{n}", a, 60) + celula_de_c(n, chamado) + texto(f"D{n}", d, 55) + texto(f"G{n}", f"titulo {chamado}", 112)
+    celulas += f'<c r="P{n}" s="92"><v>46000.5</v></c>' + formulas(n) + extra
+    atributo = ' hidden="1"' if oculta else ""
+    return f'<row r="{n}" spans="1:22"{atributo}>{celulas}</row>'
 
 
 def linha_vazia(n, com_q=True):
     return f'<row r="{n}" spans="1:22"><c r="G{n}" s="112" t="s"><v>1</v></c>{formulas(n, com_q)}</row>'
 
 
-def montar(chamados=("UTIC-2026-0001", "UTIC-2026-0002"), ultima=8, status=("EM ABERTO", "FINALIZADO")):
+FILTRO_D = '<autoFilter ref="A1:W8"><filterColumn colId="3"><filters blank="1"><filter val="EM ABERTO"/></filters></filterColumn></autoFilter>'
+
+
+def montar(chamados=("UTIC-2026-0001", "UTIC-2026-0002"), ultima=8, status=("EM ABERTO", "FINALIZADO"), filtro_d=False, oculta=(), extras=None):
+    """``chamados`` in sheet order (an int is a number cell); ``oculta``: rows with ``hidden``; ``extras``: row -> cells right of W."""
     cabecalho = "".join(texto(f"{letra}1", titulo, 1) for letra, titulo in CABECALHOS.items())
     linhas = [f'<row r="1">{cabecalho}</row>']
     for indice, chamado in enumerate(chamados):
-        linhas.append(linha_de_chamado(2 + indice, chamado, status[indice]))
+        linhas.append(linha_de_chamado(2 + indice, chamado, status[indice], oculta=2 + indice in oculta, extra=(extras or {}).get(2 + indice, "")))
     primeira_vazia = 2 + len(chamados)
     for n in range(primeira_vazia, ultima + 1):
         linhas.append(linha_vazia(n, com_q=n < primeira_vazia + 1))
@@ -52,6 +61,7 @@ def montar(chamados=("UTIC-2026-0001", "UTIC-2026-0002"), ultima=8, status=("EM 
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
             '<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
             '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+            '<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>'
             "</Types>"
         ),
         "_rels/.rels": (
@@ -60,13 +70,14 @@ def montar(chamados=("UTIC-2026-0001", "UTIC-2026-0002"), ultima=8, status=("EM 
         "xl/workbook.xml": f'<workbook {NS}><sheets><sheet name="CHAMADOS" sheetId="2" r:id="rId4"/></sheets><calcPr calcId="191028"/></workbook>',
         "xl/_rels/workbook.xml.rels": (
             f'<Relationships xmlns="{REL}"><Relationship Id="rId4" Type="{DOC}/worksheet" Target="worksheets/sheet4.xml"/>'
-            f'<Relationship Id="rId5" Type="{DOC}/sharedStrings" Target="sharedStrings.xml"/></Relationships>'
+            f'<Relationship Id="rId5" Type="{DOC}/sharedStrings" Target="sharedStrings.xml"/>'
+            f'<Relationship Id="rId6" Type="{DOC}/calcChain" Target="calcChain.xml"/></Relationships>'
         ),
         "xl/worksheets/sheet4.xml": f'<worksheet {NS}><sheetData>{"".join(linhas)}</sheetData><extLst><ext uri="{{x}}">keep-validation</ext></extLst></worksheet>',
         "xl/worksheets/_rels/sheet4.xml.rels": (
             f'<Relationships xmlns="{REL}"><Relationship Id="rId2" Type="{DOC}/table" Target="../tables/table2.xml"/></Relationships>'
         ),
-        "xl/tables/table2.xml": f'<table xmlns="x" name="Tabela3" displayName="Tabela3" ref="A1:W{ultima}"/>',
+        "xl/tables/table2.xml": f'<table xmlns="x" name="Tabela3" displayName="Tabela3" ref="A1:W{ultima}">{FILTRO_D if filtro_d else ""}</table>',
         "xl/sharedStrings.xml": '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t xml:space="preserve"> </t></si><si><t/></si></sst>',
         "xl/calcChain.xml": '<calcChain xmlns="x"><c r="Q2" i="2"/></calcChain>',
         "xl/pivotCache/pivotCacheDefinition2.xml": '<pivotCacheDefinition xmlns="x" recordCount="3"><cacheSource type="worksheet"><worksheetSource name="Tabela3"/></cacheSource></pivotCacheDefinition>',
@@ -181,9 +192,10 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         abertos = G.chamados_para_editar(original)
         self.assertEqual([(c.numero, c.chamado) for c in abertos], [("linha:2", "Sem chamado")])
         resultado = G.atualizar(original, edicoes={"linha:2": {"B": "REDE"}})
-        self.assertEqual([(g.numero, g.linha, g.celulas) for g in resultado.linhas], [("linha:2", 2, ("B",))])
-        celula_c = re.compile(r'<c r="C2".*?</c>')
-        self.assertEqual(celula_c.search(linha_xml(resultado.conteudo, 2)).group(0), celula_c.search(linha_xml(original, 2)).group(0))
+        # "27011" sorts before "Sem chamado": the edited row ends at row 3 (the key stays the pre-sort ``linha:2``)
+        self.assertEqual([(g.numero, g.linha, g.celulas) for g in resultado.linhas], [("linha:2", 3, ("B",))])
+        celula_c = re.compile(r'<c r="C\d".*?</c>')
+        self.assertEqual(celula_c.search(linha_xml(resultado.conteudo, 3)).group(0), celula_c.search(linha_xml(original, 2)).group(0).replace('"C2"', '"C3"'))
         with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
             G.atualizar(original, edicoes={"linha:3": {"B": "REDE"}})  # finalized row is not mirrored
 
@@ -257,6 +269,164 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
     def test_novo_e_edicao_juntos(self):
         resultado = G.atualizar(montar(), [NOVA], {"UTIC-2026-0001": {"A": "CLIENTE"}})
         self.assertEqual({(g.numero, g.tipo) for g in resultado.linhas}, {("UTIC-2026-0099", "novo"), ("UTIC-2026-0001", "alterado")})
+
+
+def _trocar_na_folha(conteudo, antigo, novo):
+    """Same workbook with ``antigo`` replaced by ``novo`` in the sheet text."""
+    partes = partes_de(conteudo)
+    partes["xl/worksheets/sheet4.xml"] = partes["xl/worksheets/sheet4.xml"].decode().replace(antigo, novo).encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome, dados in partes.items():
+            arquivo.writestr(nome, dados)
+    return saida.getvalue()
+
+
+def sequencia(conteudo):
+    """(C, G) of the ticket rows, in sheet order."""
+    valores = G.valores_dos_chamados(conteudo)
+    c, g = G.COLUNAS_DE_DADO.index("C"), G.COLUNAS_DE_DADO.index("G")
+    return [(valores[n][c], valores[n][g]) for n in sorted(valores)]
+
+
+def abertura_da_linha(conteudo, n):
+    return re.search(rf'<row r="{n}"[^>]*>', partes_de(conteudo)["xl/worksheets/sheet4.xml"].decode()).group(0)
+
+
+def celulas_na_linha_certa(conteudo):
+    """True when every ``<c r=...>`` carries the number of the ``<row>`` that holds it."""
+    folha = partes_de(conteudo)["xl/worksheets/sheet4.xml"].decode()
+    return all(
+        {int(n) for n in re.findall(r'<c r="[A-Z]+(\d+)"', corpo)} <= {int(numero)}
+        for numero, corpo in re.findall(r'<row r="(\d+)"[^>]*>(.*?)</row>', folha, re.DOTALL)
+    )
+
+
+class OrdemDaColunaCTest(unittest.TestCase):
+    def test_chave_ordena_como_o_excel(self):
+        esperado = [("21528", True), ("29474", True), ("29147 / UTIC-2026-0111", None), ("PRT-000017/26", None),
+                    ("Sem chamado", None), ("UTIC-2026-0093", None), ("UTIC-2026-1000", None), ("", None)]
+        embaralhado = [esperado[i] for i in (6, 3, 7, 0, 5, 2, 4, 1)]
+        self.assertEqual(sorted(embaralhado, key=lambda item: G.chave_coluna_c(*item)), esperado)
+        self.assertEqual(G.chave_coluna_c("29474"), (0, 29474.0))  # inferred from the digits
+        self.assertEqual(G.chave_coluna_c("29474", False), (1, "29474"))
+        self.assertEqual(G.chave_coluna_c("Utic-2026-0001"), G.chave_coluna_c("UTIC20260001"))  # case, hyphen
+        self.assertEqual(G.chave_coluna_c("O'Neil"), G.chave_coluna_c("oneil"))  # apostrophe
+        self.assertEqual((G.chave_coluna_c(None), G.chave_coluna_c("  ")), ((2, ""), (2, "")))
+
+    def test_base_fora_de_ordem_sai_ordenada_sem_novas_e_cada_linha_leva_suas_celulas(self):
+        base = montar(("UTIC-2026-0003", 29474, "Sem chamado", 21528, "UTIC-2026-0001"), status=("EM ABERTO",) * 5)
+        resultado = G.atualizar(base)
+        ordem = ["21528", "29474", "Sem chamado", "UTIC-2026-0001", "UTIC-2026-0003"]
+        self.assertEqual(sequencia(resultado.conteudo), [(c, f"titulo {c}") for c in ordem])
+        self.assertEqual(resultado.linhas, ())
+        self.assertTrue(celulas_na_linha_certa(resultado.conteudo))
+        self.assertIn('<c r="C2" s="112"><v>21528</v></c>', linha_xml(resultado.conteudo, 2))  # a number stays a number, with its style
+        self.assertIn(f"<f>{FORMULA_Q}</f>", linha_xml(resultado.conteudo, 2))
+        self.assertEqual(linha_xml(resultado.conteudo, 7), linha_xml(base, 7))  # free rows are not touched
+        self.assertEqual(partes_de(G.atualizar(resultado.conteudo).conteudo), partes_de(resultado.conteudo))  # already sorted: nothing moves
+
+    def test_novas_caem_na_posicao_ordenada_e_a_linha_gravada_e_a_final(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0003"), status=("EM ABERTO", "EM ABERTO"))
+        resultado = G.atualizar(base, [{**NOVA, "C": "UTIC-2026-0099"}, {**NOVA, "C": "UTIC-2026-0002"}])
+        self.assertEqual({(g.numero, g.linha, g.tipo) for g in resultado.linhas}, {("UTIC-2026-0002", 3, "novo"), ("UTIC-2026-0099", 5, "novo")})
+        self.assertEqual([c for c, _ in sequencia(resultado.conteudo)], ["UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0099"])
+        self.assertIn("UTIC-2026-0002", linha_xml(resultado.conteudo, 3))
+        self.assertTrue(celulas_na_linha_certa(resultado.conteudo))
+
+    def test_edicao_e_nova_juntas_com_ordenacao(self):
+        base = montar(("UTIC-2026-0003", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"))
+        resultado = G.atualizar(base, [{**NOVA, "C": "UTIC-2026-0002"}], {"UTIC-2026-0003": {"A": "CLIENTE"}})
+        self.assertEqual({(g.numero, g.linha, g.tipo) for g in resultado.linhas}, {("UTIC-2026-0002", 3, "novo"), ("UTIC-2026-0003", 4, "alterado")})
+        self.assertEqual([c for c, _ in sequencia(resultado.conteudo)], ["UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"])
+        self.assertIn("CLIENTE", linha_xml(resultado.conteudo, 4))
+        self.assertNotIn("CLIENTE", linha_xml(resultado.conteudo, 2))
+
+    def test_oculta_acompanha_o_filtro_da_d_depois_de_mover(self):
+        base = montar(("UTIC-2026-0003", "UTIC-2026-0001", "UTIC-2026-0002"), status=("FINALIZADO", "EM ABERTO", "FINALIZADO"), filtro_d=True, oculta=(2, 4))
+        resultado = G.atualizar(base)
+        self.assertEqual([c for c, _ in sequencia(resultado.conteudo)], ["UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"])
+        self.assertNotIn("hidden", abertura_da_linha(resultado.conteudo, 2))  # EM ABERTO moved into a hidden slot: shown
+        self.assertIn('hidden="1"', abertura_da_linha(resultado.conteudo, 3))  # FINALIZADO moved into a visible slot: hidden
+        self.assertIn('hidden="1"', abertura_da_linha(resultado.conteudo, 4))
+        sem_filtro = G.atualizar(montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"), oculta=(2,)))
+        self.assertIn('hidden="1"', abertura_da_linha(sem_filtro.conteudo, 2))  # no filter to follow: hidden stays by position
+        self.assertNotIn("hidden", abertura_da_linha(sem_filtro.conteudo, 3))
+
+    def test_celulas_a_direita_da_w_ficam_na_posicao(self):
+        extras = {2: '<c r="X2" s="5"><v>1</v></c>', 3: '<c r="X3" s="5"><v>2</v></c>'}
+        resultado = G.atualizar(montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"), extras=extras))
+        for n, titulo in ((2, "titulo UTIC-2026-0001"), (3, "titulo UTIC-2026-0002")):
+            linha = linha_xml(resultado.conteudo, n)
+            self.assertIn(extras[n], linha)
+            self.assertLess(linha.index(titulo), linha.index(f'<c r="X{n}"'))  # X still after the A..W cells
+
+    def test_calc_chain_sai_so_quando_alguma_linha_muda_de_lugar(self):
+        def calc_chain(conteudo):
+            partes = {nome: dados.decode() for nome, dados in partes_de(conteudo).items() if nome != "xl/calcChain.xml"}
+            return (
+                "xl/calcChain.xml" in partes_de(conteudo),
+                "calcChain" in partes["[Content_Types].xml"],
+                "calcChain" in partes["xl/_rels/workbook.xml.rels"],
+            )
+
+        movido = G.atualizar(montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"))).conteudo
+        self.assertEqual(calc_chain(movido), (False, False, False))
+        rels = partes_de(movido)["xl/_rels/workbook.xml.rels"].decode()
+        self.assertIn('Id="rId4"', rels)  # the other relationships stay
+        self.assertIn('Id="rId5"', rels)
+        self.assertIn("/xl/sharedStrings.xml", partes_de(movido)["[Content_Types].xml"].decode())
+        ordenada = montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))
+        for resultado in (G.atualizar(ordenada), G.atualizar(ordenada, edicoes={"UTIC-2026-0001": {"A": "CLIENTE"}})):
+            self.assertEqual(calc_chain(resultado.conteudo), (True, True, True))
+
+    def test_encerramentos_saem_ordenados_e_sem_escrita_devolvem_os_mesmos_bytes(self):
+        base = montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"), filtro_d=True)
+        resultado, estados = G.registrar_encerramentos(base, {"UTIC-2026-0002": "28/10/2026 14:30", "UTIC-2026-7777": "28/10/2026 14:30"})
+        self.assertEqual(estados, {"UTIC-2026-0002": "gravado", "UTIC-2026-7777": "nao_encontrado"})
+        self.assertEqual([(g.numero, g.linha) for g in resultado.linhas], [("UTIC-2026-0002", 3)])  # final row
+        self.assertEqual([c for c, _ in sequencia(resultado.conteudo)], ["UTIC-2026-0001", "UTIC-2026-0002"])
+        self.assertIn("FINALIZADO", linha_xml(resultado.conteudo, 3))
+        self.assertNotIn("hidden", abertura_da_linha(resultado.conteudo, 2))
+        self.assertIn('hidden="1"', abertura_da_linha(resultado.conteudo, 3))  # just finalized: the D filter hides it
+        sem_escrita, estados = G.registrar_encerramentos(base, {"UTIC-2026-7777": "28/10/2026 14:30"})
+        self.assertEqual((sem_escrita.conteudo, sem_escrita.linhas, estados), (base, (), {"UTIC-2026-7777": "nao_encontrado"}))
+
+    def test_formula_presa_a_linha_recusa_so_quando_precisa_mover(self):
+        fora_de_ordem = montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"))
+        for formula in ("B2+1", "$B$2+1", "SUM(V2:V3)", 'IF(A2="x",1,2)'):
+            with self.subTest(formula), self.assertRaisesRegex(G.GravacaoInvalida, "Nada foi entregue"):
+                G.atualizar(_trocar_na_folha(fora_de_ordem, "<f>1+1</f>", f"<f>{formula}</f>"))
+        with self.assertRaisesRegex(G.GravacaoInvalida, "Nada foi entregue"):
+            G.atualizar(_trocar_na_folha(fora_de_ordem, "<f>1+1</f>", '<f t="shared" ref="V2:V3" si="0">1+1</f>'))
+        em_ordem = montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))
+        G.atualizar(_trocar_na_folha(em_ordem, "<f>1+1</f>", "<f>B2+1</f>"))  # nothing moves: no problem
+        for inofensiva in ('"A2"&amp;"x"', "LOG10(2)+1", FORMULA_Q):  # string, function name, structured reference
+            G.atualizar(_trocar_na_folha(fora_de_ordem, "<f>1+1</f>", f"<f>{inofensiva}</f>"))
+
+    def test_linha_faltando_entre_os_chamados_recusa_em_vez_de_ordenar(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"), status=("EM ABERTO",) * 3)
+        furada = _trocar_na_folha(base, linha_de_chamado(3, "UTIC-2026-0002"), "")
+        with self.assertRaisesRegex(G.GravacaoInvalida, "Nada foi entregue"):
+            G.atualizar(furada)
+
+    def test_conferencia_recusa_arquivo_adulterado(self):
+        base = montar(("UTIC-2026-0002", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO"))
+        pacote = G._ler_pacote(base)
+        texto = pacote.texto(pacote.aba)
+        _, _, linhas = G._linhas_da_aba(texto)
+        anteriores = G.ler_coluna_c(base)
+        ordem = G._ordenar(pacote, linhas, {})
+        bom = G._montar(pacote, texto, linhas, ordem.substituicoes, True)
+        G._conferir(bom, anteriores, [], pacote, ordem)  # the real output passes
+        adulterados = {
+            "fora de ordem": G._montar(pacote, texto, linhas, {}, False),
+            "conteudo trocado": _trocar_na_folha(bom, "titulo UTIC-2026-0001", "titulo outro"),
+            "celula na linha errada": _trocar_na_folha(bom, '<c r="G3"', '<c r="G9"'),
+        }
+        for nome, conteudo in adulterados.items():
+            with self.subTest(nome), self.assertRaisesRegex(G.GravacaoInvalida, "nada foi entregue"):
+                G._conferir(conteudo, anteriores, [], pacote, ordem)
 
 
 if __name__ == "__main__":
