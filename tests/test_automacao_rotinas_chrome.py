@@ -1591,5 +1591,78 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
         self.assertEqual(ordem, ["goto", "carregar"])
 
 
+# Textos montados com os modelos do OneDrive (módulo 5729 de ondemand.resx.js, en-us e pt-br, build 2026-10-23).
+AVISOS_ENVIO_SUCESSO = [
+    "Uploaded Dashboard Operacional_SEBRAE.xlsx to DASHBOARD SEBRAE",
+    "Uploaded 1 item to DASHBOARD SEBRAE",
+    "Uploaded 2 items to DASHBOARD SEBRAE",
+    "Uploaded 1 item",
+    "Dashboard Operacional_SEBRAE.xlsx carregado para DASHBOARD SEBRAE",
+    "1 item carregado para DASHBOARD SEBRAE",
+    "2 itens carregados para DASHBOARD SEBRAE",
+    "1 item carregado",
+    "2 itens carregados",
+    "Upload complete",
+    "Upload concluído",
+]
+AVISOS_ENVIO_NAO_SUCESSO = [
+    "Dashboard Operacional_SEBRAE.xlsx wasn't uploaded to DASHBOARD SEBRAE",
+    "Dashboard Operacional_SEBRAE.xlsx wasn’t uploaded to DASHBOARD SEBRAE",
+    "1 item wasn't uploaded to DASHBOARD SEBRAE",
+    "2 items weren't uploaded to DASHBOARD SEBRAE",
+    "2 items weren’t uploaded",
+    "Dashboard Operacional_SEBRAE.xlsx não foi carregado para DASHBOARD SEBRAE",
+    "1 item não foi carregado para DASHBOARD SEBRAE",
+    "2 itens não foram carregados para DASHBOARD SEBRAE",
+    "2 itens não foram carregados",
+    "Uploading 1 item to DASHBOARD SEBRAE",
+    "Uploading Dashboard Operacional_SEBRAE.xlsx to DASHBOARD SEBRAE",
+    "Carregando 1 item para DASHBOARD SEBRAE",
+    "Carregando Dashboard Operacional_SEBRAE.xlsx para DASHBOARD SEBRAE",
+    "Save Conflict",
+    "Retry",
+    "A few seconds ago",
+    "590 KB",
+    "Dashboard Operacional_SEBRAE.xlsx",
+    "Uploaded",
+    "Uploaded by Juliana",
+]
+
+
+class AvisoEnvioConcluidoTests(unittest.TestCase):
+    """Só o aviso de sucesso confirma o envio; falha, andamento e texto da linha nunca confirmam."""
+
+    def test_aceita_avisos_de_sucesso(self):
+        for texto in AVISOS_ENVIO_SUCESSO:
+            with self.subTest(texto=texto):
+                self.assertRegex(texto, automacao._AVISO_ENVIO_CONCLUIDO)
+
+    def test_recusa_falha_andamento_e_texto_da_linha(self):
+        for texto in AVISOS_ENVIO_NAO_SUCESSO:
+            with self.subTest(texto=texto):
+                self.assertNotRegex(texto, automacao._AVISO_ENVIO_CONCLUIDO)
+
+    def test_mesmo_resultado_no_regexp_do_navegador(self):
+        # O Playwright repassa o padrão ao navegador como RegExp do JavaScript.
+        import shutil
+        import subprocess
+
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node ausente")
+        padrao = automacao._AVISO_ENVIO_CONCLUIDO
+        self.assertEqual(padrao.flags & ~re.UNICODE, re.IGNORECASE)
+        codigo = (
+            "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+            "const r=new RegExp(d.src,'i');"
+            "process.stdout.write(JSON.stringify([d.sim.map(t=>r.test(t)),d.nao.map(t=>r.test(t))]));"
+        )
+        dados = json.dumps({"src": padrao.pattern, "sim": AVISOS_ENVIO_SUCESSO, "nao": AVISOS_ENVIO_NAO_SUCESSO})
+        saida = subprocess.run([node, "-e", codigo], input=dados, capture_output=True, text=True, encoding="utf-8", check=True)
+        sim, nao = json.loads(saida.stdout)
+        self.assertEqual(sim, [True] * len(AVISOS_ENVIO_SUCESSO))
+        self.assertEqual(nao, [False] * len(AVISOS_ENVIO_NAO_SUCESSO))
+
+
 if __name__ == "__main__":
     unittest.main()

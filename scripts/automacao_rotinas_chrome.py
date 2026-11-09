@@ -1967,8 +1967,15 @@ _DASHBOARD_BAIXADO = padrao_do_nome(DASHBOARD_FINAL)
 _MENU_DUPLICATA = re.compile(r"^\s*(Duplicate|Duplicata)\s*$", re.IGNORECASE)
 _BOTAO_SUBSTITUIR = re.compile(r"^\s*(Replace|Substituir)\s*$", re.IGNORECASE)
 _BOTAO_MANTER_AMBOS = re.compile(r"^\s*(Keep both|Manter ambos)\s*$", re.IGNORECASE)
+# Avisos de sucesso do OneDrive (módulo 5729 de ondemand.resx.js, en-us e pt-br): "Uploaded {0} item(s)[ to {1}]",
+# "Uploaded {0} to {1}", "{0} carregado para {1}", "{0} item(ns) carregado(s)". As falhas ("wasn't uploaded to",
+# "não foi carregado para") e o andamento ("Uploading", "Carregando") ficam de fora. Sintaxe válida também em JS.
 _AVISO_ENVIO_CONCLUIDO = re.compile(
-    r"upload(?:s)? (?:complete|finished)|uploaded to|carregad[oa] para|(?:upload|envio|carregamento) conclu[ií]do", re.IGNORECASE
+    r"^\s*uploaded (?:\d+ items?\b|.+? to \S)"
+    r"|(?<!foi )(?<!foram )carregad[oa]s? para \S"
+    r"|^\s*\d+ ite(?:m|ns) carregad[oa]s?\b"
+    r"|upload(?:s)? (?:complete|finished)|(?:upload|envio|carregamento) conclu[ií]do",
+    re.IGNORECASE,
 )
 _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloquead|em uso|sendo usado|sendo editado", re.IGNORECASE)
 # Cópia local do que estava no SharePoint antes de sobrepor (a cópia "Duplicata" fica lá, intocada).
