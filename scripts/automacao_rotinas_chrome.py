@@ -1976,6 +1976,8 @@ _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloque
 _AVISO_CONFLITO = re.compile(r"save conflict|changes conflict with|conflito (?:de|ao) (?:salva|grava)", re.IGNORECASE)
 # Fim real da Duplicata ("Copied 1 item"): a linha da cópia aparece antes de o SharePoint terminar de copiar.
 _AVISO_COPIA_CONCLUIDA = re.compile(r"copied \d+ items?|copiad[oa]s? \d+ ite|\d+ ite(?:m|ns) copiad", re.IGNORECASE)
+# Cópia em andamento ("Copying 1 item"): no teste real de 08/11/2026 durou mais de 30 s e a linha só surgiu no fim.
+_AVISO_COPIANDO = re.compile(r"copying \d+ items?|copiando \d+ ite", re.IGNORECASE)
 # Cópia local do que estava no SharePoint antes de sobrepor (a cópia "Duplicata" fica lá, intocada).
 DASHBOARD_BACKUPS_DIR = ROOT / "data" / "state" / "sebrae_backups"
 DASHBOARD_BACKUPS_MAX = 20
@@ -2145,7 +2147,7 @@ _COPIA_DO_DASHBOARD = re.compile(re.escape(Path(DASHBOARD_FINAL).stem) + r"\s*(?
 
 
 ESPERA_COPIA_NA_LISTA_S = 30
-ESPERA_COPIA_CONCLUIDA_S = 120
+ESPERA_COPIA_CONCLUIDA_S = 300
 
 
 def _quantos_dashboards_na_lista(page: "Page") -> int:
@@ -2187,18 +2189,25 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     aguardar_estabilidade_pre_clique(duplicata.is_visible, "Duplicata (cópia de segurança no SharePoint)")
     duplicata.click()
     inicio = time.time()
-    linha_nova = copia_concluida = False
+    linha_nova = copia_concluida = copiando = False
     # Sobrepor o original enquanto o SharePoint ainda copia gera "Save Conflict" (08/11/2026): espera o aviso "Copied 1 item".
     while time.time() < inicio + ESPERA_COPIA_CONCLUIDA_S:
         verificar_cancelamento()
         copia_concluida = copia_concluida or visivel(page.get_by_text(_AVISO_COPIA_CONCLUIDA).first)
+        copiando = visivel(page.get_by_text(_AVISO_COPIANDO).first)
         linha_nova = linha_nova or _quantos_dashboards_na_lista(page) > antes
         if linha_nova and copia_concluida:
             log("Dashboard", "Cópia de segurança criada na pasta (não será alterada).")
             return
-        if not linha_nova and time.time() >= inicio + ESPERA_COPIA_NA_LISTA_S:
+        # Sem linha nova nem "Copying 1 item" em 30 s: o clique não iniciou cópia nenhuma.
+        if not linha_nova and not copiando and not copia_concluida and time.time() >= inicio + ESPERA_COPIA_NA_LISTA_S:
             raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
         page.wait_for_timeout(1000)
+    if copiando:
+        raise RotinaErro(
+            f"A cópia (Duplicata) ainda estava em andamento depois de {ESPERA_COPIA_CONCLUIDA_S} s; não substituí o Dashboard. "
+            "Espere a cópia terminar e tente de novo."
+        )
     if not linha_nova:
         raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
     # Aviso perdido entre duas leituras ou em outro idioma: segue; um conflito no envio é detectado e nada é repetido.
