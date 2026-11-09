@@ -406,7 +406,7 @@ def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
 
 
 def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
-    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), newest first, with the card saved before finalizing.
+    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), in column C order, with the card saved before finalizing.
 
     They leave the open lists as soon as SoftExpert confirms, whether or not the imported Dashboard shows them closed yet.
     """
@@ -422,7 +422,8 @@ def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
                 "pdf": str(pdf.get("nome") or "") if isinstance(pdf, dict) else "",
                 **({"pdf_remocao_pendente": True} if item.get("pdf_remocao") else {}),
             })
-    return sorted(achados, key=lambda a: str(a["em"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
+    recentes = sorted(achados, key=lambda a: str(a["em"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
+    return sebrae_novos.ordenar_pela_coluna_c(recentes, lambda a: a["numero"])  # shown in the Dashboard's order (column C), after the cap
 
 
 def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:

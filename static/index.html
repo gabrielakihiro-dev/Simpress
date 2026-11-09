@@ -794,7 +794,7 @@ Horário disponível para atendimento:</textarea>
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-automatico" data-automacao-rotina="dashboard" data-on-click="iniciarRotinaAutomacao" data-args='["dashboard"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Baixar, importar e buscar</span></button>
             </div>
           </form>
-          <label class="ck-campo"><span><input type="checkbox" id="dashboard-agendamento-ativo" data-on-change="alterarAgendamentoDashboard"> Repetir a cada 30 minutos</span></label>
+          <div class="ck-campo"><span class="ck-campo__linha"><label><input type="checkbox" id="dashboard-agendamento-ativo" data-on-change="alterarAgendamentoDashboard"> Repetir a cada</label> <select id="dashboard-agendamento-intervalo" class="ck-entrada ck-entrada--sm" data-on-change="alterarAgendamentoDashboard" aria-label="Intervalo do agendamento"><option value="30" selected>30 minutos</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option></select></span></div>
           <p id="dashboard-agendamento-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando agendamento…</p>
           <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
           <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>

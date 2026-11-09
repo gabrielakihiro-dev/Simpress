@@ -12,7 +12,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Aba **OS** (F6) com a tabela de ordens de serviço por série (Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição), que relaciona as exportações Simpress e Oracle, marca divergências e permite vincular cada OS a um chamado `UTIC-<ano>-<número>`.
 - Usuário logado informado à mão quando o Endpoint não o traz, com pendências de confirmação quando uma nova planilha muda ou remove esse usuário.
 - Alertas no painel inicial (base desatualizada, OS paradas, divergências novas) e relatório mensal, gerado também automaticamente no início de cada mês.
-- Automação pelo Chrome (`executar_automacao.bat` ou aba **Automação**) para as rotinas de OS (Oracle + UX), inventários (UX + Endpoint Central) e chamados novos do Sebrae (Dashboard + SoftExpert), com a opção **Repetir a cada 30 minutos** para **Baixar, importar e buscar**.
+- Automação pelo Chrome (`executar_automacao.bat` ou aba **Automação**) para as rotinas de OS (Oracle + UX), inventários (UX + Endpoint Central) e chamados novos do Sebrae (Dashboard + SoftExpert), com a opção **Repetir a cada** (30 minutos, 1h, 1h30 ou 2h) para **Baixar, importar e buscar**.
 - Aba **Chamados** (F5) com os chamados novos, antigos em aberto e finalizados do Sebrae: classificação manual, edição local da descrição, cópia atualizada do Dashboard, envio ao SharePoint e finalização individual no SoftExpert, sempre por ação do usuário.
 - Importação dos nomes do Microsoft Entra (CSV) para mostrar o nome da pessoa ao lado do login, sem alterar a base oficial de equipamentos.
 - Importação automática desse par de planilhas por lotes em pastas locais, com validação, histórico, proteção contra reimportação e recibos de processamento.
@@ -111,7 +111,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 | `sebrae_*.json` e `sebrae_dashboard_importado.xlsx` | `data/state` | Estado local dos chamados do Sebrae e do Dashboard importado, incluindo `sebrae_finalizacao.json` (descrições editadas e finalizações) e `sebrae_chamados_encerrados.json`; fora do Git. |
 | `sebrae_dashboard_saida/`, `sebrae_backups/` e `sebrae_dashboard_pendente/` | `data/state` | Cópias geradas por **Atualizar Dashboard**, os 20 backups mais recentes baixados antes de cada envio ao SharePoint e a cópia que ficou pendente quando o envio falhou; fora do Git. |
-| `dashboard_agendamento.json` | `data/state` | Estado do agendamento **Repetir a cada 30 minutos**; fora do Git. |
+| `dashboard_agendamento.json` | `data/state` | Estado do agendamento **Repetir a cada** (ativo, intervalo e próximo horário); fora do Git. |
 | Lotes de nomes do Microsoft Entra | `data/state/entrada_usuarios_entra` | Fila local do CSV de usuários do Entra (`pendentes`, `processadas`, `falhas`, com `_resultado.json`); fora do Git. |
 | `assistente_*.json` | `data/state` | Conversas (só texto mascarado), notas e lembretes, instruções permanentes e o interruptor da busca na web do assistente; fora do Git. |
 | `representantes_regionais.json` | `config` | Alterações por cidade dos representantes regionais do SEBRAE/PR; fora do Git. |
@@ -348,7 +348,7 @@ As rotinas abrem um Chrome de automação com perfil próprio na porta local `93
 
 Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Dashboard Operacional_SEBRAE (aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que ainda não estão nele. **Baixar, importar e buscar** (rotina `dashboard`) baixa o Dashboard da pasta `DASHBOARD SEBRAE` (`Mais ações › Baixar`), importa e busca de uma vez. O painel **Chamados** (F5) mostra um formulário por chamado novo, exporta as linhas para colar e, em **Atualizar Dashboard**, baixa `Dashboard Operacional_SEBRAE.xlsx`; **Enviar ao SharePoint** (rotina `enviar`) faz uma `Duplicata` do arquivo da pasta `DASHBOARD SEBRAE`, confere se ele não mudou desde a importação, guarda um backup local e só então o sobrepõe (`Replace`).
 
-**Repetir a cada 30 minutos** liga o agendamento de **Baixar, importar e buscar**. Ele vem pausado, só roda com o servidor ligado, reaproveita o login manual do Chrome e pula a tentativa quando há uma cópia gerada ainda não enviada; não envia nada ao SharePoint nem finaliza chamados.
+**Repetir a cada** liga o agendamento de **Baixar, importar e buscar** no intervalo escolhido ao lado: 30 minutos (padrão), 1h, 1h30 ou 2h. Trocar o intervalo com o agendamento ligado reinicia a contagem a partir daquele momento. Ele vem pausado, só roda com o servidor ligado, reaproveita o login manual do Chrome e pula a tentativa quando há uma cópia gerada ainda não enviada; não envia nada ao SharePoint nem finaliza chamados.
 
 O painel **Chamados** (F5) separa os chamados nas sub-abas **Novos**, **Antigos**, **Destaques** e **Finalizados** (abre em Novos; a lupa **Filtrar chamados** procura nas quatro). Cada cartão tem três partes: **Solicitação** (somente leitura), **Classificação operacional** (colunas A, B, D, J, R e S, preenchidas à mão) e **Finalização no SoftExpert**. Também no painel:
 
@@ -513,7 +513,7 @@ domains/monthly_report.py           Relatório mensal de operações
 domains/endpoint_lookup.py          Consulta ao vivo no Endpoint e controle remoto pelo Chrome de automação
 domains/endpoint_removals.py        Hostnames duplicados do Endpoint descartados e restaurados
 domains/entra_users.py              Nomes do Microsoft Entra (domains/entra_inbox.py: pasta de entrada)
-domains/dashboard_agendamento.py    Agendamento "Repetir a cada 30 minutos" do Dashboard do Sebrae
+domains/dashboard_agendamento.py    Agendamento "Repetir a cada" (30 min, 1h, 1h30, 2h) do Dashboard do Sebrae
 domains/local_setup.py              Importação validada dos modelos locais, com backup
 security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
 routers/transfers.py                Validação e geração da planilha de transferência
