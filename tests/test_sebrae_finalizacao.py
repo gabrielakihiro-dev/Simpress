@@ -357,15 +357,23 @@ class EstadoTest(unittest.TestCase):
         self.assertEqual(por_numero[a]["ficha"], {"titulo": "Chamado A", "valores": {"A": "x"}})
         self.assertIsNone(por_numero[b]["ficha"])
 
-    def test_finalizados_no_dashboard_devolvem_so_os_100_mais_recentes(self):
+    def _finalizar_em(self, numero, em):
+        fin._alterar(self.dir, numero, lambda item: item.update(finalizacao={"status": fin.STATUS_OK, "em": em, "encerrado_em": ""}))
+
+    def test_finalizados_no_dashboard_devolvem_so_os_100_mais_recentes_na_ordem_da_coluna_c(self):
         for n in range(105):
-            em = f"2026-10-30T10:{n // 60:02d}:{n % 60:02d}"
-            fin._alterar(self.dir, f"UTIC-2026-{n:04d}", lambda item, em=em: item.update(finalizacao={"status": fin.STATUS_OK, "em": em, "encerrado_em": ""}))
+            self._finalizar_em(f"UTIC-2026-{n:04d}", f"2026-10-30T10:{n // 60:02d}:{n % 60:02d}")
         achados = fin.finalizados_no_dashboard(self.dir)
         self.assertEqual(len(achados), fin.MAX_FINALIZADOS_NO_DASHBOARD)
-        self.assertEqual(achados[0]["numero"], "UTIC-2026-0104")
-        self.assertEqual(achados[-1]["numero"], "UTIC-2026-0005")  # 0000 a 0004 (os mais velhos) ficam de fora
+        # o corte vem da data de finalização (0000 a 0004, os mais velhos, ficam de fora); só depois entra a ordem da C
+        self.assertEqual([a["numero"] for a in achados], [f"UTIC-2026-{n:04d}" for n in range(5, 105)])
         self.assertEqual(len(fin.ler_estado(self.dir)), 105)  # o estado em disco guarda todos
+
+    def test_finalizados_no_dashboard_ordenam_pela_coluna_c_e_nao_pela_data(self):
+        # numero (C) -> quando finalizou: o mais recente tem a C do meio, o mais antigo a primeira
+        for numero, em in (("UTIC-2026-0010", "2026-10-30T12:00:00"), ("UTIC-2026-0002", "2026-10-30T09:00:00"), ("123", "2026-10-30T11:00:00"), ("UTIC-2026-0007", "2026-10-30T13:00:00")):
+            self._finalizar_em(numero, em)
+        self.assertEqual([a["numero"] for a in fin.finalizados_no_dashboard(self.dir)], ["123", "UTIC-2026-0002", "UTIC-2026-0007", "UTIC-2026-0010"])
 
     def test_ficha_precisa_ser_objeto_pequeno(self):
         with self.assertRaises(DomainValidationError):

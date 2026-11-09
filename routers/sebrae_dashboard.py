@@ -350,17 +350,45 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             mapa = _arquivar_encerrados(conteudo, anteriores)
             _registrar_marcas(arquivo_marcas, mapa, anteriores)
             preservada = _guardar_importado(conteudo, numeros, nome)
+            avisos = []
+            aviso_linhas = _acompanhar_chaves_de_linha(anteriores)  # after the new base is stored: a retry never moves keys twice
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
             corpo = {**_estado(), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
             if substituida and preservada is not None:
                 corpo["saida_pendente_substituida"] = True
-                corpo["aviso"] = (
+                avisos.append(
                     "O Dashboard no SharePoint foi editado depois da última importação (por exemplo, linha preenchida à mão ou linhas reordenadas). "
                     "A cópia gerada por Atualizar Dashboard não podia mais ser enviada sem apagar essas edições; "
                     f"ela foi guardada em data/state/sebrae_dashboard_saida/preservados/{preservada.name}. "
                     "O rascunho da tela continua: confira os cartões, clique em Atualizar Dashboard e depois em Enviar ao SharePoint."
                 )
+            if aviso_linhas:
+                avisos.append(aviso_linhas)
+            if avisos:
+                corpo["aviso"] = " ".join(avisos)
             return JSONResponse(corpo, headers={"Cache-Control": "no-store"})
+
+    def _acompanhar_chaves_de_linha(anteriores: Optional[Mapping[str, Any]]) -> str:
+        """Chamados antigos sem UTIC têm a chave ``linha:<n>``; se a planilha mudou de ordem, a observação e o destaque seguem o chamado
+        de mesmo conteúdo (C, G, I, H) e único nas duas importações. Devolve o aviso dos que não deu para seguir ('' se nenhum)."""
+        atuais = sebrae_novos.ler_existentes(services.caminhos().existentes)
+        if not anteriores or not atuais or not atuais["abertos"]:
+            return ""
+        mapa = sebrae_novos.mapear_chaves_de_linha(anteriores["abertos"], atuais["abertos"])
+        try:
+            sem_rastro = obs.acompanhar_chaves(_pasta_estado(), mapa) if any(nova != antiga for antiga, nova in mapa.items()) else []
+        except Exception as erro:  # noqa: BLE001 - the import is already stored (a retry would see an identity mapping): say what was left behind, log only the type
+            logger.warning("Observações dos chamados sem UTIC não foram movidas para as novas linhas (%s).", type(erro).__name__)
+            return (
+                "Não consegui mover as observações e os destaques dos chamados antigos sem UTIC para as novas linhas da planilha "
+                "(registro de observações ocupado ou ilegível). Confira as observações dos chamados sem UTIC."
+            )
+        if not sem_rastro:
+            return ""
+        return (
+            "As linhas da planilha mudaram de lugar e não consegui seguir com segurança (conteúdo repetido ou ausente) a observação ou o destaque de: "
+            f"{', '.join(sem_rastro[:10])}{' e outros' if len(sem_rastro) > 10 else ''}. Eles continuam nesses números de linha; confira em qual chamado estão."
+        )
 
     def _arquivar_encerrados(conteudo: bytes, anteriores: Optional[Mapping[str, Any]]) -> Mapping[str, Mapping[str, str]]:
         """Tickets that left the open list go to the permanent archive; unlike the history, a failure blocks the import

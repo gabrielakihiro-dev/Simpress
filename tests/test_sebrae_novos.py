@@ -25,6 +25,30 @@ class EstadoTest(unittest.TestCase):
         lido = novos.ler_existentes(self.caminhos.existentes)
         self.assertEqual((lido["arquivo"], lido["numeros"]), ("d.xlsx", frozenset({"UTIC-2026-1", "UTIC-2026-2"})))
 
+    def test_abertos_lidos_na_ordem_da_coluna_c_mesmo_gravados_fora_de_ordem(self):
+        def aberto(numero, chamado):
+            return {"numero": numero, "linha": 2, "titulo": numero, "chamado": chamado}
+        gravados = [
+            aberto("UTIC-2026-0010", "UTIC-2026-0010"), aberto("linha:3", ""), aberto("29474", "29474"),
+            aberto("utic-2026-0002", "utic-2026-0002"), aberto("linha:5", "  "), aberto("999", "999"),
+            aberto("UTIC-2026-0001", "UTIC-2026-0001"), aberto("UTIC20260001", "UTIC20260001"),  # same key: keeps the stored order
+        ]
+        novos.salvar_existentes(self.caminhos.existentes, [], "d.xlsx", abertos=gravados)
+        # numbers by value, then text (no case, hyphen or apostrophe), then empty
+        self.assertEqual([a["numero"] for a in novos.ler_existentes(self.caminhos.existentes)["abertos"]], [
+            "999", "29474", "UTIC-2026-0001", "UTIC20260001", "utic-2026-0002", "UTIC-2026-0010", "linha:3", "linha:5",
+        ])
+
+    def test_novos_lidos_na_ordem_da_coluna_c_e_o_filtro_de_lancados_continua(self):
+        def chamado(numero):
+            return ChamadoSoftExpert(numero=numero, titulo=numero)
+        novos.salvar_novos(self.caminhos.novos, [chamado(n) for n in ("UTIC-2026-0010", "", "UTIC-2026-0002", "123", "utic-2026-0001", "UTIC-2026-0003")], [], 0, {})
+        self.assertEqual([c.numero for c in novos.ler_novos(self.caminhos.novos)["chamados"]], [
+            "123", "utic-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0010", "",
+        ])
+        restantes = novos.ler_novos(self.caminhos.novos, ja_lancados={"UTIC-2026-0002"})["chamados"]
+        self.assertEqual([c.numero for c in restantes], ["123", "utic-2026-0001", "UTIC-2026-0003", "UTIC-2026-0010", ""])
+
     def test_versao_so_muda_quando_o_conteudo_do_dashboard_muda(self):
         def importar(arquivo, sha):
             novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-1"], arquivo, sha256=sha)
@@ -236,6 +260,37 @@ class ExportarTest(unittest.TestCase):
     def test_texto_manual_que_parece_formula_ganha_apostrofo(self):
         saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "=1+1"}}, REGISTROS, RELATORIO)
         self.assertEqual(saida["bloco_a_p"].split("\t")[1], "'=1+1")
+
+
+class MapearChavesDeLinhaTest(unittest.TestCase):
+    @staticmethod
+    def item(numero, titulo="", chamado="Sem chamado", usuario="", descricao=""):
+        return {"numero": numero, "chamado": chamado, "titulo": titulo, "usuario": usuario, "descricao": descricao}
+
+    def test_cada_chave_de_linha_vai_para_a_chave_do_mesmo_chamado(self):
+        antes = [self.item("UTIC-2026-0003", "A", "UTIC-2026-0003"), self.item("linha:3", "Impressora"), self.item("linha:4", "Monitor")]
+        depois = [self.item("linha:2", "Impressora"), self.item("linha:3", "Monitor"), self.item("UTIC-2026-0003", "A", "UTIC-2026-0003")]
+        self.assertEqual(novos.mapear_chaves_de_linha(antes, depois), {"linha:3": "linha:2", "linha:4": "linha:3"})  # a UTIC key is not positional
+
+    def test_conteudo_repetido_ou_ausente_nao_e_adivinhado(self):
+        self.assertEqual(
+            novos.mapear_chaves_de_linha(
+                [self.item("linha:2", "Igual"), self.item("linha:3", "Igual"), self.item("linha:4", "Novo repetido"), self.item("linha:5", "Saiu")],
+                [self.item("linha:2", "Igual"), self.item("linha:3", "Igual"), self.item("linha:6", "Novo repetido"), self.item("linha:7", "Novo repetido")],
+            ),
+            {"linha:2": None, "linha:3": None, "linha:4": None, "linha:5": None},
+        )
+
+    def test_qualquer_campo_do_conteudo_distingue_o_chamado(self):
+        base = self.item("linha:2", "T", usuario="Camila", descricao="trava")
+        for campo, valor in (("chamado", "21528"), ("titulo", "T2"), ("usuario", "Outra"), ("descricao", "outra")):
+            with self.subTest(campo=campo):
+                self.assertEqual(novos.mapear_chaves_de_linha([base], [{**base, "numero": "linha:3", campo: valor}]), {"linha:2": None})
+        self.assertEqual(novos.mapear_chaves_de_linha([base], [{**base, "numero": "linha:9"}]), {"linha:2": "linha:9"})
+
+    def test_chamado_que_ganhou_utic_leva_a_chave_nova(self):
+        antes, depois = [self.item("linha:2", "T")], [self.item("UTIC-2026-0007", "T")]
+        self.assertEqual(novos.mapear_chaves_de_linha(antes, depois), {"linha:2": "UTIC-2026-0007"})
 
 
 if __name__ == "__main__":

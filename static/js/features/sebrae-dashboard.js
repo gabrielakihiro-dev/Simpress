@@ -1277,16 +1277,6 @@
       nosDoChamado("article.sebrae-chamado", "numero", numero).forEach(artigo => artigo.classList.toggle("sebrae-chamado--destaque", ligado));
     }
 
-    /** Em `Chamados finalizados` os destaques ficam no topo; o resto segue a ordem original (`data-ordem`). Só mexe no DOM se a ordem mudou. */
-    function reordenarFinalizados() {
-      const lista = el("sebrae-finalizados-lista");
-      if (!lista) return;
-      const itens = [...lista.children];
-      const posto = li => (estado.destaques[li.dataset.numero] ? 0 : 1);
-      const ordenados = [...itens].sort((a, b) => posto(a) - posto(b) || Number(a.dataset.ordem) - Number(b.dataset.ordem));
-      if (ordenados.some((li, i) => li !== itens[i])) lista.replaceChildren(...ordenados);
-    }
-
     /** Título, solicitante e observação de um chamado das listas atuais; `null` quando ele não está em nenhuma (destaque só no servidor). */
     function resumoChamado(numero) {
       const fin = estado.finalizadosItens.find(item => item.numero === numero);
@@ -1563,7 +1553,6 @@
           estado.destaques[numero] = { em: reg.destaque_em || "", observacao: typeof reg.observacao === "string" ? reg.observacao : undefined };
           sincronizarDestaque(numero);
         });
-        reordenarFinalizados();
         definirTexto("sebrae-destaques-resumo", "");
         desenharDestaques();
       } catch (error) {
@@ -1593,7 +1582,6 @@
         definirFeedback(feedback, "", "");
         anunciarDestaque(ligado ? "Destaque marcado." : "Destaque removido.");
         sincronizarDestaque(numero);
-        reordenarFinalizados();
         // como em mostrarChamadoSebrae: o chamado em uso não pode sumir atrás de "Carregar mais"
         const posicao = [...(el("sebrae-finalizados-lista")?.children || [])].findIndex(li => li.dataset.numero === numero);
         if (posicao >= visao.paginas.finalizados) visao.paginas.finalizados = Math.ceil((posicao + 1) / POR_PAGINA) * POR_PAGINA;
@@ -2317,14 +2305,13 @@
       const antigos = estado.abertos.filter(emAberto);
       const linhasAntigos = antigos.map(blocoAntigo);
       el("sebrae-antigos-lista")?.replaceChildren(...linhasAntigos);
-      const linhasFinalizados = finalizados.map((item, indice) => {
+      // na ordem do servidor (coluna C, como o Excel); o destaque não muda a posição
+      const linhasFinalizados = finalizados.map(item => {
         const li = textoFinalizado(item);
         li.dataset.numero = item.numero;
-        li.dataset.ordem = String(indice);
         return li;
       });
       el("sebrae-finalizados-lista")?.replaceChildren(...linhasFinalizados);
-      reordenarFinalizados();
       definirTexto("sebrae-finalizados-resumo", `${finalizados.length} chamado(s) finalizado(s) no SoftExpert.`);
       definirTexto("sebrae-dashboard-status", importado
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
