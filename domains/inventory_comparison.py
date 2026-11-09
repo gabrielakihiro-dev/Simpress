@@ -5,6 +5,7 @@ import math
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
@@ -26,9 +27,15 @@ def is_missing_cell_value(value: Any) -> bool:
         return True
     return isinstance(value, float) and math.isnan(value)
 
+@lru_cache(maxsize=256)
+def _normalized_key(key: str) -> str:
+    # Keys are code literals; record values go through normalize_reference_value uncached.
+    return normalize_reference_value(key)
+
+
 def _record_value(record: Dict[str, Any], *keys: str) -> Any:
     for key in keys:
-        normalized = normalize_reference_value(key)
+        normalized = _normalized_key(key)
         value = record.get(normalized)
         if value is not None and str(value).strip():
             return value
@@ -115,6 +122,22 @@ def _removable_oldest_nodes(
     return oldest
 
 
+_MONTH_NAMES = {
+    "jan": "Jan", "fev": "Feb", "feb": "Feb", "mar": "Mar",
+    "abr": "Apr", "apr": "Apr", "mai": "May", "jun": "Jun",
+    "jul": "Jul", "ago": "Aug", "aug": "Aug", "set": "Sep",
+    "sep": "Sep", "out": "Oct", "oct": "Oct", "nov": "Nov",
+    "dez": "Dec", "dec": "Dec",
+}
+_MONTH_NAME_PATTERN = re.compile(r"\b(" + "|".join(_MONTH_NAMES) + r")\b", re.IGNORECASE)
+_VERIFICATION_DATE_FORMATS = (
+    "%b %d, %Y %I:%M %p", "%B %d, %Y %I:%M %p",
+    "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+    "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+    "%d/%m/%Y", "%Y-%m-%d",
+)
+
+
 def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optional[datetime]:
     parsed: Optional[datetime]
     if isinstance(value, datetime):
@@ -128,27 +151,12 @@ def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optiona
         try:
             parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
         except ValueError:
-            month_names = {
-                "jan": "Jan", "fev": "Feb", "feb": "Feb", "mar": "Mar",
-                "abr": "Apr", "apr": "Apr", "mai": "May", "jun": "Jun",
-                "jul": "Jul", "ago": "Aug", "aug": "Aug", "set": "Sep",
-                "sep": "Sep", "out": "Oct", "oct": "Oct", "nov": "Nov",
-                "dez": "Dec", "dec": "Dec",
-            }
             normalized_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-            normalized_text = re.sub(
-                r"\b(" + "|".join(month_names) + r")\b",
-                lambda match: month_names[match[0].lower()],
-                normalized_text,
-                flags=re.IGNORECASE,
+            normalized_text = _MONTH_NAME_PATTERN.sub(
+                lambda match: _MONTH_NAMES[match[0].lower()], normalized_text
             )
             parsed = None
-            for pattern in (
-                "%b %d, %Y %I:%M %p", "%B %d, %Y %I:%M %p",
-                "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
-                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
-                "%d/%m/%Y", "%Y-%m-%d",
-            ):
+            for pattern in _VERIFICATION_DATE_FORMATS:
                 try:
                     parsed = datetime.strptime(normalized_text, pattern)
                     break
@@ -644,34 +652,40 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
 
     retained_ambiguities = []
     duplicate_serial_type = normalize_reference_value("Número de série duplicado")
+    # First record per normalized serial, in list order; records appended below are indexed too.
+    records_by_serial: Dict[str, Dict[str, Any]] = {}
+
+    def index_record(record: Dict[str, Any]) -> None:
+        for serial in re.split(r"\s*/\s*", str(record.get("serie") or "")):
+            serial_key = normalize_reference_value(serial)
+            if serial_key:
+                records_by_serial.setdefault(serial_key, record)
+
+    for record in displayed_ambiguous_records:
+        index_record(record)
     for issue in displayed_ambiguities:
         if normalize_reference_value(issue.get("tipo")) != duplicate_serial_type:
             retained_ambiguities.append(issue)
             continue
 
         duplicate_serial = normalize_reference_value(issue.get("chave"))
-        matching_record = next((
-            record for record in displayed_ambiguous_records
-            if duplicate_serial
-            and duplicate_serial in {
-                normalize_reference_value(serial)
-                for serial in re.split(r"\s*/\s*", str(record.get("serie") or ""))
-            }
-        ), None)
+        matching_record = records_by_serial.get(duplicate_serial) if duplicate_serial else None
         if matching_record is None:
             ambiguous_sources = {
                 str(source.get("fonte")): "ambíguo"
                 for source in (issue.get("fontes") or [])
                 if isinstance(source, dict) and str(source.get("fonte") or "").strip()
             }
-            displayed_ambiguous_records.append({
+            appended_record = {
                 "computador": "Sem hostname/Apelido",
                 "serie": str(issue.get("chave") or ""),
                 "fontes": ambiguous_sources,
                 "motivo": issue.get("mensagem") or "A série aparece em mais de uma linha na mesma fonte.",
                 "anotacao_id": issue["anotacao_id"],
                 "anotacao": issue.get("anotacao", ""),
-            })
+            }
+            displayed_ambiguous_records.append(appended_record)
+            index_record(appended_record)
             continue
 
         associated_annotations = matching_record.get("anotacoes_associadas")
@@ -755,15 +769,35 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         event_view["arquivos_restaurados"] = display_history_files(restored_files)
     return event_view
 
+_location_rules_cache: Optional[Tuple[tuple, tuple, tuple]] = None
+
+
+def _location_rules() -> Tuple[tuple, tuple]:
+    """Prefixes (longest first, with normalized form) and cities (longest first), sorted once.
+
+    Rebuilt when SERIE_LOCAL_MAP changes: tests mutate it in place.
+    """
+    global _location_rules_cache
+    snapshot = tuple(SERIE_LOCAL_MAP.items())
+    if _location_rules_cache is None or _location_rules_cache[0] != snapshot:
+        prefixes = tuple(
+            (prefix, normalize_reference_value(prefix))
+            for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True)
+        )
+        cities = tuple(sorted(
+            ((normalize_reference_value(city), city) for city in set(SERIE_LOCAL_MAP.values())),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        ))
+        _location_rules_cache = (snapshot, prefixes, cities)
+    return _location_rules_cache[1], _location_rules_cache[2]
+
+
 def _location_for_hostname_target(target: str) -> Optional[str]:
-    for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True):
-        if target.startswith(normalize_reference_value(prefix)):
+    prefixes, city_names = _location_rules()
+    for prefix, normalized_prefix in prefixes:
+        if target.startswith(normalized_prefix):
             return SERIE_LOCAL_MAP[prefix]
-    city_names = sorted(
-        ((normalize_reference_value(city), city) for city in set(SERIE_LOCAL_MAP.values())),
-        key=lambda item: len(item[0]),
-        reverse=True,
-    )
     for normalized_city, city in city_names:
         if normalized_city and target.startswith(normalized_city):
             return city
@@ -786,7 +820,7 @@ def location_for_computer_name(computer_name: str) -> Optional[str]:
         return _location_for_hostname_target(suffix[3:])
     if suffix.startswith("BK"):
         return _location_for_hostname_target(suffix[2:])
-    for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True):
+    for prefix, _ in _location_rules()[0]:
         if suffix.startswith(prefix):
             return SERIE_LOCAL_MAP[prefix]
     return None
@@ -1444,7 +1478,7 @@ def _unmapped_series_code(computer_name: str) -> Optional[str]:
     elif suffix.startswith("BK"):
         suffix = suffix[2:]
     return next(
-        (prefix for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True) if suffix.startswith(prefix)),
+        (prefix for prefix, _ in _location_rules()[0] if suffix.startswith(prefix)),
         suffix.rstrip("0123456789-_") or suffix,
     )
 
