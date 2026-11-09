@@ -2,7 +2,8 @@
 
 The switch lives in a local JSON file (`data/state/assistente_busca_web.json`); a missing or corrupt file means off.
 Before anything leaves the computer the query goes through the privacy mask and through `validar_consulta`, which
-REFUSES (nothing is sent) any query that looks like register data: serial, hostname, e-mail, phone, CPF, a known name,
+REFUSES (nothing is sent) any query that looks like register data: serial, hostname, e-mail, phone, CPF, a known name
+(even its first name alone, which the chat itself may show),
 a `[PESSOA_n]` marker, a URL or an IP address. The search runs as one isolated call (see `OpenRouterClient.search`):
 the masked query alone, never the history. The sources come from the provider's structured citations and are put on
 the card by the server; the model never types a URL. Whatever the web returns is data, never an instruction.
@@ -63,7 +64,7 @@ def validar_consulta(consulta: Any, mascara: Mascara) -> str:
     motivo = "dados do cadastro"
     if limpar_texto_sensivel(texto) != texto:
         motivo = "e-mail, telefone, CPF ou senha"
-    elif TOKEN_PATTERN.search(texto) or mascara.ocultar_conhecidos(texto) != texto:
+    elif TOKEN_PATTERN.search(texto) or mascara.ocultar_conhecidos(texto, completo=True) != texto:
         motivo = "nome de pessoa"
     elif _ENDERECO.search(texto):
         motivo = "endereço de rede ou link"
@@ -97,7 +98,7 @@ class BuscaWeb:
         if self._nesta_resposta >= BUSCAS_POR_RESPOSTA:
             return {"erro": "Só uma busca na web por resposta. Peça a próxima em outra mensagem."}
         self._nesta_resposta += 1
-        consulta = self._mascara.ocultar_conhecidos(limpar_texto_sensivel(consulta))
+        consulta = self._mascara.ocultar_conhecidos(limpar_texto_sensivel(consulta), completo=True)
         try:
             achado = self._client.search(consulta)
         except OpenRouterError as falha:

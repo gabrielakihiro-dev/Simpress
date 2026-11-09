@@ -5,13 +5,16 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from domains.assistant_anexos import analisar
 from domains.assistant_api import SimpressApi
 from domains.assistant_chat import AssistantConversation
 from domains.assistant_conversas import LIMITE_CONVERSAS, LIMITE_MENSAGENS, LIMITE_TEXTO, LIMITE_TITULO, ConversasStore
 from domains.assistant_notas import NotasStore
 from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
-from tests.test_assistant import CPF, FakeModel, FakeSimpress, call, calls, temp_json, text
+from tests.test_assistant import (
+    CPF, PDF_LAUDO, FakeModel, FakeSimpress, MarkerModel, PdfSimpress, SebraeSolicitantesSimpress, call, calls, temp_json, text,
+)
 
 
 def make_chat(model: FakeModel, store: ConversasStore) -> AssistantConversation:
@@ -72,6 +75,68 @@ class ConversaGravaHistoricoTests(unittest.TestCase):
         self.assertNotIn(CPF, tudo)
         self.assertNotIn("fulano@exemplo.com", tudo)
         self.assertEqual(gravado[1]["texto"], "Ok, anotado.")
+
+    def test_history_file_keeps_the_whole_name_masked_even_though_the_model_saw_the_first_name(self) -> None:
+        # 08/11/2026 (pedido do usuário): the first name is visible to the model and the screen, never on disk.
+        arquivo = temp_json()
+        store = ConversasStore(arquivo)
+        model = MarkerModel(calls(call("consultar_equipamento", serial="ABC123")), text("placeholder"))
+        chat = AssistantConversation(model, SimpressApi(PdfSimpress()), "modelo-teste", lambda: "", conversas=store)  # type: ignore[arg-type]
+        resposta = chat.enviar_mensagem("quem usa a ABC123? a Marina Beatriz Teixeira da Costa ligou")
+        self.assertEqual(resposta.texto, "O usuário é Marina Beatriz Teixeira da Costa.")  # the screen shows the real name
+        gravado = store.obter(store.listar()[0]["id"])["mensagens"]  # type: ignore[index]
+        tudo = json.dumps(gravado, ensure_ascii=False)
+        bruto = arquivo.read_text(encoding="utf-8")  # the whole file: title, preview and cards too
+        for escondido in ("Marina", "Beatriz", "Teixeira", "Costa"):
+            self.assertNotIn(escondido, tudo)
+            self.assertNotIn(escondido, bruto)
+        self.assertEqual([m["papel"] for m in gravado], ["usuario", "assistente"])
+
+    def test_history_file_keeps_neither_first_name_nor_surname_of_a_sebrae_requester(self) -> None:
+        # 08/11/2026: the requester comes from the Sebrae route (never from the inventory), in the user text and in the ticket description.
+        arquivo = temp_json()
+        store = ConversasStore(arquivo)
+        nome = SebraeSolicitantesSimpress.NOME
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[{"numero": "UTIC-2026-0001", "titulo": "Remoção de usuário", "descricao": f"Remover {nome} da UGP", "valores": {}}],
+            novos=[{"numero": "UTIC-2026-0200", "linha": {"I": nome}}],  # only the base knows this name before the tool answers
+        )
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae", busca="Helga")), text("Achei o chamado UTIC-2026-0001 da Helga."))
+        chat = AssistantConversation(model, SimpressApi(simpress), "modelo-teste", lambda: "", conversas=store)  # type: ignore[arg-type]
+        resposta = chat.enviar_mensagem(f"anexa esse PDF no chamado da {nome}")
+        self.assertIn("UTIC-2026-0001", resposta.texto)
+        bruto = arquivo.read_text(encoding="utf-8")  # the whole file: title, preview and cards too
+        for escondido in ("Helga", *SebraeSolicitantesSimpress.SOBRENOMES):
+            self.assertNotIn(escondido, bruto)
+        gravado = store.obter(store.listar()[0]["id"])["mensagens"]  # type: ignore[index]
+        self.assertEqual([m["papel"] for m in gravado], ["usuario", "assistente"])
+
+    def test_historico_nao_guarda_nome_do_pdf_nem_pdf_atual_do_chamado_em_nenhum_desfecho(self) -> None:
+        # 08/11/2026: o cartão na tela mostra os nomes; o histórico e o disco ficam sem eles, seja qual for o desfecho.
+        for desfecho in ("confirmado", "cancelado", "envio recusado", "anexo removido"):
+            with self.subTest(desfecho):
+                arquivo = temp_json()
+                store = ConversasStore(arquivo)
+                anexo = analisar(PDF_LAUDO, "Marina_Costa_laudo.pdf")
+                args = {"numero": "UTIC-2026-1254", "anexo_id": anexo.id}  # esse chamado já tem o PDF "antigo.pdf"
+                model = FakeModel(calls(call("anexar_pdf_chamado_sebrae", **args)), text("ok"))
+                simpress = PdfSimpress(status_envio=422 if desfecho == "envio recusado" else 200)
+                chat = AssistantConversation(model, SimpressApi(simpress), "modelo-teste", lambda: "", conversas=store)  # type: ignore[arg-type]
+                chat.anexos.adicionar(anexo)
+                cartao = chat.enviar_mensagem("anexa esse PDF no chamado").pendente["descricao"]  # type: ignore[index]
+                self.assertIn("Marina_Costa_laudo.pdf", cartao)
+                self.assertIn("antigo.pdf", cartao)
+                if desfecho == "anexo removido":
+                    chat.anexos.remover(anexo.id)
+                resposta = chat.resolver_confirmacao(desfecho != "cancelado")
+                if desfecho == "confirmado":
+                    self.assertIn("UTIC-2026-1254", resposta.texto)
+                historico = json.dumps(chat._mensagens[1:], ensure_ascii=False)  # [0] é o prompt do sistema, que lista os anexos mascarados
+                bruto = arquivo.read_text(encoding="utf-8")
+                for escondido in ("Marina_Costa_laudo.pdf", "antigo.pdf"):
+                    self.assertNotIn(escondido, resposta.texto)
+                    self.assertNotIn(escondido, historico)
+                    self.assertNotIn(escondido, bruto)
 
     def test_failed_call_saves_nothing(self) -> None:
         store = ConversasStore(temp_json())

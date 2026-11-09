@@ -4,10 +4,21 @@ Sensitive values (logged user, nickname, names) become markers such as `[PESSOA_
 anything is sent to OpenRouter. The marker map lives only in process memory and is never
 written to disk. Markers go back to the real value in tool arguments and in the text shown
 on screen. CPF numbers are always replaced by a fixed mask, never by a marker.
+
+First name visible (user request of 08/11/2026): a person's name made of 2+ plain words, found under a
+person-name key or in the Simpress base, is shown as its first name plus a marker for the whole name
+("Marina Beatriz Teixeira da Costa" -> "Marina [PESSOA_3]"), so the user can say "the ticket of Marina" and the
+model can follow. Logins, DOMAIN-slash-user pairs, e-mails, nicknames, computer names and one-word names keep the full
+mask (the one-word rule is what protects `usuario`, which often holds a login). The first name alone never becomes
+a marker, so a lone "Marina" in free text stays as it is; the other parts of 4+ letters do. When a first name equals
+a one-word value already masked (a login, another person's surname) the whole name stays masked, whatever the order
+the values were seen in; text already sent keeps what it showed. The web search uses the full mask
+(`completo=True`): a first name must not reach an outside search engine.
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+import unicodedata
+from typing import Any, Dict, List, Set, Tuple
 
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 # Phone numbers need a DDD, +55 or a hyphen so that ticket numbers (e.g. 12345678) stay intact.
@@ -59,9 +70,28 @@ CHAVES_NOME_PESSOA = frozenset({
     "usuario", "usuario_anterior", "usuario_novo", "nome_pessoa_anterior", "nome_pessoa_novo",
 })
 PARTICULAS_NOME = frozenset({"de", "da", "do", "das", "dos", "e"})
+# A name shown with its first name: only letters separated by spaces (no dot, hyphen, backslash or @).
+_NOME_COMPOSTO = re.compile(r"[^\W\d_]+(?:\s+[^\W\d_]+)+")
+# "<word> <marker>": when the word is the first name of that marker, `restaurar` restores both as one name.
+# Entre os dois: espaços, ênfase de fechamento ("**Marina** [PESSOA_1]", grupo `fecho`), quebra de linha ou parêntese
+# de abertura ("Marina ([PESSOA_1])", grupo `abre`, que exige o parêntese de fechamento logo após o marcador).
+_NOME_E_MARCADOR = re.compile(
+    r"(?:(?<![^\W_])(?P<antes>[^\W\d_]+)"
+    r"(?P<espaco>[ \t]+|(?P<fecho>\*{1,3}|_{1,3})[ \t]*|[ \t]*\r?\n[ \t]*|[ \t]*(?P<abre>\()[ \t]*)"
+    r")?(?P<marcador>\[PESSOA_\d+\])(?(abre)[ \t]*\))"
+)
+# Solicitantes de sistema (não são pessoas): ficam fora da base de nomes e da máscara. Comparação sem caixa e sem acento.
+SOLICITANTES_SISTEMA = frozenset({"api sebrae"})
+# Stands for a first name left alone in the full mask; it is not a marker (nothing restores it).
+PRIMEIRO_NOME_OMITIDO = "[PESSOA]"
 SEM_USUARIO = "Sem usuário registrado"
 MIN_NOME_BASE = 3
 MIN_PARTE_NOME = 4  # a loose "Ana" or "Li" would replace pieces of other words
+
+
+def e_solicitante_sistema(valor: Any) -> bool:
+    sem_acento = unicodedata.normalize("NFKD", str(valor or "")).encode("ascii", "ignore").decode()
+    return " ".join(sem_acento.casefold().split()) in SOLICITANTES_SISTEMA
 
 
 def _cpf_valido(digitos: str) -> bool:
@@ -155,7 +185,12 @@ class Mascara:
         self._por_valor: Dict[str, str] = {}
         self._por_marcador: Dict[str, str] = {}
         self._base: List[str] = []
-        self._busca: Optional[Tuple["re.Pattern[str]", Dict[str, str]]] = None
+        # Marker -> first name, as written, of a plain multi-word name that may be shown ("Marina").
+        self._primeiro: Dict[str, str] = {}
+        # Casefolded one-word values already masked (logins, name parts): a first name equal to one stays hidden.
+        self._unicos: Set[str] = set()
+        # Search expression and replacements, one pair per mode (`completo` False/True); empty after any new value.
+        self._busca: Dict[bool, Tuple["re.Pattern[str]", Dict[str, str]]] = {}
 
     def _marcador(self, valor: str) -> str:
         chave = valor.strip()
@@ -163,15 +198,55 @@ class Mascara:
             marcador = f"[PESSOA_{len(self._por_valor) + 1}]"
             self._por_valor[chave] = marcador
             self._por_marcador[marcador] = chave
-            self._busca = None
+            if not re.search(r"\s", chave):
+                self._unicos.add(chave.casefold())
+            self._busca = {}
         return self._por_valor[chave]
+
+    def _primeiro_nome(self, marcador: str, nome: str) -> str:
+        """Remember the first name of a plain multi-word name. Returns it, or "" when the whole name stays masked."""
+        if _NOME_COMPOSTO.fullmatch(nome):
+            primeiro = nome.split(maxsplit=1)[0]
+            if primeiro.casefold() not in PARTICULAS_NOME:
+                if marcador not in self._primeiro:
+                    self._primeiro[marcador] = primeiro
+                    self._busca = {}
+                return primeiro
+        return ""
+
+    def _exibir(self, marcador: str, primeiro: str = "") -> str:
+        """The marker alone, or "first name + marker" when that first name may be shown."""
+        visivel = self._primeiro.get(marcador)
+        if visivel is None or visivel.casefold() in self._unicos:
+            return marcador
+        return f"{primeiro or visivel} {marcador}"
+
+    def _primeiro_do_marcador(self, achado: "re.Match[str]") -> bool:
+        """True when the word in front of the marker is the first name of that very marker."""
+        antes = achado["antes"]
+        return bool(antes) and antes.casefold() == self._primeiro.get(achado["marcador"], "").casefold()
+
+    def _sem_primeiro_nome(self, achado: "re.Match[str]") -> str:
+        """Drop the visible first name in front of its own marker ("Ana [PESSOA_1]" -> "[PESSOA_1]"), any length."""
+        if self._primeiro_do_marcador(achado):
+            return achado["marcador"] + (achado["fecho"] or "")
+        return achado.group(0)
+
+    def _par_normal(self, achado: "re.Match[str]") -> str:
+        """Como `_sem_primeiro_nome`, mas só quando esse primeiro nome precisa ficar oculto (um valor de uma palavra igual a ele é conhecido)."""
+        if self._primeiro_do_marcador(achado) and self._primeiro[achado["marcador"]].casefold() in self._unicos:
+            return achado["marcador"] + (achado["fecho"] or "")
+        return achado.group(0)
 
     def registrar_base(self, nomes: List[str]) -> None:
         """Names from the Simpress base: become markers at once and survive `limpar()`."""
         # Names of 1-2 letters ("TI") would replace common pieces of text.
-        self._base = [n.strip() for n in nomes if len(n.strip()) >= MIN_NOME_BASE and n.strip() != SEM_USUARIO]
+        self._base = [
+            n.strip() for n in nomes
+            if len(n.strip()) >= MIN_NOME_BASE and n.strip() != SEM_USUARIO and not e_solicitante_sistema(n)
+        ]
         for nome in self._base:
-            self._marcador(nome)
+            self._primeiro_nome(self._marcador(nome), nome)
 
     def mascarar(self, obj: Any, chave: str = "") -> Any:
         """Return a copy of `obj` with sensitive values replaced by markers.
@@ -189,10 +264,14 @@ class Mascara:
         elif isinstance(obj, (list, tuple)):
             for v in obj:
                 self._registrar(v, chave)
-        elif isinstance(obj, str) and chave in CHAVES_SENSIVEIS and obj.strip() and obj != SEM_USUARIO:
-            self._marcador(obj)
+        elif isinstance(obj, str) and chave in CHAVES_SENSIVEIS and obj.strip() and obj != SEM_USUARIO and not e_solicitante_sistema(obj):
+            marcador = self._marcador(obj)
             if chave in CHAVES_NOME_PESSOA:
-                for parte in re.findall(r"[^\W\d_]+", obj):
+                partes = re.findall(r"[^\W\d_]+", obj)
+                # A first name that may be shown never becomes a marker by itself.
+                if self._primeiro_nome(marcador, obj.strip()):
+                    partes = partes[1:]
+                for parte in partes:
                     if len(parte) >= MIN_PARTE_NOME and parte.casefold() not in PARTICULAS_NOME:
                         self._marcador(parte)
 
@@ -202,37 +281,70 @@ class Mascara:
         if isinstance(obj, (list, tuple)):
             return [self._trocar(v, chave) for v in obj]
         if isinstance(obj, str):
-            if chave in CHAVES_SENSIVEIS and obj.strip() and obj != SEM_USUARIO:
-                return self._marcador(obj)
+            if chave in CHAVES_SENSIVEIS and obj.strip() and obj != SEM_USUARIO and not e_solicitante_sistema(obj):
+                marcador = self._marcador(obj)
+                return self._exibir(marcador) if chave in CHAVES_NOME_PESSOA else marcador
             limpo = limpar_texto_sensivel(obj)
             return self.ocultar_conhecidos(limpo) if chave in CHAVES_TEXTO_LIVRE else limpo
         return obj
 
-    def ocultar_conhecidos(self, texto: str) -> str:
+    def ocultar_conhecidos(self, texto: str, completo: bool = False) -> str:
         """Replace already known values found in the text (whole words only).
+
+        A known name that may be shown comes back as "first name + marker", with the first name as written in the
+        text. With `completo=True` nothing is shown: the whole name becomes its marker, a first name in front of its own
+        marker is dropped (any length) and a lone first name of any length becomes PRIMEIRO_NOME_OMITIDO (for what
+        leaves the computer, like the web search and the disk history). In the normal mode a first name in front of
+        its own marker is also dropped when a one-word value equal to it is known, so it is never masked twice.
 
         shortcut: only names already seen in this conversation are recognised; a name never
         queried, typed or quoted stays as it is. Upgrade by loading the full people list.
         """
         if not self._por_valor:
             return texto
-        if self._busca is None:
+        texto = _NOME_E_MARCADOR.sub(self._sem_primeiro_nome if completo else self._par_normal, texto)
+        busca = self._busca.get(completo)
+        if busca is None:
             # One expression (the base may hold thousands of names); longest first: "Maria Souza" before "Maria".
-            valores = sorted(self._por_valor, key=len, reverse=True)
-            padrao = r"(?<!\w)(?:" + "|".join(re.escape(v) for v in valores) + r")(?!\w)"
-            self._busca = (re.compile(padrao, re.IGNORECASE), {v.casefold(): m for v, m in self._por_valor.items()})
-        busca, por_valor = self._busca
-        return busca.sub(lambda m: por_valor.get(m.group(0).casefold(), m.group(0)), texto)
+            valores = set(self._por_valor)
+            if completo:
+                valores.update(self._primeiro.values())
+            padrao = r"(?<!\w)(?:" + "|".join(re.escape(v) for v in sorted(valores, key=len, reverse=True)) + r")(?!\w)"
+            busca = self._busca[completo] = (
+                re.compile(padrao, re.IGNORECASE), {v.casefold(): m for v, m in self._por_valor.items()},
+            )
+        padrao_busca, por_valor = busca
+
+        def trocar(achado: "re.Match[str]") -> str:
+            trecho = achado.group(0)
+            marcador = por_valor.get(trecho.casefold())
+            if marcador is None:
+                return PRIMEIRO_NOME_OMITIDO if completo else trecho
+            return marcador if completo else self._exibir(marcador, trecho.split(maxsplit=1)[0])
+
+        return padrao_busca.sub(trocar, texto)
 
     def restaurar(self, obj: Any) -> Any:
-        """Swap known markers for the real value, in text, dict or list."""
+        """Swap known markers for the real value, in text, dict or list.
+
+        "Marina [PESSOA_3]" and a lone "[PESSOA_3]" both give the whole name once, never "Marina Marina ...".
+        """
         if isinstance(obj, dict):
             return {k: self.restaurar(v) for k, v in obj.items()}
         if isinstance(obj, (list, tuple)):
             return [self.restaurar(v) for v in obj]
         if isinstance(obj, str):
-            return TOKEN_PATTERN.sub(lambda m: self._por_marcador.get(m.group(0), m.group(0)), obj)
+            return _NOME_E_MARCADOR.sub(self._restaurar_trecho, obj)
         return obj
+
+    def _restaurar_trecho(self, achado: "re.Match[str]") -> str:
+        marcador = achado["marcador"]
+        valor = self._por_marcador.get(marcador, marcador)
+        if achado["antes"] is None:
+            return valor
+        if self._primeiro_do_marcador(achado) and valor != marcador:
+            return valor + (achado["fecho"] or "")
+        return achado.group(0).replace(marcador, valor, 1)
 
     @staticmethod
     def tem_marcador(obj: Any) -> bool:
@@ -246,6 +358,8 @@ class Mascara:
     def limpar(self) -> None:
         self._por_valor.clear()
         self._por_marcador.clear()
-        self._busca = None
+        self._primeiro.clear()
+        self._unicos.clear()
+        self._busca = {}
         for nome in self._base:
-            self._marcador(nome)
+            self._primeiro_nome(self._marcador(nome), nome)
