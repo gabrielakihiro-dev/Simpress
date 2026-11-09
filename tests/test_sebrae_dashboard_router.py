@@ -295,12 +295,12 @@ class OrdemDaColunaCTest(RotasBase):
         resposta = self.cliente.get(caminho)
         return resposta.status_code, resposta.json()
 
-    def test_a_tela_recebe_antigos_novos_e_finalizados_na_ordem_da_coluna_c(self):
+    def test_a_tela_recebe_antigos_e_novos_na_ordem_da_coluna_c_e_finalizados_pela_data(self):
         estado = self.cliente.get("/api/sebrae/novos").json()
         self.assertEqual([a["numero"] for a in estado["importado"]["abertos"]], self.esperados)
         self.assertEqual([f["numero"] for f in estado["novos"]["formulario"]], [c.replace("2026", "2027") for c in self.esperados])
         finalizados = [f["numero"] for f in estado["importado"]["finalizados"]]
-        self.assertEqual(finalizados, sorted(finalizados))
+        self.assertEqual(finalizados, sorted(finalizados, reverse=True))  # the most recently finalized first, not column C
         self.assertEqual(len(finalizados), len(self.esperados))
 
     def test_o_assistente_corta_as_listas_depois_da_ordem_da_coluna_c(self):
