@@ -360,20 +360,20 @@ class EstadoTest(unittest.TestCase):
     def _finalizar_em(self, numero, em):
         fin._alterar(self.dir, numero, lambda item: item.update(finalizacao={"status": fin.STATUS_OK, "em": em, "encerrado_em": ""}))
 
-    def test_finalizados_no_dashboard_devolvem_so_os_100_mais_recentes_na_ordem_da_coluna_c(self):
+    def test_finalizados_no_dashboard_devolvem_so_os_100_mais_recentes_do_mais_novo_ao_mais_velho(self):
         for n in range(105):
             self._finalizar_em(f"UTIC-2026-{n:04d}", f"2026-10-30T10:{n // 60:02d}:{n % 60:02d}")
         achados = fin.finalizados_no_dashboard(self.dir)
         self.assertEqual(len(achados), fin.MAX_FINALIZADOS_NO_DASHBOARD)
-        # o corte vem da data de finalização (0000 a 0004, os mais velhos, ficam de fora); só depois entra a ordem da C
-        self.assertEqual([a["numero"] for a in achados], [f"UTIC-2026-{n:04d}" for n in range(5, 105)])
+        # 0000 a 0004, os mais velhos, ficam de fora; a lista vai do finalizado mais recente ao mais antigo
+        self.assertEqual([a["numero"] for a in achados], [f"UTIC-2026-{n:04d}" for n in range(104, 4, -1)])
         self.assertEqual(len(fin.ler_estado(self.dir)), 105)  # o estado em disco guarda todos
 
-    def test_finalizados_no_dashboard_ordenam_pela_coluna_c_e_nao_pela_data(self):
+    def test_finalizados_no_dashboard_ordenam_pela_data_de_finalizacao_e_nao_pela_coluna_c(self):
         # numero (C) -> quando finalizou: o mais recente tem a C do meio, o mais antigo a primeira
         for numero, em in (("UTIC-2026-0010", "2026-10-30T12:00:00"), ("UTIC-2026-0002", "2026-10-30T09:00:00"), ("123", "2026-10-30T11:00:00"), ("UTIC-2026-0007", "2026-10-30T13:00:00")):
             self._finalizar_em(numero, em)
-        self.assertEqual([a["numero"] for a in fin.finalizados_no_dashboard(self.dir)], ["123", "UTIC-2026-0002", "UTIC-2026-0007", "UTIC-2026-0010"])
+        self.assertEqual([a["numero"] for a in fin.finalizados_no_dashboard(self.dir)], ["UTIC-2026-0007", "UTIC-2026-0010", "123", "UTIC-2026-0002"])
 
     def test_ficha_precisa_ser_objeto_pequeno(self):
         with self.assertRaises(DomainValidationError):
@@ -566,7 +566,7 @@ class EnvioDuravelTest(unittest.TestCase):
         envio = self.preparar()
         sha = fin.ler_envio(self.dir)["sha256"]
         fin.marcar_envio_incerto(self.dir, envio)
-        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         self.assertFalse(fin.aviso_do_pendente(self.dir)["reenvio_confirmado"])
         fin.retomar_envio_snapshot(self.dir, envio, sha)
         fin.marcar_envio_incerto(self.dir, envio)
@@ -585,7 +585,7 @@ class EnvioDuravelTest(unittest.TestCase):
         fin.marcar_envio_incerto(self.dir, envio)
         with self.assertRaises(DomainConflictError):
             fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
-        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         with self.assertRaises(DomainConflictError):
             fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256="0" * 64)
         fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
@@ -597,7 +597,7 @@ class EnvioDuravelTest(unittest.TestCase):
         sha = fin.ler_envio(self.dir)["sha256"]
         self.assertEqual(fin.ler_envio(self.dir)["base_sha256"], "a" * 64)
         fin.marcar_envio_incerto(self.dir, envio)
-        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         self.importar("b" * 64)  # o site importou de novo: a snapshot vem de uma base antiga
         with self.assertRaisesRegex(DomainConflictError, "antes da última importação"):
             fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
@@ -611,7 +611,7 @@ class EnvioDuravelTest(unittest.TestCase):
         envio = self.preparar()
         sha = fin.ler_envio(self.dir)["sha256"]
         fin.marcar_envio_incerto(self.dir, envio)
-        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         registro = fin.ler_envio(self.dir)
         registro.pop("base_sha256")
         fin.atomic_write_json(fin.caminho_envio(self.dir), registro)
@@ -623,7 +623,11 @@ class EnvioDuravelTest(unittest.TestCase):
         envio = fin.ler_envio(self.dir)["id"]
         with self.assertRaises(DomainConflictError):
             fin.recuperar_envio(self.dir, envio, "concluir_legado", confirmacao="sim")
-        frase = f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio}"
+        frase = "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS"
+        with self.assertRaisesRegex(DomainConflictError, "declare a preservação dos arquivos"):
+            fin.recuperar_envio(self.dir, envio, "concluir_legado", confirmacao=f"{frase} {envio}")  # frase antiga com ID: comparação exata
+        with self.assertRaises(DomainConflictError):
+            fin.recuperar_envio(self.dir, "a" * 32, "concluir_legado", confirmacao=frase)  # envio_id errado continua recusado
         with patch.object(fin.shutil, "rmtree", side_effect=AssertionError("não excluir")), patch.object(fin, "descartar_pendente", side_effect=AssertionError("não excluir")):
             self.assertEqual(fin.recuperar_envio(self.dir, envio, "concluir_legado", confirmacao=frase)["status"], "concluido")
             self.assertEqual(fin.recuperar_envio(self.dir, envio, "concluir_legado", confirmacao=frase)["status"], "concluido")
@@ -632,7 +636,7 @@ class EnvioDuravelTest(unittest.TestCase):
     def test_falha_entre_arquivo_de_historico_e_diario_nao_libera_legado_no_restart(self):
         fin.gravar_resultado(self.dir, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})
         envio = fin.ler_envio(self.dir)["id"]
-        frase = f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio}"
+        frase = "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS"
         gravar = fin.atomic_write_json
         def falhar(path, dados):
             if path == fin.caminho_envio(self.dir) and dados.get("status") == "concluido":
@@ -651,7 +655,7 @@ class EnvioDuravelTest(unittest.TestCase):
         fin.gravar_resultado(self.dir, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})
         registro = fin.ler_envio(self.dir)
         envio = registro["id"]
-        frase = f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio}"
+        frase = "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS"
         pasta = fin.pasta_pendente(self.dir)
         pasta.mkdir()
         for nome in ("legado.xlsx", "legado.json", ".oculto"):
@@ -702,7 +706,12 @@ class EnvioDuravelTest(unittest.TestCase):
                 fin.marcar_envio_incerto(self.dir, envio)
                 with self.assertRaises(DomainConflictError):
                     fin.recuperar_envio(self.dir, envio, acao, confirmacao="sim")
-                fin.recuperar_envio(self.dir, envio, acao, confirmacao=f"{frase} {envio}")
+                with self.assertRaisesRegex(DomainConflictError, "Digite a declaração completa após conferir"):
+                    fin.recuperar_envio(self.dir, envio, acao, confirmacao=f"{frase} {envio}")  # frase antiga com ID: comparação exata
+                with self.assertRaises(DomainConflictError):
+                    fin.recuperar_envio(self.dir, "a" * 32, acao, confirmacao=frase)  # envio_id errado continua recusado
+                self.assertEqual(fin.ler_envio(self.dir)["status"], "incerto")
+                fin.recuperar_envio(self.dir, envio, acao, confirmacao=frase)
                 self.assertEqual(fin.ler_envio(self.dir)["status"], status)
                 self.assertEqual(fin.snapshot_envio(self.dir, envio).read_bytes(), b"snapshot")
                 self.assertFalse(fin.caminho_job(self.dir).exists())
@@ -721,7 +730,7 @@ class EnvioDuravelTest(unittest.TestCase):
             fin.recuperar_envio(self.dir, envio, "limpar", em_andamento=lambda: True)
         fin.snapshot_envio(self.dir, envio).write_bytes(b"alterado")
         with self.assertRaises(DomainConflictError):
-            fin.recuperar_envio(self.dir, envio, "confirmar_recebimento", confirmacao=f"CONFIRMO APLICADO {envio}")
+            fin.recuperar_envio(self.dir, envio, "confirmar_recebimento", confirmacao="CONFIRMO APLICADO")
         self.assertEqual(fin.ler_envio(self.dir)["status"], "incerto")
         self.setUp()
         fin.gravar_resultado(self.dir, {"sharepoint": {"falhou": False, "limpeza_pendente": True}})

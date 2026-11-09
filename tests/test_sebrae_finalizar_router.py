@@ -92,7 +92,7 @@ class RecuperacaoEnvioTest(unittest.TestCase):
         from routers.sebrae_dashboard import RecuperacaoEnvioPayload
         recuperar = self.endpoint("/api/sebrae/dashboard/envio/recuperar")
         def payload(envio):
-            return RecuperacaoEnvioPayload(envio_id=envio, acao="declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+            return RecuperacaoEnvioPayload(envio_id=envio, acao="declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         with self.assertRaises(DomainConflictError):
             recuperar(payload("a" * 32))
         self.runner.estado = {"estado": "em_andamento", "rotina": "enviar"}
@@ -116,7 +116,7 @@ class RecuperacaoEnvioTest(unittest.TestCase):
     def test_reenvio_separado_da_snapshot_nao_consulta_fila_e_exige_id_hash_e_clique(self):
         from routers.sebrae_dashboard import ReenvioSnapshotPayload
         sha = fin.ler_envio(self.dir)["sha256"]
-        fin.recuperar_envio(self.dir, self.envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {self.envio}")
+        fin.recuperar_envio(self.dir, self.envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         enviar = self.endpoint("/api/sebrae/dashboard/envio/reenviar-snapshot")
         with self.assertRaises(DomainError):
             enviar(ReenvioSnapshotPayload(envio_id=self.envio, sha256=sha))
