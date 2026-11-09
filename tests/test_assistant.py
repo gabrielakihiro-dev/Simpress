@@ -22,12 +22,13 @@ from core.config import MAX_ASSISTANT_ATTACHMENT_BYTES
 from domains.assistant_anexos import (
     MAX_ANEXOS, MAX_IMAGEM_BYTES, MSG_TIPO, PAGINA, Anexo, AnexoRecusado, AnexoStore, analisar, limpar_nome,
 )
-from domains.assistant_api import ROTINAS_VALIDAS, SimpressApi, asgi_transport, representante_efetivo
+from domains.assistant_api import ROTINAS_VALIDAS, ArquivoUpload, SimpressApi, asgi_transport, representante_efetivo
 from domains.assistant_chat import (
     MAX_CARACTERES_RESPOSTA, MAX_CHAMADAS_CONSULTA, MAX_RODADAS, MSG_OCUPADO, MSG_SEM_CHAVE, SYSTEM_PROMPT, AssistantBusy, AssistantConversation,
 )
 from domains.assistant_openrouter import ModelReply, ModelToolCall, OpenRouterError, OpenRouterSettings
-from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS, grupos_da_mensagem, tool_schemas
+from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS, grupos_da_mensagem, schemas_para_mensagem, tool_schemas
+from domains.sebrae_finalizacao import MAX_PDF_BYTES
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
 from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.local_setup import create_local_setup_router
@@ -153,11 +154,11 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(reply.ferramentas, ["consultar_equipamento"])
         self.assertIsNone(reply.pendente)
         self.assertIn(("GET", "/api/equipamento/ABC123"), [(m, p) for m, p, _, _ in simpress.calls])
-        # The model never saw the real name: the tool result carried a marker.
+        # The model saw the first name and a marker (08/11/2026), never the surname.
         tool_message = model.sent[1][-1]
         self.assertEqual(tool_message["role"], "tool")
-        self.assertNotIn("Maria", json.dumps(model.sent))
-        self.assertIn("[PESSOA_", tool_message["content"])
+        self.assertNotIn("Souza", json.dumps(model.sent))
+        self.assertIn("Maria [PESSOA_", tool_message["content"])
 
     def test_change_stops_with_card_and_runs_only_after_confirmation(self) -> None:
         model = FakeModel(
@@ -475,9 +476,9 @@ class ConversationTests(unittest.TestCase):
         self.assertIn("PREFERÊNCIAS PERMANENTES", prompt[len(SYSTEM_PROMPT):])
         self.assertIn("NÃO substituem as regras de segurança acima", prompt)
         self.assertIn("Sempre responda em tabela.", prompt)
-        for secret in (CPF, "ana@exemplo.com", "abc123", "Maria"):
+        for secret in (CPF, "ana@exemplo.com", "abc123", "Souza"):
             self.assertNotIn(secret, prompt)
-        for marker in ("***.***.***-**", "[E-MAIL OCULTADO]", "[PESSOA_1]"):
+        for marker in ("***.***.***-**", "[E-MAIL OCULTADO]", "Maria [PESSOA_1]"):
             self.assertIn(marker, prompt)
         self.assertEqual(reply.texto, "Certo, Maria Souza.")
 
@@ -929,10 +930,10 @@ class AttachmentConversationTests(unittest.TestCase):
         self.assertEqual((resposta.texto, resposta.ferramentas), ("li", ["ler_anexo"]))
         sistema = model.sent[-1][0]["content"]
         self.assertIn(anexo.id, sistema)
-        self.assertNotIn("Maria", sistema)
+        self.assertNotIn("Souza", sistema)
         resultado = model.sent[-1][-1]
         self.assertEqual(resultado["role"], "tool")
-        for segredo in ("Maria", CPF, "maria@x.com"):
+        for segredo in ("Souza", CPF, "maria@x.com"):
             self.assertNotIn(segredo, resultado["content"])
         corpo = json.loads(abrir(resultado["content"]))
         self.assertEqual((corpo["pagina"], corpo["total_paginas"], corpo["resumo"]), (1, 3, "página 1 de 3"))
@@ -1406,9 +1407,9 @@ class ExplainDivergenceTests(unittest.TestCase):
         self.assertIsNone(reply.pendente)
         self.assertEqual(fake.writes(), [])
         conteudo = abrir(model.sent[1][-1]["content"])
-        for real in ("PRNOTE-MARIA-01", "Maria", "Souza"):
+        for real in ("PRNOTE-MARIA-01", "Souza"):
             self.assertNotIn(real, conteudo)
-        self.assertIn("[PESSOA_", conteudo)
+        self.assertIn("Maria [PESSOA_", conteudo)  # the person keeps the first name; the hostname keeps the full mask
         dados = json.loads(conteudo)
         self.assertNotIn("aviso", dados)
         self.assertEqual(codigos(dados), ["localidade_divergente"])
@@ -1633,8 +1634,9 @@ class OsDosAntigosTests(unittest.TestCase):
                 return super().__call__(method, path, params, body)
 
         itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
-        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
-        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True])
+        # 08/11/2026: the list comes newest first (the last row of the sheet is the most recent).
+        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("ABC123", "5", ""), ("SCXC9F072K1", "", "77")])
+        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [True, False])
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
         conversation, _ = make_conversation(model, Simpress())
         self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")
@@ -1734,12 +1736,12 @@ class ChamadosComOsToolTests(unittest.TestCase):
                              (False, "", [], ""), utic)
             self.assertEqual(itens[utic]["mensagem"], "Série não encontrada na importação atual.")
 
-    def test_person_name_never_reaches_the_model(self) -> None:
+    def test_person_surname_never_reaches_the_model(self) -> None:
         model = FakeModel(calls(call("chamados_com_os_sebrae")), text("ok"))
         conversation, simpress = make_conversation(model, ChamadosOsSimpress())
         reply = conversation.enviar_mensagem("quais chamados em aberto têm OS?")
         self.assertEqual(reply.ferramentas, ["chamados_com_os_sebrae"])
-        self.assertNotIn("Maria", json.dumps(model.sent, ensure_ascii=False))
+        self.assertNotIn("Souza", json.dumps(model.sent, ensure_ascii=False))
         self.assertNotIn(CPF, json.dumps(model.sent, ensure_ascii=False))
         self.assertEqual(simpress.writes(), [])
         self.assertIn("chamados", grupos_da_mensagem("quais chamados em aberto têm OS?"))
@@ -1817,6 +1819,380 @@ class EditDescriptionToolTests(unittest.TestCase):
             conversation, simpress = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", **args)), text("ok")), EditDescriptionSimpress())
             self.assertIsNone(conversation.enviar_mensagem("edita").pendente, args)
             self.assertEqual(simpress.writes(), [], args)
+
+
+class PdfSimpress(FakeSimpress):
+    """GET /api/sebrae/novos (old open ticket, old one that already has a PDF, finalized, new) and the POST of the PDF (route of the Anexo PDF field)."""
+
+    def __init__(self, status_envio: int = 200) -> None:
+        super().__init__()
+        self.status_envio = status_envio
+        self.equipamento["usuarios_logados"] = "Marina Beatriz Teixeira da Costa"
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Any) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"importado": {"versao": "v1", "abertos": [
+                {"numero": "UTIC-2026-1253", "softexpert": {}},
+                {"numero": "UTIC-2026-1254", "softexpert": {"pdf": {"nome": "antigo.pdf", "tamanho": 10}}},
+                {"numero": "UTIC-2026-1255", "softexpert": {"finalizacao": {"status": "ok"}}},
+            ]}, "novos": {"formulario": [{"numero": "UTIC-2026-2000", "softexpert": {}}]}}
+        if path.endswith("/anexo"):
+            self.calls.append((method, path, params, body))
+            return (200, {"pdf": {"nome": body.nome, "tamanho": len(body.conteudo)}}) if self.status_envio == 200 else (self.status_envio, {"detail": "PDF recusado"})
+        return super().__call__(method, path, params, body)
+
+
+PDF_LAUDO = make_pdf(b"BT /F1 12 Tf 72 700 Td (Laudo de desligamento) Tj ET")
+
+
+class AnexarPdfToolTests(unittest.TestCase):
+    """anexar_pdf_chamado_sebrae (08/11/2026, pedido do usuário): the PDF of the chat goes to the ticket, local only."""
+
+    def conversa(self, simpress: Optional[PdfSimpress] = None, **args: Any) -> Tuple[AssistantConversation, FakeModel, PdfSimpress, Anexo]:
+        simpress = simpress or PdfSimpress()
+        anexo = analisar(PDF_LAUDO, "laudo.pdf")
+        args = {"numero": "UTIC-2026-1253", "anexo_id": anexo.id, **args}
+        model = FakeModel(calls(call("anexar_pdf_chamado_sebrae", **args)), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.anexos.adicionar(anexo)
+        return conversation, model, simpress, anexo
+
+    def test_card_is_built_by_the_program_and_nothing_is_sent_before_confirming(self) -> None:
+        conversation, model, simpress, anexo = self.conversa()
+        card = conversation.enviar_mensagem("anexa esse PDF no chamado da Marina").pendente["descricao"]  # type: ignore[index]
+        for trecho in ('"laudo.pdf"', "1 KB", "UTIC-2026-1253", "Só neste site", "SoftExpert"):
+            self.assertIn(trecho, card)
+        self.assertNotIn("Substitui", card)
+        self.assertEqual(simpress.writes(), [])
+        resposta = conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("POST", "/api/sebrae/chamados/UTIC-2026-1253/anexo")])
+        corpo = [c for c in simpress.calls if c[0] == "POST"][0][3]
+        self.assertIsInstance(corpo, ArquivoUpload)
+        self.assertEqual((corpo.campo, corpo.nome, corpo.conteudo), ("file", "laudo.pdf", PDF_LAUDO))
+        self.assertTrue(resposta.texto.startswith("PDF anexado a UTIC-2026-1253, só neste site."), resposta.texto)
+        self.assertIn("Ação confirmada", resposta.texto)
+        self.assertEqual(resposta.ferramentas, ["anexar_pdf_chamado_sebrae"])
+
+    def test_card_says_which_pdf_it_replaces_and_a_new_ticket_works_too(self) -> None:
+        conversation, _, simpress, _ = self.conversa(numero="UTIC-2026-1254")
+        card = conversation.enviar_mensagem("troca o PDF").pendente["descricao"]  # type: ignore[index]
+        self.assertIn('Substitui o PDF atual "antigo.pdf" do chamado', card)
+        conversation, _, simpress, _ = self.conversa(numero="UTIC-2026-2000")
+        self.assertIsNotNone(conversation.enviar_mensagem("anexa").pendente)
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("POST", "/api/sebrae/chamados/UTIC-2026-2000/anexo")])
+
+    def test_the_bytes_and_the_text_of_the_pdf_never_reach_the_model_or_the_screen_list(self) -> None:
+        conversation, model, _, anexo = self.conversa()
+        conversation.enviar_mensagem("anexa esse PDF")
+        conversation.resolver_confirmacao(True)
+        enviado = json.dumps(model.sent)
+        for segredo in ("%PDF", "Laudo de desligamento"):
+            self.assertNotIn(segredo, enviado)
+        self.assertIn(anexo.id, model.sent[0][0]["content"])  # the model sees the id and the name, never the file
+        self.assertEqual(set(anexo.publico()), {"id", "nome", "tipo", "tamanho", "paginas", "aviso"})
+        self.assertNotIn("%PDF", repr(anexo) + json.dumps(anexo.publico()))
+
+    def test_attachments_that_are_gone_or_not_pdf_never_reach_a_card(self) -> None:
+        docx = analisar(make_docx(["texto"]), "a.docx")
+        for anexo_id in ("inexistente", "", docx.id):
+            conversation, model, simpress, _ = self.conversa(anexo_id=anexo_id)
+            conversation.anexos.adicionar(docx)
+            self.assertIsNone(conversation.enviar_mensagem("anexa").pendente, anexo_id)
+            self.assertEqual(simpress.writes(), [], anexo_id)
+            self.assertIn("anexar o PDF de novo", model.sent[-1][-1]["content"], anexo_id)
+
+    def test_tickets_that_cannot_receive_a_pdf_never_reach_a_card(self) -> None:
+        for numero in ("UTIC-2026-9999", "UTIC-2026-1255", "1253", ""):
+            conversation, model, simpress, _ = self.conversa(numero=numero)
+            self.assertIsNone(conversation.enviar_mensagem("anexa").pendente, numero)
+            self.assertEqual(simpress.writes(), [], numero)
+            self.assertIn('"erro"', model.sent[-1][-1]["content"], numero)
+
+    def test_attachment_removed_or_expired_after_the_card_sends_nothing(self) -> None:
+        for perda in ("remover", "expirar"):
+            conversation, _, simpress, anexo = self.conversa()
+            self.assertIsNotNone(conversation.enviar_mensagem("anexa").pendente)
+            if perda == "remover":
+                conversation.anexos.remover(anexo.id)
+            else:
+                anexo.criado -= 10 ** 6
+            texto = conversation.resolver_confirmacao(True).texto
+            self.assertTrue(texto.startswith("Não foi possível concluir a alteração"), texto)
+            self.assertIn("anexar o PDF de novo", texto)
+            self.assertEqual(simpress.writes(), [], perda)
+
+    def test_refused_upload_is_reported_and_cancelling_sends_nothing(self) -> None:
+        conversation, _, simpress, _ = self.conversa(PdfSimpress(status_envio=422))
+        conversation.enviar_mensagem("anexa")
+        texto = conversation.resolver_confirmacao(True).texto
+        self.assertTrue(texto.startswith("Não foi possível concluir a alteração: Erro 422 do Simpress"), texto)
+        conversation, _, simpress, _ = self.conversa()
+        conversation.enviar_mensagem("anexa")
+        conversation.resolver_confirmacao(False)
+        self.assertEqual(simpress.writes(), [])
+
+    def test_the_tool_is_a_write_tool_and_pdf_words_pull_only_a_narrow_group(self) -> None:
+        tool = TOOLS["anexar_pdf_chamado_sebrae"]
+        self.assertTrue(tool.changes_data and tool.describe and tool.usa_api_e_anexos)
+        self.assertIn(tool, CHANGE_TOOLS)
+        for mensagem in ("anexa esse PDF no chamado da Marina", "anexar o pdf no UTIC-2026-1253"):
+            grupos = grupos_da_mensagem(mensagem)
+            self.assertIn("anexo_pdf", grupos, mensagem)
+            self.assertNotIn("sebrae", grupos, mensagem)
+            nomes = [s["function"]["name"] for s in schemas_para_mensagem(mensagem)]
+            for esperado in ("anexar_pdf_chamado_sebrae", "chamados_novos_sebrae", "chamados_antigos_abertos_sebrae"):
+                self.assertIn(esperado, nomes, mensagem)
+            self.assertNotIn("finalizar_chamado_softexpert", nomes, mensagem)  # o grupo Sebrae inteiro levaria junto a finalização
+
+    def test_name_without_pdf_extension_is_attached_as_pdf(self) -> None:
+        conversation, _, simpress, anexo = self.conversa()
+        anexo.nome = "laudo"
+        card = conversation.enviar_mensagem("anexa").pendente["descricao"]  # type: ignore[index]
+        self.assertIn('"laudo.pdf"', card)
+        conversation.resolver_confirmacao(True)
+        corpo = [c for c in simpress.calls if c[0] == "POST"][0][3]
+        self.assertEqual((corpo.nome, corpo.conteudo), ("laudo.pdf", PDF_LAUDO))
+
+    def test_pdf_the_route_would_refuse_never_reaches_a_card(self) -> None:
+        # O cartão valida como a rota (validar_pdf): vazio, sem cabeçalho %PDF e acima do limite.
+        for rotulo, dados in (
+            ("vazio", b""),
+            ("sem cabeçalho", b"PK isto nao e um pdf"),
+            ("acima do limite", b"%PDF" + b"0" * MAX_PDF_BYTES),
+        ):
+            conversation, model, simpress, anexo = self.conversa()
+            anexo.dados = dados
+            self.assertIsNone(conversation.enviar_mensagem("anexa").pendente, rotulo)
+            self.assertEqual(simpress.writes(), [], rotulo)
+            self.assertIn("Nada foi feito", model.sent[-1][-1]["content"], rotulo)
+
+    def test_two_pdf_calls_in_the_same_turn_show_only_one_card(self) -> None:
+        anexo = analisar(PDF_LAUDO, "laudo.pdf")
+        primeira = ModelToolCall(id="id-1", name="anexar_pdf_chamado_sebrae", arguments=json.dumps({"numero": "UTIC-2026-1253", "anexo_id": anexo.id}))
+        segunda = ModelToolCall(id="id-2", name="anexar_pdf_chamado_sebrae", arguments=json.dumps({"numero": "UTIC-2026-2000", "anexo_id": anexo.id}))
+        conversation, simpress = make_conversation(FakeModel(calls(primeira, segunda)), PdfSimpress())
+        conversation.anexos.adicionar(anexo)
+        reply = conversation.enviar_mensagem("anexa nos dois chamados")
+        self.assertIn("UTIC-2026-1253", reply.pendente["descricao"])  # type: ignore[index]
+        self.assertNotIn("UTIC-2026-2000", reply.pendente["descricao"])  # type: ignore[index]
+        self.assertEqual(simpress.writes(), [])
+        recusadas = [m for m in conversation._mensagens if m["role"] == "tool"]
+        self.assertEqual(len(recusadas), 1)
+        self.assertIn("Uma alteração por vez", recusadas[0]["content"])
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("POST", "/api/sebrae/chamados/UTIC-2026-1253/anexo")])
+
+
+class MarkerModel(FakeModel):
+    """Answers the tool result by repeating the marker the model was shown (the number depends on the order of the fields)."""
+
+    marcador = ""
+
+    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
+        if self.sent:  # second call: the tool message is the last one
+            achado = re.search(r"Marina (\[PESSOA_\d+\])", messages[-1]["content"])
+            self.marcador = achado.group(1) if achado else ""
+            self.replies[0] = text(f"O usuário é Marina {self.marcador}.")
+        return super().complete(messages, tools, orcamento)
+
+
+class FirstNameConversationTests(unittest.TestCase):
+    """08/11/2026 (pedido do usuário): the model sees the first name and a marker, the screen sees the real name."""
+
+    def test_model_sees_only_the_first_name_and_the_screen_gets_the_whole_name_once(self) -> None:
+        model = MarkerModel(calls(call("consultar_equipamento", serial="ABC123")), text("placeholder"))
+        conversation, _ = make_conversation(model, PdfSimpress())
+        reply = conversation.enviar_mensagem("quem usa a ABC123?")
+        enviado = json.dumps(model.sent, ensure_ascii=False)
+        self.assertRegex(model.marcador, r"^\[PESSOA_\d+\]$")  # the model saw "Marina [PESSOA_n]"
+        for escondido in ("Beatriz", "Teixeira", "Costa"):
+            self.assertNotIn(escondido, enviado)
+        self.assertEqual(reply.texto, "O usuário é Marina Beatriz Teixeira da Costa.")  # no "Marina Marina"
+        # The next turn's history is masked too, and the name typed by the user is masked before the model.
+        model.replies.append(text("ok"))
+        conversation.enviar_mensagem("a Marina Beatriz Teixeira da Costa ligou")
+        ultimo = json.dumps(model.sent[-1], ensure_ascii=False)
+        self.assertNotIn("Beatriz", ultimo)
+        self.assertIn(f"Marina {model.marcador}", ultimo)
+
+
+class SebraeSolicitantesSimpress(FakeSimpress):
+    """GET /api/sebrae/novos with fictitious requesters: old open tickets (column I in `usuario`) and new ones (`linha.I`)."""
+
+    NOME = "Helga Prado Vasconcelos de Lima"  # fictitious
+    SOBRENOMES = ("Prado", "Vasconcelos", "Lima")
+
+    def __init__(self, abertos: Optional[List[Dict[str, Any]]] = None, novos: Optional[List[Dict[str, Any]]] = None) -> None:
+        super().__init__()
+        self.abertos = abertos if abertos is not None else []
+        self.novos = novos if novos is not None else []
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"importado": {"arquivo": "d.xlsx", "total": len(self.abertos), "abertos": self.abertos},
+                         "novos": {"formulario": self.novos, "pendentes": []}}
+        return super().__call__(method, path, params, body)
+
+    def leituras_da_rota(self) -> int:
+        return sum(1 for _, p, _, _ in self.calls if p == "/api/sebrae/novos")
+
+
+def _aberto(numero: str, **extra: Any) -> Dict[str, Any]:
+    return {"numero": f"UTIC-2026-{numero}", "titulo": "Remoção de usuário", "descricao": "", "valores": {}, **extra}
+
+
+class SebraeSolicitantesNaMascaraTests(unittest.TestCase):
+    """08/11/2026: the full name of a Sebrae requester went to the model inside `descricao`; the requesters now enter the mask."""
+
+    def test_requester_typed_by_the_user_is_masked_before_any_ticket_is_read(self) -> None:
+        # The requester is only in the new tickets (linha.I): the mask learns it from the base, not from a tool payload.
+        simpress = SebraeSolicitantesSimpress(novos=[{"numero": "UTIC-2026-0200", "linha": {"I": SebraeSolicitantesSimpress.NOME}}])
+        model = FakeModel(text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem(f"anexa esse PDF no chamado da {SebraeSolicitantesSimpress.NOME}")
+        enviado = json.dumps(model.sent[0], ensure_ascii=False)
+        for escondido in SebraeSolicitantesSimpress.SOBRENOMES:
+            self.assertNotIn(escondido, enviado)
+        self.assertRegex(enviado, r"Helga \[PESSOA_\d+\]")
+
+    def test_full_name_in_the_description_of_an_old_ticket_reaches_the_model_masked(self) -> None:
+        # `solicitante` is empty here, so only the base can explain the name found in the free text.
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[_aberto("0001", descricao=f"Remover o usuário {SebraeSolicitantesSimpress.NOME} da UGP")],
+            novos=[{"numero": "UTIC-2026-0200", "linha": {"I": SebraeSolicitantesSimpress.NOME}}],
+        )
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem("quais chamados do Sebrae estão abertos?")
+        resultado = model.sent[1][-1]["content"]
+        for escondido in SebraeSolicitantesSimpress.SOBRENOMES:
+            self.assertNotIn(escondido, resultado)
+        self.assertRegex(resultado, r"Remover o usuário Helga \[PESSOA_\d+\] da UGP")
+
+    def test_requester_key_of_the_same_payload_masks_a_name_variant_in_the_description(self) -> None:
+        # Base load fails: the `solicitante` key of the payload alone must hide the surname written in the description.
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[_aberto("0001", usuario=SebraeSolicitantesSimpress.NOME, descricao="Remover a Helga Prado da UGP")],
+        )
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        with mock.patch.object(SimpressApi, "listar_nomes_solicitantes_sebrae", return_value=None):
+            conversation.enviar_mensagem("quais chamados do Sebrae estão abertos?")
+        resultado = model.sent[1][-1]["content"]
+        self.assertNotIn("Prado", resultado)
+        self.assertRegex(resultado, r"Remover a Helga \[PESSOA_\d+\] da UGP")
+        self.assertRegex(resultado, r'"solicitante": "Helga \[PESSOA_\d+\]"')
+
+    def test_base_is_read_once_per_conversation_and_again_in_the_next_one(self) -> None:
+        simpress = SebraeSolicitantesSimpress()
+        conversation, _ = make_conversation(FakeModel(text("um"), text("dois"), text("três")), simpress)
+        conversation.enviar_mensagem("oi")
+        conversation.enviar_mensagem("oi de novo")
+        self.assertEqual(simpress.leituras_da_rota(), 1)
+        conversation.limpar_historico()
+        conversation.enviar_mensagem("outra conversa")
+        self.assertEqual(simpress.leituras_da_rota(), 2)
+
+    def test_route_that_fails_is_quiet_and_tried_again_on_the_next_message(self) -> None:
+        simpress = FakeSimpress()  # answers 404 to /api/sebrae/novos
+        conversation, _ = make_conversation(FakeModel(text("um"), text("dois")), simpress)
+        self.assertEqual(conversation.enviar_mensagem("oi").texto, "um")
+        self.assertEqual(conversation.enviar_mensagem("oi de novo").texto, "dois")
+        self.assertEqual(sum(1 for _, p, _, _ in simpress.calls if p == "/api/sebrae/novos"), 2)
+        self.assertIsNone(SimpressApi(simpress).listar_nomes_solicitantes_sebrae())
+
+    def test_only_full_names_enter_the_base(self) -> None:
+        # A lone word ("SEBRAE", a login) would become a marker all over the conversation, so it stays out.
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[_aberto("0001", usuario="SEBRAE"), _aberto("0002", usuario=f"  {SebraeSolicitantesSimpress.NOME} ",
+                                                                   leitura_softexpert={"solicitante": "Ana Souza Teste"})],
+            novos=[{"numero": "UTIC-2026-0200", "linha": {"I": SebraeSolicitantesSimpress.NOME}}, {"numero": "UTIC-2026-0201", "linha": {"I": ""}}],
+        )
+        self.assertEqual(SimpressApi(simpress).listar_nomes_solicitantes_sebrae(), [SebraeSolicitantesSimpress.NOME, "Ana Souza Teste"])
+        self.assertEqual(SimpressApi(SebraeSolicitantesSimpress()).listar_nomes_solicitantes_sebrae(), [])
+
+
+class SolicitanteDoSistemaTests(unittest.TestCase):
+    """08/11/2026: `API SEBRAE` é o sistema que abre chamados, não uma pessoa: fica fora da base de nomes e da máscara."""
+
+    def test_api_sebrae_stays_out_of_the_name_base_however_it_is_written(self) -> None:
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[_aberto("0001", usuario="API SEBRAE"), _aberto("0002", usuario=SebraeSolicitantesSimpress.NOME)],
+            novos=[{"numero": "UTIC-2026-0200", "linha": {"I": "API  Sébrae"}}, {"numero": "UTIC-2026-0201", "linha": {"I": "Ana Souza Teste"}}],
+        )
+        self.assertEqual(SimpressApi(simpress).listar_nomes_solicitantes_sebrae(), [SebraeSolicitantesSimpress.NOME, "Ana Souza Teste"])
+
+    def test_api_sebrae_requester_reaches_the_model_unmasked_while_real_names_stay_masked(self) -> None:
+        simpress = SebraeSolicitantesSimpress(
+            abertos=[_aberto("0001", usuario="API SEBRAE", descricao="Revisado."),
+                     _aberto("0002", usuario=SebraeSolicitantesSimpress.NOME, descricao=f"Remover {SebraeSolicitantesSimpress.NOME}")],
+            novos=[{"numero": "UTIC-2026-0200", "linha": {"I": "API SEBRAE"}}],
+        )
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem("quais chamados do Sebrae estão abertos?")
+        resultado = model.sent[1][-1]["content"]
+        self.assertIn('"solicitante": "API SEBRAE"', resultado)
+        self.assertEqual(resultado.count("[PESSOA_"), 2)  # só a pessoa real (solicitante e descrição); a API não vira marcador
+        for escondido in SebraeSolicitantesSimpress.SOBRENOMES:
+            self.assertNotIn(escondido, resultado)
+
+
+class ChamadosAntigosListaTests(unittest.TestCase):
+    """The list of old open tickets names the requester and the date, keeps the most recent ones and can be filtered."""
+
+    def abertos(self) -> List[Dict[str, Any]]:
+        itens = [_aberto(f"{n:04d}", usuario=f"Pessoa{n} Sobrenome{n}") for n in range(1, 36)]
+        itens[2] = _aberto("0003", usuario=SebraeSolicitantesSimpress.NOME, leitura_softexpert={"habilitada_em": "2026-10-05 09:12"})
+        return itens
+
+    def test_keeps_the_most_recent_twenty_newest_first_and_says_how_many_were_left_out(self) -> None:
+        dados = SimpressApi(SebraeSolicitantesSimpress(abertos=self.abertos())).chamados_antigos_abertos_sebrae()
+        self.assertEqual([i["numero"] for i in dados["abertos"]], [f"UTIC-2026-{n:04d}" for n in range(35, 15, -1)])
+        self.assertEqual((dados["total_abertos"], dados["encontrados"], dados["omitidos"]), (35, 35, 15))
+        self.assertEqual(dados["abertos"][-1]["solicitante"], "Pessoa16 Sobrenome16")
+        self.assertLess(list(dados).index("omitidos"), list(dados).index("abertos"))  # the counts come before the list
+
+    def test_search_finds_an_old_ticket_by_requester_ignoring_case_and_accents(self) -> None:
+        api = SimpressApi(SebraeSolicitantesSimpress(abertos=self.abertos()))
+        for busca in ("helga", "HELGA PRADO", "  vasconcélos  "):
+            dados = api.chamados_antigos_abertos_sebrae(busca)
+            self.assertEqual([i["numero"] for i in dados["abertos"]], ["UTIC-2026-0003"], busca)
+            self.assertEqual((dados["total_abertos"], dados["encontrados"], dados["omitidos"]), (35, 1, 0), busca)
+        item = api.chamados_antigos_abertos_sebrae("helga")["abertos"][0]
+        self.assertEqual((item["solicitante"], item["data"]), (SebraeSolicitantesSimpress.NOME, "2026-10-05 09:12"))
+        self.assertEqual(api.chamados_antigos_abertos_sebrae("helga ninguem")["abertos"], [])  # every word has to appear
+
+    def test_search_that_still_matches_many_keeps_the_most_recent(self) -> None:
+        dados = SimpressApi(SebraeSolicitantesSimpress(abertos=self.abertos())).chamados_antigos_abertos_sebrae("remoção")
+        self.assertEqual((len(dados["abertos"]), dados["encontrados"], dados["omitidos"]), (20, 35, 15))
+        self.assertEqual(dados["abertos"][0]["numero"], "UTIC-2026-0035")
+
+    def test_the_cut_of_a_big_answer_drops_the_oldest_tickets_and_keeps_the_counts(self) -> None:
+        # Real titles and descriptions run to 300 characters: 20 of them are far past MAX_CARACTERES_RESPOSTA.
+        abertos = [_aberto(f"{n:04d}", titulo="T" * 300, descricao="D" * 300, usuario=f"Pessoa{n} Sobrenome{n}") for n in range(1, 36)]
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
+        conversation, _ = make_conversation(model, SebraeSolicitantesSimpress(abertos=abertos))
+        conversation.enviar_mensagem("lista os chamados antigos")
+        resultado = model.sent[1][-1]["content"]
+        self.assertIn("Resposta grande", resultado)  # the cut did happen
+        for esperado in ("UTIC-2026-0035", "UTIC-2026-0034", "omitidos", "encontrados"):
+            self.assertIn(esperado, resultado)
+        self.assertNotIn("UTIC-2026-0016", resultado)  # the oldest of the twenty went first
+
+    def test_the_model_can_pass_the_search_through_the_tool(self) -> None:
+        simpress = SebraeSolicitantesSimpress(abertos=self.abertos())
+        model = FakeModel(calls(call("chamados_antigos_abertos_sebrae", busca="Helga")), text("ok"))
+        conversation, _ = make_conversation(model, simpress)
+        conversation.enviar_mensagem("acha o chamado da Helga")
+        resultado = model.sent[1][-1]["content"]
+        self.assertIn("UTIC-2026-0003", resultado)
+        self.assertNotIn("UTIC-2026-0010", resultado)
+        for escondido in SebraeSolicitantesSimpress.SOBRENOMES:
+            self.assertNotIn(escondido, resultado)
 
 
 class ContactSimpress(FakeSimpress):
@@ -1954,13 +2330,14 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         self.assertEqual((padrao["cidade"], padrao["alterada"], padrao["pausa"]), ("Foz do Iguaçu", False, "1h30"))
         self.assertEqual(padrao["nome"], "Marinez Martins")
 
-    def test_view_sends_only_markers_to_the_model(self) -> None:
+    def test_view_sends_only_markers_and_first_names_to_the_model(self) -> None:
         model = FakeModel(calls(call("ver_representantes_regionais", cidade="Maringá")), text("ok"))
         conversation, _ = make_conversation(model, RepresentativesSimpress())
         conversation.enviar_mensagem("quem representa Maringá?")
         enviado = abrir(model.sent[-1][-1]["content"])
-        for real in ("Representante", "Fictício", "ficticio", "90000", "0001"):
+        for real in ("Fictício", "ficticio", "90000", "0001"):
             self.assertNotIn(real, enviado)
+        self.assertIn("Representante [PESSOA_", enviado)  # first name stays visible (08/11/2026); e-mail and phone keep the full mask
         self.assertTrue(json.loads(enviado)["alterada"])
 
     def test_unknown_city_lists_the_valid_ones_and_calls_no_write(self) -> None:
@@ -2045,8 +2422,9 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         conversation, _ = make_conversation(model, simpress)
         conversation.enviar_mensagem("a Tatiane Matsuguma Sanches foi substituída por Representante Fictício?")
         enviado = json.dumps(model.sent[0], ensure_ascii=False)  # default name and saved name
-        for real in ("Tatiane", "Matsuguma", "Representante Fictício", "Fictício"):
+        for real in ("Matsuguma", "Representante Fictício", "Fictício"):
             self.assertNotIn(real, enviado)
+        self.assertIn("Tatiane [PESSOA_", enviado)
         self.assertIn("Maria Souza", conversation._mascara._por_valor)  # the users of the base are still there
         marcador = conversation._mascara._por_valor["Tatiane Matsuguma Sanches"]
         model.replies.insert(0, text(f"Sobre {marcador}: nada a fazer."))
@@ -2071,7 +2449,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         self.assertIn("Tatiane Matsuguma Sanches", pendente["descricao"])  # type: ignore[index]
         self.assertIn("Renata Custodio de Oliveira Varasquim", pendente["descricao"])  # type: ignore[index]
         self.assertNotIn("PESSOA_", pendente["descricao"])  # type: ignore[index]
-        self.assertNotIn("Tatiane", json.dumps(model.sent, ensure_ascii=False))
+        self.assertNotIn("Matsuguma", json.dumps(model.sent, ensure_ascii=False))
         conversation.resolver_confirmacao(True)
         self.assertEqual(simpress.calls[-1][3]["nome"], "Tatiane Matsuguma Sanches")  # type: ignore[index]
 

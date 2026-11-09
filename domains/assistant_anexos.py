@@ -73,6 +73,9 @@ class Anexo:
     aviso: str = ""
     imagem_enviada: bool = False
     criado: float = field(default_factory=time.monotonic)
+    # Raw bytes of a PDF only, kept in memory so the assistant can attach it to a Sebrae ticket after the user
+    # confirms (08/11/2026). Never written to disk, never in `publico()`, never in a log or a repr.
+    dados: bytes = field(default=b"", repr=False)
 
     def publico(self) -> Dict[str, Any]:
         """What the screen needs; never the content."""
@@ -171,6 +174,7 @@ def analisar(dados: bytes, nome_bruto: str) -> Anexo:
         except PdfSemTexto as falha:
             raise AnexoRecusado(str(falha)) from None
         anexo.aviso = "" if anexo.paginas else MSG_SEM_TEXTO_PDF
+        anexo.dados = dados  # also for a scanned PDF: the ticket needs the file, not its text
     else:
         anexo.paginas = _paginar(_texto_docx(dados))
         anexo.aviso = "" if anexo.paginas else MSG_SEM_TEXTO_DOCX
