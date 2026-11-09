@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from core.errors import DomainBusyError, DomainError
 from domains import assistant_relatorios, sebrae_dashboard_gravacao as G, sebrae_finalizacao as fin
-from domains import sebrae_novos, sebrae_observacoes as obs
+from domains import sebrae_categoria, sebrae_categoria_ia, sebrae_novos, sebrae_observacoes as obs
 from domains.assistant_api import MAX_ITENS_LISTA, SimpressApi
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
@@ -655,6 +655,97 @@ class DescricaoOpenApiTest(RotasBase):
         for url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert"):
             with self.subTest(url=url):
                 self.assertTrue(caminhos[url]["post"].get("description"))
+
+
+class SugestaoDeCategoriaNosNovosTest(RotasBase):
+    """``sugestao_categoria`` e ``sugestao_tipo`` de cada item de ``novos.formulario``: só exibição, nada é gravado."""
+
+    LISTA_B = ["INSTALAÇÃO", "PERIFÉRICO", "OUTRO"]
+
+    def novos(self, *chamados):
+        with patch.object(G, "ler_listas", return_value={"B": self.LISTA_B}):
+            self.assertEqual(self.importar(montar()).status_code, 200)
+        (self.dir / sebrae_categoria.ARQUIVO_INDICE).unlink(missing_ok=True)  # a importação cria um índice mínimo: aqui só valem as regras
+        sebrae_novos.salvar_novos(self.caminhos.novos, list(chamados), [], 0, {})
+
+    def itens(self):
+        resposta = self.cliente.get("/api/sebrae/novos")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        return {item["numero"]: item for item in resposta.json()["novos"]["formulario"]}
+
+    def test_mouse_que_parou_e_periferico_incidente(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1401", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"))
+        item = self.itens()["UTIC-2026-1401"]
+        self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), ("PERIFÉRICO", "INCIDENTE"))
+
+    def test_pedido_de_instalacao_e_solicitacao(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1402", titulo="Instalar Adobe Reader", descricao="", solicitante="Camila Lopes"))
+        self.assertEqual(self.itens()["UTIC-2026-1402"]["sugestao_tipo"], "SOLICITAÇÃO")
+
+    def test_b_ou_j_ja_preenchido_nao_recebe_sugestao(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1403", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"))
+        original = sebrae_novos.formulario
+
+        def com_campos(preenchidos):
+            return lambda *args, **kwargs: [{**item, "linha": {**item["linha"], **preenchidos}} for item in original(*args, **kwargs)]
+
+        for preenchidos, esperado in (({"B": "REDE"}, (None, "INCIDENTE")), ({"J": "SOLICITAÇÃO"}, ("PERIFÉRICO", None))):
+            with self.subTest(preenchidos=preenchidos), patch.object(sebrae_novos, "formulario", side_effect=com_campos(preenchidos)):
+                item = self.itens()["UTIC-2026-1403"]
+                self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), esperado)
+
+    def test_solicitante_do_sistema_nunca_recebe_sugestao(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1404", titulo="Mouse sem fio parou", descricao="", solicitante="API SEBRAE"))
+        item = self.itens()["UTIC-2026-1404"]
+        self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), (None, None))
+
+    def test_sem_arquivo_de_indice_a_lista_continua_e_as_regras_valem(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1405", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"))
+        self.assertFalse((self.dir / sebrae_categoria.ARQUIVO_INDICE).exists())
+        self.assertEqual(self.itens()["UTIC-2026-1405"]["sugestao_categoria"], "PERIFÉRICO")
+
+    def test_indice_corrompido_ou_ilegivel_nao_derruba_a_lista(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1408", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"))
+        caminho = self.dir / sebrae_categoria.ARQUIVO_INDICE
+        caminho.write_text("{", encoding="utf-8")  # JSON inválido
+        self.assertEqual(self.itens()["UTIC-2026-1408"]["sugestao_categoria"], "PERIFÉRICO")
+        caminho.unlink()
+        caminho.mkdir()  # "ler" uma pasta falha com OSError
+        self.assertEqual(self.itens()["UTIC-2026-1408"]["sugestao_categoria"], "PERIFÉRICO")
+
+    def test_categoria_nova_entra_nas_opcoes_mesmo_fora_da_lista_b(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1406", titulo="Impressora parou", descricao="", solicitante="Camila Lopes"))
+        self.assertEqual(self.itens()["UTIC-2026-1406"]["sugestao_categoria"], "IMPRESSORA")
+
+    def test_ia_conhece_solicitante_representante_e_usuario_dos_abertos_antes_de_perguntar(self):
+        base = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO")), 2, texto("I2", "Camila Lopes"))
+        with patch.object(G, "ler_listas", return_value={"B": self.LISTA_B}):
+            self.assertEqual(self.importar(base).status_code, 200)
+        sebrae_novos.salvar_novos(self.caminhos.novos, [ChamadoSoftExpert("UTIC-2026-1409", titulo="Assunto", descricao="", solicitante="Bruno Tavares")], [], 0, {})
+        registrados = []
+
+        class Falso:
+            def registrar_nomes(self, nomes):
+                registrados.extend(nomes)
+
+            def sugerir(self, *args):
+                return None
+
+        with patch.object(sebrae_categoria_ia, "criar", return_value=Falso()):
+            self.itens()
+        for nome in ("Bruno Tavares", "Camila Lopes", "Fernanda Colla Borretto"):
+            self.assertIn(nome, registrados)
+
+    def test_falha_da_sugestao_nao_derruba_a_lista_e_so_o_tipo_vai_ao_log(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1407", titulo="Mouse sem fio parou", descricao="texto-secreto-do-chamado", solicitante="Camila Lopes"))
+        with patch.object(sebrae_categoria, "sugerir", side_effect=RuntimeError("texto-secreto-do-chamado")):
+            with self.assertLogs("routers.sebrae_dashboard", level="WARNING") as registro:
+                item = self.itens()["UTIC-2026-1407"]
+        self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), (None, None))
+        self.assertEqual(item["numero"], "UTIC-2026-1407")
+        saida = "\n".join(registro.output)
+        self.assertIn("RuntimeError", saida)
+        self.assertNotIn("texto-secreto-do-chamado", saida)
 
 
 if __name__ == "__main__":

@@ -257,6 +257,22 @@ class ExportarTest(unittest.TestCase):
         with self.assertRaisesRegex(novos.ManuaisInvalidos, "RESPONSÁVEL"):
             novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "A": ""}}, REGISTROS, RELATORIO)
 
+    def test_b_aceita_categorias_novas_aprovadas_fora_da_lista_importada(self):
+        listas = {"A": ["SIMPRESS"], "B": ["INSTALAÇÃO", "OUTRO"]}
+        for categoria in ("REDE", "IMPRESSORA", "LICENÇA", "SISTEMA"):
+            novos.validar_listas({"B": categoria}, listas)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "coluna B"):
+            novos.validar_listas({"B": "QUALQUER"}, listas)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "coluna A"):
+            novos.validar_listas({"A": "REDE"}, listas)  # só B ganha as categorias novas
+
+    def test_envio_aceita_categoria_nova_e_recusa_valor_fora_das_listas(self):
+        listas = {"A": ["CLIENTE"], "B": ["INSTALAÇÃO", "OUTRO"]}
+        linha = novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "IMPRESSORA"}}, REGISTROS, RELATORIO, listas=listas, exigir=False)[0]
+        self.assertEqual(linha["B"], "IMPRESSORA")
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "coluna B"):
+            novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "QUALQUER"}}, REGISTROS, RELATORIO, listas=listas, exigir=False)
+
     def test_texto_manual_que_parece_formula_ganha_apostrofo(self):
         saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "=1+1"}}, REGISTROS, RELATORIO)
         self.assertEqual(saida["bloco_a_p"].split("\t")[1], "'=1+1")

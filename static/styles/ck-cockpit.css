@@ -1342,6 +1342,19 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* D FINALIZADO verde (vence a regra de travada). */
 .ck-entrada.sebrae-status--finalizado, .sebrae-chamado .ck-entrada.sebrae-status--finalizado:is(:disabled, [readonly]) { border-style: solid; border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); -webkit-text-fill-color: var(--cor-ok-texto); font-weight: var(--peso-marca); }
 .sebrae-chamado__manuais .ck-entrada { transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+/* Chip de sugestão de B e J (chamado novo): discreto, abaixo do campo; `Usar` é o único jeito de preencher. */
+.sebrae-campo-sugestao { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.sebrae-sugestao { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; padding: 2px 4px 2px 8px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-size: var(--fs-sm); }
+.sebrae-sugestao[hidden] { display: none; }
+.sebrae-sugestao__texto { min-width: 0; overflow-wrap: anywhere; }
+.sebrae-sugestao__usar { margin-left: auto; }
+@media (pointer: coarse) { .sebrae-sugestao__usar { min-height: 44px; min-width: 44px; } }
+@media (prefers-reduced-motion: no-preference) {
+  .sebrae-sugestao { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sebrae-sugestao { animation: none; }
+}
 
 /* Zona 3 · Finalização no SoftExpert (irreversível) */
 .sebrae-zona--finalizacao { gap: 0; padding: 0; }

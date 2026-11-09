@@ -16,6 +16,8 @@ TESTS_DIR = PROJECT_ROOT / "tests"
 TEMP_ROOT = PROJECT_ROOT / "TEMP"
 # The idle-close worker must not touch the real automation Chrome during the suite.
 os.environ.setdefault("SIMPRESS_CHROME_OCIOSO_S", "0")
+# The optional AI category suggestion must never call the network during the suite.
+os.environ.setdefault("SIMPRESS_SUGESTAO_IA", "0")
 sys.path.insert(0, str(PROJECT_ROOT))
 from core.local_paths import is_link_or_junction
 
