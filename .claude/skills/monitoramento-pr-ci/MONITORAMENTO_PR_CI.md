@@ -12,25 +12,27 @@ Este documento define o protocolo oficial que o **Antigravity** deve seguir auto
    - O Claude Code (em suas respectivas sessões em background) está configurado com `auto_fix: true` e fará as correções necessárias de forma autônoma.
    - O papel do Antigravity é exclusivamente de **orquestrador e monitorador**.
 
-2. **Critério Rígido de Merge:**
+2. **Critério Rígido de Merge e Sequenciamento Estrito (NUNCA mescle ao mesmo tempo):**
    - Execute o merge (`gh pr merge <numero> --merge`) **SOMENTE** quando **100% dos checks de CI estiverem verdes**:
      - `verify (3.12)` (aprovado)
      - `verify (3.14)` (aprovado)
      - `ui-browser` (aprovado)
-   - Se o PR estiver com status `CONFLICTING` ou `DIRTY`, aguarde a respectiva sessão do Claude mesclar a `main` e reenviar os testes.
+   - **NUNCA faça merge de mais de um PR simultaneamente ou em sequência imediata:** Havendo múltiplos PRs aprovados, mescle rigorosamente **um PR por vez**.
+   - **Aguarde o término completo do ciclo na `main` antes do próximo merge:** Sempre aguarde a CI disparada na `main` pelo commit de merge (`verify 3.12`, `verify 3.14`, `ui-browser`) concluir 100% verde antes de mesclar o PR seguinte. Isso evita cancelamento automático de workflows por concorrência e divergências de commit na `origin/main`.
+   - Se o PR estiver com status `CONFLICTING` ou `DIRTY`, não mexa: aguarde a respectiva sessão do Claude mesclar a `main` e reenviar os testes.
 
 3. **Monitoramento do Commit de Merge na `main`:**
    - Após cada merge, capture o hash do commit resultante na `main` (`gh pr view <numero> --json mergeCommit`).
    - Acompanhe a execução da CI disparada na `main` (`gh run list --commit <hash>`).
 
-4. **Finalização com `git pull`:**
-   - Quando todos os PRs pendentes tiverem sido mesclados e a CI dos commits de merge na `main` estiver 100% verde:
+4. **Sincronização com `git pull` a CADA #PR:**
+   - Assim que a CI na `main` de um commit de merge concluir 100% verde, execute **imediatamente**:
      ```powershell
      cd Simpress
      git checkout main
      git pull
      ```
-   - Confirme que a working tree está limpa e sincronizada com `origin/main`.
+   - Confirme que a working tree está limpa e sincronizada com `origin/main` a cada #PR concluído, antes de autorizar ou efetuar o próximo merge.
 
 ---
 
@@ -75,16 +77,18 @@ A cada despertar do `schedule`, execute a seguinte rotina:
    cd Simpress; gh pr list
    ```
 2. **Se houver PR aberto:**
-   - Checar checks: `gh pr checks <numero>`
+   - **Regra de 1 PR por vez:** Se já houver uma CI rodando na `main` decorrente de merge anterior, **aguarde ela terminar 100% verde e faça o `git pull` antes de mesclar qualquer outro PR**.
+   - Checar checks do PR da vez: `gh pr checks <numero>`
    - Se os 3 checks (`verify 3.12`, `verify 3.14`, `ui-browser`) estiverem `pass`/`success`:
      - Conferir se está mesclável: `gh pr view <numero> --json mergeable,mergeStateStatus`
-     - Se `MERGEABLE` e `CLEAN`: executar `gh pr merge <numero> --merge`
+     - Se `MERGEABLE` e `CLEAN`: executar o merge de **apenas esse PR** (`gh pr merge <numero> --merge`)
      - Identificar o commit de merge: `gh pr view <numero> --json mergeCommit`
      - Monitorar os novos runs na `main`: `gh run list --commit <hash>`
    - Se algum check falhar: **NÃO altere o código**. Registre a falha e aguarde a nova rodada enviada pelo Claude Code.
-3. **Se nenhum PR estiver aberto:**
-   - Verificar status da CI dos commits de merge na `main` (`gh run list --branch main --limit 3`).
-   - Se a CI na `main` tiver terminado verde e não houver mais tarefas ativas: executar `git checkout main; git pull`.
-   - Se ainda aguardando novas tarefas das sessões do Claude, manter o ciclo normal de **10 minutos**.
+3. **Acompanhamento da CI na `main` e `git pull` a cada PR:**
+   - Acompanhar a CI na `main` até a conclusão total (`gh run list --branch main --limit 3`).
+   - Assim que a CI na `main` concluir 100% verde: executar imediatamente `git checkout main; git pull`.
+   - Havendo outro PR pendente na fila, avançar para ele somente após este passo.
+   - Se não houver novos PRs e as sessões ainda estiverem ativas, manter o ciclo normal de **10 minutos**.
 4. **Relatório ao Usuário:**
    - Enviar um resumo conciso com: tempo decorrido dos jobs, status dos checks e horário do próximo despertar.

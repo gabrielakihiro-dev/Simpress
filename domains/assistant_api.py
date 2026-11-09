@@ -29,6 +29,7 @@ from security import sessao_local
 from domains.assistant_lgpd import SEM_USUARIO, e_solicitante_sistema, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.coverage import dobrar
+from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDOS
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
@@ -748,6 +749,10 @@ def _dict(valor: Any) -> Dict[str, Any]:
     return valor if isinstance(valor, dict) else {}
 
 
+def _intervalo_agendamento(valor: Any) -> int:
+    return valor if type(valor) is int and valor in INTERVALOS_PERMITIDOS else INTERVALO_PADRAO
+
+
 def _observacao_de(notas: Dict[str, str], serie: Any, ordem: Any) -> str:
     """Note of the OS tab (F6) for this serial+OS, by `chave_os`; "" when either side is empty or there is none."""
     try:
@@ -1097,19 +1102,25 @@ class SimpressApi:
             return {"erro": dados}
         dados = _dict(dados)
         ultimo = _dict(dados.get("ultimo_disparo"))
-        return {"ativo": dados.get("ativo") is True, "intervalo_minutos": 30,
+        return {"ativo": dados.get("ativo") is True, "intervalo_minutos": _intervalo_agendamento(dados.get("intervalo_minutos")),
                 "proxima_execucao": str(dados.get("proxima_execucao") or ""),
                 "ultimo_resultado": ultimo.get("resultado") if ultimo.get("resultado") in (
                     "iniciada", "pulado: ocupada", "pulado: horário perdido", "pulado: saída pendente", "erro ao iniciar") else "",
                 "saida_pendente": bool(dados.get("bloqueio")), "login": "Senha e MFA manuais; não envia ao SharePoint nem finaliza chamados."}
 
-    def definir_agendamento_dashboard(self, ativo: Any) -> Dict[str, Any]:
+    def definir_agendamento_dashboard(self, ativo: Any, intervalo_minutos: Any = None) -> Dict[str, Any]:
         if not isinstance(ativo, bool):
             return {"erro": "Informe ativo como verdadeiro ou falso."}
-        ok, dados = self._chamar("PUT", "/api/automacao/dashboard/agendamento", corpo={"ativo": ativo})
+        corpo: Dict[str, Any] = {"ativo": ativo}
+        if intervalo_minutos is not None:
+            if type(intervalo_minutos) is not int or intervalo_minutos not in INTERVALOS_PERMITIDOS:
+                return {"erro": "Informe intervalo_minutos como 30, 60, 90 ou 120."}
+            corpo["intervalo_minutos"] = intervalo_minutos
+        ok, dados = self._chamar("PUT", "/api/automacao/dashboard/agendamento", corpo=corpo)
         if not ok:
             return {"erro": dados}
-        return {"ativo": _dict(dados).get("ativo") is True, "intervalo_minutos": 30,
+        dados = _dict(dados)
+        return {"ativo": dados.get("ativo") is True, "intervalo_minutos": _intervalo_agendamento(dados.get("intervalo_minutos")),
                 "mensagem": "Agendamento alterado; nenhuma rotina foi iniciada agora."}
 
     def consultar_status_automacao(self) -> Dict[str, Any]:

@@ -234,6 +234,25 @@ class EdicaoManualNoSharePointTests(unittest.TestCase):
         self.assertSaidaPreservada(pendente)
         self.assertNovaBaseIgual(baixado)
 
+    # 4b. the site itself moved rows (unsorted base): the classification compares values by row number
+    def test_pending_output_with_rows_moved_by_the_site_is_still_told_apart(self):
+        desordenada = ("UTIC-2026-0003", "UTIC-2026-0001", "UTIC-2026-0004", "UTIC-2026-0002")
+        self.base = montar(desordenada, ultima=10, status=("EM ABERTO",) * 4)
+        self.importar(self.base, False)
+        self.atualizar(edicoes=[ChamadoManual(numero="UTIC-2026-0001", B="REDE")])
+        pendente = self.saida.read_bytes()
+        coluna_c = G.COLUNAS_DE_DADO.index("C")
+        self.assertEqual([v[coluna_c] for _, v in sorted(G.valores_dos_chamados(pendente).items())], sorted(desordenada))
+        self.assertNotEqual(G.valores_dos_chamados(pendente), G.valores_dos_chamados(self.base))  # rows really moved
+        regravado = regravar(self.base, lambda folha: folha.replace(' s="60"', ' s="61"'))
+        for baixado in (self.base, regravado):  # SharePoint still holds the unsorted base: the output can still be sent
+            with self.assertRaisesRegex(DomainConflictError, "não mudou desde a importação.*Enviar ao SharePoint"):
+                self.importar(baixado, True)
+            self.assertEqual(self.saida.read_bytes(), pendente)
+        corpo = self.importar(regravar(pendente, lambda folha: folha.replace(' s="60"', ' s="61"')), True)  # SharePoint holds the sent output
+        self.assertNotIn("aviso", corpo)
+        self.assertSaidaPreservada(pendente)
+
     # 5. reorder plus a filled row (the real case)
     def test_reorder_plus_filled_row_imports_and_keeps_the_new_ticket(self):
         pendente = self.importar_e_gerar_saida_pendente()
