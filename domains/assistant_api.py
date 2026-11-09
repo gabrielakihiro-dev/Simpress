@@ -1915,7 +1915,7 @@ class SimpressApi:
 
         Same tickets the screen accepts: old open ticket of the imported Dashboard (read or not) or new ticket of the last search."""
         numero, antigo, novo = self._localizar_chamado_sebrae(numero)
-        se = _dict((antigo if antigo is not None else novo).get("softexpert"))
+        se = _dict(_dict(antigo if antigo is not None else novo).get("softexpert"))
         if _dict(se.get("finalizacao")).get("status") == "ok":
             raise ValueError(f"{numero} já foi finalizado no SoftExpert; não dá mais para anexar PDF. Nada foi feito.")
         return {"numero": numero, "pdf_atual": str(_dict(se.get("pdf")).get("nome") or "")}
@@ -1942,7 +1942,7 @@ class SimpressApi:
                 raise ValueError(f"{numero} ainda não foi lido no SoftExpert (Ler chamados antigos); não há descrição para editar. Nada foi feito.")
             se, atual = _dict(antigo.get("softexpert")), str(leitura.get("descricao") or "")
         else:
-            se, atual = _dict(novo.get("softexpert")), str(_dict(novo.get("linha")).get("H") or "")
+            se, atual = _dict(_dict(novo).get("softexpert")), str(_dict(_dict(novo).get("linha")).get("H") or "")
         if _dict(se.get("finalizacao")).get("status") == "ok":
             raise ValueError(f"{numero} já foi finalizado no SoftExpert; a descrição não pode mais ser editada. Nada foi feito.")
         texto = str(descricao or "").strip()
