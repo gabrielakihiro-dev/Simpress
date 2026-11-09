@@ -1733,5 +1733,50 @@ class AvisoEnvioConcluidoTests(unittest.TestCase):
         self.assertEqual(nao, [False] * len(AVISOS_ENVIO_NAO_SUCESSO))
 
 
+class RotinaInventariosEtapasFinaisTests(unittest.TestCase):
+    """Depois de importar: verificar usuários e, em seguida, buscar em Staged Computers; falha vira só aviso."""
+
+    def rodar(self, codigo_importacao=0, usuarios=None, staged=None):
+        ordem = []
+        usuarios = usuarios or MagicMock(side_effect=lambda *_: ordem.append("usuarios"))
+        staged = staged or MagicMock(side_effect=lambda *_: ordem.append("staged"))
+        patches = (
+            patch.object(automacao, "exportar_ux_equipamentos"), patch.object(automacao, "exportar_endpoint"),
+            patch.object(automacao, "log"), patch.object(automacao, "importar", return_value=codigo_importacao),
+            patch.object(automacao, "rodar_rotina_usuarios", usuarios),
+            patch.object(automacao, "rodar_rotina_staged_computers", staged),
+        )
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        saida = io.StringIO()
+        with redirect_stdout(saida):
+            codigo = automacao.rodar_rotina_inventarios(MagicMock())
+        return codigo, saida.getvalue(), ordem, usuarios, staged
+
+    def test_staged_computers_roda_depois_de_usuarios(self):
+        codigo, _, ordem, _, _ = self.rodar()
+        self.assertEqual((codigo, ordem), (0, ["usuarios", "staged"]))
+
+    def test_falha_no_staged_computers_vira_aviso_e_nao_falha_a_rotina(self):
+        codigo, saida, _, _, staged = self.rodar(staged=MagicMock(side_effect=RuntimeError("Endpoint fora do ar")))
+        self.assertEqual(codigo, 0)
+        staged.assert_called_once()
+        self.assertIn("[AVISO] Busca em Staged Computers não concluída", saida)
+        self.assertIn("Endpoint fora do ar", saida)
+
+    def test_falha_nos_usuarios_nao_impede_o_staged_computers(self):
+        codigo, saida, _, _, staged = self.rodar(usuarios=MagicMock(side_effect=RuntimeError("sem login")))
+        self.assertEqual(codigo, 0)
+        staged.assert_called_once()
+        self.assertIn("[AVISO] Verificação de usuários não concluída", saida)
+
+    def test_importacao_com_falha_nao_busca_em_staged_computers(self):
+        codigo, _, _, usuarios, staged = self.rodar(codigo_importacao=1)
+        self.assertEqual(codigo, 1)
+        usuarios.assert_not_called()
+        staged.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -103,13 +103,13 @@ Avisar, em dois níveis, quando um notebook/MacBook está perto de sumir do Endp
 
 - Fonte: a atualização mais recente do Histórico de Planilhas (ignorando restaurações e a linha de base fixada), seção `sem_acesso_7_dias` (`dias_sem_verificacao`) e `ausentes_no_endpoint`. Séries do Sebrae ficam de fora, também no histórico antigo.
 - **Limite** (`LONG_UNUSED_WARNING_DAYS = 55` em `core/config.py`): mais de 55 dias e menos de 60 sem acesso. **Passou** (`LONG_UNUSED_LIMIT_DAYS = 60`): 60 dias ou mais.
-- **Saiu para Ausentes no Endpoint**: a série estava em `sem_acesso_7_dias` na atualização anterior, não está mais nela e aparece em `ausentes_no_endpoint` na atual; conta como passou quando os dias da atualização anterior mais os dias entre as duas atualizações chegam a 60. A série do MacBook no Endpoint (sem `S` inicial) equivale à de `EquipamentosDetalhes` com `S`, só na comparação.
+- **Saiu para Ausentes no Endpoint**: a série não está em `sem_acesso_7_dias` na atualização atual e aparece em `ausentes_no_endpoint`; o sistema volta pelo histórico até a última atualização em que ela estava em `sem_acesso_7_dias`, desde que tenha ficado em `ausentes_no_endpoint` em todas as atualizações seguintes. Conta como passou quando os dias daquela linha mais os dias desde aquela atualização chegam a 60 (09/11/2026: antes só a atualização anterior era olhada; por isso equipamentos que saíram há mais tempo também passam a aparecer no sino). A série do MacBook no Endpoint (sem `S` inicial) equivale à de `EquipamentosDetalhes` com `S`, só na comparação.
 - Só leitura: nada é regravado. O filtro por categoria (notebook/MacBook) não é aplicado; vale para toda série que aparece nessas listas.
 
 ### Quando aparece e quando some
 
 - Aparece com pelo menos um equipamento no limite ou que passou. Some quando não há nenhum, quando não há atualização no histórico ou quando o histórico não pode ser lido.
-- O aviso de "saiu da lista" dura até a próxima comparação, porque depois dela a série já consta só em `Ausentes no Endpoint`.
+- O aviso de "saiu da lista" continua enquanto a série seguir em `Ausentes no Endpoint` sem voltar a `Sem acesso há 7 dias ou mais`.
 - Estado `passou_60` tem prioridade (selo `Urgente`); `limite_55` mostra o selo `Atenção`.
 
 ### Texto
@@ -120,6 +120,12 @@ Avisar, em dois níveis, quando um notebook/MacBook está perto de sumir do Endp
 | `limite_55` | Perto de 60 dias sem acesso | 2 notebooks/MacBooks estão no limite, com mais de 55 dias sem acesso. | Ver Resumo |
 
 Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn-alerta-sem-acesso-60` abre o Resumo (`abrirPainelCockpit` com `["comparacao"]`). Título padrão do cartão oculto: `Notebooks sem acesso`.
+
+### Lista no Resumo (F3) e verificação em Staged Computers (09/11/2026)
+
+- Pedido do usuário de 09/11/2026: o resultado da comparação (Resumo/F3 e `Histórico e ações completas`) mostra, logo depois de `Sem acesso há 7 dias ou mais`, a seção `Passou de 60 dias sem acesso (n)` com Hostname/Apelido, Série, Dias sem acesso (`~` na estimativa de quem saiu), Situação (`Saiu para Ausentes no Endpoint` ou `Ainda em Sem acesso há 7 dias ou mais`) e Anotação, além de um link para o `Staged Computers` do Endpoint Central. Sem itens: `Nenhum notebook passou de 60 dias sem acesso nesta atualização.`
+- A lista é calculada na leitura (`comparacao.sem_acesso_60_dias` em `GET /api/historico-comparacoes/{id}`, com `long_unused_status(..., event_id)`, tratando aquele evento como o mais recente) e nunca é gravada no histórico. A anotação de cada linha usa um identificador estável por evento e série (com índice de ocorrência: a primeira linha de cada série usa 0, e séries vazias ou repetidas não colidem), salva como as das outras seções (pasta compartilhada, limite de 2.000 caracteres) e entra na exportação Excel do histórico. Como os dias mudam a cada atualização, ela não é reaplicada em históricos novos. Limite conhecido: se o evento for apagado, ou se `LONG_UNUSED_*` mudar e a linha deixar de aparecer, a anotação fica guardada na pasta compartilhada sem linha visível (não é apagada).
+- Na rotina `inventarios` da Automação (F4), e portanto em `ambas`, depois de uma importação bem-sucedida, `scripts/staged_computers_endpoint.py` abre uma aba própria em `Staged Computers` (só leitura; nunca fecha a aba nem o Chrome; login sempre do usuário) e procura os hostnames que saíram para Ausentes no Endpoint. Cada linha recebe a anotação `[Staged Computers dd/mm/aaaa HH:MM] Encontrado em Staged Computers do Endpoint: ...` (escritório, status e último contato) ou `Não encontrado em Staged Computers do Endpoint.`; o "não encontrado" só é escrito quando a grade foi lida por inteiro (paginação `1 - N` igual às linhas lidas e menor que o `Rows per page` da tela, botão de próxima página desativado, nenhuma busca com texto e, com a grade vazia, "Nenhum dado disponível"; o filtro avançado não é detectado). Anotação em conflito ou com integridade inválida não é tocada, e as linhas são relidas logo antes de gravar. Falha nessa etapa vira `[AVISO]` e não reprova a rotina. Usuários logados, IP e MAC não são gravados.
 
 ### Contrato da API
 

@@ -2507,6 +2507,133 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 for item in main.get_historico_comparacoes()["eventos"]
             ))
 
+    def test_history_detail_lists_notebooks_past_60_days_as_of_that_update(self):
+        def event(event_id, moment, **comparison):
+            return {"id": event_id, "horario": moment, "resumo": {}, "comparacao": comparison}
+        history = [
+            event("old", "2026-10-01T10:00:00", sem_acesso_7_dias=[{"serie": "X1", "computador": "PRNOTE-X1", "dias_sem_verificacao": 50}]),
+            event("mid", "2026-10-08T10:00:00", ausentes_no_endpoint=[{"serie": "X1", "computador": "PRNOTE-X1"}]),
+            event("new", "2026-10-15T10:00:00", sem_acesso_7_dias=[{"serie": "N1", "computador": "PRNOTE-N1", "dias_sem_verificacao": 57}],
+                  ausentes_no_endpoint=[{"serie": "X1", "computador": "PRNOTE-X1"}]),
+        ]
+        self.comparison_history.write_text(json.dumps(history), encoding="utf-8")
+
+        rows = main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"]
+        # X1 left the 7+ list two updates ago: 50 + 14 days. N1 (57) is only near the limit.
+        self.assertEqual(rows, [{
+            "serie": "X1", "computador": "PRNOTE-X1", "dias": 64, "situacao": "saiu_endpoint",
+            "anotacao_id": main.comparison_annotation_item_id("new", "sem_acesso_60_dias", 0, {"serie": "X1"}),
+            "anotacao": "",
+        }])
+        self.assertEqual(main.get_comparacao_historica("mid")["evento"]["comparacao"]["sem_acesso_60_dias"], [])
+        self.assertNotIn("sem_acesso_60_dias", json.loads(self.comparison_history.read_text(encoding="utf-8"))[2]["comparacao"])
+
+    def _history_with_a_notebook_past_60_days(self):
+        def event(event_id, moment, **comparison):
+            return {"id": event_id, "horario": moment, "resumo": {}, "comparacao": comparison}
+        history = [
+            event("old", "2026-10-01T10:00:00", sem_acesso_7_dias=[{"serie": "X1", "computador": "PRNOTE-X1", "dias_sem_verificacao": 50}]),
+            event("mid", "2026-10-08T10:00:00", ausentes_no_endpoint=[{"serie": "X1", "computador": "PRNOTE-X1"}]),
+            event("new", "2026-10-15T10:00:00", ausentes_no_endpoint=[{"serie": "X1", "computador": "PRNOTE-X1"}]),
+        ]
+        self.comparison_history.write_text(json.dumps(history), encoding="utf-8")
+
+    def test_annotation_on_a_60_day_row_is_kept_outside_the_history_and_survives_the_next_read(self):
+        self._history_with_a_notebook_past_60_days()
+        stored_before = self.comparison_history.read_bytes()
+        row = main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"][0]
+        self.assertEqual(row["anotacao_id"], main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"][0]["anotacao_id"])
+
+        saved = main.salvar_anotacao_comparacao_historica(
+            "new", row["anotacao_id"], SimpleNamespace(anotacao="Notebook devolvido ao estoque.")
+        )
+
+        self.assertTrue(saved["sucesso"])
+        self.assertEqual(self.comparison_history.read_bytes(), stored_before)
+        shared = [json.loads(path.read_text(encoding="utf-8")) for path in self.shared_annotations.glob("*.json")]
+        self.assertEqual([(record["categoria"], record["serie"], record["anotacao"]) for record in shared],
+                         [("sem_acesso_60_dias", "X1", "Notebook devolvido ao estoque.")])
+        reread = main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"][0]
+        self.assertEqual(reread["anotacao_id"], row["anotacao_id"])
+        self.assertEqual(reread["anotacao"], "Notebook devolvido ao estoque.")
+        self.assertEqual(len(reread["anotacao_revisoes"]), 1)
+        # Editing on top of the observed revision works and keeps the history file untouched.
+        main.salvar_anotacao_comparacao_historica(
+            "new", row["anotacao_id"],
+            SimpleNamespace(anotacao="Baixado do contrato.", base_revisoes=reread["anotacao_revisoes"]),
+        )
+        self.assertEqual(self.comparison_history.read_bytes(), stored_before)
+        self.assertEqual(
+            main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"][0]["anotacao"],
+            "Baixado do contrato.",
+        )
+
+    def test_60_day_rows_with_the_same_serial_get_distinct_annotation_ids(self):
+        rows = [{"serie": "", "computador": "PRNOTE-A", "dias": 64, "situacao": "saiu_endpoint"},
+                {"serie": "", "computador": "PRNOTE-B", "dias": 70, "situacao": "passou"},
+                {"serie": "X1", "computador": "PRNOTE-X1", "dias": 61, "situacao": "passou"}]
+        self._history_with_a_notebook_past_60_days()
+        with patch("routers.inventory_history.long_unused_status", return_value={"equipamentos": rows}):
+            listed = main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"]
+        ids = [row["anotacao_id"] for row in listed]
+        self.assertEqual(len(set(ids)), 3)
+        # The first occurrence keeps index 0, so annotations saved before the index existed still match.
+        self.assertEqual(ids[0], main.comparison_annotation_item_id("new", "sem_acesso_60_dias", 0, {"serie": ""}))
+        self.assertEqual(ids[1], main.comparison_annotation_item_id("new", "sem_acesso_60_dias", 1, {"serie": ""}))
+        self.assertEqual(ids[2], main.comparison_annotation_item_id("new", "sem_acesso_60_dias", 0, {"serie": "X1"}))
+
+    def test_annotation_on_an_unknown_60_day_row_is_rejected(self):
+        self._history_with_a_notebook_past_60_days()
+        other_event = main.comparison_annotation_item_id("new", "sem_acesso_60_dias", 0, {"serie": "NAO-EXISTE"})
+        for event_id, item_id in (("new", other_event), ("mid", main.comparison_annotation_item_id("mid", "sem_acesso_60_dias", 0, {"serie": "X1"}))):
+            with self.subTest(event=event_id):
+                with self.assertRaises(main.HTTPException) as raised:
+                    main.salvar_anotacao_comparacao_historica(event_id, item_id, SimpleNamespace(anotacao="x"))
+                self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(list(self.shared_annotations.glob("*.json")), [])
+
+    def test_60_day_annotation_is_available_on_a_clone_without_local_history_and_in_the_excel_export(self):
+        self._history_with_a_notebook_past_60_days()
+        item_id = main.get_comparacao_historica("new")["evento"]["comparacao"]["sem_acesso_60_dias"][0]["anotacao_id"]
+        main.salvar_anotacao_comparacao_historica("new", item_id, SimpleNamespace(anotacao="Conferir no Endpoint."))
+
+        class CapturedResponse:
+            def __init__(self, content, media_type, headers):
+                self.body = content.read()
+                self.headers = headers
+
+        with patch("routers.inventory_history.StreamingResponse", CapturedResponse):
+            response = main.exportar_historico_comparacoes_excel(data="2026-10-15")
+        workbook = openpyxl.load_workbook(io.BytesIO(response.body), data_only=True)
+        try:
+            rows = [[cell.value for cell in row] for row in workbook["Passou de 60 dias"].iter_rows()]
+        finally:
+            workbook.close()
+        header = next(row for row in rows if "Série" in row)
+        data = next(row for row in rows if "X1" in row)
+        values = dict(zip(header, data))
+        self.assertEqual(values["Hostname/Apelido"], "PRNOTE-X1")
+        self.assertEqual(values["Dias sem acesso"], "~64")
+        self.assertEqual(values["Situação"], "Saiu para Ausentes no Endpoint")
+        self.assertEqual(values["Anotação"], "Conferir no Endpoint.")
+
+        fresh_clone_history = self.root / "clone_sem_historico_60" / "historico_comparacoes.json"
+        fresh_clone_history.parent.mkdir()
+        fresh_clone_history.write_text("[]", encoding="utf-8")
+        with patch.object(main, "COMPARISON_HISTORY_FILE", fresh_clone_history):
+            detail = main.get_comparacao_historica("new")["evento"]
+            self.assertTrue(detail["somente_anotacoes_sincronizadas"])
+            synchronized = detail["comparacao"]["sem_acesso_60_dias"][0]
+            self.assertEqual((synchronized["anotacao_id"], synchronized["anotacao"]), (item_id, "Conferir no Endpoint."))
+            self.assertEqual(detail["comparacao"]["anotacoes_sincronizadas"][0]["categoria"], "sem_acesso_60_dias")
+            self.assertEqual(detail["comparacao"]["apelidos_sem_atualizacao"], [])
+            main.salvar_anotacao_comparacao_historica(
+                "new", item_id,
+                SimpleNamespace(anotacao="Resolvido no clone.", base_revisoes=synchronized["anotacao_revisoes"]),
+            )
+        record = resolve_history_annotations(main.load_history_annotations(self.shared_annotations))[("new", item_id)]
+        self.assertEqual((record["categoria"], record["anotacao"]), ("sem_acesso_60_dias", "Resolvido no clone."))
+
     def test_annotations_save_for_all_requested_sections_and_appear_in_excel_export(self):
         event = {
             "id": "evento-todas-anotacoes",

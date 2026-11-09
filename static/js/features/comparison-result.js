@@ -318,6 +318,7 @@
     const categoryLabels = {
       apelidos_sem_atualizacao: "Linhas mantidas para conferência",
       sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+      sem_acesso_60_dias: "Passou de 60 dias sem acesso",
       ausentes_no_endpoint: "Sem correspondência — Endpoint",
       ausentes_em_detalhes: "Sem correspondência — Simpress",
       divergencias_local: "Localidade divergente",

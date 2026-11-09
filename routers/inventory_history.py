@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains import history_restore
+from routers.dashboard import long_unused_status
 from domains.history_export import _history_display_files, build_history_export_workbook, history_export_series
 from domains.history_restore import HistoryRestoreError, comparison_event_type
 from domains.history_annotations import (
@@ -21,6 +22,7 @@ from domains.history_annotations import (
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from core.config import LONG_UNUSED_LIMIT_DAYS, LONG_UNUSED_WARNING_DAYS
 from core.errors import DomainError
 from core.integrity import (
     FileBusyError,
@@ -56,6 +58,9 @@ _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "series_sem_mapeamento",
     "mudancas_usuarios",
 )
+# Rows computed on read (never stored in the history): annotated through the shared revisions only.
+_DERIVED_ANNOTATABLE_CATEGORIES = ("sem_acesso_60_dias",)
+_MERGEABLE_COMPARISON_CATEGORIES = _ANNOTATABLE_COMPARISON_CATEGORIES + _DERIVED_ANNOTATABLE_CATEGORIES
 logger = logging.getLogger(__name__)
 
 
@@ -261,7 +266,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
             return event_view
         comparison["anotacoes_sync_ativa"] = bool(services.history_annotations_sync_enabled())
         event_id = str(event_view.get("id") or "")
-        for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+        for category in _MERGEABLE_COMPARISON_CATEGORIES:
             items = comparison.get(category)
             if not isinstance(items, list):
                 continue
@@ -295,7 +300,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
         event_records.sort(key=lambda record: record["item_id"])
         event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
         category_items: Dict[str, List[Dict[str, Any]]] = {
-            category: [] for category in _ANNOTATABLE_COMPARISON_CATEGORIES
+            category: [] for category in _MERGEABLE_COMPARISON_CATEGORIES
         }
         synchronized_annotations = []
         for record in event_records:
@@ -438,6 +443,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
         for event in history:
             if isinstance(event, dict) and str(event.get("horario") or "")[:10] == selected_date.isoformat():
                 event_view = services.comparison_history_for_display(event)
+                _add_long_unused_rows(event_view, str(event.get("id") or ""))
                 _merge_shared_annotations(event_view, annotations)
                 display_events.append(event_view)
         if not display_events:
@@ -458,6 +464,33 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
         )
 
 
+    def _add_long_unused_rows(event_view: Dict[str, Any], evento_id: str) -> None:
+        # Notebooks past 60 days as of this update; kept out of the stored history (it depends on older updates).
+        comparison = event_view.get("comparacao")
+        if not isinstance(comparison, dict):
+            return
+        try:
+            status = long_unused_status(
+                services.load_comparison_history(), LONG_UNUSED_WARNING_DAYS, LONG_UNUSED_LIMIT_DAYS, evento_id,
+            )
+        except Exception:
+            # The list is optional; the comparison must still open.
+            logger.exception("Falha ao calcular a lista de notebooks sem acesso há 60 dias ou mais.")
+            return
+        # Only the serial identifies the row (days and situation change between updates); the occurrence
+        # index keeps repeated or empty serials apart, and the first one keeps index 0.
+        ocorrencias: Dict[str, int] = {}
+        linhas = []
+        for item in status["equipamentos"]:
+            if item["situacao"] not in ("passou", "saiu_endpoint"):
+                continue
+            serie = str(item["serie"] or "")
+            indice = ocorrencias.get(serie, 0)
+            ocorrencias[serie] = indice + 1
+            anotacao_id = services.comparison_annotation_item_id(evento_id, "sem_acesso_60_dias", indice, {"serie": serie})
+            linhas.append({**item, "anotacao_id": anotacao_id})
+        comparison["sem_acesso_60_dias"] = linhas
+
     @router.get("/api/historico-comparacoes/{evento_id}")
     def get_comparacao_historica(evento_id: str):
         evento = next(
@@ -471,6 +504,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
                 raise HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
             return {"evento": event_view}
         event_view = services.comparison_history_for_display(evento)
+        _add_long_unused_rows(event_view, evento_id)
         _merge_shared_annotations(event_view, annotations)
         return {"evento": event_view}
 
@@ -488,6 +522,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
         annotation_row = None
         annotation_category = "apelidos_sem_atualizacao"
         annotation_line_hash = None
+        derived = False
         if event is not None:
             comparison = event.get("comparacao")
             if isinstance(comparison, dict):
@@ -507,6 +542,20 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
                             annotation_category = category
                             break
                     if annotation_row is not None:
+                        break
+            if annotation_row is None:
+                # Computed on read, so it is not in the stored history: recompute and match by id.
+                derived_view: Dict[str, Any] = {"comparacao": {}}
+                _add_long_unused_rows(derived_view, evento_id)
+                for derived_item in derived_view["comparacao"].get("sem_acesso_60_dias", []):
+                    if derived_item.get("anotacao_id") == item_id:
+                        annotation_row = dict(derived_item)
+                        annotation_category = "sem_acesso_60_dias"
+                        # Days change every update; the serial alone keeps the row signature stable.
+                        annotation_line_hash = services.history_annotation_row_fingerprint(
+                            annotation_category, {"serie": annotation_row["serie"]},
+                        )
+                        derived = True
                         break
         else:
             annotation_row = next(
@@ -581,14 +630,14 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
         try:
             # The transaction locks the history file; no Python lock is held around it.
             targets = [pending_path]
-            if event is not None:
+            if event is not None and not derived:
                 targets.append(services.comparison_history_path())
             with services.atomic_file_transaction(services.transaction_root(), targets) as transaction:
                 try:
                     record = reuse_annotation_revision(services.history_annotations_directory(), record)
                 except ValueError as error:
                     raise HTTPException(409, detail=str(error)) from None
-                if event is not None:
+                if event is not None and not derived:
                     transaction.update_json(
                         services.comparison_history_path(),
                         update_annotation,

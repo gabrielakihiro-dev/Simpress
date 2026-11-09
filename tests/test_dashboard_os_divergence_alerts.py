@@ -181,6 +181,30 @@ class LongUnusedStatusTests(unittest.TestCase):
         result = long_unused_status([previous, current])
         self.assertEqual((result["total_passou"], result["total_saiu_endpoint"]), (1, 0))
 
+    def test_notebook_that_left_the_7_day_list_updates_ago_stays_listed(self):
+        history = [
+            update("a", NOW - timedelta(days=14), sem_acesso_7_dias=[idle("X", 50), idle("BACK", 50), idle("OLD", 30)]),
+            update("b", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("OLD", 37)], ausentes_no_endpoint=[{"serie": "X"}]),
+            update("c", NOW, sem_acesso_7_dias=[idle("NOW", 61), idle("NEAR", 57)],
+                   ausentes_no_endpoint=[{"serie": "X"}, {"serie": "BACK"}, {"serie": "OLD"}]),
+        ]
+        result = long_unused_status(history)
+        # X: 50 + 14 days, absent since. BACK returned in "b" (not absent there). OLD: newest row 37 + 7 < 60.
+        self.assertEqual(
+            [(item["serie"], item["dias"], item["situacao"]) for item in result["equipamentos"]],
+            [("X", 64, "saiu_endpoint"), ("NOW", 61, "passou"), ("NEAR", 57, "limite")],
+        )
+
+    def test_event_id_uses_that_update_as_the_newest(self):
+        history = [
+            update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("A", 70)]),
+            update("b", NOW, sem_acesso_7_dias=[]),
+        ]
+        self.assertEqual(long_unused_status(history)["total_passou"], 0)
+        selected = long_unused_status(history, event_id="a")
+        self.assertEqual((selected["total_passou"], selected["horario"]), (1, (NOW - timedelta(days=7)).isoformat()))
+        self.assertEqual(long_unused_status(history, event_id="missing")["estado"], "sem_dados")
+
     def test_restorations_and_the_pinned_baseline_are_ignored(self):
         history = [
             update("a", NOW - timedelta(days=1), sem_acesso_7_dias=[idle("A", 70)]),

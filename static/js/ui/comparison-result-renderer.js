@@ -18,6 +18,7 @@
   ]);
   const CATEGORIAS_ANOTACOES_SINCRONIZADAS = {
     sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+    sem_acesso_60_dias: "Passou de 60 dias sem acesso",
     ausentes_no_endpoint: "Sem correspondência — Endpoint",
     ausentes_em_detalhes: "Sem correspondência — Simpress",
     divergencias_local: "Localidade divergente",
@@ -236,6 +237,21 @@
           <td class="px-3 py-2">${escapeHtml(String(item.linha_endpoint || "—"))}</td>
           ${renderizarCampoAnotacao(item, `o hostname ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
         </tr>`);
+  }
+
+  // Built by the server from older updates; "saiu_endpoint" days are an estimate (shown with "~").
+  function linhasSemAcesso60(itens, { renderizarCampoAnotacao }) {
+    return itens.map(item => {
+      const estimado = item.situacao === "saiu_endpoint";
+      return `
+        <tr class="text-fg-tertiary" data-sem-acesso-60-situacao="${escapeHtml(item.situacao || "")}" ${atributosLinhaComparacao("sem_acesso_60_dias", item)}>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2">${estimado ? "~" : ""}${Number(item.dias || 0).toLocaleString("pt-BR")}</td>
+          <td class="px-3 py-2">${estimado ? "Saiu para Ausentes no Endpoint" : "Ainda em Sem acesso há 7 dias ou mais"}</td>
+          ${renderizarCampoAnotacao(item, `o hostname ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
+        </tr>`;
+    });
   }
 
   function linhasApelidosAtualizados(apelidosAtualizados) {
@@ -505,6 +521,7 @@
     const aliasReviewRows = linhasApelidosConferencia(apelidosSemAtualizacao, colunas);
     const manualAliasRows = linhasApelidosManuais(divergenciasApelidosManuais, comparison);
     const semAcessoRows = linhasSemAcesso(semAcesso7DiasOrdenados, colunas);
+    const semAcesso60 = Array.isArray(comparison.sem_acesso_60_dias) ? comparison.sem_acesso_60_dias : null;
     const locationRows = linhasLocalidadeDivergente(divergenciasLocal, colunas);
     const ambiguityRows = linhasAmbiguidades(ambiguidades, registrosAmbiguos, colunas);
     const unmappedRows = linhasSeriesSemMapa(seriesSemMapa, colunas);
@@ -567,6 +584,10 @@
           <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-xs text-fg-muted">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
         </section>
+        ${semAcesso60 ? `<section class="space-y-2" data-history-filter-section data-sem-acesso-60-secao>
+          <div>${tituloSecaoComparacao(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "rose")}<p class="text-xs text-fg-muted">Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam.</p><p class="text-xs text-fg-muted">Os hostnames que somem do Endpoint ficam em <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p></div>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}
+        </section>` : ""}
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber")}<p class="text-xs text-fg-muted">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
