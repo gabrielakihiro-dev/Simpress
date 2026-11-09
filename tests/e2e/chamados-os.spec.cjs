@@ -71,3 +71,149 @@ test("Chamado × OS: o botão da OS no cartão do chamado na aba Chamados (F5) a
   await expect(modal).toBeHidden();
   await expect(gatilho).toBeFocused();
 });
+
+// ----- Marca de OS finalizada (célula Chamado da aba OS, F6) -----
+// GET/PUT de marcas-finalizacao são simulados no navegador: o fixture nunca grava marcas e nada vai ao SoftExpert.
+const EVENTO_PUT = { desfazer: "desfeita", refazer: "refeita", conferir: "conferida" };
+const MARCA_SITE = {
+  serie: "DEMO-SN-001", os: "7285070", chamado: "UTIC-2026-1378", origem: "site", motivo: "",
+  finalizado_em: "2026-11-08T09:00:00-03:00", ativa: true, conferido_em: "",
+  historico: [{ acao: "marcada", origem: "auto", em: "2026-11-08T09:00:00-03:00" }],
+};
+const MARCA_OUTRO = {
+  ...MARCA_SITE, chamado: "UTIC-2026-1379", origem: "outro_tecnico", motivo: "saiu_do_dashboard",
+};
+
+async function simularMarcas(page, iniciais) {
+  const estado = { marcas: iniciais.map(marca => ({ ...marca, historico: [...marca.historico] })), puts: [] };
+  await page.route("**/api/operacoes/chamados/marcas-finalizacao", async route => {
+    const pedido = route.request();
+    if (pedido.method() === "GET") return route.fulfill({ json: { marcas: estado.marcas } });
+    if (pedido.method() !== "PUT") return route.fallback();
+    const corpo = pedido.postDataJSON();
+    estado.puts.push(corpo);
+    const marca = estado.marcas.find(item => item.chamado === corpo.chamado);
+    if (!marca) return route.fulfill({ status: 422, json: { detail: "Marca inexistente." } });
+    if (corpo.acao === "desfazer") marca.ativa = false;
+    if (corpo.acao === "refazer") marca.ativa = true;
+    if (corpo.acao === "conferir") marca.conferido_em = "2026-11-08T10:30:00-03:00";
+    marca.historico.push({ acao: EVENTO_PUT[corpo.acao], origem: "manual", em: "2026-11-08T10:30:00-03:00" });
+    return route.fulfill({ json: { marca } });
+  });
+  return estado;
+}
+
+async function abrirF6ComMarcas(page, iniciais) {
+  const estado = await simularMarcas(page, iniciais);
+  await page.goto("/");
+  await abrirAba(page, "#btn-acompanhamento-chamados", "#btn-chamados-menu", "OS");
+  const linha = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"]').first();
+  await expect(linha).toBeVisible();
+  return { estado, linha };
+}
+
+test("Marca de OS finalizada: selo, Desfazer só com confirmação, Refazer e histórico; nada é gravado fora do PUT local", async ({ page }, testInfo) => {
+  const { estado, linha } = await abrirF6ComMarcas(page, [MARCA_SITE]);
+  const bloco = linha.locator(".ck-os-marca");
+  await expect(bloco).toHaveCount(1);
+  await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Chamado finalizado");
+  await expect(bloco).toContainText("UTIC-2026-1378");
+  await expect(bloco.locator(".ck-os-marca__dica")).toHaveCount(0);
+  await expect(bloco.getByRole("button", { name: /^Conferido/ })).toHaveCount(0);
+  if (testInfo.project.name === "mobile") {
+    // Telas menores: o bloco cabe na largura da tela, sem rolagem horizontal da página.
+    const caixa = await bloco.boundingBox();
+    expect(caixa.x + caixa.width).toBeLessThanOrEqual(391);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  }
+  // Animação de entrada entre 150 e 300 ms.
+  const duracao = await bloco.evaluate(no => parseFloat(getComputedStyle(no).animationDuration));
+  expect(duracao).toBeGreaterThanOrEqual(0.15);
+  expect(duracao).toBeLessThanOrEqual(0.3);
+
+  await bloco.locator("summary").click();
+  await expect(bloco.locator("summary")).toHaveText("Histórico da marca");
+  await expect(bloco.locator(".ck-os-marca__lista li")).toHaveText(["08/11/2026 às 09:00 · Marcada (automática)"]);
+
+  // Cancelar a confirmação não envia nada.
+  await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
+  await expect(page.locator("#mensagem-confirmar-acao")).toContainText("não é reaberto no SoftExpert");
+  await page.locator("#btn-confirmar-acao-cancelar").click();
+  expect(estado.puts).toHaveLength(0);
+  await expect(bloco.locator(".ck-os-marca__selo")).toHaveCount(1);
+
+  // Confirmar desfaz: some o selo, entra o Refazer (com o foco) e o histórico ganha o evento manual.
+  await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  const desfeita = linha.locator('.ck-os-marca[data-ativa="false"]');
+  await expect(desfeita).toHaveCount(1);
+  expect(estado.puts).toEqual([{ serie: "DEMO-SN-001", os: "7285070", chamado: "UTIC-2026-1378", acao: "desfazer" }]);
+  await expect(desfeita.locator(".ck-os-marca__selo")).toHaveCount(0);
+  await expect(desfeita.getByRole("button", { name: "Refazer, chamado UTIC-2026-1378" })).toBeFocused();
+  await expect(desfeita.locator(".ck-os-marca__lista li")).toHaveText([
+    "08/11/2026 às 09:00 · Marcada (automática)",
+    "08/11/2026 às 10:30 · Desfeita (manual)",
+  ]);
+
+  await desfeita.getByRole("button", { name: "Refazer, chamado UTIC-2026-1378" }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(linha.locator('.ck-os-marca[data-ativa="true"] .ck-os-marca__selo')).toHaveText("Chamado finalizado");
+  expect(estado.puts.map(item => item.acao)).toEqual(["desfazer", "refazer"]);
+});
+
+test("Marca de OS finalizada: finalizado por outro técnico mostra motivo e dica; Conferido grava só a conferência", async ({ page }) => {
+  const { estado, linha } = await abrirF6ComMarcas(page, [MARCA_OUTRO]);
+  const bloco = linha.locator(".ck-os-marca");
+  await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Finalizado por outro técnico");
+  await expect(bloco.locator(".ck-os-marca__dica")).toHaveText("Conferir no SoftExpert");
+  await expect(bloco.locator(".ck-os-marca__motivo")).toHaveText("Saiu da lista de abertos do Dashboard sem finalização pelo site.");
+  await bloco.getByRole("button", { name: "Conferido, chamado UTIC-2026-1379" }).click();
+  // Conferir não abre confirmação: a dica e o botão saem e o histórico registra a conferência.
+  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  await expect(bloco.locator(".ck-os-marca__dica")).toHaveCount(0);
+  await expect(bloco.getByRole("button", { name: /^Conferido/ })).toHaveCount(0);
+  await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Finalizado por outro técnico");
+  expect(estado.puts).toEqual([{ serie: "DEMO-SN-001", os: "7285070", chamado: "UTIC-2026-1379", acao: "conferir" }]);
+  await bloco.locator("summary").click();
+  await expect(bloco.locator(".ck-os-marca__lista li").last()).toHaveText("08/11/2026 às 10:30 · Conferida (manual)");
+});
+
+test("Marca de OS finalizada: falha do PUT mostra o erro, mantém a marca e reabilita os botões", async ({ page }) => {
+  const { linha } = await abrirF6ComMarcas(page, [MARCA_SITE]);
+  await page.route("**/api/operacoes/chamados/marcas-finalizacao", route => route.request().method() === "PUT"
+    ? route.fulfill({ status: 503, json: { detail: "Marcas indisponíveis no momento." } })
+    : route.fallback());
+  const bloco = linha.locator(".ck-os-marca");
+  await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(page.locator("#cockpit-tickets-os")).toContainText("Marcas indisponíveis no momento.");
+  await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Chamado finalizado");
+  await expect(bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" })).toBeEnabled();
+});
+
+test("Marca de OS finalizada: movimento reduzido desliga a animação de entrada", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const { linha } = await abrirF6ComMarcas(page, [MARCA_SITE]);
+  const duracao = await linha.locator(".ck-os-marca").evaluate(no => parseFloat(getComputedStyle(no).animationDuration));
+  expect(duracao).toBeLessThan(0.01);
+});
+
+test("Marca de OS finalizada: a janela Chamado × OS (somente leitura) mostra só o selo do chamado, sem botões nem histórico", async ({ page }) => {
+  // Duas marcas na mesma OS: a do chamado da janela (ativa) e outra de outro chamado; só a primeira aparece.
+  await simularMarcas(page, [MARCA_SITE, { ...MARCA_OUTRO, chamado: "UTIC-2026-4000" }]);
+  const gatilho = await abrirAbaOsComVinculo(page, "1378");
+  await gatilho.click();
+  await expect(page.locator("#modal-chamado-os")).toBeVisible();
+  const janela = page.locator("#chamado-os-janela-os");
+  await expect(janela.locator(".ck-os-marca")).toHaveCount(1);
+  await expect(janela.locator(".ck-os-marca__selo")).toHaveText("Chamado finalizado");
+  await expect(janela.locator(".ck-os-marca button, .ck-os-marca details")).toHaveCount(0);
+});
+
+test("Marca de OS finalizada: marca desfeita não aparece na janela Chamado × OS", async ({ page }) => {
+  await simularMarcas(page, [{ ...MARCA_SITE, ativa: false }]);
+  const gatilho = await abrirAbaOsComVinculo(page, "1378");
+  await gatilho.click();
+  await expect(page.locator("#chamado-os-janela-os")).toContainText("7285070");
+  await expect(page.locator("#chamado-os-janela-os .ck-os-marca")).toHaveCount(0);
+});

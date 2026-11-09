@@ -377,6 +377,19 @@ def registrar_finalizacao(state_dir: Path, numero: str, status: str, encerrado_e
     return _alterar(state_dir, numero, mudar)
 
 
+def congelar_os_vinculada(state_dir: Path, numero: str, vinculo: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Photo of the OS linked to the ticket when its finalization was requested (mark "OS finalizada" of the OS tab).
+
+    ``vinculo`` is ``{fonte, serie, os, origem}``; ``None`` records that there was no link then. The photo wins over any
+    later edit of the link and is rewritten if the finalization is requested again."""
+    def mudar(item: Dict[str, Any]) -> None:
+        item["os_vinculada"] = (
+            {**{k: str(vinculo.get(k) or "") for k in ("fonte", "serie", "os", "origem")}, "em": agora_iso()} if vinculo else None
+        )
+
+    return _alterar(state_dir, numero, mudar)
+
+
 def ja_finalizado(state_dir: Path, numero: str) -> bool:
     fin = ler_estado(state_dir).get(numero, {}).get("finalizacao")
     return isinstance(fin, dict) and fin.get("status") == STATUS_OK  # nao_encontrado e ja_finalizado antigos não bloqueiam

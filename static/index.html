@@ -200,6 +200,12 @@
             <p id="alerta-divergencias-novas-texto" class="ck-aviso__texto"></p>
             <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirPainelCockpit" data-args='["comparacao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
           </section>
+          <section id="alerta-chamados-outro-tecnico" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-chamados-outro-tecnico-titulo" data-state="loading" hidden>
+            <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
+            <div class="ck-aviso__topo"><span class="ck-badge" data-status="alerta">Atenção</span><h3 id="alerta-chamados-outro-tecnico-titulo" class="ck-aviso__titulo">Chamados finalizados por outro técnico</h3></div>
+            <p id="alerta-chamados-outro-tecnico-texto" class="ck-aviso__texto"></p>
+            <button type="button" id="btn-alerta-chamados-outro-tecnico" data-on-click="abrirPainelCockpit" data-args='["chamados"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver na aba OS</button>
+          </section>
         </div>
       </section>
     </div>

@@ -843,3 +843,41 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await request.get("/__fixture_base_desatualizada?estado=atualizada");
   }
 });
+
+test("finalizados por outro técnico aparecem como quarto aviso do sino e levam à aba OS", async ({ page, request }) => {
+  const trigger = page.locator("#btn-notificacoes");
+  const badge = page.locator("#badge-notificacoes");
+  const panel = page.locator("#notification-center-panel");
+  const aviso = panel.locator("#alerta-chamados-outro-tecnico");
+  await request.get("/__fixture_alertas_painel?estado=ocultos");
+  await request.get("/__fixture_base_desatualizada?estado=atualizada");
+  try {
+    await request.get("/__fixture_alertas_painel?estado=outro_tecnico");
+    await page.reload();
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await expect(badge).toHaveText("1");
+    await expect(trigger).toHaveAccessibleName("Notificações, 1 aviso ativo");
+    await expect(aviso.getByRole("heading", { name: "Chamados finalizados por outro técnico" })).toBeVisible();
+    await expect(aviso.locator(".ck-badge")).toHaveText("Atenção");
+    await expect(aviso.locator("#alerta-chamados-outro-tecnico-texto")).toHaveText(
+      "Confira no SoftExpert e marque Conferido na aba OS (F6)."
+    );
+    await auditAccessibility(page, "#notification-center-panel");
+    await aviso.getByRole("button", { name: "Ver na aba OS" }).click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
+
+    // Leitura indisponível ou lista vazia: o aviso some, sem selo no sino.
+    await request.get("/__fixture_alertas_painel?estado=outro_tecnico_indisponivel");
+    await page.reload();
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await expect(aviso).toBeHidden();
+    await expect(badge).toBeHidden();
+    await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
+  } finally {
+    await request.get("/__fixture_alertas_painel?estado=ocultos");
+    await request.get("/__fixture_base_desatualizada?estado=atualizada");
+  }
+});

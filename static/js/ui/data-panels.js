@@ -1,11 +1,12 @@
 (function (root, factory) {
-  const api = factory();
+  const modelo = typeof module === "object" && module.exports ? require("../shared/chamados-os-model.js") : root.SimpressChamadosOsModel;
+  const api = factory(modelo);
   if (typeof module === "object" && module.exports) module.exports = api;
   else {
     root.SimpressDataPanels = api;
     if (root.document) api.install(root);
   }
-})(typeof window !== "undefined" ? window : globalThis, function createDataPanels() {
+})(typeof window !== "undefined" ? window : globalThis, function createDataPanels(modelo) {
   "use strict";
 
   const ENDPOINT = "/api/painel";
@@ -246,6 +247,12 @@
       && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
       && correspondeTriagemOs(st, item.dataset.triagem || "");
 
+    // Leituras opcionais que falharam: a tabela segue montada e o status diz o que faltou.
+    function sufixoFalhasOs(st) {
+      const falhas = [st.falhaUsuarios && "usuário e hostname indisponíveis", st.falhaMarcas && "marcas de OS finalizada indisponíveis"].filter(Boolean);
+      return falhas.length ? "; " + falhas.join("; ") + "." : "";
+    }
+
     function filtrarSecaoOs(section) {
       const st = osExternas.get(section);
       if (!st) return;
@@ -273,7 +280,7 @@
       if (!st.renderizada) return;
       const status = section.querySelector(".ticket-summary-status");
       const texto = (visiveis === total ? formatNumber(visiveis) : formatNumber(visiveis) + " de " + formatNumber(total)) + " OS · "
-        + pluralize(series.size, "série", "séries") + (st.falhaUsuarios ? "; usuário e hostname indisponíveis." : "");
+        + pluralize(series.size, "série", "séries") + sufixoFalhasOs(st);
       // role=status: reescrever o mesmo texto (ex.: "Carregar mais") faria o leitor de tela anunciar de novo.
       if (status.textContent !== texto) status.textContent = texto;
     }
@@ -339,9 +346,10 @@
       status.setAttribute("aria-live", "polite");
       // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). aoExpandirSerie(serie, celula) preenche o "Andamento";
       // grupoSerie(chamado) devolve o grupo de triagem da série (data-triagem); aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
-      // soOs { serie, os }: só essa OS (janela Chamado × OS), fora dos filtros da F6; somenteLeitura: sem edição nem autosave.
+      // soOs { serie, os, chamado? }: só essa OS (janela Chamado × OS), fora dos filtros da F6; somenteLeitura: sem edição nem autosave
+      // e, das marcas de finalização, só o selo das ativas (do chamado pedido, quando houver).
       const st = {
-        busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, carregada: false,
+        busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, falhaMarcas: false, carregada: false,
         aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
         soOs: opcoes.soOs || null, somenteLeitura: Boolean(opcoes.somenteLeitura),
       };
@@ -409,6 +417,85 @@
     let osObsSeq = 0;
     const osObsKey = (serie, os) => JSON.stringify([serialKey(serie), orderKey(os)]);
     const feedbackOs = (node, texto, situacao = "") => { node.textContent = texto; node.dataset.estado = situacao; };
+
+    // ----- marca de OS finalizada (GET/PUT /api/operacoes/chamados/marcas-finalizacao) -----
+    // Só apresentação e o PUT local do backend: nada vai ao SoftExpert, SharePoint, Excel ou Oracle, e desfazer nunca reabre o chamado.
+    const MARCA_ROTA = "/api/operacoes/chamados/marcas-finalizacao";
+    const CONFIRMA_MARCA = Object.freeze({
+      desfazer: { titulo: "Desfazer a marca de finalização?", confirmar: "Desfazer",
+        mensagem: chamado => `A marca some desta OS. O chamado ${chamado} não é reaberto no SoftExpert.` },
+      refazer: { titulo: "Refazer a marca de finalização?", confirmar: "Refazer",
+        mensagem: chamado => `A marca volta a aparecer nesta OS. Nada é gravado no SoftExpert (chamado ${chamado}).` },
+    });
+    const chamadoIgual = (a, b) => String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
+
+    async function alterarMarcaOs(marca, acao, { bloco, status, section }) {
+      const confirma = CONFIRMA_MARCA[acao];
+      // Sem o diálogo de confirmação (win.confirmarAcao ausente) nada é alterado.
+      if (confirma && !(await win.confirmarAcao?.({
+        titulo: confirma.titulo, mensagem: confirma.mensagem(marca.chamado), confirmar: confirma.confirmar, cancelar: "Cancelar", destrutiva: false,
+      }))) return;
+      const botoes = [...bloco.querySelectorAll("button")];
+      botoes.forEach(botao => { botao.disabled = true; botao.setAttribute("aria-busy", "true"); });
+      try {
+        await osSummaryRequest(MARCA_ROTA, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serie: marca.serie, os: marca.os, chamado: marca.chamado, acao }),
+        });
+        await refreshTicketSummary(true);
+        doc.dispatchEvent(new win.CustomEvent("simpress:atualizar-notificacoes"));
+        // A tabela foi recriada: devolve o foco ao primeiro botão da mesma marca.
+        const id = bloco.dataset.marca;
+        [...section.querySelectorAll(".ck-os-marca")].find(item => item.dataset.marca === id)?.querySelector("button")?.focus();
+      } catch (error) {
+        status.textContent = error.message || "Não foi possível atualizar a marca.";
+        botoes.forEach(botao => { botao.disabled = false; botao.removeAttribute("aria-busy"); });
+        botoes[0]?.focus();
+      }
+    }
+
+    // Bloco de uma marca na célula Chamado: selo (só se ativa), motivo, botões e histórico. Textos do servidor entram só por textContent.
+    function renderMarcaOs(marca, { somenteLeitura, status, section }) {
+      const info = modelo.descreverMarca(marca);
+      const bloco = el("div", "ck-os-marca");
+      bloco.dataset.marca = JSON.stringify([modelo.chaveMarca(marca.serie, marca.os), String(marca.chamado || "")]);
+      bloco.dataset.ativa = String(info.ativa);
+      bloco.dataset.origem = String(marca.origem || "");
+      const topo = el("div", "ck-os-marca__topo");
+      if (info.selo) {
+        const selo = el("span", "ck-badge ck-os-marca__selo", info.selo);
+        selo.dataset.status = marca.origem === "outro_tecnico" ? "alerta" : "ok";
+        topo.append(selo);
+      }
+      if (marca.chamado) topo.append(el("span", "ck-os-marca__chamado ck-mono", String(marca.chamado)));
+      if (info.dica) topo.append(el("span", "ck-os-marca__dica", info.dica));
+      bloco.append(topo);
+      if (info.motivo) bloco.append(el("p", "ck-os-marca__motivo", info.motivo));
+      if (somenteLeitura) return bloco;
+      const acoes = el("div", "ck-os-marca__acoes");
+      const botao = (acao, texto, classe) => {
+        const button = el("button", `ck-btn ${classe} ck-btn--sm ck-os-marca__botao`, texto);
+        button.type = "button";
+        button.dataset.acao = acao;
+        button.setAttribute("aria-label", `${texto}, chamado ${marca.chamado}`);
+        button.addEventListener("click", () => alterarMarcaOs(marca, acao, { bloco, status, section }));
+        acoes.append(button);
+      };
+      if (info.podeConferir) botao("conferir", "Conferido", "ck-btn--secundario");
+      if (info.podeDesfazer) botao("desfazer", "Desfazer", "ck-btn--fantasma");
+      if (info.podeRefazer) botao("refazer", "Refazer", "ck-btn--secundario");
+      bloco.append(acoes);
+      if (info.historico.length) {
+        const detalhes = el("details", "ck-os-marca__historico");
+        detalhes.append(el("summary", "", "Histórico da marca"));
+        const lista = el("ul", "ck-os-marca__lista");
+        info.historico.forEach(linha => lista.append(el("li", "", linha)));
+        detalhes.append(lista);
+        bloco.append(detalhes);
+      }
+      return bloco;
+    }
 
     // notas: { itens: Map(chave → texto salvo), seq } ou null quando a leitura falhou (caixa só leitura).
     function renderOsObservacao(serie, os, notas, somenteLeitura = false) {
@@ -692,11 +779,12 @@
       }
     }
 
-    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map(), notas = null) {
+    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map(), notas = null, marcas = new Map()) {
       const status = section.querySelector(".ticket-summary-status");
       const content = el("div", "ck-os__corpo ticket-summary-content");
       const externa = osExternas.get(section);
-      if (externa) { externa.renderizada = records.length > 0; externa.falhaUsuarios = Boolean(userFailure); }
+      // marcas: Map(chave série+OS → marcas) ou null quando a leitura falhou (a tabela segue sem elas).
+      if (externa) { externa.renderizada = records.length > 0; externa.falhaUsuarios = Boolean(userFailure); externa.falhaMarcas = marcas === null; }
       if (!records.length) {
         status.textContent = externa?.soOs ? "Série não encontrada na importação atual." : "Nenhuma OS vinculada por série na importação atual.";
         section.setAttribute("aria-busy", "false");
@@ -777,6 +865,10 @@
               links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
             linkCell.append(slot);
           });
+          // Marca(s) da OS, uma por chamado. A janela Chamado × OS (somente leitura) só mostra o selo das ativas do chamado pedido.
+          (marcas?.get(osObsKey(record.serie, order.os)) || [])
+            .filter(marca => !externa?.somenteLeitura || (marca.ativa && (!externa.soOs?.chamado || chamadoIgual(marca.chamado, externa.soOs.chamado))))
+            .forEach(marca => linkCell.append(renderMarcaOs(marca, { somenteLeitura: Boolean(externa?.somenteLeitura), status, section })));
           const descCell = cell("Descrição", "ck-td--largo");
           descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
           cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas, externa?.somenteLeitura));
@@ -866,12 +958,15 @@
       });
       try {
         const notasSeq = osObsSeq;
-        const [report, linksData, notasData] = await Promise.all([
+        const [report, linksData, notasData, marcasData] = await Promise.all([
           osSummaryRequest("/api/operacoes/chamados"),
           osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
           // Falha nas observações não derruba a tabela: a caixa fica só leitura.
           osSummaryRequest("/api/operacoes/chamados/observacoes").catch(() => null),
+          // Falha nas marcas também não derruba a tabela: o status avisa que elas estão indisponíveis.
+          osSummaryRequest(MARCA_ROTA).catch(() => null),
         ]);
+        const marcas = Array.isArray(marcasData?.marcas) ? modelo.marcasPorOs(marcasData.marcas) : null;
         const notas = Array.isArray(notasData?.observacoes) ? {
           seq: notasSeq,
           itens: new Map(notasData.observacoes.map(item => [osObsKey(item.serie, item.os), String(item.observacao || "")])),
@@ -910,7 +1005,7 @@
           st?.aoCarregar?.(report);
           const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
             .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
-          renderTicketSummary(section, proprios.get(section) || records, users, links, !st?.somenteLeitura, userFailure, relacoes, grupos, modelos, notas);
+          renderTicketSummary(section, proprios.get(section) || records, users, links, !st?.somenteLeitura, userFailure, relacoes, grupos, modelos, notas, marcas);
         });
       } catch (error) {
         vivos().forEach(section => {
@@ -969,9 +1064,11 @@
       const semAcesso60 = data?.sem_acesso_60_dias;
       const semAcesso60Ativo = (semAcesso60?.estado === "passou_60" && Number(semAcesso60.total_passou) > 0)
         || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
+      const outroTecnico = data?.chamados_outro_tecnico;
+      const outroTecnicoAtivo = !outroTecnico?.indisponivel && Number(outroTecnico?.total) > 0;
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
-        + Number(semAcesso60Ativo);
+        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";

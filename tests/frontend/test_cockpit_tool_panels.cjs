@@ -612,7 +612,7 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
     assert.equal(montadas.length, 1);
     const [host, opcoes] = montadas[0];
     assert.equal(host, el("chamado-os-janela-os"));
-    assert.deepEqual(opcoes.soOs, { serie: "SN-1", os: "77" }, "série e OS vêm do cartão");
+    assert.deepEqual(opcoes.soOs, { serie: "SN-1", os: "77", chamado: "UTIC-2026-1" }, "série e OS vêm do cartão; o chamado filtra as marcas de finalização");
     assert.equal(opcoes.somenteLeitura, true);
     assert.equal(opcoes.semBusca, true);
     assert.equal(el("chamado-os-janela-f6").hidden, false);
@@ -629,6 +629,6 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
     // Chamado que não está no F5: avisa à esquerda e ainda mostra a OS pedida.
     await api.abrirJanelaChamadoOs({ chamado: "UTIC-X", serie: "SN-2", os: "88" });
     assert.equal(noChamado.at(-1)[0].textContent, "Chamado não encontrado na aba Chamados (F5).");
-    assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88" });
+    assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88", chamado: "UTIC-X" });
   } finally { delete global.document; delete global.SimpressDataPanels; }
 });

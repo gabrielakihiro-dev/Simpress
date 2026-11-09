@@ -1965,7 +1965,7 @@
     if (!alvo.os) return renderEmpty(hostOs, "Nenhuma OS vinculada por série na importação atual.");
     let relatorio = null;
     const section = dataPanels()?.montarTabelaOs?.(hostOs, {
-      semBusca: true, soOs: alvo, somenteLeitura: true,
+      semBusca: true, soOs: { ...alvo, chamado: String(chamado || "") }, somenteLeitura: true,
       aoCarregar: report => { relatorio = report; },
       aoExpandirSerie: (serieLinha, cell) => renderTicketDetail(
         (Array.isArray(relatorio?.chamados) ? relatorio.chamados : []).find(record => String(record.serie || "") === serieLinha),
