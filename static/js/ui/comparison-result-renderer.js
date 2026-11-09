@@ -507,6 +507,115 @@
         </section>`;
   }
 
+  // Resumo (F3) sub-tabs: one tabpanel per subject. The controller in comparison-result.js owns state, counts and filters;
+  // everything below is pure so tests can pin the texts and rules.
+  const RESUMO_ABAS = [
+    { chave: "visao", rotulo: "Visão geral" },
+    { chave: "divergencias", rotulo: "Divergências" },
+    { chave: "apelidos", rotulo: "Apelidos" },
+    { chave: "usuarios", rotulo: "Usuários" },
+    { chave: "sem-acesso", rotulo: "Sem acesso" },
+  ];
+  const ROTULOS_CATEGORIA_RESUMO = {
+    apelidos_sem_atualizacao: "Linhas mantidas para conferência",
+    sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+    sem_acesso_60_dias: "Passou de 60 dias sem acesso",
+    ausentes_no_endpoint: "Sem correspondência — Endpoint",
+    ausentes_em_detalhes: "Sem correspondência — Simpress",
+    divergencias_local: "Localidade divergente",
+    correspondencias_ambiguas: "Duplicidades e correspondências ambíguas",
+    divergencias_apelidos_manuais: "Apelidos manuais divergentes",
+    series_sem_mapeamento: "Séries sem local definido",
+    mudancas_usuarios: "Mudanças de usuário logado",
+    sem_usuario: "Sem usuário",
+  };
+  const CATEGORIAS_POR_ABA = {
+    divergencias: ["ausentes_no_endpoint", "ausentes_em_detalhes", "divergencias_local", "correspondencias_ambiguas", "series_sem_mapeamento"],
+    apelidos: ["apelidos_sem_atualizacao", "divergencias_apelidos_manuais"],
+    usuarios: ["mudancas_usuarios", "sem_usuario"],
+    "sem-acesso": ["sem_acesso_7_dias", "sem_acesso_60_dias"],
+  };
+  // The Divergências tab groups the two "sem correspondência" lists into one type.
+  const TIPOS_DIVERGENCIAS = [
+    { valor: "sem_correspondencia", rotulo: "Sem correspondência", categorias: ["ausentes_no_endpoint", "ausentes_em_detalhes"] },
+    { valor: "divergencias_local", rotulo: "Localidade divergente", categorias: ["divergencias_local"] },
+    { valor: "correspondencias_ambiguas", rotulo: "Duplicidade ou ambiguidade", categorias: ["correspondencias_ambiguas"] },
+    { valor: "series_sem_mapeamento", rotulo: "Série sem local definido", categorias: ["series_sem_mapeamento"] },
+  ];
+  const TEXTO_VAZIO_ABA = {
+    divergencias: "Nenhuma divergência neste resultado.",
+    apelidos: "Nenhum apelido pendente neste resultado.",
+    usuarios: "Nenhuma mudança de usuário neste resultado.",
+    "sem-acesso": "Nenhum equipamento sem acesso neste resultado.",
+  };
+  const TEXTO_LISTA_AUSENTE = "Este resultado não traz esta lista. Escolha uma comparação mais recente no campo Comparação.";
+
+  function canonicalizarCategoriaResumo(categoria) {
+    return categoria === "registros_ambiguos" ? "correspondencias_ambiguas" : String(categoria || "");
+  }
+  function abaDaCategoria(categoria) {
+    const canonica = canonicalizarCategoriaResumo(categoria);
+    return Object.keys(CATEGORIAS_POR_ABA).find(chave => CATEGORIAS_POR_ABA[chave].includes(canonica)) || "";
+  }
+  function rotuloAba(chave) {
+    return RESUMO_ABAS.find(aba => aba.chave === chave)?.rotulo || chave;
+  }
+  function textoLinhas(total, encontradas = false) {
+    const n = Number(total) || 0;
+    return `${n.toLocaleString("pt-BR")} ${n === 1 ? "linha" : "linhas"}${encontradas ? (n === 1 ? " encontrada" : " encontradas") : ""}`;
+  }
+  // aria-label of a tab badge; total null = the list does not exist in this result (Usuários).
+  function rotuloContagemAba(chave, total, filtrando = false) {
+    const rotulo = rotuloAba(chave);
+    if (chave === "visao") return rotulo;
+    if (total === null) return `${rotulo}: lista indisponível neste resultado`;
+    return `${rotulo}: ${textoLinhas(total, filtrando)}`;
+  }
+  function textoContadorResumo(total, filtrando = false) {
+    const n = Number(total) || 0;
+    return filtrando
+      ? `${textoLinhas(n, true)} neste resultado.`
+      : `${textoLinhas(n)} para conferência neste resultado.`;
+  }
+  function textoSemResultado(termo) {
+    const t = String(termo || "").trim();
+    return t ? `Nenhuma linha encontrada para “${t}”.` : "Nenhuma linha encontrada com os filtros atuais.";
+  }
+  // Options of the "Tipo de divergência" select; categoriasPresentes feeds every tab except Divergências.
+  function tiposDaAba(chave, categoriasPresentes = []) {
+    if (chave === "divergencias") return TIPOS_DIVERGENCIAS.map(({ valor, rotulo }) => ({ valor, rotulo }));
+    const permitidas = CATEGORIAS_POR_ABA[chave] || [];
+    return [...new Set(categoriasPresentes.map(canonicalizarCategoriaResumo))]
+      .filter(categoria => permitidas.includes(categoria))
+      .map(valor => ({ valor, rotulo: ROTULOS_CATEGORIA_RESUMO[valor] || valor }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }
+  // A type chosen on one tab falls back to "Todos" when the new tab does not offer it.
+  function resolverTipo(chave, tipo, categoriasPresentes = []) {
+    return tiposDaAba(chave, categoriasPresentes).some(opcao => opcao.valor === tipo) ? tipo : "";
+  }
+  function categoriasDoTipo(chave, tipo) {
+    if (!tipo) return null;
+    if (chave === "divergencias") return TIPOS_DIVERGENCIAS.find(opcao => opcao.valor === tipo)?.categorias || [];
+    return [tipo];
+  }
+  // Banner above the tabs (#comparacao-planilhas-avisos); a failed history save is an alert.
+  function avisoHistoricoComparacao(comparison) {
+    if (comparison.historico_salvo === false) {
+      return `<p class="notice notice-warn" role="alert">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`;
+    }
+    return comparison.historico_salvo === true ? '<p class="notice notice-info">Resultado registrado no Histórico de planilhas.</p>' : "";
+  }
+
+  // One tabpanel per Resumo tab; only the selected one is visible. The controller shows data-resumo-vazio when the tab has no rows.
+  function painelResumo(chave, conteudo, selecionado = false) {
+    const vazio = TEXTO_VAZIO_ABA[chave];
+    return `<div role="tabpanel" id="resumo-painel-${chave}" aria-labelledby="resumo-aba-${chave}" class="resumo-painel" data-resumo-painel="${chave}"${selecionado ? "" : " hidden"}>
+        ${vazio ? `<p class="text-xs text-fg-muted" data-resumo-vazio role="status" hidden>${vazio}</p>` : ""}
+        ${conteudo}
+      </div>`;
+  }
+
   function conteudoResultadoComparacao(comparison, listas, colunas) {
     const {
       ausentesEndpoint, ausentesDetalhes, divergenciasLocal, seriesSemMapa, semAcesso7DiasOrdenados, ambiguidades,
@@ -544,12 +653,10 @@
             ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
           </details>
         </section>` : "";
+    const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
     return `
-        ${comparison.historico_salvo === false
-        ? `<p class="notice notice-warn">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
-        : comparison.historico_salvo === true
-          ? '<p class="notice notice-info">Resultado registrado no Histórico de planilhas.</p>'
-          : ""}
+        ${barra}
+        ${painelResumo("visao", `
         ${Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
         ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
         : ""}
@@ -566,28 +673,9 @@
           ${secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : ""}
           ${exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario") : ""}
         </div>
-        ${barra}
-        ${secaoMudancasUsuarios}
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-fg-muted">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-xs text-fg-muted">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
-          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id)}<p class="text-xs text-fg-muted">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-xs text-fg-muted">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
-        </section>
-        ${semAcesso60 ? `<section class="space-y-2" data-history-filter-section data-sem-acesso-60-secao>
-          <div>${tituloSecaoComparacao(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "rose")}<p class="text-xs text-fg-muted">Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam.</p><p class="text-xs text-fg-muted">Os hostnames que somem do Endpoint ficam em <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}
-        </section>` : ""}
+        <p class="text-xs text-fg-subtle">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+        `, true)}
+        ${painelResumo("divergencias", `
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber")}<p class="text-xs text-fg-muted">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
@@ -611,12 +699,44 @@
           <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-xs text-fg-muted">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
+        `)}
+        ${painelResumo("apelidos", `
+        <section class="space-y-2" data-history-filter-section>
+          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-xs text-fg-muted">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
+          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
+        </section>
+        <section class="space-y-2" data-history-filter-section>
+          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id)}<p class="text-xs text-fg-muted">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
+        </section>
+        <section class="space-y-2" data-history-filter-section data-resumo-informativo>
+          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-fg-muted">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p><p class="text-xs text-fg-subtle">Informativo: não entra na contagem da aba.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
+        </section>
+        `)}
+        ${painelResumo("usuarios", `
+        ${secaoMudancasUsuarios || avisoListaAusente}
         ${exibirSemUsuario ? secaoSemUsuario(semUsuario) : ""}
-        <p class="text-xs text-fg-subtle">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+        `)}
+        ${painelResumo("sem-acesso", `
+        <section class="space-y-2" data-history-filter-section>
+          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber", "comparacao-secao-sem-acesso-7")}<p class="text-xs text-fg-muted">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
+        </section>
+        ${semAcesso60 ? `<section class="space-y-2" data-history-filter-section data-sem-acesso-60-secao>
+          <div>${tituloSecaoComparacao(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "rose", "comparacao-secao-sem-acesso-60")}<p class="text-xs text-fg-muted">Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam.</p><p class="text-xs text-fg-muted">Os hostnames que somem do Endpoint ficam em <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p></div>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}
+        </section>` : avisoListaAusente}
+        `)}
       `;
   }
 
 
 
-  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, secaoSemUsuario, SECOES_CARTOES_RESUMO };
+  return {
+    listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, secaoSemUsuario, SECOES_CARTOES_RESUMO,
+    RESUMO_ABAS, ROTULOS_CATEGORIA_RESUMO, CATEGORIAS_POR_ABA, TIPOS_DIVERGENCIAS, TEXTO_VAZIO_ABA, TEXTO_LISTA_AUSENTE,
+    canonicalizarCategoriaResumo, abaDaCategoria, rotuloAba, textoLinhas, rotuloContagemAba, textoContadorResumo, textoSemResultado,
+    tiposDaAba, resolverTipo, categoriasDoTipo, avisoHistoricoComparacao,
+  };
 });
