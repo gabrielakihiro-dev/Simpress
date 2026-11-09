@@ -197,7 +197,7 @@ def _montar(dados: Mapping[str, Any], fontes: FontesMarcas) -> Dict[str, Dict[st
             continue
         if "os_vinculada" in item:  # foto da hora do pedido; ``None`` = não havia vínculo, vale a foto
             foto = item["os_vinculada"]
-            vinculo = foto if isinstance(foto, dict) else None
+            vinculo: Mapping[str, Any] | None = foto if isinstance(foto, dict) else None
         else:  # finalização antiga, sem foto: o vínculo de hoje, se existir
             vinculo = _vinculo_atual_tolerante(fontes, numero)
         if vinculo:
