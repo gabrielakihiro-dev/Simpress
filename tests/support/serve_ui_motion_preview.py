@@ -136,6 +136,13 @@ COCKPIT_COMPARISON_EVENT = {
         "divergencias_local": [{"serie": "LENTO", "computador": "DEMO-HOST-001", "local_previsto": "Curitiba", "local_detalhes": "Londrina"}],
         "ausentes_no_endpoint": [], "ausentes_em_detalhes": [],
         "correspondencias_ambiguas": [], "registros_ambiguos": [],
+        # Derived on read by the real server (list "Passou de 60 dias sem acesso").
+        "sem_acesso_60_dias": [
+            {"serie": "SAIU60", "computador": "DEMO-HOST-060", "dias": 68, "situacao": "saiu_endpoint",
+             "anotacao_id": "fixture-60-saiu", "anotacao": "[Staged Computers 09/11/2026 08:00] Encontrado em Staged Computers do Endpoint."},
+            {"serie": "PASSOU61", "computador": "DEMO-HOST-061", "dias": 61, "situacao": "passou",
+             "anotacao_id": "fixture-60-passou", "anotacao": ""},
+        ],
     },
 }
 
