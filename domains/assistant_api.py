@@ -1639,6 +1639,9 @@ class SimpressApi:
                 "os": str(linha.get("E") or ""),
                 "cruzamento": str(cruzamento.get("status") or ""),
                 "candidatos": cruzamento.get("candidatos", 0),
+                # Sugestões do programa para B e J: o usuário confirma na tela (botão Usar); nada é salvo daqui.
+                "sugestao_categoria": str(f.get("sugestao_categoria") or ""),
+                "sugestao_tipo": str(f.get("sugestao_tipo") or ""),
             })
         pendentes = [p for p in novos.get("pendentes") or [] if isinstance(p, dict)]
         erros = _dict(novos.get("erros"))

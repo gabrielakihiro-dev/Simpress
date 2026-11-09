@@ -24,12 +24,13 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
-from core.config import format_size_limit
+from core.config import REGIONAL_REPRESENTATIVES_FILE, format_size_limit
 from core.integrity import lock_paths
 from domains import (
-    os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
+    local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_vinculos,
 )
+from domains.assistant_lgpd import e_solicitante_sistema
 from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_chamados import chave_do_numero
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
@@ -218,6 +219,52 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _pasta_estado():
         return fin.pasta_estado(services.caminhos().existentes)
 
+    def _nomes_representantes() -> List[Any]:
+        """Nomes dos representantes regionais (padrão e alterados); arquivo ilegível vale só o padrão."""
+        try:
+            salvos, _ = local_setup.load_regional_representatives(REGIONAL_REPRESENTATIVES_FILE)
+        except Exception:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
+            salvos = {}
+        padroes = [dados.get("nome") for dados in local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS.values()]
+        return [*padroes, *(dados.get("nome") for dados in salvos.values() if isinstance(dados, dict))]
+
+    def _nomes_pessoas() -> List[Any]:
+        """Nomes conhecidos de pessoas (inventário e representantes): nunca viram palavra do índice nem saem para a IA."""
+        return [*(registro.get("nome") for registro in services.registros()), *_nomes_representantes()]
+
+    def _reindexar_categoria(conteudo: bytes) -> None:
+        """Refaz o índice local da sugestão de categoria (B) e tipo (J); só aprende, nunca bloqueia importar nem atualizar."""
+        try:
+            sebrae_categoria.construir_indice(conteudo, _pasta_estado() / sebrae_categoria.ARQUIVO_INDICE, _nomes_pessoas())
+        except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Não atualizei o índice de sugestão de categoria (%s).", type(erro).__name__)
+
+    def _sugestoes_categoria(
+        linha: Mapping[str, Any], opcoes: Sequence[str], indice: Optional[Mapping[str, Any]],
+        sugestor: Optional[sebrae_categoria_ia.SugestorIA] = None,
+    ) -> Dict[str, Optional[str]]:
+        """Sugestão de B e J de um chamado novo, só para exibir (nada é gravado); B ou J já preenchido não é sugerido.
+
+        Com ``sugestor`` (IA opcional, desligada por padrão) só os chamados que ficaram em OUTRO são enviados, e a IA só
+        troca OUTRO por outra categoria válida; o J da IA vale só se as regras locais não deram J.
+        """
+        b_atual, j_atual = str(linha.get("B") or "").strip(), str(linha.get("J") or "").strip()
+        textos = (linha.get("G"), linha.get("H"), linha.get("F"), linha.get("I"))  # título, descrição, atendimento, solicitante
+        try:
+            categoria = None if b_atual else sebrae_categoria.sugerir(*textos, opcoes, indice)
+            tipo = None if j_atual else sebrae_categoria.sugerir_tipo(*textos, indice, categoria=b_atual or categoria)
+            sem_sinal = categoria is None or sebrae_categoria.normalizar(categoria) == "outro"
+            if sugestor is not None and not b_atual and not j_atual and sem_sinal and not e_solicitante_sistema(textos[3]):
+                resposta = sugestor.sugerir(textos[0], textos[1], textos[2], opcoes)
+                if resposta is not None:
+                    if sebrae_categoria.normalizar(resposta.categoria) != "outro":
+                        categoria = resposta.categoria
+                    tipo = tipo or resposta.tipo
+            return {"sugestao_categoria": categoria, "sugestao_tipo": tipo}
+        except Exception as erro:  # noqa: BLE001 - uma sugestão nunca derruba a tela; log só o tipo, nunca o texto do chamado
+            logger.warning("Sugestão de categoria indisponível (erro=%s).", type(erro).__name__)
+            return {"sugestao_categoria": None, "sugestao_tipo": None}
+
     def _novos(caminhos: sebrae_novos.Caminhos, lancados: Iterable[str]) -> Optional[Dict[str, Any]]:
         """Chamados novos da última busca já com a descrição que o usuário editou no site (lápis do cartão)."""
         novos = sebrae_novos.ler_novos(caminhos.novos, lancados)
@@ -225,8 +272,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             novos["chamados"] = sebrae_novos.aplicar_descricoes_novos(novos["chamados"], fin.descricoes_editadas(_pasta_estado()))
         return novos
 
-    def _estado() -> Dict[str, Any]:
-        corpo = _estado_base()
+    def _estado(ia: bool = True) -> Dict[str, Any]:
+        corpo = _estado_base(ia)
         # só aparecem quando existem: a tela vazia continua {"importado": None, "novos": None}
         resultado = fin.ler_resultado(_pasta_estado())
         if resultado is not None:
@@ -236,7 +283,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             corpo["sharepoint"] = pendente
         return corpo
 
-    def _estado_base() -> Dict[str, Any]:
+    def _sugestor_ia(novos: Mapping[str, Any], importado: Optional[Mapping[str, Any]] = None) -> Optional[sebrae_categoria_ia.SugestorIA]:
+        """Sugestor por IA desta resposta (None com a chave SIMPRESS_SUGESTAO_IA desligada); conhece os nomes para mascarar."""
+        try:
+            sugestor = sebrae_categoria_ia.criar()
+            if sugestor is not None:
+                sugestor.registrar_nomes(_nomes_pessoas())
+                sugestor.registrar_nomes([chamado.solicitante for chamado in novos["chamados"]])
+                sugestor.registrar_nomes([linha.get("usuario") for linha in (importado or {}).get("abertos", [])])
+            return sugestor
+        except Exception as erro:  # noqa: BLE001 - the optional AI never breaks the list; log only the class, never ticket data
+            logger.warning("Sugestão de categoria por IA indisponível (erro=%s).", type(erro).__name__)
+            return None
+
+    def _estado_base(ia: bool = True) -> Dict[str, Any]:
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
@@ -245,6 +305,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         finalizacao = fin.ler_estado(pasta) if (novos or importado) else {}
         observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
         apelidos = services.apelidos() if novos else {}
+        indice_categoria = sebrae_categoria.carregar_indice(_pasta_estado() / sebrae_categoria.ARQUIVO_INDICE) if novos else None  # uma leitura por resposta
+        lista_b = importado["listas"].get("B", []) if importado else []
+        vistas = {sebrae_categoria.normalizar(opcao) for opcao in lista_b}
+        opcoes_b = [*lista_b, *(c for c in sebrae_categoria.CATEGORIAS_NOVAS if sebrae_categoria.normalizar(c) not in vistas)]
+        sugestor = _sugestor_ia(novos, importado) if (novos and ia) else None  # IA opcional: fora de qualquer trava de arquivo (ia=False)
         finalizados = [
             {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", ""),
              "destaque": _destacado(observacoes, f.get("numero"))}
@@ -265,7 +330,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     {**item, "apelido": _apelido(apelidos, item["linha"].get("K")),
                      "softexpert": fin.publico(finalizacao.get(item["numero"])),
                      "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
-                     "destaque": _destacado(observacoes, item["numero"])}
+                     "destaque": _destacado(observacoes, item["numero"]),
+                     **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor)}
                     for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
                 ],
             },
@@ -353,7 +419,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             avisos = []
             aviso_linhas = _acompanhar_chaves_de_linha(anteriores)  # after the new base is stored: a retry never moves keys twice
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
-            corpo = {**_estado(), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
+            # ia=False: the optional AI call (network, up to ~8 s) must not hold the file lock; the next GET fills the suggestions
+            corpo = {**_estado(ia=False), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
             if substituida and preservada is not None:
                 corpo["saida_pendente_substituida"] = True
                 avisos.append(
@@ -503,6 +570,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except DashboardInvalido:
             listas, abertos, sha256 = {}, [], ""
         sebrae_novos.salvar_existentes(caminhos.existentes, numeros, nome, sha256=sha256, listas=listas, abertos=abertos)
+        if sha256:  # sem planilha legível não há o que aprender
+            _reindexar_categoria(conteudo)
         return preservada
 
     @router.post("/api/sebrae/exportar")
@@ -584,6 +653,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             with lock_paths([saida]):  # a rotina fechar grava a coluna R neste mesmo arquivo
                 sebrae_novos.salvar_planilha(saida, conteudo)
             gravada = True
+            _reindexar_categoria(conteudo)  # aprende com o B e o J que o usuário acabou de classificar
         except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo
             logger.warning("Não gravei a cópia de saída do Dashboard.", exc_info=True)
         return importado, resultado, conteudo, gravada, edicoes
