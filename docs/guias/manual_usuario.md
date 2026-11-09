@@ -112,6 +112,7 @@ O resultado traz, entre outras seções:
 
 - **Linhas mantidas para conferência**;
 - **Sem acesso há 7 dias ou mais** (notebooks do Endpoint sem verificação com êxito);
+- **Passou de 60 dias sem acesso** (notebooks que chegaram a 60 dias sem acesso, inclusive os que o Endpoint já moveu para Ausentes; a rotina de inventários da Automação procura esses no *Staged Computers* do Endpoint e anota o resultado na linha);
 - **Equipamentos sem correspondência por fonte**, separados em **Endpoint** e **Simpress**;
 - **Localidade divergente**;
 - **Duplicidades e correspondências ambíguas**;

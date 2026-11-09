@@ -246,6 +246,7 @@ def _copy_matching_history_annotations(
     )
 
     new_fingerprints = set()
+    # "sem_acesso_60_dias" is not stored and its days change every update, so its notes are never copied here.
     for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
         items = new_comparison.get(category)
         if not isinstance(items, list):

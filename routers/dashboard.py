@@ -461,16 +461,27 @@ def _dict_rows(comparison: Any, field_name: str) -> List[Dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 
+def _absent_serial_keys(comparison: Any) -> set:
+    rows = comparison.get("ausentes_no_endpoint") if isinstance(comparison, dict) else None
+    return set().union(*(
+        _serial_keys(row.get("serie"))
+        for row in filter_sebrae_owned_unmatched_items(rows)
+        if isinstance(row, dict)
+    ))
+
+
 def long_unused_status(
     history: Sequence[Any],
     warning_days: int = DEFAULT_LONG_UNUSED_WARNING_DAYS,
     limit_days: int = DEFAULT_LONG_UNUSED_DAYS,
+    event_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Notebooks/MacBooks of the newest update that are near or past ``limit_days`` without Endpoint access.
 
     Past the limit the Endpoint drops the row, so the notebook leaves "Sem acesso há 7 dias ou mais" and
-    reappears under "Ausentes no endpoint". Such a move since the previous update counts as past the limit
-    when the days it already had plus the days between the two updates reach the limit.
+    reappears under "Ausentes no endpoint". Such a move counts as past the limit when the days of its last
+    7+ row plus the days since that update reach the limit, as long as it stayed absent in every update since.
+    With ``event_id`` the update with that id plays the newest one (later updates are ignored).
     """
     result: Dict[str, Any] = {
         "estado": "sem_dados",
@@ -490,9 +501,15 @@ def long_unused_status(
         moment = _parse_event_time(event.get("horario"))
         if moment is not None:
             updates.append((moment, event))
+    if event_id is not None:
+        selected = next((moment for moment, event in updates if event.get("id") == event_id), None)
+        updates = [] if selected is None else [
+            pair for pair in updates if pair[0] < selected or pair[1].get("id") == event_id
+        ]
     if not updates:
         return result
-    updates.sort(key=lambda pair: pair[0])
+    # Stable sort with the selected event last among equal moments.
+    updates.sort(key=lambda pair: (pair[0], pair[1].get("id") == event_id))
     current_moment, current = updates[-1]
     comparison = current.get("comparacao")
     if not isinstance(comparison, dict):
@@ -509,27 +526,32 @@ def long_unused_status(
                 "situacao": "passou" if age >= limit_days else "limite",
             })
     left_endpoint = 0
-    if len(updates) > 1:
-        previous_moment, previous = updates[-2]
+    still_stale = set().union(*(_serial_keys(row.get("serie")) for row in stale))
+    # Absent now and not stale now: candidates that may have left the 7+ list in an older update.
+    candidates = _absent_serial_keys(comparison) - still_stale
+    for previous_moment, previous in reversed(updates[:-1]):
+        if not candidates:
+            break
+        previous_comparison = previous.get("comparacao")
         elapsed = max((current_moment - previous_moment).days, 0)
-        still_stale = set().union(*(_serial_keys(row.get("serie")) for row in stale))
-        absent = set().union(*(
-            _serial_keys(row.get("serie"))
-            for row in filter_sebrae_owned_unmatched_items(comparison.get("ausentes_no_endpoint"))
-            if isinstance(row, dict)
-        ))
-        for row in _dict_rows(previous.get("comparacao"), "sem_acesso_7_dias"):
+        for row in _dict_rows(previous_comparison, "sem_acesso_7_dias"):
             keys = _serial_keys(row.get("serie"))
+            if not keys & candidates:
+                continue
+            # The newest 7+ row of a notebook wins; older rows of the same notebook are ignored.
+            candidates -= keys
             days = _count(row.get("dias_sem_verificacao")) + elapsed
-            if keys and not keys & still_stale and keys & absent and days >= limit_days:
+            if days >= limit_days:
                 left_endpoint += 1
-                # "dias" here is an estimate: days at the previous update plus the days between updates.
+                # "dias" here is an estimate: days at that update plus the days since it.
                 equipment.append({
                     "serie": str(row.get("serie") or ""),
                     "computador": str(row.get("computador") or ""),
                     "dias": days,
                     "situacao": "saiu_endpoint",
                 })
+        # Looking further back only counts notebooks that stayed absent in every update since.
+        candidates &= _absent_serial_keys(previous_comparison)
     equipment.sort(key=lambda item: -item["dias"])
     total_limite = sum(item["situacao"] == "limite" for item in equipment)
     total_passou = sum(item["situacao"] in ("passou", "saiu_endpoint") for item in equipment)

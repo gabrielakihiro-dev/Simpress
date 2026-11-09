@@ -749,7 +749,10 @@ QUERY_TOOLS: List[Tool] = [
     _read("resumo_sebrae", "Resumo da sincronização de chamados Sebrae.", lambda c, a: c.resumo_sebrae()),
     _read(
         "consultar_historico_comparacao",
-        "Detalhes de uma atualização do Histórico de Planilhas pelo identificador.",
+        "Detalhes de uma atualização do Histórico de Planilhas pelo identificador. "
+        "`comparacao.sem_acesso_60_dias` é a lista `Passou de 60 dias sem acesso` do Resumo (F3) naquela atualização: série, hostname, dias "
+        "(estimados quando `situacao` é `saiu_endpoint`, ou seja, saiu para Ausentes no Endpoint) e a anotação, onde a rotina de inventários da "
+        "Automação (F4) registra se o hostname foi encontrado no Staged Computers do Endpoint.",
         lambda c, a: c.consultar_historico_comparacao(str(a.get("evento_id", ""))),
         {"evento_id": {"type": "string", "description": "Identificador do evento do histórico."}}, ["evento_id"],
     ),
@@ -802,7 +805,8 @@ QUERY_TOOLS: List[Tool] = [
         "(séries/hostnames duplicados ou conflitantes; cada item tem 'chave' ou, se for duplicidade "
         "de série, 'serie'/'computador'), séries sem mapeamento, apelidos/hostnames atualizados, "
         "divergências de apelidos manuais (apelido digitado manualmente diferente do que está nas "
-        "planilhas) ou mudanças de usuário logado. Use para responder 'qual' é a série, apelido ou "
+        "planilhas), mudanças de usuário logado ou notebooks que passaram de 60 dias sem acesso "
+        "(com dias, situação e anotação). Use para responder 'qual' é a série, apelido ou "
         "usuário por trás de um total mostrado no painel. Não cobre 'apelidos sem atualização': "
         "para esse total, use consultar_ultima_comparacao (não há lista item a item dele).",
         lambda c, a: c.listar_secao_comparacao(str(a.get("secao", ""))),
@@ -815,6 +819,7 @@ QUERY_TOOLS: List[Tool] = [
                     "apelidos_atualizados",
                     "divergencias_apelidos_manuais",
                     "mudancas_usuarios",
+                    "sem_acesso_60_dias",
                 ],
                 "description": "Seção a listar.",
             }
