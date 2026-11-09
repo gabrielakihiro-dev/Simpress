@@ -253,6 +253,9 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Antes de concluir uma mudança, rode `npm run verify` (ou `node scripts/verify.cjs`). Ele executa as mesmas checagens do CI: testes Python, `node --test`, `node --check`, `compileall`, `mypy` gradual e busca de credenciais. Usa o Python da `.venv` quando existir; para outro interpretador, defina `PYTHON`.
 - Para mudanças de interface, rode também `npm run test:ui:e2e`.
 - Ao incluir um módulo no escopo do `mypy` ou um alvo novo de `compileall`, altere a lista em `scripts/verify.cjs`; arquivos JavaScript e testes em `tests/frontend/test_*.cjs` são descobertos automaticamente.
+- Evidência por critério: ao dar algo como pronto, cada critério de aceite vem numa linha `AC: <critério> — PROVEN BY <evidência>` (saída de `npm run verify` ou de um teste focado, comando, verificação no navegador). Critério sem evidência conta como não verificado.
+- Teto de correção: no máximo 3 ciclos de correção sobre a mesma falha (teste, revisão ou CI). Depois disso, pare e devolva ao usuário o que foi tentado e o que ainda falha.
+- Verificação vaga: se o pedido disser só "verifique que funciona", antes de executar escreva no início da resposta as 4 definições: o que é observável, qual mecanismo prova (teste, `node scripts/verify.cjs`, navegador), qual o escopo e o que fazer se falhar.
 
 ## Delegação em subagentes
 
@@ -270,6 +273,9 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
 - O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
 - Trabalho independente que termina em algo próprio (branch, PR) vai para uma sessão separada, em seu próprio worktree.
+- Plano enxuto: cada passo traz Objetivo, Arquivos, Critérios de aceite e Verificar (o comando ou a checagem que prova o critério, por exemplo `npm run verify`). Sem código pronto no plano, exceto assinaturas e contratos entre arquivos. Quando houver risco de sair do escopo, o passo traz também Proibidos: os arquivos que ele não pode tocar. Plano acima de ~150 linhas é dividido em blocos. O pedido do agente principal ao executor segue o mesmo formato.
+- Dúvida de design: a sessão que executa um plano, ao encontrar dúvida de design que muda o plano, pergunta à sessão que escreveu o plano (no Claude Code, por `SendMessage`), em vez de decidir sozinha ou alterar o plano.
+- Arquivo do plano: quando salvo, fica dentro do worktree e da branch da própria sessão, nunca numa pasta compartilhada entre sessões.
 
 ### Maestro no Codex
 
