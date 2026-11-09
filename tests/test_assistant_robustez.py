@@ -233,8 +233,8 @@ class ToolEnvelopeTests(unittest.TestCase):
         model = FakeModel(calls(call("consultar_equipamento", serial="abc123")), text("ok"))
         conversation, _ = make_conversation(model)
         conversation.enviar_mensagem("ache o ABC123")
-        self.assertIn("[PESSOA_", abrir(model.sent[1][-1]["content"]))
-        self.assertNotIn("Maria", json.dumps(model.sent))
+        self.assertIn("Maria [PESSOA_", abrir(model.sent[1][-1]["content"]))
+        self.assertNotIn("Souza", json.dumps(model.sent))
 
 
 if __name__ == "__main__":

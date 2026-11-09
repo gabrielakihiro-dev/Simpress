@@ -177,7 +177,7 @@ class NotasToolTests(unittest.TestCase):
         self.assertEqual([n["id"] for n in abertos["lembretes"]], [aberta["id"]])
         self.assertEqual(len(todos["lembretes"]), 2)
         enviado = json.dumps(model.sent)
-        self.assertNotIn("Maria", enviado)
+        self.assertNotIn("Souza", enviado)  # the first name stays visible (08/11/2026), the surname does not
         self.assertNotIn(CPF, enviado)
         self.assertIn("***.***.***-**", enviado)
 
