@@ -680,7 +680,9 @@ QUERY_TOOLS: List[Tool] = [
         "`marcas_finalizacao` traz, por OS daquela série, a marca de OS finalizada da aba OS (F6) (só as OS com marca): por marca, "
         "`chamado`, `origem` (`site` = o Simpress finalizou o chamado no SoftExpert; `outro_tecnico` = o chamado saiu do Dashboard ou "
         "não foi achado no SoftExpert sem finalização pelo site, então confira no SoftExpert), `motivo`, `ativa` (false = desfeita na tela) "
-        "e `conferido`. Só leitura: desfazer, refazer e conferir a marca só se faz na tela.",
+        "e `conferido`. Só leitura: desfazer, refazer e conferir a marca só se faz na tela. "
+        "`sinais_os` traz, por OS Oracle daquela série, os selos da aba OS (F6): `envio_tecnico` (true = a descrição da OS pede envio de "
+        "técnico) e `dias_aberta` (dias entre a abertura da OS e a última importação; nulo se concluída ou sem data).",
         lambda c, a: c.listar_chamados_abertos(),
     ),
     _read(

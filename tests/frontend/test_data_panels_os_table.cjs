@@ -641,3 +641,45 @@ test("Janela somente leitura: só o selo das marcas ativas do chamado pedido, se
     assert.equal(blocosMarca(outra.section, "SN-SOR").length, 2, "sem chamado pedido, todas as ativas");
   } finally { restaurarMarcas(); }
 });
+
+test("Selos Técnico e Aberta há N dias: só no Oracle, só com os campos do servidor, sempre por textContent", async () => {
+  const original = report.chamados;
+  const oracle = (os, extra) => [{ solicitacao: `R${os}`, ordem_servico: os, descricao: "Texto livre.", ...extra }];
+  report.chamados = [
+    { serie: "SN-TEC", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9101", { envio_tecnico: true, dias_aberta: 6 }) },
+    { serie: "SN-HOJE", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9102", { envio_tecnico: false, dias_aberta: 0 }) },
+    { serie: "SN-UM", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9103", { dias_aberta: 1 }) },
+    { serie: "SN-NULO", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9104", { envio_tecnico: false, dias_aberta: null }) },
+    { serie: "SN-MIL", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9105", { dias_aberta: 1200 }) },
+    { serie: "SN-XSS", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: oracle("9106", { envio_tecnico: "true", dias_aberta: "<img src=x onerror=alert(1)>" }) },
+    { serie: "SN-SIMP", relacao: "somente_simpress", simpress: { ordens_servico: ["9107"] }, oracle: [] },
+    {
+      serie: "SN-DUAS", relacao: "somente_oracle", simpress: { ordens_servico: [] },
+      oracle: [
+        { solicitacao: "R1", ordem_servico: "9108", descricao: "a", envio_tecnico: false, dias_aberta: 2 },
+        { solicitacao: "R2", ordem_servico: "9108", descricao: "b", envio_tecnico: true, dias_aberta: 9 },
+      ],
+    },
+  ];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const selos = (serie, classe) => section.querySelectorAll(`tbody tr[data-serial="${serie}"] .${classe}`).map(selo => selo.textContent);
+
+    assert.deepEqual(selos("SN-TEC", "ck-os__selo--tecnico"), ["Técnico"]);
+    assert.deepEqual(selos("SN-TEC", "ck-os__selo--dias"), ["Aberta há 6 dias"]);
+
+    assert.deepEqual(selos("SN-HOJE", "ck-os__selo--dias"), ["Aberta hoje"]);
+    assert.deepEqual(selos("SN-HOJE", "ck-os__selo--tecnico"), [], "sem envio_tecnico verdadeiro, sem selo");
+    assert.deepEqual(selos("SN-UM", "ck-os__selo--dias"), ["Aberta há 1 dia"]);
+    assert.deepEqual(selos("SN-MIL", "ck-os__selo--dias"), [`Aberta há ${(1200).toLocaleString("pt-BR")} dias`]);
+
+    assert.deepEqual(selos("SN-NULO", "ck-os__selo"), [], "dias_aberta nulo: nenhum selo");
+    assert.deepEqual(selos("SN-SIMP", "ck-os__selo"), [], "OS só da Simpress não ganha selos");
+
+    assert.deepEqual(selos("SN-DUAS", "ck-os__selo--dias"), ["Aberta há 9 dias"], "várias solicitações: vale o maior número de dias");
+    assert.deepEqual(selos("SN-DUAS", "ck-os__selo--tecnico"), ["Técnico"], "basta uma solicitação pedir técnico");
+
+    assert.deepEqual(selos("SN-XSS", "ck-os__selo"), [], "só boolean true e número finito viram selo");
+    assert.equal(section.querySelectorAll("img").length, 0);
+  } finally { report.chamados = original; }
+});
