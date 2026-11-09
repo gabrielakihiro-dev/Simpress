@@ -1,5 +1,7 @@
+import contextlib
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -758,16 +760,25 @@ class EnviarDashboardTests(unittest.TestCase):
         page.locators = locators
         return page
 
-    def _enviar(self, page, concluido=True, em_uso=False):
-        """Roda o envio com o aviso de conclusão (``concluido``) e o de arquivo em uso (``em_uso``) simulados."""
-        aviso = page.get_by_text.return_value.first
+    def _enviar(self, page, concluido=True, em_uso=False, conflito=False, botao=None):
+        """Roda o envio com os avisos de conclusão, de arquivo em uso e de conflito (Save Conflict) simulados."""
+        avisos = {}
+        page.get_by_text.side_effect = lambda padrao, *_a, **_k: avisos.setdefault(padrao, MagicMock())
+        aviso = page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO).first
+        aviso_conflito = page.get_by_text(automacao._AVISO_CONFLITO).first
+
+        def visivel(loc):
+            if loc is aviso:
+                return concluido
+            return conflito if loc is aviso_conflito else em_uso
+
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             arquivo.write_bytes(b"x")
             with patch.object(automacao, "esperar_visivel", return_value=True), \
-                    patch.object(automacao, "visivel", side_effect=lambda loc: concluido if loc is aviso else em_uso), \
+                    patch.object(automacao, "visivel", side_effect=visivel), \
                     patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
-                    patch.object(automacao, "_botao_enviar"), \
+                    patch.object(automacao, "_botao_enviar", return_value=botao or MagicMock()), \
                     patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
                     patch.object(automacao.time, "sleep"):
                 automacao.enviar_arquivo_para_pasta(page, arquivo)
@@ -793,17 +804,7 @@ class EnviarDashboardTests(unittest.TestCase):
         page = self._pagina({"substituir"})
         botao = MagicMock()
         botao.click.side_effect = [RuntimeError("DOM desatualizado"), None]
-        aviso = page.get_by_text.return_value.first
-        with tempfile.TemporaryDirectory() as pasta:
-            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
-            arquivo.write_bytes(b"x")
-            with patch.object(automacao, "esperar_visivel", return_value=True), \
-                    patch.object(automacao, "visivel", side_effect=lambda loc: loc is aviso), \
-                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
-                    patch.object(automacao, "_botao_enviar", return_value=botao), \
-                    patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
-                    patch.object(automacao.time, "sleep"):
-                automacao.enviar_arquivo_para_pasta(page, arquivo)
+        self._enviar(page, botao=botao)
         self.assertEqual(botao.click.call_count, 2)
         page.locators["substituir"].first.click.assert_called_once()
 
@@ -817,6 +818,25 @@ class EnviarDashboardTests(unittest.TestCase):
         page = self._pagina({"substituir"})
         with self.assertRaisesRegex(automacao.RotinaErro, "em uso ou bloqueado"):
             self._enviar(page, concluido=False, em_uso=True)
+
+    def test_upload_stops_on_save_conflict_without_retrying(self):
+        # 08/11/2026: "Save Conflict" do SharePoint; Replace clicado uma vez e nada repetido ("Retry" nunca).
+        page = self._pagina({"substituir"})
+        with patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 4, 5]):
+            with self.assertRaises(automacao.RotinaErro) as erro:
+                self._enviar(page, concluido=False, conflito=True)
+        self.assertEqual(str(erro.exception), automacao.MSG_CONFLITO_SHAREPOINT)
+        page.locators["substituir"].first.click.assert_called_once()
+        nomes = [c.kwargs.get("name") for c in page.get_by_role.call_args_list]
+        self.assertFalse(any(isinstance(n, str) and "retry" in n.lower() for n in nomes))
+
+    def test_conflict_and_copy_notices_match_sharepoint_texts(self):
+        texto = "Save Conflict: Your changes conflict with those made concurrently by another user."
+        self.assertTrue(automacao._AVISO_CONFLITO.search(texto))
+        self.assertFalse(automacao._AVISO_CONFLITO.search("Dashboard Operacional_SEBRAE.xlsx"))
+        for aviso in ("Copied 1 item", "Copied 2 items", "1 item copiado", "Copiado 1 item"):
+            self.assertTrue(automacao._AVISO_COPIA_CONCLUIDA.search(aviso), aviso)
+        self.assertFalse(automacao._AVISO_COPIA_CONCLUIDA.search("Dashboard Operacional_SEBRAE Copiar.xlsx"))
 
     def test_upload_fails_without_the_completion_notice_even_if_the_row_text_changes(self):
         # O texto da linha ("há 4 minutos" -> "há 5 minutos") muda sozinho; só o aviso de conclusão vale.
@@ -833,7 +853,7 @@ class EnviarDashboardTests(unittest.TestCase):
         contagens = iter([1, 1, 2])
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
-                patch.object(automacao, "_copias_na_lista", return_value=0), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), patch.object(automacao, "visivel", return_value=True), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             automacao.duplicar_dashboard_na_pasta(page)
@@ -841,11 +861,38 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
         page.get_by_role.return_value.first.click.assert_called_once()
 
+    def _duplicar_com_aviso(self, avisos, tempo=None):
+        """Duplicata com a linha nova já na lista e o aviso "Copied 1 item" seguindo ``avisos`` (True/False por leitura)."""
+        page = MagicMock()
+        contagens = iter([1] + [2] * 1000)
+        leituras = iter(avisos)
+        relogio = patch.object(automacao.time, "time", side_effect=tempo) if tempo is not None else contextlib.nullcontext()
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+                patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), \
+                patch.object(automacao, "visivel", side_effect=lambda _loc: next(leituras, False)), \
+                patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log, relogio:
+            automacao.duplicar_dashboard_na_pasta(page)
+        return page, "\n".join(str(c.args[1]) for c in log.call_args_list)
+
+    def test_duplicate_waits_for_the_copied_notice_before_returning(self):
+        # A linha da cópia aparece antes de o SharePoint terminar de copiar; o Replace só vem depois de "Copied 1 item".
+        page, textos = self._duplicar_com_aviso([False, False, True])
+        self.assertGreaterEqual(page.wait_for_timeout.call_count, 2)
+        page.get_by_role.return_value.first.click.assert_called_once()
+        self.assertIn("Cópia de segurança criada", textos)
+
+    def test_duplicate_continues_when_the_copied_notice_never_shows(self):
+        page, textos = self._duplicar_com_aviso([], tempo=itertools.count(0, 10))
+        page.get_by_role.return_value.first.click.assert_called_once()  # a Duplicata nunca se repete
+        self.assertIn("sem o aviso de cópia concluída", textos)
+
     def _logs_da_duplicata(self, copias: int) -> str:
         contagens = iter([copias + 1, copias + 2])  # original + cópias, depois a nova
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
-                patch.object(automacao, "_copias_na_lista", return_value=copias), \
+                patch.object(automacao, "_copias_na_lista", return_value=copias), patch.object(automacao, "visivel", return_value=True), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log:
             automacao.duplicar_dashboard_na_pasta(MagicMock())
@@ -1561,6 +1608,7 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), self._fora_da_pasta_ate_voltar(page), \
+                patch.object(automacao, "visivel", return_value=True), \
                 patch.object(automacao, "aguardar_login"), \
                 patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=lambda *_a: ordem.append("guarda")) as guarda, \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
