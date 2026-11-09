@@ -2305,7 +2305,7 @@
       const antigos = estado.abertos.filter(emAberto);
       const linhasAntigos = antigos.map(blocoAntigo);
       el("sebrae-antigos-lista")?.replaceChildren(...linhasAntigos);
-      // na ordem do servidor (coluna C, como o Excel); o destaque não muda a posição
+      // na ordem do servidor (data de finalização, a mais recente primeiro); o destaque não muda a posição
       const linhasFinalizados = finalizados.map(item => {
         const li = textoFinalizado(item);
         li.dataset.numero = item.numero;

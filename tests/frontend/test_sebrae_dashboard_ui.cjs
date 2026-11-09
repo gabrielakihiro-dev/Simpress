@@ -1042,7 +1042,7 @@ test("destaque vindo das listas: antigo UTIC e linha:N mostram selo e classe, en
   assert.ok(cartaoDaSecao(el, "linha:27").textContent.includes("Impressora offline"));
 });
 
-test("chamado finalizado em destaque fica na ordem de C; o botão funciona com a observação só leitura", async () => {
+test("chamado finalizado em destaque fica na ordem do servidor (data de finalização); o botão funciona com a observação só leitura", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   carga.importado.finalizados.unshift({ ...structuredClone(carga.importado.finalizados[0]), numero: "UTIC-2026-1090", ficha: { titulo: "Mouse", solicitante: "Bia", fatos: [], detalhes: [], manuais: {} } });
   carga.importado.finalizados[1].destaque = true;
