@@ -406,7 +406,7 @@ def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
 
 
 def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
-    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), in column C order, with the card saved before finalizing.
+    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), newest finalization first, with the card saved before finalizing.
 
     They leave the open lists as soon as SoftExpert confirms, whether or not the imported Dashboard shows them closed yet.
     """
@@ -422,8 +422,8 @@ def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
                 "pdf": str(pdf.get("nome") or "") if isinstance(pdf, dict) else "",
                 **({"pdf_remocao_pendente": True} if item.get("pdf_remocao") else {}),
             })
-    recentes = sorted(achados, key=lambda a: str(a["em"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
-    return sebrae_novos.ordenar_pela_coluna_c(recentes, lambda a: a["numero"])  # shown in the Dashboard's order (column C), after the cap
+    # newest finalization first (user request, 09/11/2026); the Dashboard and the other lists keep column C order
+    return sorted(achados, key=lambda a: (str(a["em"]), a["numero"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
 
 
 def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -695,8 +695,8 @@ def recuperar_envio(
         if acao == "concluir_legado":
             resolvido = registro["status"] == "concluido" and (registro.get("recuperacao") or {}).get("acao") == acao
             if (registro.get("legado") is not True or registro.get("snapshot") or (registro["status"] != "confirmado" and not resolvido)
-                    or confirmacao != f"CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS {envio_id}"):
-                raise DomainConflictError("Confira o legado confirmado e declare o ID e a preservação dos arquivos antes de concluir.")
+                    or confirmacao != "CONFIRMO LEGADO CONFERIDO E ARQUIVOS PRESERVADOS"):
+                raise DomainConflictError("Confira o legado confirmado e declare a preservação dos arquivos antes de concluir.")
             try:
                 pasta = pasta_pendente(state_dir)
                 if pasta.exists() and any(pasta.iterdir()):
@@ -716,8 +716,8 @@ def recuperar_envio(
             if registro["status"] not in ("incerto", "preparado"):
                 raise DomainConflictError("Este envio já foi reconciliado. Recarregue a tela.")
             frase = "CONFIRMO APLICADO" if acao == "confirmar_recebimento" else "CONFIRMO NAO APLICADO"
-            if confirmacao != f"{frase} {envio_id}":
-                raise DomainConflictError("Digite a declaração completa com o ID deste envio após conferir seu conteúdo no SharePoint.")
+            if confirmacao != frase:
+                raise DomainConflictError("Digite a declaração completa após conferir o conteúdo no SharePoint.")
             if acao == "confirmar_recebimento":
                 gravar_enviado(state_dir, registro["sha256"], conteudo)
             registro.update(status="confirmado" if acao == "confirmar_recebimento" else "falhou", limpeza_pendente=acao == "confirmar_recebimento")

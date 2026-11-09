@@ -1,4 +1,7 @@
-"""Closes the automation Chrome (CDP port 9333) after a stretch with no routine (docs/operacao/automacao-chrome.md).
+"""Optionally closes the automation Chrome (CDP port 9333) after a stretch with no routine (docs/operacao/automacao-chrome.md).
+
+Off by default since 09/11/2026 (user request: keep Chrome open to preserve cache and cookies);
+``SIMPRESS_CHROME_OCIOSO_S`` > 0 turns it on.
 
 Any use of the shared lock (routine, Endpoint lookup, PowerShell, UX) resets the clock. A prepared UX
 session or a PowerShell/remote-control tab left open for the user keeps Chrome open. Chrome still
@@ -13,13 +16,13 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-LIMITE_PADRAO_S = 10 * 60
+LIMITE_PADRAO_S = 0.0
 VERIFICAR_A_CADA_S = 60
 ESPERA_FECHAR_S = 10
 
 
 def limite_configurado() -> float:
-    """``SIMPRESS_CHROME_OCIOSO_S`` overrides the 10 minutes; 0 or less turns the close off."""
+    """``SIMPRESS_CHROME_OCIOSO_S`` in seconds turns the close on; unset, invalid, 0 or less keeps it off."""
     valor = os.environ.get("SIMPRESS_CHROME_OCIOSO_S", "").strip()
     try:
         return float(valor) if valor else LIMITE_PADRAO_S
