@@ -578,6 +578,7 @@
     const exportButton = byId("btn-exportar-resultado-comparacao");
     exportButton.dataset.historyDate = "";
     exportButton.disabled = true;
+    app.limparAbasResumo?.();
     renderEmpty(byId("comparacao-planilhas-conteudo"), message);
     byId("comparacao-planilhas-conteudo").dataset.estado = estado;
   }
@@ -613,6 +614,7 @@
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       if (!keepContent) {
+        app.limparAbasResumo?.();
         renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }
@@ -645,6 +647,7 @@
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
       status.textContent = error.message || "Não foi possível carregar o histórico.";
       if (!fresh) {
+        app.limparAbasResumo?.();
         renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }

@@ -1210,6 +1210,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* O min-height global de button (40/48px) venceria os 28px; no toque o alvo volta a 44px. */
 :is(.sebrae-aba, .sebrae-lupa, .sebrae-chamado__recolher) { min-height: 0; }
 @media (pointer: coarse) { :is(.sebrae-aba, .sebrae-lupa, .sebrae-chamado__recolher) { min-height: 44px; } }
+/* Resumo (F3): sub-abas da comparação, mesmo visual das sub-abas do F5. */
+.resumo-abas-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 8px; }
+.resumo-abas-barra[hidden], .resumo-painel[hidden] { display: none; }
+.resumo-abas { display: flex; flex: 0 1 auto; gap: 4px; min-width: 0; }
+.resumo-aba { display: inline-flex; align-items: center; flex: none; gap: 6px; height: 28px; min-height: 0; padding: 0 10px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.resumo-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
+.resumo-aba[aria-selected="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
+.resumo-aba[aria-selected="true"] .resumo-aba__n { background: var(--cor-superficie); color: var(--cor-destaque-texto); }
+:is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+@media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
 .sebrae-filtro { display: flex; flex: 0 1 470px; align-items: center; gap: 8px; min-width: 0; }
 .sebrae-busca { display: flex; flex: 1 1 auto; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-mudo); }
 .sebrae-busca:focus-within { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
@@ -1517,6 +1528,11 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-abas { flex: 1 1 0; gap: 2px; }
   .sebrae-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 4px; font-size: var(--fs-ui); }
   .sebrae-aba__rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  /* Resumo: as cinco sub-abas dividem a largura, sem rolagem horizontal. */
+  .resumo-abas-barra { gap: 4px; }
+  .resumo-abas { flex: 1 1 0; gap: 2px; }
+  .resumo-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 2px; font-size: var(--fs-ui); }
+  .resumo-aba__rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .sebrae-lupa { width: 44px; height: 44px; }
   .sebrae-filtro { flex: 1 0 100%; order: 3; }
   .sebrae-busca { height: 44px; padding: 0 12px; }
