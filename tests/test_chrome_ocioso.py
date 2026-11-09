@@ -78,7 +78,7 @@ class FechamentoOciosoTests(unittest.TestCase):
         fechar.assert_not_called()
 
     def test_limit_comes_from_the_environment(self):
-        for valor, esperado in (("", 600), ("120", 120.0), ("0", 0.0), ("x", 600)):
+        for valor, esperado in (("", 0.0), ("120", 120.0), ("0", 0.0), ("x", 0.0)):
             with self.subTest(valor=valor), patch.dict(os.environ, {"SIMPRESS_CHROME_OCIOSO_S": valor}):
                 self.assertEqual(chrome_ocioso.limite_configurado(), esperado)
 
@@ -208,8 +208,9 @@ class AssistenteExplicaTests(unittest.TestCase):
     def test_assistant_explains_the_idle_close(self):
         from domains.assistant_chat import SYSTEM_PROMPT
 
-        regra = SYSTEM_PROMPT[SYSTEM_PROMPT.index("35. Chrome de automação fechado sozinho"):].splitlines()[0]
-        for trecho in ("10 minutos", "PowerShell", "Navegar à mão", "reabre o Chrome sozinha"):
+        regra = SYSTEM_PROMPT[SYSTEM_PROMPT.index("35. Chrome de automação e abas"):].splitlines()[0]
+        for trecho in ("nenhuma automação fecha as abas", "não fecha mais esse Chrome", "SIMPRESS_CHROME_OCIOSO_S",
+                       "PowerShell", "Navegar à mão", "reabre o Chrome sozinha"):
             self.assertIn(trecho, regra)
 
 
