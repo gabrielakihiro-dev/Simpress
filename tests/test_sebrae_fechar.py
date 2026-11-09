@@ -357,7 +357,7 @@ class ReenviarTest(FecharBase):
         envio = fin.preparar_envio(self.dir, self.importado)
         sha = fin.ler_envio(self.dir)["sha256"]
         fin.marcar_envio_incerto(self.dir, envio)
-        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
         fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
         return envio, sha
 
@@ -397,7 +397,7 @@ class ReenviarTest(FecharBase):
                 envio = fin.preparar_envio(self.dir, self.importado)
                 sha = fin.ler_envio(self.dir)["sha256"]
                 fin.marcar_envio_incerto(self.dir, envio)
-                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
                 pasta = fin.pasta_pendente(self.dir)
                 if com_fila:
                     pasta.mkdir()
@@ -548,7 +548,7 @@ class ReenviarTest(FecharBase):
                 envio = fin.preparar_envio(self.dir, self.importado)
                 sha = fin.ler_envio(self.dir)["sha256"]
                 fin.marcar_envio_incerto(self.dir, envio)
-                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao=f"CONFIRMO NAO APLICADO {envio}")
+                fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
                 fin.gravar_job(self.dir, [], acao="reenviar_snapshot", envio_id=envio, sha256=sha)
                 if alterar_base:
                     sebrae_novos.salvar_existentes(self.caminhos.existentes, [A, B, C], "Dashboard.xlsx", sha256="b" * 64)
