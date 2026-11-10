@@ -48,7 +48,7 @@ As OS e os pedidos vêm de `data/state/historico_chamados.json` (importado pela 
 ## Regras
 
 - O inventário reflete a base oficial **atual** (não há fotografia mensal da base); o resumo informa o arquivo de origem e quando foi carregado.
-- As regras do `AGENTS.md` valem como no histórico: equivalência de séries de MacBook, séries do Sebrae fora de `ausentes_em_detalhes`, exceção de Curitiba para `PRNOTESJP`, `PRNOTERL` e `PRNOTEARC`. Os arquivos de origem e o histórico não são regravados.
+- As regras de `docs/operacao/regras-cadastro-historico.md` valem como no histórico: equivalência de séries de MacBook, séries do Sebrae fora de `ausentes_em_detalhes`, exceção de Curitiba para `PRNOTESJP`, `PRNOTERL` e `PRNOTEARC`. Os arquivos de origem e o histórico não são regravados.
 - Rótulos de fonte: `no endpoint` e `na Simpress`.
 - `mes` precisa ser `AAAA-MM` válido e não pode ser posterior ao mês atual (422). Base não carregada: 503 com mensagem clara. Histórico de chamados ilegível: 503.
 - Mês sem dados: a planilha é gerada mesmo assim, com zeros e a observação `Sem registros no mês`.

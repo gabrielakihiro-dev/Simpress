@@ -131,7 +131,7 @@ _CAUSAS_STATUS = {
     "serie_detalhes_duplicada": ("serie_duplicada_na_simpress", "A série aparece mais de uma vez na Simpress."),
     "indisponivel": ("endpoint_indisponivel", "O Endpoint ativo não pôde ser lido; não dá para dizer se a série está nele."),
 }
-# Approved labels (AGENTS.md, "Rótulos do Histórico de Planilhas"): EquipamentosDetalhes is "na Simpress", InvAll is "no Endpoint".
+# Approved labels (docs/operacao/regras-cadastro-historico.md, "Rótulos do Histórico de Planilhas"): EquipamentosDetalhes is "na Simpress", InvAll is "no Endpoint".
 _ROTULOS_SECAO = {
     "apelido_equipamentos_detalhes": "apelido_na_simpress",
     "apelido_invall": "apelido_no_endpoint",

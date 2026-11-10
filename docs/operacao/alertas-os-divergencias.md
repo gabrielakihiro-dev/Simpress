@@ -56,7 +56,7 @@ Mostrar quantas linhas de divergência apareceram na comparação de planilhas m
 
 - Fonte: o Histórico de Planilhas (`data/state/historico_comparacoes/historico_comparacoes.json`).
 - Comparam-se as duas atualizações mais recentes pelo `horario`. Restaurações e a linha de base fixada ficam de fora, como na comparação de `compare_updates`.
-- Antes de comparar, as duas atualizações passam pela classificação atual do histórico (`comparison_history_for_display`), que aplica as regras do `AGENTS.md`:
+- Antes de comparar, as duas atualizações passam pela classificação atual do histórico (`comparison_history_for_display`), que aplica as regras de `docs/operacao/regras-cadastro-historico.md`:
   - as séries do Sebrae (`BRJ135P5XS`, `BRJ142QKBQ`, `BRJ9435VMR`, `BRJ9435VMF`, `BRJ149SCJG`) não contam como sem correspondência;
   - hostnames `PRNOTESJP*`, `PRNOTERL*` e `PRNOTEARC*` em Curitiba não contam como localidade divergente.
   O painel reaplica esses dois filtros por segurança, como o relatório mensal.
