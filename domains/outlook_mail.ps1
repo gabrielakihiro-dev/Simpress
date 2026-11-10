@@ -39,6 +39,8 @@ try {
     } catch {
         [void]$mail.GetType().InvokeMember('SendUsingAccount', [System.Reflection.BindingFlags]::SetProperty, $null, $mail, @($conta))
     }
+    # Outlook may ignore the assignment and keep the default account: read it back (-ne ignores case); applies to abrir and enviar.
+    if ([string]$mail.SendUsingAccount.SmtpAddress -ne [string]$pedido.conta_email) { throw 'CODE:conta_ausente' }
     $mail.To = [string]$pedido.para
     $mail.CC = [string]$pedido.cc
     $mail.Subject = [string]$pedido.assunto
