@@ -86,5 +86,6 @@ O usuário é leigo em back-end e front-end, mas conhece Git. Comece pelo resumo
 | Interface, Cockpit (sem AGENTS em `static/`) | n/a | `docs/cockpit-prompts/14-cockpit-v2.md`, `14-responsividade-todas-resolucoes.md` |
 | Home, Comparação, Relatório | n/a | `docs/cockpit-prompts/03-home-split-view.md`, `08-comparacao-operacional.md`, `10-relatorio-mensal.md` |
 | Alertas e manual | n/a | `docs/operacao/alertas-os-divergencias.md`, `docs/guias/manual_usuario.md` |
+| Termos de entrega e devolução (Ferramentas) | n/a | `docs/cockpit-prompts/17-termos.md` |
 
 Skills em `.claude/skills/`: `ajuste-visual-ui`, `auditoria-somente-leitura`, `gerar-prompt`, `rotina-os-chamados`, `rotina-exportar-planilhas`, `monitoramento-pr-ci`.

@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/static/styles/ck-cockpit.css">
   <link rel="stylesheet" href="/static/styles/ck-pendencias.css">
   <link rel="stylesheet" href="/static/styles/ck-cobertura.css">
+  <link rel="stylesheet" href="/static/styles/ck-termos.css">
 </head>
 <body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
@@ -165,6 +166,7 @@
           <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
           <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
           <button type="button" id="btn-cobertura" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["cobertura"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg><span class="ck-menu__rotulo">Cobertura</span><kbd aria-hidden="true">F10</kbd></button>
+          <button type="button" id="btn-termos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["termos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Termos</span></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
           <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
@@ -1062,6 +1064,116 @@ Horário disponível para atendimento:</textarea>
               <button type="submit" class="ck-btn ck-btn--primario">Registrar devolução</button>
             </form>
             <div id="cobertura-lista-devolucoes" class="cob__lista"></div>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel termos" data-cockpit-tool-panel="termos" aria-labelledby="termos-heading" hidden>
+          <h2 id="termos-heading" class="sr-only">Termos</h2>
+          <div class="ck-pilulas termos__abas" role="tablist" aria-label="Termos" data-on-keydown="termosTeclaAba" data-args='["$event"]'>
+            <button type="button" class="ck-pilula" role="tab" id="termos-aba-entrega" aria-selected="true" aria-controls="termos-painel-entrega" data-on-click="termosSelecionarAba" data-args='["entrega"]'>Termo Entrega</button>
+            <button type="button" class="ck-pilula" role="tab" id="termos-aba-devolucao" aria-selected="false" tabindex="-1" aria-controls="termos-painel-devolucao" data-on-click="termosSelecionarAba" data-args='["devolucao"]'>Termo Devolução</button>
+          </div>
+
+          <div class="termos__painel" role="tabpanel" id="termos-painel-entrega" aria-labelledby="termos-aba-entrega">
+            <form class="termos__form" id="termos-form-entrega" autocomplete="off" novalidate>
+              <fieldset class="termos__grupo">
+                <legend>Dados do colaborador</legend>
+                <div class="termos__campos">
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Nome do colaborador</span><input type="text" id="termos-entrega-nome" name="nome" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Unidade / Departamento</span><input type="text" id="termos-entrega-unidade" name="unidade" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Data da entrega / troca</span><input type="date" id="termos-entrega-data" name="data" class="ck-entrada" autocomplete="off"></label>
+                </div>
+              </fieldset>
+              <fieldset class="termos__grupo">
+                <legend>Identificação do equipamento</legend>
+                <table class="termos__tabela">
+                  <thead><tr><th scope="col">Campo</th><th scope="col">Equipamento anterior</th><th scope="col">Equipamento entregue</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row">Modelo do computador</th>
+                      <td data-rotulo="Equipamento anterior"><label class="sr-only" for="termos-entrega-modelo-anterior">Modelo do computador, equipamento anterior</label><input type="text" id="termos-entrega-modelo-anterior" name="modelo_anterior" class="ck-entrada" autocomplete="off"></td>
+                      <td data-rotulo="Equipamento entregue"><label class="sr-only" for="termos-entrega-modelo-entregue">Modelo do computador, equipamento entregue</label><input type="text" id="termos-entrega-modelo-entregue" name="modelo_entregue" class="ck-entrada" autocomplete="off"></td></tr>
+                    <tr><th scope="row">Número de série / Service Tag</th>
+                      <td data-rotulo="Equipamento anterior"><label class="sr-only" for="termos-entrega-serie-anterior">Número de série / Service Tag, equipamento anterior</label><input type="text" id="termos-entrega-serie-anterior" name="serie_anterior" class="ck-entrada" autocomplete="off"></td>
+                      <td data-rotulo="Equipamento entregue"><label class="sr-only" for="termos-entrega-serie-entregue">Número de série / Service Tag, equipamento entregue</label><input type="text" id="termos-entrega-serie-entregue" name="serie_entregue" class="ck-entrada" autocomplete="off"></td></tr>
+                  </tbody>
+                </table>
+              </fieldset>
+              <fieldset class="termos__grupo">
+                <legend>Equipamentos e acessórios entregues</legend>
+                <p class="termos__dica">Assinale Sim ou Não para cada item apresentado no ato da entrega.</p>
+                <table class="termos__tabela"><thead class="sr-only"><tr><th scope="col">Equipamento / Acessório</th><th scope="col">Sim / Não</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row">01 Mochila</th><td><div class="termos__sn" role="radiogroup" aria-label="01 Mochila"><label><input type="radio" id="termos-entrega-item-01-sim" name="item-01" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-01-nao" name="item-01" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">02 Notebook</th><td><div class="termos__sn" role="radiogroup" aria-label="02 Notebook"><label><input type="radio" id="termos-entrega-item-02-sim" name="item-02" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-02-nao" name="item-02" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">03 Teclado</th><td><div class="termos__sn" role="radiogroup" aria-label="03 Teclado"><label><input type="radio" id="termos-entrega-item-03-sim" name="item-03" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-03-nao" name="item-03" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">04 Mouse</th><td><div class="termos__sn" role="radiogroup" aria-label="04 Mouse"><label><input type="radio" id="termos-entrega-item-04-sim" name="item-04" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-04-nao" name="item-04" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">05 Hub USB</th><td><div class="termos__sn" role="radiogroup" aria-label="05 Hub USB"><label><input type="radio" id="termos-entrega-item-05-sim" name="item-05" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-05-nao" name="item-05" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">06 Suporte notebook</th><td><div class="termos__sn" role="radiogroup" aria-label="06 Suporte notebook"><label><input type="radio" id="termos-entrega-item-06-sim" name="item-06" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-06-nao" name="item-06" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">07 Headset (modelo 8225 ou 3220)</th><td><div class="termos__sn" role="radiogroup" aria-label="07 Headset (modelo 8225 ou 3220)"><label><input type="radio" id="termos-entrega-item-07-sim" name="item-07" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-07-nao" name="item-07" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">08 Case headset</th><td><div class="termos__sn" role="radiogroup" aria-label="08 Case headset"><label><input type="radio" id="termos-entrega-item-08-sim" name="item-08" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-08-nao" name="item-08" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">09 Mousepad</th><td><div class="termos__sn" role="radiogroup" aria-label="09 Mousepad"><label><input type="radio" id="termos-entrega-item-09-sim" name="item-09" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-09-nao" name="item-09" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">10 Monitor</th><td><div class="termos__sn" role="radiogroup" aria-label="10 Monitor"><label><input type="radio" id="termos-entrega-item-10-sim" name="item-10" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-10-nao" name="item-10" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">11 Cabo de Segurança</th><td><div class="termos__sn" role="radiogroup" aria-label="11 Cabo de Segurança"><label><input type="radio" id="termos-entrega-item-11-sim" name="item-11" value="sim"> Sim</label><label><input type="radio" id="termos-entrega-item-11-nao" name="item-11" value="nao"> Não</label></div></td></tr>
+                  </tbody>
+                </table>
+              </fieldset>
+              <fieldset class="termos__grupo">
+                <legend>Observações</legend>
+                <p class="termos__dica" id="termos-entrega-obs-dica">Registre avarias no equipamento anterior ou itens pendentes.</p>
+                <label class="sr-only" for="termos-entrega-obs">Observações</label>
+                <textarea id="termos-entrega-obs" name="obs" class="ck-entrada termos__obs" rows="4" aria-describedby="termos-entrega-obs-dica"></textarea>
+              </fieldset>
+              <div class="termos__acoes">
+                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["entrega"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["entrega"]'>Limpar</button>
+                <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
+                <p class="termos__estado" id="termos-status-entrega" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </div>
+
+          <div class="termos__painel" role="tabpanel" id="termos-painel-devolucao" aria-labelledby="termos-aba-devolucao" hidden>
+            <form class="termos__form" id="termos-form-devolucao" autocomplete="off" novalidate>
+              <fieldset class="termos__grupo">
+                <legend>Dados do colaborador</legend>
+                <div class="termos__campos">
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Nome do colaborador</span><input type="text" id="termos-devolucao-nome" name="nome" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Unidade</span><input type="text" id="termos-devolucao-unidade" name="unidade" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Data</span><input type="date" id="termos-devolucao-data" name="data" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Modelo do computador</span><input type="text" id="termos-devolucao-modelo" name="modelo" class="ck-entrada" autocomplete="off"></label>
+                  <label class="ck-campo"><span class="ck-campo__rotulo">Número de série</span><input type="text" id="termos-devolucao-serie" name="serie" class="ck-entrada" autocomplete="off"></label>
+                </div>
+              </fieldset>
+              <fieldset class="termos__grupo">
+                <legend class="sr-only">Equipamentos devolvidos</legend>
+                <table class="termos__tabela"><thead><tr><th scope="col">Equipamento / Acessório</th><th scope="col">Sim / Não</th></tr></thead>
+                  <tbody>
+                    <tr><th scope="row">1 - Mochila</th><td><div class="termos__sn" role="radiogroup" aria-label="1 - Mochila"><label><input type="radio" id="termos-devolucao-item-01-sim" name="item-01" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-01-nao" name="item-01" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">2 - Notebook</th><td><div class="termos__sn" role="radiogroup" aria-label="2 - Notebook"><label><input type="radio" id="termos-devolucao-item-02-sim" name="item-02" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-02-nao" name="item-02" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">3 - Teclado</th><td><div class="termos__sn" role="radiogroup" aria-label="3 - Teclado"><label><input type="radio" id="termos-devolucao-item-03-sim" name="item-03" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-03-nao" name="item-03" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">4 - Mouse</th><td><div class="termos__sn" role="radiogroup" aria-label="4 - Mouse"><label><input type="radio" id="termos-devolucao-item-04-sim" name="item-04" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-04-nao" name="item-04" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">5 - Hub USB</th><td><div class="termos__sn" role="radiogroup" aria-label="5 - Hub USB"><label><input type="radio" id="termos-devolucao-item-05-sim" name="item-05" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-05-nao" name="item-05" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">6 - Suporte notebook</th><td><div class="termos__sn" role="radiogroup" aria-label="6 - Suporte notebook"><label><input type="radio" id="termos-devolucao-item-06-sim" name="item-06" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-06-nao" name="item-06" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">7 - Headset</th><td><div class="termos__sn" role="radiogroup" aria-label="7 - Headset"><label><input type="radio" id="termos-devolucao-item-07-sim" name="item-07" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-07-nao" name="item-07" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">8 - Case headset (modelo 8225)</th><td><div class="termos__sn" role="radiogroup" aria-label="8 - Case headset (modelo 8225)"><label><input type="radio" id="termos-devolucao-item-08-sim" name="item-08" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-08-nao" name="item-08" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">9 - Mousepad</th><td><div class="termos__sn" role="radiogroup" aria-label="9 - Mousepad"><label><input type="radio" id="termos-devolucao-item-09-sim" name="item-09" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-09-nao" name="item-09" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">10 - Monitor</th><td><div class="termos__sn" role="radiogroup" aria-label="10 - Monitor"><label><input type="radio" id="termos-devolucao-item-10-sim" name="item-10" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-10-nao" name="item-10" value="nao"> Não</label></div></td></tr>
+                    <tr><th scope="row">11 - Cabo de Segurança</th><td><div class="termos__sn" role="radiogroup" aria-label="11 - Cabo de Segurança"><label><input type="radio" id="termos-devolucao-item-11-sim" name="item-11" value="sim"> Sim</label><label><input type="radio" id="termos-devolucao-item-11-nao" name="item-11" value="nao"> Não</label></div></td></tr>
+                  </tbody>
+                </table>
+              </fieldset>
+              <fieldset class="termos__grupo">
+                <legend>Observações</legend>
+                <label class="sr-only" for="termos-devolucao-obs">Observações</label>
+                <textarea id="termos-devolucao-obs" name="obs" class="ck-entrada termos__obs" rows="4"></textarea>
+              </fieldset>
+              <div class="termos__acoes">
+                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["devolucao"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["devolucao"]'>Limpar</button>
+                <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
+                <p class="termos__estado" id="termos-status-devolucao" role="status" aria-live="polite"></p>
+              </div>
+            </form>
           </div>
         </section>
 
@@ -1964,6 +2076,9 @@ Horário disponível para atendimento:</textarea>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="ck-toasts"></div>
+
+  <!-- Folha do PDF dos Termos: montada por termos.js, oculta na tela. -->
+  <div id="termos-impressao" hidden></div>
 
   <!-- Browser entry; app-entry.js owns the ordered import graph. -->
   <script type="module" src="/static/app-entry.js"></script>
