@@ -267,7 +267,7 @@ test("data-origem marca o vínculo do Dashboard e aria-invalid o número inváli
   } finally { vinculos = []; }
 });
 
-test("a busca usa série, OS, modelo e UTIC salvo, sem casar descrição nem rótulos de botões", async () => {
+test("a busca usa série, OS, modelo e UTIC salvo, sem casar rótulos de botões", async () => {
   vinculos = [{ fonte: "oracle", serie: "SN-SOR", os: "9002", ano: 2026, numero: "3290", origem: "dashboard" }];
   const modelo = report.chamados[0].simpress.modelos;
   report.chamados[0].simpress.modelos = ["Latitude 5440"];
@@ -279,7 +279,8 @@ test("a busca usa série, OS, modelo e UTIC salvo, sem casar descrição nem ró
     assert.deepEqual(visiveis(section), ["SN-SOR"], "UTIC completo");
     panels.filtrarTabelaOs({ busca: "3290" });
     assert.deepEqual(visiveis(section), ["SN-SOR"], "só o número do UTIC");
-    for (const termo of ["salvar", "andamento", "remover", "bateria", "informado", "ambiguo"]) {
+    // "solicitacao" e "informado" vêm de rótulos da descrição ("Solicitação R1:", "Descrição não informada"): ficam fora.
+    for (const termo of ["salvar", "andamento", "remover", "solicitacao", "informado", "ambiguo"]) {
       panels.filtrarTabelaOs({ busca: termo });
       assert.deepEqual(visiveis(section), [], `"${termo}" não casa`);
     }
@@ -687,6 +688,48 @@ test("Selos Técnico e Aberta há N dias: só no Oracle, só com os campos do se
     panels.filtrarTabelaOs({ busca: "tecnico" });
     assert.deepEqual(visiveis(section), ["SN-DUAS", "SN-TEC"], "sem acento também casa");
   } finally { panels.filtrarTabelaOs({ busca: "", relacao: "" }); report.chamados = original; }
+});
+
+// Nomes fictícios (LGPD): nenhuma pessoa real nos testes.
+test("busca por nome na descrição (primeiro nome ou completo) e termos de equipamento com limite de palavra", async () => {
+  const original = report.chamados;
+  const modelo = report.chamados[0].simpress.modelos;
+  const oracle = (serie, os, descricao) => ({ serie, relacao: "somente_oracle", simpress: { ordens_servico: [] },
+    oracle: [{ solicitacao: `R${os}`, ordem_servico: os, descricao }] });
+  report.chamados = [
+    oracle("SN-N1", "9201", "Usuário João Fictício Teste sem acesso ao teclado."),
+    oracle("SN-N2", "9202", "Atender João Outro na recepção; trocar mouse."),
+    oracle("SN-N3", "9203", "Mariana Exemplo pediu monitores novos."),
+    oracle("SN-N4", "9204", "Mac da diretoria não liga."),
+    oracle("SN-N5", "9205", "Entregar MacBook Air para Ana Exemplo."),
+    oracle("SN-N6", "9206", "Macaco hidráulico e iMac antigo no depósito."),
+    oracle("SN-N7", "9207", "ZBook com tela piscando."),
+    { serie: "SN-N8", relacao: "somente_simpress", simpress: { ordens_servico: ["9208"], modelos: ["HP ZBook Firefly"] }, oracle: [] },
+  ];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const busca = (termo, esperado, msg) => {
+      panels.filtrarTabelaOs({ busca: termo, relacao: "todos" });
+      assert.deepEqual(visiveis(section), esperado, msg || `"${termo}"`);
+    };
+    busca("joão", ["SN-N1", "SN-N2"], "primeiro nome acha as duas OS");
+    busca("JOAO", ["SN-N1", "SN-N2"], "maiúscula e sem acento");
+    busca("João Fictício Teste", ["SN-N1"], "nome completo exclui o homônimo");
+    busca("joao outro", ["SN-N2"]);
+    busca("joao inexistente", [], "nome completo com sobrenome que não existe");
+    busca("ana", ["SN-N5"], "início de palavra: \"ana\" não acha \"Mariana\"");
+    busca("mariana", ["SN-N3"]);
+
+    busca("teclado", ["SN-N1"]);
+    busca("mouse", ["SN-N2"]);
+    busca("monitor", ["SN-N3"], "plural \"monitores\" casa");
+    busca("zbook", ["SN-N7", "SN-N8"], "descrição e modelo");
+    busca("mac", ["SN-N4", "SN-N5"], "mac casa Mac e MacBook, não macaco nem iMac");
+    busca("MacBook", ["SN-N4", "SN-N5"], "macbook é sinônimo de mac");
+
+    busca("9204", ["SN-N4"], "número da OS segue como antes");
+    busca("n8", ["SN-N8"], "trecho de série segue como antes");
+  } finally { panels.filtrarTabelaOs({ busca: "", relacao: "" }); report.chamados = original; report.chamados[0].simpress.modelos = modelo; }
 });
 
 test("Selo Entregue: só com etapa atual Pedido entregue e data DD/MM/AAAA, por textContent", async () => {
