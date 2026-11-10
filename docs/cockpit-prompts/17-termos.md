@@ -1,6 +1,6 @@
 # 17 — Termos de entrega e devolução (Ferramentas, 09/11/2026)
 
-Painel `Termos` do menu Ferramentas do Cockpit. Reúne dois formulários que o operador preenche à mão e salva em PDF para colher assinaturas: `Termo Entrega` e `Termo Devolução`. É só front-end: nada é gravado no computador, no servidor nem em sistema externo.
+Painel `Termos` do menu Ferramentas do Cockpit. Reúne dois formulários que o operador preenche (nome, modelo, série e Notebook vêm da busca de série da Home; o resto à mão) e salva em PDF para colher assinaturas: `Termo Entrega` e `Termo Devolução`. É só front-end: nada é gravado no computador, no servidor nem em sistema externo.
 
 Autorização: pedido do usuário de 09/11/2026 (painel novo, sem atalho de teclado). No mesmo dia o usuário trocou o botão `Imprimir` por `Gerar PDF` (só quer salvar o PDF numa pasta) e definiu o nome sugerido do arquivo. Em 10/11/2026 o usuário aprovou os textos novos `Sim/Não` (cabeçalho das listas de verificação) e `Limpar o termo?` (confirmação do `Limpar`).
 
@@ -21,22 +21,39 @@ Título impresso `Termo de Entrega`, cabeçalho `SEBRAE/PR`, marca `Interno` no 
 
 - `Dados do colaborador`: `Nome do colaborador`, `Unidade / Departamento`, `Data da entrega / troca`.
 - `Identificação do equipamento`: tabela com colunas `Campo`, `Equipamento anterior`, `Equipamento entregue` e linhas `Modelo do computador` e `Número de série / Service Tag` (quatro campos). Abaixo de 768 px a tabela vira cartões com os mesmos dados.
-- `Equipamentos e acessórios entregues`, com a dica `Assinale Sim ou Não para cada item apresentado no ato da entrega.` Itens, cada um com `Sim` / `Não`: 01 Mochila; 02 Notebook; 03 Teclado; 04 Mouse; 05 Hub USB; 06 Suporte notebook; 07 Headset (modelo 8225 ou 3220); 08 Case headset; 09 Mousepad; 10 Monitor; 11 Cabo de Segurança.
+- `Equipamentos e acessórios entregues`, com a dica `Assinale Sim ou Não para cada item apresentado no ato da entrega.` Itens, cada um com `Sim` / `Não`: 01 Mochila; 02 Notebook; 03 Teclado; 04 Mouse; 05 Hub USB; 06 Suporte notebook; 07 Headset (modelo 8225 ou 3220); 08 Case headset; 09 Mousepad; 10 Monitor (HDMI / DisplayPort / Cabo de força / USB); 11 Cabo de Segurança.
 - `Observações`, com a dica `Registre avarias no equipamento anterior ou itens pendentes.`
 - `Validação do recebimento`: `Declaro que conferi as informações deste termo e recebi os equipamentos e acessórios assinalados acima.`
 - Assinaturas: `Assinatura do colaborador` e `Assinatura do técnico responsável`.
-- Rodapé: `SEBRAE/PR • Termo de Entrega`.
+- Sem rodapé (removido a pedido do usuário em 10/11/2026: ficava colado às assinaturas).
 
 ### Termo Devolução
 
-Título impresso `Termo de Devolução de Equipamentos`, cabeçalho `SEBRAE/PR`.
+Na tela, `Dados do colaborador`: `Nome do colaborador`, `Unidade`, `Data`, `Modelo do computador`, `Número de série`; lista `Equipamento / Acessório` com `Sim` / `Não`: 1 - Mochila; 2 - Notebook; 3 - Teclado; 4 - Mouse; 5 - Hub USB; 6 - Suporte notebook; 7 - Headset; 8 - Case headset (modelo 8225); 9 - Mousepad; 10 - Monitor (HDMI / DisplayPort / Cabo de força / USB); 11 - Cabo de Segurança (abaixo de 768 px a lista vira cartões); `Observações`.
 
+Folha impressa no mesmo padrão do Termo Entrega (pedido do usuário de 10/11/2026), mudando só os textos e o destaque visual:
+
+- Título `Termo de Devolução de Equipamentos`, cabeçalho `SEBRAE/PR`, marca `Interno`.
 - `Dados do colaborador`: `Nome do colaborador`, `Unidade`, `Data`, `Modelo do computador`, `Número de série`.
-- Tabela `Equipamento / Acessório` com `Sim` / `Não`: 1 - Mochila; 2 - Notebook; 3 - Teclado; 4 - Mouse; 5 - Hub USB; 6 - Suporte notebook; 7 - Headset; 8 - Case headset (modelo 8225); 9 - Mousepad; 10 - Monitor; 11 - Cabo de Segurança. Abaixo de 768 px a lista vira cartões.
+- Sem a tabela `Identificação do equipamento` (só existe na entrega, a pedido do usuário em 10/11/2026).
+- `Equipamentos e acessórios devolvidos`, dica `Assinale Sim ou Não para cada item apresentado no ato da devolução.`, tabela `Equipamento / Acessório` / `Sim / Não`.
 - `Observações`.
+- `Validação da devolução`: `Declaro que conferi as informações deste termo e devolvi os equipamentos e acessórios assinalados acima.`
 - Assinaturas: `Assinatura do colaborador` e `Assinatura do Técnico`.
+- Destaque em vinho (`#7a1f2b`, classe `tp--devolucao`): faixa à esquerda e fundo claro no cabeçalho, faixa à esquerda nos títulos de seção. A entrega usa o mesmo esquema em azul (`#1f4e8c`), sem as faixas: título, títulos de seção e marca na cor do termo, bordas das tabelas na cor e cabeçalho das tabelas com fundo claro.
 
 Sim e Não são um par de botões de rádio por item (só um pode ficar marcado; item não respondido sai com as duas caixas vazias na folha).
+
+### Preenchimento pela Home (pedido do usuário de 10/11/2026)
+
+Cada equipamento exibido na Home (busca por `#input-serial` ou clique na lista) chama `app.termosPreencherDoEquipamento(eq)` dentro de `exibirEquipamento` (`static/js/features/equipment-search.js`). A função preenche os dois termos com os dados já carregados na página, sem rota nova nem gravação:
+
+- Termo Entrega: `Nome do colaborador` (`eq.nome_pessoa`), `Modelo do computador` e `Número de série / Service Tag` da coluna `Equipamento entregue` (`eq.modelo`, `eq.serial`) e `02 Notebook` = `Sim`.
+- Termo Devolução: `Nome do colaborador` (`eq.nome_pessoa`), `Modelo do computador` (`eq.modelo`), `Número de série` (`eq.serial`) e `2 - Notebook` = `Sim`.
+- O resto (unidade, data, coluna `Equipamento anterior`, demais itens, observações) continua manual.
+- Todos os campos preenchidos continuam editáveis (sem `readonly` nem `disabled`); o Notebook pode ser trocado para Não.
+- Campo sem valor no equipamento só é apagado se tinha sido preenchido pela própria Home (`data-preenchido-home`); o que o usuário digitou à mão fica. Equipamento sem série não altera nada.
+- Só preenche quando a série muda (`data-serie-home` no formulário): salvar a edição cadastral reexibe a mesma série e não desfaz o que o usuário alterou, inclusive um Notebook = Não. `Limpar` zera essa marca.
 
 ## PDF
 
@@ -47,7 +64,7 @@ O formulário da tela nunca é impresso. `Gerar PDF` monta, por `textContent`, a
 - Observações completas, com quebras de linha preservadas (`white-space: pre-wrap`, sem altura fixa nem corte);
 - linhas de assinatura.
 
-Em seguida a página recebe a classe `termos-imprimindo` no `<html>`, o título da página (`document.title`) muda para o nome do arquivo e o programa chama `window.print()`. O usuário escolhe `Salvar como PDF` e a pasta na janela do navegador. No `afterprint` a classe sai, a folha é esvaziada e o título original volta. O CSS de impressão (`@media print`, em `static/styles/ck-termos.css`) esconde tudo o que não for `#termos-impressao`, força fundo branco e texto preto mesmo no tema escuro e usa margens neutras em `@page`. Não há dependência nova, rota nova nem gravação: o PDF é gerado pelo próprio navegador.
+Em seguida a página recebe a classe `termos-imprimindo` no `<html>`, o título da página (`document.title`) muda para o nome do arquivo e o programa chama `window.print()`. O usuário escolhe `Salvar como PDF` e a pasta na janela do navegador. No `afterprint` a classe sai, a folha é esvaziada e o título original volta. O CSS de impressão (`@media print`, em `static/styles/ck-termos.css`) esconde tudo o que não for `#termos-impressao`, força fundo branco e texto preto mesmo no tema escuro (exceto a cor de destaque de cada termo) e usa `@page { margin: 0 }` com o respiro no `padding` da folha: assim o Chrome não imprime data/hora, título (nome do arquivo) nem endereço no topo e no pé da página. Não há dependência nova, rota nova nem gravação: o PDF é gerado pelo próprio navegador.
 
 ### Nome sugerido do arquivo
 
@@ -68,12 +85,12 @@ O navegador usa o título da página como nome do arquivo em `Salvar como PDF`. 
 
 ## Assistente
 
-Regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`): Termos fica no menu Ferramentas; o preenchimento e o `Gerar PDF` (nome sugerido `<série> - <nome>`) acontecem só na tela; não há ferramenta para os termos e nada é guardado.
+Regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`): Termos fica no menu Ferramentas; a busca de série na Home já preenche nome, modelo, série e Notebook = Sim; o resto do preenchimento e o `Gerar PDF` (nome sugerido `<série> - <nome>`) acontecem só na tela; não há ferramenta para os termos e nada é guardado.
 
 ## Testes
 
-- `tests/frontend/test_termos.cjs`: formato de data, nome do arquivo (`<série> - <nome>`, limpeza, maiúsculas, limite de 100, partes vazias), montagem da folha e presença dos rótulos aprovados em `static/index.html`.
-- `tests/e2e/termos.spec.cjs`: abre pelo menu, troca de sub-aba, preenche, marca itens, simula `window.print`, confere em mídia `print` que só a folha aparece com a Observação longa completa, que não há `<kbd>` nem botão `Imprimir`, que `Gerar PDF` existe, que `document.title` vale `BRJ54925DN - Janaina do Rocio Santos Rocha` durante a impressão (Devolução) e volta no `afterprint`, e que sem série ou sem nome o PDF é bloqueado com o aviso.
+- `tests/frontend/test_termos.cjs`: formato de data, nome do arquivo (`<série> - <nome>`, limpeza, maiúsculas, limite de 100, partes vazias), montagem da folha, preenchimento pela Home (`termosPreencherDoEquipamento`, sem apagar o que foi digitado nem desfazer alterações quando a mesma série é reexibida) e presença dos rótulos aprovados em `static/index.html`.
+- `tests/e2e/termos.spec.cjs`: abre pelo menu, troca de sub-aba, preenche, marca itens, simula `window.print`, confere em mídia `print` que só a folha aparece com a Observação longa completa, que não há `<kbd>` nem botão `Imprimir`, que `Gerar PDF` existe, que `document.title` vale `BRJ54925DN - Janaina do Rocio Santos Rocha` durante a impressão (Devolução) e volta no `afterprint`, que sem série ou sem nome o PDF é bloqueado com o aviso, e que buscar uma série na Home (API simulada) preenche nome, modelo, série e Notebook = Sim nos dois termos, e que esses campos continuam editáveis.
 - `tests/e2e/cockpit-layout.spec.cjs`: `#btn-termos` na lista de botões de ferramenta (sem atalho).
 
 ## Regras movidas do AGENTS.md (10/11/2026)
