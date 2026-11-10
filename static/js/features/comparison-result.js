@@ -34,6 +34,8 @@
       ? renderer.conteudoAnotacoesSincronizadas(comparison, colunas)
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
     content.dataset.estado = "pronto";
+    const avisos = document.getElementById("comparacao-planilhas-avisos");
+    if (avisos) avisos.innerHTML = comparison.somente_anotacoes_sincronizadas ? "" : renderer.avisoHistoricoComparacao(comparison);
     const navigationHeading = navigationTarget?.section
       ? encontrarTituloSecaoComparacao(content, navigationTarget.section)
       : null;
@@ -306,47 +308,108 @@
     comparisonAnnotationSyncObservers = [];
   }
 
-  function normalizarCategoriaFiltroHistorico(category) {
-    if (category === "registros_ambiguos") return "correspondencias_ambiguas";
-    return category;
+  const ABAS_RESUMO = renderer.RESUMO_ABAS.map(aba => aba.chave);
+  const ESTADO_RESUMO_INICIAL = { aba: "visao", busca: "", soAnotadas: false, tipo: "" };
+  const estadoResumo = { ...ESTADO_RESUMO_INICIAL };
+  // Set by conectarFiltrosHistoricoComparacao for the content currently on screen; null when there is none.
+  let atualizarResumo = null;
+
+  const elementoAbaResumo = chave => document.getElementById(`resumo-aba-${chave}`);
+
+  function aplicarAbaResumo() {
+    const painelAtivo = ABAS_RESUMO.includes(estadoResumo.aba) ? estadoResumo.aba : "visao";
+    ABAS_RESUMO.forEach(chave => {
+      const botao = elementoAbaResumo(chave);
+      if (!botao) return;
+      const ativa = chave === painelAtivo;
+      botao.setAttribute("aria-selected", String(ativa));
+      botao.tabIndex = ativa ? 0 : -1;
+    });
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-resumo-painel]").forEach(painel => {
+      painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
+    });
+  }
+
+  // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
+  function selecionarAbaResumo(chave, { foco = false } = {}) {
+    if (!ABAS_RESUMO.includes(chave)) return;
+    if (chave !== estadoResumo.aba) estadoResumo.tipo = "";
+    estadoResumo.aba = chave;
+    aplicarAbaResumo();
+    atualizarResumo?.();
+    if (foco) elementoAbaResumo(chave)?.focus();
+  }
+
+  function conectarAbasResumo() {
+    const lista = document.querySelector(".resumo-abas");
+    if (!lista || lista.dataset.resumoConectado === "true") return;
+    lista.dataset.resumoConectado = "true";
+    lista.addEventListener("click", event => {
+      const botao = event.target.closest("[data-resumo-aba]");
+      if (botao) selecionarAbaResumo(botao.id.replace("resumo-aba-", ""));
+    });
+    lista.addEventListener("keydown", event => {
+      const botao = event.target.closest("[data-resumo-aba]");
+      if (!botao) return;
+      const indice = ABAS_RESUMO.indexOf(botao.id.replace("resumo-aba-", ""));
+      const destino = {
+        ArrowRight: indice + 1, ArrowLeft: indice - 1, Home: 0, End: ABAS_RESUMO.length - 1,
+      }[event.key];
+      if (destino === undefined) return;
+      event.preventDefault();
+      selecionarAbaResumo(ABAS_RESUMO[(destino + ABAS_RESUMO.length) % ABAS_RESUMO.length], { foco: true });
+    });
+  }
+
+  function escreverContagemAba(chave, total, filtrando) {
+    const selo = document.getElementById(`resumo-${chave}-contagem`);
+    const botao = elementoAbaResumo(chave);
+    if (selo) selo.textContent = total === null ? "—" : total.toLocaleString("pt-BR");
+    if (botao) botao.setAttribute("aria-label", renderer.rotuloContagemAba(chave, total, filtrando));
+  }
+
+  // Back to the empty state: tab "Visão geral", no filters, zeroed counters, no notice from the previous result.
+  function limparAbasResumo() {
+    Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);
+    atualizarResumo = null;
+    desconectarObservadoresAnotacoes();
+    ABAS_RESUMO.filter(chave => chave !== "visao").forEach(chave => escreverContagemAba(chave, 0, false));
+    const avisos = document.getElementById("comparacao-planilhas-avisos");
+    if (avisos) avisos.innerHTML = "";
+    const barra = document.querySelector(".resumo-abas-barra");
+    if (barra) barra.hidden = false;
+    conectarAbasResumo();
+    aplicarAbaResumo();
   }
 
   function conectarFiltrosHistoricoComparacao(content) {
-    const filterBar = content?.querySelector("[data-history-filter-bar]");
-    if (!filterBar) return;
+    atualizarResumo = null;
+    if (!content) return;
+    conectarAbasResumo();
+    const paineis = typeof content.querySelectorAll === "function" ? [...content.querySelectorAll("[data-resumo-painel]")] : [];
+    const comPaineis = paineis.length > 0;
+    const barraAbas = document.querySelector(".resumo-abas-barra");
+    if (barraAbas) barraAbas.hidden = !comPaineis;
+    if (comPaineis) aplicarAbaResumo();
 
-    const categoryLabels = {
-      apelidos_sem_atualizacao: "Linhas mantidas para conferência",
-      sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
-      sem_acesso_60_dias: "Passou de 60 dias sem acesso",
-      ausentes_no_endpoint: "Sem correspondência — Endpoint",
-      ausentes_em_detalhes: "Sem correspondência — Simpress",
-      divergencias_local: "Localidade divergente",
-      correspondencias_ambiguas: "Duplicidades e correspondências ambíguas",
-      divergencias_apelidos_manuais: "Apelidos manuais divergentes",
-      series_sem_mapeamento: "Séries sem local definido",
-      mudancas_usuarios: "Mudanças de usuário logado",
-      sem_usuario: "Sem usuário",
-    };
-    const searchInput = filterBar.querySelector("[data-history-filter-search]");
-    const categorySelect = filterBar.querySelector("[data-history-filter-category]");
-    const annotatedOnly = filterBar.querySelector("[data-history-filter-annotated]");
-    const status = filterBar.querySelector("[data-history-filter-count]");
-    const canonicalize = value => normalizarCategoriaFiltroHistorico(String(value || ""));
+    const filterBar = content.querySelector("[data-history-filter-bar]");
+    if (!filterBar && !comPaineis) return;
+    const searchInput = filterBar?.querySelector("[data-history-filter-search]") || null;
+    const categorySelect = filterBar?.querySelector("[data-history-filter-category]") || null;
+    const annotatedOnly = filterBar?.querySelector("[data-history-filter-annotated]") || null;
+    const status = filterBar?.querySelector("[data-history-filter-count]") || null;
+    const canonicalize = renderer.canonicalizarCategoriaResumo;
+    const rotulosCategoria = renderer.ROTULOS_CATEGORIA_RESUMO;
     const normalizeText = value => String(value || "")
       .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[̀-ͯ]/g, "")
       .toLocaleLowerCase("pt-BR");
     const setHidden = (element, hidden) => {
       element.hidden = hidden;
       element.classList.toggle("hidden", hidden);
     };
-    const rows = [...content.querySelectorAll("tr[data-comparison-category]")];
-    const categories = [...new Set(rows.map(row => canonicalize(row.dataset.comparisonCategory)).filter(Boolean))]
-      .sort((left, right) => (categoryLabels[left] || left).localeCompare(categoryLabels[right] || right, "pt-BR"));
-    categorySelect.replaceChildren(new Option("Todos os tipos", ""));
-    categories.forEach(category => categorySelect.add(new Option(categoryLabels[category] || category, category)));
-
+    const seletorLinha = "tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]";
+    const informativa = linha => Boolean(linha.closest("[data-resumo-informativo]"));
     const hasAnnotation = row => [...row.querySelectorAll("[data-comparison-annotation]")].some(textarea => {
       if (textarea.value.trim()) return true;
       try {
@@ -357,21 +420,50 @@
       }
     });
 
-    const updateFilters = () => {
-      const query = normalizeText(searchInput.value.trim());
-      const selectedCategory = canonicalize(categorySelect.value);
-      const onlyAnnotated = annotatedOnly.checked;
-      const filtersActive = Boolean(query || selectedCategory || onlyAnnotated);
-      const allRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")];
+    if (searchInput) searchInput.value = estadoResumo.busca;
+    if (annotatedOnly) annotatedOnly.checked = estadoResumo.soAnotadas;
+    let abaDoSeletor = null;
 
-      allRows.forEach(row => {
+    // Type options follow the active tab and only list what the tab really has.
+    const popularTipos = (chave, linhasDaAba) => {
+      if (!categorySelect || abaDoSeletor === chave) return;
+      abaDoSeletor = chave;
+      const presentes = [...new Set(linhasDaAba.filter(linha => !informativa(linha))
+        .map(linha => canonicalize(linha.dataset.comparisonCategory)).filter(Boolean))];
+      const tipos = comPaineis
+        ? renderer.tiposDaAba(chave, presentes)
+        : presentes.map(valor => ({ valor, rotulo: rotulosCategoria[valor] || valor }))
+          .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+      categorySelect.replaceChildren(new Option("Todos os tipos", ""));
+      tipos.forEach(tipo => categorySelect.add(new Option(tipo.rotulo, tipo.valor)));
+      estadoResumo.tipo = tipos.some(tipo => tipo.valor === estadoResumo.tipo) ? estadoResumo.tipo : "";
+      categorySelect.value = estadoResumo.tipo;
+    };
+
+    const updateFilters = () => {
+      const chaveAba = comPaineis ? estadoResumo.aba : "";
+      const painelAtivo = comPaineis ? paineis.find(painel => painel.dataset.resumoPainel === chaveAba) : null;
+      const todasLinhas = [...content.querySelectorAll(seletorLinha)];
+      popularTipos(chaveAba, painelAtivo ? [...painelAtivo.querySelectorAll("tr[data-comparison-category]")] : todasLinhas);
+
+      const query = normalizeText(estadoResumo.busca.trim());
+      const onlyAnnotated = estadoResumo.soAnotadas;
+      const categoriasDoTipo = comPaineis
+        ? renderer.categoriasDoTipo(chaveAba, estadoResumo.tipo)
+        : (estadoResumo.tipo ? [estadoResumo.tipo] : null);
+      const filtersActive = Boolean(query || categoriasDoTipo || onlyAnnotated);
+
+      todasLinhas.forEach(row => {
         const category = canonicalize(row.dataset.comparisonCategory);
         const annotationPresent = hasAnnotation(row);
         const annotationText = [...row.querySelectorAll("[data-comparison-annotation]")]
           .map(textarea => textarea.value)
           .join(" ");
-        const searchable = normalizeText(`${row.textContent} ${annotationText} ${categoryLabels[category] || category}`);
-        const matches = (!selectedCategory || selectedCategory === category)
+        const searchable = normalizeText(`${row.textContent} ${annotationText} ${rotulosCategoria[category] || category}`);
+        // The type filter only applies to the active tab and never to the informational "atualizados" section.
+        const doTipo = !categoriasDoTipo || informativa(row) || categoriasDoTipo.includes(category)
+          || Boolean(painelAtivo && !painelAtivo.contains(row));
+        const matches = doTipo
           && (!query || searchable.includes(query))
           && (!onlyAnnotated || annotationPresent);
         setHidden(row, !matches);
@@ -379,26 +471,46 @@
       });
 
       content.querySelectorAll("[data-history-filter-group]").forEach(group => {
-        const groupRows = [...group.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")];
-        const hasVisibleRow = groupRows.some(row => !row.hidden);
-        setHidden(group, filtersActive && (groupRows.length === 0 || !hasVisibleRow));
+        const groupRows = [...group.querySelectorAll(seletorLinha)];
+        setHidden(group, filtersActive && (groupRows.length === 0 || groupRows.every(row => row.hidden)));
       });
-
       content.querySelectorAll("[data-history-filter-section]").forEach(section => {
         const groups = [...section.querySelectorAll(":scope > [data-history-filter-group]")];
         setHidden(section, filtersActive && (!groups.length || groups.every(group => group.hidden)));
       });
 
-      const visibleRows = rows.filter(row => !row.hidden && !row.closest("[data-history-filter-group]")?.hidden
-        && !row.closest("[data-history-filter-section]")?.hidden);
-      status.textContent = visibleRows.length
-        ? `${visibleRows.length.toLocaleString("pt-BR")} ${visibleRows.length === 1 ? "linha" : "linhas"} ${filtersActive ? "correspondem aos filtros" : "para conferência neste resultado"}.`
-        : filtersActive ? "Nenhuma linha corresponde aos filtros." : "Nenhuma linha de divergência neste resultado.";
-    };
+      const linhasVisiveis = painel => [...painel.querySelectorAll("tr[data-comparison-category]")]
+        .filter(row => !informativa(row) && !row.hidden);
+      paineis.forEach(painel => {
+        const chave = painel.dataset.resumoPainel;
+        if (chave === "visao") return;
+        const todas = [...painel.querySelectorAll("tr[data-comparison-category]")].filter(row => !informativa(row));
+        const listaAusente = Boolean(painel.querySelector("[data-resumo-lista-ausente]")) && todas.length === 0;
+        const total = listaAusente ? null : linhasVisiveis(painel).length;
+        escreverContagemAba(chave, total, filtersActive);
+        const vazio = painel.querySelector("[data-resumo-vazio]");
+        if (vazio) vazio.hidden = !(total === 0 && !filtersActive);
+      });
 
-    searchInput.addEventListener("input", updateFilters);
-    categorySelect.addEventListener("change", updateFilters);
-    annotatedOnly.addEventListener("change", updateFilters);
+      if (filterBar) {
+        // "Visão geral" has no rows to search, so its filter bar stays out of the way.
+        setHidden(filterBar, chaveAba === "visao");
+        const visiveis = painelAtivo
+          ? linhasVisiveis(painelAtivo).length
+          : todasLinhas.filter(row => row.tagName === "TR" && !informativa(row) && !row.hidden).length;
+        if (status) {
+          status.textContent = visiveis
+            ? renderer.textoContadorResumo(visiveis, filtersActive)
+            : filtersActive ? renderer.textoSemResultado(estadoResumo.busca.trim())
+              : (renderer.TEXTO_VAZIO_ABA[chaveAba] || "Nenhuma linha de divergência neste resultado.");
+        }
+      }
+    };
+    atualizarResumo = updateFilters;
+
+    searchInput?.addEventListener("input", () => { estadoResumo.busca = searchInput.value; updateFilters(); });
+    categorySelect?.addEventListener("change", () => { estadoResumo.tipo = categorySelect.value; updateFilters(); });
+    annotatedOnly?.addEventListener("change", () => { estadoResumo.soAnotadas = annotatedOnly.checked; updateFilters(); });
     content.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
       textarea.addEventListener("input", updateFilters);
       textarea.addEventListener("annotationversionchange", updateFilters);
@@ -417,11 +529,12 @@
     return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
   }
 
-  function encontrarGrupoSecaoComparacao(content, sectionKey) {
+  // incluirOcultos: acha o grupo mesmo dentro de uma sub-aba oculta (para saber qual aba abrir antes de navegar).
+  function encontrarGrupoSecaoComparacao(content, sectionKey, { incluirOcultos = false } = {}) {
     const target = String(sectionKey || "").trim();
     const normalizedTarget = normalizarIdentificadorLinhaComparacao(target);
     return [...content.querySelectorAll("[data-history-filter-group]")].find(candidate => {
-      if (!candidate.getClientRects().length) return false;
+      if (!incluirOcultos && !candidate.getClientRects().length) return false;
       if (candidate.dataset.historyFilterGroup === target) return true;
       const section = candidate.closest("[data-history-filter-section]");
       const headings = [candidate.querySelector("h5"), section?.querySelector("h4")]
@@ -440,10 +553,39 @@
 
   const PRIORIDADE_CATEGORIAS_SERIE = ["divergencias_local", "ausentes_no_endpoint", "divergencias_usuario", "ausentes_em_detalhes"];
 
+  function acharLinhaComparacao(rows, target) {
+    let row = target.itemId ? rows.find(candidate => candidate.dataset.comparisonItemId === target.itemId) : null;
+    if (row) return row;
+    const serial = normalizarIdentificadorLinhaComparacao(target.serial);
+    const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
+    const matches = rows.filter(candidate => {
+      const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
+      const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
+      return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
+    });
+    // Sem categoria (Home): mesma prioridade das divergências listadas lá, não a primeira seção da página.
+    const priority = candidate => {
+      const index = PRIORIDADE_CATEGORIAS_SERIE.indexOf(candidate.dataset.comparisonCategory);
+      return index < 0 ? PRIORIDADE_CATEGORIAS_SERIE.length : index;
+    };
+    row = target.category ? matches[0] : matches.reduce((best, candidate) => (!best || priority(candidate) < priority(best) ? candidate : best), null);
+    // Endpoint MacBook serial lacks the leading "S" of EquipamentosDetalhes; accepted only when unambiguous.
+    if (!row && serial && !target.category) {
+      const equivalents = rows.filter(candidate => {
+        const other = normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial);
+        return other && (other === `S${serial}` || `S${other}` === serial);
+      });
+      if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
+    }
+    return row || null;
+  }
+
   function navegarParaLinhaComparacao(target) {
     const content = document.getElementById("comparacao-planilhas-conteudo");
     if (!content) return;
     if (target?.section) {
+      const aba = encontrarGrupoSecaoComparacao(content, target.section, { incluirOcultos: true })?.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+      if (aba) selecionarAbaResumo(aba);
       const group = encontrarGrupoSecaoComparacao(content, target.section);
       if (!group) return;
       const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -462,39 +604,23 @@
       return;
     }
     if (!target?.category && !target?.serial && !target?.hostname) return;
-    const visibleRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
-      .filter(row => row.getClientRects().length > 0 && (!target.category || row.dataset.comparisonCategory === target.category));
-    let row = target.itemId
-      ? visibleRows.find(candidate => candidate.dataset.comparisonItemId === target.itemId)
-      : null;
-    if (!row) {
-      const serial = normalizarIdentificadorLinhaComparacao(target.serial);
-      const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
-      const matches = visibleRows.filter(candidate => {
-        const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
-        const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
-        return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
-      });
-      // Sem categoria (Home): mesma prioridade das divergências listadas lá, não a primeira seção da página.
-      const priority = candidate => {
-        const index = PRIORIDADE_CATEGORIAS_SERIE.indexOf(candidate.dataset.comparisonCategory);
-        return index < 0 ? PRIORIDADE_CATEGORIAS_SERIE.length : index;
-      };
-      row = target.category ? matches[0] : matches.reduce((best, candidate) => (!best || priority(candidate) < priority(best) ? candidate : best), null);
-      // Endpoint MacBook serial lacks the leading "S" of EquipamentosDetalhes; accepted only when unambiguous.
-      if (!row && serial && !target.category) {
-        const equivalents = visibleRows.filter(candidate => {
-          const other = normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial);
-          return other && (other === `S${serial}` || `S${other}` === serial);
-        });
-        if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
-      }
-    }
-    if (!row) {
+    const linhasDe = categoria => [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
+      .filter(candidate => !categoria || candidate.dataset.comparisonCategory === categoria);
+    // Procura em todas as linhas, inclusive as de sub-abas ocultas: a aba só se abre depois de achar a linha.
+    const achada = acharLinhaComparacao(linhasDe(target.category), target);
+    if (!achada) {
       // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
       if (target.category) navegarParaLinhaComparacao({ ...target, category: "" });
       return;
     }
+    const categoria = achada.dataset.comparisonCategory;
+    const aba = renderer.abaDaCategoria(categoria) || achada.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+    if (aba) selecionarAbaResumo(aba);
+    // Com a aba aberta, o gêmeo visível da linha (tr no desktop, cartão no mobile).
+    const row = acharLinhaComparacao(linhasDe(categoria).filter(candidate => candidate.getClientRects().length > 0), {
+      itemId: achada.dataset.comparisonItemId, serial: achada.dataset.comparisonSerial, hostname: achada.dataset.comparisonHostname, category: categoria,
+    });
+    if (!row) return;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     motion?.reveal(row);
@@ -598,6 +724,8 @@
     const content = document.getElementById("comparacao-planilhas-conteudo");
     const heading = sectionId ? document.getElementById(sectionId) : null;
     if (!content || !heading || !content.contains(heading)) return false;
+    const aba = heading.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+    if (aba) selecionarAbaResumo(aba);
     const oculta = () => Boolean(heading.closest("[hidden]"));
     if (oculta()) limparFiltrosHistoricoComparacao(content);
     if (oculta()) return false;
@@ -619,8 +747,10 @@
     if (searchInput) searchInput.value = "";
     if (categorySelect) categorySelect.value = "";
     if (annotatedOnly) annotatedOnly.checked = false;
-    // conectarFiltrosHistoricoComparacao recomputes visibility on these events.
-    searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
+    // The filters read estadoResumo, not the DOM: clear the state too, or tipo/só anotadas keep hiding rows.
+    Object.assign(estadoResumo, { busca: "", soAnotadas: false, tipo: "" });
+    if (atualizarResumo) atualizarResumo();
+    else searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function atributosVersaoAnotacao(item) {
@@ -666,6 +796,6 @@
 
   return {
     renderizarResultadoComparacao, renderizarSemUsuarioSemComparacao, carregarSemUsuarioResumo, invalidarSemUsuarioResumo, navegarParaLinhaComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
-    renderizarAnotacaoOperacional, conectarAnotacoesOperacionais,
+    renderizarAnotacaoOperacional, conectarAnotacoesOperacionais, selecionarAbaResumo, limparAbasResumo,
   };
 });

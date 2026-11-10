@@ -578,6 +578,7 @@
     const exportButton = byId("btn-exportar-resultado-comparacao");
     exportButton.dataset.historyDate = "";
     exportButton.disabled = true;
+    app.limparAbasResumo?.();
     renderEmpty(byId("comparacao-planilhas-conteudo"), message);
     byId("comparacao-planilhas-conteudo").dataset.estado = estado;
   }
@@ -613,6 +614,7 @@
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       if (!keepContent) {
+        app.limparAbasResumo?.();
         renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }
@@ -645,6 +647,7 @@
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
       status.textContent = error.message || "Não foi possível carregar o histórico.";
       if (!fresh) {
+        app.limparAbasResumo?.();
         renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }
@@ -1864,7 +1867,7 @@
     skipLinkHref = null;
   }
 
-  async function openPanel(tool) {
+  async function openPanel(tool, aba = "") {
     if (!Object.hasOwn(toolInfo, tool)) return;
     ensureEvents();
     const root = byId("cockpit-tool-panels");
@@ -1894,8 +1897,13 @@
     if (tool === "comparacao") {
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
+      const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
       await loadComparisons();
       await ativos;
+      // O render acima volta a Visão geral (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
+      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Visão geral).
+      if (aba && pedido === comparisonRequest && activeTool === "comparacao"
+        && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
     }
     if (tool === "apelidos") await loadAliases();
     if (tool === "relatorio") {
