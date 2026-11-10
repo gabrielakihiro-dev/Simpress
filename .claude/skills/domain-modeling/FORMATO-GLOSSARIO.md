@@ -14,7 +14,7 @@ O arquivo fica na raiz do repositório (`GLOSSARY.md`). Um único contexto; não
 **Endpoint**:
 {Definição de uma ou duas frases: o que o termo É.}
 _Evitar_: {sinônimos descartados}
-_Regra_: [AGENTS.md, "Consulta ao vivo do Endpoint na Home"](./AGENTS.md)
+_Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Home (03/11/2026)"](./docs/operacao/automacao-chrome.md)
 
 **Hostname no Endpoint**:
 {Definição.}

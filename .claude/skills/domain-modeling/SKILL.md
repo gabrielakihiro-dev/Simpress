@@ -24,7 +24,7 @@ Crie arquivos só quando houver o que escrever.
 - **Atualizar o `GLOSSARY.md` na hora.** Termo resolvido entra no arquivo imediatamente, sem acumular. Formato em [FORMATO-GLOSSARIO.md](./FORMATO-GLOSSARIO.md).
 - **Preservar os rótulos aprovados do projeto literalmente**, como `na Simpress`, `no Endpoint`, `Endpoint` e `Hostname no Endpoint`. Nunca "normalize" a grafia.
 
-O `GLOSSARY.md` traz definições, nunca regras, especificações, rascunhos nem detalhes de implementação. Para cada termo, ponha no máximo um link para a seção do `AGENTS.md` que traz a regra; assim não nasce uma segunda fonte de verdade.
+O `GLOSSARY.md` traz definições, nunca regras, especificações, rascunhos nem detalhes de implementação. Para cada termo, ponha no máximo um link para a seção que traz a regra, no doc que o índice do `AGENTS.md` indica (as regras detalhadas saíram da raiz em 10/11/2026); assim não nasce uma segunda fonte de verdade.
 
 ## ADRs com parcimônia
 
