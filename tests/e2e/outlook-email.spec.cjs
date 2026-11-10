@@ -217,6 +217,34 @@ test("leaving Para resolves a single match into Nome <email>; an ambiguous name 
   expect(envios().map(({ corpo }) => ({ modo: corpo.modo, confirmado: corpo.confirmado }))).toEqual([{ modo: "abrir", confirmado: false }]);
 });
 
+test("the mouse picks a suggestion and an ambiguous option, even when the click blurs Para", async ({ page }) => {
+  const servidor = await abrirModal(page);
+  const para = page.locator("#email-para");
+
+  await para.fill("an");
+  await page.getByRole("listbox", { name: "Para" }).getByRole("option").first().click();
+  await expect(para).toHaveValue(`${ANA.nome} <${ANA.email}>; `);
+
+  await para.fill("ambiguo");
+  await para.blur();
+  const opcoes = page.locator("#email-para-opcoes").getByRole("button");
+  await expect(opcoes).toHaveCount(2);
+  await para.focus(); // the click below blurs Para and starts a second resolve of "ambiguo"
+  await opcoes.nth(1).click();
+  await expect(para).toHaveValue(`${ANA_TESTE.nome} <${ANA_TESTE.email}>`);
+  await page.waitForTimeout(300);
+  await expect(para).toHaveValue(`${ANA_TESTE.nome} <${ANA_TESTE.email}>`);
+  await expect(page.locator("#email-para-opcoes")).toBeHidden();
+
+  await page.locator("#email-setor").fill("Setor Teste");
+  await page.locator("#email-enviar").click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(status(page)).toHaveText("E-mail enviado pelo Outlook.");
+  const envios = servidor.de("POST", "/email");
+  expect(envios).toHaveLength(1);
+  expect(envios[0].corpo.para).toBe(`${ANA_TESTE.nome} <${ANA_TESTE.email}>`);
+});
+
 test("Enviar pelo Outlook asks first: Cancelar sends nothing, Enviar posts once with confirmado true", async ({ page }) => {
   const servidor = await abrirModal(page);
   const envios = () => servidor.de("POST", "/email");
