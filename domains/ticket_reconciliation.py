@@ -608,6 +608,10 @@ def reconcile_ticket_workbooks(
     simpress = _group_simpress(simpress_records)
     oracle = _group_oracle(oracle_records)
 
+    oracle_records_by_serial: Dict[str, List[Dict[str, Any]]] = {}
+    for record in oracle_records:
+        oracle_records_by_serial.setdefault(record["serie_chave"], []).append(record)
+
     tickets: List[Dict[str, Any]] = []
     for serial in sorted(set(simpress) | set(oracle)):
         simpress_data = simpress.get(serial)
@@ -638,9 +642,8 @@ def reconcile_ticket_workbooks(
             relation = "somente_oracle"
         oracle_latest_os = {_identifier_key(ticket.get("ordem_servico")) for ticket in oracle_data if ticket.get("ordem_servico")}
         oracle_current_source_rows = [
-            record for record in oracle_records
-            if record["serie_chave"] == serial
-            and _identifier_key(record.get("ordem_servico", "")) in oracle_latest_os
+            record for record in oracle_records_by_serial.get(serial, [])
+            if _identifier_key(record.get("ordem_servico", "")) in oracle_latest_os
         ]
         oracle_duplicate_count = _duplicate_record_count(oracle_current_source_rows)
         oracle_solicitations = sorted(

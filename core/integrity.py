@@ -257,12 +257,30 @@ def _cleanup_temporary(path: Path) -> None:
         logger.warning("%s %s", path, type(error).__name__)
 
 
+_write_listeners: list[Callable[[], None]] = []
+
+
+def add_write_listener(listener: Callable[[], None]) -> None:
+    """Register a callback run after any replace or delete of a target file (read-cache invalidation)."""
+    if listener not in _write_listeners:
+        _write_listeners.append(listener)
+
+
+def _notify_write() -> None:
+    for listener in tuple(_write_listeners):
+        try:
+            listener()
+        except Exception:
+            logger.exception("Falha ao notificar a gravação de arquivo.")
+
+
 def _replace_with_retries(source: Path, destination: Path) -> None:
     backoff = _PermissionBackoff()
     attempt = 0
     while True:
         try:
             os.replace(source, destination)
+            _notify_write()
             _fsync_directory(destination.parent)
             return
         except PermissionError as error:
@@ -361,6 +379,7 @@ def _restore_entry(root: Path, transaction_dir: Path, entry: Dict[str, Any]) -> 
 
     if original_hash is None:
         _unlink_with_backoff(target, missing_ok=True)
+        _notify_write()
         return
 
     backup = _safe_target(transaction_dir, entry["backup"])
@@ -627,6 +646,7 @@ class AtomicFileTransaction:
                     _unlink_with_backoff(target)
                 except PermissionError as error:
                     raise FileBusyError(f"Feche '{target.name}' no Excel e tente novamente.") from error
+                _notify_write()
                 _fsync_directory(target.parent)
             return
 

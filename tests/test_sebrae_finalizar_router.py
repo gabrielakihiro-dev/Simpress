@@ -527,7 +527,7 @@ class SemRunnerTest(FinalizarBase):
         self.assertFalse(fin.caminho_job(self.dir).exists())
 
 
-class AtualizarDispara(FinalizarBase):
+class AtualizarBase(FinalizarBase):
     def setUp(self):
         super().setUp()
         self.importar()
@@ -535,10 +535,108 @@ class AtualizarDispara(FinalizarBase):
     def edicao(self, numero, d="FINALIZADO", **extra):
         return {"numero": numero, "A": "CLIENTE", "B": "REDE", "D": d, "J": "INCIDENTE", **extra}
 
-    def atualizar(self, *edicoes, finalizar_softexpert=True):
-        resposta = self.post(ATUALIZAR, json={"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert})
+    def atualizar(self, *edicoes, finalizar_softexpert=True, enviar_sharepoint=None):
+        corpo = {"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert}
+        if enviar_sharepoint is not None:
+            corpo["enviar_sharepoint"] = enviar_sharepoint
+        resposta = self.post(ATUALIZAR, json=corpo)
         self.assertEqual(resposta.status_code, 200, resposta.text)
         return resposta.json()
+
+
+class AtualizarEnviaTest(AtualizarBase):
+    """"Atualizar Dashboard" inicia a rotina enviar sozinho (pedido de 09/11/2026), exceto quando a fechar já roda."""
+
+    def test_a_com_pedido_e_copia_gravada_inicia_so_a_enviar(self):
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertEqual(corpo["enviar"], {"iniciado": True, "motivo": ""})
+        self.assertFalse(corpo["fechar"]["iniciado"])
+        self.assertEqual(self.runner.iniciadas, ["enviar"])
+        self.assertTrue(sebrae_novos.caminho_saida(self.caminhos, corpo["arquivo"]).is_file())  # a rotina lê esta cópia
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_b_copia_nao_gravada_nao_inicia_nada_e_a_atualizacao_segue(self):
+        with patch.object(sebrae_novos, "salvar_planilha", side_effect=OSError("disco")):
+            corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), enviar_sharepoint=True)
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "A cópia de saída não foi gravada; nada foi enviado."})
+        self.assertFalse(corpo["fechar"]["iniciado"])
+        self.assertTrue(corpo["conteudo_base64"])  # o download do usuário segue
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_c_com_chamado_a_finalizar_so_a_fechar_roda_e_nao_a_enviar(self):
+        self.descrever(A)
+        corpo = self.atualizar(self.edicao(A), enviar_sharepoint=True)
+        self.assertTrue(corpo["fechar"]["iniciado"])
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "a rotina fechar já envia ao SharePoint"})
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.assertEqual(self.job()["numeros"], [A])
+
+    def test_d_finalizar_pedido_com_tudo_pulado_nao_envia(self):
+        # Enviaria D=FINALIZADO sem SoftExpert e geraria marca falsa de "outro técnico".
+        corpo = self.atualizar(self.edicao(A), enviar_sharepoint=True)  # sem descrição: pulado
+        self.assertEqual(corpo["fechar"]["pulados"], [{"numero": A, "motivo": "sem_descricao"}])
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "nenhum chamado foi finalizado no SoftExpert"})
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_d_sem_finalizar_com_pedido_inicia_a_enviar(self):
+        corpo = self.atualizar(self.edicao(A), finalizar_softexpert=False, enviar_sharepoint=True)  # confirmado na tela
+        self.assertEqual(corpo["enviar"], {"iniciado": True, "motivo": ""})
+        self.assertEqual(self.runner.iniciadas, ["enviar"])
+        self.runner.iniciadas.clear()
+        corpo = self.atualizar(self.edicao(B, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)  # nenhum D virou FINALIZADO
+        self.assertFalse(corpo["fechar"]["iniciado"])
+        self.assertEqual(corpo["fechar"]["numeros"], [])
+        self.assertEqual(corpo["enviar"], {"iniciado": True, "motivo": ""})
+        self.assertEqual(self.runner.iniciadas, ["enviar"])
+
+    def test_e_rotina_ocupada_responde_200_com_o_motivo_e_nao_inicia(self):
+        self.runner.estado = {"estado": "em_andamento", "rotina": "dashboard"}
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertFalse(corpo["enviar"]["iniciado"])
+        self.assertIn("rotina em execução", corpo["enviar"]["motivo"])
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertTrue(corpo["conteudo_base64"])
+        self.runner.estado = {"estado": "livre"}
+        self.runner.erro = DomainConflictError("Já há uma rotina em execução (o .bat).")
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "Já há uma rotina em execução (o .bat)."})
+
+    def test_e_envio_anterior_incerto_ou_falha_ao_iniciar_nao_derrubam_a_atualizacao(self):
+        envio = fin.preparar_envio(self.dir, b"snapshot")
+        fin.marcar_envio_incerto(self.dir, envio)
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertFalse(corpo["enviar"]["iniciado"])
+        self.assertTrue(corpo["enviar"]["motivo"])
+        self.assertEqual(self.runner.iniciadas, [])
+        fin.recuperar_envio(self.dir, envio, "declarar_nao_enviado", confirmacao="CONFIRMO NAO APLICADO")
+        self.runner.erro = RuntimeError("segredo interno")
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "Não foi possível iniciar o envio ao SharePoint."})
+        self.assertNotIn("segredo", json.dumps(corpo["enviar"]))
+
+    def test_f_sem_pedido_o_comportamento_antigo_segue_intacto(self):
+        for pedido in (None, False):
+            corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=pedido)
+            self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": ""})
+            self.assertTrue(corpo["conteudo_base64"])
+        self.assertEqual(self.runner.iniciadas, [])
+        self.descrever(A)
+        corpo = self.atualizar(self.edicao(A))  # finalizar sem pedido de envio: só a fechar
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.assertEqual(corpo["enviar"]["iniciado"], False)
+
+
+class AtualizarEnviaSemRunnerTest(AtualizarBase):
+    com_runner = False
+
+    def test_sem_automacao_no_servidor_o_motivo_vai_na_resposta(self):
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False, enviar_sharepoint=True)
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "A automação não está disponível neste servidor."})
+        self.assertTrue(corpo["conteudo_base64"])
+
+
+class AtualizarDispara(AtualizarBase):
 
     def test_chamado_marcado_finalizado_com_descricao_vai_para_a_rotina_e_sem_descricao_e_pulado(self):
         self.descrever(A)

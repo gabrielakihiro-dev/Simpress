@@ -29,6 +29,7 @@ from core.integrity import (
     FileTransactionError,
     TransactionConflictError,
     WorkbookSafetyError,
+    add_write_listener,
     lock_paths,
     load_workbook_safely,
     recover_pending_transactions,
@@ -313,13 +314,48 @@ def _validate_json_object(value: Any, label: str) -> Dict[str, Any]:
     return value
 
 
+# Reader cache keyed by path and file identity; any write through core.integrity clears it.
+# Hands out a new list of shallow-copied records (nested values are shared: readers only read them);
+# deepcopy costs more than the parse it avoids. Errors are never cached.
+_HISTORY_READ_CACHE: Dict[str, Tuple[Tuple[int, int, int, int], List[Dict[str, Any]]]] = {}
+_HISTORY_READ_CACHE_LOCK = threading.Lock()
+
+
+def clear_history_read_cache() -> None:
+    with _HISTORY_READ_CACHE_LOCK:
+        _HISTORY_READ_CACHE.clear()
+
+
+add_write_listener(clear_history_read_cache)
+
+
+def _history_file_identity(path: Path) -> Optional[Tuple[int, int, int, int]]:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns, stat.st_ino)
+
+
 def _read_json_history(path: Path, label: str) -> List[Dict[str, Any]]:
+    cache_key = str(path)
+    identity = _history_file_identity(path)
+    if identity is not None:
+        with _HISTORY_READ_CACHE_LOCK:
+            cached = _HISTORY_READ_CACHE.get(cache_key)
+        if cached is not None and cached[0] == identity:
+            return [dict(record) for record in cached[1]]
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise LocalJsonCorruptionError(f"O histórico local de {label} está ilegível; os dados foram preservados.") from error
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise LocalJsonCorruptionError(f"O histórico local de {label} precisa conter uma lista de registros.")
+    # Stored only if the file did not change while it was read.
+    if identity is not None and _history_file_identity(path) == identity:
+        with _HISTORY_READ_CACHE_LOCK:
+            _HISTORY_READ_CACHE[cache_key] = (identity, value)
+        return [dict(record) for record in value]
     return value
 UPLOAD_PREVIEW_TOKEN_SECRET = os.urandom(32)
 UPLOAD_PREVIEW_TOKEN_TTL_SECONDS = 10 * 60
@@ -2649,8 +2685,23 @@ app.include_router(create_entra_users_router(EntraUserServices(
 
 
 def _monthly_report_inventory() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Only the fields monthly_report.inventory_section reads, copied under the lock."""
     with STATE_LOCK:
-        return deepcopy(list(inventory_state.equipamentos_cache.values())), deepcopy(inventory_state.stats_cache)
+        stats = inventory_state.stats_cache
+        duplicates = stats.get("series_duplicadas")
+        empty_rows = stats.get("linhas_sem_serie")
+        return (
+            [
+                {key: item.get(key) for key in ("tipo", "retirada_cidade", "endereco_instalacao")}
+                for item in inventory_state.equipamentos_cache.values()
+            ],
+            {
+                "series_duplicadas": dict.fromkeys(duplicates) if isinstance(duplicates, dict) else None,
+                "linhas_sem_serie": empty_rows if isinstance(empty_rows, int) else None,
+                "arquivo_origem": str(stats.get("arquivo_origem") or ""),
+                "ultima_atualizacao": str(stats.get("ultima_atualizacao") or ""),
+            },
+        )
 
 
 _monthly_report_services = MonthlyReportServices(

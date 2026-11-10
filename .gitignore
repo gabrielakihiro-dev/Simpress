@@ -181,3 +181,9 @@ graphify-out/
 # motor_ia: log de uso real (Fase 0) e sandbox do harness (código gerado, descartável)
 /motor_ia/data/
 /motor_ia/sandbox/
+
+# Estado local: tudo em data/state fica fora do Git, salvo marcadores e READMEs versionados.
+/data/state/**
+!/data/state/**/
+!/data/state/**/.gitkeep
+!/data/state/**/README.md
