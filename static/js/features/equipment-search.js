@@ -178,6 +178,199 @@
     document.getElementById("campo-powershell-usuario").classList.toggle("hidden", modo !== "usuario");
   }
 
+  // Códigos prontos: lista guardada no servidor local (comando fixo + modo). Só carrega na primeira abertura do card.
+  const POWERSHELL_CODIGOS_URL = "/api/endpoint/powershell/codigos";
+  // Impressora de rede (Add-Printer -ConnectionName, aceito abreviado até -Con) só é instalada no perfil do usuário logado.
+  const POWERSHELL_IMPRESSORA_REDE = /^\s*Add-Printer\b.*\s-Con/i;
+  const POWERSHELL_AVISO_IMPRESSORA_SYSTEM = "Adicionar impressora de rede só funciona no modo Usuário logado.";
+  let codigosPowerShell = null; // null = ainda não carregada; por isso o editor nunca abre (e não sobrescreve a lista) após falha de carga
+  let cargaCodigosPowerShell = null;
+  let linhasCodigosPowerShell = [];
+
+  function codigosDaResposta(data) {
+    if (!Array.isArray(data?.codigos)) throw new Error("Não foi possível ler a lista de códigos.");
+    return data.codigos;
+  }
+
+  // Dado armazenado: só textContent/value, nunca innerHTML.
+  function popularSelectCodigosPowerShell() {
+    const select = document.getElementById("select-powershell-codigo");
+    const vazio = document.createElement("option");
+    vazio.value = "";
+    vazio.textContent = "Escolher código…";
+    const grupos = [["usuario", "Usuário logado"], ["sistema", "SYSTEM"]].map(([modo, rotulo]) => {
+      const itens = codigosPowerShell.filter(item => item.modo === modo);
+      if (!itens.length) return null;
+      const grupo = document.createElement("optgroup");
+      grupo.label = rotulo;
+      itens.forEach(item => {
+        const opcao = document.createElement("option");
+        opcao.value = item.id;
+        opcao.textContent = item.titulo;
+        grupo.appendChild(opcao);
+      });
+      return grupo;
+    }).filter(Boolean);
+    select.replaceChildren(vazio, ...grupos);
+  }
+
+  function definirCodigosPowerShell(lista) {
+    codigosPowerShell = lista;
+    popularSelectCodigosPowerShell();
+  }
+
+  // Resolve true quando a lista veio do servidor; `recarregar` ignora a lista já em memória.
+  async function carregarCodigosPowerShell(recarregar = false) {
+    if (codigosPowerShell && !recarregar && !cargaCodigosPowerShell) return true;
+    const select = document.getElementById("select-powershell-codigo");
+    if (!cargaCodigosPowerShell) {
+      select.setAttribute("aria-busy", "true");
+      cargaCodigosPowerShell = app.apiFetch(POWERSHELL_CODIGOS_URL, { errorMessage: "Não foi possível carregar os códigos prontos." })
+        .then(data => { definirCodigosPowerShell(codigosDaResposta(data)); return true; })
+        .catch(error => { document.getElementById("endpoint-powershell-result").textContent = error.message || "Não foi possível carregar os códigos prontos."; return false; })
+        .finally(() => { cargaCodigosPowerShell = null; select.removeAttribute("aria-busy"); });
+    }
+    return cargaCodigosPowerShell;
+  }
+
+  // O toggle do <details> não borbulha; o dispatcher o captura no próprio elemento (data-on-toggle).
+  function aoAbrirPowerShellEndpoint() {
+    if (document.getElementById("endpoint-powershell").open) void carregarCodigosPowerShell();
+  }
+
+  function aplicarCodigoProntoPowerShell() {
+    const item = (codigosPowerShell || []).find(codigo => codigo.id === document.getElementById("select-powershell-codigo").value);
+    if (!item) return;
+    document.getElementById("input-powershell-comando").value = item.comando;
+    document.getElementById("select-powershell-modo").value = item.modo === "sistema" ? "sistema" : "usuario";
+    alternarModoPowerShellEndpoint();
+    document.getElementById("endpoint-powershell-result").textContent = "";
+  }
+
+  function criarLinhaCodigoPowerShell(item = {}) {
+    const campo = (rotulo, controle, nome, classe) => {
+      controle.dataset.powershellCodigoCampo = nome;
+      const label = document.createElement("label");
+      label.className = `ck-campo ${classe}`;
+      label.append(app.createTextElement("span", "ck-campo__rotulo", rotulo), controle);
+      return label;
+    };
+    const titulo = document.createElement("input");
+    titulo.type = "text";
+    titulo.className = "ck-entrada";
+    titulo.maxLength = 80;
+    titulo.value = item.titulo || "";
+    const modo = document.createElement("select");
+    modo.className = "ck-entrada";
+    [["usuario", "Usuário logado"], ["sistema", "SYSTEM"]].forEach(([valor, rotulo]) => {
+      const opcao = document.createElement("option");
+      opcao.value = valor;
+      opcao.textContent = rotulo;
+      modo.appendChild(opcao);
+    });
+    modo.value = item.modo === "sistema" ? "sistema" : "usuario";
+    const comando = document.createElement("textarea");
+    comando.className = "ck-entrada";
+    comando.rows = 2;
+    comando.maxLength = 2000;
+    comando.spellcheck = false;
+    comando.value = item.comando || "";
+    const remover = app.createTextElement("button", "ck-btn ck-btn--perigo", "Remover");
+    remover.type = "button";
+    remover.dataset.powershellCodigoCampo = "remover";
+    const el = document.createElement("div");
+    el.className = "ck-ps-codigos__item";
+    el.setAttribute("role", "group");
+    el.append(
+      campo("Título", titulo, "titulo", "ck-ps-codigos__titulo"),
+      campo("Modo", modo, "modo", "ck-ps-codigos__modo"),
+      campo("Comando (uma linha)", comando, "comando", "ck-ps-codigos__comando"),
+      remover,
+    );
+    const linha = { id: item.id, titulo, modo, comando, el };
+    remover.addEventListener("click", () => {
+      linhasCodigosPowerShell = linhasCodigosPowerShell.filter(outra => outra !== linha);
+      renderizarLinhasCodigosPowerShell();
+    });
+    return linha;
+  }
+
+  function renderizarLinhasCodigosPowerShell() {
+    linhasCodigosPowerShell.forEach((linha, indice) => linha.el.setAttribute("aria-label", `Código ${indice + 1}`));
+    document.getElementById("powershell-codigos-lista").replaceChildren(...linhasCodigosPowerShell.map(linha => linha.el));
+  }
+
+  function fecharEditorCodigosPowerShell() {
+    document.getElementById("powershell-codigos-editor").classList.add("hidden");
+    document.getElementById("btn-powershell-codigos-gerenciar").setAttribute("aria-expanded", "false");
+    document.getElementById("powershell-codigos-status").textContent = "";
+    linhasCodigosPowerShell = [];
+    renderizarLinhasCodigosPowerShell();
+  }
+
+  // Abre (relendo a lista salva, que outra aba pode ter mudado) ou fecha descartando as edições; serve ao botão Gerenciar códigos e ao Cancelar.
+  async function alternarEditorCodigosPowerShell() {
+    const painel = document.getElementById("powershell-codigos-editor");
+    if (!painel.classList.contains("hidden")) return fecharEditorCodigosPowerShell();
+    if (!(await carregarCodigosPowerShell(true))) return; // a falha já foi mostrada em #endpoint-powershell-result
+    linhasCodigosPowerShell = codigosPowerShell.map(criarLinhaCodigoPowerShell);
+    renderizarLinhasCodigosPowerShell();
+    painel.classList.remove("hidden");
+    document.getElementById("btn-powershell-codigos-gerenciar").setAttribute("aria-expanded", "true");
+    linhasCodigosPowerShell[0]?.titulo.focus();
+  }
+
+  function adicionarCodigoPowerShell() {
+    const linha = criarLinhaCodigoPowerShell();
+    linhasCodigosPowerShell.push(linha);
+    renderizarLinhasCodigosPowerShell();
+    linha.titulo.focus();
+  }
+
+  async function salvarCodigosPowerShell() {
+    const botao = document.getElementById("btn-powershell-codigos-salvar");
+    const status = document.getElementById("powershell-codigos-status");
+    if (botao.disabled) return;
+    const codigos = linhasCodigosPowerShell.map(linha => {
+      const item = { titulo: linha.titulo.value.trim(), modo: linha.modo.value, comando: linha.comando.value };
+      if (linha.id) item.id = linha.id;
+      return item;
+    });
+    const erro = codigos.some(item => !item.titulo) ? "Informe o título de cada código."
+      : codigos.some(item => /[\r\n]/.test(item.comando)) ? "O comando não pode ter quebra de linha."
+      : codigos.some(item => !item.comando.trim()) ? "Informe o comando de cada código."
+      : codigos.some(item => item.modo === "sistema" && POWERSHELL_IMPRESSORA_REDE.test(item.comando)) ? `${POWERSHELL_AVISO_IMPRESSORA_SYSTEM} Ajuste o modo do código.` : "";
+    if (erro) {
+      status.textContent = erro;
+      return;
+    }
+    // Trava antes da confirmação: um segundo clique não abre outra confirmação nem manda outro PUT.
+    botao.disabled = true;
+    try {
+      const removidos = codigosPowerShell.filter(item => !linhasCodigosPowerShell.some(linha => linha.id === item.id)).length;
+      const confirmado = await app.confirmarAcao({
+        titulo: "Salvar lista de códigos",
+        mensagem: `A lista de códigos prontos será substituída por ${codigos.length} ${app.pluralize(codigos.length, "código", "códigos")}.${removidos ? ` ${removidos} ${app.pluralize(removidos, "código será removido", "códigos serão removidos")} da lista.` : ""}`,
+        confirmar: "Salvar lista", cancelar: "Cancelar", destrutiva: false,
+      });
+      if (!confirmado) return;
+      botao.setAttribute("aria-busy", "true");
+      status.textContent = "Salvando…";
+      const data = await app.apiFetch(POWERSHELL_CODIGOS_URL, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigos }), errorMessage: "Não foi possível salvar a lista de códigos.",
+      });
+      definirCodigosPowerShell(codigosDaResposta(data));
+      fecharEditorCodigosPowerShell();
+      document.getElementById("endpoint-powershell-result").textContent = "Lista de códigos salva.";
+    } catch (error) {
+      status.textContent = error.message || "Não foi possível salvar a lista de códigos.";
+    } finally {
+      botao.disabled = false;
+      botao.removeAttribute("aria-busy");
+    }
+  }
+
   function mensagemPowerShellEndpoint(data, hostname) {
     const host = data.hostname || hostname;
     const usuarios = Array.isArray(data.usuarios) ? data.usuarios.join(", ") : "";
@@ -207,6 +400,10 @@
       return;
     }
     const modo = document.getElementById("select-powershell-modo").value === "usuario" ? "usuario" : "sistema";
+    if (modo === "sistema" && POWERSHELL_IMPRESSORA_REDE.test(comando)) {
+      result.textContent = `${POWERSHELL_AVISO_IMPRESSORA_SYSTEM} Troque o modo e tente de novo.`;
+      return;
+    }
     const hostname = document.getElementById("input-powershell-hostname").value.trim();
     const usuario = modo === "usuario" ? document.getElementById("input-powershell-usuario").value.trim() : "";
     const payload = { modo, comando };
@@ -1184,7 +1381,8 @@
 
   return {
     consultarEndpoint,
-    controleRemotoEndpoint, abrirPowerShellEndpoint, alternarModoPowerShellEndpoint,
+    controleRemotoEndpoint, abrirPowerShellEndpoint, alternarModoPowerShellEndpoint, aplicarCodigoProntoPowerShell,
+    aoAbrirPowerShellEndpoint, alternarEditorCodigosPowerShell, adicionarCodigoPowerShell, salvarCodigosPowerShell,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,

@@ -1,14 +1,17 @@
 """Endpoint lookup shares the selected equipment and never saves a user."""
 import re
 from collections import deque
+from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Collection, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from core.config import STATE_DIR
 from domains import endpoint_lookup
 from domains.equipment_search import categorize_equipment
+from domains.powershell_codigos import ler_codigos, salvar_codigos
 
 
 class ConsultaEndpointPayload(BaseModel):
@@ -55,11 +58,30 @@ class PowerShellPayload(BaseModel):
         return endpoint_lookup.validar_comando(value)
 
 
+class CodigoPowerShellPayload(BaseModel):
+    # Só os tipos aqui; limites e caracteres proibidos são validados em domains/powershell_codigos.py.
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = None
+    titulo: str
+    modo: str
+    comando: str
+
+
+class CodigosPowerShellPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    codigos: list[CodigoPowerShellPayload]
+
+
+def _codigos_file_padrao() -> Path:
+    return STATE_DIR / "powershell_codigos.json"
+
+
 def create_endpoint_lookup_router(
     get_snapshot: Callable[[str], dict[str, Any]],
     lookup: Callable[[str, bool, Collection[str]], dict[str, Any]] = endpoint_lookup.consultar,
     remote_control: Callable[..., dict[str, Any]] = endpoint_lookup.controle_remoto,
     powershell: Callable[..., dict[str, Any]] = endpoint_lookup.abrir_powershell,
+    codigos_file: Callable[[], Path] = _codigos_file_padrao,
 ) -> APIRouter:
     router = APIRouter()
     # Pedidos de controle remoto cancelados ou substituídos; guardados só em memória.
@@ -141,5 +163,14 @@ def create_endpoint_lookup_router(
             raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
         except Exception:
             raise HTTPException(503, "Não foi possível abrir o PowerShell. Confira o Chrome de automação (porta 9333) e o login no Endpoint.") from None
+
+    @router.get("/api/endpoint/powershell/codigos")
+    def ler_codigos_powershell() -> dict[str, Any]:
+        return {"codigos": ler_codigos(codigos_file())}
+
+    @router.put("/api/endpoint/powershell/codigos")
+    def salvar_codigos_powershell(payload: CodigosPowerShellPayload) -> dict[str, Any]:
+        # 422 (DomainValidationError) e 503 (DomainBusyError) seguem pelo handler de main.py; o comando nunca vai a log.
+        return {"codigos": salvar_codigos(codigos_file(), [item.model_dump() for item in payload.codigos])}
 
     return router
