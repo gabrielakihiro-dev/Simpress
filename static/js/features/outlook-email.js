@@ -31,7 +31,7 @@
     ambiguo: "Há destinatários com mais de uma opção. Escolha a pessoa certa antes de enviar.",
     marcador: "Preencha o nome da pessoa e o setor antes de enviar.", // mirror
     semPara: "Informe o destinatário no campo Para.", // mirror
-    // No approved text: generic fallbacks for a failure the server did not explain.
+    // Approved text (10/11/2026): generic fallback for a failure the server did not explain.
     falha: "Não foi possível concluir a operação do e-mail. Tente de novo.",
   };
   const CAMPOS = {
@@ -73,6 +73,7 @@
   let timerSalvar = null;
   let cadeia = Promise.resolve(true); // PUTs run one after the other; resolves to "last save worked"
   const sujo = new Set(); // model fields edited since the last save
+  let gravando = 0; // PUTs queued or in flight
   const combos = {};
 
   function chamar(caminho, { metodo = "GET", dados, erro = TEXTO.falha } = {}) {
@@ -117,6 +118,7 @@
   async function exclusivo(passo) {
     if (ocupado || !aberto || !config) return undefined;
     const foco = document.activeElement;
+    const minha = geracao;
     ocupado = true;
     aplicarEstado();
     try {
@@ -124,7 +126,7 @@
     } finally {
       ocupado = false;
       aplicarEstado();
-      if (aberto) foco?.focus?.();
+      if (aberto && geracao === minha) foco?.focus?.();
     }
   }
 
@@ -204,7 +206,7 @@
   async function gravar(id, dados, campos) {
     try {
       guardarModelo(await chamar(`/email/modelos/${encodeURIComponent(id)}`, { metodo: "PUT", dados }));
-      if (modeloId === id && !sujo.size && !timerSalvar) mostrarAutosave(TEXTO.salva);
+      if (modeloId === id && !sujo.size && !timerSalvar && gravando === 1) mostrarAutosave(TEXTO.salva);
       return true;
     } catch (erro) {
       const atual = modeloId === id;
@@ -213,20 +215,24 @@
       mostrarAutosave(mensagem, true);
       if (!aberto || !atual) app.showToast(mensagem, "error");
       return false;
+    } finally {
+      gravando -= 1;
     }
   }
 
-  // Writes what is pending now. Resolves to true when nothing is left unsaved.
+  // Writes what is pending now, one PUT per field: a field the server refuses does not take the others down.
+  // Resolves to true when nothing is left unsaved.
   function salvarPendente() {
     limparTimer();
     const id = modeloId;
     if (!id || !sujo.size) return cadeia.then(() => sujo.size === 0);
     const campos = [...sujo];
     sujo.clear();
-    const dados = Object.fromEntries(campos.map(campo => [campo, lerCampo(campo)]));
+    const valores = Object.fromEntries(campos.map(campo => [campo, lerCampo(campo)]));
     mostrarAutosave(TEXTO.salvando);
-    cadeia = cadeia.then(() => gravar(id, dados, campos));
-    return cadeia;
+    gravando += campos.length;
+    const resultados = campos.map(campo => cadeia = cadeia.then(() => gravar(id, { [campo]: valores[campo] }, [campo])));
+    return Promise.all(resultados).then(feitos => feitos.every(Boolean));
   }
 
   async function garantirSalvo() {
@@ -460,6 +466,13 @@
   function ligarEventos() {
     if (ligado) return;
     ligado = true;
+    // Same pattern as history-annotation-autosave.js: the browser asks before leaving with unsaved or running work.
+    // No "aberto" check: a send or the closing save keeps running after Esc, and a reload then could lose its result.
+    window.addEventListener("beforeunload", evento => {
+      if (!(sujo.size || timerSalvar || gravando || ocupado)) return;
+      evento.preventDefault();
+      evento.returnValue = "";
+    });
     for (const campo of ["nome", "assunto", "corpo"]) {
       const entrada = byId(CAMPOS[campo]);
       entrada.addEventListener("input", () => agendarSalvar(campo));

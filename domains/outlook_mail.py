@@ -460,8 +460,9 @@ class EmailOutlook:
 
     def _chamar(self, pedido: dict[str, str]) -> SaidaPowerShell:
         comando = [
-            "powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(self._script.resolve()),
-        ]
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-File", str(self._script.resolve()),
+        ]  # Bypass vale só para este processo (política Restricted ou arquivo baixado); o sistema não muda.
         # Dados só por stdin, em UTF-8 de verdade (ensure_ascii=False); nada vai nos argumentos nem no texto do script.
         opcoes: dict[str, Any] = {
             "input": json.dumps(pedido, ensure_ascii=False).encode("utf-8"),

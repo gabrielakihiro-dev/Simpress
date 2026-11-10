@@ -707,7 +707,10 @@ class EnvioTests(OutlookMailBase):
         comando, opcoes = self.runner.chamadas[-1]
         self.assertEqual(
             comando,
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(SCRIPT_PS1.resolve())],
+            [
+                "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-File", str(SCRIPT_PS1.resolve()),
+            ],
         )
         self.assertEqual(SCRIPT_PS1, Path(outlook_mail.__file__).with_name("outlook_mail.ps1"))
         self.assertTrue(SCRIPT_PS1.is_file())
@@ -719,6 +722,16 @@ class EnvioTests(OutlookMailBase):
             self.assertEqual(opcoes["creationflags"], subprocess.CREATE_NO_WINDOW)
         else:
             self.assertNotIn("creationflags", opcoes)
+
+    def test_powershell_roda_com_bypass_so_no_processo_antes_do_file(self):
+        # Politica Restricted ou arquivo baixado (MOTW) nao pode impedir o script; so este processo, nunca o sistema.
+        self.enviar()
+        comando, _ = self.runner.chamadas[-1]
+        self.assertIn("-ExecutionPolicy", comando)
+        posicao = comando.index("-ExecutionPolicy")
+        self.assertEqual(comando[posicao + 1], "Bypass")
+        self.assertLess(posicao, comando.index("-File"))
+        self.assertNotIn("-Scope", comando)
 
     def test_script_e_ascii_e_so_envia_depois_do_marcador(self):
         bytes_do_script = SCRIPT_PS1.read_bytes()
@@ -743,6 +756,18 @@ class EnvioTests(OutlookMailBase):
         script = SCRIPT_PS1.read_text(encoding="ascii")
         self.assertLess(script.index("-ieq [string]$pedido.conta_email"), script.index("CODE:conta_ausente"))
         self.assertNotRegex(script, r"Accounts\s*\[\s*(0|1)\s*\]|DefaultAccount")
+
+    def test_script_confere_a_conta_que_o_outlook_guardou_antes_de_abrir_ou_enviar(self):
+        # O Outlook pode ignorar a atribuicao em silencio e mandar pela conta padrao; o script le de volta.
+        script = SCRIPT_PS1.read_text(encoding="ascii")
+        leitura = re.search(
+            r"\$mail\.SendUsingAccount\.SmtpAddress\s+-ne\s+\[string\]\$pedido\.conta_email\)\s*\{\s*throw 'CODE:conta_ausente'",
+            script,
+        )
+        self.assertIsNotNone(leitura, "falta ler SendUsingAccount.SmtpAddress e lancar CODE:conta_ausente se diferir")
+        self.assertGreater(leitura.start(), script.index("InvokeMember"))  # depois da atribuicao e do fallback
+        self.assertLess(leitura.start(), script.index("Say 'PASSO:antes_send'"))  # antes de qualquer envio
+        self.assertLess(leitura.start(), script.index(".Display($false)"))  # e antes de abrir a janela
 
 
 class LogsTests(OutlookMailBase):

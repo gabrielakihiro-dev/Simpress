@@ -42,6 +42,19 @@ function preparar({ rotas = {}, modelos, diretorio = { disponivel: true, total: 
   let proximo = 0;
   harness.context.fakeSetTimeout = (funcao, ms) => { timers.set(++proximo, { funcao, ms }); return proximo; };
   harness.context.fakeClearTimeout = id => timers.delete(id);
+  // The fake document follows focus() in activeElement; the page-leave handlers are kept to be fired by the tests.
+  const { document: documento, window: janela } = harness.context;
+  const buscarNo = documento.getElementById;
+  documento.getElementById = id => {
+    const no = buscarNo.call(documento, id);
+    if (!no.focoRastreado) {
+      no.focoRastreado = true;
+      no.focus = function focar() { this.focused = true; documento.activeElement = this; };
+    }
+    return no;
+  };
+  const aoSair = [];
+  janela.addEventListener = (tipo, ouvinte) => { if (tipo === "beforeunload") aoSair.push(ouvinte); };
   const aberturas = [];
   const fechamentos = [];
   const confirmacoes = [];
@@ -60,6 +73,13 @@ function preparar({ rotas = {}, modelos, diretorio = { disponivel: true, total: 
     // Calls of one method to one path (query ignored); an empty path means every path.
     de: (metodo, caminho) => chamadas.filter(item => item.metodo === metodo && (!caminho || item.url.split("?")[0] === `/api/outlook${caminho}`)),
     pendentes: () => [...timers.values()].map(item => item.ms),
+    // Fires beforeunload and returns the event: defaultPrevented tells whether the browser would ask to stay.
+    sair() {
+      const evento = { defaultPrevented: false, returnValue: undefined, preventDefault() { this.defaultPrevented = true; } };
+      aoSair.forEach(ouvinte => ouvinte(evento));
+      return evento;
+    },
+    focado: () => documento.activeElement?.id,
     async avancar() {
       const todos = [...timers.values()];
       timers.clear();
@@ -242,6 +262,82 @@ test("closing saves what is pending and reports a failed save in a toast", async
   assert.deepEqual(plano(falha.harness.effects.toasts), [{
     message: "Não foi possível salvar: Não foi possível gravar o modelo de e-mail. Nada foi alterado; tente de novo.", type: "error",
   }]);
+});
+
+test("a rejected field does not lose the others: each dirty field is saved in its own PUT and the failed one stays dirty", async () => {
+  const lista = [modelo("cabo", "Modelo 1 - Cabo"), modelo("m2", "Modelo 2")];
+  const app = preparar({
+    modelos: lista,
+    rotas: { "PUT /api/outlook/email/modelos/cabo": corpo => ("nome" in corpo ? erro(422, "Já existe um modelo com esse nome.", "nome_duplicado") : Object.assign(lista[0], corpo)) },
+  });
+  await app.abrir();
+  app.digitar("email-modelo-nome", "Modelo 2");
+  app.digitar("email-corpo", "Corpo que não pode se perder");
+  await app.harness.run('trocarModeloEmail("m2")');
+  assert.deepEqual(app.de("PUT", "/email/modelos/cabo").map(item => item.corpo), [{ nome: "Modelo 2" }, { corpo: "Corpo que não pode se perder" }]);
+  assert.equal(lista[0].corpo, "Corpo que não pode se perder");
+  assert.equal(app.el("email-modelo").value, "cabo");
+  assert.equal(app.el("email-autosave-status").textContent, "Não foi possível salvar: Já existe um modelo com esse nome.");
+  assert.equal(app.el("email-autosave-status").dataset.estado, "erro");
+
+  // Only the rejected field is sent again; the saved one is not.
+  await app.harness.run('trocarModeloEmail("m2")');
+  assert.deepEqual(app.de("PUT", "/email/modelos/cabo").map(item => item.corpo).slice(2), [{ nome: "Modelo 2" }]);
+  assert.equal(await app.harness.run("fecharEmailOutlook()"), false);
+});
+
+test("leaving the page warns while a change is unsaved, a save runs or an action runs", async () => {
+  const app = preparar();
+  await app.abrir();
+  assert.equal(app.sair().defaultPrevented, false);
+  app.digitar("email-corpo", "Corpo novo");
+  const aviso = app.sair();
+  assert.equal(aviso.defaultPrevented, true);
+  assert.equal(aviso.returnValue, "");
+  await app.avancar();
+  assert.equal(app.sair().defaultPrevented, false);
+  await app.harness.run("fecharEmailOutlook()");
+  assert.equal(app.sair().defaultPrevented, false);
+
+  let concluirGravacao;
+  const lenta = preparar({ rotas: { "PUT /api/outlook/email/modelos/cabo": () => new Promise(resolve => { concluirGravacao = resolve; }) } });
+  await lenta.abrir();
+  lenta.digitar("email-corpo", "Corpo em voo");
+  await lenta.avancar();
+  assert.equal(lenta.de("PUT", "/email/modelos/cabo").length, 1);
+  assert.equal(lenta.sair().defaultPrevented, true);
+  concluirGravacao({});
+  await esvaziar();
+  assert.equal(lenta.sair().defaultPrevented, false);
+
+  let concluirEnvio;
+  const acao = preparar({ rotas: { "POST /api/outlook/email": () => new Promise(resolve => { concluirEnvio = resolve; }) } });
+  await acao.abrir();
+  const execucao = acao.harness.run("abrirEmailNoOutlook()");
+  await esvaziar();
+  assert.equal(acao.de("POST", "/email").length, 1);
+  assert.equal(acao.sair().defaultPrevented, true);
+  await acao.harness.run("fecharEmailOutlook()"); // Esc during a slow send: a reload could still lose its result
+  assert.equal(acao.sair().defaultPrevented, true);
+  concluirEnvio({ status: "aberto", conta: "conta@exemplo.test" });
+  await execucao;
+  assert.equal(acao.sair().defaultPrevented, false);
+});
+
+test("a slow action that ends after close and reopen does not take the focus from the new session", async () => {
+  let concluir;
+  const app = preparar({ rotas: { "POST /api/outlook/email": () => new Promise(resolve => { concluir = resolve; }) } });
+  await app.abrir();
+  assert.equal(app.focado(), "email-modelo");
+  const execucao = app.harness.run("abrirEmailNoOutlook()");
+  await esvaziar();
+  assert.equal(app.de("POST", "/email").length, 1);
+  await app.harness.run("fecharEmailOutlook()");
+  await app.abrir();
+  app.el("email-corpo").focus();
+  concluir({ status: "aberto", conta: "conta@exemplo.test" });
+  await execucao;
+  assert.equal(app.focado(), "email-corpo");
 });
 
 test("Para suggests Entra contacts with keyboard and ARIA support", async () => {
