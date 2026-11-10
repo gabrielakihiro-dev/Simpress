@@ -3,8 +3,8 @@ const { test, expect } = require("@playwright/test");
 // Termos de entrega e devolução (Ferramentas): tudo na tela, sem gravação; o PDF é a janela de impressão do navegador.
 const AVISO_SEM_DADOS = "Preencha o número de série e o nome do colaborador.";
 
-async function abrirTermos(page) {
-  await page.goto("/");
+async function abrirTermos(page, { navegar = true } = {}) {
+  if (navegar) await page.goto("/");
   const menu = page.locator("#cockpit-tools-dropdown");
   if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-termos").click();
@@ -159,4 +159,36 @@ test("os dois termos cabem em 320px sem rolagem horizontal", async ({ page }) =>
     expect(medidas.corpo, aba).toBeLessThanOrEqual(medidas.viewport);
     expect(medidas.painel, aba).toBeLessThanOrEqual(medidas.painelVisivel);
   }
+});
+
+test("buscar a série na Home preenche nome, modelo, série e Notebook = Sim nos dois termos", async ({ page }) => {
+  // Equipamento fictício: a resposta da API é simulada, nenhum dado real entra no teste.
+  await page.route("**/api/equipamento/TERMO123", route => route.fulfill({
+    json: { serial: "TERMO123", modelo: "HP 640 G11", nome_pessoa: "Maria Teste", tipo: "Notebook" },
+  }));
+  await page.goto("/");
+  await page.locator("#input-serial").fill("TERMO123");
+  await page.locator("#input-serial").press("Enter");
+  await expect(page.locator("#card-serial")).toHaveText("TERMO123");
+
+  await abrirTermos(page, { navegar: false });
+  const entrega = page.locator("#termos-form-entrega");
+  await expect(entrega.locator('[name="nome"]')).toHaveValue("Maria Teste");
+  await expect(entrega.locator('[name="modelo_entregue"]')).toHaveValue("HP 640 G11");
+  await expect(entrega.locator('[name="serie_entregue"]')).toHaveValue("TERMO123");
+  await expect(entrega.locator('[name="modelo_anterior"]')).toHaveValue("");
+  await expect(entrega.locator('input[name="item-02"][value="sim"]')).toBeChecked();
+  await expect(entrega.locator('input[name="item-01"]:checked')).toHaveCount(0);
+
+  const devolucao = page.locator("#termos-form-devolucao");
+  await expect(devolucao.locator('[name="nome"]')).toHaveValue("Maria Teste");
+  await expect(devolucao.locator('[name="modelo"]')).toHaveValue("HP 640 G11");
+  await expect(devolucao.locator('[name="serie"]')).toHaveValue("TERMO123");
+  await expect(devolucao.locator('input[name="item-02"][value="sim"]')).toBeChecked();
+  // Os campos preenchidos pela Home continuam editáveis (pedido do usuário de 10/11/2026).
+  await page.getByRole("tab", { name: "Termo Devolução" }).click();
+  await devolucao.locator('[name="modelo"]').fill("Modelo Editado");
+  await expect(devolucao.locator('[name="modelo"]')).toHaveValue("Modelo Editado");
+  await devolucao.locator('input[name="item-02"][value="nao"]').check();
+  await expect(devolucao.locator('input[name="item-02"][value="nao"]')).toBeChecked();
 });

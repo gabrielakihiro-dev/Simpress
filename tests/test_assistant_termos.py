@@ -13,6 +13,8 @@ class AssistenteTermosTests(unittest.TestCase):
             "Termo Entrega",
             "Termo Devolução",
             "Gerar PDF",
+            "série na Home",
+            "Notebook",
             "<série> - <nome completo>",
             "Não existe ferramenta",
         ):
