@@ -683,3 +683,23 @@ test("Selos Técnico e Aberta há N dias: só no Oracle, só com os campos do se
     assert.equal(section.querySelectorAll("img").length, 0);
   } finally { report.chamados = original; }
 });
+
+test("Selo Entregue: só com etapa atual Pedido entregue e data DD/MM/AAAA, por textContent", async () => {
+  const original = report.chamados;
+  const simp = (serie, os, etapa) => ({ serie, relacao: "somente_simpress", simpress: { ordens_servico: [os], etapa_atual: etapa }, oracle: [] });
+  report.chamados = [
+    simp("BRJ551265R", "7303022", { chave: "entregue", rotulo: "Pedido entregue", data: "27/10/2026" }),
+    simp("SN-SEMDATA", "7303023", { chave: "entregue", rotulo: "Pedido entregue", data: "" }),
+    simp("SN-PARCIAL", "7303024", { chave: "entregue", rotulo: "Pedido entregue", data: "10/2026" }),
+    simp("SN-CAMINHO", "7303025", { chave: "a_caminho", rotulo: "A caminho", data: "26/10/2026" }),
+    simp("SN-XSS", "7303026", { chave: "entregue", rotulo: "Pedido entregue", data: "<img src=x onerror=alert(1)>" }),
+    simp("SN-NULO", "7303027", null),
+  ];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const selos = serie => section.querySelectorAll(`tbody tr[data-serial="${serie}"] .ck-os__selo--entregue`).map(selo => selo.textContent);
+    assert.deepEqual(selos("BRJ551265R"), ["Entregue · 27/10/2026"]);
+    ["SN-SEMDATA", "SN-PARCIAL", "SN-CAMINHO", "SN-XSS", "SN-NULO"].forEach(serie => assert.deepEqual(selos(serie), [], serie));
+    assert.equal(section.querySelectorAll("img").length, 0);
+  } finally { report.chamados = original; }
+});
