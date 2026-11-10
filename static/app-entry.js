@@ -44,6 +44,7 @@ import "./js/features/sebrae-historico.js";
 import "./js/features/chrome-automation.js";
 import "./js/features/assistant-chat.js";
 import "./js/features/coverage.js";
+import "./js/features/termos.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";
 import "./js/ui/ck-cockpit-visual.js";

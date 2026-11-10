@@ -169,7 +169,7 @@ Sino de notificações, `Sem acesso há 60 dias` (07/11/2026, pedido do usuário
 Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere sem novo pedido dele.
 
 - Barra superior, nesta ordem: Home (F1), Transporte (F2), Resumo (F3, abre o painel de ferramenta `comparacao` pelo botão `#btn-resumo-aba`; não é mais uma aba própria), Automação (F4), **Chamados** (F5, painel `sebrae-chamados`, o antigo "Chamados Sebrae") e **OS** (F6, painel `chamados`, botão `#btn-acompanhamento-chamados`, o antigo "Chamados"). Os rótulos visíveis são exatamente `Chamados` e `OS`; IDs e chaves internas foram mantidos.
-- Menu Ferramentas: Histórico de apelidos **F7**, Relatório mensal **F8** e, desde 07/11/2026, **Cobertura** **F10** (`#btn-cobertura`, painel `cobertura`; ver "Cobertura de equipamentos"); o Resumo (F3) saiu do menu e fica só na barra. O Assistente é **F9**. F1 a F9 valem também com o cursor numa caixa de texto (autorizado em 31/10/2026; senão o F5 recarregaria a página), e o F10 também, junto com a Cobertura (07/11/2026); as demais teclas de atalho (`/`, `t`, `e`, `c`) continuam ignoradas ao digitar. O mapa fica em `shortcutAction` e `toolKeys`; mantenha `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
+- Menu Ferramentas: Histórico de apelidos **F7**, Relatório mensal **F8** e, desde 07/11/2026, **Cobertura** **F10** (`#btn-cobertura`, painel `cobertura`; ver "Cobertura de equipamentos"), e, desde 09/11/2026, **Termos** (`#btn-termos`, painel `termos`, sem atalho; ver "Termos de entrega e devolução"); o Resumo (F3) saiu do menu e fica só na barra. O Assistente é **F9**. F1 a F9 valem também com o cursor numa caixa de texto (autorizado em 31/10/2026; senão o F5 recarregaria a página), e o F10 também, junto com a Cobertura (07/11/2026); as demais teclas de atalho (`/`, `t`, `e`, `c`) continuam ignoradas ao digitar. O mapa fica em `shortcutAction` e `toolKeys`; mantenha `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
 - O painel F7 (`data-cockpit-tool-panel="apelidos"`) é o histórico completo de apelidos; o modal `#modal-historico-apelidos` foi removido em 31/10/2026 por pedido do usuário. Não recrie o modal. Desde 04/11/2026 (pedido do usuário) o F7 não exibe eventos de séries iniciadas por `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae, sem relação com os equipamentos): filtro só na exibição, em `cockpit-tool-panels.js` (`ALIAS_HIDDEN_SERIAL`); nada é apagado do histórico e as demais telas não mudam.
 - O menu Ferramentas não tem grupo "Planilhas": o modal de atualização abre por **Nova comparação** (aba Comparação), pelo `Importar` da Home e pelo alerta `Atualizar base`; `Exportar Excel` (`#btn-exportar-equipamentos`) fica na barra da aba Comparação, com o rótulo visível `Exportar Excel`.
 
@@ -188,6 +188,22 @@ Painel `Cobertura` (F10) do plano aprovado pelo usuário: necessidades de equipa
 - Textos aprovados (08/11/2026, aprovados pelo usuário): os botões são `Vincular esta planilha`, `Marcar coletada`, `Marcar em trânsito`, `Confirmar recebimento`, `Registrar divergência` e `Tentar vincular de novo`, e o campo da devolução é `Nova data prevista`. Os selos de situação (`Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Entregue`) não mudam. O erro 500 (`falha_gravacao`) mostra `Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.`
 
 Detalhes, rótulos e "Riscos conhecidos": `docs/cockpit-prompts/16-cobertura.md`; rotas: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos".
+
+## Termos de entrega e devolução (Ferramentas, 09/11/2026)
+
+Painel `Termos` (`data-cockpit-tool-panel="termos"`, botão `#btn-termos`) criado a pedido do usuário em 09/11/2026: preenche e salva em PDF os termos de entrega e de devolução de equipamentos.
+
+- Fica no menu Ferramentas, sem atalho de teclado (não ocupa F-tecla; `#btn-termos` não tem `aria-keyshortcuts` nem `<kbd>`).
+- Sub-abas com os rótulos exatos `Termo Entrega` e `Termo Devolução` (`role="tablist"`; clique e setas trocam de aba).
+- Preenchimento manual, com os campos e as listas de verificação dos PDFs originais. Nada é preenchido a partir de planilhas, do cadastro, do Endpoint ou de outro sistema.
+- `Gerar PDF` usa o `Salvar como PDF` do navegador (`window.print()`). O nome sugerido do arquivo é `<SÉRIE> - <Nome completo>`, por exemplo `BRJ54925DN - Janaina do Rocio Santos Rocha`: série em maiúsculas, caracteres proibidos em nome de arquivo removidos e no máximo 100 caracteres por parte. Sem série ou sem nome, o botão é bloqueado e a tela mostra `Preencha o número de série e o nome do colaborador.`. O título da página volta ao normal e a folha de impressão (`#termos-impressao`) é esvaziada no `afterprint`. Não existe botão `Imprimir`.
+- `Limpar` pede confirmação (`Limpar o termo?`) e só então apaga os campos da aba.
+- Textos aprovados pelo usuário em 10/11/2026: `Sim/Não` (cabeçalho das listas de verificação) e `Limpar o termo?`.
+- LGPD: nada é guardado. Os dados do colaborador ficam só na memória da página (sem `localStorage`, `sessionStorage`, IndexedDB, cookie, rota de API, log nem arquivo no servidor) e somem ao recarregar. A folha é montada por `textContent`.
+- Nada é lido nem escrito em SoftExpert, SharePoint, UX, Endpoint, Excel ou outro sistema externo, e nenhum dado local em `data/` é criado ou alterado.
+- Assistente: não há ferramenta para os Termos; ele só explica onde ficam e como gerar o PDF na tela (regra 37 do `SYSTEM_PROMPT`).
+
+Detalhes (campos, listas, impressão e testes): `docs/cockpit-prompts/17-termos.md`.
 
 ## Representantes regionais SEBRAE/PR (Transferência)
 
