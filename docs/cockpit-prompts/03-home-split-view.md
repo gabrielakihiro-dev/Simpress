@@ -191,3 +191,46 @@ O cartão também consulta `GET /api/sebrae/novos` para os chamados abertos da s
 - Confirme que o botão Transporte leva à aba Transporte com o equipamento.
 
 **Commit:** `style(cockpit): Home em split-view com lista e detalhe`
+
+## E-mails por modelo pelo Outlook (Home F1, 09/11/2026)
+
+Pedido e autorização do usuário em 09/11/2026: montar na Home os e-mails repetitivos (o primeiro é o pedido de instalação do cabo de segurança) e abri-los ou enviá-los pelo Outlook (classic) deste computador. Plano completo: `docs/planos/email-outlook-modelos.md`. Rotas e códigos de erro: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "E-mails por modelo pelo Outlook".
+
+### Regras
+
+- **Escrita externa (autorizada em 09/11/2026):** criar (`Abrir no Outlook`) ou enviar (`Enviar pelo Outlook`) um e-mail no Outlook do usuário, sempre por clique explícito. O envio real exige `confirmado: true` depois da confirmação na tela; `SIMPRESS_OUTLOOK_SEM_ENVIO=1` recusa qualquer envio real (o `abrir` continua). Envio `incerto` não se repete: confira os Itens Enviados antes.
+- **Escrita local (autorizada em 09/11/2026):** só `data/state/outlook_email_modelos.json` (modelos de e-mail; fora do Git; gravação atômica sob trava; arquivo ilegível dá 503 sem sobrescrever). Sem arquivo, vale a semente `Modelo 1 - Cabo`, definida no backend (`domains/outlook_mail.py`), e o arquivo só é criado na primeira edição. Não há histórico de envio. O último modelo escolhido fica no `localStorage` do navegador, só como conveniência.
+- **LGPD:** o log guarda só modo, id da conta e código ou status; nunca corpo, destinatários, nomes, nome do modelo nem termo buscado no autocompletar. Os endereços das contas remetentes ficam só no backend (`CONTAS_REMETENTE`) e chegam ao front pela API; `static/**` não traz domínio real (`tests/test_maintenance_contracts.py`). Exemplos em docs usam dados fictícios (ex.: `Ana Exemplo <ana@exemplo.test>`).
+- **Assistente:** sem ferramenta de e-mail. A regra 38 do `SYSTEM_PROMPT` só orienta os passos abaixo e proíbe dizer que enviou ou abriu o e-mail ou que criou, alterou ou excluiu um modelo (`docs/cockpit-prompts/15-assistente.md`).
+- **Só Outlook (classic)**, via PowerShell e COM (`domains/outlook_mail.ps1`, dados por stdin). O Outlook novo não tem COM e dá erro claro. Conta ausente no Outlook dá erro; nunca cai em outra conta em silêncio.
+
+### Tela
+
+- Botão `Enviar e-mail` (`#btn-enviar-email`) em `.ck-eq-cab__acoes`, ao lado de Consultar no Endpoint, Controle remoto, Transporte e Editar; habilitado só com equipamento selecionado; sem atalho de teclado. `static/js/features/equipment-search.js` chama `app.atualizarEmailOutlook?.(equipment);` quando o equipamento selecionado muda (aceito pelo usuário em 10/11/2026).
+- Modal `#modal-email-outlook` (`[data-accessible-modal]`, título `E-mail pelo Outlook`), em `static/js/features/outlook-email.js`. Esc fecha; foco no primeiro campo.
+- Linha do modelo: `Modelo` (`#email-modelo`), `Nome do modelo` e as ações `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão` (este só no `Modelo 1 - Cabo`).
+- Campos do modelo (salvos sozinhos): `Enviar de` (contas da API; a Sebrae é a padrão), `Para`, `Cc`, `Assunto`, `Mensagem`. Campos do envio (não salvos): `Nome da pessoa` (pré-preenchido com o colaborador do equipamento) e `Setor`, que substituem `{nome}` e `{setor}` no Assunto e na Mensagem.
+- Salvamento automático: 800 ms após a última tecla e na hora no `change`/`blur`; trocar de modelo grava o pendente antes.
+- Autocompletar em `Para` e `Cc`: combobox ARIA sobre o trecho depois do último `;`, com sugestões da base do Microsoft Entra importada (até 8); escolher insere `Nome <email>; `. No `blur` e antes de cada ação, nomes sem `@` são resolvidos: um só resultado vira `Nome <email>`; mais de um pede a escolha e bloqueia o `Enviar pelo Outlook`; nenhum fica como está para o Outlook resolver.
+- Ações: `Abrir no Outlook` (o usuário revisa e envia por lá), `Enviar pelo Outlook` (com confirmação), `Copiar Texto`, `Cancelar`.
+- `Copiar Texto` (formato aprovado em 10/11/2026): o Assunto, uma linha em branco e a Mensagem, com `{nome}` e `{setor}` já substituídos; toast `Texto copiado.`.
+
+### Textos aprovados (exatos)
+
+- Botão: `Enviar e-mail`. Título: `E-mail pelo Outlook`.
+- Campos: `Modelo`, `Nome do modelo`, `Enviar de`, `Para`, `Cc`, `Assunto`, `Nome da pessoa`, `Setor`, `Mensagem`.
+- Ações de modelo: `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão`. Modelo da semente: `Modelo 1 - Cabo`.
+- Ações do e-mail: `Abrir no Outlook`, `Enviar pelo Outlook`, `Copiar Texto`, `Cancelar`.
+- Ajudas: `Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.` e `As alterações no modelo são salvas automaticamente.`
+- Confirmação do envio: título `Enviar o e-mail pelo Outlook?`; texto `O e-mail será enviado de <conta> para <Para>. Depois de enviado, não há como desfazer.`; botões `Enviar` / `Cancelar`.
+- Excluir modelo: título `Excluir o modelo?`; texto `O modelo <nome> será excluído deste site. Não há como desfazer.`; botões `Excluir` / `Cancelar`.
+- Restaurar padrão: título `Restaurar o padrão?`; texto `Para, Cc, Assunto, Mensagem e conta do Modelo 1 - Cabo voltam ao texto original.`; botões `Restaurar` / `Cancelar`.
+- Sucesso: `E-mail aberto no Outlook. Revise e envie por lá.`, `E-mail enviado pelo Outlook.`, `Texto copiado.`
+- Salvamento: `Alteração ainda não salva…`, `Salvando…`, `Salva.`, `Não foi possível salvar: …`
+- Avisos e erros: `Mantenha ao menos um modelo.`; `Já existe um modelo com esse nome.`; `Nenhum contato encontrado no Entra.`; `Escolha o destinatário certo para "<texto>":`; `Há destinatários com mais de uma opção. Escolha a pessoa certa antes de enviar.`; `A base do Microsoft Entra não foi importada; digite o e-mail completo.`; `A conta <conta> não está configurada no Outlook. Escolha outra conta ou adicione-a no Outlook.`; `Alguns destinatários não foram reconhecidos no Outlook. Confira os nomes antes de enviar.`; `Outlook (classic) indisponível. Abra o Outlook clássico e tente de novo.`; `O Outlook (classic) não está aberto. Abra o Outlook e tente enviar de novo.`; `O Outlook recusou o envio e nada foi enviado. Confira os destinatários e tente de novo.`; `O Outlook não respondeu e nada foi enviado. Tente de novo.`; `Não foi possível confirmar o envio. Confira os Itens Enviados no Outlook antes de tentar de novo.`; `O Outlook demorou a responder. A janela do e-mail pode aparecer em instantes; confira antes de tentar de novo.`; `Preencha o nome da pessoa e o setor antes de enviar.`; `Já há um e-mail sendo preparado. Aguarde.`; `O envio real está desativado neste computador.`
+- Erro genérico (aprovado em 10/11/2026): `Não foi possível concluir a operação do e-mail. Tente de novo.`
+
+### Verificação
+
+- `npm run verify`; testes `tests/test_outlook_mail.py`, `tests/test_assistant_termos.py` e `tests/test_assistant_ux_chamados.py`; `npm run test:ui:e2e`.
+- Testes reais no Outlook (classic) pelo site local: Passo 5 do plano, um cenário por vez; nunca clique em `Enviar pelo Outlook` fora dele.
