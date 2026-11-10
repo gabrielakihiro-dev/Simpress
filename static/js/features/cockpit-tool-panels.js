@@ -1867,7 +1867,7 @@
     skipLinkHref = null;
   }
 
-  async function openPanel(tool) {
+  async function openPanel(tool, aba = "") {
     if (!Object.hasOwn(toolInfo, tool)) return;
     ensureEvents();
     const root = byId("cockpit-tool-panels");
@@ -1897,8 +1897,13 @@
     if (tool === "comparacao") {
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
+      const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
       await loadComparisons();
       await ativos;
+      // O render acima volta a Visão geral (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
+      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Visão geral).
+      if (aba && pedido === comparisonRequest && activeTool === "comparacao"
+        && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
     }
     if (tool === "apelidos") await loadAliases();
     if (tool === "relatorio") {

@@ -105,5 +105,16 @@ Pedido do usuário em 09/11/2026: dividir o painel `comparacao` do Resumo em cin
 - Contadores: o selo de cada aba mostra as linhas visíveis depois dos filtros e o `aria-label` diz `<Aba>: N linhas` (`encontradas` com filtro). Quando o resultado não traz a lista (por exemplo `Usuários` em comparações antigas) o selo mostra `—` e o painel avisa `Este resultado não traz esta lista. Escolha uma comparação mais recente no campo Comparação.`
 - Estados: sem resultado, erro, nova comparação ou troca de versão chamam `limparAbasResumo` (cockpit-tool-panels.js): volta para `Visão geral`, limpa busca, tipo e `Só anotadas`, zera os selos e apaga o aviso anterior.
 - Compatibilidade: sem painéis no conteúdo (renderizações antigas) o controlador mantém o comportamento anterior da barra de filtros; `querySelectorAll` é protegido porque os testes usam um DOM falso sem esse método.
-- Fora deste bloco (bloco 1b): levar os KPIs, os botões do sino, `abrirComparacaoDaSerie` e `mostrarResultadoNaAbaComparacao` para a aba certa, e ajustar `irParaSecaoComparacao` e `navegarParaLinhaComparacao` para escolher a aba antes de checar `hidden`.
+- Fora deste bloco: a navegação profunda para a aba certa, feita no bloco 1b (abaixo).
 - Testes: `tests/frontend/test_*.cjs` (576 passam), incluindo `test_renderers_xss.cjs`. Não verificado: comportamento no navegador (troca de abas, teclado, celular, tema escuro) e `npm run verify`.
+
+## Navegação profunda para a sub-aba certa (F3, bloco 1b, 09/11/2026)
+
+Regra: toda navegação que leva a um alvo dentro do Resumo escolhe a sub-aba do alvo antes de localizá-lo e de rolar até ele. Só front-end, sem texto novo, endpoint, rotina nem escrita.
+
+- `encontrarGrupoSecaoComparacao(content, chave, { incluirOcultos })` (`comparison-result.js`): com `incluirOcultos`, acha o grupo mesmo em painel `hidden`; sem a opção, o comportamento antigo (só visíveis) continua.
+- `irParaSecaoComparacao` (KPIs, chips e sino que apontam para uma seção): descobre a aba do título (`closest("[data-resumo-painel]")`) e chama `selecionarAbaResumo` antes de limpar filtros e de checar `hidden`.
+- `navegarParaLinhaComparacao`: ramo `section` e ramo de linha (série, hostname, `item_id`, categoria) acham o alvo incluindo painéis ocultos, abrem a aba (`renderer.abaDaCategoria`, com o painel do alvo como reserva) e só então procuram o gêmeo visível (`tr` no desktop, cartão no celular) para rolar. Sem categoria, vale a primeira linha na ordem do DOM (Divergências antes de Sem acesso).
+- Sino, `Ver Resumo` do aviso de 60 dias (`#btn-alerta-sem-acesso-60`): `data-args=["comparacao","sem-acesso"]`; `abrirPainelCockpit(tool, aba)` escolhe a aba depois do render, que sempre volta a `Visão geral`. Os botões `#btn-resumo-aba` e `#btn-alerta-divergencias-novas` continuam abrindo em `Visão geral`.
+- Chips da Home, `abrirComparacaoDaSerie` e `mostrarResultadoNaAbaComparacao` não mudaram: passam por `navegarParaLinhaComparacao` e herdam a regra.
+- Testes: `tests/frontend/test_cockpit_tool_panels.cjs` (`abrirPainelCockpit` com aba), `tests/frontend/test_sem_usuario_resumo.cjs` (DOM falso ganhou `querySelectorAll`) e `tests/e2e/cockpit-layout.spec.cjs` (KPI, `irParaSecaoComparacao`, `navegarParaLinhaComparacao` e sino).

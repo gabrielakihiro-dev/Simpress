@@ -529,11 +529,12 @@
     return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
   }
 
-  function encontrarGrupoSecaoComparacao(content, sectionKey) {
+  // incluirOcultos: acha o grupo mesmo dentro de uma sub-aba oculta (para saber qual aba abrir antes de navegar).
+  function encontrarGrupoSecaoComparacao(content, sectionKey, { incluirOcultos = false } = {}) {
     const target = String(sectionKey || "").trim();
     const normalizedTarget = normalizarIdentificadorLinhaComparacao(target);
     return [...content.querySelectorAll("[data-history-filter-group]")].find(candidate => {
-      if (!candidate.getClientRects().length) return false;
+      if (!incluirOcultos && !candidate.getClientRects().length) return false;
       if (candidate.dataset.historyFilterGroup === target) return true;
       const section = candidate.closest("[data-history-filter-section]");
       const headings = [candidate.querySelector("h5"), section?.querySelector("h4")]
@@ -552,10 +553,39 @@
 
   const PRIORIDADE_CATEGORIAS_SERIE = ["divergencias_local", "ausentes_no_endpoint", "divergencias_usuario", "ausentes_em_detalhes"];
 
+  function acharLinhaComparacao(rows, target) {
+    let row = target.itemId ? rows.find(candidate => candidate.dataset.comparisonItemId === target.itemId) : null;
+    if (row) return row;
+    const serial = normalizarIdentificadorLinhaComparacao(target.serial);
+    const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
+    const matches = rows.filter(candidate => {
+      const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
+      const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
+      return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
+    });
+    // Sem categoria (Home): mesma prioridade das divergências listadas lá, não a primeira seção da página.
+    const priority = candidate => {
+      const index = PRIORIDADE_CATEGORIAS_SERIE.indexOf(candidate.dataset.comparisonCategory);
+      return index < 0 ? PRIORIDADE_CATEGORIAS_SERIE.length : index;
+    };
+    row = target.category ? matches[0] : matches.reduce((best, candidate) => (!best || priority(candidate) < priority(best) ? candidate : best), null);
+    // Endpoint MacBook serial lacks the leading "S" of EquipamentosDetalhes; accepted only when unambiguous.
+    if (!row && serial && !target.category) {
+      const equivalents = rows.filter(candidate => {
+        const other = normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial);
+        return other && (other === `S${serial}` || `S${other}` === serial);
+      });
+      if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
+    }
+    return row || null;
+  }
+
   function navegarParaLinhaComparacao(target) {
     const content = document.getElementById("comparacao-planilhas-conteudo");
     if (!content) return;
     if (target?.section) {
+      const aba = encontrarGrupoSecaoComparacao(content, target.section, { incluirOcultos: true })?.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+      if (aba) selecionarAbaResumo(aba);
       const group = encontrarGrupoSecaoComparacao(content, target.section);
       if (!group) return;
       const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -574,39 +604,23 @@
       return;
     }
     if (!target?.category && !target?.serial && !target?.hostname) return;
-    const visibleRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
-      .filter(row => row.getClientRects().length > 0 && (!target.category || row.dataset.comparisonCategory === target.category));
-    let row = target.itemId
-      ? visibleRows.find(candidate => candidate.dataset.comparisonItemId === target.itemId)
-      : null;
-    if (!row) {
-      const serial = normalizarIdentificadorLinhaComparacao(target.serial);
-      const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
-      const matches = visibleRows.filter(candidate => {
-        const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
-        const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
-        return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
-      });
-      // Sem categoria (Home): mesma prioridade das divergências listadas lá, não a primeira seção da página.
-      const priority = candidate => {
-        const index = PRIORIDADE_CATEGORIAS_SERIE.indexOf(candidate.dataset.comparisonCategory);
-        return index < 0 ? PRIORIDADE_CATEGORIAS_SERIE.length : index;
-      };
-      row = target.category ? matches[0] : matches.reduce((best, candidate) => (!best || priority(candidate) < priority(best) ? candidate : best), null);
-      // Endpoint MacBook serial lacks the leading "S" of EquipamentosDetalhes; accepted only when unambiguous.
-      if (!row && serial && !target.category) {
-        const equivalents = visibleRows.filter(candidate => {
-          const other = normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial);
-          return other && (other === `S${serial}` || `S${other}` === serial);
-        });
-        if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
-      }
-    }
-    if (!row) {
+    const linhasDe = categoria => [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
+      .filter(candidate => !categoria || candidate.dataset.comparisonCategory === categoria);
+    // Procura em todas as linhas, inclusive as de sub-abas ocultas: a aba só se abre depois de achar a linha.
+    const achada = acharLinhaComparacao(linhasDe(target.category), target);
+    if (!achada) {
       // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
       if (target.category) navegarParaLinhaComparacao({ ...target, category: "" });
       return;
     }
+    const categoria = achada.dataset.comparisonCategory;
+    const aba = renderer.abaDaCategoria(categoria) || achada.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+    if (aba) selecionarAbaResumo(aba);
+    // Com a aba aberta, o gêmeo visível da linha (tr no desktop, cartão no mobile).
+    const row = acharLinhaComparacao(linhasDe(categoria).filter(candidate => candidate.getClientRects().length > 0), {
+      itemId: achada.dataset.comparisonItemId, serial: achada.dataset.comparisonSerial, hostname: achada.dataset.comparisonHostname, category: categoria,
+    });
+    if (!row) return;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     motion?.reveal(row);
@@ -710,6 +724,8 @@
     const content = document.getElementById("comparacao-planilhas-conteudo");
     const heading = sectionId ? document.getElementById(sectionId) : null;
     if (!content || !heading || !content.contains(heading)) return false;
+    const aba = heading.closest("[data-resumo-painel]")?.dataset.resumoPainel;
+    if (aba) selecionarAbaResumo(aba);
     const oculta = () => Boolean(heading.closest("[hidden]"));
     if (oculta()) limparFiltrosHistoricoComparacao(content);
     if (oculta()) return false;
