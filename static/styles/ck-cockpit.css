@@ -1907,6 +1907,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   font: var(--peso-medio) var(--fs-xs)/1.25 var(--fonte-corpo);
 }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"] .ck-os__selo--tecnico { background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"] .ck-os__selo--entregue { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
 
 /* ---------- 8. Manual × automático ---------- */
 /* Tudo na tabela vem das importações (Oracle, Simpress, Endpoint). A coluna Chamado é preenchimento manual. */

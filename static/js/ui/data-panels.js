@@ -627,12 +627,15 @@
         if (!serie) return;
         const simpress = ticket?.simpress || {};
         const seenSimpressOrders = new Set();
+        // Etapa atual "Pedido entregue" com data completa (DD/MM/AAAA) vira o selo verde; sem data, sem selo.
+        const etapa = simpress.etapa_atual;
+        const entregue = etapa?.chave === "entregue" && /^\d{2}\/\d{2}\/\d{4}$/.test(String(etapa.data || "").trim()) ? String(etapa.data).trim() : "";
         (Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : []).forEach(value => {
           const os = String(value || "").trim();
           const key = orderKey(os);
           if (!key || seenSimpressOrders.has(key)) return;
           seenSimpressOrders.add(key);
-          rows.push({ fonte: "simpress", serie, os, descricao: "" });
+          rows.push({ fonte: "simpress", serie, os, descricao: "", entregue });
         });
 
         const oracleByOrder = new Map();
@@ -682,10 +685,11 @@
         const group = groups.get(key);
         let order = group.ordens.find(item => orderKey(item.os) === orderKey(record.os));
         if (!order) {
-          order = { serie: record.serie, os: record.os, fontes: [], descricao: "", descricaoBusca: "", envioTecnico: false, diasAberta: null };
+          order = { serie: record.serie, os: record.os, fontes: [], descricao: "", descricaoBusca: "", envioTecnico: false, diasAberta: null, entregue: "" };
           group.ordens.push(order);
         }
         if (!order.fontes.includes(record.fonte)) order.fontes.push(record.fonte);
+        if (record.fonte === "simpress" && record.entregue) order.entregue = record.entregue;
         if (record.fonte === "oracle") {
           if (record.envioTecnico) order.envioTecnico = true;
           if (Number.isFinite(record.diasAberta) && (order.diasAberta === null || record.diasAberta > order.diasAberta)) order.diasAberta = record.diasAberta;
@@ -889,7 +893,7 @@
             osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
             osCell.append(osButton);
           }
-          // Selos só da Oracle: record.diasAberta e record.envioTecnico vêm de order (fontes unidas); a Simpress sozinha não ganha selo.
+          // Selos só da Oracle: record.diasAberta e record.envioTecnico vêm de order (fontes unidas); da Simpress vem só o selo Entregue.
           if (order.diasAberta !== null && order.diasAberta !== undefined) {
             const dias = order.diasAberta;
             osCell.append(el("span", "ck-os__selo ck-os__selo--dias",
@@ -898,6 +902,8 @@
           if (order.envioTecnico) {
             osCell.append(el("span", "ck-os__selo ck-os__selo--tecnico", "Técnico"));
           }
+          // Selo da Simpress: etapa atual "Pedido entregue" com data completa.
+          if (order.entregue) osCell.append(el("span", "ck-os__selo ck-os__selo--entregue", `Entregue · ${order.entregue}`));
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
