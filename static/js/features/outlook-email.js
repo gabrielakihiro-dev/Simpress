@@ -101,8 +101,9 @@
   const mensagemDe = erro => (erro?.status && erro.message) || TEXTO.falha;
 
   // Result of an action: the status line in the modal plus a toast (the line alone was easy to miss).
-  function avisar(texto, tipo) {
-    mostrarStatus(texto, tipo);
+  // linha = false: a result from a modal session already closed goes to the toast only.
+  function avisar(texto, tipo, linha = true) {
+    if (linha) mostrarStatus(texto, tipo);
     app.showToast(texto, tipo === "ok" ? "success" : tipo === "erro" ? "error" : "warning");
   }
 
@@ -654,14 +655,14 @@
     }
   }
 
-  function informarResultado(resposta, modo) {
+  function informarResultado(resposta, modo, linha) {
     const { status, aviso } = resposta || {};
     const sucesso = status === "enviado" ? TEXTO.enviado : status === "aberto" ? TEXTO.aberto : "";
     // A send whose outcome the server could not prove is never reported as sent, nor as a plain failure.
-    if (status === "incerto" || (!sucesso && modo === "enviar")) return avisar(aviso || TEXTO.incerto, "aviso");
-    if (!sucesso) return avisar(TEXTO.falha, "erro");
-    if (!aviso) return avisar(sucesso, "ok");
-    return avisar(status === "enviado" ? `${sucesso} ${aviso}` : aviso, "aviso");
+    if (status === "incerto" || (!sucesso && modo === "enviar")) return avisar(aviso || TEXTO.incerto, "aviso", linha);
+    if (!sucesso) return avisar(TEXTO.falha, "erro", linha);
+    if (!aviso) return avisar(sucesso, "ok", linha);
+    return avisar(status === "enviado" ? `${sucesso} ${aviso}` : aviso, "aviso", linha);
   }
 
   function executarEmail(modo) {
@@ -697,11 +698,11 @@
             modo, confirmado: modo === "enviar",
           },
         });
-        informarResultado(resposta, modo);
+        informarResultado(resposta, modo, vigente());
       } catch (erro) {
         // No HTTP status: the answer was lost, so a real send may or may not have gone out.
-        if (modo === "enviar" && !erro.status) avisar(TEXTO.incerto, "aviso");
-        else avisar(mensagemDe(erro), "erro");
+        if (modo === "enviar" && !erro.status) avisar(TEXTO.incerto, "aviso", vigente());
+        else avisar(mensagemDe(erro), "erro", vigente());
       }
     });
   }
