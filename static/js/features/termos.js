@@ -8,11 +8,11 @@
 
   const ITENS_ENTREGA = [
     "01 Mochila", "02 Notebook", "03 Teclado", "04 Mouse", "05 Hub USB", "06 Suporte notebook",
-    "07 Headset (modelo 8225 ou 3220)", "08 Case headset", "09 Mousepad", "10 Monitor", "11 Cabo de Segurança",
+    "07 Headset (modelo 8225 ou 3220)", "08 Case headset", "09 Mousepad", "10 Monitor (HDMI / DisplayPort / Cabo de força / USB)", "11 Cabo de Segurança",
   ];
   const ITENS_DEVOLUCAO = [
     "1 - Mochila", "2 - Notebook", "3 - Teclado", "4 - Mouse", "5 - Hub USB", "6 - Suporte notebook",
-    "7 - Headset", "8 - Case headset (modelo 8225)", "9 - Mousepad", "10 - Monitor", "11 - Cabo de Segurança",
+    "7 - Headset", "8 - Case headset (modelo 8225)", "9 - Mousepad", "10 - Monitor (HDMI / DisplayPort / Cabo de força / USB)", "11 - Cabo de Segurança",
   ];
   const CAMPOS_ENTREGA = ["nome", "unidade", "data", "modelo_anterior", "modelo_entregue", "serie_anterior", "serie_entregue"];
   const CAMPOS_DEVOLUCAO = ["nome", "unidade", "data", "modelo", "serie"];
@@ -124,54 +124,50 @@
   // A folha usa só createElement e textContent: nada digitado vira HTML.
   function termosMontarFolha(d, dados) {
     const c = dados.campos;
-    const folha = criar(d, "article", "tp");
+    const entrega = dados.termo === "entrega";
+    // Mesma estrutura nos dois termos; a devolução muda só os textos e a cor de destaque (tp--devolucao).
+    const folha = criar(d, "article", entrega ? "tp" : "tp tp--devolucao");
     const cab = criar(d, "header", "tp__cab");
-    cab.append(criar(d, "div", "tp__org", "SEBRAE/PR"));
-    if (dados.termo === "entrega") cab.append(criar(d, "div", "tp__marca", "Interno"));
-    cab.append(criar(d, "h1", "tp__titulo", dados.termo === "entrega" ? "Termo de Entrega" : "Termo de Devolução de Equipamentos"));
+    cab.append(
+      criar(d, "div", "tp__org", "SEBRAE/PR"),
+      criar(d, "div", "tp__marca", "Interno"),
+      criar(d, "h1", "tp__titulo", entrega ? "Termo de Entrega" : "Termo de Devolução de Equipamentos"),
+    );
     folha.append(cab);
 
     const colab = secao(d, "Dados do colaborador");
     const grade = criar(d, "div", "tp__campos");
-    if (dados.termo === "entrega") {
-      grade.append(
-        campoFolha(d, "Nome do colaborador", c.nome, true),
-        campoFolha(d, "Unidade / Departamento", c.unidade),
-        campoFolha(d, "Data da entrega / troca", termosFormatarData(c.data)),
-      );
-    } else {
-      grade.append(
-        campoFolha(d, "Nome do colaborador", c.nome, true),
-        campoFolha(d, "Unidade", c.unidade),
-        campoFolha(d, "Data", termosFormatarData(c.data)),
-        campoFolha(d, "Modelo do computador", c.modelo),
-        campoFolha(d, "Número de série", c.serie),
-      );
-    }
+    grade.append(
+      campoFolha(d, "Nome do colaborador", c.nome, true),
+      campoFolha(d, entrega ? "Unidade / Departamento" : "Unidade", c.unidade),
+      campoFolha(d, entrega ? "Data da entrega / troca" : "Data", termosFormatarData(c.data)),
+    );
+    // A devolução não tem a tabela de identificação: modelo e série ficam nos dados do colaborador.
+    if (!entrega) grade.append(campoFolha(d, "Modelo do computador", c.modelo), campoFolha(d, "Número de série", c.serie));
     colab.append(grade);
     folha.append(colab);
 
-    if (dados.termo === "entrega") {
+    if (entrega) {
       const ident = secao(d, "Identificação do equipamento");
       ident.append(tabela(d, ["Campo", "Equipamento anterior", "Equipamento entregue"], [
         ["Modelo do computador", c.modelo_anterior, c.modelo_entregue],
         ["Número de série / Service Tag", c.serie_anterior, c.serie_entregue],
       ]));
       folha.append(ident);
-
-      const itens = secao(d, "Equipamentos e acessórios entregues");
-      itens.append(criar(d, "p", "tp__dica", "Assinale Sim ou Não para cada item apresentado no ato da entrega."), tabelaItens(d, dados.itens));
-      folha.append(itens, observacoes(d, dados.obs));
-
-      const validacao = secao(d, "Validação do recebimento");
-      validacao.append(criar(d, "p", "tp__texto", "Declaro que conferi as informações deste termo e recebi os equipamentos e acessórios assinalados acima."));
-      folha.append(validacao, assinaturas(d, "Assinatura do colaborador", "Assinatura do técnico responsável"));
-      folha.append(criar(d, "footer", "tp__rodape", "SEBRAE/PR • Termo de Entrega"));
-    } else {
-      const itens = secao(d);
-      itens.append(tabelaItens(d, dados.itens));
-      folha.append(itens, observacoes(d, dados.obs), assinaturas(d, "Assinatura do colaborador", "Assinatura do Técnico"));
     }
+
+    const itens = secao(d, entrega ? "Equipamentos e acessórios entregues" : "Equipamentos e acessórios devolvidos");
+    itens.append(
+      criar(d, "p", "tp__dica", `Assinale Sim ou Não para cada item apresentado no ato da ${entrega ? "entrega" : "devolução"}.`),
+      tabelaItens(d, dados.itens),
+    );
+    folha.append(itens, observacoes(d, dados.obs));
+
+    const validacao = secao(d, entrega ? "Validação do recebimento" : "Validação da devolução");
+    validacao.append(criar(d, "p", "tp__texto", entrega
+      ? "Declaro que conferi as informações deste termo e recebi os equipamentos e acessórios assinalados acima."
+      : "Declaro que conferi as informações deste termo e devolvi os equipamentos e acessórios assinalados acima."));
+    folha.append(validacao, assinaturas(d, "Assinatura do colaborador", entrega ? "Assinatura do técnico responsável" : "Assinatura do Técnico"));
     return folha;
   }
 
@@ -263,14 +259,50 @@
     });
     if (confirmou !== true) return;
     form.reset();
+    form.querySelectorAll("[data-preenchido-home]").forEach((input) => { delete input.dataset.preenchidoHome; });
+    delete form.dataset.serieHome;
     avisar(termo, "");
     if (encerrarImpressao) encerrarImpressao();
     else porId("termos-impressao")?.replaceChildren();
     form.querySelector("input")?.focus();
   }
 
+  // Campos que a busca de série da Home preenche em cada termo; o resto o usuário digita.
+  const PREENCHIMENTO_HOME = {
+    entrega: { nome: "nome_pessoa", modelo_entregue: "modelo", serie_entregue: "serial" },
+    devolucao: { nome: "nome_pessoa", modelo: "modelo", serie: "serial" },
+  };
+
+  // Chamado pela Home a cada equipamento exibido. Só age quando a série muda (salvar a edição cadastral
+  // reexibe a mesma série e não pode desfazer o que o usuário mudou). Valor vazio só apaga o que a
+  // própria Home tinha posto, para não perder o que o usuário digitou à mão.
+  function termosPreencherDoEquipamento(eq) {
+    const serial = String(eq?.serial ?? "").trim();
+    if (!serial) return;
+    ORDEM_ABAS.forEach((termo) => {
+      const form = porId(`termos-form-${termo}`);
+      if (!form || form.dataset.serieHome === serial) return;
+      form.dataset.serieHome = serial;
+      Object.entries(PREENCHIMENTO_HOME[termo]).forEach(([campo, chave]) => {
+        const input = form.querySelector(`[name="${campo}"]`);
+        if (!input) return;
+        const valor = String(eq[chave] ?? "").trim();
+        if (valor) {
+          input.value = valor;
+          input.dataset.preenchidoHome = "1";
+        } else if (input.dataset.preenchidoHome) {
+          input.value = "";
+          delete input.dataset.preenchidoHome;
+        }
+      });
+      // Item 02 Notebook: o equipamento buscado é o notebook do termo.
+      const notebook = form.querySelector('input[name="item-02"][value="sim"]');
+      if (notebook) notebook.checked = true;
+    });
+  }
+
   return {
-    termosSelecionarAba, termosTeclaAba, termosGerarPdf, termosLimpar,
+    termosSelecionarAba, termosTeclaAba, termosGerarPdf, termosLimpar, termosPreencherDoEquipamento,
     termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosMontarFolha,
   };
 });
