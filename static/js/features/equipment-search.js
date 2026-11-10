@@ -62,6 +62,9 @@
     }
     const endpointResult = document.getElementById("endpoint-lookup-result");
     if (endpointResult) endpointResult.textContent = "";
+    const powershellHost = document.getElementById("input-powershell-hostname");
+    // O hostname do PowerShell acompanha o equipamento aberto na Home.
+    if (powershellHost) powershellHost.value = String(equipment?.apelido || "").trim();
     if (copySerialButton) {
       copySerialButton.disabled = !hasSerial;
       copySerialButton.setAttribute("aria-disabled", String(!hasSerial));
@@ -170,7 +173,6 @@
   }
 
   const powershellRequestGate = transferUtils.createRequestGate();
-  const POWERSHELL_HOST_PADRAO = "PRNOTEUMU005";
   const POWERSHELL_AVISO_NAO_EXECUTADO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
 
   function alternarModoPowerShellEndpoint() {
@@ -375,11 +377,9 @@
     const host = data.hostname || hostname;
     const usuarios = Array.isArray(data.usuarios) ? data.usuarios.join(", ") : "";
     if (data.status === "inserido") {
-      const offline = data.hostname_padrao_offline ? ` O computador padrão ${POWERSHELL_HOST_PADRAO} estava offline; foi usado ${host}.` : "";
-      return `${POWERSHELL_AVISO_NAO_EXECUTADO} Computador: ${host}; conectado como ${data.usuario || data.modo}.${offline}`;
+      return `${POWERSHELL_AVISO_NAO_EXECUTADO} Computador: ${host}; conectado como ${data.usuario || data.modo}.`;
     }
     if (data.status === "not_found") return `Computador ${host} não encontrado no Endpoint. Nada foi inserido.`;
-    if (data.status === "sem_host_online") return `O computador padrão ${host} está offline e nenhum outro computador online foi encontrado. Nada foi inserido.`;
     if (data.status === "sem_usuario") return `Usuário não encontrado em ${host}.${usuarios ? ` Usuários disponíveis: ${usuarios}.` : " Nenhum usuário logado disponível."} Nada foi inserido.`;
     if (data.status === "usuario_ambiguo") return `Há mais de um usuário logado em ${host}: ${usuarios}. Informe o usuário e tente de novo. Nada foi inserido.`;
     if (data.status === "erro_terminal") return data.mensagem || `Não foi possível abrir o PowerShell em ${host}. Nada foi inserido.`;
@@ -404,14 +404,19 @@
       result.textContent = `${POWERSHELL_AVISO_IMPRESSORA_SYSTEM} Troque o modo e tente de novo.`;
       return;
     }
-    const hostname = document.getElementById("input-powershell-hostname").value.trim();
+    // Sem hostname digitado vale o do equipamento aberto; nunca cai num computador padrão alheio.
+    const hostname = document.getElementById("input-powershell-hostname").value.trim()
+      || String(appState.currentEquipamento?.apelido || "").trim();
+    if (!hostname) {
+      result.textContent = "Informe o hostname.";
+      return;
+    }
     const usuario = modo === "usuario" ? document.getElementById("input-powershell-usuario").value.trim() : "";
-    const payload = { modo, comando };
-    if (hostname) payload.hostname = hostname;
+    const payload = { modo, comando, hostname };
     if (usuario) payload.usuario = usuario;
     const confirmado = await app.confirmarAcao({
       titulo: "Inserir comando no PowerShell",
-      mensagem: `Vai abrir o PowerShell do Endpoint em ${hostname || `${POWERSHELL_HOST_PADRAO} (padrão)`}, modo ${modo === "usuario" ? `usuário logado${usuario ? ` (${usuario})` : ""}` : "SYSTEM"}, e inserir este comando no prompt:\n\n${comando}\n\nO comando será apenas inserido; NÃO será executado. O Enter é seu, no terminal do Chrome.`,
+      mensagem: `Vai abrir o PowerShell do Endpoint em ${hostname}, modo ${modo === "usuario" ? `usuário logado${usuario ? ` (${usuario})` : ""}` : "SYSTEM"}, e inserir este comando no prompt:\n\n${comando}\n\nO comando será apenas inserido; NÃO será executado. O Enter é seu, no terminal do Chrome.`,
       confirmar: "Inserir no PowerShell", cancelar: "Cancelar", destrutiva: false,
     });
     if (!confirmado) return;
@@ -425,7 +430,7 @@
         body: JSON.stringify(payload), signal: request.signal,
         errorMessage: "Não foi possível abrir o PowerShell.",
       });
-      result.textContent = mensagemPowerShellEndpoint(data, hostname || POWERSHELL_HOST_PADRAO);
+      result.textContent = mensagemPowerShellEndpoint(data, hostname);
     } catch (error) {
       if (error.name !== "AbortError") result.textContent = error.message || "Não foi possível abrir o PowerShell.";
     } finally {
