@@ -102,6 +102,70 @@ test("Resumo: irParaSecaoComparacao clears the active filters that hide the targ
   }
 });
 
+test("Resumo: KPI e irParaSecaoComparacao abrem a sub-aba da seção antes de rolar até ela", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    await page.locator("#btn-resumo-aba").click();
+    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+    // O KPI mora em Visão geral; a seção "Localidade divergente" mora em Divergências.
+    await page.locator('#comparacao-planilhas-conteudo [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    const divergente = page.locator("#comparacao-secao-localidade-divergente");
+    await expect(divergente).toBeVisible();
+    await expect(divergente).toBeInViewport();
+
+    // Sem clicar na aba antes: a seção "Sem acesso há 7 dias" abre a aba Sem acesso sozinha.
+    await page.locator("#resumo-aba-visao").click();
+    await expect(divergente).toBeHidden();
+    expect(await page.evaluate(() => window.irParaSecaoComparacao("comparacao-secao-sem-acesso-7"))).toBe(true);
+    await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#comparacao-secao-sem-acesso-7")).toBeVisible();
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+test("Resumo: navegarParaLinhaComparacao abre a sub-aba da linha antes de procurá-la", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    await page.locator("#btn-resumo-aba").click();
+    // Visão geral já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
+    await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"]').first()).toBeAttached();
+    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+    // SAIU60 só existe em "Passou de 60 dias sem acesso" (aba Sem acesso), aqui sem categoria.
+    await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "SAIU60" }));
+    await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
+    const saiu = page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"][data-comparison-serial="SAIU60"]:visible').first();
+    await expect(saiu).toBeInViewport();
+
+    // LENTO está em duas abas e a chamada vem sem categoria: vale a categoria de maior prioridade (PRIORIDADE_CATEGORIAS_SERIE), Divergências.
+    await page.locator("#resumo-aba-visao").click();
+    await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "LENTO" }));
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first()).toBeInViewport();
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+test("Sino: Ver Resumo do aviso de 60 dias abre o Resumo na sub-aba Sem acesso", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  await request.get("/__fixture_alertas_painel?estado=visiveis");
+  try {
+    await page.goto("/");
+    await page.locator("#btn-notificacoes").click();
+    await page.locator("#notification-center-panel #alerta-sem-acesso-60").getByRole("button", { name: "Ver Resumo" }).click();
+    await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+    await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"][data-comparison-serial="SAIU60"]:visible').first()).toBeVisible();
+  } finally {
+    await request.get("/__fixture_alertas_painel?estado=ocultos");
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
 test("Home chips Sem acesso, Divergente and Sem usuário open the Resumo on the exact row of their section", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   const semUsuario = { serial: "NOTE-SEM-USUARIO", apelido: "PRNOTEDEMO02", categoria: "notebook", modelo: "Notebook", retirada_cidade: "Curitiba", usuarios_logados: "" };

@@ -47,6 +47,8 @@ async function openFixtureComparison(page) {
   await openHistoryModal(page);
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
+  // As linhas anotáveis da fixture ficam na sub-aba Apelidos; o Resumo abre em Visão geral.
+  await page.locator("#resumo-aba-apelidos").click();
   await expect(page.locator('#comparacao-planilhas-conteudo textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
 
@@ -228,8 +230,11 @@ test("delete confirmation opens above the history dialog and cancelling keeps th
 
 test("comparison result tab takes focus, passes axe and closes with Escape", async ({ page }) => {
   test.setTimeout(45_000);
-  await openFixtureComparison(page);
+  // Abre sem trocar de sub-aba: o título do painel deve ficar com o foco.
+  await openHistoryModal(page);
+  await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   const panel = page.locator(COMPARISON_PANEL);
+  await expect(panel).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator("#modal-historico-comparacoes")).toBeHidden();
   await expect(page.locator("#cockpit-tool-title")).toBeFocused();
@@ -319,16 +324,20 @@ test("comparison history filters rows and autosaves their original annotations",
 test("comparison summary cards jump to their section and clear filters that hide it", async ({ page }) => {
   await openFixtureComparison(page);
   const dialog = page.locator(COMPARISON_PANEL);
+  // A barra de filtro some em Visão geral: filtra em Apelidos e depois volta aos cartões.
+  await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
+  const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
+  await expect(heading).toBeHidden();
+  // Os cartões de resumo ficam em Visão geral; o clique deve levar à sub-aba Apelidos.
+  await dialog.locator("#resumo-aba-visao").click();
   // Only "Apelidos para conferência" has rows in the fixture; zero-count cards stay static.
   const links = dialog.locator("[data-comparison-section-target]");
   await expect(links).toHaveCount(1);
   const card = dialog.getByRole("button", { name: /Apelidos para conferência: 1\. Ir para Linhas mantidas para conferência/ });
   await expect(card).toHaveCSS("cursor", "pointer");
 
-  await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
-  const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
-  await expect(heading).toBeHidden();
   await card.click();
+  await expect(dialog.locator("#resumo-aba-apelidos")).toHaveAttribute("aria-selected", "true");
   await expect(dialog.locator("[data-history-filter-search]")).toHaveValue("");
   await expect(heading).toBeFocused();
   await expect(heading).toBeInViewport();

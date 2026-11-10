@@ -119,7 +119,7 @@ Avisar, em dois níveis, quando um notebook/MacBook está perto de sumir do Endp
 | `passou_60` | Passou de 60 dias sem acesso | 2 notebooks/MacBooks passaram de 60 dias sem acesso. 1 já saiu da lista e foi para Ausentes no Endpoint. 1 notebook/MacBook está no limite, com mais de 55 dias sem acesso. | Ver Resumo |
 | `limite_55` | Perto de 60 dias sem acesso | 2 notebooks/MacBooks estão no limite, com mais de 55 dias sem acesso. | Ver Resumo |
 
-Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn-alerta-sem-acesso-60` abre o Resumo (`abrirPainelCockpit` com `["comparacao"]`). Título padrão do cartão oculto: `Notebooks sem acesso`.
+Singular: `1 notebook/MacBook passou`, `1 já saiu ... foi para`. O botão `#btn-alerta-sem-acesso-60` abre o Resumo já na sub-aba `Sem acesso` (`abrirPainelCockpit` com `["comparacao","sem-acesso"]`; bloco 1b, 09/11/2026). Título padrão do cartão oculto: `Notebooks sem acesso`.
 
 ### Lista no Resumo (F3) e verificação em Staged Computers (09/11/2026)
 
