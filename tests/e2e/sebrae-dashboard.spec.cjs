@@ -309,8 +309,12 @@ test("Finalizar leva só os novos já trabalhados e o toast mostra o erro 422 do
   const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
   await completarCampos(antigo);
-  await painel.locator("#sebrae-aba-novos").click(); // o 1378 é o primeiro novo, que já vem aberto
-  await painel.locator('#sebrae-novos-lista .sebrae-chamado[data-numero="UTIC-2026-1378"] [data-sebrae-campo="A"]').selectOption("CLIENTE");
+  await painel.locator("#sebrae-aba-novos").click();
+  // um chamado aberto por vez: abrir o antigo fechou o 1378 (primeiro novo), e abrir o 1378 fecha o antigo
+  const novo = painel.locator('#sebrae-novos-lista .sebrae-chamado[data-numero="UTIC-2026-1378"]');
+  await abrirItemAntigo(novo);
+  await expect(antigo).toBeHidden();
+  await novo.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE");
   const detalhe = "UTIC-2026-1378: A coluna A só aceita os valores da lista do Dashboard (aba LISTAS).";
   const posts = [];
   await page.route("**/api/sebrae/finalizar-softexpert", rota => {
@@ -319,6 +323,7 @@ test("Finalizar leva só os novos já trabalhados e o toast mostra o erro 422 do
     return rota.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: detalhe }) });
   });
   await painel.locator("#sebrae-aba-antigos").click();
+  await abrirItemAntigo(antigo);
   await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
   await expect(page.locator(TOAST).filter({ hasText: detalhe })).toHaveCount(1);
