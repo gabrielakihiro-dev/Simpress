@@ -497,6 +497,56 @@ test("abrirComparacaoDaSerie leva a categoria ao alvo e repassa o Sem usuário a
   } finally { delete global.document; }
 });
 
+test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do render (que volta a Visão geral)", async () => {
+  const ordem = [];
+  const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  const { api } = criarAmbientePaineis({
+    apiFetch,
+    appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
+  });
+  // O render real cria os painéis [data-resumo-painel]; o documento falso os simula.
+  global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
+  try {
+    await api.abrirPainelCockpit("comparacao", "sem-acesso");
+    assert.deepEqual(ordem, ["render", "aba:sem-acesso"]);
+    ordem.length = 0;
+    await api.abrirPainelCockpit("comparacao");
+    assert.deepEqual(ordem, ["render"], "sem aba pedida, o Resumo abre em Visão geral");
+  } finally { delete global.document; }
+});
+
+test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há painéis nem quando outra abertura começou", async () => {
+  const ordem = [];
+  const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  let segurar = null;
+  const apiFetch = async url => {
+    if (url === "/api/historico-comparacoes" && segurar) await segurar;
+    return url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  };
+  const { api } = criarAmbientePaineis({
+    apiFetch,
+    appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
+  });
+  try {
+    // Sem painéis (sem comparação ou com erro): fica em Visão geral.
+    await api.abrirPainelCockpit("comparacao", "sem-acesso");
+    assert.deepEqual(ordem, ["render"]);
+    // Com painéis, uma abertura mais nova vence: a antiga não troca a aba depois.
+    global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
+    ordem.length = 0;
+    let soltar;
+    segurar = new Promise(resolve => { soltar = resolve; });
+    const antiga = api.abrirPainelCockpit("comparacao", "sem-acesso");
+    segurar = null;
+    const nova = api.abrirPainelCockpit("comparacao", "divergencias");
+    soltar();
+    await Promise.all([antiga, nova]);
+    assert.ok(!ordem.includes("aba:sem-acesso"), `ordem: ${ordem.join(", ")}`);
+    assert.ok(ordem.includes("aba:divergencias"), `ordem: ${ordem.join(", ")}`);
+  } finally { delete global.document; }
+});
+
 test("histórico de comparações vazio limpa a aba e mantém o Exportar desativado", async () => {
   const renders = [];
   const { api, el } = criarAmbientePaineis({

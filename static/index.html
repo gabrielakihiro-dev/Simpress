@@ -186,7 +186,7 @@
             <div class="ck-aviso__topo"><span id="alerta-sem-acesso-60-selo" class="ck-badge" data-status="alerta">Atenção</span><h3 id="alerta-sem-acesso-60-titulo" class="ck-aviso__titulo">Notebooks sem acesso</h3></div>
             <p id="alerta-sem-acesso-60-texto" class="ck-aviso__texto"></p>
             <ul id="alerta-sem-acesso-60-lista" class="ck-aviso__lista" aria-label="Notebooks e MacBooks sem acesso" hidden></ul>
-            <button type="button" id="btn-alerta-sem-acesso-60" data-on-click="abrirPainelCockpit" data-args='["comparacao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver Resumo</button>
+            <button type="button" id="btn-alerta-sem-acesso-60" data-on-click="abrirPainelCockpit" data-args='["comparacao","sem-acesso"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver Resumo</button>
           </section>
           <section id="alerta-os-paradas" class="ck-aviso" data-gravidade="urgente" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
@@ -939,12 +939,22 @@ Horário disponível para atendimento:</textarea>
             <button type="button" id="cockpit-comparison-new" class="ck-btn ck-btn--secundario">Nova comparação</button>
             <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="ck-btn ck-btn--primario disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar</span></button>
             <button type="button" id="btn-exportar-equipamentos" class="ck-btn ck-btn--secundario hidden" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar Excel com apelidos e IdCliente atualizados e enviar ao UX Simpress" title="Baixar a planilha e atualizar apelidos e id no UX Simpress (contrato 16467)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar Excel</span></button>
-            <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--primario">Histórico e ações completas</button>
+            <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--secundario">Histórico e ações completas</button>
           </div>
           <h3 class="sr-only">Resultado da atualização das planilhas</h3>
           <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota"></p>
+          <div id="comparacao-planilhas-avisos"></div>
+          <div class="resumo-abas-barra">
+            <div class="resumo-abas" role="tablist" aria-label="Resumo por assunto">
+                <button type="button" role="tab" id="resumo-aba-visao" class="resumo-aba" data-resumo-aba="visao" aria-selected="true" tabindex="0"><span class="resumo-aba__rotulo">Visão geral</span></button>
+                <button type="button" role="tab" id="resumo-aba-divergencias" class="resumo-aba" data-resumo-aba="divergencias" aria-selected="false" tabindex="-1" aria-label="Divergências: 0 linhas"><span class="resumo-aba__rotulo">Divergências</span><span id="resumo-divergencias-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                <button type="button" role="tab" id="resumo-aba-apelidos" class="resumo-aba" data-resumo-aba="apelidos" aria-selected="false" tabindex="-1" aria-label="Apelidos: 0 linhas"><span class="resumo-aba__rotulo">Apelidos</span><span id="resumo-apelidos-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                <button type="button" role="tab" id="resumo-aba-usuarios" class="resumo-aba" data-resumo-aba="usuarios" aria-selected="false" tabindex="-1" aria-label="Usuários: 0 linhas"><span class="resumo-aba__rotulo">Usuários</span><span id="resumo-usuarios-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                <button type="button" role="tab" id="resumo-aba-sem-acesso" class="resumo-aba" data-resumo-aba="sem-acesso" aria-selected="false" tabindex="-1" aria-label="Sem acesso: 0 linhas"><span class="resumo-aba__rotulo">Sem acesso</span><span id="resumo-sem-acesso-contagem" class="ck-badge resumo-aba__n">0</span></button>
+            </div>
+          </div>
           <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
-          <section class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
+          <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
             <div class="ck-cartao ck-regionais">
               <div class="ck-cartao__cab">
                 <h3 id="resumo-regionais-titulo" class="ck-cartao__titulo">Ativos por regional</h3>
