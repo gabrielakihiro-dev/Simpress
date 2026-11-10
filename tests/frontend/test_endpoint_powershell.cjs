@@ -3,23 +3,31 @@ const { assert, createAppHarness, apiResponse, appHtml } = require("./support/in
 
 const AVISO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
 
-function preencher(h, { comando = "Get-Service", modo = "sistema", hostname = "", usuario = "" } = {}) {
+function preencher(h, { comando = "Get-Service", modo = "sistema", hostname = "" } = {}) {
   h.element("input-powershell-comando").value = comando;
   h.element("select-powershell-modo").value = modo;
   h.element("input-powershell-hostname").value = hostname;
-  h.element("input-powershell-usuario").value = usuario;
 }
 
 test("Home: o formulário do PowerShell tem IDs, ARIA e ação declarativa, sem parâmetro de Enter", () => {
   assert.match(appHtml, /<form[^>]*data-on-submit="abrirPowerShellEndpoint"/);
   assert.match(appHtml, /id="input-powershell-comando"/);
-  assert.match(appHtml, /id="select-powershell-modo"[^>]*data-on-change="alternarModoPowerShellEndpoint"/);
+  assert.match(appHtml, /id="select-powershell-modo"/);
   assert.match(appHtml, /<option value="sistema">SYSTEM<\/option>\s*<option value="usuario">Usuário logado<\/option>/);
   assert.match(appHtml, /id="input-powershell-hostname"[^>]*placeholder="PRNOTEUMU005"/);
-  assert.match(appHtml, /id="input-powershell-usuario"[^>]*placeholder="ex\.: gananias"/);
+  assert.doesNotMatch(appHtml, /powershell-usuario|Usuário \(opcional\)/);
   assert.match(appHtml, /id="btn-powershell-endpoint"[\s\S]*?<span>Inserir no PowerShell<\/span>/);
   assert.match(appHtml, /id="endpoint-powershell-result"[^>]*role="status"/);
   assert.doesNotMatch(appHtml, /id="[^"]*powershell[^"]*enter/i);
+});
+
+test("Home: selecionar uma série preenche o hostname do PowerShell com o apelido; sem apelido, limpa", () => {
+  const h = createAppHarness(() => apiResponse({}), { stubDisplay: false });
+  h.element("input-powershell-hostname").value = "DIGITADO";
+  h.run('exibirEquipamento({ serial: "BRJ00000AA", apelido: "PRNOTETST001" })');
+  assert.equal(h.element("input-powershell-hostname").value, "PRNOTETST001");
+  h.run('exibirEquipamento({ serial: "BRJ00000BB" })');
+  assert.equal(h.element("input-powershell-hostname").value, "");
 });
 
 test("PowerShell: quebra de linha é bloqueada no cliente, sem confirmar nem chamar a API", async () => {
@@ -43,25 +51,19 @@ test("PowerShell: modo SYSTEM envia só modo e comando; hostname só quando pree
     bodies.push(JSON.parse(options.body));
     return apiResponse({ status: "inserido", hostname: "PRNOTEUMU005", modo: "sistema" });
   });
-  preencher(h, { comando: "ipconfig", usuario: "ignorado" });
+  preencher(h, { comando: "ipconfig" });
   await h.run("abrirPowerShellEndpoint()");
   preencher(h, { comando: "ipconfig", hostname: "PRNOTEXYZ001" });
   await h.run("abrirPowerShellEndpoint()");
   assert.deepEqual(bodies, [{ modo: "sistema", comando: "ipconfig" }, { modo: "sistema", comando: "ipconfig", hostname: "PRNOTEXYZ001" }]);
 });
 
-test("PowerShell: modo Usuário logado envia o usuário e o campo aparece só nesse modo", async () => {
+test("PowerShell: modo Usuário logado nunca envia usuário, só modo, comando e hostname", async () => {
   let body;
   const h = createAppHarness((url, options) => { body = JSON.parse(options.body); return apiResponse({ status: "inserido", hostname: "PC1", modo: "usuario", usuario: "gananias" }); });
-  h.element("select-powershell-modo").value = "usuario";
-  h.run("alternarModoPowerShellEndpoint()");
-  assert.equal(h.element("campo-powershell-usuario").classList.contains("hidden"), false);
-  h.element("select-powershell-modo").value = "sistema";
-  h.run("alternarModoPowerShellEndpoint()");
-  assert.equal(h.element("campo-powershell-usuario").classList.contains("hidden"), true);
-  preencher(h, { comando: "whoami", modo: "usuario", hostname: "PC1", usuario: " gananias " });
+  preencher(h, { comando: "whoami", modo: "usuario", hostname: "PC1" });
   await h.run("abrirPowerShellEndpoint()");
-  assert.deepEqual(body, { modo: "usuario", comando: "whoami", hostname: "PC1", usuario: "gananias" });
+  assert.deepEqual(body, { modo: "usuario", comando: "whoami", hostname: "PC1" });
   preencher(h, { comando: "whoami", modo: "usuario" });
   await h.run("abrirPowerShellEndpoint()");
   assert.deepEqual(body, { modo: "usuario", comando: "whoami" });
@@ -164,12 +166,10 @@ test("PowerShell: escolher um código preenche comando e modo (SYSTEM ou Usuári
   h.run("aplicarCodigoProntoPowerShell()");
   assert.equal(h.element("input-powershell-comando").value, "Restart-Service Spooler");
   assert.equal(h.element("select-powershell-modo").value, "sistema");
-  assert.equal(h.element("campo-powershell-usuario").classList.contains("hidden"), true);
   h.element("select-powershell-codigo").value = "vp_umuarama";
   h.run("aplicarCodigoProntoPowerShell()");
   assert.equal(h.element("input-powershell-comando").value, 'Add-Printer -ConnectionName "\\\\prsrvvm-imp\\VP_UMUARAMA"');
   assert.equal(h.element("select-powershell-modo").value, "usuario");
-  assert.equal(h.element("campo-powershell-usuario").classList.contains("hidden"), false);
   await h.run("abrirPowerShellEndpoint()");
   assert.deepEqual(chamadas.at(-1).corpo, { modo: "usuario", comando: 'Add-Printer -ConnectionName "\\\\prsrvvm-imp\\VP_UMUARAMA"' });
 });
