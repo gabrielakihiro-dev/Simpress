@@ -725,6 +725,7 @@
     aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
     document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
     app.atualizarUsuarioLogadoCard(eq);
+    app.termosPreencherDoEquipamento?.(eq);
     app.atualizarChamadosAbertosHome(eq.serial);
     document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(eq);
     document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
