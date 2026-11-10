@@ -690,7 +690,7 @@ test("a lista carregada solta o aria-busy e o antigo vira details recolhido com 
     assert.deepEqual(item.querySelectorAll(".sebrae-selo--auto").map(no => no.textContent), ["D: FINALIZADO", "Pronto para finalizar", "Finalizando…", "Ver resultado", "Falhou"]);
   }
   const [comUtic, semUtic] = itens;
-  const seloLeitura = item => item.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo").filter(no => !no.className.includes("sebrae-selo--auto"));
+  const seloLeitura = item => item.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo").filter(no => !no.className.includes("sebrae-selo--auto") && !no.className.includes("sebrae-selo-obs"));
   assert.deepEqual(seloLeitura(comUtic).map(no => no.textContent), ["Não lido"]);
   assert.deepEqual(seloLeitura(semUtic), [], "sem UTIC nada é prometido");
   assert.equal(semUtic.querySelectorAll("li.sebrae-pend[data-req]").length, 0, "sem UTIC não há seção de finalizar");
@@ -1204,6 +1204,7 @@ test("destaque vindo das listas: antigo UTIC e linha:N mostram selo e classe, en
   assert.equal(el["sebrae-destaques-contagem"].textContent, "1");
   assert.ok(cartaoDaSecao(el, "UTIC-2026-1200").textContent.includes("Cobrar o fornecedor."), "a observação fica sempre visível no cartão da seção");
   assert.equal(artigosDe("UTIC-2026-1200").length, 1);
+  assert.equal(lista.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo-obs").map(no => no.hidden).join(), "false,true", "só o resumo com observação anotada mostra o selo Observação");
 
   const [botaoLinha] = botoesDestaque(lista, "linha:27");
   botaoLinha.click();

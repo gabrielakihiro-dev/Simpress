@@ -175,11 +175,6 @@
   const powershellRequestGate = transferUtils.createRequestGate();
   const POWERSHELL_AVISO_NAO_EXECUTADO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
 
-  function alternarModoPowerShellEndpoint() {
-    const modo = document.getElementById("select-powershell-modo").value;
-    document.getElementById("campo-powershell-usuario").classList.toggle("hidden", modo !== "usuario");
-  }
-
   // Códigos prontos: lista guardada no servidor local (comando fixo + modo). Só carrega na primeira abertura do card.
   const POWERSHELL_CODIGOS_URL = "/api/endpoint/powershell/codigos";
   // Impressora de rede (Add-Printer -ConnectionName, aceito abreviado até -Con) só é instalada no perfil do usuário logado.
@@ -245,7 +240,6 @@
     if (!item) return;
     document.getElementById("input-powershell-comando").value = item.comando;
     document.getElementById("select-powershell-modo").value = item.modo === "sistema" ? "sistema" : "usuario";
-    alternarModoPowerShellEndpoint();
     document.getElementById("endpoint-powershell-result").textContent = "";
   }
 
@@ -381,7 +375,7 @@
     }
     if (data.status === "not_found") return `Computador ${host} não encontrado no Endpoint. Nada foi inserido.`;
     if (data.status === "sem_usuario") return `Usuário não encontrado em ${host}.${usuarios ? ` Usuários disponíveis: ${usuarios}.` : " Nenhum usuário logado disponível."} Nada foi inserido.`;
-    if (data.status === "usuario_ambiguo") return `Há mais de um usuário logado em ${host}: ${usuarios}. Informe o usuário e tente de novo. Nada foi inserido.`;
+    if (data.status === "usuario_ambiguo") return `Há mais de um usuário logado em ${host}: ${usuarios}. Nada foi inserido.`;
     if (data.status === "erro_terminal") return data.mensagem || `Não foi possível abrir o PowerShell em ${host}. Nada foi inserido.`;
     throw new Error("Não foi possível confirmar o resultado do Endpoint.");
   }
@@ -411,12 +405,10 @@
       result.textContent = "Informe o hostname.";
       return;
     }
-    const usuario = modo === "usuario" ? document.getElementById("input-powershell-usuario").value.trim() : "";
     const payload = { modo, comando, hostname };
-    if (usuario) payload.usuario = usuario;
     const confirmado = await app.confirmarAcao({
       titulo: "Inserir comando no PowerShell",
-      mensagem: `Vai abrir o PowerShell do Endpoint em ${hostname}, modo ${modo === "usuario" ? `usuário logado${usuario ? ` (${usuario})` : ""}` : "SYSTEM"}, e inserir este comando no prompt:\n\n${comando}\n\nO comando será apenas inserido; NÃO será executado. O Enter é seu, no terminal do Chrome.`,
+      mensagem: `Vai abrir o PowerShell do Endpoint em ${hostname}, modo ${modo === "usuario" ? "usuário logado" : "SYSTEM"}, e inserir este comando no prompt:\n\n${comando}\n\nO comando será apenas inserido; NÃO será executado. O Enter é seu, no terminal do Chrome.`,
       confirmar: "Inserir no PowerShell", cancelar: "Cancelar", destrutiva: false,
     });
     if (!confirmado) return;
@@ -920,6 +912,8 @@
     document.getElementById("card-modelo").textContent = eq.modelo || "Equipamento";
     document.getElementById("badge-tipo").textContent = eq.tipo || "Geral";
     document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
+    // O apelido é o hostname no Endpoint; sem ele, o campo fica vazio e vale o computador padrão.
+    document.getElementById("input-powershell-hostname").value = eq.apelido || "";
     const aliasStatus = document.getElementById("badge-apelido-status");
     aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
       ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
@@ -1386,7 +1380,7 @@
 
   return {
     consultarEndpoint,
-    controleRemotoEndpoint, abrirPowerShellEndpoint, alternarModoPowerShellEndpoint, aplicarCodigoProntoPowerShell,
+    controleRemotoEndpoint, abrirPowerShellEndpoint, aplicarCodigoProntoPowerShell,
     aoAbrirPowerShellEndpoint, alternarEditorCodigosPowerShell, adicionarCodigoPowerShell, salvarCodigosPowerShell,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
