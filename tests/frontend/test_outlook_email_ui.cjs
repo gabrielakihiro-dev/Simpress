@@ -338,6 +338,9 @@ test("a slow action that ends after close and reopen does not take the focus fro
   concluir({ status: "aberto", conta: "conta@exemplo.test" });
   await execucao;
   assert.equal(app.focado(), "email-corpo");
+  // The old result goes to a toast only: the status line of the new session stays clean.
+  assert.equal(app.el("email-status").textContent, "");
+  assert.deepEqual(plano(app.harness.effects.toasts.at(-1)), { message: "E-mail aberto no Outlook. Revise e envie por lá.", type: "success" });
 });
 
 test("Para suggests Entra contacts with keyboard and ARIA support", async () => {
