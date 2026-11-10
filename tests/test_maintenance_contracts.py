@@ -345,6 +345,11 @@ class MaintenanceContractTests(unittest.TestCase):
         script = _frontend_script()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
+        outlook = (app_config.STATIC_DIR / "js" / "features" / "outlook-email.js").read_text(encoding="utf-8")
+        # O resto do HTML já traz o exemplo "nome@pr.sebrae.com.br" do termo; o e-mail pelo Outlook não pode ter domínio real.
+        modal_email = html.split('id="modal-email-outlook"', 1)[1].split('id="modal-confirmar-acao"', 1)[0]
+        self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
+        self.assertNotRegex(modal_email + outlook, r"Allex|Fabio|Robinson")
 
         template = app_config.TEMPLATE_FILE
         with zipfile.ZipFile(template) as archive:

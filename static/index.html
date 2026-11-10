@@ -297,6 +297,9 @@
             <button type="button" id="btn-controle-remoto-endpoint" data-on-click="controleRemotoEndpoint" class="ck-btn ck-btn--secundario" disabled aria-controls="endpoint-lookup-result" title="Abrir o controle remoto do equipamento no Endpoint (motivo: acesso) e deixar a conexão aberta para você">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Controle remoto</span>
             </button>
+            <button type="button" id="btn-enviar-email" data-on-click="abrirEmailOutlook" class="ck-btn ck-btn--secundario" disabled aria-haspopup="dialog" aria-controls="modal-email-outlook" title="Preparar um e-mail por modelo no Outlook para este equipamento">
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg><span>Enviar e-mail</span>
+            </button>
             <button type="button" id="btn-ir-para-transporte" class="ck-btn ck-btn--primario" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado (T)">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg>
               <span>Transporte</span>
@@ -1530,6 +1533,73 @@ Horário disponível para atendimento:</textarea>
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-conferido" data-on-click="conferirChamadoUX" hidden>Conferi no UX; preparar de novo</button>
         <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' aria-describedby="ux-chamado-motivo" disabled>Simular preenchimento</button>
         <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' aria-describedby="ux-chamado-motivo" disabled>Revisar e enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook">
+    <div class="ck-dialogo email-outlook">
+      <h3 id="titulo-email-outlook" class="text-base font-bold">E-mail pelo Outlook</h3>
+      <p id="email-aviso-diretorio" class="email-outlook__aviso" role="status" hidden>A base do Microsoft Entra não foi importada; digite o e-mail completo.</p>
+      <div class="email-outlook__modelo">
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-modelo">Modelo</label>
+          <select id="email-modelo" class="ck-entrada" data-on-change="trocarModeloEmail" data-args='["$value"]' disabled></select>
+        </div>
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-modelo-nome">Nome do modelo</label>
+          <input type="text" id="email-modelo-nome" class="ck-entrada" maxlength="80" autocomplete="off" disabled>
+        </div>
+      </div>
+      <div class="ck-grupo-botoes">
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-novo" data-on-click="novoModeloEmail" disabled>Novo modelo</button>
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-duplicar" data-on-click="duplicarModeloEmail" disabled>Duplicar modelo</button>
+        <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="email-modelo-excluir" data-on-click="excluirModeloEmail" disabled>Excluir modelo</button>
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-restaurar" data-on-click="restaurarModeloEmail" hidden>Restaurar padrão</button>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-conta">Enviar de</label>
+        <select id="email-conta" class="ck-entrada" disabled></select>
+      </div>
+      <div class="ck-campo email-outlook__combo">
+        <label class="ck-campo__rotulo" id="email-para-rotulo" for="email-para">Para</label>
+        <input type="text" id="email-para" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-para-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
+        <ul id="email-para-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-para-rotulo" hidden></ul>
+        <div id="email-para-opcoes" class="email-outlook__opcoes" hidden></div>
+      </div>
+      <div class="ck-campo email-outlook__combo">
+        <label class="ck-campo__rotulo" id="email-cc-rotulo" for="email-cc">Cc</label>
+        <input type="text" id="email-cc" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-cc-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
+        <ul id="email-cc-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-cc-rotulo" hidden></ul>
+        <div id="email-cc-opcoes" class="email-outlook__opcoes" hidden></div>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-assunto">Assunto</label>
+        <input type="text" id="email-assunto" class="ck-entrada" maxlength="200" autocomplete="off" aria-describedby="email-ajuda-marcadores" disabled>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-corpo">Mensagem</label>
+        <textarea id="email-corpo" class="ck-entrada email-outlook__corpo" rows="6" maxlength="4000" aria-describedby="email-ajuda-marcadores" disabled></textarea>
+      </div>
+      <p id="email-ajuda-marcadores" class="email-outlook__ajuda">Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.</p>
+      <div class="email-outlook__envio">
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-nome-pessoa">Nome da pessoa</label>
+          <input type="text" id="email-nome-pessoa" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
+        </div>
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-setor">Setor</label>
+          <input type="text" id="email-setor" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
+        </div>
+      </div>
+      <p id="email-ajuda-autosave" class="email-outlook__ajuda">As alterações no modelo são salvas automaticamente.</p>
+      <p id="email-autosave-status" class="email-outlook__autosave" role="status" aria-live="polite"></p>
+      <p id="email-status" class="email-outlook__status" role="status" aria-live="polite" hidden></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-cancelar" data-on-click="fecharEmailOutlook">Cancelar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-copiar" data-on-click="copiarTextoEmail" disabled>Copiar Texto</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-abrir" data-on-click="abrirEmailNoOutlook" disabled>Abrir no Outlook</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="email-enviar" data-on-click="enviarEmailPeloOutlook" disabled>Enviar pelo Outlook</button>
       </div>
     </div>
   </div>
