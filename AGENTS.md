@@ -32,6 +32,7 @@ Reorganização de 10/11/2026: a raiz guarda só o que vale no projeto inteiro. 
 - Cadastro: a fonte oficial é `data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx`; `InvAll` só auxilia e nunca aumenta o total.
 - Séries do Sebrae fora das comparações: `BRT100XA01`, `BRT100XA02`, `BRT200XB0R`, `BRT200XB0F`, `BRT300XC01`.
 - Hostnames `PRNOTESJP`, `PRNOTERL` e `PRNOTEARC` são de Curitiba, sem divergência de localidade.
+- Séries do Sebrae, prefixos de Curitiba e regra de MacBook: fonte única em `domains/regras_negocio.py`; não copie para outro módulo nem para o front-end.
 - MacBook: série do Endpoint sem `S` inicial equivale à do cadastro com `S`, só se o resultado for único; ambíguo fica ambíguo.
 
 ## Dados operacionais
