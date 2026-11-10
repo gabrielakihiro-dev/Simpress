@@ -314,10 +314,21 @@
         </header>
 
         <p id="endpoint-lookup-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
-        <details class="ck-ps-endpoint" id="endpoint-powershell">
+        <details class="ck-ps-endpoint" id="endpoint-powershell" data-on-toggle="aoAbrirPowerShellEndpoint">
           <summary>PowerShell no Endpoint</summary>
           <form class="ck-ps-endpoint__form" data-on-submit="abrirPowerShellEndpoint" autocomplete="off" novalidate>
             <p class="ck-campo__rotulo">O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.</p>
+            <div class="ck-ps-endpoint__codigo">
+              <label class="ck-campo">
+                <span class="ck-campo__rotulo">Código pronto (opcional)</span>
+                <select id="select-powershell-codigo" class="ck-entrada" data-on-change="aplicarCodigoProntoPowerShell" title="Preenche o comando e o modo do código escolhido">
+                  <option value="">Escolher código…</option>
+                </select>
+              </label>
+              <button type="button" id="btn-powershell-codigos-gerenciar" class="ck-btn ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell" aria-expanded="false" aria-controls="powershell-codigos-editor">
+                <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg><span>Gerenciar códigos</span>
+              </button>
+            </div>
             <label class="ck-campo">
               <span class="ck-campo__rotulo">Comando (uma linha)</span>
               <textarea id="input-powershell-comando" class="ck-entrada" rows="2" maxlength="2000" spellcheck="false" aria-describedby="endpoint-powershell-result"></textarea>
@@ -346,6 +357,16 @@
             </div>
             <p id="endpoint-powershell-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
           </form>
+          <div id="powershell-codigos-editor" class="ck-ps-codigos hidden" role="group" aria-labelledby="powershell-codigos-titulo">
+            <p id="powershell-codigos-titulo" class="ck-campo__rotulo">Códigos prontos: título, modo e comando de uma linha.</p>
+            <div id="powershell-codigos-lista" class="ck-ps-codigos__lista"></div>
+            <div class="ck-ps-codigos__acoes">
+              <button type="button" id="btn-powershell-codigo-adicionar" class="ck-btn ck-btn--secundario" data-on-click="adicionarCodigoPowerShell"><span>Adicionar código</span></button>
+              <button type="button" id="btn-powershell-codigos-salvar" class="ck-btn ck-btn--primario" data-on-click="salvarCodigosPowerShell"><span>Salvar lista</span></button>
+              <button type="button" id="btn-powershell-codigos-cancelar" class="ck-btn ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell"><span>Cancelar</span></button>
+            </div>
+            <p id="powershell-codigos-status" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+          </div>
         </details>
         <dl class="ck-dados" id="ck-dados-equipamento">
           <div class="ck-dado">

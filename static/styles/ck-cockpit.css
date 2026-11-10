@@ -753,6 +753,15 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-ps-endpoint__form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; min-width: 0; }
 .ck-ps-endpoint__linha { display: flex; flex-wrap: wrap; gap: 10px; }
 .ck-ps-endpoint__linha .ck-campo { flex: 1 1 160px; }
+.ck-ps-endpoint__codigo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.ck-ps-endpoint__codigo .ck-campo { flex: 1 1 200px; }
+.ck-ps-codigos { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--cor-borda-suave); min-width: 0; }
+.ck-ps-codigos__lista { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ck-ps-codigos__item { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; padding: 10px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-funda); min-width: 0; }
+.ck-ps-codigos__titulo { flex: 2 1 180px; }
+.ck-ps-codigos__modo { flex: 1 1 140px; }
+.ck-ps-codigos__comando { flex: 1 1 100%; }
+.ck-ps-codigos__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .ck-detalhe__cliente { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-dado dd form.ck-edicao { margin-top: 0; }
 .ck-dado:has(form.ck-edicao:not(.hidden)) { grid-column: span 2; }
