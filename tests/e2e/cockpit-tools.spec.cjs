@@ -58,6 +58,8 @@ test("comparison tab shows the full result and survives an empty history refresh
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const result = page.locator("#comparacao-planilhas-conteudo");
+  // O Resumo abre em Visão geral; a linha LENTO fica na sub-aba Divergências.
+  await page.locator("#resumo-aba-divergencias").click();
   // Tabela no desktop e card no mobile: só a variante visível conta.
   const row = result.locator('[data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
   await expect(row).toContainText("LENTO");
@@ -159,6 +161,7 @@ test("comparison skips restoration and synchronized-note entries and uses the En
   await expect(page.locator("#cockpit-comparison-event")).toHaveValue(comparison.id);
   // O resultado completo (cartões de resumo + tabelas) vem de renderizarResultadoComparacao, só do evento real.
   const result = page.locator("#comparacao-planilhas-conteudo");
+  await page.locator("#resumo-aba-divergencias").click();
   await expect(result.locator('[data-comparison-category="ausentes_em_detalhes"][data-comparison-serial="SN-ENDPOINT"]:visible').first()).toContainText("Curitiba");
   await expect(page.getByRole("button", { name: "Exportar este resultado para Excel" })).toBeEnabled();
 });
