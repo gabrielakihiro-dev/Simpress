@@ -1622,6 +1622,29 @@ test("Novos: só a primeira linha nasce aberta e Recolher chamado fecha a linha 
   assert.equal(doc.activeElement, primeira.querySelector("summary"));
 });
 
+test("um chamado aberto por vez: abrir um novo, antigo ou finalizado fecha o outro, sem perder a observação digitada", async () => {
+  const { el } = await montarVisao();
+  const abrir = linha => { linha.open = true; linha.dispatchEvent({ type: "toggle" }); }; // o navegador dispara o toggle sozinho
+  const [novo1, novo2] = el["sebrae-novos-lista"].children;
+  const antigo = el["sebrae-antigos-lista"].children[0];
+  const finalizado = el["sebrae-finalizados-lista"].querySelector("details.sebrae-finalizado");
+  assert.equal(antigo.className, "sebrae-antigo");
+  assert.equal(finalizado.className, "sebrae-finalizado");
+  novo1.dispatchEvent({ type: "toggle" }); // a primeira linha nasce aberta
+  const observacao = antigo.querySelector("textarea[data-sebrae-observacao]");
+  abrir(antigo);
+  assert.equal(novo1.open, false, "abrir um antigo fecha o novo aberto");
+  observacao.value = "texto ainda não salvo";
+  abrir(finalizado);
+  assert.equal(antigo.open, false, "abrir um finalizado fecha o antigo aberto");
+  assert.equal(observacao.value, "texto ainda não salvo", "fechar não apaga o que foi digitado");
+  abrir(novo2);
+  assert.equal(finalizado.open, false, "abrir um novo fecha o finalizado aberto");
+  abrir(novo1);
+  assert.equal(novo2.open, false, "na mesma lista também fica um só");
+  assert.deepEqual([novo1, novo2, antigo, finalizado].map(l => l.open), [true, false, false, false]);
+});
+
 test("paginação de 25: Carregar mais e Mostrando N de M sem filtro; com filtro todos os achados aparecem e o botão some", async () => {
   const { el, visiveis, filtrar } = await montarVisao();
   el["sebrae-aba-antigos"].click();

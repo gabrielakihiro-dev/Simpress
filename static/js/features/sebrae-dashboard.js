@@ -410,6 +410,7 @@
     // Vive só na memória da página: F5 → F4 → F5 mantém a aba; recarregar volta a Novos com o filtro vazio.
     const visao = { aba: "novos", termo: "", paginas: { antigos: POR_PAGINA, finalizados: POR_PAGINA }, novosAbertos: null, itens: [], porNo: new Map() };
     const abertosPelaPessoa = new WeakSet();
+    let linhaAberta = null; // a linha `details` (novo, antigo ou finalizado) aberta por último
     const normalizar = valor => (context.ticketRules?.normalizarFiltroChamados || app.normalizarFiltroChamados
       || (texto => String(texto || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").trim().toLocaleLowerCase("pt-BR")))(valor);
 
@@ -604,6 +605,11 @@
       resumo.addEventListener("click", () => abertosPelaPessoa.add(detalhe));
       detalhe.addEventListener("toggle", () => {
         const pelaPessoa = abertosPelaPessoa.delete(detalhe);
+        // um chamado aberto por vez nas três listas; linha já fora da tela (lista redesenhada) não é fechada
+        if (detalhe.open) {
+          if (linhaAberta !== detalhe && linhaAberta?.isConnected && linhaAberta.open) linhaAberta.open = false;
+          linhaAberta = detalhe;
+        }
         if (detalhe.className === "sebrae-novo" && visao.novosAbertos) visao.novosAbertos[detalhe.open ? "add" : "delete"](numero);
         if (detalhe.open && pelaPessoa) detalhe.querySelector(".sebrae-chamado__recolher")?.focus();
       });
