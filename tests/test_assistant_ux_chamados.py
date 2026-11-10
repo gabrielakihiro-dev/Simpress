@@ -107,6 +107,29 @@ class AssistantUXTests(unittest.TestCase):
         conversa.enviar_mensagem("Abrir chamado no UX", contexto_ux=dados)
         self.assertEqual([r for r in rotas if "/api/ux/" in r], ["/api/ux/abrir-chamado/preparar"])
 
+    def test_outlook_email_questions_go_to_the_model_not_to_the_home_flow(self):
+        rotas = []
+        def local(method, route, _params, body):
+            rotas.append(route)
+            return 200, {"serial": "S1", "modelo": "Modelo X", "session_id": "opaco", "opcoes": ["Teclado"]}
+
+        model = FakeModel()
+        conversa = AssistantConversation(model, SimpressApi(local))
+        dados = {"serial": "S1", "descricao": "O cabo de segurança não chegou.", "revisao": 1}
+        frases = (
+            "como mando o e-mail do cabo de segurança?",
+            "abre o e-mail do cabo no Outlook",
+            "criar o e-mail de solicitação do cabo de segurança",
+            "enviar e-mail do cabo pelo Outlook",
+        )
+        for frase in frases:
+            conversa.enviar_mensagem(frase, contexto_ux=dados)
+        self.assertEqual(len(model.calls), len(frases))
+        self.assertFalse([r for r in rotas if "abrir-chamado" in r])
+        # A real equipment problem that mentions a cable still opens the Home flow.
+        conversa.enviar_mensagem("abrir chamado no UX, cabo do carregador quebrado", contexto_ux=dados)
+        self.assertEqual([r for r in rotas if "/api/ux/" in r], ["/api/ux/abrir-chamado/preparar"])
+
     def test_system_prompt_points_the_cadastral_ticket_to_transporte(self):
         from domains.assistant_chat import SYSTEM_PROMPT
         for trecho in ("Gerar Planilha", "Transporte (F2)", "Gerar ticket no UX", "Revisar e finalizar",

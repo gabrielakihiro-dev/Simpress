@@ -202,6 +202,36 @@ sessão opaca de 30 min. Erros: `{detail, codigo}`; 409 trava ocupada/sessão in
 
 Histórico em `data/state/ux_tickets_historico.json`: só série, data, ticket, estado e `conferido_em`.
 
+## E-mails por modelo pelo Outlook (Home F1, 09/11/2026)
+
+`routers/outlook_mail.py` (`create_outlook_mail_router`) com as regras em `domains/outlook_mail.py` e o script fixo
+`domains/outlook_mail.ps1`. Usado pelo modal `E-mail pelo Outlook` do botão `Enviar e-mail` da Home (F1); detalhe da
+tela e textos aprovados em `docs/cockpit-prompts/03-home-split-view.md`. O Assistente não tem ferramenta para estas rotas.
+
+| # | Método e caminho | Entrada | Resultado |
+| --- | --- | --- | --- |
+| 198 | GET /api/outlook/email/configuracao | Sem parâmetros. | `{contas:[{id,email,rotulo,padrao}], modelos:[{id,nome,conta,para,cc,assunto,corpo,atualizado_em}], diretorio:{disponivel,total}}`. As contas (`sebrae`, padrão, e `simpress`) vêm da constante `CONTAS_REMETENTE` do backend; o front só as recebe por aqui. Sem arquivo de modelos, devolve a semente `Modelo 1 - Cabo` (id `cabo`) sem gravar nada. |
+| 199 | POST /api/outlook/email/modelos | `{nome?, copiar_de?}`. | Cria um modelo vazio (conta `sebrae`) ou a cópia de `copiar_de`; devolve o modelo. 404 `modelo_inexistente` (`copiar_de`); 422 `nome_duplicado` ou `limite_modelos` (até 50). |
+| 200 | PUT /api/outlook/email/modelos/{modelo_id} | Atualização parcial de `nome`, `conta`, `para`, `cc`, `assunto`, `corpo` (usada pelo salvamento automático). | Modelo atualizado. 404 `modelo_inexistente`; 422 `campo_invalido` ou `nome_duplicado`. |
+| 201 | DELETE /api/outlook/email/modelos/{modelo_id} | Sem corpo. | Exclui o modelo. 404 `modelo_inexistente`; 422 `ultimo_modelo` quando é o único. |
+| 202 | POST /api/outlook/email/modelos/{modelo_id}/restaurar | Sem corpo. | Só o `cabo`: conta, Para, Cc, Assunto e corpo voltam à semente (o nome fica). Outro id: 422 `sem_padrao`; id inexistente: 404 `modelo_inexistente`. |
+| 203 | GET /api/outlook/contatos | Query `q` com 2 caracteres ou mais (sem acento nem maiúscula). | Até 8 `{nome, email}` da base do Microsoft Entra já importada (só leitura de `domains/entra_users.py`); contas de máquina (`$`) e convidadas (`#EXT#`) ficam fora. 422 `consulta_curta`. |
+| 204 | POST /api/outlook/contatos/resolver | `{tokens:[…]}` (até 50). | `{resultados:[…]}` com, por token, `{status: unico\|ambiguo\|nenhum, email?, nome?, opcoes?}`; token que já é e-mail volta como está; nome idêntico de uma só pessoa é `unico`. |
+| 205 | POST /api/outlook/email | `{conta, para, cc, assunto, corpo, nome?, setor?, modo:"abrir"\|"enviar", confirmado}` (`confirmado` é `StrictBool`, padrão `false`). | 200 `{status:"aberto"\|"enviado"\|"incerto", conta, aviso?}`. `{nome}` e `{setor}` são substituídos no servidor; vazio vira `[Nome da pessoa]` / `[Setor]`. 422 `campo_invalido` (ex.: `enviar` sem Para, campo acima do limite). |
+
+Erros das regras vêm como `{detail, codigo}`, com `detail` em texto simples e sem dados do pedido. Erros de validação do corpo (campo extra, `modo` fora de `abrir`/`enviar`, `confirmado` que não é booleano, `q` acima de 200 caracteres, `tokens` que não é lista) vêm como o 422 padrão do app (`{detail:[…]}`, sem `codigo`). Modelos: arquivo ilegível
+503 `modelos_ilegiveis` (nada é sobrescrito); trava ocupada 503 `modelos_ocupados`; falha ao gravar 503
+`modelos_gravacao`. E-mail: `enviar` sem `confirmado:true` 422 `confirmacao_necessaria`; `SIMPRESS_OUTLOOK_SEM_ENVIO=1`
+422 `envio_desativado` (o `abrir` continua); marcador restante no Assunto ou na Mensagem no `enviar` 422
+`marcador_pendente`; outro e-mail em preparo 409 `ocupado`; conta desconhecida ou fora do Outlook 422 `conta_ausente`; destinatário
+não reconhecido 422 `destinatario_nao_resolvido` só no `enviar` (no `abrir` vira `aviso`); Outlook novo, sem COM ou
+fora do Windows 503 `outlook_indisponivel`; Outlook fechado no `enviar` 503 `outlook_fechado` (nada criado);
+exceção no `Send()` 502 `envio_recusado` (nada enviado); timeout antes do envio 504 `outlook_sem_resposta`; timeout
+ou falha depois do marcador de envio (exceto `envio_recusado`) volta 200 `incerto` (conferir Itens Enviados antes de
+repetir); timeout no `abrir` volta `aberto` com aviso de que a janela pode aparecer em instantes. Erro inesperado: 500
+`erro_inesperado`. O PowerShell recebe os dados só por stdin (JSON UTF-8), nunca em argumentos. O log guarda só modo,
+id da conta e código ou status: nunca corpo, destinatários, nomes, nome do modelo nem termo buscado.
+
 ## Assistente (IA própria via OpenRouter)
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
