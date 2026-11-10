@@ -1,9 +1,9 @@
-const test = require("node:test");
+﻿const test = require("node:test");
 const { assert, createAppHarness, apiResponse, appHtml } = require("./support/inventory-harness.cjs");
 
 const AVISO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
 
-function preencher(h, { comando = "Get-Service", modo = "sistema", hostname = "", usuario = "" } = {}) {
+function preencher(h, { comando = "Get-Service", modo = "sistema", hostname = "PRNOTEUMU005", usuario = "" } = {}) {
   h.element("input-powershell-comando").value = comando;
   h.element("select-powershell-modo").value = modo;
   h.element("input-powershell-hostname").value = hostname;
@@ -15,7 +15,7 @@ test("Home: o formulário do PowerShell tem IDs, ARIA e ação declarativa, sem 
   assert.match(appHtml, /id="input-powershell-comando"/);
   assert.match(appHtml, /id="select-powershell-modo"[^>]*data-on-change="alternarModoPowerShellEndpoint"/);
   assert.match(appHtml, /<option value="sistema">SYSTEM<\/option>\s*<option value="usuario">Usuário logado<\/option>/);
-  assert.match(appHtml, /id="input-powershell-hostname"[^>]*placeholder="PRNOTEUMU005"/);
+  assert.match(appHtml, /id="input-powershell-hostname"[^>]*placeholder="Hostname do equipamento"/);
   assert.match(appHtml, /id="input-powershell-usuario"[^>]*placeholder="ex\.: gananias"/);
   assert.match(appHtml, /id="btn-powershell-endpoint"[\s\S]*?<span>Inserir no PowerShell<\/span>/);
   assert.match(appHtml, /id="endpoint-powershell-result"[^>]*role="status"/);
@@ -35,19 +35,41 @@ test("PowerShell: quebra de linha é bloqueada no cliente, sem confirmar nem cha
   assert.deepEqual(h.effects.confirmations, []);
 });
 
-test("PowerShell: modo SYSTEM envia só modo e comando; hostname só quando preenchido", async () => {
+test("PowerShell: sem hostname não chama a API nem usa computador padrão", async () => {
+  let fetched = 0;
+  const h = createAppHarness(() => { fetched += 1; return apiResponse({}); });
+  preencher(h, { comando: "ipconfig", hostname: "" });
+  await h.run("abrirPowerShellEndpoint()");
+  assert.equal(h.element("endpoint-powershell-result").textContent, "Informe o hostname.");
+  assert.equal(fetched, 0);
+  assert.deepEqual(h.effects.confirmations, []);
+});
+
+test("PowerShell: o hostname acompanha o equipamento aberto na Home", async () => {
+  const bodies = [];
+  const h = createAppHarness((url, options) => { bodies.push(JSON.parse(options.body)); return apiResponse({ status: "inserido", hostname: "PRNOTEXYZ049", modo: "sistema" }); });
+  h.run('definirEquipamentoAtual({ serial: "BRJ0000001", apelido: "PRNOTEXYZ049" })');
+  assert.equal(h.element("input-powershell-hostname").value, "PRNOTEXYZ049");
+  h.element("input-powershell-comando").value = "ipconfig";
+  await h.run("abrirPowerShellEndpoint()");
+  h.run('definirEquipamentoAtual({ serial: "BRJ0000002", apelido: "PRNOTEABC001" })');
+  assert.equal(h.element("input-powershell-hostname").value, "PRNOTEABC001");
+  h.run('definirEquipamentoAtual({ serial: "BRJ0000003" })');
+  assert.equal(h.element("input-powershell-hostname").value, "");
+  assert.deepEqual(bodies, [{ modo: "sistema", comando: "ipconfig", hostname: "PRNOTEXYZ049" }]);
+});
+
+test("PowerShell: modo SYSTEM envia modo, comando e hostname", async () => {
   const bodies = [];
   const h = createAppHarness((url, options) => {
     assert.equal(url, "/api/endpoint/powershell");
     assert.equal(options.method, "POST");
     bodies.push(JSON.parse(options.body));
-    return apiResponse({ status: "inserido", hostname: "PRNOTEUMU005", modo: "sistema" });
+    return apiResponse({ status: "inserido", hostname: "PRNOTEXYZ001", modo: "sistema" });
   });
-  preencher(h, { comando: "ipconfig", usuario: "ignorado" });
+  preencher(h, { comando: "ipconfig", hostname: "PRNOTEXYZ001", usuario: "ignorado" });
   await h.run("abrirPowerShellEndpoint()");
-  preencher(h, { comando: "ipconfig", hostname: "PRNOTEXYZ001" });
-  await h.run("abrirPowerShellEndpoint()");
-  assert.deepEqual(bodies, [{ modo: "sistema", comando: "ipconfig" }, { modo: "sistema", comando: "ipconfig", hostname: "PRNOTEXYZ001" }]);
+  assert.deepEqual(bodies, [{ modo: "sistema", comando: "ipconfig", hostname: "PRNOTEXYZ001" }]);
 });
 
 test("PowerShell: modo Usuário logado envia o usuário e o campo aparece só nesse modo", async () => {
@@ -62,9 +84,9 @@ test("PowerShell: modo Usuário logado envia o usuário e o campo aparece só ne
   preencher(h, { comando: "whoami", modo: "usuario", hostname: "PC1", usuario: " gananias " });
   await h.run("abrirPowerShellEndpoint()");
   assert.deepEqual(body, { modo: "usuario", comando: "whoami", hostname: "PC1", usuario: "gananias" });
-  preencher(h, { comando: "whoami", modo: "usuario" });
+  preencher(h, { comando: "whoami", modo: "usuario", hostname: "PC1" });
   await h.run("abrirPowerShellEndpoint()");
-  assert.deepEqual(body, { modo: "usuario", comando: "whoami" });
+  assert.deepEqual(body, { modo: "usuario", comando: "whoami", hostname: "PC1" });
 });
 
 const CODIGOS = [
@@ -171,7 +193,7 @@ test("PowerShell: escolher um código preenche comando e modo (SYSTEM ou Usuári
   assert.equal(h.element("select-powershell-modo").value, "usuario");
   assert.equal(h.element("campo-powershell-usuario").classList.contains("hidden"), false);
   await h.run("abrirPowerShellEndpoint()");
-  assert.deepEqual(chamadas.at(-1).corpo, { modo: "usuario", comando: 'Add-Printer -ConnectionName "\\\\prsrvvm-imp\\VP_UMUARAMA"' });
+  assert.deepEqual(chamadas.at(-1).corpo, { modo: "usuario", comando: 'Add-Printer -ConnectionName "\\\\prsrvvm-imp\\VP_UMUARAMA"', hostname: "PRNOTEUMU005" });
 });
 
 test("PowerShell: falha ao carregar os códigos mostra o erro, deixa o select vazio e tenta de novo na próxima abertura", async () => {
@@ -356,7 +378,6 @@ test("PowerShell: sucesso mostra o aviso exato de que NÃO foi executado", async
 
 for (const [resposta, trecho] of [
   [{ status: "not_found", hostname: "PC1" }, /não encontrado.*Nada foi inserido/s],
-  [{ status: "sem_host_online" }, /Nada foi inserido/],
   [{ status: "erro_terminal", mensagem: "Terminal não abriu." }, /^Terminal não abriu\.$/],
   [{ status: "sem_usuario", hostname: "PC1", usuarios: [] }, /Nada foi inserido/],
   [{ status: "usuario_ambiguo", hostname: "PC1", usuarios: ["a", "b"] }, /Nada foi inserido/],
