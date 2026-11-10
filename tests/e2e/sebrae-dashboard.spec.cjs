@@ -105,10 +105,16 @@ test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos anti
   await antigo.locator('[data-sebrae-campo="R"]').fill("2026-10-28T09:05");
   await expect(cartao.locator("#sebrae-antigos-resumo")).toContainText("1 com alteração");
   await expect(atualizar).toBeEnabled();
-  const [download] = await Promise.all([page.waitForEvent("download"), atualizar.click()]);
+  // Nenhum chamado vai ser finalizado e um FINALIZADO foi pulado: o diálogo pergunta antes de enviar ao SharePoint; este teste só atualiza.
+  await atualizar.click();
+  const confirmar = page.locator("#modal-confirmar-acao");
+  await expect(confirmar.locator("#btn-confirmar-acao-cancelar")).toHaveText("Atualizar sem enviar");
+  const [download] = await Promise.all([page.waitForEvent("download"), confirmar.locator("#btn-confirmar-acao-cancelar").click()]);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("2 novo(s) e 1 alterado(s)");
-  await expect(cartao.locator("#sebrae-atualizar-status")).toHaveAttribute("data-estado", "ok");
+  // FINALIZADO sem descrição não vira finalização: a linha avisa o número e o motivo, em alerta, em vez de calar.
+  await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("Não serão finalizados no SoftExpert: UTIC-2026-1200 (sem descrição para finalizar).");
+  await expect(cartao.locator("#sebrae-atualizar-status")).toHaveAttribute("data-estado", "alerta");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("importe a versão atual antes");
 });
 
@@ -390,7 +396,9 @@ test("Atualizar Dashboard confirma, finaliza em massa e mostra o resultado por c
   await expect(modal.locator("#btn-confirmar-acao-ok")).toHaveText("Atualizar e finalizar");
   const envio = page.waitForRequest(r => r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar"));
   const [download] = await Promise.all([page.waitForEvent("download"), modal.locator("#btn-confirmar-acao-ok").click()]);
-  expect((await envio).postDataJSON().finalizar_softexpert).toBe(true);
+  const corpoEnvio = (await envio).postDataJSON();
+  expect(corpoEnvio.finalizar_softexpert).toBe(true);
+  expect(corpoEnvio.enviar_sharepoint).toBe(true);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("Finalizando no SoftExpert");
   const cartao = painel.locator('#sebrae-finalizados-lista details.sebrae-finalizado[data-numero="UTIC-2026-1200"]');
@@ -401,7 +409,7 @@ test("Atualizar Dashboard confirma, finaliza em massa e mostra o resultado por c
   await expect(painel.locator("#sebrae-sharepoint-aviso")).toBeHidden();
 });
 
-test("Só atualizar (botão ou Esc) baixa o Dashboard e não finaliza nada no SoftExpert", async ({ page, request }) => {
+test("Atualizar sem finalizar e Esc só atualizam e baixam: não finalizam nem enviam ao SharePoint", async ({ page, request }) => {
   const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
@@ -410,30 +418,51 @@ test("Só atualizar (botão ou Esc) baixa o Dashboard e não finaliza nada no So
   const modal = page.locator("#modal-confirmar-acao");
   await painel.locator("#btn-sebrae-atualizar").click();
   await expect(modal.locator("#btn-confirmar-acao-ok")).toHaveText("Atualizar e finalizar");
-  await expect(modal.locator("#btn-confirmar-acao-cancelar")).toHaveText("Só atualizar");
-  await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("NÃO finaliza");
+  await expect(modal.locator("#btn-confirmar-acao-cancelar")).toHaveText("Atualizar sem finalizar");
+  await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("NÃO finaliza no SoftExpert nem envia ao SharePoint");
   const [download] = await Promise.all([page.waitForEvent("download"), modal.locator("#btn-confirmar-acao-cancelar").click()]);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   await expect(modal).toBeHidden();
   await expect(painel.locator("#sebrae-atualizar-status")).toContainText("nenhum chamado foi finalizado no SoftExpert");
+  await expect(page.locator(TOAST).filter({ hasText: "Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo." }).last()).toBeVisible();
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("não confirmada");
   await expect(painel.locator("#btn-sebrae-atualizar")).toBeEnabled();
   expect(envios).toHaveLength(1);
   expect(envios[0].finalizar_softexpert).toBe(false);
-  await painel.locator("#btn-sebrae-atualizar").click(); // Esc também nunca finaliza
+  expect(envios[0].enviar_sharepoint).toBe(false); // D FINALIZADO sem SoftExpert nunca vai ao SharePoint por este clique
+  await painel.locator("#btn-sebrae-atualizar").click(); // Esc também nunca finaliza nem envia
   await expect(modal).toBeVisible();
   const [segundo] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Escape")]);
   expect(segundo.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   expect(envios).toHaveLength(2);
   expect(envios[1].finalizar_softexpert).toBe(false);
+  expect(envios[1].enviar_sharepoint).toBe(false);
 });
 
-test("chamado FINALIZADO sem descrição é pulado e o motivo aparece, sem pedir confirmação", async ({ page, request }) => {
+test("chamado FINALIZADO sem descrição é pulado; o envio ao SharePoint pede confirmação e Esc só atualiza", async ({ page, request }) => {
   const { painel, antigo } = await abrirAntigo(page, request);
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
-  const [download] = await Promise.all([page.waitForEvent("download"), painel.locator("#btn-sebrae-atualizar").click()]);
+  const envios = [];
+  page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar")) envios.push(r.postDataJSON()); });
+  const modal = page.locator("#modal-confirmar-acao");
+  await painel.locator("#btn-sebrae-atualizar").click(); // Esc: atualiza sem finalizar nem enviar
+  await expect(modal.locator("#btn-confirmar-acao-ok")).toHaveText("Atualizar e enviar");
+  await expect(modal.locator("#btn-confirmar-acao-cancelar")).toHaveText("Atualizar sem enviar");
+  await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("sem serem finalizados no SoftExpert");
+  const [primeiro] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Escape")]);
+  expect(primeiro.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
+  expect(envios).toHaveLength(1);
+  expect(envios[0].finalizar_softexpert).toBe(false);
+  expect(envios[0].enviar_sharepoint).toBe(false);
+  await painel.locator("#btn-sebrae-atualizar").click(); // confirmar: atualiza e envia, sem finalizar
+  await expect(modal).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), modal.locator("#btn-confirmar-acao-ok").click()]);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
-  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  expect(envios).toHaveLength(2);
+  expect(envios[1].finalizar_softexpert).toBe(false);
+  expect(envios[1].enviar_sharepoint).toBe(true);
+  await expect(modal).toBeHidden();
+  await expect(painel.locator("#sebrae-atualizar-status")).toContainText("Não serão finalizados no SoftExpert: UTIC-2026-1200 (sem descrição para finalizar).");
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("Nenhum chamado foi finalizado no SoftExpert");
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("1 pulado(s)");
   await expect(painel.locator("#sebrae-fechar-lista")).toContainText("UTIC-2026-1200: não será finalizado no SoftExpert (sem descrição para finalizar).");
