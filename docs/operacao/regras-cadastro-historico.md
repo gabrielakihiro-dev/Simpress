@@ -21,9 +21,10 @@ Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. 
 
 ### Equipamentos do Sebrae nas comparações Simpress
 
+- As séries do Sebrae, os prefixos de Curitiba e as duas leituras de MacBook (hostname `PRMAC` do Endpoint e texto `MacBook` do cadastro) ficam só em `domains/regras_negocio.py`. Comparação, Cobertura, Dashboard do Sebrae, busca e Assistente importam dali; o front-end não guarda cópia e recebe a lista do Sebrae já filtrada pelo backend (`comparison_history_for_display`).
 - Trate as séries `BRJ135P5XS`, `BRJ142QKBQ`, `BRJ9435VMR`, `BRJ9435VMF` e `BRJ149SCJG` como notebooks próprios do Sebrae, fora do inventário da Simpress.
 - Em todas as comparações de planilhas deste projeto, ignore essas séries na lista e na contagem de notebooks sem correspondência (`ausentes_em_detalhes`), inclusive ao consultar resultados já salvos no histórico.
-- Considere os hostnames iniciados por `PRNOTESJP`, `PRNOTERL` ou `PRNOTEARC` instalados em Curitiba, pois não têm endereço cadastrado próprio.
+- Considere os hostnames iniciados por `PRNOTESJP`, `PRNOTERL` ou `PRNOTEARC` instalados em Curitiba, pois não têm endereço cadastrado próprio. A grafia com hífen, espaço ou marcador `(M)` (`PRNOTE-SJP01`, `PRNOTE SJP01`, `PRNOTESJP01 (M)`) conta igual, na Comparação e na Cobertura.
 - Para esses prefixos e quaisquer sufixos futuros, considere a localidade consistente com Curitiba, mesmo que `EquipamentosDetalhes` informe São José dos Pinhais, São José, Colombo, Araucária ou outra cidade; não os exiba como divergência de localidade.
 - Aplique as classificações atuais também na visualização do histórico, sem regravar nem apagar seus registros.
 - Mantenha intactas as linhas dos arquivos de origem; estas regras afetam apenas a classificação e a exibição do comparativo.
