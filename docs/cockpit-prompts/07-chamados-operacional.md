@@ -95,6 +95,16 @@ Pedido do usuário em 09/11/2026: na aba OS (F6), cada OS do Oracle ganha na cé
 - Limites: o pedido de técnico vem de texto livre, então a regex pode falhar em frases escritas de outro jeito (falso negativo) ou marcar um `presencial` que não pede técnico (falso positivo); ampliar a lista é mudança de código. Negação na mesma frase, até 3 palavras antes do trecho (`não`, `nem`, `dispensa`, `sem necessidade`), anula o selo: "Não precisa de técnico" não marca; "Sem rede, precisa de técnico" marca. OS com status fechado (cancelada, concluída…) também não mostra `Aberta há N dias`, mesmo sem `data_conclusao`. OS só da Simpress não tem selo, porque a descrição e a abertura vêm do Oracle.
 - Testes: `tests/test_ticket_reporting.py`, `tests/test_operations.py`, `tests/test_assistant.py` (`SinaisOsToolTests`) e `tests/frontend/test_data_panels_os_table.cjs`.
 
+## Selo Entregue (F6, 10/11/2026)
+
+Pedido do usuário em 10/11/2026: na aba OS (F6), a OS da Simpress cuja etapa atual é `Pedido entregue` com data completa ganha um selo verde na célula `OS`. Exemplo real: OS 7303022, `Só Simpress`, Etapa atual `Pedido entregue · 27/10/2026`. Só leitura: nada é escrito em dados locais nem em sistemas externos.
+
+- Texto: `Entregue · DD/MM/AAAA` (ex.: `Entregue · 27/10/2026`).
+- Fonte: `chamados[*].simpress.etapa_atual` do `GET /api/operacoes/chamados` (montado em `_build_order_stages`, `domains/ticket_reconciliation.py`). O selo só aparece quando `chave` é `entregue` e `data` é exatamente `DD/MM/AAAA`; sem data, ou com outra etapa atual, não há selo. A etapa é da série na Simpress, então vale para todas as OS da Simpress daquela série.
+- Front-end: `collectTicketOsRows` guarda `entregue` nas linhas da Simpress e `groupTicketOsRows` o passa à OS; a célula `OS` acrescenta `span.ck-os__selo.ck-os__selo--entregue` por `textContent`, depois de `Aberta há N dias` e `Técnico`. Backend, busca, filtros, KPIs, contagens e exportação não mudam.
+- CSS: `.ck-os__selo--entregue` em `static/styles/ck-cockpit.css`, com `--cor-ok-fundo` e `--cor-ok-texto` (temas claro e escuro pelos tokens).
+- Teste: `tests/frontend/test_data_panels_os_table.cjs` (`Selo Entregue`).
+
 ---
 
 # Histórico: prompt 7 original
