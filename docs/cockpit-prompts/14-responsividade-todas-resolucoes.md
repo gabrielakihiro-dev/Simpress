@@ -273,3 +273,17 @@ Base: `git archive 044fdcc` servido pelo `ui-fixture` na porta 8822; atual: `fea
 | Modal Editar (`e`) e exportação pelo botão | o roteiro não conseguiu acionar | o roteiro não conseguiu acionar | não comparado a 320/768/1440: falhar nas duas versões não prova que funcionam; no e2e, ver "modal traps keyboard focus, restores it on Escape, and passes axe" |
 | Exportações e anotações | — | só na suíte e2e (largura padrão) | cobertas por "the Cockpit report loads the selected month and keeps the existing XLSX download", "ticket export stays bound to the selected snapshot while it loads", "a failed comparison switch cannot export the previously displayed event", "fixture annotation autosaves to the isolated in-memory endpoint" e "comparison history filters rows and autosaves their original annotations"; não comparadas com a base |
 Suíte e2e completa (`npm run test:ui:e2e`, porta 8824): 238 passed, 1 skipped, 0 failed. `npm run verify`: tudo OK (273 testes JavaScript, mypy, compileall, busca de credenciais).
+
+## Regras movidas do AGENTS.md (10/11/2026)
+
+Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. O resumo e o índice continuam no `AGENTS.md`.
+
+### Interface
+
+- Para novas telas, atualize ou escreva a especificação antes de implementar e use as referências visuais fornecidas. Se o usuário disser "Exclua o JavaScript por enquanto", mantenha a tela em HTML/CSS.
+- Preserve IDs, atributos ARIA e `data-*`, manipuladores, regras de negócio, acessibilidade, responsividade e os temas claro e escuro. Faça ajustes visuais pontuais e revisáveis em vez de substituir o design.
+- Em um redesign Cockpit aprovado pelo usuário, a composição e a posição dos componentes existentes podem mudar para seguir as referências. Essa autorização visual não remove rotinas, dados, integrações, regras de negócio ou controles existentes. Mantenha os contratos de interface e adapte o mesmo layout aos temas claro/escuro e a telas menores; use somente dados reais já fornecidos pela aplicação e deixe acessível, mesmo que recolhido, qualquer fluxo sem equivalente visível na referência.
+- O Cockpit se adapta de 320px a 2560px sem rolagem horizontal da página e não usa `min-width:1200px` (faixas e composição em `docs/cockpit-prompts/14-responsividade-todas-resolucoes.md`).
+- O layout fica exatamente idêntico ao artefato do Cockpit (https://claude.ai/artifact/DGgv5VBXhu4NrZ9DbxFQhC); nas faixas que o artefato não mostra (abaixo de 1200px), muda só a disposição, sem estilo novo.
+- Não remova `!important` mecanicamente; corrija a causa e preserve os usos justificados.
+- Capturas do `ui-fixture` e instalação do Chromium do Playwright: skill `.claude/skills/ajuste-visual-ui`.

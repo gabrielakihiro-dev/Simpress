@@ -23,7 +23,7 @@ Confirme listando as pastas antes de citar. Hoje:
 
 ## Testes protegidos
 
-Teste que existe por regra do `AGENTS.md` **nunca é candidato a aposentadoria**; só cabe propor reforço. Entram aqui os rótulos aprovados (como `na Simpress`, `no Endpoint`, `Hostname no Endpoint`, `Planilha Exportada com Sucesso!`), as regras de segurança e de escrita externa (SoftExpert, SharePoint, Endpoint, UX), a preservação de dados operacionais e o contrato de API documentado. Exemplos a confirmar no repositório: `tests/test_history_display_labels.py`, `tests/test_local_request_security.py`, `tests/test_sebrae_softexpert_*.py`, `tests/test_api_contract_doc.py`. Na dúvida, leia a seção do `AGENTS.md` ligada ao teste e trate-o como protegido.
+Teste que existe por regra do `AGENTS.md` **nunca é candidato a aposentadoria**; só cabe propor reforço. Entram aqui os rótulos aprovados (como `na Simpress`, `no Endpoint`, `Hostname no Endpoint`, `Planilha Exportada com Sucesso!`), as regras de segurança e de escrita externa (SoftExpert, SharePoint, Endpoint, UX), a preservação de dados operacionais e o contrato de API documentado. Exemplos a confirmar no repositório: `tests/test_history_display_labels.py`, `tests/test_local_request_security.py`, `tests/test_sebrae_softexpert_*.py`, `tests/test_api_contract_doc.py`. Na dúvida, leia a regra ligada ao teste, no `AGENTS.md` ou no doc que o índice dele indica e trate-o como protegido.
 
 ## Barra de valor do teste
 
