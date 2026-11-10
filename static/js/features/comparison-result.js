@@ -731,8 +731,10 @@
     if (searchInput) searchInput.value = "";
     if (categorySelect) categorySelect.value = "";
     if (annotatedOnly) annotatedOnly.checked = false;
-    // conectarFiltrosHistoricoComparacao recomputes visibility on these events.
-    searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
+    // The filters read estadoResumo, not the DOM: clear the state too, or tipo/só anotadas keep hiding rows.
+    Object.assign(estadoResumo, { busca: "", soAnotadas: false, tipo: "" });
+    if (atualizarResumo) atualizarResumo();
+    else searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function atributosVersaoAnotacao(item) {

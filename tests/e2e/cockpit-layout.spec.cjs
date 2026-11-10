@@ -78,6 +78,30 @@ test("Home exposes status actions outside its listbox and keyboard activation op
   }
 });
 
+test("Resumo: irParaSecaoComparacao clears the active filters that hide the target section", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    await page.locator("#btn-resumo-aba").click();
+    await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+    await page.locator("#resumo-aba-sem-acesso").click();
+    const heading = page.locator("#comparacao-secao-sem-acesso-7");
+    await expect(heading).toBeVisible();
+    // LENTO (Sem acesso 7+) não tem anotação: "Só anotadas" esconde a seção inteira.
+    const annotated = page.locator("#comparacao-planilhas-conteudo [data-history-filter-annotated]");
+    await annotated.check();
+    await expect(heading).toBeHidden();
+
+    expect(await page.evaluate(() => window.irParaSecaoComparacao("comparacao-secao-sem-acesso-7"))).toBe(true);
+    await expect(heading).toBeVisible();
+    await expect(annotated).not.toBeChecked();
+    await expect(page.locator("#comparacao-planilhas-conteudo [data-history-filter-category]")).toHaveValue("");
+    await expect(page.locator("#comparacao-planilhas-conteudo [data-history-filter-search]")).toHaveValue("");
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
 test("Home chips Sem acesso, Divergente and Sem usuário open the Resumo on the exact row of their section", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   const semUsuario = { serial: "NOTE-SEM-USUARIO", apelido: "PRNOTEDEMO02", categoria: "notebook", modelo: "Notebook", retirada_cidade: "Curitiba", usuarios_logados: "" };
