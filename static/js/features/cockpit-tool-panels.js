@@ -12,6 +12,7 @@
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
     cobertura: ["Cobertura", "Necessidades de equipamento, reservas, transporte e devoluções por cidade."],
+    termos: ["Termos", "Termos de entrega e devolução de equipamentos, para preencher e salvar em PDF."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).

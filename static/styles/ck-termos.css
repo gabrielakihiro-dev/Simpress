@@ -1,0 +1,70 @@
+/* Termos de entrega e devolução (Ferramentas): só layout e a folha impressa; cores, botões e abas vêm do kit ck-*. */
+/* align-content: start: sem ele as linhas do grid esticam até a altura do painel e abrem vãos. */
+.termos { display: grid; gap: 12px; align-content: start; padding: 12px 20px 20px; }
+.termos__abas { flex-wrap: wrap; }
+.termos__painel { display: grid; gap: 12px; min-width: 0; }
+.termos__form { display: grid; gap: 14px; min-width: 0; }
+.termos__grupo { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.termos__grupo > legend { padding: 0 6px; font-weight: var(--peso-medio); }
+.termos__dica { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.termos__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.termos__campos .ck-campo { min-width: 0; }
+.termos__obs { height: auto; min-height: 96px; padding: 8px 9px; resize: vertical; line-height: 1.4; }
+.termos__tabela { width: 100%; border-collapse: collapse; }
+.termos__tabela th, .termos__tabela td { padding: 6px 8px; border-bottom: 1px solid var(--cor-borda-suave); text-align: left; vertical-align: middle; font-weight: var(--peso-regular); }
+.termos__tabela thead th { font-size: var(--fs-xs); color: var(--cor-texto-sutil); font-weight: var(--peso-medio); }
+.termos__tabela tbody th { font-weight: var(--peso-medio); }
+.termos__tabela .ck-entrada { width: 100%; min-width: 0; }
+.termos__sn { display: flex; gap: 16px; }
+.termos__sn label { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle); }
+.termos__sn input { margin: 0; }
+.termos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.termos__aviso { margin: 0; flex: 1 1 100%; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.termos__estado { margin: 0; flex: 1 1 100%; min-height: 1.2em; font-size: var(--fs-sm); }
+.termos__estado[data-tipo="erro"] { color: var(--cor-erro-texto); }
+
+/* Abaixo de 768 px as tabelas viram cartões com os mesmos dados. */
+@media (max-width: 767.98px) {
+  .termos { padding: 10px 12px 16px; }
+  .termos__tabela, .termos__tabela tbody, .termos__tabela tr, .termos__tabela th, .termos__tabela td { display: block; }
+  .termos__tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .termos__tabela tbody { display: grid; gap: 8px; }
+  .termos__tabela tr { padding: 8px 10px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+  .termos__tabela th, .termos__tabela td { padding: 2px 0; border-bottom: 0; }
+  .termos__tabela td[data-rotulo]::before { content: attr(data-rotulo); display: block; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+}
+
+/* Folha do PDF: montada por termos.js, oculta na tela e única coisa visível quando a página recebe termos-imprimindo. */
+@media screen { #termos-impressao { display: none; } }
+#termos-impressao { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.35; }
+.tp { display: grid; gap: 10px; }
+.tp__cab { position: relative; display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 2px solid #000; }
+.tp__org { font-weight: 700; letter-spacing: 0.04em; }
+.tp__marca { position: absolute; top: 0; right: 0; padding: 1px 8px; border: 1px solid #000; font-size: 9pt; }
+.tp__titulo { margin: 0; font-size: 15pt; }
+.tp__secao { display: grid; gap: 4px; break-inside: avoid; }
+.tp__secao-titulo { margin: 0; font-size: 11pt; border-bottom: 1px solid #000; }
+.tp__dica { margin: 0; font-size: 9pt; }
+.tp__campos { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
+.tp__campo { display: flex; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.tp__campo--cheio { grid-column: 1 / -1; }
+.tp__rotulo { font-weight: 700; white-space: nowrap; }
+.tp__tabela { width: 100%; border-collapse: collapse; }
+.tp__tabela th, .tp__tabela td { padding: 2px 6px; border: 1px solid #000; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.tp__tabela tr { break-inside: avoid; }
+.tp__tabela .tp__marcas { white-space: nowrap; width: 1%; }
+.tp__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid #000; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tp__assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18mm; break-inside: avoid; }
+.tp__assinatura { padding-top: 3px; border-top: 1px solid #000; text-align: center; }
+.tp__rodape { margin-top: 6px; padding-top: 4px; border-top: 1px solid #000; font-size: 9pt; text-align: center; }
+
+@media print {
+  /* Página nomeada: margens A4 só para a folha do termo, não para outro Ctrl+P do Cockpit. */
+  @page termos { size: A4; margin: 14mm 12mm; }
+  html.termos-imprimindo #termos-impressao { page: termos; }
+  html.termos-imprimindo, html.termos-imprimindo body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+  html.termos-imprimindo body > *:not(#termos-impressao) { display: none !important; }
+  /* Só a folha aparece, em preto no branco; termos.js tira o [hidden] dela ao imprimir. */
+  html.termos-imprimindo #termos-impressao, html.termos-imprimindo #termos-impressao * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
+}
