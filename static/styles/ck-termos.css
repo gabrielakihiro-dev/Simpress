@@ -37,34 +37,47 @@
 /* Folha do PDF: montada por termos.js, oculta na tela e única coisa visível quando a página recebe termos-imprimindo. */
 @media screen { #termos-impressao { display: none; } }
 #termos-impressao { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.35; }
-.tp { display: grid; gap: 10px; }
-.tp__cab { position: relative; display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 2px solid #000; }
+/* Cor de destaque de cada termo: azul na entrega, vinho na devolução (pedidos do usuário de 10/11/2026). */
+.tp { --tp-cor: #1f4e8c; --tp-fundo: #e8eef7; display: grid; gap: 10px; }
+.tp--devolucao { --tp-cor: #7a1f2b; --tp-fundo: #f6e9eb; }
+.tp__cab { position: relative; display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 2px solid var(--tp-cor); }
 .tp__org { font-weight: 700; letter-spacing: 0.04em; }
-.tp__marca { position: absolute; top: 0; right: 0; padding: 1px 8px; border: 1px solid #000; font-size: 9pt; }
+.tp__marca { position: absolute; top: 0; right: 0; padding: 1px 8px; border: 1px solid var(--tp-cor); font-size: 9pt; }
 .tp__titulo { margin: 0; font-size: 15pt; }
 .tp__secao { display: grid; gap: 4px; break-inside: avoid; }
-.tp__secao-titulo { margin: 0; font-size: 11pt; border-bottom: 1px solid #000; }
+.tp__secao-titulo { margin: 0; font-size: 11pt; border-bottom: 1px solid var(--tp-cor); }
 .tp__dica { margin: 0; font-size: 9pt; }
 .tp__campos { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
 .tp__campo { display: flex; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .tp__campo--cheio { grid-column: 1 / -1; }
 .tp__rotulo { font-weight: 700; white-space: nowrap; }
 .tp__tabela { width: 100%; border-collapse: collapse; }
-.tp__tabela th, .tp__tabela td { padding: 2px 6px; border: 1px solid #000; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.tp__tabela th, .tp__tabela td { padding: 2px 6px; border: 1px solid var(--tp-cor); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .tp__tabela tr { break-inside: avoid; }
 .tp__tabela .tp__marcas { white-space: nowrap; width: 1%; }
 .tp__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid #000; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid var(--tp-cor); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tp__assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18mm; break-inside: avoid; }
-.tp__assinatura { padding-top: 3px; border-top: 1px solid #000; text-align: center; }
-.tp__rodape { margin-top: 6px; padding-top: 4px; border-top: 1px solid #000; font-size: 9pt; text-align: center; }
+.tp__assinatura { padding-top: 3px; border-top: 1px solid var(--tp-cor); text-align: center; }
+/* Devolução: além da cor, faixa à esquerda no cabeçalho e nos títulos de seção. */
+.tp--devolucao .tp__cab { padding: 6px 10px; border-bottom: 0; border-left: 6px solid var(--tp-cor); }
+.tp--devolucao .tp__marca { top: 6px; right: 10px; }
+.tp--devolucao .tp__secao-titulo { padding-left: 6px; border-left: 3px solid var(--tp-cor); }
 
 @media print {
-  /* Página nomeada: margens A4 só para a folha do termo, não para outro Ctrl+P do Cockpit. */
-  @page termos { size: A4; margin: 14mm 12mm; }
-  html.termos-imprimindo #termos-impressao { page: termos; }
+  /* Página nomeada: margens A4 só para a folha do termo, não para outro Ctrl+P do Cockpit.
+     Margem 0 faz o Chrome omitir data/hora, título e endereço; o respiro vem do padding da folha. */
+  @page termos { size: A4; margin: 0; }
+  html.termos-imprimindo #termos-impressao { page: termos; padding: 14mm 12mm; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
   html.termos-imprimindo, html.termos-imprimindo body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
   html.termos-imprimindo body > *:not(#termos-impressao) { display: none !important; }
   /* Só a folha aparece, em preto no branco; termos.js tira o [hidden] dela ao imprimir. */
   html.termos-imprimindo #termos-impressao, html.termos-imprimindo #termos-impressao * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
+  /* Exceção à regra acima: título, títulos de seção e cabeçalhos ficam na cor do termo. */
+  html.termos-imprimindo #termos-impressao .tp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html.termos-imprimindo #termos-impressao .tp--devolucao .tp__cab,
+  html.termos-imprimindo #termos-impressao .tp .tp__tabela thead th { background: var(--tp-fundo) !important; }
+  html.termos-imprimindo #termos-impressao .tp .tp__titulo,
+  html.termos-imprimindo #termos-impressao .tp .tp__secao-titulo,
+  html.termos-imprimindo #termos-impressao .tp .tp__marca { color: var(--tp-cor) !important; }
 }
