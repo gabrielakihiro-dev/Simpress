@@ -23,6 +23,7 @@ from domains.inventory_comparison import (
     normalize_reference_value,
 )
 from domains.readiness import file_signature
+from domains.regras_negocio import cadastro_e_macbook, hostname_e_macbook
 
 logger = logging.getLogger(__name__)
 _last_alias_conflicts = 0
@@ -237,7 +238,7 @@ def endpoint_alias_review_items(
         mac_endpoint_serials = {
             normalize_reference_value(serial_key)
             for serial_key, hostname in index.get("unique", {}).items()
-            if normalize_reference_value(hostname).startswith("PRMAC")
+            if hostname_e_macbook(hostname)
         }
         normalized_details_serials = set()
         normalized_details_duplicates = set()
@@ -337,7 +338,7 @@ def mac_endpoint_serial_key(index: Mapping[str, Any], serial_key: str) -> str:
     if len(serial_key) < 2 or not serial_key.startswith("S"):
         return ""
     base = serial_key[1:]
-    if not normalize_reference_value(index.get("unique", {}).get(base, "")).startswith("PRMAC"):
+    if not hostname_e_macbook(index.get("unique", {}).get(base, "")):
         return ""
     if base in (index.get("details_serials") or ()):
         return ""
@@ -433,7 +434,7 @@ def apply_effective_alias(
         not person_name or name_origin == "manual"
     ) and not details_duplicate and (
         "NOTEBOOK" in str(equipment.get("tipo") or "").upper()
-        or "MACBOOK" in str(equipment.get("modelo") or "").upper()
+        or cadastro_e_macbook(equipment.get("modelo"))
     )
 
     if not endpoint_index.get("available"):
