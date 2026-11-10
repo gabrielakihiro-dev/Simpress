@@ -681,5 +681,10 @@ test("Selos Técnico e Aberta há N dias: só no Oracle, só com os campos do se
 
     assert.deepEqual(selos("SN-XSS", "ck-os__selo"), [], "só boolean true e número finito viram selo");
     assert.equal(section.querySelectorAll("img").length, 0);
-  } finally { report.chamados = original; }
+
+    panels.filtrarTabelaOs({ busca: "Técnico", relacao: "todos" });
+    assert.deepEqual(visiveis(section), ["SN-DUAS", "SN-TEC"], "buscar \"técnico\" mostra só as OS com o selo");
+    panels.filtrarTabelaOs({ busca: "tecnico" });
+    assert.deepEqual(visiveis(section), ["SN-DUAS", "SN-TEC"], "sem acento também casa");
+  } finally { panels.filtrarTabelaOs({ busca: "", relacao: "" }); report.chamados = original; }
 });
