@@ -242,7 +242,7 @@
 
     // Sem termo de busca a lista mostra 25 OS por vez ("Carregar mais", como a aba Chamados/F5); com termo, mostra todas as que casam.
     const OS_POR_PAGINA = 25;
-    // data-busca: série, OS, usuário, hostname, modelo e UTIC salvo, já sem acento; rótulos de botões ficam de fora.
+    // data-busca: série, OS, usuário, hostname, modelo, UTIC salvo e "técnico" (OS com envio técnico), já sem acento; rótulos de botões ficam de fora.
     const casaOs = (st, termo, item) => (!termo || (item.dataset.busca || "").includes(termo))
       && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
       && correspondeTriagemOs(st, item.dataset.triagem || "");
@@ -835,7 +835,9 @@
           // Valores crus: "Não informado" e "Ambíguo" são rótulos e não entram na busca.
           const pessoa = userFailure ? {} : user || {};
           row.dataset.busca = textoOs([record.serie, order.os, pessoa.usuario, ...(pessoa.candidatos || []), pessoa.hostname,
-            ...(pessoa.hostname_candidatos || []), modelos.get(serialKey(record.serie)) || "", ...utics].filter(Boolean).join(" "));
+            ...(pessoa.hostname_candidatos || []), modelos.get(serialKey(record.serie)) || "", ...utics,
+            // Exceção aos rótulos: o selo "Técnico" entra na busca para filtrar as OS com envio técnico digitando "técnico".
+            order.envioTecnico && "Técnico"].filter(Boolean).join(" "));
           const cell = (label, className) => {
             const td = el("td", className || "");
             td.setAttribute("data-label", label);
