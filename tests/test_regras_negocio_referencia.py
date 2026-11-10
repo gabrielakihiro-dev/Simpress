@@ -12,6 +12,12 @@ from domains.inventory_comparison import (
     is_curitiba_hostname_exception,
     location_for_computer_name,
 )
+from domains.regras_negocio import (
+    cadastro_e_macbook,
+    e_serie_sebrae,
+    hostname_de_curitiba,
+    hostname_e_macbook,
+)
 from domains.sebrae_cruzamento import registros_de_equipamentos
 
 
@@ -65,12 +71,46 @@ class CuritibaHostnameVariantsTests(unittest.TestCase):
         self.assertEqual(_cidade_cobertura("PRNOTESJP01 (M)"), "Curitiba")
         self.assertEqual(_cidade_cruzamento("PRNOTESJP01 (M)"), "Curitiba")
 
-    @unittest.expectedFailure  # divergência atual; removido no Bloco 2
     def test_coverage_and_crossing_treat_hyphen_and_space_as_curitiba(self):
         for hostname in ("PRNOTE-SJP01", "PRNOTE SJP01"):
             with self.subTest(hostname=hostname):
                 self.assertEqual(_cidade_cobertura(hostname), "Curitiba")
                 self.assertEqual(_cidade_cruzamento(hostname), "Curitiba")
+
+
+class RegrasNegocioTests(unittest.TestCase):
+    def test_hostname_de_curitiba(self):
+        for hostname in ("PRNOTESJP01", "PRNOTE-RL02", "PRNOTEARC3", "prnote sjp01", "PRNOTESJP01 (M)"):
+            with self.subTest(hostname=hostname):
+                self.assertTrue(hostname_de_curitiba(hostname))
+        for hostname in ("PRNOTECWB01", "PRMACSJP01", "PRNOTE", "", None):
+            with self.subTest(hostname=hostname):
+                self.assertFalse(hostname_de_curitiba(hostname))
+
+    def test_hostname_e_macbook_olha_o_hostname_do_endpoint(self):
+        for hostname in ("PRMACEND01", "PRMAC-END01", "prmac end01"):
+            with self.subTest(hostname=hostname):
+                self.assertTrue(hostname_e_macbook(hostname))
+        for hostname in ("PRNOTEEND01", "MACBOOK01", "", None):
+            with self.subTest(hostname=hostname):
+                self.assertFalse(hostname_e_macbook(hostname))
+
+    def test_cadastro_e_macbook_olha_os_campos_do_cadastro(self):
+        self.assertTrue(cadastro_e_macbook("Notebook", "MacBook Air 13"))
+        self.assertTrue(cadastro_e_macbook(None, "macbook pro"))
+        self.assertFalse(cadastro_e_macbook("Notebook", "Modelo Fictício 14"))
+        self.assertFalse(cadastro_e_macbook("Mac", "Book"))
+        self.assertFalse(cadastro_e_macbook())
+        # O hostname não é campo de cadastro: `PRMAC` sozinho não torna o equipamento MacBook.
+        self.assertFalse(cadastro_e_macbook("PRMACEND01"))
+
+    def test_e_serie_sebrae_ignora_caixa_hifen_e_espaco(self):
+        for serie in ("BRJ135P5XS", "brj135p5xs", "brj-135p5xs", " BRJ 9435VMR "):
+            with self.subTest(serie=serie):
+                self.assertTrue(e_serie_sebrae(serie))
+        for serie in ("BRJ135P5XT", "", None):
+            with self.subTest(serie=serie):
+                self.assertFalse(e_serie_sebrae(serie))
 
 
 if __name__ == "__main__":
