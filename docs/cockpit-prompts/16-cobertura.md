@@ -47,3 +47,21 @@ Backlog, não regra: itens conferidos no código (07/11/2026) e ainda sem decis�
 ## Testes
 
 `tests/test_coverage.py`, `tests/test_coverage_router.py`, `tests/test_coverage_transporte.py`, `tests/test_assistant_cobertura.py`, `tests/frontend/test_coverage_model.cjs`, `tests/frontend/test_cobertura_transporte.cjs` e `tests/e2e/cobertura.spec.cjs`.
+
+## Regras movidas do AGENTS.md (10/11/2026)
+
+Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. O resumo e o índice continuam no `AGENTS.md`.
+
+### Cobertura de equipamentos (F10, Entrega 1A, 07/11/2026)
+
+Painel `Cobertura` (F10) do plano aprovado pelo usuário: necessidades de equipamento por data e cidade, séries disponíveis, reservas, movimentações e devoluções.
+
+- `EquipamentosDetalhes` nunca é alterado: a Cobertura só lê o cadastro. Tudo o que ela grava fica em `data/state/operacao_cobertura.json` e `data/state/operacao_cobertura_arquivados.json` (locais, fora do Git).
+- O Transporte (F2) é sempre enviado pelo operador: `Preparar Transporte` só preenche a tela; a planilha é gerada pelo clique do operador e depois registrada na movimentação (`registrar-transferencia`) ou ligada a um registro já existente (`Vincular transferência já gerada`).
+- A elegibilidade (série livre, devolução livre, kit completo) é recalculada dentro da transação de cada escrita; nada confia no que a tela mostrou antes.
+- Arquivamento D6: casos fechados há mais de 30 dias vão para o arquivo de arquivados na mesma transação de uma escrita; a leitura (`GET /api/cobertura`) não grava.
+- Nada é escrito em SoftExpert, SharePoint, UX, Endpoint ou outro sistema externo.
+- Assistente: `listar_cobertura` só consulta (autorizada pelo usuário em 07/11/2026), com os mesmos números da tela e sem dados pessoais; não há ferramenta de escrita na Cobertura.
+- Textos aprovados (08/11/2026, aprovados pelo usuário): os botões são `Vincular esta planilha`, `Marcar coletada`, `Marcar em trânsito`, `Confirmar recebimento`, `Registrar divergência` e `Tentar vincular de novo`, e o campo da devolução é `Nova data prevista`. Os selos de situação (`Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`, `Entregue`) não mudam. O erro 500 (`falha_gravacao`) mostra `Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.`
+
+Detalhes, rótulos e "Riscos conhecidos": `docs/cockpit-prompts/16-cobertura.md`; rotas: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos".

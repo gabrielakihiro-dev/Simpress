@@ -75,3 +75,23 @@ Regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`): Termos fica no menu F
 - `tests/frontend/test_termos.cjs`: formato de data, nome do arquivo (`<série> - <nome>`, limpeza, maiúsculas, limite de 100, partes vazias), montagem da folha e presença dos rótulos aprovados em `static/index.html`.
 - `tests/e2e/termos.spec.cjs`: abre pelo menu, troca de sub-aba, preenche, marca itens, simula `window.print`, confere em mídia `print` que só a folha aparece com a Observação longa completa, que não há `<kbd>` nem botão `Imprimir`, que `Gerar PDF` existe, que `document.title` vale `BRJ54925DN - Janaina do Rocio Santos Rocha` durante a impressão (Devolução) e volta no `afterprint`, e que sem série ou sem nome o PDF é bloqueado com o aviso.
 - `tests/e2e/cockpit-layout.spec.cjs`: `#btn-termos` na lista de botões de ferramenta (sem atalho).
+
+## Regras movidas do AGENTS.md (10/11/2026)
+
+Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. O resumo e o índice continuam no `AGENTS.md`.
+
+### Termos de entrega e devolução (Ferramentas, 09/11/2026)
+
+Painel `Termos` (`data-cockpit-tool-panel="termos"`, botão `#btn-termos`) criado a pedido do usuário em 09/11/2026: preenche e salva em PDF os termos de entrega e de devolução de equipamentos.
+
+- Fica no menu Ferramentas, sem atalho de teclado (não ocupa F-tecla; `#btn-termos` não tem `aria-keyshortcuts` nem `<kbd>`).
+- Sub-abas com os rótulos exatos `Termo Entrega` e `Termo Devolução` (`role="tablist"`; clique e setas trocam de aba).
+- Preenchimento manual, com os campos e as listas de verificação dos PDFs originais. Nada é preenchido a partir de planilhas, do cadastro, do Endpoint ou de outro sistema.
+- `Gerar PDF` usa o `Salvar como PDF` do navegador (`window.print()`). O nome sugerido do arquivo é `<SÉRIE> - <Nome completo>`, por exemplo `BRJ54925DN - Janaina do Rocio Santos Rocha`: série em maiúsculas, caracteres proibidos em nome de arquivo removidos e no máximo 100 caracteres por parte. Sem série ou sem nome, o botão é bloqueado e a tela mostra `Preencha o número de série e o nome do colaborador.`. O título da página volta ao normal e a folha de impressão (`#termos-impressao`) é esvaziada no `afterprint`. Não existe botão `Imprimir`.
+- `Limpar` pede confirmação (`Limpar o termo?`) e só então apaga os campos da aba.
+- Textos aprovados pelo usuário em 10/11/2026: `Sim/Não` (cabeçalho das listas de verificação) e `Limpar o termo?`.
+- LGPD: nada é guardado. Os dados do colaborador ficam só na memória da página (sem `localStorage`, `sessionStorage`, IndexedDB, cookie, rota de API, log nem arquivo no servidor) e somem ao recarregar. A folha é montada por `textContent`.
+- Nada é lido nem escrito em SoftExpert, SharePoint, UX, Endpoint, Excel ou outro sistema externo, e nenhum dado local em `data/` é criado ou alterado.
+- Assistente: não há ferramenta para os Termos; ele só explica onde ficam e como gerar o PDF na tela (regra 37 do `SYSTEM_PROMPT`).
+
+Detalhes (campos, listas, impressão e testes): `docs/cockpit-prompts/17-termos.md`.

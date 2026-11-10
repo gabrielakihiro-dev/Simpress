@@ -235,7 +235,7 @@ if exist "%PROJECT_DIR%.agents\skills" (
 )
 
 :checar_super_power
-rem Plugin model-super-power do Claude Code: subagentes da tabela "Delegacao em subagentes" do AGENTS.md.
+rem Plugin model-super-power do Claude Code: subagentes da tabela "Delegacao em subagentes" de docs/desenvolvimento/regras-agentes.md.
 rem shortcut: instala do repositorio oficial, que ainda nao tem as correcoes do maestro no app desktop (PR #1 do upstream); trocar a fonte se o PR nao for mesclado.
 set "SUPER_POWER_INSTALAR=model-super-power --marketplace johnnyhelder/claude-model-super-power"
 where claude >nul 2>nul

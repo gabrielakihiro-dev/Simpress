@@ -1,0 +1,42 @@
+# Regras de `domains/`
+
+Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto integral de cada tema está no doc indicado, sob "Regras movidas do AGENTS.md (10/11/2026)".
+
+## Sebrae e Chamados (F5)
+
+- Chamado novo é o número `UTIC-AAAA-N` ausente da coluna C do Dashboard; o Dashboard só é gravado no arquivo gerado, nunca no Excel Online nem no SharePoint (`sebrae_dashboard*.py`). Doc: `docs/operacao/sincronizar-chamados-sebrae.md`.
+- Colunas Q, T, U e V da `Tabela3` são fórmulas: nunca grave valor nelas; W não se toca; C nunca é reescrita; campo em branco nunca apaga o existente (`sebrae_dashboard_gravacao.py`). Doc: o mesmo.
+- Observação e destaque ficam só em `data/state/sebrae_observacoes.json` e nunca vão a planilha, SharePoint nem SoftExpert (`sebrae_observacoes.py`). Doc: o mesmo.
+- Finalizar chamado é irreversível e só roda por pedido do usuário, um a um; descrição vazia é recusada antes de qualquer clique (`sebrae_finalizacao.py`). Doc: o mesmo.
+- Sugestão de B e J nunca é salva sozinha; IA opcional só com `SIMPRESS_SUGESTAO_IA=1` e texto mascarado (`sebrae_categoria*.py`). Doc: o mesmo.
+- Chamado encerrado vai para `data/state/sebrae_chamados_encerrados.json` sem texto nem nome; falha ao gravar bloqueia a importação (`sebrae_arquivo.py`). Doc: o mesmo.
+
+## OS (F6)
+
+- A marca de OS finalizada é anotação local em `data/state/os_marcas_finalizacao.json`; desfazer nunca reabre o chamado (`os_marcas_finalizacao.py`). Doc: `docs/cockpit-prompts/07-chamados-operacional.md`.
+- Observação por OS fica só em `data/state/os_observacoes.json` e não entra em busca, filtros nem exportação (`os_observacoes.py`). Doc: o mesmo.
+- Série sem OS vinculada some por completo da aba OS; só a exibição muda. `envio_tecnico` e `dias_aberta` são calculados na leitura, nunca gravados (`ticket_reporting.py`). Doc: o mesmo.
+
+## Assistente (F9)
+
+- Cada ferramenta declara se consulta ou altera; toda alteração para no cartão de confirmação montado pelo programa, uma por turno (`assistant_tools.py`, `assistant_chat.py`). Doc: `docs/cockpit-prompts/15-assistente.md`.
+- A máscara de LGPD roda antes de qualquer envio ao modelo e no histórico em disco (`assistant_lgpd.py`); a chave `OPENROUTER_API_KEY` nunca vai ao front-end nem a logs. Doc: o mesmo.
+- Mudança de funcionalidade mantém ferramentas, `SYSTEM_PROMPT` e testes do Assistente alinhados. Doc: o mesmo.
+
+## Cadastro e Histórico
+
+- `EquipamentosDetalhes` é a fonte oficial; `InvAll` só auxilia. Rótulos do histórico só mudam na apresentação, sem regravar valores brutos (`history_*.py`). Doc: `docs/operacao/regras-cadastro-historico.md`.
+- Anotações têm id estável por evento, limite de 2.000 caracteres e se reaplicam só a linhas idênticas (`history_annotations.py`). Doc: `docs/operacao/ANOTACOES-HISTORICO.md`.
+
+## Cobertura (F10)
+
+- Só lê o cadastro; grava em `data/state/operacao_cobertura*.json`; a elegibilidade é recalculada dentro de cada transação (`coverage.py`, `coverage_store.py`). Doc: `docs/cockpit-prompts/16-cobertura.md`.
+
+## Transporte e representantes (F2)
+
+- O padrão dos representantes tem uma só fonte, `REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`; só a alteração por cidade é gravada em `config/representantes_regionais.json`. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
+## UX (chamado e ticket)
+
+- Envio real só com `enviar: true` e `confirmado: true`; `BRM551RN1Y` recusa envio real; descrição e dados do solicitante nunca vão a logs nem históricos (`ux_chamados.py`, `ux_ticket.py`, `SOLICITANTE_PADRAO`). Doc: `docs/operacao/automacao-chrome.md`.
+- Depois do clique em `Finalizar` ou `Enviar`, espere o número uma vez; timeout é `incerto` e nunca se repete. Doc: o mesmo.
