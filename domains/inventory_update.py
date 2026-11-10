@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import shutil
+import time
 import uuid
 from copy import deepcopy
 from contextlib import contextmanager
@@ -1245,7 +1246,10 @@ def _journal_comparison_history(
         updated.append(history_entry)
         return updated
 
+    inicio = time.perf_counter()
     transaction.update_json(comparison_history_file, append_update, [])
+    # Only the duration: the history holds series, hostnames and notes, which never go to the log.
+    logger.info("Histórico de comparações gravado em %.1f ms.", (time.perf_counter() - inicio) * 1000)
     _stage_inherited_annotations(transaction, pending_annotation_records)
     return copied_annotations
 
