@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const createSebraeDashboard = require("../../static/js/features/sebrae-dashboard.js");
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
-  formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
+  formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
   lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = createSebraeDashboard.puro;
 
 test("camposFaltando lista A, Status em FINALIZADO, J e a descrição (R é opcional) que faltam para finalizar", () => {
@@ -136,6 +136,68 @@ test("Atualizar Dashboard também anuncia chamados novos com D FINALIZADO, UTIC 
   const soft = { "UTIC-2026-10": { descricao: "Feito." }, "UTIC-2026-11": { descricao: " " }, "UTIC-2026-12": { descricao: "Feito." } };
   assert.deepEqual(candidatosFinalizar([], {}, soft, formulario, valores), ["UTIC-2026-10"]);
   assert.deepEqual(candidatosFinalizar([], {}, {}, formulario, valores), []);
+});
+
+test("excluidosFinalizar lista cada FINALIZADO que não será finalizado, com o motivo, e é o complemento de candidatosFinalizar", () => {
+  const abertos = [
+    { numero: "UTIC-2026-1", valores: { D: "EM ABERTO" } },
+    { numero: "UTIC-2026-2", valores: { D: "EM ABERTO" } },
+    { numero: "UTIC-2026-3", valores: { D: "EM ABERTO" } },
+    { numero: "linha:27", valores: { D: "EM ABERTO" } },
+    { numero: "UTIC-2026-4", valores: { D: "EM ABERTO" } },
+  ];
+  const edicoes = Object.fromEntries(abertos.map(a => [a.numero, { D: "FINALIZADO" }]).filter(([n]) => n !== "UTIC-2026-4"));
+  const soft = {
+    "UTIC-2026-1": { descricao: "Feito." },
+    "UTIC-2026-2": { descricao: " " },
+    "UTIC-2026-3": { descricao: "Feito.", finalizacao: { status: "ok" } },
+    "UTIC-2026-4": { descricao: "" },
+  };
+  assert.deepEqual(excluidosFinalizar(abertos, edicoes, soft), [
+    { numero: "UTIC-2026-2", motivo: "sem_descricao" },
+    { numero: "UTIC-2026-3", motivo: "ja_finalizado" },
+    { numero: "linha:27", motivo: "sem_numero" },
+  ]);
+  // UTIC-2026-4 não foi marcado FINALIZADO: nem candidato nem excluído
+  assert.deepEqual(candidatosFinalizar(abertos, edicoes, soft), ["UTIC-2026-1"]);
+  assert.deepEqual(excluidosFinalizar(abertos, {}, soft), []);
+  assert.deepEqual(excluidosFinalizar([], {}, {}), []);
+});
+
+test("excluidosFinalizar cobre os chamados novos do formulário e não repete o mesmo número", () => {
+  const formulario = [{ numero: "UTIC-2026-10" }, { numero: "UTIC-2026-11" }, { numero: "UTIC-2026-12" }];
+  const valores = { "UTIC-2026-10": { D: "FINALIZADO" }, "UTIC-2026-11": { D: "FINALIZADO" }, "UTIC-2026-12": { D: "EM ABERTO" } };
+  const soft = { "UTIC-2026-10": { descricao: "Feito." }, "UTIC-2026-11": { descricao: " " } };
+  assert.deepEqual(excluidosFinalizar([], {}, soft, formulario, valores), [{ numero: "UTIC-2026-11", motivo: "sem_descricao" }]);
+  // mesmo número como aberto e como novo: aparece uma vez
+  const abertos = [{ numero: "UTIC-2026-11", valores: { D: "EM ABERTO" } }];
+  const dobrado = excluidosFinalizar(abertos, { "UTIC-2026-11": { D: "FINALIZADO" } }, soft, formulario, valores);
+  assert.deepEqual(dobrado, [{ numero: "UTIC-2026-11", motivo: "sem_descricao" }]);
+});
+
+test("avisoExcluidosFinalizar monta a frase visível e fica vazio sem exclusões", () => {
+  assert.equal(avisoExcluidosFinalizar([]), "");
+  assert.equal(avisoExcluidosFinalizar(undefined), "");
+  assert.equal(avisoExcluidosFinalizar([{ numero: "UTIC-2026-0617", motivo: "sem_descricao" }]),
+    "Não serão finalizados no SoftExpert: UTIC-2026-0617 (sem descrição para finalizar).");
+  assert.equal(avisoExcluidosFinalizar([{ numero: "UTIC-2026-1", motivo: "ja_finalizado" }, { numero: "linha:27", motivo: "sem_numero" }]),
+    "Não serão finalizados no SoftExpert: UTIC-2026-1 (já finalizado no SoftExpert); linha:27 (sem número UTIC).");
+});
+
+test("resultadoEnvioAtualizacao diz o que o servidor fez: fechar, enviar iniciado, enviar não iniciado ou nada pedido", () => {
+  assert.deepEqual(resultadoEnvioAtualizacao({ fechar: { iniciado: true }, enviar: { iniciado: false, motivo: "a rotina fechar já envia ao SharePoint" } }),
+    { texto: "Dashboard atualizado. Finalizando no SoftExpert; o envio ao SharePoint só acontece se algum chamado for finalizado.", tipo: "success" });
+  assert.deepEqual(resultadoEnvioAtualizacao({ fechar: { iniciado: false }, enviar: { iniciado: true, motivo: "" } }),
+    { texto: "Dashboard atualizado. Enviando ao SharePoint…", tipo: "success" });
+  assert.deepEqual(resultadoEnvioAtualizacao({ enviar: { iniciado: false, motivo: "Já há uma rotina em andamento." } }),
+    { texto: "Dashboard atualizado, mas não foi enviado ao SharePoint: Já há uma rotina em andamento. Use Enviar ao SharePoint.", tipo: "warning" });
+  assert.deepEqual(resultadoEnvioAtualizacao({ enviar: { iniciado: false, motivo: "sem ponto final" } }),
+    { texto: "Dashboard atualizado, mas não foi enviado ao SharePoint: sem ponto final. Use Enviar ao SharePoint.", tipo: "warning" });
+  // servidor antigo (sem o campo) ou envio não pedido: comportamento anterior
+  const antigo = { texto: "Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", tipo: "success" };
+  assert.deepEqual(resultadoEnvioAtualizacao({}), antigo);
+  assert.deepEqual(resultadoEnvioAtualizacao({ enviar: { iniciado: false, motivo: "" } }), antigo);
+  assert.deepEqual(resultadoEnvioAtualizacao(undefined), antigo);
 });
 
 test("textos de resultado e de chamado pulado ficam em português", () => {
@@ -855,6 +917,115 @@ test("API SEBRAE: trocar só D para FINALIZADO e clicar leva A, B, J e S padrão
   await esvaziarFila();
   assert.equal(cartaoDe(el2, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "Revisado.");
   assert.equal(puts(outras).length, 0);
+});
+
+// ---- Atualizar Dashboard envia ao SharePoint junto (09/11/2026) ----
+
+const POST_ATUALIZAR = "/api/sebrae/dashboard/atualizar";
+const AVISO_SEM_DESCRICAO = "Não serão finalizados no SoftExpert: UTIC-2026-1501 (sem descrição para finalizar).";
+
+/** Roda `atualizarDashboardSebrae` com o diálogo respondendo `resposta` (true, false ou null) e devolve o que foi ao servidor e o que a tela mostrou. */
+async function atualizarDashboardCom({ carga, resposta, retorno = {}, marcar = [] }) {
+  const posts = [];
+  const apiFetch = async (url, opcoes = {}) => {
+    if (opcoes.method === "POST" && url === POST_ATUALIZAR) {
+      posts.push(JSON.parse(opcoes.body));
+      return { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [{ tipo: "novo" }], base: { importado_em: "2026-10-28T10:00:00-03:00" }, ...retorno };
+    }
+    return carga;
+  };
+  const { el, feature, app } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
+  for (const numero of marcar) {
+    const campo = cartaoDe(el, numero).querySelector('[data-sebrae-campo="D"]');
+    campo.value = "FINALIZADO";
+    campo.dispatchEvent({ type: "input", currentTarget: campo });
+  }
+  const dialogos = [];
+  const toasts = [];
+  let nudges = 0;
+  app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return resposta; };
+  app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  app.atualizarEstadoAutomacao = () => { nudges += 1; };
+  await feature.atualizarDashboardSebrae();
+  return { posts, dialogos, toasts, nudges, status: el["sebrae-atualizar-status"].textContent };
+}
+
+const ENVIO_INICIADO = { enviar: { iniciado: true, motivo: "" } };
+const UM_FINALIZAVEL = () => cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]);
+const FINALIZAVEL_E_SEM_DESCRICAO = () => cargaCom([
+  novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false)),
+  novoDe("UTIC-2026-1501", "Camila", softexpertVazio(true)),
+]);
+
+test("Atualizar Dashboard sem chamado a finalizar não abre diálogo, pede o envio ao SharePoint e avisa quando o envio começou", async () => {
+  const { posts, dialogos, toasts, nudges, status } = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: true, retorno: ENVIO_INICIADO });
+  assert.equal(dialogos.length, 0);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].finalizar_softexpert, false);
+  assert.equal(posts[0].enviar_sharepoint, true);
+  assert.deepEqual(toasts, [["Dashboard atualizado. Enviando ao SharePoint…", "success"]]);
+  assert.equal(nudges, 1, "avisa a Automação para mostrar a rotina enviar");
+  assert.doesNotMatch(status, /não foi enviado/);
+});
+
+test("envio que não começou aparece no aviso e na linha de status, com o motivo, sem puxar a consulta da Automação", async () => {
+  const retorno = { enviar: { iniciado: false, motivo: "A automação não está disponível neste servidor." } };
+  const { toasts, nudges, status } = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: true, retorno });
+  const texto = "Dashboard atualizado, mas não foi enviado ao SharePoint: A automação não está disponível neste servidor. Use Enviar ao SharePoint.";
+  assert.deepEqual(toasts, [[texto, "warning"]]);
+  assert.ok(status.includes(texto));
+  assert.equal(nudges, 0);
+  // resposta de servidor antigo, sem o campo enviar: texto de antes
+  const antigo = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: true });
+  assert.deepEqual(antigo.toasts, [["Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success"]]);
+});
+
+test("diálogo com chamado a finalizar: Atualizar e finalizar finaliza e envia, Atualizar sem finalizar e Esc só atualizam, sem enviar", async () => {
+  const casos = [
+    ["botão Atualizar e finalizar", true, { finalizar_softexpert: true, enviar_sharepoint: true }],
+    ["botão Atualizar sem finalizar", false, { finalizar_softexpert: false, enviar_sharepoint: false }],
+    ["Esc ou fechar o diálogo", null, { finalizar_softexpert: false, enviar_sharepoint: false }],
+  ];
+  for (const [nome, resposta, esperado] of casos) {
+    const { posts, dialogos, status } = await atualizarDashboardCom({ carga: UM_FINALIZAVEL(), resposta, marcar: ["UTIC-2026-1500"] });
+    assert.equal(dialogos.length, 1, nome);
+    assert.equal(dialogos[0].confirmar, "Atualizar e finalizar", nome);
+    assert.equal(dialogos[0].cancelar, "Atualizar sem finalizar", nome);
+    assert.match(dialogos[0].mensagem, /UTIC-2026-1500/, nome);
+    assert.equal(posts.length, 1, nome);
+    assert.equal(posts[0].finalizar_softexpert, esperado.finalizar_softexpert, nome);
+    assert.equal(posts[0].enviar_sharepoint, esperado.enviar_sharepoint, nome);
+    if (resposta !== true) assert.match(status, /nenhum chamado foi finalizado no SoftExpert/, nome);
+  }
+});
+
+test("FINALIZADO que não pode ser finalizado aparece com número e motivo no diálogo e na linha de status, sem calar", async () => {
+  const comDialogo = await atualizarDashboardCom({ carga: FINALIZAVEL_E_SEM_DESCRICAO(), resposta: false, marcar: ["UTIC-2026-1500", "UTIC-2026-1501"] });
+  assert.equal(comDialogo.dialogos.length, 1);
+  assert.ok(comDialogo.dialogos[0].mensagem.includes(AVISO_SEM_DESCRICAO));
+  assert.ok(comDialogo.status.includes(AVISO_SEM_DESCRICAO));
+});
+
+test("só FINALIZADO sem descrição: pede confirmação antes de enviar ao SharePoint sem passar pelo SoftExpert", async () => {
+  const casos = [
+    ["botão Atualizar e enviar", true, true],
+    ["botão Atualizar sem enviar", false, false],
+    ["Esc ou fechar o diálogo", null, false],
+  ];
+  for (const [nome, resposta, enviar] of casos) {
+    const { posts, dialogos, status } = await atualizarDashboardCom({ carga: FINALIZAVEL_E_SEM_DESCRICAO(), resposta, marcar: ["UTIC-2026-1501"] });
+    assert.equal(dialogos.length, 1, nome);
+    assert.equal(dialogos[0].titulo, "Enviar ao SharePoint sem finalizar no SoftExpert", nome);
+    assert.equal(dialogos[0].confirmar, "Atualizar e enviar", nome);
+    assert.equal(dialogos[0].cancelar, "Atualizar sem enviar", nome);
+    assert.ok(dialogos[0].mensagem.includes(AVISO_SEM_DESCRICAO), nome);
+    assert.equal(posts.length, 1, nome);
+    assert.equal(posts[0].finalizar_softexpert, false, nome);
+    assert.equal(posts[0].enviar_sharepoint, enviar, nome);
+    assert.ok(status.includes(AVISO_SEM_DESCRICAO), nome);
+  }
 });
 
 test("o lápis abre o editor com o texto atual, salva só no site e a restauração volta ao original", async () => {
