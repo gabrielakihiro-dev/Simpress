@@ -1,0 +1,80 @@
+# Outlook (classic) helper for domains/outlook_mail.py. ASCII only; every user-facing text lives in Python.
+# Input: one JSON object on stdin (UTF-8): modo (abrir|enviar), conta_email, para, cc, assunto, corpo.
+# Output markers on stdout, one per line:
+#   PASSO:antes_send | OK:aberto | OK:enviado | AVISO:destinatario_nao_resolvido | ERRO:<codigo>
+# modo=abrir calls Display($false) and never Send(). modo=enviar calls Send() only after PASSO:antes_send.
+$ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { }
+
+function Say([string]$texto) {
+    [Console]::Out.WriteLine($texto)
+    [Console]::Out.Flush()
+}
+
+$mail = $null
+$mostrado = $false
+$enviado = $false
+try {
+    $leitor = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), (New-Object System.Text.UTF8Encoding($false)))
+    $pedido = $leitor.ReadToEnd() | ConvertFrom-Json
+    $modo = [string]$pedido.modo
+    if ($modo -ne 'abrir' -and $modo -ne 'enviar') { throw 'CODE:outlook_indisponivel' }
+
+    if ($modo -eq 'enviar') {
+        # Sending needs a running Outlook; never start one just to send.
+        if ($null -eq (Get-Process -Name OUTLOOK -ErrorAction SilentlyContinue)) { throw 'CODE:outlook_fechado' }
+    }
+
+    $outlook = New-Object -ComObject Outlook.Application
+    $conta = $null
+    foreach ($candidata in $outlook.Session.Accounts) {
+        if ([string]$candidata.SmtpAddress -ieq [string]$pedido.conta_email) { $conta = $candidata; break }
+    }
+    # Never fall back to another account.
+    if ($null -eq $conta) { throw 'CODE:conta_ausente' }
+
+    $mail = $outlook.CreateItem(0)
+    try {
+        $mail.SendUsingAccount = $conta
+    } catch {
+        [void]$mail.GetType().InvokeMember('SendUsingAccount', [System.Reflection.BindingFlags]::SetProperty, $null, $mail, @($conta))
+    }
+    $mail.To = [string]$pedido.para
+    $mail.CC = [string]$pedido.cc
+    $mail.Subject = [string]$pedido.assunto
+    $mail.Body = ([string]$pedido.corpo) -replace "`r?`n", "`r`n"
+
+    $resolvidos = $true
+    if ($mail.Recipients.Count -gt 0) { $resolvidos = [bool]$mail.Recipients.ResolveAll() }
+
+    if ($modo -eq 'abrir') {
+        if (-not $resolvidos) { Say 'AVISO:destinatario_nao_resolvido' }
+        $mail.Display($false)
+        $mostrado = $true
+        Say 'OK:aberto'
+    } else {
+        if (-not $resolvidos) { throw 'CODE:destinatario_nao_resolvido' }
+        # From the next line on, a timeout in Python means "uncertain", not "nothing sent".
+        Say 'PASSO:antes_send'
+        try {
+            $mail.Send()
+            $enviado = $true
+        } catch {
+            throw 'CODE:envio_recusado'
+        }
+        Say 'OK:enviado'
+    }
+} catch {
+    $mensagem = [string]$_.Exception.Message
+    if ($mensagem.StartsWith('CODE:')) {
+        Say ('ERRO:' + $mensagem.Substring(5))
+    } else {
+        Say 'ERRO:outlook_indisponivel'
+    }
+} finally {
+    # Discard the unsent draft on any failure; a displayed or sent item is left alone.
+    if ($null -ne $mail -and -not $mostrado -and -not $enviado) {
+        try { $mail.Close(1) } catch { }
+    }
+}
+exit 0
