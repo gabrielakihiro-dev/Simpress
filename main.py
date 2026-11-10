@@ -1979,7 +1979,7 @@ def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
 
 _ux_chamados = ChamadosUX(STATE_DIR, conectar_ux)
 _ux_tickets = TicketsUX(STATE_DIR, conectar_ux_ticket)
-app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
+app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot, codigos_file=lambda: STATE_DIR / "powershell_codigos.json"))
 app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
 app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
 
