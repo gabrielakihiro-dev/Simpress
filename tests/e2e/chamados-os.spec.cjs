@@ -217,3 +217,22 @@ test("Marca de OS finalizada: marca desfeita não aparece na janela Chamado × O
   await expect(page.locator("#chamado-os-janela-os")).toContainText("7285070");
   await expect(page.locator("#chamado-os-janela-os .ck-os-marca")).toHaveCount(0);
 });
+
+test("Aba OS (F6): selos Técnico e Aberta há N dias aparecem na célula da OS e na janela Chamado × OS", async ({ page }) => {
+  // O fixture não calcula os campos; só no navegador a resposta de GET ganha os sinais da OS 7285070.
+  await page.route("**/api/operacoes/chamados", async route => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const corpo = await (await route.fetch()).json();
+    Object.assign(corpo.chamados[0].oracle[0], { envio_tecnico: true, dias_aberta: 3 });
+    await route.fulfill({ json: corpo });
+  });
+  const gatilho = await abrirAbaOsComVinculo(page, "1378");
+  const celula = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"] td[data-label="OS"]').first();
+  const dias = celula.locator(".ck-os__selo--dias");
+  const tecnico = celula.locator(".ck-os__selo--tecnico");
+  await expect(dias).toHaveText("Aberta há 3 dias");
+  await expect(tecnico).toHaveText("Técnico");
+  await gatilho.click();
+  await expect(page.locator("#chamado-os-janela-os .ck-os__selo--dias")).toHaveText("Aberta há 3 dias");
+  await expect(page.locator("#chamado-os-janela-os .ck-os__selo--tecnico")).toHaveText("Técnico");
+});

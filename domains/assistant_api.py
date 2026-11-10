@@ -780,6 +780,21 @@ def _marcas_de(marcas: Dict[str, List[Dict[str, Any]]], serie: Any, ordem: Any, 
     return [m for m in achadas if not alvo or m["chamado"].upper() == alvo]
 
 
+def _sinais_os(chamado: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Badges of the OS tab (F6) per Oracle OS of this serial: any `envio_tecnico`, the largest `dias_aberta`. Never the description."""
+    sinais: Dict[str, Dict[str, Any]] = {}
+    for oracle in chamado.get("oracle") or []:
+        os_ = str(oracle.get("ordem_servico") or "").strip() if isinstance(oracle, dict) else ""
+        if not os_:
+            continue
+        atual = sinais.setdefault(os_, {"envio_tecnico": False, "dias_aberta": None})
+        atual["envio_tecnico"] = atual["envio_tecnico"] or oracle.get("envio_tecnico") is True
+        dias = oracle.get("dias_aberta")
+        if type(dias) is int and (atual["dias_aberta"] is None or dias > atual["dias_aberta"]):
+            atual["dias_aberta"] = dias
+    return sinais
+
+
 def _instante(horario: Any) -> float:
     try:
         valor = datetime.fromisoformat(str(horario or "").replace("Z", "+00:00"))
@@ -1107,6 +1122,9 @@ class SimpressApi:
                                          for o in ordens if (n := _observacao_de(notas, ch.get("serie"), o))}
                 # Marks "OS finalizada" of the same tab, per OS of this serial (several tickets can mark one OS).
                 item["marcas_finalizacao"] = {str(o): m for o in ordens if (m := _marcas_de(marcas, ch.get("serie"), o))}
+                # Badges "Técnico" / "Aberta há N dias" of the same tab, per Oracle OS (booleans and integers only).
+                if sinais := _sinais_os(ch):
+                    item["sinais_os"] = sinais
             itens.append(item)
         resultado = {
             "atualizado_em": dados.get("atualizado_em", ""),
@@ -1677,7 +1695,8 @@ class SimpressApi:
         elif not importado.get("saida_pronta"):
             passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados.", "usuario"
         else:
-            passo, quem = ("O Dashboard atualizado já foi gerado. Se ainda não foi ao SharePoint, usar \"Enviar ao SharePoint\" "
+            passo, quem = ("O Dashboard atualizado já foi gerado e \"Atualizar Dashboard\" já tenta enviá-lo ao SharePoint (resultado na aba Automação). "
+                           "Se o envio não iniciou ou falhou, usar \"Enviar ao SharePoint\" "
                            "no painel Chamados (o login é manual). Se o envio avisar que o SharePoint mudou, o arquivo gerado não vale mais: "
                            "repetir Baixar, importar e buscar, Atualizar Dashboard e Enviar ao SharePoint.", "usuario")
         return {

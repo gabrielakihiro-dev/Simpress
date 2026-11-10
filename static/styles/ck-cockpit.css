@@ -896,7 +896,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #modal-chamado-os .chamado-os-janela__lado .ck-os-andamento { grid-template-columns: minmax(0, 1fr); }
 #modal-chamado-os .ck-os tbody td[data-label] { order: 5; }
 #modal-chamado-os .ck-os tbody td[data-label="Série"] { order: 1; }
-#modal-chamado-os .ck-os tbody td[data-label="OS"] { order: 2; }
+#modal-chamado-os .ck-os tbody td[data-label="OS"] { order: 2; display: block; }
+#modal-chamado-os .ck-os tbody td[data-label="OS"]::before { display: block; margin-bottom: 2px; }
 #modal-chamado-os .ck-os tbody td[data-label="Fonte"] { order: 3; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* Região 3F: Automação. Seletores com id vencem as regras legadas de cockpit-pages.css (#automacao-cards em grid de áreas). */
@@ -1896,8 +1897,16 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="divergente"] td[data-label="Série"]::after { content: "Divergente"; display: flex; background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="somente_simpress"] td[data-label="Série"]::after { content: "Só Simpress"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-relacao="somente_oracle"] td[data-label="Série"]::after { content: "Só Oracle"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
-:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="atrasados"] td[data-label="OS"]::after { content: "3+ dias"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
-:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="sem_data"] td[data-label="OS"]::after { content: "Sem data"; display: flex; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="atrasados"] td[data-label="OS"]::after { content: "3+ dias"; display: inline-flex; vertical-align: top; margin-right: 4px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-triagem="sem_data"] td[data-label="OS"]::after { content: "Sem data"; display: inline-flex; vertical-align: top; margin-right: 4px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+/* Selos "Aberta há N dias" e "Técnico" (JS, só Oracle): mesma forma do "3+ dias"; o número da OS fica sozinho na 1a linha e os selos correm lado a lado na 2a (o ::after "3+ dias" vem por último: pseudo-elemento sempre fecha a célula). */
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"] .ticket-summary-order-link { display: flex; width: max-content; max-width: 100%; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"] .ck-os__selo {
+  display: inline-flex; align-items: center; vertical-align: top; max-width: 100%; min-height: 20px; margin: 4px 4px 0 0; padding: 2px 7px; white-space: normal; overflow-wrap: anywhere;
+  border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto);
+  font: var(--peso-medio) var(--fs-xs)/1.25 var(--fonte-corpo);
+}
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody td[data-label="OS"] .ck-os__selo--tecnico { background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 
 /* ---------- 8. Manual × automático ---------- */
 /* Tudo na tabela vem das importações (Oracle, Simpress, Endpoint). A coluna Chamado é preenchimento manual. */
@@ -1963,7 +1972,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-tickets-os .ck-os__corpo { padding: 8px 8px 4px; }
   #cockpit-tickets-os .ck-os tbody td[data-label] { order: 5; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Série"] { order: 1; }
-  #cockpit-tickets-os .ck-os tbody td[data-label="OS"] { order: 2; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="OS"] { order: 2; display: block; }
+  #cockpit-tickets-os .ck-os tbody td[data-label="OS"]::before { display: block; margin-bottom: 2px; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Fonte"] { order: 3; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Fonte"]::before { margin-right: 2px; }
   #cockpit-tickets-os .ck-os tbody td[data-label="Chamado"] { order: 6; }
