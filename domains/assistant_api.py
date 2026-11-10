@@ -1677,7 +1677,8 @@ class SimpressApi:
         elif not importado.get("saida_pronta"):
             passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados.", "usuario"
         else:
-            passo, quem = ("O Dashboard atualizado já foi gerado. Se ainda não foi ao SharePoint, usar \"Enviar ao SharePoint\" "
+            passo, quem = ("O Dashboard atualizado já foi gerado e \"Atualizar Dashboard\" já tenta enviá-lo ao SharePoint (resultado na aba Automação). "
+                           "Se o envio não iniciou ou falhou, usar \"Enviar ao SharePoint\" "
                            "no painel Chamados (o login é manual). Se o envio avisar que o SharePoint mudou, o arquivo gerado não vale mais: "
                            "repetir Baixar, importar e buscar, Atualizar Dashboard e Enviar ao SharePoint.", "usuario")
         return {

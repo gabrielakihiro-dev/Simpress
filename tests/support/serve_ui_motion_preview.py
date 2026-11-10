@@ -1012,13 +1012,20 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 fechar = {"iniciado": False, "motivo": "nenhum chamado com descrição para finalizar", "numeros": [],
                           "pulados": [{"numero": n, "motivo": "sem_descricao"} for n in finalizando]}
+            # Como o servidor: a rotina enviar só começa quando o front pediu e a fechar (que já envia) não rodou.
+            if fechar["iniciado"]:
+                enviar = {"iniciado": False, "motivo": "a rotina fechar já envia ao SharePoint"}
+            elif corpo.get("finalizar_softexpert") is True and corpo.get("enviar_sharepoint"):
+                enviar = {"iniciado": False, "motivo": "nenhum chamado foi finalizado no SoftExpert"}
+            else:
+                enviar = {"iniciado": bool(corpo.get("enviar_sharepoint")), "motivo": ""}
             linhas = [{"numero": c["numero"], "linha": 340 + i, "tipo": "novo", "celulas": ["A", "C", "D"]}
                       for i, c in enumerate(corpo.get("chamados") or [])]
             linhas += [{"numero": c["numero"], "linha": 12, "tipo": "alterado", "celulas": sorted(set(c) - {"numero"})}
                        for c in corpo.get("edicoes") or []]
             self.send({"arquivo": "Dashboard Operacional_SEBRAE.xlsx",
                        "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
-                       "linhas": linhas, "conteudo_base64": "UEsDBA==", "fechar": fechar})
+                       "linhas": linhas, "conteudo_base64": "UEsDBA==", "fechar": fechar, "enviar": enviar})
             return
         if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
             size = int(self.headers.get("Content-Length", "0"))
