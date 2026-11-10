@@ -67,6 +67,7 @@ class AtualizarPayload(BaseModel):
     edicoes: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
     versao_importacao: str = Field("", max_length=128)
     finalizar_softexpert: bool = False  # só True (diálogo "Atualizar e finalizar") dispara a rotina fechar em massa; irreversível
+    enviar_sharepoint: bool = False  # True (clique em "Atualizar Dashboard") inicia a rotina enviar depois da cópia gravada, se a fechar não rodou
 
 
 @dataclass(frozen=True)
@@ -607,6 +608,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
             importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload)
+            fechar = (
+                _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
+                else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
+                else _fechar_inativo("finalização no SoftExpert não confirmada")
+            )
             return JSONResponse({
                 "arquivo": NOME_ATUALIZADO,
                 "base": {"arquivo": importado["arquivo"], "importado_em": importado["importado_em"]},
@@ -614,12 +620,36 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     {"numero": g.numero, "linha": g.linha, "tipo": g.tipo, "celulas": list(g.celulas)} for g in resultado.linhas
                 ],
                 "conteudo_base64": base64.b64encode(conteudo).decode("ascii"),
-                "fechar": (
-                    _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
-                    else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
-                    else _fechar_inativo("finalização no SoftExpert não confirmada")
+                "fechar": fechar,
+                "enviar": _enviar_apos_atualizar(
+                    payload.enviar_sharepoint, gravada, bool(fechar["iniciado"]), payload.finalizar_softexpert,
                 ),
             }, headers={"Cache-Control": "no-store"})
+
+    def _enviar_apos_atualizar(pedido: bool, gravada: bool, fechar_iniciada: bool, finalizar_pedido: bool = False) -> Dict[str, Any]:
+        """Starts ``enviar`` right after the copy is saved, unless ``fechar`` runs (it already sends); a failure never fails the update."""
+        if not gravada:
+            return {"iniciado": False, "motivo": "A cópia de saída não foi gravada; nada foi enviado."}
+        if fechar_iniciada:
+            return {"iniciado": False, "motivo": "a rotina fechar já envia ao SharePoint"}
+        if finalizar_pedido:
+            # Finalizar pedido e nada finalizado: enviar gravaria D=FINALIZADO sem SoftExpert e geraria marca falsa de outro técnico.
+            return {"iniciado": False, "motivo": "nenhum chamado foi finalizado no SoftExpert"}
+        if not pedido:
+            return {"iniciado": False, "motivo": ""}
+        if services.runner is None:
+            return {"iniciado": False, "motivo": "A automação não está disponível neste servidor."}
+        pasta = _pasta_estado()
+        try:
+            fin.exigir_envio_livre(pasta)
+            _exigir_rotina_livre(pasta)
+            services.runner().start("enviar")
+        except DomainError as erro:
+            return {"iniciado": False, "motivo": str(erro.detail)}
+        except Exception as erro:  # noqa: BLE001 - a atualização já foi gravada; log só o tipo
+            logger.warning("Não iniciei a rotina enviar depois de atualizar (%s).", type(erro).__name__)
+            return {"iniciado": False, "motivo": "Não foi possível iniciar o envio ao SharePoint."}
+        return {"iniciado": True, "motivo": ""}
 
     def _gravar_atualizacao(payload: AtualizarPayload, *, aceita_vazio: bool = False):
         """Monta a cópia atualizada e a grava em ``sebrae_dashboard_saida``; devolve (importado, resultado, conteudo, gravada, edicoes validadas).

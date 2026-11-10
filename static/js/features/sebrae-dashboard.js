@@ -168,16 +168,55 @@
     return faltas;
   }
 
-  /** O que "Atualizar Dashboard" finalizaria de verdade: D virando FINALIZADO, número UTIC, com descrição, ainda não finalizado. */
-  function candidatosFinalizar(abertos, edicoes, soft, formulario = [], valores = {}) {
-    const marcados = [
+  /** Chamados que o usuário marcou com D = FINALIZADO nesta atualização (formulários novos e edições dos antigos). */
+  function marcadosFinalizado(abertos, edicoes, formulario = [], valores = {}) {
+    return [
       ...payloadEdicoes(abertos, edicoes),
       ...payloadAtualizacao(formulario, valores),
-    ];
-    return marcados
-      .filter(e => String(e.D || "").toUpperCase() === "FINALIZADO" && NUMERO_UTIC.test(e.numero))
+    ].filter(e => String(e.D || "").toUpperCase() === "FINALIZADO");
+  }
+
+  /** O que "Atualizar Dashboard" finalizaria de verdade: D virando FINALIZADO, número UTIC, com descrição, ainda não finalizado. */
+  function candidatosFinalizar(abertos, edicoes, soft, formulario = [], valores = {}) {
+    return marcadosFinalizado(abertos, edicoes, formulario, valores)
+      .filter(e => NUMERO_UTIC.test(e.numero))
       .map(e => e.numero)
       .filter(numero => podeFinalizar(soft?.[numero]?.descricao, soft?.[numero]?.finalizacao, false));
+  }
+
+  /** Os marcados FINALIZADO que `candidatosFinalizar` deixa de fora, com o motivo (mesmos códigos de `MOTIVOS_PULADO`), sem repetir chamado. */
+  function excluidosFinalizar(abertos, edicoes, soft, formulario = [], valores = {}) {
+    const vistos = new Set();
+    const excluidos = [];
+    for (const { numero } of marcadosFinalizado(abertos, edicoes, formulario, valores)) {
+      if (vistos.has(numero)) continue;
+      vistos.add(numero);
+      let motivo = "";
+      if (!NUMERO_UTIC.test(numero)) motivo = "sem_numero";
+      else if (String(soft?.[numero]?.descricao || "").trim() === "") motivo = "sem_descricao";
+      else if (!podeFinalizar(soft[numero].descricao, soft[numero].finalizacao, false)) motivo = "ja_finalizado";
+      if (motivo) excluidos.push({ numero, motivo });
+    }
+    return excluidos;
+  }
+
+  /** Aviso visível dos FINALIZADO que ficam de fora da finalização no SoftExpert ("" quando não há nenhum). */
+  function avisoExcluidosFinalizar(excluidos) {
+    if (!excluidos?.length) return "";
+    return `Não serão finalizados no SoftExpert: ${excluidos.map(e => `${e.numero} (${MOTIVOS_PULADO[e.motivo] || e.motivo})`).join("; ")}.`;
+  }
+
+  const MOTIVO_SEM_FINALIZACAO = "nenhum chamado foi finalizado no SoftExpert";
+
+  /** Texto e tipo do aviso depois de Atualizar Dashboard: o servidor diz se finalizou (fechar) ou só enviou (enviar) ao SharePoint. */
+  function resultadoEnvioAtualizacao(dados) {
+    if (dados?.fechar?.iniciado) return { texto: "Dashboard atualizado. Finalizando no SoftExpert; o envio ao SharePoint só acontece se algum chamado for finalizado.", tipo: "success" };
+    if (dados?.enviar?.iniciado) return { texto: "Dashboard atualizado. Enviando ao SharePoint…", tipo: "success" };
+    const motivo = String(dados?.enviar?.motivo || "").trim().replace(/\.$/, "");
+    // Sem finalização no SoftExpert, "Enviar ao SharePoint" gravaria D FINALIZADO sem finalizar (marca falsa de outro técnico): não sugere o envio.
+    if (motivo === MOTIVO_SEM_FINALIZACAO) return { texto: `Dashboard atualizado, mas não foi enviado ao SharePoint: ${motivo}. Confira o SoftExpert antes de enviar.`, tipo: "warning" };
+    if (motivo) return { texto: `Dashboard atualizado, mas não foi enviado ao SharePoint: ${motivo}. Use Enviar ao SharePoint.`, tipo: "warning" };
+    return { texto: "Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", tipo: "success" };
   }
 
   function resumoResultado(resultado) {
@@ -2477,14 +2516,32 @@
         // Finalizar no SoftExpert não tem volta: quem marcou FINALIZADO com descrição confirma antes de qualquer envio.
         await Promise.all(Object.keys(estado.soft).map(salvarDescricao));
         const finalizar = candidatosFinalizar(estado.abertos, estado.edicoes, estado.soft, estado.formulario, estado.valores);
-        // Cancelar e Esc (o diálogo resolve false) só atualizam o Dashboard: nunca finalizam.
-        const finalizarSoftExpert = finalizar.length > 0 && await app.confirmarAcao({
-          titulo: "Atualizar Dashboard e finalizar no SoftExpert",
-          mensagem: `${finalizar.length} chamado(s) marcado(s) como FINALIZADO (${finalizar.join(", ")}) podem ser finalizados no SoftExpert. `
-            + "Atualizar e finalizar: atualiza o Dashboard e finaliza no SoftExpert, o que não tem volta. "
-            + "Só atualizar: atualiza o Dashboard e NÃO finaliza nada no SoftExpert.",
-          confirmar: "Atualizar e finalizar", cancelar: "Só atualizar",
-        });
+        const excluidos = excluidosFinalizar(estado.abertos, estado.edicoes, estado.soft, estado.formulario, estado.valores);
+        const avisoExcluidos = avisoExcluidosFinalizar(excluidos);
+        // Sem candidatos não há diálogo: atualiza e envia ao SharePoint. Com candidatos, só "Atualizar e finalizar" (true) finaliza e envia;
+        // "Atualizar sem finalizar", Esc e fechar o diálogo (null) só atualizam e baixam: D FINALIZADO sem SoftExpert nunca vai ao SharePoint por este clique.
+        let resposta = false;
+        if (!finalizar.length && excluidos.some(e => e.motivo === "sem_descricao")) {
+          // FINALIZADO sem descrição iria ao SharePoint sem passar pelo SoftExpert: só envia com confirmação explícita.
+          const enviar = await app.confirmarAcao({
+            titulo: "Enviar ao SharePoint sem finalizar no SoftExpert",
+            mensagem: `${avisoExcluidos} Eles vão ao Dashboard no SharePoint como FINALIZADO sem serem finalizados no SoftExpert pelo site. `
+              + "Envie só se já estiverem finalizados no SoftExpert.",
+            confirmar: "Atualizar e enviar", cancelar: "Atualizar sem enviar",
+          });
+          resposta = enviar ? false : null;
+        } else if (finalizar.length) {
+          resposta = await app.confirmarAcao({
+            titulo: "Atualizar Dashboard e finalizar no SoftExpert",
+            mensagem: `${finalizar.length} chamado(s) marcado(s) como FINALIZADO (${finalizar.join(", ")}) podem ser finalizados no SoftExpert. `
+              + "Atualizar e finalizar: atualiza o Dashboard, finaliza no SoftExpert (o que não tem volta) e envia ao SharePoint. "
+              + "Atualizar sem finalizar: só atualiza e baixa o Dashboard; NÃO finaliza no SoftExpert nem envia ao SharePoint."
+              + (avisoExcluidos ? ` ${avisoExcluidos}` : ""),
+            confirmar: "Atualizar e finalizar", cancelar: "Atualizar sem finalizar",
+          }) || null;
+        }
+        const finalizarSoftExpert = Boolean(resposta);
+        const enviarSharepoint = resposta !== null;
         // Só a finalização em massa exige A e J (a descrição e o Status FINALIZADO já filtraram os candidatos): avisa e não envia nada.
         const incompletos = finalizarSoftExpert
           ? finalizar.map(numero => [numero, camposFaltando(valoresEfetivos(numero), estado.soft[numero]?.descricao)]).filter(([, faltas]) => faltas.length)
@@ -2497,18 +2554,24 @@
         }
         if (finalizarSoftExpert) await Promise.all(finalizar.map(guardarFicha));
         const dados = await app.apiFetch("/api/sebrae/dashboard/atualizar", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes, versao_importacao: estado.versaoImportacao, finalizar_softexpert: finalizarSoftExpert }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chamados, edicoes, versao_importacao: estado.versaoImportacao, finalizar_softexpert: finalizarSoftExpert, enviar_sharepoint: enviarSharepoint }),
           errorMessage: "Não foi possível atualizar o Dashboard.",
         });
         baixarArquivo(dados.arquivo, dados.conteudo_base64);
         const novos = dados.linhas.filter(linha => linha.tipo === "novo").length;
         const quando = formatarDataHora(dados.base?.importado_em);
+        const envio = resultadoEnvioAtualizacao(dados);
         definirStatusAtualizar(
           `Baixado "${dados.arquivo}": ${novos} novo(s) e ${dados.linhas.length - novos} alterado(s). `
           + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`
-          + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : ""), "ok");
+          + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : "")
+          + (avisoExcluidos ? ` ${avisoExcluidos}` : "")
+          + (envio.tipo === "warning" ? ` ${envio.texto}` : ""),
+          avisoExcluidos || envio.tipo === "warning" ? "alerta" : "ok");
         definirEnvioDisponivel(true);
-        app.showToast("Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success");
+        app.showToast(envio.texto, envio.tipo);
+        if (dados.enviar?.iniciado) app.atualizarEstadoAutomacao?.(); // mostra a rotina enviar e habilita o Cancelar execução sem esperar a próxima consulta da Automação
         tratarFechar(dados.fechar);
       } catch (error) {
         definirStatusAtualizar(error.message, "erro");
@@ -2524,7 +2587,7 @@
   }
 
   createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, camposFaltando, ehApiSebrae, padroesManuais,
-    formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
+    formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     lerRascunho, gravarRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;
 })());

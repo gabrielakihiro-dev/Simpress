@@ -95,8 +95,10 @@
     pendente?.resolver(resposta);
   }
 
+  // Esc e fechar o diálogo resolvem null (falso para quem só testa verdade); o botão Cancelar resolve false.
+  // Quem precisa distinguir os dois (Atualizar Dashboard) compara com === null.
   function fecharConfirmacaoAcao() {
-    app.responderConfirmacaoAcao(false);
+    app.responderConfirmacaoAcao(null);
   }
 
   async function copiarTextoParaAreaTransferencia(texto) {
