@@ -18,6 +18,7 @@ from core.errors import DomainError
 import openpyxl
 from core import openpyxl_compat
 from domains import inventory_state
+from domains.frontend_assets import assembled_html
 from fastapi import HTTPException
 from starlette.routing import Match
 from security import sessao_local
@@ -264,7 +265,7 @@ class MaintenanceContractTests(unittest.TestCase):
             })
 
     def test_toasts_render_above_modal_overlays(self):
-        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
 
         self.assertNotRegex(html, r'id="toast-container"[^>]*\bz-')
         self.assertGreater(_css_layer("#toast-container"), _css_layer(".modal-overlay"))
@@ -341,7 +342,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertFalse(defaults["contato_origem_configurado"])
         config_source = (app_config.BASE_DIR / "core" / "config.py").read_text(encoding="utf-8")
         self.assertNotIn("simpress.com.br", config_source)
-        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         script = _frontend_script()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
@@ -463,7 +464,7 @@ class MaintenanceContractTests(unittest.TestCase):
             self.assertEqual(main.get_readiness_status(), report)
 
     def test_readiness_panel_has_one_disclosure_and_renders_text_safely(self):
-        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         script = _frontend_script()
         panel_start = script.index("async function carregarProntidao()")
         panel_end = script.index("function definirResumoCurto", panel_start)
@@ -650,8 +651,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIsNone(main.validate_xlsx_package(package))
 
     def test_frontend_references_assets_served_from_the_existing_static_mount(self):
-        index_file = app_config.STATIC_DIR / "index.html"
-        html = index_file.read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         self.assertIn('<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
         self.assertIn('<link rel="stylesheet" href="/static/styles/ck-tokens.css">', html)
@@ -718,7 +718,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn("carregarContagemHistoricoComparacoes()", restore)
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
-        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         dialog_script = (app_config.STATIC_DIR / "js/ui/accessible-dialogs.js").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)

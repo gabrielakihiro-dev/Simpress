@@ -1,12 +1,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const { appSource } = require("./support/app-sources.cjs");
 
 const appScript = appSource();
-const indexHtml = fs.readFileSync(path.join(__dirname, "..", "..", "static", "index.html"), "utf8");
+const indexHtml = assembledHtml();
 const appEntry = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app-entry.js"), "utf8");
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
 

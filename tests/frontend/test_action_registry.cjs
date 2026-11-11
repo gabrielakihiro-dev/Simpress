@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const dispatcher = require("../../static/js/ui/action-dispatcher.js");
 const { staticDir } = require("./support/app-sources.cjs");
@@ -32,7 +33,7 @@ function declaredActions() {
     .filter(file => !file.endsWith("action-dispatcher.js"));
   const names = new Set();
   for (const file of files) {
-    const source = fs.readFileSync(file, "utf8");
+    const source = path.basename(file) === "index.html" ? assembledHtml() : fs.readFileSync(file, "utf8");
     assert.doesNotMatch(source, /data-on-[a-z]+=\\?["']?\$\{/, `${file} builds a data-on-* name dynamically`);
     for (const match of source.matchAll(/data-on-[a-z]+=\\?["']([A-Za-z_$][\w$]*)/g)) names.add(match[1]);
     for (const match of source.matchAll(/setAttribute\(\s*["']data-on-[a-z]+["'],\s*["']([A-Za-z_$][\w$]*)["']/g)) names.add(match[1]);

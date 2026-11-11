@@ -4,6 +4,8 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,7 +13,8 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
+from core import config as app_config
+from domains.frontend_assets import CONTENT_SECURITY_POLICY, assembled_html, versioned_html
 from routers.frontend import RevalidatingStaticFiles, frontend_response
 
 
@@ -99,17 +102,102 @@ class FrontendAssetTests(unittest.TestCase):
         directives = {part.split()[0]: part.split()[1:] for part in policy.split(";") if part.strip()}
         self.assertEqual(directives["style-src"], ["'self'"])
         self.assertEqual(directives["img-src"], ["'self'"])
-        html = (Path(__file__).resolve().parents[1] / "static" / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
         self.assertNotIn("<style", html.lower())
 
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
-        static_dir = Path(__file__).resolve().parents[1] / "static"
         for name in ("index.html",):
-            html = (static_dir / name).read_text(encoding="utf-8")
+            html = assembled_html(app_config.STATIC_DIR, name)
             self.assertNotRegex(html, r"\son[a-z]+\s*=\s*[\"']", name)
             self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)[^>]*>", name)
             self.assertNotIn("javascript:", html, name)
+
+
+class AssembledHtmlTests(unittest.TestCase):
+    """`<!-- include: partials/<name>.html -->` lines are replaced by files in frontend/partials/."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.static = self.base / "static"
+        self.partials = self.base / "frontend" / "partials"
+        self.static.mkdir()
+        self.partials.mkdir(parents=True)
+
+    def site(self, index: str, **partials: str) -> Path:
+        (self.static / "index.html").write_text(index, encoding="utf-8")
+        for name, text in partials.items():
+            (self.partials / f"{name}.html").write_text(text, encoding="utf-8")
+        return self.static
+
+    def test_include_replaces_the_whole_line(self):
+        static = self.site("<body>\n    <!-- include: partials/a.html -->\n</body>\n", a="<p>A</p>\n")
+        self.assertEqual(assembled_html(static), "<body>\n<p>A</p>\n</body>\n")
+
+    def test_partial_can_include_another_partial_up_to_two_levels(self):
+        static = self.site(
+            "<!-- include: partials/a.html -->\n",
+            a="<a>\n  <!-- include: partials/b.html -->\n</a>\n",
+            b="<b></b>\n",
+        )
+        self.assertEqual(assembled_html(static), "<a>\n<b></b>\n</a>\n")
+
+    def test_third_level_is_rejected(self):
+        static = self.site(
+            "<!-- include: partials/a.html -->\n",
+            a="<!-- include: partials/b.html -->\n",
+            b="<!-- include: partials/c.html -->\n",
+            c="<c></c>\n",
+        )
+        with self.assertRaises(ValueError):
+            assembled_html(static)
+
+    def test_include_outside_partials_or_not_html_is_rejected(self):
+        (self.base / "frontend" / "x.html").write_text("<x></x>\n", encoding="utf-8")
+        (self.partials / "a.txt").write_text("<p>A</p>\n", encoding="utf-8")
+        for reference in ("partials/../x.html", "../static/index.html", "partials/a.txt"):
+            with self.subTest(reference=reference):
+                static = self.site(f"<!-- include: {reference} -->\n")
+                with self.assertRaises(ValueError):
+                    assembled_html(static)
+
+    def test_missing_partial_names_the_file(self):
+        static = self.site("<!-- include: partials/ausente.html -->\n")
+        with self.assertRaises(FileNotFoundError) as caught:
+            assembled_html(static)
+        self.assertIn("ausente.html", str(caught.exception))
+
+    def test_versioned_html_versions_assets_referenced_only_in_a_partial(self):
+        static = self.site("<!-- include: partials/a.html -->\n", a='<script src="/static/app.js"></script>\n')
+        (static / "app.js").write_text("window.revision = 1;", encoding="utf-8")
+        self.assertRegex(versioned_html(static), r'src="/static/app\.js\?v=[0-9a-f]{16}"')
+
+    @unittest.skipUnless(shutil.which("node"), "node não está instalado")
+    def test_node_and_python_assemble_the_same_page(self):
+        node = subprocess.run(
+            ["node", "tests/frontend/support/assembled-html.cjs"],
+            cwd=app_config.BASE_DIR, capture_output=True, check=True,
+        )
+        self.assertEqual(node.stdout, assembled_html(app_config.STATIC_DIR).encode("utf-8"))
+
+    @unittest.skipUnless(shutil.which("node"), "node não está instalado")
+    def test_node_and_python_expand_nested_includes_the_same_way(self):
+        files = {
+            self.static / "index.html": "<body>\n  <!-- include: partials/a.html -->\n</body>\n",
+            self.partials / "a.html": "  <a>\n    <!-- include: partials/b.html -->\n  </a>\n",
+            self.partials / "b.html": "    <b>ç</b>\n",
+        }
+        for path, text in files.items():
+            path.write_text(text, encoding="utf-8", newline="\n")
+        node = subprocess.run(
+            ["node", "tests/frontend/support/assembled-html.cjs", "index.html", str(self.static)],
+            cwd=app_config.BASE_DIR, capture_output=True, check=True,
+        )
+        expected = "<body>\n  <a>\n    <b>ç</b>\n  </a>\n</body>\n"
+        self.assertEqual(assembled_html(self.static), expected)
+        self.assertEqual(node.stdout, expected.encode("utf-8"))
 
 
 if __name__ == "__main__":
