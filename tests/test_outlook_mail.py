@@ -778,6 +778,18 @@ class EnvioTests(OutlookMailBase):
         self.assertLess(leitura.start(), script.index("Say 'PASSO:antes_send'"))  # antes de qualquer envio
         self.assertLess(leitura.start(), script.index(".Display($false)"))  # e antes de abrir a janela
 
+    def test_script_atribui_a_conta_so_por_invokemember(self):
+        # Regressao 2026-11-11: "$mail.SendUsingAccount = $conta" nao da erro mas nao tem efeito no PowerShell;
+        # a releitura voltava nula e todo abrir/enviar caia em conta_ausente.
+        script = SCRIPT_PS1.read_text(encoding="ascii")
+        self.assertNotRegex(script, r"\$mail\.SendUsingAccount\s*=")
+        self.assertRegex(script, r"InvokeMember\('SendUsingAccount',\s*\[System\.Reflection\.BindingFlags\]::SetProperty")
+
+    def test_script_traz_a_janela_para_a_frente_depois_de_abrir(self):
+        # Regressao 2026-11-11: com o Outlook fechado, Display() deixava a janela so na barra de tarefas.
+        script = SCRIPT_PS1.read_text(encoding="ascii")
+        self.assertRegex(script, r"\$mail\.Display\(\$false\)[\s\S]*?\$mail\.GetInspector\.Activate\(\)")
+
 
 class LogsTests(OutlookMailBase):
     def test_logs_nao_levam_corpo_destinatarios_nomes_modelo_nem_busca(self):
