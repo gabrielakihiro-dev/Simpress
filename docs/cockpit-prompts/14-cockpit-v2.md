@@ -203,7 +203,7 @@ Para reduzir conflitos entre sessões paralelas, trechos grandes do `static/inde
 - Testes que leem o HTML como texto usam o HTML montado: `assembled_html(app_config.STATIC_DIR)` no Python e `assembledHtml()` de `tests/frontend/support/assembled-html.cjs` no Node; `tests/test_frontend_assets.py` confere que os dois montam o mesmo texto.
 - Os varredores do build leem também os partials: Tailwind (`@source` em `static/styles/tailwind.input.css` e `content` em `config/tailwind.config.cjs`) e o subconjunto do Lucide (`scripts/build/lucide-subset.cjs`). Sem isso, classe ou ícone que só aparece num partial sumiria do CSS ou do JS gerado.
 - `GET /static/index.html` continua servindo o arquivo cru, com as linhas de include; a página real é a rota `/`.
-- Partials atuais: `cockpit-tool-panels.html` (`#cockpit-tool-panels`) e `modais.html` (todos os `.modal-overlay`, um bloco contínuo).
+- Partials atuais: `cockpit-tool-panels.html` (`#cockpit-tool-panels`) `modais.html` (todos os `.modal-overlay`, um bloco contínuo) e `card-equipamento.html` (`#card-equipamento`, dentro do painel de detalhe).
 
 - Para editar um painel extraído, abra o partial; IDs, ARIA, `data-*` e classes não mudaram de lugar no HTML final.
 
