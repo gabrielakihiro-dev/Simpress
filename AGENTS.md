@@ -43,6 +43,7 @@ Reorganização de 10/11/2026: a raiz guarda só o que vale no projeto inteiro. 
 ## Interface
 
 - Nova tela: atualize a especificação antes e siga as referências visuais; preserve IDs, ARIA, `data-*`, manipuladores, regras de negócio, temas claro e escuro.
+- `static/index.html` tem partials em `frontend/partials/`, montados pelo servidor (`<!-- include: partials/<nome>.html -->`); edite o painel no partial e leia o HTML montado nos testes (`docs/cockpit-prompts/14-cockpit-v2.md`, seção "index.html dividido em partials").
 - Cockpit de 320px a 2560px, sem rolagem horizontal e sem `min-width:1200px`; idêntico ao artefato https://claude.ai/artifact/DGgv5VBXhu4NrZ9DbxFQhC (abaixo de 1200px muda só a disposição).
 - Não remova `!important` mecanicamente; corrija a causa. Atalhos F1 a F10: `shortcutAction` e `toolKeys`, com `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
 - Capturas e Chromium do Playwright: `.claude/skills/ajuste-visual-ui`.
