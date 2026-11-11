@@ -35,6 +35,9 @@ test("Sem usuário section lists notebook rows with the comparison row attribute
   assert.match(html, /Hostname\/Apelido, Série, Local, Modelo/);
   const cartao = html.match(/<button [^>]*data-comparison-section-target="comparacao-secao-sem-usuario"[^>]*aria-label="([^"]+)"/);
   assert.equal(cartao?.[1], "Sem usuário: 2. Ir para Sem usuário");
+  // The card lives in the strip at the top of the Usuários tab, before its empty-state notice.
+  const faixa = html.slice(html.indexOf('id="resumo-painel-usuarios"')).split("data-resumo-vazio")[0];
+  assert.match(faixa, /class="resumo-cartoes".*<button [^>]*data-comparison-section-target="comparacao-secao-sem-usuario"/s);
 });
 
 test("Sem usuário with no rows keeps the section, an empty message and a static card", () => {

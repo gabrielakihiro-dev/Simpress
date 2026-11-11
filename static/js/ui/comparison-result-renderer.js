@@ -589,9 +589,12 @@
   }
 
   // One tabpanel per Resumo tab; only the selected one is visible. The controller shows data-resumo-vazio when the tab has no rows.
-  function painelResumo(chave, conteudo, selecionado = false) {
+  // `cartoes` (the tab's compact counters) stays above the empty-state notice.
+  function painelResumo(chave, conteudo, selecionado = false, cartoes = []) {
     const vazio = TEXTO_VAZIO_ABA[chave];
+    const faixa = cartoes.filter(Boolean).join("");
     return `<div role="tabpanel" id="resumo-painel-${chave}" aria-labelledby="resumo-aba-${chave}" class="resumo-painel" data-resumo-painel="${chave}"${selecionado ? "" : " hidden"}>
+        ${faixa ? `<div class="resumo-cartoes" role="group" aria-label="Contadores de ${RESUMO_ABAS.find(aba => aba.chave === chave).rotulo}">${faixa}</div>` : ""}
         ${vazio ? `<p class="text-xs text-fg-muted" data-resumo-vazio role="status" hidden>${vazio}</p>` : ""}
         ${conteudo}
       </div>`;
@@ -641,20 +644,6 @@
         ${Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
         ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
         : ""}
-        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-          ${cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null)}
-          ${cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint")}
-          ${cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes")}
-          ${cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local")}
-          ${cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas")}
-          ${cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento")}
-          ${cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados")}
-          ${cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao")}
-          ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais")}
-          ${secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : ""}
-          ${exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario") : ""}
-        </div>
-        <p class="text-xs text-fg-subtle">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
         `, true)}
         ${painelResumo("divergencias", `
         <section class="space-y-2" data-history-filter-section>
@@ -680,7 +669,14 @@
           <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-xs text-fg-muted">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
-        `)}
+        `, false, [
+          cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null),
+          cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint"),
+          cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes"),
+          cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local"),
+          cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas"),
+          cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento"),
+        ])}
         ${painelResumo("apelidos", `
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-xs text-fg-muted">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
@@ -694,11 +690,18 @@
           <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-fg-muted">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p><p class="text-xs text-fg-subtle">Informativo: não entra na contagem da aba.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
-        `)}
+        `, false, [
+          cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao"),
+          cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais"),
+          cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados"),
+        ])}
         ${painelResumo("usuarios", `
         ${secaoMudancasUsuarios || avisoListaAusente}
         ${exibirSemUsuario ? secaoSemUsuario(semUsuario) : ""}
-        `)}
+        `, false, [
+          secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : "",
+          exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario") : "",
+        ])}
         ${painelResumo("sem-acesso", `
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber", "comparacao-secao-sem-acesso-7")}<p class="text-xs text-fg-muted">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
