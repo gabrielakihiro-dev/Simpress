@@ -47,7 +47,7 @@ async function openFixtureComparison(page) {
   await openHistoryModal(page);
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
-  // As linhas anotáveis da fixture ficam na sub-aba Apelidos; o Resumo abre em Visão geral.
+  // As linhas anotáveis da fixture ficam na sub-aba Apelidos; o Resumo abre em Divergências.
   await page.locator("#resumo-aba-apelidos").click();
   await expect(page.locator('#comparacao-planilhas-conteudo textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
@@ -337,16 +337,18 @@ test("comparison history filters rows and autosaves their original annotations",
 test("comparison summary cards jump to their section and clear filters that hide it", async ({ page }) => {
   await openFixtureComparison(page);
   const dialog = page.locator(COMPARISON_PANEL);
-  // A barra de filtro some em Visão geral: filtra em Apelidos e depois volta aos cartões.
   await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
   const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
   await expect(heading).toBeHidden();
-  // Os cartões de resumo ficam em Visão geral; o clique deve levar à sub-aba Apelidos.
+  // Os cartões ficam numa faixa no topo da sub-aba da própria seção (Apelidos); Visão geral não tem cartões.
   await dialog.locator("#resumo-aba-visao").click();
+  await expect(dialog.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
+  await dialog.locator("#resumo-aba-apelidos").click();
+  const painelApelidos = dialog.locator("#resumo-painel-apelidos");
   // Only "Apelidos para conferência" has rows in the fixture; zero-count cards stay static.
-  const links = dialog.locator("[data-comparison-section-target]");
+  const links = painelApelidos.locator("[data-comparison-section-target]");
   await expect(links).toHaveCount(1);
-  const card = dialog.getByRole("button", { name: /Apelidos para conferência: 1\. Ir para Linhas mantidas para conferência/ });
+  const card = painelApelidos.getByRole("button", { name: /Apelidos para conferência: 1\. Ir para Linhas mantidas para conferência/ });
   await expect(card).toHaveCSS("cursor", "pointer");
 
   await card.click();

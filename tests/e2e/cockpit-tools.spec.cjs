@@ -58,7 +58,7 @@ test("comparison tab shows the full result and survives an empty history refresh
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const result = page.locator("#comparacao-planilhas-conteudo");
-  // O Resumo abre em Visão geral; a linha LENTO fica na sub-aba Divergências.
+  // O Resumo abre em Divergências, onde fica a linha LENTO; o clique confirma a aba.
   await page.locator("#resumo-aba-divergencias").click();
   // Tabela no desktop e card no mobile: só a variante visível conta.
   const row = result.locator('[data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();

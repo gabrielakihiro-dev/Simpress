@@ -39,6 +39,9 @@ test("the update result summarizes logged-user changes with counts, labels, (M) 
   assert.match(html, /id="comparacao-secao-mudancas-usuarios"[^>]*>.*Mudanças de usuário logado/);
   assert.match(html, /Novos no Endpoint: 1 · Alterados: 1 · Removidos do Endpoint: 1 · Manuais que voltaram a valer: 1/);
   assert.match(html, /data-comparison-section-target="comparacao-secao-mudancas-usuarios"/);
+  // The card lives in the strip at the top of the Usuários tab, before its empty-state notice.
+  const faixa = html.slice(html.indexOf('id="resumo-painel-usuarios"')).split("data-resumo-vazio")[0];
+  assert.match(faixa, /class="resumo-cartoes"[^>]*>\s*<button [^>]*data-comparison-section-target="comparacao-secao-mudancas-usuarios"/);
   for (const rotulo of ["Usuário novo no Endpoint", "Usuário alterado no Endpoint", "Usuário removido do Endpoint", "Manual voltou a valer"]) {
     assert.ok(html.includes(rotulo), rotulo);
   }

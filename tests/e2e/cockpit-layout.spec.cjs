@@ -102,14 +102,15 @@ test("Resumo: irParaSecaoComparacao clears the active filters that hide the targ
   }
 });
 
-test("Resumo: KPI e irParaSecaoComparacao abrem a sub-aba da seção antes de rolar até ela", async ({ page, request }) => {
+test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoComparacao abre a sub-aba antes de rolar", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
-    // O KPI mora em Visão geral; a seção "Localidade divergente" mora em Divergências.
-    await page.locator('#comparacao-planilhas-conteudo [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
+    // O F3 abre em Divergências, onde fica o KPI de localidade; a Visão geral não tem cartões.
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
+    await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     const divergente = page.locator("#comparacao-secao-localidade-divergente");
     await expect(divergente).toBeVisible();
@@ -131,9 +132,9 @@ test("Resumo: navegarParaLinhaComparacao abre a sub-aba da linha antes de procur
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    // Visão geral já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
+    // Divergências já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
     await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"]').first()).toBeAttached();
-    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     // SAIU60 só existe em "Passou de 60 dias sem acesso" (aba Sem acesso), aqui sem categoria.
     await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "SAIU60" }));
     await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
@@ -400,6 +401,13 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       expect(dimensions.document, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
+      if (tool === "comparacao") {
+        // A Visão geral não tem cartões: mede também a faixa compacta de Divergências.
+        await page.locator("#resumo-aba-divergencias").click();
+        await expect(page.locator("#resumo-painel-divergencias .resumo-cartoes")).toBeVisible();
+        expect(await overflowingRight(page, "#cockpit-tool-panels"), "comparacao/divergencias").toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), "comparacao/divergencias").toBeLessThanOrEqual(width);
+      }
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       if (key) {
