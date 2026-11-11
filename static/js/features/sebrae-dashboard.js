@@ -1648,7 +1648,12 @@
         controlesRecuperacao();
         return;
       }
-      if (!aviso?.falhou) {
+      // Descarte só esconde o aviso desta cópia (chave = caminho da cópia); nova falha gera nova cópia e o aviso volta.
+      const chaveDescarte = "sebrae_sharepoint_aviso_descartado";
+      const idAviso = aviso?.copia_local || aviso?.motivo || "";
+      let descartado = "";
+      try { descartado = armazenamento?.getItem(chaveDescarte) || ""; } catch (_erro) { /* sem armazenamento: aviso continua visível */ }
+      if (!aviso?.falhou || (idAviso && descartado === idAviso)) {
         host.hidden = true;
         host.replaceChildren();
         return;
@@ -1660,6 +1665,17 @@
       botao.textContent = "Tentar substituir de novo";
       botao.disabled = estado.fechar.emAndamento;
       botao.addEventListener("click", reenviarPendente);
+      const descartar = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", "Já atualizei manualmente, descartar aviso");
+      descartar.type = "button";
+      descartar.id = "btn-sebrae-descartar-aviso";
+      descartar.addEventListener("click", () => {
+        try { armazenamento?.setItem(chaveDescarte, idAviso); } catch (_erro) { /* sem armazenamento: esconde só nesta tela */ }
+        host.hidden = true;
+        host.replaceChildren();
+      });
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-sharepoint__acoes";
+      acoes.append(botao, descartar);
       const copiaCodigo = document.createElement("code");
       copiaCodigo.textContent = aviso.copia_local || "—";
       const copia = document.createElement("p");
@@ -1674,7 +1690,7 @@
           ? "A cópia pendente também foi enviada à pasta DASHBOARD SEBRAE, com outro nome."
           : "A cópia pendente não foi enviada ao SharePoint: ela está só neste computador."),
         dom.createTextElement("p", "ck-campo__ajuda", "O que fazer:"),
-        sugestoes, botao,
+        sugestoes, acoes,
       );
       host.hidden = false;
     }
