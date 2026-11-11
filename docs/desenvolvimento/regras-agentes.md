@@ -105,3 +105,11 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Identifique branches e worktrees reais antes de integrar trabalho. Não use `reset --hard`, `git clean` ou force push sem autorização.
 - Cada agente (Claude Code, Codex e Cursor) trabalha no próprio git worktree e não troca o branch do checkout principal. Antes de cada commit, confira o branch atual com `git branch --show-current`.
 - Ao remover um worktree com junction de `node_modules`, apague o junction com `cmd /c rmdir node_modules` antes de `git worktree remove`, para não apagar o `node_modules` do checkout principal.
+
+## Playwright MCP
+
+- O Playwright MCP é um servidor MCP que deixa o Claude Code controlar um navegador e devolver o código Playwright de cada ação, para virar teste depois.
+- Config em `.mcp.json` (servidor `playwright`, `@playwright/mcp@0.0.85`): Chrome instalado, perfil em memória (`--isolated`), headless, `--allowed-origins` só na porta 8765 (`127.0.0.1` e `localhost`) e saídas sem nome explícito em `.claude/prints/mcp` (um `filename` informado é resolvido a partir da raiz do worktree). Em `.claude/settings.json`, `enabledMcpjsonServers` habilita o servidor e `permissions.deny` bloqueia `mcp__playwright__browser_run_code_unsafe` (executa JS arbitrário) e `mcp__playwright__browser_file_upload` (enviaria arquivos de `data/` à página).
+- O servidor só carrega em sessão nova do Claude Code (reiniciar a sessão depois de mudar `.mcp.json` ou `settings.json`).
+- Como usar: suba o `ui-fixture` e peça "use a skill playwright-teste" (fluxo em `.claude/skills/playwright-teste`).
+- LGPD: aponte só para a fixture em `127.0.0.1:8765`, nunca para o app real; os snapshots do navegador vão ao modelo e poderiam levar dado pessoal.
