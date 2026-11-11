@@ -47,6 +47,7 @@ Reorganização de 10/11/2026: a raiz guarda só o que vale no projeto inteiro. 
 - Cockpit de 320px a 2560px, sem rolagem horizontal e sem `min-width:1200px`; idêntico ao artefato https://claude.ai/artifact/DGgv5VBXhu4NrZ9DbxFQhC (abaixo de 1200px muda só a disposição).
 - Não remova `!important` mecanicamente; corrija a causa. Atalhos F1 a F10: `shortcutAction` e `toolKeys`, com `<kbd>`, `title`, `aria-keyshortcuts` e testes alinhados.
 - Capturas e Chromium do Playwright: `.claude/skills/ajuste-visual-ui`.
+- Playwright MCP (`.mcp.json`, servidor `playwright`): só a fixture na porta 8765 (`127.0.0.1` ou `localhost`), nunca o app real; fluxo em `.claude/skills/playwright-teste`.
 
 ## Verificação
 
@@ -89,4 +90,4 @@ O usuário é leigo em back-end e front-end, mas conhece Git. Comece pelo resumo
 | Alertas e manual | n/a | `docs/operacao/alertas-os-divergencias.md`, `docs/guias/manual_usuario.md` |
 | Termos de entrega e devolução (Ferramentas) | n/a | `docs/cockpit-prompts/17-termos.md` |
 
-Skills em `.claude/skills/`: `ajuste-visual-ui`, `auditoria-somente-leitura`, `gerar-prompt`, `rotina-os-chamados`, `rotina-exportar-planilhas`, `monitoramento-pr-ci`.
+Skills em `.claude/skills/`: `ajuste-visual-ui`, `auditoria-somente-leitura`, `gerar-prompt`, `rotina-os-chamados`, `rotina-exportar-planilhas`, `monitoramento-pr-ci`, `playwright-teste`.
