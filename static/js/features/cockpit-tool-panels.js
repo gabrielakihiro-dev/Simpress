@@ -1901,8 +1901,8 @@
       const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
       await loadComparisons();
       await ativos;
-      // O render acima volta a Visão geral (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
-      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Visão geral).
+      // O render acima volta a Divergências (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
+      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Divergências).
       if (aba && pedido === comparisonRequest && activeTool === "comparacao"
         && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
     }

@@ -312,7 +312,7 @@
   }
 
   const ABAS_RESUMO = renderer.RESUMO_ABAS.map(aba => aba.chave);
-  const ESTADO_RESUMO_INICIAL = { aba: "visao", busca: "", soAnotadas: false, tipo: "" };
+  const ESTADO_RESUMO_INICIAL = { aba: "divergencias", busca: "", soAnotadas: false, tipo: "" };
   const estadoResumo = { ...ESTADO_RESUMO_INICIAL };
   // Set by conectarFiltrosHistoricoComparacao for the content currently on screen; null when there is none.
   let atualizarResumo = null;
@@ -371,7 +371,7 @@
     if (botao) botao.setAttribute("aria-label", renderer.rotuloContagemAba(chave, total, filtrando));
   }
 
-  // Back to the empty state: tab "Visão geral", no filters, zeroed counters, no notice from the previous result.
+  // Back to the empty state: tab "Divergências" (where F3 and the alert land), no filters, zeroed counters, no notice from the previous result.
   function limparAbasResumo() {
     Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);
     atualizarResumo = null;
