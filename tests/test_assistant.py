@@ -1913,6 +1913,7 @@ class EditDescriptionSimpress(FakeSimpress):
                 {"numero": "UTIC-2026-1253", "leitura_softexpert": {"descricao": "Notebook lento"}, "softexpert": {"descricao_editada": ""}},
                 {"numero": "UTIC-2026-1254", "leitura_softexpert": None, "softexpert": {}},
                 {"numero": "UTIC-2026-1255", "leitura_softexpert": {"descricao": "x"}, "softexpert": {"finalizacao": {"status": "ok"}}},
+                {"numero": "UTIC-2026-1256", "descricao": "Impressora travada", "leitura_softexpert": None, "softexpert": {}},
             ]}, "novos": {"formulario": [{"numero": "UTIC-2026-2000", "linha": {"H": "Sem rede"}, "softexpert": {"descricao_editada": "Sem rede (editada)"}}]}}
         if path.endswith("/descricao"):
             self.calls.append((method, path, params, body))
@@ -1942,9 +1943,22 @@ class EditDescriptionToolTests(unittest.TestCase):
         self.assertIsNone(conversation.enviar_mensagem("restaura").pendente)  # never edited: nothing to restore
         self.assertEqual(simpress.writes(), [])
 
+    def test_old_ticket_not_read_yet_is_editable_and_the_card_says_the_text_goes_to_column_h_not_to_softexpert(self) -> None:
+        model = FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1256", descricao="Impressora travada; trocado o toner")), text("feito"))
+        conversation, simpress = make_conversation(model, EditDescriptionSimpress())
+        card = conversation.enviar_mensagem("edita a descrição do 1256").pendente["descricao"]  # type: ignore[index]
+        for trecho in ("\"Impressora travada\"", "coluna H do Dashboard", "o SoftExpert nunca recebe esse texto"):  # current text = the Dashboard's column H
+            self.assertIn(trecho, card)
+        self.assertEqual(simpress.writes(), [])
+        resposta = conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("PUT", "/api/sebrae/chamados/UTIC-2026-1256/descricao")])
+        self.assertIn("coluna H do Dashboard", resposta.texto)
+        self.assertIn("o SoftExpert não recebe esse texto", resposta.texto)
+        conversation, _ = make_conversation(FakeModel(calls(call("editar_descricao_chamado_sebrae", numero="UTIC-2026-1254", descricao="x")), text("ok")), EditDescriptionSimpress())
+        self.assertIsNotNone(conversation.enviar_mensagem("edita").pendente)  # no H and no reading: the editor opens empty
+
     def test_cases_that_must_never_reach_a_card(self) -> None:
         for args in (
-            {"numero": "UTIC-2026-1254", "descricao": "x"},  # old ticket not read yet
             {"numero": "UTIC-2026-1255", "descricao": "x"},  # already finalized
             {"numero": "UTIC-2026-9999", "descricao": "x"},  # unknown
             {"numero": "UTIC-2026-1253", "descricao": "Falar com [E-MAIL OCULTADO]"},  # masked data must not be saved

@@ -50,6 +50,7 @@ class ChamadoManual(BaseModel):
     J: str = Field("", max_length=40)
     R: str = Field("", max_length=40)
     S: str = Field("", max_length=200)
+    G: str = Field("", max_length=sebrae_novos.MAX_TITULO)  # title typed on the site; blank keeps the one from SoftExpert/Dashboard
 
 
 class ExportarPayload(BaseModel):
@@ -669,11 +670,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             edicoes = _edicoes(payload, planilha, importado["listas"])
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
             automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os(), _indice_endpoint())
-            if not linhas and not edicoes and not automaticos:
+            descricoes = _descricoes_editadas_dos_antigos(abertos)
+            if not linhas and not edicoes and not automaticos and not descricoes:
                 if aceita_vazio:
                     return None
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
-            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes, automaticos)
+            gravar = {**edicoes, **{n: {**edicoes.get(n, {}), "H": h} for n, h in descricoes.items()}}
+            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, gravar, automaticos)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         conteudo = _reaplicar_encerramentos(resultado.conteudo)
@@ -687,6 +690,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo
             logger.warning("Não gravei a cópia de saída do Dashboard.", exc_info=True)
         return importado, resultado, conteudo, gravada, edicoes
+
+    def _descricoes_editadas_dos_antigos(abertos: Sequence[Mapping[str, Any]]) -> Dict[str, str]:
+        """``{chave: texto}`` da descrição editada no lápis do cartão, para a coluna H dos antigos em aberto cujo H é diferente.
+
+        Só vale para chave UTIC (``linha:<n>`` nunca tem texto editado). Vai só à cópia do Dashboard: o SoftExpert e a rotina
+        ``fechar`` nunca a recebem. Texto vazio não chega aqui (restaurar não apaga um H já gravado)."""
+        editadas = fin.descricoes_editadas(_pasta_estado())
+        if not editadas:
+            return {}
+        textos = {a["numero"]: (sebrae_novos.descricao_para_celula(editadas[a["numero"]]), a["descricao"]) for a in abertos if a["numero"] in editadas}
+        return {n: novo for n, (novo, atual) in textos.items() if novo and not sebrae_dashboard_gravacao.h_ja_gravado(novo, atual)}
 
     def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
         """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento já gravadas voltam à coluna R (o horário do SoftExpert substitui um R digitado à mão)."""
@@ -800,7 +814,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     @router.put("/api/sebrae/chamados/{numero}/descricao")
     def definir_descricao_editada(numero: str, payload: DescricaoEditadaPayload):
-        """Lápis do cartão: texto do bloco "Descrição" editado só neste site (SoftExpert e coluna H já lançada não mudam); vazio restaura o original."""
+        """Lápis do cartão: texto do bloco "Descrição" editado neste site. Vai à coluna H da cópia do Dashboard no próximo "Atualizar"
+        (linha nova ou antigo em aberto de chave UTIC); o SoftExpert e a rotina ``fechar`` nunca o recebem. Vazio restaura o original só
+        no site: não apaga nem desfaz um H já enviado (o usuário corrige à mão no Dashboard)."""
         numero = _exigir_finalizavel(numero)
         item = fin.definir_descricao_editada(_pasta_estado(), numero, sebrae_novos.descricao_segura(payload.descricao))
         # `descricao` = o que o cartão passa a mostrar; ao restaurar, o texto original lido do SoftExpert
@@ -815,7 +831,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         achado = next((c.descricao for c in novos["chamados"] if c.numero == numero), None) if novos else None
         if achado is not None:
             return achado
-        return sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(caminhos)).get(numero, {}).get("descricao", "")
+        # antigo: a coluna H do Dashboard vale primeiro (o cartão mostra a mesma), depois a leitura do SoftExpert
+        importado = sebrae_novos.ler_existentes(caminhos.existentes)
+        no_dashboard = next((str(a.get("descricao") or "") for a in (importado or {}).get("abertos", []) if str(a.get("numero")) == numero), "")
+        return no_dashboard or sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(caminhos)).get(numero, {}).get("descricao", "")
 
     @router.put("/api/sebrae/chamados/{numero}/ficha")
     def definir_ficha(numero: str, payload: FichaPayload):
@@ -985,7 +1004,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]]) -> Dict[str, Dict[str, str]]:
         """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay
-        blank); an off-list A/B it already has is kept."""
+        blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1001,6 +1020,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             try:
                 validados = sebrae_novos.validar_manuais(mesclados, exigir=False)
                 sebrae_novos.validar_listas(validados, listas, atual.valores)
+                titulo = sebrae_novos.titulo_editado(enviados)
+                if titulo:  # G is not in MANUAIS: it only goes when typed; the ticket is still found by its key, never by the title
+                    validados["G"] = titulo
             except sebrae_novos.ManuaisInvalidos as erro:
                 raise sebrae_novos.ManuaisInvalidos(f"{item.numero}: {erro}") from None
             edicoes[item.numero] = validados

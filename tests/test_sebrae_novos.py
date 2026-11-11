@@ -277,6 +277,29 @@ class ExportarTest(unittest.TestCase):
         saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "=1+1"}}, REGISTROS, RELATORIO)
         self.assertEqual(saida["bloco_a_p"].split("\t")[1], "'=1+1")
 
+    def test_titulo_digitado_no_site_vale_na_linha_e_em_branco_mantem_o_do_softexpert(self):
+        def linha(**extra):
+            return novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, **extra}}, REGISTROS, RELATORIO, exigir=False)[0]
+        self.assertEqual(linha()["G"], "Travando")
+        self.assertEqual(linha(G="")["G"], "Travando")
+        self.assertEqual(linha(G="   \n  ")["G"], "Travando")
+        self.assertEqual(linha(G="  Sem   rede  na sala 4 ")["G"], "Sem rede na sala 4")
+        self.assertEqual(linha(G="x" * novos.MAX_TITULO)["G"], "x" * novos.MAX_TITULO)
+
+    def test_titulo_digitado_e_mascarado_e_nunca_vira_formula(self):
+        linha = novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "CPF 123.456.789-09 senha Sebrae@661"}}, REGISTROS, RELATORIO, exigir=False)[0]
+        self.assertNotIn("123.456.789-09", linha["G"])
+        self.assertIn("***.***.***-**", linha["G"])
+        self.assertNotIn("Sebrae@661", linha["G"])
+        self.assertEqual(novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "=1+1"}}, REGISTROS, RELATORIO, exigir=False)[0]["G"], "'=1+1")
+        saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "Novo título"}}, REGISTROS, RELATORIO)
+        self.assertEqual(saida["bloco_a_p"].split("\t")[6], "Novo título")
+
+    def test_titulo_longo_demais_e_recusado_e_o_dashboard_nao_o_tem_como_manual(self):
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "UTIC-2026-1378: A coluna G aceita até 300"):
+            novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "x" * (novos.MAX_TITULO + 1)}}, REGISTROS, RELATORIO, exigir=False)
+        self.assertNotIn("G", novos.validar_manuais({**MANUAIS, "G": "qualquer"}))  # G is handled apart from the manual columns
+
 
 class MapearChavesDeLinhaTest(unittest.TestCase):
     @staticmethod
@@ -299,10 +322,42 @@ class MapearChavesDeLinhaTest(unittest.TestCase):
 
     def test_qualquer_campo_do_conteudo_distingue_o_chamado(self):
         base = self.item("linha:2", "T", usuario="Camila", descricao="trava")
-        for campo, valor in (("chamado", "21528"), ("titulo", "T2"), ("usuario", "Outra"), ("descricao", "outra")):
+        for campo, valor in (("chamado", "21528"), ("usuario", "Outra"), ("descricao", "outra")):
             with self.subTest(campo=campo):
                 self.assertEqual(novos.mapear_chaves_de_linha([base], [{**base, "numero": "linha:3", campo: valor}]), {"linha:2": None})
         self.assertEqual(novos.mapear_chaves_de_linha([base], [{**base, "numero": "linha:9"}]), {"linha:2": "linha:9"})
+
+    def test_titulo_editado_no_site_segue_pela_segunda_chance_por_c_i_e_h(self):
+        base = {"chamado": "Sem chamado", "usuario": "Camila", "descricao": "trava"}
+        antes = [self.item("UTIC-2026-0003", "A", "UTIC-2026-0003"), {**base, "numero": "linha:3", "titulo": "Impressora"}]
+        depois = [{**base, "numero": "linha:2", "titulo": "Impressora da sala 4"}, self.item("UTIC-2026-0003", "A", "UTIC-2026-0003")]  # G edited and the row moved
+        self.assertEqual(novos.mapear_chaves_de_linha(antes, depois), {"linha:3": "linha:2"})
+
+    def test_segunda_chance_nao_adivinha_com_c_i_h_repetidos_nem_destino_tomado(self):
+        base = {"chamado": "Sem chamado", "usuario": "Camila", "descricao": "trava"}
+        repetido_antes = [{**base, "numero": "linha:2", "titulo": "A"}, {**base, "numero": "linha:3", "titulo": "B"}]
+        repetido_depois = [{**base, "numero": "linha:2", "titulo": "A editado"}, {**base, "numero": "linha:3", "titulo": "B editado"}]
+        self.assertEqual(novos.mapear_chaves_de_linha(repetido_antes, repetido_depois), {"linha:2": None, "linha:3": None})
+        self.assertEqual(novos.mapear_chaves_de_linha([{**base, "numero": "linha:2", "titulo": "A"}], repetido_depois), {"linha:2": None})  # two candidates now
+        self.assertEqual(novos.mapear_chaves_de_linha(repetido_antes, [{**base, "numero": "linha:5", "titulo": "C"}]), {"linha:2": None, "linha:3": None})
+        # an exact pair and an edited-title pair side by side: each keeps its own destination
+        outro = {"chamado": "Sem chamado", "usuario": "Rui", "descricao": "rede"}
+        antes = [{**base, "numero": "linha:2", "titulo": "A"}, {**outro, "numero": "linha:3", "titulo": "B"}]
+        depois = [{**outro, "numero": "linha:2", "titulo": "B editado"}, {**base, "numero": "linha:3", "titulo": "A"}]
+        self.assertEqual(novos.mapear_chaves_de_linha(antes, depois), {"linha:2": "linha:3", "linha:3": "linha:2"})
+
+    def test_segunda_chance_exige_i_ou_h_preenchido_so_o_c_em_comum_nao_basta(self):
+        vazio = {"chamado": "Sem chamado", "usuario": "", "descricao": ""}
+        antes = [{**vazio, "numero": "linha:2", "titulo": "Impressora"}]
+        depois = [{**vazio, "numero": "linha:3", "titulo": "Outro chamado sem solicitante nem descrição"}]
+        self.assertEqual(novos.mapear_chaves_de_linha(antes, depois), {"linha:2": None})  # só C igual: outro chamado, não adivinha
+        for campo, valor in (("usuario", "Camila"), ("descricao", "trava")):
+            with self.subTest(preenchido=campo):
+                self.assertEqual(
+                    novos.mapear_chaves_de_linha([{**antes[0], campo: valor}], [{**depois[0], campo: valor}]), {"linha:2": "linha:3"},
+                )  # I ou H preenchido basta para a segunda chance
+        igual = [{**vazio, "numero": "linha:2", "titulo": "Impressora"}]
+        self.assertEqual(novos.mapear_chaves_de_linha(igual, [{**igual[0], "numero": "linha:5"}]), {"linha:2": "linha:5"})  # C, G, I e H iguais: primeira chance
 
     def test_chamado_que_ganhou_utic_leva_a_chave_nova(self):
         antes, depois = [self.item("linha:2", "T")], [self.item("UTIC-2026-0007", "T")]

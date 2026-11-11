@@ -16,7 +16,7 @@ from domains.assistant_api import MAX_ITENS_LISTA, SimpressApi
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard import CABECALHO, planilha
-from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, _trocar_na_folha, montar, texto
+from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, _trocar_na_folha, linha_xml, montar, texto
 from tests.test_sebrae_historico import planilha_com_status
 
 CHAMADO = ChamadoSoftExpert(
@@ -232,6 +232,179 @@ class RotasSebraeTest(RotasBase):
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual([(g["numero"], g["tipo"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0094", "alterado")])
 
+    def titulos(self, resposta):
+        return {c.numero: c.titulo for c in G.chamados_para_editar(base64.b64decode(resposta.json()["conteudo_base64"]))}
+
+    def test_atualizar_grava_o_titulo_g_digitado_do_chamado_novo_e_em_branco_mantem_o_do_softexpert(self):
+        self.importar(montar())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        url = "/api/sebrae/dashboard/atualizar"
+        sem_g = self.post(url, json={"chamados": [MANUAL]})
+        self.assertEqual(self.titulos(sem_g)["UTIC-2026-1378"], "Travando")
+        em_branco = self.post(url, json={"chamados": [{**MANUAL, "G": "   "}]})
+        self.assertEqual(self.titulos(em_branco)["UTIC-2026-1378"], "Travando")
+        digitado = self.post(url, json={"chamados": [{**MANUAL, "G": "  Notebook   trava ao ligar "}]})
+        self.assertEqual(digitado.status_code, 200, digitado.text)
+        self.assertEqual(self.titulos(digitado)["UTIC-2026-1378"], "Notebook trava ao ligar")
+        self.assertEqual(self.cliente.get("/api/sebrae/novos").json()["novos"]["formulario"][0]["linha"]["G"], "Travando")  # the stored search stays a pure copy
+        com_exportar = self.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "G": "Outro título"}]})
+        self.assertEqual(com_exportar.json()["bloco_a_p"].split("\t")[6], "Outro título")
+
+    def test_atualizar_grava_o_titulo_g_de_chamado_antigo_preenchido_ou_vazio_e_so_ele_muda(self):
+        vazio = _trocar_na_folha(montar(), texto("G2", "titulo UTIC-2026-0001", 112), '<c r="G2" s="112"/>')
+        for nome, conteudo, antes in (("preenchido", montar(), "titulo UTIC-2026-0001"), ("vazio", vazio, "")):
+            with self.subTest(g=nome):
+                self.importar(conteudo)
+                resposta = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [{"numero": "UTIC-2026-0001", "G": "Impressora sem toner"}]})
+                self.assertEqual(resposta.status_code, 200, resposta.text)
+                self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["G"])])
+                self.assertEqual(self.titulos(resposta)["UTIC-2026-0001"], "Impressora sem toner")
+                self.assertEqual(sebrae_novos.ler_existentes(self.caminhos.existentes)["abertos"][0]["titulo"], antes)  # the import is untouched
+
+    def test_atualizar_ignora_o_titulo_g_em_branco_e_o_igual_ao_da_planilha(self):
+        self.importar(montar())
+        url = "/api/sebrae/dashboard/atualizar"
+        em_branco = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE", "G": "  "}]})
+        self.assertEqual([g["celulas"] for g in em_branco.json()["linhas"]], [["B"]])
+        self.assertEqual(self.titulos(em_branco)["UTIC-2026-0001"], "titulo UTIC-2026-0001")
+        igual = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE", "G": "titulo UTIC-2026-0001"}]})
+        self.assertEqual([g["celulas"] for g in igual.json()["linhas"]], [["B"]])
+
+    def test_atualizar_mascara_o_titulo_g_e_nunca_o_deixa_virar_formula(self):
+        self.importar(montar())
+        url = "/api/sebrae/dashboard/atualizar"
+        com_dados = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "G": "CPF 123.456.789-09 senha: Segredo123"}]})
+        self.assertEqual(com_dados.status_code, 200, com_dados.text)
+        titulo = self.titulos(com_dados)["UTIC-2026-0001"]
+        self.assertIn("***.***.***-**", titulo)
+        self.assertNotIn("123.456.789-09", titulo)
+        self.assertNotIn("Segredo123", titulo)
+        formula = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "G": "=1+1"}]})
+        self.assertEqual(formula.status_code, 200, formula.text)
+        self.assertNotIn("<f>", linha_xml(base64.b64decode(formula.json()["conteudo_base64"]), 2).split('<c r="G2"')[1].split("</c>")[0])
+
+    def test_atualizar_recusa_titulo_g_longo_demais_com_422(self):
+        self.importar(montar())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        url = "/api/sebrae/dashboard/atualizar"
+        longo = "x" * (sebrae_novos.MAX_TITULO + 1)
+        self.assertEqual(self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "G": longo}]}).status_code, 422)
+        self.assertEqual(self.post(url, json={"chamados": [{**MANUAL, "G": longo}]}).status_code, 422)
+        self.assertEqual(self.post("/api/sebrae/exportar", json={"chamados": [{**MANUAL, "G": longo}]}).status_code, 422)
+        limite = "x" * sebrae_novos.MAX_TITULO
+        self.assertEqual(self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "G": limite}]}).status_code, 200)
+
+    def descricoes(self, resposta):
+        return {c.numero: c.descricao for c in G.chamados_para_editar(base64.b64decode(resposta.json()["conteudo_base64"]))}
+
+    def lapis(self, numero, texto):
+        resposta = self.cliente.put(f"/api/sebrae/chamados/{numero}/descricao", json={"descricao": texto})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        return resposta
+
+    def importar_com_h(self, h="descricao antiga"):
+        self.importar(_antes_da_coluna_p(montar(), 2, texto("H2", h, 112)))
+
+    def test_atualizar_grava_na_coluna_h_a_descricao_editada_no_lapis_do_antigo_so_com_h_ja_basta(self):
+        url = "/api/sebrae/dashboard/atualizar"
+        for nome, importar in (("h_vazio", lambda: self.importar(montar())), ("h_preenchido", self.importar_com_h)):
+            with self.subTest(h=nome):
+                importar()
+                self.lapis("UTIC-2026-0001", "  Cartucho trocado;   impressora voltou  ")
+                resposta = self.post(url, json={})  # só a descrição editada: não pode ser 422 "nada a gravar"
+                self.assertEqual(resposta.status_code, 200, resposta.text)
+                self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["H"])])
+                self.assertEqual(self.descricoes(resposta)["UTIC-2026-0001"], "Cartucho trocado; impressora voltou")
+                self.assertEqual(self.titulos(resposta)["UTIC-2026-0001"], "titulo UTIC-2026-0001")  # G untouched
+                self.assertEqual(resposta.json()["fechar"]["numeros"], [])
+                self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/descricao", json={"descricao": ""})
+
+    def test_atualizar_h_em_branco_ou_igual_nao_apaga_nem_reescreve_e_restaurar_nao_desfaz(self):
+        self.importar_com_h()
+        url = "/api/sebrae/dashboard/atualizar"
+        self.lapis("UTIC-2026-0001", "descricao antiga")  # same text the sheet already has
+        igual = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]})
+        self.assertEqual([g["celulas"] for g in igual.json()["linhas"]], [["B"]])
+        self.assertEqual(self.descricoes(igual)["UTIC-2026-0001"], "descricao antiga")
+        restaurada = self.lapis("UTIC-2026-0001", "   ")  # restoring leaves nothing to send and shows the Dashboard text again
+        self.assertEqual(restaurada.json()["descricao"], "descricao antiga")
+        sem_lapis = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]})
+        self.assertEqual([g["celulas"] for g in sem_lapis.json()["linhas"]], [["B"]])
+        self.assertEqual(self.descricoes(sem_lapis)["UTIC-2026-0001"], "descricao antiga")
+        self.assertEqual(self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "H": "digitado pelo payload"}]}).status_code, 422)  # H só pelo lápis
+        self.assertEqual(self.post(url, json={}).status_code, 422)  # nothing edited, nothing to write
+
+    def test_atualizar_mascara_a_descricao_h_e_nunca_a_deixa_virar_formula(self):
+        self.importar(montar())
+        url = "/api/sebrae/dashboard/atualizar"
+        self.lapis("UTIC-2026-0001", "CPF 123.456.789-09 senha: Segredo123")
+        com_dados = self.post(url, json={})
+        self.assertEqual(com_dados.status_code, 200, com_dados.text)
+        descricao = self.descricoes(com_dados)["UTIC-2026-0001"]
+        self.assertIn("***.***.***-**", descricao)
+        self.assertIn("[DADO SENSÍVEL OMITIDO]", descricao)
+        self.assertNotIn("123.456.789-09", descricao)
+        self.assertNotIn("Segredo123", descricao)
+        self.lapis("UTIC-2026-0001", "=1+1")
+        formula = self.post(url, json={})
+        self.assertEqual(formula.status_code, 200, formula.text)
+        celula = linha_xml(base64.b64decode(formula.json()["conteudo_base64"]), 2).split('<c r="H2"')[1].split("</c>")[0]
+        self.assertNotIn("<f>", celula)
+        self.assertEqual(self.descricoes(formula)["UTIC-2026-0001"], "=1+1")
+
+    def test_atualizar_grava_titulo_g_e_descricao_h_do_mesmo_antigo_juntos_e_o_novo_so_leva_o_h_do_lapis_na_linha(self):
+        self.importar(montar())
+        self.lapis("UTIC-2026-0001", "Descrição nova do lápis")
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE", "G": "Título novo"}]})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", ["B", "G", "H"])])
+        self.assertEqual((self.titulos(resposta)["UTIC-2026-0001"], self.descricoes(resposta)["UTIC-2026-0001"]), ("Título novo", "Descrição nova do lápis"))
+        self.assertEqual(sebrae_novos.ler_existentes(self.caminhos.existentes)["abertos"][0]["descricao"], "")  # the import is untouched
+
+    def reimportar(self, resposta):
+        self.importar(base64.b64decode(resposta.json()["conteudo_base64"]))
+
+    def test_descricao_h_ja_gravada_nao_fica_pendente_para_sempre_depois_de_reimportar(self):
+        url = "/api/sebrae/dashboard/atualizar"
+        casos = {
+            "enter_e_espacos": "linha 1\n\nlinha   2   fim",
+            "inicio_de_formula": "-trocar toner",
+            "inicio_de_igual": "=1+1 e depois texto",
+            "acima_de_2000": "palavra " * 300,
+        }
+        for nome, digitado in casos.items():
+            with self.subTest(caso=nome):
+                self.importar(montar())
+                self.lapis("UTIC-2026-0001", digitado)
+                primeira = self.post(url, json={})
+                self.assertEqual(primeira.status_code, 200, primeira.text)
+                self.assertEqual([(g["numero"], g["celulas"]) for g in primeira.json()["linhas"]], [("UTIC-2026-0001", ["H"])])
+                self.reimportar(primeira)  # the user re-imports the Dashboard that was just sent
+                segunda = self.post(url, json={})
+                self.assertEqual(segunda.status_code, 422, segunda.text)  # H already there: nothing pending, not even by the 2000-char cut
+                self.assertEqual(self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]}).json()["linhas"][0]["celulas"], ["B"])
+                self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/descricao", json={"descricao": ""})
+
+    def test_g_e_s_com_inicio_de_formula_nao_voltam_como_alterados_depois_de_reimportar(self):
+        url = "/api/sebrae/dashboard/atualizar"
+        self.importar(montar())
+        edicao = {"numero": "UTIC-2026-0001", "G": "+titulo novo", "S": "-DISPONIBILIDADE"}  # A, B, D and J come from lists, so G and S are the free texts
+        primeira = self.post(url, json={"edicoes": [edicao]})
+        self.assertEqual(primeira.status_code, 200, primeira.text)
+        self.assertEqual(primeira.json()["linhas"][0]["celulas"], ["G", "S"])
+        self.reimportar(primeira)
+        segunda = self.post(url, json={"edicoes": [edicao]})
+        self.assertEqual((segunda.status_code, segunda.json()["linhas"]), (200, []))  # the same values again change nothing
+
+    def test_descricao_editada_de_chamado_antigo_ainda_nao_lido_tambem_vale_e_nao_chega_ao_softexpert(self):
+        self.importar_com_h("texto do dashboard")
+        self.assertEqual(sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(self.caminhos)), {})  # never read in the SoftExpert
+        resposta = self.lapis("UTIC-2026-0001", "texto do lápis")
+        self.assertEqual(resposta.json()["descricao"], "texto do lápis")
+        abertos = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+        self.assertEqual(abertos["UTIC-2026-0001"]["softexpert"]["descricao_editada"], "texto do lápis")
+        self.assertEqual(abertos["UTIC-2026-0001"]["descricao"], "texto do dashboard")
+
     def test_atualizar_recusa_pedido_vazio_sem_importacao_e_copia_adulterada(self):
         vazio = self.post("/api/sebrae/dashboard/atualizar", json={})
         self.assertEqual(vazio.status_code, 422)
@@ -353,6 +526,22 @@ class ChavesDeLinhaAposOrdenarTest(RotasBase):
         self.assertEqual((depois["Monitor sem imagem"]["observacao"], depois["Monitor sem imagem"]["destaque"]), ("Trocar o cabo", False))
         self.assertEqual(depois["titulo UTIC-2026-0003"]["observacao"], "Fica onde está")
         self.assertEqual(sorted(obs.ler_observacoes(self.pasta())), ["UTIC-2026-0003", "linha:2", "linha:3"])  # nothing left on linha:4
+
+    def test_titulo_editado_no_site_nao_faz_a_observacao_e_o_destaque_se_perderem(self):
+        base = self.base(h3="Trava ao ligar")  # row 3 has its own H, so (C, I, H) is unique even after G changes
+        self.importar(base)
+        self.anotar("linha:3", "Aguardando peça", destaque=True)
+        self.anotar("linha:4", "Trocar o cabo")
+        editado = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [{"numero": "linha:3", "G": "Impressora da sala 4"}]})
+        self.assertEqual(editado.status_code, 200, editado.text)
+        resposta = self.importar(base64.b64decode(editado.json()["conteudo_base64"]))
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertNotIn("aviso", resposta.json())
+        depois = self.abertos(resposta)
+        self.assertEqual((depois["Impressora da sala 4"]["numero"], depois["Monitor sem imagem"]["numero"]), ("linha:2", "linha:3"))
+        self.assertEqual((depois["Impressora da sala 4"]["observacao"], depois["Impressora da sala 4"]["destaque"]), ("Aguardando peça", True))
+        self.assertEqual(depois["Monitor sem imagem"]["observacao"], "Trocar o cabo")
+        self.assertEqual(sorted(obs.ler_observacoes(self.pasta())), ["linha:2", "linha:3"])
 
     def test_mascara_do_cpf_na_descricao_nao_atrapalha_o_acompanhamento(self):
         base = self.base(h3="CPF 123.456.789-09 senha: Segredo123")
