@@ -501,6 +501,22 @@ test("falha no SharePoint mostra o aviso com motivo, cópia local e sugestões, 
   await expect(aviso).toBeHidden({ timeout: 10000 });
 });
 
+test("Já atualizei manualmente descarta o aviso do SharePoint sem reenviar e guarda qual cópia foi descartada", async ({ page, request }) => {
+  const { painel, antigo } = await abrirAntigo(page, request, "&sharepoint_falha=1");
+  await descreverChamado(antigo);
+  await completarCampos(antigo);
+  await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  const aviso = painel.locator("#sebrae-sharepoint-aviso");
+  await expect(aviso).toBeVisible({ timeout: 10000 });
+  const posts = [];
+  page.on("request", r => { if (r.method() === "POST") posts.push(r.url()); });
+  await aviso.getByRole("button", { name: "Já atualizei manualmente, descartar aviso", exact: true }).click();
+  await expect(aviso).toBeHidden();
+  expect(posts).toEqual([]); // descartar não reenvia nada ao SharePoint
+  expect(await page.evaluate(() => localStorage.getItem("sebrae_sharepoint_aviso_descartado"))).toContain("pendente 2026-10-28 1030");
+});
+
 test("o aviso do SharePoint e o resultado respeitam movimento reduzido e não criam rolagem horizontal no celular", async ({ page, request }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 800 });
