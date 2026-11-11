@@ -34,18 +34,18 @@ class CancelarControleRemotoPayload(BaseModel):
     pedido: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
 
 class PowerShellPayload(BaseModel):
-    hostname: str | None = Field(None, max_length=64)
+    hostname: str = Field(..., min_length=1, max_length=64)
     modo: Literal["sistema", "usuario"]
     comando: str = Field(..., min_length=1, max_length=endpoint_lookup.LIMITE_COMANDO_POWERSHELL)
     usuario: str | None = Field(None, max_length=128)
 
     @field_validator("hostname")
     @classmethod
-    def validar_hostname(cls, value: str | None) -> str | None:
-        value = (value or "").strip().upper()
-        if value and not re.fullmatch(r"[A-Z0-9_.-]+", value):
+    def validar_hostname(cls, value: str) -> str:
+        value = value.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9_.-]+", value):  # vazio também cai aqui: não há computador padrão
             raise ValueError("Informe um hostname válido.")
-        return value or None
+        return value
 
     @field_validator("usuario")
     @classmethod
