@@ -1,10 +1,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const staticDir = path.resolve(__dirname, "../../static");
-const html = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const html = assembledHtml();
 
 // IDs que o JS procura mas que não estão no index.html. Cada uma precisa de motivo.
 const ALLOWED_MISSING = new Map([

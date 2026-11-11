@@ -52,9 +52,45 @@ def _asset_digest(asset: Path) -> str | None:
     return digest
 
 
+# A line holding only `<!-- include: partials/<name>.html -->` is replaced by that file from
+# frontend/partials/ (next to static/, so the fragments are never served on their own).
+# The directive's newline goes with it; each partial keeps its own final newline.
+# Same rule in tests/frontend/support/assembled-html.cjs.
+_INCLUDE = re.compile(r"^[ \t]*<!-- include: (\S+) -->\n", re.MULTILINE)
+_MAX_INCLUDE_DEPTH = 2
+
+
+def partials_dir(static_dir: Path) -> Path:
+    return static_dir.resolve().parent / "frontend" / "partials"
+
+
+def assembled_html(static_dir: Path, name: str = "index.html") -> str:
+    """The page as the browser receives it, before the asset versions are added."""
+    root = static_dir.resolve()
+    partials = partials_dir(root)
+
+    def expand(source: str, depth: int) -> str:
+        def include(match: re.Match[str]) -> str:
+            reference = match.group(1)
+            target = (partials.parent / reference).resolve()
+            if not target.is_relative_to(partials) or target.suffix != ".html":
+                raise ValueError(f"Include fora de frontend/partials: {reference}")
+            if depth >= _MAX_INCLUDE_DEPTH:
+                raise ValueError(f"Include com mais de {_MAX_INCLUDE_DEPTH} níveis: {reference}")
+            try:
+                text = target.read_text(encoding="utf-8")
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(f"Partial ausente: frontend/{reference}") from exc
+            return expand(text, depth + 1)
+
+        return _INCLUDE.sub(include, source)
+
+    return expand((root / name).read_text(encoding="utf-8"), 0)
+
+
 def versioned_html(static_dir: Path, name: str = "index.html") -> str:
     root = static_dir.resolve()
-    source = (root / name).read_text(encoding="utf-8")
+    source = assembled_html(root, name)
 
     def version(match: re.Match[str]) -> str:
         prefix, url, suffix = match.groups()
