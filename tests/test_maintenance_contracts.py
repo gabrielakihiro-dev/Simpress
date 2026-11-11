@@ -665,6 +665,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('import "./js/shared/transfer-utils.js";', entry)
         self.assertIn('import "./js/shared/coverage-model.js";', entry)
         self.assertIn('import "./js/shared/chamados-os-model.js";', entry)
+        self.assertIn('import "./js/shared/sebrae-dashboard-model.js";', entry)
         self.assertIn('import "./js/features/coverage.js";', entry)
         self.assertIn('import "./app.js";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
@@ -672,7 +673,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "app-entry.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "js/shared/transfer-utils.js").is_file())
-        for name in ("styles/ck-cobertura.css", "js/shared/coverage-model.js", "js/shared/chamados-os-model.js", "js/features/coverage.js"):
+        for name in ("styles/ck-cobertura.css", "js/shared/coverage-model.js", "js/shared/chamados-os-model.js", "js/shared/sebrae-dashboard-model.js", "js/features/coverage.js"):
             self.assertTrue((app_config.STATIC_DIR / name).is_file(), name)
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
