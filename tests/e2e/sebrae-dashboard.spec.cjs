@@ -309,8 +309,12 @@ test("Finalizar leva só os novos já trabalhados e o toast mostra o erro 422 do
   const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
   await completarCampos(antigo);
-  await painel.locator("#sebrae-aba-novos").click(); // o 1378 é o primeiro novo, que já vem aberto
-  await painel.locator('#sebrae-novos-lista .sebrae-chamado[data-numero="UTIC-2026-1378"] [data-sebrae-campo="A"]').selectOption("CLIENTE");
+  await painel.locator("#sebrae-aba-novos").click();
+  // um chamado aberto por vez: abrir o antigo fechou o 1378 (primeiro novo), e abrir o 1378 fecha o antigo
+  const novo = painel.locator('#sebrae-novos-lista .sebrae-chamado[data-numero="UTIC-2026-1378"]');
+  await abrirItemAntigo(novo);
+  await expect(antigo).toBeHidden();
+  await novo.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE");
   const detalhe = "UTIC-2026-1378: A coluna A só aceita os valores da lista do Dashboard (aba LISTAS).";
   const posts = [];
   await page.route("**/api/sebrae/finalizar-softexpert", rota => {
@@ -319,6 +323,7 @@ test("Finalizar leva só os novos já trabalhados e o toast mostra o erro 422 do
     return rota.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: detalhe }) });
   });
   await painel.locator("#sebrae-aba-antigos").click();
+  await abrirItemAntigo(antigo);
   await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
   await expect(page.locator(TOAST).filter({ hasText: detalhe })).toHaveCount(1);
@@ -562,7 +567,7 @@ test("Ler chamados antigos dispara o POST, mostra andamento e resultado e o anti
   await abrirSecaoAntigos(painel); // a lista recarregou com a leitura e os antigos voltam recolhidos
   const lido = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1211"]');
   await expect(lido.locator(".sebrae-chamado__assunto")).toHaveText("Notebook não liga");
-  await expect(painel.locator('#sebrae-antigos-lista details.sebrae-antigo:has(.sebrae-chamado[data-numero="UTIC-2026-1211"]) > summary .sebrae-selo:not(.sebrae-selo--auto)')).toHaveText("Lido"); // agora lido: o selo do resumo muda
+  await expect(painel.locator('#sebrae-antigos-lista details.sebrae-antigo:has(.sebrae-chamado[data-numero="UTIC-2026-1211"]) > summary .sebrae-selo:not(.sebrae-selo--auto):not(.sebrae-selo-obs)')).toHaveText("Lido"); // agora lido: o selo do resumo muda
   await expect(lido.locator("[data-leitura='pendente']")).toHaveCount(0);
   await expect(lido.locator(".sebrae-chamado__auto")).toContainText("Diego Martins Costa");
 });
@@ -573,7 +578,7 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   const lista = painel.locator("#sebrae-antigos-lista");
   const lido = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1210"]');
   const resumoDe = numero => lista.locator(`details.sebrae-antigo:has(.sebrae-chamado[data-numero="${numero}"]) > summary.sebrae-antigo__resumo`);
-  const seloLeitura = numero => resumoDe(numero).locator(".sebrae-selo:not(.sebrae-selo--auto)");
+  const seloLeitura = numero => resumoDe(numero).locator(".sebrae-selo:not(.sebrae-selo--auto):not(.sebrae-selo-obs)");
   await expect(resumoDe("UTIC-2026-1210")).toContainText("UTIC-2026-1210");
   await expect(resumoDe("UTIC-2026-1210")).toContainText("Monitor sem imagem");
   await expect(resumoDe("UTIC-2026-1210")).toContainText("Bruna Alves Teixeira");
@@ -614,8 +619,8 @@ test("antigo não encontrado no SoftExpert na última leitura fica vermelho, com
   const linha = numero => lista.locator(`details.sebrae-antigo:has(.sebrae-chamado[data-numero="${numero}"])`);
   const vermelho = await linha("UTIC-2026-1211").evaluate(no => getComputedStyle(no).borderLeftWidth);
   expect(vermelho).toBe("4px");
-  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto)")).toHaveText("Não encontrado");
-  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto)")).toHaveAttribute("data-status", "erro");
+  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto):not(.sebrae-selo-obs)")).toHaveText("Não encontrado");
+  await expect(linha("UTIC-2026-1211").locator("> summary .sebrae-selo:not(.sebrae-selo--auto):not(.sebrae-selo-obs)")).toHaveAttribute("data-status", "erro");
   const cartao = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1211"]');
   await abrirItemAntigo(cartao);
   await expect(cartao.locator("[data-leitura='nao_encontrado']")).toContainText("pode ter sido finalizado por outro técnico");

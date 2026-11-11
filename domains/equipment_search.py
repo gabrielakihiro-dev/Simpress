@@ -5,6 +5,8 @@ import re
 import unicodedata
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 
+from domains.regras_negocio import cadastro_e_macbook
+
 
 EquipmentSearchIndexEntry = Tuple[
     int,
@@ -34,7 +36,7 @@ SUGGESTION_CUTOFF = 0.75
 def categorize_equipment(kind: Any, model: Any, normalize: Callable[[Any], str] = normalize_search_term) -> str:
     """Map inventory labels to the categories used by the search interface."""
     text = f"{normalize(kind)} {normalize(model)}"
-    if "MACBOOK" in text:
+    if cadastro_e_macbook(kind, model):
         return "macbook"
     if "MONITOR" in text:
         return "monitor"

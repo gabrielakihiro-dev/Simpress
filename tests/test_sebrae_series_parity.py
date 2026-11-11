@@ -1,29 +1,21 @@
-import re
 import unittest
 from pathlib import Path
 
-from domains.inventory_comparison import SEBRAE_OWNED_NOTEBOOK_SERIALS
+from domains.regras_negocio import SERIES_SEBRAE
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RENDERER = PROJECT_ROOT / "static" / "js" / "ui" / "comparison-result-renderer.js"
 
 
-class SebraeSeriesParityTests(unittest.TestCase):
-    def test_js_and_python_sebrae_series_lists_match(self):
+class SebraeSeriesSingleSourceTests(unittest.TestCase):
+    def test_renderer_keeps_no_copy_of_the_sebrae_series_list(self):
+        # A fonte única é domains/regras_negocio.py; o JS só usa as listas como o backend as entrega.
         source = RENDERER.read_text(encoding="utf-8")
-        block = re.search(r"SERIES_SEBRAE\s*=\s*new Set\(\[(.*?)\]\)", source, re.S)
-        self.assertIsNotNone(block, "SERIES_SEBRAE não encontrada em comparison-result-renderer.js")
-        js_series = set(re.findall(r"[\"']([A-Z0-9]+)[\"']", block.group(1)))
-        python_series = set(SEBRAE_OWNED_NOTEBOOK_SERIALS)
-
-        self.assertTrue(js_series, "SERIES_SEBRAE do JS está vazia")
-        self.assertTrue(python_series, "SEBRAE_OWNED_NOTEBOOK_SERIALS do Python está vazia")
-        self.assertEqual(
-            js_series,
-            python_series,
-            f"Listas de séries Sebrae divergem. Só no JS: {sorted(js_series - python_series)}; "
-            f"só no Python: {sorted(python_series - js_series)}",
-        )
+        self.assertTrue(SERIES_SEBRAE, "SERIES_SEBRAE do Python está vazia")
+        self.assertNotIn("SERIES_SEBRAE", source)
+        self.assertNotIn("filtrarSeriesSebrae", source)
+        for serie in SERIES_SEBRAE:
+            self.assertNotIn(serie, source, f"Série do Sebrae {serie} copiada no JS")
 
 
 if __name__ == "__main__":

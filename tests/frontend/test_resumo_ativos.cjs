@@ -2,11 +2,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const root = path.resolve(__dirname, "../..");
-const html = fs.readFileSync(path.join(root, "static/index.html"), "utf8");
+const html = assembledHtml();
 const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
 const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
 

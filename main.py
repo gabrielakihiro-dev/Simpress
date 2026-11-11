@@ -19,8 +19,7 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
 from core.integrity import (
@@ -88,8 +87,6 @@ from core.config import (
     TRANSACTION_ROOT,
     TRANSFER_HISTORY_FILE,
     UPLOAD_BACKUPS_DIR,
-    SUPPORTED_CONTRACT,
-    SUPPORTED_CONTRACT_LEGAL_NAME,
     TRANSFER_ORIGIN_CONTACT_FILE,
     REGIONAL_REPRESENTATIVES_FILE,
 )
@@ -126,7 +123,6 @@ from core.logging_setup import configure_logging
 from core.xlsx_safety import (
     XlsxLimitExceeded,
     XlsxPackageError,
-    set_cell_value_as_text,
     validate_xlsx,
 )
 
@@ -176,29 +172,24 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import alias_changes, equipment_export, inventory_state, user_changes, user_holds, entra_users
+from domains import alias_changes, equipment_edit, equipment_export, inventory_state, user_changes, user_holds, entra_users
 from domains.entra_inbox import EntraInbox
 from routers.entra_users import EntraUserServices, create_entra_users_router
 from domains.alias_changes import (
     compare_equipment_aliases,
     snapshot_equipment_aliases,
-    validate_equipment_serial as _validate_equipment_serial,
 )
 from domains.inventory_state import (
     STATE_LOCK,
     _coerce_unit_id,
     _unit_identity_key,
     format_cep,
-    get_suggested_description,
-    normalize_contract_value,
 )
 from domains import readiness, uploaded_workbooks
 from domains.uploaded_workbooks import (
-    DETAILS_ALIAS_HEADER_ALIASES,
     DETAILS_COMPLETE_SOURCE_COLUMN_COUNT,
     DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES,
     DETAILS_REQUIRED_HEADERS,
-    DETAILS_SERIAL_HEADER_ALIASES,
     WorkbookHeaderError,
     normalize_workbook_header,
     select_upload_table,
@@ -215,6 +206,7 @@ from domains.equipment_search import (
     search_normalized_index as search_normalized_equipment_index,
     suggest_user_term,
 )
+from routers.equipment import EquipmentRouteServices, create_equipment_router
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
@@ -1423,27 +1415,6 @@ _inventory_state_services = inventory_state.InventoryStateServices(
     logger=logger,
 )
 
-# Models for API
-class EquipamentoUpdatePayload(BaseModel):
-    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
-    novo: bool = Field(False, description="Indica que o formulário está cadastrando um equipamento novo")
-    modelo: Optional[str] = Field("", max_length=300, description="Modelo do Equipamento")
-    tipo: Optional[str] = Field("", max_length=120, description="Tipo (Notebook, Micro Computador, Headsets...)")
-    apelido: Optional[str] = Field("", max_length=160, description="Apelido / Hostname")
-    idCliente: Optional[str] = Field("", max_length=128, description="ID do Cliente")
-    revisao: Optional[str] = Field(None, min_length=64, max_length=64)
-    # Mantidos para compatibilidade com clientes antigos; a rota ignora esses campos.
-    endereco: Optional[str] = Field("", max_length=500, description="Endereço carregado da Simpress")
-    cidade: Optional[str] = Field("", max_length=160, description="Cidade carregada da Simpress")
-    uf: Optional[str] = Field("PR", max_length=2, description="UF carregada da Simpress")
-    cep: Optional[str] = Field("", max_length=12, description="CEP carregado da Simpress")
-    cnpj_instalacao: Optional[str] = Field("", max_length=24, description="CNPJ carregado da Simpress")
-
-    @field_validator("serial")
-    @classmethod
-    def validate_serial(cls, value: str) -> str:
-        return _validate_equipment_serial(value)
-
 
 def _public_equipment(equipment: Dict[str, Any]) -> Dict[str, Any]:
     public = {key: value for key, value in equipment.items() if not key.startswith("_")}
@@ -1453,446 +1424,23 @@ def _public_equipment(equipment: Dict[str, Any]) -> Dict[str, Any]:
     return public
 
 
-def _edit_equipment_workbook(
-    wb,
-    payload: EquipamentoUpdatePayload,
-    target_sheet_name: Optional[str] = None,
-    record_must_exist: Optional[bool] = None,
-    fields_to_update: Optional[Set[str]] = None,
-    expected_revision: Optional[str] = None,
-):
-    if target_sheet_name is None:
-        target_sheet_name = next(
-            (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
-            wb.sheetnames[0] if wb.sheetnames else None,
-        )
-    elif target_sheet_name not in wb.sheetnames:
-        return None
-    if target_sheet_name is None:
-        return None
-    ws = wb[target_sheet_name]
-    header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
-    col_map = {
-        normalize_workbook_header(value): index + 1
-        for index, value in enumerate(header_row)
-        if value is not None
-    }
-    serial_col = next(
-        (col_map.get(alias) for alias in DETAILS_SERIAL_HEADER_ALIASES if col_map.get(alias)),
-        None,
-    )
-    if not serial_col:
-        return None
-
-    target_serial = normalize_reference_value(payload.serial)
-    matching_rows = [
-        row for row in range(2, ws.max_row + 1)
-        if normalize_reference_value(ws.cell(row=row, column=serial_col).value) == target_serial
-        and target_serial
-    ]
-    if len(matching_rows) > 1:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A série {payload.serial.strip()} aparece mais de uma vez na aba '{ws.title}'; nenhum registro foi alterado.",
-        )
-    if matching_rows:
-        contract_col = col_map.get("CODIGOCONTRATO") or col_map.get("CODIGODOCONTRATO")
-        if contract_col:
-            raw_contract = ws.cell(row=matching_rows[0], column=contract_col).value
-            normalized_contract = normalize_contract_value(raw_contract)
-            if normalized_contract and normalized_contract != str(SUPPORTED_CONTRACT):
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        f"O equipamento pertence ao contrato {normalized_contract}; "
-                        f"este sistema só edita o contrato {SUPPORTED_CONTRACT}."
-                    ),
-                )
-    if matching_rows and expected_revision:
-        target_row_for_revision = matching_rows[0]
-
-        def row_value(*aliases: str) -> Any:
-            column = next(
-                (col_map.get(normalize_workbook_header(alias)) for alias in aliases
-                 if col_map.get(normalize_workbook_header(alias))),
-                None,
-            )
-            return ws.cell(row=target_row_for_revision, column=column).value if column else ""
-
-        current_revision = _equipment_revision(
-            ws.cell(row=target_row_for_revision, column=serial_col).value,
-            row_value("MODELO"),
-            row_value("TIPO", "CLASSEEQUIPAMENTO"),
-            row_value(*DETAILS_ALIAS_HEADER_ALIASES),
-            row_value("IDCLIENTE", "ID CLIENTE"),
-        )
-        if not hmac.compare_digest(expected_revision, current_revision):
-            raise HTTPException(
-                status_code=409,
-                detail="O equipamento foi alterado desde a leitura; recarregue os dados antes de salvar.",
-            )
-    if record_must_exist is True and not matching_rows:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A série {payload.serial.strip()} não está mais na planilha ativa; recarregue o inventário antes de editar.",
-        )
-    if record_must_exist is False and matching_rows:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A série {payload.serial.strip()} já existe na planilha ativa; recarregue o inventário antes de cadastrar.",
-        )
-    target_row = matching_rows[0] if matching_rows else ws.max_row + 1
-    expected: Dict[tuple, Any] = {}
-    requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
-
-    def set_value(column: Optional[int], value: Any) -> None:
-        if column is None:
-            return
-        cell = ws.cell(row=target_row, column=column)
-        persisted_value = "" if value is None else value
-        set_cell_value_as_text(cell, persisted_value)
-        expected[(ws.title, cell.coordinate)] = persisted_value
-
-    if not matching_rows:
-        set_value(serial_col, payload.serial.strip().upper())
-        set_value(col_map.get("CODIGOCONTRATO"), SUPPORTED_CONTRACT)
-        set_value(col_map.get("ITEMDECONTRATO"), target_row - 1)
-        set_value(col_map.get("RAZAOSOCIAL"), SUPPORTED_CONTRACT_LEGAL_NAME)
-
-    fields = (
-        ("apelido", col_map.get("APELIDO")),
-        ("modelo", col_map.get("MODELO")),
-        ("tipo", col_map.get("TIPO") or col_map.get("CLASSEEQUIPAMENTO")),
-        ("idCliente", col_map.get("IDCLIENTE")),
-    )
-    for field_name, column in fields:
-        if matching_rows and field_name not in requested_fields:
-            continue
-        value = getattr(payload, field_name)
-        set_value(column, value.strip() if value is not None else "")
-
-    if not matching_rows:
-        from openpyxl.utils.cell import get_column_letter, range_boundaries
-
-        for table in ws.tables.values():
-            min_col, min_row, max_col, max_row = range_boundaries(table.ref)
-            if min_row == 1 and max_row == target_row - 1 and min_col <= serial_col <= max_col:
-                expanded_ref = (
-                    f"{get_column_letter(min_col)}{min_row}:"
-                    f"{get_column_letter(max_col)}{target_row}"
-                )
-                table.ref = expanded_ref
-                if table.autoFilter is not None:
-                    table.autoFilter.ref = expanded_ref
-
-        if ws.auto_filter.ref:
-            min_col, min_row, max_col, max_row = range_boundaries(ws.auto_filter.ref)
-            if min_row == 1 and max_row == target_row - 1 and min_col <= serial_col <= max_col:
-                ws.auto_filter.ref = (
-                    f"{get_column_letter(min_col)}{min_row}:"
-                    f"{get_column_letter(max_col)}{target_row}"
-                )
-    return expected
-
-
-def update_equipment_in_workbook_file(
-    file_path: Path,
-    payload: EquipamentoUpdatePayload,
-    transaction: Optional[AtomicFileTransaction] = None,
-    target_sheet_name: Optional[str] = None,
-    record_must_exist: Optional[bool] = None,
-    fields_to_update: Optional[Set[str]] = None,
-    expected_revision: Optional[str] = None,
-) -> bool:
-    """Prepare and validate a workbook update before its atomic replacement."""
-    file_path = Path(file_path)
-    if not file_path.exists():
-        return False
-    try:
-        if transaction is not None:
-            return stage_workbook_update(
-                transaction,
-                file_path,
-                lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
-                ),
-                allow_dimension_growth=True,
-                allow_table_growth=True,
-            )
-        with AtomicFileTransaction(TRANSACTION_ROOT, [file_path]) as own_transaction:
-            saved = stage_workbook_update(
-                own_transaction,
-                file_path,
-                lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
-                ),
-                allow_dimension_growth=True,
-                allow_table_growth=True,
-            )
-            if saved:
-                own_transaction.commit()
-            return saved
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except WorkbookSafetyError as error:
-        raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível salvar '{file_path.name}': {error}") from error
-
-
-def normalizar_endereco_instalacao(payload: EquipamentoUpdatePayload) -> Dict[str, str]:
-    endereco = payload.endereco.strip() if payload.endereco else ""
-    cidade = payload.cidade.strip() if payload.cidade else ""
-    uf = (payload.uf.strip() if payload.uf else "PR").upper()
-    cep = format_cep(payload.cep)
-    cnpj = payload.cnpj_instalacao.strip() if payload.cnpj_instalacao else ""
-
-    is_sede = (
-        ("caeté" in endereco.lower() or "caete" in endereco.lower() or "sede" in endereco.lower() or "sede" in cidade.lower())
-        and ("curitiba" in cidade.lower() or "sede" in cidade.lower())
-    )
-    if is_sede:
-        endereco = "R Caeté, 150 - SEDE - Prado Velho"
-        cidade = "Curitiba"
-        uf = "PR"
-        cep = "80220-300"
-
-    return {
-        "endereco": endereco,
-        "cidade": cidade,
-        "uf": uf,
-        "cep": cep,
-        "cnpj": cnpj,
-    }
-
-
-def snapshot_endereco_instalacao(equipamento: Dict[str, Any]) -> Dict[str, str]:
-    return {
-        "endereco": str(equipamento.get("endereco_instalacao") or "").strip(),
-        "cidade": str(equipamento.get("retirada_cidade") or "").strip(),
-        "uf": str(equipamento.get("retirada_uf") or "").strip(),
-        "cep": str(equipamento.get("retirada_cep") or "").strip(),
-        "cnpj": str(equipamento.get("retirada_cnpj") or "").strip(),
-    }
-
-
-def save_equipment_to_excel(
-    payload: EquipamentoUpdatePayload,
-    json_mutations: Optional[Dict[Path, Any]] = None,
-    fields_to_update: Optional[Set[str]] = None,
-):
-    """Salva um equipamento somente na fonte e na aba associadas ao cache atual."""
-    target_serial_upper = payload.serial.strip().upper()
-    detail_files = [path for path in get_details_files() if path.is_file()]
-    if not detail_files:
-        raise HTTPException(status_code=404, detail="Nenhuma planilha da Simpress encontrada no servidor.")
-
-    requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
-    json_mutations = dict(json_mutations or {})
-    try:
-        # Lock every candidate while resolving the current primary source. Only
-        # that source is staged below; legacy copies remain untouched.
-        transaction_targets = list(dict.fromkeys([
-            *detail_files,
-            ENDPOINT_UPLOAD_FILE,
-            MODIFIED_APELIDOS_FILE,
-            *json_mutations.keys(),
-        ]))
-        with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
-            with STATE_LOCK:
-                next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
-                next_unit_cache = deepcopy(inventory_state.unidades_cache)
-                next_stats_cache = deepcopy(inventory_state.stats_cache)
-            cached_equipment = deepcopy(next_equipment_cache.get(target_serial_upper))
-            if cached_equipment is None and not payload.novo:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
-                )
-            expected_revision = payload.revisao
-            if cached_equipment is not None:
-                current_revision = str(cached_equipment.get("_revisao") or "")
-                if not expected_revision:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="A revisão deste equipamento não foi informada; recarregue-o antes de salvar.",
-                    )
-                if not hmac.compare_digest(expected_revision, current_revision):
-                    raise HTTPException(
-                        status_code=409,
-                        detail="O equipamento foi alterado desde a leitura; recarregue os dados antes de salvar.",
-                    )
-            if cached_equipment is not None and payload.novo:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A série já pertence a um equipamento carregado; atualize o inventário antes de cadastrar outra vez.",
-                )
-            if cached_equipment is not None:
-                if cached_equipment.get("invall_alias_status") == "serie_detalhes_duplicada":
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"A série {target_serial_upper} está duplicada na base ativa; nenhum registro foi alterado.",
-                    )
-                # Preserve the latest local alias when this save waited behind
-                # a concurrent alias edit, and discard a now-stale new-record override.
-                payload.apelido = cached_equipment.get(
-                    "_apelido_local", cached_equipment.get("_apelido_base", "")
-                )
-                json_mutations.pop(MODIFIED_APELIDOS_FILE, None)
-
-            active_file = get_primary_equipment_file()
-            if active_file is None or not active_file.is_file():
-                raise HTTPException(status_code=404, detail="Nenhuma planilha válida da Simpress está ativa.")
-
-            target_file = active_file.resolve()
-            locked_files = {path.resolve() for path in detail_files}
-            if target_file not in locked_files:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A lista de inventários mudou durante a edição; recarregue a base e tente novamente.",
-                )
-
-            cached_source = cached_equipment.get("_source_file") if cached_equipment else None
-            if cached_source:
-                if Path(cached_source).resolve() != target_file:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="A base ativa mudou depois que este equipamento foi carregado; recarregue-o antes de editar.",
-                    )
-
-            current_sheet = find_details_sheet(target_file)
-            if current_sheet is None:
-                raise HTTPException(status_code=409, detail="A base ativa não contém uma aba de equipamentos válida.")
-            cached_sheet = cached_equipment.get("_source_sheet") if cached_equipment else None
-            if cached_sheet and cached_sheet != current_sheet:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A aba de origem mudou depois que este equipamento foi carregado; recarregue-o antes de editar.",
-                )
-            target_sheet = cached_sheet or current_sheet
-
-            saved = update_equipment_in_workbook_file(
-                target_file,
-                payload,
-                transaction,
-                target_sheet_name=target_sheet,
-                record_must_exist=not payload.novo,
-                fields_to_update=requested_fields,
-                expected_revision=expected_revision,
-            )
-            if not saved:
-                raise HTTPException(status_code=500, detail="Não foi possível atualizar o equipamento na planilha.")
-            staged_json: Dict[Path, Any] = {}
-            for path, updater in json_mutations.items():
-                staged_json[path] = transaction.update_json(
-                    path,
-                    updater,
-                    [] if path == ALIAS_HISTORY_FILE else {},
-                )
-
-            endereco_info = (
-                snapshot_endereco_instalacao(cached_equipment)
-                if cached_equipment
-                else normalizar_endereco_instalacao(EquipamentoUpdatePayload(
-                    serial=target_serial_upper,
-                    novo=False,
-                    modelo="",
-                    tipo="",
-                    apelido="",
-                    idCliente="",
-                    revisao=None,
-                    endereco="",
-                    cidade="",
-                    uf="PR",
-                    cep="",
-                    cnpj_instalacao="",
-                ))
-            )
-            endereco = endereco_info["endereco"]
-            cidade = endereco_info["cidade"]
-            uf = endereco_info["uf"]
-            cep_formatado = endereco_info["cep"]
-            cnpj_instalacao = endereco_info["cnpj"]
-            retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
-
-            def updated_value(field_name: str, cache_key: str) -> str:
-                if cached_equipment is not None and field_name not in requested_fields:
-                    return str(cached_equipment.get(cache_key) or "").strip()
-                value = getattr(payload, field_name)
-                return value.strip() if value is not None else ""
-
-            base_alias = updated_value("apelido", "_apelido_base")
-            modelo = updated_value("modelo", "modelo")
-            tipo = updated_value("tipo", "tipo")
-            id_cliente = updated_value("idCliente", "idCliente")
-            desc_sugerida = get_suggested_description(tipo, modelo)
-
-            modified_aliases = staged_json.get(MODIFIED_APELIDOS_FILE)
-            if not isinstance(modified_aliases, dict):
-                modified_aliases = load_modified_apelidos()
-            manual_aliases = _manual_aliases_by_serial(modified_aliases)
-            normalized_serial = normalize_reference_value(target_serial_upper)
-            local_alias = manual_aliases.get(normalized_serial, base_alias)
-            updated_equipment = {
-                "serial": target_serial_upper,
-                "_source_file": str(target_file),
-                "_source_sheet": target_sheet,
-                "modelo": modelo,
-                "tipo": tipo,
-                "apelido": local_alias,
-                "_apelido_base": base_alias,
-                "_apelido_local": local_alias,
-                "_apelido_manual_override": normalized_serial in manual_aliases,
-                "_revisao": _equipment_revision(
-                    target_serial_upper, modelo, tipo, base_alias, id_cliente
-                ),
-                "idCliente": id_cliente,
-                "descricao_sugerida": desc_sugerida,
-                "endereco_instalacao": endereco,
-                "retirada_cnpj": cnpj_instalacao,
-                "retirada_endereco": retirada_endereco,
-                "retirada_cidade": cidade,
-                "retirada_uf": uf,
-                "retirada_cep": cep_formatado,
-                "contrato": (
-                    cached_equipment.get("contrato", str(SUPPORTED_CONTRACT))
-                    if cached_equipment else str(SUPPORTED_CONTRACT)
-                ),
-                "razao_social": (
-                    cached_equipment.get("razao_social", SUPPORTED_CONTRACT_LEGAL_NAME)
-                    if cached_equipment else SUPPORTED_CONTRACT_LEGAL_NAME
-                ),
-            }
-
-            endpoint_index = read_endpoint_alias_index()
-            _apply_effective_alias(
-                updated_equipment,
-                endpoint_index,
-                details_duplicate=bool(
-                    cached_equipment
-                    and cached_equipment.get("invall_alias_status") == "serie_detalhes_duplicada"
-                ),
-            )
-            next_equipment_cache[target_serial_upper] = updated_equipment
-            next_stats_cache["total_equipamentos"] = len(next_equipment_cache)
-            next_stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            prepared_state = prepare_database_state(
-                next_equipment_cache,
-                next_unit_cache,
-                next_stats_cache,
-            )
-
-            # All reads and derived data are prepared before the durable commit.
-            # Publishing afterward only swaps already-built references.
-            transaction.commit()
-            publish_database_state(prepared_state)
-            return updated_equipment, len(modified_aliases)
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except WorkbookSafetyError as error:
-        raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível concluir a gravação: {error}") from error
+# Late-bound so tests that patch these main attributes keep affecting equipment edits.
+_equipment_edit_services = equipment_edit.EquipmentEditServices(
+    transaction_root=lambda: TRANSACTION_ROOT,
+    atomic_file_transaction=lambda root, targets: AtomicFileTransaction(root, targets),
+    get_details_files=lambda: get_details_files(),
+    get_primary_equipment_file=lambda: get_primary_equipment_file(),
+    find_details_sheet=lambda file_path: find_details_sheet(file_path),
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    modified_aliases_file=lambda: MODIFIED_APELIDOS_FILE,
+    alias_history_file=lambda: ALIAS_HISTORY_FILE,
+    load_modified_apelidos=lambda: load_modified_apelidos(),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    apply_effective_alias=lambda *args, **kwargs: _apply_effective_alias(*args, **kwargs),
+    equipment_revision=lambda *args: _equipment_revision(*args),
+    prepare_database_state=lambda *args, **kwargs: prepare_database_state(*args, **kwargs),
+    publish_database_state=lambda state: publish_database_state(state),
+)
 
 
 # Late-bound so tests that patch these main attributes keep affecting alias changes.
@@ -1945,17 +1493,17 @@ _endpoint_removal_services = endpoint_removals.EndpointRemovalServices(
 app.include_router(create_endpoint_removals_router(_endpoint_removal_services))
 
 
-# Endpoints
-@app.get("/api/equipamento/{serial}")
-def get_equipamento(serial: str):
-    """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
-    clean_serial = serial.strip().upper()
-    with STATE_LOCK:
-        equipment = deepcopy(inventory_state.equipamentos_cache.get(clean_serial))
-    if equipment is not None:
-        return _public_equipment(equipment)
-
-    raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
+# Equipment routes keep their place before the endpoint lookup and UX routers.
+equipment_router, _equipment_exports = create_equipment_router(EquipmentRouteServices(
+    edit=_equipment_edit_services,
+    public_equipment=lambda equipment: _public_equipment(equipment),
+    validate_json_object=lambda data, label: _validate_json_object(data, label),
+    build_export=lambda: equipment_export.build_equipment_export(_equipment_export_services),
+))
+app.include_router(equipment_router)
+get_equipamento = _equipment_exports.get_equipamento
+salvar_equipamento = _equipment_exports.salvar_equipamento
+exportar_equipamentos = _equipment_exports.exportar_equipamentos
 
 
 def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
@@ -1980,68 +1528,10 @@ def _endpoint_lookup_snapshot(serial: str) -> Dict[str, Any]:
 
 _ux_chamados = ChamadosUX(STATE_DIR, conectar_ux)
 _ux_tickets = TicketsUX(STATE_DIR, conectar_ux_ticket)
-app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot))
+app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot, codigos_file=lambda: STATE_DIR / "powershell_codigos.json"))
 app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
 app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
 app.include_router(create_outlook_mail_router(STATE_DIR / "outlook_email_modelos.json", ENTRA_USERS_FILE))
-
-
-@app.post("/api/equipamento/salvar")
-def salvar_equipamento(payload: EquipamentoUpdatePayload):
-    """Atualiza ou cadastra um equipamento tanto na memória do site quanto diretamente na planilha Excel."""
-    if not payload.serial or not payload.serial.strip():
-        raise HTTPException(status_code=400, detail="Número de série é obrigatório.")
-    if not normalize_reference_value(payload.serial):
-        raise HTTPException(status_code=422, detail="O número de série precisa conter letras ou números.")
-    
-    target_serial = payload.serial.strip().upper()
-    requested_fields = set(payload.model_fields_set)
-    with STATE_LOCK:
-        equipamento_existente = deepcopy(inventory_state.equipamentos_cache.get(target_serial))
-    if payload.novo and equipamento_existente is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="A série já está cadastrada; atualize a base antes de criar um novo equipamento.",
-        )
-    if not payload.novo and equipamento_existente is None:
-        raise HTTPException(
-            status_code=409,
-            detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
-        )
-    if equipamento_existente is not None and not payload.revisao:
-        raise HTTPException(
-            status_code=409,
-            detail="A revisão deste equipamento não foi informada; recarregue-o antes de salvar.",
-        )
-    if equipamento_existente is not None:
-        # Para equipamentos já cadastrados, o apelido só pode ser alterado pela rota dedicada.
-        # Isso impede que o formulário de dados/endereço sobrescreva apelidos acidentalmente.
-        # Keep the stored EquipamentosDetalhes alias, not its InvAll presentation value.
-        payload.apelido = equipamento_existente.get("_apelido_local", equipamento_existente.get("_apelido_base", ""))
-
-    json_mutations = {}
-    if equipamento_existente is None and payload.apelido is not None and payload.apelido.strip():
-        new_alias = payload.apelido.strip()
-        def save_new_alias(data):
-            aliases = dict(_validate_json_object(data, "apelidos"))
-            for key in list(aliases):
-                if normalize_reference_value(key) == normalize_reference_value(target_serial):
-                    aliases.pop(key, None)
-            aliases[target_serial] = new_alias
-            return aliases
-        json_mutations[MODIFIED_APELIDOS_FILE] = save_new_alias
-
-    saved_equipment, modified_alias_count = save_equipment_to_excel(
-        payload,
-        json_mutations=json_mutations,
-        fields_to_update=requested_fields,
-    )
-    return {
-        "sucesso": True,
-        "mensagem": f"Equipamento {target_serial} atualizado com sucesso no site e na planilha Excel!",
-        "equipamento": _public_equipment(saved_equipment),
-        "total_modificados": modified_alias_count,
-    }
 
 
 def aplicar_alteracao_apelido(
@@ -2067,17 +1557,6 @@ def aplicar_alteracao_apelido(
         expected_latest_event_id=expected_latest_event_id,
         remove_history_event_id=remove_history_event_id,
         drop_override=drop_override,
-    )
-
-
-@app.get("/api/exportar-equipamentos")
-def exportar_equipamentos():
-    """Exporta a apresentação de referência com os registros da base ativa."""
-    export = equipment_export.build_equipment_export(_equipment_export_services)
-    return StreamingResponse(
-        io.BytesIO(export.content),
-        media_type=equipment_export.XLSX_MEDIA_TYPE,
-        headers=export.headers,
     )
 
 

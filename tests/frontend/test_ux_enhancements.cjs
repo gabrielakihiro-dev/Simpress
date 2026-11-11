@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const ux = require("../../static/js/ui/ux-enhancements.js");
 const createNotifications = require("../../static/js/ui/ui-notifications.js");
@@ -8,7 +9,7 @@ const createNotifications = require("../../static/js/ui/ui-notifications.js");
 const staticDir = path.join(__dirname, "..", "..", "static");
 const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();
-const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const appHtml = assembledHtml();
 const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");

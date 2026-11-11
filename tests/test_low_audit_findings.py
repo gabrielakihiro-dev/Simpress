@@ -4,6 +4,7 @@ import io
 import unittest
 
 from core import config as app_config
+from domains.frontend_assets import assembled_html
 import main
 import openpyxl
 
@@ -17,7 +18,7 @@ class LowAuditFindingTests(unittest.TestCase):
         self.assertNotRegex(script, r"if \(inputSerial\) inputSerial\.focus\(\)")
 
     def test_statistics_start_unconfirmed_and_reject_missing_or_invalid_counts(self):
-        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = assembled_html(app_config.STATIC_DIR)
         script = (app_config.STATIC_DIR / "js/features/dashboard.js").read_text(encoding="utf-8")
 
         self.assertIn('id="stat-equipamentos">Carregando…</strong>', html)
