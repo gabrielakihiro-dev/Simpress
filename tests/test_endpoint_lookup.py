@@ -1,4 +1,7 @@
 """Read-only Endpoint lookup, independent of operational files and Chrome login."""
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -135,6 +138,31 @@ class LookupTests(unittest.TestCase):
                     page.close.assert_not_called()
                     browser.close.assert_not_called()
                     pw.chromium.connect_over_cdp.assert_called_once_with("http://127.0.0.1:9333", timeout=10000)
+
+    def test_connects_to_the_port_garantir_chrome_opened(self):
+        # Fresh interpreter: CDP_PORT is read at import, so an in-process reload would undo the module patches.
+        script = (
+            "import sys\n"
+            "from unittest.mock import MagicMock, patch\n"
+            "from domains import endpoint_lookup\n"
+            "pw = MagicMock()\n"
+            "pw.chromium.connect_over_cdp.side_effect = SystemExit\n"
+            "with patch.object(endpoint_lookup.automation, 'garantir_chrome'):\n"
+            "    try:\n"
+            "        endpoint_lookup._preparar_aba(pw)\n"
+            "    except SystemExit:\n"
+            "        pass\n"
+            "print(pw.chromium.connect_over_cdp.call_args.args[0])\n"
+        )
+        root = Path(__file__).resolve().parents[1]
+        for porta, esperado in (("9444", "http://127.0.0.1:9444"), (None, "http://127.0.0.1:9333")):
+            with self.subTest(porta=porta):
+                env = {k: v for k, v in os.environ.items() if k != "SIMPRESS_CHROME_PORT"}
+                if porta:
+                    env["SIMPRESS_CHROME_PORT"] = porta
+                saida = subprocess.run([sys.executable, "-c", script], cwd=root, env=env,
+                                       capture_output=True, text=True, timeout=60, check=True)
+                self.assertEqual(saida.stdout.strip().splitlines()[-1], esperado)
 
     def test_busy_lock_prevents_browser_connection(self):
         with patch.object(automation, "adquirir_trava", side_effect=automation.TravaOcupada("busy")), \
