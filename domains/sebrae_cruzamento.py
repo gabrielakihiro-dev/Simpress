@@ -11,9 +11,9 @@ from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
 from domains.effective_alias import mac_endpoint_serial_key, strip_manual_alias_marker
 from domains.equipment_search import normalize_search_term
+from domains.regras_negocio import hostname_de_curitiba
 
-# AGENTS.md: hostnames with these prefixes are installed in Curitiba whatever EquipamentosDetalhes says.
-PREFIXOS_CURITIBA = ("PRNOTESJP", "PRNOTERL", "PRNOTEARC")
+# AGENTS.md: hostnames de Curitiba (domains/regras_negocio.py) são instalados lá, diga o que disser o EquipamentosDetalhes.
 CIDADE_CURITIBA = "Curitiba"
 
 
@@ -24,8 +24,7 @@ def registros_de_equipamentos(equipamentos: Iterable[Mapping[str, Any]]) -> List
         nome = str(item.get("nome_pessoa") or "").strip()
         if not nome:
             continue
-        apelido = normalize_search_term(item.get("apelido"))
-        cidade = CIDADE_CURITIBA if apelido.startswith(PREFIXOS_CURITIBA) else str(item.get("retirada_cidade") or "").strip()
+        cidade = CIDADE_CURITIBA if hostname_de_curitiba(item.get("apelido")) else str(item.get("retirada_cidade") or "").strip()
         registros.append({
             "nome": nome,
             "serie": str(item.get("serial") or "").strip(),

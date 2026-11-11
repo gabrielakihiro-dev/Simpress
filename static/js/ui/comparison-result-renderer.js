@@ -8,14 +8,6 @@
   const { escapeHtml, pluralize } = context.dom;
   const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
 
-  // SEBRAE's own equipment, hidden from results saved before the update filters existed.
-  const SERIES_SEBRAE = new Set([
-    "BRJ135P5XS",
-    "BRJ142QKBQ",
-    "BRJ9435VMR",
-    "BRJ9435VMF",
-    "BRJ149SCJG",
-  ]);
   const CATEGORIAS_ANOTACOES_SINCRONIZADAS = {
     sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
     sem_acesso_60_dias: "Passou de 60 dias sem acesso",
@@ -112,19 +104,15 @@
         <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`);
   }
 
+  // The backend (comparison_history_for_display) already removed SEBRAE's own series from the missing lists.
   function listasComparacao(comparison) {
-    const filtrosAtualizacaoAplicados = comparison.filtros_atualizacao_aplicados === true;
     const diasSemVerificacao = item => {
       const dias = Number(item?.dias_sem_verificacao);
       return Number.isFinite(dias) ? dias : 0;
     };
     return {
-      ausentesEndpoint: filtrosAtualizacaoAplicados
-        ? (comparison.ausentes_no_endpoint || [])
-        : filtrarSeriesSebrae(comparison.ausentes_no_endpoint),
-      ausentesDetalhes: filtrosAtualizacaoAplicados
-        ? (comparison.ausentes_em_detalhes || [])
-        : filtrarSeriesSebrae(comparison.ausentes_em_detalhes),
+      ausentesEndpoint: comparison.ausentes_no_endpoint || [],
+      ausentesDetalhes: comparison.ausentes_em_detalhes || [],
       divergenciasLocal: comparison.divergencias_local || [],
       seriesSemMapa: comparison.series_sem_mapeamento || [],
       semAcesso7DiasOrdenados: [...(comparison.sem_acesso_7_dias || [])].sort((a, b) =>
@@ -138,13 +126,6 @@
       divergenciasApelidosManuais: comparison.divergencias_apelidos_manuais || [],
       mudancasUsuarios: comparison.mudancas_usuarios || [],
     };
-  }
-
-  function filtrarSeriesSebrae(items) {
-    return (items || []).filter(item => {
-      const serie = String(item.serie || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
-      return !SERIES_SEBRAE.has(serie);
-    });
   }
 
   // Annotation columns exist only for results saved in the history, where every row keeps its own annotation id.

@@ -32,6 +32,7 @@ from domains.coverage import dobrar
 from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDOS
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
+from domains.regras_negocio import cadastro_e_macbook
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
 from routers.local_setup import RepresentanteRegionalPayload
 from routers.transfers import TransferenciaPayload, formatar_telefone_brasileiro
@@ -608,8 +609,7 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
 
 def e_macbook(equip: Dict[str, Any]) -> bool:
     """Same test as Simpress (categorize_equipment): 'MACBOOK' in the type or the model."""
-    texto = " ".join(str(equip.get(k) or "") for k in ("categoria", "tipo", "modelo")).upper()
-    return "MACBOOK" in texto
+    return cadastro_e_macbook(equip.get("categoria"), equip.get("tipo"), equip.get("modelo"))
 
 
 def validar_anotacao(texto: Any) -> str:

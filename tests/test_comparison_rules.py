@@ -1,10 +1,13 @@
+import copy
 import unittest
 import io
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from core.errors import DomainError
+from domains.inventory_update import _build_commit_response
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     with redirect_stdout(io.StringIO()):
@@ -449,6 +452,47 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertEqual(displayed_old["resumo"]["ausentes_em_detalhes"], 1)
         self.assertEqual(old_event["comparacao"]["ausentes_no_endpoint"], expected_endpoint_items)
         self.assertEqual(old_event["comparacao"]["ausentes_em_detalhes"], expected_detail_items)
+
+    def test_legacy_history_event_without_update_filters_flag_leaves_without_sebrae_series(self):
+        # O renderizador não filtra mais as séries do Sebrae: o backend entrega as listas já limpas,
+        # inclusive para eventos antigos (sem filtros_atualizacao_aplicados) e para a resposta do envio.
+        sebrae_variants = ["BRJ135P5XS", "brj142qkbq", "BRJ-9435VMR", " BRJ 9435VMF ", "BRJ149SCJG"]
+        common_endpoint_item = {"computador": "PRNOTECOMUM01", "serie": "BRJ00000001"}
+        common_detail_item = {"computador": "PRMAC-COMUM01", "serie": "BRJ00000002"}
+        event = {
+            "id": "evento-antigo-ficticio",
+            "horario": "2026-08-10T10:00:00-03:00",
+            "resumo": {"ausentes_no_endpoint": 6, "ausentes_em_detalhes": 6},
+            "comparacao": {
+                "ausentes_no_endpoint": [
+                    {"computador": f"PRNOTESEBRAE{index}", "serie": serie}
+                    for index, serie in enumerate(sebrae_variants, start=1)
+                ] + [common_endpoint_item],
+                "ausentes_em_detalhes": [
+                    {"computador": f"PRMAC-SEBRAE{index}", "serie": serie}
+                    for index, serie in enumerate(sebrae_variants, start=1)
+                ] + [common_detail_item],
+            },
+        }
+        self.assertNotIn("filtros_atualizacao_aplicados", event["comparacao"])
+        original = copy.deepcopy(event)
+
+        def series(view, key):
+            return [item["serie"] for item in view["comparacao"][key]]
+
+        displayed = main.comparison_history_for_display(event)
+        self.assertEqual(series(displayed, "ausentes_no_endpoint"), ["BRJ00000001"])
+        self.assertEqual(series(displayed, "ausentes_em_detalhes"), ["BRJ00000002"])
+        self.assertEqual(displayed["resumo"]["ausentes_no_endpoint"], 1)
+        self.assertEqual(displayed["resumo"]["ausentes_em_detalhes"], 1)
+        self.assertEqual(event, original)
+
+        response = _build_commit_response(
+            SimpleNamespace(comparison_history_for_display=main.comparison_history_for_display),
+            event, [], {"stats_cache": {}},
+        )
+        self.assertEqual(series(response, "ausentes_no_endpoint"), ["BRJ00000001"])
+        self.assertEqual(series(response, "ausentes_em_detalhes"), ["BRJ00000002"])
 
     def test_existing_hostname_classification_and_specific_prefix_order_are_preserved(self):
         self.assertEqual(main.location_for_computer_name("PRNOTEBACKUP123"), "Curitiba")
