@@ -2,9 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const createUxTicket = require("../../static/js/features/ux-ticket.js");
 
-const html = fs.readFileSync(path.join(__dirname, "..", "..", "static", "index.html"), "utf8");
+const html = assembledHtml();
 const API = "/api/ux/gerar-ticket/";
 const PAYLOAD = { serial: "LENTO", entrega_contato: "Maria Teste", entrega_telefone: "(41) 3333-0000", entrega_cnpj: "11.111.111/0001-11" };
 const SOLICITANTE = { nome: "Pessoa Teste", email: "pessoa@exemplo.com", telefone: "(41) 90000-0000" };

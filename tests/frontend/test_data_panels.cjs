@@ -1,13 +1,14 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const panels = require("../../static/js/ui/data-panels.js");
 const ux = require("../../static/js/ui/ux-enhancements.js");
 const history = require("../../static/js/ui/transfer-history.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
-const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const appHtml = assembledHtml();
 const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
 const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();

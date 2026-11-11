@@ -28,9 +28,9 @@ function loadSubset() {
   return window.lucide;
 }
 
-test("the generated subset contains every icon name used in static/", () => {
+test("the generated subset contains every icon name used in static/ and frontend/partials/", () => {
   const { icons } = loadSubset();
-  const missing = collectIconNames(staticDir).filter(name => !icons[name]);
+  const missing = collectIconNames(staticDir, path.join(root, "frontend", "partials")).filter(name => !icons[name]);
   assert.deepEqual(missing, [], "run `npm run build:ui` after adding icons");
 });
 
