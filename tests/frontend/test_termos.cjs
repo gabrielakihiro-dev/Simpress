@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const caminhoFonte = path.join(__dirname, "../../static/js/features/termos.js");
@@ -59,7 +60,7 @@ test("termos.js não guarda nem envia dados (sem storage, cookie, rede nem inner
 });
 
 test("index.html traz as abas e os botões aprovados e nenhum Imprimir", () => {
-  const html = fs.readFileSync(path.join(__dirname, "../../static/index.html"), "utf8");
+  const html = assembledHtml();
   for (const texto of ["Termo Entrega", "Termo Devolução", "Gerar PDF", "Limpar"]) {
     assert.ok(html.includes(`>${texto}</button>`), `falta o botão ${texto}`);
   }

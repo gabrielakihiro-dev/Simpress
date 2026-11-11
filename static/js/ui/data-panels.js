@@ -243,7 +243,34 @@
     // Sem termo de busca a lista mostra 25 OS por vez ("Carregar mais", como a aba Chamados/F5); com termo, mostra todas as que casam.
     const OS_POR_PAGINA = 25;
     // data-busca: série, OS, usuário, hostname, modelo, UTIC salvo e "técnico" (OS com envio técnico), já sem acento; rótulos de botões ficam de fora.
-    const casaOs = (st, termo, item) => (!termo || (item.dataset.busca || "").includes(termo))
+    // data-busca-descricao: descrição da Oracle, sem acento; casa só por início de palavra ("ana" não acha "Mariana").
+    // Equipamentos casam palavra inteira (com plural) na descrição e no data-busca; mac e macbook são sinônimos ("imac" e "macaco" ficam de fora).
+    const EQUIPAMENTOS_OS = new Map([["mac", "mac(book)?s?"], ["macbook", "mac(book)?s?"], ["teclado", "teclados?"], ["mouse", "mouses?"], ["zbook", "zbooks?"], ["monitor", "monitor(es)?"]]);
+    const escaparRegex = texto => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regexesBusca = new Map();
+    // Cada palavra do termo vira um teste; nome completo exige todas as palavras (AND).
+    function testesBuscaOs(termo) {
+      if (!regexesBusca.has(termo)) {
+        if (regexesBusca.size > 50) regexesBusca.clear();
+        regexesBusca.set(termo, termo.split(/\s+/).filter(Boolean).map(palavra => {
+          const equipamento = EQUIPAMENTOS_OS.get(palavra);
+          const regex = new RegExp("(^|[^a-z0-9])(" + (equipamento || escaparRegex(palavra)) + ")" + (equipamento ? "(?![a-z0-9])" : ""));
+          return equipamento
+            ? (busca, descricao) => regex.test(busca) || regex.test(descricao)
+            : (busca, descricao) => busca.includes(palavra) || regex.test(descricao);
+        }));
+      }
+      return regexesBusca.get(termo);
+    }
+    function casaTermoOs(termo, item) {
+      const busca = item.dataset.busca || "";
+      if (!termo) return true;
+      // Termo inteiro dentro do data-busca: comportamento anterior (série, OS, hostname, modelo...); termo com equipamento não usa o atalho ("mac" não casa "PRMAC01").
+      if (busca.includes(termo) && !termo.split(/\s+/).some(palavra => EQUIPAMENTOS_OS.has(palavra))) return true;
+      const descricao = item.dataset.buscaDescricao || "";
+      return testesBuscaOs(termo).every(teste => teste(busca, descricao));
+    }
+    const casaOs = (st, termo, item) => casaTermoOs(termo, item)
       && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
       && correspondeTriagemOs(st, item.dataset.triagem || "");
 
@@ -629,6 +656,8 @@
           record.descricao = record.solicitacoes.length
             ? record.solicitacoes.map(item => `${item.solicitacao ? `Solicitação ${item.solicitacao}: ` : ""}${item.descricao || "Descrição não informada"}`).join("\n")
             : "";
+          // Só o texto cru das descrições, para a busca: sem "Solicitação N:" nem o rótulo "Descrição não informada".
+          record.descricaoBusca = record.solicitacoes.map(item => item.descricao).filter(Boolean).join(" ");
           rows.push(record);
         });
       });
@@ -656,7 +685,7 @@
         const group = groups.get(key);
         let order = group.ordens.find(item => orderKey(item.os) === orderKey(record.os));
         if (!order) {
-          order = { serie: record.serie, os: record.os, fontes: [], descricao: "", envioTecnico: false, diasAberta: null, entregue: "" };
+          order = { serie: record.serie, os: record.os, fontes: [], descricao: "", descricaoBusca: "", envioTecnico: false, diasAberta: null, entregue: "" };
           group.ordens.push(order);
         }
         if (!order.fontes.includes(record.fonte)) order.fontes.push(record.fonte);
@@ -670,6 +699,7 @@
           if (!descriptions.includes(record.descricao)) descriptions.push(record.descricao);
           order.descricao = descriptions.join("\n");
         }
+        if (record.descricaoBusca) order.descricaoBusca = [order.descricaoBusca, record.descricaoBusca].filter(Boolean).join(" ");
       });
       const result = [...groups.values()];
       result.forEach(group => {
@@ -842,6 +872,8 @@
             ...(pessoa.hostname_candidatos || []), modelos.get(serialKey(record.serie)) || "", ...utics,
             // Exceção aos rótulos: o selo "Técnico" entra na busca para filtrar as OS com envio técnico digitando "técnico".
             order.envioTecnico && "Técnico"].filter(Boolean).join(" "));
+          // Só a descrição crua da Oracle; rótulos ("Solicitação N:", "Descrição não informada") não entram.
+          row.dataset.buscaDescricao = textoOs(order.descricaoBusca);
           const cell = (label, className) => {
             const td = el("td", className || "");
             td.setAttribute("data-label", label);

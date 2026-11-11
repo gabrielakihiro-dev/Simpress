@@ -1,10 +1,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "../..");
-const html = fs.readFileSync(path.join(root, "static/index.html"), "utf8");
+const html = assembledHtml();
 const feature = fs.readFileSync(path.join(root, "static/js/features/chrome-automation.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "static/styles/ux-refinements.css"), "utf8");
 

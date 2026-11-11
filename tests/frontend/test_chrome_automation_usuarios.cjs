@@ -1,11 +1,9 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const createChromeAutomation = require("../../static/js/features/chrome-automation.js");
 
-const root = path.resolve(__dirname, "..", "..");
-const indexHtml = fs.readFileSync(path.join(root, "static", "index.html"), "utf8");
+const indexHtml = assembledHtml();
 
 test("o botão de verificar usuários está presente na interface com atributos corretos", () => {
   assert.match(indexHtml, /id="btn-automacao-usuarios"/, "deve ter id btn-automacao-usuarios");

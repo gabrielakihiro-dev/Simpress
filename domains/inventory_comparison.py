@@ -1,31 +1,28 @@
 """Inventory comparison and source normalization rules."""
 
 import hashlib
-import math
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
+from domains.regras_negocio import (
+    PREFIXOS_HOSTNAME_CURITIBA,
+    SERIES_SEBRAE,
+    e_serie_sebrae,
+    hostname_de_curitiba,
+    hostname_e_macbook,
+    is_missing_cell_value,
+    normalize_reference_value,
+)
+
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
 
 PINNED_COMPARISON_EVENT_TIME = "2026-09-28T14:47:46-03:00"
 
-def normalize_reference_value(value: Any) -> str:
-    """Normaliza valores de série, apelido e cidade para comparações consistentes."""
-    if is_missing_cell_value(value):
-        return ""
-    decomposed = unicodedata.normalize("NFKD", str(value).strip().upper())
-    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return re.sub(r"[^A-Z0-9]", "", without_accents)
-
-
-def is_missing_cell_value(value: Any) -> bool:
-    """Return whether an Excel scalar represents an empty or not-a-number cell."""
-    if value is None:
-        return True
-    return isinstance(value, float) and math.isnan(value)
+# `normalize_reference_value` e `is_missing_cell_value` moraram aqui; agora vêm de domains/regras_negocio.py
+# e continuam importáveis deste módulo.
 
 @lru_cache(maxsize=256)
 def _normalized_key(key: str) -> str:
@@ -305,25 +302,11 @@ SERIE_LOCAL_MAP = {
     "BAR": "Barracão",
 }
 
-CURITIBA_HOSTNAME_PREFIXES = ("SJP", "RL", "ARC")
-
-SEBRAE_OWNED_NOTEBOOK_SERIALS = frozenset({
-    "BRJ135P5XS",
-    "BRJ142QKBQ",
-    "BRJ9435VMR",
-    "BRJ9435VMF",
-    "BRJ149SCJG",
-})
-
-def is_sebrae_owned_notebook_serial(serial: Any) -> bool:
-    return normalize_reference_value(serial) in SEBRAE_OWNED_NOTEBOOK_SERIALS
-
-def is_curitiba_hostname_exception(computer_name: str) -> bool:
-    name = str(computer_name or "").strip().upper()
-    if not name.startswith("PRNOTE"):
-        return False
-    suffix = normalize_reference_value(name[len("PRNOTE"):])
-    return suffix.startswith(CURITIBA_HOSTNAME_PREFIXES)
+# Nomes antigos das regras de domains/regras_negocio.py, mantidos para quem já os importa.
+CURITIBA_HOSTNAME_PREFIXES = PREFIXOS_HOSTNAME_CURITIBA
+SEBRAE_OWNED_NOTEBOOK_SERIALS = SERIES_SEBRAE
+is_sebrae_owned_notebook_serial = e_serie_sebrae
+is_curitiba_hostname_exception = hostname_de_curitiba
 
 def is_prnoteti_curitiba_location_match(
     computer_name: Any,
@@ -374,7 +357,7 @@ def filter_update_review_items(
             filtered.append(item)
         elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith(("BRJ", "BRM")):
             filtered.append(item)
-        elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
+        elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname_e_macbook(hostname):
             filtered.append(item)
     return filtered
 
@@ -433,7 +416,7 @@ def filter_update_unmatched_details(items: Any) -> List[Dict[str, Any]]:
         return []
     return [
         item for item in items
-        if isinstance(item, dict) and normalize_reference_value(item.get("computador")).startswith("PRMAC")
+        if isinstance(item, dict) and hostname_e_macbook(item.get("computador"))
     ]
 
 def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, Any]]:
@@ -814,7 +797,7 @@ def location_for_computer_name(computer_name: str) -> Optional[str]:
         if not backup_target or not re.search(r"[A-Z]", backup_target):
             return "Curitiba"
         return _location_for_hostname_target(backup_target)
-    if suffix.startswith(CURITIBA_HOSTNAME_PREFIXES):
+    if hostname_de_curitiba(name):
         return "Curitiba"
     if suffix.startswith("BKP"):
         return _location_for_hostname_target(suffix[3:])
@@ -867,7 +850,7 @@ def _vanished_hostname_stale_items(
         # se a série sem `S` também existir na Simpress, a correspondência é ambígua.
         mac_candidates = [
             hostname for hostname in details_aliases.get(f"S{serial_key}", [])
-            if normalize_reference_value(hostname).startswith("PRMAC")
+            if hostname_e_macbook(hostname)
         ]
         candidates.extend(mac_candidates)
         previous_hostname = previous_hostnames.get(serial_key, "")
@@ -940,7 +923,7 @@ def _align_macbook_details_serials(source_records: Dict[str, List[Dict[str, Any]
         record["serial_key"]
         for record in source_records["endpoint"]
         if record["serial_key"]
-        and normalize_reference_value(record["computador"]).startswith("PRMAC")
+        and hostname_e_macbook(record["computador"])
     }
     for record in source_records["detalhes"]:
         serial_key = record["serial_key"]
@@ -1230,7 +1213,7 @@ def _link_unique_alias_pair(
     right_role, right_node = right
     left_serial = nodes[left_node]["serial_key"]
     right_serial = nodes[right_node]["serial_key"]
-    if alias_key.startswith("PRMAC"):
+    if hostname_e_macbook(alias_key):
         union_find.union(left_node, right_node, allow_conflicting_serials=True)
         return
     if left_serial and right_serial and left_serial != right_serial:

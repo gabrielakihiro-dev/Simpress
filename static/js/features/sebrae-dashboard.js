@@ -410,6 +410,7 @@
     // Vive só na memória da página: F5 → F4 → F5 mantém a aba; recarregar volta a Novos com o filtro vazio.
     const visao = { aba: "novos", termo: "", paginas: { antigos: POR_PAGINA, finalizados: POR_PAGINA }, novosAbertos: null, itens: [], porNo: new Map() };
     const abertosPelaPessoa = new WeakSet();
+    let linhaAberta = null; // a linha `details` (novo, antigo ou finalizado) aberta por último
     const normalizar = valor => (context.ticketRules?.normalizarFiltroChamados || app.normalizarFiltroChamados
       || (texto => String(texto || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").trim().toLocaleLowerCase("pt-BR")))(valor);
 
@@ -604,6 +605,11 @@
       resumo.addEventListener("click", () => abertosPelaPessoa.add(detalhe));
       detalhe.addEventListener("toggle", () => {
         const pelaPessoa = abertosPelaPessoa.delete(detalhe);
+        // um chamado aberto por vez nas três listas; linha já fora da tela (lista redesenhada) não é fechada
+        if (detalhe.open) {
+          if (linhaAberta !== detalhe && linhaAberta?.isConnected && linhaAberta.open) linhaAberta.open = false;
+          linhaAberta = detalhe;
+        }
         if (detalhe.className === "sebrae-novo" && visao.novosAbertos) visao.novosAbertos[detalhe.open ? "add" : "delete"](numero);
         if (detalhe.open && pelaPessoa) detalhe.querySelector(".sebrae-chamado__recolher")?.focus();
       });
@@ -1010,7 +1016,7 @@
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
       return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), dados.titulo, dados.solicitante,
-        [seloDestaque(item.numero), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
+        [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
     }
 
     /** Linha recolhida dos novos e antigos: `details` cujo resumo mostra número, assunto, pessoa e selos; o cartão fica dentro. */
@@ -1038,7 +1044,7 @@
       const novo = dom.createTextElement("span", "ck-badge sebrae-selo", "Novo");
       novo.dataset.status = "info";
       return linhaRecolhida("sebrae-novo", item.numero, item.numero, item.linha.G, item.linha.I,
-        [novo, seloDestaque(item.numero), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
+        [novo, seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
     }
 
     /** Sugestão do servidor para B (Categoria) ou J (Tipo) de chamado novo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
@@ -1356,6 +1362,19 @@
     }
 
     const nosDoChamado = (seletor, atributo, numero) => [...document.querySelectorAll(seletor)].filter(no => no.dataset[atributo] === numero);
+
+    /** Selo `Observação` do resumo: aparece enquanto o chamado tem observação do andamento salva. */
+    function seloObservacao(numero, texto) {
+      const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-selo-obs", "Observação");
+      selo.dataset.status = "info";
+      selo.dataset.sebraeObsSelo = numero;
+      selo.hidden = !String(texto || "").trim();
+      return selo;
+    }
+
+    function sincronizarSeloObservacao(numero, texto) {
+      nosDoChamado("[data-sebrae-obs-selo]", "sebraeObsSelo", numero).forEach(selo => { selo.hidden = !String(texto || "").trim(); });
+    }
 
     /** Leva `estado.destaques[numero]` para todos os cartões desse chamado (o original e o da seção), sem criar ids. */
     function sincronizarDestaque(numero) {
@@ -1732,6 +1751,7 @@
           }
         }
         definirFeedback(reg.feedback, "Salva.", "ok");
+        sincronizarSeloObservacao(numero, reg.enviado);
         if (estado.destaques[numero]) desenharDestaques(); // o cartão da seção mostra a observação salva
         return true;
       } catch (error) {

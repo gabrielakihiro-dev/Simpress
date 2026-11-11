@@ -438,7 +438,9 @@ def _args_powershell(args: Args) -> Tuple[str, str, str, str]:
     if modo not in ("sistema", "usuario"):
         raise ValueError("Modo inválido: use sistema ou usuario.")
     hostname = str(args.get("hostname") or "").strip().upper()
-    if hostname and not re.fullmatch(r"[A-Z0-9_.-]{1,64}", hostname):
+    if not hostname:  # não existe computador padrão: o assistente pergunta ao usuário
+        raise ValueError("Informe o hostname do computador; pergunte ao usuário qual usar.")
+    if not re.fullmatch(r"[A-Z0-9_.-]{1,64}", hostname):
         raise ValueError("Informe um hostname válido.")
     usuario = str(args.get("usuario") or "").strip() if modo == "usuario" else ""
     if len(usuario) > 128:
@@ -455,12 +457,10 @@ def _run_powershell(api: SimpressApi, args: Args) -> Dict[str, Any]:
 
 
 def _describe_powershell(args: Args) -> str:
-    from domains.endpoint_lookup import HOSTNAME_PADRAO_POWERSHELL
-
     comando, modo, hostname, usuario = _args_powershell(args)
     quem = "SYSTEM" if modo == "sistema" else f"usuário logado ({limpar_texto_sensivel(usuario) if usuario else 'o único usuário listado'})"
     return (
-        f"Abrir o PowerShell (Gerente do Sistema) no Endpoint, pelo Chrome de automação, em {limpar_texto_sensivel(hostname) or HOSTNAME_PADRAO_POWERSHELL + ' (padrão)'}, "
+        f"Abrir o PowerShell (Gerente do Sistema) no Endpoint, pelo Chrome de automação, em {limpar_texto_sensivel(hostname)}, "
         f"como {quem}, e INSERIR este comando no prompt: {comando} "
         "O comando será apenas inserido no prompt; NÃO será executado (o Enter é seu, no Chrome). "
         "Se o Endpoint pedir login, a aba espera o usuário entrar (senha e autenticador são do usuário)."
@@ -1416,18 +1416,19 @@ CHANGE_TOOLS: List[Tool] = [
         "Abre o PowerShell de um computador no Endpoint (Gerente do Sistema) e INSERE um comando no prompt. NUNCA executa: o sistema não aperta Enter, "
         "quem revisa e executa é o usuário, no terminal do Chrome. Só quando o usuário pedir explicitamente para abrir o PowerShell ou inserir um comando "
         "nele, nunca para apenas consultar. Um comando de uma linha (até 2000 caracteres). modo sistema (SYSTEM, padrão) ou usuario (usuário logado). "
-        "Sem hostname usa o computador padrão PRNOTEUMU005. Retorna só status, hostname, modo e tamanho do comando; status inserido, not_found, "
-        "sem_host_online, erro_terminal, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
+        "O hostname é obrigatório: não existe computador padrão; se o usuário não disser o computador, pergunte qual usar antes de chamar. "
+        "Retorna só status, hostname, modo e tamanho do comando; status inserido, not_found, "
+        "erro_terminal, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
         "Requer Chrome de automação aberto e login manual.",
         _run_powershell,
         _describe_powershell,
         {
             "comando": {"type": "string", "description": "Comando de UMA linha a inserir no prompt (sem quebra de linha)."},
             "modo": {"type": "string", "enum": ["sistema", "usuario"], "description": "sistema (SYSTEM, padrão) ou usuario (usuário logado)."},
-            "hostname": {"type": "string", "description": "Hostname do computador (opcional; padrão PRNOTEUMU005)."},
+            "hostname": {"type": "string", "description": "Hostname do computador (obrigatório; não há computador padrão: pergunte ao usuário)."},
             "usuario": {"type": "string", "description": "Usuário logado a usar no modo usuario (opcional; ex.: gananias)."},
         },
-        ["comando"],
+        ["comando", "hostname"],
     ),
     Tool(
         "restaurar_hostname_endpoint",

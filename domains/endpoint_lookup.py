@@ -102,9 +102,9 @@ def _e_aba_da_consulta(aba: Any) -> bool:
 
 
 def _preparar_aba(pw: Any) -> Any:
-    """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (porta 9333), com a grade completa pronta."""
+    """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (SIMPRESS_CHROME_PORT, padrão 9333), com a grade completa pronta."""
     automation.garantir_chrome()  # reopens the automation Chrome after the idle close
-    browser = pw.chromium.connect_over_cdp("http://127.0.0.1:9333", timeout=10000)
+    browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10000)  # same port garantir_chrome opened
     if not browser.contexts:
         raise RuntimeError("Chrome sem contexto de navegação.")
     contexto = browser.contexts[0]
@@ -294,8 +294,6 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
 
 
 # --- PowerShell remoto (Gerente do Sistema). O comando só é INSERIDO no campo: nunca se envia Enter. ---
-HOSTNAME_PADRAO_POWERSHELL = "PRNOTEUMU005"
-_PREFIXO_FALLBACK_POWERSHELL = "prnote"
 LIMITE_COMANDO_POWERSHELL = 2000
 ESPERA_TERMINAL_S = 40
 INTERVALO_TERMINAL_S = 4
@@ -333,20 +331,13 @@ def _linhas_do_filtro(page: Any) -> list[tuple[str, bool, str]]:
     return saida
 
 
-def _escolher_host(page: Any, hostname: str, explicito: bool) -> dict[str, Any]:
-    """Host explícito é sempre tentado (ícone vermelho não bloqueia); só o padrão offline cai para outro online."""
+def _escolher_host(page: Any, hostname: str) -> dict[str, Any]:
+    """O host informado é sempre tentado (ícone vermelho não bloqueia); nunca se troca por outro computador."""
     grid.aplicar_filtro(page, automation, grid.COLUNA_NOME, hostname)
     alvo = next((l for l in _linhas_do_filtro(page) if l[0].upper() == hostname.upper()), None)
     if alvo is None:
         return {"status": "not_found", "hostname": hostname}
-    if explicito or alvo[1]:
-        return {"hostname": alvo[0], "href": alvo[2]}
-    grid.limpar_filtro(page, automation, grid.COLUNA_NOME)
-    grid.aplicar_filtro(page, automation, grid.COLUNA_NOME, _PREFIXO_FALLBACK_POWERSHELL)
-    online = next((l for l in _linhas_do_filtro(page) if l[1]), None)
-    if online is None:
-        return {"status": "sem_host_online", "hostname": hostname, "hostname_padrao_offline": True}
-    return {"hostname": online[0], "href": online[2], "hostname_padrao_offline": True}
+    return {"hostname": alvo[0], "href": alvo[2]}
 
 
 def _texto_da_aba(aba: Any) -> str:
@@ -414,15 +405,14 @@ def _fechar_aba(aba: Any) -> None:
         pass
 
 
-def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: str, comando: str, usuario: str | None) -> dict[str, Any]:
-    escolha = _escolher_host(page, hostname, explicito)
+def _abrir_powershell_na_grade(page: Any, hostname: str, modo: str, comando: str, usuario: str | None) -> dict[str, Any]:
+    escolha = _escolher_host(page, hostname)
     if "href" not in escolha:
         return escolha
     usado, href = escolha["hostname"], escolha["href"]
     if not grid.HREF_DETALHE.match(href):
         raise automation.RotinaErro(f"O link do computador {usado} não foi identificado na grade do Endpoint; o PowerShell não foi aberto.")
     linha = page.locator(f'{_LINHA}:has(a.anchor-text[href="{href}"])')
-    extra = {"hostname_padrao_offline": True} if escolha.get("hostname_padrao_offline") else {}
 
     def _abrir_aba() -> Any:
         # Refeito do zero se falhar: aba nova que sobrar desta tentativa é fechada antes da próxima.
@@ -445,10 +435,10 @@ def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: 
     conectado, erro = _preparar_terminal(aba, modo, usuario)
     if erro:
         _fechar_aba(aba)
-        return {**erro, "hostname": usado, "modo": modo, **extra}
+        return {**erro, "hostname": usado, "modo": modo}
     if conectado is None:
         _fechar_aba(aba)
-        return {"status": "erro_terminal", "hostname": usado, "modo": modo, **extra, "mensagem": (
+        return {"status": "erro_terminal", "hostname": usado, "modo": modo, "mensagem": (
             f"Não foi possível abrir o PowerShell em {usado} (conexão lenta, agente desconectado ou equipamento desligado). "
             "Recarreguei a página uma vez e o erro continuou; a execução foi cancelada.")}
     try:
@@ -459,10 +449,10 @@ def _abrir_powershell_na_grade(page: Any, hostname: str, explicito: bool, modo: 
         confirmado = False
     if not confirmado:
         _fechar_aba(aba)
-        return {"status": "erro_terminal", "hostname": usado, "modo": modo, **extra,
+        return {"status": "erro_terminal", "hostname": usado, "modo": modo,
                 "mensagem": f"O comando não foi confirmado no campo do PowerShell de {usado}; a execução foi cancelada."}
     _registrar_sessao(aba)
-    return {"status": "inserido", "hostname": usado, "modo": modo, "usuario": conectado, "inserido": True, "enter_enviado": False, **extra}
+    return {"status": "inserido", "hostname": usado, "modo": modo, "usuario": conectado, "inserido": True, "enter_enviado": False}
 
 
 def abrir_powershell(hostname: str | None, modo: str, comando: str, usuario: str | None = None) -> dict[str, Any]:
@@ -470,7 +460,9 @@ def abrir_powershell(hostname: str | None, modo: str, comando: str, usuario: str
     if modo not in ("sistema", "usuario"):
         raise ValueError("Modo inválido.")
     validar_comando(comando)
-    explicito = bool(hostname)
+    hostname = (hostname or "").strip()
+    if not hostname:  # não existe computador padrão: sem hostname, nem o Chrome é aberto
+        raise ValueError("Informe o hostname.")
     with automation.trava_execucao("consulta_endpoint"):
         from playwright.sync_api import sync_playwright
 
@@ -478,4 +470,4 @@ def abrir_powershell(hostname: str | None, modo: str, comando: str, usuario: str
         setattr(automation, "_inicio_execucao", automation.time.time())
         with sync_playwright() as pw:
             page = _preparar_aba(pw)
-            return _abrir_powershell_na_grade(page, hostname or HOSTNAME_PADRAO_POWERSHELL, explicito, modo, comando, usuario)
+            return _abrir_powershell_na_grade(page, hostname, modo, comando, usuario)

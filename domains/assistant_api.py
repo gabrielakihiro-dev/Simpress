@@ -32,6 +32,7 @@ from domains.coverage import dobrar
 from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDOS
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
+from domains.regras_negocio import cadastro_e_macbook
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
 from routers.local_setup import RepresentanteRegionalPayload
 from routers.transfers import TransferenciaPayload, formatar_telefone_brasileiro
@@ -608,8 +609,7 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
 
 def e_macbook(equip: Dict[str, Any]) -> bool:
     """Same test as Simpress (categorize_equipment): 'MACBOOK' in the type or the model."""
-    texto = " ".join(str(equip.get(k) or "") for k in ("categoria", "tipo", "modelo")).upper()
-    return "MACBOOK" in texto
+    return cadastro_e_macbook(equip.get("categoria"), equip.get("tipo"), equip.get("modelo"))
 
 
 def validar_anotacao(texto: Any) -> str:
@@ -957,11 +957,12 @@ class SimpressApi:
         return {"sucesso": status == "connected", "status": status, "serial": clean, "mensagem": mensagens[status],
                 **({"hostname": dados["hostname"]} if "hostname" in dados else {})}
 
-    def abrir_powershell_endpoint(self, comando: str, modo: str, hostname: str = "", usuario: str = "") -> Dict[str, Any]:
+    def abrir_powershell_endpoint(self, comando: str, modo: str, hostname: str, usuario: str = "") -> Dict[str, Any]:
         """Home "PowerShell no Endpoint": INSERTS the command in the prompt; never presses Enter. The command text never comes back to the model."""
-        corpo: Dict[str, Any] = {"modo": modo, "comando": comando}
-        if hostname.strip():
-            corpo["hostname"] = hostname.strip()
+        hostname = hostname.strip()
+        if not hostname:  # no default computer: the model must ask the user which one
+            return {"sucesso": False, "erro": "Informe o hostname do computador. Nada foi inserido."}
+        corpo: Dict[str, Any] = {"modo": modo, "comando": comando, "hostname": hostname}
         if usuario.strip():
             corpo["usuario"] = usuario.strip()
         ok, dados = self._chamar("POST", "/api/endpoint/powershell", corpo=corpo)
@@ -970,14 +971,11 @@ class SimpressApi:
         if not isinstance(dados, dict):
             return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
         status = dados.get("status")
-        host = dados.get("hostname") or hostname.strip() or "PRNOTEUMU005"
+        host = dados.get("hostname") or hostname
         usuarios = [str(u) for u in dados.get("usuarios", [])] if isinstance(dados.get("usuarios"), list) else []
-        # Never switch host in silence: the default host was offline and another one was used.
-        troca = f" O computador padrão estava offline; foi usado {host}." if dados.get("hostname_padrao_offline") else ""
         mensagens = {
-            "inserido": f"Comando inserido no prompt do PowerShell de {host}, mas NÃO executado: o usuário revisa e aperta Enter no terminal do Chrome.{troca}",
+            "inserido": f"Comando inserido no prompt do PowerShell de {host}, mas NÃO executado: o usuário revisa e aperta Enter no terminal do Chrome.",
             "not_found": f"Computador {host} não encontrado no Endpoint. Nada foi inserido.",
-            "sem_host_online": f"O computador padrão {host} está offline e nenhum outro online foi encontrado. Nada foi inserido.",
             "erro_terminal": str(dados.get("mensagem") or f"Não foi possível abrir o PowerShell em {host}. Nada foi inserido."),
             "sem_usuario": f"Usuário não encontrado em {host}. Nada foi inserido.",
             "usuario_ambiguo": f"Há mais de um usuário logado em {host}; peça ao usuário qual usar. Nada foi inserido.",
@@ -985,7 +983,6 @@ class SimpressApi:
         if status not in mensagens:
             return {"sucesso": False, "erro": "Não foi possível confirmar o resultado do Endpoint."}
         resultado: Dict[str, Any] = {"sucesso": status == "inserido", "status": status, "hostname": host, "modo": modo,
-                                     "hostname_padrao_offline": bool(dados.get("hostname_padrao_offline")),
                                      "tamanho_comando": len(comando), "mensagem": mensagens[status], "enter_enviado": False}
         if status == "inserido":
             resultado["usuario"] = dados.get("usuario")

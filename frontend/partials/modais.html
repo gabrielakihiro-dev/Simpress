@@ -1,0 +1,731 @@
+  <!-- ========================================== -->
+  <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
+  <!-- ========================================== -->
+  <div id="modal-preview" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
+          <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Resumo Estruturado da Transferência" aria-describedby="tip-resumo-transferencia"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-resumo-transferencia" role="tooltip" class="info-tip-text">Pronto para colar em chamados Jira, GLPI ou Teams.</span></span></h3>
+        </div>
+        <button type="button" data-on-click="fecharModalPreview" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resumo">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto flex-1 font-mono text-xs">
+        <textarea
+          id="textarea-resumo-preview"
+          rows="15"
+          readonly
+          class="w-full bg-surface/80 border border-line-quiet rounded-xl p-4 text-fg-tertiary font-mono text-xs leading-relaxed focus:outline-none"
+        ></textarea>
+      </div>
+
+      <div class="pt-4 border-t border-line-quiet flex justify-end items-center">
+        <div class="flex space-x-2">
+          <button
+            data-on-click="copiarTextoDoModal"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Texto</span>
+          </button>
+          <button
+            data-on-click="fecharModalPreview"
+            class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: HISTÓRICO DE TRANSFERÊNCIAS GERADAS -->
+  <!-- ========================================== -->
+  <div id="modal-historico-transferencias" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
+          <h3 class="text-base font-bold text-white">Transferências geradas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Transferências geradas" aria-describedby="tip-transferencias-geradas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-transferencias-geradas" role="tooltip" class="info-tip-text">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span></span></h3>
+        </div>
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar transferências geradas">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="pt-4 shrink-0">
+        <label for="filtro-historico-transferencias" class="block text-xs font-semibold text-fg-tertiary mb-1">Buscar por série, cidade, destinatário ou observação</label>
+        <input type="search" id="filtro-historico-transferencias" autocomplete="off" class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none" placeholder="Ex.: BRJ5512FGD ou Londrina" />
+        <p id="historico-transferencias-status" class="text-xs text-fg-subtle mt-2" role="status" aria-live="polite"></p>
+      </div>
+      <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CHAMADO × OS (só leitura; abre pela OS do cartão no F5) -->
+  <!-- ========================================== -->
+  <div id="modal-chamado-os" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-os">
+    <div class="ck-dialogo">
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
+        <h3 id="titulo-chamado-os" class="text-base font-bold text-white">Chamado × OS</h3>
+        <button type="button" id="chamado-os-janela-fechar" data-on-click="fecharJanelaChamadoOs" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="chamado-os-janela__corpo">
+        <div id="chamado-os-janela-chamado" class="chamado-os-janela__lado"></div>
+        <div id="chamado-os-janela-os" class="chamado-os-janela__lado"></div>
+      </div>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
+        <button type="button" id="chamado-os-janela-f6" class="ck-link-btn" hidden>Abrir na aba OS (F6)</button>
+        <button type="button" data-on-click="fecharJanelaChamadoOs" class="ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
+  <!-- ========================================== -->
+  <div id="modal-chamado-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-ux">
+    <div class="ck-dialogo">
+      <h3 id="titulo-chamado-ux" class="text-base font-bold">Abrir chamado no UX</h3>
+      <p>Série: <strong id="ux-chamado-serie"></strong> · Modelo: <strong id="ux-chamado-modelo"></strong></p>
+      <label for="ux-chamado-problema">Problema</label>
+      <select id="ux-chamado-problema" class="ck-input" data-on-change="atualizarProblemaChamadoUX" disabled></select>
+      <fieldset id="ux-chamado-solicitante" class="ux-chamado-solicitante" disabled>
+        <legend class="font-bold">Solicitante</legend>
+        <label for="ux-solicitante-nome">Nome</label>
+        <input type="text" id="ux-solicitante-nome" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-email">E-mail</label>
+        <input type="email" id="ux-solicitante-email" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-telefone">Telefone</label>
+        <input type="tel" id="ux-solicitante-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+        <label for="ux-solicitante-cargo">Departamento/Cargo</label>
+        <input type="text" id="ux-solicitante-cargo" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
+      </fieldset>
+      <p class="font-bold">Descrição</p>
+      <div id="ux-chamado-descricao"></div>
+      <p id="ux-chamado-status" role="status"></p>
+      <p id="ux-chamado-motivo" class="font-bold" hidden></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-fechar" data-on-click="fecharChamadoUX">Fechar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-conferido" data-on-click="conferirChamadoUX" hidden>Conferi no UX; preparar de novo</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' aria-describedby="ux-chamado-motivo" disabled>Simular preenchimento</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' aria-describedby="ux-chamado-motivo" disabled>Revisar e enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook">
+    <div class="ck-dialogo email-outlook">
+      <h3 id="titulo-email-outlook" class="text-base font-bold">E-mail pelo Outlook</h3>
+      <p id="email-aviso-diretorio" class="email-outlook__aviso" role="status" hidden>A base do Microsoft Entra não foi importada; digite o e-mail completo.</p>
+      <div class="email-outlook__modelo">
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-modelo">Modelo</label>
+          <select id="email-modelo" class="ck-entrada" data-on-change="trocarModeloEmail" data-args='["$value"]' disabled></select>
+        </div>
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-modelo-nome">Nome do modelo</label>
+          <input type="text" id="email-modelo-nome" class="ck-entrada" maxlength="80" autocomplete="off" disabled>
+        </div>
+      </div>
+      <div class="ck-grupo-botoes">
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-novo" data-on-click="novoModeloEmail" disabled>Novo modelo</button>
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-duplicar" data-on-click="duplicarModeloEmail" disabled>Duplicar modelo</button>
+        <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="email-modelo-excluir" data-on-click="excluirModeloEmail" disabled>Excluir modelo</button>
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-restaurar" data-on-click="restaurarModeloEmail" hidden>Restaurar padrão</button>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-conta">Enviar de</label>
+        <select id="email-conta" class="ck-entrada" disabled></select>
+      </div>
+      <div class="ck-campo email-outlook__combo">
+        <label class="ck-campo__rotulo" id="email-para-rotulo" for="email-para">Para</label>
+        <input type="text" id="email-para" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-para-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
+        <ul id="email-para-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-para-rotulo" hidden></ul>
+        <div id="email-para-opcoes" class="email-outlook__opcoes" hidden></div>
+      </div>
+      <div class="ck-campo email-outlook__combo">
+        <label class="ck-campo__rotulo" id="email-cc-rotulo" for="email-cc">Cc</label>
+        <input type="text" id="email-cc" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-cc-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
+        <ul id="email-cc-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-cc-rotulo" hidden></ul>
+        <div id="email-cc-opcoes" class="email-outlook__opcoes" hidden></div>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-assunto">Assunto</label>
+        <input type="text" id="email-assunto" class="ck-entrada" maxlength="200" autocomplete="off" aria-describedby="email-ajuda-marcadores" disabled>
+      </div>
+      <div class="ck-campo">
+        <label class="ck-campo__rotulo" for="email-corpo">Mensagem</label>
+        <textarea id="email-corpo" class="ck-entrada email-outlook__corpo" rows="6" maxlength="4000" aria-describedby="email-ajuda-marcadores" disabled></textarea>
+      </div>
+      <p id="email-ajuda-marcadores" class="email-outlook__ajuda">Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.</p>
+      <div class="email-outlook__envio">
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-nome-pessoa">Nome da pessoa</label>
+          <input type="text" id="email-nome-pessoa" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
+        </div>
+        <div class="ck-campo">
+          <label class="ck-campo__rotulo" for="email-setor">Setor</label>
+          <input type="text" id="email-setor" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
+        </div>
+      </div>
+      <p id="email-ajuda-autosave" class="email-outlook__ajuda">As alterações no modelo são salvas automaticamente.</p>
+      <p id="email-autosave-status" class="email-outlook__autosave" role="status" aria-live="polite"></p>
+      <p id="email-status" class="email-outlook__status" role="status" aria-live="polite" hidden></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-cancelar" data-on-click="fecharEmailOutlook">Cancelar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-copiar" data-on-click="copiarTextoEmail" disabled>Copiar Texto</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="email-abrir" data-on-click="abrirEmailNoOutlook" disabled>Abrir no Outlook</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="email-enviar" data-on-click="enviarEmailPeloOutlook" disabled>Enviar pelo Outlook</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-confirmar-acao" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex items-center space-x-2.5 pb-4 border-b border-line-quiet">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400" aria-hidden="true"></i>
+        <h3 id="titulo-confirmar-acao" class="text-base font-bold text-white">Confirmar ação</h3>
+      </div>
+      <p id="mensagem-confirmar-acao" class="py-4 text-sm leading-relaxed text-fg-tertiary whitespace-pre-line"></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" id="btn-confirmar-acao-cancelar" data-on-click="responderConfirmacaoAcao" data-args='[false]' class="ck-btn ck-btn--secundario">Cancelar</button>
+        <button type="button" id="btn-confirmar-acao-ok" data-on-click="responderConfirmacaoAcao" data-args='[true]' data-variant="danger" class="confirm-action-ok ck-btn ck-btn--secundario">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE TEXTO PARA SOLICITAÇÃO DE TRANSPORTE -->
+  <!-- ========================================== -->
+  <div id="modal-texto-transporte" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
+          <h3 class="text-base font-bold text-white">Solicitação de Transporte <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Solicitação de Transporte" aria-describedby="tip-solicitacao-transporte"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-solicitacao-transporte" role="tooltip" class="info-tip-text">Confira os endereços e copie o texto para sua solicitação.</span></span></h3>
+        </div>
+        <button type="button" data-on-click="fecharModalTextoTransporte" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar texto de solicitação">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto flex-1">
+        <textarea
+          id="textarea-texto-transporte"
+          rows="10"
+          readonly
+          aria-label="Texto gerado para solicitação de transporte"
+          class="w-full bg-surface/80 border border-line-quiet rounded-xl p-4 text-fg-tertiary text-sm leading-relaxed focus:outline-none"
+        ></textarea>
+      </div>
+
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end items-center gap-3">
+        <div class="flex space-x-2">
+          <button
+            type="button"
+            data-on-click="copiarTextoSolicitacaoTransporte"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Texto</span>
+          </button>
+          <button
+            type="button"
+            data-on-click="fecharModalTextoTransporte"
+            class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE TICKET NO UX (TRANSPORTE)          -->
+  <!-- ========================================== -->
+  <div id="modal-ticket-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-ticket-ux">
+    <div class="ck-dialogo">
+      <h3 id="titulo-ticket-ux" class="text-base font-bold">Gerar ticket no UX</h3>
+      <p id="ux-ticket-status" role="status" aria-live="polite"><strong id="ux-ticket-estado"></strong><span id="ux-ticket-status-detalhe"></span></p>
+      <p id="ux-ticket-erro" class="ux-ticket-erro" role="alert" hidden></p>
+      <p id="ux-ticket-ultimo-envio" class="ux-ticket-aviso" hidden></p>
+      <dl class="ux-ticket-resumo">
+        <dt>Série</dt><dd id="ux-ticket-serie">—</dd>
+        <dt>Modelo</dt><dd id="ux-ticket-modelo">—</dd>
+        <dt>Endereço escolhido</dt><dd id="ux-ticket-endereco">—</dd>
+        <dt>CNPJ de Instalação</dt><dd id="ux-ticket-cnpj-instalacao">—</dd>
+        <dt>CNPJ de Faturamento</dt><dd id="ux-ticket-cnpj-faturamento">—</dd>
+        <dt>Anexo</dt><dd id="ux-ticket-anexo">—</dd>
+      </dl>
+      <fieldset id="ux-ticket-enderecos" class="ux-ticket-enderecos" data-on-change="atualizarTicketUX" hidden disabled>
+        <legend class="font-bold">Escolha o endereço</legend>
+        <div id="ux-ticket-enderecos-lista" class="ux-ticket-enderecos__lista"></div>
+        <p id="ux-ticket-enderecos-vazio" hidden>O UX não listou nenhum endereço para este CEP. Cadastre o endereço em Meus Endereços no UX e use Preparar novamente.</p>
+        <div class="flex justify-end">
+          <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-confirmar-endereco" data-on-click="confirmarEnderecoTicketUX" disabled>Confirmar endereço</button>
+        </div>
+      </fieldset>
+      <fieldset id="ux-ticket-formulario" class="ux-ticket-formulario" disabled>
+        <legend class="sr-only">Dados do ticket</legend>
+        <label for="ux-ticket-registro" class="font-bold">Registro</label>
+        <textarea id="ux-ticket-registro" class="ck-input ux-ticket-registro" rows="10" maxlength="2500" aria-describedby="ux-ticket-registro-contador" data-on-input="atualizarTicketUX"></textarea>
+        <p id="ux-ticket-registro-contador" class="ux-ticket-contador">0/2500</p>
+        <div id="ux-ticket-solicitante" class="ux-chamado-solicitante" role="group" aria-labelledby="ux-ticket-solicitante-titulo">
+          <p id="ux-ticket-solicitante-titulo" class="font-bold ux-chamado-solicitante__titulo">Solicitante</p>
+          <label for="ux-ticket-nome">Nome</label>
+          <input type="text" id="ux-ticket-nome" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-email">E-mail</label>
+          <input type="email" id="ux-ticket-email" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-telefone">Contato</label>
+          <input type="tel" id="ux-ticket-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarTicketUX">
+          <label for="ux-ticket-chamado-interno">Nº de chamado interno</label>
+          <input type="text" id="ux-ticket-chamado-interno" class="ck-input" maxlength="10" autocomplete="off" placeholder="Opcional" data-on-input="atualizarTicketUX">
+        </div>
+      </fieldset>
+      <p id="ux-ticket-motivo" class="ux-ticket-aviso" hidden></p>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-cancelar" data-on-click="fecharTicketUX">Cancelar</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-preparar" data-on-click="prepararNovamenteTicketUX" hidden>Preparar novamente</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-conferido" data-on-click="conferirTicketUX" hidden>Conferi no UX; preparar de novo</button>
+        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-simular" data-on-click="executarTicketUX" data-args='[false]' aria-describedby="ux-ticket-motivo" disabled>Simular preenchimento</button>
+        <button type="button" class="ck-btn ck-btn--primario" id="ux-ticket-finalizar" data-on-click="executarTicketUX" data-args='[true]' aria-describedby="ux-ticket-motivo" disabled>Revisar e finalizar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== -->
+  <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
+  <!-- ==================================================== -->
+  <div id="modal-editar-equipamento" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-line-quiet shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+            <i data-lucide="edit" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span id="modal-edit-titulo">Atualizar Dados do Equipamento</span>
+              <span id="modal-edit-serial-badge" class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30"></span>
+              <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar Dados do Equipamento" aria-describedby="tip-editar-equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-equipamento" role="tooltip" class="info-tip-text">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel. Grava no arquivo Excel físico e atualiza a tela na hora. Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.</span></span>
+            </h3>
+          </div>
+        </div>
+        <button type="button" data-on-click="fecharModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar edição do equipamento">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Form) -->
+      <div class="py-4 overflow-y-auto flex-1 space-y-4 pr-1">
+
+        <!-- Bloco 1: Identificação do Hardware -->
+        <div class="bg-surface/60 p-4 rounded-xl border border-line-quiet/80 space-y-3">
+          <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            <span>Identificação do Equipamento</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-fg-tertiary font-semibold mb-1">Número de Série:</label>
+              <input type="text" id="edit-serial" class="w-full px-3 py-2 rounded-lg glass-input text-white font-mono uppercase font-bold focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-fg-tertiary font-semibold mb-1">Tipo de Equipamento:</label>
+              <select id="edit-tipo" class="w-full px-3 py-2 rounded-lg glass-input text-white focus:outline-none">
+                <option value="Notebook">Notebook</option>
+                <option value="Micro Computador">Micro Computador</option>
+                <option value="Headsets">Headsets</option>
+                <option value="Monitor">Monitor</option>
+                <option value="Impressora">Impressora</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-fg-tertiary font-semibold mb-1">Modelo do Hardware:</label>
+              <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
+            </div>
+            <div id="edit-apelido-field">
+              <div class="flex items-center gap-1 mb-1"><label class="block text-fg-tertiary font-semibold">Apelido / Hostname:</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Apelido / Hostname" aria-describedby="tip-editar-apelido-campo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido-campo" role="tooltip" class="info-tip-text">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</span></span></div>
+              <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-fg-tertiary font-semibold mb-1">Id Cliente / Observação de Uso:</label>
+              <input type="text" id="edit-id-cliente" placeholder="Ex: Note diretoria Tipo 2" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-line-quiet flex justify-end items-center shrink-0">
+        <div class="flex space-x-2">
+          <button
+            type="button"
+            data-on-click="fecharModalEditarEquipamento"
+            class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            id="btn-salvar-equipamento"
+            data-on-click="salvarDadosEquipamento"
+            class="px-5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
+          >
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Salvar no Site e na Planilha</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
+  <div id="modal-editar-apelido" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 class="text-base font-bold text-white">Editar apelido <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Editar apelido" aria-describedby="tip-editar-apelido"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido" role="tooltip" class="info-tip-text">O apelido manual prevalece nas próximas exportações do Excel.</span></span></h3>
+        </div>
+        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <label for="edit-apelido-isolado" class="block text-xs text-fg-tertiary font-semibold mb-1">Novo apelido / hostname</label>
+      <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
+      <p id="apelido-serial-contexto" class="text-xs text-fg-muted font-mono mt-2"></p>
+      <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-line-quiet">
+        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--secundario">Cancelar</button>
+        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="ck-btn ck-btn--primario">Salvar apelido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
+  <div id="modal-atualizar-planilhas" class="modal-overlay ck-veu hidden">
+    <section class="ckp-dialogo">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-sheet"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Inventários</span>
+          <h2 class="ckp-cab__titulo">Atualizar planilhas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar planilhas" aria-describedby="tip-atualizar-planilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-atualizar-planilhas" role="tooltip" class="info-tip-text">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</span></span></h2>
+        </div>
+        <div class="ckp-cab__acoes">
+          <nav class="ckp-sistemas" aria-label="Acessar sistemas de origem das planilhas">
+            <a class="ckp-sistema" href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" aria-label="Abrir inventário de computadores do Endpoint Central"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Endpoint</a>
+            <a class="ckp-sistema" href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" aria-label="Abrir Meus Equipamentos da Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
+          </nav>
+          <button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharModalAtualizarPlanilhas" aria-label="Fechar (Esc)"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        </div>
+      </header>
+
+      <div class="ckp-corpo" data-so-etapa="arquivos">
+        <div class="ckp-par-fontes" id="esc-inv-arquivos">
+          <section class="ckp-secao" data-pronta="false">
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>1</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Endpoint <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Endpoint" aria-describedby="tip-secao-endpoint"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-endpoint" role="tooltip" class="info-tip-text">Precisa ter nome do computador e rótulo de serviço/número de série.</span></span></h3></div></div>
+            <div class="ckp-secao__corpo">
+              <label class="ckp-arquivo" data-estado="vazio">
+                <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-endpoint-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx · até 60 MB">.xlsx · até 60 MB</span></span>
+                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+              </label>
+            </div>
+          </section>
+          <section class="ckp-secao" data-pronta="false">
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>2</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Simpress <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Simpress" aria-describedby="tip-secao-simpress"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-simpress" role="tooltip" class="info-tip-text">Inventário completo de 50 colunas, incluindo o CNPJ de instalação.</span></span></h3></div></div>
+            <div class="ckp-secao__corpo">
+              <label class="ckp-arquivo" data-estado="vazio">
+                <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-details-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma única planilha · até 60 MB">.xlsx ou ZIP com uma única planilha · até 60 MB</span></span>
+                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div id="upload-impacto-aviso" class="ckp-nota" data-status="alerta"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-alerta"></use></svg><p>Ao confirmar, <strong>as duas bases ativas serão substituídas</strong> pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p></div>
+
+        <label class="ckp-nota" for="auto-export-history-after-update">
+          <input id="auto-export-history-after-update" type="checkbox">
+          <p><strong>Baixar o Histórico de Planilhas automaticamente.</strong> Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</p>
+        </label>
+
+        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
+          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
+          <form class="ckp-secao__corpo" data-on-submit="importarNomesEntra">
+            <label class="ckp-arquivo" data-estado="vazio">
+              <input id="entra-csv-file" type="file" accept=".csv,text/csv">
+              <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="entra-csv-name" data-vazio="Escolher CSV ou arrastar aqui">Escolher CSV ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".csv do Microsoft Entra">.csv do Microsoft Entra</span></span>
+              <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+            </label>
+            <p id="entra-import-status" class="ckp-secao__desc" role="status" aria-live="polite">Consultando cadastro…</p>
+            <div class="ckp-linha ckp-linha--fim">
+              <button type="button" id="btn-exportar-nomes-entra" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="exportarNomesEntra" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-download"></use></svg>Baixar XLSX compacto</button>
+              <button type="submit" id="btn-importar-nomes-entra" class="ck-btn ck-btn--secundario ck-btn--sm">Importar nomes</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <div class="ckp-corpo" data-so-etapa="impacto" hidden>
+        <div class="ckp-nota" data-status="ok"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-ok"></use></svg><p id="upload-planilhas-preview" role="status" aria-live="polite" aria-atomic="true"></p></div>
+      </div>
+
+      <footer class="ckp-rodape">
+        <p id="upload-planilhas-status" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharModalAtualizarPlanilhas">Cancelar</button>
+        <button type="button" id="btn-voltar-planilhas" class="ck-btn ck-btn--fantasma hidden" data-on-click="limparPreviaUploadPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-arrow-left"></use></svg>Voltar</button>
+        <button type="button" id="btn-previsualizar-planilhas" class="ck-btn ck-btn--primario" data-on-click="previsualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-refresh"></use></svg>Pré-visualizar impacto</button>
+        <button type="button" id="btn-confirmar-planilhas" class="hidden ck-btn ck-btn--primario" data-on-click="enviarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Confirmar substituição</button>
+      </footer>
+    </section>
+  </div>
+
+  <div id="modal-importar-modelo" class="modal-overlay ck-veu hidden">
+    <section class="ckp-dialogo ckp-dialogo--estreito">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-download"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Modelo .xlsx</span>
+          <h2 class="ckp-cab__titulo"><span id="titulo-importar-modelo">Importar arquivos</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Importar arquivos" aria-describedby="descricao-importar-modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="descricao-importar-modelo" role="tooltip" class="info-tip-text"></span></span></h2>
+        </div>
+        <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      </header>
+      <div class="ckp-corpo" id="esc-modelo">
+        <label class="ckp-arquivo" data-estado="vazio">
+          <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+          <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+          <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-modelo-local" data-vazio="Escolher modelo ou arrastar aqui">Escolher modelo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio="Modelo .xlsx · até 60 MB">Modelo .xlsx · até 60 MB</span></span>
+          <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+        </label>
+        <ul class="ckp-fatos">
+          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-history"></use></svg>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais.</li>
+          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-check"></use></svg>O modelo de transferência incluído no projeto é preservado.</li>
+        </ul>
+      </div>
+      <footer class="ckp-rodape">
+        <p id="status-modelo-local" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharImportacaoModelo">Cancelar</button>
+        <button id="btn-importar-modelo" type="button" class="ck-btn ck-btn--primario" data-on-click="enviarModeloLocal"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar</button>
+      </footer>
+    </section>
+  </div>
+
+  <div id="modal-contato-origem" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
+      <div class="local-setup-heading">
+        <h3><span id="titulo-contato-origem">Contato de origem</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Contato de origem" aria-describedby="tip-contato-origem"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-contato-origem" role="tooltip" class="info-tip-text">Usado como contato da retirada em novas transferências. Fica salvo somente neste computador, em config/contato_origem.json.</span></span></h3>
+        <button type="button" class="readiness-import" data-on-click="fecharConfiguracaoContatoOrigem" aria-label="Fechar configuração do contato de origem" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="contato-origem-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2">
+          <label for="contato-origem-nome" class="block text-xs text-fg-subtle mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="contato-origem-nome" maxlength="160" required autocomplete="name" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="contato-origem-email" class="block text-xs text-fg-subtle mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="email" id="contato-origem-email" maxlength="254" required autocomplete="email" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="contato-origem-telefone" class="block text-xs text-fg-subtle mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="contato-origem-telefone" maxlength="64" required inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+        </div>
+      </div>
+      <p id="status-contato-origem" role="status" aria-live="polite" aria-atomic="true"></p>
+      <button id="btn-salvar-contato-origem" type="button" class="readiness-import" data-on-click="salvarConfiguracaoContatoOrigem">Salvar contato</button>
+    </div>
+  </div>
+
+  <div id="modal-representante-regional" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
+      <div class="local-setup-heading">
+        <h3 id="titulo-representante-regional">Editar representante regional</h3>
+        <button type="button" class="readiness-import" data-on-click="fecharEdicaoRepresentanteRegional" aria-label="Fechar edição do representante regional" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p>Cidade: <strong id="representante-regional-cidade"></strong>. A alteração fica salva somente neste computador, em config/representantes_regionais.json.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2">
+          <label for="representante-regional-nome" class="block text-xs text-fg-subtle mb-1">Nome completo:</label>
+          <input type="text" id="representante-regional-nome" maxlength="160" autocomplete="off" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="representante-regional-email" class="block text-xs text-fg-subtle mb-1">E-mail:</label>
+          <input type="email" id="representante-regional-email" maxlength="254" autocomplete="off" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <div>
+          <label for="representante-regional-telefone" class="block text-xs text-fg-subtle mb-1">Celular:</label>
+          <input type="text" id="representante-regional-telefone" maxlength="64" inputmode="tel" autocomplete="off" placeholder="(00) 9xxxx-xxxx" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+        </div>
+        <fieldset class="sm:col-span-2 grid grid-cols-2 gap-3">
+          <legend class="block text-xs text-fg-subtle mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></legend>
+          <div>
+            <label for="representante-regional-inicio" class="block text-xs text-fg-subtle mb-1">Início</label>
+            <input type="time" step="1" id="representante-regional-inicio" required class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          </div>
+          <div>
+            <label for="representante-regional-fim" class="block text-xs text-fg-subtle mb-1">Fim</label>
+            <input type="time" step="1" id="representante-regional-fim" required class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          </div>
+        </fieldset>
+        <div>
+          <label for="representante-regional-almoco" class="block text-xs text-fg-subtle mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="time" step="1" id="representante-regional-almoco" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+          <label for="representante-regional-almoco-nao-fecha" class="flex items-center gap-2 mt-2"><input type="checkbox" id="representante-regional-almoco-nao-fecha" data-on-change="alternarAlmocoRepresentanteRegional" /><span>Escritório não fecha</span></label>
+        </div>
+        <div>
+          <label for="representante-regional-pausa" class="block text-xs text-fg-subtle mb-1">Pausa: <span id="representante-regional-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="representante-regional-pausa" maxlength="16" autocomplete="off" placeholder="Ex.: 1h30" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+      </div>
+      <p id="status-representante-regional" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="flex flex-wrap justify-end gap-2">
+        <button id="btn-restaurar-representante-regional" type="button" class="ck-btn ck-btn--secundario" data-on-click="restaurarRepresentanteRegional">Restaurar padrão</button>
+        <button id="btn-cancelar-representante-regional" type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharEdicaoRepresentanteRegional">Cancelar</button>
+        <button id="btn-salvar-representante-regional" type="button" class="ck-btn ck-btn--primario" data-on-click="salvarRepresentanteRegional">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RELATÓRIO MENSAL DO CONTRATO (docs/operacao/relatorio-mensal.md) -->
+  <div id="modal-relatorio-mensal" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog monthly-report-dialog ck-dialogo">
+      <div class="local-setup-heading">
+        <h3><span id="titulo-relatorio-mensal">Relatório mensal</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Relatório mensal" aria-describedby="tip-relatorio-mensal"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-relatorio-mensal" role="tooltip" class="info-tip-text">Planilha para o gestor do contrato com o inventário da base oficial na Simpress, a última comparação do mês, as OS abertas, concluídas e pendentes e o uso do sistema no mês.</span></span></h3>
+        <button type="button" class="readiness-import" data-on-click="fecharRelatorioMensal" aria-label="Fechar relatório mensal" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal">
+        <div>
+          <label for="relatorio-mensal-mes" class="block text-xs text-fg-subtle mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="tip-relatorio-mensal" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+        </div>
+        <p id="status-relatorio-mensal" role="status" aria-live="polite" aria-atomic="true"></p>
+        <button id="btn-exportar-relatorio-mensal" type="submit" class="readiness-import">
+          <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Exportar relatório</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
+  <div id="modal-historico-comparacoes" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
+      <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-cyan-400"></i>
+            Histórico de atualizações de planilhas
+          </h3>
+          <p id="total-historico-comparacoes" class="text-xs text-fg-subtle mt-1">0 registros</p>
+        </div>
+        <div class="flex flex-wrap items-end justify-end gap-2 shrink-0">
+          <div class="flex flex-col gap-1 shrink-0">
+            <label for="data-exportar-historico-comparacoes" class="text-xs text-fg-tertiary">
+              Data para exportar
+              <select id="data-exportar-historico-comparacoes" aria-label="Selecionar a data do histórico para exportar" class="mt-1 block min-w-36 rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" disabled>
+                <option value="">Carregando datas...</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-exportar-historico-comparacoes" data-on-click="exportarHistoricoComparacoesExcel" class="btn btn-secondary gap-2 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
+              <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+              <span class="hidden sm:inline">Exportar Excel</span>
+            </button>
+            <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar histórico de planilhas">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="lista-historico-comparacoes" aria-label="Atualizações registradas" class="history-modal-scroll overflow-auto flex-1 min-h-0 py-4 space-y-3"></div>
+      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
+        <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
+  <div id="modal-pesquisa-completa" class="modal-overlay ck-veu hidden" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
+    <div class="modal-panel ck-dialogo">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
+        <div class="min-w-0">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="search" class="w-5 h-5 text-cyan-400" aria-hidden="true"></i>
+            Resultados da pesquisa
+          </h3>
+          <p class="text-xs text-fg-subtle mt-1">Termo: <span id="pesquisa-completa-termo" class="font-mono text-cyan-300 break-all"></span></p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <span id="pesquisa-completa-contagem" class="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/25 text-xs font-semibold" role="status" aria-live="polite">0 resultados</span>
+          <button type="button" id="btn-fechar-pesquisa-completa" data-on-click="fecharModalPesquisaCompleta" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resultados da pesquisa">
+            <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 border-b border-line-quiet shrink-0">
+        <label for="filtro-pesquisa-categoria" class="text-xs text-fg-tertiary">
+          Categoria
+          <select id="filtro-pesquisa-categoria" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todas as categorias</option>
+            <option value="notebook">Notebooks</option>
+            <option value="macbook">MacBooks</option>
+            <option value="monitor">Monitores</option>
+            <option value="fone">Fones</option>
+          </select>
+        </label>
+        <label for="filtro-pesquisa-cidade" class="text-xs text-fg-tertiary">
+          Cidade
+          <select id="filtro-pesquisa-cidade" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todas as cidades</option>
+          </select>
+        </label>
+        <label for="filtro-pesquisa-usuario" class="text-xs text-fg-tertiary">
+          Usuário
+          <select id="filtro-pesquisa-usuario" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todos os usuários</option>
+            <option value="sem">Sem usuário</option>
+            <option value="com">Com usuário</option>
+          </select>
+        </label>
+        <button type="button" id="btn-limpar-filtros-pesquisa" data-on-click="limparFiltrosPesquisaCompleta" class="hidden full-search-clear justify-self-end text-xs text-cyan-300 hover:text-white transition">
+          Limpar filtros
+        </button>
+      </div>
+      <p id="pesquisa-completa-status" class="text-xs text-fg-subtle py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
+      <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-between gap-3 shrink-0">
+        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden disabled:opacity-50 disabled:cursor-wait ck-btn ck-btn--primario">
+          <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Carregar mais</span>
+        </button>
+        <button type="button" data-on-click="fecharModalPesquisaCompleta" class="ml-auto ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
