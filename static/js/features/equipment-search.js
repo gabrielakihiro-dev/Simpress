@@ -60,6 +60,7 @@
       remoteButton.disabled = !hasSerial;
       remoteButton.removeAttribute("aria-busy");
     }
+    app.atualizarEmailOutlook?.(equipment);
     const endpointResult = document.getElementById("endpoint-lookup-result");
     if (endpointResult) endpointResult.textContent = "";
     const powershellHost = document.getElementById("input-powershell-hostname");
