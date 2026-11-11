@@ -694,6 +694,25 @@ class ArquivoRotasTest(RotasBase):
         self.assertEqual(depois[alvo]["descricao"], antes[0]["descricao"])
         self.assertIn("softexpert", depois[alvo])  # estado de finalização, inalterado
 
+    def test_atualizar_grava_o_mesmo_que_a_tela_sugere_pela_leitura_softexpert(self):
+        # UTIC-2026-0833: title typed into H, G and I empty; SoftExpert has title, description and requester
+        base = _trocar_na_folha(montar(("UTIC-2026-0001", "UTIC-2026-0002")), texto("G2", "titulo UTIC-2026-0001"), "")
+        self.importar(_antes_da_coluna_p(base, 2, texto("H2", "Travando")))
+        sebrae_novos.salvar_antigo(
+            sebrae_novos.caminho_antigos(self.caminhos),
+            ChamadoSoftExpert("UTIC-2026-0001", titulo="Travando", descricao="Notebook de Camila Lopes", solicitante="API SEBRAE"), "agora",
+        )
+        tela = {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}["UTIC-2026-0001"]
+        self.assertEqual(tela["automaticos_sugeridos"], {
+            "G": "Travando", "H": "Notebook de Camila Lopes", "I": "API SEBRAE", "K": "ABC123", "L": "Dell", "N": "Curitiba", "E": "7303022",
+        })
+        resposta = self.post("/api/sebrae/dashboard/atualizar", json={})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", sorted(tela["automaticos_sugeridos"]))])
+        gravado = G.chamados_para_editar(base64.b64decode(resposta.json()["conteudo_base64"]))[0]
+        self.assertEqual((gravado.titulo, gravado.descricao, gravado.usuario, gravado.automaticos["K"]),
+                         ("Travando", "Notebook de Camila Lopes", "API SEBRAE", "ABC123"))
+
     def test_antigo_nao_encontrado_na_ultima_leitura_vem_marcado_ate_ser_lido(self):
         self.importar(montar())
         alvo = self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"][0]["numero"]

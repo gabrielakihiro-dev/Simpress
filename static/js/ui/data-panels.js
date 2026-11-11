@@ -894,8 +894,10 @@
             osCell.append(osButton);
           }
           // Selos só da Oracle: record.diasAberta e record.envioTecnico vêm de order (fontes unidas); da Simpress vem só o selo Entregue.
-          if (order.diasAberta !== null && order.diasAberta !== undefined) {
-            const dias = order.diasAberta;
+          const dias = order.diasAberta;
+          const temDias = dias !== null && dias !== undefined;
+          // Peça entregue: o "Aberta há N dias" sai do selo cinza e vira sufixo do selo Entregue.
+          if (temDias && !order.entregue) {
             osCell.append(el("span", "ck-os__selo ck-os__selo--dias",
               dias === 0 ? "Aberta hoje" : dias === 1 ? "Aberta há 1 dia" : `Aberta há ${dias.toLocaleString("pt-BR")} dias`));
           }
@@ -903,7 +905,10 @@
             osCell.append(el("span", "ck-os__selo ck-os__selo--tecnico", "Técnico"));
           }
           // Selo da Simpress: etapa atual "Pedido entregue" com data completa.
-          if (order.entregue) osCell.append(el("span", "ck-os__selo ck-os__selo--entregue", `Entregue · ${order.entregue}`));
+          if (order.entregue) {
+            const sufixo = !temDias ? "" : dias === 1 ? " · 1 dia" : ` · ${dias.toLocaleString("pt-BR")} dias`;
+            osCell.append(el("span", "ck-os__selo ck-os__selo--entregue", `Entregue · ${order.entregue}${sufixo}`));
+          }
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");

@@ -325,15 +325,51 @@ def salvar_antigo(caminho: Path, chamado: ChamadoSoftExpert, lido_em: str = "") 
         _gravar(caminho, todos)
 
 
+def _mesmo_texto(a: Any, b: Any) -> bool:
+    return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
+
+
+def titulo_em_h(aberto: Mapping[str, Any], lido: Optional[Mapping[str, str]]) -> bool:
+    """Column H holds the SoftExpert title instead of the description (title typed into H; seen in UTIC-2026-0833)."""
+    if not lido:
+        return False
+    titulo, descricao = str(lido.get("titulo") or ""), str(lido.get("descricao") or "")
+    return bool(titulo.strip() and descricao.strip()) and _mesmo_texto(aberto.get("descricao"), titulo) and not _mesmo_texto(descricao, titulo)
+
+
 def complementar_antigos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]]) -> List[Mapping[str, Any]]:
     """Old open tickets with the SoftExpert description and requester filling what the Dashboard row has empty (H, I).
-    Feeds the same name cross-reference the new tickets get; the Dashboard values win when present."""
+    Feeds the same name cross-reference the new tickets get; the Dashboard values win when present, except an H that
+    is only the SoftExpert title (``titulo_em_h``), which gives way to the read description."""
     resultado: List[Mapping[str, Any]] = []
     for aberto in abertos:
         lido = antigos.get(str(aberto.get("numero") or ""))
         resultado.append(aberto if not lido else {
-            **aberto, "descricao": aberto.get("descricao") or lido["descricao"], "usuario": aberto.get("usuario") or lido["solicitante"],
+            **aberto, "descricao": lido["descricao"] if titulo_em_h(aberto, lido) else aberto.get("descricao") or lido["descricao"],
+            "usuario": aberto.get("usuario") or lido["solicitante"],
         })
+    return resultado
+
+
+def preenchimentos_softexpert(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]]) -> Dict[str, Dict[str, str]]:
+    """G (title) and I (requester) still empty in old open tickets, from the SoftExpert read (``ler_antigos``, already masked).
+    H is given only with G, when H is just that title (``titulo_em_h``): the title goes to G and the read description to H
+    (exception to "never over an existing value", authorized by the user on 11/11/2026). Keys are the ``numero`` of ``abertos``."""
+    resultado: Dict[str, Dict[str, str]] = {}
+    for aberto in abertos:
+        numero = str(aberto.get("numero") or "")
+        lido = antigos.get(numero)
+        if not lido:
+            continue
+        novos: Dict[str, str] = {}
+        if not str(aberto.get("titulo") or "").strip() and str(lido.get("titulo") or "").strip():
+            novos["G"] = _texto_de_celula(lido["titulo"])
+            if titulo_em_h(aberto, lido):
+                novos["H"] = _texto_de_celula(lido["descricao"])
+        if not str(aberto.get("usuario") or "").strip() and str(lido.get("solicitante") or "").strip():
+            novos["I"] = _texto_de_celula(lido["solicitante"])
+        if novos:
+            resultado[numero] = novos
     return resultado
 
 
