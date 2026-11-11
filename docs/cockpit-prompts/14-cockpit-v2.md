@@ -195,6 +195,16 @@ Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere 
 - O modal `#modal-historico-apelidos` (e `abrirModalHistoricoApelidos`) foi removido em 31/10/2026 por pedido do usuário: o painel F8 (`data-cockpit-tool-panel="apelidos"`, em `static/js/features/cockpit-tool-panels.js`) é o histórico completo. As ações de restaurar/excluir ficam em `static/js/features/alias-history.js` (`acoesEventoHistorico`, `desfazerEventoHistoricoApelidos`, `excluirRegistroHistorico`). Não recrie o modal; a API `/api/historico-alteracoes` não mudou.
 - O menu Ferramentas não tem mais o grupo "Planilhas": `Atualizar planilhas` (`#btn-atualizar-planilhas`) saiu (o modal abre por **Nova comparação** na aba Comparação, pelo `Importar` da Home e pelo alerta `Atualizar base`) e `Exportar Excel` (`#btn-exportar-equipamentos`, exportação do modelo com Apelido/IdCliente) passou para a barra da aba Comparação, com a mesma lógica de exibição (`static/js/features/dashboard.js`) e o rótulo visível `Exportar Excel`.
 
+## `index.html` dividido em partials (10/11/2026)
+
+Para reduzir conflitos entre sessões paralelas, trechos grandes do `static/index.html` ficam em `frontend/partials/<nome>.html`, fora de `static/` (não são servidos sozinhos). No `index.html`, uma linha que contém só `<!-- include: partials/<nome>.html -->` é trocada pelo arquivo inteiro antes de a página sair; o navegador recebe o mesmo HTML de antes, byte a byte.
+
+- Quem monta: `assembled_html()` em `domains/frontend_assets.py`, chamada por `versioned_html()` (rota `/` e servidor do e2e). Aceita só caminhos dentro de `frontend/partials/`, terminados em `.html`, com no máximo 2 níveis (um partial pode incluir outro); partial ausente para a página com erro que diz o nome.
+- Testes que leem o HTML como texto usam o HTML montado: `assembled_html(app_config.STATIC_DIR)` no Python e `assembledHtml()` de `tests/frontend/support/assembled-html.cjs` no Node; `tests/test_frontend_assets.py` confere que os dois montam o mesmo texto.
+- Os varredores do build leem também os partials: Tailwind (`@source` em `static/styles/tailwind.input.css` e `content` em `config/tailwind.config.cjs`) e o subconjunto do Lucide (`scripts/build/lucide-subset.cjs`). Sem isso, classe ou ícone que só aparece num partial sumiria do CSS ou do JS gerado.
+- `GET /static/index.html` continua servindo o arquivo cru, com as linhas de include; a página real é a rota `/`.
+- Para editar um painel extraído, abra o partial; IDs, ARIA, `data-*` e classes não mudaram de lugar no HTML final.
+
 
 ## Regras movidas do AGENTS.md (10/11/2026)
 

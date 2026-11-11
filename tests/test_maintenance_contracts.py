@@ -279,7 +279,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["../static/index.html", "../static/app.js", "../static/js/**/*.js"]', configuration)
+        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../static/app.js", "../static/js/**/*.js"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
