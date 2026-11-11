@@ -1248,8 +1248,8 @@ def _journal_comparison_history(
 
     inicio = time.perf_counter()
     transaction.update_json(comparison_history_file, append_update, [])
-    # Only the duration: the history holds series, hostnames and notes, which never go to the log.
-    logger.info("Histórico de comparações gravado em %.1f ms.", (time.perf_counter() - inicio) * 1000)
+    # Staged, not yet on disk (the transaction commit writes it). Only the duration: the history holds series, hostnames and notes, which never go to the log.
+    logger.info("Histórico de comparações preparado na transação em %.1f ms.", (time.perf_counter() - inicio) * 1000)
     _stage_inherited_annotations(transaction, pending_annotation_records)
     return copied_annotations
 

@@ -24,7 +24,7 @@ class HistoryWriteLogTests(unittest.TestCase):
                 _FakeTransaction(), None, Path("historico.json"), entry, []
             )
         messages = [record.getMessage() for record in captured.records]
-        self.assertTrue(any(m.startswith("Histórico de comparações gravado em ") and m.endswith(" ms.") for m in messages))
+        self.assertTrue(any(m.startswith("Histórico de comparações preparado na transação em ") and m.endswith(" ms.") for m in messages))
         for message in messages:
             for dado in ("SERIETESTE01", "PRNOTETESTE01", "evento-teste", "historico.json"):
                 self.assertNotIn(dado, message)
