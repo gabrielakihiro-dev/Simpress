@@ -114,6 +114,6 @@ O relatório é publicado após a verificação da CI das correções. O último
 
 - **P2 — Integração real do piloto:** depende de infraestrutura de teste explicitamente autorizada. Os simuladores confirmam os caminhos exercitados, sem comprovar banco/storage reais.
 - **P3 — Dependências e ambiente:** acompanhar os avisos de TestClient e `allowScripts` em manutenção própria, preservando a matriz e as auditorias atuais.
-- **P3 — Arquitetura e documentação de respostas:** os débitos de composição em `main.py` e respostas sem `response_model`, registrados na Fase 1, continuam fora desta correção delimitada.
+- **P3 — Arquitetura e documentação de respostas:** os débitos de composição em `main.py` e respostas sem `response_model`, registrados na Fase 1, continuam fora desta correção delimitada. Primeira fatia da decomposição (10/11/2026): as rotas de equipamento (`GET /api/equipamento/{serial}`, `POST /api/equipamento/salvar`, `GET /api/exportar-equipamentos`) e `EquipamentoUpdatePayload` saíram de `main.py` para `routers/equipment.py`, e a edição da planilha foi para `domains/equipment_edit.py`, com contrato HTTP idêntico. O restante da composição em `main.py` continua como débito.
 
 Nenhuma regressão adicional das alterações de workers ou do snapshot foi reproduzida pelos cenários examinados. Essa conclusão está limitada à revisão, às cargas sintéticas e aos jobs identificados neste relatório.
