@@ -56,14 +56,11 @@ try {
         Say 'OK:aberto'
     } else {
         if (-not $resolvidos) { throw 'CODE:destinatario_nao_resolvido' }
-        # From the next line on, a timeout in Python means "uncertain", not "nothing sent".
+        # From the next line on, anything but OK:enviado (a timeout or an exception inside Send()) is "uncertain" in Python,
+        # never "nothing sent" (user decision, 2026-11-10); so Send() has no catch of its own.
         Say 'PASSO:antes_send'
-        try {
-            $mail.Send()
-            $enviado = $true
-        } catch {
-            throw 'CODE:envio_recusado'
-        }
+        $mail.Send()
+        $enviado = $true
         Say 'OK:enviado'
     }
 } catch {

@@ -680,9 +680,11 @@
           return;
         }
         if (marcadorPendente()) return mostrarStatus(TEXTO.marcador, "erro");
+        const cc = lerCampo("cc").trim();
+        const comCopia = cc.replace(/;/g, "").trim() ? `, com cópia para ${cc}` : "";
         const confirmou = await app.confirmarAcao({
           titulo: "Enviar o e-mail pelo Outlook?",
-          mensagem: `O e-mail será enviado de ${emailDaConta()} para ${lerCampo("para").trim()}. Depois de enviado, não há como desfazer.`,
+          mensagem: `O e-mail será enviado de ${emailDaConta()} para ${lerCampo("para").trim()}${comCopia}. Depois de enviado, não há como desfazer.`,
           confirmar: "Enviar",
           cancelar: "Cancelar",
         });

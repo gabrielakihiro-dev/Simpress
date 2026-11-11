@@ -58,7 +58,6 @@ MSG_CONTA_AUSENTE = "A conta {conta} não está configurada no Outlook. Escolha 
 MSG_DESTINATARIO = "Alguns destinatários não foram reconhecidos no Outlook. Confira os nomes antes de enviar."
 MSG_INDISPONIVEL = "Outlook (classic) indisponível. Abra o Outlook clássico e tente de novo."
 MSG_FECHADO = "O Outlook (classic) não está aberto. Abra o Outlook e tente enviar de novo."
-MSG_RECUSADO = "O Outlook recusou o envio e nada foi enviado. Confira os destinatários e tente de novo."
 MSG_SEM_RESPOSTA = "O Outlook não respondeu e nada foi enviado. Tente de novo."
 MSG_INCERTO = "Não foi possível confirmar o envio. Confira os Itens Enviados no Outlook antes de tentar de novo."
 MSG_ABRIR_DEMORA = (
@@ -502,8 +501,8 @@ class EmailOutlook:
 
     @staticmethod
     def _mapear_erro(codigo: str, conta: str, saida: SaidaPowerShell) -> dict[str, Any]:
-        if saida.antes_send and codigo != "envio_recusado":
-            # Depois do marcador só o ``envio_recusado`` prova que nada foi enviado.
+        if saida.antes_send:
+            # Depois do marcador nada prova que não foi enviado, nem exceção no Send() (decisão do usuário, 10/11/2026).
             return {"status": "incerto", "conta": conta, "aviso": MSG_INCERTO}
         if codigo == "conta_ausente":
             email = CONTAS_REMETENTE[conta]["email"]
@@ -512,8 +511,6 @@ class EmailOutlook:
             raise ErroOutlook(422, MSG_DESTINATARIO, codigo="destinatario_nao_resolvido")
         if codigo == "outlook_fechado":
             raise ErroOutlook(503, MSG_FECHADO, codigo="outlook_fechado")
-        if codigo == "envio_recusado":
-            raise ErroOutlook(502, MSG_RECUSADO, codigo="envio_recusado")
         raise ErroOutlook(503, MSG_INDISPONIVEL, codigo="outlook_indisponivel")
 
     def processar(self, dados: dict[str, Any]) -> dict[str, Any]:

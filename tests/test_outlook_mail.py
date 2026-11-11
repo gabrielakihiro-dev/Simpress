@@ -529,7 +529,6 @@ class EnvioTests(OutlookMailBase):
             ("ERRO:codigo_novo_qualquer\n", 503, "outlook_indisponivel"),
             ("", 503, "outlook_indisponivel"),
             ("lixo qualquer\n", 503, "outlook_indisponivel"),
-            ("PASSO:antes_send\nERRO:envio_recusado\n", 502, "envio_recusado"),
         ]
         for saida, status, codigo in casos:
             with self.subTest(saida=saida):
@@ -578,18 +577,28 @@ class EnvioTests(OutlookMailBase):
         self.assertLess(script.index("CODE:outlook_fechado"), script.index("New-Object -ComObject"))
         self.assertLess(script.index("New-Object -ComObject"), script.index("CreateItem"))
 
-    def test_excecao_no_send_vira_envio_recusado_e_nao_incerto(self):
-        self.runner.saida = "PASSO:antes_send\nERRO:envio_recusado\n"
-        resposta = self.enviar(modo="enviar", confirmado=True)
-        self.assertEqual((resposta.status_code, resposta.json()["codigo"]), (502, "envio_recusado"))
-        self.assertNotIn("status", resposta.json())
-        self.assertIn("nada foi enviado", resposta.json()["detail"])
+    def test_excecao_no_send_vira_incerto(self):
+        # Decisão do usuário (10/11/2026): depois de PASSO:antes_send, tudo que não for OK:enviado é incerto,
+        # inclusive exceção dentro do Send(); nunca "nada foi enviado".
+        for saida in (
+            "PASSO:antes_send\nERRO:outlook_indisponivel\n",
+            "PASSO:antes_send\nERRO:envio_recusado\n",
+            "PASSO:antes_send\nERRO:codigo_novo_qualquer\n",
+        ):
+            with self.subTest(saida=saida):
+                self.runner.saida = saida
+                resposta = self.enviar(modo="enviar", confirmado=True)
+                corpo = resposta.json()
+                self.assertEqual((resposta.status_code, corpo["status"], corpo["conta"]), (200, "incerto", "sebrae"), resposta.text)
+                self.assertIn("Itens Enviados", corpo["aviso"])
+                self.assertNotIn("nada foi enviado", corpo["aviso"])
+                self.assertNotIn("codigo", corpo)
         script = SCRIPT_PS1.read_text(encoding="ascii")
-        # No script: o marcador sai antes do Send(), o Send() está num try cuja falha vira envio_recusado,
-        # e o rascunho é descartado (Close(1)) no finally.
+        # No script: o marcador sai antes do Send(), a exceção do Send() não ganha código próprio
+        # (cai no catch geral) e o rascunho é descartado (Close(1)) no finally.
+        self.assertNotIn("envio_recusado", script)
         self.assertLess(script.index("PASSO:antes_send"), script.index(".Send()"))
-        self.assertLess(script.index(".Send()"), script.index("CODE:envio_recusado"))
-        self.assertLess(script.index("PASSO:antes_send") , script.index("Say 'OK:enviado'"))
+        self.assertLess(script.index("PASSO:antes_send"), script.index("Say 'OK:enviado'"))
         self.assertRegex(script, r"finally \{[^}]*\.Close\(1\)")
         self.assertIn("[Console]::Out.Flush()", script)
 

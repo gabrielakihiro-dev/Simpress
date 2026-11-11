@@ -100,8 +100,9 @@ function preparar({ rotas = {}, modelos, diretorio = { disponivel: true, total: 
       for (const ouvinte of harness.element(id).listeners.get("keydown") || []) ouvinte(evento);
       return evento;
     },
-    async preencherEnvio({ para = "teste@exemplo.test", setor = "TI" } = {}) {
+    async preencherEnvio({ para = "teste@exemplo.test", cc = "", setor = "TI" } = {}) {
       harness.element("email-para").value = para;
+      harness.element("email-cc").value = cc;
       harness.element("email-setor").value = setor;
     },
   };
@@ -505,6 +506,32 @@ test("Enviar pelo Outlook asks the approved confirmation and sends confirmado tr
   assert.equal(envio.corpo.setor, "TI");
   assert.equal(app.el("email-status").textContent, "E-mail enviado pelo Outlook.");
   assert.deepEqual(plano(app.harness.effects.toasts.at(-1)), { message: "E-mail enviado pelo Outlook.", type: "success" });
+});
+
+test("the send confirmation adds the Cc clause only when Cc has content (user decision, 2026-11-10)", async () => {
+  const mensagemCom = async cc => {
+    const app = preparar({ rotas: { "POST /api/outlook/email": () => ({ status: "enviado", conta: "conta@exemplo.test" }) } });
+    await app.abrir();
+    await app.preencherEnvio({ cc });
+    app.harness.context.respostaConfirmacao = false;
+    await app.harness.run("enviarEmailPeloOutlook()");
+    return app.confirmacoes[0].mensagem;
+  };
+  const base = "O e-mail será enviado de conta@exemplo.test para teste@exemplo.test";
+  assert.equal(await mensagemCom(" copia@exemplo.test "), `${base}, com cópia para copia@exemplo.test. Depois de enviado, não há como desfazer.`);
+  assert.equal(await mensagemCom(""), `${base}. Depois de enviado, não há como desfazer.`);
+  assert.equal(await mensagemCom(" ; ; "), `${base}. Depois de enviado, não há como desfazer.`);
+});
+
+test("a lost answer on Enviar shows the uncertain text and never says nothing was sent", async () => {
+  const app = preparar({ rotas: { "POST /api/outlook/email": () => Promise.reject(new Error("Failed to fetch")) } });
+  await app.abrir();
+  await app.preencherEnvio();
+  await app.harness.run("enviarEmailPeloOutlook()");
+  assert.equal(app.el("email-status").textContent, MSG_INCERTO);
+  assert.equal(app.el("email-status").dataset.tipo, "aviso");
+  assert.deepEqual(plano(app.harness.effects.toasts.at(-1)), { message: MSG_INCERTO, type: "warning" });
+  assert.doesNotMatch(app.el("email-status").textContent, /nada foi enviado/i);
 });
 
 test("Enviar checks Para and the name and sector markers before any confirmation", async () => {

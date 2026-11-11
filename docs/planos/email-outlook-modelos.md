@@ -61,14 +61,14 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 - Dados só por stdin em JSON UTF-8; script começa com `[Console]::InputEncoding/OutputEncoding = UTF8`; timeout ~60 s.
 - `enviar`: antes de tudo confere `Get-Process OUTLOOK`; Outlook fechado → `outlook_fechado`, sem criar item. O `abrir` pode iniciar o Outlook.
 - `New-Object -ComObject Outlook.Application` → conta em `Session.Accounts` por `SmtpAddress` (ausente → `conta_ausente`) → `CreateItem(0)` → `SendUsingAccount` (fallback `InvokeMember` `SetProperty`) → To, CC, Subject, Body → `Recipients.ResolveAll()`.
-- `abrir`: `Display($false)`. `enviar`: imprime `PASSO:antes_send`, depois `Send()` dentro de `try/catch`; exceção no `Send()` → `envio_recusado` (nada enviado).
+- `abrir`: `Display($false)`. `enviar`: imprime `PASSO:antes_send`, depois `Send()` sem `try/catch` próprio; exceção no `Send()` → `incerto` (decisão do usuário, 10/11/2026).
 
 **Mapeamento de resultado:**
 - `conta_ausente` → 422.
 - `destinatario_nao_resolvido` → 422 só no `enviar`; no `abrir` abre assim mesmo e devolve `aviso`.
 - COM indisponível, Outlook novo ou sistema não Windows → 503 `outlook_indisponivel`.
 - Outlook fechado no `enviar` → 503 `outlook_fechado`, nada criado.
-- Exceção no `Send()` → 502 `envio_recusado`, nada enviado (não é `incerto`).
+- Exceção no `Send()` → 200 `incerto` (conferir Itens Enviados antes de repetir), como qualquer resultado depois de `PASSO:antes_send` que não seja `OK:enviado` (decisão do usuário, 10/11/2026; antes era 502 `envio_recusado`, nada enviado).
 - Timeout sem `PASSO:antes_send` → erro simples, nada enviado. Só timeout depois do marcador → `incerto` (conferir Itens Enviados antes de repetir). Timeout no `abrir` → aviso de que a janela pode aparecer em instantes.
 
 ### Front
@@ -99,7 +99,7 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 - **Ações de modelo:** `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão`. **Nome do modelo da semente:** `Modelo 1 - Cabo`.
 - **Ações do e-mail:** `Abrir no Outlook`, `Enviar pelo Outlook`, `Copiar Texto`, `Cancelar`.
 - **Ajudas:** as duas frases acima.
-- **Confirmação do envio:** título `Enviar o e-mail pelo Outlook?`; texto `O e-mail será enviado de <conta> para <Para>. Depois de enviado, não há como desfazer.`; botões `Enviar` / `Cancelar`.
+- **Confirmação do envio:** título `Enviar o e-mail pelo Outlook?`; texto `O e-mail será enviado de <conta> para <Para>, com cópia para <Cc>. Depois de enviado, não há como desfazer.`; botões `Enviar` / `Cancelar`. O trecho `, com cópia para <Cc>` só aparece se o Cc tiver conteúdo (só `;` e espaços não contam); sem Cc, vale o texto sem esse trecho (`O e-mail será enviado de <conta> para <Para>. Depois de enviado, não há como desfazer.`). Decisão do usuário, 10/11/2026.
 - **Excluir modelo:** título `Excluir o modelo?`; texto `O modelo <nome> será excluído deste site. Não há como desfazer.`; botões `Excluir` / `Cancelar`.
 - **Restaurar padrão:** título `Restaurar o padrão?`; texto `Para, Cc, Assunto, Mensagem e conta do Modelo 1 - Cabo voltam ao texto original.`; botões `Restaurar` / `Cancelar`.
 - **Sucesso:** `E-mail aberto no Outlook. Revise e envie por lá.`, `E-mail enviado pelo Outlook.`, `Texto copiado.`
@@ -115,7 +115,6 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
   - `Alguns destinatários não foram reconhecidos no Outlook. Confira os nomes antes de enviar.`
   - `Outlook (classic) indisponível. Abra o Outlook clássico e tente de novo.`
   - `O Outlook (classic) não está aberto. Abra o Outlook e tente enviar de novo.`
-  - `O Outlook recusou o envio e nada foi enviado. Confira os destinatários e tente de novo.`
   - `O Outlook não respondeu e nada foi enviado. Tente de novo.`
   - `Não foi possível confirmar o envio. Confira os Itens Enviados no Outlook antes de tentar de novo.`
   - `O Outlook demorou a responder. A janela do e-mail pode aparecer em instantes; confira antes de tentar de novo.`
@@ -150,7 +149,7 @@ Por regra do usuário, a execução roda numa sessão nova (`start_session`) com
   - contatos: ≥ 2 caracteres, sem acento/maiúscula, chaves `$` fora, até 8; resolver `unico`/`ambiguo`/`nenhum`/e-mail;
   - envio: validação e limites, `confirmado`, substituição de `{nome}`/`{setor}`, marcador bloqueia só o `enviar`, cada código de erro, timeout com e sem marcador, `SIMPRESS_OUTLOOK_SEM_ENVIO`, 409 na trava;
   - stdin UTF-8 com `Instalação`/`Segurança` intactos; `.ps1` fixo com `-File -NoProfile` e dados fora dos argumentos;
-  - Outlook fechado no `enviar` → 503 `outlook_fechado` sem criar item; exceção no `Send()` → `envio_recusado`, não `incerto`;
+  - Outlook fechado no `enviar` → 503 `outlook_fechado` sem criar item; exceção no `Send()` → `incerto` (nunca "nada enviado");
   - contas `#EXT#` fora do autocompletar e do resolver;
   - marcador restante no Assunto bloqueia o `enviar`;
   - log sem corpo, destinatários, nomes ou termo buscado (captura de log no teste).
