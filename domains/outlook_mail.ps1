@@ -34,11 +34,8 @@ try {
     if ($null -eq $conta) { throw 'CODE:conta_ausente' }
 
     $mail = $outlook.CreateItem(0)
-    try {
-        $mail.SendUsingAccount = $conta
-    } catch {
-        [void]$mail.GetType().InvokeMember('SendUsingAccount', [System.Reflection.BindingFlags]::SetProperty, $null, $mail, @($conta))
-    }
+    # Plain property assignment of SendUsingAccount raises no error but has no effect from PowerShell (read back as null, 2026-11-11).
+    [void]$mail.GetType().InvokeMember('SendUsingAccount', [System.Reflection.BindingFlags]::SetProperty, $null, $mail, @($conta))
     # Outlook may ignore the assignment and keep the default account: read it back (-ne ignores case); applies to abrir and enviar.
     if ([string]$mail.SendUsingAccount.SmtpAddress -ne [string]$pedido.conta_email) { throw 'CODE:conta_ausente' }
     $mail.To = [string]$pedido.para
@@ -53,6 +50,8 @@ try {
         if (-not $resolvidos) { Say 'AVISO:destinatario_nao_resolvido' }
         $mail.Display($false)
         $mostrado = $true
+        # Display() alone left the window only on the taskbar when Outlook was started by this script (2026-11-11).
+        try { $mail.GetInspector.Activate() } catch { }
         Say 'OK:aberto'
     } else {
         if (-not $resolvidos) { throw 'CODE:destinatario_nao_resolvido' }

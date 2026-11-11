@@ -60,8 +60,8 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 - Script fixo e versionado `domains/outlook_mail.ps1`, executado com `powershell.exe -NoProfile -NonInteractive -File`, sem interpolação de dados no texto do script nem nos argumentos.
 - Dados só por stdin em JSON UTF-8; script começa com `[Console]::InputEncoding/OutputEncoding = UTF8`; timeout ~60 s.
 - `enviar`: antes de tudo confere `Get-Process OUTLOOK`; Outlook fechado → `outlook_fechado`, sem criar item. O `abrir` pode iniciar o Outlook.
-- `New-Object -ComObject Outlook.Application` → conta em `Session.Accounts` por `SmtpAddress` (ausente → `conta_ausente`) → `CreateItem(0)` → `SendUsingAccount` (fallback `InvokeMember` `SetProperty`) → To, CC, Subject, Body → `Recipients.ResolveAll()`.
-- `abrir`: `Display($false)`. `enviar`: imprime `PASSO:antes_send`, depois `Send()` sem `try/catch` próprio; exceção no `Send()` → `incerto` (decisão do usuário, 10/11/2026).
+- `New-Object -ComObject Outlook.Application` → conta em `Session.Accounts` por `SmtpAddress` (ausente → `conta_ausente`) → `CreateItem(0)` → `SendUsingAccount` só por `InvokeMember` `SetProperty` (atribuição direta não tem efeito no PowerShell; corrigido no Passo 5, 11/11/2026), relido e comparado com a conta pedida (diferente → `conta_ausente`) → To, CC, Subject, Body → `Recipients.ResolveAll()`.
+- `abrir`: `Display($false)` e depois `GetInspector.Activate()` para a janela vir para a frente (Passo 5, 11/11/2026). `enviar`: imprime `PASSO:antes_send`, depois `Send()` sem `try/catch` próprio; exceção no `Send()` → `incerto` (decisão do usuário, 10/11/2026).
 
 **Mapeamento de resultado:**
 - `conta_ausente` → 422.
@@ -202,6 +202,14 @@ Por regra do usuário, a execução roda numa sessão nova (`start_session`) com
 - Nos testes 14 e 15, Para/Cc ficam só com o e-mail do próprio usuário (num modelo de teste, excluído no fim; o Modelo 1 - Cabo é restaurado ao padrão).
 - Cada envio real só ocorre após o "pode enviar" do usuário no chat, porque é irreversível.
 - Nunca enviar a Allex, Fabio ou Robinson em teste.
+
+**Resultado (10–11/11/2026):** os 16 cenários passaram, mais dois extras (Cc mostrado na confirmação; Assistente real aponta a Home e não diz que enviou).
+- Etapa A (commit `5c48a84`): Cc na confirmação do envio; qualquer exceção no `Send()` vira `incerto`.
+- Correção 1 (cenário 1, OK do usuário em 11/11/2026): a atribuição direta de `SendUsingAccount` não tinha efeito e o script recusava com `conta_ausente`. Agora usa só `InvokeMember` `SetProperty`. Teste de regressão: `test_script_atribui_a_conta_so_por_invokemember`.
+- Correção 2 (cenário 7a, OK do usuário em 11/11/2026): com o Outlook iniciado pelo script, a janela ficava só na barra de tarefas. Agora chama `GetInspector.Activate()` depois do `Display`. Teste de regressão: `test_script_traz_a_janela_para_a_frente_depois_de_abrir`.
+- Envios reais (14 e 15): um clique cada, após o "pode enviar" do usuário; só para os e-mails do próprio usuário; item conferido em Itens Enviados pelo COM; chegada com acentos confirmada pelo usuário.
+- Escrita externa: 2 e-mails reais enviados pelo Outlook (11/11/2026, autorizados um a um pelo usuário). Escrita local: só `data/state/outlook_email_modelos.json` do worktree; modelo de teste e Modelo 2 excluídos, Modelo 1 - Cabo restaurado ao padrão.
+- Observação, sem mudança: depois de escolher a opção do destinatário ambíguo, o aviso de bloqueio fica na tela até a próxima ação.
 
 ## Verificação final
 - Cada critério numa linha `AC: <critério> — PROVEN BY <evidência>` (saída de teste, `npm run verify`, `npm run test:ui:e2e`, captura do Outlook e do modal).
