@@ -223,6 +223,15 @@ Pedido do usuário de 09/11/2026: o formulário de cada chamado novo da aba Cham
 - Limites conhecidos: a sugestão vem da cascata local (regras, Naive Bayes, `OUTRO`); a IA opcional (`SIMPRESS_SUGESTAO_IA=1`, variável de ambiente do processo) é do servidor, não do Assistente, e não muda o modelo do chat. Sem sugestão (solicitante `API SEBRAE`, campo preenchido), os campos vêm vazios (`""`).
 - Testes: `tests/test_assistant.py` (sugestão presente na lista de chamados novos e regra 36 no prompt).
 
+## E-mails por modelo pelo Outlook (10/11/2026)
+
+O botão `Enviar e-mail` da Home (F1) abre o modal `E-mail pelo Outlook` (modelos como `Modelo 1 - Cabo`, `Abrir no Outlook`, `Enviar pelo Outlook`, `Copiar Texto`), autorizado pelo usuário em 09/11/2026. Detalhe da tela, arquivo local `data/state/outlook_email_modelos.json` e textos aprovados: `docs/cockpit-prompts/03-home-split-view.md`; rotas `/api/outlook/*`: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
+- Base: regra 38 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`). Não há ferramenta de e-mail pelo Outlook: o Assistente só orienta os passos da Home (F1) e nunca diz que enviou ou abriu o e-mail nem que criou, alterou ou excluiu um modelo. Pode escrever um rascunho na resposta, que o usuário copia (como em "Rascostar e-mail ou texto").
+- Privacidade: a regra não traz as contas remetentes, os destinatários nem a assinatura da semente, porque o `SYSTEM_PROMPT` vai ao OpenRouter.
+- Roteamento: perguntas sobre o e-mail do cabo ("como mando o e-mail do cabo de segurança?") vão ao modelo e nunca abrem o fluxo `Abrir chamado no UX`, que só reage a mensagens com "UX", chamado/solicitação/atendimento e verbo de abrir. Não há exclusão por "cabo" nem "e-mail": um chamado real ("abrir chamado no UX, cabo do carregador quebrado") continua abrindo o fluxo.
+- Testes: `tests/test_assistant_termos.py` (regra 38 no prompt, sem `@` nem nomes da semente) e `tests/test_assistant_ux_chamados.py` (frases de e-mail vão ao modelo; chamado com "cabo" ainda prepara o UX).
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.
