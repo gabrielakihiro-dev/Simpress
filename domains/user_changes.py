@@ -27,6 +27,7 @@ from domains.effective_alias import (
 )
 from domains.inventory_comparison import normalize_reference_value
 from domains.inventory_state import STATE_LOCK
+from domains.regras_negocio import hostname_e_macbook
 
 MAX_USER_LENGTH = 160
 MANUAL_USER_DATES_FILENAME = "usuarios_manuais_datas.json"
@@ -518,7 +519,7 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
             hostname_key.startswith("S")
             and hostname_key[1:] in endpoint_index.get("duplicates", {})
             and any(
-                normalize_reference_value(item.get("hostname", "")).startswith("PRMAC")
+                hostname_e_macbook(item.get("hostname", ""))
                 for item in endpoint_index["duplicates"][hostname_key[1:]]
             )
         ):

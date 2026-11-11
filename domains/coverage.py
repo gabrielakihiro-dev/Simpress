@@ -16,8 +16,8 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from domains.equipment_search import normalize_search_term
-from domains.inventory_comparison import SEBRAE_OWNED_NOTEBOOK_SERIALS
-from domains.sebrae_cruzamento import CIDADE_CURITIBA, PREFIXOS_CURITIBA
+from domains.regras_negocio import SERIES_SEBRAE, hostname_de_curitiba
+from domains.sebrae_cruzamento import CIDADE_CURITIBA
 
 Estado = Dict[str, Any]
 Registro = Dict[str, Any]
@@ -107,7 +107,7 @@ def chave_serie(serie: Any) -> str:
     return "".join(c for c in normalize_search_term(serie) if c.isalnum())
 
 
-_SEBRAE = frozenset(chave_serie(serie) for serie in SEBRAE_OWNED_NOTEBOOK_SERIALS)
+_SEBRAE = frozenset(chave_serie(serie) for serie in SERIES_SEBRAE)
 
 
 def eh_sebrae(serie: Any) -> bool:
@@ -124,7 +124,7 @@ def cidade_do_cadastro(item: Optional[Mapping[str, Any]]) -> str:
     """Cidade do cadastro; hostnames PRNOTESJP/PRNOTERL/PRNOTEARC contam como Curitiba."""
     if not item:
         return ""
-    if normalize_search_term(item.get("apelido")).startswith(PREFIXOS_CURITIBA):
+    if hostname_de_curitiba(item.get("apelido")):
         return CIDADE_CURITIBA
     return str(item.get("retirada_cidade") or "").strip()
 
