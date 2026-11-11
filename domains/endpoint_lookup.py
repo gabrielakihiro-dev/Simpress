@@ -102,9 +102,9 @@ def _e_aba_da_consulta(aba: Any) -> bool:
 
 
 def _preparar_aba(pw: Any) -> Any:
-    """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (porta 9333), com a grade completa pronta."""
+    """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (SIMPRESS_CHROME_PORT, padrão 9333), com a grade completa pronta."""
     automation.garantir_chrome()  # reopens the automation Chrome after the idle close
-    browser = pw.chromium.connect_over_cdp("http://127.0.0.1:9333", timeout=10000)
+    browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10000)  # same port garantir_chrome opened
     if not browser.contexts:
         raise RuntimeError("Chrome sem contexto de navegação.")
     contexto = browser.contexts[0]
