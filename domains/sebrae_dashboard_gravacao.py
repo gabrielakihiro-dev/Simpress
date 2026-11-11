@@ -247,6 +247,9 @@ def valores_dos_chamados(conteudo: bytes) -> Dict[int, Tuple[str, ...]]:
 
 CHAVE_DE_LINHA = "linha:"
 AUTOMATICAS_VAZIAS = ("E", "K", "L", "N")  # filled by the site only into empty cells
+LIDAS_VAZIAS = ("G", "I")  # title and requester from the SoftExpert read, also only into empty cells
+# H is replaced only when it holds just the title that G receives in the same write (title typed into H; authorized 11/11/2026)
+TITULO_EM_H = "H"
 
 
 @dataclass(frozen=True)
@@ -698,6 +701,14 @@ def _categorias_conferem(arquivo: zipfile.ZipFile, pacote: _Pacote) -> bool:
 
 # ---------------------------------------------------------------------------- entry point
 
+def _titulo_em_h(linha: "_Linha", titulo: Any, compartilhadas: Sequence[str]) -> bool:
+    """G is empty in the sheet and H is exactly ``titulo`` (spaces and case ignored): H holds the title, not the description."""
+    def norma(valor: Any) -> str:
+        return " ".join(_sem_apostrofo_de_texto(str(valor or "")).split()).casefold()
+    return bool(norma(titulo)) and _valor_celula(linha.celulas.get("G", ""), compartilhadas) is None and (
+        norma(_valor_legivel("H", linha.celulas.get("H", ""), compartilhadas)) == norma(titulo))
+
+
 def atualizar(
     conteudo: bytes,
     novas: Sequence[Mapping[str, str]] = (),
@@ -709,7 +720,8 @@ def atualizar(
     ``novas``: rows as ``sebrae_novos`` builds them (keys are column letters, ``C`` is the ticket).
     ``edicoes``: ``{key: {manual column: value}}`` (key as in ``ChamadoAberto.numero``); only manual columns, only
     cells whose value changed, and blank values never erase a cell.
-    ``automaticos``: ``{key: {E, K, L or N: value}}``, written only into cells that are empty in the sheet.
+    ``automaticos``: ``{key: {E, G, I, K, L or N: value}}``, written only into cells that are empty in the sheet; ``H`` comes
+    only with ``G`` and replaces H only when G is empty and H is exactly that title (``_titulo_em_h``), else it is ignored.
     Raises ``GravacaoInvalida`` (message for the user) when it cannot.
     """
     edicoes = edicoes or {}
@@ -756,7 +768,11 @@ def atualizar(
                 if novo and novo != _valor_legivel(letra, linha.celulas.get(letra, ""), compartilhadas):
                     alteradas[letra] = novo
             for letra, novo in (automaticos.get(chamado) or {}).items():
-                if letra not in AUTOMATICAS_VAZIAS:
+                if letra == TITULO_EM_H:
+                    if _titulo_em_h(linha, (automaticos.get(chamado) or {}).get("G"), compartilhadas) and " ".join(str(novo or "").split()):
+                        alteradas[letra] = " ".join(str(novo).split())
+                    continue
+                if letra not in AUTOMATICAS_VAZIAS + LIDAS_VAZIAS:
                     raise GravacaoInvalida(f"{chamado}: a coluna {letra} não pode ser preenchida pelo site.")
                 if novo and _valor_celula(linha.celulas.get(letra, ""), compartilhadas) is None:  # never over an existing value
                     alteradas[letra] = " ".join(str(novo).split())

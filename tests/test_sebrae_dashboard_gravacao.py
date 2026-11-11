@@ -213,6 +213,28 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         with self.assertRaises(G.GravacaoInvalida):
             G.atualizar(conteudo, automaticos={"linha:2": {"Q": "x"}})
 
+    def test_g_e_i_da_leitura_so_em_vazias_e_h_so_quando_e_o_titulo(self):
+        base = montar(("UTIC-2026-0833", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO"))
+        sem_g = _trocar_na_folha(base, texto("G2", "titulo UTIC-2026-0833"), "")
+        conteudo = _antes_da_coluna_p(sem_g, 2, texto("H2", "Abrir chamado"))
+        lidos = {"UTIC-2026-0833": {"G": "Abrir chamado", "H": "Notebook não liga", "I": "API SEBRAE"}}
+        resultado = G.atualizar(conteudo, automaticos=lidos)
+        self.assertEqual([(g.numero, g.celulas) for g in resultado.linhas], [("UTIC-2026-0833", ("G", "H", "I"))])
+        aberto = G.chamados_para_editar(resultado.conteudo)[0]
+        self.assertEqual((aberto.titulo, aberto.descricao, aberto.usuario), ("Abrir chamado", "Notebook não liga", "API SEBRAE"))
+        # G filled: H is the user's text and stays; I filled: stays
+        cheio = _antes_da_coluna_p(base, 2, texto("H2", "titulo UTIC-2026-0833") + texto("I2", "Ana"))
+        outro = G.atualizar(cheio, automaticos={"UTIC-2026-0833": {"G": "titulo UTIC-2026-0833", "H": "novo", "I": "API SEBRAE", "K": "S1"}})
+        self.assertEqual([g.celulas for g in outro.linhas], [("K",)])
+        # H different from the title G receives: H stays
+        diferente = _antes_da_coluna_p(sem_g, 2, texto("H2", "texto do técnico"))
+        self.assertEqual([g.celulas for g in G.atualizar(diferente, automaticos=lidos).linhas], [("G", "I")])
+        # title starting with "-" comes with the paste apostrophe in G; H still matches it
+        traco = _antes_da_coluna_p(sem_g, 2, texto("H2", "-Sem rede"))
+        trocado = G.atualizar(traco, automaticos={"UTIC-2026-0833": {"G": "'-Sem rede", "H": "Usuário sem rede"}})
+        self.assertEqual([g.celulas for g in trocado.linhas], [("G", "H")])
+        self.assertEqual(G.chamados_para_editar(trocado.conteudo)[0].descricao, "Usuário sem rede")
+
     def test_edita_chamado_de_c_composto_sem_reescrever_a_c(self):
         composto = "27371 / UTIC-2026-0094"
         original = montar((composto,), status=("EM ABERTO",))
