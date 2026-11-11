@@ -32,9 +32,10 @@ function listSourceFiles(staticDir) {
   return files.sort();
 }
 
-function collectIconNames(staticDir) {
+// Icons come from static/ and from the index.html partials in frontend/partials/.
+function collectIconNames(...sourceDirs) {
   const names = new Set(DYNAMIC_ICON_NAMES);
-  for (const file of listSourceFiles(staticDir)) {
+  for (const file of sourceDirs.filter(dir => fs.existsSync(dir)).flatMap(listSourceFiles)) {
     const source = fs.readFileSync(file, "utf8");
     for (const pattern of LITERAL_PATTERNS) {
       for (const match of source.matchAll(pattern)) names.add(match[1]);
@@ -127,7 +128,7 @@ function buildSubsetSource(names, lucide, version) {
 function writeLucideSubset(root, version) {
   const staticDir = path.join(root, "static");
   const lucide = require(path.join(root, "node_modules", "lucide"));
-  const names = collectIconNames(staticDir);
+  const names = collectIconNames(staticDir, path.join(root, "frontend", "partials"));
   const destination = path.join(staticDir, "vendor", `lucide-${version}-subset.js`);
   fs.writeFileSync(destination, buildSubsetSource(names, lucide, version));
   return { destination, names };

@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./assembled-html.cjs");
 const vm = require("node:vm");
 const transferUtils = require("../../../static/js/shared/transfer-utils.js");
 const catalogSearch = require("../../../static/js/shared/catalog-search-utils.js");
@@ -12,7 +13,7 @@ const notifications = require("../../../static/js/ui/ui-notifications.js");
 const { appScripts, appSource } = require("./app-sources.cjs");
 
 const appScript = appSource();
-const appHtml = fs.readFileSync(path.join(__dirname, "..", "..", "..", "static", "index.html"), "utf8");
+const appHtml = assembledHtml();
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "..", "static", "app.css"), "utf8");
 
 class FakeElement {

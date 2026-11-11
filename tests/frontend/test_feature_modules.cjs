@@ -1,12 +1,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const vm = require("node:vm");
 const { appScriptFiles, staticDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
-const indexHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const indexHtml = assembledHtml();
 const bootstrapSource = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
 const featureFiles = appScriptFiles().filter(file => file.startsWith("js/features/"));
 
