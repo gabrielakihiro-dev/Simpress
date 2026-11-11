@@ -1,10 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const createSebraeDashboard = require("../../static/js/features/sebrae-dashboard.js");
+const sebraeDashboardModel = require("../../static/js/shared/sebrae-dashboard-model.js");
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
-  lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = createSebraeDashboard.puro;
+  lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = sebraeDashboardModel;
 
 test("camposFaltando lista A, Status em FINALIZADO, J e a descrição (R é opcional) que faltam para finalizar", () => {
   const completo = { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T10:10" };
@@ -343,7 +344,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   });
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel });
   await feature.carregarNovosSebrae();
   return { doc, el, feature, app };
 }
@@ -725,7 +726,7 @@ test("a falta de saída pronta avisa em Atualizar Dashboard com data-estado aler
   assert.equal(el["sebrae-atualizar-status"].dataset.estado, "alerta");
 });
 
-const { gravarCampoRascunho } = createSebraeDashboard.puro;
+const { gravarCampoRascunho } = sebraeDashboardModel;
 test("campos de duas abas sobrevivem à reimportação e novos migram para antigos", () => {
   const disco = armazenamentoFalso();
   gravarCampoRascunho(disco, "antes", "UTIC-2026-1", "A", "MANUAL", "novo");
@@ -795,7 +796,7 @@ test("rascunho de antigo migra para novo e divergências entre os dois ficam exp
 
 // ---- Padrões do API SEBRAE nos chamados novos (03/11/2026) ----
 
-const { ehApiSebrae, padroesManuais } = createSebraeDashboard.puro;
+const { ehApiSebrae, padroesManuais } = sebraeDashboardModel;
 const esvaziarFila = () => new Promise(resolver => setImmediate(resolver));
 
 test("API SEBRAE é reconhecido sem acento, em qualquer caixa e com espaços extras; os padrões são por chamado", () => {
@@ -1558,7 +1559,7 @@ async function montarVisao() {
   };
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel });
   await feature.carregarNovosSebrae();
   await esvaziarFila(); await esvaziarFila();
   return {
