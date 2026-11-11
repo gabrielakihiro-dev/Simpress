@@ -118,3 +118,9 @@ Regra: toda navegação que leva a um alvo dentro do Resumo escolhe a sub-aba do
 - Sino, `Ver Resumo` do aviso de 60 dias (`#btn-alerta-sem-acesso-60`): `data-args=["comparacao","sem-acesso"]`; `abrirPainelCockpit(tool, aba)` escolhe a aba depois do render, que sempre volta a `Visão geral`. Os botões `#btn-resumo-aba` e `#btn-alerta-divergencias-novas` continuam abrindo em `Visão geral`.
 - Chips da Home, `abrirComparacaoDaSerie` e `mostrarResultadoNaAbaComparacao` não mudaram: passam por `navegarParaLinhaComparacao` e herdam a regra.
 - Testes: `tests/frontend/test_cockpit_tool_panels.cjs` (`abrirPainelCockpit` com aba), `tests/frontend/test_sem_usuario_resumo.cjs` (DOM falso ganhou `querySelectorAll`) e `tests/e2e/cockpit-layout.spec.cjs` (KPI, `irParaSecaoComparacao`, `navegarParaLinhaComparacao` e sino).
+
+## Ordenação e "Copiar tabela" por evento (limpeza do JS, 10/11/2026)
+
+- Antes, `data-panels.js` vigiava o `body` inteiro com um `MutationObserver` para achar tabelas `.comparison-desktop-table` novas. Agora quem monta a tabela dispara `simpress:tabelas-renderizadas` no `document` e `data-panels.js` processa só nesse momento (mais a varredura inicial no `install`).
+- Disparam o evento: `renderizarResultadoComparacao` e `renderizarSemUsuarioSemComparacao` (`static/js/features/comparison-result.js`) e o histórico de transferências (`static/js/ui/transfer-history.js`). Um renderizador novo de `.comparison-desktop-table` precisa disparar o mesmo evento; sem ele, a tabela fica sem ordenação, "Copiar tabela" e "Modo compacto".
+- Comportamento visível igual. Testes: `tests/frontend/test_data_panels_tabelas_evento.cjs` e `tests/e2e/ui.spec.cjs` ("comparison tables get sorting and copy tools through the render event").

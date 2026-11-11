@@ -222,6 +222,8 @@
           : `${items.length} ${items.length === 1 ? "transferência" : "transferências"}.`);
         renderRows(items);
         win.lucide?.createIcons?.({ root: byId("lista-historico-transferencias") });
+        // Ordenação e "Copiar tabela" (data-panels.js) entram na tabela recém-montada.
+        doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
       } catch (error) {
         if (ticket !== requestSerial) return;
         setStatus("");
