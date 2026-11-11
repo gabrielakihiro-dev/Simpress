@@ -1222,7 +1222,8 @@
 
     doc.addEventListener("simpress:atualizar-notificacoes", () => refresh(true));
 
-    new win.MutationObserver(scanTables).observe(doc.body, { childList: true, subtree: true });
+    // Quem monta uma tabela .comparison-desktop-table dispara este evento (comparison-result.js, transfer-history.js).
+    doc.addEventListener("simpress:tabelas-renderizadas", scanTables);
     scanTables();
 
     // A change of the history counter means an update/restore/delete happened: refresh both the panel and the badge.

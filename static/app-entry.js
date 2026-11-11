@@ -16,6 +16,7 @@ import "./js/ui/ui-notifications.js";
 import "./js/shared/history-format.js";
 import "./js/shared/coverage-model.js";
 import "./js/shared/chamados-os-model.js";
+import "./js/shared/sebrae-dashboard-model.js";
 import "./js/features/ticket-rules.js";
 import "./js/features/app-shell.js";
 import "./js/features/dashboard.js";

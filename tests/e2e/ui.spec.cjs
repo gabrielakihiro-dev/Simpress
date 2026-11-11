@@ -247,6 +247,19 @@ test("comparison result tab takes focus, passes axe and closes with Escape", asy
   await expect(page.locator("#main-content")).toBeVisible();
 });
 
+test("comparison tables get sorting and copy tools through the render event", async ({ page }) => {
+  await openFixtureComparison(page);
+  const content = page.locator("#comparacao-planilhas-conteudo");
+  const tabelas = content.locator(".comparison-desktop-table table");
+  // Toda tabela com linhas recebe o tratamento; vazias continuam sem (enhanceTable as ignora).
+  const comLinhas = await tabelas.evaluateAll(lista => lista.filter(t => t.tBodies[0]?.rows.length).length);
+  expect(comLinhas).toBeGreaterThan(0);
+  await expect(content.locator('.comparison-desktop-table table[data-ux-table="ready"]')).toHaveCount(comLinhas);
+  // hasText em vez de getByRole: no projeto mobile a tabela desktop fica oculta, mas o tratamento é o mesmo.
+  await expect(content.locator(".ux-table-tools > button", { hasText: "Copiar tabela" })).toHaveCount(comLinhas);
+  await expect(content.locator(".ux-sort-button").first()).toBeAttached();
+});
+
 test("fixture annotation autosaves to the isolated in-memory endpoint", async ({ page }) => {
   await openFixtureComparison(page);
   const annotation = page.locator('textarea[data-comparison-annotation]:visible').first();
