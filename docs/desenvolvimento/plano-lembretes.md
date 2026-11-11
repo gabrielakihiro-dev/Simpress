@@ -36,6 +36,8 @@ Especificação: `docs/cockpit-prompts/18-lembretes.md` (textos aprovados em 11/
   - `alterado_em` só muda se o texto mudar.
   - O log nunca leva a descrição.
   - Sem cookie → 401.
+  - Contrato das 4 rotas em `docs/arquitetura/CONTRATOS_API_BACKEND.md` (rotas 206 a 209), exigido por `tests/test_api_contract_doc.py`; decidido em 11/11/2026 para o bloco terminar verde. O Bloco 4 só confere.
+  - `\n` e `\t` na descrição dão 422, como qualquer caractere de controle (a lista e a edição usam campo de uma linha).
 - **Verificar:** `pytest tests/test_lembretes.py` (CRUD, 404, 422, 401, editar igual, caplog sem a descrição).
 - **Proibidos:** `static/**`, `frontend/**`, `domains/assistant*`.
 
@@ -76,6 +78,7 @@ Especificação: `docs/cockpit-prompts/18-lembretes.md` (textos aprovados em 11/
   - `tests/e2e/lembretes.spec.cjs`.
 - **Critérios de aceite:**
   - Modelo de texto exato, sem as partes vazias.
+  - `montarDescricaoTermo` troca quebra de linha e tab (ex.: Observações, um `<textarea>`) por espaço e junta espaços repetidos, porque o backend recusa caractere de controle com 422 (decidido em 11/11/2026).
   - Sem nome ou série: só o aviso.
   - Nada é criado sem o clique; o POST leva `origem`.
   - Depois de criar: `Lembrete criado.` e `Ver em Lembretes`.
@@ -91,7 +94,7 @@ Especificação: `docs/cockpit-prompts/18-lembretes.md` (textos aprovados em 11/
   - `cockpit-tool-panels.js` (remover `termos` de `toolInfo`);
   - `tests/e2e/cockpit-layout.spec.cjs`;
   - `domains/assistant_chat.py:118` (regra 37: os termos ficam em Ferramentas > Lembretes) e `tests/test_assistant_termos.py`;
-  - docs: `17-termos.md`, `AGENTS.md:93`, `14-cockpit-v2.md`, `14-responsividade-todas-resolucoes.md`, `15-assistente.md`, `CONTRATOS_API_BACKEND.md` (contrato `/api/lembretes`), `GLOSSARY.md` se citar Termos.
+  - docs: `17-termos.md`, `AGENTS.md:93`, `14-cockpit-v2.md`, `14-responsividade-todas-resolucoes.md`, `15-assistente.md`, `CONTRATOS_API_BACKEND.md` (só conferir o contrato `/api/lembretes`, escrito no Bloco 1), `GLOSSARY.md` se citar Termos.
 - **Critérios de aceite:**
   - `rg "btn-termos|tool-panel=\"termos\"" static frontend tests` vazio.
   - O Assistente não lê `lembretes.json`.
