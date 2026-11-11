@@ -175,7 +175,7 @@
     const observedTables = new WeakSet();
     const reducedMotion = () => Boolean(win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
     const resizeObserver = typeof win.ResizeObserver === "function"
-      ? new win.ResizeObserver(entries => entries.forEach(entry => updateOverflow(entry.target)))
+      ? new win.ResizeObserver(entries => entries.forEach(entry => updateOverflow(entry.target.closest?.(".accessible-table-wrap") || entry.target)))
       : null;
     let pendingCopy = null;
     const storage = (() => { try { return win.localStorage || null; } catch (error) { return null; } })();
@@ -353,6 +353,9 @@
         if (resizeObserver && !observedTables.has(wrap)) {
           observedTables.add(wrap);
           resizeObserver.observe(wrap);
+          // A tabela pode alargar sem o wrap mudar de tamanho (ex.: marcador de usuário logado); vigiá-la mantém a dica de rolagem certa.
+          const table = wrap.querySelector("table");
+          if (table) resizeObserver.observe(table);
         }
         updateOverflow(wrap);
       });

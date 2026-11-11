@@ -14,8 +14,11 @@ doc.dispatchEvent = event => { (listeners.get(event.type) || []).forEach(listene
 
 const observados = [];
 const timers = [];
+const redimensionados = [];
+let aoRedimensionar = null;
 const win = {
   document: doc,
+  ResizeObserver: class { constructor(callback) { aoRedimensionar = callback; } observe(target) { redimensionados.push(target); } },
   MutationObserver: class { constructor() {} observe(target) { observados.push(target); } disconnect() {} },
   CustomEvent: class { constructor(type) { this.type = type; } },
   setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
@@ -53,6 +56,23 @@ test("simpress:carregando-exibido marca o indicador depois de 50 ms, uma vez por
   assert.equal(timers.length, 2, "depois da varredura um novo evento agenda outra");
   timers[1].fn();
   assert.equal(p.dataset.uxLoading, undefined);
+});
+
+test("tabela que alarga dentro do wrap atualiza a dica de rolagem", () => {
+  const wrap = doc.createElement("div");
+  wrap.className = "accessible-table-wrap";
+  const table = doc.createElement("table");
+  wrap.appendChild(table);
+  doc.body.appendChild(wrap);
+  Object.assign(wrap, { scrollLeft: 0, clientWidth: 300, scrollWidth: 300 });
+  timers.length = 0;
+  doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
+  timers[0].fn();
+  assert.ok(redimensionados.includes(wrap) && redimensionados.includes(table), "wrap e tabela são vigiados");
+  assert.equal(wrap.dataset.uxOverflow, undefined);
+  wrap.scrollWidth = 600; // a tabela alargou; o wrap não mudou de tamanho
+  aoRedimensionar([{ target: table }]);
+  assert.equal(wrap.dataset.uxOverflow, "end");
 });
 
 test("produtores do indicador disparam o evento antes da busca", () => {
