@@ -648,6 +648,45 @@ class AtualizarDispara(AtualizarBase):
         self.assertEqual(self.job()["numeros"], [A])
         self.assertTrue(sebrae_novos.caminho_saida(self.caminhos, corpo["arquivo"]).is_file())  # the routine reads this file
 
+    def test_titulo_g_editado_nao_muda_o_pedido_de_finalizacao_que_a_rotina_recebe(self):
+        # The SoftExpert routines find a ticket by its UTIC number only: a typed title must not change who is finalized or skipped.
+        self.descrever(A)
+        sem_g = self.atualizar(self.edicao(A), self.edicao(B))
+        job_sem_g = self.job()
+        com_g = self.atualizar(self.edicao(A, G="Título totalmente diferente"), self.edicao(B, G="Outro título editado"))
+        job_com_g = self.job()
+        self.assertEqual((com_g["fechar"], job_com_g), (sem_g["fechar"], job_sem_g))
+        self.assertEqual((com_g["fechar"]["numeros"], com_g["fechar"]["pulados"]), ([A], [{"numero": B, "motivo": "sem_descricao"}]))
+        self.assertEqual(job_com_g["numeros"], [A])
+        saida = sebrae_novos.caminho_saida(self.caminhos, com_g["arquivo"]).read_bytes()
+        self.assertIn("Título totalmente diferente", linha_xml(saida, 2))  # the title reached the Dashboard copy...
+        self.assertEqual(self.runner.iniciadas, ["fechar", "fechar"])  # ...and the routine still ran for the same ticket
+
+    def test_titulo_g_e_descricao_h_editados_nao_mudam_o_pedido_nem_os_dados_que_a_rotina_recebe(self):
+        # The pencil text goes to column H of the Dashboard copy only: the job and the text/PDF the routine reads stay the same.
+        self.descrever(A)
+        sem = self.atualizar(self.edicao(A), self.edicao(B))
+        job_sem, dados_sem = self.job(), fin.dados_para_finalizar(self.dir, A)
+        for numero, texto in ((A, "Descrição editada no lápis de A"), (B, "Descrição editada no lápis de B")):
+            self.assertEqual(self.cliente.put(f"/api/sebrae/chamados/{numero}/descricao", json={"descricao": texto}).status_code, 200)
+        com = self.atualizar(self.edicao(A, G="Título editado de A"), self.edicao(B, G="Título editado de B"))
+        pedido_gravado = fin.caminho_job(self.dir).read_text(encoding="utf-8")
+        job_com, dados_com = self.job(), fin.dados_para_finalizar(self.dir, A)
+        self.assertEqual((com["fechar"], job_com, dados_com), (sem["fechar"], job_sem, dados_sem))
+        self.assertEqual((com["fechar"]["numeros"], com["fechar"]["pulados"]), ([A], [{"numero": B, "motivo": "sem_descricao"}]))
+        self.assertEqual(dados_com, ("feito " + A, None))  # only descricao_finalizacao, never descricao_editada
+        for editado in ("lápis", "l\u00e1pis", "Título editado", "T\u00edtulo editado"):
+            self.assertNotIn(editado, pedido_gravado)
+        saida = sebrae_novos.caminho_saida(self.caminhos, com["arquivo"]).read_bytes()
+        self.assertIn("Descrição editada no lápis de A", linha_xml(saida, 2))  # the Dashboard copy has the H...
+        self.assertIn("Título editado de A", linha_xml(saida, 2))  # ...and the G
+        self.assertEqual(self.runner.iniciadas, ["fechar", "fechar"])
+
+    def test_titulo_g_nao_e_guardado_no_pedido_da_rotina(self):
+        self.descrever(A)
+        self.atualizar(self.edicao(A, G="Título que não pode ir ao pedido"))
+        self.assertNotIn("Título que não", fin.caminho_job(self.dir).read_text(encoding="utf-8"))
+
     def test_sem_finalizar_softexpert_atualiza_o_dashboard_mas_nao_dispara_a_rotina(self):
         self.descrever(A)
         for corpo in ({"edicoes": [self.edicao(A)]}, {"edicoes": [self.edicao(A)], "finalizar_softexpert": False}):

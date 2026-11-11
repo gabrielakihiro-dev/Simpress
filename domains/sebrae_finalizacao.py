@@ -207,7 +207,8 @@ def definir_descricao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any
 def definir_descricao_editada(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any]:
     """Texto do bloco "Descrição" do cartão (F5) editado pelo usuário; vazio volta ao texto original do chamado.
 
-    Só local: o SoftExpert não é alterado e a coluna H de uma linha que já está no Dashboard também não.
+    O SoftExpert nunca recebe este texto (``dados_para_finalizar`` usa só ``descricao_finalizacao``). Ele vai à coluna H da cópia do
+    Dashboard no "Atualizar"; restaurar (vazio) só tira o texto daqui e não desfaz um H já gravado.
     """
     numero = validar_numero(numero)
     descricao = validar_descricao(texto)

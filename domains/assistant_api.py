@@ -2004,13 +2004,13 @@ class SimpressApi:
     def chamado_para_editar_descricao(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
         """Data for the card and the action of "editar descrição" (lápis da tela Chamados). ValueError (shown to the user) when it cannot be edited.
 
-        Works on an old open ticket already read from SoftExpert or on a new ticket of the last search; empty text restores the original."""
+        Works on any old open ticket (read from SoftExpert or not) or on a new ticket of the last search; empty text restores the original.
+        The text goes to column H of the Dashboard copy at "Atualizar"; SoftExpert never receives it."""
         numero, antigo, novo = self._localizar_chamado_sebrae(numero)
         if antigo is not None:
-            leitura = antigo.get("leitura_softexpert")
-            if not isinstance(leitura, dict):
-                raise ValueError(f"{numero} ainda não foi lido no SoftExpert (Ler chamados antigos); não há descrição para editar. Nada foi feito.")
-            se, atual = _dict(antigo.get("softexpert")), str(leitura.get("descricao") or "")
+            # what the card shows: the edited text, else the Dashboard's column H, else the SoftExpert reading
+            se = _dict(antigo.get("softexpert"))
+            atual = str(se.get("descricao_editada") or antigo.get("descricao") or _dict(antigo.get("leitura_softexpert")).get("descricao") or "")
         else:
             se, atual = _dict(_dict(novo).get("softexpert")), str(_dict(_dict(novo).get("linha")).get("H") or "")
         if _dict(se.get("finalizacao")).get("status") == "ok":
@@ -2023,7 +2023,7 @@ class SimpressApi:
         return {"numero": numero, "descricao": texto, "atual": atual, "editada": bool(str(se.get("descricao_editada") or "").strip())}
 
     def editar_descricao_chamado_sebrae(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
-        """Same call as the pencil of the Descrição block; local only (SoftExpert and the Dashboard are not touched)."""
+        """Same call as the pencil of the Descrição block: the text is kept here and goes to column H of the Dashboard copy at "Atualizar"; SoftExpert is never touched."""
         try:
             alvo = self.chamado_para_editar_descricao(numero, descricao)
         except ValueError as falha:
@@ -2032,7 +2032,7 @@ class SimpressApi:
         if not ok:
             return {"sucesso": False, "erro": dados}
         acao = "editada" if alvo["descricao"] else "restaurada ao texto original"
-        return {"sucesso": True, "mensagem": f"Descrição de {alvo['numero']} {acao}, só neste site. SoftExpert e linhas já lançadas no Dashboard não mudaram."}
+        return {"sucesso": True, "mensagem": f"Descrição de {alvo['numero']} {acao}. Ela vai à coluna H do Dashboard no próximo Atualizar Dashboard; o SoftExpert não recebe esse texto."}
 
     def estado_usuarios_entra(self) -> Dict[str, Any]:
         return self._leitura("/api/usuarios-entra/estado")
