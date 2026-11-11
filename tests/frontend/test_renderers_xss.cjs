@@ -114,7 +114,7 @@ test("comparison result renderer escapes every text field", () => {
     "reg_fonte", "end_ausente_em", "det_fonte", "atu_arquivo", "mud_sugestao", "mud_pendencia",
   ]);
   const campos = [
-      "backup_diretorio", "end_computador", "end_serie", "end_local", "anotacao", "anotacao_id",
+      "end_computador", "end_serie", "end_local", "anotacao", "anotacao_id",
       "end_anterior", "det_computador", "det_serie", "det_local", "loc_computador", "loc_serie", "loc_previsto",
       "loc_detalhes", "acesso_computador", "acesso_serie", "acesso_linha", "mapa_serie", "mapa_exemplo",
       "amb_tipo", "amb_chave", "amb_mensagem", "amb_host_a", "reg_motivo", "atu_serie", "atu_anterior",
@@ -123,6 +123,8 @@ test("comparison result renderer escapes every text field", () => {
       "mud_pessoa_novo", "mud_motivo",
     ].filter(campo => !soSemHtmlVivo.has(campo));
   afirmarCamposEscapados(html, campos, "conteudoResultadoComparacao");
+  // The "Backup das versões anteriores" footer was removed from the Resumo, so the folder name is no longer rendered.
+  assert.ok(!html.includes(escapeHtml(carga("backup_diretorio"))), "backup_diretorio não deve mais aparecer no Resumo");
   // The history notice moved out of the panels into #comparacao-planilhas-avisos.
   afirmarCamposEscapados(renderer.avisoHistoricoComparacao(comparison), ["aviso_historico"], "avisoHistoricoComparacao");
 

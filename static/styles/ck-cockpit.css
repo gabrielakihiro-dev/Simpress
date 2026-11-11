@@ -1014,15 +1014,11 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-comparacao-resultado .history-filter-footer { margin-top: 6px; }
 .ck-comparacao-resultado .history-filter-search-label input,
 .ck-comparacao-resultado .history-filter-category-label select { border-color: var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
-.ck-comparacao-resultado > .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ck-comparacao-resultado .comparison-metric-link { min-width: 0; overflow-wrap: anywhere; border-radius: var(--raio-md); transition: box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease, background-color var(--motion-fast) ease; }
-@media (min-width: 1200px) { .ck-comparacao-resultado > .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .ck-comparacao-resultado { padding-left: 12px; padding-right: 12px; }
-  .ck-comparacao-resultado > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ck-comparacao-resultado .history-filter-controls { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 420px) { .ck-comparacao-resultado > .grid { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .ck-comparacao-resultado .comparison-metric-link { transition: none; } }
 .ck-det-campos { display: grid; grid-template-columns: minmax(80px, 34%) minmax(0, 1fr); gap: 6px 10px; margin: 0; font-size: var(--fs-md); }
 .ck-det-campos dt { color: var(--cor-texto-sutil); font-size: var(--fs-sm); }
@@ -2054,7 +2050,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* A ordem visual é avisos > resumo > filtros > seções com linhas > seções sem linhas > nota final. O DOM não muda. */
 #comparacao-planilhas-conteudo > * { order: 3; }
 #comparacao-planilhas-conteudo > .notice { order: 0; }
-#comparacao-planilhas-conteudo > .grid { order: 1; }
 #comparacao-planilhas-conteudo > .history-filter-bar { order: 2; }
 #comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) { order: 4; }
 #comparacao-planilhas-conteudo > p:not(.notice) { order: 5; padding: 0 2px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
@@ -2067,25 +2062,25 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   content: ""; display: block; width: 14px; height: 14px; margin: 0 auto 10px; border: 2px solid var(--cor-borda); border-top-color: var(--cor-destaque); border-radius: 50%; animation: ck-girar 900ms linear infinite;
 }
 
-/* 3.1 Resumo: cartões viram uma faixa compacta, o número em destaque, cor só quando há o que conferir */
-#comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-#comparacao-planilhas-conteudo > .grid > * {
+/* 3.1 Resumo: cada sub-aba abre com uma faixa compacta dos seus contadores; número à esquerda, cor só quando há o que conferir */
+#comparacao-planilhas-conteudo .resumo-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 6px; margin-bottom: 20px; }
+#comparacao-planilhas-conteudo .resumo-cartoes > * {
   --tom: var(--cor-neutro-texto);
-  display: grid; grid-template-columns: 4rem minmax(0, 1fr); grid-template-areas: "num lab"; align-items: center; column-gap: 8px;
-  min-height: 52px; padding: 8px 12px; border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "num lab"; align-items: center; column-gap: 10px;
+  min-height: 38px; padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
   border-left-width: 3px; transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), box-shadow var(--duracao) var(--curva);
 }
-#comparacao-planilhas-conteudo > .grid > [data-metric-tone="amber"] { --tom: var(--cor-alerta-texto); }
-#comparacao-planilhas-conteudo > .grid > [data-metric-tone="rose"] { --tom: var(--cor-erro-texto); }
-#comparacao-planilhas-conteudo > .grid > [data-metric-tone="emerald"] { --tom: var(--cor-ok-texto); }
-#comparacao-planilhas-conteudo > .grid > * > p:first-child { grid-area: lab; margin: 0; font-size: var(--fs-xs); line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--cor-texto-suave); }
-#comparacao-planilhas-conteudo > .grid > * > p:last-child { grid-area: num; min-width: 2ch; margin: 0; font-size: var(--fs-kpi); font-weight: var(--peso-marca); line-height: 1; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
+#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="amber"] { --tom: var(--cor-alerta-texto); }
+#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="rose"] { --tom: var(--cor-erro-texto); }
+#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="emerald"] { --tom: var(--cor-ok-texto); }
+#comparacao-planilhas-conteudo .resumo-cartoes > * > p:first-child { grid-area: lab; margin: 0; font-size: var(--fs-xs); line-height: 1.3; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; color: var(--cor-texto-suave); }
+#comparacao-planilhas-conteudo .resumo-cartoes > * > p:last-child { grid-area: num; min-width: 2ch; margin: 0; font-size: var(--fs-xl); font-weight: var(--peso-marca); line-height: 1; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
 /* com itens: botão que leva à seção; o número usa o tom */
-#comparacao-planilhas-conteudo > .grid > button[data-comparison-section-target] > p:last-child { color: var(--tom); }
-#comparacao-planilhas-conteudo > .grid > button[data-comparison-section-target]:hover:not(:focus-visible) { border-top-color: var(--tom); border-right-color: var(--tom); border-bottom-color: var(--tom); }
+#comparacao-planilhas-conteudo .resumo-cartoes > button[data-comparison-section-target] > p:last-child { color: var(--tom); }
+#comparacao-planilhas-conteudo .resumo-cartoes > button[data-comparison-section-target]:hover:not(:focus-visible) { border-top-color: var(--tom); border-right-color: var(--tom); border-bottom-color: var(--tom); }
 /* sem itens: caixa recuada e número apagado */
-#comparacao-planilhas-conteudo > .grid > div[data-metric-tone]:not([data-metric-tone=""]) { background: var(--cor-superficie-funda); box-shadow: none; }
-#comparacao-planilhas-conteudo > .grid > div[data-metric-tone]:not([data-metric-tone=""]) > p { color: var(--cor-texto-mudo); }
+#comparacao-planilhas-conteudo .resumo-cartoes > div[data-metric-tone]:not([data-metric-tone=""]) { background: var(--cor-superficie-funda); box-shadow: none; }
+#comparacao-planilhas-conteudo .resumo-cartoes > div[data-metric-tone]:not([data-metric-tone=""]) > p { color: var(--cor-texto-mudo); }
 
 /* 3.2 Filtros: uma linha só, estado ativo visível */
 #comparacao-planilhas-conteudo > .history-filter-bar {
@@ -2191,19 +2186,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   /* abaixo de 1200 px a nota de estado desce para uma linha própria e as ações ficam juntas ao lado do seletor */
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > #cockpit-comparison-status { order: 7; flex: 1 1 100%; min-height: 0; }
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 260px; }
-  #comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   #comparacao-planilhas-conteudo > .history-filter-bar { grid-template-columns: minmax(0, 1fr); }
   #comparacao-planilhas-conteudo .history-filter-footer { flex-wrap: wrap; min-height: 0; }
 }
 @media (max-width: 767.98px) {
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 100%; }
-  #comparacao-planilhas-conteudo > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #comparacao-planilhas-conteudo > .grid > * { grid-template-columns: minmax(0, 1fr); grid-template-areas: "num" "lab"; row-gap: 4px; align-items: start; }
+  #comparacao-planilhas-conteudo .resumo-cartoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #comparacao-planilhas-conteudo .history-filter-controls { grid-template-columns: minmax(0, 1fr); }
   #comparacao-planilhas-conteudo > [data-history-filter-section] { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #comparacao-planilhas-conteudo > .grid > *,
+  #comparacao-planilhas-conteudo .resumo-cartoes > *,
   #comparacao-planilhas-conteudo > .history-filter-bar,
   #comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td,
   #comparacao-planilhas-conteudo details[data-user-change-details] > summary::before,

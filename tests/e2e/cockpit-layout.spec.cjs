@@ -102,14 +102,16 @@ test("Resumo: irParaSecaoComparacao clears the active filters that hide the targ
   }
 });
 
-test("Resumo: KPI e irParaSecaoComparacao abrem a sub-aba da seção antes de rolar até ela", async ({ page, request }) => {
+test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoComparacao abre a sub-aba antes de rolar", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
     await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
-    // O KPI mora em Visão geral; a seção "Localidade divergente" mora em Divergências.
-    await page.locator('#comparacao-planilhas-conteudo [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
+    // Visão geral não tem cartões; o KPI de localidade fica na faixa de Divergências, a mesma sub-aba da seção.
+    await expect(page.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
+    await page.locator("#resumo-aba-divergencias").click();
+    await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     const divergente = page.locator("#comparacao-secao-localidade-divergente");
     await expect(divergente).toBeVisible();
@@ -400,6 +402,13 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       expect(dimensions.document, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
+      if (tool === "comparacao") {
+        // A Visão geral não tem cartões: mede também a faixa compacta de Divergências.
+        await page.locator("#resumo-aba-divergencias").click();
+        await expect(page.locator("#resumo-painel-divergencias .resumo-cartoes")).toBeVisible();
+        expect(await overflowingRight(page, "#cockpit-tool-panels"), "comparacao/divergencias").toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), "comparacao/divergencias").toBeLessThanOrEqual(width);
+      }
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       if (key) {

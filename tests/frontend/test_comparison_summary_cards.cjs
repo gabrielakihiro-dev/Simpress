@@ -107,3 +107,93 @@ test("Sem usuário em estado limite mantém o título único da seção e não c
   assert.equal(cartoes(html).filter(cartao => cartao.alvo === id).length, 0);
   assert.match(html, /Mostrando os primeiros 1 de 500 notebooks sem usuário/);
 });
+
+// HTML of one Resumo tabpanel: from its opening tag to the next panel (or the end of the result).
+function painel(html, chave) {
+  const inicio = html.indexOf(`id="resumo-painel-${chave}"`);
+  assert.ok(inicio >= 0, `painel ${chave} existe`);
+  const proximo = html.indexOf('id="resumo-painel-', inicio + 1);
+  return html.slice(inicio, proximo < 0 ? undefined : proximo);
+}
+
+// Counters each tab opens with, in display order.
+const FAIXAS = {
+  divergencias: {
+    aria: "Contadores de Divergências",
+    rotulos: [
+      "Notebooks comparados", "Sem correspondência — no endpoint", "Sem correspondência — na Simpress",
+      "Divergências de local", "Duplicidades e ambiguidades", "Séries sem mapeamento",
+    ],
+  },
+  apelidos: {
+    aria: "Contadores de Apelidos",
+    rotulos: ["Apelidos para conferência", "Divergências manuais pendentes", "Apelidos/hostnames atualizados"],
+  },
+  usuarios: { aria: "Contadores de Usuários", rotulos: ["Mudanças de usuário", "Sem usuário"] },
+};
+
+test("each Resumo tab opens with its own compact counters strip, above the empty-state notice", () => {
+  const html = renderizar(COMPARACAO_COMPLETA, { estado: "ok", items: [{ serial: "SN-1", apelido: "PRNOTE-A" }] });
+  let total = 0;
+  for (const [chave, { aria, rotulos }] of Object.entries(FAIXAS)) {
+    const corpo = painel(html, chave);
+    // The strip is the first child of the panel, so it precedes the notice and every section.
+    const abertura = corpo.match(/^[^>]*>\s*<div class="resumo-cartoes" role="group" aria-label="([^"]+)">/);
+    assert.equal(abertura?.[1], aria, `${chave}: faixa é o primeiro filho do painel`);
+    assert.ok(corpo.indexOf("resumo-cartoes") < corpo.indexOf("data-resumo-vazio"), `${chave}: faixa antes de data-resumo-vazio`);
+    const faixa = corpo.slice(corpo.indexOf("resumo-cartoes"), corpo.indexOf("data-resumo-vazio"));
+    const encontrados = cartoes(faixa);
+    assert.deepEqual(encontrados.map(cartao => cartao.rotulo), rotulos, `${chave}: rótulos e ordem`);
+    total += encontrados.length;
+  }
+  // Nothing is left outside the three strips.
+  assert.equal(cartoes(html).length, total);
+});
+
+test("strip cards keep tones and links: counted cards are buttons to their section, 'Notebooks comparados' stays static", () => {
+  const html = renderizar(COMPARACAO_COMPLETA, { estado: "ok", items: [{ serial: "SN-1", apelido: "PRNOTE-A" }] });
+  const tons = {};
+  for (const chave of Object.keys(FAIXAS)) {
+    for (const cartao of cartoes(painel(html, chave))) {
+      tons[cartao.rotulo] = cartao.tag.match(/data-metric-tone="([^"]*)"/)[1];
+      assert.equal(cartao.elemento, cartao.rotulo === "Notebooks comparados" ? "div" : "button", cartao.rotulo);
+    }
+  }
+  assert.deepEqual(tons, {
+    "Notebooks comparados": "",
+    "Sem correspondência — no endpoint": "amber",
+    "Sem correspondência — na Simpress": "amber",
+    "Divergências de local": "amber",
+    "Duplicidades e ambiguidades": "rose",
+    "Séries sem mapeamento": "amber",
+    "Apelidos para conferência": "amber",
+    "Divergências manuais pendentes": "rose",
+    "Apelidos/hostnames atualizados": "emerald",
+    "Mudanças de usuário": "emerald",
+    "Sem usuário": "amber",
+  });
+});
+
+test("Visão geral no longer renders counters nor the 'Equipamentos carregados' footer", () => {
+  const html = renderizar(
+    { ...COMPARACAO_COMPLETA, total_equipamentos_carregados: 4321, backup_diretorio: "_backups_x", anotacoes_herdadas_enfileiradas: 2 },
+    { estado: "ok", items: [{ serial: "SN-1", apelido: "PRNOTE-A" }] },
+  );
+  const visao = painel(html, "visao");
+  assert.doesNotMatch(visao, /data-metric-tone/);
+  assert.doesNotMatch(visao, /resumo-cartoes/);
+  assert.doesNotMatch(visao, /comparison-metric-link/);
+  // The inherited-notes notice is the only content left there.
+  assert.match(visao, /2 anotações herdadas foram gravadas junto com o resultado/);
+  for (const texto of [/Equipamentos carregados na Simpress/, /Backup das versões anteriores/, /4\.321/, /_backups_x/]) {
+    assert.doesNotMatch(html, texto);
+  }
+});
+
+test("strips stay with static cards at zero and the Usuários tab has no wrapper without cards", () => {
+  const html = renderizar({ total_endpoint: 0 });
+  assert.equal(cartoes(painel(html, "divergencias")).length, 6);
+  assert.equal(cartoes(painel(html, "apelidos")).length, 3);
+  assert.doesNotMatch(painel(html, "usuarios"), /resumo-cartoes/);
+  assert.doesNotMatch(painel(html, "visao"), /data-metric-tone/);
+});
