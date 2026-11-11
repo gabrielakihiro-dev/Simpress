@@ -104,6 +104,7 @@ Pedido do usuário em 10/11/2026: na aba OS (F6), a OS da Simpress cuja etapa at
 - Front-end: `collectTicketOsRows` guarda `entregue` nas linhas da Simpress e `groupTicketOsRows` o passa à OS; a célula `OS` acrescenta `span.ck-os__selo.ck-os__selo--entregue` por `textContent`, depois de `Aberta há N dias` e `Técnico`. Backend, busca, filtros, KPIs, contagens e exportação não mudam.
 - CSS: `.ck-os__selo--entregue` em `static/styles/ck-cockpit.css`, com `--cor-ok-fundo` e `--cor-ok-texto` (temas claro e escuro pelos tokens).
 - Teste: `tests/frontend/test_data_panels_os_table.cjs` (`Selo Entregue`).
+- Peça entregue com dias (pedido do usuário em 11/11/2026, exemplo OS 7231981): quando a OS tem o selo Entregue e também `diasAberta`, o selo cinza `Aberta há N dias` não aparece e a contagem vira sufixo do selo verde: `Entregue · 15/10/2026 · 54 dias` (`· 1 dia` no singular). Sem `diasAberta`, o selo fica só `Entregue · DD/MM/AAAA`. Sem entrega, nada muda. Só front-end (`static/js/ui/data-panels.js`); vale também na janela `Chamado × OS`. Teste: `Peça entregue: Aberta há N dias sai do selo cinza…`.
 
 ---
 
