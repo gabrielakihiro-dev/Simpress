@@ -1349,6 +1349,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__manuais .ck-campo__rotulo { position: relative; color: var(--cor-texto-suave); }
 .sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="B"], [data-sebrae-campo="R"], [data-sebrae-campo="S"])) .ck-campo__rotulo { color: var(--cor-texto-mudo); }
 .sebrae-chamado__manuais .ck-entrada { height: var(--altura-controle); }
+/* Título (G): texto livre e longo, ocupa a linha inteira da grade. */
+.sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="G"]) { grid-column: 1 / -1; }
 /* Obrigatório vazio (A e J): contorno âmbar. D só é cobrado na zona 3, pois EM ABERTO é um valor válido. */
 .sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-entrada { border-color: var(--cor-alerta-texto); }
 .sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-campo__rotulo { color: var(--cor-alerta-texto); }

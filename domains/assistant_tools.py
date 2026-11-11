@@ -256,10 +256,10 @@ def _describe_editar_descricao_chamado(api: SimpressApi, args: Args) -> str:
     if not alvo["descricao"]:
         if not alvo["editada"]:
             raise ValueError("A descrição desse chamado ainda não foi editada; não há o que restaurar.")
-        return f"Restaurar a descrição de {alvo['numero']} ao texto original do SoftExpert. Texto atual: {atual}. Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam."
+        return f"Restaurar a descrição de {alvo['numero']} ao texto original. Texto atual: {atual}. Só neste site: o SoftExpert não muda e um H já enviado ao Dashboard não é desfeito (corrija à mão no Dashboard)."
     return (
         f"Editar a descrição de {alvo['numero']}, igual ao lápis da tela Chamados. Texto atual: {atual}. Novo texto: \"{alvo['descricao']}\". "
-        "Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam; um chamado novo leva o texto novo na coluna H ao Atualizar Dashboard."
+        "O texto vai à coluna H do Dashboard no próximo Atualizar Dashboard (chamado novo ou antigo em aberto); o SoftExpert nunca recebe esse texto."
     )
 
 
@@ -1237,9 +1237,9 @@ CHANGE_TOOLS: List[Tool] = [
     ),
     Tool(
         "editar_descricao_chamado_sebrae",
-        "Edita o texto do bloco \"Descrição\" de um chamado na tela Chamados (o lápis), só neste site: o SoftExpert e linhas já lançadas no Dashboard "
-        "não mudam. Vale para chamado antigo já lido ou chamado novo da última busca, ainda não finalizado. Use o texto exato do usuário, não invente; "
-        "marcadores de nome ([PESSOA_n]) voltam ao nome real no programa, mas e-mail e telefone ocultados no chat não podem ir no texto. Descrição vazia restaura o texto original. O usuário confirma antes.",
+        "Edita o texto do bloco \"Descrição\" de um chamado na tela Chamados (o lápis), o SoftExpert nunca recebe esse texto; "
+        "ele vai à coluna H do Dashboard no próximo Atualizar Dashboard. Vale para chamado antigo em aberto (lido ou não) ou chamado novo da última busca, ainda não finalizado. Use o texto exato do usuário, não invente; "
+        "marcadores de nome ([PESSOA_n]) voltam ao nome real no programa, mas e-mail e telefone ocultados no chat não podem ir no texto. Descrição vazia restaura o texto original só no site e não desfaz um H já enviado ao Dashboard. O usuário confirma antes.",
         lambda c, a: c.editar_descricao_chamado_sebrae(a.get("numero"), a.get("descricao")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},

@@ -60,6 +60,49 @@ test("a atualização dos antigos leva só os campos mudados e nunca em branco",
   assert.deepEqual(payloadEdicoes(abertos, {}), []);
 });
 
+// ---- Título (G) editável (11/2026): só chega à coluna G da cópia do Dashboard; o SoftExpert acha o chamado pelo número ----
+
+test("Título (G) do antigo: vai no payload só se digitado, não vazio e diferente do que o Dashboard já tem; o limite é de 300", () => {
+  const abertos = [
+    { numero: "UTIC-2026-1", titulo: "Teclado sem resposta", valores: { A: "CLIENTE", D: "EM ABERTO" } },
+    { numero: "UTIC-2026-2", titulo: "", valores: { A: "CLIENTE", D: "EM ABERTO" } },
+  ];
+  assert.deepEqual(payloadEdicoes(abertos, { "UTIC-2026-1": { G: "  Teclado sem resposta, trocado  " }, "UTIC-2026-2": { G: "Título novo" } }), [
+    { numero: "UTIC-2026-1", G: "Teclado sem resposta, trocado" },
+    { numero: "UTIC-2026-2", G: "Título novo" },
+  ]);
+  assert.deepEqual(payloadEdicoes(abertos, { "UTIC-2026-1": { G: "Teclado sem resposta" }, "UTIC-2026-2": { G: "   " } }), [], "igual ao Dashboard ou em branco: nada vai (em branco nunca apaga)");
+  assert.deepEqual(payloadEdicoes(abertos, { "UTIC-2026-1": { G: "Novo", B: "REDE" } }), [{ numero: "UTIC-2026-1", G: "Novo", B: "REDE" }]);
+  assert.equal(sebraeDashboardModel.MAX_TITULO, 300);
+});
+
+test("Título (G) do novo: linhaChamado só leva G quando há texto digitado, e G não entra nos campos manuais", () => {
+  const item = { numero: "UTIC-2026-1378", linha: { G: "Computador travando" } };
+  assert.deepEqual(sebraeDashboardModel.linhaChamado(item, { A: "CLIENTE" }), { numero: "UTIC-2026-1378", A: "CLIENTE", B: "", D: "", J: "", R: "", S: "" });
+  assert.deepEqual(sebraeDashboardModel.linhaChamado(item, { A: "CLIENTE", G: "   " }), { numero: "UTIC-2026-1378", A: "CLIENTE", B: "", D: "", J: "", R: "", S: "" });
+  assert.deepEqual(sebraeDashboardModel.linhaChamado(item, { G: " Computador travando na recepção " }),
+    { numero: "UTIC-2026-1378", A: "", B: "", D: "", J: "", R: "", S: "", G: "Computador travando na recepção" });
+  assert.deepEqual(payloadAtualizacao([item], { [item.numero]: { G: "Outro" } })[0].G, "Outro");
+  assert.equal("G" in payloadAtualizacao([item], {})[0], false);
+});
+
+test("rascunho: G aceita até 300 caracteres e os campos manuais continuam limitados a 80", () => {
+  const disco = armazenamentoFalso({
+    "simpress:sebrae-rascunho": JSON.stringify({ importado_em: "x", valores: {
+      "UTIC-2026-7": { G: "t".repeat(300), B: "x".repeat(80) }, "UTIC-2026-8": { G: "t".repeat(301), B: "x".repeat(81), A: "CLIENTE" } },
+    edicoes: {} }),
+  });
+  assert.deepEqual(lerRascunho(disco, "x").valores, { "UTIC-2026-7": { G: "t".repeat(300), B: "x".repeat(80) }, "UTIC-2026-8": { A: "CLIENTE" } });
+});
+
+test("dadosAntigo: a descrição editada no lápis (H) vence a do Dashboard e a da leitura", () => {
+  const leitura = { titulo: "T", solicitante: "S", descricao: "Da leitura.", atendimento: "", habilitada_em: "" };
+  const editada = { softexpert: { descricao_editada: "Editada no site." }, descricao: "Do Dashboard.", leitura_softexpert: leitura };
+  assert.equal(dadosAntigo(editada).descricao, "Editada no site.");
+  assert.equal(dadosAntigo({ ...editada, softexpert: { descricao_editada: "" } }).descricao, "Do Dashboard.");
+  assert.equal(dadosAntigo({ ...editada, softexpert: {}, descricao: "" }).descricao, "Da leitura.");
+});
+
 test("chamado antigo sem UTIC mostra o texto da coluna C e a linha; o botão conta os preenchimentos", () => {
   assert.equal(tituloAntigo({ numero: "linha:27", chamado: "Sem chamado" }), "Sem chamado (linha 27)");
   assert.equal(tituloAntigo({ numero: "linha:28", chamado: "" }), "Sem chamado (linha 28)");
@@ -926,7 +969,7 @@ const POST_ATUALIZAR = "/api/sebrae/dashboard/atualizar";
 const AVISO_SEM_DESCRICAO = "Não serão finalizados no SoftExpert: UTIC-2026-1501 (sem descrição para finalizar).";
 
 /** Roda `atualizarDashboardSebrae` com o diálogo respondendo `resposta` (true, false ou null) e devolve o que foi ao servidor e o que a tela mostrou. */
-async function atualizarDashboardCom({ carga, resposta, retorno = {}, marcar = [] }) {
+async function atualizarDashboardCom({ carga, resposta, retorno = {}, marcar = [], editar = [], armazenamento = null }) {
   const posts = [];
   const apiFetch = async (url, opcoes = {}) => {
     if (opcoes.method === "POST" && url === POST_ATUALIZAR) {
@@ -935,12 +978,18 @@ async function atualizarDashboardCom({ carga, resposta, retorno = {}, marcar = [
     }
     return carga;
   };
-  const { el, feature, app } = await renderizarCartoes(carga, null, apiFetch);
+  const { el, feature, app } = await renderizarCartoes(carga, armazenamento, apiFetch);
   await esvaziarFila();
   global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
   for (const numero of marcar) {
     const campo = cartaoDe(el, numero).querySelector('[data-sebrae-campo="D"]');
     campo.value = "FINALIZADO";
+    campo.dispatchEvent({ type: "input", currentTarget: campo });
+  }
+  // editar: [lista, número, letra, valor]; a lista é o id do painel ("sebrae-novos-lista" ou "sebrae-antigos-lista")
+  for (const [lista, numero, letra, valor] of editar) {
+    const campo = el[lista].querySelectorAll(`[data-sebrae-campo="${letra}"]`).find(no => no.dataset.sebraeNumero === numero);
+    campo.value = valor;
     campo.dispatchEvent({ type: "input", currentTarget: campo });
   }
   const dialogos = [];
@@ -1062,6 +1111,224 @@ test("o lápis abre o editor com o texto atual, salva só no site e a restauraç
   await esvaziarFila();
   assert.deepEqual(JSON.parse(chamadas.filter(c => c.url.endsWith("/descricao")).pop().corpo), { descricao: "" });
   assert.equal(selo.hidden, true);
+});
+
+// ---- Título (G) nos cartões e lápis da descrição (H) em todo antigo com UTIC (11/2026) ----
+
+const cartaoAntigoDe = (el, numero) => el["sebrae-antigos-lista"].querySelectorAll("details.sebrae-antigo").find(no => no.dataset.numero === numero);
+const campoG = cartao => cartao.querySelector('[data-sebrae-campo="G"]');
+
+test("Título (G) do chamado novo: nasce com o título do SoftExpert, não grava rascunho ao abrir, acompanha o assunto e só o texto digitado vira rascunho", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(CARGA_CARTOES, disco);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1378");
+  const g = campoG(cartao);
+  assert.equal(g.value, "Computador travando");
+  assert.equal(g.maxLength, 300);
+  assert.notEqual(g.disabled, true, "G é sempre editável");
+  assert.equal(g.getAttribute("list"), null, "texto livre, sem lista de sugestões");
+  assert.ok(cartao.textContent.includes("Título (G)"));
+  assert.equal(lerRascunho(disco, "2026-10-28T10:00:00-03:00").valores["UTIC-2026-1378"]?.G, undefined, "o valor inicial não vira rascunho");
+  // digitar muda o assunto do cartão e o da linha recolhida, e só então grava o rascunho
+  g.value = "Computador travando na recepção";
+  g.dispatchEvent({ type: "input", currentTarget: g });
+  assert.equal(cartao.querySelector(".sebrae-chamado__assunto").textContent, "Computador travando na recepção");
+  assert.equal(el["sebrae-novos-lista"].querySelector("details.sebrae-novo .sebrae-antigo__assunto").textContent, "Computador travando na recepção");
+  assert.equal(lerRascunho(disco, "2026-10-28T10:00:00-03:00").valores["UTIC-2026-1378"].G, "Computador travando na recepção");
+  // apagar tudo volta ao título do SoftExpert (vazio nunca apaga)
+  g.value = "   ";
+  g.dispatchEvent({ type: "input", currentTarget: g });
+  assert.equal(cartao.querySelector(".sebrae-chamado__assunto").textContent, "Computador travando");
+});
+
+test("Título (G) do novo: Atualizar leva G só quando foi digitado; sem edição o corpo não tem G", async () => {
+  const semEdicao = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: false, retorno: ENVIO_INICIADO });
+  assert.equal(semEdicao.posts.length, 1);
+  assert.equal("G" in semEdicao.posts[0].chamados[0], false);
+  const comEdicao = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: false, retorno: ENVIO_INICIADO, editar: [["sebrae-novos-lista", "UTIC-2026-1378", "G", "  Computador travando na recepção "]] });
+  assert.equal(comEdicao.posts[0].chamados[0].G, "Computador travando na recepção");
+  assert.equal(comEdicao.posts[0].chamados[0].numero, "UTIC-2026-1378", "o chamado continua identificado pelo número UTIC");
+});
+
+test("Título (G) do antigo em aberto: vem do Dashboard, aparece em UTIC e linha:N, e só a edição diferente vai em edicoes", async () => {
+  const { el } = await renderizarCartoes(CARGA_CARTOES);
+  await esvaziarFila();
+  const utic = cartaoAntigoDe(el, "UTIC-2026-1200");
+  const semUtic = cartaoAntigoDe(el, "linha:27");
+  assert.equal(campoG(utic).value, "Teclado sem resposta");
+  assert.equal(campoG(semUtic).value, "Impressora offline");
+  assert.equal(campoG(utic).maxLength, 300);
+  campoG(utic).value = "Teclado sem resposta, trocado";
+  campoG(utic).dispatchEvent({ type: "input", currentTarget: campoG(utic) });
+  assert.equal(utic.querySelector(".sebrae-chamado__assunto").textContent, "Teclado sem resposta, trocado");
+  assert.equal(utic.querySelector(".sebrae-antigo__assunto").textContent, "Teclado sem resposta, trocado");
+
+  const mudou = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: false, retorno: ENVIO_INICIADO,
+    editar: [["sebrae-antigos-lista", "UTIC-2026-1200", "G", "Teclado sem resposta, trocado"], ["sebrae-antigos-lista", "linha:27", "G", "Impressora offline"]] });
+  assert.deepEqual(mudou.posts[0].edicoes, [{ numero: "UTIC-2026-1200", G: "Teclado sem resposta, trocado" }], "G igual ao Dashboard (linha:27) não vai");
+  const vazio = await atualizarDashboardCom({ carga: CARGA_CARTOES, resposta: false, retorno: ENVIO_INICIADO, editar: [["sebrae-antigos-lista", "UTIC-2026-1200", "G", "  "]] });
+  assert.deepEqual(vazio.posts[0].edicoes, [], "G em branco nunca apaga");
+});
+
+test("Título (G) digitado sobrevive a recarregar a página, no novo e no antigo", async () => {
+  const disco = armazenamentoFalso();
+  const primeira = await renderizarCartoes(CARGA_CARTOES, disco);
+  await esvaziarFila();
+  const novo = campoG(cartaoDe(primeira.el, "UTIC-2026-1378"));
+  novo.value = "Título do novo";
+  novo.dispatchEvent({ type: "input", currentTarget: novo });
+  const antigo = campoG(cartaoAntigoDe(primeira.el, "UTIC-2026-1200"));
+  antigo.value = "Título do antigo";
+  antigo.dispatchEvent({ type: "input", currentTarget: antigo });
+  const segunda = await renderizarCartoes(CARGA_CARTOES, disco);
+  await esvaziarFila();
+  assert.equal(campoG(cartaoDe(segunda.el, "UTIC-2026-1378")).value, "Título do novo");
+  assert.equal(campoG(cartaoAntigoDe(segunda.el, "UTIC-2026-1200")).value, "Título do antigo");
+});
+
+test("o lápis da descrição aparece em todo antigo com UTIC (lido ou não), nunca em linha:N, e o texto inicial é o H do Dashboard ou a leitura", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].descricao = "H do Dashboard.";
+  carga.importado.abertos.push({ numero: "UTIC-2026-1201", titulo: "Mouse", chamado: "UTIC-2026-1201", usuario: "Ana", automaticos: {}, automaticos_sugeridos: {},
+    valores: { A: "", B: "", D: "EM ABERTO", J: "", R: "", S: "" }, softexpert: { descricao_finalizacao: "", pdf: null, finalizacao: null },
+    leitura_softexpert: { titulo: "Mouse", solicitante: "Ana", descricao: "Da leitura.", atendimento: "Feito.", habilitada_em: "" } });
+  const { el } = await renderizarCartoes(carga);
+  await esvaziarFila();
+  const naoLido = cartaoAntigoDe(el, "UTIC-2026-1200");
+  const lido = cartaoAntigoDe(el, "UTIC-2026-1201");
+  const semUtic = cartaoAntigoDe(el, "linha:27");
+  assert.ok(naoLido.querySelector("button[data-sebrae-editar-descricao]"), "antigo ainda não lido, mas com H no Dashboard, tem lápis");
+  assert.ok(lido.querySelector("button[data-sebrae-editar-descricao]"));
+  assert.equal(semUtic.querySelector("button[data-sebrae-editar-descricao]"), null, "linha:<n> não tem lápis");
+  naoLido.querySelector("button[data-sebrae-editar-descricao]").click();
+  assert.equal(naoLido.querySelector("textarea[data-sebrae-descricao-editada]").value, "H do Dashboard.");
+  lido.querySelector("button[data-sebrae-editar-descricao]").click();
+  assert.equal(lido.querySelector("textarea[data-sebrae-descricao-editada]").value, "Da leitura.");
+  assert.match(naoLido.textContent, /Ainda não lido no SoftExpert/, "a dica de leitura continua");
+  assert.equal(lido.textContent.includes("Atendimento realizado"), true);
+  assert.equal(naoLido.textContent.includes("Atendimento realizado"), false, "sem leitura não há atendimento");
+});
+
+test("descrição editada no lápis de um antigo habilita Atualizar sozinha, restaurar desabilita de novo e o texto nunca viaja no corpo nem chama o SoftExpert", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].descricao = "H do Dashboard.";
+  const chamadas = [];
+  const posts = [];
+  const apiFetch = async (url, opcoes = {}) => {
+    chamadas.push({ url, metodo: opcoes.method || "GET" });
+    if (opcoes.method === "PUT" && url.endsWith("/descricao")) {
+      const texto = JSON.parse(opcoes.body).descricao;
+      return { descricao: texto || "H do Dashboard.", descricao_editada: texto };
+    }
+    if (opcoes.method === "POST" && url === POST_ATUALIZAR) { posts.push(JSON.parse(opcoes.body)); return { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [], base: { importado_em: "2026-10-28T10:00:00-03:00" }, ...ENVIO_INICIADO }; }
+    return carga;
+  };
+  const { el, feature, app } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
+  app.atualizarEstadoAutomacao = () => {};
+  const botaoAtualizar = el["btn-sebrae-atualizar"];
+  assert.equal(botaoAtualizar.disabled, true, "sem nada a enviar");
+  await feature.atualizarDashboardSebrae();
+  assert.equal(posts.length, 0, "sem alteração o clique não envia");
+  const cartao = cartaoAntigoDe(el, "UTIC-2026-1200");
+  const editar = texto => {
+    cartao.querySelector("button[data-sebrae-editar-descricao]").click();
+    cartao.querySelector("textarea[data-sebrae-descricao-editada]").value = texto;
+    cartao.querySelector("button[data-sebrae-salvar-descricao]").click();
+  };
+  editar("H novo, escrito no site.");
+  await esvaziarFila();
+  assert.equal(botaoAtualizar.disabled, false, "H editado e ainda não enviado habilita Atualizar");
+  const feedback = cartao.querySelector(".sebrae-descricao__feedback").textContent;
+  assert.match(feedback, /coluna H do Dashboard/);
+  assert.match(feedback, /SoftExpert não recebe/);
+  assert.equal(cartao.querySelector(".sebrae-descricao__selo").hidden, false);
+  // restaurar: o texto volta ao original e não há mais o que enviar; o aviso diz que um H já enviado não é desfeito
+  cartao.querySelector("button[data-sebrae-restaurar-descricao]").click();
+  await esvaziarFila();
+  assert.equal(botaoAtualizar.disabled, true);
+  assert.match(cartao.querySelector(".sebrae-descricao__feedback").textContent, /não é desfeito/);
+  // edita de novo e atualiza: o corpo não leva a descrição (o servidor a lê do estado local)
+  editar("H novo, escrito no site.");
+  await esvaziarFila();
+  await feature.atualizarDashboardSebrae();
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].chamados, []);
+  assert.deepEqual(posts[0].edicoes, []);
+  assert.equal(JSON.stringify(posts[0]).includes("H novo"), false, "a descrição editada não viaja no corpo de Atualizar");
+  assert.equal(posts[0].finalizar_softexpert, false, "só atualiza o Dashboard; nada vai ao SoftExpert");
+  assert.deepEqual(chamadas.filter(c => c.metodo !== "GET").map(c => `${c.metodo} ${c.url}`), [...Array(3).fill("PUT /api/sebrae/chamados/UTIC-2026-1200/descricao"), `POST ${POST_ATUALIZAR}`]);
+});
+
+test("descrição já editada e ainda não enviada ao Dashboard: ao recarregar mostra o texto editado, o selo e Atualizar habilitado", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].descricao = "H antigo.";
+  carga.importado.abertos[0].softexpert = { descricao_finalizacao: "", pdf: null, finalizacao: null, descricao_editada: "Editada antes de recarregar." };
+  const { el } = await renderizarCartoes(carga);
+  await esvaziarFila();
+  const cartao = cartaoAntigoDe(el, "UTIC-2026-1200");
+  assert.equal(cartao.querySelector(".sebrae-descricao__selo").hidden, false);
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+  cartao.querySelector("button[data-sebrae-editar-descricao]").click();
+  assert.equal(cartao.querySelector("textarea[data-sebrae-descricao-editada]").value, "Editada antes de recarregar.");
+  // já igual ao H do Dashboard: não há o que enviar
+  carga.importado.abertos[0].descricao = "Editada antes de recarregar.";
+  const { el: el2 } = await renderizarCartoes(carga);
+  await esvaziarFila();
+  assert.equal(el2["btn-sebrae-atualizar"].disabled, true);
+});
+
+test("descricaoJaNoDashboard compara na mesma forma do servidor: uma linha, sem apóstrofo protetor e tolerando o corte de 2000 do H lido", () => {
+  const { descricaoJaNoDashboard: jaNoDashboard } = sebraeDashboardModel;
+  assert.equal(jaNoDashboard("Cartucho trocado.", "Cartucho trocado."), true);
+  assert.equal(jaNoDashboard("  linha 1\n\nlinha   2  ", "linha 1 linha 2"), true, "Enter e espaço duplo viram um espaço no Dashboard");
+  assert.equal(jaNoDashboard("-trocar toner", "-trocar toner"), true);
+  assert.equal(jaNoDashboard("'-trocar toner", "-trocar toner"), true, "o apóstrofo protetor não fica na célula lida");
+  assert.equal(jaNoDashboard("'=1+1", "=1+1"), true);
+  assert.equal(jaNoDashboard("'abc", "abc"), false, "apóstrofo que não protege fórmula é texto do usuário");
+  assert.equal(jaNoDashboard("outro texto", "Cartucho trocado."), false);
+  const longa = "palavra ".repeat(300).trim();
+  assert.equal(jaNoDashboard(longa, longa.slice(0, 2000)), true, "H lido cortado em 2000: só o começo precisa bater");
+  assert.equal(jaNoDashboard(longa, (longa + " ").slice(0, 2000)), true, "o corte pode terminar num espaço");
+  assert.equal(jaNoDashboard("x".repeat(2500), "y".repeat(2000)), false, "corte com começo diferente continua pendente");
+  assert.equal(jaNoDashboard("x".repeat(1999) + "yz", "x".repeat(1999)), false, "abaixo de 2000 não houve corte: texto maior é diferente");
+  assert.equal(jaNoDashboard("abc", ""), false, "H vazio e texto editado: há o que enviar");
+});
+
+test("depois de reimportar o Dashboard enviado, descrição com Enter, início de fórmula ou acima de 2000 não deixa Atualizar habilitado; texto diferente deixa", async () => {
+  const longa = "palavra ".repeat(300).trim();
+  const casos = [
+    ["Enter e espaço duplo", "linha 1\n\nlinha   2", "linha 1 linha 2", true],
+    ["início de fórmula", "-trocar toner", "-trocar toner", true],
+    ["acima de 2000", longa, longa.slice(0, 2000), true],
+    ["texto diferente", "H novo", "H do Dashboard.", false],
+  ];
+  for (const [nome, editada, h, igual] of casos) {
+    const carga = structuredClone(CARGA_CARTOES);
+    carga.novos.formulario = [];
+    carga.importado.abertos[0].descricao = h;
+    carga.importado.abertos[0].softexpert = { descricao_finalizacao: "", pdf: null, finalizacao: null, descricao_editada: editada };
+    const { el } = await renderizarCartoes(carga);
+    await esvaziarFila();
+    assert.equal(el["btn-sebrae-atualizar"].disabled, igual, nome);
+  }
+});
+
+test("Título (G) de antigo com título original acima de 300 caracteres abre cortado em 300, para o Atualizar não voltar 422", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].titulo = "t".repeat(400);
+  const { el } = await renderizarCartoes(carga);
+  await esvaziarFila();
+  const g = campoG(cartaoAntigoDe(el, "UTIC-2026-1200"));
+  assert.equal(g.value.length, 300);
+  assert.equal(g.maxLength, 300);
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true, "o valor inicial cortado não conta como edição");
 });
 
 test("campo de observação é renderizado na Zona 2 em novos, antigos (com UTIC e linha:N) e finalizados", async () => {

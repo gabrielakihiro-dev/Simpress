@@ -235,6 +235,16 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         self.assertEqual([g.celulas for g in trocado.linhas], [("G", "H")])
         self.assertEqual(G.chamados_para_editar(trocado.conteudo)[0].descricao, "Usuário sem rede")
 
+    def test_g_e_h_editados_no_site_vencem_a_leitura(self):
+        base = montar(("UTIC-2026-0833",), status=("EM ABERTO",))
+        sem_g = _trocar_na_folha(base, texto("G2", "titulo UTIC-2026-0833"), "")
+        conteudo = _antes_da_coluna_p(sem_g, 2, texto("H2", "Abrir chamado"))
+        lidos = {"UTIC-2026-0833": {"G": "Abrir chamado", "H": "Notebook não liga", "I": "API SEBRAE"}}
+        editados = {"UTIC-2026-0833": {"G": "Título digitado", "H": "Descrição digitada"}}
+        resultado = G.atualizar(conteudo, edicoes=editados, automaticos=lidos)
+        aberto = G.chamados_para_editar(resultado.conteudo)[0]
+        self.assertEqual((aberto.titulo, aberto.descricao, aberto.usuario), ("Título digitado", "Descrição digitada", "API SEBRAE"))
+
     def test_edita_chamado_de_c_composto_sem_reescrever_a_c(self):
         composto = "27371 / UTIC-2026-0094"
         original = montar((composto,), status=("EM ABERTO",))
@@ -276,6 +286,95 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
             G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"F": "x"}})
         with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
             G.atualizar(montar(), edicoes={"UTIC-2026-7777": {"A": "CLIENTE"}})
+
+    def test_titulo_g_preenchido_e_sobreposto_so_quando_muda_e_o_resto_da_planilha_fica_igual(self):
+        original = montar()
+        resultado = G.atualizar(original, edicoes={"UTIC-2026-0001": {"G": "  Novo   título & <teste> "}})
+        self.assertEqual([(g.numero, g.tipo, g.celulas) for g in resultado.linhas], [("UTIC-2026-0001", "alterado", ("G",))])
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].titulo, "Novo título & <teste>")
+        self.assertEqual(linha_xml(resultado.conteudo, 3), linha_xml(original, 3))
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].numero, "UTIC-2026-0001")  # still found by its C
+        igual = G.atualizar(original, edicoes={"UTIC-2026-0001": {"G": "titulo UTIC-2026-0001"}})
+        self.assertEqual(igual.linhas, ())
+
+    def test_titulo_g_vazio_na_planilha_e_preenchido_e_em_branco_nunca_apaga(self):
+        vazio = _trocar_na_folha(montar(), texto("G2", "titulo UTIC-2026-0001", 112), '<c r="G2" s="112"/>')
+        self.assertEqual(G.chamados_para_editar(vazio)[0].titulo, "")
+        resultado = G.atualizar(vazio, edicoes={"UTIC-2026-0001": {"G": "Impressora sem toner"}})
+        self.assertEqual([g.celulas for g in resultado.linhas], [("G",)])
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].titulo, "Impressora sem toner")
+        em_branco = G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"G": "   "}})
+        self.assertEqual(em_branco.linhas, ())  # blank never erases the title the sheet has
+
+    def test_titulo_g_com_apostrofo_vira_texto_e_chamado_finalizado_nao_aceita_g(self):
+        resultado = G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"G": "'=1+1"}})
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].titulo, "=1+1")
+        self.assertNotIn("<f>", linha_xml(resultado.conteudo, 2).split('<c r="G2"')[1].split("</c>")[0])
+        with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
+            G.atualizar(montar(), edicoes={"UTIC-2026-0002": {"G": "x"}})  # D is FINALIZADO: not mirrored
+        with self.assertRaisesRegex(G.GravacaoInvalida, "coluna F"):
+            G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"F": "x"}})  # only A, B, D, J, R, S, G and H are editable by the site
+        with self.assertRaisesRegex(G.GravacaoInvalida, "coluna C"):
+            G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"C": "UTIC-2026-0777"}})  # C is never rewritten
+        self.assertEqual(G.atualizar(montar(), automaticos={"UTIC-2026-0001": {"G": "x"}}).linhas, ())  # the read never replaces a filled G
+
+    def test_descricao_h_vazia_ou_preenchida_e_sobreposta_so_quando_muda_e_em_branco_nunca_apaga(self):
+        original = montar()  # no H cell in the row
+        resultado = G.atualizar(original, edicoes={"UTIC-2026-0001": {"H": "  Nova   descrição & <teste> "}})
+        self.assertEqual([(g.numero, g.tipo, g.celulas) for g in resultado.linhas], [("UTIC-2026-0001", "alterado", ("H",))])
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].descricao, "Nova descrição & <teste>")
+        self.assertEqual(linha_xml(resultado.conteudo, 3), linha_xml(original, 3))
+        preenchida = _antes_da_coluna_p(original, 2, texto("H2", "descricao antiga"))
+        self.assertEqual(G.chamados_para_editar(preenchida)[0].descricao, "descricao antiga")
+        editada = G.atualizar(preenchida, edicoes={"UTIC-2026-0001": {"H": "descricao editada"}})
+        self.assertEqual([g.celulas for g in editada.linhas], [("H",)])
+        self.assertEqual(G.chamados_para_editar(editada.conteudo)[0].descricao, "descricao editada")
+        self.assertEqual(G.atualizar(preenchida, edicoes={"UTIC-2026-0001": {"H": "descricao antiga"}}).linhas, ())  # same text: nothing to write
+        self.assertEqual(G.atualizar(preenchida, edicoes={"UTIC-2026-0001": {"H": "   "}}).linhas, ())  # blank never erases the H the sheet has
+        self.assertEqual(G.chamados_para_editar(G.atualizar(preenchida, edicoes={"UTIC-2026-0001": {"H": ""}}).conteudo)[0].descricao, "descricao antiga")
+
+    def test_titulo_g_e_descricao_h_do_mesmo_chamado_vao_juntos_com_os_manuais(self):
+        resultado = G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"A": "CLIENTE", "G": "Título novo", "H": "Descrição nova"}})
+        self.assertEqual([(g.numero, g.celulas) for g in resultado.linhas], [("UTIC-2026-0001", ("A", "G", "H"))])
+        aberto = G.chamados_para_editar(resultado.conteudo)[0]
+        self.assertEqual((aberto.titulo, aberto.descricao, aberto.valores["A"]), ("Título novo", "Descrição nova", "CLIENTE"))
+        self.assertEqual(aberto.numero, "UTIC-2026-0001")  # still found by its C
+
+    def test_descricao_h_com_apostrofo_vira_texto_e_chamado_finalizado_nao_aceita_h(self):
+        resultado = G.atualizar(montar(), edicoes={"UTIC-2026-0001": {"H": "'=1+1"}})
+        self.assertEqual(G.chamados_para_editar(resultado.conteudo)[0].descricao, "=1+1")
+        self.assertNotIn("<f>", linha_xml(resultado.conteudo, 2).split('<c r="H2"')[1].split("</c>")[0])
+        with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
+            G.atualizar(montar(), edicoes={"UTIC-2026-0002": {"H": "x"}})  # D is FINALIZADO: not mirrored
+        self.assertEqual(G.atualizar(montar(), automaticos={"UTIC-2026-0001": {"H": "x"}}).linhas, ())  # the read alone never rewrites H
+
+    def test_g_h_e_manuais_com_inicio_de_formula_nao_voltam_como_alterados_ao_reaplicar(self):
+        # a célula guarda ``-x``; o envio chega como ``'-x`` (``_texto_de_celula``): lidos e enviados têm de ser comparados na mesma forma
+        for inicio in ("-", "=", "+", "@"):
+            with self.subTest(inicio=inicio):
+                edicao = {"G": f"'{inicio}titulo", "H": f"'{inicio}descricao", "S": f"'{inicio}sla"}
+                primeira = G.atualizar(montar(), edicoes={"UTIC-2026-0001": edicao})
+                self.assertEqual([g.celulas for g in primeira.linhas], [("G", "H", "S")])
+                aberto = G.chamados_para_editar(primeira.conteudo)[0]
+                self.assertEqual((aberto.titulo, aberto.descricao, aberto.valores["S"]), (f"{inicio}titulo", f"{inicio}descricao", f"{inicio}sla"))
+                segunda = G.atualizar(primeira.conteudo, edicoes={"UTIC-2026-0001": edicao})
+                self.assertEqual(segunda.linhas, ())  # sobre o que já foi gravado, o mesmo envio não muda nada
+                mudado = G.atualizar(primeira.conteudo, edicoes={"UTIC-2026-0001": {**edicao, "G": f"'{inicio}outro"}})
+                self.assertEqual([g.celulas for g in mudado.linhas], [("G",)])  # só o que de fato mudou
+
+    def test_h_ja_gravado_compara_na_mesma_forma_e_tolera_o_corte_do_h_lido(self):
+        self.assertTrue(G.h_ja_gravado("Cartucho trocado", "Cartucho trocado"))
+        self.assertTrue(G.h_ja_gravado("  Cartucho   trocado ", "Cartucho trocado"))  # uma linha, sem espaço repetido
+        self.assertTrue(G.h_ja_gravado("'-x", "-x"))  # apóstrofo protetor não está na célula
+        self.assertTrue(G.h_ja_gravado("'=SOMA(1)", "=SOMA(1)"))
+        self.assertFalse(G.h_ja_gravado("Cartucho", "Cartucho trocado"))
+        self.assertFalse(G.h_ja_gravado("-x", "x"))
+        longo = " ".join(["palavra"] * 400)  # 3199 caracteres
+        cortado = longo[: G.LIMITE_H_LIDO]
+        self.assertTrue(G.h_ja_gravado(longo, cortado))  # o H lido veio cortado: só o começo precisa bater
+        self.assertFalse(G.h_ja_gravado("x" + longo, cortado))
+        self.assertFalse(G.h_ja_gravado(longo, cortado[:-3]))  # abaixo do limite não é corte: tem de ser igual
+        self.assertEqual(len(G.chamados_para_editar(_antes_da_coluna_p(montar(), 2, texto("H2", longo)))[0].descricao), G.LIMITE_H_LIDO)
 
     def test_novo_com_manuais_em_branco_nao_escreve_a_d_j_e_volta_a_ser_editavel(self):
         nova = {**NOVA, "A": "", "D": "", "J": ""}
