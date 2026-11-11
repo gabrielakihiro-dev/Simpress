@@ -200,6 +200,8 @@
       const loading = el("p", "text-sm text-center py-8 text-fg-subtle", "Carregando histórico…");
       loading.setAttribute("role", "status");
       byId("lista-historico-transferencias").replaceChildren(loading);
+      // Indicador de carregamento (ux-enhancements.js) entra antes da busca.
+      doc.dispatchEvent(new win.CustomEvent("simpress:carregando-exibido"));
       setStatus("Carregando histórico…");
       try {
         const response = await win.fetch(`${ENDPOINT}?limite=${LIST_LIMIT}&busca=${encodeURIComponent(term)}`);

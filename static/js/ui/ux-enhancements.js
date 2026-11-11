@@ -557,14 +557,18 @@
     }, true);
 
     let scanQueued = false;
-    const observer = typeof win.MutationObserver === "function" ? new win.MutationObserver(() => {
+    function scheduleScan() {
       if (scanQueued) return;
       scanQueued = true;
       win.setTimeout(() => { scanQueued = false; scanDynamicContent(); }, 50);
-    }) : null;
+    }
+    // Quem gera o que scanDynamicContent trata avisa por evento, sem observer no body:
+    // tabelas .accessible-table-wrap (comparison-result.js, transfer-history.js) e
+    // "Carregando…" em p.text-center[role=status] (comparison-history.js, transfer-history.js).
+    doc.addEventListener("simpress:tabelas-renderizadas", scheduleScan);
+    doc.addEventListener("simpress:carregando-exibido", scheduleScan);
 
     function start() {
-      observer?.observe(doc.body, { childList: true, subtree: true });
       scanDynamicContent();
       renderRecents();
       refresh();
