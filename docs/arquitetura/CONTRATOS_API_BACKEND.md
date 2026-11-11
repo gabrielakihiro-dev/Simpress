@@ -226,8 +226,8 @@ Erros das regras vêm como `{detail, codigo}`, com `detail` em texto simples e s
 `marcador_pendente`; outro e-mail em preparo 409 `ocupado`; conta desconhecida ou fora do Outlook 422 `conta_ausente`; destinatário
 não reconhecido 422 `destinatario_nao_resolvido` só no `enviar` (no `abrir` vira `aviso`); Outlook novo, sem COM ou
 fora do Windows 503 `outlook_indisponivel`; Outlook fechado no `enviar` 503 `outlook_fechado` (nada criado);
-exceção no `Send()` 502 `envio_recusado` (nada enviado); timeout antes do envio 504 `outlook_sem_resposta`; timeout
-ou falha depois do marcador de envio (exceto `envio_recusado`) volta 200 `incerto` (conferir Itens Enviados antes de
+timeout antes do envio 504 `outlook_sem_resposta`; timeout,
+exceção no `Send()` (decisão do usuário, 10/11/2026) ou qualquer falha depois do marcador de envio volta 200 `incerto` (conferir Itens Enviados antes de
 repetir); timeout no `abrir` volta `aberto` com aviso de que a janela pode aparecer em instantes. Erro inesperado: 500
 `erro_inesperado`. O PowerShell recebe os dados só por stdin (JSON UTF-8), nunca em argumentos. O log guarda só modo,
 id da conta e código ou status: nunca corpo, destinatários, nomes, nome do modelo nem termo buscado.
