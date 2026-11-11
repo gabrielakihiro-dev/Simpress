@@ -87,6 +87,8 @@
     const lista = document.getElementById("lista-historico-comparacoes");
     lista.setAttribute("aria-busy", "true");
     lista.innerHTML = '<p class="text-sm text-fg-subtle text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+    // Indicador de carregamento (ux-enhancements.js) entra antes da busca.
+    document.dispatchEvent(new CustomEvent("simpress:carregando-exibido"));
     const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
     try {

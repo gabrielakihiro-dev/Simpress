@@ -363,6 +363,8 @@ Os filtros do histórico aceitam `rotina=sebrae` e `rotina=antigos`. As rotas pa
 
 Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora; Ativar/Pausar agendamento; Cancelar (o botão existente); situação atual; última e próxima execução; incluídos, ignorados por duplicidade e pendentes; lista de pendências com motivo; acesso a logs e motivos de falha pelos painéis Andamento e Últimas execuções (com `Sincronizar chamados Sebrae` no filtro de rotina); aviso de login no banner existente. Texto fixo: "Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos. O computador precisa estar ligado e o servidor local da Simpress em execução." Mesmos tokens, temas claro e escuro, cartões no celular, animações de 150–300 ms com `prefers-reduced-motion`, IDs e ARIA existentes preservados.
 
+**Regras puras em arquivo próprio (limpeza do JS, 10/11/2026).** As constantes e funções sem estado da aba Chamados (F5) foram de `static/js/features/sebrae-dashboard.js` para `static/js/shared/sebrae-dashboard-model.js`. Exemplos: campos A–S, status, padrões de chamado, textos de resultado e rascunho. O código foi mudado de lugar, sem alteração. O arquivo novo publica `window.SimpressSebraeDashboardModel`, entra em `static/app-entry.js` antes das features e chega à fábrica por `context.sebraeDashboardModel` (`static/app.js`). Como os demais `shared/`, passa pelo typecheck de `tsconfig.ui.json`. Ações publicadas e nomes em `window` não mudaram. `createSebraeDashboard.puro` saiu: o teste `tests/frontend/test_sebrae_dashboard_ui.cjs` importa o modelo direto.
+
 ## Critérios de aceite
 
 1. Os inícios são exatamente 09:15 … 17:45 de 30 em 30 minutos, de segunda a sexta, em `America/Sao_Paulo`; 18:00 e fins de semana nunca disparam.
