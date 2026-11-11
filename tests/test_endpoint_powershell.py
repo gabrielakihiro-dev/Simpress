@@ -212,7 +212,7 @@ class PaginaGrade:
     filtros: list  # preenchido em abrir()
 
 
-def abrir(hosts, aba, hostname=None, modo="sistema", comando="Get-Date", usuario=None, preparar=None, depois_da_escolha=None):
+def abrir(hosts, aba, hostname="PRNOTEUMU005", modo="sistema", comando="Get-Date", usuario=None, preparar=None, depois_da_escolha=None):
     pagina = PaginaGrade(hosts, aba)
     pagina.filtros = []
     if preparar:
@@ -229,12 +229,12 @@ def abrir(hosts, aba, hostname=None, modo="sistema", comando="Get-Date", usuario
             patch.object(endpoint_lookup, "_escolher_host", side_effect=escolher_e_interferir), \
             patch.object(automation, "_pagina_ativa_recuperacao", pagina), patch.object(automation.time, "sleep"):
         resultado = endpoint_lookup._abrir_powershell_na_grade(
-            pagina, hostname or endpoint_lookup.HOSTNAME_PADRAO_POWERSHELL, bool(hostname), modo, comando, usuario)
+            pagina, hostname, modo, comando, usuario)
     return resultado, pagina
 
 
 class HostTests(unittest.TestCase):
-    def test_default_online_is_used_and_menu_path_is_followed(self):
+    def test_online_host_is_used_and_menu_path_is_followed(self):
         aba = AbaTerminal()
         res, pagina = abrir([("PRNOTEUMU005", "Ao vivo")], aba, comando="Get-Date")
         self.assertEqual(res, {"status": "inserido", "hostname": "PRNOTEUMU005", "modo": "sistema", "usuario": "SYSTEM", "inserido": True, "enter_enviado": False})
@@ -254,7 +254,6 @@ class HostTests(unittest.TestCase):
         aba = AbaTerminal()
         res, pagina = abrir([("PRNOTETI027", "Para baixo"), ("PRNOTEB", "Ao vivo")], aba, hostname="PRNOTETI027")
         self.assertEqual((res["status"], res["hostname"]), ("inserido", "PRNOTETI027"))
-        self.assertNotIn("hostname_padrao_offline", res)
         self.assertEqual(pagina.filtros, ["PRNOTETI027"])
 
     def test_explicit_host_failing_reports_error_without_switching(self):
@@ -264,18 +263,17 @@ class HostTests(unittest.TestCase):
         self.assertEqual(pagina.filtros, ["PRNOTETI027"])
         self.assertEqual(aba.preenchidos, [])
 
-    def test_default_offline_falls_back_to_first_online_prnote(self):
+    def test_offline_host_never_falls_back_to_another_online_prnote(self):
         aba = AbaTerminal()
         hosts = [("PRNOTEUMU005", "Para baixo"), ("PRNOTEA", "Para baixo"), ("PRNOTEB", "Ao vivo"), ("PRNOTEC", "Ao vivo")]
         res, pagina = abrir(hosts, aba)
-        self.assertEqual((res["status"], res["hostname"], res["hostname_padrao_offline"]), ("inserido", "PRNOTEB", True))
-        self.assertEqual(pagina.filtros, ["PRNOTEUMU005", "prnote"])
-        self.assertIn(("linha", "PRNOTEB"), pagina.cliques)
+        self.assertEqual((res["status"], res["hostname"]), ("inserido", "PRNOTEUMU005"))
+        self.assertNotIn("hostname_padrao_offline", res)
+        self.assertEqual(pagina.filtros, ["PRNOTEUMU005"])
+        self.assertNotIn(("linha", "PRNOTEB"), pagina.cliques)
 
-    def test_default_offline_without_any_online_or_missing_does_nothing(self):
+    def test_missing_host_does_nothing(self):
         aba = AbaTerminal()
-        res, pagina = abrir([("PRNOTEUMU005", "Para baixo"), ("PRNOTEA", "Para baixo")], aba)
-        self.assertEqual((res["status"], res["hostname_padrao_offline"]), ("sem_host_online", True))
         res, pagina = abrir([("OUTRO", "Ao vivo")], aba, hostname="PRNOTEX")
         self.assertEqual(res, {"status": "not_found", "hostname": "PRNOTEX"})
         self.assertEqual(pagina.cliques, [])
@@ -408,14 +406,12 @@ class ApiTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def post(self, **corpo):
-        return self.client.post("/api/endpoint/powershell", json={"modo": "sistema", "comando": "Get-Date", **corpo})
+        return self.client.post("/api/endpoint/powershell", json={"hostname": "PRNOTEUMU005", "modo": "sistema", "comando": "Get-Date", **corpo})
 
     def test_valid_request_passes_clean_arguments(self):
         r = self.post(hostname=" prnoteti027 ", usuario=" ")
         self.assertEqual((r.status_code, r.json()["enter_enviado"]), (200, False))
         self.assertEqual(self.ps.call_args.args, ("PRNOTETI027", "sistema", "Get-Date", None))
-        self.post()
-        self.assertEqual(self.ps.call_args.args[0], None)
 
     def test_rejects_empty_multiline_oversized_and_bad_fields(self):
         ruins = [
@@ -425,9 +421,17 @@ class ApiTests(unittest.TestCase):
         for corpo in ruins:
             with self.subTest(corpo={k: str(v)[:20] for k, v in corpo.items()}):
                 self.assertEqual(self.post(**corpo).status_code, 422)
-        self.assertEqual(self.client.post("/api/endpoint/powershell", json={"modo": "sistema"}).status_code, 422)
+        self.assertEqual(self.client.post("/api/endpoint/powershell", json={"hostname": "PRNOTEUMU005", "modo": "sistema"}).status_code, 422)
         self.ps.assert_not_called()
         self.assertEqual(self.post(comando="x" * 2000).status_code, 200)
+
+    def test_rejects_missing_or_blank_hostname_without_calling_the_browser(self):
+        # Não existe computador padrão: sem hostname a rota recusa antes de qualquer automação.
+        base = {"modo": "sistema", "comando": "Get-Date"}
+        for corpo in (base, {**base, "hostname": None}, {**base, "hostname": ""}, {**base, "hostname": "   "}):
+            with self.subTest(corpo=corpo):
+                self.assertEqual(self.client.post("/api/endpoint/powershell", json=corpo).status_code, 422)
+        self.ps.assert_not_called()
 
     def test_busy_and_failure_map_to_409_and_503_without_leaking(self):
         for erro, esperado in [(automation.TravaOcupada("busy"), 409), (RuntimeError("segredo"), 503)]:
@@ -442,10 +446,22 @@ class EntradaTests(unittest.TestCase):
         with patch.object(automation, "trava_execucao") as trava:
             for comando in ("", "a\nb", "a\rb", "x" * 2001):
                 with self.assertRaises(ValueError):
-                    endpoint_lookup.abrir_powershell(None, "sistema", comando)
+                    endpoint_lookup.abrir_powershell("PRNOTEUMU005", "sistema", comando)
             with self.assertRaises(ValueError):
-                endpoint_lookup.abrir_powershell(None, "root", "Get-Date")
+                endpoint_lookup.abrir_powershell("PRNOTEUMU005", "root", "Get-Date")
         trava.assert_not_called()
+
+    def test_domain_rejects_missing_hostname_before_touching_the_browser(self):
+        # Não existe computador padrão: hostname vazio é recusado como o comando vazio, sem abrir o Chrome.
+        with patch.object(automation, "trava_execucao") as trava, patch("playwright.sync_api.sync_playwright") as playwright:
+            for hostname in (None, "", "   "):
+                with self.subTest(hostname=hostname), self.assertRaisesRegex(ValueError, "hostname"):
+                    endpoint_lookup.abrir_powershell(hostname, "sistema", "Get-Date")
+        trava.assert_not_called()
+        playwright.assert_not_called()
+
+    def test_no_default_hostname_constant_is_left(self):
+        self.assertFalse(hasattr(endpoint_lookup, "HOSTNAME_PADRAO_POWERSHELL"))
 
     def test_log_has_size_and_mode_but_never_the_command(self):
         segredo = "Get-Secret -Name SENHA-XYZ"
@@ -456,7 +472,7 @@ class EntradaTests(unittest.TestCase):
                 patch("playwright.sync_api.sync_playwright"), patch.object(endpoint_lookup, "_preparar_aba", return_value=pagina), \
                 patch.object(grid, "aplicar_filtro", side_effect=pagina.filtrar), patch.object(grid, "limpar_filtro"), \
                 patch.object(automation, "log") as log:
-            res = endpoint_lookup.abrir_powershell(None, "sistema", segredo)
+            res = endpoint_lookup.abrir_powershell("PRNOTEUMU005", "sistema", segredo)
         self.assertEqual(res["status"], "inserido")
         self.assertEqual(aba.preenchidos, [segredo])
         textos = " ".join(str(c) for c in log.call_args_list)
