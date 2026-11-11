@@ -184,19 +184,30 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             logger.warning("Índice do Endpoint indisponível para a OS de MacBook (erro=%s).", type(erro).__name__)
             return None  # without the index E just keeps the exact-serial match
 
+    def _leitura_antigos() -> Dict[str, Dict[str, str]]:
+        """SoftExpert read of the old open tickets with the description edited on the site; the screen and "Atualizar" share it."""
+        antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos()))
+        return sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado())) if antigos else {}
+
+    def _automaticos_dos_abertos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, str]]:
+        """What "Atualizar Dashboard" fills in the old open rows: G, H and I from the SoftExpert read, then E, K, L and N
+        from the name cross-reference fed by that same read (screen and write use this one function)."""
+        efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
+        cruzados = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os(), _indice_endpoint())
+        lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
+        return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
+
     def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
 
         An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
         its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
-        antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos())) if abertos else {}
-        if antigos:
-            antigos = sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado()))
+        antigos = _leitura_antigos() if abertos else {}
         # Not in SoftExpert's task center on the last read (e.g. closed by another technician): the F5 card is tinted to check later.
         nao_encontrados = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or []) if abertos else set()
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
-        sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os(), _indice_endpoint()) if abertos else {}
+        sugestoes = _automaticos_dos_abertos(abertos, antigos, registros) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
         apelidos = services.apelidos() if abertos else {}
@@ -669,7 +680,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"])
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
-            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os(), _indice_endpoint())
+            automaticos = _automaticos_dos_abertos(abertos, _leitura_antigos() if abertos else {}, services.registros()) if abertos else {}
             descricoes = _descricoes_editadas_dos_antigos(abertos)
             if not linhas and not edicoes and not automaticos and not descricoes:
                 if aceita_vazio:

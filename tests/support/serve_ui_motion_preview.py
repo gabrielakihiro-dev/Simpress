@@ -351,7 +351,7 @@ ANTIGOS_LEITURA_1211 = {
     "habilitada_em": "21/10/2026 14:02", "atendimento": "Aguardando retirada do equipamento.", "lido_em": "2026-10-28T10:40:00-03:00",
 }
 ANTIGOS_EXTRAS = [
-    {"numero": "UTIC-2026-1210", "titulo": "", "chamado": "UTIC-2026-1210", "usuario": "", "automaticos": {}, "automaticos_sugeridos": {"N": "Londrina"},
+    {"numero": "UTIC-2026-1210", "titulo": "", "chamado": "UTIC-2026-1210", "usuario": "", "automaticos": {}, "automaticos_sugeridos": {"G": "Monitor sem imagem", "I": "Bruna Alves Teixeira", "N": "Londrina"},  # G e I vazios: vêm da leitura
      "valores": dict(ANTIGOS_VALORES), "leitura_softexpert": ANTIGOS_LEITURA_1210},
     {"numero": "UTIC-2026-1211", "titulo": "", "chamado": "UTIC-2026-1211", "usuario": "", "automaticos": {}, "automaticos_sugeridos": {},
      "valores": dict(ANTIGOS_VALORES), "leitura_softexpert": None},

@@ -130,6 +130,36 @@ class AntigosComplementadosTest(unittest.TestCase):
         self.assertEqual(novos.preenchimentos(abertos, REGISTROS, RELATORIO), {})  # sem leitura, nada é achado
 
 
+class PreenchimentosSoftExpertTest(unittest.TestCase):
+    LIDO = {"titulo": "Abrir chamado", "descricao": "Notebook de Camila Lopes não liga", "solicitante": "API SEBRAE"}
+
+    def test_g_e_i_vazios_vem_da_leitura_e_o_dashboard_vence_quando_preenchido(self):
+        vazio = {"numero": "UTIC-2026-0010", "titulo": "", "usuario": "", "descricao": "texto da planilha"}
+        cheio = {"numero": "UTIC-2026-0011", "titulo": "Do Dashboard", "usuario": "Ana", "descricao": ""}
+        antigos = {"UTIC-2026-0010": self.LIDO, "UTIC-2026-0011": self.LIDO}
+        self.assertEqual(novos.preenchimentos_softexpert([vazio, cheio], antigos),
+                         {"UTIC-2026-0010": {"G": "Abrir chamado", "I": "API SEBRAE"}})
+        self.assertEqual(novos.preenchimentos_softexpert([vazio], {}), {})  # sem leitura, nada
+
+    def test_titulo_em_h_vira_g_e_h_recebe_a_descricao_lida(self):
+        aberto = {"numero": "UTIC-2026-0833", "titulo": "", "usuario": "", "descricao": "  abrir   CHAMADO "}
+        self.assertEqual(novos.preenchimentos_softexpert([aberto], {"UTIC-2026-0833": self.LIDO}),
+                         {"UTIC-2026-0833": {"G": "Abrir chamado", "H": "Notebook de Camila Lopes não liga", "I": "API SEBRAE"}})
+        # the name cross-reference reads the description, not the title left in H
+        self.assertEqual(novos.complementar_antigos([aberto], {"UTIC-2026-0833": self.LIDO})[0]["descricao"], self.LIDO["descricao"])
+
+    def test_h_so_troca_com_g_vazio_e_descricao_lida_diferente_do_titulo(self):
+        com_g = {"numero": "U", "titulo": "Abrir chamado", "usuario": "Ana", "descricao": "Abrir chamado"}
+        self.assertEqual(novos.preenchimentos_softexpert([com_g], {"U": self.LIDO}), {})
+        h_proprio = {"numero": "U", "titulo": "", "usuario": "Ana", "descricao": "outro texto"}
+        self.assertEqual(novos.preenchimentos_softexpert([h_proprio], {"U": self.LIDO}), {"U": {"G": "Abrir chamado"}})
+        sem_descricao = {**self.LIDO, "descricao": ""}
+        aberto = {"numero": "U", "titulo": "", "usuario": "Ana", "descricao": "Abrir chamado"}
+        self.assertEqual(novos.preenchimentos_softexpert([aberto], {"U": sem_descricao}), {"U": {"G": "Abrir chamado"}})
+        igual = {**self.LIDO, "descricao": "abrir chamado"}
+        self.assertEqual(novos.preenchimentos_softexpert([aberto], {"U": igual}), {"U": {"G": "Abrir chamado"}})
+
+
 class PreenchimentosTest(unittest.TestCase):
     def aberto(self, usuario="Camila Lopes", **atuais):
         return {"numero": "linha:2", "usuario": usuario, "automaticos": {"E": "", "K": "", "L": "", "N": "", **atuais}}
