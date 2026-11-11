@@ -25,7 +25,8 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
-from domains import inventory_state, inventory_update
+from domains import equipment_edit, inventory_state, inventory_update
+from routers import equipment as equipment_routes
 from core.errors import DomainError
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
@@ -381,7 +382,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
     def test_alias_edit_payload_matches_equipment_serial_and_alias_limits(self):
         for serial in ("S", "S" * 128):
             with self.subTest(serial_length=len(serial)):
-                equipment = main.EquipamentoUpdatePayload(serial=serial)
+                equipment = equipment_routes.EquipamentoUpdatePayload(serial=serial)
                 alias = main.ApelidoUpdatePayload(serial=serial, apelido="A" * 160)
                 self.assertEqual(alias.serial, equipment.serial)
                 self.assertEqual(len(alias.apelido), 160)
@@ -389,14 +390,14 @@ class WorkflowIntegrityTests(unittest.TestCase):
         for serial in ("", "   ", "---", "S" * 129):
             with self.subTest(invalid_serial=serial[:12], serial_length=len(serial)):
                 with self.assertRaises(ValidationError):
-                    main.EquipamentoUpdatePayload(serial=serial)
+                    equipment_routes.EquipamentoUpdatePayload(serial=serial)
                 with self.assertRaises(ValidationError):
                     main.ApelidoUpdatePayload(serial=serial, apelido="HOST")
 
         with self.assertRaises(ValidationError):
             main.ApelidoUpdatePayload(serial="S-1", apelido="A" * 161)
         with self.assertRaises(ValidationError):
-            main.EquipamentoUpdatePayload(serial="S-1", apelido="A" * 161)
+            equipment_routes.EquipamentoUpdatePayload(serial="S-1", apelido="A" * 161)
 
         # Empty aliases are the existing contract for clearing a manual alias.
         self.assertEqual(main.ApelidoUpdatePayload(serial="S-1", apelido="").apelido, "")
@@ -961,7 +962,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         selected = main.get_equipamento("SN-EDITAR")
         self.assertEqual(selected["modelo"], "Modelo antes")
 
-        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        result = main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial=selected["serial"],
             modelo="Modelo atualizado",
             tipo="Notebook",
@@ -987,7 +988,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         selected = main.get_equipamento("SN-CLEAR")
 
-        main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial="SN-CLEAR",
             revisao=selected["revisao"],
             modelo=None,
@@ -1038,7 +1039,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         selected = main.get_equipamento("SN-FORMULA")
         payload_text = '=HYPERLINK("http://example.invalid","abrir")'
 
-        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        result = main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial="SN-FORMULA",
             revisao=selected["revisao"],
             modelo=payload_text,
@@ -1070,7 +1071,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(selected["contrato"], "16467")
         self.assertEqual(selected["razao_social"], "RAZAO SOCIAL FICTICIA")
 
-        main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial="SN-16467",
             revisao=selected["revisao"],
             modelo="Modelo atualizado",
@@ -1095,7 +1096,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
 
         with self.assertRaises(ValueError):
-            main.EquipamentoUpdatePayload(serial="---", novo=True)
+            equipment_routes.EquipamentoUpdatePayload(serial="---", novo=True)
         self.assertNotIn("---", inventory_state.equipamentos_cache)
 
     def test_unit_payload_rejects_invalid_cep_uf_and_cnpj(self):
@@ -1130,8 +1131,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         before = self.details.read_bytes()
         cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
-        with self.assertRaises(main.HTTPException) as raised:
-            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        with self.assertRaises(DomainError) as raised:
+            main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                 serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook",
                 revisao=main.get_equipamento("SN-DUP")["revisao"],
             ))
@@ -1143,8 +1144,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertTrue(main.load_database())
         cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
-        with self.assertRaises(main.HTTPException) as raised:
-            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        with self.assertRaises(DomainError) as raised:
+            main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                 serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook",
                 revisao=main.get_equipamento("SN-DUP")["revisao"],
             ))
@@ -1170,7 +1171,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         os.utime(newer_source, (timestamp, timestamp))
         newer_before = newer_source.read_bytes()
 
-        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        result = main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook",
             revisao=main.get_equipamento("SN-CACHE")["revisao"],
         ))
@@ -1192,9 +1193,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
         before = self.details.read_bytes()
         cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
-        with patch.object(main, "stage_workbook_update", side_effect=main.FileTransactionError("falha fictícia")):
-            with self.assertRaises(main.HTTPException) as raised:
-                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        with patch.object(equipment_edit, "stage_workbook_update", side_effect=main.FileTransactionError("falha fictícia")):
+            with self.assertRaises(DomainError) as raised:
+                main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                     serial="SN-FALHA", modelo="Modelo alterado", tipo="Notebook",
                     revisao=main.get_equipamento("SN-FALHA")["revisao"],
                 ))
@@ -1215,7 +1216,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with patch.object(main, "read_endpoint_alias_index", side_effect=RuntimeError("falha de leitura simulada")):
             with self.assertRaisesRegex(RuntimeError, "falha de leitura simulada"):
-                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                     serial="SN-PREPARE",
                     revisao=selected["revisao"],
                     modelo="Modelo depois",
@@ -1237,7 +1238,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with patch.object(main, "build_search_index", side_effect=RuntimeError("falha de índice simulada")):
             with self.assertRaisesRegex(RuntimeError, "falha de índice simulada"):
-                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                     serial="SN-INDEX-PREPARE",
                     revisao=selected["revisao"],
                     modelo="Modelo depois",
@@ -1262,8 +1263,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         ])
         source_before = self.details.read_bytes()
 
-        with self.assertRaises(main.HTTPException) as raised:
-            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        with self.assertRaises(DomainError) as raised:
+            main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
                 serial="SN-REMOVIDO", modelo="Modelo alterado", tipo="Notebook",
                 revisao=equipment_revision,
             ))
@@ -1281,7 +1282,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_model(self.model)
         self.assertTrue(main.load_database())
 
-        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+        result = main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
             serial="SN-NOVO", novo=True, modelo="Modelo novo", tipo="Notebook",
             apelido="ALIAS-NOVO", idCliente="CLIENTE-NOVO",
         ))
@@ -1745,7 +1746,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         workbook["EquipamentosDetalhes"].auto_filter.ref = "A1:F1"
         workbook.save(path)
         workbook.close()
-        payload = main.EquipamentoUpdatePayload(
+        payload = equipment_routes.EquipamentoUpdatePayload(
             serial="SERIE-NOVA-FICTICIA",
             apelido="APELIDO FICTICIO",
             modelo="MODELO FICTICIO",
@@ -1754,7 +1755,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             cep="80220000",
         )
 
-        self.assertTrue(main.update_equipment_in_workbook_file(path, payload))
+        self.assertTrue(equipment_edit.update_equipment_in_workbook_file(main._equipment_edit_services, path, payload))
 
         updated_workbook = openpyxl.load_workbook(path, data_only=False)
         updated_sheet = updated_workbook["EquipamentosDetalhes"]
@@ -3490,7 +3491,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with (
             patch.object(main, "EXPORT_MODEL_FILE", export_model),
-            patch.object(main, "StreamingResponse", CapturedResponse),
+            patch.object(equipment_routes, "StreamingResponse", CapturedResponse),
         ):
             result = main.atualizar_apelido(main.ApelidoUpdatePayload(
                 serial="S-1", apelido="HOST-MANUAL"

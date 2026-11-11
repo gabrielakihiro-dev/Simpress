@@ -15,6 +15,8 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 
 ## Prontidão, pesquisa, equipamentos e unidades
 
+Código das rotas 08, 10 e 17 (`GET /api/equipamento/{serial}`, `POST /api/equipamento/salvar`, `GET /api/exportar-equipamentos`) e do modelo `EquipamentoUpdatePayload`: `routers/equipment.py` (desde 10/11/2026; antes ficavam em `main.py`). A gravação na planilha `EquipamentosDetalhes` fica em `domains/equipment_edit.py`. Caminhos, campos e códigos de status não mudaram.
+
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
 | --- | --- | --- | --- | --- |
 | 01 | GET /api/prontidao | Sem parâmetros. | {backend, files, functions}; cada função indica disponibilidade, estado e dependências faltantes. Estados incluem awaiting_import, invalid e disponível. | 200 também quando ainda não está pronto. Local. routers/system.py. Consumidor: static/js/features/dashboard.js. |
