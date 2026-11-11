@@ -751,3 +751,28 @@ test("Selo Entregue: só com etapa atual Pedido entregue e data DD/MM/AAAA, por 
     assert.equal(section.querySelectorAll("img").length, 0);
   } finally { report.chamados = original; }
 });
+
+test("Peça entregue: Aberta há N dias sai do selo cinza e vira sufixo do selo Entregue", async () => {
+  const original = report.chamados;
+  const entregue = { chave: "entregue", rotulo: "Pedido entregue", data: "15/10/2026" };
+  const conf = (serie, os, dias, etapa) => ({
+    serie, relacao: "conferida", simpress: { ordens_servico: [os], etapa_atual: etapa },
+    oracle: [{ solicitacao: `R${os}`, ordem_servico: os, descricao: "Texto livre.", dias_aberta: dias }],
+  });
+  report.chamados = [
+    conf("SN-ENT54", "7231981", 54, entregue),
+    conf("SN-ENT1", "7231982", 1, entregue),
+    conf("SN-ENTNULO", "7231983", null, entregue),
+    conf("SN-ABERTA", "7231984", 54, { chave: "a_caminho", rotulo: "A caminho", data: "14/10/2026" }),
+  ];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const selos = (serie, classe) => section.querySelectorAll(`tbody tr[data-serial="${serie}"] .${classe}`).map(selo => selo.textContent);
+    assert.deepEqual(selos("SN-ENT54", "ck-os__selo--dias"), []);
+    assert.deepEqual(selos("SN-ENT54", "ck-os__selo--entregue"), ["Entregue · 15/10/2026 · 54 dias"]);
+    assert.deepEqual(selos("SN-ENT1", "ck-os__selo--entregue"), ["Entregue · 15/10/2026 · 1 dia"]);
+    assert.deepEqual(selos("SN-ENTNULO", "ck-os__selo--entregue"), ["Entregue · 15/10/2026"]);
+    assert.deepEqual(selos("SN-ABERTA", "ck-os__selo--dias"), ["Aberta há 54 dias"], "sem entrega, o selo cinza continua");
+    assert.deepEqual(selos("SN-ABERTA", "ck-os__selo--entregue"), []);
+  } finally { report.chamados = original; }
+});
