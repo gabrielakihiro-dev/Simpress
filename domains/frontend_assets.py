@@ -61,7 +61,8 @@ _MAX_INCLUDE_DEPTH = 2
 
 
 def partials_dir(static_dir: Path) -> Path:
-    return static_dir.resolve().parent / "frontend" / "partials"
+    # resolve() also here: a junction/symlink on frontend/ must not make is_relative_to reject every include.
+    return (static_dir.resolve().parent / "frontend" / "partials").resolve()
 
 
 def assembled_html(static_dir: Path, name: str = "index.html") -> str:
