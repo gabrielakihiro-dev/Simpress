@@ -220,6 +220,7 @@ from domains.ux_chamados import ChamadosUX
 from domains.ux_chamados_browser import conectar_ux
 from routers.ux_ticket import create_ux_ticket_router
 from routers.outlook_mail import create_outlook_mail_router
+from routers.lembretes import create_lembretes_router
 from domains.ux_ticket import TicketsUX
 from domains.ux_ticket_browser import conectar_ux_ticket
 from domains.assistant_api import asgi_transport
@@ -1532,6 +1533,7 @@ app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot, codi
 app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
 app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
 app.include_router(create_outlook_mail_router(STATE_DIR / "outlook_email_modelos.json", ENTRA_USERS_FILE))
+app.include_router(create_lembretes_router(STATE_DIR / "lembretes.json"))
 
 
 def aplicar_alteracao_apelido(
