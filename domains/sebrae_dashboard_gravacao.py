@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
 from domains.sebrae_chamados import extrair_numeros
-from domains.sebrae_dashboard import ABA, DashboardInvalido, MANUAIS, _validar_pacote, ler_coluna_c
+from domains.sebrae_dashboard import ABA, DashboardInvalido, EDITAVEIS_PELO_SITE, MANUAIS, _validar_pacote, ler_coluna_c
 from domains.sebrae_novos import STATUS_FINALIZADO
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ COLUNAS_DE_TABELA = tuple("ABCDEFGHIJKLMNOPQRSTUV")
 COLUNAS_DE_DATA = ("P", "R")
 FORMULAS_DA_LINHA = ("Q", "T", "U", "V")
 MAX_CARACTERES_CELULA = 32_767
+LIMITE_H_LIDO = 2000  # ChamadoAberto.descricao (coluna H lida) é cortada aqui
 INDICE_DA_COLUNA_W = 23
 
 _SHEET_TAG = re.compile(r"<sheet\b[^>]*/>")
@@ -268,6 +269,16 @@ class ChamadoAberto:
         }
 
 
+def h_ja_gravado(novo: str, lido: str) -> bool:
+    """``novo`` (texto editado, como vai à célula) já é o H ``lido`` da planilha (``ChamadoAberto.descricao``)?
+
+    Compara na mesma forma dos dois lados: uma linha, sem o apóstrofo protetor (a célula de texto não o guarda) e, se o H lido foi
+    cortado em ``LIMITE_H_LIDO``, só o começo precisa bater.
+    shortcut: um H lido com ``LIMITE_H_LIDO`` caracteres ou mais só é comparado pelo começo; uma edição só no fim dele não é vista."""
+    novo = _sem_apostrofo_de_texto(" ".join(str(novo).split()))
+    return novo == lido or (len(lido) >= LIMITE_H_LIDO and novo.startswith(lido))
+
+
 def _abertos(linhas: Mapping[int, _Linha], compartilhadas: Sequence[str]) -> List[ChamadoAberto]:
     """Every ticket row whose D is EM ABERTO or empty (the saved filter of column D), with or without a UTIC."""
     def lido(linha: _Linha, letra: str) -> str:
@@ -291,7 +302,7 @@ def _abertos(linhas: Mapping[int, _Linha], compartilhadas: Sequence[str]) -> Lis
         ChamadoAberto(
             utic if utic and repeticoes[utic] == 1 else f"{CHAVE_DE_LINHA}{linha.numero}", linha.numero, lido(linha, "G"), valores,
             chamado, lido(linha, "I"), {letra: lido(linha, letra) for letra in AUTOMATICAS_VAZIAS},
-            lido(linha, "H")[:2000],
+            lido(linha, "H")[:LIMITE_H_LIDO],
         )
         for linha, chamado, utic, valores in abertas
     ]
@@ -707,8 +718,8 @@ def atualizar(
     """Copy of the Dashboard with ``novas`` in the first free rows of Tabela3 and ``edicoes`` in existing rows.
 
     ``novas``: rows as ``sebrae_novos`` builds them (keys are column letters, ``C`` is the ticket).
-    ``edicoes``: ``{key: {manual column: value}}`` (key as in ``ChamadoAberto.numero``); only manual columns, only
-    cells whose value changed, and blank values never erase a cell.
+    ``edicoes``: ``{key: {column: value}}`` (key as in ``ChamadoAberto.numero``); only manual columns, the title
+    (G) and the description (H), only cells whose value changed, and blank values never erase a cell.
     ``automaticos``: ``{key: {E, K, L or N: value}}``, written only into cells that are empty in the sheet.
     Raises ``GravacaoInvalida`` (message for the user) when it cannot.
     """
@@ -750,10 +761,11 @@ def atualizar(
             linha = linhas[aberto.linha]
             alteradas: Dict[str, str] = {}
             for letra, novo in (edicoes.get(chamado) or {}).items():
-                if letra not in MANUAIS:
+                if letra not in EDITAVEIS_PELO_SITE:
                     raise GravacaoInvalida(f"{chamado}: a coluna {letra} não pode ser editada pelo site.")
                 novo = " ".join(str(novo).split())
-                if novo and novo != _valor_legivel(letra, linha.celulas.get(letra, ""), compartilhadas):
+                # sem o apóstrofo protetor de ``_texto_de_celula``: a célula guarda o texto sem ele, então ``-x`` lido é igual a ``'-x`` enviado
+                if novo and _sem_apostrofo_de_texto(novo) != _valor_legivel(letra, linha.celulas.get(letra, ""), compartilhadas):
                     alteradas[letra] = novo
             for letra, novo in (automaticos.get(chamado) or {}).items():
                 if letra not in AUTOMATICAS_VAZIAS:
