@@ -107,10 +107,9 @@ test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoCompara
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
-    // Visão geral não tem cartões; o KPI de localidade fica na faixa de Divergências, a mesma sub-aba da seção.
+    // O F3 abre em Divergências, onde fica o KPI de localidade; a Visão geral não tem cartões.
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
-    await page.locator("#resumo-aba-divergencias").click();
     await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     const divergente = page.locator("#comparacao-secao-localidade-divergente");
@@ -133,9 +132,9 @@ test("Resumo: navegarParaLinhaComparacao abre a sub-aba da linha antes de procur
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    // Visão geral já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
+    // Divergências já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
     await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"]').first()).toBeAttached();
-    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     // SAIU60 só existe em "Passou de 60 dias sem acesso" (aba Sem acesso), aqui sem categoria.
     await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "SAIU60" }));
     await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");

@@ -47,7 +47,7 @@ async function openFixtureComparison(page) {
   await openHistoryModal(page);
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
-  // As linhas anotáveis da fixture ficam na sub-aba Apelidos; o Resumo abre em Visão geral.
+  // As linhas anotáveis da fixture ficam na sub-aba Apelidos; o Resumo abre em Divergências.
   await page.locator("#resumo-aba-apelidos").click();
   await expect(page.locator('#comparacao-planilhas-conteudo textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
