@@ -56,7 +56,7 @@ test("Sem usuário read error shows a message and no card; without the read the 
 test("renderizarSemUsuarioSemComparacao acrescenta só a seção Sem usuário ao estado vazio (ok, limite e erro)", () => {
   const criar = () => {
     const content = { html: "", insertAdjacentHTML(_posicao, html) { this.html += html; } };
-    globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), createElement: () => ({ content: { querySelector: () => null } }) };
+    globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), createElement: () => ({ content: { querySelector: () => null } }), dispatchEvent: () => true };
     const api = createComparisonResult({
       app: {}, appState: {}, motion: null, dom, historyFormat,
       comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),

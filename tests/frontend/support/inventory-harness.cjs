@@ -117,6 +117,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
   const document = {
     body: new FakeElement("body"),
     addEventListener() {},
+    dispatchEvent() { return true; },
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, new FakeElement(id));
       return elements.get(id);
@@ -161,6 +162,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     Event: class { constructor(type) { this.type = type; } },
+    CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
     HTMLElement: FakeElement,
     URLSearchParams,
     setTimeout,
