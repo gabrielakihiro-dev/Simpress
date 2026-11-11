@@ -52,6 +52,8 @@
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+    // Ordenação e "Copiar tabela" (data-panels.js) entram nas tabelas recém-montadas.
+    document.dispatchEvent(new CustomEvent("simpress:tabelas-renderizadas"));
   }
 
   // No saved comparison: the empty message is already in the content area; adds only the "Sem usuário" section below it.
@@ -59,6 +61,7 @@
     const content = document.getElementById("comparacao-planilhas-conteudo");
     content.insertAdjacentHTML("beforeend", renderer.secaoSemUsuario(semUsuario));
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+    document.dispatchEvent(new CustomEvent("simpress:tabelas-renderizadas"));
   }
 
   const SEM_USUARIO_PAGINA = 100;

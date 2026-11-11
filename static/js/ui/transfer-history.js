@@ -200,6 +200,8 @@
       const loading = el("p", "text-sm text-center py-8 text-fg-subtle", "Carregando histórico…");
       loading.setAttribute("role", "status");
       byId("lista-historico-transferencias").replaceChildren(loading);
+      // Indicador de carregamento (ux-enhancements.js) entra antes da busca.
+      doc.dispatchEvent(new win.CustomEvent("simpress:carregando-exibido"));
       setStatus("Carregando histórico…");
       try {
         const response = await win.fetch(`${ENDPOINT}?limite=${LIST_LIMIT}&busca=${encodeURIComponent(term)}`);
@@ -222,6 +224,8 @@
           : `${items.length} ${items.length === 1 ? "transferência" : "transferências"}.`);
         renderRows(items);
         win.lucide?.createIcons?.({ root: byId("lista-historico-transferencias") });
+        // Ordenação e "Copiar tabela" (data-panels.js) entram na tabela recém-montada.
+        doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
       } catch (error) {
         if (ticket !== requestSerial) return;
         setStatus("");
