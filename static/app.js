@@ -38,6 +38,7 @@
     "assistantChat",
     "coverage",
     "termos",
+    "lembretes",
     "outlookEmail",
     "equipmentDossier",
   ]);

@@ -1,4 +1,6 @@
+import re
 import unittest
+from pathlib import Path
 
 from domains.assistant_chat import SYSTEM_PROMPT
 
@@ -13,16 +15,33 @@ class AssistenteTermosTests(unittest.TestCase):
         texto = regra("37. Termos de entrega e devolução")
         for trecho in (
             "Ferramentas",
+            'botão "Lembretes"',
             "sem atalho",
             "Termo Entrega",
             "Termo Devolução",
+            '"Lembretes"',
             "Gerar PDF",
             "série na Home",
             "Notebook",
             "<série> - <nome completo>",
+            '"Criar lembrete"',
+            "só depois da confirmação do usuário",
             "Não existe ferramenta",
+            "não lê nem cria os lembretes dela",
         ):
             self.assertIn(trecho, texto)
+        self.assertNotIn('botão "Termos"', texto)
+
+    def test_assistente_nao_acessa_o_arquivo_da_ferramenta_lembretes(self):
+        # lembretes.json guarda o nome do colaborador: nenhum módulo do Assistente o lê, e o prompt não o cita.
+        self.assertNotIn("lembretes.json", SYSTEM_PROMPT)
+        raiz = Path(__file__).resolve().parents[1]
+        arquivos = [*raiz.glob("domains/assistant*.py"), *raiz.glob("routers/assistant*.py")]
+        self.assertIn("assistant_chat.py", {arquivo.name for arquivo in arquivos})
+        for arquivo in arquivos:
+            fonte = arquivo.read_text(encoding="utf-8")
+            self.assertNotIn("lembretes.json", fonte, arquivo.name)
+            self.assertIsNone(re.search(r"(domains|routers)\.lembretes|from \.lembretes", fonte), arquivo.name)
 
     def test_regra_38_aponta_a_home_e_nunca_diz_que_enviou(self):
         texto = regra("38. E-mails por modelo pelo Outlook")
