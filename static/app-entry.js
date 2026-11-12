@@ -47,6 +47,7 @@ import "./js/features/assistant-chat.js";
 import "./js/features/coverage.js";
 import "./js/features/termos.js";
 import "./js/features/outlook-email.js";
+import "./js/features/equipment-dossier.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";
 import "./js/ui/ck-cockpit-visual.js";

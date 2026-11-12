@@ -197,6 +197,7 @@ class MaintenanceContractTests(unittest.TestCase):
         expected = {
             "/": {"get"},
             "/api/equipamento/{serial}": {"get"},
+            "/api/equipamento/{serial}/dossie": {"get"},
             "/api/equipamento/salvar": {"post"},
             "/api/equipamento/atualizar-apelido": {"post"},
             "/api/historico-alteracoes": {"get"},
