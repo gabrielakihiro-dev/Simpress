@@ -652,6 +652,16 @@ QUERY_TOOLS: List[Tool] = [
         },
     ),
     _read(
+        "listar_backups_regionais",
+        "Backups regionais (Resumo F3, sub-aba Backups), somente leitura: se cada regional prioritária (Cascavel, Londrina, Pato Branco, Maringá, "
+        "Ponta Grossa) tem o mínimo de 1 notebook de backup. Retorna, por cidade, status (ok, conferir, sem_backup, dados_insuficientes), contados, "
+        "excedente, backups, candidatos e contagens de conferência e excluídos, além de sobras, candidatos de outras cidades "
+        "(`outras_candidatos`, cidades sem mínimo), pendências, fontes e limitações. "
+        "Não confirma nem desfaz backup (isso é na tela) e não altera nada.",
+        lambda c, a: c.listar_backups_regionais(a.get("cidade")),
+        {"cidade": {"type": "string", "description": "Cidade (ex.: 'Cascavel'; opcional, sem filtro traz as cinco regionais)."}},
+    ),
+    _read(
         "consultar_equipamento",
         "Detalhes de um equipamento pelo número de série (modelo, tipo, cidade, usuário). Trata MacBooks que venham sem a letra 'S'.",
         lambda c, a: c.consultar_equipamento(str(a.get("serial", ""))),
@@ -1642,6 +1652,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
     "recarregar": (r"\brecarreg|\brecarga\b|\bbase de dados", ("recarregar_base",)),
     "cobertura": (r"\bcobertura|\bfalt(?:a|ar|am|ara|ando)\b|\bvagas?\b|\bnecessidades?\b", ("listar_cobertura",)),
+    "backups": (r"\bbackups?\b|\bbkp\b", ("listar_backups_regionais",)),
 }
 _PADROES_GRUPOS = {nome: re.compile(padrao) for nome, (padrao, _) in GRUPOS_FERRAMENTAS.items()}
 _SIGLA_OS = re.compile(r"\bOS\b")  # case-sensitive on purpose: "os" is the Portuguese article

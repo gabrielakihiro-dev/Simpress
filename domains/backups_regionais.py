@@ -1,7 +1,7 @@
 """Backups regionais: notebooks de backup livres por regional, como função pura (sem I/O nem log).
 
 ``build_backups_regionais`` recebe dados já lidos e devolve o contrato de ``backups_regionais`` do painel; a saída
-não traz nome de pessoa nem login.
+não traz login nem usuário do Endpoint, mas ``apelido`` pode conter nome digitado à mão (apelido manual).
 
 Contrato de entrada:
 

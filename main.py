@@ -106,7 +106,7 @@ from routers.transfers import (
 from routers.transfer_history import TransferHistoryServices, create_transfer_history_router
 from routers.coverage import CoverageServices, create_coverage_router
 from domains.coverage_store import CoberturaStore, EstadoIlegivel as CoberturaIlegivel, manutencao_dos_chamados
-from routers.backups_regionais import BackupsRegionaisServices, create_backups_regionais_router
+from routers.backups_regionais import BackupsRegionaisServices, create_backups_regionais_router, ler_painel_backups
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
@@ -1873,7 +1873,7 @@ def _backups_estado_cobertura() -> Optional[Dict[str, Any]]:
         return None
 
 
-app.include_router(create_backups_regionais_router(BackupsRegionaisServices(
+_backups_services = BackupsRegionaisServices(
     state_file=lambda: BACKUPS_REGIONAIS_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
     equipamentos=_backups_equipment_snapshot,
@@ -1881,7 +1881,8 @@ app.include_router(create_backups_regionais_router(BackupsRegionaisServices(
     endpoint=read_endpoint_alias_index,
     estado_cobertura=_backups_estado_cobertura,
     manutencao=lambda: manutencao_dos_chamados(TICKET_REPORT_FILE, sebrae_novos.caminhos_padrao(STATE_DIR).existentes),
-)))
+)
+app.include_router(create_backups_regionais_router(_backups_services))
 
 
 def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
@@ -1990,6 +1991,8 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     long_unused_days=LONG_UNUSED_LIMIT_DAYS,
     display_comparison=comparison_history_for_display,
     get_other_technician_marks=_marcas_outro_tecnico_pendentes,
+    # Independente do evento histórico: cada leitura é isolada (nunca 500) dentro de ``ler_painel_backups``.
+    get_backups_regionais=lambda: ler_painel_backups(_backups_services),
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)

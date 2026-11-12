@@ -391,7 +391,19 @@ class FirstAccessTests(unittest.TestCase):
             wb = openpyxl.load_workbook(io.BytesIO(output.content))
             self.assertEqual(wb.active["B2"].value, "HOST-NEW")
             wb.close()
-            self.assertNotIn("uso_30_dias", client.get("/api/painel").json())
+            # O painel agora lê Cobertura, Entra e confirmações de backup: tudo em pastas temporárias, nunca em data/.
+            for chave, nome in (
+                ("BACKUPS_REGIONAIS_FILE", "backups_regionais.json"), ("COVERAGE_FILE", "operacao_cobertura.json"),
+                ("COVERAGE_ARCHIVE_FILE", "operacao_cobertura_arquivados.json"),
+                ("ENTRA_USERS_FILE", "usuarios_entra_pr.json"), ("MANUAL_PERSON_NAMES_FILE", "nomes_pessoas_manuais.json"),
+            ):
+                self.stack.enter_context(patch.object(main, chave, self.state_dir / nome))
+            painel = client.get("/api/painel")
+            self.assertEqual(painel.status_code, 200, painel.text)
+            self.assertNotIn("uso_30_dias", painel.json())
+            backups = painel.json()["backups_regionais"]
+            self.assertEqual(len(backups["prioritarias"]), 5)
+            self.assertEqual(backups["fontes"]["confirmacoes"], "ok")
             self.assertEqual(client.put("/api/painel/tempos-manuais", json={}).status_code, 404)
         self.assertFalse((self.state_dir / "metricas_uso.json").exists())
 

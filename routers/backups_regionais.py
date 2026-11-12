@@ -30,6 +30,7 @@ from domains.regras_negocio import normalize_reference_value
 logger = logging.getLogger(__name__)
 
 MENSAGEM_ILEGIVEL = "As confirmações de backup estão ilegíveis; os dados foram preservados e nada foi gravado."
+LIMITACAO_CONFIRMACOES = "Confirmações de backup ilegíveis: backups confirmados à mão não foram contados."
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,39 @@ def _falhar(error: BaseException) -> NoReturn:
     raise HTTPException(status_code=500, detail={
         "codigo": "falha_gravacao", "mensagem": "Não foi possível salvar a confirmação. Tente de novo; se o erro continuar, avise o suporte.",
     }) from error
+
+
+def _entrada_tolerante(descricao: str, ler: Callable[[], Any], padrao: Any) -> Any:
+    """Uma entrada do cálculo; qualquer falha vira ``padrao``. Só a classe do erro vai ao log (sem caminho nem dado)."""
+    try:
+        return ler()
+    except Exception as error:
+        logger.warning("Falha ao ler %s dos Backups regionais do painel: %s.", descricao, type(error).__name__)
+        return padrao
+
+
+def ler_painel_backups(services: BackupsRegionaisServices) -> Dict[str, Any]:
+    """``backups_regionais`` do ``/api/painel``: o mesmo cálculo da rota de confirmar, só leitura e independente do histórico.
+
+    Cada entrada é isolada: Endpoint com falha vira ``{"available": False}``; cobertura, cadastro e confirmações ilegíveis
+    viram ``None``/``[]``; manutenção com falha vira ``Manutencao(ilegivel=True)``. Nenhuma delas derruba o painel.
+    ``fontes["confirmacoes"]`` e a limitação em pt-BR dizem se as confirmações manuais puderam ser lidas.
+    """
+    agora = services.agora()
+    equipamentos = _entrada_tolerante("o cadastro", services.equipamentos, None)
+    endpoint = _entrada_tolerante("o Endpoint", services.endpoint, {"available": False})
+    cobertura = _entrada_tolerante("a Cobertura", services.estado_cobertura, None)
+    manutencao = _entrada_tolerante("a manutenção", services.manutencao, Manutencao(ilegivel=True))
+    confirmacoes = _entrada_tolerante(
+        "as confirmações",
+        lambda: BackupsRegionaisStore(services.state_file(), services.transaction_root()).ler()["confirmacoes"],
+        None,
+    )
+    resultado = build_backups_regionais(equipamentos, endpoint, confirmacoes or [], cobertura, manutencao, agora)
+    resultado["fontes"]["confirmacoes"] = "ok" if confirmacoes is not None else "ilegivel"
+    if confirmacoes is None:
+        resultado["limitacoes"].append(LIMITACAO_CONFIRMACOES)
+    return resultado
 
 
 def series_elegiveis(calculo: Mapping[str, Any], cidade: str) -> Dict[str, Tuple[str, str]]:
