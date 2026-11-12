@@ -39,6 +39,7 @@ Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj
 - Grava só `data/state/lembretes.json` (`{"version": 1, "lembretes": [...]}`), com `lock_paths` e `atomic_write_json`.
 - O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com a classe do erro.
 - Não há escrita em sistema externo.
+- Bloco 6 (12/11/2026): o `Gerar PDF` dos termos mostra a assinatura do técnico (`GET /api/assinatura-tecnico`, lê `data/state/assinatura_tecnico.svg`, só leitura; nada do termo é enviado). Detalhe em `17-termos.md`, seção "Assinatura do técnico".
 - API `/api/lembretes` (exige o cookie de sessão local; sem ele, 401): `GET /`, `POST /`, `PATCH /{id}`, `DELETE /{id}`. Contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
 
 ## Interface

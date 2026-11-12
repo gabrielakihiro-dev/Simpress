@@ -634,6 +634,13 @@ def lembretes_proxy(handler, method, raw_path, body=None):
         handler.send(resposta.content, resposta.status_code)
 
 
+# Assinatura do técnico nos PDFs dos Termos: SVG sintético (um traço), nunca a assinatura real de data/state.
+FIXTURE_ASSINATURA_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80">'
+    b'<path d="M10 60 C 40 10, 70 70, 100 40 S 160 20, 190 50" fill="none" stroke="#000" stroke-width="3"/></svg>'
+)
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
         payload = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode()
@@ -877,6 +884,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send(lembretes_reset(int(parse_qs(url.query).get("itens", ["0"])[0])))
         elif path == "/api/lembretes":
             lembretes_proxy(self, "GET", self.path)
+        elif path == "/api/assinatura-tecnico":
+            self.send(FIXTURE_ASSINATURA_SVG, content_type="image/svg+xml")
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 

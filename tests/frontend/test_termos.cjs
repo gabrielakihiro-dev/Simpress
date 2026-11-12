@@ -52,11 +52,18 @@ test("termosLimparParte limita cada parte a 100 caracteres", () => {
   assert.equal(nome, `${"S".repeat(100)} - ${"n".repeat(100)}`);
 });
 
-test("termos.js não guarda nem envia dados (sem storage, cookie, rede nem innerHTML)", () => {
+test("termos.js não guarda nem envia dados (sem storage, cookie, fetch nem innerHTML; só o GET fixo da assinatura)", () => {
   const codigo = fs.readFileSync(caminhoFonte, "utf8");
-  for (const proibido of ["localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "innerHTML"]) {
+  for (const proibido of [
+    "localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "innerHTML", "XMLHttpRequest", "sendBeacon",
+    "http://", "https://", "new Image", "window.open", "location.", "WebSocket", "EventSource", "import(",
+  ]) {
     assert.ok(!codigo.includes(proibido), `termos.js não pode usar ${proibido}`);
   }
+  // A única rota citada é a da assinatura do técnico, constante, sem parâmetro nem concatenação.
+  assert.deepEqual(codigo.match(/["'`]\/api\/[^"'`]*["'`]/g), ['"/api/assinatura-tecnico"']);
+  // E a única URL atribuída (src/href) é essa constante.
+  assert.deepEqual(codigo.match(/\.(src|href)\s*=[^=;]*/g), [".src = URL_ASSINATURA"]);
 });
 
 test("index.html traz as abas e os botões aprovados e nenhum Imprimir", () => {

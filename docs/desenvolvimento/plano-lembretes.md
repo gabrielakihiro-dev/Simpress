@@ -108,3 +108,20 @@ Especificação: `docs/cockpit-prompts/18-lembretes.md` (textos aprovados em 11/
   - `npm run verify` e `npm run test:ui:e2e` verdes.
   - `model-super-power:revisor` sem achado grave em LGPD (descrição fora de log e do Assistente), escrita atômica e acessibilidade.
 - **Verificar:** saídas dos dois comandos e relatório do revisor, no formato `AC: … — PROVEN BY …`.
+
+## Bloco 6 — Assinatura do técnico no PDF (feito em 12/11/2026)
+
+- **Objetivo:** o PDF dos termos traz a assinatura do técnico no bloco do técnico; o lado do colaborador não muda.
+- **Arquivos:**
+  - `routers/assinatura_tecnico.py` (novo) e `main.py` (registro);
+  - `static/js/features/termos.js` (`termosGerarPdf` assíncrono) e `static/styles/ck-termos.css`;
+  - `tests/test_assinatura_tecnico.py` (novo), `tests/support/serve_ui_motion_preview.py`, `tests/e2e/termos.spec.cjs`;
+  - docs: `CONTRATOS_API_BACKEND.md` (rota 210), `17-termos.md`, `18-lembretes.md`.
+- **Critérios de aceite:**
+  - `GET /api/assinatura-tecnico` lê `data/state/assinatura_tecnico.svg` (fora do Git): 404 sem arquivo; 422 acima de 64 KB ou com `<script`, `on…=`, `javascript:`, `<foreignObject`, `href=` ou `<!ENTITY`; 200 `image/svg+xml` com `nosniff`, `no-store` e CSP `default-src 'none'`.
+  - O PDF carrega a imagem por `<img>` (`decode()`, até 3 s); qualquer falha gera o PDF sem imagem. A requisição não leva nada do termo.
+  - A imagem vai só no bloco do técnico, acima do rótulo, sem empurrar o layout. Segundo clique durante o carregamento é ignorado.
+  - Assinatura real, nome do técnico e SVG real nunca entram em `static/**`, fixtures ou testes (só SVG sintético).
+  - `test_termos.cjs` e as regras de privacidade seguem como estavam; a regra 37 do Assistente não muda (não descreve o PDF).
+- **Verificar:** `python -m unittest tests.test_assinatura_tecnico`, `tests/test_api_contract_doc.py`, `npx playwright test tests/e2e/termos.spec.cjs`, `npm run verify` e `npm run test:ui:e2e`.
+- **Proibidos:** assinatura real em qualquer arquivo versionado, `data/state` real, outros testes de privacidade.
