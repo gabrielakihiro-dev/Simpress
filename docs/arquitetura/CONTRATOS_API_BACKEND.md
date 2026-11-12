@@ -328,8 +328,8 @@ Confirmação manual de backup por série e cidade em `data/state/backups_region
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
 | --- | --- | --- | --- | --- |
-| 207 | POST /api/backups-regionais/confirmar | JSON {serie,cidade}; a série precisa aparecer no cálculo atual de `build_backups_regionais` naquela cidade como candidata ou já contada (marca ou confirmação). | {confirmacao:{serie,cidade,confirmado_em,expira_em},repetido}; validade de 7 dias; repetir com confirmação vigente mantém o `expira_em` (`repetido:true`). Série e cidade gravadas na grafia do cálculo. | 422 corpo inválido ou `serie_nao_elegivel`; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
-| 208 | POST /api/backups-regionais/desfazer | JSON {serie,cidade}. | {serie,cidade,removido}; remove a confirmação daquela série e cidade; sem registro, `removido:false`. | 422 corpo inválido; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
+| 208 | POST /api/backups-regionais/confirmar | JSON {serie,cidade}; a série precisa aparecer no cálculo atual de `build_backups_regionais` naquela cidade como candidata ou já contada (marca ou confirmação). | {confirmacao:{serie,cidade,confirmado_em,expira_em},repetido}; validade de 7 dias; repetir com confirmação vigente mantém o `expira_em` (`repetido:true`). Série e cidade gravadas na grafia do cálculo. | 422 corpo inválido ou `serie_nao_elegivel`; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
+| 209 | POST /api/backups-regionais/desfazer | JSON {serie,cidade}. | {serie,cidade,removido}; remove a confirmação daquela série e cidade (grafia comparada sem acento nem caixa); devolve a grafia gravada, ou a enviada quando não havia registro (`removido:false`). | 422 corpo inválido; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
 
 ## Regras de compatibilidade
 
