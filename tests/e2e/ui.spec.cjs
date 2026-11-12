@@ -413,6 +413,7 @@ test("ticket tracking imports both workbooks in the OS panel and relates each se
   await expect(managementPanel).not.toHaveAttribute("open", "");
   await expect(page.locator("#cockpit-tickets-os")).toContainText("DEMO-SN-001");
   await expect(page.locator("#cockpit-tickets-os")).toContainText("7285070");
+  await expect(page.locator("#cockpit-tickets-kpis")).toContainText("OS abertas");
   await expect(page.locator("#cockpit-tickets-kpis")).toContainText("Séries");
   await expect.poll(async () => {
     const state = await (await page.request.get("/__ticket_import_state")).json();

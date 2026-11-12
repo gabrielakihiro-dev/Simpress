@@ -36,6 +36,14 @@
   let returnTarget = null;
   let ticketData = null;
   let ticketTriage = "";
+  // Sub-abas da F6 (OS por situação): a tabela é uma só; a sub-aba é só mais um filtro (data-panels, filtrarTabelaOs({ situacao })).
+  const OS_ABAS = ["abertas", "finalizadas"];
+  const OS_ABA_ROTULOS = { abertas: "Abertas", finalizadas: "Finalizadas" };
+  let ticketSituacao = "abertas";
+  let ticketAbasN = { abertas: 0, finalizadas: 0 };
+  // KPIs e triagem contam só a sub-aba Abertas e não mudam ao trocar de sub-aba: data-panels avisa (aoContarSituacao) as OS abertas
+  // e, dos chamados do relatório, só as séries com pelo menos uma OS aberta.
+  let ticketAbertas = { os: 0, chamados: [] };
   let comparisonEvents = [];
   let selectedComparisonId = "";
   let selectedComparison = null;
@@ -373,21 +381,23 @@
     }
   }
 
+  // KPIs só da sub-aba Abertas: "OS abertas" e, das séries com pelo menos uma OS aberta, quantas estão em cada relação do relatório.
   function renderTicketKpis() {
-    const summary = ticketData?.resumo || {};
+    const { os, chamados } = ticketAbertas;
+    const porRelacao = relacao => chamados.filter(record => record?.relacao === relacao).length;
     renderKpis(byId("cockpit-tickets-kpis"), [
-      ["Séries", summary.series_total], ["Conferidas", summary.conferidas], ["Divergentes", summary.divergentes],
-      ["Só Simpress", summary.somente_simpress], ["Só Oracle", summary.somente_oracle],
+      ["OS abertas", os], ["Séries", chamados.length], ["Conferidas", porRelacao("conferida")], ["Divergentes", porRelacao("divergente")],
+      ["Só Simpress", porRelacao("somente_simpress")], ["Só Oracle", porRelacao("somente_oracle")],
     ]);
   }
 
   const ticketTriageGroups = [["ativos", "Ativos", ""], ["atrasados", "3+ dias", "alerta"], ["sem_data", "Sem data", "alerta"], ["em_dia", "Atualizados <3 dias", "ok"]];
 
-  // Triagem pelo grupo da série (regra em ticket-rules): os números contam a importação inteira, não só o filtro atual.
+  // Triagem pelo grupo da série (regra em ticket-rules): os números contam só as séries com OS na sub-aba Abertas, não o filtro atual nem a sub-aba visível.
   function renderTicketTriage() {
     const host = byId("cockpit-tickets-triage");
     if (!host) return;
-    const records = Array.isArray(ticketData?.chamados) ? ticketData.chamados : [];
+    const records = ticketAbertas.chamados;
     const groupOf = app.grupoTriagemChamado;
     if (typeof groupOf !== "function" || !records.length) { host.hidden = true; return; }
     const counts = { ativos: 0, atrasados: 0, sem_data: 0, em_dia: 0 };
@@ -421,8 +431,42 @@
     const relation = byId("cockpit-tickets-relation").value;
     dataPanels()?.filtrarTabelaOs({
       busca: byId("cockpit-tickets-search").value, relacao: relation === "todos" ? "" : relation,
-      triagem: ticketTriage, atencao: Boolean(byId("cockpit-tickets-attention")?.checked),
+      triagem: ticketTriage, atencao: Boolean(byId("cockpit-tickets-attention")?.checked), situacao: ticketSituacao,
     });
+  }
+
+  // ARIA das sub-abas: selecionada, tabindex rolante e o painel único (#cockpit-tickets-os) rotulado pela aba ativa. Não mexe na tabela.
+  function marcarAbaOs(situacao) {
+    ticketSituacao = situacao;
+    OS_ABAS.forEach(nome => {
+      const aba = byId(`os-aba-${nome}`);
+      if (!aba) return;
+      aba.setAttribute("aria-selected", String(nome === situacao));
+      aba.tabIndex = nome === situacao ? 0 : -1;
+    });
+    byId("cockpit-tickets-os")?.setAttribute("aria-labelledby", `os-aba-${situacao}`);
+  }
+
+  // Números das abas: linhas que passam nos filtros em cada sub-aba, sem o limite da página (aviso de data-panels).
+  function renderAbasOs() {
+    OS_ABAS.forEach(nome => {
+      const n = ticketAbasN[nome];
+      const aba = byId(`os-aba-${nome}`);
+      const contagem = byId(`os-${nome}-contagem`);
+      if (contagem) contagem.textContent = String(n);
+      if (!aba) return;
+      aba.setAttribute("aria-label", `${OS_ABA_ROTULOS[nome]}: ${n} OS`);
+      if (n) aba.removeAttribute("data-zero");
+      else aba.setAttribute("data-zero", "");
+    });
+  }
+
+  /** Seleciona a sub-aba (clique, setas, Home, End); `focar` leva o foco ao botão da aba. */
+  function selecionarAbaOs(situacao, { focar = false } = {}) {
+    if (!OS_ABAS.includes(situacao)) return;
+    marcarAbaOs(situacao);
+    filterTicketTable();
+    if (focar) byId(`os-aba-${situacao}`)?.focus();
   }
 
   function selectTicketTriage(event) {
@@ -462,12 +506,25 @@
       titulo: "Ordens de serviço por série", semBusca: true,
       aoExpandirSerie: expandTicketSeries,
       grupoSerie: app.grupoTriagemChamado,
+      // O contador "N OS · N séries" da tabela fica na barra das sub-abas, à direita.
+      statusEm: byId("cockpit-tickets-contagem"),
       aoCarregar: report => {
         ticketData = report;
-        renderTicketKpis();
-        renderTicketTriage();
         app.sincronizarGestaoChamadosCockpit?.(report);
       },
+      // KPIs e triagem só da sub-aba Abertas: recontam a cada carga (inclui o recarregamento depois de Desfazer/Conferido).
+      aoContarSituacao: abertas => {
+        ticketAbertas = abertas;
+        renderTicketKpis();
+        renderTicketTriage();
+      },
+      aoContarAbas: abas => {
+        ticketAbasN = abas;
+        renderAbasOs();
+      },
+      aoMudarSituacao: marcarAbaOs,
+      // Desfazer/Refazer/Conferido muda a OS de sub-aba e a linha some da vista: o foco volta para a aba ativa.
+      aoFocarAba: () => byId(`os-aba-${ticketSituacao}`)?.focus(),
     });
     if (!section) return renderError(host, null, "A tabela de ordens de serviço não está disponível.");
     filterTicketTable();
@@ -1773,6 +1830,16 @@
     byId("cockpit-tickets-attention").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-clear").addEventListener("click", clearTicketFilters);
     byId("cockpit-tickets-triage").addEventListener("click", selectTicketTriage);
+    OS_ABAS.forEach((nome, indice) => {
+      const aba = byId(`os-aba-${nome}`);
+      aba?.addEventListener("click", () => selecionarAbaOs(nome));
+      aba?.addEventListener("keydown", evento => {
+        const destino = { ArrowRight: indice + 1, ArrowLeft: indice - 1, Home: 0, End: OS_ABAS.length - 1 }[evento.key];
+        if (destino === undefined) return;
+        evento.preventDefault();
+        selecionarAbaOs(OS_ABAS[(destino + OS_ABAS.length) % OS_ABAS.length], { focar: true });
+      });
+    });
     byId("cockpit-comparison-new").addEventListener("click", openNewComparison);
     byId("cockpit-comparison-event").addEventListener("change", event => {
       selectedComparisonId = String(event.currentTarget.value || "");
