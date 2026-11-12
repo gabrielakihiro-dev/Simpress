@@ -1571,13 +1571,14 @@ class SimpressApi:
         return marcas, None
 
     def listar_vinculos_os(self, serie: Any = "", chamado: Any = "") -> Dict[str, Any]:
-        """Manual links ticket <-> OS, optionally filtered by serial or ticket (the route has no filter)."""
+        """Links ticket <-> OS (manual, automatic from the finalization mark, or from the Dashboard), optionally filtered by serial or ticket (the route has no filter)."""
         ok, vinculos = self._vinculos_os()
         if not ok:
             return {"erro": vinculos}
         serie, chamado = str(serie or "").strip().upper(), str(chamado or "").strip().upper()
         itens = [
-            {k: limpar_texto_sensivel(v.get(k, "")) for k in ("fonte", "serie", "os", "chamado")} for v in vinculos
+            {**{k: limpar_texto_sensivel(v.get(k, "")) for k in ("fonte", "serie", "os", "chamado")},
+             "origem": v.get("origem") if v.get("origem") in ("finalizacao", "dashboard") else "manual"} for v in vinculos
             if (not serie or str(v.get("serie", "")).strip().upper() == serie) and (not chamado or str(v.get("chamado", "")).upper() == chamado)
         ]
         resultado: Dict[str, Any] = {"total": len(itens), "vinculos": itens[:MAX_ITENS_LISTA]}
@@ -1586,7 +1587,7 @@ class SimpressApi:
         return resultado
 
     def vinculo_os_atual(self, fonte: str, serie: str, ordem: str) -> Optional[Dict[str, Any]]:
-        """The saved link of this source+serial+OS (same normalization as the route key), None when there is none. ValueError if the list cannot be read."""
+        """The current link of this source+serial+OS (manual first, else automatic: see `origem`; same normalization as the route key), None when there is none. ValueError if the list cannot be read."""
         ok, vinculos = self._vinculos_os()
         if not ok:
             raise ValueError(vinculos)

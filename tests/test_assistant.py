@@ -1535,6 +1535,58 @@ class OsLinkToolTests(unittest.TestCase):
             self.assertEqual(simpress.writes(), [])
 
 
+class LinksAutomaticosSimpress(LinksSimpress):
+    """GET vinculos-os with one link per origin: manual (no `origem`), derived from the finalization mark and from the Dashboard."""
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/operacoes/chamados/vinculos-os" and method == "GET":
+            self.calls.append((method, path, params, body))
+            return 200, {"vinculos": [
+                {"fonte": "simpress", "serie": "MAN001", "os": "1", "ano": 2026, "numero": "1", "chamado": "UTIC-2026-1"},
+                {"fonte": "simpress", "serie": "FIN001", "os": "2", "ano": 2026, "numero": "2", "chamado": "UTIC-2026-2", "origem": "finalizacao", "finalizado_em": "2026-11-10"},
+                {"fonte": "oracle", "serie": "DSH001", "os": "3", "ano": 2026, "numero": "3", "chamado": "UTIC-2026-3", "origem": "dashboard"},
+                {"fonte": "oracle", "serie": "ESTR01", "os": "4", "ano": 2026, "numero": "4", "chamado": "UTIC-2026-4", "origem": "inventada"},
+            ]}
+        return super().__call__(method, path, params, body)
+
+
+class OsLinkOrigemTests(unittest.TestCase):
+    """F6 sub-tabs (11/11/2026): the route also returns automatic links; the Assistant must not call them manual."""
+
+    def test_list_reports_the_origin_of_each_link(self) -> None:
+        model = FakeModel(calls(call("listar_vinculos_os")), text("ok"))
+        conversation, _ = make_conversation(model, LinksAutomaticosSimpress())
+        conversation.enviar_mensagem("vínculos")
+        dados = json.loads(abrir(model.sent[-1][-1]["content"]))
+        self.assertEqual({v["serie"]: v["origem"] for v in dados["vinculos"]},
+                         {"MAN001": "manual", "FIN001": "finalizacao", "DSH001": "dashboard", "ESTR01": "manual"})
+
+    def test_change_card_names_an_automatic_current_link_and_still_writes_only_this_link(self) -> None:
+        for serie, os_, atual, trecho in (("FIN001", "2", "UTIC-2026-2", "marca de OS finalizada"), ("DSH001", "3", "UTIC-2026-3", "Dashboard")):
+            fonte = "simpress" if serie == "FIN001" else "oracle"
+            model = FakeModel(calls(call("vincular_os", fonte=fonte, serie=serie, os=os_, chamado="UTIC-2026-99")), text("feito"))
+            conversation, simpress = make_conversation(model, LinksAutomaticosSimpress())
+            descricao = conversation.enviar_mensagem("troque").pendente["descricao"]  # type: ignore[index]
+            for t in (atual, "automático", trecho, "não está gravado", "UTIC-2026-99"):
+                self.assertIn(t, descricao)
+            self.assertEqual(simpress.writes(), [])
+
+    def test_manual_current_link_card_is_not_called_automatic(self) -> None:
+        model = FakeModel(calls(call("vincular_os", fonte="simpress", serie="MAN001", os="1", chamado="UTIC-2026-99")), text("ok"))
+        conversation, _ = make_conversation(model, LinksAutomaticosSimpress())
+        self.assertNotIn("automático", conversation.enviar_mensagem("troque").pendente["descricao"])  # type: ignore[index]
+
+    def test_descriptions_and_prompt_know_the_origins_and_the_f6_sub_tabs(self) -> None:
+        for trecho in ("origem", "manual", "finalizacao", "dashboard", "nunca é gravado", "Prioridade"):
+            self.assertIn(trecho, TOOLS["listar_vinculos_os"].description)
+        for trecho in ("origem", "não é gravado", "prioridade"):
+            self.assertIn(trecho, TOOLS["vincular_os"].description)
+        for trecho in ("Finalizadas", "Abertas", "total_chamados", "resumo", "contam só"):
+            self.assertIn(trecho, TOOLS["listar_chamados_abertos"].description)
+        for trecho in ("`Abertas`", "`Finalizadas`", "marca de OS finalizada ativa", "não troca de sub-aba", "só a sub-aba que está na tela", "contam só `Abertas`"):
+            self.assertIn(trecho, SYSTEM_PROMPT)
+
+
 class FinalizeSimpress(FakeSimpress):
     """GET /api/sebrae/novos with open old tickets, the PUT of the description and the POST that fires `fechar`."""
 
