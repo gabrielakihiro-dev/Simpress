@@ -576,6 +576,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             preservada = saida.parent / "preservados" / f"{uuid4().hex}.xlsx"
             preservada.parent.mkdir(parents=True, exist_ok=True)
             saida.replace(preservada)  # only after the complete copy has a safe destination; never delete pending edits
+        try:  # a origem da saída e os conflitos pertencem à importação anterior; com a nova, valem de novo só depois de Atualizar
+            fin.apagar_origem_saida(saida)
+            fin.limpar_conflitos(fin.pasta_estado(caminhos.existentes))
+        except OSError:
+            logger.warning("Não apaguei a origem da saída nem os conflitos da importação anterior.", exc_info=True)
         try:
             listas = sebrae_dashboard_gravacao.ler_listas(conteudo)
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(conteudo)]
@@ -695,7 +700,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         gravada = False
         try:
             with lock_paths([saida]):  # a rotina fechar grava a coluna R neste mesmo arquivo
+                fin.apagar_origem_saida(saida)  # sem o JSON de origem, a saída nunca é mesclada com o SharePoint
                 sebrae_novos.salvar_planilha(saida, conteudo)
+                try:
+                    fin.gravar_origem_saida(saida, importado["sha256"])  # a coluna R, gravada depois, não muda a base
+                except (OSError, RuntimeError):
+                    logger.warning("Não gravei a origem da cópia de saída do Dashboard.", exc_info=True)
             gravada = True
             _reindexar_categoria(conteudo)  # aprende com o B e o J que o usuário acabou de classificar
         except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo

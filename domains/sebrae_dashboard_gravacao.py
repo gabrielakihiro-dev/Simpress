@@ -14,6 +14,7 @@ position, and ``hidden`` follows the saved filter of column D.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import re
@@ -246,6 +247,11 @@ def valores_dos_chamados(conteudo: bytes) -> Dict[int, Tuple[str, ...]]:
     }
 
 
+def mesmos_valores(a: bytes, b: bytes) -> bool:
+    """Both copies hold the same readable values in the same ticket rows (``valores_dos_chamados``)."""
+    return valores_dos_chamados(a) == valores_dos_chamados(b)
+
+
 CHAVE_DE_LINHA = "linha:"
 AUTOMATICAS_VAZIAS = ("E", "K", "L", "N")  # filled by the site only into empty cells
 LIDAS_VAZIAS = ("G", "I")  # title and requester from the SoftExpert read, also only into empty cells
@@ -421,11 +427,22 @@ def _estilo_da_celula(bruto: str) -> str:
     return _atributos(achado.group(2)).get("s", "") if achado else ""
 
 
+def _recolocar(bruto: str, letra: str, numero: int, estilo: str) -> str:
+    """The raw ``<c>`` moved to ``letra``/``numero`` with ``estilo`` (``""``: none); content and other attributes untouched."""
+    achado = _CELULA.fullmatch(bruto)
+    if achado is None or achado.group(3) is None:
+        raise GravacaoInvalida(f"{letra}{numero}: célula de origem ilegível; nada foi entregue.")
+    atributos = re.sub(r'\s+s="[^"]*"', "", achado.group(2))
+    return f'<c r="{letra}{numero}"' + (f' s="{estilo}"' if estilo else "") + f"{atributos}>{achado.group(3)}</c>"
+
+
 def _reescrever_linha(
     linha: _Linha, valores: Mapping[str, str], estilos: Mapping[str, str], formula_q: str, manter_estilo: bool,
+    brutas: Optional[Mapping[str, str]] = None,
 ) -> str:
     """The row with ``valores`` set (empty values leave the cell alone); formula caches dropped.
 
+    ``brutas``: column -> raw ``<c>`` copied as it is (``reaplicar``: multi-line text and seconds survive), re-addressed to this row.
     A cell keeps its own style when ``manter_estilo`` (edit of an existing ticket); otherwise it takes the
     most common style of its column (new rows: the free rows below row 350 carry unrelated styles)."""
     celulas = dict(linha.celulas)
@@ -434,6 +451,9 @@ def _reescrever_linha(
             continue
         proprio = _estilo_da_celula(celulas.get(letra, "")) if manter_estilo else ""
         celulas[letra] = _celula(letra, linha.numero, proprio or estilos.get(letra, ""), valor)
+    for letra, bruto in (brutas or {}).items():
+        proprio = _estilo_da_celula(celulas.get(letra, "")) if manter_estilo else ""
+        celulas[letra] = _recolocar(bruto, letra, linha.numero, proprio or estilos.get(letra, ""))
     if formula_q and "<f" not in celulas.get("Q", ""):
         estilo_q = estilos.get("Q", "")
         celulas["Q"] = f'<c r="Q{linha.numero}"' + (f' s="{estilo_q}"' if estilo_q else "") + f' t="str"><f>{formula_q}</f></c>'
@@ -946,8 +966,179 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
         raise GravacaoInvalida("A coluna C da cópia não ficou em ordem crescente; nada foi entregue.")
 
 
+# ---------------------------------------------------------------------------- merge by cell (3-way)
+
+@dataclass(frozen=True)
+class ResultadoMerge:
+    """``conteudo``: the merged workbook, or ``None`` while ``conflitos`` wait for a choice.
+
+    Each conflict is ``{id, chamado, coluna, sharepoint, site, tipo}`` (``tipo``: ``celula`` | ``linha_apagada``)."""
+    conteudo: Optional[bytes]
+    conflitos: Tuple[Dict[str, str], ...] = ()
+
+
+@dataclass
+class _Folha:
+    pacote: _Pacote
+    texto: str
+    linhas: Dict[int, _Linha]
+    dados: List[int]  # ticket rows (row >= 2 with data), in sheet order
+    por_utic: Dict[str, List[int]]  # UTIC -> rows whose column C holds exactly that one UTIC
+
+    def valor(self, numero: int, letra: str) -> str:
+        return _valor_legivel(letra, self.linhas[numero].celulas.get(letra, ""), self.pacote.compartilhadas)
+
+    def utic(self, numero: int) -> str:
+        achados = extrair_numeros(self.valor(numero, "C"))
+        return achados[0] if len(achados) == 1 else ""
+
+    def tupla(self, numero: int) -> Tuple[str, ...]:
+        return tuple(self.valor(numero, letra) for letra in COLUNAS_DE_DADO)
+
+
+def _abrir(conteudo: bytes) -> _Folha:
+    pacote = _ler_pacote(conteudo)
+    texto = pacote.texto(pacote.aba)
+    _, _, linhas = _linhas_da_aba(texto)
+    dados = [n for n in sorted(linhas) if n >= 2 and _tem_dado(linhas[n], pacote.compartilhadas)]
+    folha = _Folha(pacote, texto, linhas, dados, {})
+    for numero in dados:
+        if utic := folha.utic(numero):
+            folha.por_utic.setdefault(utic, []).append(numero)
+    return folha
+
+
+def _bruto_do_site(folha: _Folha, numero: int, letra: str) -> str:
+    """The ``<c>`` as stored; a shared string becomes an inline one (its index means nothing in another workbook)."""
+    bruto = folha.linhas[numero].celulas[letra]
+    achado = _CELULA.fullmatch(bruto)
+    if achado is None or _atributos(achado.group(2)).get("t") != "s":
+        return bruto
+    texto = (_valor_celula(bruto, folha.pacote.compartilhadas) or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    atributos = re.sub(r'\s+t="s"', "", achado.group(2))
+    return f'<c r="{letra}{numero}"{atributos} t="inlineStr"><is><t xml:space="preserve">{texto}</t></is></c>'
+
+
+def reaplicar(
+    base: bytes, gerado: bytes, sharepoint: bytes, *, enviado: Optional[bytes] = None, escolhas: Optional[Mapping[str, str]] = None,
+) -> ResultadoMerge:
+    """Re-applies what the site changed (``gerado`` against ``base``) onto the newer ``sharepoint`` file, cell by cell.
+
+    The site's operations are the cells of ``gerado`` whose readable value differs from ``base`` in ``COLUNAS_DE_DADO`` (never C
+    of an existing row, never Q, T, U, V, W; a blank value never erases). Rows are matched by the UTIC of column C, never by position.
+    Per cell: SharePoint still holds the ``base`` value -> the site's value is written (the raw ``<c>`` of ``gerado``, re-addressed
+    and with the style of the SharePoint cell); it already holds the site's value -> nothing; anything else -> conflict. E, K, L, N
+    empty in ``base`` and filled in SharePoint keep SharePoint. ``enviado``: copy of the last send of the same import; a cell whose
+    value is the one already sent is not a new operation. Only the rows with an applied operation are rewritten.
+
+    Rows without a single UTIC (``linha:<n>``, n = row in ``base``) are merged only when the SharePoint row ``n`` equals the
+    ``base`` one in every data column; otherwise each operation is a conflict. A UTIC repeated in ``base`` or in SharePoint is
+    a conflict too. These cannot be settled with ``site`` (no certain target row), only with ``sharepoint``. A row of
+    ``base`` edited by the site and absent in SharePoint is a ``linha_apagada`` conflict: ``site`` puts it back, ``sharepoint`` drops it.
+
+    ``escolhas``: ``{id: "sharepoint" | "site"}``; an id that matches no conflict is ignored. The id is the first 12 hex of
+    the sha256 of ``chamado|coluna|sharepoint|site``, so a choice never settles a conflict with other values.
+    Raises ``DashboardInvalido`` (message without cell values) when a copy is not the expected Dashboard.
+    """
+    escolhas = escolhas or {}
+    anteriores = ler_coluna_c(sharepoint)  # also checks the headers of the sheet
+    b, g, s = _abrir(base), _abrir(gerado), _abrir(sharepoint)
+    e = _abrir(enviado) if enviado is not None else None
+    conflitos: Dict[str, Dict[str, str]] = {}
+    edicoes: Dict[int, Dict[str, str]] = {}  # SharePoint row -> column -> raw cell of ``gerado``
+    acrescentar: List[int] = []  # rows of ``gerado`` that go into the first free rows
+
+    def vale_o_site(chamado: str, coluna: str, no_sharepoint: str, no_site: str, tipo: str = "celula", certo: bool = True) -> bool:
+        """True when the choice is ``site``; a conflict without a choice (or ``site`` where the target is uncertain) is recorded."""
+        identificador = hashlib.sha256(f"{chamado}|{coluna}|{no_sharepoint}|{no_site}".encode("utf-8")).hexdigest()[:12]
+        escolha = escolhas.get(identificador)
+        if escolha == "sharepoint" or (escolha == "site" and certo):
+            return escolha == "site"
+        conflitos.setdefault(identificador, {
+            "id": identificador, "chamado": chamado, "coluna": coluna, "sharepoint": no_sharepoint, "site": no_site, "tipo": tipo,
+        })
+        return False
+
+    por_texto: Dict[str, List[int]] = {}
+    for numero in b.dados:
+        por_texto.setdefault(b.valor(numero, "C"), []).append(numero)
+    vistos: Counter = Counter()
+    for n_g in g.dados:
+        c = g.valor(n_g, "C")
+        iguais = por_texto.get(c, [])
+        n_b = iguais[vistos[c]] if vistos[c] < len(iguais) else None  # the sort is stable and C is never rewritten: k-th C of ``gerado`` is the k-th of ``base``
+        vistos[c] += 1
+        utic = g.utic(n_g)
+        if n_b is None and not utic:
+            raise GravacaoInvalida(f"A cópia a enviar tem uma linha sem número UTIC que não estava na importação (linha {n_g}); nada foi entregue.")
+        if n_b is None and utic not in s.por_utic:
+            acrescentar.append(n_g)  # new ticket, not in SharePoint yet
+            continue
+        n_e = e.por_utic[utic][0] if e is not None and utic and len(e.por_utic.get(utic, [])) == 1 else None
+        operacoes: Dict[str, str] = {}
+        for letra in COLUNAS_DE_DADO:
+            site = g.valor(n_g, letra)
+            if letra == "C" or site == "" or site == (b.valor(n_b, letra) if n_b is not None else ""):
+                continue
+            if n_e is not None and e.valor(n_e, letra) == site:  # type: ignore[union-attr]
+                continue  # already sent: SharePoint's value (maybe edited since) stands
+            operacoes[letra] = site
+        if not operacoes:
+            continue
+        if utic:
+            chamado, donas = utic, s.por_utic.get(utic, [])
+            certo = len(donas) == 1 and not (n_b is not None and len(b.por_utic[utic]) > 1)
+            decidir = not certo  # repeated C: every operation waits for a choice
+            if not donas:  # edited by the site, gone from SharePoint (n_b is set: a new ticket would have been appended above)
+                colunas = ",".join(operacoes)
+                if vale_o_site(chamado, colunas, "", "; ".join(f"{letra}: {valor}" for letra, valor in operacoes.items()), "linha_apagada"):
+                    acrescentar.append(n_g)
+                continue
+        else:
+            chamado = f"{CHAVE_DE_LINHA}{n_b}"
+            donas = [n_b] if n_b in s.dados else []  # type: ignore[list-item]
+            igual = bool(donas) and s.tupla(donas[0]) == b.tupla(n_b)  # type: ignore[arg-type]
+            certo = bool(donas) and (igual or s.valor(donas[0], "C") == c)
+            decidir = not igual  # a row without UTIC is merged only while SharePoint still has it as imported
+        fila = donas[0] if certo else None
+        for letra, site in operacoes.items():
+            antigo = b.valor(n_b, letra) if n_b is not None else ""
+            atuais = [s.valor(n, letra) for n in donas]
+            if donas and all(atual == site for atual in atuais):
+                continue
+            if not decidir and (atuais[0] != antigo and letra in AUTOMATICAS_VAZIAS and antigo == "" and atuais[0] != ""):
+                continue
+            if (not decidir and atuais[0] == antigo) or vale_o_site(chamado, letra, " / ".join(atuais), site, certo=certo):
+                if fila is not None:
+                    edicoes.setdefault(fila, {})[letra] = _bruto_do_site(g, n_g, letra)
+    if conflitos:
+        return ResultadoMerge(None, tuple(conflitos.values()))
+
+    if not edicoes and not acrescentar:
+        return ResultadoMerge(sharepoint)  # nothing for the site to apply: SharePoint's file goes back untouched, order included
+    pacote = s.pacote
+    estilos = _estilos_modais(s.linhas, pacote.compartilhadas)
+    formula_q = _formula_de_q(s.linhas)
+    primeira_livre = (max(s.dados) if s.dados else 1) + 1
+    if acrescentar and (
+        primeira_livre + len(acrescentar) - 1 > pacote.tabela_ultima_linha or any(n not in s.linhas for n in range(primeira_livre, primeira_livre + len(acrescentar)))
+    ):
+        raise GravacaoInvalida(f"Sem espaço na {TABELA}: faltam linhas livres para {len(acrescentar)} chamado(s).")
+    substituicoes: Dict[int, str] = {
+        fila: _reescrever_linha(s.linhas[fila], {}, estilos, "", True, brutas) for fila, brutas in edicoes.items()
+    }
+    novos: List[str] = []
+    for deslocamento, n_g in enumerate(acrescentar):
+        fila = primeira_livre + deslocamento
+        brutas = {letra: _bruto_do_site(g, n_g, letra) for letra in COLUNAS_DE_DADO if g.valor(n_g, letra) != ""}
+        substituicoes[fila] = _reescrever_linha(s.linhas[fila], {}, estilos, formula_q, False, brutas)
+        novos.append(g.utic(n_g))
+    conteudo, _ = _entregar(pacote, s.texto, s.linhas, substituicoes, anteriores, novos, True)
+    return ResultadoMerge(conteudo)
+
+
 __all__ = [
     "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO",
-    "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado",
-    "atualizar", "chamados_para_editar", "chave_coluna_c", "ler_listas", "registrar_encerramentos",
+    "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado", "ResultadoMerge",
+    "atualizar", "chamados_para_editar", "chave_coluna_c", "ler_listas", "mesmos_valores", "reaplicar", "registrar_encerramentos",
 ]
