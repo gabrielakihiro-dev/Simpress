@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.config import REGIONAL_REPRESENTATIVES_FILE, format_size_limit
-from core.integrity import lock_paths
+from core.integrity import atomic_write_json, lock_paths
 from domains import (
     local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_vinculos,
@@ -148,6 +148,13 @@ class RecuperacaoEnvioPayload(BaseModel):
     envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
     acao: Literal["limpar", "confirmar_recebimento", "declarar_nao_enviado", "concluir_legado"]
     confirmacao: str = Field("", max_length=100)
+
+
+class ConflitosPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    escolhas: Dict[str, Literal["sharepoint", "site"]] = Field(..., max_length=500)
+    enviar: bool = Field(False, strict=True)
 
 
 class ReenvioSnapshotPayload(BaseModel):
@@ -654,6 +661,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return {"iniciado": False, "motivo": "nenhum chamado foi finalizado no SoftExpert"}
         if not pedido:
             return {"iniciado": False, "motivo": ""}
+        return _iniciar_envio()
+
+    def _iniciar_envio() -> Dict[str, Any]:
+        """Starts the routine ``enviar`` with the same guards for both callers; a failure comes back as ``motivo``, never as an error."""
         if services.runner is None:
             return {"iniciado": False, "motivo": "A automação não está disponível neste servidor."}
         pasta = _pasta_estado()
@@ -663,8 +674,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             services.runner().start("enviar")
         except DomainError as erro:
             return {"iniciado": False, "motivo": str(erro.detail)}
-        except Exception as erro:  # noqa: BLE001 - a atualização já foi gravada; log só o tipo
-            logger.warning("Não iniciei a rotina enviar depois de atualizar (%s).", type(erro).__name__)
+        except Exception as erro:  # noqa: BLE001 - o arquivo já foi gravado; log só o tipo
+            logger.warning("Não iniciei a rotina enviar (%s).", type(erro).__name__)
             return {"iniciado": False, "motivo": "Não foi possível iniciar o envio ao SharePoint."}
         return {"iniciado": True, "motivo": ""}
 
@@ -940,7 +951,34 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 rodando = bool(resultado and resultado.get("em_andamento"))
         return JSONResponse({
             "em_andamento": rodando, "resultado": resultado, "sharepoint": fin.aviso_do_pendente(pasta),
+            "conflitos": len((fin.ler_conflitos(pasta) or {}).get("conflitos") or []),
         }, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/dashboard/conflitos")
+    def listar_conflitos():
+        """Células em conflito entre o SharePoint e o site (valores só aqui e na tela) e as escolhas já feitas; vazio sem conflito."""
+        dados = fin.ler_conflitos(_pasta_estado()) or {}
+        return JSONResponse({
+            "conflitos": dados.get("conflitos") or [], "escolhas": fin.escolhas_dos_conflitos(_pasta_estado()),
+            "criado_em": str(dados.get("criado_em") or ""),
+        }, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/dashboard/conflitos")
+    def escolher_conflitos(payload: ConflitosPayload):
+        """Grava as escolhas por conflito (``sharepoint`` ou ``site``); com ``enviar`` inicia a rotina ``enviar`` de novo."""
+        pasta = _pasta_estado()
+        arquivo = fin.caminho_conflitos(pasta)
+        with lock_paths([arquivo]):
+            dados = fin.ler_conflitos(pasta) or {}
+            ids = {str(conflito.get("id")) for conflito in dados.get("conflitos") or [] if isinstance(conflito, dict)}
+            if not ids:
+                raise DomainValidationError("Não há conflitos de edição para escolher.", status_code=422)
+            if any(chave not in ids for chave in payload.escolhas):
+                raise DomainValidationError("Há escolha para um conflito que não existe mais; recarregue a lista.", status_code=422)
+            escolhas = {**fin.escolhas_dos_conflitos(pasta), **payload.escolhas}
+            atomic_write_json(arquivo, {**dados, "escolhas": escolhas})
+        envio = _iniciar_envio() if payload.enviar else {"iniciado": False, "motivo": ""}
+        return JSONResponse({"escolhas": escolhas, "enviar": envio}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/antigos/ler", status_code=202)
     def ler_antigos():

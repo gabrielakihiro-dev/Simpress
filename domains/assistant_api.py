@@ -351,6 +351,7 @@ _MOTIVOS: Tuple[Tuple["re.Pattern[str]", str], ...] = tuple((re.compile(p), c) f
     (r"chrome nao abriu a porta|nao expos nenhum contexto", "chrome_sem_conexao"),
     (r"playwright", "playwright_ausente"),
     (r"nao vi o aviso de envio concluido", "envio_sharepoint_nao_confirmado"),
+    (r"conflito de edicao", "dashboard_sharepoint_conflito"),  # before "copia pendente": the message also says "nem guardado como copia pendente"
     (r"mudou depois da importacao|nao consegui conferir o dashboard do sharepoint", "dashboard_sharepoint_mudou"),
     (r"duplicata", "duplicata_nao_criada"),
     (r"keep both", "sharepoint_so_manter_ambos"),
@@ -380,6 +381,8 @@ MOTIVOS_AUTOMACAO: Dict[str, str] = {
     "envio_sharepoint_nao_confirmado": "O aviso de envio concluído não apareceu; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.",
     "dashboard_sharepoint_mudou": "O Dashboard no SharePoint mudou depois da importação, então o envio parou sem substituir nada. É preciso importar de novo: "
     "Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint (a cópia gerada antes fica guardada, nada é apagado).",
+    "dashboard_sharepoint_conflito": "Há células do Dashboard alteradas no SharePoint e no site ao mesmo tempo, então o envio parou sem substituir nada. "
+    "A escolha de qual valor manter é do usuário, na tela de Chamados (F5); depois é só enviar de novo.",
     "duplicata_nao_criada": "A cópia de segurança (Duplicata) não apareceu no SharePoint; o Dashboard não foi substituído.",
     "sharepoint_so_manter_ambos": "O SharePoint só ofereceu manter os dois arquivos; nada foi enviado.",
     "dashboard_em_uso_no_sharepoint": "O Dashboard estava em uso ou bloqueado no SharePoint.",

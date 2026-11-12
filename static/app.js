@@ -33,6 +33,7 @@
     "monthlyReport",
     "sebraeDashboard",
     "sebraeHistorico",
+    "sebraeConflitos",
     "chromeAutomation",
     "assistantChat",
     "coverage",
