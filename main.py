@@ -2070,6 +2070,14 @@ def _dashboard_manual_os_links() -> List[Dict[str, Any]]:
     return [v for v in links.values() if isinstance(v, dict) and not v.get("origem")] if isinstance(links, dict) else []
 
 
+def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
+    """Série e modelo do cadastro, só isso (o dossiê não expõe o resto do equipamento); None fora do cadastro."""
+    clean_serial = serial.strip().upper()
+    with STATE_LOCK:
+        equipment = inventory_state.equipamentos_cache.get(clean_serial)
+        return None if equipment is None else {"serie": clean_serial, "modelo": str(equipment.get("modelo") or "")}
+
+
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=_inventory_history_exports.history_annotation_view,
@@ -2085,6 +2093,7 @@ operations_router = create_operations_router(
     dashboard_vinculos=_dashboard_derived_os_links,
     ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
     ticket_os_marks_sources=_marcas_fontes,
+    equipment_header=_equipment_dossier_header,
 )
 app.include_router(operations_router)
 

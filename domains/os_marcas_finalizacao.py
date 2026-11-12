@@ -1,7 +1,12 @@
 """Marca de OS finalizada da aba OS (F6), só local, em ``data/state/os_marcas_finalizacao.json``.
 
 A marca avisa que o chamado ligado à OS já foi finalizado. Não escreve no SoftExpert, no SharePoint, no Excel, no Oracle
-nem no UX, não reabre chamado ao ser desfeita e não entra em filtros, KPIs, contagens nem na exportação da F6.
+nem no UX e não reabre chamado ao ser desfeita. Não entra na busca nem nos filtros da F6, mas a marca ATIVA decide a
+sub-aba da OS na aba OS: com marca ativa ela vai para ``Finalizadas``; sem marca, ou com a marca desfeita, fica em
+``Abertas``. KPIs, triagem e ``Atenção · 3+ dias`` contam só ``Abertas``, e ``Exportar Excel`` leva só a sub-aba visível.
+Marca ativa também gera, na leitura de ``GET /api/operacoes/chamados/vinculos-os``, o vínculo UTIC automático
+(``origem: "finalizacao"``; prioridade manual > finalizacao > dashboard); ele nunca é gravado em
+``os_chamados_vinculos.json`` e some quando a marca é desfeita (``Desfazer`` devolve a OS a ``Abertas``).
 
 Três fontes, sempre calculadas no servidor:
 

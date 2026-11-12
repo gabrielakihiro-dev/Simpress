@@ -42,7 +42,9 @@
     const iguais = itens.filter(item => texto(item?.chamado).toUpperCase() === texto(chamado.numero).toUpperCase()
       && serialKey(item?.serie) === serialKey(chamado.serie) && orderKey(item?.os) === orderKey(chamado.os));
     if (!iguais.length) return "";
-    return iguais.some(item => !item?.origem) ? "manual" : "dashboard";
+    // Sem origem = digitado à mão (vale sobre qualquer outro); "finalizacao" = marca de OS finalizada; qualquer outra origem segue como "dashboard".
+    if (iguais.some(item => !item?.origem)) return "manual";
+    return iguais.some(item => item.origem === "finalizacao") ? "finalizacao" : "dashboard";
   }
 
   function montarParesChamadoOs(entrada) {
@@ -124,6 +126,12 @@
     return partes ? `${partes[3]}/${partes[2]}/${partes[1]} às ${partes[4]}:${partes[5]}` : texto(iso);
   }
 
+  // ISO do servidor -> dd/mm/aaaa, só o recorte do texto (new Date mudaria o dia pelo fuso); texto que não é ISO segue como veio.
+  function formatarData(iso) {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto(iso));
+    return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : texto(iso);
+  }
+
   /** O que a linha da F6 mostra de uma marca: selo (só se ativa), dica, motivo, quais botões valem e o histórico em texto. */
   function descreverMarca(marca) {
     const outro = marca?.origem === "outro_tecnico";
@@ -142,5 +150,5 @@
     };
   }
 
-  return Object.freeze({ montarParesChamadoOs, filtrarParesChamadoOs, chaveMarca, marcasPorOs, descreverMarca, formatarDataHora });
+  return Object.freeze({ montarParesChamadoOs, filtrarParesChamadoOs, chaveMarca, marcasPorOs, descreverMarca, formatarDataHora, formatarData });
 });

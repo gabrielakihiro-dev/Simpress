@@ -68,6 +68,9 @@ async function installSummaryRoutes(page, { links = new Map(), onReportRequest =
 
 // A tabela de OS vive no painel OS (F6): "#cockpit-tickets-os .ck-os".
 const SECAO = "#cockpit-tickets-os .ck-os";
+// O contador "N OS · N séries" e as mensagens da tabela ficam na barra das sub-abas (#cockpit-tickets-contagem), fora de ".ck-os".
+const CONTAGEM = "#cockpit-tickets-contagem";
+const STATUS = "#cockpit-tickets-contagem .ticket-summary-status";
 
 async function openChamados(page) {
   // OS fica na barra principal; abaixo de 1200px só o menu Ferramentas a oferece.
@@ -80,7 +83,7 @@ async function openChamados(page) {
 async function selectSummary(page) {
   await openChamados(page);
   await expect(page.locator(SECAO)).toBeVisible();
-  await expect(page.locator(SECAO)).toContainText(" OS · ");
+  await expect(page.locator(CONTAGEM)).toContainText(" OS · ");
 }
 
 async function openSummary(page) {
@@ -130,7 +133,7 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   const hostFont = await seriesGroup.first().locator('td[data-label="Hostname"]').evaluate(element => getComputedStyle(element).fontFamily);
   expect(serialFont).toBe(hostFont);
 
-  await expect(section).toContainText("4 OS · 2 séries");
+  await expect(page.locator(CONTAGEM)).toContainText("4 OS · 2 séries");
   const orderContainer = unitedRow;
   const oracleSlot = orderContainer.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Oracle/) });
   const input = oracleSlot.locator("input.ticket-os-link-input");
@@ -141,7 +144,7 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(input).toHaveAttribute("placeholder", "0000");
   await input.fill("1116");
   await oracleSlot.getByRole("button", { name: "Salvar" }).click();
-  await expect(section.locator(".ticket-summary-status")).toHaveText(`Vínculo salvo: UTIC-${year}-1116.`);
+  await expect(page.locator(STATUS)).toHaveText(`Vínculo salvo: UTIC-${year}-1116.`);
   await expect(prefix).toHaveText(`UTIC-${year}-`);
   await expect(input).toHaveValue("1116");
 
@@ -270,7 +273,7 @@ test("Chamados filtra a tabela de OS por Relação e busca, não lista séries s
   const section = page.locator(SECAO);
   const rows = page.locator("#ck-os-tabela tbody tr[data-serial]");
   const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
-  const status = section.locator(".ticket-summary-status");
+  const status = page.locator(STATUS);
   // A busca é a do painel; a tabela não cria a própria.
   await expect(page.locator("#cockpit-tickets-os #ck-os-busca")).toHaveCount(0);
   await expect(page.locator("#cockpit-tickets-kpis")).not.toContainText("Sem OS");
@@ -374,7 +377,7 @@ test("OS deste equipamento abre Chamados já filtrado pela série", async ({ pag
   await link.click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await expect(page.locator("#cockpit-tickets-search")).toHaveValue("REL-SOR-2");
-  await expect(page.locator(SECAO)).toContainText(" OS · ");
+  await expect(page.locator(CONTAGEM)).toContainText(" OS · ");
   const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
   await expect(visible).toHaveCount(1);
   await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
@@ -405,7 +408,7 @@ test("Observação do andamento da OS salva sozinha, volta após recarregar e di
   expect(puts.at(-1)).toEqual({ serie: "DEMO-SN-AMB", os: "7285073", observacao: "/tec teste" });
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await expect(page.locator("#cockpit-tickets-os tr[data-andamento]")).toHaveCount(0);
-  await expect(page.locator(SECAO)).toContainText("4 OS · 2 séries");
+  await expect(page.locator(CONTAGEM)).toContainText("4 OS · 2 séries");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.reload();

@@ -956,5 +956,70 @@ class SugestaoDeCategoriaNosNovosTest(RotasBase):
         self.assertNotIn("texto-secreto-do-chamado", saida)
 
 
+class EncerramentoDeNaoEncontradoTest(RotasBase):
+    """D=FINALIZADO à mão num antigo não encontrado no SoftExpert exige a DT ENCERRAMENTO (R) no "Atualizar"."""
+
+    ALVO = "UTIC-2026-0001"
+    ATUALIZAR = "/api/sebrae/dashboard/atualizar"
+    MENSAGEM = "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-0001: ele não foi encontrado no SoftExpert."
+    R_1405 = r'<c r="R\d+"[^>]*><v>46325\.586'
+
+    def preparar(self, nao_encontrado=True, conteudo=None):
+        self.assertEqual(self.importar(montar() if conteudo is None else conteudo).status_code, 200)
+        if nao_encontrado:
+            sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {self.ALVO: "não está na lista"}, "nao_encontrados": [self.ALVO]})
+
+    def atualizar(self, **campos):
+        return self.post(self.ATUALIZAR, json={"edicoes": [{"numero": self.ALVO, **campos}]})
+
+    def linha_gravada(self, resposta):
+        return linha_xml(base64.b64decode(resposta.json()["conteudo_base64"]), 2)
+
+    def test_recusa_finalizado_sem_r_num_antigo_nao_encontrado_e_nao_grava_a_saida(self):
+        self.preparar()
+        resposta = self.atualizar(D="FINALIZADO")
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["detail"], self.MENSAGEM)
+        self.assertFalse(sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").exists())
+
+    def test_recusa_tambem_com_r_enviado_em_branco(self):
+        self.preparar()
+        self.assertEqual(self.atualizar(D="FINALIZADO", R="   ").status_code, 422)
+
+    def test_aceita_e_grava_o_r_quando_ele_vem_junto(self):
+        self.preparar()
+        resposta = self.atualizar(D="FINALIZADO", R="30/10/2026 14:05")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertIn("FINALIZADO", self.linha_gravada(resposta))
+        self.assertRegex(self.linha_gravada(resposta), self.R_1405)
+
+    def test_aceita_sem_r_quando_a_linha_ja_guarda_o_r(self):
+        base = _trocar_na_folha(montar(), '<c r="T2"', '<c r="R2" s="92"><v>46325.586</v></c><c r="T2"')
+        self.preparar(conteudo=base)
+        resposta = self.atualizar(D="FINALIZADO")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertRegex(self.linha_gravada(resposta), self.R_1405)
+
+    def test_aceita_sem_r_quando_a_leitura_do_softexpert_achou_o_chamado(self):
+        self.preparar()
+        sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(self.ALVO, titulo="Achou"), "agora")
+        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 200)
+
+    def test_aceita_sem_r_quando_o_chamado_nunca_foi_lido(self):
+        self.preparar(nao_encontrado=False)
+        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 200)
+
+    def test_aceita_sem_r_quando_d_nao_e_finalizado(self):
+        self.preparar()
+        self.assertEqual(self.atualizar(D="EM ABERTO", B="LENTIDÃO").status_code, 200)
+
+    def test_so_o_chamado_nao_encontrado_e_barrado_numa_lista_com_outros(self):
+        self.assertEqual(self.importar(montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))).status_code, 200)
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {self.ALVO: "não está na lista"}, "nao_encontrados": [self.ALVO]})
+        outro = self.post(self.ATUALIZAR, json={"edicoes": [{"numero": "UTIC-2026-0002", "D": "FINALIZADO"}]})
+        self.assertEqual(outro.status_code, 200, outro.text)
+        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

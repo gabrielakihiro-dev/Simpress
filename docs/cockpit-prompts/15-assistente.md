@@ -232,6 +232,24 @@ O botão `Enviar e-mail` da Home (F1) abre o modal `E-mail pelo Outlook` (modelo
 - Roteamento: perguntas sobre o e-mail do cabo ("como mando o e-mail do cabo de segurança?") vão ao modelo e nunca abrem o fluxo `Abrir chamado no UX`, que só reage a mensagens com "UX", chamado/solicitação/atendimento e verbo de abrir. Não há exclusão por "cabo" nem "e-mail": um chamado real ("abrir chamado no UX, cabo do carregador quebrado") continua abrindo o fluxo.
 - Testes: `tests/test_assistant_termos.py` (regra 38 no prompt, sem `@` nem nomes da semente) e `tests/test_assistant_ux_chamados.py` (frases de e-mail vão ao modelo; chamado com "cabo" ainda prepara o UX).
 
+## Sub-abas Abertas e Finalizadas e vínculo automático da aba OS (12/11/2026)
+
+A aba OS (F6) ganhou, em 11/11/2026, as sub-abas `Abertas` e `Finalizadas` (a marca de OS finalizada ativa decide a sub-aba) e o vínculo UTIC automático `origem: "finalizacao"`; detalhe da tela e das regras em `docs/cockpit-prompts/07-chamados-operacional.md`, seção "Sub-abas Abertas e Finalizadas (F6, 11/11/2026)". O Assistente continua só lendo; o que mudou é o que ele diz.
+
+- Base: regra 32 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`) ganhou uma frase com as duas sub-abas (`Abertas`, que abre primeiro, e `Finalizadas`), com o que cada uma reúne, com o fato de busca, Relação, Atenção e triagem valerem dentro da sub-aba escolhida, de `Limpar filtros` não trocar de sub-aba, de `Exportar Excel` levar só a sub-aba da tela (só na importação atual; numa versão anterior em `Versão em uso` a exportação não separa por sub-aba) e de KPIs, triagem e `Atenção · 3+ dias` contarem só `Abertas`. O texto anterior da regra não foi reescrito.
+- `listar_vinculos_os` (só leitura): cada vínculo traz `origem` (`manual`, `finalizacao` ou `dashboard`; qualquer outro valor vira `manual`). `manual` foi gravado pelo usuário; `finalizacao` é automático, derivado na leitura da marca ativa e nunca gravado, e some quando a marca é desfeita; `dashboard` é automático, vindo do Dashboard do Sebrae. Prioridade: manual, depois `finalizacao`, depois `dashboard`. A descrição da ferramenta diz isso, para o Assistente não chamar de manual um vínculo automático (`domains/assistant_api.py`, `domains/assistant_tools.py`).
+- `vincular_os` (com cartão, igual a antes): a descrição diz que vínculo automático não é gravado e que o manual tem prioridade. Quando o vínculo atual é automático, o cartão do programa o identifica como automático e não gravado (`Alterar o vínculo da OS ...: chamado UTIC-AAAA-N (automático, vindo da marca de OS finalizada; não está gravado) → UTIC-AAAA-M`). Continua gravando só este vínculo, e `GET` nunca grava.
+- `listar_chamados_abertos`: a descrição avisa que `total_chamados` e `resumo` contam todas as OS, enquanto os KPIs e a triagem da tela contam só `Abertas`, e que a OS com marca `ativa` em `marcas_finalizacao` fica em `Finalizadas`. Os números da ferramenta não mudaram.
+- Ponto em aberto (não alterado): se o vínculo atual é automático e o usuário pede o mesmo chamado, o cartão recusa com `Esse vínculo já existe com esse chamado. Nada a alterar.`, embora o automático não esteja gravado; gravar o vínculo manual igual ao automático (por exemplo, para ele sobreviver a um `Desfazer` da marca) hoje só se faz na tela.
+- Testes: `tests/test_assistant.py`, classe `OsLinkOrigemTests` (`origem` de cada vínculo, cartão com vínculo atual automático e manual, descrições e regra 32 no prompt).
+
+## Dossiê do equipamento (11/11/2026)
+
+O botão `Ver dossiê` da Home (F1) abre a janela `Dossiê do equipamento` (só leitura), com a seção `OS e chamados`. Tela, regras e textos aprovados: `docs/cockpit-prompts/03-home-split-view.md`; rota `GET /api/equipamento/{serial}/dossie`: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
+- Base: regra 39 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`). Não há ferramenta do dossiê: o Assistente só orienta onde abri-lo. O histórico é da série, não de cada OS, e `Última vez observada em <data>` nunca vira "OS encerrada".
+- Testes: `tests/test_assistant_termos.py` (regra 39 no prompt).
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.

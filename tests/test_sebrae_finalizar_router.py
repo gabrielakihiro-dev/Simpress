@@ -361,6 +361,17 @@ class FinalizarUmTest(FinalizarBase):
         self.assertIn("OUTRO CLIENTE", linha_xml(saida, 3))
         self.assertIn("46023.375", linha_xml(saida, 2))  # 01/01/2026 09:00; a rotina fechar troca o R depois, aqui só a cópia antes dela
 
+    def test_chamado_nao_encontrado_no_softexpert_finaliza_pelo_cartao_sem_r_manual(self):
+        # a exigência do R vale só no "Atualizar"; o cartão é o caminho de nova tentativa e o R vem do SoftExpert
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
+        self.descrever(A)
+        manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        atualizar = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "D": "FINALIZADO"}]})
+        self.assertEqual(atualizar.status_code, 422, atualizar.text)  # o mesmo chamado, pelo Atualizar, exige o R
+
     def test_campos_manuais_invalidos_recusam_sem_disparar(self):
         self.descrever(A)
         invalido = {"numero": A, "A": "CLIENTE", "D": "TALVEZ", "J": "INCIDENTE"}

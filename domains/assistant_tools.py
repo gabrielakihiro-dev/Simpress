@@ -233,7 +233,9 @@ def _describe_vincular_os(api: SimpressApi, args: Args) -> str:
     elif atual.get("chamado") == novo:
         raise ValueError("Esse vínculo já existe com esse chamado. Nada a alterar.")
     else:
-        acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')} → {novo}."
+        automatico = {"finalizacao": " (automático, vindo da marca de OS finalizada; não está gravado)",
+                      "dashboard": " (automático, vindo do Dashboard; não está gravado)"}.get(str(atual.get("origem") or ""), "")
+        acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')}{automatico} → {novo}."
     return f"{acao} Só este vínculo é gravado; os demais vínculos de OS ficam como estão."
 
 def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
@@ -681,6 +683,8 @@ QUERY_TOOLS: List[Tool] = [
         "`chamado`, `origem` (`site` = o Simpress finalizou o chamado no SoftExpert; `outro_tecnico` = o chamado saiu do Dashboard ou "
         "não foi achado no SoftExpert sem finalização pelo site, então confira no SoftExpert), `motivo`, `ativa` (false = desfeita na tela) "
         "e `conferido`. Só leitura: desfazer, refazer e conferir a marca só se faz na tela. "
+        "Na tela da aba OS (F6), a OS com marca `ativa` fica na sub-aba `Finalizadas` e as demais em `Abertas`; os KPIs e a triagem da tela "
+        "contam só `Abertas`, mas `total_chamados` e `resumo` daqui contam todas as OS. "
         "`sinais_os` traz, por OS Oracle daquela série, os selos da aba OS (F6): `envio_tecnico` (true = a descrição da OS pede envio de "
         "técnico) e `dias_aberta` (dias entre a abertura da OS e a última importação; nulo se concluída ou sem data).",
         lambda c, a: c.listar_chamados_abertos(),
@@ -772,7 +776,10 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "listar_vinculos_os",
-        "Vínculos manuais entre chamados (UTIC-AAAA-número) e ordens de serviço (OS): fonte, série, OS e chamado. "
+        "Vínculos entre chamados (UTIC-AAAA-número) e ordens de serviço (OS): fonte, série, OS, chamado e `origem`. "
+        "`origem` `manual` foi gravado pelo usuário; `finalizacao` é automático, derivado na leitura da marca ativa de OS finalizada da aba OS (F6), "
+        "nunca é gravado e some quando a marca é desfeita; `dashboard` é automático, vindo do Dashboard do Sebrae. "
+        "Prioridade: manual, depois finalizacao, depois dashboard. "
         "Filtre por série ou chamado; sem filtro traz os primeiros. Use para 'a OS X está ligada a qual chamado?'.",
         lambda c, a: c.listar_vinculos_os(a.get("serie", ""), a.get("chamado", "")),
         {"serie": SERIAL, "chamado": {"type": "string", "description": "Chamado no formato UTIC-AAAA-número (opcional)."}},
@@ -1205,6 +1212,7 @@ CHANGE_TOOLS: List[Tool] = [
     Tool(
         "vincular_os",
         "Grava (ou altera) o vínculo manual de uma OS com um chamado. Antes, use listar_vinculos_os para ver o vínculo atual. "
+        "Vínculo automático (`origem` `finalizacao` ou `dashboard`) não é gravado; o manual tem prioridade sobre ele. "
         "Só este vínculo é gravado; os outros não mudam. O usuário confirma antes.",
         lambda c, a: c.vincular_os(a.get("fonte"), a.get("serie"), a.get("os"), a.get("chamado")),
         {

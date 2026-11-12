@@ -55,5 +55,21 @@ class AssistenteTermosTests(unittest.TestCase):
             self.assertNotIn(conta["email"], regra("38. E-mails por modelo pelo Outlook"))
 
 
+class AssistenteDossieTests(unittest.TestCase):
+    def test_regra_39_aponta_o_dossie_na_home_sem_concluir_encerramento(self):
+        texto = regra("39. Dossiê do equipamento")
+        for trecho in (
+            "Home (F1)",
+            '"Ver dossiê"',
+            '"Dossiê do equipamento"',
+            '"OS e chamados"',
+            '"Mudanças da série nas importações de OS"',
+            "não de cada OS",
+            "nunca diz que foi",
+            '"Ver OS"',
+            "Não existe ferramenta do dossiê",
+        ):
+            self.assertIn(trecho, texto)
+
 if __name__ == "__main__":
     unittest.main()
