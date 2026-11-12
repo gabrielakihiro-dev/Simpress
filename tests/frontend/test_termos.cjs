@@ -52,11 +52,18 @@ test("termosLimparParte limita cada parte a 100 caracteres", () => {
   assert.equal(nome, `${"S".repeat(100)} - ${"n".repeat(100)}`);
 });
 
-test("termos.js não guarda nem envia dados (sem storage, cookie, rede nem innerHTML)", () => {
+test("termos.js não guarda nem envia dados (sem storage, cookie, fetch nem innerHTML; só o GET fixo da assinatura)", () => {
   const codigo = fs.readFileSync(caminhoFonte, "utf8");
-  for (const proibido of ["localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "innerHTML"]) {
+  for (const proibido of [
+    "localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "innerHTML", "XMLHttpRequest", "sendBeacon",
+    "http://", "https://", "new Image", "window.open", "location.", "WebSocket", "EventSource", "import(",
+  ]) {
     assert.ok(!codigo.includes(proibido), `termos.js não pode usar ${proibido}`);
   }
+  // A única rota citada é a da assinatura do técnico, constante, sem parâmetro nem concatenação.
+  assert.deepEqual(codigo.match(/["'`]\/api\/[^"'`]*["'`]/g), ['"/api/assinatura-tecnico"']);
+  // E a única URL atribuída (src/href) é essa constante.
+  assert.deepEqual(codigo.match(/\.(src|href)\s*=[^=;]*/g), [".src = URL_ASSINATURA"]);
 });
 
 test("index.html traz as abas e os botões aprovados e nenhum Imprimir", () => {
@@ -64,10 +71,11 @@ test("index.html traz as abas e os botões aprovados e nenhum Imprimir", () => {
   for (const texto of ["Termo Entrega", "Termo Devolução", "Gerar PDF", "Limpar"]) {
     assert.ok(html.includes(`>${texto}</button>`), `falta o botão ${texto}`);
   }
-  const botaoMenu = html.match(/<button[^>]*id="btn-termos"[^>]*>/);
-  assert.ok(botaoMenu, "falta #btn-termos no menu Ferramentas");
-  assert.ok(!/aria-keyshortcuts/.test(botaoMenu[0]), "Termos não tem atalho de teclado");
-  assert.ok(!/>Imprimir</.test(html.slice(html.indexOf('data-cockpit-tool-panel="termos"'))), "não pode haver botão Imprimir");
+  const botaoMenu = html.match(/<button[^>]*id="btn-lembretes"[^>]*>/);
+  assert.ok(botaoMenu, "falta #btn-lembretes no menu Ferramentas");
+  assert.ok(!/aria-keyshortcuts/.test(botaoMenu[0]), "Lembretes não tem atalho de teclado");
+  assert.ok(!html.includes('ck-menu__rotulo">Termos<'), "a ferramenta Termos saiu do menu");
+  assert.ok(!/>Imprimir</.test(html.slice(html.indexOf('data-cockpit-tool-panel="lembretes"'))), "não pode haver botão Imprimir");
 });
 
 test("termosPreencherDoEquipamento preenche só nome, modelo, série e Notebook, sem apagar o que foi digitado", () => {

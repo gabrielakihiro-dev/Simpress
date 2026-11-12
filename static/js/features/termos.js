@@ -20,9 +20,13 @@
     entrega: { itens: ITENS_ENTREGA, campos: CAMPOS_ENTREGA, campoSerie: "serie_entregue" },
     devolucao: { itens: ITENS_DEVOLUCAO, campos: CAMPOS_DEVOLUCAO, campoSerie: "serie" },
   };
-  const ORDEM_ABAS = ["entrega", "devolucao"];
+  // "lembretes" é a terceira pílula do painel Lembretes; a lista em si mora em lembretes.js.
+  const ORDEM_ABAS = ["entrega", "devolucao", "lembretes"];
   const AVISO_SEM_NOME = "Preencha o número de série e o nome do colaborador.";
   const LIMITE_PARTE = 100;
+  // Única requisição do termo: GET da assinatura do técnico (arquivo local, sem enviar nada do termo).
+  const URL_ASSINATURA = "/api/assinatura-tecnico";
+  const TEMPO_ASSINATURA_MS = 3000;
   const doc = () => (typeof document !== "undefined" ? document : null);
 
   // Fatia o texto em vez de usar new Date: o fuso não pode deslocar o dia.
@@ -115,14 +119,17 @@
     return s;
   }
 
-  function assinaturas(d, esquerda, direita) {
+  // A imagem (se houver) vai só no lado do técnico, acima do rótulo; o do colaborador fica em branco.
+  function assinaturas(d, esquerda, direita, imagemTecnico) {
     const a = criar(d, "div", "tp__assinaturas");
-    a.append(criar(d, "div", "tp__assinatura", esquerda), criar(d, "div", "tp__assinatura", direita));
+    const tecnico = criar(d, "div", "tp__assinatura", direita);
+    if (imagemTecnico) tecnico.prepend(imagemTecnico);
+    a.append(criar(d, "div", "tp__assinatura", esquerda), tecnico);
     return a;
   }
 
   // A folha usa só createElement e textContent: nada digitado vira HTML.
-  function termosMontarFolha(d, dados) {
+  function termosMontarFolha(d, dados, assinaturaTecnico) {
     const c = dados.campos;
     const entrega = dados.termo === "entrega";
     // Mesma estrutura nos dois termos; a devolução muda só os textos e a cor de destaque (tp--devolucao).
@@ -167,7 +174,7 @@
     validacao.append(criar(d, "p", "tp__texto", entrega
       ? "Declaro que conferi as informações deste termo e recebi os equipamentos e acessórios assinalados acima."
       : "Declaro que conferi as informações deste termo e devolvi os equipamentos e acessórios assinalados acima."));
-    folha.append(validacao, assinaturas(d, "Assinatura do colaborador", entrega ? "Assinatura do técnico responsável" : "Assinatura do Técnico"));
+    folha.append(validacao, assinaturas(d, "Assinatura do colaborador", entrega ? "Assinatura do técnico responsável" : "Assinatura do Técnico", assinaturaTecnico));
     return folha;
   }
 
@@ -182,7 +189,7 @@
   }
 
   function termosSelecionarAba(termo) {
-    if (!TERMOS[termo]) return;
+    if (!ORDEM_ABAS.includes(termo)) return;
     ORDEM_ABAS.forEach((nome) => {
       const ativa = nome === termo;
       const aba = porId(`termos-aba-${nome}`);
@@ -210,19 +217,55 @@
 
   let encerrarImpressao = null;
 
-  function termosGerarPdf(termo) {
-    const d = doc();
+  // Lê o termo da tela. O nome do arquivo é sempre "SÉRIE - Nome completo": sem uma das partes, mostra o aviso e devolve null.
+  // Gerar PDF e Criar lembrete usam o mesmo teste.
+  function termosLerValidado(termo) {
     const form = porId(`termos-form-${termo}`);
-    const folha = porId("termos-impressao");
-    if (!d || !form || !folha || !TERMOS[termo]) return;
+    if (!form || !TERMOS[termo]) return null;
     const dados = termosLerDados(termo, form);
-    const serie = dados.campos[TERMOS[termo].campoSerie];
-    // O nome do arquivo é sempre "SÉRIE - Nome completo": sem uma das partes, não gera.
-    if (!termosLimparParte(serie, true) || !termosLimparParte(dados.campos.nome)) {
+    if (!termosLimparParte(dados.campos[TERMOS[termo].campoSerie], true) || !termosLimparParte(dados.campos.nome)) {
       avisar(termo, AVISO_SEM_NOME, true);
-      return;
+      return null;
     }
+    return dados;
+  }
+
+  // Carrega a assinatura numa <img> fora da página; qualquer falha (404, 422, imagem inválida, tempo) devolve null
+  // e o PDF sai como antes, com a linha em branco.
+  async function termosCarregarAssinatura(d) {
+    const img = d.createElement("img");
+    img.className = "tp__assinatura-img";
+    img.alt = "";
+    img.src = URL_ASSINATURA;
+    let relogio;
+    try {
+      const limite = new Promise((_, rejeitar) => { relogio = setTimeout(rejeitar, TEMPO_ASSINATURA_MS); });
+      await Promise.race([img.decode(), limite]);
+      return img;
+    } catch (erro) {
+      return null;
+    } finally {
+      clearTimeout(relogio);
+    }
+  }
+
+  // Pedido em andamento (carregando a assinatura): novo clique é ignorado e Limpar o cancela.
+  let pdfPendente = null;
+
+  async function termosGerarPdf(termo) {
+    const d = doc();
+    const folha = porId("termos-impressao");
+    if (!d || !folha || pdfPendente) return;
+    if (!termosLerValidado(termo)) return;
     avisar(termo, "");
+    const pedido = (pdfPendente = { termo });
+    const assinatura = await termosCarregarAssinatura(d);
+    if (pdfPendente !== pedido) return;
+    pdfPendente = null;
+    // Relê depois da espera: o formulário pode ter mudado (edição ou busca de série na Home).
+    const dados = termosLerValidado(termo);
+    if (!dados) return;
+    const serie = dados.campos[TERMOS[termo].campoSerie];
     if (encerrarImpressao) encerrarImpressao();
     const tituloOriginal = d.title;
     const encerrar = () => {
@@ -234,7 +277,7 @@
       if (encerrarImpressao === encerrar) encerrarImpressao = null;
     };
     encerrarImpressao = encerrar;
-    folha.replaceChildren(termosMontarFolha(d, dados));
+    folha.replaceChildren(termosMontarFolha(d, dados, assinatura));
     // O [hidden] !important do Tailwind (em @layer) vence o CSS de impressão; por isso o atributo sai.
     folha.hidden = false;
     d.title = termosNomeArquivo(serie, dados.campos.nome);
@@ -258,6 +301,7 @@
       cancelar: "Cancelar",
     });
     if (confirmou !== true) return;
+    if (pdfPendente?.termo === termo) pdfPendente = null;
     form.reset();
     form.querySelectorAll("[data-preenchido-home]").forEach((input) => { delete input.dataset.preenchidoHome; });
     delete form.dataset.serieHome;
@@ -279,7 +323,7 @@
   function termosPreencherDoEquipamento(eq) {
     const serial = String(eq?.serial ?? "").trim();
     if (!serial) return;
-    ORDEM_ABAS.forEach((termo) => {
+    Object.keys(PREENCHIMENTO_HOME).forEach((termo) => {
       const form = porId(`termos-form-${termo}`);
       if (!form || form.dataset.serieHome === serial) return;
       form.dataset.serieHome = serial;
@@ -303,6 +347,6 @@
 
   return {
     termosSelecionarAba, termosTeclaAba, termosGerarPdf, termosLimpar, termosPreencherDoEquipamento,
-    termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosMontarFolha,
+    termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosLerValidado, termosMontarFolha,
   };
 });
