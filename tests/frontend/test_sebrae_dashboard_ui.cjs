@@ -2273,3 +2273,116 @@ test("Usar em J põe INCIDENTE no select (a pendência J some só por CSS :has; 
   chipsDe(el)[1].querySelector("button").click();
   assert.equal(select.value, "INCIDENTE");
 });
+
+const { AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;
+const NAO_ENCONTRADO = "UTIC-2026-1200";
+const LEITURA_ACHADA = { titulo: "Teclado", descricao: "", solicitante: "Camila", habilitada_em: "", atendimento: "", lido_em: "agora" };
+
+test("R obrigatório: só antigo não encontrado no SoftExpert, com D FINALIZADO (digitado) e sem R gravado", () => {
+  const antigo = (extra = {}) => ({ numero: NAO_ENCONTRADO, nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" }, ...extra });
+  assert.equal(encerramentoObrigatorio(antigo(), undefined), false, "D ainda EM ABERTO");
+  assert.equal(encerramentoObrigatorio(antigo(), { D: "FINALIZADO" }), true);
+  assert.equal(encerramentoObrigatorio(antigo(), { D: " FINALIZADO " }), true, "espaços não escondem a regra");
+  assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026 09:00" } }), { D: "FINALIZADO" }), false, "R já gravado na linha");
+  assert.equal(encerramentoObrigatorio(antigo({ leitura_softexpert: LEITURA_ACHADA }), { D: "FINALIZADO" }), false, "lido no SoftExpert: a rotina traz o R");
+  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: false }), { D: "FINALIZADO" }), false, "nunca lido: finaliza pelo SoftExpert");
+  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: undefined }), { D: "FINALIZADO" }), false);
+  assert.equal(encerramentoObrigatorio(null, { D: "FINALIZADO" }), false);
+});
+
+test("pendenciasEncerramento só lista quem ainda não tem uma data válida e avisoEncerramento repete a frase do servidor no singular", () => {
+  const abertos = [
+    { numero: "UTIC-2026-1200", nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
+    { numero: "UTIC-2026-1201", nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
+    { numero: "UTIC-2026-1202", nao_encontrado_softexpert: false, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
+  ];
+  const edicoes = { "UTIC-2026-1200": { D: "FINALIZADO" }, "UTIC-2026-1201": { D: "FINALIZADO", R: "2026-10-30T14:05" }, "UTIC-2026-1202": { D: "FINALIZADO" } };
+  assert.deepEqual(pendenciasEncerramento(abertos, edicoes), ["UTIC-2026-1200"]);
+  assert.deepEqual(pendenciasEncerramento(abertos, { ...edicoes, "UTIC-2026-1201": { D: "FINALIZADO", R: "data inválida" } }), ["UTIC-2026-1200", "UTIC-2026-1201"]);
+  assert.deepEqual(pendenciasEncerramento(abertos, {}), []);
+  assert.equal(avisoEncerramento(["UTIC-2026-1200"]), "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-1200: ele não foi encontrado no SoftExpert.");
+  assert.equal(avisoEncerramento(["UTIC-2026-1200", "UTIC-2026-1201"]), "Informe a DT ENCERRAMENTO (coluna R) dos chamados UTIC-2026-1200, UTIC-2026-1201: eles não foram encontrados no SoftExpert.");
+});
+
+async function telaNaoEncontrado(mudar = () => {}) {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].nao_encontrado_softexpert = true;
+  mudar(carga.importado.abertos[0]);
+  const posts = [];
+  const apiFetch = async (url, opcoes = {}) => {
+    if (opcoes.method === "POST" && url === POST_ATUALIZAR) {
+      posts.push(JSON.parse(opcoes.body));
+      return { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [], base: { importado_em: "2026-10-28T10:00:00-03:00" }, ...ENVIO_INICIADO };
+    }
+    return carga;
+  };
+  const { el, feature, app } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
+  const toasts = [];
+  app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  app.atualizarEstadoAutomacao = () => {};
+  const digitar = (campo, valor) => { campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  return { el, feature, posts, toasts, digitar, status: () => el["sebrae-atualizar-status"], botao: el["btn-sebrae-atualizar"] };
+}
+
+test("antigo não encontrado: D FINALIZADO torna R obrigatório, bloqueia Atualizar com a mensagem até a data ser informada e libera depois", async () => {
+  const { el, feature, posts, toasts, digitar, status, botao } = await telaNaoEncontrado();
+  const cartao = cartaoAntigoDe(el, NAO_ENCONTRADO);
+  const r = cartao.querySelector('[data-sebrae-campo="R"]');
+  const d = cartao.querySelector('[data-sebrae-campo="D"]');
+  const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
+  assert.equal(ajuda.textContent, AJUDA_ENCERRAMENTO);
+  assert.equal(ajuda.textContent, "Obrigatório ao finalizar chamado não encontrado no SoftExpert");
+  assert.equal(ajuda.hidden, true, "com D EM ABERTO a ajuda não aparece");
+  assert.equal(r.required, false);
+  assert.equal(r.getAttribute("aria-required"), "false");
+  assert.equal(r.getAttribute("aria-describedby"), null);
+
+  digitar(d, "FINALIZADO");
+  assert.equal(r.required, true);
+  assert.equal(r.getAttribute("aria-required"), "true");
+  assert.equal(r.getAttribute("aria-describedby"), ajuda.id);
+  assert.equal(ajuda.hidden, false);
+  assert.equal(botao.disabled, true, "sem R o Atualizar fica bloqueado");
+  assert.equal(status().textContent, avisoEncerramento([NAO_ENCONTRADO]));
+  assert.equal(status().dataset.estado, "alerta");
+  await feature.atualizarDashboardSebrae();
+  assert.equal(posts.length, 0, "a barreira do clique também impede o envio");
+  assert.deepEqual(toasts, [[avisoEncerramento([NAO_ENCONTRADO]), "warning"]]);
+
+  digitar(r, "2026-10-30T14:05");
+  assert.equal(botao.disabled, false);
+  assert.equal(status().textContent, "", "o aviso some quando a falta some");
+  assert.equal(r.required, true, "continua obrigatório enquanto D for FINALIZADO");
+  await feature.atualizarDashboardSebrae();
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].edicoes, [{ numero: NAO_ENCONTRADO, D: "FINALIZADO", R: "30/10/2026 14:05" }]);
+
+  digitar(d, "EM ABERTO");
+  assert.equal(r.required, false);
+  assert.equal(r.getAttribute("aria-required"), "false");
+  assert.equal(ajuda.hidden, true);
+});
+
+test("R não é obrigatório para antigo nunca lido, lido no SoftExpert nem com R já gravado, e Atualizar continua liberado", async () => {
+  const casos = [
+    ["nunca lido (sem o selo Não encontrado)", () => {}, "linha:27", false],
+    ["lido no SoftExpert", antigo => { antigo.leitura_softexpert = LEITURA_ACHADA; }, NAO_ENCONTRADO, false],
+    ["R já gravado no Dashboard", antigo => { antigo.valores.R = "20/10/2026 09:00"; }, NAO_ENCONTRADO, true],
+  ];
+  for (const [rotulo, mudar, numero, temAjuda] of casos) {
+    const { el, digitar, status, botao } = await telaNaoEncontrado(mudar);
+    const cartao = cartaoAntigoDe(el, numero);
+    const r = cartao.querySelector('[data-sebrae-campo="R"]');
+    digitar(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
+    assert.notEqual(r.required, true, rotulo);
+    assert.notEqual(r.getAttribute("aria-required"), "true", rotulo);
+    assert.equal(botao.disabled, false, rotulo);
+    assert.doesNotMatch(status().textContent, /DT ENCERRAMENTO/, rotulo);
+    const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
+    if (temAjuda) assert.equal(ajuda.hidden, true, rotulo);
+    else assert.equal(ajuda, null, rotulo);
+  }
+});
