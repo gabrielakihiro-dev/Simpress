@@ -69,11 +69,13 @@ def _gravar_encerramentos(state_dir: Path, encerramentos: Dict[str, str]) -> "tu
     caminhos = sebrae_novos.caminhos_padrao(state_dir)
     saida = sebrae_novos.caminho_saida(caminhos, fin.NOME_DASHBOARD)
     with lock_paths([saida]):
+        origem: Optional[str] = None  # importação em que a saída nova é montada (só quando ela nasce aqui)
         if saida.is_file():
             base: Optional[bytes] = saida.read_bytes()
         else:
             existentes = sebrae_novos.ler_existentes(caminhos.existentes)
             base = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"]) if existentes else None
+            origem = existentes["sha256"] if existentes and base is not None else None
         if base is None:
             return None, {}, "Não há Dashboard importado utilizável; a coluna R não foi gravada."
         try:
@@ -83,6 +85,11 @@ def _gravar_encerramentos(state_dir: Path, encerramentos: Dict[str, str]) -> "tu
             return None, {}, f"A coluna R não foi gravada: {erro}"
         if resultado.linhas:
             atomic_write_bytes(saida, resultado.conteudo)
+            if origem:
+                try:
+                    fin.gravar_origem_saida(saida, origem)  # sem isto o envio não sabe de que importação a saída veio e não mescla
+                except (OSError, FileBusyError, FileTransactionError):
+                    pass  # só desliga o merge deste envio: ele aborta como antes se o SharePoint mudou
         return (saida if saida.is_file() else None), estados, ""
 
 
@@ -128,6 +135,10 @@ def _enviar_ao_sharepoint(
             log("O resultado do envio é incerto. Confira o SharePoint manualmente; não reenvie automaticamente.")
             return fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
         motivo = rotinas.descrever_erro(erro)
+        if fin.erro_de_conflito(erro):
+            # Conflito de edição: o que o site quer enviar não está perdido (os conflitos ficam no estado); sem cópia pendente, sem subir nada.
+            log(f"Envio parado por conflito de edição: {motivo}")
+            return fin.aviso_sharepoint(True, motivo)
     else:
         try:
             fin.confirmar_envio(state_dir, envio)
@@ -207,6 +218,9 @@ def _reenviar_pendente(context: "BrowserContext", rotinas: Any, state_dir: Path,
                         return 1
                 motivo = rotinas.descrever_erro(erro)
                 log(f"O reenvio falhou: {motivo}")
+                if fin.erro_de_conflito(erro):  # a cópia pendente já guardada continua como está; nada novo é criado nem enviado
+                    resultado["sharepoint"] = fin.aviso_sharepoint(True, motivo)
+                    return 1
                 resultado["sharepoint"] = fin.aviso_sharepoint(
                     True, motivo, str(pendente), bool(registro.get("copia_sharepoint")),
                 )
@@ -256,12 +270,15 @@ def _reenviar_snapshot(context: "BrowserContext", rotinas: Any, state_dir: Path,
             resultado["sharepoint"] = fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
             log("Esta cópia foi enviada; a fila pendente existente foi preservada.")
             return 0
-        except Exception:
+        except Exception as erro:
             registro = fin.envio_do_id(state_dir, envio_id)
             if registro["status"] in ("confirmado", "concluido"):
                 resultado["sharepoint"] = fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
                 return 0
             fin.cancelar_envio_preparado(state_dir, envio_id)
+            if fin.erro_de_conflito(erro):
+                resultado["sharepoint"] = fin.aviso_sharepoint(True, rotinas.descrever_erro(erro))
+                return 1
             resultado["sharepoint"] = fin.aviso_do_pendente(state_dir)
             return 1
         finally:

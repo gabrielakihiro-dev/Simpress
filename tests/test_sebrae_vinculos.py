@@ -1,6 +1,6 @@
 import unittest
 
-from domains.sebrae_vinculos import os_do_chamado, vinculos_derivados
+from domains.sebrae_vinculos import os_do_chamado, vinculos_da_finalizacao, vinculos_derivados
 
 RELATORIO = {"chamados": [
     {"serie": "ABC-123", "simpress": {"ordens_servico": ["7303022"]}, "oracle": [{"ordem_servico": "7303022"}]},
@@ -49,6 +49,34 @@ class DerivadosTest(unittest.TestCase):
 
     def test_sem_relatorio(self):
         self.assertEqual(vinculos_derivados([aberto()], None), [])
+
+
+def marca(chamado="UTIC-2025-77", serie="abc 123", os="7303022", ativa=True, em="2025-12-30T10:00:00"):
+    return {"chamado": chamado, "serie": serie, "os": os, "ativa": ativa, "finalizado_em": em}
+
+
+class DaFinalizacaoTest(unittest.TestCase):
+    def test_marca_ativa_gera_um_vinculo_por_fonte_com_ano_do_chamado_e_grafia_do_relatorio(self):
+        vinculos = vinculos_da_finalizacao([marca()], RELATORIO)
+        self.assertEqual(vinculos[0], {
+            "fonte": "simpress", "serie": "ABC-123", "os": "7303022", "ano": 2025, "numero": "77",
+            "chamado": "UTIC-2025-77", "origem": "finalizacao", "finalizado_em": "2025-12-30T10:00:00",
+        })
+        self.assertEqual([v["fonte"] for v in vinculos], ["simpress", "oracle"])
+
+    def test_marca_desfeita_chamado_invalido_e_os_fora_do_relatorio_nao_geram_nada(self):
+        for ruim in (marca(ativa=False), marca("linha:2"), marca("UTIC-1999-1"), marca("UTIC-2025-" + "1" * 25), marca(os="999"), marca(serie="ZZZ"), marca(os="")):
+            self.assertEqual(vinculos_da_finalizacao([ruim], RELATORIO), [], ruim)
+        self.assertEqual(vinculos_da_finalizacao([marca()], None), [])
+
+    def test_primeira_marca_ativa_da_chave_vence_e_desfeita_mais_nova_nao_a_derruba(self):
+        marcas = [marca("UTIC-2026-9", ativa=False), marca("UTIC-2025-77"), marca("UTIC-2024-5")]  # mais recente primeiro
+        self.assertEqual({v["chamado"] for v in vinculos_da_finalizacao(marcas, RELATORIO)}, {"UTIC-2025-77"})
+
+    def test_serie_so_na_grafia_exata_sem_troca_macbook(self):
+        # A F6 decide a sub-aba pela série exata; o vínculo automático segue a mesma regra.
+        relatorio = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]}
+        self.assertEqual(vinculos_da_finalizacao([marca(serie="SCXC9F072K1", os="77")], relatorio), [])
 
 
 class OsDoChamadoTest(unittest.TestCase):

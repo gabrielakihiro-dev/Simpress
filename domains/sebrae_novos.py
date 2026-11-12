@@ -37,6 +37,7 @@ STATUS_ABERTO = "EM ABERTO"
 STATUS_FINALIZADO = "FINALIZADO"
 TIPOS_CHAMADO = ("INCIDENTE", "SOLICITAÇÃO")
 MAX_CAMPO_MANUAL = 80
+MAX_TITULO = 300  # title (G) typed on the site
 MAX_CAMPO_ANTIGO = 4000  # per text field of an old ticket read from SoftExpert (same cut as the finalization text)
 _FORMATO_ENCERRAMENTO = "%d/%m/%Y %H:%M"
 MENSAGEM_EXPORTADA = "Planilha Exportada com Sucesso!"
@@ -147,21 +148,41 @@ def mapear_chaves_de_linha(antes: Iterable[Mapping[str, Any]], depois: Iterable[
 
     A row is the same ticket when C, G, I and H are equal in both imports and that content is unique on both sides:
     the row number alone says nothing once the sheet was sorted or reordered. Repeated or missing content is never guessed.
+    Second chance (the title G may have been edited on the site and written to the Dashboard): a key still without
+    a pair is matched by C, I and H alone, only when I or H is filled (a row with only C in common is never paired),
+    that content is unique on both sides and the destination key is not taken by another pair.
     Both sides must come from the stored copy (``ler_existentes``), so the CPF/password masking is the same."""
     from domains.sebrae_dashboard_gravacao import CHAVE_DE_LINHA  # imported here: that module imports this one
 
-    def agrupar(itens: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, ...], List[str]]:
+    def agrupar(itens: Sequence[Mapping[str, Any]], campos: Sequence[str]) -> Dict[Tuple[str, ...], List[str]]:
         grupos: Dict[Tuple[str, ...], List[str]] = {}
         for item in itens:
-            conteudo = tuple(str(item.get(campo) or "") for campo in ("chamado", "titulo", "usuario", "descricao"))
+            conteudo = tuple(str(item.get(campo) or "") for campo in campos)
             grupos.setdefault(conteudo, []).append(str(item.get("numero") or ""))
         return grupos
 
-    anteriores, atuais = agrupar(antes), agrupar(depois)
-    return {
+    itens_antes, itens_depois = list(antes), list(depois)
+    completo = ("chamado", "titulo", "usuario", "descricao")
+    sem_titulo = ("chamado", "usuario", "descricao")
+    anteriores, atuais = agrupar(itens_antes, completo), agrupar(itens_depois, completo)
+    mapa: Dict[str, Optional[str]] = {
         chave: atuais[conteudo][0] if len(chaves) == 1 and len(atuais.get(conteudo, ())) == 1 else None
         for conteudo, chaves in anteriores.items() for chave in chaves if chave.startswith(CHAVE_DE_LINHA)
     }
+    if all(destino is not None for destino in mapa.values()):
+        return mapa
+    anteriores_sem, atuais_sem = agrupar(itens_antes, sem_titulo), agrupar(itens_depois, sem_titulo)
+    for item in itens_antes:
+        chave = str(item.get("numero") or "")
+        if mapa.get(chave, "") is not None:  # not a ``linha:`` key, or already paired
+            continue
+        conteudo = tuple(str(item.get(campo) or "") for campo in sem_titulo)
+        if not (conteudo[1] or conteudo[2]):  # só o C em comum não diz que é o mesmo chamado
+            continue
+        destinos = atuais_sem.get(conteudo, ())
+        if len(anteriores_sem[conteudo]) == 1 and len(destinos) == 1 and destinos[0] not in mapa.values():
+            mapa[chave] = destinos[0]
+    return mapa
 
 
 def ordenar_pela_coluna_c(itens: Iterable[Any], valor_c: Callable[[Any], Optional[str]]) -> List[Any]:
@@ -271,6 +292,11 @@ def ler_antigos(caminho: Path) -> Dict[str, Dict[str, str]]:
 def descricao_segura(texto: Any) -> str:
     """Texto digitado pelo usuário na descrição do chamado, com CPF e senhas mascarados como os lidos do SoftExpert."""
     return _seguro(texto)
+
+
+def descricao_para_celula(texto: Any) -> str:
+    """Descrição editada no cartão como vai à coluna H do Dashboard: uma linha, CPF e senha mascarados, sem virar fórmula."""
+    return _texto_de_celula(descricao_segura(texto))
 
 
 def aplicar_descricoes_novos(chamados: Sequence[ChamadoSoftExpert], editadas: Mapping[str, str]) -> List[ChamadoSoftExpert]:
@@ -442,6 +468,16 @@ def validar_manuais(manuais: Mapping[str, Any], exigir: bool = True) -> Dict[str
     return {**resultado, "D": status, "J": tipo, "R": encerramento}
 
 
+def titulo_editado(manuais: Mapping[str, Any]) -> str:
+    """Title (column G) typed on the site, as the Dashboard stores it; ``""`` when blank, so the SoftExpert title stays.
+
+    Only the Dashboard copy gets it: the ticket is still found by its UTIC number, never by this text."""
+    valor = " ".join(str(manuais.get("G") or "").split())
+    if len(valor) > MAX_TITULO:
+        raise ManuaisInvalidos(f"A coluna G aceita até {MAX_TITULO} caracteres.")
+    return _texto_de_celula(valor)
+
+
 def validar_listas(manuais: Mapping[str, str], listas: Mapping[str, Sequence[str]], atuais: Optional[Mapping[str, str]] = None) -> None:
     """A and B must come from the LISTAS sheet read at import. An old ticket may keep an off-list value it already has."""
     from domains.sebrae_categoria import CATEGORIAS_NOVAS  # tardio: sebrae_categoria importa a gravação
@@ -472,12 +508,17 @@ def linhas_completas(
         if exigir and chamado.numero not in manuais_por_numero:
             raise ManuaisInvalidos(f"Preencha os campos manuais do {chamado.numero}.")
         try:
-            manuais = validar_manuais(manuais_por_numero.get(chamado.numero) or {}, exigir)
+            enviados = manuais_por_numero.get(chamado.numero) or {}
+            manuais = validar_manuais(enviados, exigir)
             validar_listas(manuais, listas or {})
+            titulo = titulo_editado(enviados)
         except ManuaisInvalidos as erro:
             raise ManuaisInvalidos(f"{chamado.numero}: {erro}") from None
         cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos)
-        linhas.append({**montar_linha(chamado, cruzamento, os_), **manuais})
+        linha = {**montar_linha(chamado, cruzamento, os_), **manuais}
+        if titulo:
+            linha["G"] = titulo
+        linhas.append(linha)
     return linhas
 
 

@@ -1,4 +1,5 @@
-"""Chrome adapter for the UX "Gerar ticket" form (address update after a transfer). Sibling of PortalUXChrome."""
+"""Chrome adapter for the UX "Gerar ticket" form (Transporte tab: Atualização Cadastral or Transferência Fisica).
+Sibling of PortalUXChrome."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -14,7 +15,7 @@ from domains.ux_chamados_browser import (
     _unico, _valor_confere, automation, contexto_chrome_ux,
 )
 from domains.ux_ticket import (
-    ANEXO_MAX, CHAMADO_INTERNO_MAX, CONTRATO, DESCRICAO_MAX, INCIDENTE, MOTIVO, Formulario,
+    ANEXO_MAX, CHAMADO_INTERNO_MAX, CONTRATO, DESCRICAO_MAX, ESCOLHAS, TIPO_ATUALIZACAO, TIPO_ENDERECO, Formulario,
 )
 
 T = TypeVar("T")
@@ -262,8 +263,8 @@ class PortalTicketUXChrome:
         lista.wait_for(state="hidden", timeout=CONTROLES_MS)
         return list(dict.fromkeys(opcoes))  # identical labels (e.g. Irati listed twice) are one address
 
-    def _ate_enderecos(self, page: Any, serial: str, aba: str, cep: str) -> tuple[str, list[str]]:
-        """From the consulta screen: contract → série → card → Incidente → Motivo → CEP → Meus Endereços."""
+    def _ate_motivo(self, page: Any, serial: str, aba: str, tipo: str) -> str:
+        """From the consulta screen: contract → série → card → Incidente → Motivo of this kind; returns the model."""
         self._passo(page, "Contrato", lambda: _escolher(page, "selectContrato", None, busca=CONTRATO), rota=ROTA_CONSULTA)
         self._passo(page, "Número de série", lambda: _preencher(_unico(page.locator("input#inputNumeroSerie")), serial),
                     rota=ROTA_CONSULTA)
@@ -273,8 +274,14 @@ class PortalTicketUXChrome:
         page.evaluate("(nome) => { window.name = nome; }", f"{aba}:abrir-ticket")
         self._passo(page, "Aviso de backup", lambda: _fechar_aviso_backup(page, espera_ms=1000))
         modelo = self._passo(page, "Cabeçalho do equipamento", lambda: self._equipamento(page, serial))
-        self._passo(page, "Incidente", lambda: _escolher(page, "selectIncidente", INCIDENTE))
-        self._passo(page, "Motivo", lambda: _escolher(page, "selectMotivo", MOTIVO))
+        incidente, motivo = ESCOLHAS[tipo]
+        self._passo(page, "Incidente", lambda: _escolher(page, "selectIncidente", incidente))
+        self._passo(page, "Motivo", lambda: _escolher(page, "selectMotivo", motivo))
+        return modelo
+
+    def _ate_enderecos(self, page: Any, serial: str, aba: str, cep: str) -> tuple[str, list[str]]:
+        """Atualização Cadastral up to Motivo, then CEP → Buscar meus Endereços → Meus Endereços."""
+        modelo = self._ate_motivo(page, serial, aba, TIPO_ATUALIZACAO)
         self._passo(page, "CEP", lambda: _preencher(_unico(page.locator("input#cep-novo-endereco")), cep, nome=DIGITOS))
         self._passo(page, "Buscar meus Endereços",
                     lambda: _unico(_botao(page, "Buscar meus Endereços")).click(timeout=CONTROLES_MS))
@@ -286,6 +293,12 @@ class PortalTicketUXChrome:
         formulario: Formulario | None = None,
     ) -> None:
         """The whole preparation again, reusing the address the user already chose (revalidated on the new list)."""
+        if formulario is not None and formulario.tipo == TIPO_ENDERECO:  # Transferência Fisica: no CEP or address
+            if self._ate_motivo(page, serial, aba, TIPO_ENDERECO) != modelo:
+                raise ErroUX(409, "O modelo exibido no UX mudou.")
+            self._preencher_campos(page, formulario)
+            self._conferir_tudo(page, serial, modelo, cep, formulario)
+            return
         atual, opcoes = self._ate_enderecos(page, serial, aba, cep)
         if atual != modelo:
             raise ErroUX(409, "O modelo exibido no UX mudou.")
@@ -303,10 +316,17 @@ class PortalTicketUXChrome:
         page.bring_to_front()
         return self._com_contingencia(page, aba, lambda: self._ate_enderecos(page, serial, aba, cep))
 
+    def preparar_transferencia(self, serial: str, aba: str) -> str:
+        """"Alterar Endereço": stop after Transporte / Transferência Fisica; return the model."""
+        page = self._vigiar(self._contexto.new_page())
+        page.bring_to_front()
+        return self._com_contingencia(page, aba, lambda: self._ate_motivo(page, serial, aba, TIPO_ENDERECO))
+
     @staticmethod
-    def _conferir_escolhas(page: Any, endereco: str | None = None) -> None:
-        esperado = {"selectIncidente": INCIDENTE, "selectMotivo": MOTIVO}
-        if endereco is not None:
+    def _conferir_escolhas(page: Any, endereco: str | None = None, tipo: str = TIPO_ATUALIZACAO) -> None:
+        incidente, motivo = ESCOLHAS[tipo]
+        esperado = {"selectIncidente": incidente, "selectMotivo": motivo}
+        if endereco is not None and tipo == TIPO_ATUALIZACAO:
             esperado["novo-endereco"] = endereco
         if any(_selecionado(page, campo) != valor for campo, valor in esperado.items()):
             raise ErroUX(409, "Incidente, motivo ou endereço mudaram no UX.")
@@ -346,29 +366,39 @@ class PortalTicketUXChrome:
         self._passo(page, nome, lambda: _preencher(_unico(page.locator(seletor)), valor, nome=modo, digitado=digitado))
 
     def _preencher_campos(self, page: Any, formulario: Formulario) -> None:
-        """CNPJs → Registro → anexo → solicitante → Nº interno; stops before Finalizar."""
+        """CNPJs → Registro → anexo → solicitante → Nº interno; stops before Finalizar.
+        Transferência Fisica ("Alterar Endereço") has no CNPJ fields and goes without attachment or Nº interno."""
+        atualizacao = formulario.tipo == TIPO_ATUALIZACAO
         self._passo(page, "Aviso de backup", lambda: _fechar_aviso_backup(page))
-        self._passo(page, "Incidente, motivo e endereço", lambda: self._conferir_escolhas(page, formulario.endereco))
-        self._campo(page, "CNPJ de instalação", "input#atualizarCnpjInstalacao", formulario.cnpj_instalacao, modo=DIGITOS)
-        self._campo(page, "CNPJ de faturamento", "input#atualizarCnpjFaturamento", formulario.cnpj_faturamento, modo=DIGITOS)
+        self._passo(page, "Incidente, motivo e endereço",
+                    lambda: self._conferir_escolhas(page, formulario.endereco, formulario.tipo))
+        if atualizacao:
+            self._campo(page, "CNPJ de instalação", "input#atualizarCnpjInstalacao", formulario.cnpj_instalacao, modo=DIGITOS)
+            self._campo(page, "CNPJ de faturamento", "input#atualizarCnpjFaturamento", formulario.cnpj_faturamento,
+                        modo=DIGITOS)
         self._campo(page, "Registro", DESCRICAO, formulario.descricao)
-        self._passo(page, "Anexo", lambda: self._anexar(page, formulario.arquivo_nome, formulario.arquivo))
+        if atualizacao:
+            self._passo(page, "Anexo", lambda: self._anexar(page, formulario.arquivo_nome, formulario.arquivo))
         self._campo(page, "Nome", "input#nome", formulario.nome)
         self._campo(page, "E-mail", "input#email", formulario.email)
         self._campo(page, "Telefone", "input#telefone", formulario.telefone, modo=DIGITOS,
                     digitado=re.sub(r"\D", "", formulario.telefone))
-        self._campo(page, "Nº do chamado interno", "input#InputNumeroChamado", formulario.chamado_interno)
+        if atualizacao:
+            self._campo(page, "Nº do chamado interno", "input#InputNumeroChamado", formulario.chamado_interno)
 
     def _conferir_tudo(self, page: Any, serial: str, modelo: str, cep: str, formulario: Formulario) -> None:
         """Final check: re-read every field on screen; any difference is a failure of this step."""
         self._etapa = "Conferência final"
         _na_rota(page, ROTA_ABRIR)
         self._conferir_equipamento(page, serial, modelo)
-        self._conferir_escolhas(page, formulario.endereco)
+        atualizacao = formulario.tipo == TIPO_ATUALIZACAO
+        self._conferir_escolhas(page, formulario.endereco, formulario.tipo)
         esperados = (
-            ("input#cep-novo-endereco", cep, DIGITOS),
-            ("input#atualizarCnpjInstalacao", formulario.cnpj_instalacao, DIGITOS),
-            ("input#atualizarCnpjFaturamento", formulario.cnpj_faturamento, DIGITOS),
+            *((
+                ("input#cep-novo-endereco", cep, DIGITOS),
+                ("input#atualizarCnpjInstalacao", formulario.cnpj_instalacao, DIGITOS),
+                ("input#atualizarCnpjFaturamento", formulario.cnpj_faturamento, DIGITOS),
+            ) if atualizacao else ()),
             (DESCRICAO, formulario.descricao, ""),
             ("input#nome", formulario.nome, ""),
             ("input#email", formulario.email, ""),
@@ -379,7 +409,7 @@ class PortalTicketUXChrome:
             atual = str(_unico(page.locator(seletor)).input_value(timeout=CONTROLES_MS)).replace("\r\n", "\n")
             if not _valor_confere(modo, atual, esperado):
                 raise ErroUX(409, "A conferência final encontrou um campo diferente do esperado.")
-        if page.get_by_text(formulario.arquivo_nome).count() != 1:
+        if atualizacao and page.get_by_text(formulario.arquivo_nome).count() != 1:
             raise ErroUX(409, "A conferência final não encontrou o anexo uma única vez.")
         _na_rota(page, ROTA_ABRIR)
 

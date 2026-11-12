@@ -10,9 +10,10 @@
     const { app, dom } = context;
     const {
       CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
-      MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
-      ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes,
-      tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
+      MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
+      ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
+      tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+      resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
       camposFaltando, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
       lerRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho,
     } = context.sebraeDashboardModel;
@@ -59,6 +60,26 @@
       definirTexto("sebrae-atualizar-status", texto);
       const elemento = el("sebrae-atualizar-status");
       if (elemento) elemento.dataset.estado = situacao;
+    }
+
+    /** Antigos em aberto (visíveis) com D FINALIZADO e "não encontrado no SoftExpert" que ainda não têm DT ENCERRAMENTO (R): o servidor recusaria Atualizar. */
+    function pendentesEncerramento() {
+      return pendenciasEncerramento(estado.abertos.filter(item => !estado.finalizados.has(item.numero)), estado.edicoes);
+    }
+
+    // O aviso de "falta R" que está no status de Atualizar agora; só ele é apagado quando a falta some (nunca o resultado de um Atualizar).
+    let avisoEncerramentoNoStatus = "";
+
+    /** Mostra (ou, quando some a falta, apaga) o aviso de R obrigatório no status de Atualizar; devolve se há falta. */
+    function mostrarFaltaEncerramento(pendentes) {
+      if (pendentes.length) {
+        avisoEncerramentoNoStatus = avisoEncerramento(pendentes);
+        definirStatusAtualizar(avisoEncerramentoNoStatus, "alerta");
+      } else if (avisoEncerramentoNoStatus) {
+        if (el("sebrae-atualizar-status")?.textContent === avisoEncerramentoNoStatus) definirStatusAtualizar("", "");
+        avisoEncerramentoNoStatus = "";
+      }
+      return pendentes.length > 0;
     }
 
     /** "Enviar ao SharePoint" só vale com o arquivo gerado por Atualizar Dashboard; sem ele a rotina falharia com "Não achei...". */
@@ -135,6 +156,49 @@
       return controle;
     }
 
+    /**
+     * "Título (G)" do chamado novo ou do antigo em aberto: texto livre, sempre editável (G vazio ou preenchido).
+     * Vazio mantém o título de hoje. O texto digitado só chega à coluna G da cópia do Dashboard (Atualizar) e ao SharePoint:
+     * o SoftExpert acha o chamado pelo número UTIC e nunca recebe o título. O valor inicial não entra no estado; só o que a pessoa digita vira rascunho.
+     */
+    function campoTitulo(numero, alvo = "novo") {
+      const controle = document.createElement("input");
+      controle.type = "text";
+      controle.className = "ck-entrada ck-entrada--sm";
+      controle.maxLength = MAX_TITULO;
+      controle.autocomplete = "off";
+      controle.value = valoresDe(alvo)[numero]?.G ?? tituloOriginal(numero).slice(0, MAX_TITULO); // título original maior que o limite faria o Atualizar voltar 422
+      controle.dataset.sebraeNumero = numero;
+      controle.dataset.sebraeCampo = "G";
+      controle.dataset.sebraeAlvo = alvo;
+      controle.addEventListener("input", aoEditar);
+      controle.addEventListener("change", aoEditar);
+      return campo(ROTULO_TITULO, controle);
+    }
+
+    /** O assunto do cartão e o da linha recolhida acompanham o que está sendo digitado em "Título (G)". */
+    function mostrarTituloDigitado(controle) {
+      const texto = tituloEfetivo(controle.dataset.sebraeNumero) || "Sem título";
+      controle.closest("details")?.querySelectorAll(".sebrae-chamado__assunto, .sebrae-antigo__assunto").forEach(no => { no.textContent = texto; });
+    }
+
+    /**
+     * R (DT ENCERRAMENTO) do antigo "não encontrado no SoftExpert" vira obrigatório quando D é FINALIZADO: `required`, `aria-required` e a ajuda visível.
+     * A ajuda fica fora do `<label>` (não entra no nome do campo) e só descreve o campo enquanto aparece.
+     */
+    function sincronizarEncerramento(manuais, numero) {
+      const ajuda = manuais?.querySelector(".sebrae-chamado__encerramento-ajuda");
+      const controle = manuais?.querySelector('[data-sebrae-campo="R"]');
+      if (!ajuda || !controle) return;
+      const item = estado.abertos.find(aberto => aberto.numero === numero);
+      const obrigatorio = Boolean(item) && encerramentoObrigatorio(item, estado.edicoes[numero]);
+      controle.required = obrigatorio;
+      controle.setAttribute("aria-required", String(obrigatorio));
+      if (obrigatorio) controle.setAttribute("aria-describedby", ajuda.id);
+      else controle.removeAttribute("aria-describedby");
+      ajuda.hidden = !obrigatorio;
+    }
+
     /** Status (D) em FINALIZADO fica verde, para ver de relance quais ainda faltam finalizar. */
     function destacarFinalizado(controle) {
       if (controle.dataset.sebraeCampo === "D") controle.classList.toggle("sebrae-status--finalizado", controle.value === "FINALIZADO");
@@ -152,6 +216,20 @@
       A: "Responsável (A) *", B: "Categoria (B)", D: "Status (D) *", J: "Tipo do chamado (J) *",
       R: "Encerramento (R)", S: "Tipo SLA (S)",
     });
+    const ROTULO_TITULO = "Título (G)"; // campo à parte dos manuais: texto livre de até MAX_TITULO, sem lista de sugestões
+
+    /** Título do SoftExpert (novo) ou do Dashboard/leitura (antigo), antes de qualquer edição em "Título (G)". */
+    function tituloOriginal(numero) {
+      const antigo = estado.abertos.find(item => item.numero === numero);
+      if (antigo) return dadosAntigo(antigo).titulo;
+      return String(estado.formulario.find(item => item.numero === numero)?.linha?.G ?? "").trim();
+    }
+
+    /** Título que vale agora: o digitado em "Título (G)" (se não estiver vazio) ou o original. */
+    function tituloEfetivo(numero) {
+      const guardados = estado.abertos.some(item => item.numero === numero) ? estado.edicoes : estado.valores;
+      return String(guardados[numero]?.G ?? "").trim() || tituloOriginal(numero);
+    }
 
     /** Cartão do chamado como está na tela agora, guardado no servidor para reaparecer em "Chamados finalizados". */
     function montarFicha(numero) {
@@ -161,12 +239,12 @@
       let titulo, solicitante, fatos, detalhes = [];
       if (antigo) {
         const dados = dadosAntigo(antigo);
-        [titulo, solicitante] = [dados.titulo, dados.solicitante];
+        [titulo, solicitante] = [tituloEfetivo(numero), dados.solicitante];
         fatos = [["Solicitante", dados.solicitante], ["Abertura", dados.abertura],
           ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [rotulo, antigo.automaticos?.[letra] || antigo.automaticos_sugeridos?.[letra]])];
         detalhes = [["Descrição", dados.descricao], ["Atendimento realizado", dados.atendimento]];
       } else if (novo) {
-        [titulo, solicitante] = [novo.linha.G, novo.linha.I];
+        [titulo, solicitante] = [tituloEfetivo(numero), novo.linha.I];
         fatos = CAMPOS_AUTOMATICOS.map(([letra, rotulo]) => [rotulo, novo.linha[letra]]);
         detalhes = [["Descrição", novo.linha.H], ["Atendimento realizado", novo.linha.F]];
       } else return null;
@@ -479,8 +557,9 @@
       return detalhe;
     }
 
-    /** Bloco "Descrição" com lápis (F5): o texto muda só neste site, o SoftExpert e a linha já lançada no Dashboard ficam como estão.
-     * Texto vazio restaura o original. `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
+    /** Bloco "Descrição" com lápis (F5): o texto vale neste site e vai à coluna H da cópia do Dashboard no próximo "Atualizar Dashboard"
+     * (linha nova ou antigo em aberto com UTIC); o SoftExpert nunca o recebe. Texto vazio restaura o original só no site: não apaga nem desfaz um H já enviado.
+     * `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
     function blocoDescricaoEditavel(item, texto, aplicar) {
       const numero = item.numero;
       let atual = texto || "";
@@ -556,7 +635,9 @@
           aplicar(dados);
           mostrarEstado();
           abrirEditor(false);
-          definirFeedback(feedback, editada ? "Descrição salva só neste site." : "Descrição original restaurada.", "ok");
+          definirFeedback(feedback, editada
+            ? "Descrição salva. Vai à coluna H do Dashboard em Atualizar Dashboard; o SoftExpert não recebe esse texto."
+            : "Descrição original restaurada neste site. Um H já enviado ao Dashboard não é desfeito.", "ok");
           lapis.focus();
         } catch (error) {
           definirFeedback(feedback, `Não foi possível salvar: ${error.message}`, "erro");
@@ -610,8 +691,9 @@
     /** Item da lista de antigos: `details` recolhido; o resumo mostra número, assunto, pessoa e selos, e o cartão fica dentro. */
     function blocoAntigo(item) {
       const dados = dadosAntigo(item);
+      const tituloAtual = tituloEfetivo(item.numero);
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", tituloAntigo(item));
-      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", dados.titulo || "Sem título"));
+      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", tituloAtual || "Sem título"));
       const artigo = cartaoChamado(item.numero, "antigo", titulo, "Em aberto", "");
       const pares = [["I", "Solicitante", dados.solicitante], ["", "Abertura", dados.abertura],
         ...CAMPOS_PREENCHIDOS.flatMap(([letra, rotulo]) => {
@@ -630,20 +712,28 @@
       });
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
+      manuais.appendChild(campoTitulo(item.numero, "antigo"));
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra, "antigo"))));
+      if (dados.naoEncontrado) {
+        // Não encontrado no SoftExpert: finalizar à mão (D) exige a data de encerramento (R), que nenhuma leitura trará.
+        const ajuda = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__encerramento-ajuda", AJUDA_ENCERRAMENTO);
+        ajuda.id = `sebrae-encerramento-ajuda-${item.numero}`;
+        manuais.appendChild(ajuda);
+        sincronizarEncerramento(manuais, item.numero);
+      }
       const notas = [];
       const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
       if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
-      let detalhes = [];
-      if (dados.lido) {
-        detalhes = [blocoDescricaoEditavel(item, dados.descricao, resposta => {
+      const detalhes = [];
+      // O lápis vale para todo antigo com UTIC (lido ou não): o texto editado vai à coluna H da cópia do Dashboard; chave "linha:<n>" não tem lápis.
+      if (NUMERO_UTIC.test(item.numero)) {
+        detalhes.push(blocoDescricaoEditavel(item, dados.descricao, resposta => {
           marcarDescricaoEditada(item, resposta);
-          item.leitura_softexpert = { ...item.leitura_softexpert, descricao: resposta.descricao };
-        }), blocoDetalhe("Atendimento realizado", dados.atendimento)];
-      }
+          atualizarBotaoAtualizar();
+        }));
+      } else if (dados.descricao) detalhes.push(blocoDetalhe("Descrição", dados.descricao)); // sem UTIC: coluna H da planilha, só leitura
+      if (dados.lido) detalhes.push(blocoDetalhe("Atendimento realizado", dados.atendimento));
       else {
-        // Ainda não lido no SoftExpert: mostra a descrição da planilha Dashboard (coluna H) quando houver, só leitura.
-        if (dados.descricao) detalhes.push(blocoDetalhe("Descrição", dados.descricao));
         if (NUMERO_UTIC.test(item.numero)) {
           // Não encontrado na última leitura (ex.: finalizado por outro técnico): o CSS pinta a linha para conferir depois.
           const dica = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__dica", dados.naoEncontrado
@@ -655,7 +745,7 @@
       }
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
-      return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), dados.titulo, dados.solicitante,
+      return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,
         [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
     }
 
@@ -683,7 +773,7 @@
     function blocoNovo(item) {
       const novo = dom.createTextElement("span", "ck-badge sebrae-selo", "Novo");
       novo.dataset.status = "info";
-      return linhaRecolhida("sebrae-novo", item.numero, item.numero, item.linha.G, item.linha.I,
+      return linhaRecolhida("sebrae-novo", item.numero, item.numero, tituloEfetivo(item.numero), item.linha.I,
         [novo, seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
     }
 
@@ -736,7 +826,7 @@
 
     function blocoChamado(item) {
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
-      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.linha.G || "Sem título"));
+      titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", tituloEfetivo(item.numero) || "Sem título"));
       const artigo = cartaoChamado(item.numero, "novo", titulo, "Novo", "info");
       const selo = seloOs(item.linha.E);
       if (selo) artigo.querySelector(".sebrae-chamado__cab").appendChild(selo);
@@ -753,6 +843,7 @@
       }), blocoDetalhe("Atendimento realizado", item.linha.F)];
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
+      manuais.appendChild(campoTitulo(item.numero));
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualNovo(item, letra)));
       artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
@@ -1029,9 +1120,9 @@
       const fin = estado.finalizadosItens.find(item => item.numero === numero);
       if (fin) return { titulo: fin.ficha?.titulo, solicitante: fin.ficha?.solicitante, observacao: fin.observacao };
       const novo = estado.formulario.find(item => item.numero === numero);
-      if (novo) return { titulo: novo.linha?.G, solicitante: novo.linha?.I, observacao: novo.observacao };
+      if (novo) return { titulo: tituloEfetivo(numero), solicitante: novo.linha?.I, observacao: novo.observacao };
       const antigo = estado.abertos.find(item => item.numero === numero);
-      if (antigo) { const dados = dadosAntigo(antigo); return { titulo: dados.titulo, solicitante: dados.solicitante, observacao: antigo.observacao }; }
+      if (antigo) { const dados = dadosAntigo(antigo); return { titulo: tituloEfetivo(numero), solicitante: dados.solicitante, observacao: antigo.observacao }; }
       return null;
     }
 
@@ -1082,10 +1173,10 @@
       let resumo = no.querySelector(".sebrae-antigo__texto");
       if (aba === "novos") {
         const linha = item.linha || {};
-        campos = [campo("", item.numero, true), campo("", linha.G, true), campo("", linha.I, true), ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => campo(rotulo, linha[letra]))];
+        campos = [campo("", item.numero, true), campo("", tituloEfetivo(item.numero), true), campo("", linha.I, true), ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => campo(rotulo, linha[letra]))];
       } else if (aba === "antigos") {
         const dados = dadosAntigo(item);
-        campos = [campo("", item.numero, true), campo("", tituloAntigo(item), true), campo("", dados.titulo, true), campo("", dados.solicitante, true),
+        campos = [campo("", item.numero, true), campo("", tituloAntigo(item), true), campo("", tituloEfetivo(item.numero), true), campo("", dados.solicitante, true),
           ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => campo(rotulo, item.automaticos?.[letra] || item.automaticos_sugeridos?.[letra]))];
       } else if (aba === "finalizados") {
         const ficha = item.ficha || {};
@@ -1444,7 +1535,9 @@
     /** A cópia de saída é refeita da importada: vão o próprio chamado (se novo, mesmo sem campos) e os outros novos que o usuário trabalhou
      * (campo diferente do padrão do próprio chamado: D/S, e também A/B/J no API SEBRAE), nunca novos em branco; edições dos antigos só com campo mudado. */
     function manuaisDoChamado(numero) {
-      const trabalhado = item => item.numero === numero
+      // título (G) digitado e diferente do que veio do SoftExpert também conta como trabalho no chamado novo
+      const tituloMudado = item => { const digitado = String(estado.valores[item.numero]?.G ?? "").trim(); return Boolean(digitado) && digitado !== String(item.linha?.G ?? "").trim(); };
+      const trabalhado = item => item.numero === numero || tituloMudado(item)
         || ["A", "B", "D", "J", "R", "S"].some(letra => { const valor = estado.valores[item.numero]?.[letra]; return valor && valor !== padroesManuais(item)[letra]; });
       return { chamados: payloadAtualizacao(estado.formulario.filter(trabalhado), estado.valores), edicoes: payloadEdicoes(estado.abertos, estado.edicoes) };
     }
@@ -1542,6 +1635,8 @@
           });
           estado.fechar.sharepoint = dados.sharepoint;
           renderizarSharepoint();
+          // O servidor mantém a pendência quando sobra cópia não comprovada: sem este aviso o clique parecia não fazer nada.
+          if (acao === "limpar" && dados.sharepoint?.limpeza_pendente) app.showToast("A limpeza não terminou: ainda há cópia local diferente do que foi enviado. Ela foi preservada; veja o aviso na tela.", "warning");
         } catch (error) { app.showToast(error.message, "error"); }
       };
       const controlesRecuperacao = () => {
@@ -1604,6 +1699,15 @@
       };
       if (aviso?.recuperacao && !aviso.limpeza_pendente && !aviso.incerto) {
         const naoEnviado = aviso.status === "falhou" && aviso.recuperacao.acao === "declarar_nao_enviado";
+        // Fechar só esconde o aviso desta recuperação (chave = envio_id); um novo envio tem outro ID e o aviso volta.
+        const chaveRecuperacao = "sebrae_sharepoint_recuperacao_descartada";
+        let fechado = "";
+        try { fechado = armazenamento?.getItem(chaveRecuperacao) || ""; } catch (_erro) { /* sem armazenamento: aviso continua visível */ }
+        if (!naoEnviado && aviso.envio_id && fechado === aviso.envio_id) {
+          host.hidden = true;
+          host.replaceChildren();
+          return;
+        }
         host.replaceChildren(dom.createTextElement("p", "", naoEnviado
           ? "Você declarou que este envio não está aplicado no SharePoint. As cópias foram preservadas. Nenhum upload foi disparado."
           : aviso.reenvio_confirmado
@@ -1632,6 +1736,16 @@
             } catch (error) { reenviar.disabled = false; app.showToast(error.message, "error"); }
           });
           host.appendChild(reenviar);
+        } else {
+          const fecharAviso = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", "Fechar aviso");
+          fecharAviso.type = "button";
+          fecharAviso.id = "btn-sebrae-fechar-recuperacao";
+          fecharAviso.addEventListener("click", () => {
+            try { armazenamento?.setItem(chaveRecuperacao, aviso.envio_id || ""); } catch (_erro) { /* sem armazenamento: esconde só nesta tela */ }
+            host.hidden = true;
+            host.replaceChildren();
+          });
+          host.appendChild(fecharAviso);
         }
         host.hidden = false;
         return;
@@ -1644,11 +1758,17 @@
       }
       if (aviso?.limpeza_pendente && !aviso.falhou) {
         host.replaceChildren(dom.createTextElement("p", "", "Dashboard enviado ao SharePoint. Cópias locais foram preservadas porque a limpeza não foi concluída. Confira-as antes de qualquer reenvio."));
+        if (aviso.envio_id && aviso.snapshot_disponivel && aviso.pasta_pendente) host.appendChild(dom.createTextElement("p", "ck-campo__ajuda", `Ainda há cópia diferente do que foi enviado em ${aviso.pasta_pendente}. O sistema não a remove: preserve-a em outro lugar e tente limpar de novo.`));
         host.hidden = false;
         controlesRecuperacao();
         return;
       }
-      if (!aviso?.falhou) {
+      // Descarte só esconde o aviso desta cópia (chave = caminho da cópia); nova falha gera nova cópia e o aviso volta.
+      const chaveDescarte = "sebrae_sharepoint_aviso_descartado";
+      const idAviso = aviso?.copia_local || aviso?.motivo || "";
+      let descartado = "";
+      try { descartado = armazenamento?.getItem(chaveDescarte) || ""; } catch (_erro) { /* sem armazenamento: aviso continua visível */ }
+      if (!aviso?.falhou || (idAviso && descartado === idAviso)) {
         host.hidden = true;
         host.replaceChildren();
         return;
@@ -1660,6 +1780,17 @@
       botao.textContent = "Tentar substituir de novo";
       botao.disabled = estado.fechar.emAndamento;
       botao.addEventListener("click", reenviarPendente);
+      const descartar = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", "Já atualizei manualmente, descartar aviso");
+      descartar.type = "button";
+      descartar.id = "btn-sebrae-descartar-aviso";
+      descartar.addEventListener("click", () => {
+        try { armazenamento?.setItem(chaveDescarte, idAviso); } catch (_erro) { /* sem armazenamento: esconde só nesta tela */ }
+        host.hidden = true;
+        host.replaceChildren();
+      });
+      const acoes = document.createElement("div");
+      acoes.className = "sebrae-sharepoint__acoes";
+      acoes.append(botao, descartar);
       const copiaCodigo = document.createElement("code");
       copiaCodigo.textContent = aviso.copia_local || "—";
       const copia = document.createElement("p");
@@ -1674,7 +1805,7 @@
           ? "A cópia pendente também foi enviada à pasta DASHBOARD SEBRAE, com outro nome."
           : "A cópia pendente não foi enviada ao SharePoint: ela está só neste computador."),
         dom.createTextElement("p", "ck-campo__ajuda", "O que fazer:"),
-        sugestoes, botao,
+        sugestoes, acoes,
       );
       host.hidden = false;
     }
@@ -1693,7 +1824,7 @@
       const antigo = estado.abertos.find(item => item.numero === numero);
       const novo = estado.formulario.find(item => item.numero === numero);
       const dadosDoAntigo = antigo ? dadosAntigo(antigo) : null;
-      const titulo = dadosDoAntigo ? dadosDoAntigo.titulo : novo?.linha?.G;
+      const titulo = dadosDoAntigo || novo ? tituloEfetivo(numero) : "";
       const solicitante = dadosDoAntigo ? dadosDoAntigo.solicitante : novo?.linha?.I;
       return [titulo, solicitante].map(parte => String(parte || "").trim()).filter(Boolean).join(" · ");
     }
@@ -1911,6 +2042,8 @@
       const guardados = valoresDe(sebraeAlvo);
       guardados[sebraeNumero] = { ...(guardados[sebraeNumero] || {}), [sebraeCampo]: event.currentTarget.value };
       destacarFinalizado(event.currentTarget);
+      if (sebraeAlvo === "antigo" && (sebraeCampo === "D" || sebraeCampo === "R")) sincronizarEncerramento(event.currentTarget.closest(".sebrae-chamado__manuais"), sebraeNumero);
+      if (sebraeCampo === "G") mostrarTituloDigitado(event.currentTarget);
       if (gravarCampoRascunho(armazenamento, estado.importadoEm, sebraeNumero, sebraeCampo, event.currentTarget.value, sebraeAlvo)) {
         const tipo = sebraeAlvo === "antigo" ? "edicoes" : "valores";
         if (estado.naoSalvos[tipo][sebraeNumero]) {
@@ -1975,17 +2108,26 @@
       }
     }
 
+    /** Antigos em aberto (com UTIC) cuja descrição editada no lápis difere da coluna H importada: "Atualizar" a grava na cópia. Só conta; o servidor confere de novo. */
+    function totalDescricoesAEnviar() {
+      return estado.abertos.filter(item => NUMERO_UTIC.test(item.numero) && !estado.finalizados.has(item.numero)).filter(item => {
+        const editada = String(item.softexpert?.descricao_editada ?? "").trim();
+        return editada && !descricaoJaNoDashboard(editada, item.descricao);
+      }).length;
+    }
+
     function atualizarBotaoAtualizar() {
-      const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length;
+      const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length + totalDescricoesAEnviar();
       const preenchimentos = totalPreenchimentos(estado.abertos);
       const visiveis = estado.abertos.filter(item => !estado.finalizados.has(item.numero)).length;
       // o resumo também é o vazio da aba Antigos (CSS): escrito mesmo sem o botão Atualizar montado
       definirTexto("sebrae-antigos-resumo", visiveis
         ? `${visiveis} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
         : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
+      const faltaEncerramento = mostrarFaltaEncerramento(pendentesEncerramento());
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;
-      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
+      botao.disabled = !estado.atualizavel || faltaEncerramento || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
     }
 
     function renderizarAvisos(novos) {
@@ -2092,6 +2234,7 @@
       atualizarTodosFinalizar();
       atualizarBotaoAtualizar();
       app.carregarResumoHistoricoSebrae?.();
+      app.carregarConflitosSebrae?.();
       desenharDestaques(); // também reaplica aba, filtro e página sobre as listas novas
       carregarDestaques(); // sem await: os de fora das listas e as datas entram quando chegarem
       carregarFechar();
@@ -2166,9 +2309,15 @@
         app.showToast("O rascunho mudou em outra aba. Recarregue e confira os campos antes de atualizar o Dashboard.", "warning");
         return;
       }
+      const faltaR = pendentesEncerramento();
+      if (faltaR.length) { // o botão já fica desabilitado; esta é a barreira de quem chega aqui sem ele (o servidor também recusa com 422)
+        mostrarFaltaEncerramento(faltaR);
+        app.showToast(avisoEncerramento(faltaR), "warning");
+        return;
+      }
       const chamados = payloadAtualizacao(estado.formulario, estado.valores);
       const edicoes = payloadEdicoes(estado.abertos, estado.edicoes);
-      if (!estado.atualizavel || (!chamados.length && !edicoes.length && !totalPreenchimentos(estado.abertos))) return;
+      if (!estado.atualizavel || (!chamados.length && !edicoes.length && !totalPreenchimentos(estado.abertos) && !totalDescricoesAEnviar())) return;
       const botao = el("btn-sebrae-atualizar");
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");

@@ -110,6 +110,14 @@ class DashboardDivergente(RotinaErro):
         self.sha256 = sha256
 
 
+class DashboardEmConflito(RotinaErro):
+    """O SharePoint e o site alteraram a mesma célula: nada é enviado nem guardado como cópia pendente; a escolha é feita na tela.
+
+    ``em_conflito`` é o que ``sebrae_finalizacao.erro_de_conflito`` e ``sebrae_fechar`` reconhecem (este script não é importado por eles)."""
+
+    em_conflito = True
+
+
 class RotinaCancelada(BaseException):
     """Pedido de cancelamento; deriva de BaseException para não ser engolido por ``except Exception``."""
 
@@ -2248,11 +2256,13 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
     if existentes["sha256"] and hash_baixado == existentes["sha256"]:
         return
     # Segundo envio em diante: o SharePoint já tem o arquivo que o próprio site enviou, e não o importado.
-    if hash_baixado == sebrae_finalizacao.ler_enviado(DASHBOARD_SAIDA_DIR.parent):
+    # Um envio mesclado levou edições de terceiros que o próximo arquivo gerado não tem: nunca vale como "sem mudança"; cai no merge.
+    mesclado = sebrae_finalizacao.enviado_mesclado(DASHBOARD_SAIDA_DIR.parent)
+    if not mesclado and hash_baixado == sebrae_finalizacao.ler_enviado(DASHBOARD_SAIDA_DIR.parent):
         return
     # O SharePoint reserializa o xlsx depois do envio (hash novo, valores iguais): compara com a cópia do último envio e, sem ela, com a importada.
     referencias = [
-        ref for ref in (sebrae_finalizacao.ler_copia_enviada(DASHBOARD_SAIDA_DIR.parent), sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"]))
+        ref for ref in (None if mesclado else sebrae_finalizacao.ler_copia_enviada(DASHBOARD_SAIDA_DIR.parent), sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"]))
         if ref is not None
     ]
     if not referencias:
@@ -2267,6 +2277,53 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
         # explica pela cópia mais próxima do baixado (a enviada pode ser anterior à importada)
         motivo = _motivo_da_divergencia(valores, valores_das_referencias)
         raise DashboardDivergente(f"{MSG_SHAREPOINT_MUDOU} {motivo}{MSG_SHAREPOINT_PROXIMO_PASSO}", hash_baixado)
+
+
+def mesclar_dashboard_com_sharepoint(baixado: Path, gerado: bytes, base_origem: "str | None", divergencia: DashboardDivergente) -> "bytes | None":
+    """Mudança real no SharePoint: reaplica só as células que o site alterou sobre o Dashboard baixado (3-way por célula).
+
+    Devolve os bytes a enviar, ou ``None`` quando o merge não é permitido (o ``gerado`` não veio da importação atual ou não há cópia
+    dela): a rotina então para como antes, com ``MSG_SHAREPOINT_MUDOU``. Conflitos vão para ``sebrae_dashboard_conflitos.json`` e levantam
+    ``DashboardEmConflito``; a mensagem leva só a contagem e as letras das colunas.
+    """
+    import hashlib
+
+    from domains import sebrae_finalizacao, sebrae_novos
+    from domains.sebrae_dashboard import DashboardInvalido
+    from domains.sebrae_dashboard_gravacao import reaplicar
+
+    state_dir = DASHBOARD_SAIDA_DIR.parent
+    caminhos = sebrae_novos.caminhos_padrao(state_dir)
+    existentes = sebrae_novos.ler_existentes(caminhos.existentes)
+    if existentes is None or not existentes["sha256"] or base_origem != existentes["sha256"]:
+        return None
+    base = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
+    if base is None:
+        return None
+    sharepoint = baixado.read_bytes()
+    try:
+        resultado = reaplicar(
+            base, gerado, sharepoint, enviado=sebrae_finalizacao.enviado_da_importacao(state_dir),
+            escolhas=sebrae_finalizacao.escolhas_dos_conflitos(state_dir),
+        )
+    except DashboardInvalido as erro:
+        raise RotinaErro(f"{divergencia} Não consegui mesclar as alterações do site: {erro}") from erro
+    if resultado.conflitos:
+        try:
+            sebrae_finalizacao.gravar_conflitos(
+                state_dir, base_sha256=existentes["sha256"], sharepoint_sha256=hashlib.sha256(sharepoint).hexdigest(),
+                gerado_sha256=hashlib.sha256(gerado).hexdigest(), conflitos=resultado.conflitos,
+            )
+        except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
+            raise RotinaErro("O SharePoint e o site alteraram as mesmas células, mas não consegui guardar os conflitos; nada foi enviado.") from erro
+        colunas = ", ".join(sorted({str(conflito["coluna"]) for conflito in resultado.conflitos}))
+        raise DashboardEmConflito(
+            f"Conflito de edição: {len(resultado.conflitos)} célula(s) do Dashboard foram alteradas no SharePoint e no site (colunas {colunas}). "
+            "Nada foi enviado nem guardado como cópia pendente; escolha na tela qual valor manter e envie de novo."
+        )
+    if resultado.conteudo is None:
+        raise RotinaErro(f"{divergencia} Não consegui mesclar as alterações do site.")
+    return resultado.conteudo
 
 
 def _motivo_da_divergencia(baixado: dict, referencias: list) -> str:
@@ -2413,6 +2470,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         verificar_cancelamento()
 
         divergencia_anterior: list = []  # sha256 do download que já reprovou na conferência
+        mesclado: list = []  # [bytes] do Dashboard do SharePoint com as células do site reaplicadas; vazio: vai o arquivo gerado
 
         def _baixar_e_conferir() -> Path:
             # Baixar e conferir formam uma única etapa: nada irreversível acontece aqui (só leitura),
@@ -2420,7 +2478,10 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
             # incidente real: a conferência reprovou um arquivo bom) refaz as duas do zero em vez de
             # abortar. Se o novo download reprova com o MESMO conteúdo (sha256) do anterior, a mudança
             # no SharePoint é real: repetir não muda nada e a rotina para na 2ª tentativa, com a
-            # mensagem original (MSG_SHAREPOINT_MUDOU no início) e o motivo.
+            # mensagem original (MSG_SHAREPOINT_MUDOU no início) e o motivo. Mudança real: antes de parar, tenta reaplicar só as
+            # células do site sobre o arquivo do SharePoint; conflito ou erro levantado aqui sai direto, sem nova tentativa.
+            baixado = None
+            mesclado.clear()  # nunca vale o merge de um download anterior
             try:
                 voltar_para_pasta_dashboard(page)
                 baixado = baixar_dashboard_da_pasta(page)
@@ -2428,7 +2489,15 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                 return baixado
             except DashboardDivergente as erro:
                 if divergencia_anterior == [erro.sha256]:
-                    raise RotinaErro(str(erro)) from erro
+                    gerado = arquivo.read_bytes()
+                    conteudo_mesclado = mesclar_dashboard_com_sharepoint(
+                        baixado, gerado, sebrae_finalizacao.base_do_conteudo(state_dir, gerado), erro,
+                    )
+                    if conteudo_mesclado is None:
+                        raise RotinaErro(str(erro)) from erro
+                    mesclado[:] = [conteudo_mesclado]
+                    log("Dashboard", "O SharePoint mudou; as células alteradas pelo site foram reaplicadas sobre ele.")
+                    return baixado
                 divergencia_anterior[:] = [erro.sha256]
                 raise EtapaInstavel(str(erro)) from erro
             except Exception as erro:
@@ -2438,8 +2507,12 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         guardar_backup_do_dashboard(baixado)
         verificar_cancelamento()
         conteudo = arquivo.read_bytes()
+        base_origem = sebrae_finalizacao.base_do_conteudo(state_dir, conteudo)  # importação em que o arquivo foi montado (None: desconhecida)
         if envio_id is None:
             envio_id = sebrae_finalizacao.preparar_envio(state_dir, conteudo)
+        if mesclado:  # a cópia privada e o registro passam a ser os do arquivo que vai de fato ao SharePoint
+            sebrae_finalizacao.substituir_conteudo_envio(state_dir, envio_id, mesclado[0])
+            conteudo = mesclado[0]
         registro = sebrae_finalizacao.ler_envio(state_dir)
         if registro is None or registro["id"] != envio_id or registro["sha256"] != hashlib.sha256(conteudo).hexdigest():
             raise RotinaErro("O arquivo mudou antes do envio; nenhuma substituição foi iniciada.")
@@ -2453,9 +2526,15 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         # Falha aqui não desfaz o envio: o SharePoint já aceitou; o próximo envio só cai na comparação de valores.
         try:
             enviado = snapshot.read_bytes()
-            sebrae_finalizacao.gravar_enviado(DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado)
+            sebrae_finalizacao.gravar_enviado(
+                DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado, base_sha256=base_origem, mesclado=bool(mesclado),
+            )
         except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
             log("Dashboard", f"Não consegui guardar o hash do arquivo enviado ({erro}); o próximo envio usará só a comparação de valores.")
+        try:
+            sebrae_finalizacao.concluir_conflitos(state_dir)  # o envio terminou: a lista some, as escolhas valem até a próxima importação
+        except (OSError, RuntimeError) as erro:
+            log("Dashboard", f"Não consegui apagar o arquivo de conflitos ({type(erro).__name__}); ele some na próxima importação.")
         try:
             if not sebrae_finalizacao.descartar_pendentes(state_dir, envio_id=envio_id):
                 log("Dashboard", "Envio confirmado; cópias locais preservadas exigem conferência manual. Não reenvie automaticamente.")

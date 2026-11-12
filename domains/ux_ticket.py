@@ -1,4 +1,7 @@
-"""Session and history for preparing the UX "Gerar ticket" (address update) after a transfer workbook."""
+"""Session and history for preparing the UX "Gerar ticket" from the Transporte tab.
+
+Two kinds: "Transporte" (Atualização Cadastral with the transfer workbook attached) and "Alterar Endereço"
+(Transporte / Transferência Fisica de Equipamentos, no workbook, CNPJ, CEP or Nº interno)."""
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
@@ -25,6 +28,13 @@ CNPJ_FATURAMENTO = "75.110.585/0001-00"
 CONTRATO = "16467"
 INCIDENTE = "Atualização Cadastral"
 MOTIVO = "Alteração de Endereço ou Razão Social"
+TIPO_ATUALIZACAO = "atualizacao"  # button "Transporte" (workbook + Atualização Cadastral)
+TIPO_ENDERECO = "endereco"  # button "Alterar Endereço"
+# Incidente and Motivo per kind, exact UX labels ("Fisica" without accent, as the portal lists it).
+ESCOLHAS = {
+    TIPO_ATUALIZACAO: (INCIDENTE, MOTIVO),
+    TIPO_ENDERECO: ("Transporte", "Transferência Fisica de Equipamentos"),
+}
 DESCRICAO_MAX = 2500  # maxlength of the portal's "Registro" textarea
 CHAMADO_INTERNO_MAX = 10  # maxlength of input#InputNumeroChamado
 ANEXO_MAX = 5 * 1024 * 1024  # "arquivo ... com até 5MB"
@@ -34,6 +44,7 @@ INCERTO = "O UX não confirmou o ticket. Confira se ele foi criado antes de tent
 
 class PortalTicket(Protocol):
     def preparar(self, serial: str, aba: str, cep: str) -> tuple[str, list[str]]: ...
+    def preparar_transferencia(self, serial: str, aba: str) -> str: ...
     def escolher_endereco(self, serial: str, modelo: str, aba: str, endereco: str, cep: str) -> None: ...
     def preencher(self, serial: str, modelo: str, aba: str, cep: str, formulario: "Formulario") -> None: ...
     def enviar(self, aba: str, antes_do_clique: Callable[[], None]) -> str: ...
@@ -52,6 +63,7 @@ class Formulario:
     chamado_interno: str
     arquivo_nome: str
     arquivo: bytes
+    tipo: str = TIPO_ATUALIZACAO
 
 
 @dataclass(frozen=True)
@@ -66,6 +78,7 @@ class Sessao:
     arquivo_nome: str
     arquivo: bytes
     expira: float
+    tipo: str = TIPO_ATUALIZACAO
 
 
 def _chave(texto: str) -> str:
@@ -224,13 +237,7 @@ class TicketsUX:
             raise ErroUX(422, "A planilha gerada passa de 5 MB, o limite de anexo do UX.")
         aba = f"simpress-gerar-ticket-{uuid4().hex}"
         with self._conectar() as portal:
-            historico = self._historico()
-            incerto = self._ultimo(historico, serial, "incerto")
-            if incerto and not incerto.get("conferido_em"):
-                if not conferido:
-                    raise ErroUX(409, INCERTO, codigo="envio_incerto")
-                incerto["conferido_em"] = datetime.now().astimezone().isoformat()
-                atomic_write_json(self._history, historico)
+            historico = self._liberar_incerto(serial, conferido)
             cep_ux = f"{cep[:5]}-{cep[5:]}"
             modelo, opcoes = portal.preparar(serial, aba, cep_ux)
             if not modelo.strip():
@@ -240,18 +247,14 @@ class TicketsUX:
             endereco = achados[0] if len(achados) == 1 else None
             if endereco is not None:
                 portal.escolher_endereco(serial, modelo, aba, endereco, cep_ux)
-            session_id = uuid4().hex
-            with self._lock:
-                self._a_fechar += [anterior.aba for anterior in self._sessoes.values()]
-                self._sessoes.clear()
-                self._sessoes[session_id] = Sessao(
-                    serial, modelo, aba, cep_ux, entrega_cnpj.strip(), tuple(opcoes), endereco,
-                    arquivo_nome, arquivo, self._clock() + SESSION_TTL,
-                )
+            session_id = self._nova_sessao(Sessao(
+                serial, modelo, aba, cep_ux, entrega_cnpj.strip(), tuple(opcoes), endereco,
+                arquivo_nome, arquivo, self._clock() + SESSION_TTL,
+            ))
             self._fechar_pendentes(portal)
             ultimo = self._ultimo(historico, serial, "enviado")
             return {
-                "status": "preparado" if endereco else "endereco_ambiguo",
+                "status": "preparado" if endereco else "endereco_ambiguo", "tipo": TIPO_ATUALIZACAO,
                 "session_id": session_id, "serial": serial, "modelo": modelo,
                 "endereco": endereco, "opcoes_endereco": list(opcoes),
                 "cnpj_instalacao": entrega_cnpj.strip(), "cnpj_faturamento": CNPJ_FATURAMENTO,
@@ -260,10 +263,51 @@ class TicketsUX:
                 "ultimo_envio": {"ticket": ultimo["ticket"], "data": ultimo["data"]} if ultimo else None,
             }
 
+    def preparar_alterar_endereco(self, *, serial: str, conferido: bool = False) -> dict[str, Any]:
+        """"Alterar Endereço": Transporte / Transferência Fisica in the UX; no workbook, CNPJ, CEP or address choice."""
+        serial = serial.strip().upper()
+        aba = f"simpress-gerar-ticket-{uuid4().hex}"
+        with self._conectar() as portal:
+            historico = self._liberar_incerto(serial, conferido)
+            modelo = portal.preparar_transferencia(serial, aba)
+            if not modelo.strip():
+                raise ErroUX(409, "O UX não mostrou o modelo do equipamento.")
+            session_id = self._nova_sessao(Sessao(
+                serial, modelo, aba, "", "", (), "", "", b"", self._clock() + SESSION_TTL, TIPO_ENDERECO,
+            ))
+            self._fechar_pendentes(portal)
+            ultimo = self._ultimo(historico, serial, "enviado")
+            return {
+                "status": "preparado", "tipo": TIPO_ENDERECO, "session_id": session_id, "serial": serial,
+                "modelo": modelo,
+                "solicitante": {campo: SOLICITANTE_PADRAO[campo] for campo in CAMPOS_SOLICITANTE},
+                "ultimo_envio": {"ticket": ultimo["ticket"], "data": ultimo["data"]} if ultimo else None,
+            }
+
+    def _liberar_incerto(self, serial: str, conferido: bool) -> list[dict[str, Any]]:
+        """An unchecked "incerto" send blocks a new ticket for the same série until the user says it was checked."""
+        historico = self._historico()
+        incerto = self._ultimo(historico, serial, "incerto")
+        if incerto and not incerto.get("conferido_em"):
+            if not conferido:
+                raise ErroUX(409, INCERTO, codigo="envio_incerto")
+            incerto["conferido_em"] = datetime.now().astimezone().isoformat()
+            atomic_write_json(self._history, historico)
+        return historico
+
+    def _nova_sessao(self, sessao: Sessao) -> str:
+        """One live session at a time: older tabs are queued to close."""
+        session_id = uuid4().hex
+        with self._lock:
+            self._a_fechar += [anterior.aba for anterior in self._sessoes.values()]
+            self._sessoes.clear()
+            self._sessoes[session_id] = sessao
+        return session_id
+
     def escolher_endereco(self, *, session_id: str, serial: str, endereco: str) -> dict[str, Any]:
         serial = serial.strip().upper()
         sessao = self._sessao_valida(session_id, serial)
-        if sessao.opcoes.count(endereco) != 1:
+        if sessao.tipo != TIPO_ATUALIZACAO or sessao.opcoes.count(endereco) != 1:
             raise ErroUX(422, "Escolha um dos endereços listados pelo UX para esta sessão.")
         with self._conectar() as portal:
             try:
@@ -305,11 +349,13 @@ class TicketsUX:
         if len(interno) > CHAMADO_INTERNO_MAX or any(ord(c) < 32 for c in interno):
             raise ErroUX(422, f"O Nº do chamado interno aceita até {CHAMADO_INTERNO_MAX} caracteres.")
         sessao = self._sessao_valida(session_id, serial)
+        if sessao.tipo == TIPO_ENDERECO:
+            interno = ""  # "Alterar Endereço" never fills the Nº do chamado interno
         if sessao.endereco is None:
             raise ErroUX(409, "Escolha o endereço em Meus Endereços antes de continuar.", codigo="endereco_ambiguo")
         formulario = Formulario(
             sessao.endereco, sessao.cnpj_instalacao, CNPJ_FATURAMENTO, descricao,
-            dados["nome"], dados["email"], dados["telefone"], interno, sessao.arquivo_nome, sessao.arquivo,
+            dados["nome"], dados["email"], dados["telefone"], interno, sessao.arquivo_nome, sessao.arquivo, sessao.tipo,
         )
         with self._conectar() as portal:
             try:

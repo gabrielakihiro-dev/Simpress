@@ -977,11 +977,11 @@ class EnviarDashboardTests(unittest.TestCase):
                 automacao.conferir_dashboard_do_sharepoint(baixado)
 
     @staticmethod
-    def _dashboard(trocas=(), regravado=False) -> bytes:
-        """Dashboard de teste; ``trocas`` são (antes, depois) aplicados na aba; ``regravado`` muda só estilo e ordem do zip."""
+    def _dashboard(trocas=(), regravado=False, abertos=False) -> bytes:
+        """Dashboard de teste; ``trocas`` são (antes, depois) aplicados na aba; ``regravado`` muda só estilo e ordem do zip; ``abertos``: os 3 chamados em aberto (o site só edita chamado em aberto)."""
         from tests import test_sebrae_dashboard_gravacao as T
 
-        partes = T.partes_de(T.montar())
+        partes = T.partes_de(T.tres() if abertos else T.montar())
         folha = partes["xl/worksheets/sheet4.xml"].decode()
         for antes, depois in trocas:
             assert antes in folha
@@ -1012,15 +1012,232 @@ class EnviarDashboardTests(unittest.TestCase):
             with self.subTest(coluna=coluna), self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
                 self._confere(self._dashboard([troca]), self._dashboard())
 
-    def test_precheck_aborts_when_the_sharepoint_file_changed(self):
+    def test_precheck_still_reports_the_sharepoint_change_that_the_routine_then_merges(self):
+        # A conferência continua reprovando qualquer célula diferente da importação; quem decide mesclar é a rotina (testes "merge" abaixo).
         trocas = {
             "C": ("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>"),
             "D": ("<t>EM ABERTO</t>", "<t>FINALIZADO</t>"),
             "R": ('<c r="V2"', '<c r="R2" s="92"><v>46001.5</v></c><c r="V2"'),
         }
         for coluna, troca in trocas.items():
-            with self.subTest(coluna=coluna), self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
+            with self.subTest(coluna=coluna), self.assertRaisesRegex(automacao.DashboardDivergente, "mudou depois da importação; importe de novo"):
                 self._confere(self._dashboard([troca]), self._dashboard())
+
+    # Merge por célula (Bloco 1b): o SharePoint mudou depois da importação; a rotina reaplica só as células do site sobre o arquivo dele.
+
+    def _montar_envio(self, base: bytes, gerado: bytes, *, origem: bool = True):
+        """Pasta de estado temporária com ``base`` importada e ``gerado`` como saída do Atualizar (com o JSON de origem, se ``origem``)."""
+        from domains import sebrae_finalizacao as fin
+
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self._estado(raiz, base)
+        saida = fin.caminho_saida_dashboard(raiz)
+        saida.parent.mkdir(parents=True)
+        saida.write_bytes(gerado)
+        if origem:
+            fin.gravar_origem_saida(saida, fin.base_importada(raiz))
+        return raiz, saida
+
+    def _rodar_com_merge(self, raiz: Path, arquivo: Path, sharepoint: bytes, *, pelo_final: bool = True):
+        """Rotina enviar com conferência, merge e estado reais; só o navegador é simulado. Devolve (código ou exceção, bytes enviados, download)."""
+        baixado = raiz / "baixado.xlsx"
+        baixado.write_bytes(sharepoint)
+        enviados: list = []
+        with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
+                patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
+                patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                patch.object(automacao, "duplicar_dashboard_na_pasta"), \
+                patch.object(automacao, "baixar_dashboard_da_pasta", return_value=baixado) as baixar, \
+                patch.object(automacao, "guardar_backup_do_dashboard"), \
+                patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: enviados.append(a.read_bytes())), \
+                patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
+            try:
+                resultado = automacao.rodar_rotina_enviar(MagicMock(), None if pelo_final else arquivo)
+            except Exception as erro:
+                resultado = erro
+        return resultado, enviados, baixar
+
+    @staticmethod
+    def _sha(conteudo: bytes) -> str:
+        return hashlib.sha256(conteudo).hexdigest()
+
+    def test_routine_merges_when_the_sharepoint_file_changed_and_sends_the_merged_file(self):
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        trocas = {
+            "C": ("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>"),
+            "D": ("<t>EM ABERTO</t>", "<t>FINALIZADO</t>"),
+            "R": ('<c r="V2"', '<c r="R2" s="92"><v>46001.5</v></c><c r="V2"'),
+        }
+        for coluna, troca in trocas.items():
+            with self.subTest(coluna=coluna):
+                sharepoint = self._dashboard(abertos=True, trocas=[troca])
+                raiz, saida = self._montar_envio(base, gerado)
+                resultado, enviados, baixar = self._rodar_com_merge(raiz, saida, sharepoint)
+                self.assertEqual(resultado, 0)
+                self.assertEqual(baixar.call_count, 2)  # só o segundo download igual confirma que a mudança é real
+                self.assertEqual(len(enviados), 1)
+                esperado = T.por_chamado(sharepoint)
+                esperado["UTIC-2026-0002"]["J"] = "INCIDENTE"
+                self.assertEqual(T.por_chamado(enviados[0]), esperado)  # a edição do SharePoint e a do site
+                registro = fin.ler_envio(raiz)
+                self.assertEqual(registro["status"], "concluido")
+                self.assertEqual((registro["sha256"], registro["sha256_origem"]), (self._sha(enviados[0]), self._sha(gerado)))
+                self.assertEqual(fin.ler_enviado(raiz), self._sha(enviados[0]))
+                self.assertTrue(fin.enviado_mesclado(raiz))
+
+    def test_routine_aborts_like_before_when_the_merge_cannot_run_on_the_sharepoint_structure(self):
+        from domains import sebrae_finalizacao as fin
+        from domains.sebrae_dashboard import DashboardInvalido
+        from domains.sebrae_dashboard_gravacao import GravacaoInvalida
+
+        base = self._dashboard(abertos=True)
+        sharepoint = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>FINALIZADO</t>")])
+        # GravacaoInvalida é o que sai quando, por exemplo, um colega finalizou no SharePoint um chamado que o site tinha editado.
+        for erro in (DashboardInvalido("Tabela3 ausente"), GravacaoInvalida("UTIC-2026-0002: não está entre os chamados antigos em aberto do Dashboard.")):
+            with self.subTest(erro=type(erro).__name__):
+                raiz, saida = self._montar_envio(base, base)
+                with patch("domains.sebrae_dashboard_gravacao.reaplicar", side_effect=erro):
+                    resultado, enviados, baixar = self._rodar_com_merge(raiz, saida, sharepoint)
+                self.assertIs(type(resultado), automacao.RotinaErro)
+                self.assertTrue(str(resultado).startswith(automacao.MSG_SHAREPOINT_MUDOU))
+                self.assertIn("Não consegui mesclar", str(resultado))
+                self.assertEqual(baixar.call_count, 2)
+                self.assertEqual(enviados, [])
+                self.assertIsNone(fin.ler_envio(raiz))  # nenhum envio foi preparado
+
+    def test_routine_does_not_merge_when_the_origin_of_the_file_is_not_the_current_import(self):
+        # Origem desconhecida ou de importação antiga: aborta como antes, sem tentar o merge.
+        from domains import sebrae_finalizacao as fin
+
+        base, nova_base = self._dashboard(abertos=True), self._dashboard(abertos=True, regravado=True)  # mesmos valores, importações diferentes
+        sharepoint = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>FINALIZADO</t>")])
+        casos = ("sem JSON de origem", "JSON de importação antiga", "cópia pendente de importação antiga")
+        for caso in casos:
+            with self.subTest(caso=caso):
+                raiz, saida = self._montar_envio(base, base, origem=caso != casos[0])
+                arquivo = saida
+                if caso == casos[2]:
+                    arquivo = fin.guardar_pendente(raiz, saida, fin.agora_local(), motivo="x", tickets=[])
+                    saida.unlink()
+                if caso != casos[0]:
+                    self._estado(raiz, nova_base)  # nova importação depois da saída/cópia
+                with patch("domains.sebrae_dashboard_gravacao.reaplicar") as reaplicar:
+                    resultado, enviados, _ = self._rodar_com_merge(raiz, arquivo, sharepoint, pelo_final=caso != casos[2])
+                self.assertIs(type(resultado), automacao.RotinaErro)
+                self.assertIn("mudou depois da importação; importe de novo", str(resultado))
+                reaplicar.assert_not_called()
+                self.assertEqual(enviados, [])
+
+    def test_routine_uses_the_sent_copy_as_ancestor_only_when_it_was_built_on_the_current_import(self):
+        from domains import sebrae_finalizacao as fin
+        from domains.sebrae_dashboard_gravacao import reaplicar as real
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sharepoint = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>FINALIZADO</t>")])
+        enviado = self._dashboard(abertos=True, regravado=True)
+        for nome, base_do_enviado in (("importação antiga", "a" * 64), ("importação atual", None), ("sem base", "")):
+            with self.subTest(nome):
+                raiz, saida = self._montar_envio(base, gerado)
+                fin.gravar_enviado(raiz, self._sha(enviado), enviado, base_sha256=fin.base_importada(raiz) if base_do_enviado is None else base_do_enviado)
+                with patch("domains.sebrae_dashboard_gravacao.reaplicar", wraps=real) as reaplicar:
+                    resultado, _, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+                self.assertEqual(resultado, 0)
+                reaplicar.assert_called_once()
+                self.assertEqual(reaplicar.call_args.kwargs["enviado"], enviado if base_do_enviado is None else None)
+
+    def test_routine_stops_at_the_first_attempt_on_a_conflict_without_a_pending_copy_and_keeps_the_choices(self):
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sharepoint = T._antes_da_coluna_p(base, 3, T.texto("J3", "REQUISIÇÃO"))
+        raiz, saida = self._montar_envio(base, gerado)
+        resultado, enviados, baixar = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertIsInstance(resultado, automacao.DashboardEmConflito)
+        self.assertTrue(fin.erro_de_conflito(resultado))
+        self.assertEqual(baixar.call_count, 2)  # sem 3ª tentativa: o conflito não é instabilidade
+        self.assertEqual(enviados, [])
+        self.assertIsNone(fin.ler_envio(raiz))
+        self.assertFalse(list(fin.pasta_pendente(raiz).glob("*")) if fin.pasta_pendente(raiz).exists() else [])
+        mensagem = str(resultado)
+        self.assertIn("1 célula", mensagem)
+        self.assertIn("colunas J", mensagem)
+        for valor in ("REQUISIÇÃO", "INCIDENTE", "UTIC"):
+            self.assertNotIn(valor, mensagem)
+        conflitos = fin.ler_conflitos(raiz)
+        self.assertEqual(
+            {chave: conflitos[chave] for chave in ("base_sha256", "sharepoint_sha256", "gerado_sha256")},
+            {"base_sha256": fin.base_importada(raiz), "sharepoint_sha256": self._sha(sharepoint), "gerado_sha256": self._sha(gerado)},
+        )
+        self.assertEqual([(c["chamado"], c["coluna"], c["sharepoint"], c["site"]) for c in conflitos["conflitos"]], [("UTIC-2026-0002", "J", "REQUISIÇÃO", "INCIDENTE")])
+        self.assertEqual(conflitos["escolhas"], {})
+        # A tela grava a escolha; a próxima rodada mescla com ela e o envio concluído zera a lista, mantendo a escolha.
+        fin.caminho_conflitos(raiz).write_text(json.dumps({**conflitos, "escolhas": {conflitos["conflitos"][0]["id"]: "site"}}), encoding="utf-8")
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        self.assertEqual(T.por_chamado(enviados[0])["UTIC-2026-0002"]["J"], "INCIDENTE")
+        self.assertEqual(fin.ler_conflitos(raiz)["conflitos"], [])
+        self.assertEqual(fin.escolhas_dos_conflitos(raiz), {conflitos["conflitos"][0]["id"]: "site"})
+
+    def test_merged_send_discards_the_pending_copy_it_covers(self):
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        raiz, saida = self._montar_envio(base, gerado)
+        copia = fin.guardar_pendente(raiz, saida, fin.agora_local(), motivo="x", tickets=[])
+        sharepoint = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>FINALIZADO</t>")])
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        self.assertNotEqual(enviados[0], gerado)
+        self.assertFalse(copia.exists())  # a cópia pendente tinha o hash de antes da mescla (sha256_origem)
+        self.assertFalse(copia.with_suffix(".json").exists())
+        self.assertEqual(fin.ler_envio(raiz)["status"], "concluido")
+
+    def test_a_merged_send_is_never_taken_as_the_sites_own_unchanged_file(self):
+        # O envio mesclado levou a nota de um colega; o próximo arquivo gerado não a tem. Se o hash igual ao enviado valesse como
+        # "sem mudança", o envio seguinte apagaria a nota.
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        nota = T.texto("F2", "nota do colega")
+        sharepoint = T._antes_da_coluna_p(base, 2, nota)
+        raiz, saida = self._montar_envio(base, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        self.assertEqual(T.por_chamado(enviados[0])["UTIC-2026-0001"]["F"], "nota do colega")
+        from domains import sebrae_finalizacao as fin
+
+        saida.write_bytes(T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}, "UTIC-2026-0001": {"B": "REDE"}}))  # novo Atualizar, mesma importação
+        fin.gravar_origem_saida(saida, fin.base_importada(raiz))
+        resultado, enviados2, _ = self._rodar_com_merge(raiz, saida, enviados[0])  # o SharePoint tem exatamente o que foi enviado
+        self.assertEqual(resultado, 0)
+        self.assertEqual(len(enviados2), 1)
+        segundo = T.por_chamado(enviados2[0])
+        self.assertEqual((segundo["UTIC-2026-0001"]["F"], segundo["UTIC-2026-0001"]["B"]), ("nota do colega", "REDE"))
+
+    def test_plain_send_records_the_import_it_was_built_on_and_no_merged_flag(self):
+        import json as _json
+
+        from domains import sebrae_finalizacao as fin
+
+        base = self._dashboard()
+        raiz, saida = self._montar_envio(base, base)
+        resultado, enviados, baixar = self._rodar_com_merge(raiz, saida, base)  # SharePoint igual à importação: vai o arquivo gerado
+        self.assertEqual(resultado, 0)
+        self.assertEqual((enviados, baixar.call_count), ([base], 1))
+        registro = _json.loads(fin.caminho_enviado(raiz).read_text(encoding="utf-8"))
+        self.assertEqual(registro["base_sha256"], fin.base_importada(raiz))
+        self.assertNotIn("mesclado", registro)
+        self.assertNotIn("sha256_origem", fin.ler_envio(raiz))
 
     def test_precheck_aborts_when_the_stored_copy_is_missing(self):
         with tempfile.TemporaryDirectory() as pasta:

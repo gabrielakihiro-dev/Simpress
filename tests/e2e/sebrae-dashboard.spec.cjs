@@ -118,7 +118,37 @@ test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos anti
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("importe a versão atual antes");
 });
 
-test("Chamados novos não tem violações de acessibilidade nos temas claro e escuro", async ({ page, request }) => {
+test("Título (G): o campo existe no novo e no antigo, vai só ao corpo do Atualizar Dashboard e o SoftExpert não é chamado", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request);
+  const novo = painel.locator("#sebrae-novos-lista .sebrae-chamado").first();
+  const campoNovo = novo.locator('[data-sebrae-campo="G"]');
+  await expect(campoNovo).toHaveAttribute("maxlength", "300");
+  await expect(novo.getByLabel("Título (G)")).toBeVisible();
+  await campoNovo.fill("Teclado sem resposta (título corrigido)");
+  await expect(novo.locator(".sebrae-chamado__assunto")).toHaveText("Teclado sem resposta (título corrigido)"); // o assunto do cartão acompanha a digitação
+  await painel.locator("#sebrae-aba-antigos").click();
+  const antigo = painel.locator("#sebrae-antigos-lista .sebrae-chamado");
+  await abrirItemAntigo(antigo);
+  await antigo.locator('[data-sebrae-campo="G"]').fill("Título corrigido do antigo");
+  await expect(painel.locator("#sebrae-antigos-resumo")).toContainText("1 com alteração"); // só o título editado já conta como alteração
+  await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO"); // sem descrição: o diálogo pergunta antes do SharePoint e "Atualizar sem enviar" só baixa a cópia
+  const envio = page.waitForRequest(r => r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar"));
+  const chamadasSoftExpert = [];
+  page.on("request", r => { if (r.method() !== "GET" && /finalizar-softexpert|antigos\/ler/.test(r.url())) chamadasSoftExpert.push(r.url()); });
+  await painel.locator("#btn-sebrae-atualizar").click();
+  const confirmar = page.locator("#modal-confirmar-acao");
+  const [download] = await Promise.all([page.waitForEvent("download"), confirmar.locator("#btn-confirmar-acao-cancelar").click()]);
+  expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
+  const corpo = (await envio).postDataJSON();
+  expect(corpo.chamados.some(c => c.G === "Teclado sem resposta (título corrigido)")).toBe(true);
+  expect(corpo.edicoes).toHaveLength(1);
+  expect(corpo.edicoes[0].G).toBe("Título corrigido do antigo");
+  expect(corpo.finalizar_softexpert).toBe(false); // "Atualizar sem finalizar": o título nunca aciona o SoftExpert
+  expect(chamadasSoftExpert).toHaveLength(0);
+  expect(JSON.stringify(corpo)).not.toContain('"H"'); // a descrição H nunca viaja nos corpos de chamados e edições
+});
+
+test("Chamados novos não tem violações de acessibilidade nos temas claro e escuro",async ({ page, request }) => {
   const cartao = await abrirCartao(page, request);
   for (const tema of ["light", "dark"]) {
     await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
@@ -501,6 +531,22 @@ test("falha no SharePoint mostra o aviso com motivo, cópia local e sugestões, 
   await expect(aviso).toBeHidden({ timeout: 10000 });
 });
 
+test("Já atualizei manualmente descarta o aviso do SharePoint sem reenviar e guarda qual cópia foi descartada", async ({ page, request }) => {
+  const { painel, antigo } = await abrirAntigo(page, request, "&sharepoint_falha=1");
+  await descreverChamado(antigo);
+  await completarCampos(antigo);
+  await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+  const aviso = painel.locator("#sebrae-sharepoint-aviso");
+  await expect(aviso).toBeVisible({ timeout: 10000 });
+  const posts = [];
+  page.on("request", r => { if (r.method() === "POST") posts.push(r.url()); });
+  await aviso.getByRole("button", { name: "Já atualizei manualmente, descartar aviso", exact: true }).click();
+  await expect(aviso).toBeHidden();
+  expect(posts).toEqual([]); // descartar não reenvia nada ao SharePoint
+  expect(await page.evaluate(() => localStorage.getItem("sebrae_sharepoint_aviso_descartado"))).toContain("pendente 2026-10-28 1030");
+});
+
 test("o aviso do SharePoint e o resultado respeitam movimento reduzido e não criam rolagem horizontal no celular", async ({ page, request }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 800 });
@@ -599,8 +645,12 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(seloLeitura("UTIC-2026-1211")).toHaveText("Não lido");
   await expect(naoLido.locator(".sebrae-chamado__assunto")).toHaveText("Sem título");
   await expect(naoLido.locator("[data-leitura='pendente']")).toContainText("Ler chamados antigos");
-  await expect(naoLido.locator("details.sebrae-chamado__texto")).toHaveCount(0);
+  await expect(naoLido.locator("details.sebrae-chamado__texto")).toHaveCount(1); // só a Descrição (H do Dashboard, com lápis desde 11/11/2026); sem Atendimento sem leitura
+  await expect(naoLido.locator("details.sebrae-chamado__texto").filter({ hasText: "Atendimento realizado" })).toHaveCount(0);
+  await abrirItemAntigo(naoLido); // o botão só entra na árvore de acessibilidade com o item aberto
+  await expect(naoLido.getByRole("button", { name: "Editar descrição de UTIC-2026-1211" })).toBeVisible();
   const semUtic = lista.locator('.sebrae-chamado[data-numero="linha:27"]'); // sem UTIC não há leitura: nada é prometido
+  await expect(semUtic.locator("[data-sebrae-editar-descricao]")).toHaveCount(0); // sem UTIC não há lápis
   await expect(seloLeitura("linha:27")).toHaveCount(0);
   await expect(semUtic.locator(".sebrae-chamado__assunto")).toHaveText("Impressora offline");
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
@@ -628,7 +678,7 @@ test("antigo não encontrado no SoftExpert na última leitura fica vermelho, com
   expect(await linha("UTIC-2026-1210").evaluate(no => getComputedStyle(no).borderLeftWidth)).toBe("1px"); // o lido segue normal
 });
 
-test("o lápis da Descrição do antigo lido edita o texto só no site e Restaurar original volta ao lido", async ({ page, request }) => {
+test("o lápis da Descrição do antigo lido edita o texto (vai à coluna H em Atualizar Dashboard) e Restaurar original volta ao lido",async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request, "", "leitura");
   await painel.locator("#sebrae-aba-antigos").click();
   const lido = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1210"]');
@@ -642,12 +692,12 @@ test("o lápis da Descrição do antigo lido edita o texto só no site e Restaur
   await expect(campo).toHaveValue("O monitor da sala 3 ficou sem imagem.");
   await campo.fill("O monitor da sala 3 ficou sem imagem. Cliente pediu troca do cabo.");
   await descricao.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(descricao.getByRole("status")).toHaveText("Descrição salva só neste site.");
+  await expect(descricao.getByRole("status")).toHaveText("Descrição salva. Vai à coluna H do Dashboard em Atualizar Dashboard; o SoftExpert não recebe esse texto.");
   await expect(descricao.locator("p").first()).toHaveText("O monitor da sala 3 ficou sem imagem. Cliente pediu troca do cabo.");
   await expect(descricao.locator(".sebrae-descricao__selo")).toBeVisible();
   await lapis.click();
   await descricao.getByRole("button", { name: "Restaurar original" }).click();
-  await expect(descricao.getByRole("status")).toHaveText("Descrição original restaurada.");
+  await expect(descricao.getByRole("status")).toHaveText("Descrição original restaurada neste site. Um H já enviado ao Dashboard não é desfeito.");
   await expect(descricao.locator("p").first()).toHaveText("O monitor da sala 3 ficou sem imagem.");
   await expect(descricao.locator(".sebrae-descricao__selo")).toBeHidden();
   await expect(lido.getByLabel("Descrição para Finalizar o Chamado")).toHaveValue(""); // a descrição de finalização é outro campo e não mudou
@@ -859,4 +909,56 @@ test("no celular (390px) as quatro abas cabem na tela, sem rolagem horizontal", 
   }
   expect(await painel.locator(".sebrae-abas").evaluate(no => no.scrollWidth <= no.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+// Conflitos de edição do Dashboard (F5): a rotina enviar parou porque a mesma célula mudou no SharePoint e no site; a tela deixa escolher e reenviar.
+test("sem conflito de edição a seção de conflitos fica escondida", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request);
+  await expect(painel.locator("#sebrae-conflitos")).toBeHidden();
+});
+
+test("Conflitos de edição: lista cada célula, só libera o reenvio com todas escolhidas e manda as escolhas", async ({ page, request }) => {
+  await page.route("**/api/automacao/estado*", route => route.fulfill({ json: { estado: "livre", rotina: "", ultima: { status: "concluido" } } }));
+  const { painel } = await abrirPainel(page, request, "&conflitos=1");
+  const secao = painel.locator("#sebrae-conflitos");
+  await expect(secao).toBeVisible();
+  await expect(secao.getByRole("group")).toHaveCount(3);
+  await expect(secao.getByRole("group").first()).toContainText('Chamado UTIC-2026-9001, coluna G: SharePoint diz "Título no SharePoint", site quer "Título no site".');
+  await expect(secao.getByRole("group").nth(1)).toContainText("Chamado UTIC-2026-9002: linha apagada no SharePoint, mas editada no site.");
+  const enviar = secao.getByRole("button", { name: "Salvar escolhas e reenviar", exact: true });
+  await expect(enviar).toBeDisabled();
+  await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolha uma opção em cada célula (faltam 3).");
+  const restrito = secao.getByRole("group").nth(2); // linha sem UTIC único: o servidor só aceita manter o do SharePoint
+  await expect(restrito.getByRole("radio")).toHaveCount(1);
+  await expect(restrito.getByRole("radio", { name: "Usar o do site" })).toHaveCount(0);
+  await expect(restrito).toContainText("só dá para manter o valor do SharePoint");
+  await secao.getByRole("group").first().getByRole("radio", { name: "Usar o do site" }).check();
+  await expect(enviar).toBeDisabled();
+  await secao.getByRole("group").nth(1).getByRole("radio", { name: "Manter o do SharePoint" }).check();
+  await expect(enviar).toBeDisabled();
+  await restrito.getByRole("radio", { name: "Manter o do SharePoint" }).check();
+  await expect(enviar).toBeEnabled();
+  await enviar.click();
+  await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolhas salvas. Reenviando ao SharePoint…");
+  await expect(secao).toBeHidden({ timeout: 10000 }); // a lista esvazia quando o envio termina
+  await expect(page.locator(TOAST).filter({ hasText: "Conflitos resolvidos e Dashboard enviado ao SharePoint." })).toBeVisible();
+  const { post } = await (await request.get("/__fixture_conflitos")).json();
+  expect(post).toEqual({ escolhas: { c1: "site", c2: "sharepoint", c3: "sharepoint" }, enviar: true, versao_importacao: "versao-fixture-conflitos" });
+});
+
+test("Conflitos de edição: sem rolagem horizontal de 320px a 2560px e sem falha de acessibilidade nos dois temas", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request, "&conflitos=1");
+  const secao = painel.locator("#sebrae-conflitos");
+  await expect(secao).toBeVisible();
+  for (const largura of [320, 360, 768, 1280, 2560]) {
+    await page.setViewportSize({ width: largura, height: 800 });
+    await expect(secao.getByRole("group").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${largura}px`).toBe(true);
+    expect(await secao.evaluate(no => no.scrollWidth <= no.clientWidth), `seção a ${largura}px`).toBe(true);
+  }
+  for (const tema of ["light", "dark"]) {
+    await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
+    const resultado = await new AxeBuilder({ page }).include("#sebrae-conflitos").analyze();
+    expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  }
 });

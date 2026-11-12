@@ -45,6 +45,9 @@ CABECALHOS: Dict[str, str] = {
     "U": "AGING", "V": "HR CONSUMIDA", "W": "PRODUZINDO",
 }
 MANUAIS = ("A", "B", "D", "J", "R", "S")
+TITULO = "G"  # copied from SoftExpert; the site may overwrite it in the Dashboard copy, never used to find a ticket
+DESCRICAO = "H"  # same rule: the site may overwrite it with the description edited on the card; SoftExpert never receives it
+EDITAVEIS_PELO_SITE = MANUAIS + (TITULO, DESCRICAO)
 FORMULAS = ("Q", "T", "U", "V")  # the site never writes them: a paste would erase the formula
 INTOCADAS = ("W",)
 
@@ -339,7 +342,8 @@ def linhas_para_colar(linhas: Sequence[Mapping[str, str]]) -> Tuple[str, str]:
 
 
 __all__ = [
-    "ABA", "CABECALHOS", "CRUZ_AMBIGUO", "CRUZ_AUSENTE", "CRUZ_UNICO", "Cruzamento", "DashboardInvalido",
-    "FORMULAS", "INTOCADAS", "MANUAIS", "NovosChamados", "PENDENCIAS_DEFINIDAS", "conferir_cabecalhos",
+    "ABA", "CABECALHOS", "CRUZ_AMBIGUO", "CRUZ_AUSENTE", "CRUZ_UNICO", "Cruzamento", "DESCRICAO", "DashboardInvalido",
+    "EDITAVEIS_PELO_SITE", "FORMULAS", "INTOCADAS", "MANUAIS", "NovosChamados", "PENDENCIAS_DEFINIDAS", "conferir_cabecalhos",
     "cruzar_por_nome", "ler_coluna_c", "ler_datas_chamados", "ler_status_chamados", "linhas_para_colar", "montar_linha", "omitir_credenciais", "triar_novos",
+    "TITULO",
 ]

@@ -236,3 +236,42 @@ Pedido e autorização do usuário em 09/11/2026: montar na Home os e-mails repe
 
 - `npm run verify`; testes `tests/test_outlook_mail.py`, `tests/test_assistant_termos.py` e `tests/test_assistant_ux_chamados.py`; `npm run test:ui:e2e`.
 - Testes reais no Outlook (classic) pelo site local: Passo 5 do plano, um cenário por vez; nunca clique em `Enviar pelo Outlook` fora dele.
+
+## Dossiê do equipamento: OS e chamados (Home F1, v1, 11/11/2026)
+
+Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a parte de OS: o histórico guardado é **por série**, não por OS. Só leitura: nada é gravado em dado local nem em sistema externo. Contrato da rota: `docs/arquitetura/CONTRATOS_API_BACKEND.md` (`GET /api/equipamento/{serial}/dossie`).
+
+### Regras
+
+- **Fonte:** o relatório de chamados importado (aba OS, F6) e os vínculos UTIC (`os_chamados_vinculos.json` e os derivados do Dashboard). Nada novo é armazenado.
+- **Situação atual por OS:** vem da importação mais recente (a "seleção do F6" é sempre a mais recente nesta v1). Por OS: número, fonte (Simpress ou Oracle), status, fila, `dias_aberta` e UTIC com origem `Manual` ou `Dashboard`. O vínculo manual vence o derivado na mesma chave (fonte, série, OS). Série duplicada na mesma importação: a situação atual junta as OS de todas as linhas, sem repetir a mesma OS; o histórico usa só a primeira linha, como a linha do tempo da aba OS.
+- **Status Simpress é da série**, não de cada OS: o relatório guarda o status da Simpress por série. A OS Simpress não tem fila nem `dias_aberta`.
+- **Histórico:** título `Mudanças da série nas importações de OS`. Reaproveita a linha do tempo da série, sem os eventos `Sem mudanças`, com as 30 ocorrências mais recentes primeiro. Não há histórico por OS. As anotações da linha do tempo não entram no dossiê. Cada mudança aparece como na aba OS: `<campo>: <antes> → <depois>`, com as listas separadas por `, ` e `(vazio)` quando não havia valor.
+- **Série fora da importação mais recente:** mostra `Última vez observada em <data>.` Nunca diz que a OS foi encerrada: a série pode só ter saído do relatório.
+- **Profundidade:** mostra `Importações disponíveis: <N>` (no máximo 50 guardadas).
+- **Estados da seção:** `Sem base importada` (nenhuma importação de OS), `Sem registros para esta série` (a série não aparece em nenhuma importação) e `Fonte indisponível` (relatório ou vínculos ilegíveis; o cabeçalho continua aparecendo).
+- **LGPD:** a resposta traz só série, modelo, números de OS e UTIC, status, fila, dias e as mudanças da linha do tempo. Nunca descrição da OS, usuário, nome, e-mail ou telefone.
+- **Assistente:** sem ferramenta nova; só orienta onde abrir o dossiê (`docs/cockpit-prompts/15-assistente.md`).
+
+### Tela
+
+- Botão `Ver dossiê` (`#btn-ver-dossie`) em `.ck-eq-cab__acoes`, junto das outras ações do equipamento; habilitado só com equipamento selecionado; sem atalho de teclado.
+- Diálogo `#modal-dossie-equipamento` no visual do Cockpit (`.ck-veu` e `.ck-dialogo`, temas claro e escuro), título `Dossiê do equipamento`, com a série e o modelo no cabeçalho. Abre por `app.abrirModalAcessivel`; `Fechar` e `Esc` fecham e devolvem o foco ao `Ver dossiê`.
+- Seção `OS e chamados`: tabela da situação atual por OS (cards de uma coluna no celular), a linha `Importações disponíveis: <N>`, o aviso de última observação quando houver e a lista do histórico.
+- `Ver OS` em cada OS da situação atual: fecha o diálogo e chama `abrirChamadoDaOs([], serie, os)`, que abre a OS na aba OS (F6); `serie` é a da linha do relatório (`ordens[].serie`, que pode diferir da do cadastro; sem ela, a série aberta) e `os` é o número da OS, porque a F6 acha a linha por essas duas grafias. Sem OS na importação mais recente, não há `Ver OS` (a aba OS esconde a série sem OS).
+- A consulta é cancelada (`AbortController`) ao fechar o diálogo ou trocar de série; resposta atrasada de outra série é descartada.
+- Trocar de série com o diálogo aberto (por exemplo, outra busca aplicada por baixo dele) **fecha o diálogo** (pelo mesmo caminho de `Fechar`) e cancela a consulta. Reabrir mostra a série nova. Reaplicar a mesma série mantém o diálogo aberto.
+- Em estado diferente de `ok`, o diálogo mostra só a mensagem do estado (sem a linha de importações, sem tabela e sem histórico). Em `ok` sem OS na importação mais recente, a tabela some inteira (sem texto novo) e ficam a linha de importações, o aviso de última observação (quando houver) e o histórico.
+- Acessibilidade: a coluna da ação tem o cabeçalho `Ver OS` só para leitores de tela (classe `ck-sr`); cada botão leva `aria-label="Ver OS <número>"`; `#btn-ver-dossie` tem `title` com a explicação curta (`Ver as OS e os chamados deste equipamento nas importações`, dica de tela, fora da lista de textos aprovados). O erro da consulta é sempre o texto aprovado, nunca o `detail` do servidor.
+- Layout: abaixo de 1200px a tabela vira cards (`.ck-tabela--cards`); abaixo de 768px os cards têm uma coluna só. Estilos em `static/styles/ck-cockpit.css` (bloco "Dossiê do equipamento"), só com os tokens existentes; sem animação nova (a abertura é a de `abrirModalAcessivel`; a linha de carregamento reaproveita `ck-surgir` e respeita `prefers-reduced-motion`). Código: `static/js/features/equipment-dossier.js` (ação `abrirDossieEquipamento`, `fecharDossieEquipamento`, `atualizarDossieEquipamento`, esta chamada por `definirEquipamentoAtual`).
+
+### Textos aprovados (exatos)
+
+- Botão: `Ver dossiê`. Título: `Dossiê do equipamento`. Seção: `OS e chamados`. Histórico: `Mudanças da série nas importações de OS`.
+- Colunas: `OS`, `Fonte`, `Status`, `Fila`, `Dias aberta`, `UTIC`. Origem do UTIC: `Manual`, `Dashboard`. Ação: `Ver OS`. Fechar: `Fechar`.
+- `Importações disponíveis: <N>`; `Última vez observada em <data>.`; `Sem mudanças registradas.` (histórico vazio).
+- Estados: `Sem base importada`, `Sem registros para esta série`, `Fonte indisponível`. Carregando: `Carregando dossiê…`. Erro da consulta: `Não foi possível carregar o dossiê. Tente de novo.`
+
+### Verificação
+
+- `npm run verify` (inclui `tests/test_equipment_dossier.py`) e `npm run test:ui:e2e` (`tests/e2e/dossie-equipamento.spec.cjs`: abrir, trocar de série rapidamente, foco e teclado, temas claro e escuro, tela estreita).
