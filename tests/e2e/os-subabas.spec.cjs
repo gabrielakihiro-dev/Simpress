@@ -79,7 +79,8 @@ async function abrirF6(page) {
   if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
   await page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#btn-chamados-menu").click();
   await expect(page.locator("#cockpit-tool-title")).toHaveText("OS");
-  await expect(page.locator("#ck-os-tabela tbody tr[data-serial]:visible").first()).toBeVisible();
+  // CI mobile runners can take over 5 s to render the first rows; keep it under the 20 s test timeout.
+  await expect(page.locator("#ck-os-tabela tbody tr[data-serial]:visible").first()).toBeVisible({ timeout: 15_000 });
 }
 
 const ABA_ABERTAS = "#os-aba-abertas";
