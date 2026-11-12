@@ -44,9 +44,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ui-browser:
+  # A suíte inteira levava ~30 min num job só; dividida em 4 partes que rodam em paralelo.
+  ui-browser-shard:
+    name: ui-browser (shard ${{ matrix.shard }}/4)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -81,4 +87,14 @@ jobs:
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Test real interface in desktop and mobile viewports
-        run: npm run test:ui:e2e
+        run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+  # Mantém um check único chamado ui-browser, que só passa se todas as partes passarem.
+  ui-browser:
+    needs: ui-browser-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every shard to pass
+        run: test "${{ needs.ui-browser-shard.result }}" = "success"

@@ -12,13 +12,15 @@ async function abrirAba(page, botaoBarra, itemMenu, titulo) {
   await expect(page.locator("#cockpit-tool-title")).toHaveText(titulo);
 }
 
-async function abrirAbaOsComVinculo(page, numero) {
+// A OS com marca ativa fica na sub-aba Finalizadas; as demais, em Abertas (a padrão).
+async function abrirAbaOsComVinculo(page, numero, { finalizadas = false } = {}) {
   const vinculo = { fonte: "oracle", serie: "DEMO-SN-001", os: "7285070", ano: 2026, numero, origem: "manual", chamado: `UTIC-2026-${numero}` };
   await page.route("**/api/operacoes/chamados/vinculos-os", route => route.request().method() === "GET"
     ? route.fulfill({ json: { vinculos: [vinculo] } })
     : route.fallback());
   await page.goto("/");
   await abrirAba(page, "#btn-acompanhamento-chamados", "#btn-chamados-menu", "OS");
+  if (finalizadas) await page.locator("#os-aba-finalizadas").click();
   const gatilho = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"] button.ticket-os-link-goto').first();
   await expect(gatilho).toBeVisible();
   await expect(gatilho).toHaveAttribute("aria-haspopup", "dialog");
@@ -103,10 +105,12 @@ async function simularMarcas(page, iniciais) {
   return estado;
 }
 
-async function abrirF6ComMarcas(page, iniciais) {
+// Marca ativa leva a OS para a sub-aba Finalizadas; Desfazer a devolve para Abertas (a padrão).
+async function abrirF6ComMarcas(page, iniciais, aba = "finalizadas") {
   const estado = await simularMarcas(page, iniciais);
   await page.goto("/");
   await abrirAba(page, "#btn-acompanhamento-chamados", "#btn-chamados-menu", "OS");
+  if (aba === "finalizadas") await page.locator("#os-aba-finalizadas").click();
   const linha = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"]').first();
   await expect(linha).toBeVisible();
   return { estado, linha };
@@ -142,21 +146,29 @@ test("Marca de OS finalizada: selo, Desfazer só com confirmação, Refazer e hi
   expect(estado.puts).toHaveLength(0);
   await expect(bloco.locator(".ck-os-marca__selo")).toHaveCount(1);
 
-  // Confirmar desfaz: some o selo, entra o Refazer (com o foco) e o histórico ganha o evento manual.
+  // Confirmar desfaz: a OS volta para Abertas (a linha sai das Finalizadas) e o foco vai para a aba ativa.
   await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
+  expect(estado.puts).toEqual([{ serie: "DEMO-SN-001", os: "7285070", chamado: "UTIC-2026-1378", acao: "desfazer" }]);
+  await expect(linha).toBeHidden();
+  await expect(page.locator("#os-aba-finalizadas")).toBeFocused();
+  await page.locator("#os-aba-abertas").click();
   const desfeita = linha.locator('.ck-os-marca[data-ativa="false"]');
   await expect(desfeita).toHaveCount(1);
-  expect(estado.puts).toEqual([{ serie: "DEMO-SN-001", os: "7285070", chamado: "UTIC-2026-1378", acao: "desfazer" }]);
+  await expect(linha).toHaveAttribute("data-finalizada", "false");
   await expect(desfeita.locator(".ck-os-marca__selo")).toHaveCount(0);
-  await expect(desfeita.getByRole("button", { name: "Refazer, chamado UTIC-2026-1378" })).toBeFocused();
+  await expect(desfeita.getByRole("button", { name: "Refazer, chamado UTIC-2026-1378" })).toBeVisible();
+  await desfeita.locator("summary").click();
   await expect(desfeita.locator(".ck-os-marca__lista li")).toHaveText([
     "08/11/2026 às 09:00 · Marcada (automática)",
     "08/11/2026 às 10:30 · Desfeita (manual)",
   ]);
 
+  // Refazer devolve a OS para Finalizadas.
   await desfeita.getByRole("button", { name: "Refazer, chamado UTIC-2026-1378" }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(linha).toBeHidden();
+  await page.locator("#os-aba-finalizadas").click();
   await expect(linha.locator('.ck-os-marca[data-ativa="true"] .ck-os-marca__selo')).toHaveText("Chamado finalizado");
   expect(estado.puts.map(item => item.acao)).toEqual(["desfazer", "refazer"]);
 });
@@ -186,7 +198,8 @@ test("Marca de OS finalizada: falha do PUT mostra o erro, mantém a marca e reab
   const bloco = linha.locator(".ck-os-marca");
   await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
-  await expect(page.locator("#cockpit-tickets-os")).toContainText("Marcas indisponíveis no momento.");
+  // A mensagem de status da tabela fica na barra das sub-abas (#cockpit-tickets-contagem).
+  await expect(page.locator("#cockpit-tickets-contagem")).toContainText("Marcas indisponíveis no momento.");
   await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Chamado finalizado");
   await expect(bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" })).toBeEnabled();
 });
@@ -201,7 +214,7 @@ test("Marca de OS finalizada: movimento reduzido desliga a animação de entrada
 test("Marca de OS finalizada: a janela Chamado × OS (somente leitura) mostra só o selo do chamado, sem botões nem histórico", async ({ page }) => {
   // Duas marcas na mesma OS: a do chamado da janela (ativa) e outra de outro chamado; só a primeira aparece.
   await simularMarcas(page, [MARCA_SITE, { ...MARCA_OUTRO, chamado: "UTIC-2026-4000" }]);
-  const gatilho = await abrirAbaOsComVinculo(page, "1378");
+  const gatilho = await abrirAbaOsComVinculo(page, "1378", { finalizadas: true });
   await gatilho.click();
   await expect(page.locator("#modal-chamado-os")).toBeVisible();
   const janela = page.locator("#chamado-os-janela-os");

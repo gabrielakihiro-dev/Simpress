@@ -55,7 +55,30 @@
     return partes ? `${partes[3]}-${partes[2]}-${partes[1]}T${partes[4] || "00:00"}` : "";
   }
 
-  /** Só os campos que o usuário mudou e não deixou em branco: em branco nunca apaga o que já está no Dashboard. */
+  const MAX_TITULO = 300; // mesmo limite de ChamadoManual.G no servidor (routers/sebrae_dashboard.py)
+  const LIMITE_H_LIDO = 2000; // a coluna H lida do Dashboard chega cortada aqui (LIMITE_H_LIDO em domains/sebrae_dashboard_gravacao.py)
+
+  /** Uma linha, sem espaços repetidos: a forma em que o servidor grava e lê G e H (`" ".join(texto.split())`). */
+  function umaLinha(texto) {
+    return String(texto ?? "").split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  /**
+   * A descrição editada no lápis já é a coluna H lida do Dashboard? Mesma regra do servidor (`h_ja_gravado`): uma linha, sem o apóstrofo
+   * protetor (a célula não o guarda) e, se o H lido tem LIMITE_H_LIDO caracteres (foi cortado), só o começo precisa bater.
+   * Sem isso, editar com Enter ou espaço duplo deixaria "1 com alteração" para sempre depois de reimportar o Dashboard.
+   */
+  function descricaoJaNoDashboard(editada, lida) {
+    const novo = umaLinha(editada).replace(/^'(?=[=+\-@])/, "");
+    const cortada = String(lida ?? "").length >= LIMITE_H_LIDO; // medido antes de aparar: o corte pode terminar num espaço
+    const atual = umaLinha(lida);
+    return novo === atual || (cortada && novo.startsWith(atual));
+  }
+
+  /**
+   * Só os campos que o usuário mudou e não deixou em branco: em branco nunca apaga o que já está no Dashboard.
+   * G (título) vai junto, comparado com o título que o cartão mostra (`item.titulo`); o título editado só chega à coluna G da cópia do Dashboard.
+   */
   function payloadEdicoes(abertos, edicoes) {
     return (abertos || []).flatMap(item => {
       const editado = edicoes?.[item.numero];
@@ -66,6 +89,10 @@
         const novo = letra === "R" ? formatarEncerramento(editado.R) : String(editado[letra] || "").trim();
         if (novo && novo !== String(item.valores?.[letra] || "").trim()) mudou[letra] = novo;
       });
+      if ("G" in editado) {
+        const titulo = String(editado.G || "").trim();
+        if (titulo && umaLinha(titulo) !== umaLinha(item.titulo)) mudou.G = titulo; // o servidor grava G em uma linha: espaço duplo sozinho não é mudança
+      }
       return Object.keys(mudou).length ? [{ numero: item.numero, ...mudou }] : [];
     });
   }
@@ -84,8 +111,34 @@
       lido: Boolean(leitura), naoEncontrado: !leitura && item.nao_encontrado_softexpert === true,
       titulo: texto(item.titulo) || texto(leitura?.titulo),
       solicitante: texto(item.usuario) || texto(leitura?.solicitante),
-      descricao: texto(item.descricao) || texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
+      // a descrição editada no lápis vem primeiro: o Dashboard (H) só muda quando "Atualizar Dashboard" a grava
+      descricao: texto(item.softexpert?.descricao_editada) || texto(item.descricao) || texto(leitura?.descricao), atendimento: texto(leitura?.atendimento), abertura: texto(leitura?.habilitada_em),
     };
+  }
+
+  const AJUDA_ENCERRAMENTO = "Obrigatório ao finalizar chamado não encontrado no SoftExpert";
+
+  /**
+   * DT ENCERRAMENTO (R) é obrigatório: antigo "não encontrado" no SoftExpert com Status (D) FINALIZADO (digitado ou gravado) e sem R gravado.
+   * Nenhuma leitura trará a data desse chamado. Espelha a recusa 422 do servidor em Atualizar Dashboard (`_edicoes`).
+   */
+  function encerramentoObrigatorio(item, edicao) {
+    const efetivo = letra => String(edicao?.[letra] ?? "").trim() || String(item?.valores?.[letra] ?? "").trim();
+    return dadosAntigo(item || {}).naoEncontrado && efetivo("D") === "FINALIZADO" && !String(item.valores?.R ?? "").trim();
+  }
+
+  /** Números dos antigos com R obrigatório e ainda sem uma data válida no campo (é o que bloqueia Atualizar). */
+  function pendenciasEncerramento(abertos, edicoes) {
+    return (abertos || [])
+      .filter(item => encerramentoObrigatorio(item, edicoes?.[item.numero]) && !formatarEncerramento(edicoes?.[item.numero]?.R))
+      .map(item => item.numero);
+  }
+
+  /** Mensagem de Atualizar bloqueado; no singular é a mesma frase que o servidor devolve em 422. */
+  function avisoEncerramento(numeros) {
+    return numeros.length === 1
+      ? `Informe a DT ENCERRAMENTO (coluna R) do chamado ${numeros[0]}: ele não foi encontrado no SoftExpert.`
+      : `Informe a DT ENCERRAMENTO (coluna R) dos chamados ${numeros.join(", ")}: eles não foram encontrados no SoftExpert.`;
   }
 
   /** Texto da leitura dos antigos: andamento (X de Y), resultado ou interrupção. `anteriorEm` ignora o resultado da execução anterior. */
@@ -109,8 +162,12 @@
     return (abertos || []).filter(item => Object.keys(item.automaticos_sugeridos || {}).length > 0).length;
   }
 
+  /** G (título) só vai se o usuário digitou algo: sem isso o servidor mantém o título do SoftExpert. */
   function linhaChamado(item, v) {
-    return { numero: item.numero, A: v.A || "", B: v.B || "", D: v.D || "", J: v.J || "", R: formatarEncerramento(v.R), S: v.S || "" };
+    const linha = { numero: item.numero, A: v.A || "", B: v.B || "", D: v.D || "", J: v.J || "", R: formatarEncerramento(v.R), S: v.S || "" };
+    const titulo = String(v.G ?? "").trim();
+    if (titulo) linha.G = titulo;
+    return linha;
   }
 
   /** Atualizar Dashboard grava TODOS os chamados novos, mesmo sem A, D e J (vazios viram ""). */
@@ -256,6 +313,7 @@
       ["A", "B", "D", "J", "R", "S"].forEach(letra => {
         if (typeof campos[letra] === "string" && campos[letra].length <= 80) limpos[letra] = campos[letra];
       });
+      if (typeof campos.G === "string" && campos.G.length <= MAX_TITULO) limpos.G = campos.G; // título (G): texto livre, limite próprio
       if (Object.keys(limpos).length) saida[numero] = limpos;
     });
     return saida;
@@ -376,9 +434,10 @@
 
   return Object.freeze({
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
-    ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes,
-    tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
-    MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
+    ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
+    MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
     ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
     resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     CHAVE_RASCUNHO, NUMERO_RASCUNHO, limparValoresRascunho, PREFIXO_CAMPO, lerRascunho, gravarCampoRascunho, gravarRascunho, apagarRascunho, aplicarRascunho,

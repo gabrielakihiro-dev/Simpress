@@ -243,15 +243,22 @@ test("o cartão grava data-estado (carregando, pronto, vazio, erro) para o CSS d
   await waitFor(() => section.dataset.estado === "pronto");
 });
 
-test("data-origem marca o vínculo do Dashboard e aria-invalid o número inválido do campo UTIC", async () => {
+test("Abertas: o vínculo do Dashboard vira link com o selo Do Dashboard, e aria-invalid marca o número inválido do campo UTIC", async () => {
   vinculos = [{ fonte: "oracle", serie: "SN-SOR", os: "9002", ano: 2026, numero: "3290", origem: "dashboard" }];
   try {
     const { section, status } = await montar({ semBusca: true });
     const linha = serie => section.querySelector(`tbody tr[data-serial="${serie}"]`);
-    assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-editor").dataset.origem, "dashboard");
+    const bloco = linha("SN-SOR").querySelector(".os-chamado");
+    assert.equal(bloco.dataset.origem, "dashboard");
+    assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-editor"), null, "o vínculo automático não tem o editor manual");
+    assert.equal(linha("SN-SOR").querySelector(".ticket-os-link-input"), null);
+    assert.equal(bloco.querySelector(".os-selo--dashboard").textContent, "Do Dashboard");
+    assert.equal(bloco.querySelector(".os-selo--auto"), null);
     assert.equal(linha("SN-CONF").querySelector(".ticket-os-link-editor").dataset.origem, undefined, "sem vínculo, sem origem");
+    assert.equal(linha("SN-CONF").querySelector(".os-chamado"), null, "sem vínculo, sem link");
 
-    const janela = linha("SN-SOR").querySelector("button.ticket-os-link-goto");
+    const janela = linha("SN-SOR").querySelector("button.os-chamado__link");
+    assert.equal(janela.textContent, "UTIC-2026-3290");
     assert.equal(janela.getAttribute("data-on-click"), "abrirJanelaChamadoOs");
     assert.deepEqual(JSON.parse(janela.getAttribute("data-args")), [{ chamado: "UTIC-2026-3290", serie: "SN-SOR", os: "9002" }, "$this"]);
     assert.equal(janela.getAttribute("aria-haspopup"), "dialog");
@@ -535,6 +542,9 @@ test("Marca fora da busca, dos filtros, da contagem e da lista exportada da F6",
   marcas = [novaMarca(), novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard" })];
   try {
     const { section, status } = await montar({ semBusca: true });
+    // Marca ativa tira a OS de Abertas: a sub-aba padrão fica vazia e as duas OS estão em Finalizadas.
+    assert.equal(status.textContent, "0 OS · 0 séries");
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
     assert.equal(status.textContent, "2 OS · 2 séries");
     for (const termo of ["finalizado", "UTIC-2026-1", "outro técnico", "SoftExpert", "Histórico"]) {
       panels.filtrarTabelaOs({ busca: termo, relacao: "" });
@@ -544,7 +554,7 @@ test("Marca fora da busca, dos filtros, da contagem e da lista exportada da F6",
     assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
     assert.deepEqual(panels.seriesFiltradasOs().sort(), ["SN-CONF", "SN-SOR"]);
     assert.equal(status.textContent, "2 OS · 2 séries");
-  } finally { restaurarMarcas(); }
+  } finally { restaurarMarcas(); panels.filtrarTabelaOs({ situacao: "abertas" }); }
 });
 
 test("Desfazer pede confirmação, envia a marca ao PUT, recria a tabela e avisa o sino", async () => {
@@ -600,6 +610,7 @@ test("Erro 422 ou 503 no PUT da marca aparece no status e a tabela segue de pé"
   marcas = [novaMarca()];
   try {
     const { section, status } = await montar({ semBusca: true });
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
     for (const falha of [{ status: 422, detail: "Marca inexistente ou ação inválida." }, { status: 503, detail: "Arquivo de marcas indisponível." }]) {
       falhaMarca = falha;
       const botao = blocosMarca(section, "SN-CONF")[0].querySelector("button");
@@ -607,11 +618,12 @@ test("Erro 422 ou 503 no PUT da marca aparece no status e a tabela segue de pé"
       await waitFor(() => status.textContent === falha.detail);
       assert.equal(botao.disabled, false, "o botão volta a valer");
       assert.equal(botao.getAttribute("aria-busy"), null);
-      assert.equal(visiveis(section).length, 2, "a tabela não é recriada nem quebra");
+      assert.deepEqual(visiveis(section), ["SN-CONF"], "a tabela não é recriada nem quebra, e a OS segue em Finalizadas");
+      assert.equal(blocosMarca(section, "SN-CONF")[0].querySelector("button"), botao, "o mesmo botão segue na tela");
       assert.equal(eventos.length, 0, "falha não avisa o sino");
     }
     assert.equal(putsMarcas.length, 2);
-  } finally { restaurarMarcas(); }
+  } finally { restaurarMarcas(); panels.filtrarTabelaOs({ situacao: "abertas" }); }
 });
 
 test("Falha ao ler as marcas não derruba a tabela e o status avisa", async () => {
@@ -775,4 +787,317 @@ test("Peça entregue: Aberta há N dias sai do selo cinza e vira sufixo do selo 
     assert.deepEqual(selos("SN-ABERTA", "ck-os__selo--dias"), ["Aberta há 54 dias"], "sem entrega, o selo cinza continua");
     assert.deepEqual(selos("SN-ABERTA", "ck-os__selo--entregue"), []);
   } finally { report.chamados = original; }
+});
+
+// ----- sub-abas Abertas e Finalizadas da F6 -----
+const chamadosOracle = series => series.map((serie, i) => ({
+  serie, relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: [{ solicitacao: `R${i}`, ordem_servico: String(1000 + i), descricao: "" }],
+}));
+const reiniciarFiltros = () => panels.filtrarTabelaOs({ situacao: "abertas", busca: "", relacao: "", triagem: "", atencao: false });
+const linhaOs = (section, serie) => section.querySelector(`tbody tr[data-serial="${serie}"]`);
+const vinculoFinalizacao = (extra = {}) => ({
+  fonte: "oracle", serie: "SN-CONF", os: "9001", ano: 2026, numero: "1", origem: "finalizacao", finalizado_em: "2026-11-08T10:30:00-03:00", ...extra,
+});
+
+test("Sub-abas: marca ativa leva a OS para Finalizadas; situacao escolhe a sub-aba e busca, relação, triagem e atenção valem nas duas", async () => {
+  marcas = [novaMarca(), novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", ativa: false })];
+  const grupos = { "SN-CONF": "em_dia", "SN-SOR": "atrasados" };
+  try {
+    const { section, status } = await montar({ semBusca: true, grupoSerie: ticket => grupos[ticket.serie] });
+    assert.equal(linhaOs(section, "SN-CONF").dataset.finalizada, "true", "marca ativa");
+    assert.equal(linhaOs(section, "SN-SOR").dataset.finalizada, "false", "marca desfeita não finaliza a OS");
+    assert.deepEqual(visiveis(section), ["SN-SOR"], "Abertas é a sub-aba padrão");
+    assert.equal(status.textContent, "1 OS · 1 série");
+
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(visiveis(section), ["SN-CONF"]);
+    assert.equal(status.textContent, "1 OS · 1 série");
+    panels.filtrarTabelaOs({ situacao: "qualquer" });
+    assert.deepEqual(visiveis(section), ["SN-SOR"], "valor desconhecido cai em Abertas");
+
+    // O total do status é o da sub-aba; os filtros da barra valem nas duas.
+    for (const [situacao, serie, outra] of [["abertas", "SN-SOR", "SN-CONF"], ["finalizadas", "SN-CONF", "SN-SOR"]]) {
+      const atrasada = serie === "SN-SOR";
+      reiniciarFiltros();
+      panels.filtrarTabelaOs({ situacao, busca: serie.toLowerCase() });
+      assert.deepEqual(visiveis(section), [serie], `${situacao}: busca`);
+      panels.filtrarTabelaOs({ busca: outra });
+      assert.deepEqual(visiveis(section), [], `${situacao}: a série da outra sub-aba não aparece`);
+      assert.equal(status.textContent, "0 de 1 OS · 0 séries");
+      panels.filtrarTabelaOs({ busca: "", relacao: "conferida" });
+      assert.deepEqual(visiveis(section), atrasada ? [] : [serie], `${situacao}: relação`);
+      panels.filtrarTabelaOs({ relacao: "", triagem: "atrasados" });
+      assert.deepEqual(visiveis(section), atrasada ? [serie] : [], `${situacao}: triagem`);
+      panels.filtrarTabelaOs({ triagem: "", atencao: true });
+      assert.deepEqual(visiveis(section), atrasada ? [serie] : [], `${situacao}: atenção`);
+    }
+  } finally { restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Sub-abas: os números das abas seguem os filtros e ignoram a página; Carregar mais vale só na sub-aba ativa e volta ao trocar", async () => {
+  const original = report.chamados;
+  report.chamados = chamadosOracle(Array.from({ length: 60 }, (_, i) => `SN-P${String(i).padStart(2, "0")}`));
+  // Índices pares finalizados (30 em cada sub-aba).
+  marcas = report.chamados.filter((_, i) => i % 2 === 0).map(item => novaMarca({ serie: item.serie, os: item.oracle[0].ordem_servico }));
+  const abas = [];
+  try {
+    const { section, status } = await montar({ semBusca: true, aoContarAbas: numeros => abas.push(numeros) });
+    assert.deepEqual(abas, [{ abertas: 30, finalizadas: 30 }], "os números são do total, não da página");
+    const mais = section.querySelector("[data-os-mais]");
+    assert.equal(visiveis(section).length, 25);
+    assert.equal(mais.querySelector(".sebrae-mais__n").textContent, "Mostrando 25 de 30");
+    assert.equal(status.textContent, "30 OS · 30 séries");
+
+    mais.querySelector("button").click();
+    assert.equal(visiveis(section).length, 30, "Carregar mais mostra o resto da sub-aba");
+    assert.equal(mais.hidden, true);
+    assert.equal(abas.length, 1, "Carregar mais não muda os números das abas");
+
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.equal(visiveis(section).length, 25, "outra sub-aba volta à primeira página");
+    assert.equal(mais.hidden, false);
+    assert.equal(mais.querySelector(".sebrae-mais__n").textContent, "Mostrando 25 de 30");
+    assert.ok(visiveis(section).every(serie => Number(serie.slice(-2)) % 2 === 0), "só as finalizadas");
+    assert.equal(abas.length, 1, "trocar de sub-aba não muda os números");
+
+    panels.filtrarTabelaOs({ busca: "SN-P0" });
+    assert.deepEqual(abas.at(-1), { abertas: 5, finalizadas: 5 }, "as abas contam as linhas que passam nos filtros, nas duas sub-abas");
+    assert.equal(visiveis(section).length, 5);
+    panels.filtrarTabelaOs({ relacao: "conferida" });
+    assert.deepEqual(abas.at(-1), { abertas: 0, finalizadas: 0 });
+    panels.filtrarTabelaOs({ busca: "", relacao: "" });
+    assert.deepEqual(abas.at(-1), { abertas: 30, finalizadas: 30 });
+  } finally { report.chamados = original; restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Sub-abas: aoContarSituacao recebe só as OS abertas e as séries delas, e não muda ao trocar de sub-aba nem ao filtrar", async () => {
+  marcas = [novaMarca()];
+  const contagens = [];
+  try {
+    const { section } = await montar({ semBusca: true, aoContarSituacao: dados => contagens.push(dados) });
+    assert.equal(contagens.length, 1);
+    assert.equal(contagens[0].os, 1, "só as OS de Abertas");
+    assert.deepEqual(contagens[0].chamados.map(ticket => ticket.serie), ["SN-SOR"], "só as séries com OS aberta");
+
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    panels.filtrarTabelaOs({ busca: "nada-casa", relacao: "conferida" });
+    reiniciarFiltros();
+    assert.equal(contagens.length, 1, "trocar de sub-aba e filtrar não recontam");
+
+    // Marca desfeita: a OS volta a Abertas e a tabela recarregada avisa o host.
+    marcas = [novaMarca({ ativa: false })];
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => contagens.length === 2 && section.dataset.estado === "pronto");
+    assert.equal(contagens[1].os, 2);
+    assert.deepEqual(contagens[1].chamados.map(ticket => ticket.serie).sort(), ["SN-CONF", "SN-SOR"]);
+
+    // Leitura das marcas falhou: nenhuma OS é finalizada, então todas contam em Abertas.
+    marcas = null;
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => contagens.length === 3 && section.dataset.estado === "pronto");
+    assert.equal(contagens[2].os, 2);
+    assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+  } finally { restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Sub-abas: seriesFiltradasOs (o Exportar Excel) devolve só a sub-aba visível; sub-aba vazia devolve lista vazia", async () => {
+  const original = report.chamados;
+  report.chamados = [...original, { serie: "SN-DUAS", relacao: "somente_oracle", simpress: { ordens_servico: [] }, oracle: [
+    { solicitacao: "R3", ordem_servico: "9301", descricao: "" }, { solicitacao: "R4", ordem_servico: "9302", descricao: "" }] }];
+  marcas = [novaMarca(), novaMarca({ serie: "SN-DUAS", os: "9301", chamado: "UTIC-2026-3" })];
+  try {
+    [...doc.body.children].forEach(node => node.remove());
+    const { section } = await montar({ semBusca: true });
+    assert.deepEqual(panels.seriesFiltradasOs().sort(), ["SN-DUAS", "SN-SOR"], "Abertas");
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(panels.seriesFiltradasOs().sort(), ["SN-CONF", "SN-DUAS"], "Finalizadas; a exportação é por série, então SN-DUAS (OS nas duas) sai nas duas");
+    panels.filtrarTabelaOs({ busca: "9301" });
+    assert.deepEqual(panels.seriesFiltradasOs(), ["SN-DUAS"]);
+    panels.filtrarTabelaOs({ busca: "9302" });
+    assert.deepEqual(panels.seriesFiltradasOs(), [], "a OS 9302 está em Abertas");
+    panels.filtrarTabelaOs({ busca: "", relacao: "somente_oracle" });
+    assert.deepEqual(panels.seriesFiltradasOs(), ["SN-DUAS"], "relação combina com a sub-aba");
+
+    reiniciarFiltros();
+    marcas = [];
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "pronto");
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(panels.seriesFiltradasOs(), [], "sub-aba vazia exporta zero séries, não o caminho antigo (null)");
+  } finally { report.chamados = original; restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("statusEm leva o status N OS · N séries para o elemento do host; a janela Chamado × OS mantém o dela", async () => {
+  const host = novoHost();
+  const slot = doc.createElement("div");
+  doc.body.append(slot);
+  const section = panels.montarTabelaOs(host, { semBusca: true, statusEm: slot });
+  const status = slot.querySelector(".ticket-summary-status");
+  assert.ok(status, "o status foi para o elemento do host");
+  assert.equal(section.querySelector(".ticket-summary-status"), null, "e saiu do cabeçalho do cartão");
+  assert.equal(status.getAttribute("role"), "status");
+  await waitFor(() => /OS ·/.test(status.textContent));
+  assert.equal(status.textContent, "2 OS · 2 séries");
+
+  const slotJanela = doc.createElement("div");
+  doc.body.append(slotJanela);
+  const janela = panels.montarTabelaOs(novoHost(), { semBusca: true, soOs: { serie: "SN-CONF", os: "9001" }, somenteLeitura: true, statusEm: slotJanela });
+  assert.ok(janela.querySelector(".ticket-summary-status"), "janela com soOs ignora statusEm");
+  assert.equal(slotJanela.children.length, 0);
+});
+
+test("Células do Chamado: Abertas ignora o vínculo da finalização; Finalizadas mostra link, selo Vinculado automaticamente e a data", async () => {
+  // SN-CONF: marca ativa e vínculo da finalização. SN-SOR: só o vínculo da finalização (marca desfeita), então a OS está em Abertas.
+  vinculos = [vinculoFinalizacao(), vinculoFinalizacao({ serie: "SN-SOR", os: "9002", numero: "3290" })];
+  marcas = [novaMarca(), novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-3290", ativa: false })];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const aberta = linhaOs(section, "SN-SOR");
+    assert.equal(aberta.dataset.finalizada, "false");
+    assert.equal(aberta.querySelector(".os-chamado"), null, "o vínculo da finalização não vira link em Abertas");
+    assert.equal(aberta.querySelector(".ticket-os-link-input").value, "", "e nunca preenche o campo manual");
+    assert.equal(aberta.querySelector(".ticket-os-link-remove"), null, "sem vínculo manual, sem Remover vínculo");
+    assert.equal(aberta.querySelector(".ticket-os-link-editor").dataset.origem, undefined);
+
+    const finalizada = linhaOs(section, "SN-CONF");
+    assert.equal(finalizada.dataset.finalizada, "true");
+    const bloco = finalizada.querySelector(".os-chamado");
+    assert.equal(bloco.dataset.origem, "finalizacao");
+    const link = bloco.querySelector("button.os-chamado__link");
+    assert.equal(link.textContent, "UTIC-2026-1");
+    assert.equal(link.getAttribute("data-on-click"), "abrirJanelaChamadoOs");
+    assert.deepEqual(JSON.parse(link.getAttribute("data-args")), [{ chamado: "UTIC-2026-1", serie: "SN-CONF", os: "9001" }, "$this"]);
+    const selo = bloco.querySelector(".os-selo--auto");
+    assert.equal(selo.textContent, "Vinculado automaticamente");
+    assert.ok(selo.querySelector("svg"), "o selo tem o ícone de corrente");
+    assert.equal(selo.querySelector("svg").getAttribute("aria-hidden"), "true");
+    assert.equal(bloco.querySelector(".os-selo--dashboard"), null);
+    assert.equal(finalizada.querySelector(".ticket-os-link-editor"), null, "o link automático substitui o editor");
+
+    const [marca] = blocosMarca(section, "SN-CONF");
+    assert.equal(marca.querySelector(".ck-badge").textContent, "Chamado finalizado", "o selo da marca continua");
+    assert.equal(marca.querySelector(".os-finalizado-em").textContent, "Finalizado em 08/11/2026");
+    assert.equal(marca.querySelector(".ck-os-marca__chamado"), null, "o chamado já aparece no link");
+    assert.deepEqual(botoesMarca(marca), ["Desfazer"]);
+    assert.equal(aberta.querySelector(".os-finalizado-em"), null, "só a marca ativa mostra a data");
+
+    // Vínculo manual tem prioridade sobre o da finalização: a OS fica com o editor e o número digitado.
+    vinculos = [vinculoFinalizacao(), vinculoFinalizacao({ fonte: "simpress", numero: "77", origem: undefined, finalizado_em: undefined })];
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "pronto" && linhaOs(section, "SN-CONF").querySelector(".ticket-os-link-input")?.value === "77");
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-chamado"), null, "o manual vence o automático");
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-selo"), null);
+
+    // Vínculo do Dashboard aparece com o selo cinza também numa OS finalizada.
+    vinculos = [vinculoFinalizacao({ origem: "dashboard", numero: "3290", finalizado_em: undefined })];
+    await panels.atualizarTabelaOs(true);
+    await waitFor(() => section.dataset.estado === "pronto" && linhaOs(section, "SN-CONF").querySelector(".os-selo--dashboard"));
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-selo--dashboard").textContent, "Do Dashboard");
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-selo--auto"), null);
+  } finally { vinculos = []; restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Desfazer em Finalizadas devolve a OS a Abertas com o campo manual vazio, recalcula abas e KPIs e leva o foco para a aba ativa", async () => {
+  vinculos = [vinculoFinalizacao()];
+  marcas = [novaMarca()];
+  const abas = [];
+  const contagens = [];
+  let focos = 0;
+  try {
+    const { section } = await montar({ semBusca: true, aoContarAbas: n => abas.push(n), aoContarSituacao: d => contagens.push(d), aoFocarAba: () => { focos += 1; } });
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(visiveis(section), ["SN-CONF"]);
+    assert.deepEqual(abas.at(-1), { abertas: 1, finalizadas: 1 });
+    assert.equal(contagens.at(-1).os, 1);
+
+    // O servidor devolve a marca desfeita e já sem o vínculo da finalização (ele só deriva de marca ativa).
+    marcas = [novaMarca({ ativa: false, historico: [{ acao: "marcada", origem: "auto", em: "2026-11-08T10:30:00-03:00" },
+      { acao: "desfeita", origem: "manual", em: "2026-11-08T12:00:00-03:00" }] })];
+    vinculos = [];
+    blocosMarca(section, "SN-CONF")[0].querySelector("button").dispatchEvent({ type: "click" });
+    await waitFor(() => eventos.includes("simpress:atualizar-notificacoes"));
+    assert.deepEqual(putsMarcas, [{ serie: "SN-CONF", os: "9001", chamado: "UTIC-2026-1", acao: "desfazer" }]);
+    assert.deepEqual(visiveis(section), [], "a OS saiu de Finalizadas");
+    assert.equal(focos, 1, "a linha mudou de sub-aba: o foco vai para a aba ativa");
+    assert.deepEqual(abas.at(-1), { abertas: 2, finalizadas: 0 });
+    assert.equal(contagens.at(-1).os, 2, "KPIs e triagem contam a OS de volta");
+
+    panels.filtrarTabelaOs({ situacao: "abertas" });
+    assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+    const linha = linhaOs(section, "SN-CONF");
+    assert.equal(linha.dataset.finalizada, "false");
+    assert.equal(linha.querySelector(".os-chamado"), null);
+    assert.equal(linha.querySelector(".ticket-os-link-input").value, "", "o campo manual abre vazio");
+    assert.deepEqual(botoesMarca(blocosMarca(section, "SN-CONF")[0]), ["Refazer"], "a marca desfeita fica na linha de Abertas");
+  } finally { vinculos = []; restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Conferido em Finalizadas mantém a OS na sub-aba e devolve o foco ao botão da própria marca", async () => {
+  const outroTecnico = extra => novaMarca({ serie: "SN-SOR", os: "9002", chamado: "UTIC-2026-2", origem: "outro_tecnico", motivo: "saiu_do_dashboard", ...extra });
+  marcas = [outroTecnico()];
+  let focos = 0;
+  try {
+    const { section } = await montar({ semBusca: true, aoFocarAba: () => { focos += 1; } });
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(visiveis(section), ["SN-SOR"]);
+    const conferido = blocosMarca(section, "SN-SOR")[0].querySelectorAll("button").find(botao => botao.textContent === "Conferido");
+    marcas = [outroTecnico({ conferido_em: "2026-11-08T11:00:00-03:00" })];
+    conferido.dispatchEvent({ type: "click" });
+    await waitFor(() => eventos.includes("simpress:atualizar-notificacoes"));
+    assert.equal(putsMarcas[0].acao, "conferir");
+    assert.equal(confirmacoes.length, 0, "Conferido não pede confirmação");
+    assert.deepEqual(visiveis(section), ["SN-SOR"], "a OS segue em Finalizadas");
+    assert.deepEqual(botoesMarca(blocosMarca(section, "SN-SOR")[0]), ["Desfazer"]);
+    assert.equal(doc.activeElement.textContent, "Desfazer", "o foco volta ao botão da mesma marca");
+    assert.equal(focos, 0, "a linha não mudou de sub-aba");
+  } finally { restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("Janela Chamado × OS (soOs) não usa sub-abas: mostra a OS pedida mesmo finalizada, com o editor de sempre e sem avisar o host", async () => {
+  vinculos = [vinculoFinalizacao({ origem: "dashboard", numero: "3290", finalizado_em: undefined })];
+  marcas = [novaMarca()];
+  const avisos = [];
+  try {
+    const { section, status } = await montar({
+      semBusca: true, soOs: { serie: "SN-CONF", os: "9001" }, somenteLeitura: true,
+      aoContarAbas: () => avisos.push("abas"), aoContarSituacao: () => avisos.push("situacao"), aoMudarSituacao: () => avisos.push("troca"),
+    });
+    assert.deepEqual(visiveis(section), ["SN-CONF"], "a OS finalizada aparece, sem filtro de sub-aba");
+    assert.equal(linhaOs(section, "SN-CONF").dataset.finalizada, "true");
+    assert.equal(status.textContent, "1 OS · 1 série");
+    panels.filtrarTabelaOs({ situacao: "abertas" });
+    assert.deepEqual(visiveis(section), ["SN-CONF"], "filtrarTabelaOs({ situacao }) ignora a janela");
+    const editor = linhaOs(section, "SN-CONF").querySelector(".ticket-os-link-editor");
+    assert.equal(editor.dataset.origem, "dashboard", "mantém o editor com data-origem, não o link com selo");
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-chamado"), null);
+    assert.equal(linhaOs(section, "SN-CONF").querySelector(".os-finalizado-em"), null, "a janela não mostra a data de finalização");
+    assert.deepEqual(avisos, [], "a janela não avisa o host de abas, KPIs nem troca de sub-aba");
+  } finally { vinculos = []; restaurarMarcas(); reiniciarFiltros(); }
+});
+
+test("revelarLinhaOs leva à sub-aba da OS, volta à primeira página e avisa o host; fora dos filtros a linha não abre", async () => {
+  const original = report.chamados;
+  report.chamados = chamadosOracle(Array.from({ length: 60 }, (_, i) => `SN-P${String(i).padStart(2, "0")}`));
+  marcas = report.chamados.filter((_, i) => i % 2 === 0).map(item => novaMarca({ serie: item.serie, os: item.oracle[0].ordem_servico }));
+  const trocas = [];
+  try {
+    const { section } = await montar({ semBusca: true, aoMudarSituacao: situacao => trocas.push(situacao) });
+    const finalizada = linhaOs(section, "SN-P58");
+    const aberta = linhaOs(section, "SN-P59");
+    assert.equal(finalizada.hidden, true, "está em Finalizadas, e a sub-aba ativa é Abertas");
+    assert.equal(panels.revelarLinhaOs(finalizada), true);
+    assert.equal(finalizada.hidden, false);
+    assert.deepEqual(trocas, ["finalizadas"], "o host é avisado para marcar a aba");
+    assert.ok(visiveis(section).every(serie => Number(serie.slice(-2)) % 2 === 0), "a lista agora é só de Finalizadas");
+
+    assert.equal(panels.revelarLinhaOs(aberta), true);
+    assert.equal(aberta.hidden, false);
+    assert.deepEqual(trocas, ["finalizadas", "abertas"]);
+
+    panels.filtrarTabelaOs({ busca: "SN-P5", situacao: "abertas" });
+    assert.equal(panels.revelarLinhaOs(finalizada), true, "passa na busca: troca de sub-aba");
+    panels.filtrarTabelaOs({ busca: "nada-casa", situacao: "abertas" });
+    assert.equal(panels.revelarLinhaOs(finalizada), false, "fora da busca a linha não abre");
+    assert.deepEqual(trocas, ["finalizadas", "abertas", "finalizadas"], "e a sub-aba não muda");
+  } finally { report.chamados = original; restaurarMarcas(); reiniciarFiltros(); }
 });

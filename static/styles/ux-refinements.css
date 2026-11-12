@@ -186,7 +186,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 }
 .ux-pending-chip-count > span { color: var(--ux-surface-0); font-size: 0.75rem; }
 @media (pointer: coarse) { .ux-pending-chip { min-height: 44px; } }
-@media (min-width: 768px) { #btn-gerar-planilha { white-space: nowrap; } }
+@media (min-width: 768px) { #btn-gerar-planilha, #btn-alterar-endereco { white-space: nowrap; } }
 
 /* Light theme: pre-existing axe color-contrast failures in the delivery card. */
 html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: var(--color-emerald-200); }

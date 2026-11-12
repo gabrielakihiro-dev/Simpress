@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 from domains import ux_chamados, ux_ticket_browser as browser
-from domains.ux_ticket import INCIDENTE, MOTIVO, Formulario
+from domains.ux_ticket import INCIDENTE, MOTIVO, TIPO_ENDERECO, Formulario
 
 ORIGEM = "https://ux.simpress.com.br"
 CABECALHO = (
@@ -270,6 +270,20 @@ class PreencherTests(unittest.TestCase):
         browser._preencher(telefone, "(41) 98751-2389", nome="telefone", digitado="41987512389")
         self.assertEqual(telefone.valor, "41987512389")
 
+    def test_alterar_endereco_fills_only_registro_and_requester(self):
+        pagina = Pagina()
+        for campo, valor in (("selectIncidente", "Transporte"), ("selectMotivo", "Transferência Fisica de Equipamentos")):
+            pagina.controles[f"ng-select:has(input#{campo}) .ng-value-label"] = Controle(texto=valor)
+        form = formulario(tipo=TIPO_ENDERECO, chamado_interno="12345678")
+        browser.PortalTicketUXChrome(Contexto())._preencher_campos(pagina, form)
+        self.assertEqual(pagina.controles[browser.DESCRICAO].valor, form.descricao)
+        self.assertEqual((pagina.controles["input#nome"].valor, pagina.controles["input#email"].valor,
+                          pagina.controles["input#telefone"].valor), (form.nome, form.email, "41999990000"))
+        for seletor in ("input#atualizarCnpjInstalacao", "input#atualizarCnpjFaturamento"):
+            self.assertNotIn(seletor, pagina.controles)
+        self.assertEqual(pagina.controles["input#InputNumeroChamado"].valor, "")  # never typed
+        self.assertTrue(all(not controle.arquivos for controle in pagina.controles.values()))  # no attachment
+
 
 class EnviarTests(unittest.TestCase):
     def setUp(self):
@@ -401,11 +415,53 @@ class ConferenciaFinalTests(unittest.TestCase):
             self.assertNotIn("Pessoa", str(erro.exception))
 
 
+    def test_alterar_endereco_checks_transporte_without_cep_cnpj_or_attachment(self):
+        # The Transferência Fisica form has no CEP, CNPJ or attachment; Nº interno stays empty on screen.
+        # The form still carries CNPJs, address and a file name: reading any of them would diverge.
+        form = formulario(tipo=TIPO_ENDERECO, chamado_interno="")
+        pagina = Pagina()
+        for campo, valor in (("selectIncidente", "Transporte"), ("selectMotivo", "Transferência Fisica de Equipamentos")):
+            pagina.controles[f"ng-select:has(input#{campo}) .ng-value-label"] = Controle(texto=valor)
+        for seletor, valor in ((browser.DESCRICAO, form.descricao), ("input#nome", form.nome), ("input#email", form.email),
+                               ("input#telefone", "41999990000"), ("input#InputNumeroChamado", "")):
+            pagina.controles[seletor] = Controle(valor=valor)
+        portal = browser.PortalTicketUXChrome(Contexto())
+        portal._conferir_tudo(pagina, "ABC123", "HP 250R G9", CEP, form)
+        for seletor in ("input#atualizarCnpjInstalacao", "input#atualizarCnpjFaturamento", "input#cep-novo-endereco"):
+            self.assertNotIn(seletor, pagina.controles)
+        self.assertNotIn("planilha.xlsx", pagina.textos)
+        # Atualização Cadastral left selected on screen is a divergence for this ticket.
+        pagina.controles["ng-select:has(input#selectIncidente) .ng-value-label"] = Controle(texto=INCIDENTE)
+        with self.assertRaises(ux_chamados.ErroUX) as erro:
+            portal._conferir_tudo(pagina, "ABC123", "HP 250R G9", CEP, form)
+        self.assertEqual(erro.exception.status, 409)
+
+
 class ContingenciaTests(unittest.TestCase):
     def setUp(self):
         self.contexto = Contexto()
         self.portal = browser.PortalTicketUXChrome(self.contexto)
         self.portal._esperar_consulta = mock.Mock()
+
+    def test_alterar_endereco_picks_transporte_and_stops_without_cep(self):
+        escolhas = []
+
+        def escolher(page, campo, alvo, *, busca=None):
+            escolhas.append((campo, alvo))
+            return alvo
+
+        def abrir_card(page, serial):
+            page.url = ORIGEM + browser.ROTA_ABRIR
+
+        self.portal._abrir_card = abrir_card
+        self.portal._equipamento = lambda page, serial: "HP 250R G9"
+        with mock.patch.object(browser, "_escolher", escolher):
+            self.assertEqual(self.portal.preparar_transferencia("ABC123", "sessao"), "HP 250R G9")
+        self.assertEqual(escolhas, [("selectContrato", None), ("selectIncidente", "Transporte"),
+                                    ("selectMotivo", "Transferência Fisica de Equipamentos")])
+        [pagina] = self.contexto.pages
+        self.assertNotIn("input#cep-novo-endereco", pagina.controles)
+        self.assertNotIn("Buscar meus Endereços", pagina.botoes)
 
     def test_a_a_route_deviation_goes_back_to_the_consulta_and_succeeds_on_the_second_try(self):
         inicios = []

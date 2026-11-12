@@ -206,7 +206,7 @@
     }
   }
 
-  // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Gerar planilha).
+  // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Transporte, o antigo Gerar planilha).
   async function prepararTransporte({ serial, cidade, obs, movimentacao } = {}) {
     const serie = String(serial || "").trim();
     if (serie && chaveSerieTransporte(appState.currentEquipamento?.serial) !== chaveSerieTransporte(serie)) {
@@ -445,6 +445,7 @@
   }
 
   function atualizarPreviaTransporteCockpit() {
+    atualizarBotaoAlterarEndereco();
     const root = document.querySelector(".ck-transp");
     if (!root) return;
     const value = id => {
@@ -571,6 +572,34 @@
     }
 
     return { texto: `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}` };
+  }
+
+  // "Alterar Endereço" (ux-ticket.js): only the série and both addresses; no representative, phone, e-mail or workbook.
+  // Short form, from the Retirada city to the Entrega city.
+  function montarTextoAlterarEndereco() {
+    const retiradaEndereco = document.getElementById("retirada-endereco").value.trim();
+    const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+    if (!retiradaEndereco || !entregaEndereco) {
+      return { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." };
+    }
+    const unidadeDestino = appState.unidadesList.find(
+      unit => String(unit.id) === String(document.getElementById("select-unidade-destino").value)
+    );
+    const retiradaCidade = cidadeComUf(appState.retiradaCidadeSelecionada);
+    const entregaCidade = cidadeComUf(unidadeDestino?.cidade);
+    if (!retiradaCidade || !entregaCidade) {
+      return { aviso: "Não foi possível identificar as cidades de origem e destino." };
+    }
+    return { texto: `Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de ${retiradaCidade} para ${entregaCidade}.` };
+  }
+
+  function serialAlterarEndereco() {
+    return transferUtils.serialForTransfer(appState.currentEquipamento, document.getElementById("input-serial")?.value || "");
+  }
+
+  function atualizarBotaoAlterarEndereco() {
+    const botao = document.getElementById("btn-alterar-endereco");
+    if (botao) botao.disabled = !serialAlterarEndereco() || !montarTextoAlterarEndereco().texto;
   }
 
   function gerarTextoSolicitacaoTransporte() {
@@ -850,6 +879,7 @@
     atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
     abrirModalPreview, fecharModalPreview, copiarTextoDoModal, montarTextoSolicitacaoTransporte, gerarTextoSolicitacaoTransporte,
+    montarTextoAlterarEndereco, serialAlterarEndereco, atualizarBotaoAlterarEndereco,
     atualizarPreviaTransporteCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,

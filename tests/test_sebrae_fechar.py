@@ -31,6 +31,15 @@ class RotinaCancelada(BaseException):
     pass
 
 
+class Conflito(RuntimeError):
+    """O que ``DashboardEmConflito`` (scripts/automacao_rotinas_chrome.py) é para o fechar: um erro marcado com ``em_conflito``."""
+
+    em_conflito = True
+
+
+MOTIVO_CONFLITO = "Conflito de edição: 1 célula(s) do Dashboard foram alteradas no SharePoint e no site (colunas J)."
+
+
 class Aba:
     def is_closed(self):
         return getattr(self, "fechada", False)
@@ -352,6 +361,27 @@ class EnvioFalhoTest(FecharBase):
         self.assertFalse(fin.aviso_do_pendente(self.dir)["copia_sharepoint"])
 
 
+    def test_conflito_de_edicao_nao_guarda_copia_pendente_nem_sobe_nada_e_cancela_o_envio(self):
+        self.descrever(A)
+        self.rotinas.falha_envio = Conflito(MOTIVO_CONFLITO)
+        codigo, _ = self.rodar({A: ok()}, [A])
+        self.assertEqual(codigo, 1)
+        self.assertIsNone(fin.pendente_mais_recente(self.dir))
+        self.assertEqual(self.rotinas.copias, [])
+        aviso = self.resultado()["sharepoint"]
+        self.assertEqual(
+            {k: aviso[k] for k in ("falhou", "motivo", "copia_local", "copia_sharepoint")},
+            {"falhou": True, "motivo": MOTIVO_CONFLITO, "copia_local": "", "copia_sharepoint": False},
+        )
+        self.assertEqual(fin.ler_envio(self.dir)["status"], "falhou")  # o envio preparado foi cancelado: o próximo clique não fica travado
+        fin.exigir_envio_livre(self.dir)
+
+    def test_a_saida_montada_a_partir_da_importacao_registra_em_que_importacao_foi_montada(self):
+        self.descrever(A)
+        self.rodar({A: ok()}, [A])
+        self.assertEqual(fin.base_do_conteudo(self.dir, self.saida.read_bytes()), fin.base_importada(self.dir))
+
+
 class ReenviarTest(FecharBase):
     def preparar_job_snapshot(self):
         envio = fin.preparar_envio(self.dir, self.importado)
@@ -558,6 +588,30 @@ class ReenviarTest(FecharBase):
                 else:
                     self.assertEqual(sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir), 0)
                     self.assertEqual(self.rotinas.enviadas, [(fin.NOME_DASHBOARD, self.importado)])
+
+    def test_conflito_no_reenvio_da_pendente_nao_cria_outra_copia_e_mantem_a_que_ja_existe(self):
+        pendente = self.criar_pendente()
+        self.rotinas.falha_envio = Conflito(MOTIVO_CONFLITO)
+        self.assertEqual(self.pedir(), 1)
+        self.assertEqual(list(fin.pasta_pendente(self.dir).glob("*.xlsx")), [pendente])
+        self.assertEqual(self.rotinas.copias, [])
+        aviso = self.resultado()["sharepoint"]
+        self.assertEqual(
+            {k: aviso[k] for k in ("falhou", "motivo", "copia_local", "copia_sharepoint")},
+            {"falhou": True, "motivo": MOTIVO_CONFLITO, "copia_local": "", "copia_sharepoint": False},
+        )
+        self.assertEqual(fin.ler_envio(self.dir)["status"], "falhou")
+
+    def test_conflito_no_reenvio_da_snapshot_cancela_o_envio_sem_copia_pendente_e_preserva_a_snapshot(self):
+        envio, sha = self.preparar_job_snapshot()
+        self.rotinas.falha_envio = Conflito(MOTIVO_CONFLITO)
+        self.assertEqual(sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir), 1)
+        aviso = self.resultado()["sharepoint"]
+        self.assertEqual((aviso["falhou"], aviso["motivo"], aviso["copia_local"]), (True, MOTIVO_CONFLITO, ""))
+        self.assertEqual(fin.ler_envio(self.dir)["status"], "falhou")
+        self.assertTrue(fin.snapshot_envio(self.dir, envio).exists())
+        self.assertFalse(fin.pasta_pendente(self.dir).exists() and any(fin.pasta_pendente(self.dir).iterdir()))
+        self.assertEqual(self.rotinas.copias, [])
 
     def pedir(self):
         fin.gravar_job(self.dir, [], acao=fin.ACAO_REENVIAR)

@@ -233,7 +233,9 @@ def _describe_vincular_os(api: SimpressApi, args: Args) -> str:
     elif atual.get("chamado") == novo:
         raise ValueError("Esse vínculo já existe com esse chamado. Nada a alterar.")
     else:
-        acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')} → {novo}."
+        automatico = {"finalizacao": " (automático, vindo da marca de OS finalizada; não está gravado)",
+                      "dashboard": " (automático, vindo do Dashboard; não está gravado)"}.get(str(atual.get("origem") or ""), "")
+        acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')}{automatico} → {novo}."
     return f"{acao} Só este vínculo é gravado; os demais vínculos de OS ficam como estão."
 
 def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
@@ -256,10 +258,10 @@ def _describe_editar_descricao_chamado(api: SimpressApi, args: Args) -> str:
     if not alvo["descricao"]:
         if not alvo["editada"]:
             raise ValueError("A descrição desse chamado ainda não foi editada; não há o que restaurar.")
-        return f"Restaurar a descrição de {alvo['numero']} ao texto original do SoftExpert. Texto atual: {atual}. Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam."
+        return f"Restaurar a descrição de {alvo['numero']} ao texto original. Texto atual: {atual}. Só neste site: o SoftExpert não muda e um H já enviado ao Dashboard não é desfeito (corrija à mão no Dashboard)."
     return (
         f"Editar a descrição de {alvo['numero']}, igual ao lápis da tela Chamados. Texto atual: {atual}. Novo texto: \"{alvo['descricao']}\". "
-        "Só neste site: SoftExpert e linhas já lançadas no Dashboard não mudam; um chamado novo leva o texto novo na coluna H ao Atualizar Dashboard."
+        "O texto vai à coluna H do Dashboard no próximo Atualizar Dashboard (chamado novo ou antigo em aberto); o SoftExpert nunca recebe esse texto."
     )
 
 
@@ -681,6 +683,8 @@ QUERY_TOOLS: List[Tool] = [
         "`chamado`, `origem` (`site` = o Simpress finalizou o chamado no SoftExpert; `outro_tecnico` = o chamado saiu do Dashboard ou "
         "não foi achado no SoftExpert sem finalização pelo site, então confira no SoftExpert), `motivo`, `ativa` (false = desfeita na tela) "
         "e `conferido`. Só leitura: desfazer, refazer e conferir a marca só se faz na tela. "
+        "Na tela da aba OS (F6), a OS com marca `ativa` fica na sub-aba `Finalizadas` e as demais em `Abertas`; os KPIs e a triagem da tela "
+        "contam só `Abertas`, mas `total_chamados` e `resumo` daqui contam todas as OS. "
         "`sinais_os` traz, por OS Oracle daquela série, os selos da aba OS (F6): `envio_tecnico` (true = a descrição da OS pede envio de "
         "técnico) e `dias_aberta` (dias entre a abertura da OS e a última importação; nulo se concluída ou sem data).",
         lambda c, a: c.listar_chamados_abertos(),
@@ -772,7 +776,10 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "listar_vinculos_os",
-        "Vínculos manuais entre chamados (UTIC-AAAA-número) e ordens de serviço (OS): fonte, série, OS e chamado. "
+        "Vínculos entre chamados (UTIC-AAAA-número) e ordens de serviço (OS): fonte, série, OS, chamado e `origem`. "
+        "`origem` `manual` foi gravado pelo usuário; `finalizacao` é automático, derivado na leitura da marca ativa de OS finalizada da aba OS (F6), "
+        "nunca é gravado e some quando a marca é desfeita; `dashboard` é automático, vindo do Dashboard do Sebrae. "
+        "Prioridade: manual, depois finalizacao, depois dashboard. "
         "Filtre por série ou chamado; sem filtro traz os primeiros. Use para 'a OS X está ligada a qual chamado?'.",
         lambda c, a: c.listar_vinculos_os(a.get("serie", ""), a.get("chamado", "")),
         {"serie": SERIAL, "chamado": {"type": "string", "description": "Chamado no formato UTIC-AAAA-número (opcional)."}},
@@ -1205,6 +1212,7 @@ CHANGE_TOOLS: List[Tool] = [
     Tool(
         "vincular_os",
         "Grava (ou altera) o vínculo manual de uma OS com um chamado. Antes, use listar_vinculos_os para ver o vínculo atual. "
+        "Vínculo automático (`origem` `finalizacao` ou `dashboard`) não é gravado; o manual tem prioridade sobre ele. "
         "Só este vínculo é gravado; os outros não mudam. O usuário confirma antes.",
         lambda c, a: c.vincular_os(a.get("fonte"), a.get("serie"), a.get("os"), a.get("chamado")),
         {
@@ -1237,9 +1245,9 @@ CHANGE_TOOLS: List[Tool] = [
     ),
     Tool(
         "editar_descricao_chamado_sebrae",
-        "Edita o texto do bloco \"Descrição\" de um chamado na tela Chamados (o lápis), só neste site: o SoftExpert e linhas já lançadas no Dashboard "
-        "não mudam. Vale para chamado antigo já lido ou chamado novo da última busca, ainda não finalizado. Use o texto exato do usuário, não invente; "
-        "marcadores de nome ([PESSOA_n]) voltam ao nome real no programa, mas e-mail e telefone ocultados no chat não podem ir no texto. Descrição vazia restaura o texto original. O usuário confirma antes.",
+        "Edita o texto do bloco \"Descrição\" de um chamado na tela Chamados (o lápis), o SoftExpert nunca recebe esse texto; "
+        "ele vai à coluna H do Dashboard no próximo Atualizar Dashboard. Vale para chamado antigo em aberto (lido ou não) ou chamado novo da última busca, ainda não finalizado. Use o texto exato do usuário, não invente; "
+        "marcadores de nome ([PESSOA_n]) voltam ao nome real no programa, mas e-mail e telefone ocultados no chat não podem ir no texto. Descrição vazia restaura o texto original só no site e não desfaz um H já enviado ao Dashboard. O usuário confirma antes.",
         lambda c, a: c.editar_descricao_chamado_sebrae(a.get("numero"), a.get("descricao")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},

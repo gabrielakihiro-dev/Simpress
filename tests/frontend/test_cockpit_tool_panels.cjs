@@ -89,8 +89,16 @@ test("alias metrics count monthly events and distinct equipment without inventin
     { tipo: "endereco", serial: "SN-2", horario: "2026-09-20T09:00:00-03:00" },
   ];
   assert.deepEqual(panels.aliasMetrics(events, new Date("2026-10-25T12:00:00-03:00")), {
-    changesThisMonth: 2, equipmentAffected: 1, outOfPattern: null, duplicateAliases: null,
+    changesThisMonth: 2, equipmentAffected: 1,
   });
+});
+
+test("alias day label says Hoje, Ontem or the weekday in local time, and flags invalid dates", () => {
+  const now = new Date(2026, 10, 11, 15, 0);
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 11, 9, 30).toISOString(), now), "Hoje · quarta, 11/11");
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 10, 23, 59).toISOString(), now), "Ontem · terça, 10/11");
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 9, 8, 0).toISOString(), now), "Segunda, 09/11");
+  assert.equal(panels.aliasDayLabel("nao-e-data", now), "Data indisponível");
 });
 
 test("monthly preview uses the report values, the period and drops metrics the report does not provide", () => {
@@ -181,6 +189,7 @@ test("a month row links to the F5 only with the F5 key and fills the series of n
 function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {}) {
   const elementos = new Map();
   const ouvintes = [];
+  const ouvintesElemento = [];
   const novo = id => new Proxy({ id, hidden: true, open: false, dataset: {}, textContent: "", value: "", children: [], attrs: {} }, {
     get(alvo, chave) {
       if (chave in alvo) return alvo[chave];
@@ -188,6 +197,8 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {
       if (chave === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
       if (chave === "setAttribute") return (n, v) => { alvo.attrs[n] = v; };
       if (chave === "getAttribute") return n => alvo.attrs[n] ?? null;
+      if (chave === "removeAttribute") return n => { delete alvo.attrs[n]; };
+      if (chave === "addEventListener") return (tipo, fn) => ouvintesElemento.push([id, tipo, fn]);
       if (chave === "focus") return () => { global.document.activeElement = elementos.get(id); };
       if (chave === "querySelector" || chave === "closest") return () => null;
       if (chave === "querySelectorAll") return () => [];
@@ -207,7 +218,9 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {
   const api = createCockpitToolPanels({ app, appState: {}, apiFetch });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
-  return { api, el, esc };
+  // dispara(id, tipo, evento): chama os ouvintes que o painel registrou naquele elemento (cliques e teclas das sub-abas da F6).
+  const dispara = (id, tipo, evento = {}) => ouvintesElemento.filter(([alvo, t]) => alvo === id && t === tipo).forEach(([, , fn]) => fn(evento));
+  return { api, el, esc, dispara };
 }
 
 test("Voltar retorna ao painel anterior e, sem anterior, fecha para a tela principal", async () => {
@@ -326,10 +339,12 @@ test("abrir Chamados (sebrae-chamados) mostra o painel sem recarregar a lista", 
 });
 
 test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e mantém KPIs, busca e Relação", () => {
-  assert.match(html, /<div id="cockpit-tickets-os" class="ck-ferr-os"><\/div>/);
+  // A tabela de OS é o único painel das sub-abas: role=tabpanel, rotulado pela aba ativa (o JS troca o aria-labelledby).
+  assert.match(html, /<div id="cockpit-tickets-os" class="ck-ferr-os" role="tabpanel" aria-labelledby="os-aba-abertas"><\/div>/);
   assert.doesNotMatch(html, /id="cockpit-tickets-(list|detail)"/);
   const idsChamados = [
-    "cockpit-tickets-kpis", "cockpit-tickets-triage", "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-attention",
+    "cockpit-tickets-kpis", "cockpit-tickets-kpis-nota", "cockpit-tickets-triage", "cockpit-tickets-contagem", "os-aba-abertas", "os-aba-finalizadas", "os-abertas-contagem", "os-finalizadas-contagem",
+    "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-attention",
     "cockpit-tickets-export", "cockpit-tickets-clear", "cockpit-tickets-manage", "cockpit-tickets-manage-panel",
     "cockpit-tickets-form", "cockpit-tickets-file-simpress", "cockpit-tickets-file-oracle", "cockpit-tickets-import", "cockpit-tickets-import-status",
     "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution",
@@ -369,14 +384,18 @@ test("abrir OS monta a tabela uma vez, com as opções de OS, e depois só atual
     assert.equal(opcoes.incluirSemOs, undefined, "série sem OS nunca é listada");
     assert.equal(typeof opcoes.aoExpandirSerie, "function");
     assert.equal(typeof opcoes.aoCarregar, "function");
-    assert.deepEqual(calls.filtrar, [{ busca: "", relacao: "", triagem: "", atencao: false }], "Relação 'todos' vira filtro vazio");
+    for (const nome of ["aoContarSituacao", "aoContarAbas", "aoMudarSituacao", "aoFocarAba"]) assert.equal(typeof opcoes[nome], "function", nome);
+    assert.equal(opcoes.statusEm, el("cockpit-tickets-contagem"), "o contador 'N OS · N séries' vai para a barra das sub-abas");
+    assert.deepEqual(calls.filtrar, [{ busca: "", relacao: "", triagem: "", atencao: false, situacao: "abertas" }], "Relação 'todos' vira filtro vazio e a sub-aba nasce em Abertas");
     assert.deepEqual(calls.atualizar, [], "a tabela recém-montada já carrega sozinha");
 
-    // aoCarregar recebe o relatório (KPIs) e aoExpandirSerie preenche a linha de Andamento.
+    // aoCarregar guarda o relatório (snapshot); os KPIs vêm de aoContarSituacao (só Abertas). aoExpandirSerie preenche a linha de Andamento.
     const kpis = el("cockpit-tickets-kpis");
     let kpiRenders = 0;
     kpis.replaceChildren = () => { kpiRenders += 1; };
     opcoes.aoCarregar({ resumo: { series_total: 2 }, chamados: [{ serie: "SN-1", relacao: "conferida", oracle: [], simpress: {} }] });
+    assert.equal(kpiRenders, 0, "o relatório todo não redesenha os KPIs");
+    opcoes.aoContarSituacao({ os: 1, chamados: [{ serie: "SN-1", relacao: "conferida", oracle: [], simpress: {} }] });
     assert.equal(kpiRenders, 1);
     const celula = el("celula-andamento");
     let preenchida = 0;
@@ -393,6 +412,188 @@ test("abrir OS monta a tabela uma vez, com as opções de OS, e depois só atual
     assert.equal(calls.montar.length, 1);
     assert.deepEqual(calls.atualizar, [true]);
   } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+// Nós simples no lugar do DOM permissivo: guardam filhos e texto para conferir KPIs, triagem e ARIA das sub-abas.
+function usarNosSimples() {
+  global.document.createElement = tag => {
+    const node = { tag, className: "", textContent: "", dataset: {}, attrs: {}, children: [] };
+    node.append = (...filhos) => { node.children.push(...filhos); };
+    node.replaceChildren = (...filhos) => { node.children = filhos; };
+    node.setAttribute = (nome, valor) => { node.attrs[nome] = valor; };
+    return node;
+  };
+}
+
+// Abre o painel OS com a tabela falsa e devolve o que o painel ligou nela (opções) e o que ele filtrou.
+async function abrirOsComTabelaFalsa(ambiente) {
+  const filtros = [];
+  const dados = { opcoes: null };
+  global.SimpressDataPanels = {
+    montarTabelaOs: (_host, opcoes) => { dados.opcoes = opcoes; return {}; },
+    filtrarTabelaOs: filtro => filtros.push(filtro),
+    atualizarTabelaOs: async () => {},
+  };
+  usarNosSimples();
+  ambiente.el("cockpit-tickets-attention").checked = false; // o DOM permissivo devolveria uma função (verdadeira)
+  const kpis = [];
+  const triagem = [];
+  ambiente.el("cockpit-tickets-kpis").replaceChildren = (...cartoes) => { kpis.push(cartoes.map(cartao => [cartao.children[0].textContent, cartao.children[1].textContent])); };
+  ambiente.el("cockpit-tickets-triage").replaceChildren = (cabecalho, botoes) => {
+    triagem.push({ resumo: cabecalho.children[1].textContent, numeros: botoes.children.map(botao => [botao.dataset.triagem, botao.children[1].textContent]) });
+  };
+  await ambiente.api.abrirPainelCockpit("chamados");
+  return { ...dados, filtros, kpis, triagem };
+}
+
+test("KPIs e triagem contam só as OS abertas e não mudam ao trocar de sub-aba", async () => {
+  const ambiente = criarAmbientePaineis({ appExtra: { grupoTriagemChamado: registro => registro.grupo } });
+  const { el, dispara } = ambiente;
+  try {
+    const { opcoes, filtros, kpis, triagem } = await abrirOsComTabelaFalsa(ambiente);
+    opcoes.aoCarregar({ snapshot_id: "s1", resumo: { series_total: 9 }, chamados: new Array(9).fill({ serie: "X", relacao: "conferida" }) });
+    assert.equal(kpis.length, 0, "o relatório inteiro (Abertas e Finalizadas) não gera KPIs");
+    opcoes.aoContarSituacao({ os: 4, chamados: [
+      { serie: "A", relacao: "conferida", grupo: "atrasados" },
+      { serie: "B", relacao: "divergente", grupo: "em_dia" },
+      { serie: "C", relacao: "somente_oracle", grupo: "" },
+    ] });
+    assert.deepEqual(kpis.at(-1), [
+      ["OS abertas", "4"], ["Séries", "3"], ["Conferidas", "1"], ["Divergentes", "1"], ["Só Simpress", "0"], ["Só Oracle", "1"],
+    ], "'OS abertas' vem primeiro e as séries são só as com OS aberta");
+    assert.deepEqual(triagem.at(-1), {
+      resumo: "2 de 3 séries com chamado aberto no Oracle · 1 sem chamado aberto",
+      numeros: [["ativos", "2"], ["atrasados", "1"], ["sem_data", "0"], ["em_dia", "1"]],
+    });
+    const antesKpis = kpis.length;
+    const antesTriagem = triagem.length;
+
+    // Trocar de sub-aba só filtra a tabela: KPIs e triagem não são redesenhados nem mudam.
+    dispara("os-aba-finalizadas", "click");
+    assert.deepEqual(filtros.at(-1), { busca: "", relacao: "", triagem: "", atencao: false, situacao: "finalizadas" });
+    dispara("os-aba-abertas", "click");
+    assert.deepEqual(filtros.at(-1).situacao, "abertas");
+    assert.equal(kpis.length, antesKpis);
+    assert.equal(triagem.length, antesTriagem);
+
+    // Recarregar (Desfazer/Conferido) recalcula: a OS que voltou para Abertas entra na contagem.
+    opcoes.aoContarSituacao({ os: 5, chamados: [{ serie: "A", relacao: "conferida", grupo: "atrasados" }, { serie: "B", relacao: "divergente", grupo: "em_dia" }, { serie: "C", relacao: "somente_oracle", grupo: "" }, { serie: "D", relacao: "somente_simpress", grupo: "sem_data" }] });
+    assert.deepEqual(kpis.at(-1).slice(0, 2), [["OS abertas", "5"], ["Séries", "4"]]);
+    assert.equal(triagem.at(-1).numeros[0][1], "3");
+    assert.match(html, /<p[^>]*id="cockpit-tickets-kpis-nota"[^>]*>KPIs e triagem contam só as OS da sub-aba Abertas\.<\/p>/);
+    assert.ok(el("cockpit-tickets-triage").hidden === false);
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("sem OS aberta a triagem some e os KPIs zeram", async () => {
+  const ambiente = criarAmbientePaineis({ appExtra: { grupoTriagemChamado: () => "ativos" } });
+  try {
+    const { opcoes, kpis, triagem } = await abrirOsComTabelaFalsa(ambiente);
+    opcoes.aoContarSituacao({ os: 0, chamados: [] });
+    assert.deepEqual(kpis.at(-1).slice(0, 2), [["OS abertas", "0"], ["Séries", "0"]]);
+    assert.equal(triagem.length, 0);
+    assert.equal(ambiente.el("cockpit-tickets-triage").hidden, true);
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("sub-abas da OS: números, aria-label, selecionada e painel único rotulado pela aba ativa", async () => {
+  const ambiente = criarAmbientePaineis();
+  const { el, dispara } = ambiente;
+  try {
+    const { opcoes, filtros } = await abrirOsComTabelaFalsa(ambiente);
+    opcoes.aoContarAbas({ abertas: 3, finalizadas: 0 });
+    assert.equal(el("os-abertas-contagem").textContent, "3");
+    assert.equal(el("os-finalizadas-contagem").textContent, "0");
+    assert.equal(el("os-aba-abertas").getAttribute("aria-label"), "Abertas: 3 OS");
+    assert.equal(el("os-aba-finalizadas").getAttribute("aria-label"), "Finalizadas: 0 OS");
+    assert.equal(el("os-aba-abertas").getAttribute("data-zero"), null);
+    assert.equal(el("os-aba-finalizadas").getAttribute("data-zero"), "", "aba vazia fica com o número esmaecido");
+    opcoes.aoContarAbas({ abertas: 3, finalizadas: 2 });
+    assert.equal(el("os-aba-finalizadas").getAttribute("data-zero"), null);
+    assert.equal(el("os-aba-finalizadas").getAttribute("aria-label"), "Finalizadas: 2 OS");
+
+    dispara("os-aba-finalizadas", "click");
+    assert.equal(el("os-aba-finalizadas").getAttribute("aria-selected"), "true");
+    assert.equal(el("os-aba-abertas").getAttribute("aria-selected"), "false");
+    assert.equal(el("os-aba-finalizadas").tabIndex, 0);
+    assert.equal(el("os-aba-abertas").tabIndex, -1);
+    assert.equal(el("cockpit-tickets-os").getAttribute("aria-labelledby"), "os-aba-finalizadas");
+    assert.equal(filtros.at(-1).situacao, "finalizadas");
+    // A tabela troca de sub-aba sozinha (abrir a OS de um chamado): o painel só espelha o ARIA, sem filtrar de novo.
+    const filtrosAntes = filtros.length;
+    opcoes.aoMudarSituacao("abertas");
+    assert.equal(el("os-aba-abertas").getAttribute("aria-selected"), "true");
+    assert.equal(el("cockpit-tickets-os").getAttribute("aria-labelledby"), "os-aba-abertas");
+    assert.equal(filtros.length, filtrosAntes);
+    // Depois de Desfazer/Conferido a linha some da vista: o foco volta para a aba ativa.
+    opcoes.aoFocarAba();
+    assert.equal(global.document.activeElement, el("os-aba-abertas"));
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("sub-abas da OS: setas, Home e End movem seleção e foco (tabindex rolante)", async () => {
+  const ambiente = criarAmbientePaineis();
+  const { el, dispara } = ambiente;
+  try {
+    const { filtros } = await abrirOsComTabelaFalsa(ambiente);
+    const tecla = (id, key) => { let prevenido = false; dispara(id, "keydown", { key, preventDefault() { prevenido = true; } }); return prevenido; };
+    assert.equal(tecla("os-aba-abertas", "ArrowRight"), true);
+    assert.equal(el("os-aba-finalizadas").getAttribute("aria-selected"), "true");
+    assert.equal(global.document.activeElement, el("os-aba-finalizadas"));
+    assert.equal(filtros.at(-1).situacao, "finalizadas");
+    assert.equal(tecla("os-aba-finalizadas", "ArrowRight"), true, "circula do fim para o começo");
+    assert.equal(el("os-aba-abertas").getAttribute("aria-selected"), "true");
+    assert.equal(tecla("os-aba-abertas", "ArrowLeft"), true, "circula do começo para o fim");
+    assert.equal(el("os-aba-finalizadas").getAttribute("aria-selected"), "true");
+    assert.equal(tecla("os-aba-finalizadas", "Home"), true);
+    assert.equal(global.document.activeElement, el("os-aba-abertas"));
+    assert.equal(tecla("os-aba-abertas", "End"), true);
+    assert.equal(global.document.activeElement, el("os-aba-finalizadas"));
+    assert.equal(filtros.at(-1).situacao, "finalizadas");
+    assert.equal(tecla("os-aba-finalizadas", "Tab"), false, "outras teclas seguem o comportamento normal");
+    assert.equal(tecla("os-aba-finalizadas", "a"), false);
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("busca, Relação, Atenção e Triagem seguem valendo na sub-aba ativa; Limpar filtros não muda de sub-aba", async () => {
+  const ambiente = criarAmbientePaineis({ appExtra: { grupoTriagemChamado: () => "atrasados" } });
+  const { el, dispara } = ambiente;
+  try {
+    const { opcoes, filtros } = await abrirOsComTabelaFalsa(ambiente);
+    opcoes.aoContarSituacao({ os: 1, chamados: [{ serie: "A", relacao: "conferida" }] });
+    dispara("os-aba-finalizadas", "click");
+    el("cockpit-tickets-relation").value = "divergente";
+    el("cockpit-tickets-attention").checked = true;
+    dispara("cockpit-tickets-relation", "change");
+    assert.deepEqual(filtros.at(-1), { busca: "", relacao: "divergente", triagem: "", atencao: true, situacao: "finalizadas" });
+    dispara("cockpit-tickets-clear", "click");
+    assert.deepEqual(filtros.at(-1), { busca: "", relacao: "", triagem: "", atencao: false, situacao: "finalizadas" });
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("sub-abas da OS no HTML: tablist rotulado, abas ligadas ao painel único e contador na barra", () => {
+  const barra = html.match(/<div class="os-abas-barra">[\s\S]*?<div id="cockpit-tickets-os"/)?.[0] || "";
+  assert.ok(barra, "barra das sub-abas antes da tabela de OS");
+  assert.match(barra, /<div class="os-abas" role="tablist" aria-label="OS por situação">/);
+  for (const [id, rotulo] of [["abertas", "Abertas"], ["finalizadas", "Finalizadas"]]) {
+    const aba = barra.match(new RegExp(`<button[^>]*id="os-aba-${id}"[^>]*>[\\s\\S]*?</button>`))?.[0] || "";
+    assert.match(aba, /class="os-aba"/);
+    assert.match(aba, new RegExp(`data-os-aba="${id}"`));
+    assert.match(aba, /role="tab"/);
+    assert.match(aba, /aria-controls="cockpit-tickets-os"/);
+    assert.match(aba, new RegExp(`aria-label="${rotulo}: 0 OS"`));
+    assert.match(aba, new RegExp(`<span class="os-aba__rotulo">${rotulo}</span>`));
+    assert.match(aba, /^<button[^>]*\sdata-zero>/, "aba vazia nasce esmaecida (data-zero no botão, como no CSS)");
+    assert.match(aba, new RegExp(`<span id="os-${id}-contagem" class="ck-badge os-aba__n">0</span>`));
+  }
+  assert.match(barra, /id="os-aba-abertas"[^>]*aria-selected="true"[^>]*tabindex="0"/);
+  assert.match(barra, /id="os-aba-finalizadas"[^>]*aria-selected="false"[^>]*tabindex="-1"/);
+  assert.ok(barra.indexOf('id="os-aba-abertas"') < barra.indexOf('id="os-aba-finalizadas"'), "Abertas vem primeiro");
+  assert.match(barra, /<div id="cockpit-tickets-contagem" class="os-contagem"><\/div>/);
+  // Um só tabpanel na tela de OS: a tabela, rotulada pela aba ativa; sem segundo painel nem segunda tabela.
+  const painelOs = html.match(/data-cockpit-tool-panel="chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
+  assert.equal((painelOs.match(/role="tabpanel"/g) || []).length, 1);
+  assert.equal((html.match(/id="cockpit-tickets-os"/g) || []).length, 1);
 });
 
 test("linha do tempo da série descarta a resposta tardia quando a linha de Andamento foi desconectada", async () => {
@@ -438,7 +639,7 @@ test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela
     assert.equal(el("cockpit-tool-panels").hidden, false);
     assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados");
     assert.deepEqual(eventos, ["input"]);
-    assert.deepEqual(filtros.at(0), { busca: "SN-9", relacao: "somente_oracle", triagem: "", atencao: false });
+    assert.deepEqual(filtros.at(0), { busca: "SN-9", relacao: "somente_oracle", triagem: "", atencao: false, situacao: "abertas" });
   } finally { delete global.document; delete global.SimpressDataPanels; }
 });
 

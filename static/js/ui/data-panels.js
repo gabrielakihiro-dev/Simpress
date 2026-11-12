@@ -270,14 +270,42 @@
       const descricao = item.dataset.buscaDescricao || "";
       return testesBuscaOs(termo).every(teste => teste(busca, descricao));
     }
-    const casaOs = (st, termo, item) => casaTermoOs(termo, item)
+    // Busca, Relação, Atenção e Triagem valem nas duas sub-abas (Abertas e Finalizadas); a sub-aba é só mais uma dimensão do filtro.
+    const casaFiltrosOs = (st, termo, item) => casaTermoOs(termo, item)
       && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
       && correspondeTriagemOs(st, item.dataset.triagem || "");
+    // st.situacao vazio = sem sub-aba (janela Chamado × OS): todas as linhas.
+    const naSituacaoOs = (st, item) => !st.situacao || (item.dataset.finalizada === "true") === (st.situacao === "finalizadas");
+    const casaOs = (st, termo, item) => casaFiltrosOs(st, termo, item) && naSituacaoOs(st, item);
+    const statusOs = section => osExternas.get(section)?.status || section.querySelector(".ticket-summary-status");
+    // OS finalizada = marca ativa para a série+OS (a mesma regra do selo "Chamado finalizado"); marcas null (leitura falhou) = tudo em Abertas.
+    const osFinalizada = (marcas, serie, os) => Boolean(marcas?.get(osObsKey(serie, os))?.some(marca => marca?.ativa));
 
     // Leituras opcionais que falharam: a tabela segue montada e o status diz o que faltou.
     function sufixoFalhasOs(st) {
       const falhas = [st.falhaUsuarios && "usuário e hostname indisponíveis", st.falhaMarcas && "marcas de OS finalizada indisponíveis"].filter(Boolean);
       return falhas.length ? "; " + falhas.join("; ") + "." : "";
+    }
+
+    // Números das abas (opcoes.aoContarAbas): só avisa o host quando mudam.
+    function avisarAbasOs(st, porAba) {
+      if (!st.aoContarAbas || st.soOs || (st.abas?.abertas === porAba.abertas && st.abas?.finalizadas === porAba.finalizadas)) return;
+      st.abas = { ...porAba };
+      st.aoContarAbas({ ...porAba });
+    }
+
+    // KPIs e triagem do host contam só a sub-aba Abertas e não mudam ao trocar de sub-aba: o host recebe as OS abertas e, dos chamados do relatório,
+    // só as séries com pelo menos uma OS aberta.
+    function avisarSituacaoOs(st, records, report, marcas) {
+      const comAberta = new Set();
+      let os = 0;
+      records.forEach(record => record.ordens.forEach(order => {
+        if (osFinalizada(marcas, record.serie, order.os)) return;
+        os += 1;
+        comAberta.add(serialKey(record.serie));
+      }));
+      const chamados = (Array.isArray(report?.chamados) ? report.chamados : []).filter(ticket => comAberta.has(serialKey(ticket?.serie)));
+      st.aoContarSituacao({ os, chamados });
     }
 
     function filtrarSecaoOs(section) {
@@ -287,16 +315,22 @@
       const itens = [...section.querySelectorAll("tbody tr[data-serial]")];
       const series = new Set();
       const mostradas = new Set();
+      // Linhas que passam nos filtros em cada sub-aba, sem o limite da página: são os números das abas.
+      const porAba = { abertas: 0, finalizadas: 0 };
       let visiveis = 0;
+      let total = 0;
       itens.forEach(item => {
-        const ok = casaOs(st, termo, item);
+        const daSituacao = naSituacaoOs(st, item);
+        if (daSituacao) total += 1;
+        const passa = casaFiltrosOs(st, termo, item);
+        if (passa) porAba[item.dataset.finalizada === "true" ? "finalizadas" : "abertas"] += 1;
+        const ok = passa && daSituacao;
         item.hidden = !ok || (!termo && visiveis >= st.limite);
         if (!ok) return;
         series.add(item.dataset.serial);
         if (!item.hidden) mostradas.add(item.dataset.serial);
         visiveis += 1;
       });
-      const total = itens.length;
       section.querySelectorAll("tbody tr[data-andamento]").forEach(row => { row.hidden = !mostradas.has(row.dataset.andamento); });
       const mais = section.querySelector("[data-os-mais]");
       if (mais) {
@@ -305,7 +339,8 @@
           : "Mostrando " + formatNumber(st.limite) + " de " + formatNumber(visiveis);
       }
       if (!st.renderizada) return;
-      const status = section.querySelector(".ticket-summary-status");
+      avisarAbasOs(st, porAba);
+      const status = statusOs(section);
       const texto = (visiveis === total ? formatNumber(visiveis) : formatNumber(visiveis) + " de " + formatNumber(total)) + " OS · "
         + pluralize(series.size, "série", "séries") + sufixoFalhasOs(st);
       // role=status: reescrever o mesmo texto (ex.: "Carregar mais") faria o leitor de tela anunciar de novo.
@@ -318,6 +353,15 @@
       const st = osExternas.get(section);
       if (!st || !row.hidden) return Boolean(row && !row.hidden);
       const termo = textoOs(st.busca.trim());
+      // A OS está na outra sub-aba: vai para ela (se passar nos filtros), volta à primeira página e avisa o host para atualizar as abas.
+      if (!naSituacaoOs(st, row)) {
+        if (!casaFiltrosOs(st, termo, row)) return false;
+        st.situacao = row.dataset.finalizada === "true" ? "finalizadas" : "abertas";
+        st.limite = OS_POR_PAGINA;
+        st.aoMudarSituacao?.(st.situacao);
+        filtrarSecaoOs(section);
+        if (!row.hidden) return true;
+      }
       const casam = [...section.querySelectorAll("tbody tr[data-serial]")].filter(item => casaOs(st, termo, item));
       const posicao = casam.indexOf(row);
       if (posicao < 0) return false;
@@ -343,7 +387,7 @@
     function filtrarTabelaOs(filtro = {}) {
       osExternas.forEach((st, section) => {
         if (st.soOs) return; // janela Chamado × OS: mostra só a OS pedida, sem filtro da F6
-        const antes = [st.busca, st.relacao, st.triagem, st.atencao].join("|");
+        const antes = [st.busca, st.relacao, st.triagem, st.atencao, st.situacao].join("|");
         if ("busca" in filtro) {
           st.busca = String(filtro.busca || "");
           const campo = section.querySelector(".ck-os__busca input");
@@ -352,8 +396,9 @@
         if ("relacao" in filtro) st.relacao = String(filtro.relacao || "");
         if ("triagem" in filtro) st.triagem = String(filtro.triagem || "");
         if ("atencao" in filtro) st.atencao = Boolean(filtro.atencao);
-        // Só filtro novo volta à primeira página; recriar a tabela (vínculo salvo) mantém o que já estava aberto.
-        if (antes !== [st.busca, st.relacao, st.triagem, st.atencao].join("|")) st.limite = OS_POR_PAGINA;
+        if ("situacao" in filtro) st.situacao = filtro.situacao === "finalizadas" ? "finalizadas" : "abertas";
+        // Só filtro novo (ou outra sub-aba) volta à primeira página; recriar a tabela (vínculo salvo) mantém o que já estava aberto.
+        if (antes !== [st.busca, st.relacao, st.triagem, st.atencao, st.situacao].join("|")) st.limite = OS_POR_PAGINA;
         filtrarSecaoOs(section);
       });
     }
@@ -375,13 +420,22 @@
       // grupoSerie(chamado) devolve o grupo de triagem da série (data-triagem); aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
       // soOs { serie, os, chamado? }: só essa OS (janela Chamado × OS), fora dos filtros da F6; somenteLeitura: sem edição nem autosave
       // e, das marcas de finalização, só o selo das ativas (do chamado pedido, quando houver).
+      // Sub-abas da F6 (só no host sem soOs/somenteLeitura): a tabela abre em "abertas"; filtrarTabelaOs({ situacao }) troca. O host recebe
+      // aoContarSituacao({ os, chamados }) com as OS da sub-aba Abertas (KPIs e triagem), aoContarAbas({ abertas, finalizadas }) com os números das abas
+      // (filtros aplicados, sem o limite da página), aoMudarSituacao(situacao) quando revelarLinhaOs troca de sub-aba e aoFocarAba() quando o foco
+      // se perde porque a linha mudou de sub-aba. statusEm: elemento do host onde o status ("N OS · N séries") fica, em vez do cabeçalho.
       const st = {
         busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, falhaMarcas: false, carregada: false,
         aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
         soOs: opcoes.soOs || null, somenteLeitura: Boolean(opcoes.somenteLeitura),
+        situacao: opcoes.soOs || opcoes.somenteLeitura ? "" : "abertas", status,
+        aoContarSituacao: opcoes.aoContarSituacao, aoContarAbas: opcoes.aoContarAbas, aoMudarSituacao: opcoes.aoMudarSituacao, aoFocarAba: opcoes.aoFocarAba, abas: null,
       };
       const head = el("div", "ck-cartao__cab");
-      head.append(title, status);
+      if (opcoes.statusEm && !st.soOs) {
+        head.append(title);
+        opcoes.statusEm.replaceChildren(status);
+      } else head.append(title, status);
       if (!opcoes.semBusca) {
         const busca = el("label", "ck-os__busca");
         busca.append(el("span", "ck-sr", "Buscar série, OS ou usuário"));
@@ -474,7 +528,10 @@
         doc.dispatchEvent(new win.CustomEvent("simpress:atualizar-notificacoes"));
         // A tabela foi recriada: devolve o foco ao primeiro botão da mesma marca.
         const id = bloco.dataset.marca;
-        [...section.querySelectorAll(".ck-os-marca")].find(item => item.dataset.marca === id)?.querySelector("button")?.focus();
+        const novo = [...section.querySelectorAll(".ck-os-marca")].find(item => item.dataset.marca === id);
+        // Desfazer/Refazer muda a OS de sub-aba: a linha nova fica escondida e o foco vai para a aba ativa (se o host tiver uma).
+        if (novo && !novo.closest("tr")?.hidden) novo.querySelector("button")?.focus();
+        else osExternas.get(section)?.aoFocarAba?.();
       } catch (error) {
         status.textContent = error.message || "Não foi possível atualizar a marca.";
         botoes.forEach(botao => { botao.disabled = false; botao.removeAttribute("aria-busy"); });
@@ -483,7 +540,8 @@
     }
 
     // Bloco de uma marca na célula Chamado: selo (só se ativa), motivo, botões e histórico. Textos do servidor entram só por textContent.
-    function renderMarcaOs(marca, { somenteLeitura, status, section }) {
+    // chamadoExibido: chamado que a célula já mostra como link (não repete o texto na marca); comData: "Finalizado em DD/MM/AAAA" na marca ativa (sub-aba Finalizadas).
+    function renderMarcaOs(marca, { somenteLeitura, status, section, chamadoExibido = "", comData = false }) {
       const info = modelo.descreverMarca(marca);
       const bloco = el("div", "ck-os-marca");
       bloco.dataset.marca = JSON.stringify([modelo.chaveMarca(marca.serie, marca.os), String(marca.chamado || "")]);
@@ -495,7 +553,8 @@
         selo.dataset.status = marca.origem === "outro_tecnico" ? "alerta" : "ok";
         topo.append(selo);
       }
-      if (marca.chamado) topo.append(el("span", "ck-os-marca__chamado ck-mono", String(marca.chamado)));
+      if (comData && info.ativa && marca.finalizado_em) topo.append(el("span", "os-finalizado-em", `Finalizado em ${modelo.formatarData(marca.finalizado_em)}`));
+      if (marca.chamado && !(chamadoExibido && chamadoIgual(marca.chamado, chamadoExibido))) topo.append(el("span", "ck-os-marca__chamado ck-mono", String(marca.chamado)));
       if (info.dica) topo.append(el("span", "ck-os-marca__dica", info.dica));
       bloco.append(topo);
       if (info.motivo) bloco.append(el("p", "ck-os-marca__motivo", info.motivo));
@@ -801,6 +860,48 @@
       return editor;
     }
 
+    // ----- célula Chamado das sub-abas da F6 (Abertas e Finalizadas) -----
+    // Mesma ordem do servidor para a mesma chave: o vínculo manual (sem origem) vale sobre o da finalização, e este sobre o do Dashboard.
+    const prioridadeVinculo = saved => (saved.origem === "dashboard" ? 2 : saved.origem === "finalizacao" ? 1 : 0);
+    const chamadoDoVinculo = saved => saved?.chamado || (saved?.numero ? `UTIC-${saved.ano}-${saved.numero}` : "");
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const ICONE_CORRENTE = ["M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7", "M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"];
+
+    function iconeCorrente() {
+      const svg = doc.createElementNS(SVG_NS, "svg");
+      Object.entries({ "aria-hidden": "true", width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+        "stroke-width": "2.4", "stroke-linecap": "round", "stroke-linejoin": "round" }).forEach(([nome, valor]) => svg.setAttribute(nome, valor));
+      ICONE_CORRENTE.forEach(d => {
+        const path = doc.createElementNS(SVG_NS, "path");
+        path.setAttribute("d", d);
+        svg.append(path);
+      });
+      return svg;
+    }
+
+    // Abertas: só o vínculo do Dashboard vira link com o selo "Do Dashboard"; o da finalização nunca preenche o campo manual.
+    // Finalizadas: o vínculo da finalização vira link com o selo "Vinculado automaticamente" (o manual, se houver, tem prioridade e segue no editor).
+    function renderChamadoSubaba(sourceRecord, saved, finalizada, status) {
+      const origem = saved?.origem;
+      const chamado = chamadoDoVinculo(saved);
+      const automatico = (origem === "finalizacao" && finalizada) || origem === "dashboard";
+      if (!automatico || !chamado) return renderTicketOsLinkEditor(sourceRecord, origem === "finalizacao" ? null : saved, true, status);
+      const bloco = el("div", "os-chamado");
+      bloco.dataset.origem = origem;
+      bloco.dataset.chamado = chamado;
+      const link = el("button", "ck-link-btn ck-mono os-chamado__link", chamado);
+      link.type = "button";
+      link.setAttribute("aria-label", `Abrir o chamado ${chamado} e a OS ${sourceRecord.os} na janela Chamado × OS`);
+      link.setAttribute("aria-haspopup", "dialog");
+      link.setAttribute("data-on-click", "abrirJanelaChamadoOs");
+      link.setAttribute("data-args", JSON.stringify([{ chamado, serie: sourceRecord.serie, os: sourceRecord.os }, "$this"]));
+      const selo = el("span", `ck-badge os-selo os-selo--${origem === "finalizacao" ? "auto" : "dashboard"}`);
+      if (origem === "finalizacao") selo.append(iconeCorrente());
+      selo.append(el("span", "", origem === "finalizacao" ? "Vinculado automaticamente" : "Do Dashboard"));
+      bloco.append(link, selo);
+      return bloco;
+    }
+
     async function persistTicketOsLink(record, year, numero, input, save, remove, statusMessage) {
       const buttons = [save, remove].filter(Boolean);
       buttons.forEach(button => { button.disabled = true; button.setAttribute("aria-busy", "true"); });
@@ -821,13 +922,16 @@
     }
 
     function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map(), modelos = new Map(), notas = null, marcas = new Map()) {
-      const status = section.querySelector(".ticket-summary-status");
+      const status = statusOs(section);
       const content = el("div", "ck-os__corpo ticket-summary-content");
       const externa = osExternas.get(section);
+      // Sub-abas (só o host da F6): a célula Chamado e a marca dependem da situação da própria OS.
+      const subabas = Boolean(externa?.situacao);
       // marcas: Map(chave série+OS → marcas) ou null quando a leitura falhou (a tabela segue sem elas).
       if (externa) { externa.renderizada = records.length > 0; externa.falhaUsuarios = Boolean(userFailure); externa.falhaMarcas = marcas === null; }
       if (!records.length) {
         status.textContent = externa?.soOs ? "Série não encontrada na importação atual." : "Nenhuma OS vinculada por série na importação atual.";
+        if (externa) avisarAbasOs(externa, { abertas: 0, finalizadas: 0 });
         section.setAttribute("aria-busy", "false");
         section.dataset.estado = "vazio";
         section.querySelector(".ticket-summary-content")?.remove();
@@ -912,9 +1016,15 @@
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
-          // Um único editor UTIC por linha: a fonte que já tem vínculo salvo, senão a primeira.
-          const linkSource = order.fontes.find(source =>
-            links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }))) || order.fontes[0];
+          // OS finalizada = marca ativa; a sub-aba filtra por este atributo (a janela Chamado × OS não usa).
+          const marcasDaOs = marcas?.get(osObsKey(record.serie, order.os)) || [];
+          const finalizada = marcasDaOs.some(marca => marca?.ativa);
+          row.dataset.finalizada = String(finalizada);
+          // Um único editor UTIC por linha: a fonte que já tem vínculo salvo, senão a primeira (nas sub-abas, a de maior prioridade).
+          const salvoDe = source => links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }));
+          const comVinculo = order.fontes.filter(salvoDe);
+          const linkSource = (subabas ? comVinculo.sort((a, b) => prioridadeVinculo(salvoDe(a)) - prioridadeVinculo(salvoDe(b))) : comVinculo)[0] || order.fontes[0];
+          let chamadoExibido = "";
           order.fontes.forEach(source => {
             const tagSlot = el("div", "ck-os-fonte");
             tagSlot.append(el("span", "ck-tag", ticketSummarySourceLabel([source])));
@@ -922,14 +1032,16 @@
             const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
             if (source !== linkSource) return;
             const slot = el("div", "ck-os-fonte");
-            slot.append(renderTicketOsLinkEditor(sourceRecord,
-              links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
+            const conteudo = subabas ? renderChamadoSubaba(sourceRecord, salvoDe(source), finalizada, status)
+              : renderTicketOsLinkEditor(sourceRecord, salvoDe(source), canSave, status);
+            chamadoExibido = conteudo.dataset.chamado || "";
+            slot.append(conteudo);
             linkCell.append(slot);
           });
           // Marca(s) da OS, uma por chamado. A janela Chamado × OS (somente leitura) só mostra o selo das ativas do chamado pedido.
-          (marcas?.get(osObsKey(record.serie, order.os)) || [])
+          marcasDaOs
             .filter(marca => !externa?.somenteLeitura || (marca.ativa && (!externa.soOs?.chamado || chamadoIgual(marca.chamado, externa.soOs.chamado))))
-            .forEach(marca => linkCell.append(renderMarcaOs(marca, { somenteLeitura: Boolean(externa?.somenteLeitura), status, section })));
+            .forEach(marca => linkCell.append(renderMarcaOs(marca, { somenteLeitura: Boolean(externa?.somenteLeitura), status, section, chamadoExibido, comData: subabas })));
           const descCell = cell("Descrição", "ck-td--largo");
           descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
           cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas, externa?.somenteLeitura));
@@ -1015,7 +1127,7 @@
         osSerie.set(section, serial);
         section.setAttribute("aria-busy", "true");
         section.dataset.estado = "carregando";
-        section.querySelector(".ticket-summary-status").textContent = "Carregando OS…";
+        statusOs(section).textContent = "Carregando OS…";
       });
       try {
         const notasSeq = osObsSeq;
@@ -1067,6 +1179,7 @@
           const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
             .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
           renderTicketSummary(section, proprios.get(section) || records, users, links, !st?.somenteLeitura, userFailure, relacoes, grupos, modelos, notas, marcas);
+          if (st?.aoContarSituacao && !st.soOs) avisarSituacaoOs(st, proprios.get(section) || records, report, marcas);
         });
       } catch (error) {
         vivos().forEach(section => {
@@ -1075,7 +1188,7 @@
           section.dataset.estado = "erro";
           const st = osExternas.get(section);
           if (st) st.renderizada = false;
-          section.querySelector(".ticket-summary-status").textContent = error.message === "Failed to fetch"
+          statusOs(section).textContent = error.message === "Failed to fetch"
             ? "Não foi possível carregar as OS. Tente novamente."
             : error.message || "Não foi possível carregar as OS.";
         });
