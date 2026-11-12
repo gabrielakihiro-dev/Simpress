@@ -102,6 +102,28 @@ test("vínculo manual vence o automático; só automático vira dashboard", () =
   assert.equal(m.montarParesChamadoOs({ sebrae, relatorio, vinculos: { vinculos } })[0].vinculo, "manual");
 });
 
+test("tipoVinculo: manual vence finalizacao, finalizacao vence dashboard; só vale o par chamado + série + OS", () => {
+  const chamado = { numero: "UTIC-2026-30", serie: "SINT-030", os: "7030" };
+  const base = { serie: "SINT-030", os: "7030", chamado: "UTIC-2026-30" };
+  const tipo = itens => m.montarParesChamadoOs({
+    sebrae: { novos: { formulario: [{ numero: chamado.numero, linha: { E: chamado.os, K: chamado.serie } }] } }, relatorio: null, vinculos: itens,
+  })[0].vinculo;
+  assert.equal(tipo([{ ...base, fonte: "oracle", origem: "finalizacao" }]), "finalizacao");
+  assert.equal(tipo([{ ...base, fonte: "oracle", origem: "dashboard" }, { ...base, fonte: "simpress", origem: "finalizacao" }]), "finalizacao", "finalizacao vence dashboard");
+  assert.equal(tipo([{ ...base, fonte: "oracle", origem: "finalizacao" }, { ...base, fonte: "simpress" }]), "manual", "manual vence finalizacao");
+  assert.equal(tipo([{ ...base, fonte: "oracle", origem: "dashboard" }]), "dashboard");
+  assert.equal(tipo([{ ...base, os: "9999", fonte: "oracle", origem: "finalizacao" }]), "", "outra OS não liga");
+  assert.equal(tipo([]), "");
+});
+
+test("formatarData: só o recorte do ISO, sem mudar o dia pelo fuso; texto fora do padrão segue como veio", () => {
+  assert.equal(m.formatarData("2026-11-08T10:30:00-03:00"), "08/11/2026");
+  assert.equal(m.formatarData("2026-11-08T23:59:00-03:00"), "08/11/2026", "não vira o dia seguinte em UTC");
+  assert.equal(m.formatarData("2026-01-02"), "02/01/2026");
+  assert.equal(m.formatarData("sem data"), "sem data");
+  assert.equal(m.formatarData(undefined), "");
+});
+
 test("filtro por UTIC, série e OS sem acento e sem maiúscula", () => {
   const chaves = termo => m.filtrarParesChamadoOs(pares, termo).map(par => par.chave);
   assert.deepEqual(chaves("utic-2026-20"), ["UTIC-2026-20"]);

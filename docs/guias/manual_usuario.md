@@ -176,6 +176,8 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 **Como confirmar:** aparecem a mensagem "Planilhas importadas. As OS foram relacionadas pela série." e o aviso "Acompanhamento de chamados atualizado."; o bloco se fecha, a tabela de OS passa a mostrar a nova versão e o seletor de versões, as fontes importadas e os botões **Exportar Excel** e **Excluir importações antigas** ficam no mesmo bloco. Se faltar um dos arquivos, a tela pede "Selecione as duas planilhas para importar."
 
+**Abertas e Finalizadas:** a tabela de OS tem duas sub-abas logo acima dela. **Abertas** (a que abre primeiro) mostra as OS sem chamado finalizado; **Finalizadas** mostra as OS cujo chamado já foi finalizado. O número no selo de cada aba é a quantidade de OS que passam nos filtros daquela aba. Use as setas do teclado, **Home** e **End** para trocar de aba. Os números do topo (**OS abertas**, **Séries** e os demais) e a triagem contam só as OS de **Abertas** e não mudam quando você troca de aba; **Exportar Excel** leva só as séries da sub-aba que está na tela. Em **Finalizadas**, **Desfazer** devolve a OS para **Abertas**: isso só tira a marca na tela e não reabre o chamado no SoftExpert.
+
 ### Opção B — pela pasta local
 
 1. Exporte as duas planilhas (UX Simpress, contrato 16467, e Oracle) e guarde-as em um lugar conhecido. Se uma exportação for bloqueada pelo site, não tente contornar: peça ao responsável.
