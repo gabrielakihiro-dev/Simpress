@@ -2284,7 +2284,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 [data-cockpit-tool-panel="apelidos"] .ck-alias-barra > .ck-campo:first-child { flex: 1 1 280px; }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-periodo { flex: none; }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-periodo .ck-segmentado__op { min-height: 38px; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
-[data-cockpit-tool-panel="apelidos"] .ck-alias-periodo .ck-segmentado__op span { font-variant-numeric: tabular-nums; opacity: .75; }
+[data-cockpit-tool-panel="apelidos"] .ck-alias-periodo .ck-segmentado__op span { font-variant-numeric: tabular-nums; }
 
 /* Lista agrupada por dia */
 [data-cockpit-tool-panel="apelidos"] .ck-dividido__lista { display: flex; flex-direction: column; gap: 18px; align-self: start; padding-top: 12px; }
@@ -2317,7 +2317,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 [data-cockpit-tool-panel="apelidos"] .ck-alias-det__meta, [data-cockpit-tool-panel="apelidos"] .ck-alias-det__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-det__data { font-size: var(--fs-md); color: var(--cor-texto-mudo); }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-det__acoes > .ck-nota { flex: 1 1 100%; }
-[data-cockpit-tool-panel="apelidos"] .ck-alias-det__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+[data-cockpit-tool-panel="apelidos"] .ck-alias-det__cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-compara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-caixa { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
 [data-cockpit-tool-panel="apelidos"] .ck-alias-caixa__rotulo { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }

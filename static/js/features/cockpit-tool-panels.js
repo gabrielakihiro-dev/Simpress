@@ -1046,6 +1046,7 @@
       if (tab) selectAliasType(tab.dataset.aliasType);
     });
     tabs.addEventListener("keydown", event => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
       const current = ALIAS_TYPES.indexOf(event.target.closest("[data-alias-type]")?.dataset.aliasType);
       if (current < 0) return;
       const next = { ArrowRight: (current + 1) % ALIAS_TYPES.length, ArrowLeft: (current + ALIAS_TYPES.length - 1) % ALIAS_TYPES.length, Home: 0, End: ALIAS_TYPES.length - 1 }[event.key];
