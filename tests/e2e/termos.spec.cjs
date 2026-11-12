@@ -13,20 +13,34 @@ async function abrirTermos(page, { navegar = true } = {}) {
 }
 
 // Substitui window.print: registra o título e a folha no instante da impressão e não abre a janela do navegador.
+// "imagens" lista as <img> da folha (só a assinatura do técnico) com o bloco de assinatura em que cada uma está.
 async function interceptarImpressao(page) {
   await page.evaluate(() => {
     window.__impressoes = [];
     window.print = () => {
+      const folha = document.getElementById("termos-impressao");
+      const blocos = [...folha.querySelectorAll(".tp__assinatura")];
       window.__impressoes.push({
         titulo: document.title,
-        folhaFilhos: document.getElementById("termos-impressao").childElementCount,
+        folhaFilhos: folha.childElementCount,
         classe: document.documentElement.classList.contains("termos-imprimindo"),
+        blocos: blocos.length,
+        imagens: [...folha.querySelectorAll("img")].map(img => ({
+          bloco: blocos.indexOf(img.closest(".tp__assinatura")),
+          rotulo: img.closest(".tp__assinatura").textContent,
+          carregada: img.complete && img.naturalWidth > 0,
+          alt: img.getAttribute("alt"),
+          classe: img.className,
+        })),
       });
     };
   });
 }
 
 const impressoes = page => page.evaluate(() => window.__impressoes);
+
+// A impressão é assíncrona (espera a assinatura do técnico): aguarda a n-ésima chamada a window.print.
+const esperarImpressao = (page, n = 1) => page.waitForFunction(total => window.__impressoes.length >= total, n);
 
 test("abre pelo menu Ferramentas e troca de sub-aba por clique e por ArrowRight", async ({ page }) => {
   await abrirTermos(page);
@@ -91,6 +105,7 @@ test("Gerar PDF usa '<série> - <nome>' como título e restaura tudo no afterpri
   await page.locator("#termos-devolucao-serie").fill("brj54925dn");
   await page.locator("#termos-devolucao-nome").fill("Janaina do Rocio Santos Rocha");
   await page.locator("#termos-painel-devolucao").getByRole("button", { name: "Gerar PDF" }).click();
+  await esperarImpressao(page);
 
   const [impressao] = await impressoes(page);
   expect(impressao.titulo).toBe("BRJ54925DN - Janaina do Rocio Santos Rocha");
@@ -112,10 +127,118 @@ test("Termo Entrega nomeia o arquivo com a série do equipamento entregue", asyn
   await page.locator("#termos-entrega-serie-entregue").fill("brj54925dn");
   await page.locator("#termos-entrega-nome").fill("Janaina do Rocio Santos Rocha");
   await page.locator("#termos-painel-entrega").getByRole("button", { name: "Gerar PDF" }).click();
+  await esperarImpressao(page);
   const [impressao] = await impressoes(page);
   expect(impressao.titulo).toBe("BRJ54925DN - Janaina do Rocio Santos Rocha");
   await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
   expect(await page.evaluate(() => document.getElementById("termos-impressao").childElementCount)).toBe(0);
+});
+
+// Assinatura do técnico: a folha mostra a imagem só no bloco do técnico; sem ela, sai como antes (linha em branco).
+const SVG_FALSO = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"><path d="M10 60 L190 20" stroke="#000"/></svg>';
+
+async function gerarPdf(page, termo) {
+  await interceptarImpressao(page);
+  if (termo === "devolucao") {
+    await page.getByRole("tab", { name: "Termo Devolução" }).click();
+    await page.locator("#termos-devolucao-serie").fill("brj54925dn");
+    await page.locator("#termos-devolucao-nome").fill("Janaina do Rocio Santos Rocha");
+  } else {
+    await page.locator("#termos-entrega-serie-entregue").fill("brj54925dn");
+    await page.locator("#termos-entrega-nome").fill("Janaina do Rocio Santos Rocha");
+  }
+  await page.locator(`#termos-painel-${termo}`).getByRole("button", { name: "Gerar PDF" }).click();
+  await esperarImpressao(page);
+  return (await impressoes(page))[0];
+}
+
+for (const [termo, rotulo] of [["entrega", "Assinatura do técnico responsável"], ["devolucao", "Assinatura do Técnico"]]) {
+  test(`PDF do termo de ${termo} traz a assinatura do técnico só no bloco do técnico`, async ({ page }) => {
+    const pedidos = [];
+    page.on("request", req => { if (req.url().includes("/api/assinatura-tecnico")) pedidos.push({ metodo: req.method(), url: req.url(), corpo: req.postData() }); });
+    await abrirTermos(page);
+    const impressao = await gerarPdf(page, termo);
+    expect(impressao.blocos).toBe(2);
+    expect(impressao.imagens).toEqual([{ bloco: 1, rotulo, carregada: true, alt: "", classe: "tp__assinatura-img" }]);
+    // Única requisição: GET sem query nem corpo, então nada do termo sai da página.
+    expect(pedidos).toEqual([{ metodo: "GET", url: new URL("/api/assinatura-tecnico", page.url()).href, corpo: null }]);
+  });
+
+  test(`folha impressa do termo de ${termo}: imagem de 14 mm sobre a linha do técnico, sem empurrar o layout`, async ({ page }) => {
+    await abrirTermos(page);
+    await gerarPdf(page, termo); // afterprint não é disparado: a folha continua montada
+    await page.emulateMedia({ media: "print" });
+    const medir = () => page.evaluate(() => {
+      const folha = document.getElementById("termos-impressao");
+      const img = folha.querySelector("img.tp__assinatura-img");
+      const linhaAssinaturas = folha.querySelector(".tp__assinaturas");
+      const img1 = img.getBoundingClientRect();
+      return {
+        imagem: { altura: img1.height, largura: img1.width, topo: img1.top, base: img1.bottom, estilo: getComputedStyle(img).position },
+        blocoTecnico: linhaAssinaturas.children[1].getBoundingClientRect().top,
+        fimDoAnterior: linhaAssinaturas.previousElementSibling.getBoundingClientRect().bottom,
+        topoDasAssinaturas: linhaAssinaturas.getBoundingClientRect().top,
+        alturaDaFolha: folha.scrollHeight,
+      };
+    });
+    const com = await medir();
+    expect(com.imagem.estilo).toBe("absolute");
+    expect(Math.abs(com.imagem.altura - 52.9)).toBeLessThanOrEqual(2); // 14 mm a 96 dpi
+    expect(com.imagem.largura).toBeGreaterThan(0);
+    // Desce 39/122,3 da própria altura abaixo da linha: o corpo apoia nela e só as caudas passam.
+    expect(Math.abs(com.imagem.base - com.blocoTecnico - com.imagem.altura * 39 / 122.3)).toBeLessThanOrEqual(1.5);
+    expect(com.imagem.topo).toBeGreaterThanOrEqual(com.fimDoAnterior); // não cobre o texto anterior
+    // Sem a imagem (display:none), as posições e a altura da folha não mudam: ela não empurra nada.
+    await page.evaluate(() => { document.querySelector("#termos-impressao img.tp__assinatura-img").style.display = "none"; });
+    const sem = await medir();
+    expect(sem.topoDasAssinaturas).toBe(com.topoDasAssinaturas);
+    expect(sem.blocoTecnico).toBe(com.blocoTecnico);
+    expect(sem.alturaDaFolha).toBe(com.alturaDaFolha);
+  });
+}
+
+for (const status of [404, 422]) {
+  test(`PDF sai sem imagem quando a assinatura responde ${status}`, async ({ page }) => {
+    await page.route("**/api/assinatura-tecnico", route => route.fulfill({ status, json: { detail: "sem assinatura", codigo: "teste" } }));
+    await abrirTermos(page);
+    for (const termo of ["entrega", "devolucao"]) {
+      const impressao = await gerarPdf(page, termo);
+      expect(impressao.folhaFilhos, termo).toBeGreaterThan(0);
+      expect(impressao.blocos, termo).toBe(2);
+      expect(impressao.imagens, termo).toEqual([]);
+      await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+    }
+  });
+}
+
+test("PDF sai sem imagem quando a assinatura demora mais de 3 s", async ({ page }) => {
+  await page.route("**/api/assinatura-tecnico", async route => {
+    await new Promise(resolve => setTimeout(resolve, 4500));
+    await route.abort().catch(() => {});
+  });
+  await abrirTermos(page);
+  const inicio = Date.now();
+  const impressao = await gerarPdf(page, "entrega");
+  expect(Date.now() - inicio).toBeGreaterThanOrEqual(2800);
+  expect(impressao.imagens).toEqual([]);
+});
+
+test("segundo clique em Gerar PDF durante o carregamento da assinatura é ignorado", async ({ page }) => {
+  let pedidos = 0;
+  await page.route("**/api/assinatura-tecnico", async route => {
+    pedidos += 1;
+    await new Promise(resolve => setTimeout(resolve, 600));
+    await route.fulfill({ status: 200, contentType: "image/svg+xml", body: SVG_FALSO });
+  });
+  await abrirTermos(page);
+  await interceptarImpressao(page);
+  await page.locator("#termos-entrega-serie-entregue").fill("brj54925dn");
+  await page.locator("#termos-entrega-nome").fill("Janaina do Rocio Santos Rocha");
+  await page.locator("#termos-painel-entrega").getByRole("button", { name: "Gerar PDF" }).dblclick();
+  await esperarImpressao(page);
+  await page.waitForTimeout(400);
+  expect(await impressoes(page)).toHaveLength(1);
+  expect(pedidos).toBe(1);
 });
 
 test("Limpar pede confirmação e só apaga o termo ao confirmar", async ({ page }) => {

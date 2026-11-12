@@ -58,7 +58,11 @@
 .tp__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid var(--tp-cor); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tp__assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18mm; break-inside: avoid; }
-.tp__assinatura { padding-top: 3px; border-top: 1px solid var(--tp-cor); text-align: center; }
+.tp__assinatura { position: relative; padding-top: 3px; border-top: 1px solid var(--tp-cor); text-align: center; }
+/* Assinatura do técnico (GET /api/assinatura-tecnico): fica sobre a linha, na folga de 18 mm acima dela, sem mudar o layout.
+   Desce 39/122,3 da altura (unidades do viewBox de data/state/assinatura_tecnico.svg) para o corpo das letras apoiar na linha;
+   só as caudas da primeira e da última letra passam dela (pedido do usuário, 12/11/2026). Trocar o SVG exige recalcular a fração. */
+.tp__assinatura-img { position: absolute; bottom: calc(100% + 1px - 14mm * 39 / 122.3); left: 50%; transform: translateX(-50%); height: 14mm; width: auto; max-width: 100%; object-fit: contain; }
 /* Devolução: além da cor, faixa à esquerda no cabeçalho e nos títulos de seção. */
 .tp--devolucao .tp__cab { padding: 6px 10px; border-bottom: 0; border-left: 6px solid var(--tp-cor); }
 .tp--devolucao .tp__marca { top: 6px; right: 10px; }
