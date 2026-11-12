@@ -1200,6 +1200,21 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-sharepoint .ck-campo__ajuda { color: inherit; }
 .sebrae-sharepoint__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* Conflitos de edição do Dashboard: uma célula por grupo, escolha entre o valor do SharePoint e o do site. */
+.sebrae-conflitos { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sebrae-conflitos[hidden] { display: none; }
+.sebrae-conflitos__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-alerta-texto); }
+.sebrae-conflitos > p { margin: 0; }
+.sebrae-conflitos__lista { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sebrae-conflito { min-width: 0; margin: 0; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); }
+.sebrae-conflito__texto { max-width: 100%; padding: 0 4px; white-space: pre-wrap; font-weight: 600; }
+.sebrae-conflito__opcoes { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+.sebrae-conflito__opcao { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle-sm); cursor: pointer; }
+.sebrae-conflito__opcao input { margin: 0; }
+.sebrae-conflitos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.sebrae-conflitos__acoes > p { margin: 0; color: var(--cor-texto); } /* o cinza de .ck-cartao__meta não alcança 4,5:1 sobre o fundo de alerta no tema escuro */
+@media (pointer: coarse) { .sebrae-conflito__opcao, .sebrae-conflitos .ck-btn { min-height: 44px; } }
+
 /* ---------- 2. Sub-abas, filtro, painéis e listas ---------- */
 /* .ck-det__corpo já separa os filhos com gap de 14px: as margens abaixo são a medida do wireframe menos 14px. */
 .sebrae-abas-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
