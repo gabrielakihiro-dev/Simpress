@@ -121,7 +121,7 @@ test("sem conflito a seção fica escondida e o botão desligado", async () => {
 
 test("lista cada célula com duas opções, botão só liga com todas escolhidas e o POST leva escolhas e enviar", async () => {
   const rotas = {
-    "GET /api/sebrae/dashboard/conflitos": { conflitos: [celula("a"), apagada("b")], escolhas: {}, criado_em: "2026-11-12T10:00:00" },
+    "GET /api/sebrae/dashboard/conflitos": { conflitos: [celula("a"), apagada("b")], escolhas: {}, criado_em: "2026-11-12T10:00:00", versao_importacao: "v-atual" },
     "POST /api/sebrae/dashboard/conflitos": { escolhas: { a: "site", b: "sharepoint" }, enviar: { iniciado: true, motivo: "" } },
   };
   await comTela(rotas, async tela => {
@@ -147,13 +147,40 @@ test("lista cada célula com duas opções, botão só liga com todas escolhidas
     tela.botao.click();
     await new Promise(resolve => setImmediate(resolve));
     const post = tela.chamadas.find(item => item.metodo === "POST");
-    assert.deepEqual(post.corpo, { escolhas: { a: "site", b: "sharepoint" }, enviar: true });
+    assert.deepEqual(post.corpo, { escolhas: { a: "site", b: "sharepoint" }, enviar: true, versao_importacao: "v-atual" }, "leva a versão do GET");
     assert.equal(post.cabecalhos["Content-Type"], "application/json");
     assert.equal(tela.efeitos.automacao, 1, "mostra a rotina enviar sem esperar a próxima consulta");
     assert.equal(tela.botao.disabled, true, "fica desligado enquanto o envio roda");
     assert.equal(tela.status.textContent, "Escolhas salvas. Reenviando ao SharePoint…");
     assert.equal(tela.timersPendentes(), 1, "acompanha o estado da automação");
   });
+});
+
+test("conflito com aceita_site falso só oferece Manter o do SharePoint, explica e nunca manda site", async () => {
+  const semUtic = celula("u", { chamado: "linha:2", aceita_site: false });
+  const rotas = {
+    "GET /api/sebrae/dashboard/conflitos": { conflitos: [semUtic, celula("a", { aceita_site: true }), apagada("b")], escolhas: { u: "site" }, criado_em: "", versao_importacao: "v1" },
+    "POST /api/sebrae/dashboard/conflitos": { escolhas: {}, enviar: { iniciado: false, motivo: "x" } },
+  };
+  await comTela(rotas, async tela => {
+    await tela.modulo.carregarConflitosSebrae();
+    const [restrito, comum, antigo] = tela.grupos();
+    assert.deepEqual(restrito.querySelectorAll("label").map(item => item.textContent.trim()), ["Manter o do SharePoint"]);
+    assert.deepEqual(restrito.querySelectorAll("input").map(item => item.value), ["sharepoint"]);
+    assert.equal(restrito.querySelectorAll("input").filter(item => item.checked).length, 0, "um site gravado antes não vale aqui");
+    assert.equal(restrito.querySelector(".sebrae-conflito__aviso").textContent, "Sem número UTIC único para achar a linha no SharePoint: só dá para manter o valor do SharePoint.");
+    assert.equal(comum.querySelectorAll("input").length, 2);
+    assert.equal(comum.querySelectorAll(".sebrae-conflito__aviso").length, 0);
+    assert.equal(antigo.querySelectorAll("input").length, 2, "conflito sem a chave aceita os dois");
+    assert.equal(tela.botao.disabled, true);
+    tela.escolher(0, "sharepoint");
+    tela.escolher(1, "site");
+    tela.escolher(2, "site");
+    tela.botao.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(tela.chamadas.find(item => item.metodo === "POST").corpo.escolhas, { u: "sharepoint", a: "site", b: "site" });
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(escolhasParaEnviar([semUtic], { u: "site" }))), {}, "site em conflito restrito não entra");
 });
 
 test("escolha gravada antes aparece marcada ao recarregar", async () => {

@@ -337,10 +337,13 @@ def reset_finalizar(sharepoint_falha=False):
 
 reset_finalizar()
 
-# Conflitos de edição do Dashboard (F5): fictional cells; /__fixture_automacao?conflitos=1 brings two, /__fixture_conflitos reads the last POST.
+# Conflitos de edição do Dashboard (F5): fictional cells; /__fixture_automacao?conflitos=1 brings three (the 3rd accepts only SharePoint),
+# /__fixture_conflitos reads the last POST. Like the real route, the POST needs the version the GET gave (409) and refuses "site" on c3 (422).
+VERSAO_CONFLITOS = "versao-fixture-conflitos"
 CONFLITOS_FIXTURE = [
-    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site"},
-    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002"},
+    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site", "aceita_site": True},
+    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002", "aceita_site": True},
+    {"id": "c3", "tipo": "celula", "chamado": "linha:3", "coluna": "J", "sharepoint": "", "site": "INCIDENTE", "aceita_site": False},
 ]
 conflitos_state = {}
 
@@ -700,7 +703,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/sebrae/finalizar-softexpert":
             self.send(finalizar_consulta())
         elif path == "/api/sebrae/dashboard/conflitos":
-            self.send({"conflitos": conflitos_state["conflitos"], "escolhas": conflitos_state["escolhas"], "criado_em": ""})
+            self.send({"conflitos": conflitos_state["conflitos"], "escolhas": conflitos_state["escolhas"], "criado_em": "", "versao_importacao": VERSAO_CONFLITOS})
         elif path == "/__fixture_conflitos":
             self.send({"post": conflitos_state["post"]})
         elif path == "/api/sebrae/antigos/ler":
@@ -1016,8 +1019,14 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             corpo = json.loads(self.rfile.read(size) or b"{}")
             ids = {item["id"] for item in conflitos_state["conflitos"]}
-            if not ids or not set(corpo.get("escolhas") or {}) <= ids:
+            so_sharepoint = {item["id"] for item in conflitos_state["conflitos"] if item.get("aceita_site") is False}
+            escolhas = corpo.get("escolhas") or {}
+            if corpo.get("versao_importacao") != VERSAO_CONFLITOS:
+                self.send({"detail": "O Dashboard foi reimportado ou a tela está desatualizada. Recarregue e confira os campos antes de atualizar ou finalizar. Nada foi gravado ou finalizado."}, 409)
+            elif not ids or not set(escolhas) <= ids:
                 self.send({"detail": "Há escolha para um conflito que não existe mais; recarregue a lista."}, 422)
+            elif any(valor == "site" and chave in so_sharepoint for chave, valor in escolhas.items()):
+                self.send({"detail": "Esse conflito só pode manter o valor do SharePoint."}, 422)
             else:
                 # Como o servidor ao concluir o envio: a lista esvazia e as escolhas ficam gravadas.
                 conflitos_state.update(post=corpo, conflitos=[], escolhas=corpo["escolhas"])

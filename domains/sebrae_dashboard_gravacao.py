@@ -972,9 +972,10 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
 class ResultadoMerge:
     """``conteudo``: the merged workbook, or ``None`` while ``conflitos`` wait for a choice.
 
-    Each conflict is ``{id, chamado, coluna, sharepoint, site, tipo}`` (``tipo``: ``celula`` | ``linha_apagada``)."""
+    Each conflict is ``{id, chamado, coluna, sharepoint, site, tipo, aceita_site}`` (``tipo``: ``celula`` | ``linha_apagada``;
+    ``aceita_site`` False: the target row is uncertain, only ``sharepoint`` settles it)."""
     conteudo: Optional[bytes]
-    conflitos: Tuple[Dict[str, str], ...] = ()
+    conflitos: Tuple[Dict[str, Any], ...] = ()
 
 
 @dataclass
@@ -1044,7 +1045,7 @@ def reaplicar(
     anteriores = ler_coluna_c(sharepoint)  # also checks the headers of the sheet
     b, g, s = _abrir(base), _abrir(gerado), _abrir(sharepoint)
     e = _abrir(enviado) if enviado is not None else None
-    conflitos: Dict[str, Dict[str, str]] = {}
+    conflitos: Dict[str, Dict[str, Any]] = {}
     edicoes: Dict[int, Dict[str, str]] = {}  # SharePoint row -> column -> raw cell of ``gerado``
     acrescentar: List[int] = []  # rows of ``gerado`` that go into the first free rows
 
@@ -1055,7 +1056,7 @@ def reaplicar(
         if escolha == "sharepoint" or (escolha == "site" and certo):
             return escolha == "site"
         conflitos.setdefault(identificador, {
-            "id": identificador, "chamado": chamado, "coluna": coluna, "sharepoint": no_sharepoint, "site": no_site, "tipo": tipo,
+            "id": identificador, "chamado": chamado, "coluna": coluna, "sharepoint": no_sharepoint, "site": no_site, "tipo": tipo, "aceita_site": certo,
         })
         return False
 
@@ -1098,7 +1099,7 @@ def reaplicar(
             chamado = f"{CHAVE_DE_LINHA}{n_b}"
             donas = [n_b] if n_b in s.dados else []  # type: ignore[list-item]
             igual = bool(donas) and s.tupla(donas[0]) == b.tupla(n_b)  # type: ignore[arg-type]
-            certo = bool(donas) and (igual or s.valor(donas[0], "C") == c)
+            certo = igual  # the same C ("Sem chamado") does not identify the row: only an identical row is a sure target
             decidir = not igual  # a row without UTIC is merged only while SharePoint still has it as imported
         fila = donas[0] if certo else None
         for letra, site in operacoes.items():

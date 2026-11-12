@@ -14,6 +14,10 @@
     { valor: "sharepoint", rotulo: "Manter o do SharePoint" },
     { valor: "site", rotulo: "Usar o do site" },
   ]);
+  const AVISO_SO_SHAREPOINT = "Sem número UTIC único para achar a linha no SharePoint: só dá para manter o valor do SharePoint.";
+
+  /** ``aceita_site`` false: the target row is uncertain, so the server refuses ``site`` (a conflict without the key accepts both). */
+  const aceitaSite = conflito => conflito?.aceita_site !== false;
 
   /** A cell value as shown in the sentence: quoted, cut when long, "(vazio)" when blank. */
   function valorVisivel(valor) {
@@ -28,19 +32,19 @@
     return `Chamado ${chamado}, coluna ${conflito?.coluna || "—"}: SharePoint diz ${valorVisivel(conflito?.sharepoint)}, site quer ${valorVisivel(conflito?.site)}.`;
   }
 
-  /** Only the ids of the current list with a valid choice go in the POST. */
+  /** Only the ids of the current list with a valid choice go in the POST (never ``site`` where it is not accepted). */
   function escolhasParaEnviar(conflitos, escolhas) {
     const corpo = {};
     (Array.isArray(conflitos) ? conflitos : []).forEach(conflito => {
       const valor = escolhas?.[conflito?.id];
-      if (OPCOES.some(opcao => opcao.valor === valor)) corpo[conflito.id] = valor;
+      if (OPCOES.some(opcao => opcao.valor === valor) && (valor !== "site" || aceitaSite(conflito))) corpo[conflito.id] = valor;
     });
     return corpo;
   }
 
   function createSebraeConflitos(context) {
     const { app, dom } = context;
-    const estado = { ligado: false, consulta: 0, conflitos: [], escolhas: {}, ocupado: false, acompanhamento: 0, timer: 0 };
+    const estado = { ligado: false, consulta: 0, conflitos: [], escolhas: {}, versao: "", ocupado: false, acompanhamento: 0, timer: 0 };
 
     const el = id => document.getElementById(id);
 
@@ -65,7 +69,7 @@
       grupo.append(dom.createTextElement("legend", "sebrae-conflito__texto", textoDoConflito(conflito)));
       const opcoes = document.createElement("div");
       opcoes.className = "sebrae-conflito__opcoes";
-      OPCOES.forEach(opcao => {
+      OPCOES.filter(opcao => opcao.valor !== "site" || aceitaSite(conflito)).forEach(opcao => {
         const rotulo = document.createElement("label");
         rotulo.className = "sebrae-conflito__opcao";
         const radio = document.createElement("input");
@@ -82,6 +86,7 @@
         opcoes.appendChild(rotulo);
       });
       grupo.appendChild(opcoes);
+      if (!aceitaSite(conflito)) grupo.appendChild(dom.createTextElement("p", "sebrae-conflito__aviso", AVISO_SO_SHAREPOINT));
       return grupo;
     }
 
@@ -99,6 +104,7 @@
       const doServidor = corpo?.escolhas && typeof corpo.escolhas === "object" ? corpo.escolhas : {};
       const locais = Object.fromEntries(Object.entries(estado.escolhas).filter(([id]) => ids.has(id)));
       estado.conflitos = conflitos;
+      estado.versao = typeof corpo?.versao_importacao === "string" ? corpo.versao_importacao : "";
       estado.escolhas = { ...doServidor, ...locais }; // a escolha ainda não salva de quem está na tela vale mais que a gravada
       renderizar();
     }
@@ -169,7 +175,7 @@
         const corpo = await app.apiFetch(URL_CONFLITOS, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ escolhas, enviar: true }),
+          body: JSON.stringify({ escolhas, enviar: true, versao_importacao: estado.versao }),
           errorMessage: "Não foi possível salvar as escolhas.",
         });
         if (corpo?.enviar?.iniciado) {

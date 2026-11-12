@@ -155,6 +155,7 @@ class ConflitosPayload(BaseModel):
 
     escolhas: Dict[str, Literal["sharepoint", "site"]] = Field(..., max_length=500)
     enviar: bool = Field(False, strict=True)
+    versao_importacao: str = Field("", max_length=128)
 
 
 class ReenvioSnapshotPayload(BaseModel):
@@ -958,23 +959,31 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def listar_conflitos():
         """Células em conflito entre o SharePoint e o site (valores só aqui e na tela) e as escolhas já feitas; vazio sem conflito."""
         dados = fin.ler_conflitos(_pasta_estado()) or {}
+        atual = sebrae_novos.ler_existentes(services.caminhos().existentes)
         return JSONResponse({
             "conflitos": dados.get("conflitos") or [], "escolhas": fin.escolhas_dos_conflitos(_pasta_estado()),
-            "criado_em": str(dados.get("criado_em") or ""),
+            "criado_em": str(dados.get("criado_em") or ""), "versao_importacao": atual["versao"] if atual else "",
         }, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/dashboard/conflitos")
     def escolher_conflitos(payload: ConflitosPayload):
-        """Grava as escolhas por conflito (``sharepoint`` ou ``site``); com ``enviar`` inicia a rotina ``enviar`` de novo."""
+        """Grava as escolhas por conflito (``sharepoint`` ou ``site``); com ``enviar`` inicia a rotina ``enviar`` de novo.
+
+        Exige a ``versao_importacao`` atual (409 se ausente ou antiga). ``site`` num conflito com ``aceita_site`` falso é 422."""
+        _exigir_versao(payload.versao_importacao)
         pasta = _pasta_estado()
         arquivo = fin.caminho_conflitos(pasta)
         with lock_paths([arquivo]):
             dados = fin.ler_conflitos(pasta) or {}
-            ids = {str(conflito.get("id")) for conflito in dados.get("conflitos") or [] if isinstance(conflito, dict)}
+            conflitos = [conflito for conflito in dados.get("conflitos") or [] if isinstance(conflito, dict)]
+            ids = {str(conflito.get("id")) for conflito in conflitos}
             if not ids:
                 raise DomainValidationError("Não há conflitos de edição para escolher.", status_code=422)
             if any(chave not in ids for chave in payload.escolhas):
                 raise DomainValidationError("Há escolha para um conflito que não existe mais; recarregue a lista.", status_code=422)
+            so_sharepoint = {str(conflito.get("id")) for conflito in conflitos if conflito.get("aceita_site") is False}  # an old conflict without the key accepts both
+            if any(valor == "site" and chave in so_sharepoint for chave, valor in payload.escolhas.items()):
+                raise DomainValidationError("Esse conflito só pode manter o valor do SharePoint.", status_code=422)
             escolhas = {**fin.escolhas_dos_conflitos(pasta), **payload.escolhas}
             atomic_write_json(arquivo, {**dados, "escolhas": escolhas})
         envio = _iniciar_envio() if payload.enviar else {"iniciado": False, "motivo": ""}

@@ -922,22 +922,28 @@ test("Conflitos de edição: lista cada célula, só libera o reenvio com todas 
   const { painel } = await abrirPainel(page, request, "&conflitos=1");
   const secao = painel.locator("#sebrae-conflitos");
   await expect(secao).toBeVisible();
-  await expect(secao.getByRole("group")).toHaveCount(2);
+  await expect(secao.getByRole("group")).toHaveCount(3);
   await expect(secao.getByRole("group").first()).toContainText('Chamado UTIC-2026-9001, coluna G: SharePoint diz "Título no SharePoint", site quer "Título no site".');
   await expect(secao.getByRole("group").nth(1)).toContainText("Chamado UTIC-2026-9002: linha apagada no SharePoint, mas editada no site.");
   const enviar = secao.getByRole("button", { name: "Salvar escolhas e reenviar", exact: true });
   await expect(enviar).toBeDisabled();
-  await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolha uma opção em cada célula (faltam 2).");
+  await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolha uma opção em cada célula (faltam 3).");
+  const restrito = secao.getByRole("group").nth(2); // linha sem UTIC único: o servidor só aceita manter o do SharePoint
+  await expect(restrito.getByRole("radio")).toHaveCount(1);
+  await expect(restrito.getByRole("radio", { name: "Usar o do site" })).toHaveCount(0);
+  await expect(restrito).toContainText("só dá para manter o valor do SharePoint");
   await secao.getByRole("group").first().getByRole("radio", { name: "Usar o do site" }).check();
   await expect(enviar).toBeDisabled();
   await secao.getByRole("group").nth(1).getByRole("radio", { name: "Manter o do SharePoint" }).check();
+  await expect(enviar).toBeDisabled();
+  await restrito.getByRole("radio", { name: "Manter o do SharePoint" }).check();
   await expect(enviar).toBeEnabled();
   await enviar.click();
   await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolhas salvas. Reenviando ao SharePoint…");
   await expect(secao).toBeHidden({ timeout: 10000 }); // a lista esvazia quando o envio termina
   await expect(page.locator(TOAST).filter({ hasText: "Conflitos resolvidos e Dashboard enviado ao SharePoint." })).toBeVisible();
   const { post } = await (await request.get("/__fixture_conflitos")).json();
-  expect(post).toEqual({ escolhas: { c1: "site", c2: "sharepoint" }, enviar: true });
+  expect(post).toEqual({ escolhas: { c1: "site", c2: "sharepoint", c3: "sharepoint" }, enviar: true, versao_importacao: "versao-fixture-conflitos" });
 });
 
 test("Conflitos de edição: sem rolagem horizontal de 320px a 2560px e sem falha de acessibilidade nos dois temas", async ({ page, request }) => {
