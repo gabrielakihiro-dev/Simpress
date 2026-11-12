@@ -1211,6 +1211,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-conflito__opcoes { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
 .sebrae-conflito__opcao { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle-sm); cursor: pointer; }
 .sebrae-conflito__opcao input { margin: 0; }
+.sebrae-conflito__aviso { margin: 4px 0 0; padding: 0 4px; color: var(--cor-texto); }
 .sebrae-conflitos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .sebrae-conflitos__acoes > p { margin: 0; color: var(--cor-texto); } /* o cinza de .ck-cartao__meta não alcança 4,5:1 sobre o fundo de alerta no tema escuro */
 @media (pointer: coarse) { .sebrae-conflito__opcao, .sebrae-conflitos .ck-btn { min-height: 44px; } }

@@ -813,7 +813,7 @@ class ReaplicarTest(unittest.TestCase):
             list(resultado.conflitos),
             [{
                 "id": id_do_conflito("UTIC-2026-0001", "J", "REQUISIÇÃO", "INCIDENTE"), "chamado": "UTIC-2026-0001", "coluna": "J",
-                "sharepoint": "REQUISIÇÃO", "site": "INCIDENTE", "tipo": "celula",
+                "sharepoint": "REQUISIÇÃO", "site": "INCIDENTE", "tipo": "celula", "aceita_site": True,
             }],  # only J: B was free in SharePoint
         )
         self.assertRegex(resultado.conflitos[0]["id"], r"^[0-9a-f]{12}$")
@@ -894,7 +894,7 @@ class ReaplicarTest(unittest.TestCase):
             list(resultado.conflitos),
             [{
                 "id": id_do_conflito("UTIC-2026-0002", "J", "", "J: INCIDENTE"), "chamado": "UTIC-2026-0002", "coluna": "J",
-                "sharepoint": "", "site": "J: INCIDENTE", "tipo": "linha_apagada",
+                "sharepoint": "", "site": "J: INCIDENTE", "tipo": "linha_apagada", "aceita_site": True,
             }],
         )
         identificador = resultado.conflitos[0]["id"]
@@ -951,6 +951,7 @@ class ReaplicarTest(unittest.TestCase):
         resultado = G.reaplicar(base, gerado, mudou, escolhas={antigo: "site", "inexistente00": "sharepoint"})
         self.assertIsNone(resultado.conteudo)
         self.assertEqual(len(resultado.conflitos), 1)
+        self.assertTrue(resultado.conflitos[0]["aceita_site"])  # a plain UTIC cell conflict accepts both choices
         self.assertNotEqual(resultado.conflitos[0]["id"], antigo)
         self.assertEqual(por_chamado(self.ok(base, gerado, mudou, escolhas={resultado.conflitos[0]["id"]: "site"}))["UTIC-2026-0001"]["J"], "INCIDENTE")
 
@@ -974,8 +975,9 @@ class ReaplicarTest(unittest.TestCase):
         resultado = G.reaplicar(base, gerado, mudou)
         self.assertIsNone(resultado.conteudo)
         self.assertEqual([(c["chamado"], c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("linha:2", "J", "", "INCIDENTE")])
+        self.assertFalse(resultado.conflitos[0]["aceita_site"])  # the same C ("Sem chamado") does not identify the row
         identificador = resultado.conflitos[0]["id"]
-        self.assertEqual(por_chamado(self.ok(base, gerado, mudou, escolhas={identificador: "site"}))["Sem chamado"]["J"], "INCIDENTE")  # same C in row 2: target is sure
+        self.assertIsNone(G.reaplicar(base, gerado, mudou, escolhas={identificador: "site"}).conteudo)  # still a conflict: only ``sharepoint`` settles it
         self.assertTrue(G.mesmos_valores(self.ok(base, gerado, mudou, escolhas={identificador: "sharepoint"}), mudou))
         # another ticket now sits in row 2: there is no sure target, so only ``sharepoint`` settles it
         deslocada = montar(("27011", "Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 3)
@@ -984,6 +986,19 @@ class ReaplicarTest(unittest.TestCase):
         self.assertIsNone(G.reaplicar(base, gerado, deslocada, escolhas={incerto.conflitos[0]["id"]: "site"}).conteudo)
         self.assertTrue(G.mesmos_valores(self.ok(base, gerado, deslocada, escolhas={incerto.conflitos[0]["id"]: "sharepoint"}), deslocada))
 
+    def test_linha_sem_utic_com_c_repetida_e_linha_apagada_no_sharepoint_nao_aceita_o_site(self):
+        base = _antes_da_coluna_p(_antes_da_coluna_p(montar(("Sem chamado", "Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 3), 2, texto("I2", "Ana")), 3, texto("I3", "Bia"))
+        gerado = do_site(base, {"linha:2": {"J": "INCIDENTE"}})  # the site edits Ana's row
+        sp = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 2), 2, texto("I2", "Bia"))  # Ana's row is gone and Bia moved up to row 2
+        resultado = G.reaplicar(base, gerado, sp)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["coluna"], c["aceita_site"]) for c in resultado.conflitos], [("linha:2", "J", False)])
+        identificador = resultado.conflitos[0]["id"]
+        self.assertIsNone(G.reaplicar(base, gerado, sp, escolhas={identificador: "site"}).conteudo)  # never writes into Bia's row
+        saida = self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"})
+        self.assertTrue(G.mesmos_valores(saida, sp))
+        self.assertNotIn("INCIDENTE", linha_xml(saida, 2))
+
     def test_c_repetida_no_sharepoint_com_operacao_so_se_resolve_pelo_sharepoint(self):
         base = tres()
         gerado = do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
@@ -991,6 +1006,7 @@ class ReaplicarTest(unittest.TestCase):
         resultado = G.reaplicar(base, gerado, sp)
         self.assertIsNone(resultado.conteudo)
         self.assertEqual([(c["chamado"], c["coluna"]) for c in resultado.conflitos], [("UTIC-2026-0002", "J")])
+        self.assertFalse(resultado.conflitos[0]["aceita_site"])
         identificador = resultado.conflitos[0]["id"]
         self.assertIsNone(G.reaplicar(base, gerado, sp, escolhas={identificador: "site"}).conteudo)
         self.assertTrue(G.mesmos_valores(self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"}), sp))
