@@ -91,7 +91,7 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     def gravar(operacao: Callable[[store_mod.Estado], Tuple[store_mod.Estado, Any]]) -> Any:
         try:
             return store().escrever(operacao)
-        except (FileBusyError, EstadoIlegivel, FileTransactionError) as error:
+        except (FileBusyError, EstadoIlegivel, FileTransactionError, OSError) as error:
             _falhar(error)
 
     @router.post("/api/backups-regionais/confirmar")
@@ -121,7 +121,8 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     def desfazer(payload: ConfirmacaoPayload) -> Dict[str, Any]:
         """Remove a confirmação da série naquela cidade; sem registro, ``removido: false``."""
         removido = gravar(lambda estado: store_mod.desfazer(estado, payload.serie, payload.cidade))
-        return {"serie": payload.serie, "cidade": payload.cidade, "removido": removido}
+        origem = removido or {"serie": payload.serie, "cidade": payload.cidade}
+        return {"serie": origem["serie"], "cidade": origem["cidade"], "removido": removido is not None}
 
     return router
 

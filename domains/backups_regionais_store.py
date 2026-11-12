@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
-from core.integrity import AtomicFileTransaction, FileTransactionError
+from core.integrity import AtomicFileTransaction, FileTransactionError, TransactionConflictError
 from domains.regras_negocio import normalize_reference_value
 
 ESQUEMA = 1
@@ -46,7 +46,7 @@ def validar_estado(valor: Any, nome: str = "backups_regionais.json") -> Estado:
     """Validação estrita: esquema conhecido, nenhuma chave desconhecida e registros com os quatro campos."""
     if not isinstance(valor, dict):
         raise EstadoIlegivel(f"'{nome}' precisa conter um objeto.")
-    if valor.get("esquema") != ESQUEMA:
+    if type(valor.get("esquema")) is not int or valor["esquema"] != ESQUEMA:  # recusa true e 1.0
         raise EstadoIlegivel(f"'{nome}' tem um esquema desconhecido ({valor.get('esquema')!r}).")
     desconhecidas = set(valor) - {"esquema", "confirmacoes"}
     if desconhecidas:
@@ -96,10 +96,11 @@ def confirmar(estado: Estado, serie: str, cidade: str, agora: datetime) -> Tuple
     return {"esquema": ESQUEMA, "confirmacoes": [*restantes, registro]}, registro, False
 
 
-def desfazer(estado: Estado, serie: str, cidade: str) -> Tuple[Estado, bool]:
-    """``(novo_estado, removido)``; desfazer o que não existe não é erro."""
+def desfazer(estado: Estado, serie: str, cidade: str) -> Tuple[Estado, Optional[Registro]]:
+    """``(novo_estado, registro_removido | None)``; desfazer o que não existe não é erro."""
+    removido = next((r for r in estado["confirmacoes"] if _mesma(r, serie, cidade)), None)
     restantes = [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]
-    return {"esquema": ESQUEMA, "confirmacoes": restantes}, len(restantes) != len(estado["confirmacoes"])
+    return {"esquema": ESQUEMA, "confirmacoes": restantes}, removido
 
 
 class BackupsRegionaisStore:
@@ -137,4 +138,6 @@ def eh_ilegivel(error: BaseException) -> bool:
     """``FileTransactionError`` de leitura (JSON inválido) ou estado inválido: 503, nunca 500."""
     if isinstance(error, EstadoIlegivel):
         return True
+    if isinstance(error, TransactionConflictError):  # rollback falhou: há transação pendente, não é "nada gravado"
+        return False
     return isinstance(error, FileTransactionError) and isinstance(error.__cause__, (ValueError, UnicodeError))

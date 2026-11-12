@@ -22,7 +22,7 @@ with (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.integrity import FileBusyError
+from core.integrity import FileBusyError, TransactionConflictError
 from domains.coverage import Manutencao
 from domains.effective_alias import build_endpoint_alias_index
 from routers.backups_regionais import BackupsRegionaisServices, create_backups_regionais_router
@@ -145,6 +145,7 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         conteudos = {
             "json_invalido": b"{quebrado",
             "chave_desconhecida": json.dumps({"esquema": 1, "confirmacoes": [], "extra": 1}).encode("utf-8"),
+            "esquema_booleano": json.dumps({"esquema": True, "confirmacoes": []}).encode("utf-8"),
         }
         for nome, conteudo in conteudos.items():
             for caminho in (CONFIRMAR, DESFAZER):
@@ -179,6 +180,21 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         confirmacoes = self.arquivo()["confirmacoes"]
         self.assertEqual(len(confirmacoes), 1)
         self.assertEqual(confirmacoes[0]["expira_em"], esperado)
+
+    def test_desfazer_com_outra_grafia_remove_e_devolve_a_gravada(self):
+        self.post(CONFIRMAR)
+        resposta = self.post(DESFAZER, serie="nb1", cidade="CASCAVEL")
+        self.assertEqual(resposta, {"serie": "NB1", "cidade": "Cascavel", "removido": True})
+        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": []})
+
+    def test_rollback_com_conflito_responde_500_e_nao_503(self):
+        conflito = TransactionConflictError("C:/Users/pessoa/arquivo.json")
+        conflito.__cause__ = ValueError("estado")
+        with mock.patch("domains.backups_regionais_store.AtomicFileTransaction", side_effect=conflito):
+            resposta = self.client.post(DESFAZER, json={"serie": "NB1", "cidade": "Cascavel"})
+        self.assertEqual(resposta.status_code, 500, resposta.text)
+        self.assertEqual(resposta.json()["detail"]["codigo"], "falha_gravacao")
+        self.assertNotIn("pessoa", resposta.text)
 
 
 if __name__ == "__main__":
