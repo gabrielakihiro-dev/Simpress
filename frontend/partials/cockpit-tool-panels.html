@@ -12,6 +12,7 @@
         <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados" aria-labelledby="cockpit-tickets-heading" hidden>
           <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de OS por série</h2>
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
+          <p id="cockpit-tickets-kpis-nota" class="ckp-secao__desc os-kpis-nota">KPIs e triagem contam só as OS da sub-aba Abertas.</p>
           <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
@@ -60,7 +61,14 @@
               </details>
             </div>
           </details>
-          <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
+          <div class="os-abas-barra">
+            <div class="os-abas" role="tablist" aria-label="OS por situação">
+              <button type="button" role="tab" id="os-aba-abertas" class="os-aba" data-os-aba="abertas" aria-selected="true" aria-controls="cockpit-tickets-os" tabindex="0" aria-label="Abertas: 0 OS"><span class="os-aba__rotulo">Abertas</span><span id="os-abertas-contagem" class="ck-badge os-aba__n" data-zero>0</span></button>
+              <button type="button" role="tab" id="os-aba-finalizadas" class="os-aba" data-os-aba="finalizadas" aria-selected="false" aria-controls="cockpit-tickets-os" tabindex="-1" aria-label="Finalizadas: 0 OS"><span class="os-aba__rotulo">Finalizadas</span><span id="os-finalizadas-contagem" class="ck-badge os-aba__n" data-zero>0</span></button>
+            </div>
+            <div id="cockpit-tickets-contagem" class="os-contagem"></div>
+          </div>
+          <div id="cockpit-tickets-os" class="ck-ferr-os" role="tabpanel" aria-labelledby="os-aba-abertas"></div>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>

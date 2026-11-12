@@ -1795,7 +1795,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 }
 
 /* ---------- 3. Relação entre as fontes (KPIs): legenda discreta, mesma altura da triagem ---------- */
-#cockpit-tickets-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: auto 1fr; overflow: hidden; }
+#cockpit-tickets-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: auto 1fr; overflow: hidden; }
 #cockpit-tickets-kpis:empty { display: none; }
 #cockpit-tickets-kpis::before {
   content: "Relação entre as fontes"; /* [TEXTO NOVO] */
@@ -1806,13 +1806,14 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #cockpit-tickets-kpis .ck-kpi:last-child { border-right: 0; }
 #cockpit-tickets-kpis .ck-kpi__valor { font-size: var(--fs-xl); }
 #cockpit-tickets-kpis .ck-kpi__rotulo { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
-/* ordem fixa em renderTicketKpis: Séries, Conferidas, Divergentes, Só Simpress, Só Oracle; o ponto repete as cores das etiquetas das linhas */
-#cockpit-tickets-kpis .ck-kpi:nth-child(n+2) .ck-kpi__rotulo::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ponto); }
-#cockpit-tickets-kpis .ck-kpi:nth-child(2) { --ponto: var(--cor-ok-texto); }
-#cockpit-tickets-kpis .ck-kpi:nth-child(3) { --ponto: var(--cor-erro-texto); }
-#cockpit-tickets-kpis .ck-kpi:nth-child(4), #cockpit-tickets-kpis .ck-kpi:nth-child(5) { --ponto: var(--cor-alerta-texto); }
-@media (max-width: 767.98px) {
-  #cockpit-tickets-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto; }
+/* ordem fixa em renderTicketKpis: OS abertas, Séries, Conferidas, Divergentes, Só Simpress, Só Oracle; o ponto das quatro últimas repete as cores das etiquetas das linhas */
+#cockpit-tickets-kpis .ck-kpi:nth-child(n+3) .ck-kpi__rotulo::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ponto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(3) { --ponto: var(--cor-ok-texto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(4) { --ponto: var(--cor-erro-texto); }
+#cockpit-tickets-kpis .ck-kpi:nth-child(5), #cockpit-tickets-kpis .ck-kpi:nth-child(6) { --ponto: var(--cor-alerta-texto); }
+/* Duas fileiras de três: celular e a faixa em que o cartão divide a linha com a triagem e fica estreito demais para seis colunas. */
+@media (max-width: 767.98px), (min-width: 1200px) and (max-width: 1559.98px) {
+  #cockpit-tickets-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto repeat(2, 1fr); }
   #cockpit-tickets-kpis .ck-kpi:nth-child(3n) { border-right: 0; }
   #cockpit-tickets-kpis .ck-kpi:nth-child(n+4) { border-top: 1px solid var(--cor-borda-suave); }
 }
@@ -1856,6 +1857,42 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   content: "Nenhuma OS corresponde aos filtros. Use Limpar filtros."; /* [TEXTO NOVO] */
   display: block; padding: 24px 12px 28px; text-align: center; font-size: var(--fs-md); color: var(--cor-texto-mudo);
 }
+
+/* ---------- 6b. Sub-abas Abertas e Finalizadas ---------- */
+/* Mesmo desenho de abas do F5, em abas de sublinhado: 44px de altura, aba ativa com 2px de destaque embaixo. O contador "N OS · N séries" fica à direita da barra. */
+.os-kpis-nota { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+.os-abas-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 12px; margin-top: 2px; border-bottom: 1px solid var(--cor-borda); }
+.os-abas { display: flex; flex: 0 1 auto; gap: 4px; min-width: 0; }
+.os-aba {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; gap: 8px; min-width: 0; height: 44px; min-height: 44px; margin-bottom: -1px; padding: 0 14px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: var(--raio-sm) var(--raio-sm) 0 0; background: transparent; color: var(--cor-texto-suave);
+  font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer;
+  transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva), border-color var(--duracao) var(--curva);
+}
+.os-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
+.os-aba[aria-selected="true"] { border-bottom-color: var(--cor-destaque); color: var(--cor-destaque-texto); font-weight: var(--peso-marca); }
+.os-aba:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; }
+.os-aba__rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.os-aba__n { justify-content: center; min-width: 24px; border-radius: 999px; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.os-aba[aria-selected="true"] .os-aba__n { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+/* Aba vazia (o JS põe data-zero): contagem só contornada e rótulo apagado. */
+.os-aba[data-zero]:not([aria-selected="true"]) { color: var(--cor-texto-mudo); }
+.os-aba[data-zero] .os-aba__n { background: transparent; color: var(--cor-texto-mudo); box-shadow: inset 0 0 0 1px var(--cor-borda); }
+.os-contagem { margin-left: auto; padding: 0 0 12px; color: var(--cor-texto); font-size: var(--fs-md); font-variant-numeric: tabular-nums; text-align: right; }
+.os-contagem .ticket-summary-status { margin: 0; color: inherit; font-variant-numeric: tabular-nums; white-space: normal; text-align: right; }
+/* O estado (carregando, erro, vazio) mora na tabela, que vem logo depois da barra. */
+.os-abas-barra:has(+ #cockpit-tickets-os .ck-os[aria-busy="true"]) .ticket-summary-status { color: var(--cor-destaque-texto); }
+.os-abas-barra:has(+ #cockpit-tickets-os .ck-os[data-estado="erro"]) .ticket-summary-status { color: var(--cor-erro-texto); }
+.os-abas-barra:has(+ #cockpit-tickets-os .ck-os[data-estado="vazio"]) .ticket-summary-status { color: var(--cor-texto-mudo); }
+/* Célula do Chamado vinda de vínculo automático: link com o número e um selo da origem. */
+.os-chamado { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.os-chamado__link { min-height: 0; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.os-selo { display: inline-flex; align-items: center; gap: 4px; height: auto; min-height: 20px; max-width: 100%; padding: 2px 7px; white-space: normal; line-height: 1.25; }
+.os-selo svg { flex: none; width: 12px; height: 12px; }
+.os-selo--auto { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+.os-selo--dashboard { background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); }
+.os-finalizado-em { font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+@media (pointer: coarse) { #cockpit-tickets-os .os-chamado__link { min-height: 44px; } }
 
 /* ---------- 7. Tabela (≥1200px): colunas reequilibradas, cabeçalho fixo, faixa de atenção ---------- */
 @media (min-width: 1200px) {
@@ -1952,7 +1989,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto);
 }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-editor[data-origem="dashboard"] .ticket-os-link-form:has(.ticket-os-link-remove) .ticket-os-link-prefix { color: var(--cor-destaque-texto); }
-:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os .ticket-os-link-editor[data-origem="dashboard"]::after {
+/* Na F6 o vínculo do Dashboard é o link com o selo "Do Dashboard"; o texto abaixo só vale na janela Chamado × OS, que mantém o editor. */
+#modal-chamado-os .ck-os .ticket-os-link-editor[data-origem="dashboard"]::after {
   content: "Automático · Dashboard"; /* [TEXTO NOVO] */
   display: block; margin-top: 4px; font-size: var(--fs-xs); color: var(--cor-destaque-texto);
 }
@@ -1998,9 +2036,16 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (max-width: 767.98px) {
   #cockpit-tickets-os .ck-os > .ck-cartao__cab { align-items: flex-start; }
   #cockpit-tickets-os .ck-os .ticket-summary-status { flex: 1 1 100%; margin-left: 0; text-align: left; }
+  /* Abas em duas colunas de 50%, com a linha de base nas abas; o contador desce para baixo delas, à esquerda. */
+  .os-abas-barra { display: block; border-bottom: 0; }
+  .os-abas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; width: 100%; border-bottom: 1px solid var(--cor-borda); }
+  .os-aba { margin-bottom: -1px; padding: 0 8px; }
+  .os-contagem { margin-left: 0; padding: 8px 0 0; text-align: left; }
+  .os-contagem .ticket-summary-status { text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .os-aba, .os-aba__n { transition: none; }
   #cockpit-tickets-os .ck-os tbody tr[data-serial],
   #cockpit-tickets-os .ck-os__andamento-btn::before,
   #cockpit-tickets-os .ck-os[aria-busy="true"] .ck-os__corpo { transition: none; }
