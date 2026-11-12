@@ -140,8 +140,9 @@ Mesmos `data-on-click="adicionarObsChamado"` e `data-args` atuais.
 #### Rodapé
 
 - Botão **Texto para Transporte** — `gerarTextoSolicitacaoTransporte`, texto com os endereços de retirada e entrega em `#modal-texto-transporte` (removido em 07/11/2026 e restaurado em 08/11/2026)
-- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Gerar planilha** abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
-- Botão **Gerar planilha** — ligado ao handler existente (`gerarPlanilhaExcel`)
+- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Transporte** (antigo **Gerar planilha**) abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
+- Botão **Transporte** (antigo **Gerar planilha**, renomeado em 11/11/2026) — mesmo `#btn-gerar-planilha` e handler (`gerarPlanilhaExcel`); primeiro da barra
+- Botão **Alterar Endereço** (`#btn-alterar-endereco`, `alterarEnderecoTicketUX`, 11/11/2026) — segundo da barra; acende só com a série e os dois endereços e abre o modal com Incidente `Transporte` / Motivo `Transferência Fisica de Equipamentos`, sem planilha
 
 #### IDs preservados
 
@@ -172,7 +173,7 @@ O `#transfer-equipment-banner` continua no topo, acima das 3 colunas, mostrando 
 - Rode `npx playwright test tests/e2e/ui.spec.cjs` — formulário de transferência deve funcionar.
 - Confirme que selecionar uma unidade preenche os campos de destino.
 - Confirme que a pré-visualização atualiza ao digitar.
-- Confirme que "Gerar planilha" baixa a planilha e abre "Gerar ticket no UX" (`tests/e2e/ux-ticket.spec.cjs`, com `/api/ux/gerar-ticket/*` simulado).
+- Confirme que "Transporte" baixa a planilha e abre "Gerar ticket no UX", e que "Alterar Endereço" abre "Alterar Endereço no UX" sem chamar `/api/gerar-planilha` (`tests/e2e/ux-ticket.spec.cjs`, com `/api/ux/gerar-ticket/*` simulado).
 - Confirme que os chips de observação rápida adicionam texto.
 
 **Commit:** `style(cockpit): Transporte em 3 colunas com pré-visualização ao vivo`
@@ -183,4 +184,4 @@ Os chips de cidade (`button.ck-unidade`) foram removidos. A seção "Chips de un
 
 ## Transporte preparado pela Cobertura (F10, 07/11/2026)
 
-`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Nunca clica em `Gerar planilha`; quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.
+`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Nunca clica em `Transporte` (antigo `Gerar planilha`); quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.

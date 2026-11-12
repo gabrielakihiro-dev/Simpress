@@ -276,3 +276,24 @@ test("localStorage que lança erro ou guarda lixo não quebra o vínculo", async
   const env = installHistory({ storage: lixo, responses: [] });
   assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
 });
+
+test("Alterar Endereço: texto com os endereços reais e botão aceso só com série e os dois endereços", () => {
+  const env = bootTransferForm();
+  const botao = env.document.getElementById("btn-alterar-endereco");
+  env.document.getElementById("retirada-endereco").value = "Rua Retirada, 10";
+  env.form.atualizarBotaoAlterarEndereco();
+  assert.equal(botao.disabled, true);
+  assert.match(env.form.montarTextoAlterarEndereco().aviso, /Selecione o equipamento de origem/);
+
+  env.document.getElementById("entrega-endereco").value = " Rua Entrega, 20 ";
+  env.form.atualizarBotaoAlterarEndereco();
+  assert.equal(botao.disabled, true, "sem série o botão fica apagado");
+
+  env.appState.currentEquipamento = { serial: "SINT-001" };
+  env.document.getElementById("input-serial").value = "SINT-001";
+  env.form.atualizarBotaoAlterarEndereco();
+  assert.equal(botao.disabled, false, "não precisa de representante, telefone nem e-mail");
+  assert.equal(env.form.serialAlterarEndereco(), "SINT-001");
+  assert.equal(env.form.montarTextoAlterarEndereco().texto,
+    "Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae Rua Entrega, 20 para Rua Retirada, 10.");
+});
