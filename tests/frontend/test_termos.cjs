@@ -64,10 +64,11 @@ test("index.html traz as abas e os botões aprovados e nenhum Imprimir", () => {
   for (const texto of ["Termo Entrega", "Termo Devolução", "Gerar PDF", "Limpar"]) {
     assert.ok(html.includes(`>${texto}</button>`), `falta o botão ${texto}`);
   }
-  const botaoMenu = html.match(/<button[^>]*id="btn-termos"[^>]*>/);
-  assert.ok(botaoMenu, "falta #btn-termos no menu Ferramentas");
-  assert.ok(!/aria-keyshortcuts/.test(botaoMenu[0]), "Termos não tem atalho de teclado");
-  assert.ok(!/>Imprimir</.test(html.slice(html.indexOf('data-cockpit-tool-panel="termos"'))), "não pode haver botão Imprimir");
+  const botaoMenu = html.match(/<button[^>]*id="btn-lembretes"[^>]*>/);
+  assert.ok(botaoMenu, "falta #btn-lembretes no menu Ferramentas");
+  assert.ok(!/aria-keyshortcuts/.test(botaoMenu[0]), "Lembretes não tem atalho de teclado");
+  assert.ok(!html.includes('ck-menu__rotulo">Termos<'), "a ferramenta Termos saiu do menu");
+  assert.ok(!/>Imprimir</.test(html.slice(html.indexOf('data-cockpit-tool-panel="lembretes"'))), "não pode haver botão Imprimir");
 });
 
 test("termosPreencherDoEquipamento preenche só nome, modelo, série e Notebook, sem apagar o que foi digitado", () => {

@@ -9,7 +9,7 @@ Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj
 - Painel `section[data-cockpit-tool-panel="lembretes"]`, aberto pelo botão `#btn-lembretes` no menu Ferramentas. Sem atalho de teclado (Termos também não tinha).
 - Sub-abas (pílulas, `role="tab"`), nesta ordem: `Termo Entrega`, `Termo Devolução` e `Lembretes <n pendentes>`. O painel abre em `Lembretes`.
 - `Termo Entrega` e `Termo Devolução` são os formulários de `17-termos.md`, movidos sem mudança: IDs, campos, `Gerar PDF`, `Limpar`, nome do PDF `<Série> - <Nome>` e o preenchimento automático da Home (`app.termosPreencherDoEquipamento(eq)`).
-- A ferramenta **Termos** (`#btn-termos`, painel `termos`) é removida ao final da migração.
+- A ferramenta **Termos** (`#btn-termos`, painel `termos`) foi removida em 12/11/2026 (Bloco 4 da migração): o menu Ferramentas só tem `#btn-lembretes`.
 
 ## Lista de lembretes
 

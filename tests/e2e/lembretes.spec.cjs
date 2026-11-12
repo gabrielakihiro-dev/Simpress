@@ -52,11 +52,13 @@ test("abre em Lembretes com as pílulas na ordem e o estado vazio", async ({ pag
   await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
 });
 
-test("o botão Termos abre o painel na aba Termo Entrega", async ({ page }) => {
+test("o menu Ferramentas não tem mais o botão Termos: os termos abrem pela pílula de Lembretes", async ({ page }) => {
   await page.goto("/");
   await page.locator("#cockpit-tools-trigger").click();
-  await page.locator("#btn-termos").click();
+  await expect(page.locator("#cockpit-tools-dropdown").getByRole("menuitem", { name: "Termos", exact: true })).toHaveCount(0);
+  await page.locator("#btn-lembretes").click();
   await expect(page.locator('[data-cockpit-tool-panel="lembretes"]')).toBeVisible();
+  await page.locator("#termos-aba-entrega").click();
   await expect(page.locator("#termos-aba-entrega")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#termos-painel-entrega")).toBeVisible();
 });
