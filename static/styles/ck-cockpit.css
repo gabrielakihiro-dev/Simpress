@@ -1354,6 +1354,11 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* Obrigatório vazio (A e J): contorno âmbar. D só é cobrado na zona 3, pois EM ABERTO é um valor válido. */
 .sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-entrada { border-color: var(--cor-alerta-texto); }
 .sebrae-chamado__manuais .ck-campo:has(:is([data-sebrae-campo="A"], [data-sebrae-campo="J"]) > option[value=""]:checked) .ck-campo__rotulo { color: var(--cor-alerta-texto); }
+/* R obrigatório vazio (antigo não encontrado no SoftExpert com D FINALIZADO): contorno âmbar como A e J; a ajuda ocupa a linha inteira, abaixo dos campos. */
+.sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]:required:invalid) .ck-entrada { border-color: var(--cor-alerta-texto); }
+.sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]:required:invalid) .ck-campo__rotulo { color: var(--cor-alerta-texto); }
+.sebrae-chamado__manuais > .sebrae-chamado__encerramento-ajuda { grid-column: 1 / -1; margin: 0; }
+.sebrae-chamado__encerramento-ajuda[hidden] { display: none; }
 /* Célula travada (antigo já preenchido, finalizado): tracejada, chata e com cadeado desenhado em CSS. */
 .sebrae-chamado :is(input, select, textarea):is(:disabled, [readonly]) { border-style: dashed; border-color: var(--cor-borda); background: var(--cor-superficie-funda); color: var(--cor-texto-suave); -webkit-text-fill-color: var(--cor-texto-suave); opacity: 1; cursor: not-allowed; }
 .sebrae-chamado .ck-campo:has(> :is(input, select, textarea):is(:disabled, [readonly])) > .ck-campo__rotulo { padding-left: 14px; }
