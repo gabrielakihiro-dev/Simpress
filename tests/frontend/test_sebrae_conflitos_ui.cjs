@@ -283,6 +283,29 @@ test("422 do servidor mostra o erro e recarrega a lista", async () => {
   });
 });
 
+test("409 de versão antiga recarrega a lista e passa a enviar a versão nova", async () => {
+  const falha = Object.assign(new Error("O Dashboard foi importado de novo."), { status: 409 });
+  let versao = "v1";
+  const rotas = {
+    "GET /api/sebrae/dashboard/conflitos": () => ({ conflitos: [celula("a")], escolhas: {}, criado_em: "", versao_importacao: versao }),
+    "POST /api/sebrae/dashboard/conflitos": falha,
+  };
+  await comTela(rotas, async tela => {
+    await tela.modulo.carregarConflitosSebrae();
+    versao = "v2";
+    tela.escolher(0, "sharepoint");
+    tela.botao.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(tela.status.textContent, falha.message);
+    assert.equal(tela.chamadas.filter(item => item.metodo === "GET").length, 2, "consulta de novo");
+    tela.escolher(0, "sharepoint");
+    tela.botao.click();
+    await new Promise(resolve => setImmediate(resolve));
+    const posts = tela.chamadas.filter(item => item.metodo === "POST");
+    assert.deepEqual(posts.map(item => item.corpo.versao_importacao), ["v1", "v2"]);
+  });
+});
+
 test("falha ao consultar a lista deixa a tela como estava, sem erro solto", async () => {
   await comTela({ "GET /api/sebrae/dashboard/conflitos": new Error("fora do ar") }, async tela => {
     await tela.modulo.carregarConflitosSebrae();
