@@ -102,23 +102,29 @@
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="apelidos" aria-labelledby="cockpit-alias-heading" hidden>
           <h2 id="cockpit-alias-heading" class="sr-only">Histórico de apelidos e alterações</h2>
-          <div id="cockpit-alias-kpis" class="ck-kpis" role="group" aria-label="Resumo do histórico"></div>
-          <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input id="cockpit-alias-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, usuário ou alteração"></label>
-            <label class="ck-campo"><span class="ck-campo__rotulo">Tipo</span><select id="cockpit-alias-type" class="ck-entrada"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
+          <div class="ck-alias-cab">
+            <div id="cockpit-alias-kpis" class="ck-kpis ck-alias-kpis" role="group" aria-label="Resumo do histórico"></div>
             <button type="button" id="cockpit-alias-export" class="ck-btn ck-btn--primario">Exportar CSV</button>
+          </div>
+          <div id="cockpit-alias-tabs" class="ck-alias-abas" role="tablist" aria-label="Tipo de alteração">
+            <button type="button" role="tab" id="cockpit-alias-tab-todos" class="ck-alias-aba" data-alias-type="todos" aria-selected="true" tabindex="0" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Todos</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
+            <button type="button" role="tab" id="cockpit-alias-tab-apelido" class="ck-alias-aba" data-alias-type="apelido" aria-selected="false" tabindex="-1" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Apelido</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
+            <button type="button" role="tab" id="cockpit-alias-tab-usuario" class="ck-alias-aba" data-alias-type="usuario" aria-selected="false" tabindex="-1" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Usuário</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
+            <button type="button" role="tab" id="cockpit-alias-tab-endereco" class="ck-alias-aba" data-alias-type="endereco" aria-selected="false" tabindex="-1" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Endereço</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
+            <button type="button" role="tab" id="cockpit-alias-tab-aviso_endpoint" class="ck-alias-aba" data-alias-type="aviso_endpoint" aria-selected="false" tabindex="-1" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Avisos do Endpoint</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
+          </div>
+          <div class="ck-barra-ferr ck-alias-barra">
+            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input id="cockpit-alias-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, apelido, usuário ou origem"></label>
+            <label class="ck-campo" hidden><span class="ck-campo__rotulo">Tipo</span><select id="cockpit-alias-type" class="ck-entrada"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
+            <div id="cockpit-alias-filters" class="ck-segmentado ck-alias-periodo" role="group" aria-label="Período">
+              <button type="button" class="ck-segmentado__op" data-alias-period="todos" aria-pressed="true">Todas <span id="cockpit-alias-count-all">0</span></button>
+              <button type="button" class="ck-segmentado__op" data-alias-period="7dias" aria-pressed="false">Últimos 7 dias <span id="cockpit-alias-count-7days">0</span></button>
+            </div>
             <label class="ckp-alternar" title="Mostra só os registros que podem ser restaurados ou excluídos"><input id="cockpit-alias-actions-only" type="checkbox">Somente com ação disponível</label>
             <button type="button" id="cockpit-alias-clear" class="ck-btn ck-btn--secundario">Limpar filtros</button>
           </div>
-          <div id="cockpit-alias-filters" class="ck-pilulas ck-ferr-filtros" role="group" aria-label="Filtrar histórico por período e classificação">
-            <button type="button" class="ck-pilula" data-alias-period="todos" aria-pressed="true">Todas <span class="ck-pilula__n" id="cockpit-alias-count-all">0</span></button>
-            <button type="button" class="ck-pilula" data-alias-period="7dias" aria-pressed="false">Últimos 7 dias <span class="ck-pilula__n" id="cockpit-alias-count-7days">0</span></button>
-            <button type="button" class="ck-pilula" disabled aria-describedby="cockpit-alias-data-note">Fora do padrão —</button>
-            <button type="button" class="ck-pilula" disabled aria-describedby="cockpit-alias-data-note">Duplicados —</button>
-            <p id="cockpit-alias-data-note" class="ck-barra-ferr__nota">O projeto não dispõe de regra e fonte confiável para essas duas classificações.</p>
-          </div>
           <div class="ck-dividido">
-            <div class="ck-dividido__lista" id="cockpit-alias-list" role="list" aria-label="Alterações registradas"></div>
+            <div class="ck-dividido__lista" id="cockpit-alias-list" role="group" aria-label="Alterações registradas"></div>
             <aside class="ck-dividido__detalhe ck-det__corpo" id="cockpit-alias-detail" aria-label="Detalhes da alteração selecionada"><p class="ck-lista__vazio">Selecione uma alteração.</p></aside>
           </div>
         </section>
