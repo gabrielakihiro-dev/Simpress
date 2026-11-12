@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from core.errors import DomainBusyError, DomainError
 from core.logging_setup import redact_reference
 from domains import ticket_import
+from domains.alias_changes import validate_equipment_serial
+from domains.equipment_dossier import build_os_section, empty_os_section
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
@@ -138,11 +140,13 @@ def create_operations_router(
     ticket_os_notes_file: Optional[Callable[[], Path]] = None,
     ticket_os_marks_file: Optional[Callable[[], Path]] = None,
     ticket_os_marks_sources: Optional[Callable[[], FontesMarcas]] = None,
+    equipment_header: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
 
     ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``).
-    ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``)."""
+    ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``).
+    ``equipment_header(serial)`` gives ``{"serie", "modelo"}`` of a registered equipment, else ``None`` (dossier route)."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -237,10 +241,12 @@ def create_operations_router(
             link["chamado"] = f"UTIC-{ano}-{numero}"
         return data
 
+    def ticket_os_links_path() -> Path:
+        return ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
+
     @router.get("/api/operacoes/chamados/vinculos-os")
     def get_ticket_os_links():
-        path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
-        data = read_ticket_os_links(path)
+        data = read_ticket_os_links(ticket_os_links_path())
         return {"vinculos": [*data["vinculos"].values(), *derived_ticket_os_links(data["vinculos"])]}
 
     def derived_ticket_os_links(manual: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -260,7 +266,7 @@ def create_operations_router(
 
     @router.put("/api/operacoes/chamados/vinculos-os")
     def save_ticket_os_link(payload: TicketOsLinkPayload):
-        path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
+        path = ticket_os_links_path()
         key = ticket_os_link_key(payload.fonte, payload.serie, payload.os)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -505,6 +511,29 @@ def create_operations_router(
         if not events:
             raise HTTPException(status_code=404, detail="Não há histórico para esta série.")
         return {"serie": events[-1]["serie"], "eventos": events, "total": len(events)}
+
+    @router.get("/api/equipamento/{serial}/dossie")
+    def get_equipment_dossier(serial: str):
+        """Read-only: header from the registry plus the OS section; the order of the checks is part of the contract."""
+        try:
+            clean_serial = validate_equipment_serial(serial)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        header = equipment_header(clean_serial) if equipment_header else None
+        if header is None:
+            raise HTTPException(status_code=404, detail="Equipamento não encontrado na base local.")
+        try:
+            snapshots = displayed_ticket_snapshots(load_ticket_report())
+            manual = read_ticket_os_links(ticket_os_links_path())["vinculos"]
+            links = {
+                **{ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in derived_ticket_os_links(manual)},
+                **manual,
+            }
+            section = build_os_section(snapshots, clean_serial, links, ticket_os_link_key)
+        except HTTPException as error:
+            logger.warning("Dossiê do equipamento: fonte de OS indisponível (HTTP %s).", error.status_code)
+            section = empty_os_section("indisponivel")
+        return {"serie": header["serie"], "modelo": header["modelo"], "os": section}
 
     @router.put("/api/operacoes/chamados/linha-do-tempo/{event_id}/{item_id}")
     def save_ticket_timeline_annotation(event_id: str, item_id: str, payload: TicketTimelineAnnotationPayload):

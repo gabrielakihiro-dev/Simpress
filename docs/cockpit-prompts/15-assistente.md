@@ -232,6 +232,13 @@ O botão `Enviar e-mail` da Home (F1) abre o modal `E-mail pelo Outlook` (modelo
 - Roteamento: perguntas sobre o e-mail do cabo ("como mando o e-mail do cabo de segurança?") vão ao modelo e nunca abrem o fluxo `Abrir chamado no UX`, que só reage a mensagens com "UX", chamado/solicitação/atendimento e verbo de abrir. Não há exclusão por "cabo" nem "e-mail": um chamado real ("abrir chamado no UX, cabo do carregador quebrado") continua abrindo o fluxo.
 - Testes: `tests/test_assistant_termos.py` (regra 38 no prompt, sem `@` nem nomes da semente) e `tests/test_assistant_ux_chamados.py` (frases de e-mail vão ao modelo; chamado com "cabo" ainda prepara o UX).
 
+## Dossiê do equipamento (11/11/2026)
+
+O botão `Ver dossiê` da Home (F1) abre a janela `Dossiê do equipamento` (só leitura), com a seção `OS e chamados`. Tela, regras e textos aprovados: `docs/cockpit-prompts/03-home-split-view.md`; rota `GET /api/equipamento/{serial}/dossie`: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
+- Base: regra 39 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`). Não há ferramenta do dossiê: o Assistente só orienta onde abri-lo. O histórico é da série, não de cada OS, e `Última vez observada em <data>` nunca vira "OS encerrada".
+- Testes: `tests/test_assistant_termos.py` (regra 39 no prompt).
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.

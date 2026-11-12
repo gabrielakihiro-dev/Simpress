@@ -2240,3 +2240,35 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (prefers-reduced-motion: reduce) {
   .email-outlook__lista, .email-outlook__opcao, .ck-veu > .ck-dialogo.email-outlook .email-outlook__status { animation: none; transition: none; }
 }
+
+/* ---------- Dossiê do equipamento (Home F1): modal só de leitura; tabela da situação atual por OS (cards de uma coluna no celular) e histórico da série ---------- */
+#modal-dossie-equipamento > .ck-dialogo { width: min(900px, 100%); max-width: 900px; max-height: min(90vh, 900px); }
+.dossie-equip [hidden] { display: none; }
+.dossie-equip__cab, .dossie-equip__secao { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dossie-equip__secao { gap: 10px; }
+.ck-veu > .ck-dialogo.dossie-equip p { margin: 0; font-size: var(--fs-ui); overflow-wrap: anywhere; }
+.ck-veu > .ck-dialogo.dossie-equip .dossie-equip__id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; color: var(--cor-texto); }
+.dossie-equip__id strong { font-family: var(--fonte-mono); font-weight: var(--peso-medio); }
+.ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status, .ck-veu > .ck-dialogo.dossie-equip .dossie-equip__mensagem { padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); }
+.ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status { animation: ck-surgir var(--duracao) var(--curva); }
+.ck-veu > .ck-dialogo.dossie-equip .dossie-equip__subtitulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto); }
+.dossie-equip__ordens, .dossie-equip__historico { min-width: 0; }
+.dossie-equip__historico { display: flex; flex-direction: column; gap: 6px; }
+.dossie-equip .ck-tabela th:nth-child(1) { width: 15%; }
+.dossie-equip .ck-tabela th:nth-child(2) { width: 11%; }
+.dossie-equip .ck-tabela th:nth-child(3) { width: 19%; }
+.dossie-equip .ck-tabela th:nth-child(4) { width: 15%; }
+.dossie-equip .ck-tabela th:nth-child(5) { width: 12%; }
+.dossie-equip .ck-tabela th:nth-child(6) { width: 16%; }
+.dossie-equip .ck-tabela th:nth-child(7) { width: 12%; }
+.dossie-equip .ck-tabela td .ck-tag { align-self: flex-start; }
+.dossie-equip__eventos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.dossie-equip__evento { padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+.ck-veu > .ck-dialogo.dossie-equip .dossie-equip__evento-cab { color: var(--cor-texto); }
+.dossie-equip__mudancas { margin: 4px 0 0; padding-left: 16px; font-size: var(--fs-ui); color: var(--cor-texto-suave); overflow-wrap: anywhere; }
+@media (max-width: 767.98px) {
+  #modal-dossie-equipamento .ck-tabela--cards tr { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status { animation: none; }
+}
