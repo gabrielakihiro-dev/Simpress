@@ -108,6 +108,15 @@ def caminho_saida_dashboard(state_dir: Path) -> Path:
     return state_dir / "sebrae_dashboard_saida" / NOME_DASHBOARD
 
 
+def caminho_origem_de(saida: Path) -> Path:
+    """JSON ``{base_sha256}`` gravado ao lado da saída: a importação sobre a qual o site montou aquele arquivo."""
+    return Path(saida).with_suffix(".origem.json")
+
+
+def caminho_conflitos(state_dir: Path) -> Path:
+    return state_dir / "sebrae_dashboard_conflitos.json"
+
+
 # ---------------------------------------------------------------------------- time
 
 def agora_local() -> datetime:
@@ -547,6 +556,7 @@ def ler_envio(state_dir: Path) -> Optional[Dict[str, Any]]:
                 or not isinstance(registro.get("limpeza_pendente"), bool)
                 or not isinstance(registro.get("snapshot", False), bool)
                 or not isinstance(registro.get("reenvio_snapshot", False), bool)
+                or not (registro.get("sha256_origem") is None or re.fullmatch(r"[a-f0-9]{64}", str(registro["sha256_origem"])))
                 or (registro.get("recuperacao") is not None and not isinstance(registro["recuperacao"], dict))
                 or not isinstance(registro.get("resolucoes", []), list)
                 or registro["limpeza_pendente"] != (registro["status"] in ("preparado", "incerto", "confirmado"))
@@ -655,6 +665,28 @@ def preparar_envio(state_dir: Path, conteudo: bytes, *, pendente: Optional[Path]
         return envio
 
 
+def substituir_conteudo_envio(state_dir: Path, envio: str, conteudo: bytes) -> None:
+    """Troca o conteúdo de um envio ainda ``preparado`` (o arquivo gerado virou o mesclado com o SharePoint).
+
+    A cópia privada e ``sha256`` passam a ser os do conteúdo novo; ``sha256_origem`` guarda o hash anterior para que a limpeza
+    reconheça as cópias pendentes que o envio cobre. Depois de ``marcar_envio_incerto`` nada mais pode mudar.
+    """
+    with lock_paths([caminho_envio(state_dir), state_dir / "sebrae_dashboard_pendente.guard"]):
+        registro = ler_envio(state_dir)
+        if registro is None or registro["id"] != envio or registro["status"] != "preparado":
+            raise DomainConflictError("O pedido de envio mudou; nada foi enviado.")
+        sha = hashlib.sha256(conteudo).hexdigest()
+        if sha == registro["sha256"]:
+            return
+        try:
+            atomic_write_bytes(state_dir / "sebrae_dashboard_envios" / envio / NOME_DASHBOARD, conteudo)
+        except (OSError, FileBusyError, FileTransactionError) as error:
+            raise DomainBusyError("Não foi possível preservar a cópia privada mesclada antes do envio. Nada foi enviado.") from error
+        registro["sha256_origem"] = registro.get("sha256_origem") or registro["sha256"]
+        registro["sha256"] = sha
+        _gravar_envio(state_dir, registro)
+
+
 def marcar_envio_incerto(state_dir: Path, envio: str) -> None:
     with lock_paths([caminho_envio(state_dir)]):
         registro = ler_envio(state_dir)
@@ -720,7 +752,7 @@ def recuperar_envio(
             if confirmacao != frase:
                 raise DomainConflictError("Digite a declaração completa após conferir o conteúdo no SharePoint.")
             if acao == "confirmar_recebimento":
-                gravar_enviado(state_dir, registro["sha256"], conteudo)
+                gravar_enviado(state_dir, registro["sha256"], conteudo, base_sha256=registro.get("base_sha256"), mesclado=bool(registro.get("sha256_origem")))
             registro.update(status="confirmado" if acao == "confirmar_recebimento" else "falhou", limpeza_pendente=acao == "confirmar_recebimento")
         else:
             raise DomainValidationError("A ação de recuperação é inválida.", status_code=422)
@@ -735,14 +767,33 @@ def recuperar_envio(
         atual = envio_do_id(state_dir, envio_id)
         return {"envio_id": envio_id, "status": atual["status"], "sharepoint": aviso_do_pendente(state_dir)}
 
-def gravar_enviado(state_dir: Path, sha256: str, conteudo: Optional[bytes] = None) -> None:
+def gravar_enviado(
+    state_dir: Path, sha256: str, conteudo: Optional[bytes] = None, *, base_sha256: Optional[str] = None, mesclado: bool = False,
+) -> None:
     """Hash (and copy) of the Dashboard this site last put on SharePoint; the next ``enviar`` accepts exactly that file as "unchanged".
 
     The copy matters because SharePoint re-serializes the xlsx after an upload (new hash, same values): the next check compares values.
+    ``base_sha256`` is the import the sent file was built on (the copy is a merge ancestor only for that import); ``mesclado`` marks a file
+    that carries someone else's SharePoint edits, so the next check never takes it as "the site's own, unchanged" file.
     """
     if conteudo is not None:
         atomic_write_bytes(caminho_copia_enviada(state_dir), conteudo)
-    atomic_write_json(caminho_enviado(state_dir), {"sha256": sha256, "enviado_em": agora_iso()})
+    registro: Dict[str, Any] = {"sha256": sha256, "enviado_em": agora_iso()}
+    if base_sha256:
+        registro["base_sha256"] = base_sha256
+    if mesclado:
+        registro["mesclado"] = True
+    atomic_write_json(caminho_enviado(state_dir), registro)
+
+
+def enviado_mesclado(state_dir: Path) -> bool:
+    return (_ler_json(caminho_enviado(state_dir)) or {}).get("mesclado") is True
+
+
+def enviado_da_importacao(state_dir: Path) -> Optional[bytes]:
+    """The last sent copy, only when it was built on the import that is current now (otherwise it is not a valid merge ancestor)."""
+    base = str((_ler_json(caminho_enviado(state_dir)) or {}).get("base_sha256") or "")
+    return ler_copia_enviada(state_dir) if base and base == base_importada(state_dir) else None
 
 
 def ler_copia_enviada(state_dir: Path) -> Optional[bytes]:
@@ -757,6 +808,81 @@ def ler_copia_enviada(state_dir: Path) -> Optional[bytes]:
 
 def ler_enviado(state_dir: Path) -> str:
     return str((_ler_json(caminho_enviado(state_dir)) or {}).get("sha256") or "")
+
+
+def gravar_origem_saida(saida: Path, base_sha256: str) -> None:
+    """Grava ao lado da saída a importação em que ela foi montada (``base_do_conteudo`` só mescla se for a atual)."""
+    atomic_write_json(caminho_origem_de(saida), {"base_sha256": base_sha256})
+
+
+def apagar_origem_saida(saida: Path) -> None:
+    caminho_origem_de(saida).unlink(missing_ok=True)
+
+
+def _base_valida(valor: Any) -> Optional[str]:
+    return valor if isinstance(valor, str) and re.fullmatch(r"[a-f0-9]{64}", valor) else None
+
+
+def base_do_conteudo(state_dir: Path, conteudo: bytes) -> Optional[str]:
+    """SHA-256 da importação em que ``conteudo`` foi montado: o JSON ao lado da saída ou o da cópia pendente de mesmo conteúdo.
+
+    ``None`` quando não se sabe (cópia sem registro, registros que discordam): quem pergunta trata como "origem desconhecida" e não mescla.
+    """
+    saida = caminho_saida_dashboard(state_dir)
+    try:
+        if saida.read_bytes() == conteudo:
+            return _base_valida((_ler_json(caminho_origem_de(saida)) or {}).get("base_sha256"))
+    except OSError:
+        pass
+    sha = hashlib.sha256(conteudo).hexdigest()
+    bases = set()
+    try:
+        for caminho in pasta_pendente(state_dir).glob("*.xlsx"):
+            if hashlib.sha256(caminho.read_bytes()).hexdigest() == sha:
+                bases.add(_base_valida((_ler_json(caminho.with_suffix(".json")) or {}).get("base_sha256")))
+    except OSError:
+        return None
+    return bases.pop() if len(bases) == 1 else None
+
+
+def erro_de_conflito(erro: BaseException) -> bool:
+    """``DashboardEmConflito`` (scripts/automacao_rotinas_chrome.py) leva ``em_conflito = True``; este módulo não importa o script."""
+    return getattr(erro, "em_conflito", False) is True
+
+
+def ler_conflitos(state_dir: Path) -> Optional[Dict[str, Any]]:
+    return _ler_json(caminho_conflitos(state_dir))
+
+
+def escolhas_dos_conflitos(state_dir: Path) -> Dict[str, str]:
+    escolhas = (ler_conflitos(state_dir) or {}).get("escolhas")
+    return {str(chave): str(valor) for chave, valor in escolhas.items()} if isinstance(escolhas, dict) else {}
+
+
+def gravar_conflitos(
+    state_dir: Path, *, base_sha256: str, sharepoint_sha256: str, gerado_sha256: str, conflitos: Sequence[Mapping[str, Any]],
+) -> None:
+    """Os valores das células ficam só neste arquivo (lido pela tela); as escolhas já feitas são mantidas."""
+    atomic_write_json(caminho_conflitos(state_dir), {
+        "base_sha256": base_sha256, "sharepoint_sha256": sharepoint_sha256, "gerado_sha256": gerado_sha256,
+        "criado_em": agora_iso(), "conflitos": [dict(conflito) for conflito in conflitos], "escolhas": escolhas_dos_conflitos(state_dir),
+    })
+
+
+def limpar_conflitos(state_dir: Path) -> None:
+    caminho_conflitos(state_dir).unlink(missing_ok=True)
+
+
+def concluir_conflitos(state_dir: Path) -> None:
+    """Envio concluído: a lista some, mas as escolhas ficam até a próxima importação.
+
+    O arquivo gerado continua com o valor do site; sem a escolha "sharepoint" guardada, o próximo envio da mesma importação
+    acusaria de novo o mesmo conflito."""
+    escolhas = escolhas_dos_conflitos(state_dir)
+    if not escolhas:
+        limpar_conflitos(state_dir)
+        return
+    atomic_write_json(caminho_conflitos(state_dir), {"criado_em": agora_iso(), "conflitos": [], "escolhas": escolhas})
 
 
 def nome_pendente(momento: datetime, ordem_criacao: int) -> str:
@@ -848,8 +974,10 @@ def descartar_pendentes(state_dir: Path, *, envio_id: Optional[str] = None) -> b
             return not arquivos
         snapshot_envio(state_dir, registro["id"])
         cobertas = {copia["nome"]: copia["sha256"] for copia in registro["copias"]}
+        aceitos = {registro["sha256"], registro.get("sha256_origem")}  # envio mesclado: a cópia coberta tem o hash de antes da mescla
         for _, caminho in arquivos:
-            if cobertas.get(caminho.name) == registro["sha256"] == hashlib.sha256(caminho.read_bytes()).hexdigest():
+            digest = hashlib.sha256(caminho.read_bytes()).hexdigest()
+            if cobertas.get(caminho.name) == digest and digest in aceitos:
                 descartar_pendente(caminho)
         limpas = not any(pasta_pendente(state_dir).glob("*.xlsx"))
         registro.update(status="concluido" if limpas else "confirmado", limpeza_pendente=not limpas)
