@@ -220,7 +220,7 @@ test("Alterar Endereço lights up with only the série and both addresses and ne
   expect(chamadas[0]).toEqual({ etapa: "preparar-alterar-endereco", corpo: { serial: "LENTO" } });
   await expect(modal.getByRole("status")).toContainText("Transferência Fisica de Equipamentos");
   const registro = modal.getByLabel("Registro");
-  await expect(registro).toHaveValue(/^Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae Rua Fictícia, 100.* para \S.*\.$/);
+  await expect(registro).toHaveValue(/^Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de \S.*\/PR para \S.*\/PR\.$/);
   for (const id of ["#ux-ticket-cnpj-instalacao", "#ux-ticket-cnpj-faturamento", "#ux-ticket-anexo", "#ux-ticket-chamado-interno"]) {
     await expect(modal.locator(id)).toBeHidden();
   }
