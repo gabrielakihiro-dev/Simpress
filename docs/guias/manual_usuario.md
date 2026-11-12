@@ -70,11 +70,23 @@ Menu lateral:
 - **Home** — pesquisa de equipamentos.
 - **Transporte** — formulário de retirada e entrega (geração da planilha de transferência).
 - **Nova transferência** — limpa o formulário para começar outra.
-- **Ferramentas:** **Comparação** (F3, junto do **Resumo**), **Histórico de apelidos** (F7), **Relatório mensal** (F8), **Catálogo de unidades** e, em telas menores, **Chamados** (F5) e **OS** (F6), que nas telas largas ficam na barra superior. **Atualizar planilhas** não está mais no menu: abra pela aba **Comparação › Nova comparação**, pelo botão **Importar** da Home ou pelo alerta **Atualizar base**. **Exportar Excel** agora fica na barra da aba **Comparação**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026). O **Histórico de apelidos** (F7) é o histórico completo de alterações: busque, filtre por tipo, marque **Somente com ação disponível**, use **Limpar filtros** e, no detalhe do registro, **Restaurar anterior**, **Excluir aviso** ou **Restaurar e excluir**. A janela antiga **Histórico de alterações** não existe mais.
+- **Ferramentas:** **Comparação** (F3, junto do **Resumo**), **Histórico de apelidos** (F7), **Relatório mensal** (F8), **Catálogo de unidades** e, em telas menores, **Chamados** (F5) e **OS** (F6), que nas telas largas ficam na barra superior. **Atualizar planilhas** não está mais no menu: abra pela aba **Comparação › Nova comparação**, pelo botão **Importar** da Home ou pelo alerta **Atualizar base**. **Exportar Excel** agora fica na barra da aba **Comparação**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026). O **Histórico de apelidos** (F7) é o histórico completo de alterações; veja o passo a passo logo abaixo. A janela antiga **Histórico de alterações** não existe mais.
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). De qualquer aba (F2–F4) ou painel (F5–F9), a pesquisa leva direto à **Home (F1)**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
 **Controle remoto:** na Home, com um equipamento selecionado, clique em **Controle remoto** (ao lado de *Consultar no Endpoint*). O Simpress abre o controle remoto no Endpoint com o motivo `acesso` e deixa a conexão aberta para você continuar. Se o computador estiver offline, aparece uma caixa de mensagem avisando. Você também pode pedir ao Assistente ("abra o controle remoto da série X"); ele mostra um cartão e só conecta depois que você confirmar. Exige o Chrome de automação aberto (porta 9333) com o login do Endpoint feito.
+
+**Histórico de apelidos (F7):** mostra tudo o que mudou nos equipamentos (apelido, usuário logado, endereço de instalação e avisos do Endpoint), do mais novo para o mais antigo. Atualizado em 11/11/2026.
+
+1. Abra **Ferramentas › Histórico de apelidos** (ou tecle `F7`). A lista é recarregada sozinha toda vez que a tela abre.
+2. No topo, veja **Alterações neste mês** e **Equipamentos afetados**. O botão **Exportar CSV** baixa, para abrir no Excel, só os registros que estão na lista no momento (os filtros valem).
+3. Escolha o tipo nas abas **Todos**, **Apelido**, **Usuário**, **Endereço** ou **Avisos do Endpoint**. Cada aba mostra quantos registros tem, já considerando a busca, o **Somente com ação disponível** e o período. Com o teclado, use as setas `←` e `→` para trocar de aba (e `Home` ou `End` para ir à primeira ou à última). Cada tipo tem sua cor (Apelido azul, Usuário roxo, Endereço verde-água, Aviso laranja), sempre com o nome escrito.
+4. Para estreitar, digite em **Buscar no histórico** (série, apelido, usuário ou origem), escolha **Todas** ou **Últimos 7 dias** e, se quiser, marque **Somente com ação disponível**. **Limpar filtros** apaga tudo isso e volta para a aba **Todos**.
+5. A lista vem agrupada por dia (**Hoje**, **Ontem**, depois o dia da semana e a data). Registros sem data válida ficam no fim, em **Data indisponível**. Cada linha mostra o tipo, a série, a hora, o valor antigo riscado seguido do novo, a **Origem**, o **Autor** e, quando houver, o selo **Ação disponível**.
+6. Clique em uma linha para ver o detalhe à direita: **O que mudou** (**Antes** e **Depois**), **Cadastro atual** (com **Copiar apelido atual**), **Detalhes do registro** e **Histórico deste equipamento**, com o registro escolhido destacado. Selecionar uma linha não altera nada.
+7. No topo do detalhe ficam as ações: **Abrir na Home**, **Restaurar anterior**, **Restaurar e excluir** ou **Excluir aviso**. Só aparecem as que valem para aquele registro; quando nenhuma vale, o detalhe explica que não há ação. As que alteram dados podem pedir confirmação antes de executar.
+
+**Como confirmar que deu certo:** depois de **Restaurar anterior**, o registro e o equipamento mostram o valor anterior. Séries que começam com `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae) não aparecem nesta tela.
 
 ## 4. Atualizar a base EquipamentosDetalhes
 
@@ -138,14 +150,16 @@ O resultado traz, entre outras seções:
 2. Abra manualmente a aba **Transporte** no menu lateral.
 3. Revise **origem** (retirada) e **destino** (entrega): CNPJ, endereço e contatos. O **Catálogo de unidades** ajuda a preencher.
 4. Preencha todos os campos obrigatórios: série; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega (e a duração da pausa, se o escritório fechar para o almoço). Botões como **+ Substituição** inserem observações prontas.
-5. Clique em **Gerar Planilha** no rodapé. O arquivo é baixado pelo navegador.
+5. Clique em **Transporte** (antigo **Gerar Planilha**), o primeiro botão do rodapé. O arquivo é baixado pelo navegador.
 6. Abra a planilha baixada e confira os dados antes de encaminhá-la.
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).
 
 Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação. Se o UX estiver deslogado, a automação clica em **Acesso Time Simpress** e escolhe a conta `gansouza@simpress.com.br` (nunca digita senha nem MFA). O endereço da unidade de entrega é escolhido sozinho quando sobra um só: o mesmo endereço repetido (como Irati), o complemento igual ao do cadastro (como "Sala 4") ou o bairro abreviado (como "AER" e "AEROPORTO") contam como um. Se ainda houver mais de um, o modal lista e você escolhe.
 
-Se **Gerar Planilha** não funcionar, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
+Se **Transporte** não gerar a planilha, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
+
+**Só alterar o endereço do equipamento:** o segundo botão, **Alterar Endereço**, acende assim que a série e os endereços de retirada e entrega estão na tela (não precisa de representante, telefone nem e-mail). Ele não gera planilha: abre **Alterar Endereço no UX** com o Incidente **Transporte** e o Motivo **Transferência Fisica de Equipamentos**, e o Registro vem com "Solicito apenas o endereço do equipamento da unidade do Sebrae (entrega) para (retirada).", editável. Sem CNPJ, CEP, anexo nem Nº do chamado interno; **Revisar e finalizar** continua pedindo a sua confirmação.
 
 **Textos prontos para chamados:** na **Home**, depois de pesquisar o equipamento, o botão de textos para chamados manuais mostra modelos editáveis. Use **Copiar** para levar o texto ao chamado.
 

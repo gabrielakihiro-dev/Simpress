@@ -112,8 +112,6 @@
     return {
       changesThisMonth: current.length,
       equipmentAffected: new Set(current.map(event => String(event.serial || "").trim()).filter(Boolean)).size,
-      outOfPattern: null,
-      duplicateAliases: null,
     };
   }
 
@@ -573,7 +571,8 @@
 
   function renderDetailsInto(target, entries) {
     const list = element("dl", "ck-det-campos");
-    entries.forEach(([label, value]) => list.append(element("dt", "", label), element("dd", "", value)));
+    entries.filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .forEach(([label, value]) => list.append(element("dt", "", label), element("dd", "", value)));
     target.append(list);
   }
 
@@ -745,6 +744,54 @@
 
   const aliasDate = value => (value ? displayDate(value) : "Data indisponível");
 
+  const ALIAS_WEEKDAY = new Intl.DateTimeFormat("pt-BR", { weekday: "long" });
+  const pad2 = number => String(number).padStart(2, "0");
+
+  // Título do grupo por dia local: "Hoje · quarta, 11/11", "Ontem · terça, 10/11", "Segunda, 09/11".
+  function aliasDayLabel(value, now = new Date()) {
+    const stamp = Date.parse(value || "");
+    if (!Number.isFinite(stamp)) return "Data indisponível";
+    const date = new Date(stamp);
+    const sameDay = other => date.getFullYear() === other.getFullYear() && date.getMonth() === other.getMonth() && date.getDate() === other.getDate();
+    const weekday = ALIAS_WEEKDAY.format(date).replace(/-feira$/, "");
+    const shortDate = `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}`;
+    if (sameDay(now)) return `Hoje · ${weekday}, ${shortDate}`;
+    if (sameDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return `Ontem · ${weekday}, ${shortDate}`;
+    return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${shortDate}`;
+  }
+
+  function aliasTime(value) {
+    const stamp = Date.parse(value || "");
+    if (!Number.isFinite(stamp)) return "";
+    const date = new Date(stamp);
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }
+
+  function aliasChip(event) {
+    const chip = element("span", "ck-alias-chip", aliasTypeLabel(event.tipo));
+    chip.dataset.aliasTipo = event.tipo || "apelido";
+    return chip;
+  }
+
+  const aliasWarningReason = event => aliasReason(event) || event.motivo || "Aviso do Endpoint";
+  const aliasWarningValue = event => event.valor_anterior || event.apelido_anterior || "valor não informado";
+
+  // "antes → depois"; no aviso do Endpoint, "motivo · valor".
+  function aliasChange(event, className) {
+    const change = element("span", className);
+    if (event.tipo === "aviso_endpoint") {
+      change.textContent = `${aliasWarningReason(event)} · ${aliasWarningValue(event)}`;
+      return change;
+    }
+    const arrow = element("span", "ck-alias-seta", "→");
+    arrow.setAttribute("aria-hidden", "true");
+    change.append(element("span", "ck-alteracao__antes", aliasValue(event, true) || "(vazio)"), arrow, element("strong", "", aliasValue(event) || "(vazio)"));
+    return change;
+  }
+
+  // Só os preenchidos: "Origem: X", "Autor: Y".
+  const aliasOriginAuthor = event => [event.origem && `Origem: ${event.origem}`, event.autor && `Autor: ${event.autor}`].filter(Boolean);
+
   function aliasReason(event) {
     return event.tipo === "aviso_endpoint" ? ALIAS_WARNING_REASONS[event.motivo] || "" : "";
   }
@@ -756,7 +803,9 @@
   }
 
   function renderAliasCurrent(section, equipment, error = "") {
-    section.replaceChildren(element("h3", "", "Cadastro atual"));
+    const head = element("div", "ck-alias-det__cab");
+    head.append(element("h3", "", "Cadastro atual"));
+    section.replaceChildren(head);
     if (equipment === undefined) {
       section.append(element("p", "ck-nota", "Carregando os dados atuais do cadastro local…"));
       return;
@@ -770,9 +819,9 @@
       return;
     }
     renderDetailsInto(section, [
+      ["Apelido atual", equipment.apelido || "Sem apelido"],
       ["Modelo", equipment.modelo || equipment.tipo || "Não informado"],
       ["Local", equipment.retirada_cidade || "Não informado"],
-      ["Apelido atual", equipment.apelido || "Sem apelido"],
     ]);
     if (equipment.apelido) {
       const copy = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Copiar apelido atual");
@@ -786,9 +835,7 @@
           app.showToast(error.message || "Não foi possível copiar o apelido.", "error");
         } finally { copy.disabled = false; }
       });
-      const actions = element("div", "ck-det__rodape");
-      actions.append(copy);
-      section.append(actions);
+      head.append(copy);
     }
   }
 
@@ -813,48 +860,46 @@
     }
   }
 
+  function aliasBlock(title) {
+    const section = element("section", "ck-det-bloco ck-alias-det__bloco");
+    if (title) section.append(element("h3", "", title));
+    return section;
+  }
+
+  function aliasCompareBox(label, value, tone) {
+    const box = element("div", `ck-alias-caixa ck-alias-caixa--${tone}`);
+    box.append(element("span", "ck-alias-caixa__rotulo", label), element("strong", "ck-alias-caixa__valor", value));
+    return box;
+  }
+
+  function aliasTimelineItem(item, selected) {
+    const entry = element("li", "ck-tempo__item");
+    const mark = element("span", "ck-tempo__marca");
+    mark.dataset.aliasTipo = item.tipo || "apelido";
+    if (item === selected) mark.dataset.selecionado = "true";
+    const body = element("div", "ck-tempo__corpo");
+    const title = element("span", "ck-alias-tempo__titulo");
+    title.append(element("strong", "ck-tempo__titulo", aliasTypeLabel(item.tipo)));
+    if (item === selected) title.append(element("span", "ck-alias-selo ck-alias-selo--atual", "Selecionado"));
+    body.append(title, Object.assign(element("time", "ck-tempo__meta", aliasDate(item.horario)), { dateTime: item.horario || "" }), aliasChange(item, "ck-alteracao"));
+    const origin = aliasOriginAuthor(item);
+    if (origin.length) body.append(element("span", "ck-tempo__meta", origin.join(" · ")));
+    entry.append(mark, body);
+    return entry;
+  }
+
   function renderAliasDetail(event) {
     const target = byId("cockpit-alias-detail");
     const request = ++aliasEquipmentRequest;
     if (!event) return renderEmpty(target, "Selecione uma alteração do histórico.");
-    const fields = [
-      ["Data", aliasDate(event.horario)], ["Série", event.serial], ["Equipamento", event.equipamento],
-      ["Tipo", aliasTypeLabel(event.tipo)], ["Campo", event.acao], ["Valor anterior", aliasValue(event, true)],
-      ["Valor novo", aliasValue(event)], ["Usuário relacionado", event.usuario_endpoint],
-      ["Origem", event.origem], ["Motivo", aliasReason(event) || event.motivo],
-    ];
-    renderDetails(target, fields);
-    const current = element("section", "ck-det-bloco");
-    renderAliasCurrent(current, undefined);
-    target.append(current);
-    const timeline = element("section", "ck-det-bloco");
-    timeline.append(element("h3", "", "Histórico deste equipamento"));
-    const events = aliasTimeline(event);
-    if (!events.length) timeline.append(element("p", "ck-lista__vazio", "Não há outros eventos para esta série."));
-    else {
-      const list = element("ol", "ck-tempo");
-      events.forEach(item => {
-        const entry = element("li", "ck-tempo__item");
-        const body = element("div", "ck-tempo__corpo");
-        const change = element("span", "ck-alteracao");
-        if (item.tipo === "aviso_endpoint") change.textContent = `${aliasReason(item) || item.motivo || "Aviso"} ·${item.valor_anterior || "valor não informado"}`;
-        else change.append(
-          element("span", "ck-alteracao__antes", aliasValue(item, true) || "(vazio)"),
-          document.createTextNode("→"),
-          element("span", "", aliasValue(item) || "(vazio)"),
-        );
-        body.append(
-          element("strong", "ck-tempo__titulo", `${aliasTypeLabel(item.tipo)} · ${item.acao || "registro"}`),
-          Object.assign(element("time", "ck-tempo__meta", aliasDate(item.horario)), { dateTime: item.horario || "" }),
-          element("span", "ck-tempo__meta", `Autor: ${item.autor || "não informado"} · Origem: ${item.origem || "não informada"}`),
-          change,
-        );
-        entry.append(element("span", "ck-tempo__marca"), body);
-        list.append(entry);
-      });
-      timeline.append(list);
-    }
-    const actions = element("div", "ck-det__rodape");
+    target.replaceChildren();
+
+    // 1. Cabeçalho: tipo, data, série e ações.
+    const head = aliasBlock();
+    head.classList.add("ck-alias-det__topo");
+    const meta = element("div", "ck-alias-det__meta");
+    meta.append(aliasChip(event), element("span", "ck-alias-det__data", aliasDate(event.horario)));
+    const actions = element("div", "ck-alias-det__acoes");
     if (event.serial) {
       const openHome = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Abrir na Home");
       openHome.type = "button";
@@ -886,14 +931,52 @@
         : "Há uma alteração mais recente para este campo, ou nenhuma ação está disponível para este registro.";
       actions.append(element("p", "ck-nota", reason));
     }
-    target.append(timeline);
-    if (actions.childElementCount) target.append(actions);
+    head.append(meta, element("h3", "ck-alias-det__serie", event.serial || "Série indisponível"), actions);
+
+    // 2. O que mudou.
+    const changed = aliasBlock("O que mudou");
+    if (event.tipo === "aviso_endpoint") {
+      const box = element("div", "ck-alias-caixa ck-alias-caixa--aviso");
+      box.append(element("strong", "ck-alias-caixa__valor", aliasWarningReason(event)), element("span", "ck-alias-caixa__sub", `Valor removido: ${aliasWarningValue(event)}`));
+      changed.append(box);
+    } else {
+      const pair = element("div", "ck-alias-compara");
+      pair.append(aliasCompareBox("Antes", aliasValue(event, true) || "(vazio)", "antes"), aliasCompareBox("Depois", aliasValue(event) || "(vazio)", "depois"));
+      changed.append(pair);
+    }
+
+    // 3. Cadastro atual (carregado ao final).
+    const current = aliasBlock();
+    renderAliasCurrent(current, undefined);
+
+    // 4. Detalhes do registro: só campos preenchidos.
+    const fields = [
+      ["Campo", event.acao], ["Origem", event.origem], ["Autor", event.autor],
+      ["Usuário relacionado", event.usuario_endpoint], ["Motivo", aliasReason(event) || event.motivo],
+    ];
+    const details = fields.some(([, value]) => value) ? aliasBlock("Detalhes do registro") : null;
+    if (details) renderDetailsInto(details, fields);
+
+    // 5. Histórico deste equipamento, do mais recente ao mais antigo.
+    const events = aliasTimeline(event).slice().reverse();
+    const timeline = aliasBlock(`Histórico deste equipamento (${events.length})`);
+    if (!events.length) timeline.append(element("p", "ck-lista__vazio", "Não há outros eventos para esta série."));
+    else {
+      const list = element("ol", "ck-tempo");
+      events.forEach(item => list.append(aliasTimelineItem(item, event)));
+      timeline.append(list);
+    }
+
+    target.append(head, changed, current, ...(details ? [details] : []), timeline);
     void loadAliasCurrentEquipment(event, current, request);
   }
 
-  function filteredAliases() {
+  const ALIAS_TYPES = ["todos", "apelido", "usuario", "endereco", "aviso_endpoint"];
+
+  // typeOverride: tipo a usar no lugar do select (contagem de cada aba); o export continua usando o select.
+  function filteredAliases(typeOverride) {
     const terms = normalize(byId("cockpit-alias-search").value).split(/\s+/).filter(Boolean);
-    const type = byId("cockpit-alias-type").value;
+    const type = typeOverride ?? byId("cockpit-alias-type").value;
     const actionsOnly = byId("cockpit-alias-actions-only").checked;
     const cutoff = selectedAliasPeriod === "7dias" ? Date.now() - (7 * 24 * 60 * 60 * 1000) : null;
     return aliasEvents.filter(event => {
@@ -912,12 +995,69 @@
     });
   }
 
+  // Aba ativa = valor do select (fonte de verdade); contagem = mesmos filtros de busca, ação e período, por tipo. Os botões nunca são recriados.
+  function syncAliasTabs() {
+    const current = byId("cockpit-alias-type").value;
+    const counts = new Map();
+    const all = filteredAliases("todos");
+    all.forEach(event => counts.set(event.tipo || "apelido", (counts.get(event.tipo || "apelido") || 0) + 1));
+    byId("cockpit-alias-tabs").querySelectorAll("[data-alias-type]").forEach(tab => {
+      const type = tab.dataset.aliasType;
+      const active = type === current;
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+      tab.querySelector("[data-alias-tab-count]").textContent = displayCount(type === "todos" ? all.length : counts.get(type) || 0);
+    });
+  }
+
+  // Mais recente primeiro; datas inválidas no fim (a ordenação é estável).
+  function sortAliasesByDate(events) {
+    const stamp = event => { const value = Date.parse(event.horario || ""); return Number.isFinite(value) ? value : null; };
+    return events.slice().sort((left, right) => {
+      const a = stamp(left);
+      const b = stamp(right);
+      if (a === null || b === null) return (a === null) - (b === null);
+      return b - a;
+    });
+  }
+
+  function aliasRow(event, selected) {
+    const button = element("button", "ck-alias-linha");
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(event === selected));
+    const top = element("span", "ck-alias-linha__topo");
+    const serial = event.serial || "Série indisponível";
+    top.append(aliasChip(event), Object.assign(element("strong", "ck-alias-linha__serie", serial), { title: serial }), element("span", "ck-alias-linha__hora", aliasTime(event.horario)));
+    button.append(top, aliasChange(event, "ck-alias-linha__mudanca"));
+    const allowed = aliasActions(event);
+    const origin = aliasOriginAuthor(event);
+    const hasAction = allowed.desfazer || allowed.excluir;
+    if (origin.length || hasAction) {
+      const foot = element("span", "ck-alias-linha__rodape");
+      origin.forEach(text => foot.append(element("span", "", text)));
+      if (hasAction) foot.append(element("span", "ck-alias-selo", "Ação disponível"));
+      button.append(foot);
+    }
+    button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
+    const item = element("li", "ck-ferr-item");
+    item.append(button);
+    return item;
+  }
+
+  function aliasGroup(label, events, selected) {
+    const group = element("section", "ck-alias-grupo");
+    const heading = element("h3", "ck-alias-grupo__cab");
+    heading.append(element("span", "", label), element("span", "", `${events.length} ${plural(events.length, "alteração", "alterações")}`));
+    const list = element("ul", "ck-alias-grupo__lista");
+    list.append(...events.map(event => aliasRow(event, selected)));
+    group.append(heading, list);
+    return group;
+  }
+
   function renderAliases() {
-    const filtered = filteredAliases();
     const metrics = aliasMetrics(aliasEvents);
     renderKpis(byId("cockpit-alias-kpis"), [
       ["Alterações neste mês", metrics.changesThisMonth], ["Equipamentos afetados", metrics.equipmentAffected],
-      ["Fora do padrão", metrics.outOfPattern], ["Apelidos duplicados", metrics.duplicateAliases],
     ]);
     byId("cockpit-alias-count-all").textContent = displayCount(aliasEvents.length);
     const sevenDayCount = aliasEvents.filter(event => {
@@ -928,6 +1068,8 @@
     byId("cockpit-alias-filters").querySelectorAll("[data-alias-period]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.aliasPeriod === selectedAliasPeriod));
     });
+    syncAliasTabs();
+    const filtered = sortAliasesByDate(filteredAliases());
     const target = byId("cockpit-alias-list");
     if (!filtered.length) {
       renderEmpty(target, aliasEvents.length ? "Nenhuma alteração corresponde aos filtros." : "O histórico não contém alterações.");
@@ -936,21 +1078,39 @@
     }
     const selected = filtered.find(event => String(event.id || "") === selectedAliasId) || filtered[0];
     selectedAliasId = String(selected?.id || "");
-    target.replaceChildren(...filtered.map(event => {
-      const row = element("div", "ck-ferr-item");
-      row.setAttribute("role", "listitem");
-      const button = element("button", "ck-item ck-ferr-botao");
-      button.type = "button";
-      button.setAttribute("aria-pressed", String(String(event.id || "") === selectedAliasId));
-      button.append(Object.assign(element("strong", "ck-item__serie", event.serial || "Série indisponível"), { title: event.serial || "Série indisponível" }));
-      button.append(badge(aliasTypeLabel(event.tipo), "info"));
-      button.append(element("small", "ck-item__sub", `${aliasDate(event.horario)} · ${event.tipo === "aviso_endpoint"
-        ? aliasReason(event) || event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));
-      button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
-      row.append(button);
-      return row;
-    }));
+    const groups = new Map();
+    filtered.forEach(event => {
+      const stamp = Date.parse(event.horario || "");
+      const key = Number.isFinite(stamp) ? new Date(stamp).toDateString() : "";
+      if (!groups.has(key)) groups.set(key, { label: aliasDayLabel(event.horario), events: [] });
+      groups.get(key).events.push(event);
+    });
+    target.replaceChildren(...[...groups.values()].map(group => aliasGroup(group.label, group.events, selected)));
     renderAliasDetail(selected);
+  }
+
+  // Abas: o select oculto é a fonte de verdade do filtro de tipo; setar .value não dispara "change", por isso renderAliases() direto.
+  function selectAliasType(type) {
+    byId("cockpit-alias-type").value = type;
+    renderAliases();
+    byId("cockpit-alias-tabs").querySelector(`[data-alias-type="${type}"]`)?.focus();
+  }
+
+  function bindAliasTabs() {
+    const tabs = byId("cockpit-alias-tabs");
+    tabs.addEventListener("click", event => {
+      const tab = event.target.closest("[data-alias-type]");
+      if (tab) selectAliasType(tab.dataset.aliasType);
+    });
+    tabs.addEventListener("keydown", event => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const current = ALIAS_TYPES.indexOf(event.target.closest("[data-alias-type]")?.dataset.aliasType);
+      if (current < 0) return;
+      const next = { ArrowRight: (current + 1) % ALIAS_TYPES.length, ArrowLeft: (current + ALIAS_TYPES.length - 1) % ALIAS_TYPES.length, Home: 0, End: ALIAS_TYPES.length - 1 }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      selectAliasType(ALIAS_TYPES[next]);
+    });
   }
 
   async function loadAliases() {
@@ -964,7 +1124,7 @@
       aliasEvents = (Array.isArray(data.eventos) ? data.eventos : []).filter(event => !ALIAS_HIDDEN_SERIAL.test(String(event.serial || "").trim()));
       aliasLatest = app.ultimoRegistroPorCampo(aliasEvents);
       aliasEquipmentCache.clear();
-      if (!aliasEvents.some(event => String(event.id || "") === selectedAliasId)) selectedAliasId = String(aliasEvents[0]?.id || "");
+      if (!aliasEvents.some(event => String(event.id || "") === selectedAliasId)) selectedAliasId = "";
       renderAliases();
     } catch (error) {
       if (request === aliasRequest && activeTool === "apelidos") renderError(target, error, "Falha ao carregar o histórico.");
@@ -1848,6 +2008,7 @@
     byId("cockpit-comparison-legacy").addEventListener("click", app.abrirModalHistoricoComparacoes);
     byId("cockpit-alias-search").addEventListener("input", renderAliases);
     byId("cockpit-alias-type").addEventListener("change", renderAliases);
+    bindAliasTabs();
     byId("cockpit-alias-filters").addEventListener("click", event => {
       const button = event.target.closest("[data-alias-period]");
       if (!button || button.disabled) return;
@@ -2101,6 +2262,7 @@
     mostrarResultadoNaAbaComparacao,
     comparisonMetrics,
     aliasMetrics,
+    aliasDayLabel,
     monthlyPreviewText,
     sebraeOpenLists,
     sebraeMonthMatch,

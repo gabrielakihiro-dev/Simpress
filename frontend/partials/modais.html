@@ -123,6 +123,41 @@
     </div>
   </div>
 
+  <!-- Dossiê do equipamento (Home F1): só leitura; OS e chamados da série selecionada -->
+  <div id="modal-dossie-equipamento" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-dossie-equipamento">
+    <div class="ck-dialogo dossie-equip">
+      <header class="dossie-equip__cab">
+        <h3 id="titulo-dossie-equipamento" class="text-base font-bold">Dossiê do equipamento</h3>
+        <p class="dossie-equip__id"><strong id="dossie-serie"></strong><span id="dossie-modelo"></span></p>
+      </header>
+      <p id="dossie-status" class="dossie-equip__status" role="status" aria-live="polite" hidden></p>
+      <section id="dossie-os" class="dossie-equip__secao" aria-labelledby="dossie-os-titulo" hidden>
+        <h4 id="dossie-os-titulo" class="dossie-equip__subtitulo">OS e chamados</h4>
+        <p id="dossie-os-mensagem" class="dossie-equip__mensagem" hidden></p>
+        <p id="dossie-os-importacoes" hidden></p>
+        <p id="dossie-os-observada" hidden></p>
+        <div id="dossie-os-ordens" class="dossie-equip__ordens" hidden>
+          <table class="ck-tabela ck-tabela--cards">
+            <thead>
+              <tr>
+                <th scope="col">OS</th><th scope="col">Fonte</th><th scope="col">Status</th><th scope="col">Fila</th><th scope="col">Dias aberta</th><th scope="col">UTIC</th><th scope="col"><span class="ck-sr">Ver OS</span></th>
+              </tr>
+            </thead>
+            <tbody id="dossie-os-linhas"></tbody>
+          </table>
+        </div>
+        <div id="dossie-historico" class="dossie-equip__historico" hidden>
+          <h4 id="dossie-historico-titulo" class="dossie-equip__subtitulo"></h4>
+          <ul id="dossie-historico-lista" class="dossie-equip__eventos"></ul>
+          <p id="dossie-historico-vazio" hidden>Sem mudanças registradas.</p>
+        </div>
+      </section>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
+        <button type="button" id="dossie-fechar" data-on-click="fecharDossieEquipamento" class="ck-btn ck-btn--secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook">
     <div class="ck-dialogo email-outlook">
       <h3 id="titulo-email-outlook" class="text-base font-bold">E-mail pelo Outlook</h3>

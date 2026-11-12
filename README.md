@@ -211,7 +211,7 @@ Com um equipamento selecionado na Home:
 1. Pesquise o equipamento na aba **Home** e confira os dados encontrados.
 2. Abra manualmente a aba **Transporte** (F2).
 3. Revise a origem e o destino, incluindo CNPJ, endereço e contatos. O catálogo de unidades pode ajudar a preencher os dados.
-4. Preencha os campos obrigatórios e clique em **Gerar Planilha** no rodapé.
+4. Preencha os campos obrigatórios e clique em **Transporte** (antigo **Gerar Planilha**) no rodapé. Para só alterar o endereço no UX, use **Alterar Endereço** (série e endereços bastam, sem planilha).
 5. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
 
 Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.

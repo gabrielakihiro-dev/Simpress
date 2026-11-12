@@ -44,14 +44,14 @@ test("the F7 panel is the full history: search, type, action filter and clear", 
   await expect(page.locator("#modal-historico-apelidos")).toHaveCount(0);
   await expect(page.locator("#cockpit-alias-count-all")).toHaveText("32");
 
-  await page.locator("#cockpit-alias-type").selectOption("usuario");
+  await page.getByRole("tab", { name: /^Usuário/ }).click();
   await expect(page.locator(ITEMS)).toHaveCount(8);
   await page.locator("#cockpit-alias-search").fill("SN-001");
   await expect(page.locator(ITEMS)).toHaveCount(2);
   await expect(page.locator(ITEMS).first()).toContainText("old.usuario.01");
 
   await page.locator("#cockpit-alias-search").fill("");
-  await page.locator("#cockpit-alias-type").selectOption("todos");
+  await page.getByRole("tab", { name: /^Todos/ }).click();
   await page.locator("#cockpit-alias-actions-only").check();
   await expect(page.locator(ITEMS)).toHaveCount(23);
   await page.locator(ITEMS).filter({ hasText: "SN-001" }).first().getByRole("button").click();
@@ -62,7 +62,31 @@ test("the F7 panel is the full history: search, type, action filter and clear", 
   await page.locator("#cockpit-alias-clear").click();
   await expect(page.locator("#cockpit-alias-search")).toHaveValue("");
   await expect(page.locator("#cockpit-alias-type")).toHaveValue("todos");
+  await expect(page.getByRole("tab", { name: /^Todos/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#cockpit-alias-actions-only")).not.toBeChecked();
+  await expect(page.locator(ITEMS)).toHaveCount(32);
+});
+
+test("the type tabs follow the arrow, Home and End keys and wrap around", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openHistory(page, fixtureHistory());
+  const todos = page.getByRole("tab", { name: /^Todos/ });
+  const apelido = page.getByRole("tab", { name: /^Apelido/ });
+  const avisos = page.getByRole("tab", { name: /^Avisos do Endpoint/ });
+
+  await todos.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(apelido).toBeFocused();
+  await expect(apelido).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(ITEMS)).toHaveCount(8);
+
+  await page.keyboard.press("End");
+  await expect(avisos).toBeFocused();
+  await expect(avisos).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(todos).toBeFocused();
+  await expect(todos).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(ITEMS)).toHaveCount(32);
 });
 
@@ -85,18 +109,18 @@ test("detail offers only the actions each record allows", async ({ page }) => {
   await openHistory(page, fixtureHistory());
   const detail = page.locator("#cockpit-alias-detail");
 
-  await page.locator("#cockpit-alias-type").selectOption("aviso_endpoint");
+  await page.getByRole("tab", { name: /^Avisos do Endpoint/ }).click();
   await page.locator(ITEMS).first().getByRole("button").click();
   await expect(detail).toContainText("Usuário logado removido no Endpoint");
   await expect(detail.getByRole("button", { name: "Excluir aviso" })).toBeEnabled();
   await expect(detail.getByRole("button", { name: "Restaurar anterior" })).toHaveCount(0);
 
-  await page.locator("#cockpit-alias-type").selectOption("endereco");
+  await page.getByRole("tab", { name: /^Endereço/ }).click();
   await page.locator(ITEMS).first().getByRole("button").click();
   await expect(detail.getByRole("button", { name: /Restaurar|Excluir/ })).toHaveCount(0);
   await expect(detail).toContainText("não podem ser restaurados manualmente");
 
-  await page.locator("#cockpit-alias-type").selectOption("usuario");
+  await page.getByRole("tab", { name: /^Usuário/ }).click();
   await page.locator(ITEMS).filter({ hasText: "old.usuario.05" }).getByRole("button").click();
   await expect(detail.getByRole("button", { name: /Restaurar|Excluir/ })).toHaveCount(0);
   await expect(detail).toContainText("alteração mais recente");
@@ -118,7 +142,7 @@ test("deleting an Endpoint warning confirms, calls the API and refreshes the lis
   await page.locator("#btn-historico-apelidos").click();
   await expect(page.locator(ITEMS)).toHaveCount(32);
 
-  await page.locator("#cockpit-alias-type").selectOption("aviso_endpoint");
+  await page.getByRole("tab", { name: /^Avisos do Endpoint/ }).click();
   await page.locator(ITEMS).first().getByRole("button").click();
   await page.locator("#cockpit-alias-detail").getByRole("button", { name: "Excluir aviso" }).click();
   await page.locator("#btn-confirmar-acao-ok").click();

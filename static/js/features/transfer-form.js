@@ -206,7 +206,7 @@
     }
   }
 
-  // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Gerar planilha).
+  // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Transporte, o antigo Gerar planilha).
   async function prepararTransporte({ serial, cidade, obs, movimentacao } = {}) {
     const serie = String(serial || "").trim();
     if (serie && chaveSerieTransporte(appState.currentEquipamento?.serial) !== chaveSerieTransporte(serie)) {
@@ -445,6 +445,7 @@
   }
 
   function atualizarPreviaTransporteCockpit() {
+    atualizarBotaoAlterarEndereco();
     const root = document.querySelector(".ck-transp");
     if (!root) return;
     const value = id => {
@@ -571,6 +572,25 @@
     }
 
     return { texto: `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}` };
+  }
+
+  // "Alterar Endereço" (ux-ticket.js): only the série and both addresses; no representative, phone, e-mail or workbook.
+  function montarTextoAlterarEndereco() {
+    const retiradaEndereco = document.getElementById("retirada-endereco").value.trim();
+    const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+    if (!retiradaEndereco || !entregaEndereco) {
+      return { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." };
+    }
+    return { texto: `Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae ${entregaEndereco} para ${retiradaEndereco}.` };
+  }
+
+  function serialAlterarEndereco() {
+    return transferUtils.serialForTransfer(appState.currentEquipamento, document.getElementById("input-serial")?.value || "");
+  }
+
+  function atualizarBotaoAlterarEndereco() {
+    const botao = document.getElementById("btn-alterar-endereco");
+    if (botao) botao.disabled = !serialAlterarEndereco() || !montarTextoAlterarEndereco().texto;
   }
 
   function gerarTextoSolicitacaoTransporte() {
@@ -850,6 +870,7 @@
     atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
     abrirModalPreview, fecharModalPreview, copiarTextoDoModal, montarTextoSolicitacaoTransporte, gerarTextoSolicitacaoTransporte,
+    montarTextoAlterarEndereco, serialAlterarEndereco, atualizarBotaoAlterarEndereco,
     atualizarPreviaTransporteCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,

@@ -1,6 +1,6 @@
 ---
 name: playwright-teste
-description: Gera ou corrige specs Playwright (`tests/e2e/*.spec.cjs`) inspecionando a fixture ui-fixture com o Playwright MCP (`browser_snapshot`). Use para criar teste de uma tela, depurar spec que falha ou auditar uma tela ao vivo, só com dados sintéticos.
+description: Gera ou corrige specs Playwright (`tests/e2e/*.spec.cjs`) inspecionando a fixture ui-fixture com o Playwright MCP (`browser_snapshot`). Use para criar teste de uma tela, depurar spec que falha, auditar uma tela ao vivo e em TODO pedido de automação nova ou alterada (botão, modal, rotina de portal), só com dados sintéticos.
 ---
 
 # Playwright MCP e specs e2e
@@ -11,6 +11,12 @@ description: Gera ou corrige specs Playwright (`tests/e2e/*.spec.cjs`) inspecion
 - Olhada rápida: use o painel de navegador embutido do app.
 - Configuração em `.mcp.json` (servidor `playwright`); o servidor só carrega no início da sessão, então reinicie a sessão após mudá-lo.
 - Navegador: o MCP usa o Chrome instalado (`--browser chrome`) com perfil em memória (`--isolated`, headless), sem logins e separado do Chrome de automação (CDP 9333).
+
+## Todo pedido de automação (11/11/2026)
+
+- Automação nova ou alterada (botão, modal, preenchimento de portal) termina com o fluxo abaixo: a tela do Simpress é conferida na fixture com o MCP e coberta por um spec com as rotas `/api/*` simuladas (`page.route`).
+- O portal real (UX, Oracle, Endpoint, SoftExpert) não entra no MCP: a inspeção dele é só leitura pelo adaptador CDP 9333 (`domains/*_browser.py`), com a trava e o login do usuário; escrita só com autorização registrada com a data.
+- Economia de tokens: um `browser_snapshot` por tela, sem screenshot nem `filename`; leia só o trecho do erro em `TEMP/test-results/*/error-context.md`.
 
 ## Fluxo
 
