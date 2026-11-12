@@ -59,7 +59,7 @@ _endpoint_records_lock = threading.Lock()
 def unavailable_endpoint_alias_index() -> Dict[str, Any]:
     return {
         "available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {},
-        "users": {}, "ambiguous_users": {},
+        "users": {}, "ambiguous_users": {}, "verified_by_serial": {},
     }
 
 
@@ -75,6 +75,7 @@ def build_endpoint_alias_index(
     rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
     users_by_serial: Dict[str, List[str]] = {}
     verified_by_serial: Dict[str, List[Optional[datetime]]] = {}
+    verified_raw_by_serial: Dict[str, List[Any]] = {}
     blank_serials: List[Dict[str, str]] = []
     for record in records:
         serial = _record_value(
@@ -96,8 +97,10 @@ def build_endpoint_alias_index(
         if serial_key:
             rows_by_serial.setdefault(serial_key, []).append(row)
             users_by_serial.setdefault(serial_key, []).append(logged_users)
+            verified_raw = _upload_verification_value(record)
+            verified_raw_by_serial.setdefault(serial_key, []).append(verified_raw)
             verified_by_serial.setdefault(serial_key, []).append(
-                _parse_verification_datetime(_upload_verification_value(record), timezone.utc)
+                _parse_verification_datetime(verified_raw, timezone.utc)
             )
         elif hostname:
             blank_serials.append(row)
@@ -135,6 +138,16 @@ def build_endpoint_alias_index(
         if candidates:
             ambiguous_users[serial_key] = list(candidates.values())
 
+    # Latest non-empty verification per serial (ISO); serials without any date are left out. A date without a
+    # timezone stays without one, so the reader applies its own local clock (same rule as the comparison).
+    latest_verified: Dict[str, str] = {}
+    for serial_key, moments in verified_by_serial.items():
+        dated = [(moment, index) for index, moment in enumerate(moments) if moment is not None]
+        if dated:
+            moment, latest = max(dated, key=lambda pair: pair[0])
+            local = _parse_verification_datetime(verified_raw_by_serial[serial_key][latest], None)
+            latest_verified[serial_key] = (local if local is not None and local.tzinfo is None else moment).isoformat()
+
     return {
         "available": True,
         "users": users,
@@ -143,6 +156,7 @@ def build_endpoint_alias_index(
         "duplicates": duplicates,
         "blank_serials": blank_serials,
         "blank_hostnames": blank_hostnames,
+        "verified_by_serial": latest_verified,
     }
 
 
