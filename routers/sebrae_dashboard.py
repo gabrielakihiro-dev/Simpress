@@ -189,6 +189,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos()))
         return sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado())) if antigos else {}
 
+    def _nao_encontrados(antigos: Mapping[str, Mapping[str, str]]) -> set:
+        """Old tickets missing from SoftExpert's task center on the last read and absent from the cached read (one rule for the screen badge and the 422)."""
+        lidos = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or [])
+        return {str(n) for n in lidos} - set(antigos)
+
     def _automaticos_dos_abertos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, str]]:
         """What "Atualizar Dashboard" fills in the old open rows: G, H and I from the SoftExpert read, then E, K, L and N
         from the name cross-reference fed by that same read (screen and write use this one function)."""
@@ -204,7 +209,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
         antigos = _leitura_antigos() if abertos else {}
         # Not in SoftExpert's task center on the last read (e.g. closed by another technician): the F5 card is tinted to check later.
-        nao_encontrados = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or []) if abertos else set()
+        nao_encontrados = _nao_encontrados(antigos) if abertos else set()
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
         sugestoes = _automaticos_dos_abertos(abertos, antigos, registros) if abertos else {}
@@ -217,7 +222,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
-             "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados and str(a.get("numero")) not in antigos,
+             "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
              "destaque": _destacado(obs_map, a.get("numero"))}  # ``softexpert`` is the finalization state; this is the read data
             for a, e in zip(abertos, efetivos)
@@ -619,7 +624,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
-            importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload)
+            importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload, exigir_encerramento=True)
             fechar = (
                 _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
                 else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
@@ -663,10 +668,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return {"iniciado": False, "motivo": "Não foi possível iniciar o envio ao SharePoint."}
         return {"iniciado": True, "motivo": ""}
 
-    def _gravar_atualizacao(payload: AtualizarPayload, *, aceita_vazio: bool = False):
+    def _gravar_atualizacao(payload: AtualizarPayload, *, aceita_vazio: bool = False, exigir_encerramento: bool = False):
         """Monta a cópia atualizada e a grava em ``sebrae_dashboard_saida``; devolve (importado, resultado, conteudo, gravada, edicoes validadas).
 
-        Com ``aceita_vazio`` e nada a gravar, devolve ``None`` em vez de 422."""
+        Com ``aceita_vazio`` e nada a gravar, devolve ``None`` em vez de 422. Com ``exigir_encerramento`` (só o "Atualizar"),
+        D=FINALIZADO à mão num antigo não encontrado no SoftExpert exige a coluna R (o ``finalizar-softexpert`` por cartão não exige)."""
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
@@ -678,7 +684,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             )
         try:
             linhas = _linhas_novas(payload, importado, caminhos)
-            edicoes = _edicoes(payload, planilha, importado["listas"])
+            edicoes = _edicoes(payload, planilha, importado["listas"], exigir_encerramento)
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
             automaticos = _automaticos_dos_abertos(abertos, _leitura_antigos() if abertos else {}, services.registros()) if abertos else {}
             descricoes = _descricoes_editadas_dos_antigos(abertos)
@@ -1013,9 +1019,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
         return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False, vinculos=services.vinculos_os())
 
-    def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]]) -> Dict[str, Dict[str, str]]:
+    def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]], exigir_encerramento: bool = False) -> Dict[str, Dict[str, str]]:
         """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay
-        blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked."""
+        blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked.
+
+        With ``exigir_encerramento``: D=FINALIZADO without R (none sent, none stored) on a ticket not found in SoftExpert is
+        refused, since no read will ever supply the closing date for it."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1036,6 +1045,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     validados["G"] = titulo
             except sebrae_novos.ManuaisInvalidos as erro:
                 raise sebrae_novos.ManuaisInvalidos(f"{item.numero}: {erro}") from None
+            if (exigir_encerramento and validados["D"] == sebrae_novos.STATUS_FINALIZADO and not validados["R"]
+                    and item.numero in _nao_encontrados(_leitura_antigos())):
+                raise sebrae_novos.ManuaisInvalidos(f"Informe a DT ENCERRAMENTO (coluna R) do chamado {item.numero}: ele não foi encontrado no SoftExpert.")
             edicoes[item.numero] = validados
         return edicoes
 
