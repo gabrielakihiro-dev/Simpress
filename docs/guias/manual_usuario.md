@@ -159,7 +159,7 @@ Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualiza
 
 Se **Transporte** não gerar a planilha, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
 
-**Só alterar o endereço do equipamento:** o segundo botão, **Alterar Endereço**, acende assim que a série e os endereços de retirada e entrega estão na tela (não precisa de representante, telefone nem e-mail). Ele não gera planilha: abre **Alterar Endereço no UX** com o Incidente **Transporte** e o Motivo **Transferência Fisica de Equipamentos**, e o Registro vem com "Solicito apenas o endereço do equipamento da unidade do Sebrae (entrega) para (retirada).", editável. Sem CNPJ, CEP, anexo nem Nº do chamado interno; **Revisar e finalizar** continua pedindo a sua confirmação.
+**Só alterar o endereço do equipamento:** o segundo botão, **Alterar Endereço**, acende assim que a série e os endereços de retirada e entrega estão na tela (não precisa de representante, telefone nem e-mail). Ele não gera planilha: abre **Alterar Endereço no UX** com o Incidente **Transporte** e o Motivo **Transferência Fisica de Equipamentos**, e o Registro vem com "Solicito alteração do endereço do equipamento da Unidade de (cidade de retirada) para (cidade de entrega)." (ex.: de Curitiba/PR para Arapongas/PR), editável. Sem CNPJ, CEP, anexo nem Nº do chamado interno; **Revisar e finalizar** continua pedindo a sua confirmação.
 
 **Textos prontos para chamados:** na **Home**, depois de pesquisar o equipamento, o botão de textos para chamados manuais mostra modelos editáveis. Use **Copiar** para levar o texto ao chamado.
 

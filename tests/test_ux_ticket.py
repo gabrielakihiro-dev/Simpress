@@ -400,8 +400,8 @@ class RouterTests(unittest.TestCase):
         self.assertEqual((sessao["status"], sessao["tipo"]), ("preparado", "endereco"))
         self.gerar.assert_not_called()
         texto = (
-            "Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae "
-            "Av. Tupi, 333 - Bortot - Pato Branco/PR para Rua Fictícia, 1 - Centro - Curitiba/PR."
+            "Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de "
+            "Curitiba/PR para Pato Branco/PR."
         )
         self.assertEqual(self.enviar(sessao, descricao=texto).json()["status"], "preenchido")
         self.assertEqual(self.portal.formularios[-1].descricao, texto)
