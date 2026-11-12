@@ -70,11 +70,23 @@ Menu lateral:
 - **Home** — pesquisa de equipamentos.
 - **Transporte** — formulário de retirada e entrega (geração da planilha de transferência).
 - **Nova transferência** — limpa o formulário para começar outra.
-- **Ferramentas:** **Comparação** (F3, junto do **Resumo**), **Histórico de apelidos** (F7), **Relatório mensal** (F8), **Catálogo de unidades** e, em telas menores, **Chamados** (F5) e **OS** (F6), que nas telas largas ficam na barra superior. **Atualizar planilhas** não está mais no menu: abra pela aba **Comparação › Nova comparação**, pelo botão **Importar** da Home ou pelo alerta **Atualizar base**. **Exportar Excel** agora fica na barra da aba **Comparação**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026). O **Histórico de apelidos** (F7) é o histórico completo de alterações: busque, filtre por tipo, marque **Somente com ação disponível**, use **Limpar filtros** e, no detalhe do registro, **Restaurar anterior**, **Excluir aviso** ou **Restaurar e excluir**. A janela antiga **Histórico de alterações** não existe mais.
+- **Ferramentas:** **Comparação** (F3, junto do **Resumo**), **Histórico de apelidos** (F7), **Relatório mensal** (F8), **Catálogo de unidades** e, em telas menores, **Chamados** (F5) e **OS** (F6), que nas telas largas ficam na barra superior. **Atualizar planilhas** não está mais no menu: abra pela aba **Comparação › Nova comparação**, pelo botão **Importar** da Home ou pelo alerta **Atualizar base**. **Exportar Excel** agora fica na barra da aba **Comparação**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026). O **Histórico de apelidos** (F7) é o histórico completo de alterações; veja o passo a passo logo abaixo. A janela antiga **Histórico de alterações** não existe mais.
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). De qualquer aba (F2–F4) ou painel (F5–F9), a pesquisa leva direto à **Home (F1)**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
 **Controle remoto:** na Home, com um equipamento selecionado, clique em **Controle remoto** (ao lado de *Consultar no Endpoint*). O Simpress abre o controle remoto no Endpoint com o motivo `acesso` e deixa a conexão aberta para você continuar. Se o computador estiver offline, aparece uma caixa de mensagem avisando. Você também pode pedir ao Assistente ("abra o controle remoto da série X"); ele mostra um cartão e só conecta depois que você confirmar. Exige o Chrome de automação aberto (porta 9333) com o login do Endpoint feito.
+
+**Histórico de apelidos (F7):** mostra tudo o que mudou nos equipamentos (apelido, usuário logado, endereço de instalação e avisos do Endpoint), do mais novo para o mais antigo. Atualizado em 11/11/2026.
+
+1. Abra **Ferramentas › Histórico de apelidos** (ou tecle `F7`). A lista é recarregada sozinha toda vez que a tela abre.
+2. No topo, veja **Alterações neste mês** e **Equipamentos afetados**. O botão **Exportar CSV** baixa, para abrir no Excel, só os registros que estão na lista no momento (os filtros valem).
+3. Escolha o tipo nas abas **Todos**, **Apelido**, **Usuário**, **Endereço** ou **Avisos do Endpoint**. Cada aba mostra quantos registros tem, já considerando a busca, o **Somente com ação disponível** e o período. Com o teclado, use as setas `←` e `→` para trocar de aba (e `Home` ou `End` para ir à primeira ou à última). Cada tipo tem sua cor (Apelido azul, Usuário roxo, Endereço verde-água, Aviso laranja), sempre com o nome escrito.
+4. Para estreitar, digite em **Buscar no histórico** (série, apelido, usuário ou origem), escolha **Todas** ou **Últimos 7 dias** e, se quiser, marque **Somente com ação disponível**. **Limpar filtros** apaga tudo isso e volta para a aba **Todos**.
+5. A lista vem agrupada por dia (**Hoje**, **Ontem**, depois o dia da semana e a data). Registros sem data válida ficam no fim, em **Data indisponível**. Cada linha mostra o tipo, a série, a hora, o valor antigo riscado seguido do novo, a **Origem**, o **Autor** e, quando houver, o selo **Ação disponível**.
+6. Clique em uma linha para ver o detalhe à direita: **O que mudou** (**Antes** e **Depois**), **Cadastro atual** (com **Copiar apelido atual**), **Detalhes do registro** e **Histórico deste equipamento**, com o registro escolhido destacado. Selecionar uma linha não altera nada.
+7. No topo do detalhe ficam as ações: **Abrir na Home**, **Restaurar anterior**, **Restaurar e excluir** ou **Excluir aviso**. Só aparecem as que valem para aquele registro; quando nenhuma vale, o detalhe explica que não há ação. As que alteram dados podem pedir confirmação antes de executar.
+
+**Como confirmar que deu certo:** depois de **Restaurar anterior**, o registro e o equipamento mostram o valor anterior. Séries que começam com `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae) não aparecem nesta tela.
 
 ## 4. Atualizar a base EquipamentosDetalhes
 
@@ -163,6 +175,8 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 4. Clique em **Importar planilhas** (até 60 MB por arquivo).
 
 **Como confirmar:** aparecem a mensagem "Planilhas importadas. As OS foram relacionadas pela série." e o aviso "Acompanhamento de chamados atualizado."; o bloco se fecha, a tabela de OS passa a mostrar a nova versão e o seletor de versões, as fontes importadas e os botões **Exportar Excel** e **Excluir importações antigas** ficam no mesmo bloco. Se faltar um dos arquivos, a tela pede "Selecione as duas planilhas para importar."
+
+**Abertas e Finalizadas:** a tabela de OS tem duas sub-abas logo acima dela. **Abertas** (a que abre primeiro) mostra as OS sem chamado finalizado; **Finalizadas** mostra as OS cujo chamado já foi finalizado. O número no selo de cada aba é a quantidade de OS que passam nos filtros daquela aba. Use as setas do teclado, **Home** e **End** para trocar de aba. Os números do topo (**OS abertas**, **Séries** e os demais) e a triagem contam só as OS de **Abertas** e não mudam quando você troca de aba; **Exportar Excel** leva só as séries da sub-aba que está na tela. Em **Finalizadas**, **Desfazer** devolve a OS para **Abertas**: isso só tira a marca na tela e não reabre o chamado no SoftExpert.
 
 ### Opção B — pela pasta local
 

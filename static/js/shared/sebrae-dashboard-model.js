@@ -116,6 +116,31 @@
     };
   }
 
+  const AJUDA_ENCERRAMENTO = "Obrigatório ao finalizar chamado não encontrado no SoftExpert";
+
+  /**
+   * DT ENCERRAMENTO (R) é obrigatório: antigo "não encontrado" no SoftExpert com Status (D) FINALIZADO (digitado ou gravado) e sem R gravado.
+   * Nenhuma leitura trará a data desse chamado. Espelha a recusa 422 do servidor em Atualizar Dashboard (`_edicoes`).
+   */
+  function encerramentoObrigatorio(item, edicao) {
+    const efetivo = letra => String(edicao?.[letra] ?? "").trim() || String(item?.valores?.[letra] ?? "").trim();
+    return dadosAntigo(item || {}).naoEncontrado && efetivo("D") === "FINALIZADO" && !String(item.valores?.R ?? "").trim();
+  }
+
+  /** Números dos antigos com R obrigatório e ainda sem uma data válida no campo (é o que bloqueia Atualizar). */
+  function pendenciasEncerramento(abertos, edicoes) {
+    return (abertos || [])
+      .filter(item => encerramentoObrigatorio(item, edicoes?.[item.numero]) && !formatarEncerramento(edicoes?.[item.numero]?.R))
+      .map(item => item.numero);
+  }
+
+  /** Mensagem de Atualizar bloqueado; no singular é a mesma frase que o servidor devolve em 422. */
+  function avisoEncerramento(numeros) {
+    return numeros.length === 1
+      ? `Informe a DT ENCERRAMENTO (coluna R) do chamado ${numeros[0]}: ele não foi encontrado no SoftExpert.`
+      : `Informe a DT ENCERRAMENTO (coluna R) dos chamados ${numeros.join(", ")}: eles não foram encontrados no SoftExpert.`;
+  }
+
   /** Texto da leitura dos antigos: andamento (X de Y), resultado ou interrupção. `anteriorEm` ignora o resultado da execução anterior. */
   function resumoLeituraAntigos(resultado, emAndamento, quando = "", anteriorEm = null) {
     const contar = lista => Object.keys(lista || {}).length;
@@ -410,7 +435,8 @@
   return Object.freeze({
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
     ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
-    tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
     ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
     resultadoEnvioAtualizacao, resumoResultado, resumoInicio,

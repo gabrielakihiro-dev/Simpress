@@ -75,6 +75,34 @@ def vinculos_derivados(
     return [entrada for chave, entrada in entradas.items() if len(donos[chave]) == 1]
 
 
+def vinculos_da_finalizacao(
+    marcas: Sequence[Mapping[str, Any]], relatorio: Mapping[str, Any] | None,
+) -> List[Dict[str, Any]]:
+    """Links implied by the ACTIVE finalization marks (``ler_marcas``, newest first), marked ``origem: "finalizacao"``.
+
+    The year and number come from the mark's own UTIC (never a fixed year). One entry per source (simpress/oracle) that
+    holds the mark's OS under its serial; serial and OS keep the report's spelling. A mark whose OS the report does not
+    have yields nothing. The first (newest) active mark of a (source, serial, OS) wins. The serial must match as written
+    (no MacBook ``S`` fallback): the F6 tab puts an OS in ``Finalizadas`` by the same exact serial, so both stay in step.
+    """
+    chamados = (relatorio or {}).get("chamados")
+    if not isinstance(chamados, list):
+        return []
+    entradas: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    for marca in marcas:
+        achado = NUMERO_UTIC.fullmatch(str(marca.get("chamado") or "").strip())
+        serie, alvo = str(marca.get("serie") or "").strip(), _os_chave(marca.get("os"))
+        if not marca.get("ativa") or not achado or not serie or not alvo or not 2000 <= int(achado.group(1)) <= 9999 or len(achado.group(2)) > 24:
+            continue
+        for fonte, (ordem, serie_relatorio) in _ordens_da_serie(chamados, _chave_serie(serie)).get(alvo, {}).items():
+            entradas.setdefault((fonte, _chave_serie(serie_relatorio), alvo), {
+                "fonte": fonte, "serie": serie_relatorio, "os": ordem, "ano": int(achado.group(1)), "numero": achado.group(2),
+                "chamado": f"UTIC-{achado.group(1)}-{achado.group(2)}", "origem": "finalizacao",
+                "finalizado_em": str(marca.get("finalizado_em") or ""),
+            })
+    return list(entradas.values())
+
+
 def vinculo_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> Optional[Mapping[str, Any]]:
     """Link whose ``chamado`` is ``numero``; with several, the one with the highest OS (as ``os_da_serie``); ``None`` if none."""
     alvo = str(numero or "").strip().upper()
