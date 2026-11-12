@@ -46,6 +46,7 @@ import "./js/features/chrome-automation.js";
 import "./js/features/assistant-chat.js";
 import "./js/features/coverage.js";
 import "./js/features/termos.js";
+import "./js/features/lembretes.js";
 import "./js/features/outlook-email.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";

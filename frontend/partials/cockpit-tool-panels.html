@@ -197,14 +197,15 @@
           </div>
         </section>
 
-        <section class="ck-ferr-painel termos" data-cockpit-tool-panel="termos" aria-labelledby="termos-heading" hidden>
-          <h2 id="termos-heading" class="sr-only">Termos</h2>
-          <div class="ck-pilulas termos__abas" role="tablist" aria-label="Termos" data-on-keydown="termosTeclaAba" data-args='["$event"]'>
-            <button type="button" class="ck-pilula" role="tab" id="termos-aba-entrega" aria-selected="true" aria-controls="termos-painel-entrega" data-on-click="termosSelecionarAba" data-args='["entrega"]'>Termo Entrega</button>
+        <section class="ck-ferr-painel termos lembretes" data-cockpit-tool-panel="lembretes" aria-labelledby="lembretes-heading" hidden>
+          <h2 id="lembretes-heading" class="sr-only">Lembretes</h2>
+          <div class="ck-pilulas termos__abas" role="tablist" aria-label="Lembretes" data-on-keydown="termosTeclaAba" data-args='["$event"]'>
+            <button type="button" class="ck-pilula" role="tab" id="termos-aba-entrega" aria-selected="false" tabindex="-1" aria-controls="termos-painel-entrega" data-on-click="termosSelecionarAba" data-args='["entrega"]'>Termo Entrega</button>
             <button type="button" class="ck-pilula" role="tab" id="termos-aba-devolucao" aria-selected="false" tabindex="-1" aria-controls="termos-painel-devolucao" data-on-click="termosSelecionarAba" data-args='["devolucao"]'>Termo Devolução</button>
+            <button type="button" class="ck-pilula" role="tab" id="termos-aba-lembretes" aria-selected="true" aria-controls="termos-painel-lembretes" data-on-click="termosSelecionarAba" data-args='["lembretes"]'>Lembretes <span class="ck-pilula__n" id="lembretes-pendentes">0</span><span class="sr-only"> pendentes</span></button>
           </div>
 
-          <div class="termos__painel" role="tabpanel" id="termos-painel-entrega" aria-labelledby="termos-aba-entrega">
+          <div class="termos__painel" role="tabpanel" id="termos-painel-entrega" aria-labelledby="termos-aba-entrega" hidden>
             <form class="termos__form" id="termos-form-entrega" autocomplete="off" novalidate>
               <fieldset class="termos__grupo">
                 <legend>Dados do colaborador</legend>
@@ -304,6 +305,35 @@
                 <p class="termos__estado" id="termos-status-devolucao" role="status" aria-live="polite"></p>
               </div>
             </form>
+          </div>
+
+          <div class="termos__painel lembretes__painel" role="tabpanel" id="termos-painel-lembretes" aria-labelledby="termos-aba-lembretes">
+            <div class="lembretes__caixa">
+              <form class="lembretes__novo" id="lembretes-form-novo" autocomplete="off" novalidate data-on-submit="lembretesAdicionar">
+                <label class="sr-only" for="lembretes-novo-descricao">Descrição</label>
+                <input type="text" id="lembretes-novo-descricao" class="ck-entrada lembretes__campo" placeholder="O que você precisa fazer?" autocomplete="off" aria-describedby="lembretes-novo-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'>
+                <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled>Adicionar</button>
+                <p class="lembretes__erro" id="lembretes-novo-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
+              </form>
+              <p class="lembretes__vazio" id="lembretes-vazio" hidden>Nenhum lembrete. Anote o que precisa fazer.</p>
+              <ul class="lembretes__lista" id="lembretes-lista" aria-label="Lembretes pendentes"></ul>
+              <div class="lembretes__concluidos" id="lembretes-concluidos" hidden>
+                <button type="button" class="lembretes__recolher" id="lembretes-concluidos-botao" aria-expanded="false" aria-controls="lembretes-concluidos-lista" data-on-click="lembretesAlternarConcluidos"><svg class="ck-ico lembretes__seta" aria-hidden="true"><use href="#i-chevron-right"></use></svg><span id="lembretes-concluidos-rotulo">Concluídos (0)</span></button>
+                <ul class="lembretes__lista" id="lembretes-concluidos-lista" aria-label="Lembretes concluídos" hidden></ul>
+              </div>
+            </div>
+          </div>
+
+          <div id="lembretes-confirmar" class="modal-overlay ck-veu hidden">
+            <div class="ck-dialogo lembretes__dialogo" role="alertdialog" aria-modal="true" aria-labelledby="lembretes-confirmar-titulo" aria-describedby="lembretes-confirmar-texto">
+              <h3 id="lembretes-confirmar-titulo">Excluir este lembrete?</h3>
+              <p class="lembretes__dialogo-item" id="lembretes-confirmar-item"></p>
+              <p id="lembretes-confirmar-texto">Esta ação não pode ser desfeita.</p>
+              <div class="lembretes__dialogo-acoes">
+                <button type="button" class="ck-btn ck-btn--secundario" id="lembretes-confirmar-cancelar" data-on-click="lembretesCancelarExclusao">Cancelar</button>
+                <button type="button" class="ck-btn ck-btn--secundario confirm-action-ok" id="lembretes-confirmar-ok" data-variant="danger" data-on-click="lembretesConfirmarExclusao">Excluir</button>
+              </div>
+            </div>
           </div>
         </section>
 

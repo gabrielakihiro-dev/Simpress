@@ -20,7 +20,8 @@
     entrega: { itens: ITENS_ENTREGA, campos: CAMPOS_ENTREGA, campoSerie: "serie_entregue" },
     devolucao: { itens: ITENS_DEVOLUCAO, campos: CAMPOS_DEVOLUCAO, campoSerie: "serie" },
   };
-  const ORDEM_ABAS = ["entrega", "devolucao"];
+  // "lembretes" é a terceira pílula do painel Lembretes; a lista em si mora em lembretes.js.
+  const ORDEM_ABAS = ["entrega", "devolucao", "lembretes"];
   const AVISO_SEM_NOME = "Preencha o número de série e o nome do colaborador.";
   const LIMITE_PARTE = 100;
   const doc = () => (typeof document !== "undefined" ? document : null);
@@ -182,7 +183,7 @@
   }
 
   function termosSelecionarAba(termo) {
-    if (!TERMOS[termo]) return;
+    if (!ORDEM_ABAS.includes(termo)) return;
     ORDEM_ABAS.forEach((nome) => {
       const ativa = nome === termo;
       const aba = porId(`termos-aba-${nome}`);
@@ -279,7 +280,7 @@
   function termosPreencherDoEquipamento(eq) {
     const serial = String(eq?.serial ?? "").trim();
     if (!serial) return;
-    ORDEM_ABAS.forEach((termo) => {
+    Object.keys(PREENCHIMENTO_HOME).forEach((termo) => {
       const form = porId(`termos-form-${termo}`);
       if (!form || form.dataset.serieHome === serial) return;
       form.dataset.serieHome = serial;

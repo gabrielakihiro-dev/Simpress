@@ -597,6 +597,43 @@ def cobertura_proxy(handler, method, raw_path, body=None):
     handler.send(resposta.content, resposta.status_code)
 
 
+# Lembretes: the real /api/lembretes router over a temporary file. /__fixture_lembretes resets it to an empty list;
+# ?itens=N seeds N synthetic reminders. Every test that writes starts from this reset.
+LEMBRETES = {"client": None, "dir": None}
+
+
+def lembretes_reset(itens=0):
+    import shutil
+    import tempfile
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from routers.lembretes import create_lembretes_router
+
+    if LEMBRETES["dir"]:
+        shutil.rmtree(LEMBRETES["dir"], ignore_errors=True)
+    root = Path(tempfile.mkdtemp(prefix="simpress-lembretes-ui-"))
+    api = FastAPI()
+    api.include_router(create_lembretes_router(root / "lembretes.json"))
+    client = TestClient(api)
+    LEMBRETES.update(client=client, dir=str(root))
+    for numero in range(1, itens + 1):
+        client.post("/api/lembretes", json={"descricao": f"Lembrete sintético {numero}"})
+    return {"itens": itens}
+
+
+def lembretes_proxy(handler, method, raw_path, body=None):
+    if LEMBRETES["client"] is None:
+        lembretes_reset()
+    cabecalhos = {"Content-Type": "application/json"}
+    resposta = LEMBRETES["client"].request(method, raw_path, content=body or None, headers=cabecalhos)
+    if resposta.status_code == 204:
+        handler.send(b"", 204)  # 204 has no body: Content-Length 0 is enough for fetch.
+    else:
+        handler.send(resposta.content, resposta.status_code)
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
         payload = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode()
@@ -836,6 +873,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(cobertura_reset(params.get("cenario", ["base"])[0]))
         elif path == "/api/cobertura" or path.startswith("/api/cobertura/"):
             cobertura_proxy(self, "GET", self.path)
+        elif path == "/__fixture_lembretes":
+            self.send(lembretes_reset(int(parse_qs(url.query).get("itens", ["0"])[0])))
+        elif path == "/api/lembretes":
+            lembretes_proxy(self, "GET", self.path)
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
@@ -936,8 +977,16 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             self.send({"detail": "JSON inválido"}, 400)
 
+    def do_PATCH(self):
+        if urlsplit(self.path).path.startswith("/api/lembretes/"):
+            lembretes_proxy(self, "PATCH", self.path, self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+        else:
+            self.send({"detail": "Endpoint de teste não encontrado"}, 404)
+
     def do_DELETE(self):
-        if urlsplit(self.path).path.startswith("/api/config/representantes-regionais/"):
+        if urlsplit(self.path).path.startswith("/api/lembretes/"):
+            lembretes_proxy(self, "DELETE", self.path)
+        elif urlsplit(self.path).path.startswith("/api/config/representantes-regionais/"):
             if regional_changes.pop(unquote(urlsplit(self.path).path.rsplit("/", 1)[-1]), None) is None:
                 self.send({"detail": "Esta cidade não tem alteração salva."}, 404)
             else:
@@ -957,6 +1006,9 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/cobertura/"):
             size = int(self.headers.get("Content-Length", "0"))
             cobertura_proxy(self, "POST", self.path, self.rfile.read(size))
+            return
+        if path == "/api/lembretes":
+            lembretes_proxy(self, "POST", self.path, self.rfile.read(int(self.headers.get("Content-Length", "0"))))
             return
         if path == "/api/operacoes/chamados/exportar":
             self.rfile.read(int(self.headers.get("Content-Length", "0")))
