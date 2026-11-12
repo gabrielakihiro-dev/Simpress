@@ -2234,6 +2234,7 @@
       atualizarTodosFinalizar();
       atualizarBotaoAtualizar();
       app.carregarResumoHistoricoSebrae?.();
+      app.carregarConflitosSebrae?.();
       desenharDestaques(); // também reaplica aba, filtro e página sobre as listas novas
       carregarDestaques(); // sem await: os de fora das listas e as datas entram quando chegarem
       carregarFechar();

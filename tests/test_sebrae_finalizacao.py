@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import tempfile
@@ -780,6 +781,150 @@ class EnvioDuravelTest(unittest.TestCase):
         with patch.object(fin, "atomic_write_json", side_effect=PermissionError("disco")):
             with self.assertRaises(DomainBusyError):
                 self.preparar()
+
+
+class MesclaEnvioTest(unittest.TestCase):
+    """Bloco 1b: conteúdo mesclado do envio, origem do arquivo gerado, enviado e arquivo de conflitos."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.origem = self.dir / "saida.xlsx"
+        self.origem.write_bytes(b"gerado")
+        self.importar("a" * 64)
+
+    def importar(self, sha256):
+        sebrae_novos.salvar_existentes(sebrae_novos.caminhos_padrao(self.dir).existentes, [], "Dashboard.xlsx", sha256=sha256)
+
+    def saida(self, conteudo=b"gerado"):
+        saida = fin.caminho_saida_dashboard(self.dir)
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        saida.write_bytes(conteudo)
+        return saida
+
+    def test_substituir_conteudo_troca_copia_e_hash_do_envio_preparado_e_guarda_a_origem(self):
+        envio = fin.preparar_envio(self.dir, b"gerado")
+        original = hashlib.sha256(b"gerado").hexdigest()
+        fin.substituir_conteudo_envio(self.dir, envio, b"mesclado")
+        registro = fin.ler_envio(self.dir)
+        mesclado = hashlib.sha256(b"mesclado").hexdigest()
+        self.assertEqual((registro["sha256"], registro["sha256_origem"], registro["status"]), (mesclado, original, "preparado"))
+        self.assertEqual(fin.snapshot_envio(self.dir, envio).read_bytes(), b"mesclado")
+        fin.substituir_conteudo_envio(self.dir, envio, b"mesclado")  # mesmo conteúdo: nada muda
+        fin.substituir_conteudo_envio(self.dir, envio, b"mesclado 2")
+        self.assertEqual(fin.ler_envio(self.dir)["sha256_origem"], original)  # a origem é sempre a do arquivo gerado
+
+    def test_substituir_conteudo_so_vale_para_o_envio_preparado(self):
+        envio = fin.preparar_envio(self.dir, b"gerado")
+        with self.assertRaises(DomainConflictError):
+            fin.substituir_conteudo_envio(self.dir, "b" * 32, b"mesclado")
+        fin.marcar_envio_incerto(self.dir, envio)
+        with self.assertRaises(DomainConflictError):
+            fin.substituir_conteudo_envio(self.dir, envio, b"mesclado")
+        self.assertEqual(fin.snapshot_envio(self.dir, envio).read_bytes(), b"gerado")  # nada mudou depois do incerto
+        self.assertNotIn("sha256_origem", fin.ler_envio(self.dir))
+
+    def test_envio_com_sha256_origem_invalido_e_recusado_na_leitura(self):
+        fin.preparar_envio(self.dir, b"gerado")
+        registro = fin.ler_envio(self.dir)
+        registro["sha256_origem"] = "xyz"
+        fin.atomic_write_json(fin.caminho_envio(self.dir), registro)
+        with self.assertRaises(DomainBusyError):
+            fin.ler_envio(self.dir)
+
+    def test_limpeza_reconhece_a_copia_pendente_pelo_hash_do_arquivo_gerado_ou_do_mesclado(self):
+        outra = self.dir / "outra.xlsx"
+        outra.write_bytes(b"de terceiros")
+        alheia = fin.guardar_pendente(self.dir, outra, datetime(2026, 10, 30, 17, 5, tzinfo=timezone.utc), motivo="y", tickets=[])
+        pendente = fin.guardar_pendente(self.dir, self.origem, datetime(2026, 10, 30, 17, 6, tzinfo=timezone.utc), motivo="x", tickets=[])  # a mais recente
+        envio = fin.preparar_envio(self.dir, b"gerado", pendente=pendente)
+        fin.substituir_conteudo_envio(self.dir, envio, b"mesclado")
+        fin.marcar_envio_incerto(self.dir, envio)
+        fin.confirmar_envio(self.dir, envio)
+        self.assertFalse(fin.descartar_pendentes(self.dir, envio_id=envio))  # sobrou a cópia que o envio não cobria
+        self.assertFalse(pendente.exists())
+        self.assertTrue(alheia.exists())
+
+    def test_enviado_guarda_a_base_e_so_serve_de_ancestral_na_importacao_em_que_foi_montado(self):
+        sha = hashlib.sha256(b"enviado").hexdigest()
+        fin.gravar_enviado(self.dir, sha, b"enviado", base_sha256="a" * 64)
+        registro = json.loads(fin.caminho_enviado(self.dir).read_text(encoding="utf-8"))
+        self.assertEqual(registro["base_sha256"], "a" * 64)
+        self.assertNotIn("mesclado", registro)
+        self.assertFalse(fin.enviado_mesclado(self.dir))
+        self.assertEqual(fin.enviado_da_importacao(self.dir), b"enviado")
+        self.importar("b" * 64)  # nova importação: a cópia enviada deixa de valer como ancestral
+        self.assertIsNone(fin.enviado_da_importacao(self.dir))
+        self.assertEqual(fin.ler_copia_enviada(self.dir), b"enviado")  # a conferência de valores ainda a enxerga
+        fin.gravar_enviado(self.dir, sha, b"enviado")  # sem base registrada (versão antiga): nunca é ancestral
+        self.importar("a" * 64)
+        self.assertIsNone(fin.enviado_da_importacao(self.dir))
+
+    def test_enviado_mesclado_e_marcado_no_registro(self):
+        fin.gravar_enviado(self.dir, hashlib.sha256(b"m").hexdigest(), b"m", base_sha256="a" * 64, mesclado=True)
+        self.assertTrue(fin.enviado_mesclado(self.dir))
+
+    def test_recuperar_envio_passa_a_base_e_a_marca_de_mesclado_ao_registro_do_enviado(self):
+        envio = fin.preparar_envio(self.dir, b"gerado")
+        fin.substituir_conteudo_envio(self.dir, envio, b"mesclado")
+        fin.marcar_envio_incerto(self.dir, envio)
+        fin.recuperar_envio(self.dir, envio, "confirmar_recebimento", confirmacao="CONFIRMO APLICADO")
+        registro = json.loads(fin.caminho_enviado(self.dir).read_text(encoding="utf-8"))
+        self.assertEqual((registro["sha256"], registro["base_sha256"], registro["mesclado"]), (hashlib.sha256(b"mesclado").hexdigest(), "a" * 64, True))
+
+    def test_base_do_conteudo_le_o_json_ao_lado_da_saida_so_se_a_saida_for_o_conteudo(self):
+        saida = self.saida()
+        self.assertIsNone(fin.base_do_conteudo(self.dir, b"gerado"))  # saída sem JSON de origem
+        fin.gravar_origem_saida(saida, "a" * 64)
+        self.assertEqual(fin.base_do_conteudo(self.dir, b"gerado"), "a" * 64)
+        self.assertIsNone(fin.base_do_conteudo(self.dir, b"outro conteudo"))  # a saída já não é esse arquivo
+        fin.caminho_origem_de(saida).write_text(json.dumps({"base_sha256": "curto"}), encoding="utf-8")
+        self.assertIsNone(fin.base_do_conteudo(self.dir, b"gerado"))
+        fin.apagar_origem_saida(saida)
+        fin.apagar_origem_saida(saida)  # idempotente
+        self.assertFalse(fin.caminho_origem_de(saida).exists())
+
+    def test_base_do_conteudo_de_copia_pendente_exige_uma_base_so(self):
+        momento = datetime(2026, 10, 30, 17, 5, tzinfo=timezone.utc)
+        primeira = fin.guardar_pendente(self.dir, self.origem, momento, motivo="x", tickets=[])
+        self.assertEqual(fin.base_do_conteudo(self.dir, b"gerado"), "a" * 64)
+        self.importar("b" * 64)
+        fin.guardar_pendente(self.dir, self.origem, momento, motivo="y", tickets=[])  # mesmo conteúdo, outra importação
+        self.assertIsNone(fin.base_do_conteudo(self.dir, b"gerado"))
+        primeira.with_suffix(".json").write_text("{ruim", encoding="utf-8")  # registro ilegível: origem desconhecida, não mescla
+        self.assertIsNone(fin.base_do_conteudo(self.dir, b"gerado"))
+        fin.descartar_pendente(primeira)  # só a cópia da importação atual sobra: base única
+        self.assertEqual(fin.base_do_conteudo(self.dir, b"gerado"), "b" * 64)
+
+    def test_conflitos_mantem_as_escolhas_ja_feitas_e_so_a_tela_ou_o_envio_apagam(self):
+        conflito = {"id": "c1", "chamado": UTIC, "coluna": "J", "sharepoint": "REQUISIÇÃO", "site": "INCIDENTE", "tipo": "editou_ambos"}
+        self.assertIsNone(fin.ler_conflitos(self.dir))
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {})
+        fin.gravar_conflitos(self.dir, base_sha256="a" * 64, sharepoint_sha256="b" * 64, gerado_sha256="c" * 64, conflitos=[conflito])
+        dados = fin.ler_conflitos(self.dir)
+        self.assertEqual(
+            {k: dados[k] for k in ("base_sha256", "sharepoint_sha256", "gerado_sha256", "conflitos", "escolhas")},
+            {"base_sha256": "a" * 64, "sharepoint_sha256": "b" * 64, "gerado_sha256": "c" * 64, "conflitos": [conflito], "escolhas": {}},
+        )
+        self.assertTrue(dados["criado_em"])
+        fin.atomic_write_json(fin.caminho_conflitos(self.dir), {**dados, "escolhas": {"c1": "site"}})
+        fin.gravar_conflitos(self.dir, base_sha256="a" * 64, sharepoint_sha256="d" * 64, gerado_sha256="c" * 64, conflitos=[conflito])
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"c1": "site"})
+        self.assertEqual(fin.ler_conflitos(self.dir)["sharepoint_sha256"], "d" * 64)
+        fin.concluir_conflitos(self.dir)  # envio concluído: a lista some, a escolha fica para o próximo envio da mesma importação
+        self.assertEqual(fin.ler_conflitos(self.dir)["conflitos"], [])
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"c1": "site"})
+        fin.limpar_conflitos(self.dir)
+        fin.limpar_conflitos(self.dir)  # idempotente
+        self.assertIsNone(fin.ler_conflitos(self.dir))
+        fin.concluir_conflitos(self.dir)  # sem escolhas: não cria arquivo
+        self.assertIsNone(fin.ler_conflitos(self.dir))
+
+    def test_erro_de_conflito_so_vale_para_quem_declara_em_conflito(self):
+        class Conflito(Exception):
+            em_conflito = True
+
+        self.assertTrue(fin.erro_de_conflito(Conflito("x")))
+        self.assertFalse(fin.erro_de_conflito(Exception("x")))
 
 
 class RegistrarEncerramentosTest(unittest.TestCase):

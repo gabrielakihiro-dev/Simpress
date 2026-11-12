@@ -190,6 +190,20 @@ class RotasSebraeTest(RotasBase):
         self.assertEqual(self.importar(montar()).status_code, 200)
         self.assertFalse(saida.exists())
 
+    def test_atualizar_registra_a_importacao_da_saida_e_a_nova_importacao_apaga_esse_registro_e_os_conflitos(self):
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+        self.importar(montar())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        self.assertEqual(self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL]}).status_code, 200)
+        base = sebrae_novos.ler_existentes(self.caminhos.existentes)["sha256"]
+        self.assertEqual(json.loads(fin.caminho_origem_de(saida).read_text(encoding="utf-8")), {"base_sha256": base})
+        self.assertEqual(fin.base_do_conteudo(self.dir, saida.read_bytes()), base)
+        fin.gravar_conflitos(self.dir, base_sha256=base, sharepoint_sha256="b" * 64, gerado_sha256="c" * 64, conflitos=[])
+        self.assertIsNotNone(fin.ler_conflitos(self.dir))
+        self.assertEqual(self.importar(montar()).status_code, 200)  # nova importação: o arquivo e os conflitos da anterior não valem mais
+        self.assertFalse(fin.caminho_origem_de(saida).exists())
+        self.assertIsNone(fin.ler_conflitos(self.dir))
+
     def test_atualizar_grava_novo_com_a_d_j_em_branco_e_recusa_d_invalido(self):
         self.importar(montar())
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
