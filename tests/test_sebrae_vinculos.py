@@ -73,12 +73,10 @@ class DaFinalizacaoTest(unittest.TestCase):
         marcas = [marca("UTIC-2026-9", ativa=False), marca("UTIC-2025-77"), marca("UTIC-2024-5")]  # mais recente primeiro
         self.assertEqual({v["chamado"] for v in vinculos_da_finalizacao(marcas, RELATORIO)}, {"UTIC-2025-77"})
 
-    def test_macbook_sem_os_na_grafia_da_marca_usa_a_outra_grafia_so_com_o_indice(self):
+    def test_serie_so_na_grafia_exata_sem_troca_macbook(self):
+        # A F6 decide a sub-aba pela série exata; o vínculo automático segue a mesma regra.
         relatorio = {"chamados": [{"serie": "CXC9F072K1", "simpress": {"ordens_servico": ["77"]}}]}
-        indice = {"unique": {"CXC9F072K1": "PRMAC001"}, "details_serials": {"SCXC9F072K1"}}
-        mac = marca(serie="SCXC9F072K1", os="77")
-        self.assertEqual(vinculos_da_finalizacao([mac], relatorio), [])
-        self.assertEqual([(v["serie"], v["os"]) for v in vinculos_da_finalizacao([mac], relatorio, indice)], [("CXC9F072K1", "77")])
+        self.assertEqual(vinculos_da_finalizacao([marca(serie="SCXC9F072K1", os="77")], relatorio), [])
 
 
 class OsDoChamadoTest(unittest.TestCase):

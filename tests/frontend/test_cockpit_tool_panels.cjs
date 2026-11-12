@@ -575,7 +575,8 @@ test("sub-abas da OS no HTML: tablist rotulado, abas ligadas ao painel único e 
     assert.match(aba, /aria-controls="cockpit-tickets-os"/);
     assert.match(aba, new RegExp(`aria-label="${rotulo}: 0 OS"`));
     assert.match(aba, new RegExp(`<span class="os-aba__rotulo">${rotulo}</span>`));
-    assert.match(aba, new RegExp(`<span id="os-${id}-contagem" class="ck-badge os-aba__n" data-zero>0</span>`));
+    assert.match(aba, /^<button[^>]*\sdata-zero>/, "aba vazia nasce esmaecida (data-zero no botão, como no CSS)");
+    assert.match(aba, new RegExp(`<span id="os-${id}-contagem" class="ck-badge os-aba__n">0</span>`));
   }
   assert.match(barra, /id="os-aba-abertas"[^>]*aria-selected="true"[^>]*tabindex="0"/);
   assert.match(barra, /id="os-aba-finalizadas"[^>]*aria-selected="false"[^>]*tabindex="-1"/);
