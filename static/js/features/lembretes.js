@@ -27,6 +27,11 @@
   const limparTexto = (texto) => String(texto ?? "").replace(/[\p{Cc}\s]+/gu, " ").trim();
   const mensagemDe = (erro, padrao) => (erro?.status && erro.message ? erro.message : padrao);
   const avisarErro = (erro, padrao) => app.showToast(mensagemDe(erro, padrao), "error");
+  // Toda escrita invalida o GET em andamento: a resposta antiga não pode sobrescrever a lista já alterada.
+  const mutar = (url, opcoes) => {
+    pedidoLista += 1;
+    return apiFetch(url, opcoes);
+  };
 
   // Cada fonte da data exibida é o texto em ISO com fuso; o navegador converte para a hora local.
   function formatarData(iso) {
@@ -134,6 +139,9 @@
 
   function renderizar() {
     if (!doc()) return;
+    // Refazer a lista não pode apagar o que o usuário digita na edição ainda não salva.
+    const campoEdicao = porId("lembretes-edicao-campo");
+    const rascunho = campoEdicao ? { id: editandoId, valor: campoEdicao.value, foco: doc().activeElement === campoEdicao } : null;
     const pendentes = ordenar(lembretes.filter((l) => !l.concluido));
     const concluidos = ordenar(lembretes.filter((l) => l.concluido));
     porId("lembretes-lista")?.replaceChildren(...pendentes.map(criarItem));
@@ -147,6 +155,12 @@
     aplicarConcluidos();
     const contador = porId("lembretes-pendentes");
     if (contador) contador.textContent = String(pendentes.length);
+    const novoCampo = porId("lembretes-edicao-campo");
+    if (rascunho && novoCampo && String(rascunho.id) === String(editandoId)) {
+      novoCampo.value = rascunho.valor;
+      lembretesAoDigitar(novoCampo);
+      if (rascunho.foco) novoCampo.focus();
+    }
   }
 
   function aplicarConcluidos() {
@@ -240,7 +254,7 @@
     ocupado = true;
     estadoBotaoNovo();
     try {
-      const criado = await apiFetch(URL_API, {
+      const criado = await mutar(URL_API, {
         method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao }),
         errorMessage: "Não foi possível adicionar o lembrete.",
       });
@@ -257,7 +271,7 @@
   }
 
   async function atualizar(id, campos, mensagem) {
-    const atualizado = await apiFetch(`${URL_API}/${encodeURIComponent(id)}`, {
+    const atualizado = await mutar(`${URL_API}/${encodeURIComponent(id)}`, {
       method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(campos), errorMessage: mensagem,
     });
     lembretes = lembretes.map((l) => (String(l.id) === String(id) ? atualizado : l));
@@ -357,7 +371,7 @@
     const indice = [...(porId(lista)?.children ?? [])].findIndex((li) => li.dataset.lembreteId === String(id));
     let removido = false;
     try {
-      await apiFetch(`${URL_API}/${encodeURIComponent(id)}`, { method: "DELETE", errorMessage: "Não foi possível excluir o lembrete." });
+      await mutar(`${URL_API}/${encodeURIComponent(id)}`, { method: "DELETE", errorMessage: "Não foi possível excluir o lembrete." });
       removido = true;
     } catch (erro) {
       avisarErro(erro, "Não foi possível excluir o lembrete.");
@@ -401,7 +415,8 @@
     // Sem número de série ou sem nome, termosLerValidado mostra o aviso no termo e nada abre.
     const dados = app.termosLerValidado?.(termo);
     const campo = porId("lembretes-criar-descricao");
-    if (!dados || !campo) return;
+    // Com um POST em andamento, o fim dele fecharia este diálogo novo e o texto revisado se perderia.
+    if (!dados || !campo || ocupado) return;
     avisoDoTermo(termo, "");
     criando = termo;
     campo.value = montarDescricaoTermo(termo, dados);
@@ -427,7 +442,7 @@
     porId("lembretes-criar-ok").disabled = true;
     let criado = null;
     try {
-      criado = await apiFetch(URL_API, {
+      criado = await mutar(URL_API, {
         method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, origem: termo }),
         errorMessage: "Não foi possível criar o lembrete.",
       });

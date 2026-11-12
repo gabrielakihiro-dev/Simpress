@@ -240,6 +240,26 @@ class ErrosTests(LembretesBase):
                 self.assertEqual(resposta.json()["codigo"], "lembretes_ilegiveis")
                 self.assertEqual(self.arquivo.read_text(encoding="utf-8"), conteudo)
 
+    def test_item_sem_campos_opcionais_e_lido_com_null(self):
+        item = {"id": "a1", "descricao": "Texto", "criado_em": "2026-11-12T08:00:00-03:00", "concluido": False}
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [item]}), encoding="utf-8")
+        self.assertEqual(self.lembretes(), [{**item, "alterado_em": None, "concluido_em": None, "origem": None}])
+        self.assertEqual(self.client.patch("/api/lembretes/a1", json={"concluido": True}).status_code, 200)
+
+    def test_surrogate_isolado_devolve_422_e_nao_grava(self):
+        # Escapado no JSON: o surrogate só existe depois do parse no servidor.
+        corpo = b'{"descricao": "ab\\ud800"}'
+        resposta = self.client.post("/api/lembretes", content=corpo, headers={"Content-Type": "application/json"})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertFalse(self.arquivo.exists())
+
+    def test_leitura_bloqueada_pelo_windows_devolve_503_ocupado(self):
+        self.criar("Texto")
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError):
+            resposta = self.client.get("/api/lembretes")
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json()["codigo"], "lembretes_ocupados")
+
     def test_falha_ao_gravar_devolve_503_e_mantem_o_arquivo(self):
         item = self.criar("Texto")
         antes = self.arquivo.read_text(encoding="utf-8")
