@@ -167,6 +167,25 @@ class EndpointAliasIndexTests(unittest.TestCase):
         self.assertEqual(set(index["blank_hostnames"]), {"BLANK"})
         self.assertEqual(index["users"], {})
 
+    def test_verified_by_serial_keeps_the_latest_dated_verification_per_serial(self):
+        index = endpoint_index([
+            {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-1", "ULTIMAVERIFICACAOCOMEXITO": "2026-11-01T10:00:00+00:00"},
+            {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-1B", "ULTIMAVERIFICACAOCOMEXITO": "2026-11-05T10:00:00+00:00"},
+            {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-1C", "ULTIMAVERIFICACAOCOMEXITO": ""},
+            {"SERIAL": "S2", "NOMEDOCOMPUTADOR": "HOST-2", "ULTIMAVERIFICACAOCOMEXITO": ""},
+            {"SERIAL": "S3", "NOMEDOCOMPUTADOR": "HOST-3"},
+        ])
+        self.assertEqual(index["verified_by_serial"], {"S1": "2026-11-05T10:00:00+00:00"})
+
+    def test_verified_by_serial_keeps_a_date_without_timezone_without_one(self):
+        index = endpoint_index([
+            {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-1", "ULTIMAVERIFICACAOCOMEXITO": "05/11/2026 13:00"},
+        ])
+        self.assertEqual(index["verified_by_serial"], {"S1": "2026-11-05T13:00:00"})
+
+    def test_unavailable_index_has_empty_verified_by_serial(self):
+        self.assertEqual(effective_alias.unavailable_endpoint_alias_index()["verified_by_serial"], {})
+
     def test_review_items_keep_source_labels(self):
         index = endpoint_index([{"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-1"}])
         reasons = {item["serie"]: item["motivo"] for item in effective_alias.endpoint_alias_review_items(index, {"S2"})}
