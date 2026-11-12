@@ -190,7 +190,7 @@
       } catch (error) {
         estado.ocupado = false;
         atualizarBotao();
-        if (error.status === 422) await carregarConflitosSebrae(); // a lista mudou no servidor
+        if (error.status === 422 || error.status === 409) await carregarConflitosSebrae(); // a lista ou a versao_importacao mudou no servidor
         definirStatus(error.message); // depois do recarregamento, que limpa o status
         app.showToast(error.message, "error");
       }
