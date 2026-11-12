@@ -594,6 +594,64 @@ test("recuperação confirmada após reload só pede limpeza com o mesmo ID", as
   assert.match(el["sebrae-sharepoint-aviso"].textContent, /concluída/);
 });
 
+test("limpar que deixa cópia pendente avisa por toast e mostra a pasta, sem toast quando conclui", async () => {
+  const pasta = "C:/fixture/pendentes";
+  const pendente = { falhou: false, limpeza_pendente: true, incerto: false, envio_id: "a".repeat(32), snapshot_disponivel: true, status: "confirmado", pasta_pendente: pasta };
+  for (const [restou, toasts] of [[true, 1], [false, 0]]) {
+    const carga = structuredClone(CARGA_CARTOES);
+    carga.sharepoint = pendente;
+    const { el, app } = await renderizarCartoes(carga, null, async (_url, opts) => {
+      if (opts?.method === "POST") return { sharepoint: restou ? { ...pendente } : { ...pendente, limpeza_pendente: false, status: "concluido", recuperacao: { acao: "limpar" } } };
+      return carga;
+    });
+    const avisos = [];
+    app.showToast = (mensagem, tipo) => avisos.push([mensagem, tipo]);
+    const ajuda = () => el["sebrae-sharepoint-aviso"].querySelectorAll("p.ck-campo__ajuda").map(p => p.textContent);
+    assert.ok(ajuda().includes(`Ainda há cópia diferente do que foi enviado em ${pasta}. O sistema não a remove: preserve-a em outro lugar e tente limpar de novo.`));
+    el["sebrae-sharepoint-aviso"].querySelector('[data-sebrae-envio-acao="limpar"]').click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(avisos.length, toasts);
+    if (restou) {
+      assert.equal(avisos[0][1], "warning");
+      assert.match(avisos[0][0], /ainda há cópia local diferente/);
+      assert.ok(ajuda().some(texto => texto.includes(pasta)), "a caixa continua com a pasta pendente");
+      assert.ok(el["sebrae-sharepoint-aviso"].querySelector('[data-sebrae-envio-acao="limpar"]'), "pode tentar limpar de novo");
+    }
+  }
+});
+
+test("aviso de recuperação concluída tem Fechar aviso: some, continua fechado no mesmo envio e volta em outro", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  const envio = "f".repeat(32);
+  carga.sharepoint = { envio_id: envio, status: "concluido", snapshot_disponivel: true, falhou: false, limpeza_pendente: false, incerto: false, recuperacao: { acao: "limpar" } };
+  const disco = armazenamentoFalso();
+  const { el, feature } = await renderizarCartoes(carga, disco);
+  const aviso = el["sebrae-sharepoint-aviso"];
+  const fechar = () => aviso.querySelector('[id="btn-sebrae-fechar-recuperacao"]');
+  assert.equal(aviso.hidden, false);
+  assert.match(aviso.textContent, /Recuperação concluída/);
+  assert.equal(fechar().textContent, "Fechar aviso");
+  assert.match(fechar().className, /ck-btn--fantasma/);
+  fechar().click();
+  assert.equal(aviso.hidden, true);
+  assert.deepEqual(disco.dados, { sebrae_sharepoint_recuperacao_descartada: envio });
+  await feature.carregarNovosSebrae();
+  assert.equal(aviso.hidden, true, "recarregar a tela não reabre o mesmo envio");
+  carga.sharepoint = { ...carga.sharepoint, envio_id: "9".repeat(32) };
+  await feature.carregarNovosSebrae();
+  assert.equal(aviso.hidden, false, "novo envio mostra o aviso de novo");
+  assert.ok(fechar());
+});
+
+test("Fechar aviso não aparece quando o envio foi declarado não enviado (reenviar continua)", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.sharepoint = { envio_id: "c".repeat(32), sha256: "d".repeat(64), status: "falhou", snapshot_disponivel: true, falhou: false, limpeza_pendente: false, recuperacao: { acao: "declarar_nao_enviado" } };
+  const { el } = await renderizarCartoes(carga, armazenamentoFalso());
+  const aviso = el["sebrae-sharepoint-aviso"];
+  assert.equal(aviso.querySelector('[id="btn-sebrae-fechar-recuperacao"]'), null);
+  assert.ok(aviso.querySelector('[data-sebrae-envio-acao="reenviar_snapshot"]'));
+});
+
 test("declaração de não enviado exige texto forte e nunca dispara upload automaticamente", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   const envio = "b".repeat(32);
