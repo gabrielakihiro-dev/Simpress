@@ -37,6 +37,7 @@ from domains.ticket_import import (
 from domains.inventory_comparison import normalize_reference_value
 from domains.os_marcas_finalizacao import NOME_ARQUIVO as NOME_ARQUIVO_MARCAS, FontesMarcas, alterar_marca, ler_marcas
 from domains.os_observacoes import ler_observacoes, salvar_observacao
+from domains.sebrae_vinculos import vinculos_da_finalizacao
 from domains.ticket_reconciliation import _serial_key, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
@@ -241,7 +242,25 @@ def create_operations_router(
     def get_ticket_os_links():
         path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
         data = read_ticket_os_links(path)
-        return {"vinculos": [*data["vinculos"].values(), *derived_ticket_os_links(data["vinculos"])]}
+        finalized = finalization_ticket_os_links(data["vinculos"])
+        return {"vinculos": [*data["vinculos"].values(), *finalized.values(), *derived_ticket_os_links({**data["vinculos"], **finalized})]}
+
+    def finalization_ticket_os_links(manual: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Links implied by active finalization marks, by key (a manual link on the key wins); a failure never breaks the GET.
+        The marks never feed the resolver that builds them (``ticket_os_marks_sources``), and nothing here is stored."""
+        if ticket_os_marks_file is None:
+            return {}
+        try:
+            links = vinculos_da_finalizacao(ler_marcas(ticket_os_marks_path(), ticket_os_marks_fontes()), load_ticket_report())
+        except Exception as error:  # noqa: BLE001 - DomainBusyError included; log only the type, never ticket data
+            logger.warning("Vínculos de OS derivados das marcas de finalização indisponíveis (%s).", type(error).__name__)
+            return {}
+        found: Dict[str, Dict[str, Any]] = {}
+        for item in links:
+            key = ticket_os_link_key(item["fonte"], item["serie"], item["os"])
+            if key not in manual:
+                found.setdefault(key, item)
+        return found
 
     def derived_ticket_os_links(manual: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Dashboard-derived links; a manual link on the same key always wins, and a failure never breaks the GET.

@@ -185,6 +185,116 @@ class DashboardDerivedOsLinkTests(unittest.TestCase):
             self.assertEqual(self.get_links(Path(directory), broken), [])
 
 
+class FinalizationDerivedOsLinkTests(unittest.TestCase):
+    """GET de vinculos-os com os vínculos das marcas de finalização ATIVAS: manual > finalizacao > dashboard."""
+
+    CAMINHO = "/api/operacoes/chamados/vinculos-os"
+    CAMINHO_MARCAS = "/api/operacoes/chamados/marcas-finalizacao"
+    REPORT = {"chamados": [
+        {"serie": "SN-1", "simpress": {"ordens_servico": ["7285070"]}, "oracle": [{"ordem_servico": "7285070"}]},
+        {"serie": "SN-2", "simpress": {"ordens_servico": ["99"]}},
+    ]}
+    OPEN = [{"numero": "UTIC-2026-0094", "automaticos": {"K": "SN-1", "E": ""}}, {"numero": "UTIC-2026-0095", "automaticos": {"K": "SN-2", "E": ""}}]
+    # Marca do ano passado, com série em outra grafia (minúscula, espaço) e OS com espaço: a chave tem de ser a do relatório.
+    FINALIZACAO = {"UTIC-2025-77": {
+        "finalizacao": {"status": "ok", "em": "2025-12-30T10:00:00"},
+        "os_vinculada": {"fonte": "simpress", "serie": " sn 1 ", "os": "7285 070", "origem": "manual", "em": "2025-12-30T09:00:00"},
+    }}
+
+    def setUp(self):
+        pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(pasta.cleanup)
+        self.root = Path(pasta.name)
+        self.links = self.root / "os_chamados_vinculos.json"
+        (self.root / "tickets.json").write_text(json.dumps(self.REPORT), encoding="utf-8")
+
+    def router(self, finalizacao=None, dashboard=True):
+        fontes = FontesMarcas(finalizacao=self.FINALIZACAO if finalizacao is None else finalizacao)
+        return create_operations_router(
+            load_comparison_history=lambda: [], comparison_history_for_display=lambda event: event,
+            ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
+            ticket_os_links_file=lambda: self.links,
+            dashboard_vinculos=(lambda report: vinculos_derivados(self.OPEN, report)) if dashboard else None,
+            ticket_os_marks_file=lambda: self.root / "marcas.json", ticket_os_marks_sources=lambda: fontes,
+        )
+
+    def get(self, **kwargs):
+        return route_handler(self.router(**kwargs), self.CAMINHO, "GET")()["vinculos"]
+
+    def manual(self, fonte="simpress", serie="SN-1", os="7285070", chamado="UTIC-2026-5"):
+        ano, numero = chamado.split("-")[1:]
+        chave = json.dumps([fonte, serie.replace("-", ""), os], separators=(",", ":"))
+        self.links.write_text(json.dumps({"version": 1, "vinculos": {chave: {
+            "fonte": fonte, "serie": serie, "os": os, "ano": int(ano), "numero": numero, "chamado": chamado}}}), encoding="utf-8")
+
+    def test_active_mark_gives_a_finalizacao_link_with_the_year_of_its_ticket_and_the_report_spelling(self):
+        links = self.get(dashboard=False)
+        self.assertEqual({(v["fonte"], v["serie"], v["os"], v["ano"], v["numero"], v["chamado"], v["origem"]) for v in links}, {
+            ("simpress", "SN-1", "7285070", 2025, "77", "UTIC-2025-77", "finalizacao"),
+            ("oracle", "SN-1", "7285070", 2025, "77", "UTIC-2025-77", "finalizacao"),
+        })
+        self.assertEqual({v["finalizado_em"] for v in links}, {"2025-12-30T10:00:00"})
+
+    def test_manual_beats_finalizacao_beats_dashboard_on_the_same_key(self):
+        por_chave = lambda links: {(v["fonte"], v["serie"], v["os"]): (v["chamado"], v.get("origem")) for v in links}  # manual não tem origem
+        self.assertEqual(por_chave(self.get()), {
+            ("simpress", "SN-1", "7285070"): ("UTIC-2025-77", "finalizacao"),  # dashboard (UTIC-2026-0094) perde
+            ("oracle", "SN-1", "7285070"): ("UTIC-2025-77", "finalizacao"),
+            ("simpress", "SN-2", "99"): ("UTIC-2026-0095", "dashboard"),  # sem marca, o derivado do Dashboard segue
+        })
+        self.manual()
+        com_manual = self.get()
+        self.assertEqual(por_chave(com_manual)[("simpress", "SN-1", "7285070")], ("UTIC-2026-5", None))  # manual vence
+        self.assertEqual([v.get("origem") for v in com_manual], [None, "finalizacao", "dashboard"])  # ordem: manual, finalizacao, dashboard
+
+    def test_undone_mark_gives_no_link(self):
+        router = self.router()
+        route_handler(router, self.CAMINHO_MARCAS, "PUT")(OsMarcaPayload(serie="sn 1", os="7285 070", chamado="UTIC-2025-77", acao="desfazer"))
+        links = route_handler(router, self.CAMINHO, "GET")()["vinculos"]
+        self.assertEqual([(v["chamado"], v["origem"]) for v in links], [("UTIC-2026-0094", "dashboard"), ("UTIC-2026-0094", "dashboard"), ("UTIC-2026-0095", "dashboard")])
+
+    def test_mark_serial_and_os_spelling_resolve_to_the_same_key_as_the_report(self):
+        self.manual(chamado="UTIC-2026-5")  # chave manual da grafia do relatório: a marca " sn 1 " / "7285 070" cai na mesma chave
+        self.assertEqual([(v["fonte"], v["chamado"]) for v in self.get(dashboard=False)], [("simpress", "UTIC-2026-5"), ("oracle", "UTIC-2025-77")])
+
+    def test_unreadable_marks_keep_the_manual_and_dashboard_links_with_only_the_error_type_in_the_log(self):
+        self.manual()
+        esperado = [("UTIC-2026-5", None), ("UTIC-2026-0094", "dashboard"), ("UTIC-2026-0095", "dashboard")]
+        (self.root / "marcas.json").write_text("{ não é json UTIC-2025-77", encoding="utf-8")
+        causas = {"arquivo ilegível": None, "ler_marcas ocupado": patch("routers.operations.ler_marcas", side_effect=DomainBusyError("segredo UTIC-2025-77"))}
+        for nome, causa in causas.items():
+            with self.subTest(nome), self.assertLogs("routers.operations", level="WARNING") as log:
+                if causa is None:
+                    links = self.get()
+                else:
+                    with causa:
+                        links = self.get()
+            self.assertEqual([(v["chamado"], v.get("origem")) for v in links], esperado)
+            self.assertIn("DomainBusyError", log.output[0])
+            self.assertNotIn("UTIC-2025-77", log.output[0])
+
+    def test_without_a_marks_file_provider_nothing_is_derived_from_marks(self):
+        router = create_operations_router(
+            load_comparison_history=lambda: [], comparison_history_for_display=lambda event: event,
+            ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
+            ticket_os_links_file=lambda: self.links, ticket_os_marks_sources=lambda: FontesMarcas(finalizacao=self.FINALIZACAO),
+        )
+        self.assertEqual(route_handler(router, self.CAMINHO, "GET")()["vinculos"], [])
+
+    def test_manual_links_file_is_never_written_by_the_get_or_by_the_marks_put(self):
+        self.manual()
+        antes = self.links.read_bytes()
+        router = self.router()
+        route_handler(router, self.CAMINHO, "GET")()
+        route_handler(router, self.CAMINHO_MARCAS, "PUT")(OsMarcaPayload(serie="sn 1", os="7285 070", chamado="UTIC-2025-77", acao="desfazer"))
+        route_handler(router, self.CAMINHO_MARCAS, "PUT")(OsMarcaPayload(serie="sn 1", os="7285 070", chamado="UTIC-2025-77", acao="refazer"))
+        route_handler(router, self.CAMINHO, "GET")()
+        self.assertEqual(self.links.read_bytes(), antes)
+        self.links.unlink()
+        route_handler(router, self.CAMINHO, "GET")()
+        self.assertFalse(self.links.exists())  # GET sem arquivo também não cria nada
+
+
 class TicketOsMarksRouteTests(unittest.TestCase):
     """GET/PUT das marcas de OS finalizada (``/api/operacoes/chamados/marcas-finalizacao``)."""
 
