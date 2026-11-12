@@ -211,18 +211,26 @@
 
   let encerrarImpressao = null;
 
+  // Lê o termo da tela. O nome do arquivo é sempre "SÉRIE - Nome completo": sem uma das partes, mostra o aviso e devolve null.
+  // Gerar PDF e Criar lembrete usam o mesmo teste.
+  function termosLerValidado(termo) {
+    const form = porId(`termos-form-${termo}`);
+    if (!form || !TERMOS[termo]) return null;
+    const dados = termosLerDados(termo, form);
+    if (!termosLimparParte(dados.campos[TERMOS[termo].campoSerie], true) || !termosLimparParte(dados.campos.nome)) {
+      avisar(termo, AVISO_SEM_NOME, true);
+      return null;
+    }
+    return dados;
+  }
+
   function termosGerarPdf(termo) {
     const d = doc();
-    const form = porId(`termos-form-${termo}`);
     const folha = porId("termos-impressao");
-    if (!d || !form || !folha || !TERMOS[termo]) return;
-    const dados = termosLerDados(termo, form);
+    if (!d || !folha) return;
+    const dados = termosLerValidado(termo);
+    if (!dados) return;
     const serie = dados.campos[TERMOS[termo].campoSerie];
-    // O nome do arquivo é sempre "SÉRIE - Nome completo": sem uma das partes, não gera.
-    if (!termosLimparParte(serie, true) || !termosLimparParte(dados.campos.nome)) {
-      avisar(termo, AVISO_SEM_NOME, true);
-      return;
-    }
     avisar(termo, "");
     if (encerrarImpressao) encerrarImpressao();
     const tituloOriginal = d.title;
@@ -304,6 +312,6 @@
 
   return {
     termosSelecionarAba, termosTeclaAba, termosGerarPdf, termosLimpar, termosPreencherDoEquipamento,
-    termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosMontarFolha,
+    termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosLerValidado, termosMontarFolha,
   };
 });

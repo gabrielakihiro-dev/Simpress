@@ -55,6 +55,14 @@
 .lembretes__dialogo .lembretes__dialogo-item { max-height: 6.5em; overflow-y: auto; padding: 8px 10px; border-radius: var(--raio-sm); background: var(--cor-superficie-funda); color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
 .lembretes__dialogo-acoes { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* Diálogo Criar lembrete (Termo → Lembrete). O kit pinta todo p e textarea de .ck-veu > .ck-dialogo; por isso os seletores repetem esse escopo. */
+.ck-veu > .ck-dialogo.lembretes__dialogo--criar { width: min(560px, 100%); max-width: 560px; }
+.lembretes__dialogo .lembretes__criar-campo { height: auto; min-height: 9em; padding: 8px 9px; line-height: 1.4; resize: vertical; }
+.lembretes__dialogo .lembretes__dica, .lembretes__dialogo .lembretes__erro { flex: none; font-size: var(--fs-xs); }
+.ck-veu > .ck-dialogo.lembretes__dialogo p.lembretes__erro { color: var(--cor-alerta-texto); }
+.ck-veu > .ck-dialogo.lembretes__dialogo .lembretes__criar-campo[aria-invalid="true"] { border-color: var(--cor-alerta-texto); }
+.termos__estado .lembretes__ver { margin-inline-start: 8px; }
+
 /* Abaixo de 480px de largura do painel: cada lembrete vira um cartão, ações sempre visíveis, alvos de 44px. */
 @container (max-width: 479px) {
   .lembretes__item { flex-wrap: wrap; padding: 12px; }
