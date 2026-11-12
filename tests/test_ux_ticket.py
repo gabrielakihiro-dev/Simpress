@@ -46,6 +46,10 @@ class Portal:
         self.ceps.append(cep)
         return "HP 250R G9", list(self.opcoes)
 
+    def preparar_transferencia(self, serial, aba):
+        self.abas[aba] = serial
+        return "HP 250R G9"
+
     def escolher_endereco(self, serial, modelo, aba, endereco, cep):
         self.escolhas.append((aba, endereco))
         self.ceps_escolha.append(cep)
@@ -299,6 +303,34 @@ class TicketsUXTests(unittest.TestCase):
         self.assertEqual(self.portal.envios, 0)
         self.assertEqual(len(self.historico()), 1)
 
+    def test_alterar_endereco_session_has_no_workbook_cnpj_or_internal_number(self):
+        sessao = self.servico.preparar_alterar_endereco(serial="abc123")
+        self.assertEqual((sessao["status"], sessao["tipo"], sessao["serial"]), ("preparado", ux_ticket.TIPO_ENDERECO, "ABC123"))
+        self.assertNotIn("cnpj_faturamento", sessao)
+        self.assertEqual(self.portal.ceps, [])  # no Meus Endereços / CEP step
+        with self.assertRaises(ux_chamados.ErroUX) as erro:
+            self.servico.escolher_endereco(session_id=sessao["session_id"], serial="ABC123", endereco=PATO_BRANCO)
+        self.assertEqual(erro.exception.status, 422)
+        self.executar(sessao, chamado_interno="12345678")
+        formulario = self.portal.formularios[-1]
+        self.assertEqual((formulario.tipo, formulario.chamado_interno, formulario.arquivo), (ux_ticket.TIPO_ENDERECO, "", b""))
+
+    def test_alterar_endereco_keeps_the_real_send_gates(self):
+        sessao = self.servico.preparar_alterar_endereco(serial="BRM551RN1Y")
+        with self.assertRaises(ux_chamados.ErroUX) as erro:
+            self.executar(sessao, serial="BRM551RN1Y", enviar=True, confirmado=True)
+        self.assertEqual((erro.exception.status, str(erro.exception)), (422, ux_chamados.MSG_SERIE_TESTE))
+        sessao = self.servico.preparar_alterar_endereco(serial="abc123")
+        with self.assertRaises(ux_chamados.ErroUX) as erro:
+            self.executar(sessao, enviar=True, confirmado=False)
+        self.assertEqual((erro.exception.status, str(erro.exception)), (422, "O envio real do ticket exige confirmação."))
+        with mock.patch.dict(os.environ, {ux_chamados.VAR_SEM_ENVIO: "1"}), self.assertRaises(ux_chamados.ErroUX) as erro:
+            self.executar(sessao, enviar=True, confirmado=True)
+        self.assertEqual((erro.exception.status, str(erro.exception)), (422, ux_chamados.MSG_SEM_ENVIO))
+        self.assertEqual(self.portal.envios, 0)
+        resultado = self.executar(sessao, enviar=True, confirmado=True)
+        self.assertEqual((resultado["status"], self.portal.envios), ("enviado", 1))
+
     def test_cancel_and_expiry_close_the_session_tab(self):
         primeira = self.preparar()
         self.servico.cancelar(primeira["session_id"])
@@ -360,6 +392,21 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(self.enviar(sessao, solicitante={"nome": "", "email": "p@example.test", "telefone": "1"}).status_code, 422)
         resposta = self.client.post("/api/ux/gerar-ticket/cancelar", json={"session_id": sessao["session_id"]})
         self.assertEqual(resposta.json(), {"status": "cancelado"})
+
+    def test_alterar_endereco_route_needs_only_the_series_and_never_builds_the_workbook(self):
+        resposta = self.client.post("/api/ux/gerar-ticket/preparar-alterar-endereco", json={"serial": "ABC123"})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        sessao = resposta.json()
+        self.assertEqual((sessao["status"], sessao["tipo"]), ("preparado", "endereco"))
+        self.gerar.assert_not_called()
+        texto = (
+            "Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae "
+            "Av. Tupi, 333 - Bortot - Pato Branco/PR para Rua Fictícia, 1 - Centro - Curitiba/PR."
+        )
+        self.assertEqual(self.enviar(sessao, descricao=texto).json()["status"], "preenchido")
+        self.assertEqual(self.portal.formularios[-1].descricao, texto)
+        extra = self.client.post("/api/ux/gerar-ticket/preparar-alterar-endereco", json={"serial": "ABC123", "entrega_cnpj": "1"})
+        self.assertEqual(extra.status_code, 422)
 
     def test_transport_request_text_is_accepted_as_the_ticket_description_unchanged(self):
         # Default Registro of "Gerar ticket no UX" = the F2 "Texto para Transporte" (montarTextoSolicitacaoTransporte).

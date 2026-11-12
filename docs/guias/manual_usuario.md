@@ -138,14 +138,16 @@ O resultado traz, entre outras seções:
 2. Abra manualmente a aba **Transporte** no menu lateral.
 3. Revise **origem** (retirada) e **destino** (entrega): CNPJ, endereço e contatos. O **Catálogo de unidades** ajuda a preencher.
 4. Preencha todos os campos obrigatórios: série; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega (e a duração da pausa, se o escritório fechar para o almoço). Botões como **+ Substituição** inserem observações prontas.
-5. Clique em **Gerar Planilha** no rodapé. O arquivo é baixado pelo navegador.
+5. Clique em **Transporte** (antigo **Gerar Planilha**), o primeiro botão do rodapé. O arquivo é baixado pelo navegador.
 6. Abra a planilha baixada e confira os dados antes de encaminhá-la.
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).
 
 Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação. Se o UX estiver deslogado, a automação clica em **Acesso Time Simpress** e escolhe a conta `gansouza@simpress.com.br` (nunca digita senha nem MFA). O endereço da unidade de entrega é escolhido sozinho quando sobra um só: o mesmo endereço repetido (como Irati), o complemento igual ao do cadastro (como "Sala 4") ou o bairro abreviado (como "AER" e "AEROPORTO") contam como um. Se ainda houver mais de um, o modal lista e você escolhe.
 
-Se **Gerar Planilha** não funcionar, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
+Se **Transporte** não gerar a planilha, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
+
+**Só alterar o endereço do equipamento:** o segundo botão, **Alterar Endereço**, acende assim que a série e os endereços de retirada e entrega estão na tela (não precisa de representante, telefone nem e-mail). Ele não gera planilha: abre **Alterar Endereço no UX** com o Incidente **Transporte** e o Motivo **Transferência Fisica de Equipamentos**, e o Registro vem com "Solicito apenas o endereço do equipamento da unidade do Sebrae (entrega) para (retirada).", editável. Sem CNPJ, CEP, anexo nem Nº do chamado interno; **Revisar e finalizar** continua pedindo a sua confirmação.
 
 **Textos prontos para chamados:** na **Home**, depois de pesquisar o equipamento, o botão de textos para chamados manuais mostra modelos editáveis. Use **Copiar** para levar o texto ao chamado.
 

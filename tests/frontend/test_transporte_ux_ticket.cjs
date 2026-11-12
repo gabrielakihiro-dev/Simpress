@@ -26,6 +26,8 @@ function fakeElement(id = "") {
     setAttribute(name, value) { this.attrs[name] = String(value); },
     replaceChildren(...children) { this.children = children; },
     append(...children) { this.children.push(...children); },
+    // The <dt> before a <dd>; created on first use.
+    get previousElementSibling() { return this._dt || (this._dt = fakeElement(id + ":dt")); },
   };
 }
 
@@ -36,7 +38,7 @@ const TEXTO_TRANSPORTE = [
   "Endereço para Retirada: Rua A, 1", "Endereço para Entrega: Rua B, 2",
 ].join(String.fromCharCode(10));
 
-function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte = "" } = {}) {
+function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte = "", serial = "", textoEndereco = "" } = {}) {
   const elementos = new Map();
   const listeners = {};
   const el = id => {
@@ -49,6 +51,7 @@ function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte
   global.document = {
     getElementById: el,
     createElement: () => fakeElement(),
+    querySelector: seletor => el("query:" + seletor),
     createTextNode: text => ({ text }),
     addEventListener: (type, fn) => { listeners[type] = fn; },
   };
@@ -71,6 +74,9 @@ function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte
     showToast: (mensagem, tipo) => efeitos.toasts.push({ mensagem, tipo }),
     // transfer-form.js publishes this; it returns { aviso } when the F2 addresses are missing.
     montarTextoSolicitacaoTransporte: () => textoTransporte ? { texto: textoTransporte } : { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." },
+    // Also from transfer-form.js, for the "Alterar Endereço" button.
+    serialAlterarEndereco: () => serial,
+    montarTextoAlterarEndereco: () => textoEndereco ? { texto: textoEndereco } : { aviso: "Selecione o equipamento de origem e a unidade de destino para carregar os endereços." },
   };
   el("select-unidade-destino").value = "7";
   const acoes = createUxTicket({ app, appState: { unidadesList: [{ id: 7, cep }] } });
@@ -84,7 +90,7 @@ function criar({ responder, cep = "80000-000", confirmar = true, textoTransporte
 const esperar = () => new Promise(resolve => setImmediate(resolve));
 const etapas = efeitos => efeitos.chamadas.map(([etapa]) => etapa);
 
-test("Gerar Planilha opens the modal and prepares with the payload plus the delivery CEP", async () => {
+test("Transporte (#btn-gerar-planilha) opens the modal and prepares with the payload plus the delivery CEP", async () => {
   const h = criar({ responder: () => PREPARADO, textoTransporte: TEXTO_TRANSPORTE });
   await h.gerar();
   assert.deepEqual(h.efeitos.abertos, [["modal-ticket-ux", "#ux-ticket-cancelar", "fecharTicketUX"]]);
@@ -382,4 +388,74 @@ test("the modal markup keeps the visible alert; Deslocamento is the Home default
   assert.match(html, /id="modal-texto-transporte"/);
   // Copiar texto stays out of the F2 aside (not requested back).
   assert.doesNotMatch(html, /btn-copiar-resumo-cockpit/);
+});
+
+const TEXTO_ENDERECO = ["Prezados,", "", "Solicito apenas o endereço do equipamento da unidade do Sebrae Rua B, 2 para Rua A, 1."].join(String.fromCharCode(10));
+const PREPARADO_ENDERECO = {
+  status: "preparado", tipo: "endereco", session_id: "b".repeat(32), serial: "LENTO", modelo: "Modelo X",
+  solicitante: SOLICITANTE, ultimo_envio: null,
+};
+
+test("Alterar Endereço prepares with only the série, never /preparar, and shows its own Registro", async () => {
+  const h = criar({ responder: () => PREPARADO_ENDERECO, serial: "LENTO", textoEndereco: TEXTO_ENDERECO, textoTransporte: TEXTO_TRANSPORTE });
+  h.acoes.alterarEnderecoTicketUX();
+  await esperar();
+  assert.deepEqual(h.efeitos.chamadas, [["preparar-alterar-endereco", { serial: "LENTO" }]]);
+  assert.equal(h.el("titulo-ticket-ux").textContent, "Alterar Endereço no UX");
+  assert.equal(h.el("ux-ticket-registro").value, TEXTO_ENDERECO);
+  for (const id of ["ux-ticket-endereco", "ux-ticket-cnpj-instalacao", "ux-ticket-cnpj-faturamento", "ux-ticket-anexo"]) {
+    assert.equal(h.el(id).hidden, true, id);
+    assert.equal(h.el(id).previousElementSibling.hidden, true, id + " <dt>");
+  }
+  assert.equal(h.el("ux-ticket-chamado-interno").hidden, true);
+  assert.equal(h.el("ux-ticket-simular").disabled, false);
+  assert.equal(h.el("ux-ticket-estado").textContent, "Pronto para simular ou finalizar");
+});
+
+test("Alterar Endereço sends an empty internal number and confirms with the Transporte incident", async () => {
+  const h = criar({ responder: etapa => etapa === "preparar-alterar-endereco" ? PREPARADO_ENDERECO : { status: "enviado" }, serial: "LENTO", textoEndereco: TEXTO_ENDERECO });
+  h.acoes.alterarEnderecoTicketUX();
+  await esperar();
+  h.el("ux-ticket-chamado-interno").value = "123456";
+  await h.acoes.executarTicketUX(true);
+  const [etapa, corpo] = h.efeitos.chamadas.at(-1);
+  assert.equal(etapa, "enviar");
+  assert.equal(corpo.chamado_interno, "");
+  assert.equal(corpo.descricao, TEXTO_ENDERECO);
+  assert.equal(corpo.enviar, true);
+  assert.equal(corpo.confirmado, true);
+  assert.match(h.efeitos.confirmacoes[0].mensagem, /Incidente: Transporte · Transferência Fisica de Equipamentos/);
+});
+
+test("Alterar Endereço without a série or the addresses only warns and calls nothing", async () => {
+  const semSerie = criar({ responder: () => PREPARADO_ENDERECO, textoEndereco: TEXTO_ENDERECO });
+  semSerie.acoes.alterarEnderecoTicketUX();
+  const semEndereco = criar({ responder: () => PREPARADO_ENDERECO, serial: "LENTO" });
+  semEndereco.acoes.alterarEnderecoTicketUX();
+  await esperar();
+  assert.deepEqual([...semSerie.efeitos.chamadas, ...semEndereco.efeitos.chamadas], []);
+  assert.equal(semSerie.efeitos.toasts[0].mensagem, "Pesquise e selecione o equipamento antes de alterar o endereço.");
+  assert.equal(semEndereco.efeitos.toasts[0].mensagem, "Selecione o equipamento de origem e a unidade de destino para carregar os endereços.");
+});
+
+test("after Alterar Endereço, Transporte restores the full modal and its own Registro", async () => {
+  const h = criar({ responder: etapa => etapa === "preparar" ? PREPARADO : PREPARADO_ENDERECO, serial: "LENTO", textoEndereco: TEXTO_ENDERECO, textoTransporte: TEXTO_TRANSPORTE });
+  h.acoes.alterarEnderecoTicketUX();
+  await esperar();
+  h.acoes.fecharTicketUX();
+  await h.gerar();
+  assert.equal(h.el("titulo-ticket-ux").textContent, "Gerar ticket no UX");
+  assert.equal(h.el("ux-ticket-registro").value, TEXTO_TRANSPORTE);
+  assert.equal(h.el("ux-ticket-cnpj-instalacao").hidden, false);
+  assert.equal(h.el("ux-ticket-chamado-interno").hidden, false);
+});
+
+test("the bar shows Transporte first and Alterar Endereço second, before Texto para Transporte", () => {
+  const transporte = html.indexOf('id="btn-gerar-planilha"');
+  const alterar = html.indexOf('id="btn-alterar-endereco"');
+  const texto = html.indexOf("Texto para Transporte</span>");
+  assert.ok(transporte > 0 && transporte < alterar && alterar < texto);
+  assert.match(html, /id="btn-gerar-planilha"[^>]*>[\s\S]*?<span>Transporte<\/span>/);
+  assert.match(html, /id="btn-alterar-endereco"\s+data-on-click="alterarEnderecoTicketUX"[^>]*disabled\s*>[\s\S]*?<span>Alterar Endereço<\/span>/);
+  assert.doesNotMatch(html, /Gerar Planilha/);
 });

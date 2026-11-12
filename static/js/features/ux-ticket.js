@@ -1,4 +1,4 @@
-/** Transporte (F2): after "Gerar Planilha", prepare the UX "Gerar ticket" and simulate or confirm the submission. */
+/** Transporte (F2): after "Transporte" (workbook) or "Alterar Endereço" (série + addresses), prepare the UX "Gerar ticket" and simulate or confirm the submission. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).uxTicket = factory;
@@ -13,6 +13,12 @@
   const PLACEHOLDER = /\[[^\]\n]*\]|:[ \t]*$/m;
   const CAMPOS = { nome: "ux-ticket-nome", email: "ux-ticket-email", telefone: "ux-ticket-telefone" };
   const byId = id => document.getElementById(id);
+  // Same values as TIPO_ATUALIZACAO / TIPO_ENDERECO in domains/ux_ticket.py.
+  const ATUALIZACAO = "atualizacao";
+  const ENDERECO = "endereco";
+  // Rows of the modal that only the "Transporte" ticket (Atualização Cadastral + workbook) uses.
+  const SO_ATUALIZACAO = ["ux-ticket-endereco", "ux-ticket-cnpj-instalacao", "ux-ticket-cnpj-faturamento", "ux-ticket-anexo"];
+  const ehEndereco = pedido => pedido?.tipo === ENDERECO;
   let vigente = null;
   // Default solicitante, read once from the server (no corporate e-mail in front-end files); shown before /preparar ends.
   let padrao = null;
@@ -50,14 +56,14 @@
   }
 
   function motivoBloqueio(pedido) {
-    if (!pedido) return "Gere a planilha no Transporte para preparar o ticket.";
+    if (!pedido) return "Use Transporte ou Alterar Endereço para preparar o ticket.";
     if (pedido.enviando) return "Envio em andamento: aguarde o resultado do UX.";
     if (pedido.ocupado) return "";
     if (!pedido.session_id) {
-      if (pedido.concluido) return "Esta sessão do UX já foi usada. Gere a planilha de novo se precisar de outro ticket.";
+      if (pedido.concluido) return "Esta sessão do UX já foi usada. Use Transporte ou Alterar Endereço de novo se precisar de outro ticket.";
       return "Simulação e finalização indisponíveis: a sessão do UX não está preparada. Use Preparar novamente.";
     }
-    if (!pedido.dados?.endereco) return "Escolha e confirme o endereço para liberar a simulação e a finalização.";
+    if (!ehEndereco(pedido) && !pedido.dados?.endereco) return "Escolha e confirme o endereço para liberar a simulação e a finalização.";
     const registro = byId("ux-ticket-registro").value.trim();
     if (!registro) return "Preencha o Registro.";
     if (registro.length > REGISTRO_MAX) return "O Registro passa de " + REGISTRO_MAX + " caracteres.";
@@ -65,7 +71,7 @@
     const solicitante = lerSolicitante();
     if (!Object.values(solicitante).every(Boolean)) return "Preencha Nome, E-mail e Contato do solicitante.";
     if (!/^[^@\s]+@[^@\s]+$/.test(solicitante.email)) return "Informe um E-mail válido para o solicitante.";
-    if (byId("ux-ticket-chamado-interno").value.trim().length > INTERNO_MAX) return "O Nº de chamado interno aceita até " + INTERNO_MAX + " caracteres.";
+    if (!ehEndereco(pedido) && byId("ux-ticket-chamado-interno").value.trim().length > INTERNO_MAX) return "O Nº de chamado interno aceita até " + INTERNO_MAX + " caracteres.";
     return "";
   }
 
@@ -128,7 +134,7 @@
   function renderizarEnderecos(pedido) {
     const grupo = byId("ux-ticket-enderecos");
     const lista = byId("ux-ticket-enderecos-lista");
-    const ambiguo = Boolean(pedido.session_id) && !pedido.dados?.endereco;
+    const ambiguo = !ehEndereco(pedido) && Boolean(pedido.session_id) && !pedido.dados?.endereco;
     const opcoes = ambiguo && Array.isArray(pedido.dados?.opcoes_endereco) ? pedido.dados.opcoes_endereco : [];
     lista.replaceChildren(...opcoes.map((texto, indice) => {
       const rotulo = document.createElement("label");
@@ -156,7 +162,9 @@
       // The server value only replaces an empty or untouched default, never what the user typed.
       if ((!valor || valor === padrao?.[campo]) && dados.solicitante?.[campo]) byId(id).value = dados.solicitante[campo];
     }
-    if (pedido.dados.endereco) {
+    if (ehEndereco(pedido)) {
+      mostrarEstado("Pronto para simular ou finalizar", "No UX o formulário está em Transporte / Transferência Fisica de Equipamentos; Simular preenchimento completa o Registro e o solicitante. Nada foi enviado ao UX.");
+    } else if (pedido.dados.endereco) {
       mostrarEstado("Pronto para simular ou finalizar", "No UX o formulário está preenchido até Meus Endereços; Simular preenchimento completa os CNPJs, o Registro, o anexo e o solicitante. Nada foi enviado ao UX.");
     } else if (pedido.dados.opcoes_endereco?.length) {
       mostrarEstado("Escolha o endereço", "O UX listou mais de um endereço para o CEP da unidade de entrega. Escolha o correto e confirme.");
@@ -187,7 +195,8 @@
     renderizarEnderecos(pedido);
     controles();
     try {
-      const dados = await post("preparar", conferido ? { ...pedido.corpo, conferido: true } : pedido.corpo);
+      const etapa = ehEndereco(pedido) ? "preparar-alterar-endereco" : "preparar";
+      const dados = await post(etapa, conferido ? { ...pedido.corpo, conferido: true } : pedido.corpo);
       if (!atual(pedido)) {
         cancelarSessao(dados?.session_id); // closed while preparing: do not leave the UX tab behind
         return;
@@ -204,7 +213,7 @@
     }
   }
 
-  function limparModal(payload) {
+  function limparModal(payload, tipo) {
     for (const id of ["ux-ticket-serie", "ux-ticket-modelo", "ux-ticket-endereco", "ux-ticket-cnpj-instalacao", "ux-ticket-cnpj-faturamento", "ux-ticket-anexo"]) {
       byId(id).textContent = "—";
     }
@@ -212,8 +221,18 @@
     byId("ux-ticket-ultimo-envio").hidden = true;
     byId("ux-ticket-enderecos").hidden = true;
     byId("ux-ticket-enderecos-lista").replaceChildren();
-    // Default Registro = the F2 "Texto para Transporte" (same function); empty when the addresses are missing.
-    byId("ux-ticket-registro").value = app.montarTextoSolicitacaoTransporte?.().texto || "";
+    const endereco = tipo === ENDERECO;
+    byId("titulo-ticket-ux").textContent = endereco ? "Alterar Endereço no UX" : "Gerar ticket no UX";
+    for (const id of SO_ATUALIZACAO) {
+      byId(id).hidden = endereco;
+      byId(id).previousElementSibling.hidden = endereco; // its <dt>
+    }
+    // "Alterar Endereço" never sends the internal ticket number.
+    byId("ux-ticket-chamado-interno").hidden = endereco;
+    document.querySelector('label[for="ux-ticket-chamado-interno"]').hidden = endereco;
+    // Default Registro: "Transporte" = the F2 "Texto para Transporte"; "Alterar Endereço" = its own text. Empty without both addresses.
+    const texto = endereco ? app.montarTextoAlterarEndereco?.() : app.montarTextoSolicitacaoTransporte?.();
+    byId("ux-ticket-registro").value = texto?.texto || "";
     for (const id of Object.values(CAMPOS)) byId(id).value = "";
     byId("ux-ticket-chamado-interno").value = "";
     mostrarErro("");
@@ -233,7 +252,7 @@
     controles();
   }
 
-  async function prepararTicketUX(payload) {
+  async function prepararTicketUX(payload, tipo = ATUALIZACAO) {
     try {
       if (!payload?.serial) return;
       if (vigente?.ocupado) {
@@ -241,12 +260,13 @@
         return;
       }
       encerrar();
-      const entrega_cep = cepDaEntrega();
-      const pedido = vigente = { corpo: { ...payload, entrega_cep }, dados: null, session_id: null };
-      limparModal(payload);
+      const entrega_cep = tipo === ENDERECO ? "" : cepDaEntrega();
+      const corpo = tipo === ENDERECO ? { serial: payload.serial } : { ...payload, entrega_cep };
+      const pedido = vigente = { tipo, corpo, dados: null, session_id: null };
+      limparModal(payload, tipo);
       app.abrirModalAcessivel(MODAL, "#ux-ticket-cancelar", "fecharTicketUX");
       void preencherPadrao(pedido);
-      if (entrega_cep.replace(/\D/g, "").length !== 8) {
+      if (tipo === ATUALIZACAO && entrega_cep.replace(/\D/g, "").length !== 8) {
         pedido.falha = true;
         mostrarEstado("Erro", "O ticket não foi preparado.");
         mostrarErro("A unidade de entrega não tem CEP com 8 dígitos no cadastro de unidades. Corrija o CEP da unidade e gere a planilha de novo.");
@@ -258,6 +278,17 @@
       // Optional step after the download: never let it break the transfer flow.
       console.error("Erro ao preparar o ticket no UX:", erro);
     }
+  }
+
+  // Button "Alterar Endereço": only the série and both addresses; never calls /api/gerar-planilha.
+  function alterarEnderecoTicketUX() {
+    const serial = app.serialAlterarEndereco?.();
+    const { aviso } = app.montarTextoAlterarEndereco?.() || { aviso: "Não foi possível montar o texto do Registro." };
+    if (!serial || aviso) {
+      app.showToast(serial ? aviso : "Pesquise e selecione o equipamento antes de alterar o endereço.", "warning");
+      return;
+    }
+    void prepararTicketUX({ serial }, ENDERECO);
   }
 
   function encerrar() {
@@ -315,14 +346,14 @@
     const serial = pedido.dados.serial;
     const descricao = byId("ux-ticket-registro").value.trim();
     const solicitante = lerSolicitante();
-    const chamado_interno = byId("ux-ticket-chamado-interno").value.trim();
+    const chamado_interno = ehEndereco(pedido) ? "" : byId("ux-ticket-chamado-interno").value.trim();
     pedido.ocupado = true;
     controles();
     try {
       if (enviar) {
         const confirmou = await app.confirmarAcao({
           titulo: "Finalizar ticket no UX",
-          mensagem: "Série: " + serial + "\nEndereço: " + pedido.dados.endereco
+          mensagem: "Série: " + serial + (ehEndereco(pedido) ? "\nIncidente: Transporte · Transferência Fisica de Equipamentos" : "\nEndereço: " + pedido.dados.endereco)
             + "\nSolicitante: " + solicitante.nome + " · " + solicitante.email + " · " + solicitante.telefone
             + (chamado_interno ? "\nNº de chamado interno: " + chamado_interno : "") + "\n\n" + descricao,
           confirmar: "Finalizar ticket",
@@ -385,6 +416,6 @@
 
   return {
     fecharTicketUX, atualizarTicketUX, prepararNovamenteTicketUX, conferirTicketUX,
-    confirmarEnderecoTicketUX, executarTicketUX,
+    confirmarEnderecoTicketUX, executarTicketUX, alterarEnderecoTicketUX,
   };
 });
