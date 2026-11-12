@@ -390,7 +390,7 @@ test("the modal markup keeps the visible alert; Deslocamento is the Home default
   assert.doesNotMatch(html, /btn-copiar-resumo-cockpit/);
 });
 
-const TEXTO_ENDERECO = ["Prezados,", "", "Solicito apenas o endereço do equipamento da unidade do Sebrae Rua B, 2 para Rua A, 1."].join(String.fromCharCode(10));
+const TEXTO_ENDERECO = ["Prezados,", "", "Solicito alteração do endereço do equipamento da Unidade de Curitiba/PR para Maringá/PR."].join(String.fromCharCode(10));
 const PREPARADO_ENDERECO = {
   status: "preparado", tipo: "endereco", session_id: "b".repeat(32), serial: "LENTO", modelo: "Modelo X",
   solicitante: SOLICITANTE, ultimo_envio: null,
