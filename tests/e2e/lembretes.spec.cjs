@@ -532,3 +532,15 @@ test("Criar lembrete cabe em 320px sem rolagem horizontal", async ({ page }) => 
   expect(medidas.direita).toBeLessThanOrEqual(medidas.janela);
   expect(medidas.esquerda).toBeGreaterThanOrEqual(0);
 });
+
+test("editar um item e concluir outro não apaga o texto ainda não salvo", async ({ page }) => {
+  await abrirLembretes(page);
+  await adicionarPelaTela(page, "Item A");
+  await adicionarPelaTela(page, "Item B");
+  await pendentes(page).filter({ hasText: "Item A" }).getByRole("button", { name: "Editar lembrete" }).click();
+  await campoEdicao(page).fill("Item A revisado");
+  await page.getByRole("button", { name: "Concluir: Item B" }).click();
+  await expect(concluidos(page)).toHaveCount(1);
+  await expect(campoEdicao(page)).toHaveValue("Item A revisado");
+  expect((await apiLembretes(page)).find(l => l.descricao === "Item A")).toBeTruthy();
+});

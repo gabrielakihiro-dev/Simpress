@@ -55,7 +55,8 @@ def _descricao(valor: Any) -> str:
     """Texto sem caractere de controle, sem espaços nas pontas, não vazio e dentro do limite."""
     if not isinstance(valor, str):
         raise _invalido(MSG_DESCRICAO_TEXTO, "descricao_invalida")
-    if any(unicodedata.category(c) == "Cc" for c in valor):
+    # Cs (surrogate isolado) não grava em UTF-8: recusa com 422 em vez de falhar na gravação.
+    if any(unicodedata.category(c) in ("Cc", "Cs") for c in valor):
         raise _invalido(MSG_DESCRICAO_CONTROLE, "descricao_invalida")
     texto = valor.strip()
     if not texto:
@@ -101,6 +102,9 @@ class Lembretes:
             bruto = self.arquivo.read_text(encoding="utf-8")
         except FileNotFoundError:
             return []
+        except PermissionError as erro:
+            # No Windows, o os.replace de outra gravação trava a leitura por um instante.
+            raise ErroLembrete(503, MSG_OCUPADO, codigo="lembretes_ocupados") from erro
         except (OSError, UnicodeDecodeError) as erro:
             raise ErroLembrete(503, MSG_ILEGIVEL, codigo="lembretes_ilegiveis") from erro
         try:
@@ -116,7 +120,8 @@ class Lembretes:
             or len({item["id"] for item in itens}) != len(itens)
         ):
             raise ErroLembrete(503, MSG_ILEGIVEL, codigo="lembretes_ilegiveis")
-        return [{campo: item[campo] for campo in CAMPOS} for item in itens]
+        # Campos opcionais ausentes (arquivo de outra versão ou editado à mão) viram null.
+        return [{campo: item.get(campo) for campo in CAMPOS} for item in itens]
 
     def listar(self) -> list[dict[str, Any]]:
         return self._carregar()
