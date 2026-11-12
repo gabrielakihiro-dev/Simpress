@@ -61,6 +61,7 @@
       remoteButton.removeAttribute("aria-busy");
     }
     app.atualizarEmailOutlook?.(equipment);
+    app.atualizarDossieEquipamento?.(equipment);
     const endpointResult = document.getElementById("endpoint-lookup-result");
     if (endpointResult) endpointResult.textContent = "";
     const powershellHost = document.getElementById("input-powershell-hostname");
