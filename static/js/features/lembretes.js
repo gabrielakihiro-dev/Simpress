@@ -19,8 +19,12 @@
   let concluidosAbertos = false;
   let ocupado = false;
   let pedidoLista = 0;
+  // Termo de origem enquanto o diálogo Criar lembrete está aberto.
+  let criando = null;
 
   const tamanho = (texto) => [...String(texto ?? "")].length;
+  // O backend recusa caractere de controle (422): quebra de linha e tab viram espaço, e espaços repetidos viram um só.
+  const limparTexto = (texto) => String(texto ?? "").replace(/[\p{Cc}\s]+/gu, " ").trim();
   const mensagemDe = (erro, padrao) => (erro?.status && erro.message ? erro.message : padrao);
   const avisarErro = (erro, padrao) => app.showToast(mensagemDe(erro, padrao), "error");
 
@@ -163,6 +167,27 @@
     else focarCampoNovo();
   }
 
+  // Função pura: monta a descrição a partir do que termosLerDados devolve. Partes vazias ficam de fora e nada é cortado.
+  function montarDescricaoTermo(termo, dados) {
+    const entrada = termo === "entrega";
+    const c = dados?.campos ?? {};
+    const v = (nome) => limparTexto(c[nome]);
+    const equipamento = (modelo, serie) => [modelo, serie && `série ${serie}`].filter(Boolean).join(", ");
+    const recebido = equipamento(v(entrada ? "modelo_entregue" : "modelo"), v(entrada ? "serie_entregue" : "serie"));
+    const unidade = v("unidade");
+    const data = limparTexto(app.termosFormatarData?.(c.data) ?? c.data);
+    const itens = (dados?.itens ?? []).filter((i) => i.resposta === "sim").map((i) => limparTexto(i.rotulo));
+    const anterior = entrada ? equipamento(v("modelo_anterior"), v("serie_anterior")) : "";
+    const obs = limparTexto(dados?.obs);
+    const abertura = `${entrada ? "Entrada" : "Saída"}: ${v("nome")}${unidade ? ` (${unidade})` : ""}`;
+    return limparTexto([
+      `${abertura}${recebido ? ` ${entrada ? "recebeu" : "devolveu"} ${recebido}` : ""}${data ? ` em ${data}` : ""}.`,
+      itens.length && `Itens: ${itens.join(", ")}.`,
+      anterior && `Anterior: ${anterior}.`,
+      obs && `Obs.: ${obs}`,
+    ].filter(Boolean).join(" "));
+  }
+
   function estadoBotaoNovo() {
     const campo = porId("lembretes-novo-descricao");
     const botao = porId("lembretes-adicionar");
@@ -179,6 +204,10 @@
     if (!campo) return;
     if (campo.id === "lembretes-novo-descricao") {
       estadoBotaoNovo();
+      return;
+    }
+    if (campo.id === "lembretes-criar-descricao") {
+      estadoBotaoCriar();
       return;
     }
     const form = campo.form;
@@ -348,9 +377,89 @@
     else focarCampoNovo();
   }
 
+  // Diálogo Criar lembrete (Termo Entrega e Termo Devolução): o texto já vem montado e o usuário revisa antes de criar.
+  function estadoBotaoCriar() {
+    const campo = porId("lembretes-criar-descricao");
+    const botao = porId("lembretes-criar-ok");
+    if (!campo || !botao) return;
+    const n = tamanho(limparTexto(campo.value));
+    botao.disabled = n === 0 || n > LIMITE;
+    const erro = porId("lembretes-criar-erro");
+    if (erro) erro.hidden = n <= LIMITE;
+    campo.setAttribute("aria-invalid", String(n > LIMITE));
+  }
+
+  function avisoDoTermo(termo, texto) {
+    const el = porId(`termos-status-${termo}`);
+    if (!el) return null;
+    el.textContent = texto;
+    delete el.dataset.tipo;
+    return el;
+  }
+
+  function lembretesCriarDoTermo(termo) {
+    // Sem número de série ou sem nome, termosLerValidado mostra o aviso no termo e nada abre.
+    const dados = app.termosLerValidado?.(termo);
+    const campo = porId("lembretes-criar-descricao");
+    if (!dados || !campo) return;
+    avisoDoTermo(termo, "");
+    criando = termo;
+    campo.value = montarDescricaoTermo(termo, dados);
+    estadoBotaoCriar();
+    app.abrirModalAcessivel("lembretes-criar", "#lembretes-criar-descricao", "lembretesCancelarCriar");
+  }
+
+  // Também é o fechamento do Esc (accessible-dialogs chama window[data-close-function]).
+  function lembretesCancelarCriar() {
+    if (criando === null) return;
+    criando = null;
+    app.fecharModalAcessivel("lembretes-criar");
+  }
+
+  async function lembretesConfirmarCriar() {
+    const termo = criando;
+    const campo = porId("lembretes-criar-descricao");
+    if (termo === null || !campo || ocupado) return;
+    // Mesma limpeza da parte pura: o usuário pode ter digitado quebra de linha no campo.
+    const descricao = limparTexto(campo.value);
+    if (!descricao || tamanho(descricao) > LIMITE) return;
+    ocupado = true;
+    porId("lembretes-criar-ok").disabled = true;
+    let criado = null;
+    try {
+      criado = await apiFetch(URL_API, {
+        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, origem: termo }),
+        errorMessage: "Não foi possível criar o lembrete.",
+      });
+    } catch (erro) {
+      avisarErro(erro, "Não foi possível criar o lembrete.");
+    } finally {
+      ocupado = false;
+      estadoBotaoCriar();
+    }
+    // Em erro o diálogo continua aberto, com o texto, para tentar de novo.
+    if (!criado) return;
+    criando = null;
+    lembretes = [...lembretes, criado];
+    renderizar();
+    app.fecharModalAcessivel("lembretes-criar");
+    const aviso = avisoDoTermo(termo, "Lembrete criado.");
+    if (!aviso) return;
+    const ver = elemento("button", "ck-btn ck-btn--fantasma ck-btn--sm lembretes__ver", "Ver em Lembretes");
+    ver.type = "button";
+    ligar(ver, "click", "lembretesVerLembretes", [criado.id]);
+    aviso.append(ver);
+  }
+
+  function lembretesVerLembretes(id) {
+    app.termosSelecionarAba?.("lembretes");
+    focarItem(id, ".lembretes__marcar");
+  }
+
   return {
     carregarLembretes, lembretesAdicionar, lembretesAoDigitar, lembretesAlternar, lembretesEditar,
     lembretesCancelarEdicao, lembretesTeclaEdicao, lembretesSalvarEdicao, lembretesAlternarConcluidos,
     lembretesExcluir, lembretesCancelarExclusao, lembretesConfirmarExclusao,
+    montarDescricaoTermo, lembretesCriarDoTermo, lembretesCancelarCriar, lembretesConfirmarCriar, lembretesVerLembretes,
   };
 });

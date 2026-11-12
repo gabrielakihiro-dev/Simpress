@@ -326,3 +326,207 @@ test("editar e excluir mostram o ícone da sprite (símbolo existe e o desenho t
     expect(icone.largura, botao).toBe(16);
   }
 });
+
+// Termo → Lembrete: o botão Criar lembrete dos dois termos monta a descrição, abre o diálogo e só cria no clique.
+const AVISO_SEM_DADOS = "Preencha o número de série e o nome do colaborador.";
+const botaoCriarLembrete = (page, termo) => page.locator(`#termos-painel-${termo}`).getByRole("button", { name: "Criar lembrete" });
+const dialogoCriar = page => page.locator("#lembretes-criar");
+const descricaoCriar = page => page.locator("#lembretes-criar-descricao");
+const confirmarCriar = page => page.locator("#lembretes-criar-ok");
+const postsDeLembretes = page => {
+  const posts = [];
+  page.on("request", requisicao => {
+    if (requisicao.method() === "POST" && requisicao.url().endsWith("/api/lembretes")) posts.push(requisicao.postDataJSON());
+  });
+  return posts;
+};
+
+async function abrirTermo(page, termo, opcoes) {
+  await abrirLembretes(page, opcoes);
+  await page.locator(`#termos-aba-${termo}`).click();
+  await expect(page.locator(`#termos-painel-${termo}`)).toBeVisible();
+}
+
+async function preencherEntrega(page) {
+  await page.locator("#termos-entrega-nome").fill("Maria Teste");
+  await page.locator("#termos-entrega-unidade").fill("Curitiba");
+  await page.locator("#termos-entrega-data").fill("2026-11-12");
+  await page.locator("#termos-entrega-modelo-anterior").fill("Dell 5420");
+  await page.locator("#termos-entrega-modelo-entregue").fill("HP 640 G11");
+  await page.locator("#termos-entrega-serie-anterior").fill("ANTIGA123");
+  await page.locator("#termos-entrega-serie-entregue").fill("NOVA456");
+  await page.locator("#termos-entrega-item-02-sim").check();
+  await page.locator("#termos-entrega-item-03-sim").check();
+  await page.locator("#termos-entrega-obs").fill("Sem avarias.");
+}
+
+async function preencherDevolucao(page) {
+  await page.locator("#termos-devolucao-nome").fill("Maria Teste");
+  await page.locator("#termos-devolucao-unidade").fill("Curitiba");
+  await page.locator("#termos-devolucao-data").fill("2026-11-12");
+  await page.locator("#termos-devolucao-modelo").fill("HP 640 G10");
+  await page.locator("#termos-devolucao-serie").fill("BRJ123");
+  await page.locator("#termos-devolucao-item-01-sim").check();
+  await page.locator("#termos-devolucao-item-02-nao").check();
+  await page.locator("#termos-devolucao-item-03-sim").check();
+}
+
+test("Criar lembrete sem série ou sem nome mostra só o aviso e nada abre", async ({ page }) => {
+  await abrirTermo(page, "entrega");
+  await botaoCriarLembrete(page, "entrega").click();
+  await expect(page.locator("#termos-status-entrega")).toHaveText(AVISO_SEM_DADOS);
+  await expect(dialogoCriar(page)).toBeHidden();
+
+  // Só o nome, ou só a série: também bloqueia.
+  await page.locator("#termos-entrega-nome").fill("Maria Teste");
+  await botaoCriarLembrete(page, "entrega").click();
+  await expect(page.locator("#termos-status-entrega")).toHaveText(AVISO_SEM_DADOS);
+  await page.locator("#termos-entrega-nome").fill("");
+  await page.locator("#termos-entrega-serie-entregue").fill("NOVA456");
+  await botaoCriarLembrete(page, "entrega").click();
+  await expect(page.locator("#termos-status-entrega")).toHaveText(AVISO_SEM_DADOS);
+
+  await page.locator("#termos-aba-devolucao").click();
+  await botaoCriarLembrete(page, "devolucao").click();
+  await expect(page.locator("#termos-status-devolucao")).toHaveText(AVISO_SEM_DADOS);
+  await expect(dialogoCriar(page)).toBeHidden();
+  expect(await apiLembretes(page)).toEqual([]);
+});
+
+test("Termo Entrega: o diálogo abre com o texto montado, Esc cancela sem criar e o foco volta ao botão", async ({ page }) => {
+  await abrirTermo(page, "entrega");
+  await preencherEntrega(page);
+  const botao = botaoCriarLembrete(page, "entrega");
+  await botao.click();
+
+  await expect(dialogoCriar(page)).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Criar lembrete" })).toBeVisible();
+  await expect(descricaoCriar(page)).toHaveValue(
+    "Entrada: Maria Teste (Curitiba) recebeu HP 640 G11, série NOVA456 em 12/11/2026. "
+    + "Itens: 02 Notebook, 03 Teclado. Anterior: Dell 5420, série ANTIGA123. Obs.: Sem avarias.",
+  );
+  await expect(page.locator("#lembretes-criar-dica")).toHaveText("Texto montado com os dados do termo. Revise antes de criar.");
+  await expect(page.locator("#lembretes-criar-cancelar")).toHaveText("Cancelar");
+  await expect(confirmarCriar(page)).toHaveText("Criar lembrete");
+  await expect(confirmarCriar(page)).toBeEnabled();
+  await expect(descricaoCriar(page)).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialogoCriar(page)).toBeHidden();
+  await expect(botao).toBeFocused();
+  // O Esc só fechou o diálogo: o painel e o termo continuam abertos, e nada foi criado.
+  await expect(page.locator("#termos-painel-entrega")).toBeVisible();
+  expect(await apiLembretes(page)).toEqual([]);
+
+  await botao.click();
+  await page.locator("#lembretes-criar-cancelar").click();
+  await expect(dialogoCriar(page)).toBeHidden();
+  await expect(botao).toBeFocused();
+  expect(await apiLembretes(page)).toEqual([]);
+});
+
+test("Termo Entrega: confirmar cria o lembrete com origem entrega e oferece Ver em Lembretes", async ({ page }) => {
+  await abrirTermo(page, "entrega");
+  await preencherEntrega(page);
+  const posts = postsDeLembretes(page);
+  await botaoCriarLembrete(page, "entrega").click();
+  // O usuário revisa e muda o texto antes de criar; o que vai é o texto do campo.
+  const revisado = "Entrada: Maria Teste recebeu HP 640 G11, série NOVA456. Conferir carregador.";
+  await descricaoCriar(page).fill(revisado);
+  await confirmarCriar(page).click();
+
+  await expect(dialogoCriar(page)).toBeHidden();
+  await expect(page.locator("#termos-status-entrega")).toHaveText("Lembrete criado.Ver em Lembretes");
+  expect(posts).toEqual([{ descricao: revisado, origem: "entrega" }]);
+  const [criado] = await apiLembretes(page);
+  expect(criado).toMatchObject({ descricao: revisado, origem: "entrega" });
+
+  await page.locator("#termos-status-entrega").getByRole("button", { name: "Ver em Lembretes" }).click();
+  await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
+  await expect(pendentes(page).filter({ hasText: "Conferir carregador." })).toHaveCount(1);
+  await expect(page.locator("#lembretes-pendentes")).toHaveText("1");
+});
+
+test("Termo Devolução: a quebra de linha das Observações vira espaço e o POST leva origem devolucao", async ({ page }) => {
+  await abrirTermo(page, "devolucao");
+  await preencherDevolucao(page);
+  await page.locator("#termos-devolucao-obs").fill("Carregador\ntrocado.\n\n\tRiscos na tampa.");
+  const posts = postsDeLembretes(page);
+  await botaoCriarLembrete(page, "devolucao").click();
+  const esperado = "Saída: Maria Teste (Curitiba) devolveu HP 640 G10, série BRJ123 em 12/11/2026. "
+    + "Itens: 1 - Mochila, 3 - Teclado. Obs.: Carregador trocado. Riscos na tampa.";
+  await expect(descricaoCriar(page)).toHaveValue(esperado);
+  await confirmarCriar(page).click();
+
+  await expect(page.locator("#termos-status-devolucao")).toHaveText("Lembrete criado.Ver em Lembretes");
+  expect(posts).toEqual([{ descricao: esperado, origem: "devolucao" }]);
+  const [criado] = await apiLembretes(page);
+  expect(criado).toMatchObject({ descricao: esperado, origem: "devolucao" });
+});
+
+test("Criar lembrete: quebra de linha digitada no diálogo também é limpa antes do POST", async ({ page }) => {
+  await abrirTermo(page, "devolucao");
+  await preencherDevolucao(page);
+  await botaoCriarLembrete(page, "devolucao").click();
+  await descricaoCriar(page).fill("Primeira linha\nSegunda linha");
+  await confirmarCriar(page).click();
+  await expect(page.locator("#termos-status-devolucao")).toContainText("Lembrete criado.");
+  expect((await apiLembretes(page)).map(l => l.descricao)).toEqual(["Primeira linha Segunda linha"]);
+});
+
+test("Criar lembrete: acima de 2000 caracteres desabilita o botão e mostra o aviso; nada é cortado", async ({ page }) => {
+  await abrirTermo(page, "devolucao");
+  await preencherDevolucao(page);
+  await page.locator("#termos-devolucao-obs").fill("o".repeat(2100));
+  await botaoCriarLembrete(page, "devolucao").click();
+  await expect(dialogoCriar(page)).toBeVisible();
+  // O texto montado não é cortado: passa de 2000 e o botão fica desligado.
+  expect((await descricaoCriar(page).inputValue()).length).toBeGreaterThan(2000);
+  await expect(confirmarCriar(page)).toBeDisabled();
+  await expect(page.locator("#lembretes-criar-erro")).toHaveText("A descrição pode ter até 2000 caracteres.");
+  expect(await apiLembretes(page)).toEqual([]);
+
+  await descricaoCriar(page).fill("a".repeat(2000));
+  await expect(confirmarCriar(page)).toBeEnabled();
+  await expect(page.locator("#lembretes-criar-erro")).toBeHidden();
+  await descricaoCriar(page).fill("a".repeat(2001));
+  await expect(confirmarCriar(page)).toBeDisabled();
+  await descricaoCriar(page).fill("   ");
+  await expect(confirmarCriar(page)).toBeDisabled();
+  await page.keyboard.press("Escape");
+  expect(await apiLembretes(page)).toEqual([]);
+});
+
+test("Criar lembrete: falha ao gravar mantém o diálogo aberto com o texto", async ({ page }) => {
+  await abrirTermo(page, "entrega");
+  await preencherEntrega(page);
+  await page.route("**/api/lembretes", route => route.request().method() === "POST"
+    ? route.fulfill({ status: 503, json: { detail: "Aviso de teste: gravação indisponível.", codigo: "lembretes_gravacao" } })
+    : route.fallback());
+  await botaoCriarLembrete(page, "entrega").click();
+  const texto = await descricaoCriar(page).inputValue();
+  await confirmarCriar(page).click();
+  await expect(page.getByText("Aviso de teste: gravação indisponível.")).toBeVisible();
+  await expect(dialogoCriar(page)).toBeVisible();
+  await expect(descricaoCriar(page)).toHaveValue(texto);
+  await expect(confirmarCriar(page)).toBeEnabled();
+  await expect(page.locator("#termos-status-entrega")).toHaveText("");
+  expect(await apiLembretes(page)).toEqual([]);
+});
+
+test("Criar lembrete cabe em 320px sem rolagem horizontal", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await abrirTermo(page, "entrega");
+  await preencherEntrega(page);
+  await botaoCriarLembrete(page, "entrega").click();
+  await expect(dialogoCriar(page)).toBeVisible();
+  const medidas = await page.evaluate(() => {
+    const raiz = document.documentElement;
+    const caixa = document.querySelector("#lembretes-criar > .ck-dialogo").getBoundingClientRect();
+    return { janela: raiz.clientWidth, documento: raiz.scrollWidth, direita: caixa.right, esquerda: caixa.left };
+  });
+  expect(medidas.documento).toBeLessThanOrEqual(medidas.janela);
+  expect(medidas.direita).toBeLessThanOrEqual(medidas.janela);
+  expect(medidas.esquerda).toBeGreaterThanOrEqual(0);
+});

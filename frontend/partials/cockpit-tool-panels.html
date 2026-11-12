@@ -256,6 +256,7 @@
               </fieldset>
               <div class="termos__acoes">
                 <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["entrega"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--secundario" data-on-click="lembretesCriarDoTermo" data-args='["entrega"]'>Criar lembrete</button>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["entrega"]'>Limpar</button>
                 <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
                 <p class="termos__estado" id="termos-status-entrega" role="status" aria-live="polite"></p>
@@ -300,6 +301,7 @@
               </fieldset>
               <div class="termos__acoes">
                 <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["devolucao"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--secundario" data-on-click="lembretesCriarDoTermo" data-args='["devolucao"]'>Criar lembrete</button>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["devolucao"]'>Limpar</button>
                 <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
                 <p class="termos__estado" id="termos-status-devolucao" role="status" aria-live="polite"></p>
@@ -332,6 +334,20 @@
               <div class="lembretes__dialogo-acoes">
                 <button type="button" class="ck-btn ck-btn--secundario" id="lembretes-confirmar-cancelar" data-on-click="lembretesCancelarExclusao">Cancelar</button>
                 <button type="button" class="ck-btn ck-btn--secundario confirm-action-ok" id="lembretes-confirmar-ok" data-variant="danger" data-on-click="lembretesConfirmarExclusao">Excluir</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="lembretes-criar" class="modal-overlay ck-veu hidden">
+            <div class="ck-dialogo lembretes__dialogo lembretes__dialogo--criar" role="dialog" aria-modal="true" aria-labelledby="lembretes-criar-titulo">
+              <h3 id="lembretes-criar-titulo">Criar lembrete</h3>
+              <label for="lembretes-criar-descricao">Descrição</label>
+              <textarea id="lembretes-criar-descricao" class="ck-entrada lembretes__criar-campo" rows="7" autocomplete="off" aria-describedby="lembretes-criar-dica lembretes-criar-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'></textarea>
+              <p class="lembretes__dica" id="lembretes-criar-dica">Texto montado com os dados do termo. Revise antes de criar.</p>
+              <p class="lembretes__erro" id="lembretes-criar-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
+              <div class="lembretes__dialogo-acoes">
+                <button type="button" class="ck-btn ck-btn--secundario" id="lembretes-criar-cancelar" data-on-click="lembretesCancelarCriar">Cancelar</button>
+                <button type="button" class="ck-btn ck-btn--primario" id="lembretes-criar-ok" data-on-click="lembretesConfirmarCriar">Criar lembrete</button>
               </div>
             </div>
           </div>
