@@ -362,14 +362,13 @@ const toolComparison = {
     ausentes_no_endpoint: [], ausentes_em_detalhes: [],
   },
 };
-// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3 fica na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Termos e Lembretes só no menu, sem atalho (atalho vazio); os dois abrem o painel lembretes (Termos, na aba Termo Entrega).
+// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3 fica na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Lembretes só no menu, sem atalho (atalho vazio); os termos de entrega e devolução ficam dentro desse painel.
 const toolButtons = [
   ["#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "sebrae-chamados", "F5", "Chamados"],
   ["#btn-acompanhamento-chamados", "#btn-chamados-menu", "chamados", "F6", "OS"],
   ["#btn-resumo-aba", "#btn-resumo-aba", "comparacao", "F3", "Resumo"],
   ["#btn-historico-apelidos", "#btn-historico-apelidos", "apelidos", "F7", "Histórico de apelidos"],
   ["#btn-relatorio-mensal", "#btn-relatorio-mensal", "relatorio", "F8", "Relatório mensal"],
-  ["#btn-termos", "#btn-termos", "lembretes", "", "Lembretes"],
   ["#btn-lembretes", "#btn-lembretes", "lembretes", "", "Lembretes"],
 ];
 

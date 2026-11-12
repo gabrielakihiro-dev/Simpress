@@ -12,7 +12,6 @@
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
     cobertura: ["Cobertura", "Necessidades de equipamento, reservas, transporte e devoluções por cidade."],
-    termos: ["Termos", "Termos de entrega e devolução de equipamentos, para preencher e salvar em PDF."],
     lembretes: ["Lembretes", "Anote o que precisa fazer; os termos de entrega e devolução ficam nas outras abas."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],

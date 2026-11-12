@@ -97,7 +97,7 @@ O usuário pede no chat, por exemplo "gera o resumo mensal em Word" ou "exporta 
 
 ## Lembretes e notas
 
-O usuário pede no chat "me lembre de conferir o lote X" ou "anote que a série Y foi para manutenção", e depois "quais lembretes eu tenho?". É só uma memória consultável: não há alarme, notificação nem aviso automático, e o Assistente é instruído a nunca prometer avisar.
+O usuário pede no chat "me lembre de conferir o lote X" ou "anote que a série Y foi para manutenção", e depois "quais lembretes eu tenho?". É só uma memória consultável: não há alarme, notificação nem aviso automático, e o Assistente é instruído a nunca prometer avisar. Estas notas (`data/state/assistente_notas.json`) não são os lembretes da ferramenta Lembretes do menu Ferramentas (`data/state/lembretes.json`, `18-lembretes.md`): o Assistente não lê nem cria os dessa ferramenta (ver "Termos e Lembretes (Ferramentas)").
 
 - Armazenamento: `data/state/assistente_notas.json` (fora do Git, como as instruções permanentes), gravado de forma atômica (`core.integrity.atomic_write_json`) em `domains/assistant_notas.py`. Arquivo ausente ou corrompido é lido como lista vazia e substituído na próxima gravação. Cada nota tem `id` aleatório, `texto` (até 500 caracteres), `criada_em` (ISO com fuso), `concluida` e `prazo` opcional (`AAAA-MM-DD`). No máximo 200 notas; passar do limite devolve erro em português.
 - Ferramentas: `listar_lembretes([incluir_concluidos])` é consulta (só as abertas por padrão; até 15 itens com 200 caracteres cada, para caber no corte de 6.000 caracteres do resultado). `criar_lembrete(texto[, prazo])`, `concluir_lembrete(id)` e `apagar_lembrete(id)` alteram dados: param a conversa com cartão de confirmação montado pelo programa (por exemplo `Criar o lembrete "Conferir o lote X", com prazo em 05/11/2026.`; nos outros dois o cartão cita o texto guardado, lido pelo id), no máximo uma alteração por turno, executam só depois do `Confirmar`, e o cartão volta após recarregar a página. Id inexistente, nota já concluída, texto vazio, prazo inválido ou limite atingido voltam como erro para o modelo, sem cartão. O prazo precisa de data completa (o modelo não recebe a data de hoje).
@@ -231,6 +231,15 @@ O botão `Enviar e-mail` da Home (F1) abre o modal `E-mail pelo Outlook` (modelo
 - Privacidade: a regra não traz as contas remetentes, os destinatários nem a assinatura da semente, porque o `SYSTEM_PROMPT` vai ao OpenRouter.
 - Roteamento: perguntas sobre o e-mail do cabo ("como mando o e-mail do cabo de segurança?") vão ao modelo e nunca abrem o fluxo `Abrir chamado no UX`, que só reage a mensagens com "UX", chamado/solicitação/atendimento e verbo de abrir. Não há exclusão por "cabo" nem "e-mail": um chamado real ("abrir chamado no UX, cabo do carregador quebrado") continua abrindo o fluxo.
 - Testes: `tests/test_assistant_termos.py` (regra 38 no prompt, sem `@` nem nomes da semente) e `tests/test_assistant_ux_chamados.py` (frases de e-mail vão ao modelo; chamado com "cabo" ainda prepara o UX).
+
+## Termos e Lembretes (Ferramentas, 12/11/2026)
+
+A ferramenta Termos foi substituída pela ferramenta Lembretes (`18-lembretes.md`); os termos de entrega e devolução continuam como as sub-abas `Termo Entrega` e `Termo Devolução` dela (`17-termos.md`).
+
+- Base: regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`). Diz que os termos ficam em Ferramentas > Lembretes (botão `Lembretes`, sem atalho; sub-abas `Termo Entrega`, `Termo Devolução` e `Lembretes`), que a busca de série na Home preenche nome, modelo, série e Notebook, e que `Gerar PDF` e `Limpar` (com confirmação) acontecem na tela.
+- Criar lembrete: o botão `Criar lembrete` de cada termo cria o lembrete só depois da confirmação do usuário na tela; o Assistente apenas explica isso.
+- Sem ferramenta: não há ferramenta para os termos nem para os lembretes da ferramenta Lembretes. O Assistente não lê nem cria esses lembretes e nenhum `domains/assistant*.py` nem `routers/assistant*.py` acessa `data/state/lembretes.json`, porque o arquivo guarda o nome do colaborador (LGPD). `criar_lembrete` e `listar_lembretes` (regra 23) continuam sendo as notas do Assistente, em outro arquivo.
+- Testes: `tests/test_assistant_termos.py` (textos da regra 37 e nenhuma menção a `lembretes.json` no prompt nem em `domains/assistant*.py` e `routers/assistant*.py`).
 
 ## Limites conhecidos
 

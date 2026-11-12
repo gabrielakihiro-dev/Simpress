@@ -1,19 +1,21 @@
 # 17 — Termos de entrega e devolução (Ferramentas, 09/11/2026)
 
-Painel `Termos` do menu Ferramentas do Cockpit. Reúne dois formulários que o operador preenche (nome, modelo, série e Notebook vêm da busca de série da Home; o resto à mão) e salva em PDF para colher assinaturas: `Termo Entrega` e `Termo Devolução`. É só front-end: nada é gravado no computador, no servidor nem em sistema externo.
+**Desde 12/11/2026 (Lembretes, Bloco 4):** a ferramenta `Termos` (botão `#btn-termos`, painel `termos`) foi removida. Os dois termos continuam iguais, agora como as sub-abas `Termo Entrega` e `Termo Devolução` do painel `Lembretes` (botão `#btn-lembretes`, `data-cockpit-tool-panel="lembretes"`); a ferramenta e o botão `Criar lembrete` de cada termo estão em `docs/cockpit-prompts/18-lembretes.md`. Onde este texto diz "painel `Termos`" ou cita `#btn-termos`, leia o painel `Lembretes` e `#btn-lembretes`.
+
+Os termos são dois formulários no painel Lembretes do menu Ferramentas do Cockpit, que o operador preenche (nome, modelo, série e Notebook vêm da busca de série da Home; o resto à mão) e salva em PDF para colher assinaturas: `Termo Entrega` e `Termo Devolução`. É só front-end: o termo em si não grava nada no computador, no servidor nem em sistema externo (a única gravação é o lembrete que o usuário cria pelo botão `Criar lembrete`, descrito em `18-lembretes.md`).
 
 Autorização: pedido do usuário de 09/11/2026 (painel novo, sem atalho de teclado). No mesmo dia o usuário trocou o botão `Imprimir` por `Gerar PDF` (só quer salvar o PDF numa pasta) e definiu o nome sugerido do arquivo. Em 10/11/2026 o usuário aprovou os textos novos `Sim/Não` (cabeçalho das listas de verificação) e `Limpar o termo?` (confirmação do `Limpar`).
 
 ## Regras
 
-- Dados pessoais (nome do colaborador, série do equipamento) existem só na memória da página enquanto ela estiver aberta. Não há `localStorage`, `sessionStorage`, IndexedDB, cookie, rota do servidor, log nem arquivo. Recarregar a página apaga tudo.
-- O painel não tem atalho de teclado: o botão `#btn-termos` não tem `<kbd>` nem `aria-keyshortcuts`, e `termos` fica em `toolInfo` mas não em `toolKeys` (`static/js/features/cockpit-tool-panels.js`).
-- O Assistente (F9) não tem ferramenta para os termos; a regra 37 do `SYSTEM_PROMPT` só explica onde ficam e que tudo acontece na tela.
+- Dados pessoais (nome do colaborador, série do equipamento) existem só na memória da página enquanto ela estiver aberta. Não há `localStorage`, `sessionStorage`, IndexedDB, cookie, rota do servidor, log nem arquivo para o termo. Recarregar a página apaga tudo. Exceção única: o botão `Criar lembrete` (`18-lembretes.md`) grava em `data/state/lembretes.json` só o texto que o usuário revisou e confirmou no diálogo.
+- O painel não tem atalho de teclado: o botão `#btn-lembretes` não tem `<kbd>` nem `aria-keyshortcuts`, e `lembretes` fica em `toolInfo` mas não em `toolKeys` (`static/js/features/cockpit-tool-panels.js`); `termos` saiu de `toolInfo` junto com o botão.
+- O Assistente (F9) não tem ferramenta para os termos nem para os lembretes da ferramenta Lembretes; a regra 37 do `SYSTEM_PROMPT` só explica onde ficam (Ferramentas > Lembretes) e que tudo acontece na tela.
 - Os rótulos abaixo são os textos aprovados e saem exatamente assim na tela e na folha impressa. As listas de itens são separadas por termo, porque diferem (Termo Entrega tem `Headset (modelo 8225 ou 3220)`; Termo Devolução tem `Headset` e `Case headset (modelo 8225)`).
 
 ## Tela
 
-Menu Ferramentas, grupo `Painéis`, botão `Termos` (sem tecla). O painel `section[data-cockpit-tool-panel="termos"]` traz duas sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega` e `Termo Devolução`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais o aviso visível `Na janela que abrir, escolha Salvar como PDF e a pasta.` e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo.
+Menu Ferramentas, grupo `Painéis`, botão `Lembretes` (sem tecla). O painel `section[data-cockpit-tool-panel="lembretes"]` traz as sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega`, `Termo Devolução` e `Lembretes` (a lista, em `18-lembretes.md`); o painel abre em `Lembretes`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais o aviso visível `Na janela que abrir, escolha Salvar como PDF e a pasta.` e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo.
 
 ### Termo Entrega
 
@@ -85,13 +87,14 @@ O navegador usa o título da página como nome do arquivo em `Salvar como PDF`. 
 
 ## Assistente
 
-Regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`): Termos fica no menu Ferramentas; a busca de série na Home já preenche nome, modelo, série e Notebook = Sim; o resto do preenchimento e o `Gerar PDF` (nome sugerido `<série> - <nome>`) acontecem só na tela; não há ferramenta para os termos e nada é guardado.
+Regra 37 do `SYSTEM_PROMPT` (`domains/assistant_chat.py`): os termos ficam no menu Ferramentas, no botão `Lembretes` (sub-abas `Termo Entrega`, `Termo Devolução` e `Lembretes`); a busca de série na Home já preenche nome, modelo, série e Notebook = Sim; o resto do preenchimento e o `Gerar PDF` (nome sugerido `<série> - <nome>`) acontecem só na tela; o botão `Criar lembrete` de cada termo só cria o lembrete depois da confirmação do usuário na tela; não há ferramenta para os termos nem para os lembretes dessa ferramenta (o Assistente não lê nem cria os lembretes dela e não acessa `data/state/lembretes.json`; as notas `criar_lembrete` e `listar_lembretes` da regra 23 são outro armazenamento, `assistente_notas.json`) e nada do termo é guardado. `tests/test_assistant_termos.py` confere o texto da regra e que nenhum `domains/assistant*.py` nem `routers/assistant*.py` cita `lembretes.json`.
 
 ## Testes
 
 - `tests/frontend/test_termos.cjs`: formato de data, nome do arquivo (`<série> - <nome>`, limpeza, maiúsculas, limite de 100, partes vazias), montagem da folha, preenchimento pela Home (`termosPreencherDoEquipamento`, sem apagar o que foi digitado nem desfazer alterações quando a mesma série é reexibida) e presença dos rótulos aprovados em `static/index.html`.
-- `tests/e2e/termos.spec.cjs`: abre pelo menu, troca de sub-aba, preenche, marca itens, simula `window.print`, confere em mídia `print` que só a folha aparece com a Observação longa completa, que não há `<kbd>` nem botão `Imprimir`, que `Gerar PDF` existe, que `document.title` vale `BRJ54925DN - Janaina do Rocio Santos Rocha` durante a impressão (Devolução) e volta no `afterprint`, que sem série ou sem nome o PDF é bloqueado com o aviso, e que buscar uma série na Home (API simulada) preenche nome, modelo, série e Notebook = Sim nos dois termos, e que esses campos continuam editáveis.
-- `tests/e2e/cockpit-layout.spec.cjs`: `#btn-termos` na lista de botões de ferramenta (sem atalho).
+- `tests/e2e/termos.spec.cjs`: abre pelo menu (`#btn-lembretes` e a pílula `Termo Entrega`), troca de sub-aba, preenche, marca itens, simula `window.print`, confere em mídia `print` que só a folha aparece com a Observação longa completa, que não há `<kbd>` nem botão `Imprimir`, que `Gerar PDF` existe, que `document.title` vale `BRJ54925DN - Janaina do Rocio Santos Rocha` durante a impressão (Devolução) e volta no `afterprint`, que sem série ou sem nome o PDF é bloqueado com o aviso, e que buscar uma série na Home (API simulada) preenche nome, modelo, série e Notebook = Sim nos dois termos, e que esses campos continuam editáveis.
+- `tests/e2e/cockpit-layout.spec.cjs`: `#btn-lembretes` na lista de botões de ferramenta (sem atalho); `#btn-termos` saiu da lista.
+- `tests/e2e/lembretes.spec.cjs`: o menu Ferramentas não tem mais o botão `Termos`; os termos abrem pela pílula de `Lembretes`.
 
 ## Regras movidas do AGENTS.md (10/11/2026)
 
@@ -99,9 +102,9 @@ Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. 
 
 ### Termos de entrega e devolução (Ferramentas, 09/11/2026)
 
-Painel `Termos` (`data-cockpit-tool-panel="termos"`, botão `#btn-termos`) criado a pedido do usuário em 09/11/2026: preenche e salva em PDF os termos de entrega e de devolução de equipamentos.
+Painel `Termos` (`data-cockpit-tool-panel="termos"`, botão `#btn-termos`; removido em 12/11/2026 e substituído pelas sub-abas do painel `Lembretes`, botão `#btn-lembretes`) criado a pedido do usuário em 09/11/2026: preenche e salva em PDF os termos de entrega e de devolução de equipamentos.
 
-- Fica no menu Ferramentas, sem atalho de teclado (não ocupa F-tecla; `#btn-termos` não tem `aria-keyshortcuts` nem `<kbd>`).
+- Fica no menu Ferramentas, sem atalho de teclado (não ocupa F-tecla; `#btn-lembretes` não tem `aria-keyshortcuts` nem `<kbd>`).
 - Sub-abas com os rótulos exatos `Termo Entrega` e `Termo Devolução` (`role="tablist"`; clique e setas trocam de aba).
 - Preenchimento manual, com os campos e as listas de verificação dos PDFs originais. Nada é preenchido a partir de planilhas, do cadastro, do Endpoint ou de outro sistema.
 - `Gerar PDF` usa o `Salvar como PDF` do navegador (`window.print()`). O nome sugerido do arquivo é `<SÉRIE> - <Nome completo>`, por exemplo `BRJ54925DN - Janaina do Rocio Santos Rocha`: série em maiúsculas, caracteres proibidos em nome de arquivo removidos e no máximo 100 caracteres por parte. Sem série ou sem nome, o botão é bloqueado e a tela mostra `Preencha o número de série e o nome do colaborador.`. O título da página volta ao normal e a folha de impressão (`#termos-impressao`) é esvaziada no `afterprint`. Não existe botão `Imprimir`.
@@ -109,6 +112,6 @@ Painel `Termos` (`data-cockpit-tool-panel="termos"`, botão `#btn-termos`) criad
 - Textos aprovados pelo usuário em 10/11/2026: `Sim/Não` (cabeçalho das listas de verificação) e `Limpar o termo?`.
 - LGPD: nada é guardado. Os dados do colaborador ficam só na memória da página (sem `localStorage`, `sessionStorage`, IndexedDB, cookie, rota de API, log nem arquivo no servidor) e somem ao recarregar. A folha é montada por `textContent`.
 - Nada é lido nem escrito em SoftExpert, SharePoint, UX, Endpoint, Excel ou outro sistema externo, e nenhum dado local em `data/` é criado ou alterado.
-- Assistente: não há ferramenta para os Termos; ele só explica onde ficam e como gerar o PDF na tela (regra 37 do `SYSTEM_PROMPT`).
+- Assistente: não há ferramenta para os Termos nem para os lembretes; ele só explica onde ficam (Ferramentas > Lembretes) e como gerar o PDF na tela (regra 37 do `SYSTEM_PROMPT`).
 
 Detalhes (campos, listas, impressão e testes): `docs/cockpit-prompts/17-termos.md`.
