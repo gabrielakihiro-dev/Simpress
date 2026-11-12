@@ -286,6 +286,8 @@ test("Alterar Endereço: texto com os endereços reais e botão aceso só com s�
   assert.match(env.form.montarTextoAlterarEndereco().aviso, /Selecione o equipamento de origem/);
 
   env.document.getElementById("entrega-endereco").value = " Rua Entrega, 20 ";
+  env.appState.retiradaCidadeSelecionada = "Curitiba";
+  env.document.getElementById("select-unidade-destino").value = "7";
   env.form.atualizarBotaoAlterarEndereco();
   assert.equal(botao.disabled, true, "sem série o botão fica apagado");
 
@@ -295,5 +297,5 @@ test("Alterar Endereço: texto com os endereços reais e botão aceso só com s�
   assert.equal(botao.disabled, false, "não precisa de representante, telefone nem e-mail");
   assert.equal(env.form.serialAlterarEndereco(), "SINT-001");
   assert.equal(env.form.montarTextoAlterarEndereco().texto,
-    "Prezados,\n\nSolicito apenas o endereço do equipamento da unidade do Sebrae Rua Entrega, 20 para Rua Retirada, 10.");
+    "Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de Curitiba/PR para Maringá/PR.");
 });
