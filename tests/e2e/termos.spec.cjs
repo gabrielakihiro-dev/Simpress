@@ -8,7 +8,7 @@ async function abrirTermos(page, { navegar = true } = {}) {
   const menu = page.locator("#cockpit-tools-dropdown");
   if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-termos").click();
-  await expect(page.locator('[data-cockpit-tool-panel="termos"]')).toBeVisible();
+  await expect(page.locator('[data-cockpit-tool-panel="lembretes"]')).toBeVisible();
 }
 
 // Substitui window.print: registra o título e a folha no instante da impressão e não abre a janela do navegador.
@@ -29,7 +29,7 @@ const impressoes = page => page.evaluate(() => window.__impressoes);
 
 test("abre pelo menu Ferramentas e troca de sub-aba por clique e por ArrowRight", async ({ page }) => {
   await abrirTermos(page);
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Termos");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Lembretes");
   await expect(page.locator("#btn-termos kbd")).toHaveCount(0);
 
   const entrega = page.getByRole("tab", { name: "Termo Entrega" });
