@@ -89,8 +89,16 @@ test("alias metrics count monthly events and distinct equipment without inventin
     { tipo: "endereco", serial: "SN-2", horario: "2026-09-20T09:00:00-03:00" },
   ];
   assert.deepEqual(panels.aliasMetrics(events, new Date("2026-10-25T12:00:00-03:00")), {
-    changesThisMonth: 2, equipmentAffected: 1, outOfPattern: null, duplicateAliases: null,
+    changesThisMonth: 2, equipmentAffected: 1,
   });
+});
+
+test("alias day label says Hoje, Ontem or the weekday in local time, and flags invalid dates", () => {
+  const now = new Date(2026, 10, 11, 15, 0);
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 11, 9, 30).toISOString(), now), "Hoje · quarta, 11/11");
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 10, 23, 59).toISOString(), now), "Ontem · terça, 10/11");
+  assert.equal(panels.aliasDayLabel(new Date(2026, 10, 9, 8, 0).toISOString(), now), "Segunda, 09/11");
+  assert.equal(panels.aliasDayLabel("nao-e-data", now), "Data indisponível");
 });
 
 test("monthly preview uses the report values, the period and drops metrics the report does not provide", () => {
