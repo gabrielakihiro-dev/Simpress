@@ -322,6 +322,15 @@ Estado operacional local em `data/state/operacao_cobertura.json`; casos fechados
 
 - Assistente: `listar_cobertura(cidade?, data?, ate?, perfil?)` (consulta; autorizada pelo usuário em 07/11/2026). Chama a rota 173, a mesma da tela, e filtra as vagas no próprio Assistente (cidade igual sem acento e sem caixa, `data` exata, `ate` inclusive, `perfil` por trecho); as contagens das vagas filtradas seguem as mesmas quatro situações e `faltam` é `sem_cobertura`. Só leva vagas, contagens e disponíveis (lista de campos permitidos): os `casos` (quem recebeu, observações, cópias da transferência) nunca vão ao modelo. Filtro sem vaga devolve as cidades, datas e perfis existentes, nunca `faltam: 0`; data fora de AAAA-MM-DD dá erro; 503 `estado_ilegível` vira erro sem números. Não reserva, não cria nem altera nada. Detalhes em `docs/cockpit-prompts/16-cobertura.md`.
 
+## Backups regionais (Resumo F3)
+
+Confirmação manual de backup por série e cidade em `data/state/backups_regionais.json` (`{esquema:1, confirmacoes:[{serie,cidade,confirmado_em,expira_em}]}`, sem nenhum dado pessoal; chave desconhecida torna o arquivo ilegível). Cálculo em `domains/backups_regionais.py`, gravação em `domains/backups_regionais_store.py` (`AtomicFileTransaction`, sem lock Python) e rotas em `routers/backups_regionais.py`. O cadastro, o Endpoint (lido fora do `STATE_LOCK`), a Cobertura e a manutenção são só leitura. Erros usam `detail:{codigo,mensagem}`: 409 `arquivo_ocupado`, 503 `estado_ilegível` (arquivo preservado, nada gravado), 500 `falha_gravacao`. Corpos JSON recusam campos extras (422).
+
+| # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
+| --- | --- | --- | --- | --- |
+| 207 | POST /api/backups-regionais/confirmar | JSON {serie,cidade}; a série precisa aparecer no cálculo atual de `build_backups_regionais` naquela cidade como candidata ou já contada (marca ou confirmação). | {confirmacao:{serie,cidade,confirmado_em,expira_em},repetido}; validade de 7 dias; repetir com confirmação vigente mantém o `expira_em` (`repetido:true`). Série e cidade gravadas na grafia do cálculo. | 422 corpo inválido ou `serie_nao_elegivel`; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
+| 208 | POST /api/backups-regionais/desfazer | JSON {serie,cidade}. | {serie,cidade,removido}; remove a confirmação daquela série e cidade; sem registro, `removido:false`. | 422 corpo inválido; 409 `arquivo_ocupado`; 503 `estado_ilegível`. Grava só o arquivo local. |
+
 ## Regras de compatibilidade
 
 - Ficha: quando presentes, `titulo` e `solicitante` são textos; `fatos` e `detalhes` são listas de pares `[rótulo, texto]`; `manuais` é um objeto com valores textuais. Formatos incompatíveis na entrada retornam 422. Na leitura de fichas legadas, a tela ignora apenas pares inválidos, preservando os dados brutos e as partes válidas do cartão.
