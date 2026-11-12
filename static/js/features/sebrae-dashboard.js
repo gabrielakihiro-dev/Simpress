@@ -1590,6 +1590,8 @@
           });
           estado.fechar.sharepoint = dados.sharepoint;
           renderizarSharepoint();
+          // O servidor mantém a pendência quando sobra cópia não comprovada: sem este aviso o clique parecia não fazer nada.
+          if (acao === "limpar" && dados.sharepoint?.limpeza_pendente) app.showToast("A limpeza não terminou: ainda há cópia local diferente do que foi enviado. Ela foi preservada; veja o aviso na tela.", "warning");
         } catch (error) { app.showToast(error.message, "error"); }
       };
       const controlesRecuperacao = () => {
@@ -1652,6 +1654,15 @@
       };
       if (aviso?.recuperacao && !aviso.limpeza_pendente && !aviso.incerto) {
         const naoEnviado = aviso.status === "falhou" && aviso.recuperacao.acao === "declarar_nao_enviado";
+        // Fechar só esconde o aviso desta recuperação (chave = envio_id); um novo envio tem outro ID e o aviso volta.
+        const chaveRecuperacao = "sebrae_sharepoint_recuperacao_descartada";
+        let fechado = "";
+        try { fechado = armazenamento?.getItem(chaveRecuperacao) || ""; } catch (_erro) { /* sem armazenamento: aviso continua visível */ }
+        if (!naoEnviado && aviso.envio_id && fechado === aviso.envio_id) {
+          host.hidden = true;
+          host.replaceChildren();
+          return;
+        }
         host.replaceChildren(dom.createTextElement("p", "", naoEnviado
           ? "Você declarou que este envio não está aplicado no SharePoint. As cópias foram preservadas. Nenhum upload foi disparado."
           : aviso.reenvio_confirmado
@@ -1680,6 +1691,16 @@
             } catch (error) { reenviar.disabled = false; app.showToast(error.message, "error"); }
           });
           host.appendChild(reenviar);
+        } else {
+          const fecharAviso = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", "Fechar aviso");
+          fecharAviso.type = "button";
+          fecharAviso.id = "btn-sebrae-fechar-recuperacao";
+          fecharAviso.addEventListener("click", () => {
+            try { armazenamento?.setItem(chaveRecuperacao, aviso.envio_id || ""); } catch (_erro) { /* sem armazenamento: esconde só nesta tela */ }
+            host.hidden = true;
+            host.replaceChildren();
+          });
+          host.appendChild(fecharAviso);
         }
         host.hidden = false;
         return;
@@ -1692,6 +1713,7 @@
       }
       if (aviso?.limpeza_pendente && !aviso.falhou) {
         host.replaceChildren(dom.createTextElement("p", "", "Dashboard enviado ao SharePoint. Cópias locais foram preservadas porque a limpeza não foi concluída. Confira-as antes de qualquer reenvio."));
+        if (aviso.envio_id && aviso.snapshot_disponivel && aviso.pasta_pendente) host.appendChild(dom.createTextElement("p", "ck-campo__ajuda", `Ainda há cópia diferente do que foi enviado em ${aviso.pasta_pendente}. O sistema não a remove: preserve-a em outro lugar e tente limpar de novo.`));
         host.hidden = false;
         controlesRecuperacao();
         return;
