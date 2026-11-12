@@ -1,4 +1,4 @@
-"""Local-only API for the UX "Gerar ticket" (address update) after a transfer: prepare, choose address, fill/send, cancel."""
+"""Local-only API for the UX "Gerar ticket" from the Transporte tab: prepare, choose address, fill/send, cancel."""
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,6 +23,11 @@ def _sem_controle(valor: str) -> str:
 class PrepararTicketPayload(TransferenciaPayload):
     """The same body as /api/gerar-planilha (the attachment is rebuilt from it) plus the delivery CEP."""
     entrega_cep: str = Field(min_length=8, max_length=12)
+    conferido: StrictBool = False
+
+
+class PrepararAlterarEnderecoPayload(SeriePayload):
+    """"Alterar Endereço": only the série; no workbook, CNPJ or CEP (the Registro text comes in /enviar)."""
     conferido: StrictBool = False
 
 
@@ -71,6 +76,13 @@ def create_ux_ticket_router(servico: TicketsUX, template_provider: Callable[[], 
                 arquivo_nome=nome, arquivo=conteudo, conferido=payload.conferido,
             )
         resultado: dict[str, Any] | JSONResponse = executar(acao)
+        return resultado
+
+    @router.post("/preparar-alterar-endereco", response_model=None)
+    def preparar_alterar_endereco(payload: PrepararAlterarEnderecoPayload) -> dict[str, Any] | JSONResponse:
+        resultado: dict[str, Any] | JSONResponse = executar(lambda: servico.preparar_alterar_endereco(
+            serial=payload.serial, conferido=payload.conferido,
+        ))
         return resultado
 
     @router.post("/escolher-endereco", response_model=None)
