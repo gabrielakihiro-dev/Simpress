@@ -42,6 +42,7 @@ import "./js/features/alias-history.js";
 import "./js/features/monthly-report.js";
 import "./js/features/sebrae-dashboard.js";
 import "./js/features/sebrae-historico.js";
+import "./js/features/sebrae-conflitos.js";
 import "./js/features/chrome-automation.js";
 import "./js/features/assistant-chat.js";
 import "./js/features/coverage.js";

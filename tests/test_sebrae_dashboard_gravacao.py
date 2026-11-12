@@ -1,3 +1,4 @@
+import hashlib
 import io
 import re
 import unittest
@@ -5,7 +6,7 @@ import zipfile
 from xml.etree import ElementTree
 
 from domains import sebrae_dashboard_gravacao as G
-from domains.sebrae_dashboard import CABECALHOS
+from domains.sebrae_dashboard import CABECALHOS, DashboardInvalido
 
 NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
 REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -731,6 +732,303 @@ class CategoriasDaListaTest(unittest.TestCase):
                         arquivo.writestr(parte, dados)
                 with self.assertRaisesRegex(G.GravacaoInvalida, "categorias"):
                     G._conferir(saida.getvalue(), anteriores, [], pacote, ordem, True)
+
+
+# ---------------------------------------------------------------------------- merge by cell (``reaplicar``)
+
+CHAMADOS = ("UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003")
+
+
+def tres(chamados=CHAMADOS, extras=None):
+    return montar(chamados, status=("EM ABERTO",) * len(chamados), extras=extras)
+
+
+def do_site(base, edicoes=None, novas=()):
+    """What the site would send: the Atualizar output over ``base``."""
+    return G.atualizar(base, list(novas), edicoes or {}).conteudo
+
+
+def por_chamado(conteudo):
+    """C -> {column: readable value} of the filled data cells (rows with a repeated C are not supported here)."""
+    saida = {}
+    for tupla in G.valores_dos_chamados(conteudo).values():
+        linha = dict(zip(G.COLUNAS_DE_DADO, tupla))
+        saida[linha["C"]] = {letra: valor for letra, valor in linha.items() if valor}
+    return saida
+
+
+def celula_bruta(conteudo, ref):
+    folha = partes_de(conteudo)["xl/worksheets/sheet4.xml"].decode()
+    return re.search(rf'<c r="{ref}"[^>]*?(?:/>|>.*?</c>)', folha, re.DOTALL).group(0)
+
+
+def sem_endereco_nem_estilo(bruto):
+    return re.sub(r' r="[A-Z]+\d+"| s="\d+"', "", bruto)
+
+
+def _trocar_parte(conteudo, nome, antigo, novo):
+    partes = partes_de(conteudo)
+    partes[nome] = partes[nome].decode().replace(antigo, novo).encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for parte, dados in partes.items():
+            arquivo.writestr(parte, dados)
+    return saida.getvalue()
+
+
+def id_do_conflito(chamado, coluna, sharepoint, site):
+    return hashlib.sha256(f"{chamado}|{coluna}|{sharepoint}|{site}".encode("utf-8")).hexdigest()[:12]
+
+
+class ReaplicarTest(unittest.TestCase):
+    def ok(self, *args, **kwargs):
+        resultado = G.reaplicar(*args, **kwargs)
+        self.assertEqual(resultado.conflitos, ())
+        self.assertIsNotNone(resultado.conteudo)
+        return resultado.conteudo
+
+    def test_mesmos_valores_ignora_estilo_e_ve_so_o_que_esta_nas_celulas(self):
+        base = tres()
+        self.assertTrue(G.mesmos_valores(base, base))
+        self.assertTrue(G.mesmos_valores(base, _trocar_na_folha(base, 's="55"', 's="56"')))  # style only
+        self.assertFalse(G.mesmos_valores(base, do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})))
+
+    def test_ac1_edicao_do_sharepoint_em_celula_que_o_site_nao_tocou_sai_junto_com_a_do_site(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})
+        sp = _antes_da_coluna_p(_antes_da_coluna_p(base, 2, texto("F2", "nota do SP")), 3, texto("I3", "Ana"))
+        saida = self.ok(base, gerado, sp)
+        esperado = por_chamado(sp)
+        esperado["UTIC-2026-0001"].update({"B": "REDE", "J": "INCIDENTE"})
+        self.assertEqual(por_chamado(saida), esperado)
+        self.assertEqual(linha_xml(saida, 3), linha_xml(sp, 3))  # the SharePoint edit of another row stays as it was
+
+    def test_ac2_mesma_celula_com_valores_diferentes_e_conflito_sem_conteudo(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})
+        sp = _antes_da_coluna_p(base, 2, texto("J2", "REQUISIÇÃO"))
+        resultado = G.reaplicar(base, gerado, sp)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual(
+            list(resultado.conflitos),
+            [{
+                "id": id_do_conflito("UTIC-2026-0001", "J", "REQUISIÇÃO", "INCIDENTE"), "chamado": "UTIC-2026-0001", "coluna": "J",
+                "sharepoint": "REQUISIÇÃO", "site": "INCIDENTE", "tipo": "celula", "aceita_site": True,
+            }],  # only J: B was free in SharePoint
+        )
+        self.assertRegex(resultado.conflitos[0]["id"], r"^[0-9a-f]{12}$")
+
+    def test_conflito_resolvido_por_escolha_do_sharepoint_ou_do_site(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})
+        sp = _antes_da_coluna_p(base, 2, texto("J2", "REQUISIÇÃO"))
+        identificador = G.reaplicar(base, gerado, sp).conflitos[0]["id"]
+        do_sp = por_chamado(self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"}))["UTIC-2026-0001"]
+        self.assertEqual((do_sp["J"], do_sp["B"]), ("REQUISIÇÃO", "REDE"))
+        do_site_ = por_chamado(self.ok(base, gerado, sp, escolhas={identificador: "site"}))["UTIC-2026-0001"]
+        self.assertEqual((do_site_["J"], do_site_["B"]), ("INCIDENTE", "REDE"))
+        self.assertIsNone(G.reaplicar(base, gerado, sp, escolhas={identificador: "qualquer"}).conteudo)  # invalid choice is no choice
+
+    def test_ac3_os_dois_mudaram_para_o_mesmo_valor_sem_conflito(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        sp = _antes_da_coluna_p(base, 2, texto("J2", "INCIDENTE"))
+        saida = self.ok(base, gerado, sp)
+        self.assertTrue(G.mesmos_valores(saida, sp))
+        self.assertTrue(G.mesmos_valores(self.ok(base, base, sp), sp))  # no operation at all: SharePoint as it is
+
+    def test_ac4_linha_nova_do_site_ja_existente_no_sharepoint_nao_duplica(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))
+        gerado = do_site(base, novas=[NOVA])
+        sp = _antes_da_coluna_p(do_site(base, novas=[NOVA]), 4, texto("K4", "SERIE-SP"))
+        saida = self.ok(base, gerado, sp)
+        self.assertEqual([c for c, _ in sequencia(saida)], ["UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0099"])
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0099"]["K"], "SERIE-SP")
+        # a different value in a cell both filled is a conflict, still without a second row
+        diferente = do_site(base, novas=[{**NOVA, "G": "Título do SharePoint"}])
+        resultado = G.reaplicar(base, gerado, diferente)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["coluna"], c["tipo"]) for c in resultado.conflitos], [("UTIC-2026-0099", "G", "celula")])
+
+    def test_colunas_automaticas_vazias_na_base_e_preenchidas_no_sharepoint_ficam_como_o_sharepoint(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))
+        gerado = do_site(base, novas=[NOVA])  # E "123"
+        sp = do_site(base, novas=[{**NOVA, "E": "999"}])
+        saida = self.ok(base, gerado, sp)
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0099"]["E"], "999")
+
+    def test_linha_nova_ausente_do_sharepoint_e_acrescentada_sem_perder_a_edicao_do_sharepoint(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))
+        gerado = do_site(base, novas=[NOVA])
+        sp = _antes_da_coluna_p(base, 2, texto("J2", "REQUISIÇÃO"))
+        saida = self.ok(base, gerado, sp)
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0099"], por_chamado(gerado)["UTIC-2026-0099"])
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["J"], "REQUISIÇÃO")
+        self.assertEqual([c for c, _ in sequencia(saida)], ["UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0099"])
+
+    def test_ac5_linha_reordenada_no_sharepoint_e_casada_pela_c(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sp = tres(("UTIC-2026-0003", "UTIC-2026-0001", "UTIC-2026-0002"))  # the 0002 of SharePoint is in row 4
+        saida = self.ok(base, gerado, sp)
+        resumo = por_chamado(saida)
+        self.assertEqual([c for c, _ in sequencia(saida)], list(CHAMADOS))  # the output is sorted by C (known limit)
+        self.assertEqual({c: "J" in resumo[c] for c in CHAMADOS}, {"UTIC-2026-0001": False, "UTIC-2026-0002": True, "UTIC-2026-0003": False})
+        self.assertEqual(resumo["UTIC-2026-0002"]["J"], "INCIDENTE")
+
+    def test_base_fora_de_ordem_e_gerado_ordenado_pelo_atualizar_ainda_casam_pela_c(self):
+        base = tres(("UTIC-2026-0003", "UTIC-2026-0001"))
+        gerado = do_site(base, {"UTIC-2026-0003": {"J": "INCIDENTE"}})  # the sort moved the row from 2 to 3
+        self.assertEqual([c for c, _ in sequencia(gerado)], ["UTIC-2026-0001", "UTIC-2026-0003"])
+        saida = self.ok(base, gerado, _antes_da_coluna_p(base, 3, texto("I3", "Ana")))
+        resumo = por_chamado(saida)
+        self.assertEqual((resumo["UTIC-2026-0003"]["J"], resumo["UTIC-2026-0001"]["I"]), ("INCIDENTE", "Ana"))
+
+    def test_ac6_linha_apagada_no_sharepoint_com_operacao_do_site_e_conflito_e_as_escolhas_funcionam(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sp = tres(("UTIC-2026-0001", "UTIC-2026-0003"))
+        resultado = G.reaplicar(base, gerado, sp)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual(
+            list(resultado.conflitos),
+            [{
+                "id": id_do_conflito("UTIC-2026-0002", "J", "", "J: INCIDENTE"), "chamado": "UTIC-2026-0002", "coluna": "J",
+                "sharepoint": "", "site": "J: INCIDENTE", "tipo": "linha_apagada", "aceita_site": True,
+            }],
+        )
+        identificador = resultado.conflitos[0]["id"]
+        reinserida = self.ok(base, gerado, sp, escolhas={identificador: "site"})
+        self.assertEqual([c for c, _ in sequencia(reinserida)], list(CHAMADOS))
+        self.assertEqual(por_chamado(reinserida)["UTIC-2026-0002"], por_chamado(gerado)["UTIC-2026-0002"])
+        self.assertIn("<v>46000.5</v>", linha_xml(reinserida, 3))  # the date cell comes from the site as it is
+        descartada = self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"})
+        self.assertTrue(G.mesmos_valores(descartada, sp))
+
+    def test_ac7_h_com_varias_linhas_e_data_com_segundos_sobrevivem_byte_a_byte(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"H": "primeira linha segunda linha quarta", "R": "28/10/2026 14:30"}})
+        gerado = _trocar_na_folha(gerado, "primeira linha segunda linha quarta", "primeira linha\nsegunda linha\n\nquarta")  # Atualizar collapses spaces: put the raw text in by hand
+        serial = re.search(r"<v>([^<]+)</v>", celula_bruta(gerado, "R2")).group(1)
+        gerado = _trocar_na_folha(gerado, f"<v>{serial}</v>", "<v>46323.604745370372</v>")
+        sp = _antes_da_coluna_p(base, 2, texto("I2", "Ana"))
+        saida = self.ok(base, gerado, sp)
+        self.assertIn("primeira linha\nsegunda linha\n\nquarta", celula_bruta(saida, "H2"))
+        self.assertEqual(sem_endereco_nem_estilo(celula_bruta(saida, "H2")), sem_endereco_nem_estilo(celula_bruta(gerado, "H2")))
+        self.assertEqual(sem_endereco_nem_estilo(celula_bruta(saida, "R2")), sem_endereco_nem_estilo(celula_bruta(gerado, "R2")))
+        self.assertIn("<v>46323.604745370372</v>", celula_bruta(saida, "R2"))
+
+    def test_ac8_q_t_u_v_w_e_c_nunca_mudam_e_linha_sem_operacao_fica_identica_ao_byte(self):
+        base = tres(extras={2: texto("W2", "nota W")})
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        gerado = _trocar_na_folha(_trocar_na_folha(gerado, "nota W", "W do site"), "<f>1+1</f>", "<f>2+2</f>")  # not operations
+        sp = _trocar_na_folha(base, "<v>old</v>", "<v>do-sp</v>")
+        saida = self.ok(base, gerado, sp)
+        linha = linha_xml(saida, 2)
+        self.assertIn("nota W", linha)
+        self.assertNotIn("W do site", linha)
+        for formula in ("<f>1+1</f>", "<f>FALSE</f>", '<f>"x"</f>', f"<f>{FORMULA_Q}</f>"):
+            self.assertIn(formula, linha)
+        self.assertNotIn("2+2", linha)
+        self.assertEqual(celula_bruta(saida, "C2"), celula_bruta(sp, "C2"))
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["J"], "INCIDENTE")
+        for n in (3, 4):
+            self.assertEqual(linha_xml(saida, n), linha_xml(sp, n))  # not even the cached values of the formulas change
+        self.assertIn("<v>do-sp</v>", linha_xml(saida, 3))
+
+    def test_celula_em_branco_do_site_nao_apaga_o_valor_do_sharepoint(self):
+        base = _antes_da_coluna_p(tres(), 2, texto("I2", "Ana"))
+        gerado = _trocar_na_folha(do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}}), texto("I2", "Ana"), "")
+        self.assertNotIn("I", por_chamado(gerado)["UTIC-2026-0001"])
+        saida = self.ok(base, gerado, base)
+        self.assertEqual((por_chamado(saida)["UTIC-2026-0001"]["I"], por_chamado(saida)["UTIC-2026-0001"]["J"]), ("Ana", "INCIDENTE"))
+
+    def test_ac9_escolha_com_id_antigo_nao_resolve_conflito_novo(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        antigo = G.reaplicar(base, gerado, _antes_da_coluna_p(base, 2, texto("J2", "REQUISIÇÃO"))).conflitos[0]["id"]
+        mudou = _antes_da_coluna_p(base, 2, texto("J2", "OUTRO"))
+        resultado = G.reaplicar(base, gerado, mudou, escolhas={antigo: "site", "inexistente00": "sharepoint"})
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual(len(resultado.conflitos), 1)
+        self.assertTrue(resultado.conflitos[0]["aceita_site"])  # a plain UTIC cell conflict accepts both choices
+        self.assertNotEqual(resultado.conflitos[0]["id"], antigo)
+        self.assertEqual(por_chamado(self.ok(base, gerado, mudou, escolhas={resultado.conflitos[0]["id"]: "site"}))["UTIC-2026-0001"]["J"], "INCIDENTE")
+
+    def test_enviado_so_vira_ancestral_da_celula_que_o_site_ja_tinha_mandado(self):
+        base = tres()
+        enviado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE", "B": "REDE"}})
+        sp = _trocar_na_folha(enviado, ">INCIDENTE<", ">REQUISIÇÃO<")  # someone changed J after the send
+        self.assertEqual([c["coluna"] for c in G.reaplicar(base, gerado, sp).conflitos], ["J"])  # without ``enviado`` it is a conflict
+        saida = self.ok(base, gerado, sp, enviado=enviado)
+        self.assertEqual((por_chamado(saida)["UTIC-2026-0001"]["J"], por_chamado(saida)["UTIC-2026-0001"]["B"]), ("REQUISIÇÃO", "REDE"))
+
+    def test_chave_de_linha_so_aplica_quando_a_linha_do_sharepoint_e_igual_a_base_mesmo_com_a_ordenacao_deslocada(self):
+        base = montar(("Sem chamado", "27011", "UTIC-2026-0001"), status=("EM ABERTO",) * 3)  # not sorted: the Atualizar output moves rows
+        gerado = do_site(base, {"linha:2": {"J": "INCIDENTE"}})
+        self.assertEqual([c for c, _ in sequencia(gerado)], ["27011", "Sem chamado", "UTIC-2026-0001"])
+        saida = self.ok(base, gerado, _antes_da_coluna_p(base, 3, texto("I3", "Ana")))  # SharePoint changed the other row
+        resumo = por_chamado(saida)
+        self.assertEqual((resumo["Sem chamado"]["J"], resumo["27011"]["I"]), ("INCIDENTE", "Ana"))
+        mudou = _antes_da_coluna_p(base, 2, texto("I2", "Ana"))  # SharePoint changed this very row
+        resultado = G.reaplicar(base, gerado, mudou)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("linha:2", "J", "", "INCIDENTE")])
+        self.assertFalse(resultado.conflitos[0]["aceita_site"])  # the same C ("Sem chamado") does not identify the row
+        identificador = resultado.conflitos[0]["id"]
+        self.assertIsNone(G.reaplicar(base, gerado, mudou, escolhas={identificador: "site"}).conteudo)  # still a conflict: only ``sharepoint`` settles it
+        self.assertTrue(G.mesmos_valores(self.ok(base, gerado, mudou, escolhas={identificador: "sharepoint"}), mudou))
+        # another ticket now sits in row 2: there is no sure target, so only ``sharepoint`` settles it
+        deslocada = montar(("27011", "Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 3)
+        incerto = G.reaplicar(base, gerado, deslocada)
+        self.assertEqual([(c["chamado"], c["coluna"]) for c in incerto.conflitos], [("linha:2", "J")])
+        self.assertIsNone(G.reaplicar(base, gerado, deslocada, escolhas={incerto.conflitos[0]["id"]: "site"}).conteudo)
+        self.assertTrue(G.mesmos_valores(self.ok(base, gerado, deslocada, escolhas={incerto.conflitos[0]["id"]: "sharepoint"}), deslocada))
+
+    def test_linha_sem_utic_com_c_repetida_e_linha_apagada_no_sharepoint_nao_aceita_o_site(self):
+        base = _antes_da_coluna_p(_antes_da_coluna_p(montar(("Sem chamado", "Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 3), 2, texto("I2", "Ana")), 3, texto("I3", "Bia"))
+        gerado = do_site(base, {"linha:2": {"J": "INCIDENTE"}})  # the site edits Ana's row
+        sp = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO",) * 2), 2, texto("I2", "Bia"))  # Ana's row is gone and Bia moved up to row 2
+        resultado = G.reaplicar(base, gerado, sp)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["coluna"], c["aceita_site"]) for c in resultado.conflitos], [("linha:2", "J", False)])
+        identificador = resultado.conflitos[0]["id"]
+        self.assertIsNone(G.reaplicar(base, gerado, sp, escolhas={identificador: "site"}).conteudo)  # never writes into Bia's row
+        saida = self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"})
+        self.assertTrue(G.mesmos_valores(saida, sp))
+        self.assertNotIn("INCIDENTE", linha_xml(saida, 2))
+
+    def test_c_repetida_no_sharepoint_com_operacao_so_se_resolve_pelo_sharepoint(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sp = montar(("UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0002"), status=("EM ABERTO",) * 3)
+        resultado = G.reaplicar(base, gerado, sp)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["coluna"]) for c in resultado.conflitos], [("UTIC-2026-0002", "J")])
+        self.assertFalse(resultado.conflitos[0]["aceita_site"])
+        identificador = resultado.conflitos[0]["id"]
+        self.assertIsNone(G.reaplicar(base, gerado, sp, escolhas={identificador: "site"}).conteudo)
+        self.assertTrue(G.mesmos_valores(self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"}), sp))
+
+    def test_texto_compartilhado_do_site_vira_texto_na_linha_do_sharepoint(self):
+        base = tres()
+        partes = _trocar_parte(base, "xl/sharedStrings.xml", "</sst>", "<si><t>Compartilhada &amp; texto</t></si></sst>")  # index 2
+        gerado = _antes_da_coluna_p(partes, 2, '<c r="J2" s="112" t="s"><v>2</v></c>')
+        saida = self.ok(base, gerado, base)
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["J"], "Compartilhada & texto")
+        self.assertIn('t="inlineStr"', celula_bruta(saida, "J2"))
+        self.assertNotIn("<v>2</v>", celula_bruta(saida, "J2"))
+
+    def test_copia_que_nao_e_o_dashboard_levanta_dashboard_invalido_sem_valores_na_mensagem(self):
+        base = tres()
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        with self.assertRaises(DashboardInvalido):
+            G.reaplicar(base, gerado, b"isto nao e uma planilha")
+        sem_utic = _trocar_na_folha(gerado, texto("C2", "UTIC-2026-0001"), texto("C2", "Sem numero"))
+        with self.assertRaises(G.GravacaoInvalida) as erro:
+            G.reaplicar(base, sem_utic, base)
+        self.assertNotIn("Sem numero", str(erro.exception))
 
 
 if __name__ == "__main__":

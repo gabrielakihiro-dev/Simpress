@@ -228,6 +228,8 @@ class LogTests(unittest.TestCase):
             "O Chrome não abriu a porta 9222.": "chrome_sem_conexao",
             "O site recusou o Dashboard (HTTP 400).": "dashboard_recusado_pelo_site",
             "O Dashboard no SharePoint mudou depois da importação; importe de novo.": "dashboard_sharepoint_mudou",
+            "Conflito de edição: 2 célula(s) do Dashboard foram alteradas no SharePoint e no site (colunas H, J). Nada foi enviado nem guardado "
+            "como cópia pendente; escolha na tela qual valor manter e envie de novo.": "dashboard_sharepoint_conflito",
             "Gestão de solicitações: a tela não ficou pronta em 60 s (x).": "timeout",
             "TimeoutError: Page.click: Timeout 30000ms exceeded.": "timeout",
             "A busca de chamados novos não foi concluída.": "rotina_nao_concluida",

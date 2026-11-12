@@ -158,7 +158,7 @@ class FinalizarBase(unittest.TestCase):
         return {}
 
     def post(self, url, **kwargs):
-        if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert") and isinstance(kwargs.get("json"), dict):
+        if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert", "/api/sebrae/dashboard/conflitos") and isinstance(kwargs.get("json"), dict):
             atual = sebrae_novos.ler_existentes(self.caminhos.existentes)
             kwargs["json"].setdefault("versao_importacao", atual["versao"] if atual else "")
         return self.cliente.post(url, **kwargs)
@@ -763,7 +763,7 @@ class ResultadoEReenvioTest(FinalizarBase):
         return fin.guardar_pendente(self.dir, origem, datetime(2026, 10, 30, 17, 5, tzinfo=timezone.utc), motivo="sem login", tickets=[A])
 
     def test_sem_nada_o_resultado_vem_vazio(self):
-        self.assertEqual(self.cliente.get(FINALIZAR).json(), {"em_andamento": False, "resultado": None, "sharepoint": None})
+        self.assertEqual(self.cliente.get(FINALIZAR).json(), {"em_andamento": False, "resultado": None, "sharepoint": None, "conflitos": 0})
         self.assertNotIn("fechar", self.cliente.get("/api/sebrae/novos").json())
 
     def test_resultado_e_aviso_do_sharepoint_aparecem_e_em_andamento_segue_o_runner(self):
@@ -1024,6 +1024,140 @@ class MarcaSaiuDoDashboardTest(FinalizarBase):
             self.importar(montar((C,), ultima=9, status=("FINALIZADO",)))  # ``importar`` exige 200; A e B saíram
         self.assertTrue(any("erro=DomainValidationError" in r.getMessage() and A not in r.getMessage() for r in log.records))
         self.assertEqual([(r["chamado"], r["serie"]) for r in self.registros().values()], [(B, "BRX2")])
+
+
+class ConflitosRotasTest(FinalizarBase):
+    URL = "/api/sebrae/dashboard/conflitos"
+    CONFLITOS = [
+        {"id": "aaaaaaaaaaaa", "chamado": A, "coluna": "J", "sharepoint": "valor do SP", "site": "valor do site", "tipo": "celula", "aceita_site": True},
+        {"id": "bbbbbbbbbbbb", "chamado": B, "coluna": "", "sharepoint": "", "site": "", "tipo": "linha_apagada"},  # conflito antigo, sem ``aceita_site``: aceita os dois
+        {"id": "dddddddddddd", "chamado": "linha:2", "coluna": "J", "sharepoint": "", "site": "valor do site", "tipo": "celula", "aceita_site": False},
+    ]
+
+    def setUp(self):
+        super().setUp()
+        self.importar()
+        self.versao = sebrae_novos.ler_existentes(self.caminhos.existentes)["versao"]
+
+    def gravar(self, escolhas=None):
+        fin.gravar_conflitos(self.dir, base_sha256="a" * 64, sharepoint_sha256="b" * 64, gerado_sha256="c" * 64, conflitos=self.CONFLITOS)
+        if escolhas:
+            dados = fin.ler_conflitos(self.dir)
+            fin.caminho_conflitos(self.dir).write_text(json.dumps({**dados, "escolhas": escolhas}), encoding="utf-8")
+
+    def test_get_sem_arquivo_responde_vazio_e_sem_cache(self):
+        resposta = self.cliente.get(self.URL)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {"conflitos": [], "escolhas": {}, "criado_em": "", "versao_importacao": self.versao})
+        self.assertEqual(resposta.headers["cache-control"], "no-store")
+        self.caminhos.existentes.unlink()
+        self.assertEqual(self.cliente.get(self.URL).json()["versao_importacao"], "")  # sem importação
+
+    def test_get_com_arquivo_devolve_conflitos_escolhas_e_data(self):
+        self.gravar({"aaaaaaaaaaaa": "site"})
+        corpo = self.cliente.get(self.URL).json()
+        self.assertEqual(corpo["conflitos"], self.CONFLITOS)
+        self.assertEqual(corpo["escolhas"], {"aaaaaaaaaaaa": "site"})
+        self.assertTrue(corpo["criado_em"])
+        self.assertEqual(corpo["versao_importacao"], self.versao)
+
+    def test_estado_da_finalizacao_traz_a_contagem_de_conflitos(self):
+        self.assertEqual(self.cliente.get(FINALIZAR).json()["conflitos"], 0)
+        self.gravar()
+        self.assertEqual(self.cliente.get(FINALIZAR).json()["conflitos"], 3)
+        fin.concluir_conflitos(self.dir)
+        self.assertEqual(self.cliente.get(FINALIZAR).json()["conflitos"], 0)
+
+    def test_post_grava_escolhas_somando_as_anteriores_e_mantem_os_outros_campos(self):
+        self.gravar({"aaaaaaaaaaaa": "site"})
+        antes = fin.ler_conflitos(self.dir)
+        resposta = self.post(self.URL, json={"escolhas": {"bbbbbbbbbbbb": "sharepoint"}})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        esperado = {"aaaaaaaaaaaa": "site", "bbbbbbbbbbbb": "sharepoint"}
+        self.assertEqual(resposta.json(), {"escolhas": esperado, "enviar": {"iniciado": False, "motivo": ""}})
+        depois = fin.ler_conflitos(self.dir)
+        self.assertEqual(depois["escolhas"], esperado)
+        self.assertEqual({k: v for k, v in depois.items() if k != "escolhas"}, {k: v for k, v in antes.items() if k != "escolhas"})
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_post_recusa_id_inexistente_valor_invalido_campo_extra_e_sem_conflitos(self):
+        self.assertEqual(self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site"}}).status_code, 422)  # sem arquivo
+        self.gravar()
+        antes = fin.caminho_conflitos(self.dir).read_bytes()
+        for corpo in (
+            {"escolhas": {"cccccccccccc": "site"}},
+            {"escolhas": {"aaaaaaaaaaaa": "site", "cccccccccccc": "sharepoint"}},
+            {"escolhas": {"aaaaaaaaaaaa": "outro"}},
+            {"escolhas": {"aaaaaaaaaaaa": "site"}, "enviar": "sim"},
+            {"escolhas": {"aaaaaaaaaaaa": "site"}, "extra": 1},
+            {},
+        ):
+            with self.subTest(corpo=corpo):
+                self.assertEqual(self.post(self.URL, json=corpo).status_code, 422)
+        self.assertEqual(fin.caminho_conflitos(self.dir).read_bytes(), antes)
+        self.assertEqual(self.runner.iniciadas, [])
+        fin.concluir_conflitos(self.dir)  # lista vazia: nada a escolher
+        self.assertEqual(self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site"}}).status_code, 422)
+
+    def test_post_sem_versao_ou_com_versao_antiga_responde_409_e_nao_grava_nem_inicia_o_envio(self):
+        self.gravar()
+        antes = fin.caminho_conflitos(self.dir).read_bytes()
+        for versao in ("", "0" * 32):
+            for enviar in (False, True):
+                with self.subTest(versao=versao, enviar=enviar):
+                    resposta = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "sharepoint"}, "enviar": enviar, "versao_importacao": versao})
+                    self.assertEqual(resposta.status_code, 409, resposta.text)
+        self.assertEqual(fin.caminho_conflitos(self.dir).read_bytes(), antes)
+        self.assertEqual(self.runner.iniciadas, [])
+        self.caminhos.existentes.unlink()  # sem importação nenhuma
+        self.assertEqual(self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "sharepoint"}, "versao_importacao": self.versao}).status_code, 422)
+
+    def test_post_recusa_site_em_conflito_que_nao_aceita_o_site_sem_mostrar_valores_e_aceita_sharepoint(self):
+        self.gravar()
+        antes = fin.caminho_conflitos(self.dir).read_bytes()
+        resposta = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site", "dddddddddddd": "site"}, "enviar": True})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["detail"], "Esse conflito só pode manter o valor do SharePoint.")
+        self.assertNotIn("valor do site", resposta.text)
+        self.assertEqual(fin.caminho_conflitos(self.dir).read_bytes(), antes)
+        self.assertEqual(self.runner.iniciadas, [])
+        certo = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site", "bbbbbbbbbbbb": "site", "dddddddddddd": "sharepoint"}, "versao_importacao": self.versao})
+        self.assertEqual(certo.status_code, 200, certo.text)  # ``site`` vale no conflito comum e no antigo sem a chave
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"aaaaaaaaaaaa": "site", "bbbbbbbbbbbb": "site", "dddddddddddd": "sharepoint"})
+
+    def test_post_com_enviar_inicia_a_rotina_enviar_depois_de_gravar(self):
+        self.gravar()
+        resposta = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "sharepoint"}, "enviar": True})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["enviar"], {"iniciado": True, "motivo": ""})
+        self.assertEqual(self.runner.iniciadas, ["enviar"])
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"aaaaaaaaaaaa": "sharepoint"})
+
+    def test_post_com_enviar_e_rotina_ocupada_grava_a_escolha_e_explica_sem_iniciar(self):
+        self.gravar()
+        self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
+        corpo = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site"}, "enviar": True}).json()
+        self.assertFalse(corpo["enviar"]["iniciado"])
+        self.assertIn("rotina em execução", corpo["enviar"]["motivo"])
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"aaaaaaaaaaaa": "site"})
+
+
+class ConflitosSemRunnerTest(FinalizarBase):
+    com_runner = False
+    URL = ConflitosRotasTest.URL
+    CONFLITOS = ConflitosRotasTest.CONFLITOS
+    gravar = ConflitosRotasTest.gravar
+
+    def setUp(self):
+        super().setUp()
+        self.importar()
+
+    def test_post_com_enviar_sem_automacao_so_grava(self):
+        self.gravar()
+        corpo = self.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site"}, "enviar": True}).json()
+        self.assertEqual(corpo["enviar"], {"iniciado": False, "motivo": "A automação não está disponível neste servidor."})
+        self.assertEqual(fin.escolhas_dos_conflitos(self.dir), {"aaaaaaaaaaaa": "site"})
 
 
 if __name__ == "__main__":
