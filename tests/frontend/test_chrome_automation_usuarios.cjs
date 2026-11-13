@@ -11,7 +11,7 @@ test("o botão de verificar usuários está presente na interface com atributos 
   assert.match(indexHtml, /data-on-click="iniciarRotinaAutomacao"/, "deve ter data-on-click='iniciarRotinaAutomacao'");
   assert.match(indexHtml, /data-args='\["usuarios"\]'/, "deve passar ['usuarios'] nos args");
   assert.match(indexHtml, /<use href="#i-users">/, "deve usar o ícone users");
-  assert.match(indexHtml, /<h2 class="ck-rotina__titulo" id="ck-verificacao-titulo">Verificar usuários<\/h2>/, "deve exibir o rótulo Verificar usuários");
+  assert.match(indexHtml, /<h3 class="[^"]*" id="ck-verificacao-titulo">Verificar usuários<\/h3>/, "deve exibir o rótulo Verificar usuários");
   assert.match(indexHtml, /<option value="usuarios">Verificar usuários<\/option>/, "deve ter opção no filtro de histórico");
 });
 
