@@ -18,14 +18,18 @@ class NovoLembretePayload(BaseModel):
 
     descricao: str
     origem: Optional[str] = None
+    data_agendada: Optional[str] = None
+    hora_agendada: Optional[str] = None
 
 
 class AtualizarLembretePayload(BaseModel):
-    """Parcial: só os campos enviados mudam; limites e valores são validados pelo domínio."""
+    """Parcial: só os campos enviados mudam (`null` explícito em data/hora limpa); o domínio valida os valores."""
     model_config = ConfigDict(extra="forbid")
 
     descricao: Optional[str] = None
     concluido: Optional[StrictBool] = None
+    data_agendada: Optional[str] = None
+    hora_agendada: Optional[str] = None
 
 
 def executar(acao: Callable[[], T]) -> T | JSONResponse:
@@ -54,7 +58,18 @@ def create_lembretes_router(arquivo: Path) -> APIRouter:
 
     @router.post("", status_code=201)
     def criar(payload: NovoLembretePayload) -> Any:
-        return executar(lambda: lembretes.criar(payload.descricao, payload.origem))
+        return executar(
+            lambda: lembretes.criar(payload.descricao, payload.origem, payload.data_agendada, payload.hora_agendada),
+        )
+
+    # Rota fixa antes de `/{lembrete_id}`, para nunca ser lida como id.
+    @router.post("/reagendar-atrasados")
+    def reagendar_atrasados() -> Any:
+        def acao() -> dict[str, Any]:
+            itens, reagendados = lembretes.reagendar_atrasados()
+            return {"lembretes": itens, "reagendados": reagendados}
+
+        return executar(acao)
 
     @router.patch("/{lembrete_id}")
     def atualizar(lembrete_id: str, payload: AtualizarLembretePayload) -> Any:

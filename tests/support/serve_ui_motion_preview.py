@@ -1039,7 +1039,7 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             cobertura_proxy(self, "POST", self.path, self.rfile.read(size))
             return
-        if path == "/api/lembretes":
+        if path in ("/api/lembretes", "/api/lembretes/reagendar-atrasados"):
             lembretes_proxy(self, "POST", self.path, self.rfile.read(int(self.headers.get("Content-Length", "0"))))
             return
         if path == "/api/operacoes/chamados/exportar":

@@ -8,7 +8,7 @@ import json
 import logging
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -17,10 +17,14 @@ from fastapi.testclient import TestClient
 
 import main
 from domains.lembretes import Lembretes
+from domains.sebrae_observacoes import FUSO
 from routers.lembretes import create_lembretes_router
 
 SEGREDO = "descricao-sigilosa-zeta"
-CAMPOS = {"id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem"}
+CAMPOS = {
+    "id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem",
+    "data_agendada", "hora_agendada",
+}
 
 
 class ListaDeLogs(logging.Handler):
@@ -88,6 +92,8 @@ class CrudTests(LembretesBase):
         self.assertIs(item["concluido"], False)
         self.assertIsNone(item["concluido_em"])
         self.assertIsNone(item["origem"])
+        self.assertIsNone(item["data_agendada"])
+        self.assertIsNone(item["hora_agendada"])
         self.assertEqual(self.lembretes(), [item])
 
     def test_origem_entrega_e_devolucao_sao_aceitas(self):
@@ -243,8 +249,31 @@ class ErrosTests(LembretesBase):
     def test_item_sem_campos_opcionais_e_lido_com_null(self):
         item = {"id": "a1", "descricao": "Texto", "criado_em": "2026-11-12T08:00:00-03:00", "concluido": False}
         self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [item]}), encoding="utf-8")
-        self.assertEqual(self.lembretes(), [{**item, "alterado_em": None, "concluido_em": None, "origem": None}])
+        nulos = {
+            "alterado_em": None, "concluido_em": None, "origem": None, "data_agendada": None, "hora_agendada": None,
+        }
+        self.assertEqual(self.lembretes(), [{**item, **nulos}])
         self.assertEqual(self.client.patch("/api/lembretes/a1", json={"concluido": True}).status_code, 200)
+        # A gravação seguinte já leva os campos novos como null.
+        self.assertEqual(self.gravado()["lembretes"][0]["data_agendada"], None)
+        self.assertIn("hora_agendada", self.gravado()["lembretes"][0])
+
+    def test_item_com_data_e_hora_fora_do_formato_nao_torna_o_arquivo_ilegivel(self):
+        # O formato só é conferido na entrada da API: um arquivo editado à mão continua legível.
+        item = {"id": "a1", "descricao": "Texto", "criado_em": "t", "concluido": False,
+                "data_agendada": "13/11/2026", "hora_agendada": "tarde"}
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [item]}), encoding="utf-8")
+        lido = self.lembretes()[0]
+        self.assertEqual((lido["data_agendada"], lido["hora_agendada"]), ("13/11/2026", "tarde"))
+
+    def test_data_ou_hora_que_nao_e_texto_no_arquivo_torna_ilegivel(self):
+        for campo, valor in (("data_agendada", 20261113), ("hora_agendada", 900), ("data_agendada", ["2026-11-13"])):
+            with self.subTest(campo=campo, valor=valor):
+                item = {"id": "a1", "descricao": "Texto", "criado_em": "t", "concluido": False, campo: valor}
+                conteudo = json.dumps({"version": 1, "lembretes": [item]})
+                self.arquivo.write_text(conteudo, encoding="utf-8")
+                self.assertEqual(self.client.get("/api/lembretes").status_code, 503)
+                self.assertEqual(self.arquivo.read_text(encoding="utf-8"), conteudo)
 
     def test_surrogate_isolado_devolve_422_e_nao_grava(self):
         # Escapado no JSON: o surrogate só existe depois do parse no servidor.
@@ -270,6 +299,262 @@ class ErrosTests(LembretesBase):
         self.assertEqual(self.arquivo.read_text(encoding="utf-8"), antes)
 
 
+class DataAgendadaTests(LembretesBase):
+    def test_criar_com_data_e_hora(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="09:30")
+        self.assertEqual((item["data_agendada"], item["hora_agendada"]), ("2026-11-14", "09:30"))
+        self.assertEqual(self.lembretes(), [item])
+        self.assertEqual(self.gravado()["lembretes"], [item])
+
+    def test_criar_so_com_data_e_com_null_explicito(self):
+        so_data = self.criar(data_agendada="2026-11-14")
+        self.assertEqual((so_data["data_agendada"], so_data["hora_agendada"]), ("2026-11-14", None))
+        nulos = self.criar(data_agendada=None, hora_agendada=None)
+        self.assertEqual((nulos["data_agendada"], nulos["hora_agendada"]), (None, None))
+
+    def test_criar_aceita_data_passada(self):
+        # O e2e precisa criar um atrasado; o POST não compara com hoje.
+        item = self.criar(data_agendada="2020-01-01")
+        self.assertEqual(item["data_agendada"], "2020-01-01")
+
+    def test_data_invalida_devolve_422_data_invalida_e_nao_grava(self):
+        invalidas = {
+            "dia inexistente": "2026-02-30",
+            "sem hifens": "20261113",
+            "semana ISO": "2026-W46-5",
+            "dia/mês/ano": "13/11/2026",
+            "vazia": "",
+            "espaço na ponta": " 2026-11-13",
+            "quebra de linha na ponta": "2026-11-13\n",
+            "com hora": "2026-11-13T09:00",
+            "dígitos árabes": "٢٠٢٦-١١-١٣",
+            "mês 13": "2026-13-01",
+        }
+        for nome, valor in invalidas.items():
+            with self.subTest(nome=nome):
+                resposta = self.client.post("/api/lembretes", json={"descricao": "Texto", "data_agendada": valor})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json()["codigo"], "data_invalida")
+        self.assertFalse(self.arquivo.exists())
+
+    def test_hora_invalida_devolve_422_hora_invalida_e_nao_grava(self):
+        invalidas = {
+            "com segundos": "09:00:30", "sem dois-pontos": "0900", "24:00": "24:00", "sem zero": "9:00",
+            "minuto 60": "09:60", "vazia": "", "quebra de linha": "09:00\n", "com espaço": " 09:00",
+        }
+        for nome, valor in invalidas.items():
+            with self.subTest(nome=nome):
+                resposta = self.client.post(
+                    "/api/lembretes",
+                    json={"descricao": "Texto", "data_agendada": "2026-11-13", "hora_agendada": valor},
+                )
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json()["codigo"], "hora_invalida")
+        self.assertFalse(self.arquivo.exists())
+
+    def test_horas_limite_sao_aceitas(self):
+        for hora in ("00:00", "23:59", "12:05"):
+            with self.subTest(hora=hora):
+                self.assertEqual(self.criar(data_agendada="2026-11-13", hora_agendada=hora)["hora_agendada"], hora)
+
+    def test_hora_sem_data_no_post_devolve_422(self):
+        for extra in ({"hora_agendada": "10:00"}, {"data_agendada": None, "hora_agendada": "10:00"}):
+            with self.subTest(extra=extra):
+                resposta = self.client.post("/api/lembretes", json={"descricao": "Texto", **extra})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json()["codigo"], "hora_invalida")
+        self.assertFalse(self.arquivo.exists())
+
+    def test_valor_que_nao_e_texto_cai_no_422_do_pydantic(self):
+        for campo, valor in (("data_agendada", 20261113), ("hora_agendada", 900), ("data_agendada", ["2026-11-13"])):
+            with self.subTest(campo=campo, valor=valor):
+                resposta = self.client.post("/api/lembretes", json={"descricao": "Texto", campo: valor})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertFalse(self.arquivo.exists())
+
+    def patch(self, item: dict, corpo: dict):
+        return self.client.patch(f"/api/lembretes/{item['id']}", json=corpo)
+
+    def test_patch_hora_em_item_com_data_e_ok(self):
+        item = self.criar(data_agendada="2026-11-14")
+        resposta = self.patch(item, {"hora_agendada": "10:00"})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual((resposta.json()["data_agendada"], resposta.json()["hora_agendada"]), ("2026-11-14", "10:00"))
+
+    def test_patch_hora_em_item_sem_data_devolve_422_e_nao_grava(self):
+        item = self.criar()
+        antes = self.gravado()
+        resposta = self.patch(item, {"hora_agendada": "10:00"})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["codigo"], "hora_invalida")
+        self.assertEqual(self.gravado(), antes)
+
+    def test_patch_data_null_limpa_data_e_hora(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        atual = self.patch(item, {"data_agendada": None})
+        self.assertEqual(atual.status_code, 200, atual.text)
+        self.assertEqual((atual.json()["data_agendada"], atual.json()["hora_agendada"]), (None, None))
+        self.assertEqual(self.gravado()["lembretes"][0]["hora_agendada"], None)
+
+    def test_patch_data_null_com_hora_devolve_422_e_nao_grava(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        antes = self.gravado()
+        resposta = self.patch(item, {"data_agendada": None, "hora_agendada": "11:00"})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["codigo"], "hora_invalida")
+        self.assertEqual(self.gravado(), antes)
+
+    def test_patch_hora_null_limpa_so_a_hora(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        atual = self.patch(item, {"hora_agendada": None}).json()
+        self.assertEqual((atual["data_agendada"], atual["hora_agendada"]), ("2026-11-14", None))
+
+    def test_patch_so_a_data_mantem_a_hora(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        atual = self.patch(item, {"data_agendada": "2026-11-20"}).json()
+        self.assertEqual((atual["data_agendada"], atual["hora_agendada"]), ("2026-11-20", "10:00"))
+
+    def test_patch_data_e_hora_juntas_em_item_sem_data(self):
+        item = self.criar()
+        atual = self.patch(item, {"data_agendada": "2026-11-20", "hora_agendada": "08:15"}).json()
+        self.assertEqual((atual["data_agendada"], atual["hora_agendada"]), ("2026-11-20", "08:15"))
+
+    def test_patch_de_outro_campo_nao_mexe_na_agenda(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        atual = self.patch(item, {"concluido": True}).json()
+        self.assertEqual((atual["data_agendada"], atual["hora_agendada"]), ("2026-11-14", "10:00"))
+
+    def test_mudar_a_data_nao_altera_alterado_em(self):
+        item = self.criar("Texto", data_agendada="2026-11-14")
+        for corpo in ({"data_agendada": "2026-11-20"}, {"hora_agendada": "10:00"}, {"data_agendada": None}):
+            with self.subTest(corpo=corpo):
+                self.assertIsNone(self.patch(item, corpo).json()["alterado_em"])
+        self.assertIsNotNone(self.patch(item, {"descricao": "Outro texto"}).json()["alterado_em"])
+
+    def test_patch_com_data_ou_hora_invalida_devolve_422_e_nao_grava(self):
+        item = self.criar(data_agendada="2026-11-14", hora_agendada="10:00")
+        antes = self.gravado()
+        casos = (
+            ({"data_agendada": "2026-02-30"}, "data_invalida"), ({"data_agendada": "20261113"}, "data_invalida"),
+            ({"data_agendada": "2026-W46-5"}, "data_invalida"), ({"hora_agendada": "09:00:30"}, "hora_invalida"),
+            ({"hora_agendada": "0900"}, "hora_invalida"), ({"hora_agendada": "24:00"}, "hora_invalida"),
+        )
+        for corpo, codigo in casos:
+            with self.subTest(corpo=corpo):
+                resposta = self.patch(item, corpo)
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json()["codigo"], codigo)
+        self.assertEqual(self.gravado(), antes)
+
+
+class ReagendarAtrasadosTests(LembretesBase):
+    def dominio(self, hoje: list[date]) -> Lembretes:
+        return Lembretes(self.arquivo, hoje=lambda: hoje[0])
+
+    def test_move_so_pendentes_atrasados_para_hoje_mantendo_a_hora(self):
+        dominio = self.dominio([date(2026, 11, 13)])
+        atrasado = dominio.criar("Atrasado", None, "2026-11-10", "17:00")
+        atrasado_sem_hora = dominio.criar("Atrasado sem hora", None, "2026-01-02")
+        de_hoje = dominio.criar("De hoje", None, "2026-11-13", "08:00")
+        futuro = dominio.criar("Futuro", None, "2026-11-14", "09:00")
+        sem_data = dominio.criar("Sem data")
+        concluido = dominio.criar("Concluído atrasado", None, "2026-11-01", "10:00")
+        dominio.atualizar(concluido["id"], {"concluido": True})
+        concluido = next(i for i in dominio.listar() if i["id"] == concluido["id"])
+
+        lista, reagendados = dominio.reagendar_atrasados()
+
+        self.assertEqual(reagendados, 2)
+        por_id = {i["id"]: i for i in lista}
+        self.assertEqual((por_id[atrasado["id"]]["data_agendada"], por_id[atrasado["id"]]["hora_agendada"]),
+                         ("2026-11-13", "17:00"))
+        self.assertEqual((por_id[atrasado_sem_hora["id"]]["data_agendada"], por_id[atrasado_sem_hora["id"]]["hora_agendada"]),
+                         ("2026-11-13", None))
+        for intacto in (de_hoje, futuro, sem_data, concluido):
+            self.assertEqual(por_id[intacto["id"]], intacto)
+        self.assertEqual(lista, dominio.listar())  # a lista devolvida é o que ficou gravado
+        self.assertEqual([i["id"] for i in lista], [i["id"] for i in self.gravado()["lembretes"]])
+
+    def test_sem_atrasados_devolve_zero_e_nao_grava(self):
+        dominio = self.dominio([date(2026, 11, 13)])
+        self.assertEqual(dominio.reagendar_atrasados(), ([], 0))
+        self.assertFalse(self.arquivo.exists())  # nem cria o arquivo
+
+        dominio.criar("De hoje", None, "2026-11-13")
+        dominio.criar("Sem data")
+        antes_bytes = self.arquivo.read_bytes()
+        _, reagendados = dominio.reagendar_atrasados()
+        self.assertEqual(reagendados, 0)
+        self.assertEqual(self.arquivo.read_bytes(), antes_bytes)
+
+    def test_sem_atrasados_nao_chama_a_gravacao(self):
+        dominio = self.dominio([date(2026, 11, 13)])
+        dominio.criar("Futuro", None, "2026-11-20")
+        with mock.patch("domains.lembretes.atomic_write_json") as gravar:
+            self.assertEqual(dominio.reagendar_atrasados()[1], 0)
+        gravar.assert_not_called()
+
+    def test_virada_do_dia_com_hoje_injetado(self):
+        hoje = [date(2026, 11, 12)]
+        dominio = self.dominio(hoje)
+        item = dominio.criar("Do dia 12", None, "2026-11-12", "23:30")
+        self.assertEqual(dominio.reagendar_atrasados()[1], 0)  # dia 12 ainda é hoje
+        hoje[0] = date(2026, 11, 13)  # passou da meia-noite
+        lista, reagendados = dominio.reagendar_atrasados()
+        self.assertEqual(reagendados, 1)
+        self.assertEqual((lista[0]["id"], lista[0]["data_agendada"], lista[0]["hora_agendada"]),
+                         (item["id"], "2026-11-13", "23:30"))
+        self.assertEqual(dominio.reagendar_atrasados()[1], 0)  # idempotente no mesmo dia
+
+    def test_data_fora_do_formato_no_arquivo_nao_e_mexida(self):
+        itens = [
+            {"id": "a1", "descricao": "Texto", "criado_em": "t", "concluido": False, "data_agendada": "01/01/2020"},
+            {"id": "a2", "descricao": "Texto", "criado_em": "t", "concluido": False, "data_agendada": "2020-02-30"},
+        ]
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": itens}), encoding="utf-8")
+        antes_bytes = self.arquivo.read_bytes()
+        self.assertEqual(self.dominio([date(2026, 11, 13)]).reagendar_atrasados()[1], 0)
+        self.assertEqual(self.arquivo.read_bytes(), antes_bytes)
+
+    def test_rota_devolve_lista_completa_e_contagem(self):
+        atrasado = self.criar("Atrasado", data_agendada="2020-01-01", hora_agendada="07:45")
+        futuro = self.criar("Futuro", data_agendada="2999-01-01")
+        sem_data = self.criar("Sem data")
+        antes = datetime.now(FUSO).date().isoformat()
+        resposta = self.client.post("/api/lembretes/reagendar-atrasados")
+        depois = datetime.now(FUSO).date().isoformat()
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        corpo = resposta.json()
+        self.assertEqual(set(corpo), {"lembretes", "reagendados"})
+        self.assertEqual(corpo["reagendados"], 1)
+        por_id = {i["id"]: i for i in corpo["lembretes"]}
+        self.assertEqual(len(por_id), 3)
+        self.assertIn(por_id[atrasado["id"]]["data_agendada"], {antes, depois})  # hoje em America/Sao_Paulo
+        self.assertEqual(por_id[atrasado["id"]]["hora_agendada"], "07:45")
+        self.assertEqual(por_id[futuro["id"]], futuro)
+        self.assertEqual(por_id[sem_data["id"]], sem_data)
+        self.assertEqual(corpo["lembretes"], self.lembretes())
+
+    def test_rota_sem_atrasados_devolve_zero_e_nao_cria_o_arquivo(self):
+        resposta = self.client.post("/api/lembretes/reagendar-atrasados")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json(), {"lembretes": [], "reagendados": 0})
+        self.assertFalse(self.arquivo.exists())
+
+    def test_rota_com_arquivo_ilegivel_devolve_503_e_preserva(self):
+        self.arquivo.write_text("{não é json", encoding="utf-8")
+        resposta = self.client.post("/api/lembretes/reagendar-atrasados")
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json()["codigo"], "lembretes_ilegiveis")
+        self.assertEqual(self.arquivo.read_text(encoding="utf-8"), "{não é json")
+
+    def test_data_padrao_de_hoje_usa_america_sao_paulo(self):
+        antes = datetime.now(FUSO).date()
+        hoje = Lembretes(self.arquivo)._hoje()
+        depois = datetime.now(FUSO).date()
+        self.assertIn(hoje, {antes, depois})
+
+
 class LogTests(LembretesBase):
     def test_log_nunca_leva_a_descricao(self):
         with capturar_logs() as linhas:
@@ -279,6 +564,11 @@ class LogTests(LembretesBase):
             self.client.post("/api/lembretes", json={"descricao": f"{SEGREDO}\x00"})  # 422
             self.client.post("/api/lembretes", json={"descricao": SEGREDO * 100})  # 422 (limite)
             self.client.patch("/api/lembretes/inexistente", json={"descricao": SEGREDO})  # 404
+            self.client.patch(f"/api/lembretes/{item['id']}", json={"data_agendada": "2026-11-20"})
+            self.client.post("/api/lembretes", json={"descricao": SEGREDO, "data_agendada": "2026-02-30"})  # 422
+            self.client.post("/api/lembretes", json={"descricao": SEGREDO, "hora_agendada": "10:00"})  # 422
+            self.client.post("/api/lembretes", json={"descricao": SEGREDO, "data_agendada": "2020-01-01"})
+            self.client.post("/api/lembretes/reagendar-atrasados")
             self.client.get("/api/lembretes")
             self.client.delete(f"/api/lembretes/{item['id']}")
         self.assertTrue(any("Lembretes" in linha for linha in linhas), "o teste não viu nenhum log do app")
@@ -305,6 +595,7 @@ class SessaoTests(unittest.TestCase):
         pedidos = (
             ("GET", "/api/lembretes", None),
             ("POST", "/api/lembretes", {"descricao": "Texto"}),
+            ("POST", "/api/lembretes/reagendar-atrasados", None),
             ("PATCH", "/api/lembretes/abc", {"concluido": True}),
             ("DELETE", "/api/lembretes/abc", None),
         )
@@ -316,6 +607,7 @@ class SessaoTests(unittest.TestCase):
         caminhos = main.app.openapi()["paths"]
         self.assertEqual(set(caminhos["/api/lembretes"]), {"get", "post"})
         self.assertEqual(set(caminhos["/api/lembretes/{lembrete_id}"]), {"patch", "delete"})
+        self.assertEqual(set(caminhos["/api/lembretes/reagendar-atrasados"]), {"post"})
 
 
 if __name__ == "__main__":
