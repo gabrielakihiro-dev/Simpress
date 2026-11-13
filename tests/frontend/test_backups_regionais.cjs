@@ -87,6 +87,7 @@ function montar(t) {
   return {
     feature, painel, selo, aba, chamadas, toasts, disparados, estado, botao, intervalos,
     enviar: detalhe => ouvintes.get("simpress:painel-atualizado")({ detail: detalhe }),
+    indisponivel: () => ouvintes.get("simpress:painel-indisponivel")({}),
     clicar: alvo => painel.ouvintes.click({ target: { closest: () => alvo } }),
   };
 }
@@ -292,9 +293,101 @@ test("erro da API: mostra detail.mensagem, reabilita o botão e não pede atuali
   assert.equal(alvo.atributos["aria-busy"], undefined);
   assert.deepEqual(ctx.disparados, []);
 
-  ctx.estado.apiFetch = async () => { throw new Error("Sem conexão"); };
+  // Erro de rede (sem status): o texto cru do navegador não vai ao toast; vale a mensagem da ação.
+  ctx.estado.apiFetch = async () => { throw new TypeError("Failed to fetch"); };
   await ctx.clicar(alvo);
-  assert.deepEqual(ctx.toasts[1], { mensagem: "Sem conexão", tipo: "error" });
+  assert.deepEqual(ctx.toasts[1], { mensagem: "Não foi possível confirmar o backup.", tipo: "error" });
+  await ctx.clicar(ctx.botao("desfazer", "BRBBB22222", "Londrina"));
+  assert.deepEqual(ctx.toasts[2], { mensagem: "Não foi possível desfazer a confirmação.", tipo: "error" });
+  assert.deepEqual(ctx.disparados, []);
+});
+
+test("erro 422 (série saiu do cálculo): toast com a mensagem e pedido de atualização do painel", async t => {
+  const ctx = montar(t);
+  ctx.estado.apiFetch = async () => {
+    throw Object.assign(new Error("x"), { status: 422, detail: { codigo: "serie_nao_elegivel", mensagem: "Esta série não aparece como candidata a backup nesta cidade." } });
+  };
+  const alvo = ctx.botao("confirmar", "BRCCC33333", "Londrina");
+  await ctx.clicar(alvo);
+  assert.deepEqual(ctx.toasts, [{ mensagem: "Esta série não aparece como candidata a backup nesta cidade.", tipo: "error" }]);
+  assert.equal(alvo.disabled, false);
+  assert.deepEqual(ctx.disparados, ["simpress:atualizar-notificacoes"]);
+});
+
+test("Desfazer: backup contado pela marca com confirmação vigente e série na conferência com confirmação vigente", t => {
+  const { renderizarBackupsRegionais } = montar(t).feature;
+  const dados = painelBase().backups_regionais;
+  dados.prioritarias[0].backups[0].confirmado_ate = "2026-11-18T10:00:00-03:00";
+  dados.prioritarias[0].conferencia = [
+    { serie: "BRDDD44444", motivo: "leitura_ambigua", confirmacao: { estado: "vigente", expira_em: "2026-11-18T10:00:00-03:00" } },
+    { serie: "BRIII99999", motivo: "cidade_divergente", confirmacao: { estado: "invalidada", motivo: "expirada" } },
+    { serie: "BRJJJ00000", motivo: "cidade_divergente" },
+  ];
+  const html = renderizarBackupsRegionais(dados);
+  assert.ok(html.includes('data-backup-acao="desfazer" data-serie="BRAAA11111" data-cidade="Londrina"'), "marca + confirmação vigente");
+  assert.ok(html.includes('data-backup-acao="desfazer" data-serie="BRDDD44444" data-cidade="Londrina"'), "conferência com confirmação vigente");
+  assert.ok(!html.includes('data-serie="BRIII99999"'), "confirmação invalidada não leva Desfazer");
+  assert.ok(html.includes("Antes: a confirmação anterior expirou"));
+  assert.ok(!html.includes('data-serie="BRJJJ00000"'));
+});
+
+test("aguardando: rótulo 'aguardando dados' até o painel; falha antes da primeira resposta vira indisponível", t => {
+  const ctx = montar(t);
+  assert.equal(ctx.aba.atributos["aria-label"], "Backups: aguardando dados");
+  ctx.indisponivel();
+  assert.equal(ctx.aba.atributos["aria-label"], "Backups: dados indisponíveis");
+  assert.equal(ctx.selo.textContent, "—");
+  assert.match(ctx.painel.innerHTML, /Não foi possível calcular/);
+
+  ctx.enviar(painelBase());
+  assert.equal(ctx.aba.atributos["aria-label"], "Backups: 2 regionais pendentes");
+  ctx.indisponivel();
+  assert.ok(ctx.painel.innerHTML.includes("<table"), "falha depois de dados bons não apaga a tabela");
+});
+
+test("só o gerado_em mudou: troca o texto da linha e não recria o painel", t => {
+  const ctx = montar(t);
+  const linha = { textContent: "" };
+  ctx.painel.querySelector = seletor => (seletor === ".ck-backups__meta" ? linha : null);
+  ctx.enviar(painelBase());
+  const primeiro = ctx.painel.innerHTML;
+  let atribuicoes = 0;
+  let valor = primeiro;
+  Object.defineProperty(ctx.painel, "innerHTML", { get: () => valor, set: novo => { atribuicoes += 1; valor = novo; } });
+
+  const depois = painelBase();
+  depois.backups_regionais.gerado_em = "2026-11-12T09:05:00-03:00";
+  ctx.enviar(depois);
+  assert.equal(atribuicoes, 0, "innerHTML não é reatribuído");
+  assert.match(linha.textContent, /^Atualizado em .+Mínimo: 2 backups por regional prioritária\.$/);
+
+  const mudou = painelBase();
+  mudou.backups_regionais.pendencias = { sem_backup: [], conferir: [] };
+  mudou.backups_regionais.prioritarias[1].status = "ok";
+  ctx.enviar(mudou);
+  assert.equal(atribuicoes, 1, "mudança no corpo recria o painel");
+});
+
+test("ação sem efeito no corpo (repetido) ainda redesenha: solta o botão e devolve o foco", async t => {
+  const ctx = montar(t);
+  ctx.painel.querySelector = seletor => (seletor === ".ck-backups__meta" ? { textContent: "" } : null);
+  ctx.enviar(painelBase());
+  const focados = [];
+  const novoBotao = { ...ctx.botao("confirmar", "BRCCC33333", "Londrina"), focus() { focados.push(this); } };
+  ctx.painel.contains = () => true;
+  ctx.painel.querySelectorAll = seletor => (seletor === "[data-backup-acao]" ? [novoBotao] : []);
+  ctx.estado.apiFetch = async () => ({ repetido: true, confirmacao: { serie: "BRCCC33333", cidade: "Londrina", expira_em: "2026-11-18T10:00:00-03:00" } });
+  await ctx.clicar(ctx.botao("confirmar", "BRCCC33333", "Londrina"));
+  let atribuicoes = 0;
+  let valor = ctx.painel.innerHTML;
+  Object.defineProperty(ctx.painel, "innerHTML", { get: () => valor, set: novo => { atribuicoes += 1; valor = novo; } });
+  globalThis.document.activeElement = null;
+
+  const depois = painelBase();
+  depois.backups_regionais.gerado_em = "2026-11-12T09:05:00-03:00";
+  ctx.enviar(depois);
+  assert.equal(atribuicoes, 1, "com ação pendente de foco o painel é recriado");
+  assert.deepEqual(focados, [novoBotao], "foco volta ao botão da mesma série e cidade");
 });
 
 test("clique repetido durante o pedido e cliques fora de botão válido são ignorados", async t => {

@@ -4,8 +4,9 @@ Cálculo em ``domains/backups_regionais.py``; gravação em ``domains/backups_re
 (``AtomicFileTransaction``, sem lock Python). Nada aqui grava em ``EquipamentosDetalhes`` nem em sistemas externos.
 
 Confirmar só aceita a série que o cálculo atual mostra naquela cidade como candidata ou já contada (por marca ou por
-confirmação, para renovar o clique). Erros: ``HTTPException`` com ``detail = {"codigo", "mensagem"}``. Arquivo
-ocupado → 409 ``arquivo_ocupado``; estado ilegível → 503 ``estado_ilegível`` (o arquivo é preservado); série fora do
+confirmação); repetir com confirmação vigente não renova: mantém o ``expira_em`` (``repetido: true``). Erros:
+``HTTPException`` com ``detail = {"codigo", "mensagem"}``. Arquivo ocupado ou falha passageira de leitura (``OSError``)
+→ 409 ``arquivo_ocupado``; estado ilegível → 503 ``estado_ilegível`` (o arquivo é preservado); série fora do
 cálculo → 422 ``serie_nao_elegivel``; falha de gravação → 500 ``falha_gravacao``.
 """
 
@@ -31,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 MENSAGEM_ILEGIVEL = "As confirmações de backup estão ilegíveis; os dados foram preservados e nada foi gravado."
 LIMITACAO_CONFIRMACOES = "Confirmações de backup ilegíveis: backups confirmados à mão não foram contados."
+LIMITACAO_CONFIRMACOES_INDISPONIVEIS = (
+    "Confirmações de backup indisponíveis no momento: backups confirmados à mão não foram contados."
+)
 
 
 @dataclass(frozen=True)
@@ -90,19 +94,23 @@ def ler_painel_backups(services: BackupsRegionaisServices) -> Dict[str, Any]:
 
     Cada entrada é isolada: Endpoint com falha vira ``{"available": False}``; cobertura, cadastro e confirmações ilegíveis
     viram ``None``/``[]``; manutenção com falha vira ``Manutencao(ilegivel=True)``. Nenhuma delas derruba o painel.
-    ``fontes["confirmacoes"]`` e a limitação em pt-BR dizem se as confirmações manuais puderam ser lidas.
+    ``fontes["confirmacoes"]`` (``ok``, ``ilegivel`` ou ``indisponivel`` para falha passageira de leitura) e a
+    limitação em pt-BR dizem se as confirmações manuais puderam ser lidas.
     """
     agora = services.agora()
     equipamentos, endpoint, cobertura, manutencao = _entradas(services)
-    confirmacoes = _entrada_tolerante(
-        "as confirmações",
-        lambda: BackupsRegionaisStore(services.state_file(), services.transaction_root()).ler()["confirmacoes"],
-        None,
-    )
-    resultado = build_backups_regionais(equipamentos, endpoint, confirmacoes or [], cobertura, manutencao, agora)
-    resultado["fontes"]["confirmacoes"] = "ok" if confirmacoes is not None else "ilegivel"
-    if confirmacoes is None:
-        resultado["limitacoes"].append(LIMITACAO_CONFIRMACOES)
+    fonte, confirmacoes = "ok", []
+    try:
+        confirmacoes = BackupsRegionaisStore(services.state_file(), services.transaction_root()).ler()["confirmacoes"]
+    except Exception as error:  # só a classe vai ao log (sem caminho nem dado)
+        fonte = "ilegivel" if isinstance(error, EstadoIlegivel) else "indisponivel"
+        logger.warning("Falha ao ler as confirmações dos Backups regionais: %s.", type(error).__name__)
+    resultado = build_backups_regionais(equipamentos, endpoint, confirmacoes, cobertura, manutencao, agora)
+    resultado["fontes"]["confirmacoes"] = fonte
+    if fonte != "ok":
+        resultado["limitacoes"].append(
+            LIMITACAO_CONFIRMACOES if fonte == "ilegivel" else LIMITACAO_CONFIRMACOES_INDISPONIVEIS
+        )
     return resultado
 
 
@@ -143,6 +151,9 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
             atual = store().ler()
         except EstadoIlegivel as error:
             _falhar(error)
+        except OSError as error:
+            # Leitura direta presa (antivírus, sincronização): passageira, mesmo 409 do arquivo ocupado.
+            _falhar(FileBusyError(type(error).__name__))
         # Endpoint e cadastro são lidos antes, fora de qualquer transação; a gravação só toca o arquivo de backups.
         # Mesma leitura tolerante do painel: o que a tela mostrou como candidato continua confirmável.
         equipamentos, endpoint, cobertura, manutencao = _entradas(services)
@@ -160,7 +171,8 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     @router.post("/api/backups-regionais/desfazer")
     def desfazer(payload: ConfirmacaoPayload) -> Dict[str, Any]:
         """Remove a confirmação da série naquela cidade; sem registro, ``removido: false``."""
-        removido = gravar(lambda estado: store_mod.desfazer(estado, payload.serie, payload.cidade))
+        agora = services.agora()
+        removido = gravar(lambda estado: store_mod.desfazer(estado, payload.serie, payload.cidade, agora))
         origem = removido or {"serie": payload.serie, "cidade": payload.cidade}
         return {"serie": origem["serie"], "cidade": origem["cidade"], "removido": removido is not None}
 
