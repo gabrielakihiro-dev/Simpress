@@ -583,28 +583,29 @@
       </section>
 
       <section class="ck-cartao" id="sebrae-novos-painel" aria-labelledby="sebrae-novos-titulo">
-        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span></div>
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span><span class="ck-espaco"></span><span class="sebrae-agenda-selos"><span class="ck-badge" data-status="ok" data-agendamento="ligado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Agendamento ligado</span></span><span class="ck-badge" data-agendamento="desligado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Agendamento desligado</span></span></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span></button></div>
         <div class="ck-cartao__corpo ck-det__corpo">
           <form class="sebrae-importar" data-on-submit="importarDashboardSebrae">
             <label class="ckp-arquivo" data-estado="vazio">
               <input id="sebrae-dashboard-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
               <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="sebrae-dashboard-name" data-vazio="Escolher o Dashboard ou arrastar aqui">Escolher o Dashboard ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx do Dashboard Operacional_SEBRAE (aba CHAMADOS)">.xlsx do Dashboard Operacional_SEBRAE (aba CHAMADOS)</span></span>
+              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="sebrae-dashboard-name" data-vazio="Escolher o Dashboard ou arrastar aqui">Escolher o Dashboard ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx · aba CHAMADOS">.xlsx · aba CHAMADOS</span></span>
               <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
             </label>
             <div class="ck-grupo-botoes" role="group" aria-label="Chamados novos">
               <button type="submit" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-importar"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Importar Dashboard</span></button>
-              <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-buscar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Buscar chamados novos</span></button>
-              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-automatico" data-automacao-rotina="dashboard" data-on-click="iniciarRotinaAutomacao" data-args='["dashboard"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Baixar, importar e buscar</span></button>
+              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-buscar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Buscar chamados novos</span></button>
+              <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-automatico" data-automacao-rotina="dashboard" data-on-click="iniciarRotinaAutomacao" data-args='["dashboard"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Baixar, importar e buscar</span></button>
             </div>
           </form>
-          <div class="ck-campo"><span class="ck-campo__linha"><label><input type="checkbox" id="dashboard-agendamento-ativo" data-on-change="alterarAgendamentoDashboard"> Repetir a cada</label> <select id="dashboard-agendamento-intervalo" class="ck-entrada ck-entrada--sm" data-on-change="alterarAgendamentoDashboard" aria-label="Intervalo do agendamento"><option value="30" selected>30 minutos</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option></select></span></div>
-          <p id="dashboard-agendamento-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando agendamento…</p>
-          <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
-          <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <div class="sebrae-agenda">
+            <div class="ck-campo"><span class="ck-campo__linha"><label><input type="checkbox" id="dashboard-agendamento-ativo" data-on-change="alterarAgendamentoDashboard"> Repetir a cada</label> <select id="dashboard-agendamento-intervalo" class="ck-entrada ck-entrada--sm" data-on-change="alterarAgendamentoDashboard" aria-label="Intervalo do agendamento"><option value="30" selected>30 minutos</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option></select></span></div>
+            <p id="dashboard-agendamento-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando agendamento…</p>
+            <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
+            <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          </div>
           <div id="sebrae-historico-resumo" class="sebrae-historico-resumo"></div>
           <div id="sebrae-novos-avisos"></div>
-          <div class="ck-grupo-botoes"><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span></button></div>
         </div>
       </section>
 
