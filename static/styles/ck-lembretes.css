@@ -58,6 +58,8 @@
 /* Edição inline: campo realçado, dica com teclas e Cancelar/Salvar lado a lado. */
 .lembretes__edicao { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; animation: ck-surgir var(--duracao) var(--curva); }
 .lembretes__edicao .lembretes__campo { flex: 1 1 100%; width: auto; border-color: var(--cor-destaque); box-shadow: 0 0 0 3px var(--cor-destaque-fundo); }
+/* Foco do modelo (borda e anel de destaque) no lugar do anel global de :focus-visible do tema claro. */
+.lembretes__caixa .lembretes__campo:focus-visible { outline: none; border-color: var(--cor-destaque); box-shadow: 0 0 0 3px var(--cor-destaque-fundo); }
 .lembretes__dica { margin: 0; flex: 1 1 auto; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
 .lembretes__dica kbd { font: inherit; font-size: 10.5px; padding: 0 4px; border: 1px solid var(--cor-borda); border-radius: 3px; background: var(--cor-campo); }
 .lembretes__edicao-acoes { display: flex; gap: 6px; margin-inline-start: auto; }
