@@ -75,6 +75,7 @@ Em seguida a página recebe a classe `termos-imprimindo` no `<html>`, o título 
 - A requisição não leva nada do termo (sem corpo, sem query) e só ocorre ao clicar em `Gerar PDF`, com os dados já validados.
 - Para trocar a assinatura, substitua o arquivo `data/state/assinatura_tecnico.svg`. Sem o arquivo, ou se ele for recusado (acima de 64 KB, sem `<svg`, com script, atributo `on…=`, `javascript:`, `<foreignObject`, `href=` ou `<!ENTITY`), o PDF sai com a linha em branco, como antes; a tela não mostra aviso. SVG exportado de editor que traga `href`/`xlink:href` precisa ser limpo antes. Recorte a `viewBox` rente ao traço (sem margem embaixo) e recalcule a fração 39/122,3 em `static/styles/ck-termos.css` (onde termina o corpo das letras ÷ altura da `viewBox`); sem isso, a assinatura sobe ou desce em relação à linha.
 - A `<img>` (classe `tp__assinatura-img`, `alt` vazio, 14 mm de altura) é criada por `createElement` e posicionada sobre a margem, sem empurrar o layout. Se não carregar em até 3 s, o PDF sai sem ela.
+- Na impressão, a `<img>` tem fundo transparente (exceção à regra que pinta toda a folha de branco). Correção de 12/11/2026: com o fundo branco, a parte da imagem abaixo da linha cobria a linha do técnico (sobravam só as pontas) e o rótulo. A largura segue a proporção do SVG (altura fixa de 14 mm, `width: auto`, limitada à largura do bloco); teste e2e cobre uma assinatura larga (~4,9:1) nos dois termos.
 
 ### Nome sugerido do arquivo
 
