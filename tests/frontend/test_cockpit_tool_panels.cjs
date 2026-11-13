@@ -186,7 +186,7 @@ test("a month row links to the F5 only with the F5 key and fills the series of n
 });
 
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.
-function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {}) {
+function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, contextExtra = {} } = {}) {
   const elementos = new Map();
   const ouvintes = [];
   const ouvintesElemento = [];
@@ -215,7 +215,7 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {
     createElement: () => novo("novo"),
   };
   const app = { apiFetch, showToast() {}, ...appExtra };
-  const api = createCockpitToolPanels({ app, appState: {}, apiFetch });
+  const api = createCockpitToolPanels({ app, appState: {}, apiFetch, ...contextExtra });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
   // dispara(id, tipo, evento): chama os ouvintes que o painel registrou naquele elemento (cliques e teclas das sub-abas da F6).
@@ -940,4 +940,210 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
     assert.equal(noChamado.at(-1)[0].textContent, "Chamado não encontrado na aba Chamados (F5).");
     assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88", chamado: "UTIC-X" });
   } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+// ---------- Links de lembrete: abrirReferenciaLembrete abre a mesma janela, só com GETs existentes ----------
+
+const modeloChamadosOs = require("../../static/js/shared/chamados-os-model.js");
+
+// Ambiente da janela com respostas falsas: cartoes = { "UTIC-...": { os, serie } } (o que o F5 devolve); vinculos/sebrae = respostas dos GETs.
+function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVinculos = false, falhaSebrae = false } = {}) {
+  const chamadasApi = [];
+  const pedidosCartao = [];
+  const apiFetch = async url => {
+    chamadasApi.push(url);
+    if (url === "/api/operacoes/chamados/vinculos-os") { if (falhaVinculos) throw new Error("falhou"); return { vinculos }; }
+    if (url === "/api/sebrae/novos") { if (falhaSebrae) throw new Error("falhou"); return sebrae; }
+    throw new Error(`GET inesperado: ${url}`);
+  };
+  const cartaoDe = chave => (cartoes[chave] ? { dataset: { os: cartoes[chave].os || "", serie: cartoes[chave].serie || "" } } : null);
+  const ambiente = criarAmbientePaineis({
+    apiFetch,
+    contextExtra: { chamadosOsModel: modeloChamadosOs },
+    appExtra: {
+      abrirModalAcessivel() {},
+      fecharModalAcessivel() {},
+      cartaoChamadoSebraeLeitura: async chave => { pedidosCartao.push(chave); return cartaoDe(chave); },
+    },
+  });
+  const montadas = [];
+  global.SimpressDataPanels = {
+    montarTabelaOs: (host, opcoes) => { montadas.push(opcoes); return { querySelector: () => null }; },
+    filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
+  };
+  const conteudo = id => { const lista = []; ambiente.el(id).replaceChildren = (...nos) => lista.push(nos); return lista; };
+  const noChamado = conteudo("chamado-os-janela-chamado");
+  const noOs = conteudo("chamado-os-janela-os");
+  const textos = lista => lista.at(-1).map(no => no.textContent);
+  const limpar = () => { delete global.document; delete global.SimpressDataPanels; };
+  return { ...ambiente, chamadasApi, pedidosCartao, montadas, noChamado, noOs, textos, limpar };
+}
+
+const vinculo = (os, chamado, extra = {}) => ({ fonte: "simpress", serie: "SN-1", os, chamado, ...extra });
+
+test("lembrete, chamado com OS no cartão: abre cartão e a OS do cartão, sem consultar os vínculos", async () => {
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-0833": { os: "1234567", serie: "SN-9" } } });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-0833" }, { isConnected: true });
+    assert.deepEqual(a.pedidosCartao, ["UTIC-2026-0833"]);
+    assert.deepEqual(a.chamadasApi, [], "a OS do cartão vence: nenhum GET");
+    assert.deepEqual(a.montadas.at(-1).soOs, { serie: "SN-9", os: "1234567", chamado: "UTIC-2026-0833", lembrete: true });
+    assert.equal(a.el("chamado-os-janela-f6").hidden, false);
+  } finally { a.limpar(); }
+});
+
+test("lembrete, chamado sem OS no cartão: usa o vínculo salvo pelo chamado exato e respeita a prioridade", async () => {
+  const a = ambienteReferencia({
+    cartoes: { "UTIC-2026-0833": {} },
+    vinculos: [
+      vinculo("1111111", "UTIC-2026-0833", { origem: "dashboard" }),
+      vinculo("2222222", "UTIC-2026-0833", { origem: "finalizacao" }),
+      vinculo("3333333", "UTIC-2026-083"),
+    ],
+  });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-0833" });
+    assert.deepEqual(a.chamadasApi, ["/api/operacoes/chamados/vinculos-os"]);
+    assert.deepEqual(a.montadas.at(-1).soOs, { serie: "SN-1", os: "2222222", chamado: "UTIC-2026-0833", lembrete: true }, "finalizacao vence dashboard; UTIC-2026-083 não casa");
+  } finally { a.limpar(); }
+});
+
+test("lembrete, cartão do F5 com OS \"—\": trata como sem OS, usa o vínculo e não leva a série do cartão", async () => {
+  const a = ambienteReferencia({
+    cartoes: { "UTIC-2026-0833": { os: "—", serie: "SN-CARTAO" } },
+    vinculos: [vinculo("2222222", "UTIC-2026-0833", { serie: "" })],
+  });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-0833" });
+    assert.deepEqual(a.textos(a.noOs.slice(0, 1)), ["Carregando…"], "lado da OS começa com Carregando…");
+    assert.deepEqual(a.chamadasApi, ["/api/operacoes/chamados/vinculos-os"]);
+    assert.deepEqual(a.montadas.at(-1).soOs, { serie: "", os: "2222222", chamado: "UTIC-2026-0833", lembrete: true });
+    assert.deepEqual(a.noOs.at(-1), [], "o Carregando… sai antes de a tabela da OS ser montada");
+  } finally { a.limpar(); }
+});
+
+test("lembrete, chamado com duas OS na mesma prioridade: não escolhe e avisa à direita", async () => {
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-1": {} }, vinculos: [vinculo("2222222", "UTIC-2026-1"), vinculo("1111111", "UTIC-2026-1")] });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-1" });
+    assert.deepEqual(a.textos(a.noOs), ["Mais de uma OS ligada a este chamado (1111111, 2222222). Abra pela aba OS (F6)."]);
+    assert.equal(a.montadas.length, 0);
+    assert.equal(a.el("chamado-os-janela-f6").hidden, true);
+  } finally { a.limpar(); }
+});
+
+test("lembrete, chamado sem OS em lugar nenhum: frase de sempre; chamado inexistente: só o aviso à esquerda", async () => {
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-1": {} }, vinculos: [vinculo("1111111", "UTIC-2026-2")] });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-1" });
+    assert.deepEqual(a.textos(a.noOs), ["Nenhuma OS vinculada por série na importação atual."]);
+    assert.equal(a.montadas.length, 0);
+
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-9999" });
+    assert.deepEqual(a.textos(a.noChamado), ["Chamado não encontrado na aba Chamados (F5)."]);
+    assert.deepEqual(a.noOs.at(-1), [], "lado da OS fica vazio (o CSS o esconde)");
+    assert.equal(a.montadas.length, 0);
+  } finally { a.limpar(); }
+});
+
+test("lembrete, chamado ausente do F5 mas com vínculo: mostra o aviso do chamado e a OS ligada", async () => {
+  const a = ambienteReferencia({ vinculos: [vinculo("2222222", "UTIC-2026-7")] });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-7" });
+    assert.deepEqual(a.textos(a.noChamado), ["Chamado não encontrado na aba Chamados (F5)."]);
+    assert.equal(a.montadas.at(-1).soOs.os, "2222222");
+  } finally { a.limpar(); }
+});
+
+test("lembrete, chamado com a leitura de vínculos falhando: não quebra e cai na frase de sempre", async () => {
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-1": {} }, falhaVinculos: true });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "chamado", numero: "UTIC-2026-1" });
+    assert.deepEqual(a.textos(a.noOs), ["Nenhuma OS vinculada por série na importação atual."]);
+  } finally { a.limpar(); }
+});
+
+test("lembrete, OS ligada a um chamado: abre o cartão desse chamado e só essa OS", async () => {
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-0833": { os: "1234567", serie: "SN-1" } }, vinculos: [vinculo("1234567", "utic-2026-0833")] });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "1234567" }, { isConnected: true });
+    assert.deepEqual([...a.chamadasApi].sort(), ["/api/operacoes/chamados/vinculos-os", "/api/sebrae/novos"]);
+    assert.deepEqual(a.pedidosCartao, ["UTIC-2026-0833"]);
+    assert.deepEqual(a.montadas.at(-1).soOs, { serie: "SN-1", os: "1234567", chamado: "UTIC-2026-0833", lembrete: true });
+  } finally { a.limpar(); }
+});
+
+test("lembrete, OS que só o F5 liga a um chamado: usa o F5 em aberto", async () => {
+  const sebrae = { novos: { formulario: [{ numero: "UTIC-2026-5", linha: { E: "5555555", K: "SN-5" } }] } };
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-5": { os: "5555555", serie: "SN-5" } }, sebrae });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "5555555" });
+    assert.deepEqual(a.pedidosCartao, ["UTIC-2026-5"]);
+    assert.deepEqual(a.montadas.at(-1).soOs, { serie: "SN-5", os: "5555555", chamado: "UTIC-2026-5", lembrete: true });
+  } finally { a.limpar(); }
+});
+
+test("lembrete, OS sem chamado (inclusive com as duas leituras falhando): só a OS, sem série e sem cartão", async () => {
+  for (const falhas of [{}, { falhaVinculos: true, falhaSebrae: true }]) {
+    const a = ambienteReferencia(falhas);
+    try {
+      await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "7654321" });
+      assert.deepEqual(a.pedidosCartao, []);
+      assert.deepEqual(a.noChamado.at(-1), [], "lado do chamado fica vazio (o CSS o esconde)");
+      assert.deepEqual(a.montadas.at(-1).soOs, { serie: "", os: "7654321", chamado: "", lembrete: true });
+      assert.equal(a.el("chamado-os-janela-f6").hidden, false);
+    } finally { a.limpar(); }
+  }
+});
+
+test("lembrete, OS ligada a mais de um chamado: abre só a OS e avisa à esquerda", async () => {
+  const a = ambienteReferencia({ vinculos: [vinculo("1234567", "UTIC-2026-9"), vinculo("1234567", "UTIC-2026-2")] });
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "1234567" });
+    assert.deepEqual(a.pedidosCartao, []);
+    assert.deepEqual(a.textos(a.noChamado), ["OS ligada a mais de um chamado (UTIC-2026-2, UTIC-2026-9)."]);
+    assert.equal(a.montadas.at(-1).soOs.os, "1234567");
+  } finally { a.limpar(); }
+});
+
+test("lembrete: tipo desconhecido ou número vazio não abre nada", async () => {
+  const a = ambienteReferencia();
+  try {
+    await a.api.abrirReferenciaLembrete({ tipo: "x", numero: "1" });
+    await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "" });
+    await a.api.abrirReferenciaLembrete();
+    assert.deepEqual([a.chamadasApi, a.pedidosCartao, a.montadas], [[], [], []]);
+  } finally { a.limpar(); }
+});
+
+test("lembrete: pedido antigo que termina depois de um novo não sobrescreve a janela", async () => {
+  let liberar;
+  const a = ambienteReferencia({ cartoes: { "UTIC-2026-2": { os: "2222222", serie: "SN-2" } } });
+  try {
+    // O primeiro pedido espera no resolver; o segundo (chamado com OS no cartão) termina antes.
+    const lento = a.api.abrirJanelaChamadoOs({ os: "1111111", resolver: () => new Promise(resolve => { liberar = resolve; }) });
+    await a.api.abrirJanelaChamadoOs({ chamado: "UTIC-2026-2" });
+    liberar({ chamado: "UTIC-2026-1" });
+    await lento;
+    assert.deepEqual(a.pedidosCartao, ["UTIC-2026-2"], "o pedido antigo parou antes de pedir o cartão");
+    assert.equal(a.montadas.length, 1);
+    assert.equal(a.montadas[0].soOs.os, "2222222");
+  } finally { a.limpar(); }
+});
+
+test("lembrete: ao fechar, o foco volta ao link equivalente quando a lista se redesenhou", async () => {
+  const a = ambienteReferencia();
+  try {
+    const args = JSON.stringify([{ tipo: "os", numero: "7654321" }, "$this"]);
+    const antigo = { isConnected: false, matches: seletor => seletor === ".lembretes__ref", getAttribute: nome => (nome === "data-args" ? args : null) };
+    const focados = [];
+    const novo = { getAttribute: nome => (nome === "data-args" ? args : null), focus: () => focados.push("novo") };
+    const outro = { getAttribute: () => "[]", focus: () => focados.push("outro") };
+    const consultas = [];
+    global.document.querySelectorAll = seletor => { consultas.push(seletor); return [outro, novo]; };
+    await a.api.abrirReferenciaLembrete({ tipo: "os", numero: "7654321" }, antigo);
+    a.api.fecharJanelaChamadoOs();
+    assert.deepEqual(consultas, ["button.lembretes__ref"]);
+    assert.deepEqual(focados, ["novo"]);
+  } finally { a.limpar(); }
 });

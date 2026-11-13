@@ -900,6 +900,9 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #modal-chamado-os > .ck-dialogo { width: min(1200px, calc(100vw - 32px)); max-width: none; max-height: min(90vh, 960px); overflow-y: hidden; }
 #modal-chamado-os .chamado-os-janela__corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 4px; }
 #modal-chamado-os .chamado-os-janela__lado { min-width: 0; }
+/* Lado sem conteúdo (ex.: OS pedida sem chamado, ou chamado inexistente sem OS) some e o outro ocupa a largura toda. */
+#modal-chamado-os .chamado-os-janela__lado:empty { display: none; }
+#modal-chamado-os .chamado-os-janela__corpo:has(> .chamado-os-janela__lado:empty) { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 899.98px) {
   #modal-chamado-os .chamado-os-janela__corpo { grid-template-columns: minmax(0, 1fr); }
 }

@@ -120,6 +120,23 @@
     return form;
   }
 
+  // Chamado UTIC-AAAA-N e OS de 7 dígitos no texto viram botão que abre a janela Chamado × OS (só leitura); o resto fica texto puro.
+  function criarLinkReferencia({ tipo, numero, texto }) {
+    const b = elemento("button", "ck-link-btn ck-mono lembretes__ref", texto);
+    b.type = "button";
+    b.setAttribute("aria-haspopup", "dialog");
+    b.setAttribute("aria-label", `${tipo === "chamado" ? "Abrir o chamado" : "Abrir a OS"} ${numero} na janela Chamado × OS`);
+    ligar(b, "click", "abrirReferenciaLembrete", [{ tipo, numero }, "$this"]);
+    return b;
+  }
+
+  function criarTexto(descricao) {
+    const p = elemento("p", "lembretes__texto");
+    const partes = context.chamadosOsModel?.referenciasNoTexto(descricao) ?? [{ texto: descricao }];
+    p.append(...partes.map((parte) => (parte.tipo ? criarLinkReferencia(parte) : doc().createTextNode(parte.texto))));
+    return p;
+  }
+
   // Bloco recolhível com os dados salvos do termo (só lembretes criados de um termo com a cópia gravada).
   function criarBlocoTermo(l) {
     const secoes = l.termo ? app.termosSecoesLembrete?.(l.origem, l.termo) : null;
@@ -174,7 +191,7 @@
     const corpo = elemento("div", "lembretes__corpo");
     const data = elemento("time", l.alterado_em ? "lembretes__data lembretes__data--alterado" : "lembretes__data",`${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
     data.setAttribute("datetime", dataExibida(l));
-    corpo.append(elemento("p", "lembretes__texto", l.descricao), data);
+    corpo.append(criarTexto(l.descricao), data);
     const blocoTermo = criarBlocoTermo(l);
     if (blocoTermo) corpo.append(blocoTermo);
     const acoes = elemento("div", "lembretes__acoes");
