@@ -177,7 +177,7 @@
   const powershellRequestGate = transferUtils.createRequestGate();
   const POWERSHELL_AVISO_NAO_EXECUTADO = "O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.";
 
-  // Códigos prontos: lista guardada no servidor local (comando fixo + modo). Só carrega na primeira abertura do card.
+  // Códigos prontos: lista guardada no servidor local (comando fixo + modo). Carrega na primeira seleção de equipamento (e de novo nas seguintes se a carga falhar).
   const POWERSHELL_CODIGOS_URL = "/api/endpoint/powershell/codigos";
   // Impressora de rede (Add-Printer -ConnectionName, aceito abreviado até -Con) só é instalada no perfil do usuário logado.
   const POWERSHELL_IMPRESSORA_REDE = /^\s*Add-Printer\b.*\s-Con/i;
@@ -225,16 +225,23 @@
     if (!cargaCodigosPowerShell) {
       select.setAttribute("aria-busy", "true");
       cargaCodigosPowerShell = app.apiFetch(POWERSHELL_CODIGOS_URL, { errorMessage: "Não foi possível carregar os códigos prontos." })
-        .then(data => { definirCodigosPowerShell(codigosDaResposta(data)); return true; })
-        .catch(error => { document.getElementById("endpoint-powershell-result").textContent = error.message || "Não foi possível carregar os códigos prontos."; return false; })
+        .then(data => {
+          definirCodigosPowerShell(codigosDaResposta(data));
+          // Limpa só o erro de uma carga anterior, nunca outro status.
+          const status = document.getElementById("endpoint-powershell-result");
+          if (status.dataset.erroCodigos && status.textContent === status.dataset.erroCodigos) status.textContent = "";
+          delete status.dataset.erroCodigos;
+          return true;
+        })
+        .catch(error => {
+          const status = document.getElementById("endpoint-powershell-result");
+          status.textContent = error.message || "Não foi possível carregar os códigos prontos.";
+          status.dataset.erroCodigos = status.textContent;
+          return false;
+        })
         .finally(() => { cargaCodigosPowerShell = null; select.removeAttribute("aria-busy"); });
     }
     return cargaCodigosPowerShell;
-  }
-
-  // O toggle do <details> não borbulha; o dispatcher o captura no próprio elemento (data-on-toggle).
-  function aoAbrirPowerShellEndpoint() {
-    if (document.getElementById("endpoint-powershell").open) void carregarCodigosPowerShell();
   }
 
   function aplicarCodigoProntoPowerShell() {
@@ -916,6 +923,7 @@
     document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
     // O apelido é o hostname no Endpoint; sem ele, o campo fica vazio e vale o computador padrão.
     document.getElementById("input-powershell-hostname").value = eq.apelido || "";
+    void carregarCodigosPowerShell(); // o formulário fica sempre visível; o cache evita novo GET nas próximas seleções
     const aliasStatus = document.getElementById("badge-apelido-status");
     aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
       ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
@@ -1383,7 +1391,7 @@
   return {
     consultarEndpoint,
     controleRemotoEndpoint, abrirPowerShellEndpoint, aplicarCodigoProntoPowerShell,
-    aoAbrirPowerShellEndpoint, alternarEditorCodigosPowerShell, adicionarCodigoPowerShell, salvarCodigosPowerShell,
+    carregarCodigosPowerShell, alternarEditorCodigosPowerShell, adicionarCodigoPowerShell, salvarCodigosPowerShell,
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,
