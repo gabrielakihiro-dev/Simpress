@@ -41,7 +41,7 @@ Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto 
 
 ## Transporte e representantes (F2)
 
-- O padrão dos representantes é o código (`REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`: só cidades e horários, sem dado pessoal) mesclado com o arquivo local `data/state/representantes_regionais_padrao.json` (nome, e-mail e telefone; fora do Git; modelo em `config/representantes_regionais_padrao.exemplo.json`); só a alteração por cidade é gravada em `config/representantes_regionais.json`. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+- O padrão dos representantes é o código (`REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`: só cidades e horários, sem dado pessoal) mesclado com o arquivo local `data/state/representantes_regionais_padrao.json` (nome, e-mail e telefone; fora do Git; modelo em `config/representantes_regionais_padrao.exemplo.json`); só a alteração por cidade é gravada em `config/representantes_regionais.json`; com o arquivo local de padrões inválido, o PUT é recusado (503) e nada é gravado. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
 
 ## E-mail por modelo (Outlook, Home F1)
 
