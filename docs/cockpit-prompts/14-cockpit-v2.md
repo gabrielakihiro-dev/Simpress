@@ -212,6 +212,21 @@ Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups`; `st
 - Cartão do sino (`#alerta-backups-regionais`): `docs/operacao/alertas-os-divergencias.md`, seção 5.
 - Fixture dos e2e (`tests/support/serve_ui_motion_preview.py`): `GET /__fixture_backups?estado=padrao|so_conferir|nulo|indisponivel` reinicia o estado em memória; `POST /api/backups-regionais/confirmar` e `/desfazer` mudam esse estado. Séries `TSTBK*` e apelidos `Estacao Teste N` são fictícios.
 
+## Visual do Catálogo de unidades (13/11/2026)
+
+Pedido do usuário: deixar os blocos do painel `unidades` mais organizados e limpos, no mesmo padrão do Histórico de apelidos. Só CSS, numa seção própria no fim de `static/styles/ck-cockpit.css`, escopada a `[data-cockpit-tool-panel="unidades"]`; HTML, IDs, ARIA, textos e dados não mudaram; no JavaScript entrou só um comentário em `renderUnits` avisando que a ordem dos pares (Cidade, UF, Endereço, CEP, CNPJ) e das colunas é usada pelo CSS via `nth-child`. Proposta aprovada no artefato de design do catálogo.
+
+- Painel com largura máxima de 1400 px, centralizado.
+- KPIs (Unidades, Cidades, Com CNPJ) em cartões compactos com borda, lado a lado; no celular dividem a linha em três.
+- Barra numa linha só: busca (até 360 px), contagem `N de M unidades` ao lado e `Nova unidade` à direita. No celular a busca ocupa a linha toda.
+- Em 1200 px ou mais, a lista é uma tabela dentro de um cartão (cabeçalho com fundo suave, linha selecionada com faixa de 3 px). Abaixo disso continuam os cards de `.ck-tabela--cards`.
+- CNPJ da lista e CEP e CNPJ do detalhe em fonte mono com números tabulares. O texto continua cru, sem máscara (o e2e confere `03209636000100`).
+- Detalhe em cartão: título maior, pares em grade 2×2 com linhas finas e Endereço na largura toda. A faixa cinza com cartões empilhados saiu: `.ck-det__corpo` transformava `.ck-pares` em coluna flexível.
+- Bordas dos cartões e linhas do detalhe em `--cor-borda-suave` no tema claro, como no artefato; no escuro em `--cor-borda`, porque o token suave quase some sobre a superfície.
+- Linha da lista com foco: anel para dentro (`outline-offset: -2px`), porque a lista rola e cortaria o anel. Detalhe fixo com `max-height` descontando o `top` de 12 px. Detalhe sem seleção não desenha faixa vazia (`:empty`). Abaixo de 400 px o lápis do CNPJ quebra para a linha de baixo sem margem negativa.
+- Temas claro e escuro só com tokens de `ck-tokens.css`; sem `!important`.
+- Verificado no fixture com 6 unidades fictícias, em 1366×900 e 390×844, nos dois temas, sem rolagem horizontal. Não verificado com os dados reais nem no navegador do usuário.
+
 ## `index.html` dividido em partials (10/11/2026)
 
 Para reduzir conflitos entre sessões paralelas, trechos grandes do `static/index.html` ficam em `frontend/partials/<nome>.html`, fora de `static/` (não são servidos sozinhos). No `index.html`, uma linha que contém só `<!-- include: partials/<nome>.html -->` é trocada pelo arquivo inteiro antes de a página sair; o navegador recebe o mesmo HTML de antes, byte a byte.
