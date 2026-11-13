@@ -71,8 +71,18 @@ def _entrada_tolerante(descricao: str, ler: Callable[[], Any], padrao: Any) -> A
     try:
         return ler()
     except Exception as error:
-        logger.warning("Falha ao ler %s dos Backups regionais do painel: %s.", descricao, type(error).__name__)
+        logger.warning("Falha ao ler %s dos Backups regionais: %s.", descricao, type(error).__name__)
         return padrao
+
+
+def _entradas(services: BackupsRegionaisServices) -> Tuple[Any, Any, Any, Manutencao]:
+    """Cadastro, Endpoint, Cobertura e manutenção, cada um isolado: o painel e a rota de confirmar leem igual."""
+    return (
+        _entrada_tolerante("o cadastro", services.equipamentos, None),
+        _entrada_tolerante("o Endpoint", services.endpoint, {"available": False}),
+        _entrada_tolerante("a Cobertura", services.estado_cobertura, None),
+        _entrada_tolerante("a manutenção", services.manutencao, Manutencao(ilegivel=True)),
+    )
 
 
 def ler_painel_backups(services: BackupsRegionaisServices) -> Dict[str, Any]:
@@ -83,10 +93,7 @@ def ler_painel_backups(services: BackupsRegionaisServices) -> Dict[str, Any]:
     ``fontes["confirmacoes"]`` e a limitação em pt-BR dizem se as confirmações manuais puderam ser lidas.
     """
     agora = services.agora()
-    equipamentos = _entrada_tolerante("o cadastro", services.equipamentos, None)
-    endpoint = _entrada_tolerante("o Endpoint", services.endpoint, {"available": False})
-    cobertura = _entrada_tolerante("a Cobertura", services.estado_cobertura, None)
-    manutencao = _entrada_tolerante("a manutenção", services.manutencao, Manutencao(ilegivel=True))
+    equipamentos, endpoint, cobertura, manutencao = _entradas(services)
     confirmacoes = _entrada_tolerante(
         "as confirmações",
         lambda: BackupsRegionaisStore(services.state_file(), services.transaction_root()).ler()["confirmacoes"],
@@ -137,10 +144,9 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
         except EstadoIlegivel as error:
             _falhar(error)
         # Endpoint e cadastro são lidos antes, fora de qualquer transação; a gravação só toca o arquivo de backups.
-        calculo = build_backups_regionais(
-            services.equipamentos(), services.endpoint(), atual["confirmacoes"],
-            services.estado_cobertura(), services.manutencao(), agora,
-        )
+        # Mesma leitura tolerante do painel: o que a tela mostrou como candidato continua confirmável.
+        equipamentos, endpoint, cobertura, manutencao = _entradas(services)
+        calculo = build_backups_regionais(equipamentos, endpoint, atual["confirmacoes"], cobertura, manutencao, agora)
         achada = series_elegiveis(calculo, payload.cidade).get(normalize_reference_value(payload.serie))
         if achada is None:
             raise HTTPException(status_code=422, detail={
