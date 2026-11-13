@@ -988,6 +988,7 @@ class SimpressApi:
             "inserido": f"Comando inserido no prompt do PowerShell de {host}, mas NÃO executado: o usuário revisa e aperta Enter no terminal do Chrome.",
             "not_found": f"Computador {host} não encontrado no Endpoint. Nada foi inserido.",
             "erro_terminal": str(dados.get("mensagem") or f"Não foi possível abrir o PowerShell em {host}. Nada foi inserido."),
+            "offline": f"O notebook {host} está offline no Endpoint. Nada foi inserido.",
             "sem_usuario": f"Usuário não encontrado em {host}. Nada foi inserido.",
             "usuario_ambiguo": f"Há mais de um usuário logado em {host}; peça ao usuário qual usar. Nada foi inserido.",
         }
