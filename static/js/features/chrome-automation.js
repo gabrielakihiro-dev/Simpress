@@ -143,7 +143,7 @@
     concluido: "ok", falha: "erro", cancelado: "", interrompido: "alerta", ocupada: "alerta", em_andamento: "info",
   });
 
-  // Selo da última execução de cada rotina (cartões e linha "Verificar usuários"); estado.ultimasPorRotina vem do histórico.
+  // Selo da última execução de cada rotina (os 4 cartões, inclusive "Verificar usuários"); estado.ultimasPorRotina vem do histórico.
   function renderizarBadgesRotinas() {
     document.querySelectorAll("[data-rotina-badge]").forEach(badge => {
       const rotina = badge.dataset.rotinaBadge;
@@ -202,6 +202,10 @@
       const rotulo = acompanhar ? "Acompanhar" : (repetir ? "Tentar de novo" : "Executar");
       const texto = botao.querySelector("span");
       if (texto && texto.textContent !== rotulo) texto.textContent = rotulo;
+      // Botão só com ícone: o nome acessível e a dica acompanham o rótulo (Executar, Acompanhar, Tentar de novo).
+      const nomeRotina = cartao.querySelector?.("h3")?.textContent?.trim();
+      botao.setAttribute("aria-label", nomeRotina ? `${rotulo} ${nomeRotina}` : rotulo);
+      botao.title = rotulo;
       botao.classList.toggle("ck-btn--primario", acompanhar);
       botao.classList.toggle("ck-btn--secundario", !acompanhar);
       definirIcone(botao, acompanhar ? "i-text" : (repetir ? "i-refresh" : "i-play"));
@@ -243,6 +247,8 @@
         ? `Última execução: ${ROTINAS[ultima.rotina] || ultima.rotina}, ${STATUS[ultima.status] || ultima.status} em ${formatarHora(ultima.fim || ultima.inicio)}.`
         : "Nenhuma rotina em andamento.";
     }
+    // A barra corta o detalhe com reticências; o title mostra o texto inteiro.
+    detalhe.title = detalhe.textContent;
 
     const aviso = document.getElementById("automacao-aviso-login");
     const avisoTexto = document.getElementById("automacao-aviso-login-texto");

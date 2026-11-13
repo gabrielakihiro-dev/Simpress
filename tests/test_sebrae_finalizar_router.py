@@ -647,6 +647,54 @@ class AtualizarEnviaSemRunnerTest(AtualizarBase):
         self.assertTrue(corpo["conteudo_base64"])
 
 
+class FinalizadoPorOutroTecnicoTest(AtualizarBase):
+    """Regra do usuário (12/11/2026): D=FINALIZADO + R num antigo que a leitura do SoftExpert não achou vai no job como R manual."""
+
+    R = "12/11/2026 09:30"
+
+    def nao_encontrado(self):
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
+
+    def test_atualizar_com_d_finalizado_e_r_em_nao_encontrado_grava_o_r_manual_no_job(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        corpo = self.atualizar(self.edicao(A, R=self.R))
+        self.assertEqual(corpo["fechar"]["numeros"], [A])
+        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+
+    def test_atualizar_sem_r_ou_com_chamado_achado_ou_nunca_lido_nao_grava_r_manual(self):
+        self.descrever(A)
+        self.assertEqual(self.atualizar(self.edicao(A, R=self.R))["fechar"]["numeros"], [A])  # nunca lido na central
+        self.assertEqual(self.job()["encerramentos_manuais"], {})
+        sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(A, titulo="Achou"), "agora")
+        self.assertEqual(self.atualizar(self.edicao(A, R=self.R))["fechar"]["numeros"], [A])  # a leitura achou o chamado
+        self.assertEqual(self.job()["encerramentos_manuais"], {})
+
+    def test_so_o_chamado_nao_encontrado_leva_r_manual_numa_lista_com_outros(self):
+        self.nao_encontrado()
+        self.descrever(A, B)
+        self.atualizar(self.edicao(A, R=self.R), self.edicao(B, R="11/11/2026 10:00"))
+        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+
+    def test_cartao_finalizar_com_d_finalizado_e_r_em_nao_encontrado_grava_o_r_manual_no_job(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [self.edicao(A, R=self.R)]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+
+    def test_cartao_finalizar_sem_r_ou_sem_d_finalizado_nao_grava_r_manual(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["encerramentos_manuais"], {})
+        self.runner.iniciadas.clear()
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [self.edicao(A, d="EM ABERTO", R=self.R)]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["encerramentos_manuais"], {})
+
+
 class AtualizarDispara(AtualizarBase):
 
     def test_chamado_marcado_finalizado_com_descricao_vai_para_a_rotina_e_sem_descricao_e_pulado(self):

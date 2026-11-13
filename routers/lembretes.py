@@ -18,6 +18,8 @@ class NovoLembretePayload(BaseModel):
 
     descricao: str
     origem: Optional[str] = None
+    # Cópia dos dados do termo; formato validado pelo domínio (termo_invalido).
+    termo: Optional[Any] = None
 
 
 class AtualizarLembretePayload(BaseModel):
@@ -54,7 +56,7 @@ def create_lembretes_router(arquivo: Path) -> APIRouter:
 
     @router.post("", status_code=201)
     def criar(payload: NovoLembretePayload) -> Any:
-        return executar(lambda: lembretes.criar(payload.descricao, payload.origem))
+        return executar(lambda: lembretes.criar(payload.descricao, payload.origem, payload.termo))
 
     @router.patch("/{lembrete_id}")
     def atualizar(lembrete_id: str, payload: AtualizarLembretePayload) -> Any:

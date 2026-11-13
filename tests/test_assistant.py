@@ -1681,6 +1681,22 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertEqual(dados["chamados"][2]["resultado_softexpert"], "ok")
         self.assertEqual(dados["ultima_finalizacao"]["resultados"][0]["status"], "ok")
 
+    def test_ticket_finalized_by_another_technician_never_reaches_a_card_and_shows_its_status(self) -> None:
+        def simpress() -> FinalizeSimpress:
+            fake = FinalizeSimpress()
+            fake.abertos[0]["softexpert"] = {"descricao_finalizacao": "Cabo", "pdf": None, "finalizacao": {
+                "status": "finalizado_outro_tecnico", "em": "x", "encerrado_em": "12/11/2026 09:30"}}
+            return fake
+
+        conversation, fake = make_conversation(FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253")), text("ok")), simpress())
+        self.assertIsNone(conversation.enviar_mensagem("finalize").pendente)
+        self.assertEqual(fake.writes(), [])
+        for metodo in (SimpressApi(simpress()).chamado_para_anexar_pdf, SimpressApi(simpress()).chamado_para_editar_descricao):
+            with self.assertRaisesRegex(ValueError, "por outro técnico"):
+                metodo("UTIC-2026-1253")
+        dados = SimpressApi(simpress()).situacao_finalizacao_sebrae()
+        self.assertEqual(dados["chamados"][0]["resultado_softexpert"], "finalizado_outro_tecnico")
+
     def test_mass_finalization_is_not_a_routine_of_the_assistant(self) -> None:
         self.assertNotIn("fechar", ROTINAS_VALIDAS)
 
