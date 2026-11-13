@@ -752,7 +752,7 @@ QUERY_TOOLS: List[Tool] = [
         "obter_relatorio_mensal",
         "Dados do relatório mensal de um mês: inventário, comparação, OS e `sebrae` (chamados da aba Chamados, F5: "
         "`abertos` e `finalizados` no mês, `sem_data` fora da contagem e até 5 `linhas` com chamado, título, série e datas, "
-        "mais `linhas_omitidas`; a lista completa fica no Relatório mensal, F8; null sem Dashboard importado; `erro` quando "
+        "mais `linhas_omitidas`; a lista completa fica no Relatório mensal, F8, sub-aba `Chamados (F5)`; null sem Dashboard importado; `erro` quando "
         "a leitura falhou, sem afetar o resto).",
         lambda c, a: c.obter_relatorio_mensal(str(a.get("mes", ""))),
         {"mes": {"type": "string", "description": "Mês no formato AAAA-MM (ex.: '2026-10')."}}, ["mes"],
@@ -1438,7 +1438,7 @@ CHANGE_TOOLS: List[Tool] = [
         "nele, nunca para apenas consultar. Um comando de uma linha (até 2000 caracteres). modo sistema (SYSTEM, padrão) ou usuario (usuário logado). "
         "O hostname é obrigatório: não existe computador padrão; se o usuário não disser o computador, pergunte qual usar antes de chamar. "
         "Retorna só status, hostname, modo e tamanho do comando; status inserido, not_found, "
-        "erro_terminal, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
+        "erro_terminal, offline, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
         "Requer Chrome de automação aberto e login manual.",
         _run_powershell,
         _describe_powershell,
@@ -1590,7 +1590,7 @@ NUCLEO_FERRAMENTAS: Tuple[str, ...] = (
 # name -> (regex over the text without accents and in lower case, tools of the group)
 GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "chamados": (
-        r"\bchamad|\butic\b|ordem de servico|\bo\.s\.|\bvincul|\bsla\b",
+        r"\bchamad|\butic\b|ordem de servico|\bo\.s\.|\bvincul|\bsla\b|\blinha do tempo\b",
         ("listar_chamados_abertos", "chamados_com_os_sebrae", "linha_do_tempo_chamados", "historico_chamados", "snapshot_chamados", "evolucao_chamados",
          "listar_vinculos_os", "vincular_os", "anotar_linha_do_tempo", "excluir_chamados_antigos"),
     ),
