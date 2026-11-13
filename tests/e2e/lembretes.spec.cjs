@@ -350,7 +350,13 @@ async function abrirTermo(page, termo, opcoes) {
   await expect(page.locator(`#termos-painel-${termo}`)).toBeVisible();
 }
 
+// Termo novo abre com todos os itens em Sim; os testes partem de itens sem resposta para escolher os do texto.
+async function desmarcarItens(page, termo) {
+  await page.locator(`#termos-form-${termo} input[type="radio"]`).evaluateAll(radios => radios.forEach(r => { r.checked = false; }));
+}
+
 async function preencherEntrega(page) {
+  await desmarcarItens(page, "entrega");
   await page.locator("#termos-entrega-nome").fill("Maria Teste");
   await page.locator("#termos-entrega-unidade").fill("Curitiba");
   await page.locator("#termos-entrega-data").fill("2026-11-12");
@@ -364,6 +370,7 @@ async function preencherEntrega(page) {
 }
 
 async function preencherDevolucao(page) {
+  await desmarcarItens(page, "devolucao");
   await page.locator("#termos-devolucao-nome").fill("Maria Teste");
   await page.locator("#termos-devolucao-unidade").fill("Curitiba");
   await page.locator("#termos-devolucao-data").fill("2026-11-12");
@@ -876,4 +883,224 @@ test("data agendada: a pílula Hoje conta atrasados e de hoje, e o contador de p
   // A vista Hoje mostra Atrasada, hoje e Sem data: só o de amanhã fica de fora.
   await expect(pendentes(page)).toHaveCount(3);
   await expect(pendentes(page).filter({ hasText: "De amanhã" })).toHaveCount(0);
+});
+
+// ----- Chamado e OS no texto: o número vira link e abre a janela Chamado × OS (#modal-chamado-os), só leitura -----
+// Dados sintéticos. A fixture tem a OS 7285070 (série DEMO-SN-001) no relatório da aba OS e, no F5, os chamados
+// UTIC-2026-1378 (OS 7303022, fora do relatório), UTIC-2026-1336 (sem OS) e UTIC-2026-1200. Vínculos e ajustes do F5 vêm só
+// de page.route: nada é gravado no servidor da fixture.
+const OS_RELATORIO = "7285070";
+const OS_INEXISTENTE = "1234567";
+const janelaChamadoOs = page => page.locator("#modal-chamado-os");
+const ladoChamado = page => page.locator("#chamado-os-janela-chamado");
+const ladoOs = page => page.locator("#chamado-os-janela-os");
+const ladosVisiveis = page => page.locator("#modal-chamado-os .chamado-os-janela__lado:visible");
+const linhaDaOs = page => ladoOs(page).locator('tbody tr[data-serial="DEMO-SN-001"]');
+const cartaoDoChamado = page => ladoChamado(page).locator("article.sebrae-chamado");
+const linkChamado = (page, numero) => page.getByRole("button", { name: `Abrir o chamado ${numero} na janela Chamado × OS` });
+const linkOs = (page, numero) => page.getByRole("button", { name: `Abrir a OS ${numero} na janela Chamado × OS` });
+const vinculoSalvo = (chamado, os = OS_RELATORIO) => ({ fonte: "oracle", serie: "DEMO-SN-001", os, ano: 2026, numero: chamado.slice(-4), chamado });
+
+async function simularVinculos(page, vinculos) {
+  const leituras = { total: 0 };
+  await page.route("**/api/operacoes/chamados/vinculos-os", route => {
+    if (route.request().method() !== "GET") return route.fallback();
+    leituras.total += 1;
+    return route.fulfill({ json: { vinculos } });
+  });
+  return leituras;
+}
+
+async function simularSebrae(page, ajustar) {
+  await page.route("**/api/sebrae/novos", async route => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const dados = await (await route.fetch()).json();
+    ajustar(dados);
+    await route.fulfill({ json: dados });
+  });
+}
+
+// O chamado UTIC-2026-1378 passa a ter a OS que existe no relatório da aba OS.
+const chamado1378ComOsDoRelatorio = dados => { dados.novos.formulario[0].linha.E = OS_RELATORIO; };
+
+// Chame depois dos page.route do teste: o goto de abrirLembretes já dispara as leituras.
+async function abrirComLembrete(page, descricao) {
+  expect((await page.request.get("/__fixture_lembretes?itens=0")).ok()).toBeTruthy();
+  expect((await page.request.post("/api/lembretes", { data: { descricao } })).ok()).toBeTruthy();
+  await abrirLembretes(page, { reiniciar: false });
+}
+
+async function clicarEEsperarJanela(page, link) {
+  await link.click();
+  await expect(janelaChamadoOs(page)).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Chamado × OS" })).toBeVisible();
+}
+
+test("link de chamado com OS no cartão do F5: abre o cartão do chamado e a OS dele lado a lado", async ({ page }, testInfo) => {
+  await simularVinculos(page, []);
+  await simularSebrae(page, chamado1378ComOsDoRelatorio);
+  await abrirComLembrete(page, "Conferir UTIC-2026-1378 com o cliente");
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1378"));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1378");
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladoOs(page)).not.toContainText("Carregando…");
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+  await expect(page.locator("#chamado-os-janela-f6")).toBeVisible();
+  if (testInfo.project.name === "desktop") {
+    // Acima de 900px os dois lados dividem a mesma linha; abaixo disso empilham.
+    const [esquerda, direita] = [await ladoChamado(page).boundingBox(), await ladoOs(page).boundingBox()];
+    expect(direita.x).toBeGreaterThan(esquerda.x + esquerda.width - 1);
+    expect(Math.abs(direita.y - esquerda.y)).toBeLessThan(8);
+  }
+});
+
+test("link de chamado sem OS no cartão e sem vínculo: avisa à direita que não há OS", async ({ page }) => {
+  await simularVinculos(page, []);
+  await abrirComLembrete(page, "Ver UTIC-2026-1336");
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1336"));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1336");
+  await expect(ladoOs(page)).toHaveText("Nenhuma OS vinculada por série na importação atual.");
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+  await expect(page.locator("#chamado-os-janela-f6")).toBeHidden();
+});
+
+test("link de chamado sem OS no cartão, mas com vínculo salvo: mostra a OS do vínculo", async ({ page }) => {
+  await simularVinculos(page, [vinculoSalvo("UTIC-2026-1336")]);
+  await abrirComLembrete(page, "Ver UTIC-2026-1336");
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1336"));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1336");
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladoOs(page)).not.toContainText(/Nenhuma OS vinculada|Carregando…/);
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+  await expect(page.locator("#chamado-os-janela-f6")).toBeVisible();
+});
+
+test("link de OS ligada a um chamado por vínculo salvo: mostra o cartão do chamado e a OS", async ({ page }) => {
+  await simularVinculos(page, [vinculoSalvo("UTIC-2026-1378")]);
+  await abrirComLembrete(page, `Verificar a OS ${OS_RELATORIO} hoje`);
+  await clicarEEsperarJanela(page, linkOs(page, OS_RELATORIO));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1378");
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+});
+
+test("link de OS sem vínculo: o chamado vem dos chamados abertos do F5", async ({ page }) => {
+  await simularVinculos(page, []);
+  await simularSebrae(page, chamado1378ComOsDoRelatorio);
+  await abrirComLembrete(page, `Verificar a OS ${OS_RELATORIO} hoje`);
+  await clicarEEsperarJanela(page, linkOs(page, OS_RELATORIO));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1378");
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+});
+
+test("link de OS sem chamado: só o lado da OS fica visível", async ({ page }) => {
+  await simularVinculos(page, []);
+  await abrirComLembrete(page, `Verificar a OS ${OS_RELATORIO} hoje`);
+  await clicarEEsperarJanela(page, linkOs(page, OS_RELATORIO));
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladoChamado(page)).toBeHidden();
+  await expect(ladosVisiveis(page)).toHaveCount(1);
+});
+
+test("link de OS ligada a dois chamados na mesma prioridade: avisa da ambiguidade e mostra a OS", async ({ page }) => {
+  await simularVinculos(page, [vinculoSalvo("UTIC-2026-1378"), vinculoSalvo("UTIC-2026-1379")]);
+  await abrirComLembrete(page, `Verificar a OS ${OS_RELATORIO} hoje`);
+  await clicarEEsperarJanela(page, linkOs(page, OS_RELATORIO));
+  await expect(ladoChamado(page)).toContainText("OS ligada a mais de um chamado (UTIC-2026-1378, UTIC-2026-1379).");
+  await expect(cartaoDoChamado(page)).toHaveCount(0);
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladosVisiveis(page)).toHaveCount(2);
+});
+
+test("link de chamado inexistente: avisa que não achou e o lado da OS fica oculto", async ({ page }) => {
+  const vinculos = await simularVinculos(page, []);
+  await abrirComLembrete(page, "Ver UTIC-2026-9999");
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-9999"));
+  await expect(ladoChamado(page)).toContainText("Chamado não encontrado na aba Chamados (F5).");
+  await expect.poll(() => vinculos.total).toBeGreaterThan(0); // o vínculo salvo já foi consultado
+  await page.waitForTimeout(300); // prova de ausência: se o lado da OS fosse se preencher, já teria acontecido
+  await expect(ladoOs(page)).toBeHidden();
+  await expect(ladosVisiveis(page)).toHaveCount(1);
+  await expect(page.locator("#chamado-os-janela-f6")).toBeHidden();
+});
+
+test("link de OS inexistente: avisa que a OS não está na importação e o lado do chamado fica oculto", async ({ page }) => {
+  await simularVinculos(page, []);
+  await abrirComLembrete(page, `Cobrar a OS ${OS_INEXISTENTE}`);
+  await clicarEEsperarJanela(page, linkOs(page, OS_INEXISTENTE));
+  await expect(ladoOs(page)).toContainText("OS não encontrada na importação atual.");
+  await expect(ladoOs(page).locator("tbody tr")).toHaveCount(0);
+  await expect(ladoChamado(page)).toBeHidden();
+  await expect(ladosVisiveis(page)).toHaveCount(1);
+});
+
+test("vários números no mesmo lembrete: cada número vira link e a data dd/mm/aaaa não", async ({ page }) => {
+  const descricao = `Chamados UTIC-2026-0833 e UTIC-2026-1378, OS ${OS_INEXISTENTE} e 7654321, prazo 12/11/2026.`;
+  await abrirComLembrete(page, descricao);
+  const item = pendentes(page).first();
+  const links = item.locator("button.lembretes__ref");
+  await expect(links).toHaveText(["UTIC-2026-0833", "UTIC-2026-1378", OS_INEXISTENTE, "7654321"]);
+  const nomes = await links.evaluateAll(botoes => botoes.map(botao => botao.getAttribute("aria-label")));
+  expect(nomes).toEqual([
+    "Abrir o chamado UTIC-2026-0833 na janela Chamado × OS",
+    "Abrir o chamado UTIC-2026-1378 na janela Chamado × OS",
+    `Abrir a OS ${OS_INEXISTENTE} na janela Chamado × OS`,
+    "Abrir a OS 7654321 na janela Chamado × OS",
+  ]);
+  // A data fica como texto puro e o texto do lembrete segue inteiro.
+  await expect(links).toHaveCount(4); // só os 4 números; nenhum pedaço da data virou link
+  await expect(item.locator(".lembretes__texto")).toHaveText(descricao);
+  expect((await apiLembretes(page)).map(l => l.descricao)).toEqual([descricao]);
+});
+
+test("Esc fecha a janela do link e o foco volta ao link", async ({ page }) => {
+  await simularVinculos(page, []);
+  await simularSebrae(page, chamado1378ComOsDoRelatorio);
+  await abrirComLembrete(page, "Conferir UTIC-2026-1378 com o cliente");
+  const link = linkChamado(page, "UTIC-2026-1378");
+  await clicarEEsperarJanela(page, link);
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await page.keyboard.press("Escape");
+  await expect(janelaChamadoOs(page)).toBeHidden();
+  await expect(link).toBeFocused();
+  await expect(page.locator('[data-cockpit-tool-panel="lembretes"]')).toBeVisible(); // o Esc fecha só a janela
+});
+
+test("clicar no link não abre a edição do lembrete nem o conclui", async ({ page }) => {
+  await simularVinculos(page, []);
+  await abrirComLembrete(page, "Conferir UTIC-2026-1378 com o cliente");
+  const alteracoes = [];
+  page.on("request", requisicao => {
+    if (["PATCH", "PUT", "DELETE"].includes(requisicao.method()) && requisicao.url().includes("/api/lembretes")) alteracoes.push(requisicao.method());
+  });
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1378"));
+  await page.keyboard.press("Escape");
+  await expect(janelaChamadoOs(page)).toBeHidden();
+  await expect(page.locator("#lembretes-lista textarea")).toHaveCount(0);
+  await expect(campoEdicao(page)).toHaveCount(0);
+  await expect(pendentes(page)).toHaveCount(1);
+  await expect(page.locator("#lembretes-pendentes")).toHaveText("1");
+  await expect(page.getByRole("button", { name: "Concluir: Conferir UTIC-2026-1378 com o cliente" })).toBeVisible();
+  expect(alteracoes).toEqual([]);
+  expect(await apiLembretes(page)).toMatchObject([{ descricao: "Conferir UTIC-2026-1378 com o cliente", concluido: false }]);
+});
+
+test("320px: a janela aberta pelo link não causa rolagem horizontal", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await simularVinculos(page, []);
+  await simularSebrae(page, chamado1378ComOsDoRelatorio);
+  await abrirComLembrete(page, "Conferir UTIC-2026-1378 com o cliente");
+  await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1378"));
+  await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1378");
+  await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  const medidas = await page.evaluate(() => {
+    const raiz = document.documentElement;
+    const caixa = document.querySelector("#modal-chamado-os > .ck-dialogo").getBoundingClientRect();
+    return { janela: raiz.clientWidth, documento: raiz.scrollWidth, pagina: document.body.scrollWidth, esquerda: caixa.left, direita: caixa.right };
+  });
+  expect(medidas.documento).toBeLessThanOrEqual(medidas.janela);
+  expect(medidas.pagina).toBeLessThanOrEqual(medidas.janela);
+  expect(medidas.esquerda).toBeGreaterThanOrEqual(0);
+  expect(medidas.direita).toBeLessThanOrEqual(medidas.janela);
 });

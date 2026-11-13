@@ -201,7 +201,7 @@
   const iconeFechar = (tamanho) => icone([["path", { d: "M18 6 6 18M6 6l12 12" }]], tamanho);
 
   // Campo nativo de data ou de hora com rótulo visível (Data, Hora (opcional)); id e escopo definem qual é.
-  function campoDataHora(escopo, tipo, rotulo, valor) {
+  function campoDataHora(escopo, tipo, rotulo, valor, desligado = false) {
     const bloco = elemento("div", "lembretes__campo-data");
     const label = elemento("label", "lembretes__rotulo-campo", rotulo);
     label.htmlFor = `lembretes-${escopo}-${tipo}`;
@@ -209,6 +209,7 @@
     entrada.type = tipo === "data" ? "date" : "time";
     entrada.id = `lembretes-${escopo}-${tipo}`;
     entrada.value = valor;
+    entrada.disabled = desligado;
     if (tipo === "data") entrada.max = "9999-12-31";
     ligar(entrada, "change", "lembretesAoMudarData", ["$this"]);
     bloco.append(label, entrada);
@@ -233,8 +234,8 @@
     ligar(campo, "input", "lembretesAoDigitar", ["$this"]);
     const agenda = elemento("div", "lembretes__edicao-agenda");
     const data = campoDataHora("edicao", "data", "Data", dataDe(l) ?? "");
-    const hora = campoDataHora("edicao", "hora", "Hora (opcional)", horaDe(l) ?? "");
-    hora.querySelector("input").disabled = !dataDe(l);
+    // Hora sem data não existe: sem data, o campo da hora já nasce desligado.
+    const hora = campoDataHora("edicao", "hora", "Hora (opcional)", horaDe(l) ?? "", !dataDe(l));
     const remover = elemento("button", "ck-btn ck-btn--fantasma ck-btn--sm lembretes__remover-data");
     remover.type = "button";
     remover.append(iconeFechar(14), "Remover data");
@@ -305,6 +306,23 @@
     return secao;
   }
 
+  // Chamado UTIC-AAAA-N e OS de 7 dígitos no texto viram botão que abre a janela Chamado × OS (só leitura); o resto fica texto puro.
+  function criarLinkReferencia({ tipo, numero, texto }) {
+    const b = elemento("button", "ck-link-btn ck-mono lembretes__ref", texto);
+    b.type = "button";
+    b.setAttribute("aria-haspopup", "dialog");
+    b.setAttribute("aria-label", `${tipo === "chamado" ? "Abrir o chamado" : "Abrir a OS"} ${numero} na janela Chamado × OS`);
+    ligar(b, "click", "abrirReferenciaLembrete", [{ tipo, numero }, "$this"]);
+    return b;
+  }
+
+  function criarTexto(descricao) {
+    const p = elemento("p", "lembretes__texto");
+    const partes = context.chamadosOsModel?.referenciasNoTexto(descricao) ?? [{ texto: descricao }];
+    p.append(...partes.map((parte) => (parte.tipo ? criarLinkReferencia(parte) : doc().createTextNode(parte.texto))));
+    return p;
+  }
+
   // Bloco recolhível com os dados salvos do termo (só lembretes criados de um termo com a cópia gravada).
   function criarBlocoTermo(l) {
     const secoes = l.termo ? app.termosSecoesLembrete?.(l.origem, l.termo) : null;
@@ -359,7 +377,7 @@
     const corpo = elemento("div", "lembretes__corpo");
     const data = elemento("time", l.alterado_em ? "lembretes__data lembretes__data--alterado" : "lembretes__data",`${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
     data.setAttribute("datetime", dataExibida(l));
-    corpo.append(elemento("p", "lembretes__texto", l.descricao));
+    corpo.append(criarTexto(l.descricao));
     const dia = dataDe(l);
     if (dia) {
       // span e não <time>: o único <time> do item é o de Criado/Alterado em.
