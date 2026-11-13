@@ -134,6 +134,57 @@ test("botões: Confirmar em todo candidato, Desfazer só em backup confirmado ma
   assert.ok(html.includes("Confirmado manualmente") && html.includes("Marca no apelido"));
 });
 
+// Texto da seção "Sobras" (até o fim do próprio cartão), para não confundir com os botões da tabela.
+const secaoSobras = html => html.split('<h3 class="ck-cartao__titulo">Sobras</h3>')[1]?.split("</section>")[0] ?? "";
+const botoesDesfazer = html => html.match(/data-backup-acao="desfazer"/g)?.length ?? 0;
+
+test("sobras fora das prioritárias: item confirmado manualmente leva Desfazer; item com marca no apelido não", t => {
+  const { feature } = montar(t);
+  const dados = painelBase().backups_regionais;
+  dados.sobras = [{
+    cidade: "Curitiba", quantidade: 2, prioritaria: false, series: ["BRXXX00001", "BRYYY00002"],
+    itens: [
+      { serie: "BRXXX00001", origem: "confirmacao", confirmado_ate: "2026-11-18T10:00:00-03:00" },
+      { serie: "BRYYY00002", origem: "marca", confirmado_ate: null },
+    ],
+  }];
+  const sobras = secaoSobras(feature.renderizarBackupsRegionais(dados));
+  assert.equal(botoesDesfazer(sobras), 1, "só o item confirmado manualmente tem Desfazer");
+  assert.ok(sobras.includes('data-backup-acao="desfazer" data-serie="BRXXX00001" data-cidade="Curitiba"'));
+  assert.ok(sobras.includes('aria-label="Desfazer confirmação: série BRXXX00001, Curitiba"'));
+  assert.ok(!sobras.includes('data-serie="BRYYY00002"'), "item com marca não tem botão");
+  assert.ok(sobras.includes('<code class="ck-backups__serie">BRYYY00002</code>'));
+  assert.ok(sobras.includes("Confirmado manualmente") && sobras.includes("Marca no apelido") && sobras.includes("confirmado até"));
+  assert.ok(!sobras.includes('data-backup-acao="confirmar"'));
+  assert.match(sobras, /2 backups em regional fora das prioritárias/);
+});
+
+test("sobras prioritárias: só as séries, sem botão; o Desfazer fica só na tabela (um por série)", t => {
+  const { feature } = montar(t);
+  const dados = painelBase().backups_regionais;
+  dados.sobras = [{
+    cidade: "Londrina", quantidade: 1, prioritaria: true, series: ["BRBBB22222"],
+    itens: [{ serie: "BRBBB22222", origem: "confirmacao", confirmado_ate: "2026-11-18T10:00:00-03:00" }],
+  }];
+  const html = feature.renderizarBackupsRegionais(dados);
+  const sobras = secaoSobras(html);
+  assert.ok(sobras.includes('<code class="ck-backups__serie">BRBBB22222</code>'));
+  assert.equal(botoesDesfazer(sobras), 0, "sobra prioritária não repete o botão");
+  assert.ok(!sobras.includes("Confirmado manualmente"));
+  assert.match(sobras, /1 backup além do mínimo/);
+  assert.equal(html.match(/data-backup-acao="desfazer" data-serie="BRBBB22222"/g).length, 1, "só o botão da tabela");
+});
+
+test("sobras no formato antigo (sem itens): continuam mostrando as séries, sem botão", t => {
+  const { feature } = montar(t);
+  const dados = painelBase().backups_regionais;
+  dados.sobras = [{ cidade: "Curitiba", quantidade: 2, prioritaria: false, series: ["BRXXX00001", "BRYYY00002"] }];
+  const sobras = secaoSobras(feature.renderizarBackupsRegionais(dados));
+  assert.ok(sobras.includes('<code class="ck-backups__serie">BRXXX00001</code> <code class="ck-backups__serie">BRYYY00002</code>'));
+  assert.ok(!sobras.includes("data-backup-acao"), "sem itens não há botão");
+  assert.match(sobras, /2 backups em regional fora das prioritárias/);
+});
+
 test("motivo desconhecido aparece cru e escapado, nunca some", t => {
   const { feature } = montar(t);
   const dados = painelBase().backups_regionais;

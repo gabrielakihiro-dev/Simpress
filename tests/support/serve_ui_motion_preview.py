@@ -292,6 +292,7 @@ def backups_payload():
     prioritarias, sobras, outras, pendencias = [], [], [], {"sem_backup": [], "conferir": []}
     for item in backups_state["cidades"].values():
         backups = sorted(item["backups"], key=lambda backup: backup["origem"] != "marca")  # estável: marca antes
+        itens = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate")} for backup in backups]
         series = [backup["serie"] for backup in backups]
         if item["prioritaria"]:
             status = "ok" if len(backups) >= BACKUPS_MINIMO else "conferir" if item["candidatos"] else "sem_backup"
@@ -304,10 +305,11 @@ def backups_payload():
             })
             if len(backups) > BACKUPS_MINIMO:
                 sobras.append({"cidade": item["cidade"], "quantidade": len(backups) - BACKUPS_MINIMO,
-                               "series": series[BACKUPS_MINIMO:], "prioritaria": True})
+                               "series": series[BACKUPS_MINIMO:], "itens": itens[BACKUPS_MINIMO:], "prioritaria": True})
             continue
         if series:
-            sobras.append({"cidade": item["cidade"], "quantidade": len(series), "series": series, "prioritaria": False})
+            sobras.append({"cidade": item["cidade"], "quantidade": len(series), "series": series, "itens": itens,
+                           "prioritaria": False})
         if item["candidatos"]:
             outras.append({"cidade": item["cidade"], "candidatos": item["candidatos"]})
     return {
