@@ -2159,7 +2159,7 @@ test("sugestão aparece em B e J do chamado novo, com texto e rótulo exatos, se
   assert.equal(campoNovo(el, "J").value, "");
   // sem o clique, nada vai ao rascunho
   assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"] || {}, {});
-  // outras letras nunca ganham chip
+  // sem sugestao_responsavel na carga, A fica sem chip; D, R e S nunca têm
   for (const letra of ["A", "D", "R", "S"]) assert.equal(campoNovo(el, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
 });
 
@@ -2210,6 +2210,27 @@ test("Usar preenche o campo, grava no rascunho pelo caminho da edição manual e
   assert.equal(selectB.value, "REDE");
   assert.equal(chipsDe(el).length, 0);
   assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"], { B: "REDE", J: "SOLICITAÇÃO" });
+});
+
+test("sugestão de Responsável (A): chip CLIENTE/SIMPRESS só com o clique em Usar; API SEBRAE e A no rascunho ficam sem chip", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestao({ sugestao_responsavel: "SIMPRESS" }), disco);
+  const selectA = campoNovo(el, "A");
+  const chipA = chipsDe(el).find(chip => chip.querySelector("button").getAttribute("aria-label").endsWith("Responsável (A)"));
+  assert.ok(chipA, "A ganha chip");
+  assert.equal(chipA.querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: SIMPRESS");
+  assert.equal(chipA.querySelector("button").getAttribute("aria-label"), "Usar sugestão SIMPRESS em Responsável (A)");
+  assert.equal(selectA.value, "", "nada é preenchido sem o clique");
+  chipA.querySelector("button").click();
+  assert.equal(selectA.value, "SIMPRESS");
+  assert.equal(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"].A, "SIMPRESS");
+
+  const api = await renderizarCartoes(cargaSugestao({ sugestao_responsavel: "SIMPRESS" }, "API SEBRAE"));
+  assert.equal(chipsDe(api.el).length, 0, "API SEBRAE já vem com CLIENTE");
+  const comRascunho = armazenamentoFalso();
+  gravarCampoRascunho(comRascunho, IMPORTADO_EM, "UTIC-2026-1378", "A", "CLIENTE", "novo");
+  const { el: elRascunho } = await renderizarCartoes(cargaSugestao({ sugestao_responsavel: "SIMPRESS", sugestao_categoria: null, sugestao_tipo: null }), comRascunho);
+  assert.equal(chipsDe(elRascunho).length, 0, "valor do rascunho esconde o chip de A");
 });
 
 test("Usar com valor fora da lista cria opção extra no select; em B sem lista (input) só põe o texto", async () => {

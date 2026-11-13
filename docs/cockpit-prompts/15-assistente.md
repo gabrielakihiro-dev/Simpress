@@ -227,6 +227,14 @@ Motivo: num teste real ("anexa esse PDF no chamado de remoção de usuário da F
 - Limites conhecidos: (1) um nome que o programa nunca viu continua passando como está em texto livre: pessoa fora do inventário, dos representantes e da planilha do Sebrae, ou uma variante (primeiro nome com outro sobrenome) numa `descricao` sem a chave `solicitante` ao lado. (2) A pessoa citada na `descricao` pode ser outra que não o solicitante; ela só é escondida se também constar em alguma das fontes. (3) Solicitante de uma importação nova, lida no meio da conversa, só entra na base na próxima `Nova conversa`; até lá vale a máscara por chave do próprio resultado. (4) A `busca` olha os primeiros 300 caracteres de título e descrição, o mesmo corte que o modelo recebe.
 - Testes: `SebraeSolicitantesNaMascaraTests` e `ChamadosAntigosListaTests` em `tests/test_assistant.py`; o do histórico em disco em `tests/test_assistant_conversas.py` (`test_history_file_keeps_neither_first_name_nor_surname_of_a_sebrae_requester`). Os nomes dos testes são fictícios.
 
+## Sugestão de Responsável (A) nos chamados novos (13/11/2026)
+
+Pedido do usuário de 13/11/2026: os chamados novos também trazem `sugestao_responsavel` (A): `CLIENTE` para usuário, acesso, software, e-mail, arquivo e impressora; `SIMPRESS` para defeito de hardware (teclado, mouse, fone, monitor).
+
+- Base: regra 36 do `SYSTEM_PROMPT` e descrição de `chamados_novos_sebrae` (`domains/assistant_tools.py`), só leitura.
+- Efeito: o Assistente informa como sugestão e nunca diz que gravou A; quem confirma é o usuário, com `Usar` na F5.
+- Testes: `tests/test_assistant.py` (`sugestao_responsavel` na lista e no prompt).
+
 ## Sugestão de Categoria (B) e Tipo (J) nos chamados novos (09/11/2026)
 
 Pedido do usuário de 09/11/2026: o formulário de cada chamado novo da aba Chamados (F5) mostra uma sugestão de B e J, e o Assistente precisa saber dela sem nunca salvá-la.
