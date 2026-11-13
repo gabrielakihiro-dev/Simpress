@@ -96,7 +96,7 @@ const CODIGOS = [
 const URL_CODIGOS = "/api/endpoint/powershell/codigos";
 
 // Harness com o endpoint de códigos; `chamadas` guarda toda URL buscada (método e corpo).
-function criarHarnessCodigos({ get = () => apiResponse({ codigos: CODIGOS }), put, confirmResult = true } = {}) {
+function criarHarnessCodigos({ get = () => apiResponse({ codigos: CODIGOS }), put, confirmResult = true, stubDisplay } = {}) {
   const chamadas = [];
   const h = createAppHarness((url, options = {}) => {
     const corpo = options.body ? JSON.parse(options.body) : undefined;
@@ -104,16 +104,16 @@ function criarHarnessCodigos({ get = () => apiResponse({ codigos: CODIGOS }), pu
     if (url !== URL_CODIGOS) return apiResponse({ status: "inserido", hostname: "PRNOTEUMU005", modo: "sistema" });
     if (options.method === "PUT") return put ? put(corpo) : apiResponse({ codigos: corpo.codigos.map((item, i) => ({ id: `novo${i}`, ...item })) });
     return get();
-  }, { confirmResult });
+  }, { confirmResult, stubDisplay });
   h.element("powershell-codigos-editor").classList.add("hidden"); // o harness não aplica as classes do HTML
   return { h, chamadas };
 }
 
 const aguardar = () => new Promise(resolve => setImmediate(resolve));
 
+// Equivale à seleção de um equipamento: exibirEquipamento chama carregarCodigosPowerShell().
 async function abrirCard(h) {
-  h.element("endpoint-powershell").open = true;
-  h.run("aoAbrirPowerShellEndpoint()");
+  h.run("carregarCodigosPowerShell()");
   await aguardar();
 }
 
@@ -137,7 +137,8 @@ async function abrirEditor(h) {
 test("Home: o select de códigos é dinâmico e o editor fica fora do formulário de envio", () => {
   assert.match(appHtml, /id="select-powershell-codigo"[^>]*data-on-change="aplicarCodigoProntoPowerShell"/);
   assert.doesNotMatch(appHtml, /<option value="VP_/);
-  assert.match(appHtml, /<details[^>]*id="endpoint-powershell"[^>]*data-on-toggle="aoAbrirPowerShellEndpoint"/);
+  assert.match(appHtml, /<section class="ck-ps-endpoint" id="endpoint-powershell"/);
+  assert.doesNotMatch(appHtml, /<details[^>]*id="endpoint-powershell"|aoAbrirPowerShellEndpoint/);
   assert.match(appHtml, /id="btn-powershell-codigos-gerenciar"[^>]*aria-expanded="false" aria-controls="powershell-codigos-editor"/);
   assert.match(appHtml, /id="powershell-codigos-editor" class="[^"]*\bhidden\b/);
   for (const [id, acao] of [["btn-powershell-codigo-adicionar", "adicionarCodigoPowerShell"], ["btn-powershell-codigos-salvar", "salvarCodigosPowerShell"], ["btn-powershell-codigos-cancelar", "alternarEditorCodigosPowerShell"]]) {
@@ -148,16 +149,17 @@ test("Home: o select de códigos é dinâmico e o editor fica fora do formulári
   assert.ok(formAberto > 0 && appHtml.indexOf("</form>", formAberto) < appHtml.indexOf('id="powershell-codigos-editor"'));
 });
 
-test("PowerShell: os códigos só são buscados na primeira abertura do card, em optgroups por modo, sem innerHTML", async () => {
-  const { h, chamadas } = criarHarnessCodigos();
-  assert.deepEqual(chamadas, []);
-  h.run("aoAbrirPowerShellEndpoint()"); // toggle de fechamento: details.open continua falso
+test("PowerShell: os códigos só são buscados na primeira seleção de equipamento, em optgroups por modo, sem innerHTML", async () => {
+  const { h, chamadas } = criarHarnessCodigos({ stubDisplay: false });
   await aguardar();
   assert.deepEqual(chamadas, []);
-  await abrirCard(h);
-  assert.deepEqual(chamadas, [{ url: URL_CODIGOS, metodo: "GET", corpo: undefined }]);
-  await abrirCard(h);
-  assert.equal(chamadas.length, 1);
+  h.run('exibirEquipamento({ serial: "BRJ00000AA", apelido: "PRNOTETST001" })');
+  await aguardar();
+  const codigos = () => chamadas.filter(c => c.url === URL_CODIGOS); // a seleção também busca outras rotas
+  assert.deepEqual(codigos(), [{ url: URL_CODIGOS, metodo: "GET", corpo: undefined }]);
+  h.run('exibirEquipamento({ serial: "BRJ00000BB" })');
+  await aguardar();
+  assert.equal(codigos().length, 1);
   const [vazio, usuario, sistema, ...resto] = h.element("select-powershell-codigo").children;
   assert.equal(resto.length, 0);
   assert.equal(vazio.value, "");
@@ -193,7 +195,7 @@ test("PowerShell: escolher um código preenche comando e modo (SYSTEM ou Usuári
   assert.deepEqual(chamadas.at(-1).corpo, { modo: "usuario", comando: 'Add-Printer -ConnectionName "\\\\prsrvvm-imp\\VP_UMUARAMA"', hostname: "PRNOTEUMU005" });
 });
 
-test("PowerShell: falha ao carregar os códigos mostra o erro, deixa o select vazio e tenta de novo na próxima abertura", async () => {
+test("PowerShell: falha ao carregar os códigos mostra o erro, deixa o select vazio, tenta de novo na próxima seleção e some quando a carga dá certo", async () => {
   let falhar = true;
   const { h, chamadas } = criarHarnessCodigos({ get: () => (falhar ? apiResponse({ detail: "Arquivo de códigos ocupado." }, { status: 503 }) : apiResponse({ codigos: CODIGOS })) });
   await abrirCard(h);
@@ -205,6 +207,7 @@ test("PowerShell: falha ao carregar os códigos mostra o erro, deixa o select va
   falhar = false;
   await abrirCard(h);
   assert.equal(h.element("select-powershell-codigo").children.length, 3);
+  assert.equal(h.element("endpoint-powershell-result").textContent, "");
 });
 
 test("PowerShell: o editor lista os códigos e o PUT leva o que foi adicionado, editado e removido", async () => {
@@ -398,3 +401,29 @@ for (const [status, detail] of [[409, "Chrome ocupado"], [503, "Falha geral"], [
     assert.equal(h.element("btn-powershell-endpoint").disabled, false);
   });
 }
+
+test("Home: proposta C — cabeçalho só com Transporte, Editar e histórico; Endpoint e Outros no painel Ações", () => {
+  const cabInicio = appHtml.indexOf('<header class="ck-eq-cab"');
+  const cab = appHtml.slice(cabInicio, appHtml.indexOf("</header>", cabInicio));
+  assert.ok(cabInicio > 0);
+  for (const id of ["btn-ir-para-transporte", "btn-editar-equipamento"]) assert.match(cab, new RegExp(`id="${id}"`));
+  assert.match(cab, /aria-label="Histórico de apelidos"/);
+  for (const id of ["btn-consultar-endpoint", "btn-controle-remoto-endpoint", "btn-enviar-email", "btn-ver-dossie", "endpoint-powershell"]) {
+    assert.doesNotMatch(cab, new RegExp(`id="${id}"`));
+  }
+  const acoesInicio = appHtml.indexOf('<section class="ck-cartao ck-acoes" aria-labelledby="home-acoes-titulo">');
+  const outros = appHtml.indexOf('id="home-acoes-outros"');
+  const abertos = appHtml.indexOf('aria-labelledby="home-open-tickets-title"');
+  assert.ok(acoesInicio > 0 && acoesInicio < outros && outros < abertos, "Ações vem antes de Chamados abertos");
+  const endpoint = appHtml.slice(acoesInicio, outros);
+  for (const id of ["btn-consultar-endpoint", "btn-controle-remoto-endpoint", "endpoint-lookup-result", "endpoint-powershell"]) assert.match(endpoint, new RegExp(`id="${id}"`));
+  const secaoOutros = appHtml.slice(outros, abertos);
+  for (const id of ["btn-enviar-email", "btn-ver-dossie"]) assert.match(secaoOutros, new RegExp(`id="${id}"`));
+});
+
+test("Home: o aviso de que o sistema nunca aperta Enter fica junto do botão Inserir, sem botão de executar", () => {
+  assert.match(appHtml, /<div class="ck-ps-endpoint__envio">\s*<button type="submit" id="btn-powershell-endpoint"[\s\S]*?<\/button>\s*<p class="ck-ps-endpoint__aviso">O comando só é inserido no prompt\. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome\.<\/p>\s*<\/div>/);
+  assert.match(appHtml, /id="btn-powershell-codigos-gerenciar" class="ck-btn ck-btn--icone[^"]*"[^>]*aria-label="Gerenciar códigos"/);
+  const ps = appHtml.slice(appHtml.indexOf('id="endpoint-powershell"'), appHtml.indexOf('id="home-acoes-outros"'));
+  assert.doesNotMatch(ps, /Executar|#i-play/);
+});

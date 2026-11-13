@@ -17,18 +17,6 @@
             </div>
           </div>
           <div class="ck-eq-cab__acoes">
-            <button type="button" id="btn-consultar-endpoint" data-on-click="consultarEndpoint" class="ck-btn ck-btn--secundario" disabled aria-controls="endpoint-lookup-result" title="Consultar o usuário do último logon no Endpoint, sem alterar dados">
-              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Consultar no Endpoint</span>
-            </button>
-            <button type="button" id="btn-controle-remoto-endpoint" data-on-click="controleRemotoEndpoint" class="ck-btn ck-btn--secundario" disabled aria-controls="endpoint-lookup-result" title="Abrir o controle remoto do equipamento no Endpoint (motivo: acesso) e deixar a conexão aberta para você">
-              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Controle remoto</span>
-            </button>
-            <button type="button" id="btn-enviar-email" data-on-click="abrirEmailOutlook" class="ck-btn ck-btn--secundario" disabled aria-haspopup="dialog" aria-controls="modal-email-outlook" title="Preparar um e-mail por modelo no Outlook para este equipamento">
-              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg><span>Enviar e-mail</span>
-            </button>
-            <button type="button" id="btn-ver-dossie" data-on-click="abrirDossieEquipamento" class="ck-btn ck-btn--secundario" disabled aria-haspopup="dialog" aria-controls="modal-dossie-equipamento" title="Ver as OS e os chamados deste equipamento nas importações">
-              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Ver dossiê</span>
-            </button>
             <button type="button" id="btn-ir-para-transporte" class="ck-btn ck-btn--primario" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado (T)">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg>
               <span>Transporte</span>
@@ -45,212 +33,242 @@
           </div>
         </header>
 
-        <p id="endpoint-lookup-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
-        <details class="ck-ps-endpoint" id="endpoint-powershell" data-on-toggle="aoAbrirPowerShellEndpoint">
-          <summary>PowerShell no Endpoint</summary>
-          <form class="ck-ps-endpoint__form" data-on-submit="abrirPowerShellEndpoint" autocomplete="off" novalidate>
-            <p class="ck-campo__rotulo">O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.</p>
-            <div class="ck-ps-endpoint__codigo">
-              <label class="ck-campo">
-                <span class="ck-campo__rotulo">Código pronto (opcional)</span>
-                <select id="select-powershell-codigo" class="ck-entrada" data-on-change="aplicarCodigoProntoPowerShell" title="Preenche o comando e o modo do código escolhido">
-                  <option value="">Escolher código…</option>
-                </select>
-              </label>
-              <button type="button" id="btn-powershell-codigos-gerenciar" class="ck-btn ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell" aria-expanded="false" aria-controls="powershell-codigos-editor">
-                <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg><span>Gerenciar códigos</span>
+        <div class="ck-home-layout">
+          <div class="ck-home-layout__principal">
+            <dl class="ck-dados" id="ck-dados-equipamento">
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>Série</dt><dd class="ck-mono" id="grid-serial">—</dd></div>
+                <button type="button" data-on-click="copiarSerieAtual" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar série"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
+              </div>
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>Apelido</dt><dd class="ck-mono" id="grid-apelido" data-campo="apelido">—</dd></div>
+                <button type="button" data-on-click="abrirModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar apelido"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
+              </div>
+              <div class="ck-dado" id="ck-dado-usuario">
+                <div class="ck-dado__textos">
+                  <dt id="ck-rotulo-usuario">Usuário AD</dt>
+                  <dd data-campo="usuario">
+                    <span id="card-usuarios-logados" class="hidden">—</span>
+                    <form id="form-usuario-manual" class="ck-edicao hidden" data-on-submit="salvarUsuarioLogado" autocomplete="off">
+                      <input id="input-usuario-manual" class="ck-entrada ck-entrada--sm" type="text" maxlength="160" placeholder="Usuário" aria-labelledby="ck-rotulo-usuario">
+                      <button type="submit" id="btn-salvar-usuario-manual" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
+                    </form>
+                  </dd>
+                </div>
+                <span id="card-usuario-manual-acoes" class="hidden ck-dado__acoes">
+                  <button type="button" data-on-click="editarUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
+                  <button type="button" data-on-click="limparUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Limpar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+                </span>
+              </div>
+              <div class="ck-dado" id="ck-dado-login">
+                <div class="ck-dado__textos">
+                  <dt id="ck-rotulo-login">Nome completo</dt>
+                  <dd data-campo="login">
+                    <span id="card-nome-pessoa" class="hidden">—</span>
+                    <form id="form-nome-pessoa" class="ck-edicao hidden" data-on-submit="salvarNomePessoa" autocomplete="off">
+                      <input id="input-nome-pessoa" class="ck-entrada ck-entrada--sm" type="text" maxlength="300" placeholder="Nome da pessoa" aria-labelledby="ck-rotulo-login">
+                      <button type="submit" id="btn-salvar-nome-pessoa" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
+                    </form>
+                  </dd>
+                </div>
+                <button type="button" id="btn-editar-nome-pessoa" class="hidden ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa" aria-label="Editar nome">Editar nome</button>
+              </div>
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>Local atual</dt><dd id="card-localizacao">—</dd></div>
+                <button type="button" data-on-click="abrirModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar no cadastro completo" title="Editar no cadastro completo"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
+              </div>
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>CEP</dt><dd class="ck-mono" id="grid-cep">—</dd></div>
+                <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["cep"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CEP"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
+              </div>
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>CNPJ faturamento</dt><dd class="ck-mono" id="grid-cnpj-fat">—</dd></div>
+                <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de faturamento"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
+              </div>
+              <div class="ck-dado">
+                <div class="ck-dado__textos"><dt>CNPJ instalação</dt><dd class="ck-mono" id="grid-cnpj-inst">—</dd></div>
+                <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de instalação"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
+              </div>
+            </dl>
+
+            <form id="form-editar-equipamento" class="ck-dados-edicao" data-on-submit="salvarDadosCadastrais" autocomplete="off" hidden>
+              <p class="ck-dados-edicao__info" role="status" aria-live="polite"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg><span id="ck-dados-edicao-texto">Editando dados cadastrais · nenhuma alteração</span></p>
+              <div class="ck-dados-edicao__acoes">
+                <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" data-cancelar-dados>Cancelar <kbd class="ck-kbd" aria-hidden="true">Esc</kbd></button>
+                <button type="submit" id="btn-salvar-dados-cadastrais" class="ck-btn ck-btn--primario ck-btn--sm">Salvar alterações</button>
+              </div>
+            </form>
+
+            <p id="card-id-cliente" class="hidden ck-detalhe__cliente"></p>
+            <p id="card-cnpj-atual" class="hidden"></p>
+
+          <section class="ck-cartao ck-chamado" aria-labelledby="ticket-templates-title">
+            <div class="ck-chamado__abas" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
+              <button type="button" class="ck-modelo-aba" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
+                <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Deslocamento
+              </button>
+              <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
+                <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Kit teclado + mouse
+              </button>
+              <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
+                <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Mau funcionamento
+              </button>
+              <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado" aria-controls="visualizacao-chamado-uso-inadequado" tabindex="-1">
+                <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Uso inadequado
               </button>
             </div>
-            <label class="ck-campo">
-              <span class="ck-campo__rotulo">Comando (uma linha)</span>
-              <textarea id="input-powershell-comando" class="ck-entrada" rows="2" maxlength="2000" spellcheck="false" aria-describedby="endpoint-powershell-result"></textarea>
-            </label>
-            <div class="ck-ps-endpoint__linha">
-              <label class="ck-campo">
-                <span class="ck-campo__rotulo">Modo</span>
-                <select id="select-powershell-modo" class="ck-entrada">
-                  <option value="sistema">SYSTEM</option>
-                  <option value="usuario">Usuário logado</option>
-                </select>
-              </label>
-              <label class="ck-campo">
-                <span class="ck-campo__rotulo">Hostname</span>
-                <input id="input-powershell-hostname" class="ck-entrada" type="text" maxlength="64" placeholder="Hostname do equipamento">
-              </label>
-            </div>
-            <div>
-              <button type="submit" id="btn-powershell-endpoint" class="ck-btn ck-btn--secundario" aria-controls="endpoint-powershell-result" title="Abre o PowerShell no Endpoint e insere o comando no prompt, sem executá-lo">
-                <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Inserir no PowerShell</span>
-              </button>
-            </div>
-            <p id="endpoint-powershell-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
-          </form>
-          <div id="powershell-codigos-editor" class="ck-ps-codigos hidden" role="group" aria-labelledby="powershell-codigos-titulo">
-            <p id="powershell-codigos-titulo" class="ck-campo__rotulo">Códigos prontos: título, modo e comando de uma linha.</p>
-            <div id="powershell-codigos-lista" class="ck-ps-codigos__lista"></div>
-            <div class="ck-ps-codigos__acoes">
-              <button type="button" id="btn-powershell-codigo-adicionar" class="ck-btn ck-btn--secundario" data-on-click="adicionarCodigoPowerShell"><span>Adicionar código</span></button>
-              <button type="button" id="btn-powershell-codigos-salvar" class="ck-btn ck-btn--primario" data-on-click="salvarCodigosPowerShell"><span>Salvar lista</span></button>
-              <button type="button" id="btn-powershell-codigos-cancelar" class="ck-btn ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell"><span>Cancelar</span></button>
-            </div>
-            <p id="powershell-codigos-status" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
-          </div>
-        </details>
-        <dl class="ck-dados" id="ck-dados-equipamento">
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>Série</dt><dd class="ck-mono" id="grid-serial">—</dd></div>
-            <button type="button" data-on-click="copiarSerieAtual" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar série"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
-          </div>
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>Apelido</dt><dd class="ck-mono" id="grid-apelido" data-campo="apelido">—</dd></div>
-            <button type="button" data-on-click="abrirModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar apelido"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
-          </div>
-          <div class="ck-dado" id="ck-dado-usuario">
-            <div class="ck-dado__textos">
-              <dt id="ck-rotulo-usuario">Usuário AD</dt>
-              <dd data-campo="usuario">
-                <span id="card-usuarios-logados" class="hidden">—</span>
-                <form id="form-usuario-manual" class="ck-edicao hidden" data-on-submit="salvarUsuarioLogado" autocomplete="off">
-                  <input id="input-usuario-manual" class="ck-entrada ck-entrada--sm" type="text" maxlength="160" placeholder="Usuário" aria-labelledby="ck-rotulo-usuario">
-                  <button type="submit" id="btn-salvar-usuario-manual" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
-                </form>
-              </dd>
-            </div>
-            <span id="card-usuario-manual-acoes" class="hidden ck-dado__acoes">
-              <button type="button" data-on-click="editarUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
-              <button type="button" data-on-click="limparUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Limpar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
-            </span>
-          </div>
-          <div class="ck-dado" id="ck-dado-login">
-            <div class="ck-dado__textos">
-              <dt id="ck-rotulo-login">Nome completo</dt>
-              <dd data-campo="login">
-                <span id="card-nome-pessoa" class="hidden">—</span>
-                <form id="form-nome-pessoa" class="ck-edicao hidden" data-on-submit="salvarNomePessoa" autocomplete="off">
-                  <input id="input-nome-pessoa" class="ck-entrada ck-entrada--sm" type="text" maxlength="300" placeholder="Nome da pessoa" aria-labelledby="ck-rotulo-login">
-                  <button type="submit" id="btn-salvar-nome-pessoa" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
-                </form>
-              </dd>
-            </div>
-            <button type="button" id="btn-editar-nome-pessoa" class="hidden ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa" aria-label="Editar nome">Editar nome</button>
-          </div>
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>Local atual</dt><dd id="card-localizacao">—</dd></div>
-            <button type="button" data-on-click="abrirModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar no cadastro completo" title="Editar no cadastro completo"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
-          </div>
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>CEP</dt><dd class="ck-mono" id="grid-cep">—</dd></div>
-            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["cep"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CEP"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
-          </div>
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>CNPJ faturamento</dt><dd class="ck-mono" id="grid-cnpj-fat">—</dd></div>
-            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de faturamento"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
-          </div>
-          <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>CNPJ instalação</dt><dd class="ck-mono" id="grid-cnpj-inst">—</dd></div>
-            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de instalação"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
-          </div>
-        </dl>
 
-        <form id="form-editar-equipamento" class="ck-dados-edicao" data-on-submit="salvarDadosCadastrais" autocomplete="off" hidden>
-          <p class="ck-dados-edicao__info" role="status" aria-live="polite"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg><span id="ck-dados-edicao-texto">Editando dados cadastrais · nenhuma alteração</span></p>
-          <div class="ck-dados-edicao__acoes">
-            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" data-cancelar-dados>Cancelar <kbd class="ck-kbd" aria-hidden="true">Esc</kbd></button>
-            <button type="submit" id="btn-salvar-dados-cadastrais" class="ck-btn ck-btn--primario ck-btn--sm">Salvar alterações</button>
-          </div>
-        </form>
+            <div id="ticket-templates-content">
+              <div class="ck-chamado__barra">
+                <h2 id="ticket-templates-title" class="ck-sr">Textos prontos para chamados manuais</h2>
+                <p class="ck-chamado__info">Série: <strong id="ticket-templates-serial">—</strong></p>
+                <div class="ck-chamado__acoes">
+                  <a class="ck-btn ck-btn--fantasma ck-btn--sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
+                    <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg> Portal
+                  </a>
+                  <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
+                    <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copiar
+                    <kbd class="ck-kbd" aria-hidden="true">C</kbd>
+                  </button>
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-abrir-chamado-ux" data-on-click="abrirChamadoUX" aria-haspopup="dialog">Abrir chamado no UX</button>
+                </div>
+              </div>
 
-        <p id="card-id-cliente" class="hidden ck-detalhe__cliente"></p>
-        <p id="card-cnpj-atual" class="hidden"></p>
+              <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="ck-chamado__painel">
+                <textarea id="texto-chamado-deslocamento" class="ck-chamado__texto" spellcheck="true">Prezados,
 
-        <div class="ck-home-base">
-        <section class="ck-cartao ck-chamado" aria-labelledby="ticket-templates-title">
-          <div class="ck-chamado__abas" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
-              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Deslocamento
-            </button>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
-              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Kit teclado + mouse
-            </button>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
-              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Mau funcionamento
-            </button>
-            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado" aria-controls="visualizacao-chamado-uso-inadequado" tabindex="-1">
-              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Uso inadequado
-            </button>
-          </div>
+  Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
 
-          <div id="ticket-templates-content">
-            <div class="ck-chamado__barra">
-              <h2 id="ticket-templates-title" class="ck-sr">Textos prontos para chamados manuais</h2>
-              <p class="ck-chamado__info">Série: <strong id="ticket-templates-serial">—</strong></p>
-              <div class="ck-chamado__acoes">
-                <a class="ck-btn ck-btn--fantasma ck-btn--sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
-                  <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg> Portal
-                </a>
-                <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
-                  <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copiar
-                  <kbd class="ck-kbd" aria-hidden="true">C</kbd>
-                </button>
-                <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-abrir-chamado-ux" data-on-click="abrirChamadoUX" aria-haspopup="dialog">Abrir chamado no UX</button>
+  Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.
+
+  Em caso de dúvidas durante o processo, entre em contato com o responsável configurado para a retirada do equipamento.
+
+  Contato no local:
+  Colaborador(a) Novo(a):
+  Data de Instalação:
+  Horário da Instalação:
+
+  Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
+              </div>
+              <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="ck-chamado__painel" hidden>
+                <textarea id="texto-chamado-teclado-mouse" class="ck-chamado__texto" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
+
+  Nome do(a) Colaborador(a):
+  Horário de funcionamento:
+
+  Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
+  Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
+              </div>
+              <div id="visualizacao-chamado-mau-funcionamento" role="tabpanel" aria-labelledby="pill-chamado-mau-funcionamento" class="ck-chamado__painel" hidden>
+                <textarea id="texto-chamado-mau-funcionamento" class="ck-chamado__texto" spellcheck="true">Prezados,
+  Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
+
+  Descrição do Problema:
+
+  Nome do(a) colaborador(a):
+  Horário disponível para atendimento:</textarea>
+              </div>
+              <div id="visualizacao-chamado-uso-inadequado" role="tabpanel" aria-labelledby="pill-chamado-uso-inadequado" class="ck-chamado__painel" hidden>
+                <textarea id="texto-chamado-uso-inadequado" class="ck-chamado__texto" spellcheck="true">Prezados,
+  Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
+
+  Descrição:
+
+  Nome do(a) colaborador(a):
+  Horário disponível para atendimento:</textarea>
               </div>
             </div>
 
-            <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="ck-chamado__painel">
-              <textarea id="texto-chamado-deslocamento" class="ck-chamado__texto" spellcheck="true">Prezados,
-
-Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
-
-Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.
-
-Em caso de dúvidas durante o processo, entre em contato com o responsável configurado para a retirada do equipamento.
-
-Contato no local:
-Colaborador(a) Novo(a):
-Data de Instalação:
-Horário da Instalação:
-
-Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
-            </div>
-            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="ck-chamado__painel" hidden>
-              <textarea id="texto-chamado-teclado-mouse" class="ck-chamado__texto" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
-
-Nome do(a) Colaborador(a):
-Horário de funcionamento:
-
-Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
-Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
-            </div>
-            <div id="visualizacao-chamado-mau-funcionamento" role="tabpanel" aria-labelledby="pill-chamado-mau-funcionamento" class="ck-chamado__painel" hidden>
-              <textarea id="texto-chamado-mau-funcionamento" class="ck-chamado__texto" spellcheck="true">Prezados,
-Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
-
-Descrição do Problema:
-
-Nome do(a) colaborador(a):
-Horário disponível para atendimento:</textarea>
-            </div>
-            <div id="visualizacao-chamado-uso-inadequado" role="tabpanel" aria-labelledby="pill-chamado-uso-inadequado" class="ck-chamado__painel" hidden>
-              <textarea id="texto-chamado-uso-inadequado" class="ck-chamado__texto" spellcheck="true">Prezados,
-Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
-
-Descrição:
-
-Nome do(a) colaborador(a):
-Horário disponível para atendimento:</textarea>
-            </div>
+            <button type="button" id="btn-toggle-ticket-templates" class="hidden" aria-expanded="true" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais"></button>
+          </section>
           </div>
 
-          <button type="button" id="btn-toggle-ticket-templates" class="hidden" aria-expanded="true" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais"></button>
-        </section>
+          <div class="ck-home-layout__lateral">
+            <section class="ck-cartao ck-acoes" aria-labelledby="home-acoes-titulo">
+              <h2 id="home-acoes-titulo" class="ck-sr">Ações</h2>
+              <div class="ck-acoes__secao" role="group" aria-labelledby="home-acoes-endpoint">
+                <h3 id="home-acoes-endpoint" class="ck-acoes__rotulo">Endpoint</h3>
+                <div class="ck-acoes__par">
+                  <button type="button" id="btn-consultar-endpoint" data-on-click="consultarEndpoint" class="ck-btn ck-btn--secundario ck-btn--cheio" disabled aria-controls="endpoint-lookup-result" title="Consultar o usuário do último logon no Endpoint, sem alterar dados">
+                    <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Consultar no Endpoint</span>
+                  </button>
+                  <button type="button" id="btn-controle-remoto-endpoint" data-on-click="controleRemotoEndpoint" class="ck-btn ck-btn--secundario ck-btn--cheio" disabled aria-controls="endpoint-lookup-result" title="Abrir o controle remoto do equipamento no Endpoint (motivo: acesso) e deixar a conexão aberta para você">
+                    <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Controle remoto</span>
+                  </button>
+                </div>
+                <p id="endpoint-lookup-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+                <section class="ck-ps-endpoint" id="endpoint-powershell" aria-labelledby="endpoint-powershell-titulo">
+                  <div class="ck-ps-endpoint__cab">
+                    <h4 id="endpoint-powershell-titulo" class="ck-ps-endpoint__titulo">PowerShell no Endpoint</h4>
+                    <button type="button" id="btn-powershell-codigos-gerenciar" class="ck-btn ck-btn--icone ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell" aria-expanded="false" aria-controls="powershell-codigos-editor" aria-label="Gerenciar códigos" title="Gerenciar códigos">
+                      <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>
+                    </button>
+                  </div>
+                  <form class="ck-ps-endpoint__form" data-on-submit="abrirPowerShellEndpoint" autocomplete="off" novalidate>
+                    <label class="ck-campo">
+                      <span class="ck-campo__rotulo">Código pronto (opcional)</span>
+                      <select id="select-powershell-codigo" class="ck-entrada" data-on-change="aplicarCodigoProntoPowerShell" title="Preenche o comando e o modo do código escolhido">
+                        <option value="">Escolher código…</option>
+                      </select>
+                    </label>
+                    <label class="ck-campo">
+                      <span class="ck-campo__rotulo">Comando (uma linha)</span>
+                      <textarea id="input-powershell-comando" class="ck-entrada" rows="2" maxlength="2000" spellcheck="false" aria-describedby="endpoint-powershell-result"></textarea>
+                    </label>
+                    <div class="ck-ps-endpoint__linha">
+                      <label class="ck-campo">
+                        <span class="ck-campo__rotulo">Modo</span>
+                        <select id="select-powershell-modo" class="ck-entrada">
+                          <option value="sistema">SYSTEM</option>
+                          <option value="usuario">Usuário logado</option>
+                        </select>
+                      </label>
+                      <label class="ck-campo">
+                        <span class="ck-campo__rotulo">Hostname</span>
+                        <input id="input-powershell-hostname" class="ck-entrada" type="text" maxlength="64" placeholder="Hostname do equipamento">
+                      </label>
+                    </div>
+                    <div class="ck-ps-endpoint__envio">
+                      <button type="submit" id="btn-powershell-endpoint" class="ck-btn ck-btn--secundario" aria-controls="endpoint-powershell-result" title="Abre o PowerShell no Endpoint e insere o comando no prompt, sem executá-lo">
+                        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg><span>Inserir no PowerShell</span>
+                      </button>
+                      <p class="ck-ps-endpoint__aviso">O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.</p>
+                    </div>
+                    <p id="endpoint-powershell-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+                  </form>
+                  <div id="powershell-codigos-editor" class="ck-ps-codigos hidden" role="group" aria-labelledby="powershell-codigos-titulo">
+                    <p id="powershell-codigos-titulo" class="ck-campo__rotulo">Códigos prontos: título, modo e comando de uma linha.</p>
+                    <div id="powershell-codigos-lista" class="ck-ps-codigos__lista"></div>
+                    <div class="ck-ps-codigos__acoes">
+                      <button type="button" id="btn-powershell-codigo-adicionar" class="ck-btn ck-btn--secundario" data-on-click="adicionarCodigoPowerShell"><span>Adicionar código</span></button>
+                      <button type="button" id="btn-powershell-codigos-salvar" class="ck-btn ck-btn--primario" data-on-click="salvarCodigosPowerShell"><span>Salvar lista</span></button>
+                      <button type="button" id="btn-powershell-codigos-cancelar" class="ck-btn ck-btn--secundario" data-on-click="alternarEditorCodigosPowerShell"><span>Cancelar</span></button>
+                    </div>
+                    <p id="powershell-codigos-status" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
+                  </div>
+                </section>
+              </div>
+              <div class="ck-acoes__secao ck-acoes__secao--sep" role="group" aria-labelledby="home-acoes-outros">
+                <h3 id="home-acoes-outros" class="ck-acoes__rotulo">Outros</h3>
+                <div class="ck-acoes__par">
+                  <button type="button" id="btn-enviar-email" data-on-click="abrirEmailOutlook" class="ck-btn ck-btn--secundario ck-btn--cheio" disabled aria-haspopup="dialog" aria-controls="modal-email-outlook" title="Preparar um e-mail por modelo no Outlook para este equipamento">
+                    <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg><span>Enviar e-mail</span>
+                  </button>
+                  <button type="button" id="btn-ver-dossie" data-on-click="abrirDossieEquipamento" class="ck-btn ck-btn--secundario ck-btn--cheio" disabled aria-haspopup="dialog" aria-controls="modal-dossie-equipamento" title="Ver as OS e os chamados deste equipamento nas importações">
+                    <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Ver dossiê</span>
+                  </button>
+                </div>
+              </div>
+            </section>
 
-        <aside class="ck-cartao" aria-labelledby="home-open-tickets-title">
-          <header class="ck-cartao__cab">
-            <h2 id="home-open-tickets-title" class="ck-cartao__titulo">Chamados abertos</h2>
-            <span class="ck-espaco"></span>
-            <span id="home-open-tickets-count" class="ck-cartao__meta" role="status" aria-live="polite"></span>
-          </header>
-          <div id="home-open-tickets-body" aria-busy="false"></div>
-        </aside>
+            <aside class="ck-cartao" aria-labelledby="home-open-tickets-title">
+              <header class="ck-cartao__cab">
+                <h2 id="home-open-tickets-title" class="ck-cartao__titulo">Chamados abertos</h2>
+                <span class="ck-espaco"></span>
+                <span id="home-open-tickets-count" class="ck-cartao__meta" role="status" aria-live="polite"></span>
+              </header>
+              <div id="home-open-tickets-body" aria-busy="false"></div>
+            </aside>
+          </div>
         </div>
       </div>
