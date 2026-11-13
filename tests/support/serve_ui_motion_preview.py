@@ -457,11 +457,13 @@ FINALIZAR_SHAREPOINT = {
 finalizar_state = {}
 
 
-def reset_finalizar(sharepoint_falha=False):
+def reset_finalizar(sharepoint_falha=False, outro_tecnico=False):
     finalizar_state.clear()
     finalizar_state.update(descricao="", pdf=None, finalizacao=None, polls=0, rodando=False, acao="finalizar",
                            numeros=[], resultado=None, sharepoint=None, sharepoint_falha=sharepoint_falha,
-                           ficha=None, manuais=None)
+                           ficha=None, manuais=None,
+                           # /__fixture_automacao?outro_tecnico=1: o finalizado da fixture vira "finalizado por outro técnico" (Desfazer finalização)
+                           outro_tecnico="registrado" if outro_tecnico else "")
 
 
 reset_finalizar()
@@ -547,6 +549,10 @@ def sebrae_novos_payload():
         dados["importado"]["finalizados"].insert(0, {
             "numero": FINALIZAR_NUMERO, "encerrado_em": finalizar_state["finalizacao"]["encerrado_em"], "em": finalizar_state["finalizacao"]["em"],
             "descricao": finalizar_state["descricao"], "ficha": finalizar_state["ficha"], "pdf": pdf["nome"] if pdf else None})
+    if finalizar_state["outro_tecnico"] == "registrado":
+        dados["importado"]["finalizados"][-1]["status"] = "finalizado_outro_tecnico"
+    elif finalizar_state["outro_tecnico"] == "desfeito":  # como no servidor real, o desfeito sai de Finalizados
+        dados["importado"]["finalizados"] = [f for f in dados["importado"]["finalizados"] if f["numero"] != "UTIC-2026-1100"]
     return dados
 
 
@@ -867,7 +873,7 @@ class Handler(BaseHTTPRequestHandler):
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",
                 }
-            reset_finalizar(query.get("sharepoint_falha", ["0"])[0] == "1")
+            reset_finalizar(query.get("sharepoint_falha", ["0"])[0] == "1", query.get("outro_tecnico", ["0"])[0] == "1")
             reset_conflitos(query.get("conflitos", ["0"])[0] == "1")
             reset_antigos(query.get("antigos", [""])[0])
             scenario = query.get("sebrae", ["padrao"])[0]
@@ -1040,6 +1046,9 @@ class Handler(BaseHTTPRequestHandler):
             lembretes_proxy(self, "GET", self.path)
         elif path == "/api/assinatura-tecnico":
             self.send(FIXTURE_ASSINATURA_SVG, content_type="image/svg+xml")
+        elif path == "/api/endpoint/powershell/codigos":
+            # The Home PowerShell form is always visible and loads the ready-made codes on the first selection.
+            self.send({"codigos": [{"id": "demo", "titulo": "Listar serviços", "modo": "sistema", "comando": "Get-Service"}]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
@@ -1195,6 +1204,17 @@ class Handler(BaseHTTPRequestHandler):
             nome = re.search(rb'filename="([^"]+)"', corpo)
             finalizar_state["pdf"] = {"nome": nome.group(1).decode() if nome else "anexo.pdf", "tamanho": len(corpo)}
             self.send({"numero": FINALIZAR_NUMERO, "pdf": finalizar_state["pdf"]})
+            return
+        if path == "/api/sebrae/finalizacao/desfazer-outro-tecnico":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo = json.loads(self.rfile.read(size) or b"{}")
+            if corpo.get("confirmado") is not True:
+                self.send({"detail": "Confirme para desfazer a finalização."}, 422)
+            elif finalizar_state["outro_tecnico"] != "registrado" or corpo.get("numero") != "UTIC-2026-1100":
+                self.send({"detail": "Só a finalização registrada como feita por outro técnico pode ser desfeita."}, 422)
+            else:
+                finalizar_state["outro_tecnico"] = "desfeito"
+                self.send({"numero": "UTIC-2026-1100", "desfeito": True})
             return
         if path == "/api/sebrae/finalizar-softexpert":
             size = int(self.headers.get("Content-Length", "0"))

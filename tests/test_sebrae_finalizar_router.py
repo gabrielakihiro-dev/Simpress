@@ -695,6 +695,101 @@ class FinalizadoPorOutroTecnicoTest(AtualizarBase):
         self.assertEqual(self.job()["encerramentos_manuais"], {})
 
 
+class DesfazerOutroTecnicoTest(AtualizarBase):
+    """Pedido do usuário (13/11/2026): desfazer só o registro local "finalizado por outro técnico" e corrigir D e R pelo cartão."""
+
+    R = "12/11/2026 09:30"
+    R_SERIAL = r'<c r="R\d+"[^>]*><v>46338\.39'
+    DESFAZER = "/api/sebrae/finalizacao/desfazer-outro-tecnico"
+
+    def registrar(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_OUTRO_TECNICO, self.R)
+        fin.gravar_resultado(self.dir, {"iniciado_em": "x", "em_andamento": False, "resultados": [
+            {"numero": A, "status": fin.STATUS_OUTRO_TECNICO, "encerrado_em": self.R, "mensagem": "não está na lista"},
+            {"numero": B, "status": fin.STATUS_OK, "encerrado_em": "30/10/2026 14:05", "mensagem": ""},
+        ]})
+
+    def desfazer(self, numero=A, confirmado=True):
+        return self.post(self.DESFAZER, json={"numero": numero, "confirmado": confirmado})
+
+    def test_sem_confirmado_responde_422_e_nada_muda(self):
+        self.registrar()
+        for corpo in ({"numero": A}, {"numero": A, "confirmado": False}, {"numero": A, "confirmado": "true"}):
+            with self.subTest(corpo=corpo):
+                self.assertEqual(self.post(self.DESFAZER, json=corpo).status_code, 422)
+        self.assertTrue(fin.ja_finalizado(self.dir, A))
+
+    def test_recusa_ok_inexistente_e_numero_invalido_com_422(self):
+        self.registrar()
+        fin.registrar_finalizacao(self.dir, B, fin.STATUS_OK, "30/10/2026 14:05")
+        for numero in (B, C, "abc"):
+            with self.subTest(numero=numero):
+                self.assertEqual(self.desfazer(numero).status_code, 422)
+        self.assertTrue(fin.ja_finalizado(self.dir, B))
+        self.assertNotIn(C, fin.ler_estado(self.dir))
+
+    def test_pedido_pendente_ou_rotina_rodando_responde_409_sem_desfazer(self):
+        self.registrar()
+        self.descrever(B)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 202)  # deixa o pedido pendente
+        self.assertEqual(self.desfazer().status_code, 409)
+        self.job()
+        self.runner.estado = {"estado": "em_andamento", "rotina": "antigos"}
+        self.assertEqual(self.desfazer().status_code, 409)
+        self.assertTrue(fin.ja_finalizado(self.dir, A))
+        self.assertEqual(fin.ler_resultado(self.dir)["resultados"][0]["status"], fin.STATUS_OUTRO_TECNICO)  # o resultado também fica
+
+    def test_runner_ilegivel_responde_503_sem_desfazer(self):
+        self.registrar()
+        with patch.object(self.runner, "state", side_effect=RuntimeError("sem estado")):
+            self.assertEqual(self.desfazer().status_code, 503)
+        self.assertTrue(fin.ja_finalizado(self.dir, A))
+        self.assertEqual(fin.ler_resultado(self.dir)["resultados"][0]["status"], fin.STATUS_OUTRO_TECNICO)
+
+    def test_falha_ao_gravar_o_resultado_nao_desfaz_o_estado_e_a_nova_tentativa_funciona(self):
+        self.registrar()
+        with patch.object(fin, "gravar_resultado", side_effect=DomainBusyError("ocupado")):
+            self.assertEqual(self.desfazer().status_code, 503)
+        self.assertTrue(fin.ja_finalizado(self.dir, A))
+        self.assertEqual(self.desfazer().status_code, 200)
+        self.assertEqual(fin.ler_resultado(self.dir)["resultados"][0]["status"], fin.STATUS_NAO_ENCONTRADO)
+
+    def test_sucesso_tira_a_finalizacao_reescreve_o_resultado_e_nao_dispara_nada(self):
+        self.registrar()
+        resposta = self.desfazer(A.lower())
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json(), {"numero": A, "desfeito": True})
+        self.assertEqual(resposta.headers["cache-control"], "no-store")
+        self.assertNotIn("finalizacao", fin.ler_estado(self.dir)[A])
+        self.assertEqual(fin.dados_para_finalizar(self.dir, A)[0], f"feito {A}")
+        itens = {r["numero"]: r for r in fin.ler_resultado(self.dir)["resultados"]}
+        self.assertEqual((itens[A]["status"], itens[A]["encerrado_em"], itens[A]["mensagem"]), (fin.STATUS_NAO_ENCONTRADO, "", "não está na lista"))
+        self.assertEqual((itens[B]["status"], itens[B]["encerrado_em"]), (fin.STATUS_OK, "30/10/2026 14:05"))
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+        self.assertNotIn(A, [f["numero"] for f in self.cliente.get("/api/sebrae/novos").json()["importado"]["finalizados"]])
+        self.assertEqual(self.desfazer().status_code, 422)  # já desfeito
+
+    def test_sem_resultado_gravado_desfaz_do_mesmo_jeito(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_OUTRO_TECNICO, self.R)
+        self.assertEqual(self.desfazer().status_code, 200)
+        self.assertIsNone(fin.ler_resultado(self.dir))
+
+    def test_correcao_pelo_cartao_registrar_desfazer_e_atualizar_deixa_d_aberto_e_r_vazio(self):
+        self.registrar()
+        antes = base64.b64decode(self.atualizar(self.edicao(B, d="EM ABERTO"), finalizar_softexpert=False)["conteudo_base64"])
+        self.assertRegex(linha_xml(antes, 2), self.R_SERIAL)  # o R do outro técnico estava indo para a cópia
+        self.assertEqual(self.desfazer().status_code, 200)
+        corpo = self.atualizar(self.edicao(A, d="EM ABERTO"), finalizar_softexpert=False)
+        linha = linha_xml(base64.b64decode(corpo["conteudo_base64"]), 2)
+        self.assertNotRegex(linha, r'<c r="R\d+"[^>]*><v>')
+        self.assertIn("EM ABERTO", linha)
+        self.assertNotIn("FINALIZADO", linha)
+        self.assertEqual(self.runner.iniciadas, [])
+
+
 class AtualizarDispara(AtualizarBase):
 
     def test_chamado_marcado_finalizado_com_descricao_vai_para_a_rotina_e_sem_descricao_e_pulado(self):

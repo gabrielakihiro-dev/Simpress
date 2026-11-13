@@ -54,8 +54,9 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   harness.context.workflowSearchItem = equipment;
 
   await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
-  // Home also reads the open tickets of the selected series (Chamados abertos) and the Sebrae tickets (F5).
-  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/sebrae/novos", "/api/operacoes/chamados"]);
+  // Home also reads the PowerShell ready-made codes (always-visible form, first selection only),
+  // the open tickets of the selected series (Chamados abertos) and the Sebrae tickets (F5).
+  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/endpoint/powershell/codigos", "/api/sebrae/novos", "/api/operacoes/chamados"]);
   assert.equal(
     harness.element("retirada-cnpj").value,
     equipment.retirada_cnpj,
