@@ -243,3 +243,91 @@ test("Marca: histórico em texto com data e hora, evento e origem; data fora do 
   assert.equal(m.formatarDataHora("2026-01-02T03:04:05+00:00"), "02/01/2026 às 03:04");
   assert.equal(m.formatarDataHora(undefined), "");
 });
+
+// ----- referências em texto livre (Lembretes) -----
+const refs = texto => m.referenciasNoTexto(texto).filter(parte => parte.tipo).map(parte => [parte.tipo, parte.numero]);
+
+test("Referências: UTIC e OS de 7 dígitos viram links, na ordem, e o texto original é preservado", () => {
+  const texto = "Ver utic-2026-0833 e a OS 1234567; depois UTIC-2026-12 / OS 7654321.";
+  const partes = m.referenciasNoTexto(texto);
+  assert.equal(partes.map(parte => parte.texto).join(""), texto);
+  assert.deepEqual(refs(texto), [["chamado", "UTIC-2026-0833"], ["os", "1234567"], ["chamado", "UTIC-2026-12"], ["os", "7654321"]]);
+  assert.deepEqual(partes[0], { texto: "Ver " });
+  assert.deepEqual(partes[1], { tipo: "chamado", numero: "UTIC-2026-0833", texto: "utic-2026-0833" }, "numero em maiúsculas, texto como digitado");
+});
+
+test("Referências: casamento exato, sem zero inventado nem pedaço de outro número", () => {
+  assert.deepEqual(refs("UTIC-2026-083"), [["chamado", "UTIC-2026-083"]], "numero fica como digitado");
+  assert.deepEqual(refs("xUTIC-2026-1 UTIC-2026-1x UTIC-2026-1-2 UTIC-26-1 UTIC-2026-"), []);
+  assert.deepEqual(refs(`UTIC-2026-${"9".repeat(25)}`), [], "mais de 24 dígitos não é chamado");
+  assert.deepEqual(refs("12345678 123456 12345678901234 a1234567 1234567b 1234567-1 UTIC-2026-1234567"), [["chamado", "UTIC-2026-1234567"]],
+    "7 dígitos só isolados; os 7 dígitos dentro do UTIC não viram OS");
+});
+
+test("Referências: OS dentro de data, telefone e valor não vira link; pontuação de frase não cola", () => {
+  assert.deepEqual(refs("12/11/2026 (41) 3456-7890 R$ 1.234.567,89 1234567,89 1,1234567 0.1234567"), []);
+  assert.deepEqual(refs("1234567/1 2/1234567"), [], "barra cola");
+  assert.deepEqual(refs("OS 1234567. Outra: 7654321, (2345678) \"3456789\""),
+    [["os", "1234567"], ["os", "7654321"], ["os", "2345678"], ["os", "3456789"]]);
+  assert.deepEqual(m.referenciasNoTexto(""), []);
+  assert.deepEqual(m.referenciasNoTexto(undefined), []);
+  assert.deepEqual(m.referenciasNoTexto("sem número"), [{ texto: "sem número" }]);
+});
+
+test("Referências: rejeitada não parte o texto em trechos separados", () => {
+  assert.deepEqual(m.referenciasNoTexto("a 12345678 b"), [{ texto: "a 12345678 b" }]);
+});
+
+const vinc = (os, chamado, extra = {}) => ({ fonte: "simpress", serie: "SN-1", os, chamado, ...extra });
+
+test("chamadoDaOs: exato, vínculo vence o F5, e prioridade manual > finalizacao > dashboard", () => {
+  assert.equal(m.chamadoDaOs("1234567", { vinculos: [vinc("12345678", "UTIC-2026-1")] }), null, "OS exata, não por prefixo");
+  assert.equal(m.chamadoDaOs("", { vinculos: [vinc("1", "UTIC-2026-1")] }), null);
+  assert.equal(m.chamadoDaOs("1234567"), null);
+  assert.deepEqual(m.chamadoDaOs("1234567", { vinculos: { vinculos: [vinc("1234567", "utic-2026-0833", { origem: "dashboard" })] } }),
+    { chamado: "UTIC-2026-0833", serie: "SN-1" }, "aceita { vinculos: [...] } e põe o chamado em maiúsculas");
+  const todos = [vinc("1234567", "UTIC-2026-3", { origem: "dashboard" }), vinc("1234567", "UTIC-2026-2", { origem: "finalizacao" })];
+  assert.equal(m.chamadoDaOs("1234567", { vinculos: todos }).chamado, "UTIC-2026-2", "finalizacao vence dashboard");
+  assert.equal(m.chamadoDaOs("1234567", { vinculos: [...todos, vinc("1234567", "UTIC-2026-1")] }).chamado, "UTIC-2026-1", "manual (sem origem) vence tudo");
+  assert.equal(m.chamadoDaOs("1234567", { vinculos: [...todos, vinc("1234567", "UTIC-2026-4", { origem: "planilha" })] }).chamado, "UTIC-2026-4",
+    "origem desconhecida conta como manual, igual à F6");
+  const semChamado = vinc("1234567", "", { numero: "55", ano: "2026" });
+  assert.equal(m.chamadoDaOs("1234567", { vinculos: [semChamado] }).chamado, "UTIC-2026-55", "deriva do ano e número quando falta o chamado");
+});
+
+test("chamadoDaOs: mesmo chamado repetido não é ambíguo; dois chamados na mesma prioridade são", () => {
+  const dois = [vinc("1234567", "UTIC-2026-1"), { ...vinc("1234567", "UTIC-2026-1"), fonte: "oracle" }];
+  assert.deepEqual(m.chamadoDaOs("1234567", { vinculos: dois }), { chamado: "UTIC-2026-1", serie: "SN-1" });
+  const outraSerie = [vinc("1234567", "UTIC-2026-1"), { ...vinc("1234567", "UTIC-2026-1"), serie: "SN-2" }];
+  assert.deepEqual(m.chamadoDaOs("1234567", { vinculos: outraSerie }), { chamado: "UTIC-2026-1", serie: "" }, "séries diferentes: não escolhe uma");
+  assert.deepEqual(m.chamadoDaOs("1234567", { vinculos: [vinc("1234567", "UTIC-2026-9"), vinc("1234567", "UTIC-2026-2")] }),
+    { ambiguo: ["UTIC-2026-2", "UTIC-2026-9"] });
+  assert.deepEqual(m.chamadoDaOs("1234567", { vinculos: [vinc("1234567", "UTIC-2026-9"), vinc("1234567", "UTIC-2026-2", { origem: "dashboard" })] }),
+    { chamado: "UTIC-2026-9", serie: "SN-1" }, "o de prioridade menor não entra na conta");
+});
+
+test("chamadoDaOs: sem vínculo usa o F5 em aberto (sem finalizados) e acusa ambiguidade", () => {
+  assert.deepEqual(m.chamadoDaOs("7001", { vinculos: [], sebrae }), { chamado: "UTIC-2026-20", serie: "SINT-001" }, "novos: linha.E e K");
+  assert.deepEqual(m.chamadoDaOs("7004", { sebrae }), { chamado: "UTIC-2026-12", serie: "SINT-004" }, "linha:N usa o chamado do item e a série sugerida");
+  assert.equal(m.chamadoDaOs("7003", { sebrae }), null, "chamado finalizado fica fora");
+  assert.equal(m.chamadoDaOs("7009", { sebrae }), null, "novo que consta em finalizados fica fora");
+  const repetida = { novos: { formulario: [{ numero: "UTIC-2026-31", linha: { E: "5555555" } }, { numero: "UTIC-2026-30", linha: { E: "5555555" } }] } };
+  assert.deepEqual(m.chamadoDaOs("5555555", { sebrae: repetida }), { ambiguo: ["UTIC-2026-30", "UTIC-2026-31"] });
+  assert.deepEqual(m.chamadoDaOs("5555555", { vinculos: [vinc("5555555", "UTIC-2026-99")], sebrae: repetida }).chamado, "UTIC-2026-99",
+    "o vínculo vale antes do F5");
+});
+
+test("osDoChamado: exato, prioridade dos vínculos e ambiguidade", () => {
+  assert.equal(m.osDoChamado("UTIC-2026-083", { vinculos: [vinc("1234567", "UTIC-2026-0833")] }), null, "exato: 083 não casa 0833");
+  assert.equal(m.osDoChamado("", { vinculos: [vinc("1234567", "UTIC-2026-1")] }), null);
+  assert.equal(m.osDoChamado("UTIC-2026-1"), null);
+  assert.equal(m.osDoChamado("UTIC-2026-1", { vinculos: [vinc("", "UTIC-2026-1")] }), null, "vínculo sem OS não conta");
+  assert.deepEqual(m.osDoChamado("utic-2026-0833", { vinculos: [vinc("1234567", "UTIC-2026-0833")] }), { os: "1234567", serie: "SN-1" });
+  const mistos = [vinc("1111111", "UTIC-2026-1", { origem: "dashboard" }), vinc("2222222", "UTIC-2026-1", { origem: "finalizacao" })];
+  assert.equal(m.osDoChamado("UTIC-2026-1", { vinculos: mistos }).os, "2222222", "finalizacao vence dashboard");
+  assert.equal(m.osDoChamado("UTIC-2026-1", { vinculos: [...mistos, vinc("3333333", "UTIC-2026-1")] }).os, "3333333", "manual vence");
+  assert.deepEqual(m.osDoChamado("UTIC-2026-1", { vinculos: [vinc("2222222", "UTIC-2026-1"), vinc("1111111", "UTIC-2026-1")] }),
+    { ambiguo: ["1111111", "2222222"] });
+  assert.deepEqual(m.osDoChamado("UTIC-2026-1", { vinculos: [vinc("2222222", "UTIC-2026-1"), { ...vinc("2222222", "UTIC-2026-1"), fonte: "oracle" }] }),
+    { os: "2222222", serie: "SN-1" }, "mesma OS repetida não é ambígua");
+});

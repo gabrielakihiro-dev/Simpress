@@ -23,6 +23,31 @@ Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj
 - Excluir pede confirmação em `role="alertdialog"`: título `Excluir este lembrete?`, a descrição do item, `Esta ação não pode ser desfeita.`, botões `Cancelar` e `Excluir`. Esc cancela.
 - Estado vazio: `Nenhum lembrete. Anote o que precisa fazer.`
 
+## Chamado e OS no texto (12/11/2026)
+
+Pedido do usuário (12/11/2026). Só leitura: nenhum endpoint novo, nada é gravado e o texto do lembrete não muda no arquivo.
+
+- No texto de um lembrete (lista de pendentes e de concluídos), `UTIC-AAAA-N` (ex.: `UTIC-2026-0833`) e um número de OS de exatamente 7 dígitos (ex.: `1234567`) viram botões (`button.ck-link-btn.lembretes__ref`, `aria-haspopup="dialog"`, `aria-label` `Abrir o chamado <número> na janela Chamado × OS` ou `Abrir a OS <número> na janela Chamado × OS`). Na edição inline o texto volta a ser o campo, sem links.
+- O clique chama `abrirReferenciaLembrete({tipo, numero}, gatilho)` (`static/js/features/cockpit-tool-panels.js`), que abre o modal `#modal-chamado-os` por cima do painel, sem trocar de aba. A janela é a de `07-chamados-operacional.md` (cartão do F5 à esquerda, tabela da OS do F6 à direita), com os mesmos botões `Abrir na aba OS (F6)` e `Fechar`. Esc fecha e o foco volta ao link (ou ao link equivalente, se a lista se redesenhou).
+- Casamento exato (`referenciasNoTexto` em `static/js/shared/chamados-os-model.js`, modelo puro e testado):
+  - `UTIC-AAAA-N` vale sem diferença de maiúsculas e minúsculas; o número é aberto em maiúsculas.
+  - Não vira link número colado a letra, dígito, `_` ou hífen (`X1234567`, `UTIC-2026-0833X`, `41 99999-1234`).
+  - OS também não vira link se estiver colada a `/` (data ou fração, ex.: `12/11/2026`, `1234567/2`) nem a `.` ou `,` quando o caractere do outro lado é dígito (valores, ex.: `1.234.567,89`, `1234567,89`). Decisão registrada: pontuação de fim de frase não impede o link; `OS 1234567.` e `(OS 1234567)` ligam.
+  - Mais de 7 dígitos seguidos, ou menos de 7, não ligam.
+- Link de chamado: a OS do cartão do F5 vence; só sem ela vale o vínculo salvo (`GET /api/operacoes/chamados/vinculos-os`). OS `—` no cartão conta como sem OS, e a série do cartão só acompanha a OS do próprio cartão. Prioridade dos vínculos, a mesma da aba OS: digitado à mão (sem origem ou origem desconhecida) > `finalizacao` > `dashboard`. Só a melhor prioridade conta.
+- Link de OS: o chamado vem dos vínculos (mesma prioridade) e, sem vínculo, dos chamados abertos da F5 (`GET /api/sebrae/novos`, sem finalizados). Se uma das duas leituras falhar, a janela segue com a outra e nunca quebra.
+- Ambiguidade nunca escolhe: com mais de um valor na melhor prioridade, a janela mostra o aviso em vez de adivinhar.
+- Avisos exatos (aprovados em 12/11/2026, a pedido do usuário):
+  - `Mais de uma OS ligada a este chamado (<OS>, <OS>). Abra pela aba OS (F6).`
+  - `OS ligada a mais de um chamado (<UTIC>, <UTIC>).`
+  - `Chamado não encontrado na aba Chamados (F5).` (já existia)
+  - `Nenhuma OS vinculada por série na importação atual.` (já existia; aparece à direita quando o chamado existe na F5 mas não tem OS)
+  - `OS não encontrada na importação atual.` (só nos links de lembrete, quando a OS pedida sem série não está no relatório da aba OS; nos gatilhos do F5 e do F6 continua `Série não encontrada na importação atual.`)
+- Lado sem conteúdo (OS pedida sem chamado, ou chamado inexistente sem OS) some e o outro lado ocupa a largura toda (`.chamado-os-janela__lado:empty` em `ck-cockpit.css`).
+- Visual: o link segue o tamanho e a quebra do texto (`overflow-wrap: anywhere`), sublinhado pontilhado que vira sólido no hover, riscado junto no lembrete concluído, foco visível; só tokens de cor existentes. Alvo de toque de 44 px não se aplica a link dentro de frase.
+- LGPD: o texto do lembrete continua fora de log, histórico e Assistente; o clique só envia o número da OS ou do chamado às leituras já existentes.
+- Testes: `tests/frontend/test_chamados_os.cjs` (casamento e prioridade), `tests/frontend/test_lembretes.cjs` (links na lista), `tests/frontend/test_cockpit_tool_panels.cjs` (abertura, avisos, foco), `tests/frontend/test_data_panels_os_table.cjs` (`OS não encontrada na importação atual.`).
+
 ## Termo → Lembrete
 
 - Barra de cada termo: novo botão `Criar lembrete`, ao lado de `Gerar PDF` e `Limpar`.

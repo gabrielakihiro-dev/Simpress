@@ -930,7 +930,9 @@
       // marcas: Map(chave série+OS → marcas) ou null quando a leitura falhou (a tabela segue sem elas).
       if (externa) { externa.renderizada = records.length > 0; externa.falhaUsuarios = Boolean(userFailure); externa.falhaMarcas = marcas === null; }
       if (!records.length) {
-        status.textContent = externa?.soOs ? "Série não encontrada na importação atual." : "Nenhuma OS vinculada por série na importação atual.";
+        // Janela Chamado × OS: sem série pedida (link de lembrete) o que faltou foi a OS, não a série.
+        status.textContent = !externa?.soOs ? "Nenhuma OS vinculada por série na importação atual."
+          : externa.soOs.serie || !externa.soOs.lembrete ? "Série não encontrada na importação atual." : "OS não encontrada na importação atual.";
         if (externa) avisarAbasOs(externa, { abertas: 0, finalizadas: 0 });
         section.setAttribute("aria-busy", "false");
         section.dataset.estado = "vazio";

@@ -2185,28 +2185,54 @@
   }
 
   // Janela "Chamado × OS" (botão da OS no cartão do F5): chamado à esquerda, OS à direita, tudo só leitura.
-  // Aceita só o número do chamado (série e OS vêm do cartão) ou série + OS.
+  // Aceita só o número do chamado (série e OS vêm do cartão) ou série + OS. Dois ganchos opcionais, usados pelos links
+  // dos lembretes: `resolver` (antes do cartão) completa chamado/série/OS ou traz `avisoChamado`; `reservaOs`
+  // (depois do cartão, só se faltou OS) devolve `{ os, serie }` ou `{ aviso }`. Lado sem conteúdo fica vazio (o CSS o esconde).
   let janelaChamadoOs = { pedido: 0, gatilho: null, chamado: "" };
-  async function abrirJanelaChamadoOs({ chamado = "", serie = "", os = "" } = {}, gatilho = null) {
+  async function abrirJanelaChamadoOs({ chamado = "", serie = "", os = "", resolver = null, reservaOs = null } = {}, gatilho = null) {
     const pedido = janelaChamadoOs.pedido + 1;
     janelaChamadoOs = { pedido, gatilho, chamado: String(chamado || "") };
     const hostChamado = byId("chamado-os-janela-chamado");
     const hostOs = byId("chamado-os-janela-os");
     const linkF6 = byId("chamado-os-janela-f6");
     hostChamado.replaceChildren(element("p", "ck-lista__vazio", "Carregando…"));
-    hostOs.replaceChildren();
+    hostOs.replaceChildren(element("p", "ck-lista__vazio", "Carregando…"));
     linkF6.hidden = true;
     app.abrirModalAcessivel("modal-chamado-os", "#chamado-os-janela-fechar", "fecharJanelaChamadoOs");
-    const cartao = chamado ? await app.cartaoChamadoSebraeLeitura?.(chamado) : null;
+    // Um gancho que falha não derruba a janela: segue só com o que foi pedido.
+    const chamarGancho = async (gancho, ...args) => { try { return (await gancho(...args)) || {}; } catch (_) { return {}; } };
+    let dados = { chamado: String(chamado || ""), serie: String(serie || ""), os: String(os || ""), avisoChamado: "" };
+    if (resolver) {
+      const achado = await chamarGancho(resolver);
+      if (pedido !== janelaChamadoOs.pedido) return;
+      dados = { ...dados, ...Object.fromEntries(["chamado", "serie", "os", "avisoChamado"].filter(chave => achado[chave]).map(chave => [chave, String(achado[chave])])) };
+    }
+    const cartao = dados.chamado ? await app.cartaoChamadoSebraeLeitura?.(dados.chamado) : null;
     if (pedido !== janelaChamadoOs.pedido) return;
     if (cartao) hostChamado.replaceChildren(cartao);
-    else if (chamado) renderEmpty(hostChamado, "Chamado não encontrado na aba Chamados (F5).");
+    else if (dados.chamado) renderEmpty(hostChamado, "Chamado não encontrado na aba Chamados (F5).");
+    else if (dados.avisoChamado) renderEmpty(hostChamado, dados.avisoChamado);
     else hostChamado.replaceChildren();
-    const alvo = { serie: String(serie || cartao?.dataset.serie || ""), os: String(os || cartao?.dataset.os || "") };
-    if (!alvo.os) return renderEmpty(hostOs, "Nenhuma OS vinculada por série na importação atual.");
+    // "—" no cartão do F5 é "sem OS"; a série do cartão só acompanha a OS do próprio cartão.
+    const osCartao = String(cartao?.dataset.os || "").replace(/^—$/, "");
+    const alvo = dados.os ? { serie: dados.serie, os: dados.os }
+      : { serie: dados.serie || (osCartao ? String(cartao?.dataset.serie || "") : ""), os: osCartao };
+    if (!alvo.os && reservaOs && dados.chamado) {
+      // A OS do cartão do F5 vence; só sem ela vale o vínculo salvo.
+      const reserva = await chamarGancho(reservaOs, dados.chamado);
+      if (pedido !== janelaChamadoOs.pedido) return;
+      if (reserva.os) { alvo.os = String(reserva.os); alvo.serie = String(reserva.serie || dados.serie || ""); }
+      else if (reserva.aviso) return renderEmpty(hostOs, String(reserva.aviso));
+    }
+    if (!alvo.os) {
+      // Chamado que nem existe na F5 e sem OS: só o aviso à esquerda; com o cartão, a frase de sempre.
+      if (cartao || !dados.chamado) renderEmpty(hostOs, "Nenhuma OS vinculada por série na importação atual.");
+      else hostOs.replaceChildren();
+      return;
+    }
     let relatorio = null;
     const section = dataPanels()?.montarTabelaOs?.(hostOs, {
-      semBusca: true, soOs: { ...alvo, chamado: String(chamado || "") }, somenteLeitura: true,
+      semBusca: true, soOs: { ...alvo, chamado: dados.chamado, ...(resolver || reservaOs ? { lembrete: true } : {}) }, somenteLeitura: true,
       aoCarregar: report => { relatorio = report; },
       aoExpandirSerie: (serieLinha, cell) => renderTicketDetail(
         (Array.isArray(relatorio?.chamados) ? relatorio.chamados : []).find(record => String(record.serie || "") === serieLinha),
@@ -2227,16 +2253,44 @@
     app.fecharModalAcessivel("modal-chamado-os");
     byId("chamado-os-janela-chamado").replaceChildren();
     byId("chamado-os-janela-os").replaceChildren();
-    // A F5 ou a F6 pode ter se redesenhado com a janela aberta: o foco volta ao botão equivalente.
-    if (gatilho && !gatilho.isConnected && gatilho.matches?.(".ticket-os-link-goto")) {
+    // A F5, a F6 ou a lista de Lembretes pode ter se redesenhado com a janela aberta: o foco volta ao botão equivalente.
+    const seletorGatilho = [".ticket-os-link-goto", ".lembretes__ref"].find(seletor => gatilho?.matches?.(seletor));
+    if (gatilho && !gatilho.isConnected && seletorGatilho) {
       const args = gatilho.getAttribute("data-args");
-      [...document.querySelectorAll("button.ticket-os-link-goto")].find(botao => botao.getAttribute("data-args") === args)?.focus();
+      [...document.querySelectorAll(`button${seletorGatilho}`)].find(botao => botao.getAttribute("data-args") === args)?.focus();
     } else if (gatilho && !gatilho.isConnected && chamado) {
       const artigo = [...document.querySelectorAll("article.sebrae-chamado[data-numero]")].find(item => item.dataset.numero === chamado);
       const destino = artigo?.querySelector(".sebrae-chamado__os");
       if (destino && !destino.closest("details:not([open])")) destino.focus();
       else artigo?.closest("details")?.querySelector("summary")?.focus();
     }
+  }
+
+  // Link de um lembrete (Ferramentas > Lembretes): abre a janela Chamado × OS sem trocar de aba. Só GETs que já existem
+  // (vínculos de OS e /api/sebrae/novos); falha de leitura segue só com o que foi pedido, sem quebrar a janela.
+  const lerSemFalhar = (url, mensagem) => apiFetch(url, { errorMessage: mensagem }).catch(() => null);
+  const lerVinculosOs = () => lerSemFalhar("/api/operacoes/chamados/vinculos-os", "Não foi possível consultar os vínculos de OS.").then(dados => dados?.vinculos || []);
+  function abrirReferenciaLembrete({ tipo, numero } = {}, gatilho = null) {
+    const modelo = context.chamadosOsModel;
+    const alvo = String(numero || "");
+    if (!modelo || !alvo) return undefined;
+    if (tipo === "chamado") {
+      // A OS do cartão do F5 vence (a janela a usa); sem ela, o vínculo salvo pelo chamado exato.
+      const reservaOs = async chamado => {
+        const achado = modelo.osDoChamado(chamado, { vinculos: await lerVinculosOs() });
+        if (achado?.ambiguo) return { aviso: `Mais de uma OS ligada a este chamado (${achado.ambiguo.join(", ")}). Abra pela aba OS (F6).` };
+        return achado ? { os: achado.os, serie: achado.serie } : null;
+      };
+      return abrirJanelaChamadoOs({ chamado: alvo, reservaOs }, gatilho);
+    }
+    if (tipo !== "os") return undefined;
+    const resolver = async () => {
+      const [vinculos, sebrae] = await Promise.all([lerVinculosOs(), lerSemFalhar("/api/sebrae/novos", "Não foi possível consultar os chamados do Sebrae.")]);
+      const achado = modelo.chamadoDaOs(alvo, { vinculos, sebrae });
+      if (achado?.ambiguo) return { avisoChamado: `OS ligada a mais de um chamado (${achado.ambiguo.join(", ")}).` };
+      return achado ? { chamado: achado.chamado, serie: achado.serie } : null;
+    };
+    return abrirJanelaChamadoOs({ os: alvo, resolver }, gatilho);
   }
 
   // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
@@ -2258,6 +2312,7 @@
     abrirChamadosDoEquipamento,
     abrirChamadoDaOs,
     abrirJanelaChamadoOs,
+    abrirReferenciaLembrete,
     fecharJanelaChamadoOs,
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
