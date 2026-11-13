@@ -195,6 +195,22 @@ Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere 
 - O modal `#modal-historico-apelidos` (e `abrirModalHistoricoApelidos`) foi removido em 31/10/2026 por pedido do usuário: o painel F8 (`data-cockpit-tool-panel="apelidos"`, em `static/js/features/cockpit-tool-panels.js`) é o histórico completo. As ações de restaurar/excluir ficam em `static/js/features/alias-history.js` (`acoesEventoHistorico`, `desfazerEventoHistoricoApelidos`, `excluirRegistroHistorico`). Não recrie o modal; a API `/api/historico-alteracoes` não mudou.
 - O menu Ferramentas não tem mais o grupo "Planilhas": `Atualizar planilhas` (`#btn-atualizar-planilhas`) saiu (o modal abre por **Nova comparação** na aba Comparação, pelo `Importar` da Home e pelo alerta `Atualizar base`) e `Exportar Excel` (`#btn-exportar-equipamentos`, exportação do modelo com Apelido/IdCliente) passou para a barra da aba Comparação, com a mesma lógica de exibição (`static/js/features/dashboard.js`) e o rótulo visível `Exportar Excel`.
 
+## Sub-aba Backups do Resumo (F3, 12/11/2026)
+
+Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups`; `static/js/features/backups-regionais.js`). Mostra o campo `backups_regionais` de `GET /api/painel` (contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)"); o módulo não consulta o painel, escuta `simpress:painel-atualizado`.
+
+- Funciona sem comparação importada e com qualquer evento selecionado: não depende de `ultima_comparacao` nem do histórico.
+- Teclado: `Setas`, `Home` e `End` movem o foco entre as abas do Resumo.
+- Em 1200 px ou mais, tabela; abaixo disso, cards com os mesmos dados e ações; sem rolagem horizontal de 320 px a 2560 px.
+- Abaixo de 600 px as seis abas do Resumo ficam em duas linhas de três (`.resumo-abas` com `flex-wrap`), para nenhum rótulo ser cortado.
+- Comparação nova, aberta do histórico ou navegação por série com a aba Backups aberta volta a Divergências antes de mostrar o resultado.
+- Depois de um redesenho, o foco volta ao mesmo botão, ao botão da mesma série e cidade (Confirmar vira Desfazer), ao resumo `N excluídos` que estava em foco ou, sem par, à aba Backups.
+- Botões `Confirmar disponível por 7 dias` e `Desfazer confirmação`; a tela pede a atualização do painel depois de cada ação (`simpress:atualizar-notificacoes`).
+- O apelido aparece só na tela local: nunca em toast, `console`, região `aria-live` global, log nem Assistente. Todo texto vindo do campo é escapado.
+- Ao fim da automação de inventário, o botão `Ver backups no Resumo` (`#automacao-ver-backups`) abre essa sub-aba (`openPanel("comparacao","backups")`).
+- Cartão do sino (`#alerta-backups-regionais`): `docs/operacao/alertas-os-divergencias.md`, seção 5.
+- Fixture dos e2e (`tests/support/serve_ui_motion_preview.py`): `GET /__fixture_backups?estado=padrao|so_conferir|nulo|indisponivel` reinicia o estado em memória; `POST /api/backups-regionais/confirmar` e `/desfazer` mudam esse estado. Séries `TSTBK*` e apelidos `Estacao Teste N` são fictícios.
+
 ## `index.html` dividido em partials (10/11/2026)
 
 Para reduzir conflitos entre sessões paralelas, trechos grandes do `static/index.html` ficam em `frontend/partials/<nome>.html`, fora de `static/` (não são servidos sozinhos). No `index.html`, uma linha que contém só `<!-- include: partials/<nome>.html -->` é trocada pelo arquivo inteiro antes de a página sair; o navegador recebe o mesmo HTML de antes, byte a byte.

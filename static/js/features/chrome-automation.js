@@ -644,6 +644,12 @@
     mostrarEstado(dados);
     acrescentarLinhas(dados.log);
     atualizarBotoes();
+    // Inventários concluídos: atalho para a sub-aba Backups do Resumo; some quando uma nova rotina começa.
+    const verBackups = document.getElementById("automacao-ver-backups");
+    if (verBackups) {
+      if (estado.emAndamento) verBackups.hidden = true;
+      else if (estavaAtivo && (rotinaAnterior === "inventarios" || rotinaAnterior === "ambas") && dados.ultima?.status === "concluido") verBackups.hidden = false;
+    }
     // A leitura dos chamados novos acabou: a lista da tela já pode mostrar o resultado.
     if (estavaAtivo && !estado.emAndamento && (rotinaAnterior === "sebrae" || rotinaAnterior === "dashboard")) app.carregarNovosSebrae?.();
     const ultimaId = dados.ultima?.id || "";

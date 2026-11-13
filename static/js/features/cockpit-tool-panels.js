@@ -544,6 +544,7 @@
     const category = String(categoria || "").trim();
     pendingComparisonTarget = value ? (category ? { serial: value, category } : { serial: value }) : null;
     selectedComparisonId = "";
+    app.selecionarAbaResumo?.("divergencias"); // sai de Backups: o resultado pedido aparece mesmo com o painel já aberto
     await openPanel("comparacao");
     pendingComparisonTarget = null;
   }
@@ -555,6 +556,7 @@
     pendingComparisonTarget = navigationTarget;
     pendingFreshComparison = eventId ? null : comparison;
     selectedComparisonId = eventId;
+    app.selecionarAbaResumo?.("divergencias"); // sai de Backups: o resultado pedido aparece mesmo com o painel já aberto
     await openPanel("comparacao");
     pendingComparisonTarget = null;
     pendingFreshComparison = null;
@@ -2102,6 +2104,7 @@
     const root = byId("cockpit-tool-panels");
     if (!root) return;
     const activeElement = document.activeElement;
+    const jaAberto = activeTool === tool;
     if (!activeTool) returnTarget = activeElement?.closest?.(".ck-aba--painel, [data-cockpit-tool]") || byId("cockpit-tools-trigger") || activeElement;
     if (activeTool && activeTool !== tool && !goingBack) previousTool = activeTool;
     activeTool = tool;
@@ -2127,11 +2130,17 @@
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
       const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
+      // Backups não depende da comparação: abre já (sem esperar a rede) e de novo depois, caso o render a tenha mexido.
+      // A primeira abertura do painel (ou um pedido de outra aba) volta a Divergências; reabrir o painel já aberto sem aba mantém a aba atual.
+      if (aba === "backups") app.selecionarAbaResumo?.("backups");
+      else if (aba || !jaAberto) app.selecionarAbaResumo?.("divergencias");
       await loadComparisons();
       await ativos;
       // O render acima volta a Divergências (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
       // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Divergências).
-      if (aba && pedido === comparisonRequest && activeTool === "comparacao"
+      if (aba === "backups") {
+        if (pedido === comparisonRequest && activeTool === "comparacao") app.selecionarAbaResumo?.("backups");
+      } else if (aba && pedido === comparisonRequest && activeTool === "comparacao"
         && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
     }
     if (tool === "apelidos") await loadAliases();
