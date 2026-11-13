@@ -178,6 +178,35 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
                     self.assertNotIn("SEGREDO", resposta.text)
         self.assertFalse(self.state.exists())
 
+    def test_falha_passageira_de_leitura_responde_409_e_nao_503(self):
+        self.semear({"esquema": 1, "confirmacoes": []})
+        # Desfazer não lê antes na rota: a leitura prévia do store também transforma o erro passageiro em 409 (não 500).
+        for caminho in (CONFIRMAR, DESFAZER):
+            with self.subTest(caminho=caminho):
+                with mock.patch("pathlib.Path.read_text", side_effect=PermissionError("SEGREDO C:/Users/pessoa/arquivo.json")):
+                    resposta = self.client.post(caminho, json={"serie": "NB1", "cidade": "Cascavel"})
+                self.assertEqual(resposta.status_code, 409, resposta.text)
+                self.assertEqual(resposta.json()["detail"]["codigo"], "arquivo_ocupado")
+                self.assertNotIn("SEGREDO", resposta.text)
+                self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": []})
+
+    def test_gravar_poda_expiradas_antigas_e_mantem_a_recem_expirada(self):
+        def registro(serie, cidade, expirou_ha):
+            expira = AGORA - timedelta(days=expirou_ha)
+            return {
+                "serie": serie, "cidade": cidade,
+                "confirmado_em": (expira - timedelta(days=7)).isoformat(timespec="seconds"),
+                "expira_em": expira.isoformat(timespec="seconds"),
+            }
+        recente, antiga = registro("NB2", "Londrina", 1), registro("VELHA", "Cascavel", 8)
+        self.semear({"esquema": 1, "confirmacoes": [recente, antiga]})
+        self.post(CONFIRMAR)
+        self.assertEqual([r["serie"] for r in self.arquivo()["confirmacoes"]], ["NB2", "NB1"])
+        # Desfazer uma antiga devolve removido: true (a poda vem depois) e ela sai do arquivo.
+        self.state.write_text(json.dumps({"esquema": 1, "confirmacoes": [recente, antiga]}), encoding="utf-8")
+        self.assertTrue(self.post(DESFAZER, serie="VELHA")["removido"])
+        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [recente]})
+
     def test_confirmacao_expirada_e_substituida_por_uma_nova(self):
         self.semear({"esquema": 1, "confirmacoes": [{
             "serie": "NB1", "cidade": "Cascavel",

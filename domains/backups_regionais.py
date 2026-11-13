@@ -225,7 +225,11 @@ def build_backups_regionais(
             grupo["excluidos"].append(excluido)
         elif duplicada or motivo_marca:
             grupo["conferencia"].append(
-                {"serie": serie, "apelido": apelido, "motivo": "serie_duplicada" if duplicada else motivo_marca}
+                {
+                    "serie": serie, "apelido": apelido, "motivo": "serie_duplicada" if duplicada else motivo_marca,
+                    # Confirmação gravada continua desfazível mesmo sem contar aqui.
+                    "confirmacao": confirmacao_vigente or confirmacao_invalidada,
+                }
             )
         elif (marca_valida and recente) or confirmacao_vigente:
             por_marca = marca_valida and recente
@@ -234,7 +238,8 @@ def build_backups_regionais(
                 "apelido": apelido,
                 "origem": "marca" if por_marca else "confirmacao",
                 "ultima_verificacao": verificacao.isoformat() if verificacao is not None and presente else None,
-                "confirmado_ate": None if por_marca else confirmacao_vigente["expira_em"] if confirmacao_vigente else None,
+                # Com marca e confirmação, a origem é a marca, mas a confirmação continua visível (e desfazível).
+                "confirmado_ate": confirmacao_vigente["expira_em"] if confirmacao_vigente else None,
                 "confirmacao": confirmacao_vigente,
             })
         else:

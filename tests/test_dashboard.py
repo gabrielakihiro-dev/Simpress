@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -8,7 +9,12 @@ from fastapi.testclient import TestClient
 
 from domains.coverage import Manutencao
 from domains.effective_alias import build_endpoint_alias_index
-from routers.backups_regionais import LIMITACAO_CONFIRMACOES, BackupsRegionaisServices, ler_painel_backups
+from routers.backups_regionais import (
+    LIMITACAO_CONFIRMACOES,
+    LIMITACAO_CONFIRMACOES_INDISPONIVEIS,
+    BackupsRegionaisServices,
+    ler_painel_backups,
+)
 from routers.dashboard import DashboardServices, create_dashboard_router
 
 CATEGORIES = ({"value": "notebook", "label": "Notebooks"}, {"value": "monitor", "label": "Monitores"})
@@ -175,6 +181,16 @@ class DashboardBackupsRegionaisTests(unittest.TestCase):
         self.assertEqual(campo["fontes"]["confirmacoes"], "ilegivel")
         self.assertIn(LIMITACAO_CONFIRMACOES, campo["limitacoes"])
         self.assertEqual(self.state.read_text(encoding="utf-8"), "{ isto não é json")
+
+    def test_falha_passageira_ao_ler_confirmacoes_vira_indisponivel_e_nao_ilegivel(self):
+        self.state.write_text('{"esquema": 1, "confirmacoes": []}', encoding="utf-8")
+        with mock.patch("pathlib.Path.read_text", side_effect=PermissionError("C:/Users/pessoa/arquivo.json")):
+            with self.assertLogs("routers.backups_regionais", level="WARNING") as logs:
+                campo = ler_painel_backups(self.services())
+        self.assertEqual(campo["fontes"]["confirmacoes"], "indisponivel")
+        self.assertIn(LIMITACAO_CONFIRMACOES_INDISPONIVEIS, campo["limitacoes"])
+        self.assertNotIn(LIMITACAO_CONFIRMACOES, campo["limitacoes"])
+        self.assertFalse(any("pessoa" in linha for linha in logs.output))
 
     def test_confirmacoes_lidas_marcam_fonte_ok_sem_limitacao(self):
         campo = self.painel(self.services()).json()["backups_regionais"]

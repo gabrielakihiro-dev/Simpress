@@ -1338,6 +1338,8 @@
         if (serial === requestSerial) {
           renderBadge(0);
           renderizarFalhaNotificacoes();
+          // Quem espera o painel (Backups, F3) troca "aguardando" por "indisponível"; sem detalhe, nada pessoal.
+          doc.dispatchEvent(new win.CustomEvent("simpress:painel-indisponivel"));
         }
         win.console?.warn?.("Painel indisponível:", error?.message || error);
       }
