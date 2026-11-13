@@ -108,12 +108,12 @@ Sub-abas (tablist `Assuntos do relatório`, abaixo da barra de mês, acima do co
 | `rel-aba-sebrae` | `Chamados (F5)` | `rel-painel-sebrae` | Seção `Chamados (F5)`: `Situação atual` e `Com data em <mês>`. |
 | `rel-aba-base` | `Base atual` | `rel-painel-base` | Seção `Base atual`, com `Não muda com o mês`. |
 
-Contadores nas abas (`rel-os-contagem`, `rel-comp-contagem`, `rel-sebrae-contagem`), sempre iguais ao número de linhas da lista da própria aba:
+Contadores nas abas (`rel-os-contagem`, `rel-comp-contagem`, `rel-sebrae-contagem`), com o total de linhas do mês na fonte da aba (o filtro `Todas`/`Pendentes` da OS não muda o contador):
 
 - OS: linhas de `os.linhas`; tom de alerta quando for maior que zero.
 - Pendências da comparação: linhas de `comparacao.linhas`; tom de alerta quando for maior que zero.
 - Chamados (F5): linhas da contagem do mês (`report.sebrae.linhas`); tom neutro, porque só informa.
-- `Visão geral` e `Base atual` não têm contador. Se a fonte não veio (sem Dashboard, erro, carregando), o contador fica oculto: nunca aparece `0` inventado nem o número do mês anterior.
+- `Visão geral` e `Base atual` não têm contador. Se a fonte não veio (sem Dashboard, erro, carregando), o contador fica oculto e nunca mostra o número do mês anterior. Sem nenhuma comparação, o servidor devolve lista vazia e a aba mostra `0`.
 
 Textos novos: `Visão geral` e `Ver chamados →` (botão da faixa `Chamados (F5)`). Os outros rótulos já eram textos aprovados e não mudaram. `Ver lista ↓` (OS e comparação) e `Ver chamados →` trocam para a aba certa e levam o foco ao título da seção; `Ver lista ↓` da OS abre a aba já filtrada em `Pendentes`.
 
@@ -121,7 +121,7 @@ IDs novos: `rel-aba-*`, `rel-painel-*`, `rel-*-contagem`, `cockpit-monthly-estad
 
 Comportamento:
 
-- Abre em `Visão geral`. A aba escolhida fica ao mudar o mês e ao recarregar em silêncio (importar OS ou nova comparação com o F8 aberto), junto com o filtro da OS. Carregando e erro aparecem em `cockpit-monthly-estado`, com as abas sempre à vista.
+- Abre em `Visão geral` só na primeira abertura do F8. A aba escolhida fica ao mudar o mês, ao recarregar em silêncio (importar OS ou nova comparação com o F8 aberto) e ao fechar e reabrir o F8 na mesma carga da página. O filtro da OS fica só na recarga silenciosa; ao mudar o mês, volta a `Todas`. Carregando e erro aparecem em `cockpit-monthly-estado`, com as abas sempre à vista.
 - Teclado, mesmo molde da F6: `role=tablist` / `tab` / `tabpanel`, `aria-selected`, `tabindex` rotativo (só a aba ativa entra na ordem do Tab), setas circulares, `Home` e `End`; focar uma aba pelas setas a ativa.
 - Telas pequenas: a tablist rola sozinha na horizontal (a página nunca rola); em ponteiro grosso cada aba tem no mínimo 44px de altura.
 
