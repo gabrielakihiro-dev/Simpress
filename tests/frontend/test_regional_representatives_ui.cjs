@@ -353,3 +353,13 @@ test("saving in the dialog follows the same rule: edited fields are kept with a 
     ["Representante salvo.", "success"],
   ]);
 });
+
+test("warns once when the local defaults file is invalid", async t => {
+  const env = setup({ fetchImpl: async () => ({ ok: true, json: async () => ({ alteracoes: {}, padroes: PADROES, arquivo_invalido: false, padroes_arquivo_invalido: true }) }) });
+  t.after(env.restore);
+  await env.feature.carregarRepresentantesRegionais();
+  await env.feature.carregarRepresentantesRegionais(true);
+  assert.deepEqual(env.toasts, [
+    ["O arquivo local de padrões dos representantes está inválido: nomes, e-mails e telefones ficaram em branco e não é possível salvar edições até corrigi-lo.", "warning"],
+  ]);
+});
