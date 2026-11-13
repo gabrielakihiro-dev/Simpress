@@ -8,7 +8,7 @@ Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto 
 - Colunas Q, T, U e V da `Tabela3` são fórmulas: nunca grave valor nelas; W não se toca; C nunca é reescrita; campo em branco nunca apaga o existente (`sebrae_dashboard_gravacao.py`). Doc: o mesmo.
 - Observação e destaque ficam só em `data/state/sebrae_observacoes.json` e nunca vão a planilha, SharePoint nem SoftExpert (`sebrae_observacoes.py`). Doc: o mesmo.
 - Finalizar chamado é irreversível e só roda por pedido do usuário, um a um; descrição vazia é recusada antes de qualquer clique (`sebrae_finalizacao.py`). Doc: o mesmo.
-- Sugestão de B e J nunca é salva sozinha; IA opcional só com `SIMPRESS_SUGESTAO_IA=1` e texto mascarado (`sebrae_categoria*.py`). Doc: o mesmo.
+- Sugestão de A, B e J nunca é salva sozinha; IA opcional só com `SIMPRESS_SUGESTAO_IA=1` e texto mascarado (`sebrae_categoria*.py`). Doc: o mesmo.
 - Chamado encerrado vai para `data/state/sebrae_chamados_encerrados.json` sem texto nem nome; falha ao gravar bloqueia a importação (`sebrae_arquivo.py`). Doc: o mesmo.
 
 ## OS (F6)

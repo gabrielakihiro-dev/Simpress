@@ -785,15 +785,15 @@
         [novo, seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
     }
 
-    /** Sugestão do servidor para B (Categoria) ou J (Tipo) de chamado novo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
+    /** Sugestão do servidor para A (Responsável), B (Categoria) ou J (Tipo) de chamado novo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
     function sugestaoManual(item, letra) {
       if (ehApiSebrae(item.linha?.I)) return "";
-      const valor = letra === "B" ? item.sugestao_categoria : letra === "J" ? item.sugestao_tipo : "";
+      const valor = { A: item.sugestao_responsavel, B: item.sugestao_categoria, J: item.sugestao_tipo }[letra];
       return typeof valor === "string" ? valor.trim() : "";
     }
 
     /**
-     * Campo manual de chamado novo. Em B e J, com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
+     * Campo manual de chamado novo. Em A, B e J, com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
      * `Sugestão: <valor>` + `Usar` abaixo do campo. Nada é preenchido nem salvo sem o clique em `Usar`.
      * Escolher à mão qualquer valor esconde o chip; voltar a vazio o mostra de novo.
      * shortcut: a sugestão de J vem do servidor já calculada com a sugestão de B; mudar B na tela não a recalcula, só ao recarregar a lista.

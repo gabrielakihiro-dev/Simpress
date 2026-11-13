@@ -3106,19 +3106,20 @@ class SugestaoCategoriaSebraeTest(unittest.TestCase):
 
     def test_sugestoes_chegam_ao_assistente(self) -> None:
         dados = self.resposta([
-            {"numero": "UTIC-2026-0001", "titulo": "Mouse quebrado", "sugestao_categoria": "PERIFÉRICO", "sugestao_tipo": "INCIDENTE"},
+            {"numero": "UTIC-2026-0001", "titulo": "Mouse quebrado", "sugestao_responsavel": "SIMPRESS", "sugestao_categoria": "PERIFÉRICO", "sugestao_tipo": "INCIDENTE"},
             {"numero": "UTIC-2026-0002", "titulo": "Alerta", "sugestao_categoria": None, "sugestao_tipo": None},
         ])
         por_numero = {c["numero"]: c for c in dados["chamados"]}
         self.assertEqual((por_numero["UTIC-2026-0001"]["sugestao_categoria"], por_numero["UTIC-2026-0001"]["sugestao_tipo"]), ("PERIFÉRICO", "INCIDENTE"))
         self.assertEqual((por_numero["UTIC-2026-0002"]["sugestao_categoria"], por_numero["UTIC-2026-0002"]["sugestao_tipo"]), ("", ""))
+        self.assertEqual((por_numero["UTIC-2026-0001"]["sugestao_responsavel"], por_numero["UTIC-2026-0002"]["sugestao_responsavel"]), ("SIMPRESS", ""))
 
     def test_descricao_e_prompt_dizem_que_e_so_sugestao(self) -> None:
         descricao = TOOLS["chamados_novos_sebrae"].description
-        for trecho in ("sugestao_categoria", "sugestao_tipo", "confirma na tela"):
+        for trecho in ("sugestao_responsavel", "sugestao_categoria", "sugestao_tipo", "confirma na tela"):
             self.assertIn(trecho, descricao)
         self.assertNotIn("chamados_novos_sebrae", [t.name for t in CHANGE_TOOLS])
-        for trecho in ("`sugestao_categoria`", "`sugestao_tipo`", "`Usar`", "Você não grava B nem J"):
+        for trecho in ("`sugestao_responsavel`", "`SIMPRESS`", "`sugestao_categoria`", "`sugestao_tipo`", "`Usar`", "Você não grava A, B nem J"):
             self.assertIn(trecho, SYSTEM_PROMPT)
 
 
