@@ -105,7 +105,7 @@ Aprovado pelo usuário em 13/11/2026 (proposta C, "Híbrido: painel de ações �
 - Abaixo de 1200px as colunas empilham na ordem do DOM (dados, modelos de chamado, Ações, Chamados abertos), sem rolagem horizontal de 320px a 2560px.
 - Os códigos prontos do PowerShell (`GET /api/endpoint/powershell/codigos`) são buscados na primeira seleção de equipamento (`exibirEquipamento`) e ficam em memória; se a carga falhar, a próxima seleção tenta de novo e o erro some quando uma carga dá certo; o hostname continua preenchido com o apelido a cada seleção. O `data-on-toggle="aoAbrirPowerShellEndpoint"` deixou de existir.
 
-#### Grade de dados 4×2
+#### Grade de dados 4×2 (2 colunas entre 1200px e 1399px)
 
 | Série | Apelido | Usuário | Login |
 |-------|---------|---------|-------|
