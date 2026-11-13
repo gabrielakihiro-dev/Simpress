@@ -84,6 +84,7 @@ O usuário é leigo em back-end e front-end, mas conhece Git. Comece pelo resumo
 | Assistente (F9) | `domains/AGENTS.md` | `docs/cockpit-prompts/15-assistente.md` |
 | Histórico e cadastro | `domains/AGENTS.md` | `docs/operacao/regras-cadastro-historico.md` |
 | Cobertura (F10) | `domains/AGENTS.md` | `docs/cockpit-prompts/16-cobertura.md` |
+| Backups regionais (Resumo F3) | `domains/AGENTS.md` | `docs/cockpit-prompts/05-resumo-kpis.md`, `docs/arquitetura/CONTRATOS_API_BACKEND.md` |
 | Transporte, representantes (F2) | `domains/AGENTS.md` | `docs/arquitetura/CONTRATOS_API_BACKEND.md` |
 | Contratos de API | `routers/AGENTS.md` | `docs/arquitetura/CONTRATOS_API_BACKEND.md` |
 | Testes e verificação | `tests/AGENTS.md` | `docs/desenvolvimento/regras-agentes.md` |

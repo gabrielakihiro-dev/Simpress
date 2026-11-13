@@ -187,3 +187,27 @@
   .lembretes__item, .lembretes__edicao, .lembretes__concluidos .lembretes__lista, .lembretes__texto, .lembretes__marcar::before, .lembretes__marcar::after, .lembretes__acao, .lembretes__seta,
   .lembretes__data-painel, .lembretes__grupo, .lembretes__atalho, .lembretes__nav, .lembretes__dia, .lembretes__adicionar-dia { animation: none; transition: none; }
 }
+
+/* Bloco "Dados do termo" (12/11/2026): cópia salva do termo, recolhível, com Gerar PDF e Preencher no Termo. */
+.lembretes__termo { margin-top: 6px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie-funda); min-width: 0; }
+.lembretes__termo-resumo { display: flex; align-items: center; min-height: var(--altura-controle); padding: 0 10px; color: var(--cor-texto-mudo); font: var(--peso-medio) var(--fs-md)/1.2 var(--fonte-corpo); cursor: pointer; transition: color var(--duracao) var(--curva); }
+.lembretes__termo-resumo:hover { color: var(--cor-texto); }
+.lembretes__termo[open] > .lembretes__termo-resumo { border-bottom: 1px solid var(--cor-borda-suave); }
+.lembretes__termo[open] > :not(summary) { animation: ck-surgir var(--duracao) var(--curva); }
+.lembretes__termo-secao { display: grid; gap: 4px; padding: 8px 10px 0; min-width: 0; }
+.lembretes__termo-titulo { margin: 0; font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
+.lembretes__termo-campos { display: grid; gap: 2px; margin: 0; }
+.lembretes__termo-linha { display: grid; grid-template-columns: minmax(0, 22em) minmax(0, 1fr); gap: 8px; font-size: var(--fs-sm); }
+.lembretes__termo-linha dt { color: var(--cor-texto-sutil); overflow-wrap: anywhere; }
+.lembretes__termo-linha dd { margin: 0; color: var(--cor-texto); overflow-wrap: anywhere; }
+.lembretes__termo-obs { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+.lembretes__termo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px; }
+
+@container (max-width: 479px) {
+  .lembretes__termo-linha { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .lembretes__termo-acoes .ck-btn { flex: 1 1 0; min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lembretes__termo[open] > :not(summary), .lembretes__termo-resumo { animation: none; transition: none; }
+}

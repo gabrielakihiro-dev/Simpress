@@ -331,16 +331,28 @@
     document.querySelectorAll("#comparacao-planilhas-conteudo [data-resumo-painel]").forEach(painel => {
       painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
     });
+    // "Backups" não depende da comparação: o painel fixo fica fora do conteúdo recriado e, com ele aberto,
+    // o conteúdo inteiro (filtros e mensagem de vazio) e "Ativos por regional" saem de cena.
+    const noBackups = painelAtivo === "backups";
+    const painelBackups = document.getElementById("resumo-painel-backups");
+    if (painelBackups) painelBackups.hidden = !noBackups;
+    const conteudo = document.getElementById("comparacao-planilhas-conteudo");
+    if (conteudo) conteudo.hidden = noBackups;
+    const ativos = document.getElementById("resumo-ativos-secao");
+    if (ativos) ativos.hidden = noBackups;
   }
 
   // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
   function selecionarAbaResumo(chave, { foco = false } = {}) {
     if (!ABAS_RESUMO.includes(chave)) return;
-    if (chave !== estadoResumo.aba) estadoResumo.tipo = "";
+    const mudou = chave !== estadoResumo.aba;
+    if (mudou) estadoResumo.tipo = "";
     estadoResumo.aba = chave;
     aplicarAbaResumo();
     atualizarResumo?.();
     if (foco) elementoAbaResumo(chave)?.focus();
+    // Pede dados novos só na chegada à aba (openPanel seleciona duas vezes e não pode gerar dois refresh).
+    if (mudou && chave === "backups") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
   }
 
   function conectarAbasResumo() {
@@ -372,11 +384,14 @@
   }
 
   // Back to the empty state: tab "Divergências" (where F3 and the alert land), no filters, zeroed counters, no notice from the previous result.
+  // "Backups" não é da comparação: a aba aberta continua aberta e o selo dela (escrito por backups-regionais.js) não é zerado.
   function limparAbasResumo() {
+    const abaAtual = estadoResumo.aba;
     Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);
+    if (abaAtual === "backups") estadoResumo.aba = "backups";
     atualizarResumo = null;
     desconectarObservadoresAnotacoes();
-    ABAS_RESUMO.filter(chave => chave !== "visao").forEach(chave => escreverContagemAba(chave, 0, false));
+    ABAS_RESUMO.filter(chave => chave !== "visao" && chave !== "backups").forEach(chave => escreverContagemAba(chave, 0, false));
     const avisos = document.getElementById("comparacao-planilhas-avisos");
     if (avisos) avisos.innerHTML = "";
     const barra = document.querySelector(".resumo-abas-barra");
@@ -391,9 +406,10 @@
     conectarAbasResumo();
     const paineis = typeof content.querySelectorAll === "function" ? [...content.querySelectorAll("[data-resumo-painel]")] : [];
     const comPaineis = paineis.length > 0;
+    // A barra fica sempre visível: a aba Backups existe com ou sem comparação.
     const barraAbas = document.querySelector(".resumo-abas-barra");
-    if (barraAbas) barraAbas.hidden = !comPaineis;
-    if (comPaineis) aplicarAbaResumo();
+    if (barraAbas) barraAbas.hidden = false;
+    if (comPaineis || estadoResumo.aba === "backups") aplicarAbaResumo();
 
     const filterBar = content.querySelector("[data-history-filter-bar]");
     if (!filterBar && !comPaineis) return;

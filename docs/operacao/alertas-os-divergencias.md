@@ -1,6 +1,6 @@
-# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias" e "Chamados finalizados por outro técnico"
+# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias", "Chamados finalizados por outro técnico" e "Backups regionais"
 
-Exibe quatro alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos quatro grava nada: os históricos de OS e de planilhas e as marcas de OS finalizada são apenas lidos.
+Exibe cinco alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos cinco grava nada: os históricos de OS e de planilhas, as marcas de OS finalizada e as confirmações de backup são apenas lidos (confirmar e desfazer backup acontecem na sub-aba Backups do Resumo, não no sino).
 
 ## 1. OS paradas
 
@@ -190,10 +190,37 @@ O texto é o mesmo para um ou vários chamados. O cartão é `#alerta-chamados-o
 
 Com falha ao ler as marcas: `{"total": 0, "itens": [], "indisponivel": true}`. Sem a fonte configurada: `{"total": 0, "itens": []}`. Implementação do cartão: `renderizarAlertaChamadosOutroTecnico` em `static/js/features/dashboard.js`.
 
+## 5. Backups regionais
+
+### Objetivo
+
+Avisar quando uma regional prioritária está sem notebook de backup disponível ou tem só candidatos para o usuário conferir, sem precisar abrir o Resumo (F3). Cálculo e regras em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)".
+
+### Dados
+
+- Fonte: `backups_regionais.pendencias` em `GET /api/painel`, que o front recebe pelo evento `simpress:painel-atualizado` (`sem_backup` e `conferir` são listas de cidades).
+- Só leitura: o cartão não grava nada. `Confirmar disponível por 7 dias` e `Desfazer confirmação` ficam na sub-aba Backups do Resumo.
+
+### Quando aparece e quando some
+
+- Aparece com pelo menos uma cidade em `pendencias.sem_backup` (selo `Urgente`, `data-gravidade="urgente"`) ou, sem nenhuma, com pelo menos uma em `pendencias.conferir` (selo `Atenção`, `data-gravidade="atencao"`).
+- Some com as duas listas vazias, com o campo `null` (serviço desligado), com `indisponivel: true` ou quando o campo falta; o resto do painel continua carregando.
+- Entra no contador do sino: um aviso a mais, não uma unidade por cidade.
+- Depois de confirmar ou desfazer na sub-aba, o front pede a atualização do painel (`simpress:atualizar-notificacoes`) e o cartão acompanha o novo cálculo.
+
+### Texto
+
+| Título | Quando | Botão |
+| --- | --- | --- |
+| Sem backup disponível | há cidade em `pendencias.sem_backup` | Ver backups no Resumo |
+| Conferir possível backup | só há cidade em `pendencias.conferir` | Ver backups no Resumo |
+
+O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`, `vazio` ou `indisponivel`; lista `#alerta-backups-regionais-lista` com uma linha por cidade e situação, por exemplo `Cascavel — sem backup disponível`). O botão `#btn-alerta-backups-regionais` abre a sub-aba Backups do Resumo (`abrirPainelCockpit` com `["comparacao","backups"]`). O cartão nunca traz apelido nem série. Implementação: `renderizarAlertaBackupsRegionais` em `static/js/features/dashboard.js`.
+
 ## Interface
 
-- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 4 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
-- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas` e `#alerta-chamados-outro-tecnico` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 5 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas`, `#alerta-chamados-outro-tecnico` e `#alerta-backups-regionais` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
 - Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
@@ -209,3 +236,4 @@ Com falha ao ler as marcas: `{"total": 0, "itens": [], "indisponivel": true}`. S
 9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.
 10. Com equipamento com mais de 55 dias (e menos de 60) sem acesso, o sino mostra "Perto de 60 dias sem acesso"; com 60 dias ou mais, ou depois de sair para Ausentes no Endpoint, mostra "Passou de 60 dias sem acesso"; com tudo em dia, sem atualização ou histórico ilegível, o cartão fica oculto.
 11. Com pelo menos uma marca `Finalizado por outro técnico` ativa e sem `Conferido`, o sino mostra "Chamados finalizados por outro técnico" com `Atenção` e o botão "Ver na aba OS" abre a aba OS; depois de `Conferido` ou `Desfazer` na aba OS, ou com a lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso. Marcas de chamados finalizados pelo site nunca entram.
+12. Com pelo menos uma regional prioritária em `pendencias.sem_backup`, o sino mostra "Sem backup disponível" com `Urgente`; só com `pendencias.conferir`, mostra "Conferir possível backup" com `Atenção`; o botão "Ver backups no Resumo" abre a sub-aba Backups; com as listas vazias, `null` ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.

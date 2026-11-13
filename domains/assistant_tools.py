@@ -652,6 +652,16 @@ QUERY_TOOLS: List[Tool] = [
         },
     ),
     _read(
+        "listar_backups_regionais",
+        "Backups regionais (Resumo F3, sub-aba Backups), somente leitura: se cada regional prioritária (Cascavel, Londrina, Pato Branco, Maringá, "
+        "Ponta Grossa) tem o mínimo de 1 notebook de backup. Retorna, por cidade, status (ok, conferir, sem_backup, dados_insuficientes), contados, "
+        "excedente, backups, candidatos e contagens de conferência e excluídos, além de sobras, candidatos de outras cidades "
+        "(`outras_candidatos`, cidades sem mínimo), pendências, fontes e limitações. "
+        "Não confirma nem desfaz backup (isso é na tela) e não altera nada.",
+        lambda c, a: c.listar_backups_regionais(a.get("cidade")),
+        {"cidade": {"type": "string", "description": "Cidade (ex.: 'Cascavel'; opcional, sem filtro traz as cinco regionais)."}},
+    ),
+    _read(
         "consultar_equipamento",
         "Detalhes de um equipamento pelo número de série (modelo, tipo, cidade, usuário). Trata MacBooks que venham sem a letra 'S'.",
         lambda c, a: c.consultar_equipamento(str(a.get("serial", ""))),
@@ -927,7 +937,9 @@ QUERY_TOOLS: List[Tool] = [
         "inicial, só quando única) se E está vazia; é só sugestão, nada é gravado fora de `Atualizar Dashboard`. "
         "`nao_encontrado_softexpert: true` = a última leitura (Ler chamados antigos) não achou o chamado na central de tarefas do "
         "SoftExpert (pode ter sido finalizado por outro técnico); o cartão fica vermelho com o selo `Não encontrado` para conferir "
-        "depois; não diga que foi finalizado, só que não foi encontrado. `solicitante` é quem abriu o chamado (coluna I) e `data` a "
+        "depois; não diga que foi finalizado, só que não foi encontrado. Só quando o usuário marca D=FINALIZADO com a DT ENCERRAMENTO (R) e manda "
+        "finalizar, a rotina registra o chamado como `finalizado_outro_tecnico` (aparece em `resultado_softexpert` de situacao_finalizacao_sebrae e "
+        "o chamado passa para a sub-aba Finalizados); sem R segue só `Não encontrado`. `solicitante` é quem abriu o chamado (coluna I) e `data` a "
         "data de abertura lida do SoftExpert (vazia se o chamado não foi lido). A lista traz no máximo 20 itens, na ordem da coluna C (a mesma da F5): "
         "`total_abertos` é o total, `encontrados` quantos passaram pela `busca` e `omitidos` quantos ficaram de fora. Para achar um "
         "chamado por pessoa, número, série ou palavra do título, passe `busca` (todas as palavras precisam aparecer); com o primeiro nome "
@@ -1642,6 +1654,7 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
     "recarregar": (r"\brecarreg|\brecarga\b|\bbase de dados", ("recarregar_base",)),
     "cobertura": (r"\bcobertura|\bfalt(?:a|ar|am|ara|ando)\b|\bvagas?\b|\bnecessidades?\b", ("listar_cobertura",)),
+    "backups": (r"\bbackups?\b|\bbkp\b", ("listar_backups_regionais",)),
 }
 _PADROES_GRUPOS = {nome: re.compile(padrao) for nome, (padrao, _) in GRUPOS_FERRAMENTAS.items()}
 _SIGLA_OS = re.compile(r"\bOS\b")  # case-sensitive on purpose: "os" is the Portuguese article

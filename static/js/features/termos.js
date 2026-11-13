@@ -63,6 +63,49 @@
     return { termo, campos, itens, obs: valor("obs") };
   }
 
+  // Dados salvos num lembrete ({campos, itens: ["sim"|"nao"|""], obs}) no mesmo formato de termosLerDados;
+  // os rótulos vêm daqui, nunca do arquivo. Formato estranho devolve null (o lembrete não mostra o bloco).
+  function termosDadosDoLembrete(origem, salvo) {
+    const t = Object.hasOwn(TERMOS, origem) ? TERMOS[origem] : null;
+    if (!t || !salvo || typeof salvo !== "object" || !salvo.campos || typeof salvo.campos !== "object" || !Array.isArray(salvo.itens)) return null;
+    const texto = (v) => (typeof v === "string" ? v : "");
+    const campos = {};
+    t.campos.forEach((nome) => { campos[nome] = texto(salvo.campos[nome]); });
+    const itens = t.itens.map((rotulo, i) => ({ rotulo, resposta: salvo.itens[i] === "sim" || salvo.itens[i] === "nao" ? salvo.itens[i] : "" }));
+    return { termo: origem, campos, itens, obs: texto(salvo.obs) };
+  }
+
+  // Seções do bloco "Dados do termo" do lembrete, com os títulos e rótulos do formulário; vazio vira "—".
+  function termosSecoesLembrete(origem, salvo) {
+    const dados = termosDadosDoLembrete(origem, salvo);
+    if (!dados) return null;
+    const c = dados.campos;
+    const entrega = origem === "entrega";
+    const v = (texto) => (String(texto).trim() ? texto : "—");
+    const colaborador = [
+      ["Nome do colaborador", v(c.nome)],
+      [entrega ? "Unidade / Departamento" : "Unidade", v(c.unidade)],
+      [entrega ? "Data da entrega / troca" : "Data", v(termosFormatarData(c.data))],
+    ];
+    if (!entrega) colaborador.push(["Modelo do computador", v(c.modelo)], ["Número de série", v(c.serie)]);
+    const secoes = [{ titulo: "Dados do colaborador", campos: colaborador }];
+    if (entrega) {
+      secoes.push({ titulo: "Identificação do equipamento", campos: [
+        ["Modelo do computador, equipamento anterior", v(c.modelo_anterior)],
+        ["Modelo do computador, equipamento entregue", v(c.modelo_entregue)],
+        ["Número de série / Service Tag, equipamento anterior", v(c.serie_anterior)],
+        ["Número de série / Service Tag, equipamento entregue", v(c.serie_entregue)],
+      ] });
+    }
+    const resposta = { sim: "Sim", nao: "Não", "": "—" };
+    secoes.push(
+      { titulo: entrega ? "Equipamentos e acessórios entregues" : "Equipamentos e acessórios devolvidos",
+        campos: dados.itens.map((item) => [item.rotulo, resposta[item.resposta]]) },
+      { titulo: "Observações", texto: v(dados.obs) },
+    );
+    return secoes;
+  }
+
   function criar(d, tag, classe, texto) {
     const el = d.createElement(tag);
     if (classe) el.className = classe;
@@ -252,18 +295,17 @@
   // Pedido em andamento (carregando a assinatura): novo clique é ignorado e Limpar o cancela.
   let pdfPendente = null;
 
-  async function termosGerarPdf(termo) {
+  // lerDados é chamado antes e depois da espera pela assinatura; aoFalhar recebe a mensagem de erro.
+  async function imprimirTermo(termo, lerDados, aoFalhar) {
     const d = doc();
     const folha = porId("termos-impressao");
     if (!d || !folha || pdfPendente) return;
-    if (!termosLerValidado(termo)) return;
-    avisar(termo, "");
+    if (!lerDados()) return;
     const pedido = (pdfPendente = { termo });
     const assinatura = await termosCarregarAssinatura(d);
     if (pdfPendente !== pedido) return;
     pdfPendente = null;
-    // Relê depois da espera: o formulário pode ter mudado (edição ou busca de série na Home).
-    const dados = termosLerValidado(termo);
+    const dados = lerDados();
     if (!dados) return;
     const serie = dados.campos[TERMOS[termo].campoSerie];
     if (encerrarImpressao) encerrarImpressao();
@@ -287,8 +329,63 @@
       window.print();
     } catch (erro) {
       encerrar();
-      avisar(termo, "Não foi possível abrir a janela de impressão.", true);
+      aoFalhar("Não foi possível abrir a janela de impressão.");
     }
+  }
+
+  function termosGerarPdf(termo) {
+    // Relê depois da espera: o formulário pode ter mudado (edição ou busca de série na Home).
+    const lerDados = () => {
+      const dados = termosLerValidado(termo);
+      if (dados) avisar(termo, "");
+      return dados;
+    };
+    return imprimirTermo(termo, lerDados, (texto) => avisar(termo, texto, true));
+  }
+
+  // PDF a partir dos dados salvos no lembrete: não lê nem muda o formulário do termo; erro vira toast.
+  function termosGerarPdfDoLembrete(origem, salvo) {
+    const dados = termosDadosDoLembrete(origem, salvo);
+    if (!dados) return Promise.resolve();
+    return imprimirTermo(origem, () => dados, (texto) => app.showToast(texto, "error"));
+  }
+
+  const temConteudo = (form) => [...form.querySelectorAll("input, textarea")]
+    .some((campo) => (campo.type === "radio" ? campo.checked : String(campo.value ?? "").trim() !== ""));
+
+  // Preenche o termo de origem com os dados do lembrete para editar; confirma antes se já houver algo digitado.
+  async function termosPreencherDoLembrete(origem, salvo) {
+    const dados = termosDadosDoLembrete(origem, salvo);
+    const form = dados ? porId(`termos-form-${origem}`) : null;
+    if (!form) return false;
+    if (temConteudo(form)) {
+      const confirmou = await app.confirmarAcao({
+        titulo: "Substituir o termo?",
+        mensagem: "Os campos do termo serão trocados pelos dados do lembrete.",
+        confirmar: "Substituir",
+        cancelar: "Cancelar",
+      });
+      if (confirmou !== true) return false;
+    }
+    if (pdfPendente?.termo === origem) pdfPendente = null;
+    form.reset();
+    // serieHome fica: a mesma série na Home não deve sobrescrever o que veio do lembrete.
+    form.querySelectorAll("[data-preenchido-home]").forEach((input) => { delete input.dataset.preenchidoHome; });
+    Object.entries(dados.campos).forEach(([nome, valor]) => {
+      const input = form.querySelector(`[name="${nome}"]`);
+      if (input) input.value = valor;
+    });
+    dados.itens.forEach((item, i) => {
+      if (!item.resposta) return;
+      const radio = form.querySelector(`input[name="item-${String(i + 1).padStart(2, "0")}"][value="${item.resposta}"]`);
+      if (radio) radio.checked = true;
+    });
+    const obs = form.querySelector('[name="obs"]');
+    if (obs) obs.value = dados.obs;
+    termosSelecionarAba(origem);
+    avisar(origem, "Termo preenchido com os dados do lembrete.");
+    form.querySelector("input")?.focus();
+    return true;
   }
 
   async function termosLimpar(termo) {
@@ -348,5 +445,6 @@
   return {
     termosSelecionarAba, termosTeclaAba, termosGerarPdf, termosLimpar, termosPreencherDoEquipamento,
     termosFormatarData, termosLimparParte, termosNomeArquivo, termosLerDados, termosLerValidado, termosMontarFolha,
+    termosDadosDoLembrete, termosSecoesLembrete, termosGerarPdfDoLembrete, termosPreencherDoLembrete,
   };
 });
