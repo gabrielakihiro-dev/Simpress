@@ -128,3 +128,7 @@ A linha em andamento recebe fundo `var(--color-accent-900)`.
 ## Desvio aprovado pelo usuário (etapa A, item 4)
 
 Os subtítulos de "Verificar usuários" e "Sincronizar chamados Sebrae" viraram dica ⓘ (`.info-tip`, sprite `#i-info`) à direita do título, com o texto integral no tooltip (`#tip-verificar-usuarios`, `#tip-sync-sebrae`).
+
+## Desvio aprovado pelo usuário (F4 Bloco 1, 12/11/2026)
+
+Barra do Chrome numa linha e as quatro rotinas em blocos pequenos numa só grade `.ck-rotinas` (`auto-fill`, `minmax(200px, 1fr)`), na ordem `Rotina de OS`, `Inventários`, `Verificar usuários`, `Rotina Completa`; `Verificar usuários` saiu da linha separada (`ck-linha-acao`, removida). O botão de cada rotina é só o ícone ▶ com `aria-label` (`Executar <rotina>`) e `title`; abaixo de 768px o bloco tem 56px, o botão 44x44 e o detalhe do Chrome some. Documento completo: `docs/operacao/automacao-chrome.md`.

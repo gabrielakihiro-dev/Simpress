@@ -15,6 +15,7 @@
     "shell",
     "dashboard",
     "resumoAtivos",
+    "backupsRegionais",
     "cockpitToolPanels",
     "regionalContacts",
     "transferForm",

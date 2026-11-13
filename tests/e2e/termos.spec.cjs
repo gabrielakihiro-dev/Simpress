@@ -195,6 +195,29 @@ for (const [termo, rotulo] of [["entrega", "Assinatura do técnico responsável"
     expect(sem.blocoTecnico).toBe(com.blocoTecnico);
     expect(sem.alturaDaFolha).toBe(com.alturaDaFolha);
   });
+
+  // Bug de 12/11/2026: na impressão, o fundo branco da folha pintava a <img>, que cobria a linha e o rótulo do técnico.
+  test(`folha impressa do termo de ${termo}: assinatura larga sai inteira, transparente e sem esconder o rótulo`, async ({ page }) => {
+    // Sintética, ~4,9:1 como a real (viewBox sem width/height), traço de ponta a ponta.
+    const svgLargo = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 122.3"><path d="M5 80 L595 40 L590 120" stroke="#000" stroke-width="4" fill="none"/></svg>';
+    await page.route("**/api/assinatura-tecnico", route => route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgLargo }));
+    await page.setViewportSize({ width: 794, height: 1123 }); // largura de A4 a 96 dpi, como na impressão
+    await abrirTermos(page);
+    await gerarPdf(page, termo);
+    await page.emulateMedia({ media: "print" });
+    const m = await page.evaluate(() => {
+      const img = document.querySelector("#termos-impressao img.tp__assinatura-img");
+      const bloco = img.closest(".tp__assinatura");
+      const i = img.getBoundingClientRect();
+      const b = bloco.getBoundingClientRect();
+      return { fundo: getComputedStyle(img).backgroundColor, proporcao: i.width / i.height, esquerda: i.left - b.left, direita: b.right - i.right, rotulo: bloco.textContent };
+    });
+    expect(m.fundo).toBe("rgba(0, 0, 0, 0)");
+    expect(Math.abs(m.proporcao - 600 / 122.3)).toBeLessThanOrEqual(0.1);
+    expect(m.esquerda).toBeGreaterThanOrEqual(0);
+    expect(m.direita).toBeGreaterThanOrEqual(0);
+    expect(m.rotulo).toBe(rotulo);
+  });
 }
 
 for (const status of [404, 422]) {

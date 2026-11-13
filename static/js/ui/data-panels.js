@@ -1242,9 +1242,14 @@
         || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
       const outroTecnico = data?.chamados_outro_tecnico;
       const outroTecnicoAtivo = !outroTecnico?.indisponivel && Number(outroTecnico?.total) > 0;
+      // Mesma regra do cartão #alerta-backups-regionais (dashboard.js): serviço ligado, sem falha e com regional pendente.
+      const backups = data?.backups_regionais;
+      const temRegional = lista => Array.isArray(lista) && lista.some(cidade => String(cidade ?? "").trim());
+      const backupsAtivo = Boolean(backups) && typeof backups === "object" && !backups.indisponivel
+        && (temRegional(backups.pendencias?.sem_backup) || temRegional(backups.pendencias?.conferir));
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
-        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo);
+        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(backupsAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";

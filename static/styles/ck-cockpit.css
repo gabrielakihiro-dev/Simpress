@@ -488,22 +488,28 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-auto__principal { min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px; }
 @media (min-width: 1200px) { .ck-auto__principal { overflow: auto; } }
 .ck-secao-titulo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-chrome { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 14px; }
-.ck-chrome__nome { display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-chrome__nome .ck-ico { color: var(--cor-destaque); }
-.ck-chrome__det { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
-.ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.ck-rotina { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+/* F4 Bloco 1: barra do Chrome numa linha e rotinas em blocos pequenos (artefato do Design, Main e Celular). */
+.ck-chrome { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.ck-chrome__nome { flex: none; display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-marca); white-space: nowrap; }
+.ck-chrome__nome .ck-ico { width: 16px; height: 16px; color: var(--cor-destaque); }
+.ck-chrome__det { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-rotinas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.ck-rotina { display: flex; align-items: center; gap: 8px; padding: 9px 10px; min-height: 54px; }
 .ck-rotina[data-estado="em-andamento"] { border-color: var(--cor-destaque); }
-.ck-rotina__cab { display: flex; align-items: center; gap: 8px; }
-.ck-rotina__icone { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-texto-suave); }
-.ck-rotina[data-estado="em-andamento"] .ck-rotina__icone { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
-.ck-rotina__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-rotina__desc { flex: 1; font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); }
-.ck-rotina__rodape { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.ck-linha-acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; }
-.ck-linha-acao__texto { flex: 1 1 220px; display: flex; align-items: center; gap: 4px; min-width: 0; }
-.ck-linha-acao__texto > span:not(.info-tip) { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-rotina__icone { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+.ck-rotina__corpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.ck-rotina__cab { display: flex; align-items: center; gap: 2px; max-width: 100%; min-width: 0; }
+.ck-rotina__titulo { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-base); font-weight: var(--peso-marca); }
+.ck-rotina .ck-btn--icone { flex: none; width: 30px; height: 30px; }
+/* O `button { min-height }` global do app.css esticaria o bloco além dos ~54px do Design. */
+.ck-rotina :is(.ck-btn--icone, .info-tip-trigger) { min-height: 0; }
+.ck-rotina .info-tip-trigger { width: 18px; height: 18px; }
+/* A dica ⓘ ancora no bloco (não no ícone): a bolha de até 20rem não alarga a grade, a rolagem do painel nem a página. Até 640px vale o fixed de ux-refinements.css. */
+@media (min-width: 641px) {
+  .ck-rotina { position: relative; }
+  .ck-rotina .info-tip { position: static; }
+  .ck-rotina .info-tip .info-tip-text { inset-inline: 0; width: auto; max-width: none; }
+}
 .ck-fatos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
 .ck-fatos dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-fatos dd { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
@@ -550,7 +556,11 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 }
 @media (max-width: 767.98px) {
   .ck-auto__principal { padding: 14px 12px 20px; }
-  .ck-rotinas, .ck-fatos { grid-template-columns: minmax(0, 1fr); }
+  .ck-fatos { grid-template-columns: minmax(0, 1fr); }
+  .ck-chrome { flex-wrap: wrap; gap: 8px; }
+  .ck-chrome__det { display: none; }
+  .ck-rotina { gap: 10px; padding: 6px 6px 6px 10px; min-height: 56px; }
+  .ck-rotina .ck-btn--icone { width: 44px; height: 44px; }
   .ck-consulta__campos { grid-template-columns: minmax(0, 1fr); }
   .ck-console__linhas { flex: 1 1 100%; }
   .ck-log__linha { grid-template-columns: 62px minmax(0, 1fr) auto; padding: 8px 12px; }
@@ -929,8 +939,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #tab-panel-automacao .ck-log__origem:empty::before { content: "—"; color: var(--cor-texto-sutil); }
 #tab-panel-automacao .ck-log__linha { transition: background-color 150ms ease; }
 
-#automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-#automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
+#automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 #dashboard-agendamento-intervalo { width: auto; }
 /* B4: no card de chamados novos, a opção "Repetir a cada 30 minutos" e as três linhas de status ficam juntas (6px em vez de 14px) e se leem como um só grupo; o gap de 14px continua entre os grupos. */
 #tab-panel-automacao .ck-campo + #dashboard-agendamento-status,
@@ -953,7 +962,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
   #automacao-cards .ck-console { border-top: 1px solid var(--cor-borda); }
 }
 @media (max-width: 767.98px) {
-  #automacao-cards .ck-rotinas, #automacao-cards .automation-action-support { grid-template-columns: minmax(0, 1fr); }
+  #automacao-cards .ck-rotinas { gap: 6px; }
+  #automacao-cards .automation-action-support { grid-template-columns: minmax(0, 1fr); }
   .ck-console__ferramentas > .ck-console__linhas { flex: 1 1 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1247,6 +1257,36 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
+/* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
+#resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__estado { margin: 0; padding: 24px 12px; text-align: center; color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__limites { padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__limites-titulo { margin: 0 0 4px; font-size: var(--fs-md); font-weight: var(--peso-medio); }
+#resumo-painel-backups .ck-backups__limites ul { margin: 0; padding-left: 18px; }
+#resumo-painel-backups .ck-backups__lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+#resumo-painel-backups .ck-backups__item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+#resumo-painel-backups .ck-backups__detalhe { flex: 1 1 100%; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups :is(.ck-backups__nota, .ck-backups__vazio) { font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__serie { font-family: var(--fonte-mono); font-size: var(--fs-md); overflow-wrap: anywhere; }
+#resumo-painel-backups :is(.ck-backups__apelido, .ck-backups__cidade) { overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__apelido { color: var(--cor-texto-suave); }
+#resumo-painel-backups .ck-backups__contagem { font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
+#resumo-painel-backups .ck-btn { height: auto; min-height: var(--altura-controle-sm); max-width: 100%; padding-block: 4px; white-space: normal; text-align: center; }
+#resumo-painel-backups .ck-btn[aria-busy="true"] { cursor: progress; }
+#resumo-painel-backups .ck-backups__excluidos > summary { min-height: var(--altura-controle-sm); cursor: pointer; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+#resumo-painel-backups .ck-backups__excluidos > summary:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+#resumo-painel-backups .ck-backups__excluidos > .ck-backups__lista { margin-top: 8px; }
+#resumo-painel-backups .ck-backups__item > .ck-backups__lista { flex: 1 1 100%; min-width: 0; }
+#resumo-painel-backups .ck-backups__secao .ck-cartao__corpo { display: grid; gap: 12px; }
+#resumo-painel-backups .ck-backups__grupo { display: grid; gap: 6px; }
+#resumo-painel-backups .ck-tabela th:nth-child(1) { width: 11%; }
+#resumo-painel-backups .ck-tabela th:nth-child(2) { width: 15%; }
+#resumo-painel-backups .ck-tabela th:nth-child(3) { width: 22%; }
+#resumo-painel-backups .ck-tabela th:nth-child(4) { width: 24%; }
+#resumo-painel-backups .ck-tabela th:nth-child(5) { width: 14%; }
+#resumo-painel-backups .ck-tabela th:nth-child(6) { width: 14%; }
+@media (pointer: coarse) { #resumo-painel-backups :is(.ck-btn, .ck-backups__excluidos > summary) { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { #resumo-painel-backups :is(.ck-tabela tbody tr, .ck-btn) { transition: none; } }
 .sebrae-filtro { display: flex; flex: 0 1 470px; align-items: center; gap: 8px; min-width: 0; }
 .sebrae-busca { display: flex; flex: 1 1 auto; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-mudo); }
 .sebrae-busca:focus-within { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
@@ -1561,7 +1601,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-abas { flex: 1 1 0; gap: 2px; }
   .sebrae-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 4px; font-size: var(--fs-ui); }
   .sebrae-aba__rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  /* Resumo: as cinco sub-abas dividem a largura, sem rolagem horizontal. */
+  /* Resumo: as seis sub-abas dividem a largura, sem rolagem horizontal. */
   .resumo-abas-barra { gap: 4px; }
   .resumo-abas { flex: 1 1 0; gap: 2px; }
   .resumo-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 2px; font-size: var(--fs-ui); }
@@ -1699,6 +1739,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
 .ck-assist-widget > .ck-assist__form { padding: 0 12px 12px; }
 .ck-assist-widget > .ck-assist__barra { padding: 8px 12px; flex-wrap: wrap; }
+/* Resumo: abaixo de 600px as seis sub-abas ficam em duas linhas de três, para os rótulos não serem cortados. */
+@media (max-width: 599px) { .resumo-abas { flex-wrap: wrap; } .resumo-aba { flex: 1 1 calc((100% - 4px) / 3); } }
 @media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
 @media (max-width: 599px) { .ck-assist-widget { left: 8px; right: 8px; bottom: 8px; width: auto; height: calc(100dvh - 72px); } }
 @media (max-width: 599px) {
