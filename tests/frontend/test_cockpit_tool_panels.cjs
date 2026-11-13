@@ -961,6 +961,7 @@ test("lembrete, cartão do F5 com OS \"—\": trata como sem OS, usa o vínculo 
     assert.deepEqual(a.textos(a.noOs.slice(0, 1)), ["Carregando…"], "lado da OS começa com Carregando…");
     assert.deepEqual(a.chamadasApi, ["/api/operacoes/chamados/vinculos-os"]);
     assert.deepEqual(a.montadas.at(-1).soOs, { serie: "", os: "2222222", chamado: "UTIC-2026-0833", lembrete: true });
+    assert.deepEqual(a.noOs.at(-1), [], "o Carregando… sai antes de a tabela da OS ser montada");
   } finally { a.limpar(); }
 });
 

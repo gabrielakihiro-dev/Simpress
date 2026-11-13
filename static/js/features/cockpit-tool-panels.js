@@ -2231,6 +2231,7 @@
       return;
     }
     let relatorio = null;
+    hostOs.replaceChildren(); // montarTabelaOs acrescenta a tabela: tira o "Carregando…" antes
     const section = dataPanels()?.montarTabelaOs?.(hostOs, {
       semBusca: true, soOs: { ...alvo, chamado: dados.chamado, ...(resolver || reservaOs ? { lembrete: true } : {}) }, somenteLeitura: true,
       aoCarregar: report => { relatorio = report; },

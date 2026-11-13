@@ -43,6 +43,7 @@ Pedido do usuário (12/11/2026). Só leitura: nenhum endpoint novo, nada é grav
   - `Chamado não encontrado na aba Chamados (F5).` (já existia)
   - `Nenhuma OS vinculada por série na importação atual.` (já existia; aparece à direita quando o chamado existe na F5 mas não tem OS)
   - `OS não encontrada na importação atual.` (só nos links de lembrete, quando a OS pedida sem série não está no relatório da aba OS; nos gatilhos do F5 e do F6 continua `Série não encontrada na importação atual.`)
+- Enquanto lê, os dois lados mostram `Carregando…`; a frase sai quando chega o cartão, a tabela da OS ou o aviso (nunca fica junto da tabela).
 - Lado sem conteúdo (OS pedida sem chamado, ou chamado inexistente sem OS) some e o outro lado ocupa a largura toda (`.chamado-os-janela__lado:empty` em `ck-cockpit.css`).
 - Visual: o link segue o tamanho e a quebra do texto (`overflow-wrap: anywhere`), sublinhado pontilhado que vira sólido no hover, riscado junto no lembrete concluído, foco visível; só tokens de cor existentes. Alvo de toque de 44 px não se aplica a link dentro de frase.
 - LGPD: o texto do lembrete continua fora de log, histórico e Assistente; o clique só envia o número da OS ou do chamado às leituras já existentes.
