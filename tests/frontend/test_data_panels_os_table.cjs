@@ -834,6 +834,30 @@ test("Sub-abas: marca ativa leva a OS para Finalizadas; situacao escolhe a sub-a
   } finally { restaurarMarcas(); reiniciarFiltros(); }
 });
 
+test("Sub-abas: OS com selo Entregue vai para Finalizadas sem marca nem vínculo UTIC, e sai da contagem de Abertas", async () => {
+  const original = report.chamados;
+  const simp = (serie, os, etapa) => ({ serie, relacao: "somente_simpress", simpress: { ordens_servico: [os], etapa_atual: etapa }, oracle: [] });
+  report.chamados = [
+    simp("BRJ5512G5R", "7303022", { chave: "entregue", rotulo: "Pedido entregue", data: "27/10/2026" }),
+    simp("SN-SEMDATA", "7303023", { chave: "entregue", rotulo: "Pedido entregue", data: "" }),
+    simp("SN-CAMINHO", "7303025", { chave: "a_caminho", rotulo: "A caminho", data: "26/10/2026" }),
+  ];
+  marcas = [];
+  const abas = [];
+  const contagens = [];
+  try {
+    const { section } = await montar({ semBusca: true, aoContarAbas: n => abas.push(n), aoContarSituacao: d => contagens.push(d) });
+    assert.equal(linhaOs(section, "BRJ5512G5R").dataset.finalizada, "true", "entregue sem marca finaliza");
+    assert.equal(linhaOs(section, "SN-SEMDATA").dataset.finalizada, "false", "sem data, sem selo, segue aberta");
+    assert.deepEqual(visiveis(section), ["SN-CAMINHO", "SN-SEMDATA"]);
+    assert.deepEqual(abas.at(-1), { abertas: 2, finalizadas: 1 });
+    assert.equal(contagens.at(-1).os, 2, "KPIs contam só as abertas");
+    panels.filtrarTabelaOs({ situacao: "finalizadas" });
+    assert.deepEqual(visiveis(section), ["BRJ5512G5R"]);
+    assert.equal(linhaOs(section, "BRJ5512G5R").querySelector(".os-selo--auto"), null, "sem marca, nada de Vinculado automaticamente");
+  } finally { restaurarMarcas(); reiniciarFiltros(); report.chamados = original; }
+});
+
 test("Sub-abas: os números das abas seguem os filtros e ignoram a página; Carregar mais vale só na sub-aba ativa e volta ao trocar", async () => {
   const original = report.chamados;
   report.chamados = chamadosOracle(Array.from({ length: 60 }, (_, i) => `SN-P${String(i).padStart(2, "0")}`));
