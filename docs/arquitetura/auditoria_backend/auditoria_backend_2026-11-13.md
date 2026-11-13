@@ -15,7 +15,8 @@ Terceira rodada sobre o backend, depois de [auditoria_backend_2026-10-15.md](aud
   - `npm audit` e `pip-audit` (vulnerabilidades de dependências);
   - o comportamento com uma pasta do OneDrive real;
   - os testes próprios de `motor_ia/`;
-  - o corpo completo de alguns helpers de `routers/sebrae_dashboard.py` e de `build_readiness_report`, lidos só por amostragem.
+  - o corpo completo de alguns helpers de `routers/sebrae_dashboard.py` e de `build_readiness_report`, lidos só por amostragem;
+  - a comparação rota a rota com `docs/arquitetura/CONTRATOS_API_BACKEND.md` (item N9).
 
 ## 2. Resumo
 
@@ -27,12 +28,11 @@ O backend está mais saudável do que em 17/10:
 - A camada de domínio não usa mais `HTTPException`.
 - Toda chamada a `/api/` passou a exigir o cookie da sessão local.
 
-Não há falha crítica ou alta confirmada. Os pontos que mais pesam agora são estruturais:
+Há uma falha alta confirmada (achado 4): o repositório no GitHub é público, e o código e alguns documentos versionados trazem e-mails corporativos, um login pessoal e o endereço do OneDrive pessoal de outra pessoa. Não há falha crítica. Os demais pontos são estruturais:
 
 - um módulo de domínio voltou a importar routers;
 - três fábricas de router concentram de 549 a 998 linhas cada;
 - 29 blocos `except Exception` não registram nada;
-- e-mails corporativos, um login pessoal e o endereço de um OneDrive pessoal continuam como padrão no código;
 - os scripts maiores, que tocam sistemas externos, ficam fora do mypy;
 - a CI não roda em PR que só mexe em documentação.
 
@@ -98,15 +98,15 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Impacto: as funções internas não são testáveis isoladamente, e toda mudança no Sebrae (F5) mexe num bloco de quase mil linhas. É a continuação natural do passo 10, que tirou peso do `main.py` mas o levou para as rotas.
 - Solução: extrair para `domains/` a lógica que não depende de HTTP, como já foi feito com `domains/history_restore.py`, e deixar na fábrica só a validação do payload e a conversão de erros.
 
-**4. E-mails, login padrão e URL de OneDrive pessoal fixos no código.** Média, confirmado.
+**4. E-mails, login padrão e URL de OneDrive pessoal fixos no código.** Alta, confirmado (o repositório no GitHub é público).
 - Evidência (os valores não são repetidos aqui):
   - padrões de `SIMPRESS_DASHBOARD_EMAIL` e `SIMPRESS_SOFTEXPERT_EMAIL` em `scripts/automacao_rotinas_chrome.py:82-83`;
   - padrão de `SIMPRESS_ENDPOINT_USUARIO` com um login pessoal em `scripts/automacao_rotinas_chrome.py:71`;
   - `DASHBOARD_PASTA_URL` em `scripts/automacao_rotinas_chrome.py:74-77` aponta para o OneDrive pessoal de outra pessoa, sem variável de ambiente;
   - `CONTAS_REMETENTE` em `domains/outlook_mail.py:38-39`;
-  - os mesmos endereços aparecem em testes e em `docs/operacao/automacao-chrome.md`, `docs/planos/email-outlook-modelos.md` e `docs/guias/manual_usuario.md:158`.
-- Impacto: dado pessoal versionado, contra a regra de LGPD do projeto. Também prende a rotina a pessoas específicas: outro operador precisa definir as variáveis, e a lista de remetentes do Outlook e a pasta do Dashboard não têm variável.
-- Solução: o mesmo caminho do contato da retirada (B7): variável de ambiente ou arquivo local em `config/` ignorado pelo Git, com exemplo versionado, e padrão vazio no código. Trocar nos testes e nos docs por endereços fictícios. É decisão do responsável, porque muda o comportamento de quem não definir nada.
+  - os mesmos endereços aparecem em testes e em `docs/operacao/automacao-chrome.md`, `docs/operacao/prompt-sincronizacao-chamados-sebrae.md`, `docs/planos/email-outlook-modelos.md` e `docs/guias/manual_usuario.md:158`. O `README.md` deixou de citar um deles nesta rodada.
+- Impacto: dado pessoal versionado num repositório público, contra a regra de LGPD do projeto. Tirar os valores do código não os tira do histórico do Git. Também prende a rotina a pessoas específicas: outro operador precisa definir as variáveis, e a lista de remetentes do Outlook e a pasta do Dashboard não têm variável.
+- Solução: o mesmo caminho do contato da retirada (B7): variável de ambiente ou arquivo local em `config/` ignorado pelo Git, com exemplo versionado, e padrão vazio no código. Trocar nos testes e nos docs por endereços fictícios. É decisão do responsável, porque muda o comportamento de quem não definir nada. Tornar o repositório privado ou reescrever o histórico também é decisão do responsável.
 
 **5. Scripts grandes fora do mypy.** Baixa, confirmado.
 - Evidência (`scripts/verify.cjs:86-98`): o mypy gradual cobre `core/`, `domains/`, `routers/`, `security/`, `main.py` e três scripts; o estrito (`--disallow-untyped-defs`) só `core/`, `domains/` e `security/`. Ficam fora do mypy (só passam pelo `compileall`) `automacao_rotinas_chrome.py` (2.759 linhas), `sebrae_softexpert.py` (1.816), `sebrae_excel.py` (922) e `verificar_usuarios_endpoint.py` (760), que tocam sistemas externos.
@@ -156,11 +156,11 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 
 Ordem por custo e risco. Cada passo é uma mudança pequena, com teste.
 
-1. Achados 8, 9, 10 e 11 (limpeza; minutos cada).
-2. Achado 2: log nos `except Exception` silenciosos de `routers/sebrae_dashboard.py` e `domains/endpoint_lookup.py`.
-3. Achado 1: tirar de `domains/assistant_api.py` a dependência de `routers/` e tornar públicas as funções importadas.
-4. Achado 6: CI também para PR só de documentação.
-5. Achado 4: e-mails, login padrão e URL da pasta do Dashboard para configuração local, depois da decisão do responsável.
+1. Achado 4 (alta): e-mails, login padrão e URL da pasta do Dashboard para configuração local, depois da decisão do responsável sobre o padrão e sobre o histórico do repositório público.
+2. Achados 8, 9, 10 e 11 (limpeza; minutos cada).
+3. Achado 2: log nos `except Exception` silenciosos de `routers/sebrae_dashboard.py` e `domains/endpoint_lookup.py`.
+4. Achado 1: tirar de `domains/assistant_api.py` a dependência de `routers/` e tornar públicas as funções importadas.
+5. Achado 6: CI também para PR só de documentação.
 6. Achado 3: extrair a lógica de `create_sebrae_dashboard_router` para `domains/`, uma área por vez.
 7. Achados 5 e 7: ampliar o mypy e decidir o destino de `motor_ia/`.
 8. Pendência antiga N7/M3: ler só a aba e as colunas usadas, quando o inventário passar de uns 20 mil equipamentos.

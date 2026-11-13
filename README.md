@@ -26,7 +26,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Menu **Ferramentas** > **Lembretes**: lembretes com data opcional, gravados só em `data/state/lembretes.json`, e os formulários **Termo Entrega** e **Termo Devolução**, que geram o PDF pelo navegador sem gravar nada no servidor. Veja [Termos](docs/cockpit-prompts/17-termos.md) e [Lembretes](docs/cockpit-prompts/18-lembretes.md).
 - Sub-aba **Backups** do **Resumo** (F3): notebooks de backup livres nas regionais prioritárias; **Confirmar disponível por 7 dias** grava só série, cidade e datas em `data/state/backups_regionais.json`.
 - **Abrir chamado no UX** (cartão do equipamento na Home) e o ticket UX gerado depois do **Transporte** (F2) preenchem o portal UX Simpress pelo Chrome de automação. O envio real exige confirmação, a série de teste `BRM551RN1Y` nunca é enviada e `SIMPRESS_UX_SEM_ENVIO=1` recusa qualquer envio real.
-- **Enviar e-mail** (Home, painel **Ações**) abre ou envia e-mails por modelo pelo Outlook clássico, só por clique. O envio real pede confirmação e `SIMPRESS_OUTLOOK_SEM_ENVIO=1` o recusa. Veja [Home](docs/cockpit-prompts/03-home-split-view.md).
+- **Enviar e-mail** (Home, grupo **Outros** do cartão do equipamento) abre ou envia e-mails por modelo pelo Outlook clássico, só por clique. O envio real pede confirmação e `SIMPRESS_OUTLOOK_SEM_ENVIO=1` o recusa. Veja [Home](docs/cockpit-prompts/03-home-split-view.md).
 
 As mudanças ainda sem versão publicada estão na seção **[Não lançado]** do [CHANGELOG](CHANGELOG.md).
 
