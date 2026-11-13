@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
+const { createFakeDocument } = require("./support/fake-dom.cjs");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "../..");
@@ -940,6 +941,382 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
     assert.equal(noChamado.at(-1)[0].textContent, "Chamado não encontrado na aba Chamados (F5).");
     assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88", chamado: "UTIC-X" });
   } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+// ---- Relatório mensal (F8): cinco sub-abas ----
+const REL_ABAS = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["comp", "Pendências da comparação"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"]];
+const REL_COM_CONTAGEM = ["os", "comp", "sebrae"];
+
+test("Relatório mensal (F8): cinco abas ligadas por ARIA e os painéis moram dentro de #cockpit-monthly-details", () => {
+  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="relatorio"[\s\S]*?\n        <\/section>/)?.[0] || "";
+  assert.match(painel, /<div class="rel-abas" role="tablist" aria-label="Assuntos do relatório">/);
+  assert.deepEqual([...painel.matchAll(/<button[^>]*role="tab"[^>]*id="rel-aba-(\w+)"/g)].map(m => m[1]), REL_ABAS.map(([nome]) => nome));
+  REL_ABAS.forEach(([nome, rotulo], indice) => {
+    const botao = painel.match(new RegExp(`<button[^>]*id="rel-aba-${nome}"[^>]*>[\\s\\S]*?</button>`))?.[0] || "";
+    assert.match(botao, new RegExp(`aria-controls="rel-painel-${nome}"`));
+    assert.match(botao, new RegExp(`aria-selected="${indice === 0}"`));
+    assert.match(botao, new RegExp(`tabindex="${indice === 0 ? 0 : -1}"`));
+    assert.ok(botao.includes(`<span class="rel-aba__rotulo">${rotulo}</span>`), `rótulo exato de ${nome}`);
+    // Contador só nas abas OS, Comparação e Chamados; nasce oculto e é preenchido a cada render.
+    assert.equal(botao.includes(`<span id="rel-${nome}-contagem" class="ck-badge rel-aba__n" hidden></span>`), REL_COM_CONTAGEM.includes(nome), `contador de ${nome}`);
+    const caixa = painel.match(new RegExp(`<div id="rel-painel-${nome}"[^>]*>`))?.[0] || "";
+    assert.match(caixa, /role="tabpanel"/);
+    assert.match(caixa, new RegExp(`aria-labelledby="rel-aba-${nome}"`));
+    assert.equal(/\shidden/.test(caixa), indice !== 0, `só a Visão geral nasce visível (${nome})`);
+  });
+  const ids = [...painel.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(new Set(ids).size, ids.length, "ids únicos no painel");
+  // O invólucro guarda os cinco painéis; o estado (carregando/erro) fica fora dele.
+  const posicao = id => painel.indexOf(`id="${id}"`);
+  assert.ok(posicao("cockpit-monthly-estado") < posicao("cockpit-monthly-details"));
+  for (const [nome] of REL_ABAS) assert.ok(posicao(`rel-painel-${nome}`) > posicao("cockpit-monthly-details"), `painel ${nome} dentro do invólucro`);
+  assert.match(painel, /<div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês">/);
+  // Ordem da Visão geral: atenção, movimento, faixa Chamados (F5), prévia fechada.
+  const visao = painel.slice(posicao("rel-painel-visao"), posicao("rel-painel-os"));
+  const ordem = ["cockpit-monthly-attention", "cockpit-monthly-movimento", "cockpit-monthly-chamados", "ck-rel__previa"].map(trecho => visao.indexOf(trecho));
+  assert.ok(ordem.every((valor, i) => valor >= 0 && (i === 0 || valor > ordem[i - 1])), "ordem da Visão geral");
+  assert.doesNotMatch(visao.match(/<details[^>]*>/)?.[0] || "", /\sopen/);
+  assert.match(visao, /<section id="cockpit-monthly-chamados"[^>]*hidden>/);
+  assert.match(visao, /<button type="button" id="cockpit-monthly-chamados-ver" class="ck-rel__link">Ver chamados →<\/button>/);
+  for (const id of ["periods", "month", "period", "copy", "export", "status", "estado", "details", "attention", "attention-title", "kpis", "movimento", "chamados", "chamados-title", "chamados-dados", "chamados-ver", "preview"]) {
+    assert.equal(ids.filter(valor => valor === `cockpit-monthly-${id}`).length, 1, `#cockpit-monthly-${id}`);
+  }
+});
+
+test("Relatório mensal (F8): CSS das abas rola a barra sozinha, respeita hidden e movimento reduzido", () => {
+  const bloco = seletor => css.match(new RegExp(`(?:^|\\n)${seletor.replace(/[.[\]()]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] || "";
+  assert.match(bloco(".rel-abas"), /overflow-x:\s*auto/);
+  assert.match(bloco(".rel-abas"), /min-width:\s*0/);
+  assert.match(bloco(".rel-abas-barra"), /min-width:\s*0/);
+  assert.match(css, /\.rel-aba__n\[hidden\], \.ck-rel__painel\[hidden\], \.ck-rel__faixa\[hidden\] \{ display: none; \}/);
+  assert.match(bloco(".rel-aba"), /transition:[^;]*var\(--duracao\)/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.rel-aba, \.rel-aba__n \{ transition: none; \} \}/);
+  assert.doesNotMatch((css.match(/\.rel-aba[^{]*\{[^}]*\}/g) || []).join("\n"), /#[0-9a-f]{3,8}\b|rgba?\(/i, "sem cor nova: só tokens");
+});
+
+// DOM híbrido do F8: a estrutura do relatório é uma árvore real (fake-dom: foco, hidden e filhos); o resto do app é permissivo.
+function completarFakeDom(fake) {
+  const proto = Object.getPrototypeOf(fake.createElement("x"));
+  if (proto.replaceWith) return;
+  proto.replaceWith = function replaceWith(outro) {
+    const irmaos = this.parentNode.children;
+    irmaos.splice(irmaos.indexOf(this), 1, outro);
+    outro.parentNode = this.parentNode;
+    this.parentNode = null;
+  };
+  Object.defineProperties(proto, {
+    lastChild: { get() { return this.children.at(-1) || null; } },
+    style: { get() { return (this.estilo ||= {}); } },
+    classList: {
+      get() {
+        const no = this;
+        const lista = () => no.className.split(/\s+/).filter(Boolean);
+        return { add: (...nomes) => { no.className = [...new Set([...lista(), ...nomes])].join(" "); }, contains: nome => lista().includes(nome) };
+      },
+    },
+  });
+}
+
+function relatorioExemplo(mes = "2026-11", { os = 3, comp = 2, sebrae = 2 } = {}) {
+  const linhas = (total, fazer) => Array.from({ length: total }, (_vazio, i) => fazer(i + 1));
+  return {
+    mes: { key: mes, label: `mês ${mes}`, parcial: false, data_corte: `${mes}-28` },
+    gerado_em: `${mes}-28T10:00:00`,
+    os: {
+      oracle: { abertas: 3, concluidas: 1, pendentes: 2, encerradas_sem_data: 0 },
+      simpress: { abertas: 1, concluidas: 0, pendentes: 1, encerradas_sem_data: 0 },
+      linhas: linhas(os, i => ({ fonte: "OS Oracle", identificador: `OS-${i}`, serie: `SN-${i}`, status: "Aberta", criacao: `${mes}-02`, conclusao: "", situacao: [i % 2 ? "Pendente no fim do mês" : "Concluída no mês"] })),
+      dados_insuficientes: [],
+    },
+    comparacao: {
+      evento_id: "", atualizacoes_no_mes: 1, horario: `${mes}-05T10:00:00`, contagens: { "Sem correspondência — no endpoint": comp },
+      linhas: linhas(comp, i => ({ secao: "Sem correspondência — no endpoint", hostname: `H${i}`, serie: `SC-${i}`, local_previsto: "A", local_simpress: "B" })),
+    },
+    inventario: { total: 10, unidades: 2, linhas_sem_serie: 0, series_duplicadas: [], por_tipo: [["Notebook", 6]], por_unidade: [["Curitiba", "Sede", 6]], arquivo_origem: "base.xlsx" },
+    sebrae: {
+      abertos: sebrae, finalizados: 1, sem_data: 0,
+      linhas: linhas(sebrae, i => ({ chave: `UTIC-2026-${i}`, chamado: `UTIC-2026-${i}`, titulo: `T${i}`, serie: `SN-${i}`, abertura: `${mes}-03`, finalizacao: "", situacoes: ["Aberto no mês"] })),
+    },
+  };
+}
+
+function criarAmbienteRelatorio() {
+  const fake = createFakeDocument();
+  completarFakeDom(fake);
+  const reais = new Map();
+  const permissivos = new Map();
+  const ouvintesDocumento = [];
+  const ouvintesElemento = [];
+  const no = (tag, id, pai = fake.body, atributos = {}) => {
+    const novo = fake.createElement(tag);
+    novo.id = id;
+    Object.entries(atributos).forEach(([nome, valor]) => novo.setAttribute(nome, valor));
+    pai.append(novo);
+    reais.set(id, novo);
+    return novo;
+  };
+  no("div", "rel-tablist", fake.body, { role: "tablist" });
+  REL_ABAS.forEach(([nome], indice) => {
+    const aba = no("button", `rel-aba-${nome}`, reais.get("rel-tablist"), { role: "tab", "aria-selected": String(indice === 0), "aria-controls": `rel-painel-${nome}`, tabindex: indice === 0 ? "0" : "-1" });
+    if (REL_COM_CONTAGEM.includes(nome)) no("span", `rel-${nome}-contagem`, aba).hidden = true;
+  });
+  no("div", "cockpit-monthly-estado");
+  const detalhes = no("div", "cockpit-monthly-details");
+  REL_ABAS.forEach(([nome], indice) => { no("div", `rel-painel-${nome}`, detalhes, { role: "tabpanel" }).hidden = indice !== 0; });
+  const visao = reais.get("rel-painel-visao");
+  const atencao = no("section", "cockpit-monthly-attention", visao);
+  atencao.hidden = true;
+  no("h3", "cockpit-monthly-attention-title", atencao);
+  no("div", "cockpit-monthly-kpis", atencao);
+  no("div", "cockpit-monthly-movimento", visao);
+  const faixa = no("section", "cockpit-monthly-chamados", visao);
+  faixa.hidden = true;
+  no("span", "cockpit-monthly-chamados-dados", faixa);
+  no("button", "cockpit-monthly-chamados-ver", faixa);
+
+  const permissivo = id => new Proxy({ id, hidden: true, open: false, dataset: {}, textContent: "", value: "", disabled: false }, {
+    get(alvo, chave) {
+      if (chave in alvo) return alvo[chave];
+      if (chave === "isConnected") return true;
+      if (chave === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
+      if (chave === "getAttribute") return () => null;
+      if (chave === "addEventListener") return (tipo, fn) => ouvintesElemento.push([id, tipo, fn]);
+      if (chave === "querySelector" || chave === "closest") return () => null;
+      if (chave === "querySelectorAll") return () => [];
+      return () => {};
+    },
+    set(alvo, chave, valor) { alvo[chave] = valor; return true; },
+  });
+  global.document = {
+    get activeElement() { return fake.activeElement; },
+    getElementById: id => fake.getElementById(id) || (permissivos.has(id) ? permissivos.get(id) : permissivos.set(id, permissivo(id)).get(id)),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (tipo, fn) => ouvintesDocumento.push([tipo, fn]),
+    createElement: tag => fake.createElement(tag),
+    createTextNode: texto => fake.createTextNode(texto),
+    createDocumentFragment: () => fake.createElement("#fragment"),
+  };
+  const servidor = { relatorio: mes => relatorioExemplo(mes), sebrae: { importado: null, novos: null }, sebraeErro: null, pedidos: [] };
+  const apiFetch = async url => {
+    servidor.pedidos.push(url);
+    if (url.startsWith("/api/sebrae/novos")) {
+      if (servidor.sebraeErro) throw servidor.sebraeErro;
+      return servidor.sebrae;
+    }
+    return servidor.relatorio(new URL(url, "http://local").searchParams.get("mes"));
+  };
+  const api = createCockpitToolPanels({ app: { apiFetch, showToast() {} }, appState: {}, apiFetch });
+  const el = id => global.document.getElementById(id);
+  const aba = nome => reais.get(`rel-aba-${nome}`);
+  const painel = nome => reais.get(`rel-painel-${nome}`);
+  const esperar = () => new Promise(resolver => setImmediate(resolver));
+  const dispara = (id, tipo, evento = {}) => ouvintesElemento.filter(([alvo, t]) => alvo === id && t === tipo).forEach(([, , fn]) => fn(evento));
+  return {
+    api, el, aba, painel, servidor, esperar, dispara,
+    abrir: () => api.abrirPainelCockpit("relatorio"),
+    mudarMes: async mes => {
+      const entrada = global.document.getElementById("cockpit-monthly-month");
+      entrada.value = mes;
+      dispara("cockpit-monthly-month", "change", { currentTarget: entrada });
+      await esperar();
+    },
+    emite: tipo => ouvintesDocumento.filter(([t]) => t === tipo).forEach(([, fn]) => fn({})),
+    tecla: (nome, key) => {
+      const evento = { type: "keydown", key, prevenido: false, preventDefault() { this.prevenido = true; } };
+      aba(nome).dispatchEvent(evento);
+      return evento;
+    },
+    visiveis: () => REL_ABAS.map(([nome]) => nome).filter(nome => !painel(nome).hidden),
+    selecionada: () => REL_ABAS.map(([nome]) => nome).filter(nome => aba(nome).getAttribute("aria-selected") === "true"),
+    tabindices: () => REL_ABAS.map(([nome]) => aba(nome).tabIndex),
+  };
+}
+
+async function comRelatorio(corpo) {
+  const ambiente = criarAmbienteRelatorio();
+  try {
+    await ambiente.abrir();
+    await corpo(ambiente);
+  } finally { delete global.document; }
+}
+
+const textoDe = no => (no.ownText || "") + no.children.map(textoDe).join("");
+
+test("Relatório mensal (F8): abre na Visão geral e preenche painéis, seções e contadores", async () => {
+  await comRelatorio(async ({ el, aba, painel, visiveis, selecionada, tabindices }) => {
+    assert.deepEqual(visiveis(), ["visao"]);
+    assert.deepEqual(selecionada(), ["visao"]);
+    assert.deepEqual(tabindices(), [0, -1, -1, -1, -1]);
+    assert.equal(el("cockpit-monthly-attention").hidden, false);
+    // Cada seção continua descendente de #cockpit-monthly-details, com o id do título que os links usam.
+    const secoes = el("cockpit-monthly-details").querySelectorAll("[data-rel-secao]");
+    assert.deepEqual(secoes.map(secao => secao.dataset.relSecao).sort(), ["base", "comp", "movimento", "os", "sebrae"]);
+    for (const nome of ["os", "comp", "sebrae", "base"]) {
+      assert.equal(painel(nome).querySelectorAll(`[data-rel-secao="${nome}"]`).length, 1, `seção ${nome} no painel ${nome}`);
+      assert.equal(painel(nome).querySelector(`[id="cockpit-monthly-${nome}-title"]`)?.tagName, "H3");
+    }
+    assert.equal(el("cockpit-monthly-movimento").querySelector('[data-rel-secao="movimento"]')?.tagName, "SECTION");
+    // Contadores: o número da aba é o total da lista; OS e Comparação com alerta, Chamados neutro.
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).textContent), ["3", "2", "2"]);
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).hidden), [false, false, false]);
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).dataset.status), ["alerta", "alerta", undefined]);
+    assert.equal(aba("visao").tabIndex, 0);
+  });
+});
+
+test("Relatório mensal (F8): contador some sem a fonte e fica neutro com zero linhas", async () => {
+  const ambiente = criarAmbienteRelatorio();
+  try {
+    ambiente.servidor.relatorio = mes => ({ ...relatorioExemplo(mes), os: {}, comparacao: { linhas: [] }, sebrae: { erro: "Dashboard ilegível." } });
+    await ambiente.abrir();
+    const { el } = ambiente;
+    assert.equal(el("rel-os-contagem").hidden, true, "OS sem linhas na resposta: oculto");
+    assert.equal(el("rel-os-contagem").textContent, "");
+    assert.equal(el("rel-sebrae-contagem").hidden, true, "contagem do Sebrae com erro: oculto");
+    // Fonte presente com zero linhas mostra 0, sem tom de alerta.
+    assert.equal(el("rel-comp-contagem").hidden, false);
+    assert.equal(el("rel-comp-contagem").textContent, "0");
+    assert.equal(el("rel-comp-contagem").dataset.status, undefined);
+    // Sem números do Sebrae nem Dashboard, a faixa não inventa zeros.
+    const faixa = textoDe(el("cockpit-monthly-chamados-dados"));
+    assert.match(faixa, /Nenhum Dashboard importado\./);
+    assert.doesNotMatch(faixa, /Abertos no mês|Finalizados no mês|Chamados novos|Antigos em aberto/);
+    assert.equal(el("cockpit-monthly-chamados").hidden, false);
+  } finally { delete global.document; }
+});
+
+test("Relatório mensal (F8): faixa Chamados (F5) da Visão geral mostra só os números que existem", async () => {
+  const ambiente = criarAmbienteRelatorio();
+  try {
+    ambiente.servidor.sebrae = { importado: { abertos: [{ numero: "UTIC-2026-1" }, { numero: "linha:9" }], finalizados: [] }, novos: { formulario: [{ numero: "UTIC-2026-5" }] } };
+    await ambiente.abrir();
+    const faixa = textoDe(ambiente.el("cockpit-monthly-chamados-dados"));
+    assert.match(faixa, /Abertos no mês 2/);
+    assert.match(faixa, /Finalizados no mês 1/);
+    assert.match(faixa, /Chamados novos 1/);
+    assert.match(faixa, /Antigos em aberto 2/);
+    assert.equal(ambiente.el("cockpit-monthly-chamados").hidden, false);
+    // Falha só na situação atual: mantém a contagem do mês e omite Novos e Antigos.
+    ambiente.servidor.sebraeErro = new Error("Falha no Sebrae.");
+    await ambiente.mudarMes("2026-10");
+    const semAtual = textoDe(ambiente.el("cockpit-monthly-chamados-dados"));
+    assert.match(semAtual, /Abertos no mês 2/);
+    assert.doesNotMatch(semAtual, /Chamados novos|Antigos em aberto/);
+    // A prévia para a gestão segue montada com os mesmos números.
+    assert.match(ambiente.el("cockpit-monthly-preview").textContent, /^Relatório mensal Simpress · mês 2026-10/);
+  } finally { delete global.document; }
+});
+
+test("Relatório mensal (F8): clique, setas, Home e End trocam de aba com tabindex rotativo e painel visível", async () => {
+  await comRelatorio(async ({ aba, tecla, visiveis, selecionada, tabindices }) => {
+    aba("os").click();
+    assert.deepEqual(visiveis(), ["os"]);
+    assert.deepEqual(selecionada(), ["os"]);
+    assert.deepEqual(tabindices(), [-1, 0, -1, -1, -1]);
+    const direita = tecla("os", "ArrowRight");
+    assert.equal(direita.prevenido, true);
+    assert.deepEqual(selecionada(), ["comp"]);
+    assert.deepEqual(visiveis(), ["comp"]);
+    assert.deepEqual(tabindices(), [-1, -1, 0, -1, -1]);
+    assert.equal(global.document.activeElement, aba("comp"), "a seta leva o foco para a aba nova");
+    tecla("comp", "ArrowLeft");
+    assert.deepEqual(selecionada(), ["os"]);
+    tecla("os", "End");
+    assert.deepEqual(selecionada(), ["base"]);
+    assert.equal(global.document.activeElement, aba("base"));
+    tecla("base", "ArrowRight");
+    assert.deepEqual(selecionada(), ["visao"], "ArrowRight na última volta para a primeira");
+    tecla("visao", "ArrowLeft");
+    assert.deepEqual(selecionada(), ["base"], "ArrowLeft na primeira vai para a última");
+    tecla("base", "Home");
+    assert.deepEqual(selecionada(), ["visao"]);
+    assert.deepEqual(visiveis(), ["visao"]);
+    const outra = tecla("visao", "a");
+    assert.equal(outra.prevenido, false, "tecla fora do conjunto não é consumida");
+    assert.deepEqual(selecionada(), ["visao"]);
+  });
+});
+
+test("Relatório mensal (F8): Ver lista dos cartões e Ver chamados trocam a aba antes de focar o título", async () => {
+  await comRelatorio(async ({ el, painel, visiveis, selecionada }) => {
+    const botoes = el("cockpit-monthly-kpis").querySelectorAll("button");
+    const botao = rotulo => botoes.find(item => item.getAttribute("aria-label") === rotulo);
+    // Foco em painel hidden não pega (activeElement volta ao body): se a aba trocasse depois, o foco falharia.
+    botao("Ver lista de OS e pedidos pendentes").click();
+    assert.deepEqual(visiveis(), ["os"]);
+    assert.deepEqual(selecionada(), ["os"]);
+    assert.equal(painel("os").querySelector('[data-rel-filtro="pendentes"]').getAttribute("aria-pressed"), "true", "a lista de OS já vem filtrada por pendentes");
+    assert.equal(global.document.activeElement, el("cockpit-monthly-os-title"));
+    el("rel-aba-visao").click();
+    botao("Ver lista de pendências da comparação").click();
+    assert.deepEqual(visiveis(), ["comp"]);
+    assert.equal(global.document.activeElement, el("cockpit-monthly-comp-title"));
+    el("rel-aba-visao").click();
+    el("cockpit-monthly-chamados-ver").click();
+    assert.deepEqual(visiveis(), ["sebrae"]);
+    assert.deepEqual(selecionada(), ["sebrae"]);
+    assert.equal(global.document.activeElement, el("cockpit-monthly-sebrae-title"));
+  });
+});
+
+test("Relatório mensal (F8): a aba escolhida sobrevive à recarga quieta e à troca de mês, e os contadores acompanham", async () => {
+  await comRelatorio(async ({ aba, el, servidor, visiveis, selecionada, tabindices, emite, esperar, mudarMes }) => {
+    aba("comp").click();
+    servidor.relatorio = mes => relatorioExemplo(mes, { os: 5, comp: 4, sebrae: 1 });
+    emite("simpress:chamados-atualizados");
+    await esperar();
+    assert.deepEqual(visiveis(), ["comp"], "recarga quieta mantém a aba");
+    assert.deepEqual(selecionada(), ["comp"]);
+    assert.deepEqual(tabindices(), [-1, -1, 0, -1, -1]);
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).textContent), ["5", "4", "1"], "o contador é atualizado também na recarga quieta");
+    servidor.relatorio = mes => relatorioExemplo(mes, { os: 1, comp: 0, sebrae: 7 });
+    await mudarMes("2026-10");
+    assert.ok(servidor.pedidos.some(url => url.includes("mes=2026-10")));
+    assert.deepEqual(visiveis(), ["comp"], "troca de mês mantém a aba");
+    assert.deepEqual(selecionada(), ["comp"]);
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).textContent), ["1", "0", "7"]);
+    assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).dataset.status), ["alerta", undefined, undefined], "zero linhas perde o tom de alerta");
+    assert.equal(el("cockpit-monthly-comp-title").tagName, "H3");
+  });
+});
+
+test("Relatório mensal (F8): carregando e erro vão para #cockpit-monthly-estado e o invólucro nunca é esvaziado", async () => {
+  await comRelatorio(async ({ aba, el, painel, servidor, visiveis, esperar, mudarMes }) => {
+    const detalhes = el("cockpit-monthly-details");
+    const filhos = [...detalhes.children];
+    const trocas = [];
+    detalhes.replaceChildren = (...nos) => trocas.push(nos);
+    const mesmosFilhos = () => {
+      assert.equal(detalhes.children.length, filhos.length);
+      detalhes.children.forEach((filho, i) => assert.equal(filho, filhos[i], `painel ${i} é o mesmo nó`));
+    };
+    aba("os").click();
+
+    let liberar;
+    servidor.relatorio = () => new Promise(resolver => { liberar = resolver; });
+    await mudarMes("2026-10");
+    assert.match(el("cockpit-monthly-estado").textContent, /Carregando/);
+    mesmosFilhos();
+    assert.equal(painel("os").children.length, 0, "os painéis são esvaziados, não o invólucro");
+    assert.equal(el("rel-os-contagem").hidden, true, "contadores somem enquanto carrega");
+    assert.equal(el("cockpit-monthly-chamados").hidden, true);
+    assert.equal(el("cockpit-monthly-attention").hidden, true);
+    liberar(relatorioExemplo("2026-10"));
+    await esperar();
+    assert.equal(el("cockpit-monthly-estado").children.length, 0, "o carregando sai quando o relatório chega");
+    mesmosFilhos();
+    assert.equal(painel("os").querySelectorAll("[data-rel-secao]").length, 1);
+    assert.deepEqual(visiveis(), ["os"]);
+
+    servidor.relatorio = () => { throw new Error("Falha de teste."); };
+    await mudarMes("2026-09");
+    assert.equal(el("cockpit-monthly-estado").textContent, "Falha de teste.");
+    mesmosFilhos();
+    assert.deepEqual(visiveis(), ["os"], "o erro não muda a aba");
+    assert.equal(el("rel-os-contagem").hidden, true);
+    assert.equal(trocas.length, 0, "replaceChildren nunca foi chamado no invólucro");
+  });
 });
 
 // ---------- Links de lembrete: abrirReferenciaLembrete abre a mesma janela, só com GETs existentes ----------

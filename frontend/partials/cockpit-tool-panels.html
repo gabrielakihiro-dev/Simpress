@@ -150,13 +150,37 @@
             <button type="button" id="cockpit-monthly-export" class="ck-btn ck-btn--primario">Exportar planilha</button>
             <p id="cockpit-monthly-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Selecione um mês para carregar o relatório.</p>
           </div>
+          <div class="rel-abas-barra">
+            <div class="rel-abas" role="tablist" aria-label="Assuntos do relatório">
+              <button type="button" role="tab" id="rel-aba-visao" class="rel-aba" data-rel-aba="visao" aria-selected="true" aria-controls="rel-painel-visao" tabindex="0"><span class="rel-aba__rotulo">Visão geral</span></button>
+              <button type="button" role="tab" id="rel-aba-os" class="rel-aba" data-rel-aba="os" aria-selected="false" aria-controls="rel-painel-os" tabindex="-1"><span class="rel-aba__rotulo">OS e pedidos do mês</span><span id="rel-os-contagem" class="ck-badge rel-aba__n" hidden></span></button>
+              <button type="button" role="tab" id="rel-aba-comp" class="rel-aba" data-rel-aba="comp" aria-selected="false" aria-controls="rel-painel-comp" tabindex="-1"><span class="rel-aba__rotulo">Pendências da comparação</span><span id="rel-comp-contagem" class="ck-badge rel-aba__n" hidden></span></button>
+              <button type="button" role="tab" id="rel-aba-sebrae" class="rel-aba" data-rel-aba="sebrae" aria-selected="false" aria-controls="rel-painel-sebrae" tabindex="-1"><span class="rel-aba__rotulo">Chamados (F5)</span><span id="rel-sebrae-contagem" class="ck-badge rel-aba__n" hidden></span></button>
+              <button type="button" role="tab" id="rel-aba-base" class="rel-aba" data-rel-aba="base" aria-selected="false" aria-controls="rel-painel-base" tabindex="-1"><span class="rel-aba__rotulo">Base atual</span></button>
+            </div>
+          </div>
           <div class="ck-rel__corpo">
-            <section id="cockpit-monthly-attention" class="ck-rel__atencao-bloco" aria-labelledby="cockpit-monthly-attention-title" hidden>
-              <h3 id="cockpit-monthly-attention-title" class="ck-rel__titulo" tabindex="-1">Precisa de atenção</h3>
-              <div id="cockpit-monthly-kpis" class="ck-rel__atencao-grade" role="group" aria-label="Indicadores do relatório"></div>
-            </section>
-            <div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês"></div>
-            <details class="ck-det-bloco ck-rel__previa"><summary class="ck-det__titulo">Prévia para a gestão</summary><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></details>
+            <div id="cockpit-monthly-estado" class="ck-rel__estado"></div>
+            <div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês">
+              <div id="rel-painel-visao" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-visao">
+                <section id="cockpit-monthly-attention" class="ck-rel__atencao-bloco" aria-labelledby="cockpit-monthly-attention-title" hidden>
+                  <h3 id="cockpit-monthly-attention-title" class="ck-rel__titulo" tabindex="-1">Precisa de atenção</h3>
+                  <div id="cockpit-monthly-kpis" class="ck-rel__atencao-grade" role="group" aria-label="Indicadores do relatório"></div>
+                </section>
+                <div id="cockpit-monthly-movimento" class="ck-rel__slot"></div>
+                <section id="cockpit-monthly-chamados" class="ck-rel__faixa" aria-labelledby="cockpit-monthly-chamados-title" hidden>
+                  <strong id="cockpit-monthly-chamados-title" class="ck-rel__faixa-titulo">Chamados (F5)</strong>
+                  <span id="cockpit-monthly-chamados-dados" class="ck-rel__faixa-dados"></span>
+                  <span class="ck-rel__espaco" aria-hidden="true"></span>
+                  <button type="button" id="cockpit-monthly-chamados-ver" class="ck-rel__link">Ver chamados →</button>
+                </section>
+                <details class="ck-det-bloco ck-rel__previa"><summary class="ck-det__titulo">Prévia para a gestão</summary><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></details>
+              </div>
+              <div id="rel-painel-os" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-os" hidden></div>
+              <div id="rel-painel-comp" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-comp" hidden></div>
+              <div id="rel-painel-sebrae" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-sebrae" hidden></div>
+              <div id="rel-painel-base" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-base" hidden></div>
+            </div>
           </div>
         </section>
 
