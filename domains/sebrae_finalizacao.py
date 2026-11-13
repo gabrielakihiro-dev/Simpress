@@ -49,6 +49,9 @@ STATUS_NAO_ENCONTRADO = "nao_encontrado"  # fora da central de tarefas: não pro
 STATUS_ERRO = "erro"
 STATUS_SEM_DESCRICAO = "sem_descricao"
 STATUS_PRONTO = "pronto"  # --sem-finalizar: the form was filled and checked, Finalizar was not clicked
+# Regra do usuário (12/11/2026): fora da central, com D=FINALIZADO e R informados pelo usuário, o chamado foi finalizado por outro técnico.
+STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"
+STATUS_FINALIZADOS = frozenset({STATUS_OK, STATUS_OUTRO_TECNICO})  # os dois saem das listas abertas e levam D/R ao Dashboard
 
 SUGESTOES_SHAREPOINT: Tuple[str, str, str] = (
     "Confira se o login do SharePoint está ativo no Chrome de automação (porta 9333) e use \"Tentar substituir de novo\".",
@@ -402,7 +405,7 @@ def congelar_os_vinculada(state_dir: Path, numero: str, vinculo: Optional[Mappin
 
 def ja_finalizado(state_dir: Path, numero: str) -> bool:
     fin = ler_estado(state_dir).get(numero, {}).get("finalizacao")
-    return isinstance(fin, dict) and fin.get("status") == STATUS_OK  # nao_encontrado e ja_finalizado antigos não bloqueiam
+    return isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS  # nao_encontrado e ja_finalizado antigos não bloqueiam
 
 
 def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
@@ -410,24 +413,24 @@ def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
     achados: Dict[str, str] = {}
     for numero, item in ler_estado(state_dir).items():
         fin = item.get("finalizacao")
-        if isinstance(fin, dict) and fin.get("status") == STATUS_OK and fin.get("encerrado_em"):
+        if isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS and fin.get("encerrado_em"):
             achados[numero] = str(fin["encerrado_em"])
     return achados
 
 
 def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
-    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), newest finalization first, with the card saved before finalizing.
+    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``) or recorded as finalized by another technician (``finalizado_outro_tecnico``), newest first, with the card saved before finalizing.
 
     They leave the open lists as soon as SoftExpert confirms, whether or not the imported Dashboard shows them closed yet.
     """
     achados = []
     for numero, item in ler_estado(state_dir).items():
         fin = item.get("finalizacao")
-        if isinstance(fin, dict) and fin.get("status") == STATUS_OK:
+        if isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS:
             ficha = item.get("ficha")
             pdf = item.get("pdf")
             achados.append({
-                "numero": numero, "encerrado_em": str(fin.get("encerrado_em") or ""), "em": str(fin.get("em") or ""),
+                "numero": numero, "status": str(fin["status"]), "encerrado_em": str(fin.get("encerrado_em") or ""), "em": str(fin.get("em") or ""),
                 "descricao": str(item.get("descricao_finalizacao") or ""), "ficha": ficha if isinstance(ficha, dict) else None,
                 "pdf": str(pdf.get("nome") or "") if isinstance(pdf, dict) else "",
                 **({"pdf_remocao_pendente": True} if item.get("pdf_remocao") else {}),
@@ -456,9 +459,12 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 
 def gravar_job(
     state_dir: Path, numeros: Sequence[str], *, confirmar_final: bool = True, pulados: Sequence[Mapping[str, str]] = (),
-    acao: str = ACAO_FINALIZAR, envio_id: str = "", sha256: str = "",
+    acao: str = ACAO_FINALIZAR, envio_id: str = "", sha256: str = "", encerramentos_manuais: Mapping[str, str] = {},
 ) -> None:
-    """Request for the next ``fechar`` run; the routine consumes it. ``--sem-finalizar`` can still force a dry run."""
+    """Request for the next ``fechar`` run; the routine consumes it. ``--sem-finalizar`` can still force a dry run.
+
+    ``encerramentos_manuais`` = ``{UTIC: "dd/MM/aaaa HH:mm"}`` of old tickets the user marked FINALIZADO with an Encerramento (R) and
+    that the last SoftExpert read did not find: if ``fechar`` also does not find them, they count as finalized by another technician."""
     with lock_paths([state_dir / "sebrae_dashboard_base.guard", caminho_envio(state_dir), caminho_job(state_dir)]):
         if acao == ACAO_REENVIAR:
             exigir_envio_livre(state_dir)
@@ -468,7 +474,7 @@ def gravar_job(
                 raise DomainConflictError("Já há um pedido aguardando a automação.")
         atomic_write_json(caminho_job(state_dir), {
             "criado_em": agora_iso(), "acao": acao, "numeros": list(numeros), "confirmar_final": bool(confirmar_final),
-            "pulados": [dict(p) for p in pulados],
+            "pulados": [dict(p) for p in pulados], "encerramentos_manuais": dict(encerramentos_manuais),
             **({"envio_id": envio_id, "sha256": sha256} if acao == ACAO_REENVIAR_SNAPSHOT else {}),
         })
 
@@ -489,6 +495,21 @@ def _job_valido(job: Mapping[str, Any], agora: Optional[datetime]) -> bool:
     return timedelta(0) <= idade <= JOB_VALIDADE
 
 
+def _encerramentos_validos(bruto: Any, numeros: Sequence[str]) -> Dict[str, str]:
+    """Só número do próprio pedido com R no formato ``dd/MM/aaaa HH:mm``; o resto do arquivo é descartado."""
+    if not isinstance(bruto, dict):
+        return {}
+    validos: Dict[str, str] = {}
+    for numero, quando in bruto.items():
+        try:
+            datetime.strptime(str(quando), FORMATO_ENCERRAMENTO)
+        except ValueError:
+            continue
+        if numero in numeros:
+            validos[numero] = str(quando)
+    return validos
+
+
 def consumir_job(state_dir: Path, agora: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
     """The job, deleted on reading; ``None`` when there is none, it is unreadable or older than ``JOB_VALIDADE``."""
     caminho = caminho_job(state_dir)
@@ -500,9 +521,11 @@ def consumir_job(state_dir: Path, agora: Optional[datetime] = None) -> Optional[
     numeros = job.get("numeros")
     if not isinstance(numeros, list) or job.get("acao") not in (ACAO_FINALIZAR, ACAO_REENVIAR, ACAO_REENVIAR_SNAPSHOT):
         return None
+    lista = [str(n) for n in numeros]
     return {
-        "acao": job["acao"], "numeros": [str(n) for n in numeros], "confirmar_final": job.get("confirmar_final") is not False,
+        "acao": job["acao"], "numeros": lista, "confirmar_final": job.get("confirmar_final") is not False,
         "pulados": [p for p in job.get("pulados") or [] if isinstance(p, dict)],
+        "encerramentos_manuais": _encerramentos_validos(job.get("encerramentos_manuais"), lista),
         **({"envio_id": str(job.get("envio_id") or ""), "sha256": str(job.get("sha256") or "")} if job["acao"] == ACAO_REENVIAR_SNAPSHOT else {}),
     }
 

@@ -755,11 +755,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _fechar_inativo(motivo: str, pulados: Sequence[Mapping[str, str]] = ()) -> Dict[str, Any]:
         return {"iniciado": False, "motivo": motivo, "numeros": [], "pulados": [dict(p) for p in pulados]}
 
+    def _encerramentos_manuais(com_r: Mapping[str, str]) -> Dict[str, str]:
+        """``{UTIC: R}`` dos que a última leitura do SoftExpert não achou (regra do usuário, 12/11/2026): se a ``fechar`` também não os achar,
+        o R do usuário os registra como finalizados por outro técnico. Chamado achado na leitura nunca entra aqui."""
+        if not com_r:
+            return {}
+        perdidos = _nao_encontrados(_leitura_antigos())
+        return {numero: r for numero, r in com_r.items() if numero in perdidos}
+
     def _finalizar_marcados(edicoes: Mapping[str, Mapping[str, str]]) -> Dict[str, Any]:
         """Tickets (old edits and new rows) whose D the user just set to FINALIZADO go to the ``fechar`` routine; a failure here never fails the update."""
         pasta = _pasta_estado()
         numeros: List[str] = []
         pulados: List[Dict[str, str]] = []
+        com_r: Dict[str, str] = {}
         for chave, valores in edicoes.items():
             if str(valores.get("D") or "").strip().upper() != sebrae_novos.STATUS_FINALIZADO:
                 continue
@@ -774,10 +783,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 pulados.append({"numero": numero, "motivo": fin.STATUS_SEM_DESCRICAO})
             else:
                 numeros.append(numero)
+                if str(valores.get("R") or "").strip():
+                    com_r[numero] = str(valores["R"]).strip()
         if not numeros:
             return _fechar_inativo("", pulados)
         try:
-            _disparar(numeros, pulados)
+            _disparar(numeros, pulados, encerramentos_manuais=_encerramentos_manuais(com_r))
         except DomainError as erro:
             return _fechar_inativo(str(erro.detail), pulados)
         return {"iniciado": True, "motivo": "", "numeros": numeros, "pulados": pulados}
@@ -800,7 +811,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if ativa is not None:
             raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
 
-    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR, *, envio_id: str = "", sha256: str = "") -> None:
+    def _disparar(
+        numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR, *, envio_id: str = "", sha256: str = "",
+        encerramentos_manuais: Mapping[str, str] = {},
+    ) -> None:
         """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
 
         409 when a run is in progress or another job still waits; the job is removed if the routine does not start."""
@@ -823,7 +837,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             else:
                 if acao == fin.ACAO_FINALIZAR:
                     _congelar_os_vinculada(pasta, numeros)  # before the job: the link may change while the routine runs
-                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, encerramentos_manuais=encerramentos_manuais)
             try:
                 runner.start("fechar")
             except BaseException:
@@ -935,13 +949,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             if not fin.dados_para_finalizar(pasta, numero)[0]:
                 raise DomainValidationError("Preencha a descrição para finalizar o chamado antes de finalizar.", status_code=422)
             # Os campos manuais entram na cópia de saída antes da rotina, que depois só grava R e D: sem isso o Dashboard enviado ao SharePoint perderia A, B, J e S.
+            manual = ""  # R do usuário com D=FINALIZADO neste cartão (só conta se a leitura do SoftExpert não achou o chamado)
             if payload.chamados or payload.edicoes:
                 if services.runner is not None:
                     _exigir_rotina_livre(pasta)  # a rotina ocupada recusa antes de refazer a cópia; _disparar confere de novo dentro do lock
                 gravacao = _gravar_atualizacao(AtualizarPayload(chamados=payload.chamados, edicoes=payload.edicoes, versao_importacao=payload.versao_importacao), aceita_vazio=True)
                 if gravacao is not None and not gravacao[3]:
                     raise DomainBusyError("Não consegui gravar os campos manuais na cópia do Dashboard; nada foi finalizado.")
-            _disparar([numero])
+                valores = gravacao[4].get(numero, {}) if gravacao is not None else {}
+                if str(valores.get("D") or "").strip().upper() == sebrae_novos.STATUS_FINALIZADO:
+                    manual = str(valores.get("R") or "").strip()
+            _disparar([numero], encerramentos_manuais=_encerramentos_manuais({numero: manual} if manual else {}))
             return JSONResponse({"iniciado": True, "numeros": [numero]}, status_code=202, headers={"Cache-Control": "no-store"})
 
     @router.get("/api/sebrae/finalizar-softexpert")
