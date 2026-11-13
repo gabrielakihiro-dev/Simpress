@@ -55,7 +55,7 @@ O `#tab-panel-retirada-entrega` vira um grid de 3 colunas:
 - Tipo de acesso (`#retirada-tipo-acesso`) — 2 colunas
 - Voltagem (`#retirada-voltagem`) — 1 coluna
 - Representante regional (`#retirada-representante`) — select ocupando a linha toda, preenchido automaticamente pela cidade. Mesmo `data-on-change`.
-- Botão `Editar` (`#btn-editar-representante-retirada`) ao lado do select: abre o modal `#modal-representante-regional` (`Salvar`, `Restaurar padrão`, `Cancelar`) e grava só a alteração da cidade em `config/representantes_regionais.json` (local, fora do Git). O padrão (nome, e-mail e telefone; o código guarda só cidades e horários) vem do arquivo local `data/state/representantes_regionais_padrao.json`, e a cidade sem nome efetivo aparece como `Não definido ainda`. Mesmo botão na Entrega: `#btn-editar-representante-entrega`.
+- Botão `Editar` (`#btn-editar-representante-retirada`) ao lado do select: abre o modal `#modal-representante-regional` (`Salvar`, `Restaurar padrão`, `Cancelar`) e grava só a alteração da cidade em `config/representantes_regionais.json` (local, fora do Git). O padrão (nome, e-mail e telefone; o código guarda só cidades e horários) vem do arquivo local `data/state/representantes_regionais_padrao.json`, e a cidade sem nome efetivo aparece como `Não definido ainda`. Se esse arquivo estiver inválido, a tela avisa uma vez (toast) e `Salvar` é recusado (503) sem gravar nada, até corrigi-lo (13/11/2026). Mesmo botão na Entrega: `#btn-editar-representante-entrega`.
 - Nome (`#retirada-contato`) — obrigatório (*)
 - E-mail (`#retirada-email`) — obrigatório (*)
 - Celular (`#retirada-telefone`) — obrigatório (*), font-mono
