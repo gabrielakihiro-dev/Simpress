@@ -693,7 +693,8 @@ QUERY_TOOLS: List[Tool] = [
         "`chamado`, `origem` (`site` = o Simpress finalizou o chamado no SoftExpert; `outro_tecnico` = o chamado saiu do Dashboard ou "
         "não foi achado no SoftExpert sem finalização pelo site, então confira no SoftExpert), `motivo`, `ativa` (false = desfeita na tela) "
         "e `conferido`. Só leitura: desfazer, refazer e conferir a marca só se faz na tela. "
-        "Na tela da aba OS (F6), a OS com marca `ativa` fica na sub-aba `Finalizadas` e as demais em `Abertas`; os KPIs e a triagem da tela "
+        "Na tela da aba OS (F6), a OS com marca `ativa` ou com o selo `Entregue` da Simpress (etapa atual `Pedido entregue` com data "
+        "completa, com ou sem vínculo UTIC) fica na sub-aba `Finalizadas` e as demais em `Abertas`; os KPIs e a triagem da tela "
         "contam só `Abertas`, mas `total_chamados` e `resumo` daqui contam todas as OS. "
         "`sinais_os` traz, por OS Oracle daquela série, os selos da aba OS (F6): `envio_tecnico` (true = a descrição da OS pede envio de "
         "técnico) e `dias_aberta` (dias entre a abertura da OS e a última importação; nulo se concluída ou sem data).",

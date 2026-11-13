@@ -14,8 +14,8 @@ Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto 
 ## OS (F6)
 
 - A marca de OS finalizada é anotação local em `data/state/os_marcas_finalizacao.json`; desfazer nunca reabre o chamado (`os_marcas_finalizacao.py`). Doc: `docs/cockpit-prompts/07-chamados-operacional.md`.
-- A marca ativa decide a sub-aba da OS (`Finalizadas`; sem marca ou desfeita, `Abertas`); KPIs, triagem e `Atenção · 3+ dias` contam só `Abertas` e `Exportar Excel` leva só a sub-aba visível. Doc: o mesmo.
-- Marca ativa gera o vínculo UTIC automático (`origem: "finalizacao"`) na leitura de `GET /api/operacoes/chamados/vinculos-os`; prioridade manual > finalizacao > dashboard, nunca gravado em `os_chamados_vinculos.json`; `Desfazer` remove o vínculo e devolve a OS a `Abertas` (`sebrae_vinculos.py`, `routers/operations.py`). Doc: o mesmo.
+- A marca ativa ou o selo `Entregue` da Simpress (desde 13/11/2026, com ou sem vínculo UTIC) leva a OS para `Finalizadas`; sem nenhum dos dois, `Abertas`; KPIs, triagem e `Atenção · 3+ dias` contam só `Abertas` e `Exportar Excel` leva só a sub-aba visível. Doc: o mesmo.
+- Marca ativa gera o vínculo UTIC automático (`origem: "finalizacao"`) na leitura de `GET /api/operacoes/chamados/vinculos-os`; prioridade manual > finalizacao > dashboard, nunca gravado em `os_chamados_vinculos.json`; `Desfazer` remove o vínculo e devolve a OS a `Abertas`, salvo com o selo `Entregue` (`sebrae_vinculos.py`, `routers/operations.py`). Doc: o mesmo.
 - Observação por OS fica só em `data/state/os_observacoes.json` e não entra em busca, filtros nem exportação (`os_observacoes.py`). Doc: o mesmo.
 - Série sem OS vinculada some por completo da aba OS; só a exibição muda. `envio_tecnico` e `dias_aberta` são calculados na leitura, nunca gravados (`ticket_reporting.py`). Doc: o mesmo.
 
