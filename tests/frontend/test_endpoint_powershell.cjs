@@ -379,6 +379,7 @@ test("PowerShell: sucesso mostra o aviso exato de que NÃO foi executado", async
 for (const [resposta, trecho] of [
   [{ status: "not_found", hostname: "PC1" }, /não encontrado.*Nada foi inserido/s],
   [{ status: "erro_terminal", mensagem: "Terminal não abriu." }, /^Terminal não abriu\.$/],
+  [{ status: "offline", hostname: "PRNOTEUIC001" }, /^O notebook PRNOTEUIC001 está offline no Endpoint\. Nada foi inserido\.$/],
   [{ status: "sem_usuario", hostname: "PC1", usuarios: [] }, /Nada foi inserido/],
   [{ status: "usuario_ambiguo", hostname: "PC1", usuarios: ["a", "b"] }, /Nada foi inserido/],
 ]) {
