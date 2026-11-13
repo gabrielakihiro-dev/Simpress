@@ -21,6 +21,9 @@
   let pedidoLista = 0;
   // Termo de origem enquanto o diálogo Criar lembrete está aberto.
   let criando = null;
+  // Vista aberta ("hoje" ou "embreve") e semana mostrada em Em breve (0 = a semana de hoje).
+  let vista = "hoje";
+  let semanaAtual = 0;
 
   const tamanho = (texto) => [...String(texto ?? "")].length;
   // O backend recusa caractere de controle (422): quebra de linha e tab viram espaço, e espaços repetidos viram um só.
@@ -49,6 +52,99 @@
     .sort((a, b) => instante(b.item) - instante(a.item) || b.posicao - a.posicao)
     .map(({ item }) => item);
   const achar = (id) => lembretes.find((l) => String(l.id) === String(id));
+
+  // Datas agendadas são texto "AAAA-MM-DD" e só passam por Date.UTC/getUTC*: new Date("AAAA-MM-DD") e toISOString dependem do fuso do navegador.
+  // Só hojeEm olha para America/Sao_Paulo; os rótulos usam Intl com timeZone "UTC" para não deslocar o dia.
+  const FUSO = "America/Sao_Paulo";
+  const RE_DATA = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const RE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const DIA_MS = 86400000;
+  const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const dois = (n) => String(n).padStart(2, "0");
+  const formatoUtc = (opcoes) => new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", ...opcoes });
+  const fmtMesCurto = formatoUtc({ month: "short" });
+  const fmtMesLongo = formatoUtc({ month: "long" });
+  const fmtSemana = formatoUtc({ weekday: "long" });
+  const fmtSaoPaulo = new Intl.DateTimeFormat("en-US", { timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit" });
+
+  // Meia-noite UTC da data real no formato estrito, ou null (recusa 2026-02-30 e ano 0000, como o backend).
+  // setUTCFullYear em vez de Date.UTC: o Date.UTC trata os anos 0 a 99 como 1900 a 1999.
+  function dataMs(texto) {
+    const partes = typeof texto === "string" ? RE_DATA.exec(texto) : null;
+    if (!partes) return null;
+    const [ano, mes, dia] = [Number(partes[1]), Number(partes[2]), Number(partes[3])];
+    const d = new Date(0);
+    d.setUTCFullYear(ano, mes - 1, dia);
+    return ano >= 1 && d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia ? d.getTime() : null;
+  }
+  const dataValida = (texto) => dataMs(texto) !== null;
+  const textoDeMs = (ms) => {
+    const d = new Date(ms);
+    return `${String(d.getUTCFullYear()).padStart(4, "0")}-${dois(d.getUTCMonth() + 1)}-${dois(d.getUTCDate())}`;
+  };
+  const somarDias = (data, n) => textoDeMs(dataMs(data) + n * DIA_MS);
+  const diaDaSemana = (data) => new Date(dataMs(data)).getUTCDay();
+
+  // "Hoje" em America/Sao_Paulo, no formato AAAA-MM-DD, para o instante em milissegundos.
+  function hojeEm(instanteMs = Date.now()) {
+    const partes = Object.fromEntries(fmtSaoPaulo.formatToParts(new Date(instanteMs)).map(({ type, value }) => [type, value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
+  }
+
+  // Segunda-feira seguinte a hoje; numa segunda, a da semana que vem (+7).
+  const proximaSegunda = (hoje) => somarDias(hoje, (8 - diaDaSemana(hoje)) % 7 || 7);
+  // Os 7 dias (domingo a sábado) da semana de hoje deslocada em n semanas.
+  const semanaDe = (hoje, n = 0) => {
+    const domingo = somarDias(hoje, 7 * n - diaDaSemana(hoje));
+    return Array.from({ length: 7 }, (_, i) => somarDias(domingo, i));
+  };
+
+  const semPonto = (texto) => texto.replace(/\.$/, "");
+  const capitalizar = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+  // "13 nov"; em ano diferente do de hoje, "13 nov 2027".
+  const diaEMes = (data, hoje) => `${Number(data.slice(8))} ${semPonto(fmtMesCurto.format(dataMs(data)))}${data.slice(0, 4) === hoje.slice(0, 4) ? "" : ` ${data.slice(0, 4)}`}`;
+  const rotuloDia = (data, hoje) => (data === hoje ? "Hoje" : data === somarDias(hoje, 1) ? "Amanhã" : diaEMes(data, hoje));
+  // Rótulo do item: "Hoje · 14:00", "Amanhã", "13 nov", "13 nov 2027".
+  const rotuloAgenda = (data, hora, hoje) => `${rotuloDia(data, hoje)}${RE_HORA.test(hora ?? "") ? ` · ${hora}` : ""}`;
+  // Cabeçalho de um dia: "12 nov · Hoje · quinta-feira", "13 nov · Amanhã · sexta-feira", "14 nov · sábado".
+  const tituloGrupoDia = (data, hoje) => [
+    diaEMes(data, hoje), data === hoje && "Hoje", data === somarDias(hoje, 1) && "Amanhã", fmtSemana.format(dataMs(data)),
+  ].filter(Boolean).join(" · ");
+  // Mês e ano da faixa: "Novembro 2026", ou "Novembro – Dezembro 2026" quando a semana cruza o mês.
+  function tituloSemana(dias) {
+    const [inicio, fim] = [dias[0], dias[dias.length - 1]];
+    const mes = (d) => capitalizar(fmtMesLongo.format(dataMs(d)));
+    if (inicio.slice(0, 7) === fim.slice(0, 7)) return `${mes(inicio)} ${inicio.slice(0, 4)}`;
+    if (inicio.slice(0, 4) === fim.slice(0, 4)) return `${mes(inicio)} – ${mes(fim)} ${inicio.slice(0, 4)}`;
+    return `${mes(inicio)} ${inicio.slice(0, 4)} – ${mes(fim)} ${fim.slice(0, 4)}`;
+  }
+
+  // Data fora do formato (arquivo editado à mão) conta como sem data; hora só vale com data.
+  const dataDe = (l) => (dataValida(l?.data_agendada) ? l.data_agendada : null);
+  const horaDe = (l) => (dataDe(l) && RE_HORA.test(l.hora_agendada ?? "") ? l.hora_agendada : null);
+  const chaveAgenda = (l) => `${dataDe(l)} ${horaDe(l) ?? "99:99"}`;
+
+  // Função pura: separa os pendentes em atrasados (data < hoje), um grupo por dia (de hoje em diante) e sem data.
+  // Dentro de cada grupo: data e hora crescentes, com hora antes de sem hora; no empate, a regra de ordenar (mais recente no topo).
+  function agruparLembretes(pendentes, hoje) {
+    const recentes = ordenar(pendentes ?? []);
+    const comData = recentes.filter((l) => dataDe(l)).sort((a, b) => (chaveAgenda(a) < chaveAgenda(b) ? -1 : chaveAgenda(a) > chaveAgenda(b) ? 1 : 0));
+    const porDia = new Map();
+    comData.filter((l) => dataDe(l) >= hoje).forEach((l) => porDia.set(dataDe(l), [...(porDia.get(dataDe(l)) ?? []), l]));
+    return { atrasados: comData.filter((l) => dataDe(l) < hoje), porDia, semData: recentes.filter((l) => !dataDe(l)) };
+  }
+
+  // Grupos da vista aberta. Hoje: Atrasada, hoje e Sem data. Em breve: Atrasada só na semana atual, um grupo por dia (de hoje em diante) e Sem data.
+  function montarVista(agrupado, hoje, qual = "hoje", semana = 0) {
+    const grupos = [];
+    if (agrupado.atrasados.length && (qual === "hoje" || semana === 0)) {
+      grupos.push({ chave: "atrasada", titulo: "Atrasada", n: agrupado.atrasados.length, itens: agrupado.atrasados, reagendar: true });
+    }
+    const dias = qual === "embreve" ? semanaDe(hoje, semana).filter((d) => d >= hoje) : [hoje];
+    dias.forEach((d) => grupos.push({ chave: d, data: d, titulo: tituloGrupoDia(d, hoje), itens: agrupado.porDia.get(d) ?? [], adicionar: true }));
+    if (agrupado.semData.length) grupos.push({ chave: "sem-data", titulo: "Sem data", n: agrupado.semData.length, itens: agrupado.semData });
+    return grupos;
+  }
 
   function elemento(tag, classe, texto) {
     const el = doc().createElement(tag);
@@ -79,11 +175,45 @@
     return b;
   }
 
+  // Ícone de calendário e de fechar (o sprite do index.html não traz calendário): SVG próprio, só com currentColor.
+  function icone(desenho, tamanho = 12) {
+    const svg = doc().createElementNS(SVG_NS, "svg");
+    [["viewBox", "0 0 24 24"], ["width", tamanho], ["height", tamanho], ["fill", "none"], ["stroke", "currentColor"], ["stroke-width", "2"],
+      ["stroke-linecap", "round"], ["stroke-linejoin", "round"], ["aria-hidden", "true"], ["class", "lembretes__ico"]]
+      .forEach(([nome, valor]) => svg.setAttribute(nome, String(valor)));
+    desenho.forEach(([tag, atributos]) => {
+      const parte = doc().createElementNS(SVG_NS, tag);
+      Object.entries(atributos).forEach(([nome, valor]) => parte.setAttribute(nome, valor));
+      svg.append(parte);
+    });
+    return svg;
+  }
+  const iconeCalendario = (tamanho) => icone([["rect", { x: 3, y: 5, width: 18, height: 16, rx: 2 }], ["path", { d: "M16 3v4M8 3v4M3 10h18" }]], tamanho);
+  const iconeMais = (tamanho) => icone([["path", { d: "M12 5v14M5 12h14" }]], tamanho);
+  const iconeFechar = (tamanho) => icone([["path", { d: "M18 6 6 18M6 6l12 12" }]], tamanho);
+
+  // Campo nativo de data ou de hora com rótulo visível (Data, Hora (opcional)); id e escopo definem qual é.
+  function campoDataHora(escopo, tipo, rotulo, valor) {
+    const bloco = elemento("div", "lembretes__campo-data");
+    const label = elemento("label", "lembretes__rotulo-campo", rotulo);
+    label.htmlFor = `lembretes-${escopo}-${tipo}`;
+    const entrada = elemento("input", "ck-entrada");
+    entrada.type = tipo === "data" ? "date" : "time";
+    entrada.id = `lembretes-${escopo}-${tipo}`;
+    entrada.value = valor;
+    if (tipo === "data") entrada.max = "9999-12-31";
+    ligar(entrada, "change", "lembretesAoMudarData", ["$this"]);
+    bloco.append(label, entrada);
+    return bloco;
+  }
+
   function criarEdicao(l) {
     const form = elemento("form", "lembretes__edicao");
     form.autocomplete = "off";
     form.noValidate = true;
     ligar(form, "submit", "lembretesSalvarEdicao", [l.id]);
+    // O Esc vale em qualquer campo da edição (descrição, data ou hora): o evento sobe até o formulário.
+    ligar(form, "keydown", "lembretesTeclaEdicao", ["$event"]);
     const rotulo = elemento("label", "sr-only", "Editar descrição");
     rotulo.htmlFor = "lembretes-edicao-campo";
     const campo = elemento("input", "ck-entrada lembretes__campo");
@@ -93,7 +223,15 @@
     campo.autocomplete = "off";
     campo.setAttribute("aria-describedby", "lembretes-edicao-dica lembretes-edicao-erro");
     ligar(campo, "input", "lembretesAoDigitar", ["$this"]);
-    ligar(campo, "keydown", "lembretesTeclaEdicao", ["$event"]);
+    const agenda = elemento("div", "lembretes__edicao-agenda");
+    const data = campoDataHora("edicao", "data", "Data", dataDe(l) ?? "");
+    const hora = campoDataHora("edicao", "hora", "Hora (opcional)", horaDe(l) ?? "");
+    hora.querySelector("input").disabled = !dataDe(l);
+    const remover = elemento("button", "ck-btn ck-btn--fantasma ck-btn--sm lembretes__remover-data");
+    remover.type = "button";
+    remover.append(iconeFechar(14), "Remover data");
+    ligar(remover, "click", "lembretesRemoverData", ["edicao"]);
+    agenda.append(data, hora, remover);
     const dica = elemento("p", "lembretes__dica");
     dica.append(elemento("kbd", "", "Enter"), " salva · ", elemento("kbd", "", "Esc"), " cancela");
     dica.id = "lembretes-edicao-dica";
@@ -108,11 +246,58 @@
     const salvar = elemento("button", "ck-btn ck-btn--primario ck-btn--sm", "Salvar");
     salvar.type = "submit";
     acoes.append(cancelar, salvar);
-    form.append(rotulo, campo, dica, erro, acoes);
+    // Como no modelo: campo, erro, data/hora/remover, botões e, por último, a dica das teclas.
+    form.append(rotulo, campo, erro, agenda, acoes, dica);
     return form;
   }
 
-  function criarItem(l) {
+  // Um dia da faixa da semana (Em breve): sem item possível antes de hoje, então o botão fica desligado.
+  function criarDia(data, hoje) {
+    const botao = elemento("button", "lembretes__dia");
+    botao.type = "button";
+    botao.dataset.dia = data;
+    if (data === hoje) botao.setAttribute("aria-current", "date");
+    botao.disabled = data < hoje;
+    botao.append(elemento("span", "lembretes__dia-nome", DIAS_CURTOS[diaDaSemana(data)]), elemento("span", "lembretes__dia-num", String(Number(data.slice(8)))));
+    ligar(botao, "click", "lembretesIrParaDia", [data]);
+    return botao;
+  }
+
+  // Um grupo da vista: título, contagem, Reagendar (só em Atrasada), itens e + Adicionar lembrete (só nos dias).
+  function criarGrupo(grupo, hoje) {
+    const secao = elemento("section", "lembretes__grupo");
+    secao.dataset.grupo = grupo.chave;
+    const titulo = elemento("h3", "lembretes__grupo-titulo", grupo.titulo);
+    titulo.id = `lembretes-grupo-${grupo.chave}`;
+    titulo.tabIndex = -1;
+    secao.setAttribute("aria-labelledby", titulo.id);
+    const topo = elemento("div", "lembretes__grupo-topo");
+    topo.append(titulo);
+    if (grupo.n !== undefined) topo.append(elemento("span", "lembretes__grupo-n", String(grupo.n)));
+    if (grupo.reagendar) {
+      const reagendar = elemento("button", "ck-btn ck-btn--fantasma ck-btn--sm lembretes__reagendar", "Reagendar para hoje");
+      reagendar.type = "button";
+      ligar(reagendar, "click", "lembretesReagendarAtrasados");
+      topo.append(reagendar);
+    }
+    secao.append(topo);
+    if (grupo.itens.length) {
+      const lista = elemento("ul", "lembretes__lista lembretes__itens");
+      lista.append(...grupo.itens.map((l) => criarItem(l, hoje)));
+      secao.append(lista);
+    }
+    if (grupo.adicionar) {
+      const adicionar = elemento("button", "lembretes__adicionar-dia");
+      adicionar.type = "button";
+      adicionar.setAttribute("aria-label", `Adicionar lembrete em ${grupo.titulo}`);
+      adicionar.append(iconeMais(14), "Adicionar lembrete");
+      ligar(adicionar, "click", "lembretesAdicionarNoDia", [grupo.data]);
+      secao.append(adicionar);
+    }
+    return secao;
+  }
+
+  function criarItem(l, hoje) {
     const li = elemento("li", "lembretes__item");
     li.dataset.lembreteId = l.id;
     if (l.concluido) li.classList.add("lembretes__item--feito");
@@ -131,7 +316,16 @@
     const corpo = elemento("div", "lembretes__corpo");
     const data = elemento("time", l.alterado_em ? "lembretes__data lembretes__data--alterado" : "lembretes__data",`${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
     data.setAttribute("datetime", dataExibida(l));
-    corpo.append(elemento("p", "lembretes__texto", l.descricao), data);
+    corpo.append(elemento("p", "lembretes__texto", l.descricao));
+    const dia = dataDe(l);
+    if (dia) {
+      // span e não <time>: o único <time> do item é o de Criado/Alterado em.
+      const classe = !l.concluido && dia < hoje ? " lembretes__agenda--atrasada" : dia === hoje ? " lembretes__agenda--hoje" : "";
+      const agenda = elemento("span", `lembretes__agenda${classe}`);
+      agenda.append(iconeCalendario(12), rotuloAgenda(dia, horaDe(l), hoje));
+      corpo.append(agenda);
+    }
+    corpo.append(data);
     const acoes = elemento("div", "lembretes__acoes");
     acoes.append(
       botaoIcone("lembretes__editar", "Editar lembrete", "pencil", "lembretesEditar", l.id),
@@ -141,15 +335,46 @@
     return li;
   }
 
+  const CAMPOS_EDICAO = ["lembretes-edicao-campo", "lembretes-edicao-data", "lembretes-edicao-hora"];
+
+  // Pílulas Hoje <n> / Em breve, painel da semana (só em Em breve) e faixa de 7 dias.
+  function renderizarVistas(agrupado, hoje) {
+    const hojeN = porId("lembretes-hoje-n");
+    if (hojeN) hojeN.textContent = String(agrupado.atrasados.length + (agrupado.porDia.get(hoje)?.length ?? 0));
+    ["hoje", "embreve"].forEach((qual) => {
+      const aba = porId(`lembretes-aba-${qual}`);
+      if (!aba) return;
+      aba.setAttribute("aria-selected", String(qual === vista));
+      aba.tabIndex = qual === vista ? 0 : -1;
+    });
+    porId("lembretes-lista")?.setAttribute("aria-labelledby", `lembretes-aba-${vista}`);
+    // Faixa de dias e navegação ‹ Hoje › só existem em Em breve.
+    ["lembretes-semana", "lembretes-navegar"].forEach((id) => { const el = porId(id); if (el) el.hidden = vista !== "embreve"; });
+    if (vista !== "embreve") return;
+    const dias = semanaDe(hoje, semanaAtual);
+    const mes = porId("lembretes-mes");
+    if (mes) mes.textContent = tituloSemana(dias);
+    const anterior = porId("lembretes-semana-anterior");
+    if (anterior) anterior.disabled = semanaAtual === 0;
+    porId("lembretes-faixa")?.replaceChildren(...dias.map((d) => criarDia(d, hoje)));
+  }
+
   function renderizar() {
     if (!doc()) return;
-    // Refazer a lista não pode apagar o que o usuário digita na edição ainda não salva.
-    const campoEdicao = porId("lembretes-edicao-campo");
-    const rascunho = campoEdicao ? { id: editandoId, valor: campoEdicao.value, foco: doc().activeElement === campoEdicao } : null;
-    const pendentes = ordenar(lembretes.filter((l) => !l.concluido));
+    // Refazer a lista não pode apagar o que o usuário digita na edição ainda não salva (descrição, data e hora).
+    const rascunho = porId("lembretes-edicao-campo") ? {
+      id: editandoId,
+      valores: CAMPOS_EDICAO.map((id) => porId(id)?.value ?? ""),
+      foco: CAMPOS_EDICAO.find((id) => doc().activeElement === porId(id)),
+    } : null;
+    // "Hoje" é recalculado a cada desenho: a aba aberta de um dia para o outro não fica presa na data antiga.
+    const hoje = hojeEm();
+    const pendentes = lembretes.filter((l) => !l.concluido);
     const concluidos = ordenar(lembretes.filter((l) => l.concluido));
-    porId("lembretes-lista")?.replaceChildren(...pendentes.map(criarItem));
-    porId("lembretes-concluidos-lista")?.replaceChildren(...concluidos.map(criarItem));
+    const agrupado = agruparLembretes(pendentes, hoje);
+    porId("lembretes-lista")?.replaceChildren(...montarVista(agrupado, hoje, vista, semanaAtual).map((g) => criarGrupo(g, hoje)));
+    porId("lembretes-concluidos-lista")?.replaceChildren(...concluidos.map((l) => criarItem(l, hoje)));
+    renderizarVistas(agrupado, hoje);
     const vazio = porId("lembretes-vazio");
     if (vazio) vazio.hidden = lembretes.length > 0;
     const bloco = porId("lembretes-concluidos");
@@ -159,11 +384,13 @@
     aplicarConcluidos();
     const contador = porId("lembretes-pendentes");
     if (contador) contador.textContent = String(pendentes.length);
+    atualizarBotaoData();
     const novoCampo = porId("lembretes-edicao-campo");
     if (rascunho && novoCampo && String(rascunho.id) === String(editandoId)) {
-      novoCampo.value = rascunho.valor;
+      CAMPOS_EDICAO.forEach((id, i) => { const el = porId(id); if (el) el.value = rascunho.valores[i]; });
+      lembretesAoMudarData(porId("lembretes-edicao-data"));
       lembretesAoDigitar(novoCampo);
-      if (rascunho.foco) novoCampo.focus();
+      if (rascunho.foco) porId(rascunho.foco)?.focus();
     }
   }
 
@@ -250,21 +477,113 @@
     }
   }
 
+  // Agenda do formulário de novo lembrete: campos nativos de data e hora (texto "" quando vazios).
+  const valorCampo = (id) => porId(id)?.value ?? "";
+
+  function atualizarBotaoData() {
+    const botao = porId("lembretes-data-botao");
+    if (!botao) return;
+    const data = valorCampo("lembretes-novo-data");
+    const ativa = dataValida(data);
+    const hoje = hojeEm();
+    const rotulo = porId("lembretes-data-rotulo");
+    if (rotulo) rotulo.textContent = ativa ? rotuloAgenda(data, valorCampo("lembretes-novo-hora"), hoje) : "Data";
+    botao.classList.toggle("lembretes__data-botao--ativa", ativa);
+    [["hoje", hoje], ["amanha", somarDias(hoje, 1)], ["segunda", proximaSegunda(hoje)]].forEach(([nome, dia]) => {
+      porId(`lembretes-atalho-${nome}`)?.setAttribute("aria-pressed", String(ativa && data === dia));
+    });
+  }
+
+  // Hora só existe com data: sem data o campo de hora fica desligado e vazio. Vale para o formulário novo e para a edição.
+  function lembretesAoMudarData(campo) {
+    const escopo = campo?.id?.startsWith("lembretes-edicao") ? "edicao" : "novo";
+    const data = porId(`lembretes-${escopo}-data`);
+    const hora = porId(`lembretes-${escopo}-hora`);
+    if (!data || !hora) return;
+    hora.disabled = !data.value;
+    if (!data.value) hora.value = "";
+    if (escopo === "novo") atualizarBotaoData();
+  }
+
+  function lembretesAtalhoData(qual) {
+    const campo = porId("lembretes-novo-data");
+    if (!campo) return;
+    const hoje = hojeEm();
+    campo.value = qual === "amanha" ? somarDias(hoje, 1) : qual === "segunda" ? proximaSegunda(hoje) : hoje;
+    lembretesAoMudarData(campo);
+  }
+
+  function lembretesRemoverData(escopo) {
+    const data = porId(`lembretes-${escopo === "edicao" ? "edicao" : "novo"}-data`);
+    if (!data) return;
+    data.value = "";
+    lembretesAoMudarData(data);
+    data.focus();
+  }
+
+  function painelData(abrir) {
+    const painel = porId("lembretes-data-painel");
+    if (!painel) return;
+    painel.hidden = !abrir;
+    porId("lembretes-data-botao")?.setAttribute("aria-expanded", String(abrir));
+  }
+
+  function lembretesAlternarPainelData() {
+    const painel = porId("lembretes-data-painel");
+    if (painel) painelData(painel.hidden);
+  }
+
+  // Esc fecha só o painel Data agendada e devolve o foco ao botão Data; preventDefault impede o Esc de fechar o painel de ferramentas.
+  function lembretesTeclaPainelData(evento) {
+    if (evento?.key !== "Escape" || porId("lembretes-data-painel")?.hidden !== false) return;
+    evento.preventDefault();
+    painelData(false);
+    porId("lembretes-data-botao")?.focus();
+  }
+
+  function limparAgendaNovo() {
+    const data = porId("lembretes-novo-data");
+    const hora = porId("lembretes-novo-hora");
+    if (data) data.value = "";
+    if (hora) { hora.value = ""; hora.disabled = true; }
+    painelData(false);
+    atualizarBotaoData();
+  }
+
+  // Corpo do POST: só inclui a data quando é uma data real; a hora, só com data e no formato HH:MM.
+  function lerAgendaNova() {
+    const data = valorCampo("lembretes-novo-data");
+    if (!dataValida(data)) return {};
+    const hora = valorCampo("lembretes-novo-hora");
+    return RE_HORA.test(hora) ? { data_agendada: data, hora_agendada: hora } : { data_agendada: data };
+  }
+
+  // Item agendado para um dia fora da vista aberta: o toast diz para onde ele foi.
+  function avisarSeFora(l) {
+    const dia = l && !l.concluido ? dataDe(l) : null;
+    if (!dia) return;
+    const aqui = [...(porId("lembretes-lista")?.querySelectorAll("[data-lembrete-id]") ?? [])].some((el) => el.dataset.lembreteId === String(l.id));
+    if (!aqui) app.showToast(`Lembrete agendado para ${rotuloAgenda(dia, horaDe(l), hojeEm())}.`);
+  }
+
   async function lembretesAdicionar() {
     const campo = porId("lembretes-novo-descricao");
     if (!campo || ocupado) return;
     const descricao = campo.value.trim();
     if (!descricao || tamanho(descricao) > LIMITE) return;
+    const agenda = lerAgendaNova();
     ocupado = true;
     estadoBotaoNovo();
     try {
       const criado = await mutar(URL_API, {
-        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao }),
+        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, ...agenda }),
         errorMessage: "Não foi possível adicionar o lembrete.",
       });
       lembretes = [...lembretes, criado];
       campo.value = "";
+      limparAgendaNovo();
       renderizar();
+      avisarSeFora(criado);
     } catch (erro) {
       avisarErro(erro, "Não foi possível adicionar o lembrete.");
     } finally {
@@ -322,21 +641,35 @@
     sairDaEdicao(editandoId);
   }
 
+  // Função pura: só o que mudou vai no PATCH. Tirar a data manda data_agendada null (o backend limpa a hora junto);
+  // trocar só a data mantém a hora; a hora só entra quando há data e ela mudou.
+  function camposEditados(l, { descricao, data, hora }) {
+    const campos = {};
+    if (descricao !== l.descricao) campos.descricao = descricao;
+    if (data !== (dataDe(l) ?? "")) campos.data_agendada = data || null;
+    if (data && hora !== (horaDe(l) ?? "")) campos.hora_agendada = hora || null;
+    return campos;
+  }
+
   async function lembretesSalvarEdicao(id) {
     const l = achar(id);
     const campo = porId("lembretes-edicao-campo");
     if (!l || !campo || ocupado) return;
     const descricao = campo.value.trim();
     if (!descricao || tamanho(descricao) > LIMITE) return;
-    // Sem mudança no texto não há PATCH: a data não muda.
-    if (descricao === l.descricao) {
+    const data = valorCampo("lembretes-edicao-data");
+    if (data && !dataValida(data)) return;
+    const campos = camposEditados(l, { descricao, data, hora: valorCampo("lembretes-edicao-hora") });
+    // Nada mudou: sem PATCH, e o alterado_em continua o mesmo.
+    if (!Object.keys(campos).length) {
       sairDaEdicao(id);
       return;
     }
     ocupado = true;
     try {
-      await atualizar(id, { descricao }, "Não foi possível salvar o lembrete.");
+      await atualizar(id, campos, "Não foi possível salvar o lembrete.");
       sairDaEdicao(id);
+      if ("data_agendada" in campos || "hora_agendada" in campos) avisarSeFora(achar(id));
     } catch (erro) {
       avisarErro(erro, "Não foi possível salvar o lembrete.");
     } finally {
@@ -372,7 +705,9 @@
     ocupado = true;
     const antes = lembretes.find((l) => String(l.id) === String(id));
     const lista = antes?.concluido ? "lembretes-concluidos-lista" : "lembretes-lista";
-    const indice = [...(porId(lista)?.children ?? [])].findIndex((li) => li.dataset.lembreteId === String(id));
+    // A lista de pendentes tem grupos: os itens (li) são contados na ordem da tela, de todos os grupos.
+    const itensDaLista = () => [...(porId(lista)?.querySelectorAll("[data-lembrete-id]") ?? [])];
+    const indice = itensDaLista().findIndex((li) => li.dataset.lembreteId === String(id));
     let removido = false;
     try {
       await mutar(`${URL_API}/${encodeURIComponent(id)}`, { method: "DELETE", errorMessage: "Não foi possível excluir o lembrete." });
@@ -389,7 +724,7 @@
     lembretes = lembretes.filter((l) => String(l.id) !== String(id));
     renderizar();
     // O foco volta ao item que ocupou o lugar do excluído; sem itens na lista, ao campo de adicionar.
-    const itens = [...(porId(lista)?.children ?? [])];
+    const itens = itensDaLista();
     const proximo = itens[Math.min(indice, itens.length - 1)];
     if (proximo && proximo.getClientRects().length) proximo.querySelector(".lembretes__marcar")?.focus();
     else focarCampoNovo();
@@ -475,10 +810,77 @@
     focarItem(id, ".lembretes__marcar");
   }
 
+  // Vistas Hoje e Em breve (pílulas, tablist com setas) e navegação por semana.
+  function lembretesSelecionarVista(qual) {
+    if ((qual !== "hoje" && qual !== "embreve") || qual === vista) return;
+    vista = qual;
+    semanaAtual = 0;
+    renderizar();
+  }
+
+  function lembretesTeclaVista(evento) {
+    const abas = ["hoje", "embreve"];
+    const passo = { ArrowRight: 1, ArrowLeft: -1 }[evento?.key];
+    const alvo = evento?.key === "Home" ? 0 : evento?.key === "End" ? abas.length - 1
+      : passo === undefined ? null : (abas.indexOf(vista) + passo + abas.length) % abas.length;
+    if (alvo === null) return;
+    evento.preventDefault();
+    lembretesSelecionarVista(abas[alvo]);
+    porId(`lembretes-aba-${vista}`)?.focus();
+  }
+
+  // delta: -1 semana anterior, 1 próxima semana, 0 volta à semana de hoje. Nunca mostra semana passada.
+  function lembretesMudarSemana(delta) {
+    const nova = Number(delta) === 0 ? 0 : Math.max(0, semanaAtual + Number(delta));
+    if (nova === semanaAtual) return;
+    semanaAtual = nova;
+    renderizar();
+    // Semana anterior fica desligada na semana de hoje: o foco passa para Próxima semana em vez de se perder.
+    if (Number(delta) < 0 && porId("lembretes-semana-anterior")?.disabled) porId("lembretes-semana-proxima")?.focus();
+  }
+
+  function lembretesIrParaDia(data) {
+    porId(`lembretes-grupo-${data}`)?.focus();
+  }
+
+  // + Adicionar lembrete de um dia: põe a data no formulário e leva o foco à descrição.
+  function lembretesAdicionarNoDia(data) {
+    const campo = porId("lembretes-novo-data");
+    if (!campo || !dataValida(data)) return;
+    campo.value = data;
+    lembretesAoMudarData(campo);
+    focarCampoNovo();
+  }
+
+  // Sem confirmação (como no Todoist): o backend move todo pendente atrasado para hoje, mantendo a hora.
+  async function lembretesReagendarAtrasados() {
+    if (ocupado) return;
+    ocupado = true;
+    let movidos = 0;
+    try {
+      const dados = await mutar(`${URL_API}/reagendar-atrasados`, { method: "POST", errorMessage: "Não foi possível reagendar os lembretes." });
+      if (Array.isArray(dados?.lembretes)) lembretes = dados.lembretes;
+      movidos = Number(dados?.reagendados) || 0;
+      renderizar();
+      if (movidos > 0) app.showToast(movidos === 1 ? "1 lembrete reagendado para hoje." : `${movidos} lembretes reagendados para hoje.`);
+    } catch (erro) {
+      avisarErro(erro, "Não foi possível reagendar os lembretes.");
+    } finally {
+      ocupado = false;
+    }
+    // O botão Reagendar sai da tela: o foco vai ao grupo de hoje, onde os itens foram parar.
+    if (movidos > 0) porId(`lembretes-grupo-${hojeEm()}`)?.focus();
+  }
+
   return {
     carregarLembretes, lembretesAdicionar, lembretesAoDigitar, lembretesAlternar, lembretesEditar,
     lembretesCancelarEdicao, lembretesTeclaEdicao, lembretesSalvarEdicao, lembretesAlternarConcluidos,
     lembretesExcluir, lembretesCancelarExclusao, lembretesConfirmarExclusao,
     montarDescricaoTermo, lembretesCriarDoTermo, lembretesCancelarCriar, lembretesConfirmarCriar, lembretesVerLembretes,
+    lembretesSelecionarVista, lembretesTeclaVista, lembretesMudarSemana, lembretesIrParaDia, lembretesAdicionarNoDia,
+    lembretesReagendarAtrasados, lembretesAlternarPainelData, lembretesTeclaPainelData, lembretesAtalhoData,
+    lembretesAoMudarData, lembretesRemoverData,
+    // Funções puras (testadas em tests/frontend/test_lembretes.cjs).
+    hojeEm, agruparLembretes, montarVista, camposEditados, rotuloAgenda, tituloGrupoDia, tituloSemana, proximaSegunda, semanaDe, dataValida, somarDias,
   };
 });

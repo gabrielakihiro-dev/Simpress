@@ -20,7 +20,7 @@ const campoNovo = page => page.getByPlaceholder("O que você precisa fazer?");
 const adicionar = page => page.getByRole("button", { name: "Adicionar", exact: true });
 // getByLabel("Editar descrição") também casaria os lápis do Sebrae: o campo é achado pelo papel e pelo nome.
 const campoEdicao = page => page.getByRole("textbox", { name: "Editar descrição" });
-const pendentes = page => page.locator("#lembretes-lista > li");
+const pendentes = page => page.locator("#lembretes-lista li.lembretes__item");
 const concluidos = page => page.locator("#lembretes-concluidos-lista > li");
 const apiLembretes = async page => (await (await page.request.get("/api/lembretes")).json()).lembretes;
 
@@ -33,7 +33,7 @@ async function adicionarPelaTela(page, texto) {
 test("abre em Lembretes com as pílulas na ordem e o estado vazio", async ({ page }) => {
   await abrirLembretes(page);
   await expect(page.locator("#cockpit-tool-title")).toHaveText("Lembretes");
-  const abas = page.locator('[data-cockpit-tool-panel="lembretes"] [role="tablist"] [role="tab"]');
+  const abas = page.locator('[data-cockpit-tool-panel="lembretes"] .termos__abas [role="tab"]');
   await expect(abas).toHaveText([/^Termo Entrega$/, /^Termo Devolução$/, /^Lembretes 0 pendentes$/]);
   await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#termos-painel-entrega")).toBeHidden();
@@ -291,7 +291,7 @@ for (const largura of [320, 2560]) {
 test("tema escuro usa os tokens do Cockpit", async ({ page }) => {
   await abrirLembretes(page, { itens: 1 });
   const cores = () => page.evaluate(() => {
-    const item = document.querySelector("#lembretes-lista > li");
+    const item = document.querySelector("#lembretes-lista li.lembretes__item");
     return {
       fundo: getComputedStyle(item).backgroundColor,
       texto: getComputedStyle(item.querySelector(".lembretes__texto")).color,
@@ -318,6 +318,7 @@ test("data de cada item aparece como Criado em / Alterado em no formato dd/mm/aa
 
 test("editar e excluir mostram o ícone da sprite (símbolo existe e o desenho tem tamanho)", async ({ page }) => {
   await abrirLembretes(page, { itens: 1 });
+  await expect(pendentes(page)).toHaveCount(1);
   for (const botao of [".lembretes__editar", ".lembretes__excluir"]) {
     const icone = await page.evaluate((seletor) => {
       const svg = document.querySelector(`#lembretes-lista ${seletor} svg`);
