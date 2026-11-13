@@ -267,8 +267,8 @@ class PreencherTests(unittest.TestCase):
         with self.assertRaises(ux_chamados.ErroUX):
             browser._preencher(campo, "75.110.585/0001-00")
         telefone = Controle()
-        browser._preencher(telefone, "(41) 98751-2389", nome="telefone", digitado="41987512389")
-        self.assertEqual(telefone.valor, "41987512389")
+        browser._preencher(telefone, "(41) 90000-0000", nome="telefone", digitado="41900000000")
+        self.assertEqual(telefone.valor, "41900000000")
 
     def test_alterar_endereco_fills_only_registro_and_requester(self):
         pagina = Pagina()

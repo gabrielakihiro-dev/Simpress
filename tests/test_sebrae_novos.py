@@ -7,7 +7,7 @@ from domains.sebrae_chamados import ChamadoSoftExpert
 
 CHAMADO = ChamadoSoftExpert(
     numero="UTIC-2026-1378", titulo="Travando", descricao="Meu CPF 123.456.789-09", solicitante="Camila Lopes",
-    habilitada_em="26/10/2026, 17:25:23", detalhes_atendimento_realizado="Criado o login\n\nana@pr.sebrae.com.br\nSebrae@661",
+    habilitada_em="26/10/2026, 17:25:23", detalhes_atendimento_realizado="Criado o login\n\nana@pr.sebrae.com.br\nSebrae@000",
 )
 REGISTROS = [{"nome": "Camila Lopes", "serie": "ABC123", "modelo": "Dell", "cidade": "Curitiba"}]
 RELATORIO = {"chamados": [{"serie": "ABC123", "simpress": {"ordens_servico": ["7303022"]}}]}
@@ -61,7 +61,7 @@ class EstadoTest(unittest.TestCase):
         novos.salvar_novos(self.caminhos.novos, [CHAMADO], [("UTIC-2026-1387", "alerta")], 3, {"UTIC-2026-9": "erro"})
         bruto = self.caminhos.novos.read_text(encoding="utf-8")
         self.assertNotIn("123.456.789-09", bruto)
-        self.assertNotIn("Sebrae@661", bruto)
+        self.assertNotIn("Sebrae@000", bruto)
         lido = novos.ler_novos(self.caminhos.novos)
         self.assertEqual([c.numero for c in lido["chamados"]], ["UTIC-2026-1378"])
         self.assertEqual(lido["ignorados"], 3)
@@ -246,7 +246,7 @@ class ExportarTest(unittest.TestCase):
         self.assertEqual((primeira[0], primeira[3], primeira[9]), ("CLIENTE", "EM ABERTO", "INCIDENTE"))
         self.assertEqual(saida["bloco_r_s"], "\tDISPONIBILIDADE")
         self.assertEqual(saida["mensagem"], "Planilha Exportada com Sucesso!")
-        self.assertNotIn("Sebrae@661", saida["bloco_a_p"])
+        self.assertNotIn("Sebrae@000", saida["bloco_a_p"])
 
     def test_recusa_campos_faltando_ou_invalidos(self):
         for manuais, trecho in (
@@ -317,10 +317,10 @@ class ExportarTest(unittest.TestCase):
         self.assertEqual(linha(G="x" * novos.MAX_TITULO)["G"], "x" * novos.MAX_TITULO)
 
     def test_titulo_digitado_e_mascarado_e_nunca_vira_formula(self):
-        linha = novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "CPF 123.456.789-09 senha Sebrae@661"}}, REGISTROS, RELATORIO, exigir=False)[0]
+        linha = novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "CPF 123.456.789-09 senha Sebrae@000"}}, REGISTROS, RELATORIO, exigir=False)[0]
         self.assertNotIn("123.456.789-09", linha["G"])
         self.assertIn("***.***.***-**", linha["G"])
-        self.assertNotIn("Sebrae@661", linha["G"])
+        self.assertNotIn("Sebrae@000", linha["G"])
         self.assertEqual(novos.linhas_completas([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "=1+1"}}, REGISTROS, RELATORIO, exigir=False)[0]["G"], "'=1+1")
         saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "G": "Novo título"}}, REGISTROS, RELATORIO)
         self.assertEqual(saida["bloco_a_p"].split("\t")[6], "Novo título")

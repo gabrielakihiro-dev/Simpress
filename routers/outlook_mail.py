@@ -72,10 +72,10 @@ def executar(acao: Callable[[], T]) -> T | JSONResponse:
 
 def create_outlook_mail_router(
     arquivo_modelos: Path, arquivo_entra: Path, *, executar_processo: Executor = subprocess.run,
-    script: Path = SCRIPT_PS1,
+    script: Path = SCRIPT_PS1, arquivo_padrao_cabo: Optional[Path] = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/outlook")
-    modelos = ModelosEmail(arquivo_modelos)
+    modelos = ModelosEmail(arquivo_modelos, arquivo_padrao_cabo=arquivo_padrao_cabo)
     diretorio = Diretorio(arquivo_entra)
     email = EmailOutlook(executar=executar_processo, script=script)
 

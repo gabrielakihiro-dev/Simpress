@@ -220,20 +220,47 @@ class UxChamadosTests(unittest.TestCase):
         self.assertEqual(self.portal.fills, [])
 
 
-    def test_without_local_profile_the_default_solicitante_is_used(self):
-        (self.state / "ux_solicitante.json").unlink()
-        self.assertEqual(self.preparar()["solicitante"], {
-            "nome": "Gabriel Akihiro Noda Souza", "email": "gansouza@simpress.com.br",
-            "telefone": "(41)98751-2389", "departamento_cargo": "Analista WP Junior",
-        })
-        sessao = self.preparar()
-        self.assertEqual(self.executar(sessao)["status"], "preenchido")
-        self.assertEqual(self.portal.fills[-1][3], ux_chamados.SOLICITANTE_PADRAO)
+    def test_code_default_solicitante_holds_no_personal_data(self):
+        # The repository is public: the real requester lives only in the git-ignored data/state/ux_solicitante.json.
+        self.assertEqual(set(ux_chamados.SOLICITANTE_PADRAO), set(ux_chamados.PROFILE_FIELDS))
+        self.assertEqual(set(ux_chamados.SOLICITANTE_PADRAO.values()), {""})
 
-    def test_preparar_offers_the_profile_values_and_a_broken_profile_falls_back_to_the_default(self):
+    def test_without_local_profile_the_modal_gets_blank_fields_and_a_dry_run_keeps_the_portals_own_data(self):
+        (self.state / "ux_solicitante.json").unlink()
+        sessao = self.preparar()
+        self.assertEqual(sessao["solicitante"], {campo: "" for campo in ux_chamados.EDITAVEIS})
+        self.portal.faltando = ["Nome"]
+        resultado = self.executar(sessao)
+        self.assertEqual((resultado["status"], resultado["faltando"]), ("preenchido", ["Nome"]))
+        self.assertEqual(self.portal.fills[-1][3], {})  # empty: the adapter leaves the portal's Solicitante and reports what is empty
+
+    def test_without_local_profile_a_real_send_is_refused_before_any_click_and_leaves_no_trace(self):
+        (self.state / "ux_solicitante.json").unlink()
+        sessao = self.preparar()
+        with self.assertRaises(ux_chamados.ErroUX) as erro:
+            self.executar(sessao, enviar=True, confirmado=True)
+        self.assertEqual((erro.exception.status, str(erro.exception)), (422, ux_chamados.MSG_SOLICITANTE_VAZIO))
+        self.assertEqual((self.portal.envios, self.portal.fills), (0, []))  # no fill and no irreversible click
+        self.assertFalse((self.state / ux_chamados.HISTORY_NAME).exists())  # nothing recorded as "incerto"
+        self.assertTrue(self.servico.tem_sessao_viva())  # the session survives, so the user can fill the modal and retry
+        # The same refusal through the route (the Home calls it); a broken profile is refused too (503), still before any click.
+        router = create_ux_chamados_router(self.servico, lambda _serial: {})
+        rotas = {rota.path.rsplit("/", 1)[-1]: rota.endpoint for rota in router.routes}
+        dados = {"session_id": sessao["session_id"], "serial": "S123", "problema": "Não liga", "descricao": self.descricao}
+        (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
+        self.assertEqual(rotas["enviar"](EnviarPayload(**dados, enviar=True, confirmado=True)).status_code, 503)
+        (self.state / "ux_solicitante.json").unlink()
+        self.assertEqual(rotas["enviar"](EnviarPayload(**dados, enviar=True, confirmado=True)).status_code, 422)
+        self.assertEqual(self.portal.envios, 0)
+        # With the four fields filled in the modal the send goes through.
+        completo = {"nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000", "departamento_cargo": "Setor Exemplo"}
+        self.assertEqual(self.executar(sessao, enviar=True, confirmado=True, solicitante=completo)["os"], "12345")
+        self.assertEqual(self.portal.envios, 1)
+
+    def test_preparar_offers_the_profile_values_and_a_broken_profile_falls_back_to_the_blank_default(self):
         self.assertEqual(self.preparar()["solicitante"]["nome"], "Pessoa Fictícia")
         (self.state / "ux_solicitante.json").write_text("{", encoding="utf-8")
-        self.assertEqual(self.preparar()["solicitante"], {c: ux_chamados.SOLICITANTE_PADRAO[c] for c in ux_chamados.EDITAVEIS})
+        self.assertEqual(self.preparar()["solicitante"], {campo: "" for campo in ux_chamados.EDITAVEIS})
 
     def test_edited_solicitante_overrides_the_default_for_that_request_only(self):
         sessao = self.preparar()

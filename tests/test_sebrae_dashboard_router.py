@@ -14,6 +14,7 @@ from domains import assistant_relatorios, sebrae_dashboard_gravacao as G, sebrae
 from domains import sebrae_categoria, sebrae_categoria_ia, sebrae_novos, sebrae_observacoes as obs
 from domains.assistant_api import MAX_ITENS_LISTA, SimpressApi
 from domains.sebrae_chamados import ChamadoSoftExpert
+from routers import sebrae_dashboard as rota_sebrae
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard import CABECALHO, planilha
 from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, _trocar_na_folha, linha_xml, montar, texto
@@ -970,9 +971,11 @@ class SugestaoDeCategoriaNosNovosTest(RotasBase):
             def sugerir(self, *args):
                 return None
 
-        with patch.object(sebrae_categoria_ia, "criar", return_value=Falso()):
+        padroes = self.dir / "representantes_padrao.json"  # temp copy: the real local defaults file is never read by the test
+        padroes.write_text(json.dumps({"Londrina": {"nome": "Pessoa Exemplo"}}), encoding="utf-8")
+        with patch.object(sebrae_categoria_ia, "criar", return_value=Falso()), patch.object(rota_sebrae, "REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", padroes):
             self.itens()
-        for nome in ("Bruno Tavares", "Camila Lopes", "Fernanda Colla Borretto"):
+        for nome in ("Bruno Tavares", "Camila Lopes", "Pessoa Exemplo"):
             self.assertIn(nome, registrados)
 
     def test_falha_da_sugestao_nao_derruba_a_lista_e_so_o_tipo_vai_ao_log(self):

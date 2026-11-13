@@ -284,7 +284,7 @@ class LoginAbasTests(unittest.TestCase):
 
     def test_microsoft_clicks_only_the_requested_account(self):
         page, clicados, relogio = self._conta_microsoft(
-            ["Gabriel Akihiro Noda Souza", "gansouza@simpress.com.br", "GAkihiro@pr.sebrae.com.br", "Use outra conta"]
+            ["Pessoa Exemplo", "gansouza@simpress.com.br", "GAkihiro@pr.sebrae.com.br", "Use outra conta"]
         )
         with (
             patch.object(automacao.time, "time", lambda: relogio["agora"]),

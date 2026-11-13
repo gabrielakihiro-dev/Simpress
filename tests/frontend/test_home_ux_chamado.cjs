@@ -2,8 +2,8 @@ const test = require("node:test");
 const { assert, createAppHarness, apiResponse } = require("./support/inventory-harness.cjs");
 
 const SOLICITANTE = {
-  nome: "Gabriel Akihiro Noda Souza", email: "gansouza@simpress.com.br",
-  telefone: "(41)98751-2389", departamento_cargo: "Analista WP Junior",
+  nome: "Pessoa Exemplo", email: "nome.exemplo@pr.sebrae.com.br",
+  telefone: "(41) 90000-0000", departamento_cargo: "Setor Exemplo / Cargo Exemplo",
 };
 
 test("Home discards a prepared UX session after the selected equipment changes", async () => {
@@ -53,10 +53,10 @@ test("Home sends the active ticket text only with an explicit final confirmation
   assert.equal(harness.element("ux-solicitante-telefone").value, SOLICITANTE.telefone);
   assert.equal(harness.element("ux-solicitante-cargo").value, SOLICITANTE.departamento_cargo);
   assert.equal(harness.element("ux-chamado-solicitante").disabled, false);
-  harness.element("ux-solicitante-cargo").value = " Analista WP Pleno ";
+  harness.element("ux-solicitante-cargo").value = " Setor Exemplo / Cargo Novo ";
   await harness.run("executarChamadoUX(false)");
   await harness.run("executarChamadoUX(true)");
-  const solicitante = { ...SOLICITANTE, departamento_cargo: "Analista WP Pleno" };
+  const solicitante = { ...SOLICITANTE, departamento_cargo: "Setor Exemplo / Cargo Novo" };
   assert.deepEqual(calls.slice(1), [
     ["/api/ux/abrir-chamado/enviar", { session_id: "opaque", serial: "S1", problema: "Teclado", descricao: "O teclado apresenta defeito.", solicitante, enviar: false, confirmado: false }],
     ["/api/ux/abrir-chamado/enviar", { session_id: "opaque", serial: "S1", problema: "Teclado", descricao: "O teclado apresenta defeito.", solicitante, enviar: true, confirmado: true }],
@@ -84,6 +84,34 @@ test("Home blocks Simular and Revisar e enviar while a Solicitante field is empt
   assert.match(harness.element("ux-chamado-motivo").textContent, /campos do solicitante/);
   await harness.run("executarChamadoUX(false)");
   assert.deepEqual(calls, ["/api/ux/abrir-chamado/preparar"]);
+});
+
+
+test("Home opens the UX modal with empty Solicitante fields when no local profile exists and keeps both actions disabled", async () => {
+  const calls = [];
+  const vazio = { nome: "", email: "", telefone: "", departamento_cargo: "" };  // what the backend returns without data/state/ux_solicitante.json
+  const harness = createAppHarness(url => {
+    calls.push(url);
+    return Promise.resolve(apiResponse({ status: "preparado", serial: "S1", session_id: "opaque", modelo: "X", opcoes: ["Teclado"], solicitante: vazio }));
+  });
+  harness.run(`abrirModalAcessivel = () => {};
+    fecharModalAcessivel = () => {};
+    SimpressApp.state.currentEquipamento = { serial: "S1" };`);
+  harness.element("btn-copiar-chamado-atual").dataset.args = '["texto-chamado-teclado-mouse"]';
+  harness.element("texto-chamado-teclado-mouse").value = "O teclado apresenta defeito.";
+  await harness.run("abrirChamadoUX()");
+  harness.element("ux-chamado-problema").value = "Teclado";
+  harness.run("atualizarProblemaChamadoUX()");
+  for (const id of ["ux-solicitante-nome", "ux-solicitante-email", "ux-solicitante-telefone", "ux-solicitante-cargo"]) assert.equal(harness.element(id).value, "", id);
+  assert.equal(harness.element("ux-chamado-solicitante").disabled, false);  // the fields stay editable
+  for (const id of ["ux-chamado-simular", "ux-chamado-enviar"]) assert.equal(harness.element(id).disabled, true, id);
+  assert.match(harness.element("ux-chamado-motivo").textContent, /campos do solicitante/);
+  await harness.run("executarChamadoUX(false)");
+  await harness.run("executarChamadoUX(true)");
+  assert.deepEqual(calls, ["/api/ux/abrir-chamado/preparar"]);  // neither action reaches the server
+  for (const [campo, id] of [["nome", "ux-solicitante-nome"], ["email", "ux-solicitante-email"], ["telefone", "ux-solicitante-telefone"], ["departamento_cargo", "ux-solicitante-cargo"]]) harness.element(id).value = SOLICITANTE[campo];
+  harness.run("atualizarProblemaChamadoUX()");
+  for (const id of ["ux-chamado-simular", "ux-chamado-enviar"]) assert.equal(harness.element(id).disabled, false, id);
 });
 
 

@@ -17,11 +17,11 @@ function fakeElement() {
 
 // A slice of GET /api/config/representantes-regionais `padroes` (the backend owns the full list of 22).
 const PADROES = [
-  { cidade: "Cascavel", nome: "Fernanda Colla Borretto", email: "fcolla@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-  { cidade: "Londrina", nome: "Renata Custodio de Oliveira Varasquim", email: "rvarasquim@pr.sebrae.com.br", telefone: "(43) 99643-8754", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-  { cidade: "Maringá", nome: "Tatiane Matsuguma Sanches", email: "tmatsuguma@pr.sebrae.com.br", telefone: "(44) 99810-1371", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
-  { cidade: "Foz do Iguaçu", nome: "Marinez Martins", email: "moliveira@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-  { cidade: "Toledo", nome: "Fernanda da Costa Goldacker", email: "fgoldacker@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+  { cidade: "Cascavel", nome: "Carla Exemplo Teste", email: "carla.exemplo@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+  { cidade: "Londrina", nome: "Rita Exemplo de Oliveira Teste", email: "rita.exemplo@pr.sebrae.com.br", telefone: "(41) 90000-0000", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+  { cidade: "Maringá", nome: "Tereza Exemplar Santos", email: "tereza.exemplar@pr.sebrae.com.br", telefone: "(41) 90000-0001", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+  { cidade: "Foz do Iguaçu", nome: "Marlene Modelo", email: "marlene.modelo@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+  { cidade: "Toledo", nome: "Tania da Costa Fictícia", email: "tania.ficticia@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
   { cidade: "Arapongas", nome: "", nomeOpcao: "Não definido ainda", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
 ];
 
@@ -59,7 +59,7 @@ test("merges the saved edit over the immutable default per city", async t => {
   await env.feature.carregarRepresentantesRegionais();
   const londrina = env.get("retirada-representante");
   assert.equal(nomeNaLista(londrina, "Londrina"), "Nova Pessoa — Londrina");
-  assert.equal(nomeNaLista(londrina, "Maringá"), "Tatiane Matsuguma Sanches — Maringá");
+  assert.equal(nomeNaLista(londrina, "Maringá"), "Tereza Exemplar Santos — Maringá");
   env.feature.preencherRepresentanteRegional("retirada", "Londrina", true);
   assert.equal(env.get("retirada-contato").value, "Nova Pessoa");
   assert.equal(env.get("retirada-horario").value, "09:00:00 às 17:00:00");
@@ -98,7 +98,7 @@ test("saving keeps each chosen city, re-fills only the form showing the edited c
   };
   await env.feature.salvarRepresentanteRegional();
   assert.deepEqual(env.calls.at(-1), ["PUT", "/api/config/representantes-regionais/Londrina", {
-    nome: "Editada", email: "rvarasquim@pr.sebrae.com.br", telefone: "(43) 99643-8754",
+    nome: "Editada", email: "rita.exemplo@pr.sebrae.com.br", telefone: "(41) 90000-0000",
     horario: "09:30:00 às 17:45:10", almoco: "12:15:00", pausaDuracao: "1h30",
   }]);
   assert.equal(env.get("retirada-representante").value, "Londrina");
@@ -155,7 +155,7 @@ test("Restaurar padrão is disabled without a saved edit and sends DELETE when t
   };
   await env.feature.restaurarRepresentanteRegional();
   assert.deepEqual(env.calls.at(-1), ["DELETE", "/api/config/representantes-regionais/Toledo"]);
-  assert.equal(env.get("retirada-contato").value, "Fernanda da Costa Goldacker");
+  assert.equal(env.get("retirada-contato").value, "Tania da Costa Fictícia");
   assert.deepEqual(env.toasts, [["Padrão restaurado.", "success"]]);
 });
 
@@ -213,7 +213,7 @@ test("a failed first load is retried once after 2 s; the second success shows no
   assert.equal(warnings.length, 1);
   assert.deepEqual(env.toasts, []);
   assert.equal(env.get("retirada-representante").value, "Londrina");
-  assert.equal(env.get("retirada-contato").value, "Renata Custodio de Oliveira Varasquim");
+  assert.equal(env.get("retirada-contato").value, "Rita Exemplo de Oliveira Teste");
   assert.equal(env.get("btn-editar-representante-retirada").disabled, false);
 });
 
@@ -247,7 +247,7 @@ test("a later failed reload keeps the loaded defaults and only warns", async t =
   await env.feature.carregarRepresentantesRegionais(true);
   assert.equal(warnings.length, 1);
   assert.deepEqual(env.toasts, []);
-  assert.equal(nomeNaLista(env.get("retirada-representante"), "Londrina"), "Renata Custodio de Oliveira Varasquim — Londrina");
+  assert.equal(nomeNaLista(env.get("retirada-representante"), "Londrina"), "Rita Exemplo de Oliveira Teste — Londrina");
 });
 
 test("fills requested before the defaults arrive are replayed once they load", async t => {
@@ -260,8 +260,8 @@ test("fills requested before the defaults arrive are replayed once they load", a
   assert.equal(env.get("retirada-contato").value, "");
   await env.feature.carregarRepresentantesRegionais();
   assert.equal(env.get("retirada-representante").value, "Londrina");
-  assert.equal(env.get("retirada-contato").value, "Renata Custodio de Oliveira Varasquim");
-  assert.equal(env.get("retirada-telefone").value, "(43) 99643-8754");
+  assert.equal(env.get("retirada-contato").value, "Rita Exemplo de Oliveira Teste");
+  assert.equal(env.get("retirada-telefone").value, "(41) 90000-0000");
   assert.equal(env.get("entrega-representante").value, "", "a city cleared meanwhile is not replayed");
   assert.equal(env.get("entrega-contato").value, "");
   assert.equal(env.get("btn-editar-representante-retirada").disabled, false);
@@ -282,7 +282,7 @@ test("a reload requested by the assistant re-fills only the form showing the cit
   assert.equal(env.get("entrega-contato").value, "Digitado a mão");
 });
 
-const londrinaPadrao = { nome: "Renata Custodio de Oliveira Varasquim", email: "rvarasquim@pr.sebrae.com.br", telefone: "(43) 99643-8754", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" };
+const londrinaPadrao = { nome: "Rita Exemplo de Oliveira Teste", email: "rita.exemplo@pr.sebrae.com.br", telefone: "(41) 90000-0000", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" };
 
 async function recarregarComo(env, londrina) {
   global.fetch = async () => ({ ok: true, json: async () => ({ alteracoes: { Londrina: londrina }, arquivo_invalido: false }) });
@@ -297,7 +297,7 @@ test("a reload by the assistant updates untouched fields and keeps silent when n
   await recarregarComo(env, { ...londrinaPadrao, nome: "Nova Pessoa", horario: "09:00:00 às 17:00:00" });
   assert.equal(env.get("retirada-contato").value, "Nova Pessoa");
   assert.equal(env.get("retirada-horario").value, "09:00:00 às 17:00:00");
-  assert.equal(env.get("retirada-telefone").value, "(43) 99643-8754");
+  assert.equal(env.get("retirada-telefone").value, "(41) 90000-0000");
   assert.deepEqual(env.toasts, []);
 });
 
