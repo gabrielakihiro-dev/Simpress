@@ -110,6 +110,39 @@ class RegrasDeCategoriaTest(unittest.TestCase):
         self.assertEqual(C.sugerir(titulo, "", "", "Fulana Souza", TODAS, None), "OUTRO")
 
 
+class ResponsavelTest(unittest.TestCase):
+    """Responsável (A): CLIENTE para usuário, acesso e software; SIMPRESS para defeito de hardware; só sugestão."""
+
+    def sugerir(self, titulo, solicitante="Fulana Souza", opcoes=("CLIENTE", "SIMPRESS")):
+        return C.sugerir_responsavel(titulo, "", "", solicitante, opcoes)
+
+    def test_hardware_e_simpress(self):
+        for titulo in ("Mouse sem fio parou", "Teclado com defeito", "Monitor não liga", "Fone de ouvido sem som", "Headset quebrado",
+                       "Notebook não liga", "Tela quebrada do notebook", "Bateria estufada"):
+            with self.subTest(titulo=titulo):
+                self.assertEqual(self.sugerir(titulo), "SIMPRESS")
+
+    def test_usuario_acesso_e_software_sao_cliente(self):
+        for titulo in ("Instalar Power BI", "Não consigo abrir o PDF", "Edge não abre", "WhatsApp travando", "Novo usuário",
+                       "Desligamento de colaborador", "Liberação de usuário", "Remoção de usuário", "E-mail suspeito",
+                       "Acesso à impressora", "Alerta do Endpoint", "Chrome lento"):
+            with self.subTest(titulo=titulo):
+                self.assertEqual(self.sugerir(titulo), "CLIENTE")
+
+    def test_entrada_ou_saida_de_usuario_vence_o_periferico(self):
+        self.assertEqual(self.sugerir("Desligamento: devolução do mouse e do teclado"), "CLIENTE")
+
+    def test_sem_indicio_ou_solicitante_do_sistema_nao_sugere(self):
+        self.assertIsNone(self.sugerir("Assunto qualquer"))
+        self.assertIsNone(self.sugerir("Notebook lento"))  # lentidão sem defeito físico não é hardware
+        self.assertIsNone(self.sugerir("Monitoramento da rede"))  # "monitor" só como palavra inteira
+        self.assertIsNone(self.sugerir("Mouse sem fio parou", solicitante="API SEBRAE"))
+
+    def test_usa_a_grafia_da_lista_e_sem_lista_o_rotulo_padrao(self):
+        self.assertEqual(self.sugerir("Mouse parou", opcoes=("Cliente", "Simpress")), "Simpress")
+        self.assertEqual(self.sugerir("Mouse parou", opcoes=()), "SIMPRESS")
+
+
 class NaiveBayesTest(unittest.TestCase):
     def test_sugere_a_classe_do_texto(self):
         self.assertEqual(C.sugerir("zebra girafa", "", "", "Fulana Souza", TODAS, indice_b()), "LENTIDÃO")

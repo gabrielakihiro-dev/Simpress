@@ -916,6 +916,23 @@ class SugestaoDeCategoriaNosNovosTest(RotasBase):
                 item = self.itens()["UTIC-2026-1403"]
                 self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), esperado)
 
+    def test_responsavel_sugerido_cliente_ou_simpress(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1410", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"),
+                   ChamadoSoftExpert("UTIC-2026-1411", titulo="Instalar Power BI", descricao="", solicitante="Camila Lopes"),
+                   ChamadoSoftExpert("UTIC-2026-1412", titulo="Assunto", descricao="", solicitante="Camila Lopes"))
+        itens = self.itens()
+        self.assertEqual([itens[n]["sugestao_responsavel"] for n in ("UTIC-2026-1410", "UTIC-2026-1411", "UTIC-2026-1412")],
+                         ["SIMPRESS", "CLIENTE", None])
+
+    def test_a_ja_preenchido_nao_recebe_sugestao_de_responsavel(self):
+        self.novos(ChamadoSoftExpert("UTIC-2026-1413", titulo="Mouse sem fio parou", descricao="", solicitante="Camila Lopes"))
+        original = sebrae_novos.formulario
+        com_a = lambda *args, **kwargs: [{**item, "linha": {**item["linha"], "A": "CLIENTE"}} for item in original(*args, **kwargs)]
+        with patch.object(sebrae_novos, "formulario", side_effect=com_a):
+            item = self.itens()["UTIC-2026-1413"]
+        self.assertIsNone(item["sugestao_responsavel"])
+        self.assertEqual(item["sugestao_categoria"], "PERIFÉRICO")
+
     def test_solicitante_do_sistema_nunca_recebe_sugestao(self):
         self.novos(ChamadoSoftExpert("UTIC-2026-1404", titulo="Mouse sem fio parou", descricao="", solicitante="API SEBRAE"))
         item = self.itens()["UTIC-2026-1404"]
@@ -963,7 +980,7 @@ class SugestaoDeCategoriaNosNovosTest(RotasBase):
         with patch.object(sebrae_categoria, "sugerir", side_effect=RuntimeError("texto-secreto-do-chamado")):
             with self.assertLogs("routers.sebrae_dashboard", level="WARNING") as registro:
                 item = self.itens()["UTIC-2026-1407"]
-        self.assertEqual((item["sugestao_categoria"], item["sugestao_tipo"]), (None, None))
+        self.assertEqual((item["sugestao_responsavel"], item["sugestao_categoria"], item["sugestao_tipo"]), (None, None, None))
         self.assertEqual(item["numero"], "UTIC-2026-1407")
         saida = "\n".join(registro.output)
         self.assertIn("RuntimeError", saida)
