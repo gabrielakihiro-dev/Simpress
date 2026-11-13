@@ -1438,7 +1438,7 @@ CHANGE_TOOLS: List[Tool] = [
         "nele, nunca para apenas consultar. Um comando de uma linha (até 2000 caracteres). modo sistema (SYSTEM, padrão) ou usuario (usuário logado). "
         "O hostname é obrigatório: não existe computador padrão; se o usuário não disser o computador, pergunte qual usar antes de chamar. "
         "Retorna só status, hostname, modo e tamanho do comando; status inserido, not_found, "
-        "erro_terminal, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
+        "erro_terminal, offline, sem_usuario ou usuario_ambiguo (nesse caso peça ao usuário qual usuário usar). O usuário confirma antes. "
         "Requer Chrome de automação aberto e login manual.",
         _run_powershell,
         _describe_powershell,

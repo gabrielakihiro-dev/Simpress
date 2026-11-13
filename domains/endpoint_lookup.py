@@ -161,14 +161,34 @@ _LINHA = ".ember-table-table-row:not(.ember-table-header-row)"
 _ITEM_CONTROLE_REMOTO = 'li.zmenu__item[data-label="Controle remoto"]:visible'
 
 
-def _menu_com_controle_remoto(page: Any, esperar_ms: int = 5000) -> bool:
+def _menu_com_item(page: Any, item: str, esperar_ms: int = 5000) -> bool:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
     try:
-        page.locator(_ITEM_CONTROLE_REMOTO).first.wait_for(state="visible", timeout=esperar_ms)
+        page.locator(item).first.wait_for(state="visible", timeout=esperar_ms)
         return True
     except PlaywrightTimeout:
         return False
+
+
+def _menu_com_controle_remoto(page: Any, esperar_ms: int = 5000) -> bool:
+    return _menu_com_item(page, _ITEM_CONTROLE_REMOTO, esperar_ms)
+
+
+def _no_detalhe(page: Any, href: str) -> bool:
+    return bool(re.search(re.escape(href) + r"(/|$)", page.url))
+
+
+def _abrir_menu_na_pagina(page: Any, href: str) -> None:
+    """Abre o menu "Ações" da página do computador (fallback quando o menu da grade não traz a opção)."""
+    link = f'a.anchor-text[href="{href}"]'
+    if not _no_detalhe(page, href):  # outro computador aberto ou ainda na grade: vai ao detalhe deste link
+        if page.locator(link).count():
+            page.locator(link).first.click(timeout=10000)
+        else:
+            page.goto(automation.ENDPOINT_URL.split("#")[0] + href, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
+        automation.acionar_quando_pronto(lambda: None, "A página do computador não abriu", confirmar=lambda: _no_detalhe(page, href))
+    page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000)
 
 
 def _clicar_resiliente(acao: Any, descricao: str) -> None:
@@ -258,35 +278,23 @@ def controle_remoto(serial: str, macbook: bool, details_serials: Collection[str]
                 raise automation.RotinaErro(
                     f"A linha da série {serial} mudou no Endpoint ({hostname} em vez de {achado.get('_hostname')}); não abri o controle remoto.")
 
-            def _no_detalhe() -> bool:
-                return bool(re.search(re.escape(href) + r"(/|$)", page.url))
-
             def _abrir_menu_na_grade() -> None:
                 if not linha.count():
                     raise automation.EtapaInstavel(f"a linha de {hostname} não está mais na grade")
                 linha.first.locator(".resource-action--button").first.click(timeout=10000)
 
-            def _abrir_menu_na_pagina() -> None:
-                if not _no_detalhe():  # outro computador aberto ou ainda na grade: vai ao detalhe deste link
-                    if page.locator(link).count():
-                        page.locator(link).first.click(timeout=10000)
-                    else:
-                        page.goto(automation.ENDPOINT_URL.split("#")[0] + href, wait_until="domcontentloaded", timeout=automation.CARREGAMENTO_MS)
-                    automation.acionar_quando_pronto(lambda: None, "A página do computador não abriu", confirmar=_no_detalhe)
-                page.locator(".resource-action--tab .resource-action--button").first.click(timeout=20000)
-
-            abrir_menu = _abrir_menu_na_grade
+            abrir_menu: Any = _abrir_menu_na_grade
             _clicar_resiliente(abrir_menu, "Abrir menu de ações do computador")
             if not _menu_com_controle_remoto(page):
                 # Monitor vermelho ou sem a opção: tenta o menu "Ações" da página do computador.
                 page.keyboard.press("Escape")
-                abrir_menu = _abrir_menu_na_pagina
+                abrir_menu = lambda: _abrir_menu_na_pagina(page, href)  # noqa: E731
                 _clicar_resiliente(abrir_menu, "Abrir menu de ações na página do computador")
                 if not _menu_com_controle_remoto(page):
                     page.keyboard.press("Escape")
                     return {"status": "offline", "serial": serial, "hostname": hostname}
             def _mesmo_contexto() -> bool:
-                return bool(linha.count()) or _no_detalhe()
+                return bool(linha.count()) or _no_detalhe(page, href)
 
             if not _conectar_controle_remoto(page, abrir_menu, _mesmo_contexto, _ainda_vale):
                 return recusado
@@ -414,13 +422,30 @@ def _abrir_powershell_na_grade(page: Any, hostname: str, modo: str, comando: str
         raise automation.RotinaErro(f"O link do computador {usado} não foi identificado na grade do Endpoint; o PowerShell não foi aberto.")
     linha = page.locator(f'{_LINHA}:has(a.anchor-text[href="{href}"])')
 
+    def _abrir_menu_na_grade() -> None:
+        if not linha.count():
+            raise automation.EtapaInstavel(f"a linha de {usado} não está mais na grade")
+        linha.first.locator(".resource-action--button").first.click(timeout=10000)
+
+    # Como no Controle remoto: menu da grade; sem "Gerente do Sistema", menu "Ações" da página do computador; sem ele, offline.
+    abrir_menu: Any = _abrir_menu_na_grade
+    _clicar_resiliente(abrir_menu, "Abrir menu de ações do computador")
+    if not _menu_com_item(page, _ITEM_GERENTE):
+        page.keyboard.press("Escape")
+        abrir_menu = lambda: _abrir_menu_na_pagina(page, href)  # noqa: E731
+        _clicar_resiliente(abrir_menu, "Abrir menu de ações na página do computador")
+        if not _menu_com_item(page, _ITEM_GERENTE):
+            page.keyboard.press("Escape")
+            return {"status": "offline", "hostname": usado, "modo": modo}
+    tentativas = [0]
+
     def _abrir_aba() -> Any:
         # Refeito do zero se falhar: aba nova que sobrar desta tentativa é fechada antes da próxima.
         antes = list(page.context.pages)
+        tentativas[0] += 1
         try:
-            if not linha.count():
-                raise automation.EtapaInstavel(f"a linha de {usado} não está mais na grade")
-            linha.first.locator(".resource-action--button").first.click(timeout=10000)
+            if tentativas[0] > 1:  # entre tentativas o menu é fechado (Escape de _recuperar_padrao): reabre o mesmo
+                abrir_menu()
             page.locator(_ITEM_GERENTE).first.hover(timeout=10000)
             with page.context.expect_page(timeout=20000) as nova:
                 page.locator(_ITEM_POWERSHELL).first.click(timeout=10000)

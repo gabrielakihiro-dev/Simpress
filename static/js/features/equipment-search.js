@@ -385,6 +385,7 @@
     if (data.status === "not_found") return `Computador ${host} não encontrado no Endpoint. Nada foi inserido.`;
     if (data.status === "sem_usuario") return `Usuário não encontrado em ${host}.${usuarios ? ` Usuários disponíveis: ${usuarios}.` : " Nenhum usuário logado disponível."} Nada foi inserido.`;
     if (data.status === "usuario_ambiguo") return `Há mais de um usuário logado em ${host}: ${usuarios}. Nada foi inserido.`;
+    if (data.status === "offline") return `O notebook ${host} está offline no Endpoint. Nada foi inserido.`;
     if (data.status === "erro_terminal") return data.mensagem || `Não foi possível abrir o PowerShell em ${host}. Nada foi inserido.`;
     throw new Error("Não foi possível confirmar o resultado do Endpoint.");
   }
