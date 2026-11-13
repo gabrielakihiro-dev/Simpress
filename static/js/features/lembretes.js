@@ -29,6 +29,10 @@
   const tamanho = (texto) => [...String(texto ?? "")].length;
   // O backend recusa caractere de controle (422): quebra de linha e tab viram espaço, e espaços repetidos viram um só.
   const limparTexto = (texto) => String(texto ?? "").replace(/[\p{Cc}\s]+/gu, " ").trim();
+  // Mesmos limites do backend para a cópia do termo (200 por campo, 2000 nas observações; controle vira espaço,
+  // exceto quebra de linha e tab nas observações): sem isso o POST dava 422 e o diálogo não deixava corrigir.
+  const textoTermo = (texto, limite, permitidos = "") =>
+    [...String(texto ?? "").replace(/\p{Cs}/gu, "").replace(/\p{Cc}/gu, (c) => (permitidos.includes(c) ? c : " "))].slice(0, limite).join("");
   const mensagemDe = (erro, padrao) => (erro?.status && erro.message ? erro.message : padrao);
   const avisarErro = (erro, padrao) => app.showToast(mensagemDe(erro, padrao), "error");
   // Toda escrita invalida o GET em andamento: a resposta antiga não pode sobrescrever a lista já alterada.
@@ -462,7 +466,11 @@
     if (!dados || !campo || ocupado) return;
     avisoDoTermo(termo, "");
     criando = termo;
-    copiaTermo = { campos: { ...dados.campos }, itens: dados.itens.map((item) => item.resposta), obs: dados.obs };
+    copiaTermo = {
+      campos: Object.fromEntries(Object.entries(dados.campos).map(([chave, valor]) => [chave, textoTermo(valor, 200)])),
+      itens: dados.itens.map((item) => item.resposta),
+      obs: textoTermo(dados.obs, 2000, "\n\r\t"),
+    };
     campo.value = montarDescricaoTermo(termo, dados);
     estadoBotaoCriar();
     app.abrirModalAcessivel("lembretes-criar", "#lembretes-criar-descricao", "lembretesCancelarCriar");
