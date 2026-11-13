@@ -282,11 +282,22 @@ A ferramenta Termos foi substituída pela ferramenta Lembretes (`18-lembretes.md
 - Sem ferramenta: não há ferramenta para os termos nem para os lembretes da ferramenta Lembretes. O Assistente não lê nem cria esses lembretes e nenhum `domains/assistant*.py` nem `routers/assistant*.py` acessa `data/state/lembretes.json`, porque o arquivo guarda o nome do colaborador (LGPD). `criar_lembrete` e `listar_lembretes` (regra 23) continuam sendo as notas do Assistente, em outro arquivo.
 - Testes: `tests/test_assistant_termos.py` (textos da regra 37 e nenhuma menção a `lembretes.json` no prompt nem em `domains/assistant*.py` e `routers/assistant*.py`).
 
+## Telas de 13/11/2026 e estilo de escrita (13/11/2026)
+
+Pedido do usuário de 13/11/2026: conferir todas as abas contra o Assistente, atualizar o que estava desatualizado e deixar as respostas mais humanas, com base na skill humanizer-pt-br (https://github.com/mackswendhell/humanizer-pt-br, licença MIT). Só mudam o `SYSTEM_PROMPT`, a descrição de uma ferramenta e o roteamento: nenhuma ferramenta nova, nada gravado em sistema externo nem em dado local.
+
+- Regra 32 (OS, F6): `Finalizadas` também recebe a OS com o selo `Entregue` (etapa atual `Pedido entregue` com data completa, com ou sem vínculo UTIC), e desfazer a marca só devolve a OS a `Abertas` sem esse selo, como na tela desde 13/11/2026.
+- Regra 37 (Termos e Lembretes): os 11 itens dos termos abrem em `Sim`; a sub-aba `Lembretes` tem as vistas `Hoje` e `Em breve`, data agendada, `Reagendar para hoje` (botão do grupo dos atrasados: move todos de uma vez, sem confirmação) e UTIC/OS no texto abrindo a janela `Chamado × OS`. O prompt diz que essa tela não dispara alarme nem aviso. O Assistente segue sem ler nem criar esses lembretes.
+- Regra 41 (nova): onde ficam as cinco sub-abas do Relatório Mensal (F8), o Histórico de apelidos (F7) e o botão `Desfazer finalização` dos chamados com o selo `Finalizado por outro técnico` em Chamados (F5) > `Finalizados`. O Assistente não tem ferramenta para desfazer; só explica. O prompt avisa que `obter_relatorio_mensal` traz um resumo de cada sub-aba, com listas cortadas, e que a lista completa fica na tela.
+- `obter_relatorio_mensal`: a descrição aponta a lista completa para a sub-aba `Chamados (F5)` do F8.
+- Roteamento: o grupo `chamados` de `GRUPOS_FERRAMENTAS` casa também "linha do tempo", então "anote na linha do tempo que..." leva `anotar_linha_do_tempo` mesmo sem UTIC no texto (antes era limite conhecido).
+- Regra 42 (nova), estilo de escrita, em texto próprio a partir dos padrões da humanizer-pt-br: sem bajulação na abertura nem frases de encerramento de chatbot, sem vocabulário típico de IA e enchimento, sem exagero promocional nem conclusão otimista genérica, sem fórmulas ("não é apenas X, mas também Y", listas sempre de três, gerúndio decorativo no fim), ressalva só com dúvida real, sem emoji, sem negrito nem outro markdown (o chat do F9 mostra texto puro: `textContent` em `assistant-chat.js`) e frases de tamanho variado. Textos aprovados exatos, máscaras de LGPD, o texto do cartão de confirmação, os avisos que outras regras mandam dizer e os formatos que outras regras pedem têm prioridade sobre o estilo. A linha de abertura do prompt aponta para a regra 42.
+- Testes: `tests/test_assistant_estilo_e_abas.py` (regras 32, 37, 41 e 42, descrição do relatório e roteamento) e `tests/test_assistant_termos.py` (regra 37). Rodada com o modelo real (`deepseek-flash`, seis perguntas sobre as telas, ferramentas recusadas, sem dado pessoal) comparando o prompt anterior e o novo: negrito de 43 para 0, travessão de 14 para 1 e texto cerca de 26% mais curto, com as respostas sobre OS entregues, sub-aba `Chamados (F5)`, `Desfazer finalização` e lembretes corretas.
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.
 
-- Roteamento de ferramentas por mensagem: a frase "anote na linha do tempo" casa só com o grupo `historico` em `schemas_para_mensagem`, mas `anotar_linha_do_tempo` está no grupo `chamados` (`GRUPOS_FERRAMENTAS` em `domains/assistant_tools.py`, perto das linhas 1346 a 1357).
 - Sobrenome da base escrito sozinho em texto livre (08/11/2026): "Teixeira ligou" não é mascarado, porque a base de solicitantes registra só nomes completos. Nomes completos continuam mascarados.
 
 ## Testes e verificação
