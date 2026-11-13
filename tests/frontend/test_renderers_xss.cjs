@@ -6,6 +6,7 @@ const createTicketRules = require("../../static/js/features/ticket-rules.js");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
 const createEquipmentSearchRenderers = require("../../static/js/ui/equipment-search-renderers.js");
 const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
+const createBackupsRegionais = require("../../static/js/features/backups-regionais.js");
 const panels = require("../../static/js/ui/data-panels.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
@@ -22,6 +23,7 @@ function criarElementoFalso() {
 }
 const elementos = new Map();
 globalThis.document = {
+  addEventListener() {},
   createElement: () => criarElementoFalso(),
   getElementById: id => {
     if (!elementos.has(id)) elementos.set(id, criarElementoFalso());
@@ -131,6 +133,41 @@ test("comparison result renderer escapes every text field", () => {
   const sincronizadas = renderer.conteudoAnotacoesSincronizadas(comparison, renderer.criarColunasAnotacao(comparison));
   afirmarSemHtmlVivo(sincronizadas, "conteudoAnotacoesSincronizadas");
   assert.ok(sincronizadas.includes(escapeHtml(carga("sinc_computador"))), "conteudoAnotacoesSincronizadas: hostname");
+});
+
+test("backups regionais renderer escapes every text field", () => {
+  const { renderizarBackupsRegionais } = createBackupsRegionais({
+    app: {}, dom, historyFormat,
+    comparisonResultRenderer: () => createComparisonResultRenderer({ app: { atributosVersaoAnotacao: () => "" }, dom, historyFormat, loggedUserMarkers }),
+  });
+  const identidade = prefixo => ({ serie: carga(`${prefixo}_serie`), apelido: carga(`${prefixo}_apelido`) });
+  const invalidada = campo => ({ estado: "invalidada", motivo: carga(campo) });
+  const dados = {
+    gerado_em: carga("gerado_em"), minimo: 2, limitacoes: [carga("limitacao")],
+    prioritarias: [{
+      cidade: carga("cidade"), status: carga("status"), contados: 1, minimo: 2, excedente: 1,
+      backups: [
+        { ...identidade("bk"), origem: "confirmacao", ultima_verificacao: carga("bk_verif"), confirmado_ate: carga("bk_ate") },
+        { ...identidade("bk2"), origem: carga("bk2_origem") },
+      ],
+      candidatos: [{
+        ...identidade("cand"), motivo: carga("cand_motivo"), dias_sem_verificacao: 9,
+        ultima_verificacao: carga("cand_verif"), confirmacao: invalidada("cand_confirmacao"),
+      }],
+      conferencia: [{ ...identidade("conf"), motivo: carga("conf_motivo") }],
+      excluidos: [{ ...identidade("exc"), motivo: carga("exc_motivo"), confirmacao: invalidada("exc_confirmacao") }],
+    }],
+    sobras: [{ cidade: carga("sobra_cidade"), quantidade: 2, prioritaria: false, series: [carga("sobra_serie")] }],
+    outras_candidatos: [{ cidade: carga("outra_cidade"), candidatos: [{ ...identidade("outra"), motivo: carga("outra_motivo") }] }],
+  };
+  const campos = [
+    "gerado_em", "limitacao", "cidade", "status", "bk_serie", "bk_apelido", "bk_verif", "bk_ate", "bk2_serie", "bk2_origem",
+    "cand_serie", "cand_apelido", "cand_motivo", "cand_verif", "cand_confirmacao", "conf_serie", "conf_apelido", "conf_motivo",
+    "exc_serie", "exc_apelido", "exc_motivo", "exc_confirmacao", "sobra_cidade", "sobra_serie",
+    "outra_cidade", "outra_serie", "outra_apelido", "outra_motivo",
+  ];
+  afirmarCamposEscapados(renderizarBackupsRegionais(dados), campos, "renderizarBackupsRegionais");
+  afirmarCamposEscapados(renderizarBackupsRegionais({ indisponivel: true, limitacoes: [carga("limitacao")] }), ["limitacao"], "renderizarBackupsRegionais (indisponível)");
 });
 
 test("OS table of the Chamados panel renders Simpress and Oracle fields as text", async () => {

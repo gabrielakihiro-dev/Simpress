@@ -1244,6 +1244,35 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
+/* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
+#resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__estado { margin: 0; padding: 24px 12px; text-align: center; color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__limites { padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__limites-titulo { margin: 0 0 4px; font-size: var(--fs-md); font-weight: var(--peso-medio); }
+#resumo-painel-backups .ck-backups__limites ul { margin: 0; padding-left: 18px; }
+#resumo-painel-backups .ck-backups__lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+#resumo-painel-backups .ck-backups__item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+#resumo-painel-backups .ck-backups__detalhe { flex: 1 1 100%; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups :is(.ck-backups__nota, .ck-backups__vazio) { font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__serie { font-family: var(--fonte-mono); font-size: var(--fs-md); overflow-wrap: anywhere; }
+#resumo-painel-backups :is(.ck-backups__apelido, .ck-backups__cidade) { overflow-wrap: anywhere; }
+#resumo-painel-backups .ck-backups__apelido { color: var(--cor-texto-suave); }
+#resumo-painel-backups .ck-backups__contagem { font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
+#resumo-painel-backups .ck-btn { height: auto; min-height: var(--altura-controle-sm); max-width: 100%; padding-block: 4px; white-space: normal; text-align: center; }
+#resumo-painel-backups .ck-btn[aria-busy="true"] { cursor: progress; }
+#resumo-painel-backups .ck-backups__excluidos > summary { min-height: var(--altura-controle-sm); cursor: pointer; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+#resumo-painel-backups .ck-backups__excluidos > summary:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+#resumo-painel-backups .ck-backups__excluidos > .ck-backups__lista { margin-top: 8px; }
+#resumo-painel-backups .ck-backups__secao .ck-cartao__corpo { display: grid; gap: 12px; }
+#resumo-painel-backups .ck-backups__grupo { display: grid; gap: 6px; }
+#resumo-painel-backups .ck-tabela th:nth-child(1) { width: 11%; }
+#resumo-painel-backups .ck-tabela th:nth-child(2) { width: 15%; }
+#resumo-painel-backups .ck-tabela th:nth-child(3) { width: 22%; }
+#resumo-painel-backups .ck-tabela th:nth-child(4) { width: 24%; }
+#resumo-painel-backups .ck-tabela th:nth-child(5) { width: 14%; }
+#resumo-painel-backups .ck-tabela th:nth-child(6) { width: 14%; }
+@media (pointer: coarse) { #resumo-painel-backups :is(.ck-btn, .ck-backups__excluidos > summary) { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { #resumo-painel-backups :is(.ck-tabela tbody tr, .ck-btn) { transition: none; } }
 .sebrae-filtro { display: flex; flex: 0 1 470px; align-items: center; gap: 8px; min-width: 0; }
 .sebrae-busca { display: flex; flex: 1 1 auto; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-mudo); }
 .sebrae-busca:focus-within { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
@@ -1558,7 +1587,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-abas { flex: 1 1 0; gap: 2px; }
   .sebrae-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 4px; font-size: var(--fs-ui); }
   .sebrae-aba__rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  /* Resumo: as cinco sub-abas dividem a largura, sem rolagem horizontal. */
+  /* Resumo: as seis sub-abas dividem a largura, sem rolagem horizontal. */
   .resumo-abas-barra { gap: 4px; }
   .resumo-abas { flex: 1 1 0; gap: 2px; }
   .resumo-aba { flex: 1 1 0; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; height: 44px; padding: 0 2px; font-size: var(--fs-ui); }
@@ -1696,6 +1725,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
 .ck-assist-widget > .ck-assist__form { padding: 0 12px 12px; }
 .ck-assist-widget > .ck-assist__barra { padding: 8px 12px; flex-wrap: wrap; }
+/* Resumo: abaixo de 600px as seis sub-abas ficam em duas linhas de três, para os rótulos não serem cortados. */
+@media (max-width: 599px) { .resumo-abas { flex-wrap: wrap; } .resumo-aba { flex: 1 1 calc((100% - 4px) / 3); } }
 @media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
 @media (max-width: 599px) { .ck-assist-widget { left: 8px; right: 8px; bottom: 8px; width: auto; height: calc(100dvh - 72px); } }
 @media (max-width: 599px) {
