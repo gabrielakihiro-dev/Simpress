@@ -166,6 +166,13 @@ class ReenvioSnapshotPayload(BaseModel):
     confirmado: bool = Field(False, strict=True)
 
 
+class DesfazerOutroTecnicoPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    numero: str = Field(..., max_length=40)
+    confirmado: bool = Field(False, strict=True)
+
+
 def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRouter:
     router = APIRouter()
 
@@ -966,6 +973,36 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     manual = str(valores.get("R") or "").strip()
             _disparar([numero], encerramentos_manuais=_encerramentos_manuais({numero: manual} if manual else {}))
             return JSONResponse({"iniciado": True, "numeros": [numero]}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/finalizacao/desfazer-outro-tecnico")
+    def desfazer_outro_tecnico(payload: DesfazerOutroTecnicoPayload):
+        """Desfaz o registro local "finalizado por outro técnico": o chamado volta aos abertos para corrigir D e R pelo cartão.
+
+        Só dados locais mudam (estado e último resultado da rotina); nada vai ao SoftExpert, ao SharePoint nem dispara rotina."""
+        if not payload.confirmado:
+            raise DomainValidationError("Confirme para desfazer a finalização.", status_code=422)
+        numero = fin.validar_numero(payload.numero)
+        pasta = _pasta_estado()
+        with lock_paths([_base_guard(), fin.caminho_job(pasta)]):
+            _exigir_rotina_livre(pasta)  # um pedido pendente com R manual registraria o chamado de novo
+            try:  # aqui não há `start` depois para barrar: sem ler o runner, uma `fechar` rodando regravaria o resultado
+                _rotina_em_andamento()
+            except Exception as exc:  # noqa: BLE001
+                raise DomainBusyError("Não foi possível conferir se há rotina em execução. Tente de novo.") from exc
+            fin.exigir_outro_tecnico(pasta, numero)
+            # O resultado vem antes do estado: se a gravação dele falhar, o estado continua igual e a nova tentativa funciona.
+            resultado = fin.ler_resultado(pasta)
+            itens = resultado.get("resultados") if isinstance(resultado, dict) else None
+            if isinstance(itens, list):
+                mudou = False
+                for r in itens:
+                    if isinstance(r, dict) and str(r.get("numero") or "").strip().upper() == numero:
+                        r.update(status=fin.STATUS_NAO_ENCONTRADO, encerrado_em="")  # a tela não devolve o R nem o move de volta para Finalizados
+                        mudou = True
+                if mudou and resultado is not None:
+                    fin.gravar_resultado(pasta, resultado)
+            fin.desfazer_outro_tecnico(pasta, numero)
+        return JSONResponse({"numero": numero, "desfeito": True}, headers={"Cache-Control": "no-store"})
 
     @router.get("/api/sebrae/finalizar-softexpert")
     def resultado_finalizacao():

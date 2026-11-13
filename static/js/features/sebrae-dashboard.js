@@ -508,6 +508,7 @@
       const rodape = document.createElement("div");
       rodape.className = "sebrae-final__rodape";
       rodape.appendChild(resultado);
+      if (item.status === STATUS_OUTRO_TECNICO) rodape.appendChild(botaoDesfazerOutroTecnico(item.numero));
       const corpo = document.createElement("div");
       corpo.className = "sebrae-final__corpo";
       corpo.append(colTexto, colAnexo, rodape);
@@ -516,6 +517,38 @@
       detalhe.appendChild(artigo);
       li.appendChild(detalhe);
       return li;
+    }
+
+    /** Desfaz só o registro local "finalizado por outro técnico" (pedido do usuário, 13/11/2026): o chamado volta aos abertos para corrigir D e R. */
+    function botaoDesfazerOutroTecnico(numero) {
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ck-btn ck-btn--fantasma ck-btn--sm";
+      botao.textContent = "Desfazer finalização";
+      botao.dataset.sebraeDesfazerOutroTecnico = numero;
+      botao.addEventListener("click", async () => {
+        const confirmado = await app.confirmarAcao({
+          titulo: "Desfazer finalização",
+          mensagem: `Desfazer a finalização de ${numero} registrada como feita por outro técnico? Só os dados locais mudam: o chamado volta para os abertos e o SharePoint não é revertido.`,
+          confirmar: "Desfazer finalização", cancelar: "Cancelar",
+        });
+        if (!confirmado) return;
+        botao.disabled = true;
+        try {
+          await app.apiFetch("/api/sebrae/finalizacao/desfazer-outro-tecnico", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ numero, confirmado: true }),
+            errorMessage: "Não foi possível desfazer a finalização.",
+          });
+        } catch (error) {
+          botao.disabled = false;
+          app.showToast(error.message, "error");
+          return;
+        }
+        app.showToast("Finalização desfeita: o chamado voltou para os abertos. Corrija D e R no cartão e use Atualizar.", "success");
+        carregarNovosSebrae();
+      });
+      return botao;
     }
 
     /** Cópia só leitura do cartão do F5 para a janela Chamado × OS: zonas 1 e 2 sem lápis nem campos editáveis, sem a zona 3.
