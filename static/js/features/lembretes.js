@@ -21,10 +21,18 @@
   let pedidoLista = 0;
   // Termo de origem enquanto o diálogo Criar lembrete está aberto.
   let criando = null;
+  // Cópia dos dados do termo tirada quando o diálogo abre ({campos, itens, obs}); vai junto no POST.
+  let copiaTermo = null;
+  // Ids com o bloco "Dados do termo" aberto: renderizar() refaz os itens e não pode fechá-los.
+  let termosAbertos = new Set();
 
   const tamanho = (texto) => [...String(texto ?? "")].length;
   // O backend recusa caractere de controle (422): quebra de linha e tab viram espaço, e espaços repetidos viram um só.
   const limparTexto = (texto) => String(texto ?? "").replace(/[\p{Cc}\s]+/gu, " ").trim();
+  // Mesmos limites do backend para a cópia do termo (200 por campo, 2000 nas observações; controle vira espaço,
+  // exceto quebra de linha e tab nas observações): sem isso o POST dava 422 e o diálogo não deixava corrigir.
+  const textoTermo = (texto, limite, permitidos = "") =>
+    [...String(texto ?? "").replace(/\p{Cs}/gu, "").replace(/\p{Cc}/gu, (c) => (permitidos.includes(c) ? c : " "))].slice(0, limite).join("");
   const mensagemDe = (erro, padrao) => (erro?.status && erro.message ? erro.message : padrao);
   const avisarErro = (erro, padrao) => app.showToast(mensagemDe(erro, padrao), "error");
   // Toda escrita invalida o GET em andamento: a resposta antiga não pode sobrescrever a lista já alterada.
@@ -111,6 +119,41 @@
     return form;
   }
 
+  // Bloco recolhível com os dados salvos do termo (só lembretes criados de um termo com a cópia gravada).
+  function criarBlocoTermo(l) {
+    const secoes = l.termo ? app.termosSecoesLembrete?.(l.origem, l.termo) : null;
+    if (!secoes) return null;
+    const bloco = elemento("details", "lembretes__termo");
+    if (termosAbertos.has(String(l.id))) bloco.open = true;
+    bloco.append(elemento("summary", "lembretes__termo-resumo", "Dados do termo"));
+    secoes.forEach((s) => {
+      const secao = elemento("section", "lembretes__termo-secao");
+      secao.append(elemento("h3", "lembretes__termo-titulo", s.titulo));
+      if (s.texto !== undefined) {
+        secao.append(elemento("p", "lembretes__termo-obs", s.texto));
+      } else {
+        const lista = elemento("dl", "lembretes__termo-campos");
+        s.campos.forEach(([rotulo, valor]) => {
+          const linha = elemento("div", "lembretes__termo-linha");
+          linha.append(elemento("dt", "", rotulo), elemento("dd", "", valor));
+          lista.append(linha);
+        });
+        secao.append(lista);
+      }
+      bloco.append(secao);
+    });
+    const acoes = elemento("div", "lembretes__termo-acoes");
+    const pdf = elemento("button", "ck-btn ck-btn--secundario ck-btn--sm", "Gerar PDF");
+    pdf.type = "button";
+    ligar(pdf, "click", "lembretesGerarPdfTermo", [l.id]);
+    const preencher = elemento("button", "ck-btn ck-btn--secundario ck-btn--sm", "Preencher no Termo");
+    preencher.type = "button";
+    ligar(preencher, "click", "lembretesPreencherTermo", [l.id]);
+    acoes.append(pdf, preencher);
+    bloco.append(acoes);
+    return bloco;
+  }
+
   function criarItem(l) {
     const li = elemento("li", "lembretes__item");
     li.dataset.lembreteId = l.id;
@@ -128,6 +171,8 @@
     const data = elemento("time", "lembretes__data", `${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
     data.setAttribute("datetime", dataExibida(l));
     corpo.append(elemento("p", "lembretes__texto", l.descricao), data);
+    const blocoTermo = criarBlocoTermo(l);
+    if (blocoTermo) corpo.append(blocoTermo);
     const acoes = elemento("div", "lembretes__acoes");
     acoes.append(
       botaoIcone("lembretes__editar", "Editar lembrete", "pencil", "lembretesEditar", l.id),
@@ -142,6 +187,8 @@
     // Refazer a lista não pode apagar o que o usuário digita na edição ainda não salva.
     const campoEdicao = porId("lembretes-edicao-campo");
     const rascunho = campoEdicao ? { id: editandoId, valor: campoEdicao.value, foco: doc().activeElement === campoEdicao } : null;
+    termosAbertos = new Set([...doc().querySelectorAll("details.lembretes__termo[open]")]
+      .map((bloco) => bloco.closest("[data-lembrete-id]")?.dataset.lembreteId));
     const pendentes = ordenar(lembretes.filter((l) => !l.concluido));
     const concluidos = ordenar(lembretes.filter((l) => l.concluido));
     porId("lembretes-lista")?.replaceChildren(...pendentes.map(criarItem));
@@ -419,6 +466,11 @@
     if (!dados || !campo || ocupado) return;
     avisoDoTermo(termo, "");
     criando = termo;
+    copiaTermo = {
+      campos: Object.fromEntries(Object.entries(dados.campos).map(([chave, valor]) => [chave, textoTermo(valor, 200)])),
+      itens: dados.itens.map((item) => item.resposta),
+      obs: textoTermo(dados.obs, 2000, "\n\r\t"),
+    };
     campo.value = montarDescricaoTermo(termo, dados);
     estadoBotaoCriar();
     app.abrirModalAcessivel("lembretes-criar", "#lembretes-criar-descricao", "lembretesCancelarCriar");
@@ -428,6 +480,7 @@
   function lembretesCancelarCriar() {
     if (criando === null) return;
     criando = null;
+    copiaTermo = null;
     app.fecharModalAcessivel("lembretes-criar");
   }
 
@@ -443,7 +496,7 @@
     let criado = null;
     try {
       criado = await mutar(URL_API, {
-        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, origem: termo }),
+        method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, origem: termo, termo: copiaTermo }),
         errorMessage: "Não foi possível criar o lembrete.",
       });
     } catch (erro) {
@@ -455,6 +508,7 @@
     // Em erro o diálogo continua aberto, com o texto, para tentar de novo.
     if (!criado) return;
     criando = null;
+    copiaTermo = null;
     lembretes = [...lembretes, criado];
     renderizar();
     app.fecharModalAcessivel("lembretes-criar");
@@ -471,10 +525,22 @@
     focarItem(id, ".lembretes__marcar");
   }
 
+  // Ações do bloco "Dados do termo": usam só os dados salvos no lembrete.
+  function lembretesGerarPdfTermo(id) {
+    const l = achar(id);
+    if (l?.termo) return app.termosGerarPdfDoLembrete?.(l.origem, l.termo);
+  }
+
+  function lembretesPreencherTermo(id) {
+    const l = achar(id);
+    if (l?.termo) return app.termosPreencherDoLembrete?.(l.origem, l.termo);
+  }
+
   return {
     carregarLembretes, lembretesAdicionar, lembretesAoDigitar, lembretesAlternar, lembretesEditar,
     lembretesCancelarEdicao, lembretesTeclaEdicao, lembretesSalvarEdicao, lembretesAlternarConcluidos,
     lembretesExcluir, lembretesCancelarExclusao, lembretesConfirmarExclusao,
     montarDescricaoTermo, lembretesCriarDoTermo, lembretesCancelarCriar, lembretesConfirmarCriar, lembretesVerLembretes,
+    lembretesGerarPdfTermo, lembretesPreencherTermo,
   };
 });
