@@ -582,14 +582,53 @@
     renderizarListaSemAcesso60(info);
   }
 
+  // Backups regionais (/api/painel): só dado já calculado pelo servidor. A lista traz cidade e situação, nunca apelido nem série.
+  const nomesRegionais = valor => (Array.isArray(valor) ? valor.map(item => String(item ?? "").trim()).filter(Boolean) : []);
+
+  function renderizarAlertaBackupsRegionais(dados) {
+    const card = document.getElementById("alerta-backups-regionais");
+    if (!card) return;
+    const semBackup = dados && typeof dados === "object" && !dados.indisponivel ? nomesRegionais(dados.pendencias?.sem_backup) : [];
+    const conferir = dados && typeof dados === "object" && !dados.indisponivel ? nomesRegionais(dados.pendencias?.conferir) : [];
+    if (!semBackup.length && !conferir.length) {
+      ocultarAlertaPainel(card, dados?.indisponivel ? "indisponivel" : "vazio");
+      return;
+    }
+    const urgente = semBackup.length > 0;
+    card.dataset.gravidade = urgente ? "urgente" : "atencao";
+    const selo = document.getElementById("alerta-backups-regionais-selo");
+    if (selo) {
+      selo.dataset.status = urgente ? "erro" : "alerta";
+      selo.textContent = urgente ? "Urgente" : "Atenção";
+    }
+    const titulo = document.getElementById("alerta-backups-regionais-titulo");
+    if (titulo) titulo.textContent = urgente ? "Sem backup disponível" : "Conferir possível backup";
+    const partes = [];
+    if (semBackup.length) partes.push(`${semBackup.length} ${semBackup.length === 1 ? "regional está" : "regionais estão"} sem backup disponível.`);
+    if (conferir.length) partes.push(`${conferir.length} ${conferir.length === 1 ? "regional tem" : "regionais têm"} possível backup para conferir.`);
+    mostrarAlertaPainel(card, urgente ? "sem_backup" : "conferir", partes.join(" "));
+    const lista = document.getElementById("alerta-backups-regionais-lista");
+    if (!lista) return;
+    const linhas = [...semBackup.map(cidade => `${cidade} — sem backup disponível`), ...conferir.map(cidade => `${cidade} — conferir possível backup`)];
+    lista.replaceChildren(...linhas.map(linha => {
+      const li = document.createElement("li");
+      li.textContent = linha;
+      return li;
+    }));
+    lista.hidden = false;
+  }
+
+  const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-backups-regionais"];
+
   function inicializarAlertasOsDivergencias() {
     document.addEventListener("simpress:painel-atualizado", event => {
       renderizarAlertaSemAcesso60(event.detail?.sem_acesso_60_dias);
       renderizarAlertaOsParadas(event.detail?.os_paradas);
       renderizarAlertaDivergenciasNovas(event.detail?.divergencias_novas);
       renderizarAlertaChamadosOutroTecnico(event.detail?.chamados_outro_tecnico);
+      renderizarAlertaBackupsRegionais(event.detail?.backups_regionais);
     });
-    ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico"].forEach(id => {
+    ALERTAS_DO_SINO.forEach(id => {
       document.getElementById(id)?.addEventListener("animationend", event => {
         delete event.currentTarget.dataset.enter;
       });
@@ -605,6 +644,6 @@
     carregarEstatisticas, carregarProntidao, inicializarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
-    renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico,
+    renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico, renderizarAlertaBackupsRegionais,
   };
 });
