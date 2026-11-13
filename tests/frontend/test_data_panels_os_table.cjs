@@ -452,6 +452,21 @@ test("soOs sem a OS no relatório avisa que a série não foi encontrada", async
   assert.equal(section.querySelectorAll("tbody tr[data-serial]").length, 0);
 });
 
+test("soOs do lembrete sem série e sem a OS no relatório avisa que a OS não foi encontrada", async () => {
+  const host = novoHost();
+  const section = panels.montarTabelaOs(host, { semBusca: true, soOs: { serie: "", os: "9999999", lembrete: true } });
+  const status = section.querySelector(".ticket-summary-status");
+  await waitFor(() => status.textContent === "OS não encontrada na importação atual.");
+  assert.equal(section.querySelectorAll("tbody tr[data-serial]").length, 0);
+});
+
+test("soOs fora do lembrete (F5) sem série mantém o aviso de série não encontrada", async () => {
+  const host = novoHost();
+  const section = panels.montarTabelaOs(host, { semBusca: true, soOs: { serie: "", os: "9999999" } });
+  const status = section.querySelector(".ticket-summary-status");
+  await waitFor(() => status.textContent === "Série não encontrada na importação atual.");
+});
+
 test("somenteLeitura: OS em texto, observação só leitura e nada é gravado", async () => {
   observacoes = [{ serie: "SN-SOR", os: "9002", observacao: "Peça pedida" }];
   const putsAntes = requests.filter(([method]) => method === "PUT").length;
