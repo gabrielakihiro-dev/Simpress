@@ -351,7 +351,8 @@
   }
 
   const temConteudo = (form) => [...form.querySelectorAll("input, textarea")]
-    .some((campo) => (campo.type === "radio" ? campo.checked : String(campo.value ?? "").trim() !== ""));
+    // Rádio só conta se diferir do padrão (Sim marcado no termo novo).
+    .some((campo) => (campo.type === "radio" ? campo.checked !== campo.defaultChecked : String(campo.value ?? "").trim() !== ""));
 
   // Preenche o termo de origem com os dados do lembrete para editar; confirma antes se já houver algo digitado.
   async function termosPreencherDoLembrete(origem, salvo) {
@@ -375,10 +376,10 @@
       const input = form.querySelector(`[name="${nome}"]`);
       if (input) input.value = valor;
     });
+    // Valor salvo prevalece sobre o padrão Sim; item salvo sem resposta fica sem marca.
     dados.itens.forEach((item, i) => {
-      if (!item.resposta) return;
-      const radio = form.querySelector(`input[name="item-${String(i + 1).padStart(2, "0")}"][value="${item.resposta}"]`);
-      if (radio) radio.checked = true;
+      form.querySelectorAll(`input[name="item-${String(i + 1).padStart(2, "0")}"]`)
+        .forEach((radio) => { radio.checked = radio.value === item.resposta; });
     });
     const obs = form.querySelector('[name="obs"]');
     if (obs) obs.value = dados.obs;
