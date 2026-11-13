@@ -69,11 +69,12 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         # NB1 (Cascavel) e NB2 (Londrina) somem do Endpoint: candidatas. OUTRO só deixa o Endpoint disponível.
         self.equipamentos = [notebook("NB1", "Cascavel"), notebook("NB2", "Londrina")]
         self.endpoint = endpoint(("OUTRO", "PRNOTE-X", AGORA - timedelta(days=1)))
+        self.ler_endpoint = lambda: self.endpoint
         router = create_backups_regionais_router(BackupsRegionaisServices(
             state_file=lambda: self.state,
             transaction_root=lambda: self.root,
             equipamentos=lambda: self.equipamentos,
-            endpoint=lambda: self.endpoint,
+            endpoint=lambda: self.ler_endpoint(),
             estado_cobertura=lambda: {"disponibilidade": {}, "reservas": {}, "movimentacoes": {}, "devolucoes": {}},
             manutencao=lambda: Manutencao(),
             agora=lambda: self.agora,
@@ -132,6 +133,16 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         self.assertTrue(segunda["repetido"])
         self.assertEqual(segunda["confirmacao"]["expira_em"], registro["expira_em"])
         self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [registro]})
+
+    def test_endpoint_com_falha_nao_derruba_confirmar_e_o_log_so_tem_a_classe(self):
+        def falha():
+            raise OSError(r"C:\caminho\local\endpoint.xlsx")
+        self.ler_endpoint = falha
+        with self.assertLogs(level="WARNING") as logs:
+            registro = self.post(CONFIRMAR)["confirmacao"]  # o painel mostra NB1 com fonte_endpoint_indisponivel
+        self.assertEqual((registro["serie"], registro["cidade"]), ("NB1", "Cascavel"))
+        self.assertTrue(any("OSError" in linha for linha in logs.output))
+        self.assertFalse(any("caminho" in linha for linha in logs.output))
 
     def test_desfazer_remove_o_registro_e_repetir_responde_removido_false(self):
         self.post(CONFIRMAR)

@@ -238,6 +238,7 @@
   }
 
   function liberar(botao) {
+    focoDaAcao = null;  // sem redesenho até aqui, a marca não pode puxar o foco depois
     botao.disabled = false;
     botao.removeAttribute("aria-busy");
   }
@@ -267,7 +268,6 @@
     } catch (erro) {
       app.showToast(mensagemDoErro(erro, "Não foi possível concluir a ação."), "error");
       liberar(botaoAcao);
-      focoDaAcao = null;
       if (!document.activeElement || document.activeElement === document.body) botaoAcao.focus?.();
     } finally {
       emAndamento = false;
