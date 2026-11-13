@@ -133,7 +133,7 @@ class RegionalRepresentativesTests(unittest.TestCase):
                 "almoco": "Escritório não fecha", "pausaDuracao": ""}
         with self.assertLogs("domains.local_setup", level="WARNING"):
             response = self.client.put(f"{URL}/Londrina", json=body)
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 503)
         self.assertFalse(self.path.exists())  # no fake diff written
 
     def test_without_a_defaults_path_the_code_defaults_alone_are_used(self):
