@@ -1041,7 +1041,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-rel__atencao-bloco { display: flex; flex-direction: column; gap: 8px; }
 .ck-rel__atencao-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .ck-rel__detalhe { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.ck-rel__cartao, .ck-rel__secao, .ck-rel__corpo > .ck-rel__previa { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__cartao, .ck-rel__secao, .ck-rel__painel > .ck-rel__previa { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
 .ck-rel__previa summary { cursor: pointer; }
 .ck-rel__cartao[data-status="alerta"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 .ck-rel__cartao[data-status="alerta"] :is(.ck-rel__cartao-titulo, .ck-rel__nota, .ck-rel__valor) { color: inherit; }
@@ -1084,6 +1084,27 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-rel__cartao > button { align-self: flex-start; }
 @media (pointer: coarse) { [data-cockpit-tool-panel="relatorio"] .ck-rel__corpo :is(.ck-rel__link, .ck-btn--sm) { min-height: 44px; } .ck-rel__link { display: inline-flex; align-items: center; } }
 @media (prefers-reduced-motion: reduce) { .ck-rel__trilho-valor { transition: none; } }
+/* Relatório mensal: sub-abas (molde de .resumo-aba). A barra rola sozinha; min-width:0 em toda a cadeia flex evita rolagem horizontal da página (320 a 2560px). */
+.rel-abas-barra { min-width: 0; padding: 8px 20px; border-bottom: 1px solid var(--cor-borda-suave); }
+.rel-abas { display: flex; gap: 4px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.rel-aba { display: inline-flex; align-items: center; flex: none; gap: 6px; height: 28px; min-height: 0; padding: 0 10px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.rel-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
+.rel-aba[aria-selected="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
+.rel-aba:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; } /* por dentro: a barra tem overflow-x e cortaria um contorno externo */
+.rel-aba__n { transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.rel-aba[aria-selected="true"] .rel-aba__n:not([data-status]) { background: var(--cor-superficie); color: var(--cor-destaque-texto); }
+.rel-aba__n[hidden], .ck-rel__painel[hidden], .ck-rel__faixa[hidden] { display: none; } /* .ck-badge, .ck-rel__painel e .ck-rel__faixa têm display próprio e venceriam o atributo hidden */
+.ck-rel__estado:empty, .ck-rel__slot:empty { display: none; }
+.ck-rel__estado, .ck-rel__slot, .ck-rel__painel { min-width: 0; }
+.ck-rel__painel { display: flex; flex-direction: column; gap: 14px; }
+.ck-rel__faixa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-width: 0; padding: 10px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__faixa-titulo { font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
+.ck-rel__faixa-dados { display: flex; flex-wrap: wrap; gap: 4px 16px; min-width: 0; font-size: var(--fs-md); color: var(--cor-texto-mudo); }
+.ck-rel__faixa-item b { font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; color: var(--cor-texto-forte); }
+.ck-rel__faixa .ck-rel__link { align-self: center; }
+@media (max-width: 767.98px) { .rel-abas-barra { padding: 8px 12px; } }
+@media (pointer: coarse) { .rel-aba { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .rel-aba, .rel-aba__n { transition: none; } }
 @media (max-width: 767.98px) { .ck-ferr-filtros { padding: 8px 12px; } }
 
 /* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */
