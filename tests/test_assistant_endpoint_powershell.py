@@ -93,7 +93,7 @@ class AssistantPowerShellTests(unittest.TestCase):
 
     def test_result_never_echoes_the_command(self):
         segredo = "Write-Host SEGREDO-123"
-        for status in ("inserido", "not_found", "erro_terminal", "sem_usuario", "usuario_ambiguo"):
+        for status in ("inserido", "not_found", "erro_terminal", "offline", "sem_usuario", "usuario_ambiguo"):
             answer = {"status": status, "hostname": "PRNOTEUMU005", "modo": "sistema", "mensagem": "falha", "usuarios": ["a", "b"] if status == "usuario_ambiguo" else []}
             result = TOOLS["abrir_powershell_endpoint"].run(SimpressApi(lambda *args, a=answer: (200, a)), {"comando": segredo, "hostname": HOST})
             self.assertNotIn("SEGREDO-123", json.dumps(result, ensure_ascii=False), status)
@@ -105,6 +105,11 @@ class AssistantPowerShellTests(unittest.TestCase):
         self.assertEqual(ok["hostname"], "PC1")
         self.assertEqual(ok["modo"], "sistema")
         self.assertIn("NÃO executado", ok["mensagem"])
+
+    def test_offline_says_notebook_is_offline_and_nothing_inserted(self):
+        result = TOOLS["abrir_powershell_endpoint"].run(SimpressApi(lambda *a: (200, {"status": "offline", "hostname": "PRNOTEUIC001"})), {"comando": "ls", "hostname": "PRNOTEUIC001"})
+        self.assertFalse(result["sucesso"])
+        self.assertEqual(result["mensagem"], "O notebook PRNOTEUIC001 está offline no Endpoint. Nada foi inserido.")
 
     def test_http_errors_and_unknown_status_are_errors(self):
         for answer in ((409, {"detail": "ocupado"}), (503, {"detail": "falha"}), (200, {"status": "x"}), (422, {"detail": "inválido"})):

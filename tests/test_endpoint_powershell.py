@@ -168,6 +168,9 @@ class LocGrade:
 
     first = property(lambda self: self)
 
+    def wait_for(self, **kw):  # o item do menu aparece (computador online)
+        pass
+
     def hover(self, **kw):
         self.pagina.cliques.append(("hover", self.seletor))
 
@@ -212,9 +215,13 @@ class PaginaGrade:
     filtros: list  # preenchido em abrir()
 
 
-def abrir(hosts, aba, hostname="PRNOTEUMU005", modo="sistema", comando="Get-Date", usuario=None, preparar=None, depois_da_escolha=None):
+def abrir(hosts, aba, hostname="PRNOTEUMU005", modo="sistema", comando="Get-Date", usuario=None, preparar=None, depois_da_escolha=None,
+          menus=()):
+    """``menus``: se cada menu aberto (grade, depois página) traz "Gerente do Sistema"; o que faltar vale True."""
     pagina = PaginaGrade(hosts, aba)
     pagina.filtros = []
+    pagina.menus = list(menus)
+    pagina.url = "https://endpoint/#/uems/inventory/computers"
     if preparar:
         preparar(pagina)
     escolher = endpoint_lookup._escolher_host
@@ -227,6 +234,8 @@ def abrir(hosts, aba, hostname="PRNOTEUMU005", modo="sistema", comando="Get-Date
 
     with patch.object(grid, "aplicar_filtro", side_effect=pagina.filtrar), patch.object(grid, "limpar_filtro"), \
             patch.object(endpoint_lookup, "_escolher_host", side_effect=escolher_e_interferir), \
+            patch.object(endpoint_lookup, "_menu_com_item", side_effect=lambda *a, **k: pagina.menus.pop(0) if pagina.menus else True), \
+            patch.object(endpoint_lookup, "_abrir_menu_na_pagina", side_effect=lambda page, href: pagina.cliques.append(("acoes_pagina", href))), \
             patch.object(automation, "_pagina_ativa_recuperacao", pagina), patch.object(automation.time, "sleep"):
         resultado = endpoint_lookup._abrir_powershell_na_grade(
             pagina, hostname, modo, comando, usuario)
@@ -271,6 +280,26 @@ class HostTests(unittest.TestCase):
         self.assertNotIn("hostname_padrao_offline", res)
         self.assertEqual(pagina.filtros, ["PRNOTEUMU005"])
         self.assertNotIn(("linha", "PRNOTEB"), pagina.cliques)
+
+    def test_offline_tries_computer_page_then_reports_offline(self):
+        aba = AbaTerminal()
+        res, pagina = abrir([("PRNOTEUIC001", "Para baixo")], aba, hostname="PRNOTEUIC001", modo="usuario", menus=(False, False))
+        self.assertEqual(res, {"status": "offline", "hostname": "PRNOTEUIC001", "modo": "usuario"})
+        self.assertEqual(pagina.cliques, [("linha", "PRNOTEUIC001"), ("acoes_pagina", "#/uems/inventory/computers/PRNOTEUIC001")])
+        self.assertEqual([c[1] for c in pagina.keyboard.chamadas], [("Escape",), ("Escape",)])
+        self.assertEqual(aba.preenchidos, [])
+
+    def test_menu_on_computer_page_is_used_when_grid_menu_lacks_option(self):
+        aba = AbaTerminal()
+        res, pagina = abrir([("PRNOTEUIC001", "Para baixo")], aba, hostname="PRNOTEUIC001", menus=(False, True))
+        self.assertEqual(res["status"], "inserido")
+        self.assertEqual(pagina.cliques, [
+            ("linha", "PRNOTEUIC001"),
+            ("acoes_pagina", "#/uems/inventory/computers/PRNOTEUIC001"),
+            ("hover", 'li.zmenu__item[data-label="Gerente do Sistema"]:visible'),
+            ("click", 'li.zmenu__item[data-label="PowerShell"]:visible'),
+        ])
+        self.assertTrue(aba.sem_enter())
 
     def test_missing_host_does_nothing(self):
         aba = AbaTerminal()
