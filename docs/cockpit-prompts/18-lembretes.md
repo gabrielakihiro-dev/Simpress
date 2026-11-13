@@ -46,7 +46,7 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 - Depois de editar o termo preenchido, `Criar lembrete` cria um lembrete novo, como antes; o lembrete original não muda (decisão de 12/11/2026, sem atualização do termo gravado).
 - Lembretes antigos, com origem de termo mas sem dados salvos, e lembretes manuais não mostram o bloco nem as ações.
 - Editar a descrição ou concluir o lembrete não altera os dados do termo gravados.
-- Textos novos (`Dados do termo`, `Preencher no Termo`, `Substituir o termo?` e a mensagem, `Substituir`, `Termo preenchido com os dados do lembrete.`): propostos em 12/11/2026, aguardando aprovação. `Gerar PDF` é o mesmo texto do termo.
+- Textos novos (`Dados do termo`, `Preencher no Termo`, `Substituir o termo?` e a mensagem, `Substituir`, `Termo preenchido com os dados do lembrete.`): aprovados pelo usuário em 12/11/2026. `Gerar PDF` é o mesmo texto do termo.
 
 ## Dados e privacidade (LGPD)
 
