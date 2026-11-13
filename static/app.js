@@ -65,6 +65,7 @@
     comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
     sebraeDashboardModel: window.SimpressSebraeDashboardModel,
+    chamadosOsModel: window.SimpressChamadosOsModel,
     ticketRules: window.SimpressTicketRules(domUtils),
     transferUtils: window.SimpressTransferUtils,
     catalogSearch: window.SimpressCatalogSearch,

@@ -18,6 +18,10 @@
 .lembretes__data { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .lembretes__item--feito .lembretes__texto { color: var(--cor-texto-mudo); text-decoration: line-through; }
 .lembretes__item--feito { background: var(--cor-superficie-funda); }
+/* Chamado/OS dentro do texto (abre a janela Chamado × OS): segue o tamanho e a quebra do texto; o concluído mantém o link, riscado. */
+.lembretes__ref { display: inline; font-size: inherit; line-height: inherit; text-align: start; white-space: normal; overflow-wrap: anywhere; text-decoration: underline dotted; text-underline-offset: 2px; }
+.lembretes__ref:hover { text-decoration-style: solid; }
+.lembretes__item--feito .lembretes__ref, .lembretes__item--feito .lembretes__ref:hover { text-decoration-line: underline line-through; }
 
 /* Círculo de concluir: o botão tem 24px de área; o desenho vem de borda e pseudo-elemento. */
 .lembretes__marcar { position: relative; flex: none; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
@@ -46,7 +50,7 @@
 .lembretes__recolher .lembretes__seta { width: 14px; height: 14px; transition: transform var(--duracao) var(--curva); }
 .lembretes__recolher[aria-expanded="true"] .lembretes__seta { transform: rotate(90deg); }
 
-.lembretes__marcar:focus-visible, .lembretes__acao:focus-visible, .lembretes__recolher:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.lembretes__marcar:focus-visible, .lembretes__acao:focus-visible, .lembretes__recolher:focus-visible, .lembretes__ref:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 
 /* Diálogo de exclusão: fica fora da caixa, então não herda container-type. */
 .lembretes__dialogo { width: min(420px, 100%); max-width: 420px; }
