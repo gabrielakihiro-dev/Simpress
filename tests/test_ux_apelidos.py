@@ -62,11 +62,14 @@ class AssistenteUxTests(unittest.TestCase):
         from domains.assistant_api import ROTINAS_VALIDAS, SimpressApi
         self.assertIn("ux_apelidos", SYSTEM_PROMPT)
         self.assertNotIn("ux_apelidos", ROTINAS_VALIDAS)
-        # Atalhos atuais: Resumo F3 e Assistente F9; F7 (antiga Comparação) e F10 não existem mais como esses destinos.
+        # Atalhos atuais: Resumo F3, Histórico de apelidos F7 e Cobertura F10; F7 deixou de ser a Comparação.
         for texto in (SYSTEM_PROMPT, TOOLS["exportar_planilha"].description):
             self.assertIn("Resumo (F3)", texto)
-            self.assertNotIn("(F7)", texto)
-            self.assertNotIn("F10", texto)
+            self.assertNotIn("Comparação (F7)", texto)
+        self.assertNotIn("F7", TOOLS["exportar_planilha"].description)
+        self.assertNotIn("F10", TOOLS["exportar_planilha"].description)
+        self.assertIn("Histórico de apelidos (F7)", SYSTEM_PROMPT)
+        self.assertIn("Cobertura, no menu Ferramentas, atalho F10", SYSTEM_PROMPT)
         chamadas = []
         api = SimpressApi(lambda *args: chamadas.append(args) or (200, {}))
         self.assertFalse(api.executar_automacao("ux_apelidos")["sucesso"])
