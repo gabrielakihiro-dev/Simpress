@@ -1154,6 +1154,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #sebrae-novos-painel .sebrae-importar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes { flex: 0 1 auto; align-items: center; }
 #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn { height: 30px; }
+/* No Design o primário deste cartão é preenchido (roxo com texto da cor de fundo), não só contornado. */
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario { background: var(--cor-destaque); border-color: var(--cor-destaque); color: var(--cor-fundo); }
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario:is(:hover, :active) { background: var(--cor-destaque-forte); border-color: var(--cor-destaque-forte); color: var(--cor-fundo); }
 /* O seletor (arrastar, nome, remover) continua sendo o de file-picker.js sobre .ckp-arquivo; aqui só muda a forma. */
 #sebrae-novos-painel .ckp-arquivo { display: flex; flex: 1 1 260px; gap: 8px; min-width: 0; min-height: 30px; padding: 0 8px; }
 #sebrae-novos-painel .ckp-arquivo__ico { flex: none; width: auto; height: auto; background: none; }
@@ -1180,6 +1183,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes > .ck-btn--primario { grid-column: 1 / -1; }
   #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn { height: auto; white-space: normal; text-align: center; }
+  /* Celular do Design: botões só com texto e seletor sem a dica de formato. */
+  #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn .ck-ico, #sebrae-novos-painel .ckp-arquivo__meta { display: none; }
 }
 /* Toque: alvo de 44px nos botões e no remover do arquivo; no ponteiro fino as medidas de 22 a 30px não mudam. */
 @media (max-width: 767.98px), (pointer: coarse) {
