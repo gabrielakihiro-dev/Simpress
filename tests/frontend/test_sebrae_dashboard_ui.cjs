@@ -837,6 +837,58 @@ test("o finalizado por outro técnico leva o selo exato no resumo da lista Final
   assert.match(el["sebrae-finalizados-lista"].querySelector(".sebrae-chamado__resultado").textContent, /^Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada/);
 });
 
+test("Desfazer finalização aparece só no finalizado por outro técnico; confirma, desfaz e recarrega", async () => {
+  const botaoDe = el => el["sebrae-finalizados-lista"].querySelector('[data-sebrae-desfazer-outro-tecnico="UTIC-2026-1100"]');
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.importado.finalizados[0].status = "ok";
+  assert.equal(botaoDe((await renderizarCartoes(carga)).el), null, "o finalizado pelo SoftExpert não se desfaz");
+  carga.importado.finalizados[0].status = "finalizado_outro_tecnico";
+  const pedidos = [];
+  const { el, app } = await renderizarCartoes(carga, null, async (url, opts = {}) => {
+    pedidos.push({ url, metodo: opts.method || "GET", corpo: opts.body });
+    return url.endsWith("/desfazer-outro-tecnico") ? { numero: "UTIC-2026-1100", desfeito: true } : carga;
+  });
+  const botao = botaoDe(el);
+  assert.ok(botao);
+  assert.equal(botao.textContent, "Desfazer finalização");
+  assert.equal(botao.type, "button");
+  const confirmacoes = [];
+  const toasts = [];
+  app.showToast = (msg, tipo) => toasts.push([msg, tipo]);
+  app.confirmarAcao = async opcoes => { confirmacoes.push(opcoes); return false; };
+  const posts = () => pedidos.filter(p => p.metodo === "POST");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(confirmacoes.length, 1);
+  assert.match(confirmacoes[0].mensagem, /Só os dados locais mudam/);
+  assert.match(confirmacoes[0].mensagem, /SharePoint não é revertido/);
+  assert.equal(confirmacoes[0].confirmar, "Desfazer finalização");
+  assert.equal(posts().length, 0, "cancelar não envia nada");
+  app.confirmarAcao = async () => true;
+  const leiturasAntes = pedidos.filter(p => p.metodo === "GET").length;
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(posts().map(p => [p.url, JSON.parse(p.corpo)]), [["/api/sebrae/finalizacao/desfazer-outro-tecnico", { numero: "UTIC-2026-1100", confirmado: true }]]);
+  assert.deepEqual(toasts, [["Finalização desfeita: o chamado voltou para os abertos. Corrija D e R no cartão e use Atualizar.", "success"]]);
+  assert.ok(pedidos.filter(p => p.metodo === "GET").length > leiturasAntes, "recarrega os chamados");
+});
+
+test("falha ao desfazer mostra o erro e libera o botão de novo", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.importado.finalizados[0].status = "finalizado_outro_tecnico";
+  const { el, app } = await renderizarCartoes(carga, null, async (url, opts = {}) => {
+    if (opts.method === "POST") throw new Error("Só a finalização registrada como feita por outro técnico pode ser desfeita.");
+    return carga;
+  });
+  const toasts = [];
+  app.showToast = (msg, tipo) => toasts.push([msg, tipo]);
+  const botao = el["sebrae-finalizados-lista"].querySelector("[data-sebrae-desfazer-outro-tecnico]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(toasts, [["Só a finalização registrada como feita por outro técnico pode ser desfeita.", "error"]]);
+  assert.equal(botao.disabled, false);
+});
+
 test("a falta de saída pronta avisa em Atualizar Dashboard com data-estado alerta", async () => {
   const { el } = await renderizarCartoes();
   assert.equal(el["sebrae-atualizar-status"].textContent, "Gere o Dashboard atualizado antes de enviar ao SharePoint.");

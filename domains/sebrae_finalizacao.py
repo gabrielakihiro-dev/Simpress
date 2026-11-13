@@ -390,6 +390,34 @@ def registrar_finalizacao(state_dir: Path, numero: str, status: str, encerrado_e
     return _alterar(state_dir, numero, mudar)
 
 
+def _finalizacao_outro_tecnico(todos: dict, numero: str) -> dict:
+    item = todos.get(numero)
+    fin = item.get("finalizacao") if isinstance(item, dict) else None
+    if not isinstance(fin, dict) or fin.get("status") != STATUS_OUTRO_TECNICO:
+        raise DomainValidationError("Só a finalização registrada como feita por outro técnico pode ser desfeita.", status_code=422)
+    return fin
+
+
+def exigir_outro_tecnico(state_dir: Path, numero: str) -> None:
+    """422 unless ``numero`` is recorded as ``finalizado_outro_tecnico``; lets the caller check before touching other files."""
+    _finalizacao_outro_tecnico(ler_estado(state_dir), validar_numero(numero))
+
+
+def desfazer_outro_tecnico(state_dir: Path, numero: str) -> str:
+    """Undoes a ``finalizado_outro_tecnico`` record (local data only); returns the ``encerrado_em`` it had.
+
+    Only that status can be undone: ``ok`` was finalized in SoftExpert by this site and stays. Description, PDF and card
+    are kept, so the ticket goes back to the open lists ready to be corrected."""
+    numero = validar_numero(numero)
+    arquivo = _estado(state_dir)
+    with lock_paths([arquivo]):
+        todos = ler_estado(state_dir)
+        fin = _finalizacao_outro_tecnico(todos, numero)
+        del todos[numero]["finalizacao"]
+        atomic_write_json(arquivo, todos)
+    return str(fin.get("encerrado_em") or "")
+
+
 def congelar_os_vinculada(state_dir: Path, numero: str, vinculo: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Photo of the OS linked to the ticket when its finalization was requested (mark "OS finalizada" of the OS tab).
 

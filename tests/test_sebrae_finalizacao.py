@@ -348,6 +348,27 @@ class EstadoTest(unittest.TestCase):
         self.assertEqual(fin.encerramentos_registrados(self.dir), {UTIC: "12/11/2026 09:30"})
         self.assertTrue(fin.ja_finalizado(self.dir, UTIC))
 
+    def test_desfazer_outro_tecnico_tira_so_a_finalizacao_e_devolve_o_encerramento(self):
+        fin.definir_descricao(self.dir, UTIC, "feito")
+        fin.registrar_finalizacao(self.dir, UTIC, fin.STATUS_OUTRO_TECNICO, "12/11/2026 09:30")
+        self.assertEqual(fin.desfazer_outro_tecnico(self.dir, UTIC.lower()), "12/11/2026 09:30")
+        item = fin.ler_estado(self.dir)[UTIC]
+        self.assertNotIn("finalizacao", item)
+        self.assertEqual(item["descricao_finalizacao"], "feito")
+        self.assertFalse(fin.ja_finalizado(self.dir, UTIC))
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {})
+        self.assertEqual(fin.finalizados_no_dashboard(self.dir), [])
+
+    def test_desfazer_recusa_ok_sem_registro_e_numero_invalido_sem_alterar_nada(self):
+        fin.registrar_finalizacao(self.dir, UTIC, fin.STATUS_OK, "30/10/2026 14:05")
+        fin.registrar_finalizacao(self.dir, "UTIC-2026-0002", fin.STATUS_NAO_ENCONTRADO)
+        antes = fin.ler_estado(self.dir)
+        for numero in (UTIC, "UTIC-2026-0002", "UTIC-2026-0009", "abc"):
+            with self.subTest(numero=numero), self.assertRaises(DomainValidationError) as erro:
+                fin.desfazer_outro_tecnico(self.dir, numero)
+            self.assertEqual(erro.exception.status_code, 422)
+        self.assertEqual(fin.ler_estado(self.dir), antes)
+
     def test_finalizados_no_dashboard_trazem_o_status_e_incluem_o_finalizado_por_outro_tecnico(self):
         a, b, c = UTIC, "UTIC-2026-0002", "UTIC-2026-0003"
         fin.registrar_finalizacao(self.dir, a, fin.STATUS_OK, "30/10/2026 14:05")
