@@ -1163,7 +1163,58 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-passo__cab { flex-wrap: wrap; }
 
 /* ---------- Automação: chamados novos do SoftExpert ---------- */
-#sebrae-novos-painel .sebrae-importar { display: flex; flex-direction: column; gap: 8px; }
+/* F4 Bloco 2: cartão compacto (artefato do Design). Tudo escopado no cartão; só tokens. */
+/* O `button { min-height }` global do app.css (40px; 48px até 1280px) esticaria botões de 26 a 30px; o toque volta a 44px no bloco de baixo. */
+#sebrae-novos-painel :is(.ck-btn, .info-tip-trigger) { min-height: 0; }
+#sebrae-novos-painel .ck-cartao__titulo { min-width: 0; }
+#sebrae-novos-painel .ck-cartao__corpo { gap: 10px; padding: 10px 12px; }
+/* Selo do agendamento sem JS: o checkbox do cartão decide qual dos dois selos aparece. */
+#sebrae-novos-painel .sebrae-agenda-selos { display: inline-flex; }
+/* Sem :has nenhum selo aparece e o texto de estado continua sendo a fonte. */
+#sebrae-novos-painel .sebrae-agenda-selos > [data-agendamento] { display: none; }
+#sebrae-novos-painel:has(#dashboard-agendamento-ativo:checked) .sebrae-agenda-selos > [data-agendamento="ligado"] { display: inline-flex; }
+#sebrae-novos-painel:has(#dashboard-agendamento-ativo:not(:checked)) .sebrae-agenda-selos > [data-agendamento="desligado"] { display: inline-flex; }
+/* Linha 1: arquivo numa linha de 30px + os três botões. Importar Dashboard e Buscar são secundários; Baixar, importar e buscar é o primário. */
+#sebrae-novos-painel .sebrae-importar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+#sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes { flex: 0 1 auto; align-items: center; }
+#sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn { height: 30px; }
+/* No Design o primário deste cartão é preenchido (roxo com texto da cor de fundo), não só contornado. */
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario { background: var(--cor-destaque); border-color: var(--cor-destaque); color: var(--cor-fundo); }
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario:is(:hover, :active) { background: var(--cor-destaque-forte); border-color: var(--cor-destaque-forte); color: var(--cor-fundo); }
+/* O seletor (arrastar, nome, remover) continua sendo o de file-picker.js sobre .ckp-arquivo; aqui só muda a forma. */
+#sebrae-novos-painel .ckp-arquivo { display: flex; flex: 1 1 260px; gap: 8px; min-width: 0; min-height: 30px; padding: 0 8px; }
+#sebrae-novos-painel .ckp-arquivo__ico { flex: none; width: auto; height: auto; background: none; }
+#sebrae-novos-painel .ckp-arquivo__ico .ck-ico { width: 12px; height: 12px; }
+#sebrae-novos-painel .ckp-arquivo__textos { flex: 1 1 auto; flex-direction: row; align-items: center; gap: 8px; }
+#sebrae-novos-painel .ckp-arquivo__nome { flex: 0 1 auto; min-width: 0; font-size: var(--fs-ui); }
+#sebrae-novos-painel .ckp-arquivo__meta { flex: 0 100 auto; min-width: 0; color: var(--cor-texto-mudo); }
+#sebrae-novos-painel .ckp-arquivo__acoes { flex: none; }
+#sebrae-novos-painel .ckp-arquivo__acoes .ck-btn--icone { width: 24px; height: 24px; }
+#sebrae-novos-painel .ckp-arquivo__trocar { display: none; }
+/* Linha 2: repetição e os três avisos de estado como texto mudo na mesma linha. */
+#sebrae-novos-painel .sebrae-agenda { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+#sebrae-novos-painel .sebrae-agenda .ck-campo { flex: none; }
+#sebrae-novos-painel .sebrae-agenda .ck-entrada { width: auto; }
+#sebrae-novos-painel .sebrae-agenda > p { display: inline-flex; align-items: center; min-width: 0; margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); overflow-wrap: anywhere; }
+/* Status vazio sai do fluxo, mas fica na árvore de acessibilidade para o aria-live anunciar o primeiro texto. */
+#sebrae-novos-painel .sebrae-agenda > p:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#sebrae-novos-painel :is(#sebrae-historico-resumo, #sebrae-novos-avisos):empty { display: none; }
+@media (max-width: 767.98px) {
+  #sebrae-novos-painel .ck-cartao__cab { flex-wrap: nowrap; }
+  #sebrae-novos-painel .ck-cartao__titulo { flex: 1 1 0; }
+  #sebrae-novos-painel .ck-cartao__cab > :is(.info-tip, .ck-espaco, .sebrae-agenda-selos) { display: none; }
+  #sebrae-novos-painel .sebrae-importar > .ckp-arquivo { flex: 1 1 100%; min-height: 40px; }
+  #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes > .ck-btn--primario { grid-column: 1 / -1; }
+  #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn { height: auto; white-space: normal; text-align: center; }
+  /* Celular do Design: botões só com texto e seletor sem a dica de formato. */
+  #sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn .ck-ico, #sebrae-novos-painel .ckp-arquivo__meta { display: none; }
+}
+/* Toque: alvo de 44px nos botões e no remover do arquivo; no ponteiro fino as medidas de 22 a 30px não mudam. */
+@media (max-width: 767.98px), (pointer: coarse) {
+  #sebrae-novos-painel .ck-btn { min-height: 44px; }
+  #sebrae-novos-painel .ckp-arquivo__acoes .ck-btn--icone { min-width: 44px; }
+}
 /* =====================================================================
    CHAMADOS (F5) · REDESENHO VISUAL · 01/11/2026
    Arquivo: static/styles/ck-cockpit.css
