@@ -1612,7 +1612,7 @@
       const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
       const pulados = f.pulados.length ? f.pulados : res?.pulados || [];
       // Os finalizados saem daqui na hora (vão para "Chamados finalizados"); sobram só avisos, erros e pulados.
-      const restantes = (res?.resultados || []).filter(r => r.status !== "ok");
+      const restantes = (res?.resultados || []).filter(r => !STATUS_DESFEITOS.includes(r.status));
       let status = "";
       if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
       else if (f.mensagemInicio) status = f.mensagemInicio;

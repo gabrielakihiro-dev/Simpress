@@ -945,7 +945,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             numero = _exigir_finalizavel(payload.numero)
             pasta = _pasta_estado()
             if fin.ja_finalizado(pasta, numero):
-                raise DomainConflictError(f"{numero} já foi finalizado no SoftExpert.")
+                raise DomainConflictError(f"{numero} já está entre os chamados finalizados.")
             if not fin.dados_para_finalizar(pasta, numero)[0]:
                 raise DomainValidationError("Preencha a descrição para finalizar o chamado antes de finalizar.", status_code=422)
             # Os campos manuais entram na cópia de saída antes da rotina, que depois só grava R e D: sem isso o Dashboard enviado ao SharePoint perderia A, B, J e S.
