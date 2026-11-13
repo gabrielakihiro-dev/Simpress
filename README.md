@@ -23,6 +23,10 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local; a mesma planilha é enviada em seguida ao UX Simpress pela rotina `ux_apelidos`, que salva os apelidos/id do contrato 16467.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 - Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter (ou, opcionalmente, o DeepSeek) com a chave do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Aceita anexos e áudio, guarda conversas, notas e instruções localmente e pode buscar na web quando você liga essa opção. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
+- Menu **Ferramentas** > **Lembretes**: lembretes com data opcional, gravados só em `data/state/lembretes.json`, e os formulários **Termo Entrega** e **Termo Devolução**, que geram o PDF pelo navegador sem gravar nada no servidor. Veja [Termos](docs/cockpit-prompts/17-termos.md) e [Lembretes](docs/cockpit-prompts/18-lembretes.md).
+- Sub-aba **Backups** do **Resumo** (F3): notebooks de backup livres nas regionais prioritárias; **Confirmar disponível por 7 dias** grava só série, cidade e datas em `data/state/backups_regionais.json`.
+- **Abrir chamado no UX** (cartão do equipamento na Home) e o ticket UX gerado depois do **Transporte** (F2) preenchem o portal UX Simpress pelo Chrome de automação. O envio real exige confirmação, a série de teste `BRM551RN1Y` nunca é enviada e `SIMPRESS_UX_SEM_ENVIO=1` recusa qualquer envio real.
+- **Enviar e-mail** (Home, grupo **Outros** do cartão do equipamento) abre ou envia e-mails por modelo pelo Outlook clássico, só por clique. O envio real pede confirmação e `SIMPRESS_OUTLOOK_SEM_ENVIO=1` o recusa. Veja [Home](docs/cockpit-prompts/03-home-split-view.md).
 
 As mudanças ainda sem versão publicada estão na seção **[Não lançado]** do [CHANGELOG](CHANGELOG.md).
 
@@ -30,7 +34,7 @@ As mudanças ainda sem versão publicada estão na seção **[Não lançado]** d
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior.
-- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript.
+- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript e rodar a verificação completa (`npm run verify`).
 - Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas; o assistente (OpenRouter ou DeepSeek) e as rotinas de automação pelo Chrome precisam de internet.
 - Google Chrome instalado, só para as rotinas de automação.
 
@@ -156,6 +160,28 @@ $env:SIMPRESS_TRANSFER_ORIGIN_CONTACT = "Nome do contato"
 $env:SIMPRESS_TRANSFER_ORIGIN_EMAIL = "contato@empresa.com"
 $env:SIMPRESS_TRANSFER_ORIGIN_PHONE = "(41) 00000-0000"
 ```
+
+### Variáveis de ambiente
+
+Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as rotinas; reinicie o processo depois de alterá-las.
+
+| Variável | Efeito |
+| --- | --- |
+| `SIMPRESS_PORT` | Porta do servidor ao rodar `python main.py` (padrão `8000`). O `iniciar_servidor.bat` ignora o valor definido e usa a porta livre que escolher entre `8000` e `8099`. |
+| `SIMPRESS_NAO_ABRIR_NAVEGADOR=1` | Não abre o navegador quando o servidor termina de iniciar. |
+| `SIMPRESS_ENABLE_DOCS=1` | Liga `/docs`, `/redoc` e `/openapi.json` (desligados por padrão). |
+| `SIMPRESS_VERIFICAR_ATUALIZACAO=0` | Desliga a oferta de atualização do inicializador. |
+| `SIMPRESS_CHROME_PORT` e `SIMPRESS_CHROME_PROFILE` | Porta CDP (padrão `9333`) e pasta do perfil (padrão `%USERPROFILE%\.chrome-automation`) do Chrome de automação. |
+| `SIMPRESS_DASHBOARD_EMAIL` e `SIMPRESS_SOFTEXPERT_EMAIL` | Contas escolhidas pelas rotinas nos logins Microsoft (Oracle, UX e Dashboard) e no SoftExpert. |
+| `SIMPRESS_ENDPOINT_USUARIO` | Usuário preenchido pela rotina no login local do Endpoint Central (a senha continua com você). |
+| `SIMPRESS_CHROME_OCIOSO_S` | Segundos sem rotina até fechar o Chrome de automação. Sem a variável, ou com `0`, o Chrome fica aberto. |
+| `SIMPRESS_IMPORT_INBOX_DIR` e `SIMPRESS_TICKET_IMPORT_INBOX_DIR` | Pastas das filas de importação automática de inventários e de chamados, no lugar de `data/state/entrada_automatica` e `data/state/entrada_chamados`. |
+| `SIMPRESS_SUGESTAO_IA=1` | Liga a sugestão por IA de categoria e tipo dos chamados do Sebrae que as regras locais deixaram como `OUTRO`. O texto vai mascarado ao OpenRouter; só vale definida no processo, não no `.env`. |
+| `SIMPRESS_ATUALIZACAO_TIMEOUT` | Tempo máximo, em segundos, da verificação de atualização do inicializador (padrão `60`). |
+| `SIMPRESS_ANNOTATIONS_DIR` | Pasta das anotações do histórico, no lugar da escolhida automaticamente (relativa à pasta do projeto ou absoluta). |
+| `SIMPRESS_UX_SEM_ENVIO=1` | Recusa qualquer envio real ao UX; a simulação continua. |
+| `SIMPRESS_OUTLOOK_SEM_ENVIO=1` | Recusa o envio real pelo Outlook; **Abrir no Outlook** continua. |
+| `SIMPRESS_TRANSFER_ORIGIN_*` | Contato padrão da retirada (veja acima). |
 
 ## Iniciar e abrir a aplicação
 
@@ -344,7 +370,7 @@ Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rá
 
 ### Automação pelo Chrome
 
-As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`; **Abrir Chrome para login** só abre Endpoint Central, UX Simpress e Oracle para você entrar antes das rotinas, sem digitar senha nem código do autenticador, e **Cancelar execução** interrompe a rotina em andamento (o Chrome continua aberto). Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` em todos os logins Microsoft (Oracle, UX e Dashboard), exceto no SoftExpert, que usa `gakihiro@pr.sebrae.com.br` (também o usuário de login local do Endpoint Central); se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Rotina Completa**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`; **Abrir Chrome para login** só abre Endpoint Central, UX Simpress e Oracle para você entrar antes das rotinas, sem digitar senha nem código do autenticador, e **Cancelar execução** interrompe a rotina em andamento (o Chrome continua aberto). Na tela de conta da Microsoft, a rotina escolhe a conta de `SIMPRESS_DASHBOARD_EMAIL` em todos os logins Microsoft (Oracle, UX e Dashboard), exceto no SoftExpert, que usa a conta de `SIMPRESS_SOFTEXPERT_EMAIL`. No login local do Endpoint Central, preenche o usuário de `SIMPRESS_ENDPOINT_USUARIO`. Sem as variáveis, valem as contas padrão de `scripts/automacao_rotinas_chrome.py`. Se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
 
 ### Chamados novos do Sebrae
 
@@ -422,6 +448,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
 | Uma ação mostrou “Falha interna do servidor” | Consulte `data/logs/simpress.log` (ou `simpress.log.1` a `.5`, os anteriores). O registro mostra a rota e o ponto do código da falha, sem o conteúdo das planilhas. |
 | A interface informa que um arquivo está em uso ou ocupado | Feche a planilha no Excel ou aguarde a sincronização do OneDrive e tente de novo. A resposta 409 não altera nenhum arquivo. |
+| Uma chamada a `/api/` retorna 401 | Falta o cookie da sessão local neste navegador. Abra a aplicação pelo `iniciar_servidor.bat`, que passa por `/bootstrap` e cria o cookie. Depois de reiniciar o servidor, abra de novo pelo inicializador: o segredo da sessão muda a cada início. |
 | Uma chamada a `/api/` feita de outra página ou porta retorna 403 | É esperado: a API aceita só chamadas da própria interface ou de endereços digitados no navegador. Use a interface em `http://127.0.0.1:<porta>`. |
 | O inicializador não oferece a atualização | Leia o motivo mostrado no terminal: a atualização só é oferecida quando existe uma tag `vX.Y.Z` mais nova publicada no `origin/main` (veja [Versionamento](docs/guias/versionamento.md)), no branch `main`, sem alterações locais rastreadas (`git status`), com rede e sem `SIMPRESS_VERIFICAR_ATUALIZACAO=0`. |
 | O visual continua antigo após `git pull` | Confirme a branch com `git switch main` e atualize com `git pull --ff-only origin main`. Encerre o servidor anterior e execute `iniciar_servidor.bat` da pasta atualizada. Recarregue com `Ctrl+F5` uma vez. As páginas passam a usar URLs de CSS e JavaScript vinculadas ao conteúdo dos arquivos para evitar versões antigas no cache. |
@@ -500,6 +527,18 @@ core/integrity.py                        Bloqueios, transações e recuperação
 core/xlsx_safety.py                      Validação estrutural e limites de pacotes XLSX
 core/openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
 core/logging_setup.py                    Logs do servidor no console e em data/logs/simpress.log
+core/errors.py                           Erros de domínio com o status HTTP, sem depender da camada HTTP
+domains/regras_negocio.py           Fonte única das regras de hostname, série do Sebrae e MacBook
+domains/inventory_state.py          Estado em memória do inventário ativo (EquipamentosDetalhes)
+domains/history_restore.py          Restauração de backups registrados no histórico de comparação
+domains/alias_changes.py            Salvar, restaurar e desfazer o apelido manual de um equipamento
+domains/equipment_edit.py           Edição de equipamentos na planilha ativa
+domains/equipment_export.py         Exportação de equipamentos no modelo fixo
+domains/coverage*.py                Cobertura de equipamentos (F10): regras e estado local
+domains/backups_regionais*.py       Backups regionais do Resumo (F3): regras e confirmações locais
+domains/lembretes.py                Lembretes (Ferramentas), gravados em data/state/lembretes.json
+domains/outlook_mail.py             E-mails por modelo pelo Outlook clássico (com outlook_mail.ps1)
+domains/ux_*.py                     Chamado e ticket UX pelo Chrome de automação
 domains/inventory_comparison.py     Normalização e regras de comparação de inventários
 domains/inventory_update.py         Validação, atualização e histórico de inventários
 domains/ticket_inbox.py             Entrada estável, validação e arquivamento de lotes Simpress/Oracle
@@ -518,6 +557,9 @@ domains/entra_users.py              Nomes do Microsoft Entra (domains/entra_inbo
 domains/dashboard_agendamento.py    Agendamento "Repetir a cada" (30 min, 1h, 1h30, 2h) do Dashboard do Sebrae
 domains/local_setup.py              Importação validada dos modelos locais, com backup
 security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
+security/sessao_local.py            Sessão local por início do servidor (cookie exigido em /api/*)
+security/limite_taxa.py             Limite por minuto nas rotas que gastam créditos ou abrem o Chrome
+security/network.py                 Política de conexão da aplicação local
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
 routers/equipment_search.py         Rotas de busca e estatísticas de equipamentos
@@ -537,9 +579,22 @@ routers/local_setup.py               Importação dos modelos locais
 routers/monthly_report.py            Relatório mensal (F8)
 routers/transfer_history.py          Histórico local das transferências geradas
 routers/frontend.py                  Política de cache das páginas e arquivos da interface
+routers/equipment.py                 Leitura, edição e exportação de um equipamento
+routers/coverage.py                  Cobertura de equipamentos (F10)
+routers/backups_regionais.py         Backups regionais do Resumo (F3)
+routers/lembretes.py                 Lembretes (Ferramentas)
+routers/assinatura_tecnico.py        Assinatura do técnico nos PDFs dos Termos, só leitura
+routers/outlook_mail.py              E-mails por modelo pelo Outlook
+routers/ux_chamados.py / ux_ticket.py  Chamado e ticket UX
+frontend/partials/                   Partes do static/index.html, montadas pelo servidor
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
 static/js/features/                  Módulos da interface por funcionalidade
+motor_ia/                            Pipeline experimental isolado, com testes próprios fora do npm run verify
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
+scripts/build/lucide-subset.cjs            Recorte dos ícones Lucide usados pela interface
+scripts/bootstrap_environment.py     Criação do ambiente virtual e instalação das dependências fixadas
+scripts/select_server_port.py        Reaproveita o servidor em execução ou escolhe uma porta livre
+scripts/process_inventory_inbox.py   Processamento local da pasta de entrada dos inventários
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
@@ -547,6 +602,11 @@ scripts/automacao_rotinas_chrome.py  Rotinas do Chrome de automação (OS, inven
 scripts/sebrae_leitura.py            Leitura no SoftExpert dos chamados que o Dashboard ainda não tem
 scripts/sebrae_softexpert.py         Acesso ao SoftExpert usado pelas rotinas do Sebrae
 scripts/sebrae_fechar.py             Finalização no SoftExpert dos chamados marcados FINALIZADO
+scripts/sebrae_rotina.py             Liga a leitura do SoftExpert e o Excel Online à rotina do Sebrae
+scripts/sebrae_excel.py              Camada de Excel Online da rotina "Sincronizar chamados Sebrae"
+scripts/sebrae_sombra.py             Modo sombra: o modelo local sugere o tipo, sem influenciar a rotina
+scripts/staged_computers_endpoint.py Procura no Endpoint Central os hostnames que sumiram do Endpoint
+scripts/avisos_windows.py            Avisos do Windows (notificação) da automação das rotinas
 scripts/verificar_usuarios_endpoint.py  Conferência das pendências de usuário logado no Endpoint
 scripts/prepare_*_downloads.py       Publicação de downloads recentes nas pastas de entrada
 scripts/check_update.py              Oferta de atualização para a tag publicada mais nova
@@ -558,7 +618,7 @@ data/state/                           Estado e históricos locais, ignorados pel
 data/state/entrada_chamados/          Modelo e instruções versionados; lotes e recibos operacionais ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
 data/logs/                            Registros locais do servidor, ignorados pelo Git
-docs/                                 Relatórios de revisão e desempenho
+docs/                                 Guias, operação, arquitetura, especificações do Cockpit e planos
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
 package.json / package-lock.json     Dependências de desenvolvimento da interface
@@ -577,6 +637,12 @@ GLOSSARY.md                           Termos usados no projeto
 - [Nomes do Microsoft Entra](docs/operacao/nomes-entra-ui.md)
 - [Assistente](docs/cockpit-prompts/15-assistente.md)
 - [Cobertura de equipamentos](docs/cockpit-prompts/16-cobertura.md)
+- [Home: e-mail pelo Outlook e chamado no UX](docs/cockpit-prompts/03-home-split-view.md)
+- [Termos de entrega e devolução](docs/cockpit-prompts/17-termos.md)
+- [Lembretes](docs/cockpit-prompts/18-lembretes.md)
+- [Regras de cadastro e histórico](docs/operacao/regras-cadastro-historico.md)
+- [Plano dos e-mails por modelo pelo Outlook](docs/planos/email-outlook-modelos.md)
+- [Regras para agentes de desenvolvimento](docs/desenvolvimento/regras-agentes.md)
 - [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
 - [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
@@ -594,12 +660,14 @@ GLOSSARY.md                           Termos usados no projeto
 - [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
 - [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
 - [Auditoria do backend e situação do roteiro](docs/arquitetura/auditoria_backend/README.md)
+- [Auditoria técnica de 17/10/2026](docs/arquitetura/auditoria_tecnica_2026-10-17.md)
+- [Auditoria do backend de 13/11/2026](docs/arquitetura/auditoria_backend/auditoria_backend_2026-11-13.md)
 
 As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, JavaScript em `static/js/{shared,ui,features}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site. Toda chamada a `/api/` exige o cookie `simpress_sessao_<porta>` (`HttpOnly`, `SameSite=Strict`), criado ao abrir `/bootstrap?t=<segredo>`; o segredo muda a cada início do servidor e fica gravado em `%LOCALAPPDATA%\Simpress\sessao_<porta>.txt`. O navegador também o guarda no cookie e no histórico (o link `/bootstrap`). Sem o cookie, a resposta é 401.
 
 Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 
@@ -609,6 +677,8 @@ Algumas ações gravam ou enviam dados para fora do computador, sempre a partir 
 - **Finalizar no SoftExpert**: finaliza o chamado no SoftExpert, de forma irreversível; a rotina `fechar` também atualiza o Dashboard e o envia.
 - Sincronização com o UX Simpress na exportação de equipamentos: grava apelidos no contrato 16467.
 - **Controle remoto**: abre uma conexão com o computador escolhido pelo Endpoint Central.
+- **Abrir chamado no UX** e ticket UX: enviam o chamado ou o ticket ao UX Simpress, só com confirmação (`SIMPRESS_UX_SEM_ENVIO=1` recusa o envio real).
+- **Enviar pelo Outlook**: envia o e-mail do modelo pela conta do Outlook, só com confirmação (`SIMPRESS_OUTLOOK_SEM_ENVIO=1` recusa o envio real).
 - Assistente (F9): envia texto, imagens e áudio ao OpenRouter ou ao DeepSeek e, com **Busca na web** ligada, a pesquisa à Exa (veja [Assistente (F9)](#assistente-f9)).
 
 Arquivos operacionais que já foram versionados continuam recuperáveis no histórico Git local. As regras atuais de `.gitignore` impedem novos rastreamentos, mas não reescrevem o histórico existente.
