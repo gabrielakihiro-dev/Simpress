@@ -222,7 +222,7 @@ Pedido do usuário: deixar os blocos do painel `unidades` mais organizados e lim
 - Em 1200 px ou mais, a lista é uma tabela dentro de um cartão (cabeçalho com fundo suave, linha selecionada com faixa de 3 px). Abaixo disso continuam os cards de `.ck-tabela--cards`.
 - CNPJ da lista e CEP e CNPJ do detalhe em fonte mono com números tabulares. O texto continua cru, sem máscara (o e2e confere `03209636000100`).
 - Detalhe em cartão: título maior, pares em grade 2×2 com linhas finas e Endereço na largura toda. A faixa cinza com cartões empilhados saiu: `.ck-det__corpo` transformava `.ck-pares` em coluna flexível.
-- Bordas dos cartões e linhas do detalhe em `--cor-borda` (com `--cor-borda-suave` sumiam no tema escuro).
+- Bordas dos cartões e linhas do detalhe em `--cor-borda-suave` no tema claro, como no artefato; no escuro em `--cor-borda`, porque o token suave quase some sobre a superfície.
 - Linha da lista com foco: anel para dentro (`outline-offset: -2px`), porque a lista rola e cortaria o anel. Detalhe fixo com `max-height` descontando o `top` de 12 px. Detalhe sem seleção não desenha faixa vazia (`:empty`). Abaixo de 400 px o lápis do CNPJ quebra para a linha de baixo sem margem negativa.
 - Temas claro e escuro só com tokens de `ck-tokens.css`; sem `!important`.
 - Verificado no fixture com 6 unidades fictícias, em 1366×900 e 390×844, nos dois temas, sem rolagem horizontal. Não verificado com os dados reais nem no navegador do usuário.
