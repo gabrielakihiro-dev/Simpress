@@ -267,16 +267,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _sugestoes_categoria(
         linha: Mapping[str, Any], opcoes: Sequence[str], indice: Optional[Mapping[str, Any]],
-        sugestor: Optional[sebrae_categoria_ia.SugestorIA] = None,
+        sugestor: Optional[sebrae_categoria_ia.SugestorIA] = None, opcoes_a: Sequence[str] = (),
     ) -> Dict[str, Optional[str]]:
-        """Sugestão de B e J de um chamado novo, só para exibir (nada é gravado); B ou J já preenchido não é sugerido.
+        """Sugestão de A, B e J de um chamado novo, só para exibir (nada é gravado); campo já preenchido não é sugerido.
+
+        A (Responsável) vem só das regras locais (``sugerir_responsavel``): CLIENTE para usuário, acesso e software,
+        SIMPRESS para defeito de hardware; nunca vai à IA.
 
         Com ``sugestor`` (IA opcional, desligada por padrão) só os chamados que ficaram em OUTRO são enviados, e a IA só
         troca OUTRO por outra categoria válida; o J da IA vale só se as regras locais não deram J.
         """
-        b_atual, j_atual = str(linha.get("B") or "").strip(), str(linha.get("J") or "").strip()
+        a_atual, b_atual, j_atual = (str(linha.get(letra) or "").strip() for letra in ("A", "B", "J"))
         textos = (linha.get("G"), linha.get("H"), linha.get("F"), linha.get("I"))  # título, descrição, atendimento, solicitante
         try:
+            responsavel = None if a_atual else sebrae_categoria.sugerir_responsavel(*textos, opcoes_a)
             categoria = None if b_atual else sebrae_categoria.sugerir(*textos, opcoes, indice)
             tipo = None if j_atual else sebrae_categoria.sugerir_tipo(*textos, indice, categoria=b_atual or categoria)
             sem_sinal = categoria is None or sebrae_categoria.normalizar(categoria) == "outro"
@@ -286,10 +290,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     if sebrae_categoria.normalizar(resposta.categoria) != "outro":
                         categoria = resposta.categoria
                     tipo = tipo or resposta.tipo
-            return {"sugestao_categoria": categoria, "sugestao_tipo": tipo}
+            return {"sugestao_responsavel": responsavel, "sugestao_categoria": categoria, "sugestao_tipo": tipo}
         except Exception as erro:  # noqa: BLE001 - uma sugestão nunca derruba a tela; log só o tipo, nunca o texto do chamado
             logger.warning("Sugestão de categoria indisponível (erro=%s).", type(erro).__name__)
-            return {"sugestao_categoria": None, "sugestao_tipo": None}
+            return {"sugestao_responsavel": None, "sugestao_categoria": None, "sugestao_tipo": None}
 
     def _novos(caminhos: sebrae_novos.Caminhos, lancados: Iterable[str]) -> Optional[Dict[str, Any]]:
         """Chamados novos da última busca já com a descrição que o usuário editou no site (lápis do cartão)."""
@@ -335,6 +339,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         lista_b = importado["listas"].get("B", []) if importado else []
         vistas = {sebrae_categoria.normalizar(opcao) for opcao in lista_b}
         opcoes_b = [*lista_b, *(c for c in sebrae_categoria.CATEGORIAS_NOVAS if sebrae_categoria.normalizar(c) not in vistas)]
+        opcoes_a = importado["listas"].get("A", []) if importado else []
         sugestor = _sugestor_ia(novos, importado) if (novos and ia) else None  # IA opcional: fora de qualquer trava de arquivo (ia=False)
         finalizados = [
             {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", ""),
@@ -357,7 +362,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                      "softexpert": fin.publico(finalizacao.get(item["numero"])),
                      "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
                      "destaque": _destacado(observacoes, item["numero"]),
-                     **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor)}
+                     **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor, opcoes_a)}
                     for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
                 ],
             },

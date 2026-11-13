@@ -302,3 +302,44 @@ def sugerir_tipo(
             return _opcao(TIPOS, do_mapa)
     probabilidades = pontuar(indice["j"], tokens(texto), TIPOS)
     return max(probabilidades.items(), key=lambda par: par[1])[0] if probabilidades else None
+
+
+# Responsável (A): CLIENTE cuida de usuário, acesso e software; SIMPRESS, de defeito de hardware (periférico e monitor).
+RESPONSAVEIS = ("CLIENTE", "SIMPRESS")
+CLIENTE, SIMPRESS = RESPONSAVEIS
+_A_PESSOAS = re.compile(
+    dict(REGRAS_B)["DESLIGAMENTO"].pattern + "|" + dict(REGRAS_B)["NOVO USUÁRIO"].pattern
+    + r"|\b(libera\w* (de |do |da )?(usuario|acesso|login|conta)|remoc\w* (de |do |da )?usuario|desbloque\w*)\b"
+)
+_A_HARDWARE = re.compile(
+    r"\b(teclad\w*|mouses?|monitor(es)?|fones?|headsets?|headphones?|webcam\w*|perifer\w*|caixa de som|auricular\w*|"
+    r"hardware|carregador\w*)\b"
+)
+# Notebook ou computador só é SIMPRESS com defeito físico explícito; lentidão e erro de programa ficam com o CLIENTE.
+_A_EQUIPAMENTO = re.compile(r"\b(notebooks?|computador\w*|desktops?|bateria\w*|telas?|carcaca|dobradic\w*)\b")
+_A_DEFEITO = re.compile(r"\b(quebrad\w*|danificad\w*|defeito\w*|queimad\w*|trincad\w*|avaria\w*|nao liga|tela azul|estufad\w*)\b")
+_A_SOFTWARE = re.compile(
+    r"\b(instal\w*|reinstal\w*|aplicativ\w*|apps?|softwares?|programas?|edge|chrome|navegador\w*|whats ?app|power ?bi|"
+    r"teams|outlook|office|excel|word|e ?mails?|phishing|spam|suspeit\w*|malware|virus|endpoint|pdfs?|acrobat|adobe|"
+    r"arquivos?|impressor\w*|impressao|imprimi\w*|senhas?|acessos?|licenc\w*)\b"
+)
+
+
+def sugerir_responsavel(titulo: Any, descricao: Any, atendimento: Any, solicitante: Any, opcoes: Sequence[str] = ()) -> Optional[str]:
+    """``CLIENTE`` ou ``SIMPRESS`` para A, na grafia de ``opcoes`` quando ela traz o rótulo; ``None`` sem indício.
+
+    Ordem: entrada, saída ou liberação de usuário é do CLIENTE mesmo com periférico no texto (kit do colaborador);
+    depois defeito de hardware (periférico, ou notebook com defeito físico) é da SIMPRESS; por fim software, e-mail, arquivo, acesso e impressora são do CLIENTE.
+    """
+    if e_solicitante_sistema(solicitante):
+        return None
+    texto = texto_normalizado(titulo, descricao, atendimento)
+    if _A_PESSOAS.search(texto):
+        rotulo = CLIENTE
+    elif _A_HARDWARE.search(texto) or (_A_EQUIPAMENTO.search(texto) and _A_DEFEITO.search(texto)):
+        rotulo = SIMPRESS
+    elif _A_SOFTWARE.search(texto):
+        rotulo = CLIENTE
+    else:
+        return None
+    return _opcao(opcoes, rotulo) or rotulo

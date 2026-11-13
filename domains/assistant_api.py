@@ -1668,7 +1668,8 @@ class SimpressApi:
                 "os": str(linha.get("E") or ""),
                 "cruzamento": str(cruzamento.get("status") or ""),
                 "candidatos": cruzamento.get("candidatos", 0),
-                # Sugestões do programa para B e J: o usuário confirma na tela (botão Usar); nada é salvo daqui.
+                # Sugestões do programa para A, B e J: o usuário confirma na tela (botão Usar); nada é salvo daqui.
+                "sugestao_responsavel": str(f.get("sugestao_responsavel") or ""),
                 "sugestao_categoria": str(f.get("sugestao_categoria") or ""),
                 "sugestao_tipo": str(f.get("sugestao_tipo") or ""),
             })
