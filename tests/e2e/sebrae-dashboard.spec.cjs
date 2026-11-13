@@ -2,8 +2,8 @@ const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
 
 // The fixture answers /api/sebrae/* with fictional tickets; no Chrome, SoftExpert or Dashboard file is touched.
-async function abrirCartao(page, request, extra = "", antigos = "") {
-  await request.get(`/__fixture_automacao?quantidade=0&sebrae=padrao&run=${extra}&antigos=${antigos}`);
+async function abrirCartao(page, request, extra = "", antigos = "", consulta = "") {
+  await request.get(`/__fixture_automacao?quantidade=0&sebrae=padrao&run=${extra}&antigos=${antigos}${consulta}`);
   await page.goto("/");
   await page.locator("#tab-automacao").click();
   const cartao = page.locator("#sebrae-novos-painel");
@@ -12,8 +12,8 @@ async function abrirCartao(page, request, extra = "", antigos = "") {
 }
 
 // A lista, os antigos, a exportação e Atualizar Dashboard moram no painel Chamados (F5; barra principal, menu Ferramentas ou botão do cartão).
-async function abrirPainel(page, request, extra = "", antigos = "") {
-  const cartao = await abrirCartao(page, request, extra, antigos);
+async function abrirPainel(page, request, extra = "", antigos = "", consulta = "") {
+  const cartao = await abrirCartao(page, request, extra, antigos, consulta);
   await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)"); // a lista já foi carregada
   await cartao.locator("#btn-sebrae-abrir-chamados").click();
   const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
@@ -86,6 +86,28 @@ test("Chamados finalizados é a sub-aba Finalizados, escondida até ser escolhid
   await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("27/10/2026 14:05");
   await expect(cartao.getByLabel("Descrição para Finalizar o Chamado")).toHaveValue("Teclado trocado.");
   await expect(cartao.locator('input:not([disabled]), select, button:not([data-sebrae-destaque]):not(.sebrae-chamado__recolher), textarea:not([readonly])')).toHaveCount(0); // só leitura (Recolher chamado só fecha a linha)
+});
+
+test("Desfazer finalização: só no finalizado por outro técnico, pede confirmação, avisa e tira o chamado de Finalizados", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request, "", "", "&outro_tecnico=1");
+  await painel.locator("#sebrae-aba-finalizados").click();
+  const cartao = painel.locator('#sebrae-finalizados-lista details.sebrae-finalizado[data-numero="UTIC-2026-1100"]');
+  await cartao.locator("> summary").click();
+  const botao = cartao.locator('[data-sebrae-desfazer-outro-tecnico="UTIC-2026-1100"]');
+  await expect(botao).toHaveText("Desfazer finalização");
+  await botao.click();
+  const modal = page.locator("#modal-confirmar-acao");
+  await expect(modal).toContainText("o SharePoint não é revertido");
+  await modal.locator("#btn-confirmar-acao-cancelar").click(); // cancelar não envia nada
+  await expect(cartao).toHaveCount(1);
+  await botao.click();
+  const [pedido] = await Promise.all([
+    page.waitForRequest(req => req.url().endsWith("/api/sebrae/finalizacao/desfazer-outro-tecnico") && req.method() === "POST"),
+    modal.locator("#btn-confirmar-acao-ok").click(),
+  ]);
+  expect(pedido.postDataJSON()).toEqual({ numero: "UTIC-2026-1100", confirmado: true });
+  await expect(page.locator("#toast-container .ck-toast").filter({ hasText: "Finalização desfeita" })).toHaveText(/Finalização desfeita: o chamado voltou para os abertos\. Corrija D e R no cartão e use Atualizar\./);
+  await expect(cartao).toHaveCount(0);
 });
 
 test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos antigos, sem tocar no original", async ({ page, request }) => {
