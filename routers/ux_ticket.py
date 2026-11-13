@@ -6,8 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
-from domains.ux_chamados import SOLICITANTE_PADRAO
-from domains.ux_ticket import CAMPOS_SOLICITANTE, CHAMADO_INTERNO_MAX, DESCRICAO_MAX, TicketsUX
+from domains.ux_ticket import CHAMADO_INTERNO_MAX, DESCRICAO_MAX, TicketsUX
 from routers.transfers import TransferenciaPayload, gerar_planilha_transferencia_bytes
 from routers.ux_chamados import CancelarPayload, SeriePayload, executar_ux as executar
 
@@ -63,8 +62,8 @@ def create_ux_ticket_router(servico: TicketsUX, template_provider: Callable[[], 
 
     @router.get("/solicitante")
     def solicitante() -> dict[str, str]:
-        """Default solicitante for the modal; served here so no corporate e-mail ships in the front-end files."""
-        return {campo: SOLICITANTE_PADRAO[campo] for campo in CAMPOS_SOLICITANTE}
+        """Default solicitante for the modal, from the local profile; served here so no corporate e-mail ships in the front-end files."""
+        return servico.solicitante_padrao()
 
     @router.post("/preparar", response_model=None)
     def preparar(payload: PrepararTicketPayload) -> dict[str, Any] | JSONResponse:

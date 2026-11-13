@@ -1,7 +1,8 @@
 """E-mails por modelo pelo Outlook (classic) na Home (F1): modelos locais, contatos do Entra e envio por COM.
 
 Escrita externa (criar ou enviar e-mail no Outlook do usuário) só por clique explícito; escrita local só em
-``data/state/outlook_email_modelos.json``. Nenhum log leva corpo, destinatários, nomes, nome de modelo ou termo
+``data/state/outlook_email_modelos.json``; o texto padrão do Modelo 1 pode vir de
+``data/state/outlook_modelo_cabo_padrao.json`` (só leitura, git-ignorado). Nenhum log leva corpo, destinatários, nomes, nome de modelo ou termo
 buscado: só modo, id da conta e código ou classe do erro.
 """
 
@@ -131,20 +132,23 @@ def _id_valido(modelo_id: Any) -> str:
 # ---------------------------------------------------------------- modelos
 
 CORPO_CABO = "\n".join([
-    "Allex, ",
+    "Olá,",
     "Solicito a instalação de um cabo de segurança para o(a) {nome} - {setor}",
     "O cabo já está com o(a) colaborador(a).",
     "Qualquer dúvida estarei à disposição. ",
-    "Att. Gabriel Akihiro",
+    "Att.",
 ])
 ID_CABO = "cabo"
+# Padrão genérico e público: destinatários e assinatura reais vêm do arquivo local (ver `padrao_cabo`).
 CAMPOS_PADRAO_CABO = {
     "conta": "sebrae",
-    "para": "Allex Fernando Deretti;",
-    "cc": "Fabio Neves; Robinson Luiz de Souza Kriki Silvestre;",
+    "para": "Pessoa Exemplo A;",
+    "cc": "Pessoa Exemplo B; Pessoa Exemplo C;",
     "assunto": "Instalação do Cabo de Segurança",
     "corpo": CORPO_CABO,
 }
+
+
 def contas_publicas() -> list[dict[str, Any]]:
     return [
         {"id": chave, "email": dados["email"], "rotulo": dados["rotulo"], "padrao": chave == CONTA_PADRAO}
@@ -155,8 +159,31 @@ def contas_publicas() -> list[dict[str, Any]]:
 CAMPOS_MODELO = ("id", "nome", "conta", "para", "cc", "assunto", "corpo", "atualizado_em")
 
 
-def semente_cabo() -> dict[str, str]:
-    return {"id": ID_CABO, "nome": "Modelo 1 - Cabo", **CAMPOS_PADRAO_CABO, "atualizado_em": ""}
+def padrao_cabo(arquivo: Optional[Path] = None) -> dict[str, str]:
+    """Texto padrão do Modelo 1: o do código, com os campos do arquivo local por cima.
+
+    Só leitura. Arquivo ausente, ilegível ou fora do formato vale o código; um campo inválido é ignorado. Nada é logado.
+    """
+    padrao = dict(CAMPOS_PADRAO_CABO)
+    if arquivo is None:
+        return padrao
+    try:
+        local = json.loads(Path(arquivo).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return padrao
+    if not isinstance(local, dict):
+        return padrao
+    for chave in CAMPOS_PADRAO_CABO:
+        if chave in local:
+            try:
+                padrao[chave] = _campo_modelo(chave, local[chave])
+            except ErroOutlook:
+                pass
+    return padrao
+
+
+def semente_cabo(arquivo_padrao: Optional[Path] = None) -> dict[str, str]:
+    return {"id": ID_CABO, "nome": "Modelo 1 - Cabo", **padrao_cabo(arquivo_padrao), "atualizado_em": ""}
 
 
 def _modelo_valido(item: Any) -> bool:
@@ -171,15 +198,18 @@ def _modelo_valido(item: Any) -> bool:
 class ModelosEmail:
     """Modelos em um JSON local: leitura sem trava, escrita atômica sob trava de arquivo."""
 
-    def __init__(self, arquivo: Path, agora: Callable[[], str] = agora_iso) -> None:
+    def __init__(
+        self, arquivo: Path, agora: Callable[[], str] = agora_iso, arquivo_padrao_cabo: Optional[Path] = None,
+    ) -> None:
         self.arquivo = Path(arquivo)
         self._agora = agora
+        self._arquivo_padrao_cabo = arquivo_padrao_cabo
 
     def _carregar(self) -> list[dict[str, str]]:
         try:
             bruto = self.arquivo.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return [semente_cabo()]
+            return [semente_cabo(self._arquivo_padrao_cabo)]
         except (OSError, UnicodeDecodeError) as erro:
             raise ErroOutlook(503, MSG_MODELOS_ILEGIVEIS, codigo="modelos_ilegiveis") from erro
         try:
@@ -288,7 +318,7 @@ class ModelosEmail:
             modelo = self._achar(modelos, modelo_id)
             if modelo["id"] != ID_CABO:
                 raise ErroOutlook(422, MSG_SEM_PADRAO, codigo="sem_padrao")
-            modelo.update(CAMPOS_PADRAO_CABO)  # o nome fica
+            modelo.update(padrao_cabo(self._arquivo_padrao_cabo))  # o nome fica
             modelo["atualizado_em"] = self._agora()
             return dict(modelo)
 
@@ -377,7 +407,7 @@ class Diretorio:
             return {"token": token, "status": "unico", "email": texto}
         alvo = _normalizar(texto)
         # Nome igual ao digitado vale mais que nomes que só contêm as palavras:
-        # "Fabio Neves" é uma pessoa, mesmo havendo "Fabio Neves Silva". Dois nomes idênticos continuam ambíguos.
+        # "Pessoa Exemplo B" é uma pessoa, mesmo havendo "Pessoa Exemplo B Silva". Dois nomes idênticos continuam ambíguos.
         exatos = [p for p in pessoas if alvo and p.nome_n == alvo]
         candidatos = exatos
         if not exatos and len(alvo) >= 2:

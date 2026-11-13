@@ -25,7 +25,6 @@ from domains.assistant_rascunhos import DESCRICAO_TIPOS, LIMITE_COMPLEMENTO, mon
 from domains.assistant_relatorios import (
     DATA_PATTERN, FORMATOS, MES_PATTERN, MSG_PLANILHA_EXPORTADA, PLANILHAS, TIPOS, GeradorRelatorios, RelatorioRecusado,
 )
-from domains.local_setup import REGIONAL_REPRESENTATIVE_DEFAULTS
 
 Args = Dict[str, Any]
 
@@ -331,10 +330,10 @@ def _describe_representante_regional(api: SimpressApi, args: Args) -> str:
 
 
 def _describe_restaurar_representante(api: SimpressApi, args: Args) -> str:
-    cidade, efetivo, alterado = api.representante_regional_atual(args.get("cidade"))
+    cidade, efetivo, alterado, padrao = api.representante_regional_atual(args.get("cidade"))
     if not alterado:
         raise ValueError("Esta cidade não tem alteração salva. Nada a restaurar.")
-    linhas = _linhas_representante(diferencas_representante(efetivo, REGIONAL_REPRESENTATIVE_DEFAULTS[cidade])) or "os valores já são iguais ao padrão"
+    linhas = _linhas_representante(diferencas_representante(efetivo, padrao)) or "os valores já são iguais ao padrão"
     return f"Restaurar o representante regional de {cidade} (SEBRAE/PR) ao padrão do sistema; a alteração salva é descartada. {linhas}."
 
 _TIPOS_ALTERACAO = {"": "apelido", "apelido": "apelido", "usuario": "usuário logado", "aviso_endpoint": "aviso do Endpoint"}

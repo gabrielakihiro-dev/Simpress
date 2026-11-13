@@ -90,6 +90,8 @@ from core.config import (
     UPLOAD_BACKUPS_DIR,
     TRANSFER_ORIGIN_CONTACT_FILE,
     REGIONAL_REPRESENTATIVES_FILE,
+    REGIONAL_REPRESENTATIVE_DEFAULTS_FILE,
+    OUTLOOK_MODELO_CABO_DEFAULTS_FILE,
 )
 from routers.inventory_history import (
     ComparisonAnnotationPayload,
@@ -1535,7 +1537,9 @@ _ux_tickets = TicketsUX(STATE_DIR, conectar_ux_ticket)
 app.include_router(create_endpoint_lookup_router(_endpoint_lookup_snapshot, codigos_file=lambda: STATE_DIR / "powershell_codigos.json"))
 app.include_router(create_ux_chamados_router(_ux_chamados, _endpoint_lookup_snapshot))
 app.include_router(create_ux_ticket_router(_ux_tickets, get_local_transfer_template))
-app.include_router(create_outlook_mail_router(STATE_DIR / "outlook_email_modelos.json", ENTRA_USERS_FILE))
+app.include_router(create_outlook_mail_router(
+    STATE_DIR / "outlook_email_modelos.json", ENTRA_USERS_FILE, arquivo_padrao_cabo=OUTLOOK_MODELO_CABO_DEFAULTS_FILE,
+))
 app.include_router(create_lembretes_router(STATE_DIR / "lembretes.json"))
 app.include_router(create_assinatura_tecnico_router(STATE_DIR / "assinatura_tecnico.svg"))
 
@@ -2019,6 +2023,7 @@ local_setup_router, importar_modelo_local = create_local_setup_router(
     validate_export=_check_imported_export,
     origin_contact_file=lambda: TRANSFER_ORIGIN_CONTACT_FILE,
     regional_representatives_file=lambda: REGIONAL_REPRESENTATIVES_FILE,
+    regional_representative_defaults_file=lambda: REGIONAL_REPRESENTATIVE_DEFAULTS_FILE,
 )
 app.include_router(local_setup_router)
 

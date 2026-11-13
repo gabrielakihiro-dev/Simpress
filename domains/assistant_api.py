@@ -705,9 +705,16 @@ def resolver_cidade_representante(cidade: Any) -> str:
     raise ValueError(f"Cidade sem representante regional: informe uma destas: {', '.join(REGIONAL_REPRESENTATIVE_CITIES)}.")
 
 
-def representante_efetivo(cidade: str, salvos: Dict[str, Any]) -> Tuple[Dict[str, str], bool]:
+def representante_padrao(cidade: str, padroes: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """Default of the city: the code's, overridden by the effective default the route returns (`padroes`, by city)."""
+    local = _dict((padroes or {}).get(cidade))
+    base = REGIONAL_REPRESENTATIVE_DEFAULTS[cidade]
+    return {c: local[c] if isinstance(local.get(c), str) else base[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}
+
+
+def representante_efetivo(cidade: str, salvos: Dict[str, Any], padroes: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, str], bool]:
     """(default merged with the saved change of the city, whether a change is saved)."""
-    salvo, padrao = _dict(salvos.get(cidade)), REGIONAL_REPRESENTATIVE_DEFAULTS[cidade]
+    salvo, padrao = _dict(salvos.get(cidade)), representante_padrao(cidade, padroes)
     return {c: salvo[c] if isinstance(salvo.get(c), str) else padrao[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}, bool(salvo)
 
 
@@ -1065,11 +1072,16 @@ class SimpressApi:
         The saved edits are read on every call: a name edited on the screen mid-conversation is masked from the next message.
         """
         try:
-            salvos = self._representantes_salvos()[0]
+            salvos, _, padroes = self._representantes_salvos()
         except ValueError:
-            salvos = {}  # route down: the defaults still go in
-        padrao = [REGIONAL_REPRESENTATIVE_DEFAULTS[c]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
-        editados = [representante_efetivo(c, salvos)[0]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
+            # Route down: read the local defaults file directly, or the real names would reach the model unmasked.
+            from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE
+            from domains.local_setup import effective_regional_representative_defaults
+
+            salvos = {}
+            padroes, _ = effective_regional_representative_defaults(REGIONAL_REPRESENTATIVE_DEFAULTS_FILE)
+        padrao = [representante_padrao(c, padroes)["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
+        editados = [representante_efetivo(c, salvos, padroes)[0]["nome"] for c in REGIONAL_REPRESENTATIVE_CITIES]
         return list(dict.fromkeys(n for n in padrao + editados if n))
 
     def listar_nomes_solicitantes_sebrae(self) -> Optional[List[str]]:
@@ -2439,29 +2451,34 @@ class SimpressApi:
             return {"sucesso": False, "erro": dados}
         return {"sucesso": True, "mensagem": f"Contato de origem atualizado ({', '.join(m[0] for m in mudancas)})."}
 
-    def _representantes_salvos(self) -> Tuple[Dict[str, Any], bool]:
-        """(changes saved by city, whether the file is unreadable); ValueError when the route fails."""
+    def _representantes_salvos(self) -> Tuple[Dict[str, Any], bool, Dict[str, Any]]:
+        """(changes saved by city, whether the file is unreadable, effective defaults by city); ValueError when the route fails.
+
+        The defaults come from the route (`padroes`: code plus the local defaults file); an answer without them leaves the code's.
+        """
         ok, dados = self._chamar("GET", "/api/config/representantes-regionais")
         if not ok:
             raise ValueError(dados)
         dados = _dict(dados)
-        return _dict(dados.get("alteracoes")), bool(dados.get("arquivo_invalido"))
+        padroes = {str(item.get("cidade")): _dict(item) for item in dados.get("padroes") or [] if isinstance(item, dict)}
+        return _dict(dados.get("alteracoes")), bool(dados.get("arquivo_invalido")), padroes
 
-    def representante_regional_atual(self, cidade: Any) -> Tuple[str, Dict[str, str], bool]:
-        """(city, effective values, whether a change is saved); real values: only for the card and the merge. ValueError (pt-BR)."""
+    def representante_regional_atual(self, cidade: Any) -> Tuple[str, Dict[str, str], bool, Dict[str, str]]:
+        """(city, effective values, whether a change is saved, default of the city); real values: only for the card and the merge. ValueError (pt-BR)."""
         cidade = resolver_cidade_representante(cidade)
-        return (cidade, *representante_efetivo(cidade, self._representantes_salvos()[0]))
+        salvos, _, padroes = self._representantes_salvos()
+        return (cidade, *representante_efetivo(cidade, salvos, padroes), representante_padrao(cidade, padroes))
 
     def ver_representantes_regionais(self, cidade: Any = None) -> Dict[str, Any]:
         """Values go out under sensitive keys (nome, email, retirada_telefone), so the conversation's mask turns them into markers."""
         try:
             cidade = resolver_cidade_representante(cidade) if str(cidade or "").strip() else None
-            salvos, invalido = self._representantes_salvos()
+            salvos, invalido, padroes = self._representantes_salvos()
         except ValueError as falha:
             return {"erro": str(falha)}
         if cidade is None:
             return {"cidades": [{"cidade": c, "alterada": isinstance(salvos.get(c), dict)} for c in REGIONAL_REPRESENTATIVE_CITIES], "arquivo_invalido": invalido}
-        valores, alterada = representante_efetivo(cidade, salvos)
+        valores, alterada = representante_efetivo(cidade, salvos, padroes)
         return {
             "cidade": cidade, "nome": valores["nome"], "email": valores["email"], "retirada_telefone": valores["telefone"],
             "horario": valores["horario"], "almoco": valores["almoco"], "pausa": valores["pausaDuracao"],
@@ -2602,7 +2619,7 @@ class SimpressApi:
 
     def montar_alteracao_representante(self, cidade: Any, *novos: Any) -> Tuple[str, Dict[str, str], List[Tuple[str, str, str]]]:
         """(city, body for the route, changes) of `alterar_representante_regional`; ValueError (pt-BR) when it cannot run."""
-        cidade, efetivo, _ = self.representante_regional_atual(cidade)
+        cidade, efetivo, *_ = self.representante_regional_atual(cidade)
         return (cidade, *montar_representante_regional(efetivo, *novos))
 
     def alterar_representante_regional(self, cidade: Any, nome: Any, email: Any, telefone: Any, horario: Any, almoco: Any, pausa: Any) -> Dict[str, Any]:
@@ -2617,7 +2634,7 @@ class SimpressApi:
 
     def restaurar_representante_regional(self, cidade: Any) -> Dict[str, Any]:
         try:
-            cidade, _, alterado = self.representante_regional_atual(cidade)
+            cidade, _, alterado, _ = self.representante_regional_atual(cidade)
         except ValueError as falha:
             return {"sucesso": False, "erro": str(falha)}
         if not alterado:

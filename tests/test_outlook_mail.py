@@ -31,13 +31,13 @@ SEGREDO_MODELO = "Modelo Sigiloso Zeta"
 SEGREDO_BUSCA = "termobuscasigiloso"
 
 DIRETORIO = {
-    "aderetti": "Allex Fernando Deretti",
-    "fneves": "Fabio Neves",
-    "fnsilva": "Fabio Neves Silva",
-    "fsneves": "Fabio Souza Neves",
-    "rkriki": "Robinson Luiz de Souza Kriki Silvestre",
-    "rkrikij": "Robinson Luiz de Souza Kriki Silvestre Junior",
-    "jalvares": "José Álvares",
+    "pexemploa": "Pessoa Exemplo A",
+    "pexemplob": "Pessoa Exemplo B",
+    "pexemplobs": "Pessoa Exemplo B Silva",
+    "pexemplobt": "Pessoa Teste Exemplo B",
+    "pexemploc": "Pessoa Exemplo C",
+    "pexemplocj": "Pessoa Exemplo C Junior",
+    "jalvaro": "Júlio Álvaro",
     "ana": "Ana Silva",
     "mariana": "Mariana Silva",
     "prnoteabc$": "Maquina Teste",
@@ -95,7 +95,7 @@ def capturar_logs():
 
 def pedido_email(**mudancas) -> dict:
     base = {
-        "conta": "sebrae", "para": "Allex Fernando Deretti;", "cc": "", "assunto": "Assunto",
+        "conta": "sebrae", "para": "Pessoa Exemplo A;", "cc": "", "assunto": "Assunto",
         "corpo": "Corpo", "nome": "Fulana", "setor": "TI", "modo": "abrir", "confirmado": False,
     }
     base.update(mudancas)
@@ -116,9 +116,11 @@ class OutlookMailBase(unittest.TestCase):
     def escrever_diretorio(self, usuarios: dict) -> None:
         self.entra.write_text(json.dumps({"version": 1, "users": usuarios}), encoding="utf-8")
 
-    def novo_client(self, runner) -> TestClient:
+    def novo_client(self, runner, arquivo_padrao_cabo=None) -> TestClient:
         app = FastAPI()
-        app.include_router(create_outlook_mail_router(self.arquivo, self.entra, executar_processo=runner))
+        app.include_router(create_outlook_mail_router(
+            self.arquivo, self.entra, executar_processo=runner, arquivo_padrao_cabo=arquivo_padrao_cabo,
+        ))
         return TestClient(app)
 
     def config(self) -> dict:
@@ -144,19 +146,19 @@ class ModelosTests(OutlookMailBase):
         self.assertEqual(cabo["id"], "cabo")
         self.assertEqual(cabo["nome"], "Modelo 1 - Cabo")
         self.assertEqual(cabo["conta"], "sebrae")
-        self.assertEqual(cabo["para"], "Allex Fernando Deretti;")
-        self.assertEqual(cabo["cc"], "Fabio Neves; Robinson Luiz de Souza Kriki Silvestre;")
+        self.assertEqual(cabo["para"], "Pessoa Exemplo A;")
+        self.assertEqual(cabo["cc"], "Pessoa Exemplo B; Pessoa Exemplo C;")
         self.assertEqual(cabo["assunto"], "Instalação do Cabo de Segurança")
         self.assertEqual(
             cabo["corpo"],
-            "Allex, \n"
+            "Olá,\n"
             "Solicito a instalação de um cabo de segurança para o(a) {nome} - {setor}\n"
             "O cabo já está com o(a) colaborador(a).\n"
             "Qualquer dúvida estarei à disposição. \n"
-            "Att. Gabriel Akihiro",
+            "Att.",
         )
         self.assertEqual(cabo["corpo"], CORPO_CABO)
-        self.assertTrue(cabo["corpo"].startswith("Allex, \n"))
+        self.assertTrue(cabo["corpo"].startswith("Olá,\n"))
         self.assertIn("disposição. \n", cabo["corpo"])
 
     def test_configuracao_traz_contas_modelos_e_diretorio(self):
@@ -247,7 +249,7 @@ class ModelosTests(OutlookMailBase):
         self.assertEqual(cabo["nome"], "Meu cabo")
         self.assertEqual(
             (cabo["conta"], cabo["para"], cabo["cc"], cabo["assunto"], cabo["corpo"]),
-            ("sebrae", "Allex Fernando Deretti;", "Fabio Neves; Robinson Luiz de Souza Kriki Silvestre;",
+            ("sebrae", "Pessoa Exemplo A;", "Pessoa Exemplo B; Pessoa Exemplo C;",
              "Instalação do Cabo de Segurança", CORPO_CABO),
         )
         outro = self.criar(nome="Outro")
@@ -330,6 +332,95 @@ class ModelosTests(OutlookMailBase):
                 self.assertEqual(self.arquivo.read_bytes(), conteudo)
 
 
+class PadraoCaboLocalTests(OutlookMailBase):
+    """Texto padrão do Modelo 1 com o arquivo local opcional (só leitura): sem arquivo, válido e inválido."""
+
+    LOCAL = {
+        "conta": "simpress", "para": "Destino Local Teste;", "cc": "Copia Local Teste;",
+        "assunto": "Assunto local de teste", "corpo": "Oi,\nTexto {nome} - {setor}\nAtt. Assinatura Local",
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.padrao = self.pasta / "outlook_modelo_cabo_padrao.json"
+        self.client = self.novo_client(self.runner, self.padrao)
+
+    def campos(self, modelo: dict) -> dict:
+        return {chave: modelo[chave] for chave in outlook_mail.CAMPOS_PADRAO_CABO}
+
+    def estragar_cabo(self) -> None:
+        resposta = self.client.put("/api/outlook/email/modelos/cabo", json={
+            "para": "x", "cc": "y", "assunto": "z", "corpo": "w", "conta": "sebrae",
+        })
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+
+    def test_sem_arquivo_vale_o_padrao_do_codigo_e_nada_e_criado(self):
+        self.assertFalse(self.padrao.exists())
+        self.assertEqual(self.campos(self.modelo("cabo")), outlook_mail.CAMPOS_PADRAO_CABO)
+        self.estragar_cabo()
+        self.assertEqual(self.client.post("/api/outlook/email/modelos/cabo/restaurar").status_code, 200)
+        self.assertEqual(self.campos(self.modelo("cabo")), outlook_mail.CAMPOS_PADRAO_CABO)
+        self.assertFalse(self.padrao.exists())
+
+    def test_arquivo_valido_vale_na_semente_e_no_restaurar_sem_ser_alterado(self):
+        self.padrao.write_text(json.dumps(self.LOCAL), encoding="utf-8")
+        antes = self.padrao.read_bytes()
+        self.assertEqual(self.campos(self.modelo("cabo")), self.LOCAL)
+        self.estragar_cabo()
+        resposta = self.client.post("/api/outlook/email/modelos/cabo/restaurar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(self.campos(self.modelo("cabo")), self.LOCAL)
+        self.assertEqual(self.padrao.read_bytes(), antes)
+        # Só o arquivo de modelos é escrito pelo Outlook; o padrão local é só leitura.
+        self.assertEqual(
+            {p.name for p in self.pasta.iterdir() if not p.name.endswith(".lock")},
+            {self.arquivo.name, self.entra.name, self.padrao.name},
+        )
+
+    def test_arquivo_parcial_completa_com_o_codigo(self):
+        self.padrao.write_text(json.dumps({"para": "Destino Local Teste;"}), encoding="utf-8")
+        esperado = {**outlook_mail.CAMPOS_PADRAO_CABO, "para": "Destino Local Teste;"}
+        self.assertEqual(self.campos(self.modelo("cabo")), esperado)
+
+    def test_arquivo_invalido_vale_o_padrao_do_codigo_sem_quebrar_nem_logar_valores(self):
+        invalidos = (
+            "{corrompido", "[]", "null", '"texto"',
+            json.dumps({"conta": "inexistente", "para": 123, "cc": None, "assunto": "a" * 201, "corpo": "x\u0000y"}),
+        )
+        with capturar_logs() as linhas:
+            for conteudo in invalidos:
+                with self.subTest(conteudo=conteudo[:12]):
+                    self.padrao.write_text(conteudo, encoding="utf-8")
+                    self.assertEqual(self.campos(self.modelo("cabo")), outlook_mail.CAMPOS_PADRAO_CABO)
+            self.padrao.write_bytes(b"\xff\xfe\x00bad")
+            self.assertEqual(self.campos(self.modelo("cabo")), outlook_mail.CAMPOS_PADRAO_CABO)
+            self.padrao.unlink()
+            self.padrao.mkdir()  # diretório no lugar do arquivo: OSError
+            self.assertEqual(self.campos(self.modelo("cabo")), outlook_mail.CAMPOS_PADRAO_CABO)
+        self.assertEqual(linhas, [])
+
+    def test_campo_invalido_e_ignorado_e_o_valido_fica(self):
+        self.padrao.write_text(json.dumps({**self.LOCAL, "conta": "inexistente", "assunto": "a" * 201}), encoding="utf-8")
+        esperado = {**self.LOCAL, "conta": "sebrae", "assunto": outlook_mail.CAMPOS_PADRAO_CABO["assunto"]}
+        self.assertEqual(self.campos(self.modelo("cabo")), esperado)
+
+    def test_exemplo_versionado_e_valido_e_todos_os_campos_sao_aceitos(self):
+        exemplo = Path(__file__).resolve().parents[1] / "config" / "outlook_modelo_cabo_padrao.exemplo.json"
+        dados = json.loads(exemplo.read_text(encoding="utf-8"))
+        self.assertEqual(set(dados), set(outlook_mail.CAMPOS_PADRAO_CABO))
+        self.assertEqual(outlook_mail.padrao_cabo(exemplo), dados)
+        self.assertIn("{nome}", dados["corpo"])
+        self.assertIn("{setor}", dados["corpo"])
+
+    def test_padrao_do_codigo_e_generico_e_mantem_os_marcadores(self):
+        corpo = outlook_mail.CAMPOS_PADRAO_CABO["corpo"]
+        self.assertIn("{nome}", corpo)
+        self.assertIn("{setor}", corpo)
+        self.assertEqual(corpo.splitlines()[0], "Olá,")
+        self.assertEqual(corpo.splitlines()[-1], "Att.")
+        self.assertNotIn("@", " ".join(outlook_mail.CAMPOS_PADRAO_CABO.values()))
+
+
 class ContatosTests(OutlookMailBase):
     def buscar(self, termo: str):
         return self.client.get("/api/outlook/contatos", params={"q": termo})
@@ -342,10 +433,10 @@ class ContatosTests(OutlookMailBase):
         self.assertEqual(self.buscar("fn").status_code, 200)
 
     def test_busca_ignora_acento_e_maiuscula_e_acha_pelo_login(self):
-        for termo in ("jose", "JOSÉ", "alvares", "ÁLVA", "jalv"):
+        for termo in ("julio", "JÚLIO", "alvaro", "ÁLVA", "jalv"):
             with self.subTest(termo=termo):
                 contatos = self.buscar(termo).json()["contatos"]
-                self.assertEqual(contatos, [{"nome": "José Álvares", "email": "jalvares@pr.sebrae.com.br"}])
+                self.assertEqual(contatos, [{"nome": "Júlio Álvaro", "email": "jalvaro@pr.sebrae.com.br"}])
 
     def test_busca_deixa_contas_de_maquina_e_convidados_de_fora(self):
         for termo in ("maquina", "prnoteabc", "convidado", "externo", "ext"):
@@ -365,8 +456,8 @@ class ContatosTests(OutlookMailBase):
     def test_diretorio_indisponivel_nao_quebra_a_configuracao(self):
         self.entra.write_text("{corrompido", encoding="utf-8")
         self.assertEqual(self.config()["diretorio"], {"disponivel": False, "total": 0})
-        self.assertEqual(self.buscar("fabio").json()["contatos"], [])
-        resolvido = self.client.post("/api/outlook/contatos/resolver", json={"tokens": ["Fabio Neves"]}).json()
+        self.assertEqual(self.buscar("exemplo").json()["contatos"], [])
+        resolvido = self.client.post("/api/outlook/contatos/resolver", json={"tokens": ["Pessoa Exemplo B"]}).json()
         self.assertEqual(resolvido["resultados"][0]["status"], "nenhum")
 
 
@@ -377,45 +468,46 @@ class ResolverTests(OutlookMailBase):
         return resposta.json()["resultados"]
 
     def test_resolver_unico_ambiguo_nenhum_e_email(self):
-        unico, ambiguo, nenhum, email = self.resolver("Allex Deretti", "Silva", "Fulano Inexistente", "alguem@exemplo.test")
+        unico, ambiguo, nenhum, email = self.resolver("Pessoa A", "Silva", "Fulano Inexistente", "alguem@exemplo.test")
         self.assertEqual(unico, {
-            "token": "Allex Deretti", "status": "unico", "nome": "Allex Fernando Deretti",
-            "email": "aderetti@pr.sebrae.com.br",
+            "token": "Pessoa A", "status": "unico", "nome": "Pessoa Exemplo A",
+            "email": "pexemploa@pr.sebrae.com.br",
         })
         self.assertEqual(ambiguo["status"], "ambiguo")
         self.assertEqual(
-            {o["nome"] for o in ambiguo["opcoes"]}, {"Fabio Neves Silva", "Ana Silva", "Mariana Silva"},
+            {o["nome"] for o in ambiguo["opcoes"]}, {"Pessoa Exemplo B Silva", "Ana Silva", "Mariana Silva"},
         )
         self.assertEqual(nenhum, {"token": "Fulano Inexistente", "status": "nenhum"})
         self.assertEqual(email, {"token": "alguem@exemplo.test", "status": "unico", "email": "alguem@exemplo.test"})
 
     def test_resolver_ignora_acento_e_maiuscula(self):
-        (resultado,) = self.resolver("JOSE alvares")
-        self.assertEqual((resultado["status"], resultado["email"]), ("unico", "jalvares@pr.sebrae.com.br"))
+        (resultado,) = self.resolver("JULIO alvaro")
+        self.assertEqual((resultado["status"], resultado["email"]), ("unico", "jalvaro@pr.sebrae.com.br"))
 
     def test_resolver_nome_exato_vale_mais_que_nomes_que_so_contem_as_palavras(self):
         # Mesma forma do Cc da semente, só com dados sintéticos.
-        fabio, robinson = self.resolver("Fabio Neves", "Robinson Luiz de Souza Kriki Silvestre")
-        self.assertEqual(fabio, {
-            "token": "Fabio Neves", "status": "unico", "nome": "Fabio Neves", "email": "fneves@pr.sebrae.com.br",
+        pessoa_b, pessoa_c = self.resolver("Pessoa Exemplo B", "Pessoa Exemplo C")
+        self.assertEqual(pessoa_b, {
+            "token": "Pessoa Exemplo B", "status": "unico", "nome": "Pessoa Exemplo B",
+            "email": "pexemplob@pr.sebrae.com.br",
         })
-        self.assertEqual((robinson["status"], robinson["email"]), ("unico", "rkriki@pr.sebrae.com.br"))
+        self.assertEqual((pessoa_c["status"], pessoa_c["email"]), ("unico", "pexemploc@pr.sebrae.com.br"))
         # Sem o nome exato, as mesmas palavras ainda dão mais de uma pessoa.
-        (sem_exato,) = self.resolver("Fabio")
+        (sem_exato,) = self.resolver("Exemplo B")
         self.assertEqual(sem_exato["status"], "ambiguo")
-        (parcial,) = self.resolver("Robinson Silvestre")
+        (parcial,) = self.resolver("Pessoa C")
         self.assertEqual(parcial["status"], "ambiguo")
 
     def test_resolver_dois_nomes_exatos_iguais_continua_ambiguo(self):
-        self.escrever_diretorio({"fneves": "Fabio Neves", "fneves2": "FÁBIO  neves", "fnsilva": "Fabio Neves Silva"})
-        (resultado,) = self.resolver("Fabio Neves")
+        self.escrever_diretorio({"pexemplob": "Pessoa Exemplo B", "pexemplob2": "PESSÔA  exemplo b", "pexemplobs": "Pessoa Exemplo B Silva"})
+        (resultado,) = self.resolver("Pessoa Exemplo B")
         self.assertEqual(resultado["status"], "ambiguo")
-        self.assertEqual({o["email"] for o in resultado["opcoes"]}, {"fneves@pr.sebrae.com.br", "fneves2@pr.sebrae.com.br"})
+        self.assertEqual({o["email"] for o in resultado["opcoes"]}, {"pexemplob@pr.sebrae.com.br", "pexemplob2@pr.sebrae.com.br"})
 
     def test_resolver_nome_exato_com_acento_e_caixa_diferentes(self):
-        self.escrever_diretorio({"jalvares": "José Álvares", "jalvares2": "José Álvares Filho"})
-        (resultado,) = self.resolver("JOSE ALVARES")
-        self.assertEqual((resultado["status"], resultado["email"]), ("unico", "jalvares@pr.sebrae.com.br"))
+        self.escrever_diretorio({"jalvaro": "Júlio Álvaro", "jalvaro2": "Júlio Álvaro Filho"})
+        (resultado,) = self.resolver("JULIO ALVARO")
+        self.assertEqual((resultado["status"], resultado["email"]), ("unico", "jalvaro@pr.sebrae.com.br"))
 
     def test_resolver_deixa_maquinas_e_convidados_de_fora(self):
         for token in ("Maquina Teste", "Convidado Externo"):
@@ -431,7 +523,7 @@ class ResolverTests(OutlookMailBase):
 
     def test_resolver_so_le_o_diretorio(self):
         antes = self.entra.read_bytes()
-        self.resolver("Fabio Neves")
+        self.resolver("Pessoa Exemplo B")
         self.assertEqual(self.entra.read_bytes(), antes)
 
 
@@ -692,7 +784,7 @@ class EnvioTests(OutlookMailBase):
     def test_stdin_vai_em_utf8_sem_perder_acentos(self):
         resposta = self.enviar(
             assunto="Instalação do Cabo de Segurança", corpo="Solicito a instalação, segurança e à disposição.",
-            nome="José Álvares", setor="Gestão",
+            nome="Júlio Álvaro", setor="Gestão",
         )
         self.assertEqual(resposta.status_code, 200, resposta.text)
         comando, opcoes = self.runner.chamadas[-1]
@@ -794,11 +886,11 @@ class EnvioTests(OutlookMailBase):
 class LogsTests(OutlookMailBase):
     def test_logs_nao_levam_corpo_destinatarios_nomes_modelo_nem_busca(self):
         self.runner.saida = "PASSO:antes_send\nOK:enviado\n"
-        sensiveis = (SEGREDO_CORPO, SEGREDO_NOME, SEGREDO_SETOR, SEGREDO_PARA, SEGREDO_MODELO, SEGREDO_BUSCA, "Fabio Neves")
+        sensiveis = (SEGREDO_CORPO, SEGREDO_NOME, SEGREDO_SETOR, SEGREDO_PARA, SEGREDO_MODELO, SEGREDO_BUSCA, "Pessoa Exemplo B")
         with capturar_logs() as linhas:
             self.criar(nome=SEGREDO_MODELO)
             self.client.get("/api/outlook/contatos", params={"q": SEGREDO_BUSCA})
-            self.client.post("/api/outlook/contatos/resolver", json={"tokens": [SEGREDO_NOME, "Fabio Neves"]})
+            self.client.post("/api/outlook/contatos/resolver", json={"tokens": [SEGREDO_NOME, "Pessoa Exemplo B"]})
             enviado = self.enviar(
                 modo="enviar", confirmado=True, para=SEGREDO_PARA, cc=SEGREDO_PARA, assunto=SEGREDO_MODELO,
                 corpo=SEGREDO_CORPO, nome=SEGREDO_NOME, setor=SEGREDO_SETOR,

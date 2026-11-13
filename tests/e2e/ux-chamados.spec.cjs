@@ -1,8 +1,8 @@
 const { test, expect } = require("@playwright/test");
 
 const SOLICITANTE = {
-  nome: "Gabriel Akihiro Noda Souza", email: "gansouza@simpress.com.br",
-  telefone: "(41)98751-2389", departamento_cargo: "Analista WP Junior",
+  nome: "Pessoa Exemplo", email: "nome.exemplo@pr.sebrae.com.br",
+  telefone: "(41) 90000-0000", departamento_cargo: "Setor Exemplo / Cargo Exemplo",
 };
 
 test("Home prepares a UX ticket and separates the dry run from the final action", async ({ page }) => {
@@ -28,7 +28,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await expect(modal.getByLabel("E-mail")).toHaveValue(SOLICITANTE.email);
   await expect(modal.getByLabel("Telefone")).toHaveValue(SOLICITANTE.telefone);
   await expect(modal.getByLabel("Departamento/Cargo")).toHaveValue(SOLICITANTE.departamento_cargo);
-  await modal.getByLabel("Telefone").fill("(41)90000-0000");
+  await modal.getByLabel("Telefone").fill("(41) 98888-7777");
   await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhuma solicitação foi enviada");
@@ -40,8 +40,31 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await expect(modal.getByRole("status")).toContainText("OS #98765");
   expect(requests.filter(({ body }) => body.enviar === true).map(({ body }) => body)).toEqual([{
     session_id: "fixture", serial: "LENTO", problema: "Notebook - Teclado", descricao: "O teclado do notebook não funciona.",
-    solicitante: { ...SOLICITANTE, telefone: "(41) 90000-0000" }, enviar: true, confirmado: true,
+    solicitante: { ...SOLICITANTE, telefone: "(41) 98888-7777" }, enviar: true, confirmado: true,
   }]);
+});
+
+test("Home shows empty Solicitante fields without a local profile and keeps Simular and Revisar e enviar disabled", async ({ page }) => {
+  const requests = [];
+  await page.route("**/api/ux/abrir-chamado/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    requests.push(path);
+    await route.fulfill({ json: { status: "preparado", serial: "LENTO", modelo: "Notebook de teste", session_id: "fixture", opcoes: ["Notebook - Teclado"], solicitante: { nome: "", email: "", telefone: "", departamento_cargo: "" } } });
+  });
+  await page.goto("/");
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  await page.getByRole("tab", { name: "Kit teclado + mouse" }).click();
+  await page.locator("#texto-chamado-teclado-mouse").fill("O teclado do notebook não funciona.");
+  await page.getByRole("button", { name: "Abrir chamado no UX" }).click();
+  const modal = page.getByRole("dialog", { name: "Abrir chamado no UX" });
+  await expect(modal.getByText("Notebook de teste")).toBeVisible();
+  for (const rotulo of ["Nome", "E-mail", "Telefone", "Departamento/Cargo"]) await expect(modal.getByLabel(rotulo, { exact: rotulo === "Nome" })).toHaveValue("");
+  await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
+  await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
+  await expect(modal.getByRole("button", { name: "Revisar e enviar" })).toBeDisabled();
+  expect(requests).toEqual(["/api/ux/abrir-chamado/preparar"]);
 });
 
 test("Home explains a failed UX preparation, keeps the description and disables the actions", async ({ page }) => {

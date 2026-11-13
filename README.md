@@ -115,6 +115,8 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | Lotes de nomes do Microsoft Entra | `data/state/entrada_usuarios_entra` | Fila local do CSV de usuários do Entra (`pendentes`, `processadas`, `falhas`, com `_resultado.json`); fora do Git. |
 | `assistente_*.json` | `data/state` | Conversas (só texto mascarado), notas e lembretes, instruções permanentes e o interruptor da busca na web do assistente; fora do Git. |
 | `representantes_regionais.json` | `config` | Alterações por cidade dos representantes regionais do SEBRAE/PR; fora do Git. |
+| `representantes_regionais_padrao.json` | `data/state` | Nome, e-mail e telefone padrão dos 22 representantes (o código guarda só cidades e horários); fora do Git. Modelo fictício: `config/representantes_regionais_padrao.exemplo.json`. |
+| `outlook_modelo_cabo_padrao.json` | `data/state` | Opcional: destinatários, assunto e corpo reais do Modelo 1 de e-mail pelo Outlook (só leitura; sem ele vale o padrão genérico do código); fora do Git. Modelo fictício: `config/outlook_modelo_cabo_padrao.exemplo.json`. |
 | `.env` | raiz do projeto | Chaves e modelos do assistente (OpenRouter e, opcionalmente, DeepSeek); fora do Git. Modelo em `.env.example`. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
@@ -145,7 +147,7 @@ Sem dados, a aba **Transporte** mostra um aviso com o botão **Configurar contat
 Copy-Item config\contato_origem.exemplo.json config\contato_origem.json
 ```
 
-Os 22 representantes regionais do SEBRAE/PR têm o padrão no backend (a tela os carrega da API); o botão **Editar** (Retirada e Entrega) grava só as alterações por cidade em `config/representantes_regionais.json`, local e ignorado pelo Git, sem reiniciar o servidor. **Restaurar padrão** no modal remove a alteração da cidade. O assistente (F9) também consulta, altera e restaura essas cidades, com cartão de confirmação.
+Os 22 representantes regionais do SEBRAE/PR têm o padrão no backend (a tela os carrega da API): o código guarda só as cidades e os horários, e nome, e-mail e telefone vêm do arquivo local `data/state/representantes_regionais_padrao.json` (fora do Git; copie `config/representantes_regionais_padrao.exemplo.json` e preencha; sem o arquivo, a lista mostra `Não definido ainda`); o botão **Editar** (Retirada e Entrega) grava só as alterações por cidade em `config/representantes_regionais.json`, local e ignorado pelo Git, sem reiniciar o servidor. **Restaurar padrão** no modal remove a alteração da cidade. O assistente (F9) também consulta, altera e restaura essas cidades, com cartão de confirmação.
 
 As variáveis de ambiente têm prioridade sobre o arquivo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
 

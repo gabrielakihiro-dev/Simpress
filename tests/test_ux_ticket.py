@@ -163,14 +163,25 @@ class TicketsUXTests(unittest.TestCase):
         self.assertEqual(sessao["endereco"], PATO_BRANCO)
         self.assertEqual(sessao["cnpj_faturamento"], "75.110.585/0001-00")
         self.assertEqual(sessao["cnpj_instalacao"], "75.110.585/0005-25")
-        self.assertEqual(sessao["solicitante"], {
-            "nome": "Gabriel Akihiro Noda Souza", "email": "gansouza@simpress.com.br", "telefone": "(41)98751-2389",
-        })
+        # No local profile file here and the code default is blank: the modal gets empty fields (public repository).
+        self.assertEqual(sessao["solicitante"], {"nome": "", "email": "", "telefone": ""})
         self.assertEqual(self.portal.ceps, ["85504-000"])
         self.assertEqual([e for _, e in self.portal.escolhas], [PATO_BRANCO])
         self.assertEqual(self.portal.ceps_escolha, ["85504-000"])  # the adapter can redo the flow from scratch
         self.executar(sessao)
         self.assertEqual(self.portal.ceps_formulario, ["85504-000"])
+
+    def test_prefill_comes_from_the_local_profile_file_and_a_broken_file_gives_blank_fields(self):
+        perfil = self.state / ux_chamados.PROFILE_NAME
+        perfil.write_text(json.dumps({
+            "nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000",
+            "ramal": "", "departamento_cargo": "Setor Exemplo / Cargo Exemplo",
+        }), encoding="utf-8")
+        esperado = {"nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"}
+        self.assertEqual(self.preparar()["solicitante"], esperado)
+        self.assertEqual(self.servico.preparar_alterar_endereco(serial="abc123")["solicitante"], esperado)
+        perfil.write_text("{não é json", encoding="utf-8")  # a broken profile never blocks the modal
+        self.assertEqual(self.servico.preparar_alterar_endereco(serial="abc123")["solicitante"], {"nome": "", "email": "", "telefone": ""})
 
     def test_ambiguous_address_returns_the_list_and_requires_an_exact_choice(self):
         self.portal.opcoes = [PATO_BRANCO, PATO_BRANCO.replace("BORTOT", "BORTOT II")]
@@ -354,7 +365,8 @@ class RouterTests(unittest.TestCase):
         pasta = TemporaryDirectory()
         self.addCleanup(pasta.cleanup)
         self.portal = Portal()
-        self.servico = TicketsUX(Path(pasta.name), self.portal.conectar)
+        self.state = Path(pasta.name)
+        self.servico = TicketsUX(self.state, self.portal.conectar)
         app = FastAPI()
         app.include_router(ux_ticket_router.create_ux_ticket_router(self.servico, lambda: Path("modelo.xlsx")))
         self.client = TestClient(app)
@@ -375,10 +387,19 @@ class RouterTests(unittest.TestCase):
             "solicitante": {"nome": "Pessoa", "email": "p@example.test", "telefone": "41999990000"}, **alteracoes,
         })
 
-    def test_default_solicitante_route_serves_the_backend_constant_without_touching_chrome(self):
+    def test_default_solicitante_route_is_blank_without_a_profile_and_serves_the_local_profile_without_touching_chrome(self):
         resposta = self.client.get("/api/ux/gerar-ticket/solicitante")
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json(), {campo: ux_chamados.SOLICITANTE_PADRAO[campo] for campo in ("nome", "email", "telefone")})
+        self.assertEqual(resposta.json(), {"nome": "", "email": "", "telefone": ""})
+        (self.state / ux_chamados.PROFILE_NAME).write_text(json.dumps({
+            "nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000",
+            "ramal": "", "departamento_cargo": "Setor Exemplo / Cargo Exemplo",
+        }), encoding="utf-8")
+        resposta = self.client.get("/api/ux/gerar-ticket/solicitante")
+        self.assertEqual(
+            resposta.json(), {"nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"},
+        )
+        self.assertEqual(self.portal.abas, {})  # the route never opens the portal
 
     def test_routes_prepare_simulate_and_cancel(self):
         resposta = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo)

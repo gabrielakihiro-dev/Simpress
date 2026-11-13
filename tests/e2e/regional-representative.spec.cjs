@@ -30,7 +30,7 @@ test("edits, validates and restores a regional representative from the transfer 
   const dialog = page.getByRole("dialog", { name: "Editar representante regional" });
   await expect(dialog).toBeVisible();
   await expect(page.locator("#representante-regional-nome")).toBeFocused();
-  await expect(page.locator("#representante-regional-nome")).toHaveValue("Renata Custodio de Oliveira Varasquim");
+  await expect(page.locator("#representante-regional-nome")).toHaveValue("Rita Exemplo de Oliveira Teste");
   await expect(page.locator("#representante-regional-almoco-nao-fecha")).toBeChecked();
   await expect(page.locator("#btn-restaurar-representante-regional")).toBeDisabled();
 
@@ -56,7 +56,7 @@ test("edits, validates and restores a regional representative from the transfer 
   await expect(page.locator("#retirada-representante option[value='Londrina']")).toHaveText("Renata Editada — Londrina");
   await expect(page.locator("#retirada-contato")).toHaveValue("Renata Editada");
   await expect(page.locator("#retirada-horario")).toHaveValue("09:00:00 às 17:00:00");
-  await expect(page.locator("#entrega-contato")).toHaveValue("Tatiane Matsuguma Sanches");
+  await expect(page.locator("#entrega-contato")).toHaveValue("Tereza Exemplar Santos");
 
   // The edit survives a reload (it comes back from the API).
   await page.reload();
@@ -69,8 +69,8 @@ test("edits, validates and restores a regional representative from the transfer 
   await page.locator("#btn-restaurar-representante-regional").click();
   await page.locator("#btn-confirmar-acao-ok").click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator("#retirada-representante option[value='Londrina']")).toHaveText("Renata Custodio de Oliveira Varasquim — Londrina");
-  await expect(page.locator("#retirada-contato")).toHaveValue("Renata Custodio de Oliveira Varasquim");
+  await expect(page.locator("#retirada-representante option[value='Londrina']")).toHaveText("Rita Exemplo de Oliveira Teste — Londrina");
+  await expect(page.locator("#retirada-contato")).toHaveValue("Rita Exemplo de Oliveira Teste");
 });
 
 test("Esc and Cancelar close the regional representative dialog without saving", async ({ page }) => {
@@ -85,7 +85,7 @@ test("Esc and Cancelar close the regional representative dialog without saving",
   await page.locator("#btn-editar-representante-entrega").click();
   await page.locator("#btn-cancelar-representante-regional").click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator("#entrega-representante option[value='Toledo']")).toHaveText("Fernanda da Costa Goldacker — Toledo");
+  await expect(page.locator("#entrega-representante option[value='Toledo']")).toHaveText("Tania da Costa Fictícia — Toledo");
 });
 
 test("keeps a hand-typed field when the dialog changes it and warns which one was kept", async ({ page }) => {
@@ -140,9 +140,9 @@ test("a city chosen by the equipment search before the defaults arrive is filled
   await expect(page.locator("#card-equipamento")).toBeVisible({ timeout: 15_000 });
   await openTransferTab(page);
   await expect(page.locator("#retirada-representante option")).toHaveCount(1);
-  await expect(page.locator("#retirada-contato")).not.toHaveValue("Renata Custodio de Oliveira Varasquim");
+  await expect(page.locator("#retirada-contato")).not.toHaveValue("Rita Exemplo de Oliveira Teste");
   release();
   await expect(page.locator("#retirada-representante")).toHaveValue("Londrina");
-  await expect(page.locator("#retirada-contato")).toHaveValue("Renata Custodio de Oliveira Varasquim");
+  await expect(page.locator("#retirada-contato")).toHaveValue("Rita Exemplo de Oliveira Teste");
   await expect(page.locator("#btn-editar-representante-retirada")).toBeEnabled();
 });

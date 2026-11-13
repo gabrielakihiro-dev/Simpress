@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
-from core.config import REGIONAL_REPRESENTATIVES_FILE, format_size_limit
+from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, REGIONAL_REPRESENTATIVES_FILE, format_size_limit
 from core.integrity import atomic_write_json, lock_paths
 from domains import (
     local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
@@ -246,12 +246,14 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return fin.pasta_estado(services.caminhos().existentes)
 
     def _nomes_representantes() -> List[Any]:
-        """Nomes dos representantes regionais (padrão e alterados); arquivo ilegível vale só o padrão."""
+        """Nomes dos representantes regionais (padrão local e alterados); arquivo ilegível vale só o padrão."""
         try:
             salvos, _ = local_setup.load_regional_representatives(REGIONAL_REPRESENTATIVES_FILE)
         except Exception:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
             salvos = {}
-        padroes = [dados.get("nome") for dados in local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS.values()]
+        # O padrão vem do arquivo local (o código tem os nomes em branco): sem ele os nomes reais deixariam de ser mascarados.
+        padroes_efetivos, _ = local_setup.effective_regional_representative_defaults(REGIONAL_REPRESENTATIVE_DEFAULTS_FILE)
+        padroes = [dados.get("nome") for dados in padroes_efetivos.values()]
         return [*padroes, *(dados.get("nome") for dados in salvos.values() if isinstance(dados, dict))]
 
     def _nomes_pessoas() -> List[Any]:

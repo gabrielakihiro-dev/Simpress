@@ -13,7 +13,7 @@ Hoje o pedido de instalação do cabo de segurança é escrito à mão no Outloo
 
 Escritas novas (autorizadas pelo usuário em 09/11/2026):
 - Externa: criar ou enviar um e-mail no Outlook do usuário, só por clique explícito.
-- Local: `data/state/outlook_email_modelos.json` (modelos de e-mail; fora do Git; gravação atômica sob trava). Nenhum histórico de envio e nenhum log com conteúdo.
+- Local: `data/state/outlook_email_modelos.json` (modelos de e-mail; fora do Git; gravação atômica sob trava); lê, só leitura, o `data/state/outlook_modelo_cabo_padrao.json` opcional (padrão do Modelo 1, 13/11/2026). Nenhum histórico de envio e nenhum log com conteúdo.
 
 ## Desenho
 
@@ -25,20 +25,21 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 
 **Modelos** (`data/state/outlook_email_modelos.json`):
 - Formato `{version: 1, modelos: [{id, nome, conta, para, cc, assunto, corpo, atualizado_em}]}`.
-- Arquivo ausente: semente "Modelo 1 - Cabo" (id `cabo`, conta `sebrae`) gerada das constantes do backend; só é gravado na primeira edição.
-- Semente do Cabo: Para `Allex Fernando Deretti;`, Cc `Fabio Neves; Robinson Luiz de Souza Kriki Silvestre;`, Assunto `Instalação do Cabo de Segurança`, corpo literal (espaços finais preservados como na fonte):
+- Arquivo ausente: semente "Modelo 1 - Cabo" (id `cabo`, conta `sebrae`) gerada do padrão do backend, mesclado com o arquivo local opcional abaixo; só é gravado na primeira edição.
+- **Padrão do código (genérico e público, desde 13/11/2026, porque o repositório é público):** Para `Pessoa Exemplo A;`, Cc `Pessoa Exemplo B; Pessoa Exemplo C;`, Assunto `Instalação do Cabo de Segurança` e corpo literal (espaços finais preservados), sem nome de terceiro nem assinatura do usuário:
   ```
-  Allex, 
+  Olá,
   Solicito a instalação de um cabo de segurança para o(a) {nome} - {setor}
   O cabo já está com o(a) colaborador(a).
   Qualquer dúvida estarei à disposição. 
-  Att. Gabriel Akihiro
+  Att.
   ```
+- **Padrão local opcional (desde 13/11/2026):** `data/state/outlook_modelo_cabo_padrao.json` (`OUTLOOK_MODELO_CABO_DEFAULTS_FILE` em `core/config.py`; fora do Git, coberto por `/data/state/**`). Chaves aceitas: subconjunto de `conta`, `para`, `cc`, `assunto` e `corpo`; cada campo presente e válido (mesmos limites de `_campo_modelo`) vale por cima do código, e o que faltar ou for inválido fica com o do código. A semente do Cabo e o `Restaurar padrão` usam o código mesclado com esse arquivo (`padrao_cabo` em `domains/outlook_mail.py`). **Só leitura:** o Outlook nunca o grava; arquivo ausente, ilegível, fora do formato ou com campo inválido vale o código, sem erro nem log de valores. Modelo fictício versionado: `config/outlook_modelo_cabo_padrao.exemplo.json`. Escreve apenas localmente; nada em sistema externo.
 - Limites: nome ≤ 80 (único, sem distinguir maiúsculas), até 50 modelos, Para/Cc ≤ 1000, Assunto ≤ 200, Corpo ≤ 4000; caracteres de controle recusados (exceto `\n` e `\t` no corpo). Conta tem de ser um id de `CONTAS_REMETENTE`.
 - Gravação atômica (arquivo temporário + replace) sob trava de arquivo, reaproveitando o padrão já usado para estado local (ex.: `domains/os_observacoes.py`). Arquivo ilegível: 503, sem sobrescrever.
 
 **Diretório para autocompletar** (só leitura de `domains/entra_users.py`): `read_directory()` dá `users[login_key(upn)] = displayName`; e-mail = `<chave>@pr.sebrae.com.br`; chaves terminadas em `$` (contas de máquina) e contas convidadas (`#EXT#` no UPN ou na chave) ficam fora do autocompletar e do resolver. Busca por `normalize_search_term` (sem acento nem maiúscula) no nome e no login; prefixo de palavra vem antes de "contém".
-- **Nome exato no resolver (aprovado pelo usuário em 10/11/2026, após o Passo 0):** se o termo, depois de `normalize_search_term`, for idêntico ao `displayName` de uma única pessoa, o resultado é `unico`, mesmo que outras pessoas combinem por prefixo ou por "contém". Mais de um nome idêntico continua `ambiguo`. Motivo: na base real, "Fabio Neves" combina com 3 pessoas por palavras e "Robinson Luiz de Souza Kriki Silvestre" com 2, mas cada um tem só um nome idêntico. Sem a regra, o Cc da semente bloquearia o `enviar`.
+- **Nome exato no resolver (aprovado pelo usuário em 10/11/2026, após o Passo 0):** se o termo, depois de `normalize_search_term`, for idêntico ao `displayName` de uma única pessoa, o resultado é `unico`, mesmo que outras pessoas combinem por prefixo ou por "contém". Mais de um nome idêntico continua `ambiguo`. Motivo: em um diretório com nomes parecidos, um nome completo combina com várias pessoas por palavras, mas cada pessoa tem só um nome idêntico (os testes usam nomes fictícios com essa mesma forma, como `Pessoa Exemplo B` e `Pessoa Exemplo B Silva`). Sem a regra, o Cc da semente bloquearia o `enviar`.
 
 **Rotas:**
 | Rota | Função |
@@ -201,14 +202,14 @@ Por regra do usuário, a execução roda numa sessão nova (`start_session`) com
 
 - Nos testes 14 e 15, Para/Cc ficam só com o e-mail do próprio usuário (num modelo de teste, excluído no fim; o Modelo 1 - Cabo é restaurado ao padrão).
 - Cada envio real só ocorre após o "pode enviar" do usuário no chat, porque é irreversível.
-- Nunca enviar a Allex, Fabio ou Robinson em teste.
+- Nunca enviar a terceiros em teste; só ao e-mail do próprio usuário.
 
 **Resultado (10–11/11/2026):** os 16 cenários passaram, mais dois extras (Cc mostrado na confirmação; Assistente real aponta a Home e não diz que enviou).
 - Etapa A (commit `5c48a84`): Cc na confirmação do envio; qualquer exceção no `Send()` vira `incerto`.
 - Correção 1 (cenário 1, OK do usuário em 11/11/2026): a atribuição direta de `SendUsingAccount` não tinha efeito e o script recusava com `conta_ausente`. Agora usa só `InvokeMember` `SetProperty`. Teste de regressão: `test_script_atribui_a_conta_so_por_invokemember`.
 - Correção 2 (cenário 7a, OK do usuário em 11/11/2026): com o Outlook iniciado pelo script, a janela ficava só na barra de tarefas. Agora chama `GetInspector.Activate()` depois do `Display`. Teste de regressão: `test_script_traz_a_janela_para_a_frente_depois_de_abrir`.
 - Envios reais (14 e 15): um clique cada, após o "pode enviar" do usuário; só para os e-mails do próprio usuário; item conferido em Itens Enviados pelo COM; chegada com acentos confirmada pelo usuário.
-- Escrita externa: 2 e-mails reais enviados pelo Outlook (11/11/2026, autorizados um a um pelo usuário). Escrita local: só `data/state/outlook_email_modelos.json` do worktree; modelo de teste e Modelo 2 excluídos, Modelo 1 - Cabo restaurado ao padrão.
+- Escrita externa: 2 e-mails reais enviados pelo Outlook (11/11/2026, autorizados um a um pelo usuário). Escrita local: só `data/state/outlook_email_modelos.json` do worktree (o `outlook_modelo_cabo_padrao.json` nunca é gravado); modelo de teste e Modelo 2 excluídos, Modelo 1 - Cabo restaurado ao padrão.
 - Observação, sem mudança: depois de escolher a opção do destinatário ambíguo, o aviso de bloqueio fica na tela até a próxima ação.
 
 ## Verificação final

@@ -20,11 +20,9 @@ SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_chamados_historico.json"
 PROFILE_NAME = "ux_solicitante.json"
 PROFILE_FIELDS = ("nome", "email", "telefone", "ramal", "departamento_cargo")
-# Default Solicitante (pedido do usuário, 06/11/2026) when data/state/ux_solicitante.json does not exist.
-SOLICITANTE_PADRAO = {
-    "nome": "Gabriel Akihiro Noda Souza", "email": "gansouza@simpress.com.br", "telefone": "(41)98751-2389",
-    "ramal": "", "departamento_cargo": "Analista WP Junior",
-}
+# Default Solicitante when data/state/ux_solicitante.json does not exist: blank on purpose (the repository is public, so
+# the real data lives only in that git-ignored file). A blank requester never goes to the portal on a real send.
+SOLICITANTE_PADRAO = {"nome": "", "email": "", "telefone": "", "ramal": "", "departamento_cargo": ""}
 EDITAVEIS = ("nome", "email", "telefone", "departamento_cargo")  # shown in the modal; ramal is not
 EXCLUDED_STEMS = (
     "impress", "digitaliza", "atolament", "scanner", "printer", "mfp", "licenciament", "diverg", "toner",
@@ -40,6 +38,10 @@ MSG_SEM_ENVIO = f"O envio real está desativado ({VAR_SEM_ENVIO}). Só a simula�
 MSG_SOLICITANTE_FALTANDO = (
     "O envio não foi feito: faltam dados do solicitante no formulário do UX. Preencha no Chrome de automação "
     "(ou crie data/state/ux_solicitante.json) e envie de novo. Faltando: "
+)
+MSG_SOLICITANTE_VAZIO = (
+    "O envio não foi feito: o solicitante do UX não está definido. Preencha nome, e-mail, telefone e departamento/cargo "
+    "no modal da Home (ou crie data/state/ux_solicitante.json) e envie de novo."
 )
 INCERTO = "O UX não confirmou o envio. Confira se o chamado foi criado antes de tentar novamente."
 
@@ -93,6 +95,37 @@ def validar_descricao(descricao: str) -> str:
     return texto
 
 
+def ler_perfil_solicitante(caminho: Path) -> dict[str, str]:
+    """Requester from the local profile file; without the file, the blank default. A broken file is a 503."""
+    try:
+        perfil = json.loads(caminho.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return dict(SOLICITANTE_PADRAO)
+    except (OSError, ValueError):
+        raise ErroUX(503, "O perfil local do solicitante do UX está inválido. Corrija ou apague data/state/ux_solicitante.json.") from None
+    try:
+        if not isinstance(perfil, dict):
+            raise ValueError()
+        dados = {campo: perfil.get(campo) for campo in PROFILE_FIELDS}
+        if any(
+            not isinstance(valor, str) or (not valor.strip() and campo != "ramal")
+            or any(ord(c) < 32 for c in valor)
+            for campo, valor in dados.items()
+        ):
+            raise ValueError()
+    except (OSError, ValueError):
+        raise ErroUX(503, "O perfil local do solicitante do UX está incompleto. Corrija ou apague data/state/ux_solicitante.json.") from None
+    return {campo: str(valor).strip() for campo, valor in dados.items()}
+
+
+def perfil_solicitante_ou_padrao(caminho: Path) -> dict[str, str]:
+    # A broken local profile must not block flows where the Home sends the editable fields itself.
+    try:
+        return ler_perfil_solicitante(caminho)
+    except ErroUX:
+        return dict(SOLICITANTE_PADRAO)
+
+
 class ChamadosUX:
     def __init__(
         self,
@@ -121,32 +154,10 @@ class ChamadosUX:
         return historico
 
     def _solicitante(self) -> dict[str, str]:
-        try:
-            perfil = json.loads(self._profile.read_text(encoding="utf-8-sig"))
-        except FileNotFoundError:
-            return dict(SOLICITANTE_PADRAO)
-        except (OSError, ValueError):
-            raise ErroUX(503, "O perfil local do solicitante do UX está inválido. Corrija ou apague data/state/ux_solicitante.json.") from None
-        try:
-            if not isinstance(perfil, dict):
-                raise ValueError()
-            dados = {campo: perfil.get(campo) for campo in PROFILE_FIELDS}
-            if any(
-                not isinstance(valor, str) or (not valor.strip() and campo != "ramal")
-                or any(ord(c) < 32 for c in valor)
-                for campo, valor in dados.items()
-            ):
-                raise ValueError()
-        except (OSError, ValueError):
-            raise ErroUX(503, "O perfil local do solicitante do UX está incompleto. Corrija ou apague data/state/ux_solicitante.json.") from None
-        return {campo: str(valor).strip() for campo, valor in dados.items()}
+        return ler_perfil_solicitante(self._profile)
 
     def _perfil_ou_padrao(self) -> dict[str, str]:
-        # A broken local profile must not block flows where the Home sends the editable fields itself.
-        try:
-            return self._solicitante()
-        except ErroUX:
-            return dict(SOLICITANTE_PADRAO)
+        return perfil_solicitante_ou_padrao(self._profile)
 
     def _limpar_expiradas(self) -> None:
         agora = self._clock()
@@ -265,6 +276,12 @@ class ChamadosUX:
             if any(not dados[campo] or any(ord(c) < 32 for c in dados[campo]) for campo in EDITAVEIS):
                 raise ErroUX(422, "Preencha nome, e-mail, telefone e departamento/cargo do solicitante.")
         solicitante = dados
+        if any(not dados.get(campo) for campo in EDITAVEIS):
+            # No profile file and a blank default: refuse before touching the portal (no click, no history record).
+            # A dry run keeps the portal's own Solicitante and reports what is still empty (`faltando`).
+            if enviar:
+                raise ErroUX(422, MSG_SOLICITANTE_VAZIO)
+            solicitante = {}
         with self._conectar() as portal:
             try:
                 return self._executar_no_portal(

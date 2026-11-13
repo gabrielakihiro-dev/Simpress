@@ -351,7 +351,8 @@ class MaintenanceContractTests(unittest.TestCase):
         # O resto do HTML já traz o exemplo "nome@pr.sebrae.com.br" do termo; o e-mail pelo Outlook não pode ter domínio real.
         modal_email = html.split('id="modal-email-outlook"', 1)[1].split('id="modal-confirmar-acao"', 1)[0]
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
-        self.assertNotRegex(modal_email + outlook, r"Allex|Fabio|Robinson")
+        # Nenhum destinatário "Nome Sobrenome;" no front: o texto padrão do Modelo 1 vem do servidor.
+        self.assertNotRegex(modal_email + outlook, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;")
 
         template = app_config.TEMPLATE_FILE
         with zipfile.ZipFile(template) as archive:
