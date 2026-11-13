@@ -291,6 +291,7 @@ function montarTela() {
         radio.type = "radio";
         radio.value = valor;
         radio.checked = false;
+        radio.defaultChecked = false;
         form.append(radio);
         form.radios[`${nome}-${valor}`] = radio;
       }
@@ -300,7 +301,7 @@ function montarTela() {
     form.obs.value = "";
     form.append(form.obs);
     form.reset = () => form.querySelectorAll("input, textarea").forEach((c) => {
-      if (c.type === "radio") c.checked = false;
+      if (c.type === "radio") c.checked = c.defaultChecked;
       else c.value = "";
     });
     tela.forms[termo] = form;

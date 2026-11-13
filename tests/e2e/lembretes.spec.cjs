@@ -349,7 +349,13 @@ async function abrirTermo(page, termo, opcoes) {
   await expect(page.locator(`#termos-painel-${termo}`)).toBeVisible();
 }
 
+// Termo novo abre com todos os itens em Sim; os testes partem de itens sem resposta para escolher os do texto.
+async function desmarcarItens(page, termo) {
+  await page.locator(`#termos-form-${termo} input[type="radio"]`).evaluateAll(radios => radios.forEach(r => { r.checked = false; }));
+}
+
 async function preencherEntrega(page) {
+  await desmarcarItens(page, "entrega");
   await page.locator("#termos-entrega-nome").fill("Maria Teste");
   await page.locator("#termos-entrega-unidade").fill("Curitiba");
   await page.locator("#termos-entrega-data").fill("2026-11-12");
@@ -363,6 +369,7 @@ async function preencherEntrega(page) {
 }
 
 async function preencherDevolucao(page) {
+  await desmarcarItens(page, "devolucao");
   await page.locator("#termos-devolucao-nome").fill("Maria Teste");
   await page.locator("#termos-devolucao-unidade").fill("Curitiba");
   await page.locator("#termos-devolucao-data").fill("2026-11-12");
