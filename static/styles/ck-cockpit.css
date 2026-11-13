@@ -2491,7 +2491,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 [data-cockpit-tool-panel="unidades"] .ck-tabela td:nth-child(3)::before { font-family: var(--fonte-corpo); }
 @media (min-width: 1200px) {
   [data-cockpit-tool-panel="unidades"] .ck-dividido__lista { align-self: start; }
-  [data-cockpit-tool-panel="unidades"] .ck-tabela { border-collapse: separate; border-spacing: 0; border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); overflow: hidden; }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela { border-collapse: separate; border-spacing: 0; border: 1px solid var(--cor-borda-suave); border-radius: 10px; background: var(--cor-superficie); overflow: hidden; }
   [data-cockpit-tool-panel="unidades"] .ck-tabela th { padding: 9px 14px; background: var(--cor-superficie-funda); border-bottom-color: var(--cor-borda-suave); }
   [data-cockpit-tool-panel="unidades"] .ck-tabela td { padding: 11px 14px; vertical-align: middle; }
   [data-cockpit-tool-panel="unidades"] .ck-tabela tbody tr:last-child td { border-bottom: 0; }
@@ -2500,14 +2500,16 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   [data-cockpit-tool-panel="unidades"] .ck-tabela tbody tr:focus-visible { outline-offset: -2px; }
   #cockpit-tool-panels [data-cockpit-tool-panel="unidades"] .ck-dividido__detalhe { top: 12px; max-height: calc(100dvh - var(--ck-topbar-h, 48px) - 24px); }
 }
-[data-cockpit-tool-panel="unidades"] .ck-dividido__detalhe { border: 1px solid var(--cor-borda); border-radius: 10px; }
+[data-cockpit-tool-panel="unidades"] .ck-dividido__detalhe { border: 1px solid var(--cor-borda-suave); border-radius: 10px; }
+/* No escuro --cor-borda-suave quase some sobre --cor-superficie: cartões e linhas do detalhe usam --cor-borda */
+[data-theme="dark"] [data-cockpit-tool-panel="unidades"] :is(.ck-tabela, .ck-dividido__detalhe, .ck-det__corpo .ck-par) { border-color: var(--cor-borda); }
 [data-cockpit-tool-panel="unidades"] .ck-det__cab { gap: 4px; padding: 16px 20px; }
 [data-cockpit-tool-panel="unidades"] .ck-det__titulo { font-size: var(--fs-2xl); font-weight: var(--peso-marca); overflow-wrap: anywhere; }
 
 /* Detalhe: sem a faixa cinza; pares em grade 2×2 com linhas finas e Endereço na largura toda */
 [data-cockpit-tool-panel="unidades"] .ck-det__corpo.ck-pares { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; padding: 4px 20px 8px; border: 0; border-radius: 0; background: transparent; }
 [data-cockpit-tool-panel="unidades"] .ck-det__corpo.ck-pares:empty { padding: 0; }
-[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par { gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--cor-borda); background: transparent; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par { gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--cor-borda-suave); background: transparent; }
 [data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par:nth-child(3) { grid-column: 1 / -1; }
 [data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par:nth-last-child(-n+2) { border-bottom: 0; }
 [data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par dd { font-size: var(--fs-base); }
