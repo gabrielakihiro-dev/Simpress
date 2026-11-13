@@ -1956,6 +1956,7 @@
     byId("cockpit-units-detail-badge").replaceChildren(...(selected?.is_sede ? [badge("SEDE", "success")] : []));
     byId("cockpit-units-copy-cnpj").disabled = !selected;
     byId("cockpit-units-copy-cep").disabled = !selected;
+    // A ordem dos pares (e das colunas da lista) é usada pelo CSS do painel (nth-child em ck-cockpit.css): mude os dois juntos.
     renderPares(byId("cockpit-units-detail-pares"), selected ? [
       ["Cidade", selected.cidade], ["UF", selected.uf], ["Endereço", selected.endereco], ["CEP", selected.cep], ["CNPJ", cnpjWithPencil(selected)],
     ] : []);
