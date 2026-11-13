@@ -94,3 +94,35 @@ Tela (`monthlySebraeSection`): a `Situação atual` (`GET /api/sebrae/novos`) co
 
 Prévia: `Chamados (F5), com data em <mês>: Abertos no mês N · Finalizados no mês N · Sem data de abertura ou de encerramento: N (fora da contagem)`, omitida com erro ou sem Dashboard importado.
 
+## Sub-abas (12/11/2026)
+
+Autorização do usuário de 12/11/2026: dividir o Relatório Mensal (F8) em cinco sub-abas, para a tela não virar uma rolagem longa. É só navegação: nada é gravado em sistema externo nem em dado local, e a XLSX, a prévia e o endpoint seguem iguais. O `Layout operacional (07/11/2026)` continua valendo para o conteúdo de cada bloco; muda só onde cada bloco aparece.
+
+Sub-abas (tablist `Assuntos do relatório`, abaixo da barra de mês, acima do corpo):
+
+| Aba (`id`) | Rótulo | Painel (`id`) | Conteúdo |
+|---|---|---|---|
+| `rel-aba-visao` | `Visão geral` | `rel-painel-visao` | `Precisa de atenção`, `Movimento do mês`, faixa `Chamados (F5)` com `Ver chamados →` e `Prévia para a gestão`. |
+| `rel-aba-os` | `OS e pedidos do mês` | `rel-painel-os` | Seção `OS e pedidos do mês`, com o filtro e `Carregar mais`. |
+| `rel-aba-comp` | `Pendências da comparação` | `rel-painel-comp` | Seção `Pendências da comparação`. |
+| `rel-aba-sebrae` | `Chamados (F5)` | `rel-painel-sebrae` | Seção `Chamados (F5)`: `Situação atual` e `Com data em <mês>`. |
+| `rel-aba-base` | `Base atual` | `rel-painel-base` | Seção `Base atual`, com `Não muda com o mês`. |
+
+Contadores nas abas (`rel-os-contagem`, `rel-comp-contagem`, `rel-sebrae-contagem`), com o total de linhas do mês na fonte da aba (o filtro `Todas`/`Pendentes` da OS não muda o contador):
+
+- OS: linhas de `os.linhas`; tom de alerta quando for maior que zero.
+- Pendências da comparação: linhas de `comparacao.linhas`; tom de alerta quando for maior que zero.
+- Chamados (F5): linhas da contagem do mês (`report.sebrae.linhas`); tom neutro, porque só informa.
+- `Visão geral` e `Base atual` não têm contador. Se a fonte não veio (sem Dashboard, erro, carregando), o contador fica oculto e nunca mostra o número do mês anterior. Sem nenhuma comparação, o servidor devolve lista vazia e a aba mostra `0`.
+
+Textos novos: `Visão geral` e `Ver chamados →` (botão da faixa `Chamados (F5)`). Os outros rótulos já eram textos aprovados e não mudaram. `Ver lista ↓` (OS e comparação) e `Ver chamados →` trocam para a aba certa e levam o foco ao título da seção; `Ver lista ↓` da OS abre a aba já filtrada em `Pendentes`.
+
+IDs novos: `rel-aba-*`, `rel-painel-*`, `rel-*-contagem`, `cockpit-monthly-estado` (carregando e erro; o invólucro `cockpit-monthly-details` nunca é esvaziado), `cockpit-monthly-chamados` (faixa), `cockpit-monthly-chamados-dados` e `cockpit-monthly-chamados-ver`. Os `id` dos títulos das seções (`cockpit-monthly-<chave>-title`) e os `data-rel-secao` não mudaram.
+
+Comportamento:
+
+- Abre em `Visão geral` só na primeira abertura do F8. A aba escolhida fica ao mudar o mês, ao recarregar em silêncio (importar OS ou nova comparação com o F8 aberto) e ao fechar e reabrir o F8 na mesma carga da página. O filtro da OS fica só na recarga silenciosa; ao mudar o mês, volta a `Todas`. Carregando e erro aparecem em `cockpit-monthly-estado`, com as abas sempre à vista.
+- Teclado, mesmo molde da F6: `role=tablist` / `tab` / `tabpanel`, `aria-selected`, `tabindex` rotativo (só a aba ativa entra na ordem do Tab), setas circulares, `Home` e `End`; focar uma aba pelas setas a ativa.
+- Telas pequenas: a tablist rola sozinha na horizontal (a página nunca rola); em ponteiro grosso cada aba tem no mínimo 44px de altura.
+
+Verificação: `tests/e2e/monthly-report.spec.cjs` (abas, contadores, clique, teclado, `Ver lista ↓`, `Ver chamados →`, mudança de mês, 320px e axe nas cinco abas nos dois temas) e `tests/frontend/test_cockpit_tool_panels.cjs`.

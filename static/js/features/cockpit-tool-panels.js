@@ -1196,12 +1196,15 @@
     }));
   }
 
-  // ---- Relatório mensal (F8): layout operacional (07/11/2026) ----
-  // Ordem: Precisa de atenção → Movimento do mês → OS e pedidos → Pendências da comparação → Chamados (F5: situação atual
-  // e contagem do mês, report.sebrae) → Base atual → Prévia. Cada número aparece uma vez; os links só navegam (Home, OS, Resumo, Chamados), nada é gravado.
+  // ---- Relatório mensal (F8): layout operacional (07/11/2026), em cinco sub-abas ----
+  // Visão geral (Precisa de atenção → Movimento do mês → faixa Chamados (F5) → Prévia), OS e pedidos do mês, Pendências da comparação,
+  // Chamados (F5: situação atual e contagem do mês, report.sebrae) e Base atual. Cada número aparece uma vez; os links só navegam
+  // (Home, OS, Resumo, Chamados), nada é gravado. A estrutura das abas e dos painéis é estática no partial; o JS só preenche e alterna.
   const MONTHLY_PAGE = 25;
   const MONTHLY_TOP_UNITS = 8;
-  const monthlyView = { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false };
+  const REL_ABAS = ["visao", "os", "comp", "sebrae", "base"];
+  // `aba` só nasce aqui: o reset de loadMonthlyReport não a toca, então a aba escolhida sobrevive à troca de mês e à recarga quieta.
+  const monthlyView = { aba: "visao", report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false };
   const monthlySituationTone = { "Aberta no mês": "info", "Concluída no mês": "success", "Pendente no fim do mês": "warning" };
   const monthlyFilters = [["todas", "Todas", ""], ["abertas", "Abertas", "Aberta no mês"], ["concluidas", "Concluídas", "Concluída no mês"], ["pendentes", "Pendentes", "Pendente no fim do mês"]];
   const monthlySectionTone = { "Sem correspondência — no endpoint": "error", "Sem correspondência — na Simpress": "warning" };
@@ -1252,10 +1255,34 @@
 
   function monthlyLink(text, label, onClick) { return monthlyButton(text, onClick, { className: "ck-rel__link ck-mono", label }); }
 
-  function monthlyJump(headingId) {
+  // Sub-abas do F8 (Resumo F3 e OS F6 seguem o mesmo molde): estado em monthlyView.aba, ARIA e painel visível numa só passagem.
+  function aplicarAbaRelatorio() {
+    REL_ABAS.forEach(nome => {
+      const selecionada = nome === monthlyView.aba;
+      const aba = byId(`rel-aba-${nome}`);
+      if (aba) {
+        aba.setAttribute("aria-selected", String(selecionada));
+        aba.tabIndex = selecionada ? 0 : -1;
+      }
+      const painel = byId(`rel-painel-${nome}`);
+      if (painel) painel.hidden = !selecionada;
+    });
+  }
+
+  /** Seleciona a sub-aba (clique, setas, Home, End, "Ver lista"); `focar` leva o foco ao botão da aba. */
+  function selecionarAbaRelatorio(nome, { focar = false } = {}) {
+    if (!REL_ABAS.includes(nome)) return;
+    monthlyView.aba = nome;
+    aplicarAbaRelatorio();
+    if (focar) byId(`rel-aba-${nome}`)?.focus();
+  }
+
+  // `aba`: troca antes de focar, porque foco em painel hidden não pega.
+  function monthlyJump(headingId, aba = "") {
+    if (aba) selecionarAbaRelatorio(aba);
     const heading = byId(headingId);
     if (!heading) return;
-    heading.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    heading.scrollIntoView?.({ block: "start", behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth" });
     heading.focus({ preventScroll: true });
   }
 
@@ -1323,7 +1350,7 @@
         monthlyView.filtro = "pendentes";
         monthlyView.limiteOs = MONTHLY_PAGE;
         refreshMonthlySection("os");
-        monthlyJump("cockpit-monthly-os-title");
+        monthlyJump("cockpit-monthly-os-title", "os");
       }, { className: "ck-rel__link", label: "Ver lista de OS e pedidos pendentes", arrow: true }),
     );
     const counts = element("dl", "ck-rel__contagens");
@@ -1336,7 +1363,7 @@
     inventory.append(
       counts,
       element("p", "ck-rel__nota", `${comparisonUsedText(comparison)}.`),
-      monthlyButton("Ver lista", () => monthlyJump("cockpit-monthly-comp-title"), { className: "ck-rel__link", label: "Ver lista de pendências da comparação", arrow: true }),
+      monthlyButton("Ver lista", () => monthlyJump("cockpit-monthly-comp-title", "comp"), { className: "ck-rel__link", label: "Ver lista de pendências da comparação", arrow: true }),
     );
     const cards = [pending, inventory];
     if (insufficient.length) cards.push(monthlyOutsideCard(insufficient));
@@ -1406,8 +1433,13 @@
     return section;
   }
 
+  // Linhas de uma fonte do relatório; a seção e o contador da aba leem pela mesma regra, então o número da aba é o da lista.
+  function monthlyRows(source) {
+    return Array.isArray(source?.linhas) ? source.linhas : [];
+  }
+
   function monthlyOsSection(tickets) {
-    const all = Array.isArray(tickets.linhas) ? tickets.linhas : [];
+    const all = monthlyRows(tickets);
     const filter = monthlyFilters.find(([key]) => key === monthlyView.filtro) || monthlyFilters[0];
     const rows = filter[2] ? all.filter(row => (row.situacao || []).includes(filter[2])) : all;
     const group = element("div", "ck-rel__filtros");
@@ -1452,7 +1484,7 @@
   }
 
   function monthlyComparisonSection(comparison) {
-    const rows = Array.isArray(comparison.linhas) ? comparison.linhas : [];
+    const rows = monthlyRows(comparison);
     const eventId = String(comparison.evento_id || "");
     const actions = eventId ? [monthlyButton("Abrir no Resumo (F3)", () => mostrarResultadoNaAbaComparacao({ evento_id: eventId }))] : [];
     const section = monthlySection("comp", "Pendências da comparação", actions);
@@ -1557,7 +1589,7 @@
       noDate,
       element("p", "ck-rel__nota", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site."),
     );
-    const rows = Array.isArray(counts.linhas) ? counts.linhas : [];
+    const rows = monthlyRows(counts);
     if (!rows.length) {
       section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return section;
@@ -1677,17 +1709,65 @@
     target?.focus();
   }
 
+  // Total de cada aba com contador, igual ao da lista dela; null (contador oculto) quando a fonte não veio.
+  function monthlyTabTotal(report, nome) {
+    const source = nome === "os" ? report?.os : nome === "comp" ? report?.comparacao : sebraeMonthCounts(report);
+    return Array.isArray(source?.linhas) ? source.linhas.length : null;
+  }
+
+  // OS e Comparação pedem atenção quando há linhas (tom de alerta); Chamados só informa (neutro).
+  function renderMonthlyTabCounts(report) {
+    ["os", "comp", "sebrae"].forEach(nome => {
+      const node = byId(`rel-${nome}-contagem`);
+      if (!node) return;
+      const total = monthlyTabTotal(report, nome);
+      node.hidden = total === null;
+      node.textContent = total === null ? "" : displayCount(total);
+      if (nome !== "sebrae" && total > 0) node.dataset.status = monthlyBadgeStatus.warning;
+      else delete node.dataset.status;
+    });
+  }
+
+  // Faixa "Chamados (F5)" da Visão geral: só os números que existem (sem Dashboard ou com erro, nada de zeros inventados).
+  function renderMonthlyChamados(report) {
+    const items = [];
+    const month = sebraeMonthCounts(report);
+    if (month) items.push(["Abertos no mês", month.abertos], ["Finalizados no mês", month.finalizados]);
+    const data = monthlyView.sebrae;
+    if (!monthlyView.sebraeErro && (data?.importado || data?.novos)) {
+      const lists = sebraeOpenLists(data);
+      items.push(["Chamados novos", lists.novos.length], ["Antigos em aberto", lists.antigos.length]);
+    }
+    const dados = byId("cockpit-monthly-chamados-dados");
+    dados.replaceChildren(...(items.length
+      ? items.map(([label, value]) => {
+        const item = element("span", "ck-rel__faixa-item", `${label} `);
+        item.append(element("b", "ck-num", displayCount(value)));
+        return item;
+      })
+      : [element("span", "ck-mudo", monthlyView.sebraeErro || "Nenhum Dashboard importado.")]));
+    byId("cockpit-monthly-chamados").hidden = false;
+  }
+
+  // Esvazia os painéis (carregando ou troca de mês) sem tocar no invólucro #cockpit-monthly-details nem nos painéis em si.
+  function clearMonthlyPanels() {
+    byId("cockpit-monthly-movimento").replaceChildren();
+    byId("cockpit-monthly-chamados-dados").replaceChildren();
+    byId("cockpit-monthly-chamados").hidden = true;
+    Object.keys(monthlySectionBuilders).forEach(key => byId(`rel-painel-${key}`).replaceChildren());
+    renderMonthlyTabCounts(null);
+  }
+
   function renderMonthly(report) {
     monthlyView.report = report;
     renderMonthlyAttention(report);
     byId("cockpit-monthly-attention").hidden = false;
-    byId("cockpit-monthly-details").replaceChildren(
-      monthlyMovementSection(report.os || {}),
-      monthlyOsSection(report.os || {}),
-      monthlyComparisonSection(report.comparacao || {}),
-      monthlySebraeSection(report),
-      monthlyBaseSection(report.inventario || {}),
-    );
+    byId("cockpit-monthly-estado").replaceChildren();
+    byId("cockpit-monthly-movimento").replaceChildren(monthlyMovementSection(report.os || {}));
+    renderMonthlyChamados(report);
+    Object.entries(monthlySectionBuilders).forEach(([key, build]) => byId(`rel-painel-${key}`).replaceChildren(build(report)));
+    renderMonthlyTabCounts(report);
+    aplicarAbaRelatorio();
     byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report, monthlyView.sebraeErro ? null : monthlyView.sebrae);
     const period = monthlyPeriodLabel(report);
     const badgeNode = byId("cockpit-monthly-period");
@@ -1700,11 +1780,13 @@
   // `quiet`: recarga depois de importar OS ou de nova comparação; mantém filtros e páginas e não pisca "Carregando".
   async function loadMonthlyReport(month, { quiet = false } = {}) {
     const current = ++monthlyRequest;
-    const target = byId("cockpit-monthly-details");
+    // Carregando e erro vão para #cockpit-monthly-estado: o invólucro dos painéis nunca é esvaziado.
+    const target = byId("cockpit-monthly-estado");
     if (!quiet) {
       Object.assign(monthlyView, { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false });
       byId("cockpit-monthly-preview").textContent = "";
       byId("cockpit-monthly-kpis").replaceChildren();
+      clearMonthlyPanels();
       byId("cockpit-monthly-attention").hidden = true;
       byId("cockpit-monthly-period").hidden = true;
       byId("cockpit-monthly-copy").disabled = true;
@@ -2027,6 +2109,18 @@
       selectedAliasPeriod = "todos";
       renderAliases();
     });
+    // Sub-abas do F8: setas, Home e End seguem o molde da F6 (circular, ativa ao focar).
+    REL_ABAS.forEach((nome, indice) => {
+      const aba = byId(`rel-aba-${nome}`);
+      aba?.addEventListener("click", () => selecionarAbaRelatorio(nome));
+      aba?.addEventListener("keydown", evento => {
+        const destino = { ArrowRight: indice + 1, ArrowLeft: indice - 1, Home: 0, End: REL_ABAS.length - 1 }[evento.key];
+        if (destino === undefined) return;
+        evento.preventDefault();
+        selecionarAbaRelatorio(REL_ABAS[(destino + REL_ABAS.length) % REL_ABAS.length], { focar: true });
+      });
+    });
+    byId("cockpit-monthly-chamados-ver")?.addEventListener("click", () => monthlyJump("cockpit-monthly-sebrae-title", "sebrae"));
     byId("cockpit-monthly-month").addEventListener("change", event => loadMonthlyReport(event.currentTarget.value));
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
