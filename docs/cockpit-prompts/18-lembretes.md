@@ -34,9 +34,24 @@ Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj
   - Saída: `Saída: <Nome> (<Unidade>) devolveu <Modelo>, série <Série> em <dd/mm/aaaa>. Itens: <itens marcados Sim>. Obs.: <Observações>`
 - Nada é cortado. Acima de 2000 caracteres (em qualquer campo de descrição), o botão de confirmar fica desabilitado e aparece `A descrição pode ter até 2000 caracteres.` (texto proposto em 11/11/2026, aguardando aprovação).
 
+## Lembrete do termo: dados salvos, PDF e preenchimento (12/11/2026)
+
+Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua igual, mas guarda os dados do termo como foram salvos e os mostra com a mesma formatação; nele é possível gerar o PDF ou preencher o termo de novo para editar.
+
+- Ao clicar em `Criar lembrete` no termo, os dados do termo são copiados no momento em que o diálogo abre (o que se digitar no termo depois não entra). O lembrete grava, além da descrição, o campo `termo`: os campos do formulário (data crua `aaaa-mm-dd`), a resposta de cada um dos 11 itens (`sim`, `nao` ou vazio) e as observações, exatamente como digitados.
+- No item da lista, abaixo da descrição, aparece o bloco recolhível `Dados do termo`, com os mesmos títulos e rótulos do termo: `Dados do colaborador`, `Identificação do equipamento` (só entrega: anterior e entregue), `Equipamentos e acessórios entregues`/`devolvidos` (cada item com `Sim`, `Não` ou `—`) e `Observações`. Campo vazio aparece como `—`. Abrir ou fechar o bloco não muda nada gravado.
+- Duas ações no bloco:
+  - `Gerar PDF`: gera o mesmo PDF do termo (mesma folha, mesmo nome `<Série> - <Nome>`, assinatura do técnico) a partir dos dados salvos, sem ler nem mudar o formulário do termo. Erro aparece como aviso (toast).
+  - `Preencher no Termo`: abre a sub-aba do termo de origem com os campos preenchidos pelos dados salvos, para editar. Se o termo já tiver algo digitado, pede confirmação antes: título `Substituir o termo?`, mensagem `Os campos do termo serão trocados pelos dados do lembrete.`, botões `Substituir` e `Cancelar`. Depois de preencher aparece `Termo preenchido com os dados do lembrete.` no termo.
+- Depois de editar o termo preenchido, `Criar lembrete` cria um lembrete novo, como antes; o lembrete original não muda (decisão de 12/11/2026, sem atualização do termo gravado).
+- Lembretes antigos, com origem de termo mas sem dados salvos, e lembretes manuais não mostram o bloco nem as ações.
+- Editar a descrição ou concluir o lembrete não altera os dados do termo gravados.
+- Textos novos (`Dados do termo`, `Preencher no Termo`, `Substituir o termo?` e a mensagem, `Substituir`, `Termo preenchido com os dados do lembrete.`): propostos em 12/11/2026, aguardando aprovação. `Gerar PDF` é o mesmo texto do termo.
+
 ## Dados e privacidade (LGPD)
 
 - Grava só `data/state/lembretes.json` (`{"version": 1, "lembretes": [...]}`), com `lock_paths` e `atomic_write_json`.
+- Desde 12/11/2026, o lembrete criado a partir de um termo grava também `termo` (`{"campos": {...}, "itens": [11 respostas], "obs": "..."}`): nome do colaborador, unidade, data, modelos, séries, itens e observações, como digitados. Não há CPF no termo. Nada disso vai para log, Assistente ou sistema externo; o arquivo continua só local.
 - O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com a classe do erro.
 - Não há escrita em sistema externo.
 - Bloco 6 (12/11/2026): o `Gerar PDF` dos termos mostra a assinatura do técnico (`GET /api/assinatura-tecnico`, lê `data/state/assinatura_tecnico.svg`, só leitura; nada do termo é enviado). Detalhe em `17-termos.md`, seção "Assinatura do técnico".
