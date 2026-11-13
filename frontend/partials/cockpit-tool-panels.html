@@ -326,12 +326,12 @@
           <div class="termos__painel lembretes__painel" role="tabpanel" id="termos-painel-lembretes" aria-labelledby="termos-aba-lembretes">
             <div class="lembretes__caixa">
               <form class="lembretes__novo" id="lembretes-form-novo" autocomplete="off" novalidate data-on-submit="lembretesAdicionar">
-                <label class="sr-only" for="lembretes-novo-descricao">Descrição</label>
+                <label class="lembretes__rotulo" for="lembretes-novo-descricao">Descrição</label>
                 <input type="text" id="lembretes-novo-descricao" class="ck-entrada lembretes__campo" placeholder="O que você precisa fazer?" autocomplete="off" aria-describedby="lembretes-novo-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'>
-                <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled>Adicionar</button>
+                <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled><svg class="ck-ico" aria-hidden="true"><use href="#i-plus"></use></svg>Adicionar</button>
                 <p class="lembretes__erro" id="lembretes-novo-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
               </form>
-              <p class="lembretes__vazio" id="lembretes-vazio" hidden>Nenhum lembrete. Anote o que precisa fazer.</p>
+              <p class="lembretes__vazio" id="lembretes-vazio" hidden><span class="lembretes__vazio-ico" aria-hidden="true"><svg class="ck-ico"><use href="#i-check"></use></svg></span><span>Nenhum lembrete. Anote o que precisa fazer.</span></p>
               <ul class="lembretes__lista" id="lembretes-lista" aria-label="Lembretes pendentes"></ul>
               <div class="lembretes__concluidos" id="lembretes-concluidos" hidden>
                 <button type="button" class="lembretes__recolher" id="lembretes-concluidos-botao" aria-expanded="false" aria-controls="lembretes-concluidos-lista" data-on-click="lembretesAlternarConcluidos"><svg class="ck-ico lembretes__seta" aria-hidden="true"><use href="#i-chevron-right"></use></svg><span id="lembretes-concluidos-rotulo">Concluídos (0)</span></button>
