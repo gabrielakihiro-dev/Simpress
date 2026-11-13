@@ -168,6 +168,9 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
     @router.put("/api/config/representantes-regionais/{cidade}")
     def save_regional_representative_route(cidade: str, payload: RepresentanteRegionalPayload) -> dict[str, Any]:
         path, cidade = regional_representatives_path(), known_city(cidade)
+        # With a broken defaults file every field would differ from the blank code defaults and be saved as an edit.
+        if effective_regional_representative_defaults(defaults_path())[1]:
+            raise HTTPException(409, "O arquivo local de padrões dos representantes está inválido. Corrija-o antes de salvar.")
         try:
             save_regional_representative(path, cidade, payload.model_dump(), defaults_path())
         except (OSError, FileTransactionError, FileBusyError) as error:

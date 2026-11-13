@@ -174,6 +174,7 @@
   const pendentes = {};
   let cidadeEdicaoRepresentante = "";
   let salvandoRepresentante = false;
+  let avisouPadroesInvalidos = false;
 
   function representantesRegionais() {
     return padroesRepresentantes.map((padrao) => {
@@ -225,6 +226,10 @@
         padroesRepresentantes = resultado.padroes.map((padrao) => Object.freeze({ ...padrao }));
       } else if (primeiraCarga) throw new Error("A resposta não trouxe os padrões dos representantes regionais.");
       aplicarAlteracoesRepresentantes(resultado);
+      if (resultado?.padroes_arquivo_invalido === true && !avisouPadroesInvalidos) {
+        avisouPadroesInvalidos = true;
+        app.showToast("O arquivo local de padrões dos representantes está inválido: nomes, e-mails e telefones ficaram em branco e não é possível salvar edições até corrigi-lo.", "warning");
+      }
       if (primeiraCarga) {
         Object.entries(pendentes).forEach(([tipo, { cidade, forcar }]) => app.preencherRepresentanteRegional(tipo, cidade, forcar));
       } else if (refazerFormularios === true) {

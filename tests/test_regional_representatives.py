@@ -127,6 +127,15 @@ class RegionalRepresentativesTests(unittest.TestCase):
             self.assertTrue(all(not item["nome"] for item in body["padroes"]))
             self.assertFalse(body["arquivo_invalido"])  # the overrides file is a separate flag
 
+    def test_put_is_refused_while_the_local_defaults_file_is_invalid(self):
+        self.write_local_defaults("{não é json")
+        body = {"nome": "Pessoa Exemplo", "email": "", "telefone": "", "horario": "08:00:00 às 18:00:00",
+                "almoco": "Escritório não fecha", "pausaDuracao": ""}
+        with self.assertLogs("domains.local_setup", level="WARNING"):
+            response = self.client.put(f"{URL}/Londrina", json=body)
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(self.path.exists())  # no fake diff written
+
     def test_without_a_defaults_path_the_code_defaults_alone_are_used(self):
         # None never reads a file: the result is the same on a machine that has the real local file.
         efetivos, invalido = effective_regional_representative_defaults()
