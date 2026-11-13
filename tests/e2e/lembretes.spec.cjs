@@ -20,7 +20,7 @@ const campoNovo = page => page.getByPlaceholder("O que você precisa fazer?");
 const adicionar = page => page.getByRole("button", { name: "Adicionar", exact: true });
 // getByLabel("Editar descrição") também casaria os lápis do Sebrae: o campo é achado pelo papel e pelo nome.
 const campoEdicao = page => page.getByRole("textbox", { name: "Editar descrição" });
-const pendentes = page => page.locator("#lembretes-lista > li");
+const pendentes = page => page.locator("#lembretes-lista li.lembretes__item");
 const concluidos = page => page.locator("#lembretes-concluidos-lista > li");
 const apiLembretes = async page => (await (await page.request.get("/api/lembretes")).json()).lembretes;
 
@@ -33,7 +33,7 @@ async function adicionarPelaTela(page, texto) {
 test("abre em Lembretes com as pílulas na ordem e o estado vazio", async ({ page }) => {
   await abrirLembretes(page);
   await expect(page.locator("#cockpit-tool-title")).toHaveText("Lembretes");
-  const abas = page.locator('[data-cockpit-tool-panel="lembretes"] [role="tablist"] [role="tab"]');
+  const abas = page.locator('[data-cockpit-tool-panel="lembretes"] .termos__abas [role="tab"]');
   await expect(abas).toHaveText([/^Termo Entrega$/, /^Termo Devolução$/, /^Lembretes 0 pendentes$/]);
   await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#termos-painel-entrega")).toBeHidden();
@@ -291,7 +291,7 @@ for (const largura of [320, 2560]) {
 test("tema escuro usa os tokens do Cockpit", async ({ page }) => {
   await abrirLembretes(page, { itens: 1 });
   const cores = () => page.evaluate(() => {
-    const item = document.querySelector("#lembretes-lista > li");
+    const item = document.querySelector("#lembretes-lista li.lembretes__item");
     return {
       fundo: getComputedStyle(item).backgroundColor,
       texto: getComputedStyle(item.querySelector(".lembretes__texto")).color,
@@ -318,6 +318,7 @@ test("data de cada item aparece como Criado em / Alterado em no formato dd/mm/aa
 
 test("editar e excluir mostram o ícone da sprite (símbolo existe e o desenho tem tamanho)", async ({ page }) => {
   await abrirLembretes(page, { itens: 1 });
+  await expect(pendentes(page)).toHaveCount(1);
   for (const botao of [".lembretes__editar", ".lembretes__excluir"]) {
     const icone = await page.evaluate((seletor) => {
       const svg = document.querySelector(`#lembretes-lista ${seletor} svg`);
@@ -777,6 +778,111 @@ test("editar um item e concluir outro não apaga o texto ainda não salvo", asyn
   await expect(concluidos(page)).toHaveCount(1);
   await expect(campoEdicao(page)).toHaveValue("Item A revisado");
   expect((await apiLembretes(page)).find(l => l.descricao === "Item A")).toBeTruthy();
+});
+
+// Data agendada: os dias vêm de America/Sao_Paulo, o mesmo fuso do front e do backend, sem page.clock.
+const FORMATO_DIA = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+const diaSaoPaulo = (deslocamento = 0) => {
+  const [ano, mes, dia] = FORMATO_DIA.format(new Date()).split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia + deslocamento)).toISOString().slice(0, 10);
+};
+const grupoDoDia = (page, chave) => page.locator(`#lembretes-lista section[data-grupo="${chave}"]`);
+
+// Zera a fixture, cria os itens pela API (aceita data no passado) e recarrega o painel.
+async function semearLembretes(page, itens) {
+  expect((await page.request.get("/__fixture_lembretes?itens=0")).ok()).toBeTruthy();
+  for (const item of itens) expect((await page.request.post("/api/lembretes", { data: item })).ok()).toBeTruthy();
+  await abrirLembretes(page, { reiniciar: false });
+}
+
+// Em breve mostra a semana de domingo a sábado: num sábado, amanhã (domingo) está na semana seguinte.
+async function abrirEmBreve(page, dia) {
+  await page.locator("#lembretes-aba-embreve").click();
+  await expect(page.locator("#lembretes-aba-embreve")).toHaveAttribute("aria-selected", "true");
+  if (new Date(`${dia}T00:00:00Z`).getUTCDay() === 0) await page.locator("#lembretes-semana-proxima").click();
+}
+
+test("data agendada: criar para amanhã sai da vista Hoje, avisa por toast e aparece em Em breve", async ({ page }) => {
+  const amanha = diaSaoPaulo(1);
+  await abrirLembretes(page);
+  await page.locator("#lembretes-data-botao").click();
+  await page.locator("#lembretes-atalho-amanha").click();
+  await expect(page.locator("#lembretes-data-botao")).toHaveText("Amanhã");
+  await campoNovo(page).fill("Reunião de amanhã");
+  await campoNovo(page).press("Enter");
+
+  await expect(page.locator("#toast-container")).toContainText("Lembrete agendado para Amanhã.");
+  await expect(pendentes(page).filter({ hasText: "Reunião de amanhã" })).toHaveCount(0);
+  await expect(page.locator("#lembretes-hoje-n")).toHaveText("0");
+
+  await abrirEmBreve(page, amanha);
+  const grupo = grupoDoDia(page, amanha);
+  await expect(grupo.locator(".lembretes__grupo-titulo")).toContainText("Amanhã");
+  const item = grupo.locator("li.lembretes__item").filter({ hasText: "Reunião de amanhã" });
+  await expect(item).toHaveCount(1);
+  await expect(item.locator("span.lembretes__agenda")).toHaveText("Amanhã");
+
+  const lembretes = await apiLembretes(page);
+  expect(lembretes).toHaveLength(1);
+  expect(lembretes[0]).toMatchObject({ descricao: "Reunião de amanhã", data_agendada: amanha, hora_agendada: null });
+});
+
+test("data agendada: item atrasado fica em Atrasada e Reagendar para hoje o leva ao grupo de hoje", async ({ page }) => {
+  const [ontem, hoje] = [diaSaoPaulo(-1), diaSaoPaulo(0)];
+  await semearLembretes(page, [{ descricao: "Enviar relatório", data_agendada: ontem }]);
+
+  const atrasada = grupoDoDia(page, "atrasada");
+  await expect(atrasada).toBeVisible();
+  await expect(atrasada.locator("li.lembretes__item").filter({ hasText: "Enviar relatório" })).toHaveCount(1);
+  await expect(atrasada.locator(".lembretes__agenda--atrasada")).toHaveCount(1);
+  await expect(page.locator("#lembretes-hoje-n")).toHaveText("1");
+
+  await page.getByRole("button", { name: "Reagendar para hoje", exact: true }).click();
+  await expect(grupoDoDia(page, "atrasada")).toHaveCount(0);
+  const hojeGrupo = grupoDoDia(page, hoje);
+  await expect(hojeGrupo.locator(".lembretes__grupo-titulo")).toContainText("Hoje");
+  const item = hojeGrupo.locator("li.lembretes__item").filter({ hasText: "Enviar relatório" });
+  await expect(item).toHaveCount(1);
+  await expect(item.locator("span.lembretes__agenda")).toHaveText("Hoje");
+  await expect(item.locator(".lembretes__agenda--atrasada")).toHaveCount(0);
+  expect(await apiLembretes(page)).toMatchObject([{ descricao: "Enviar relatório", data_agendada: hoje }]);
+});
+
+test("data agendada: Remover data na edição limpa data e hora e move o item para Sem data", async ({ page }) => {
+  const amanha = diaSaoPaulo(1);
+  await semearLembretes(page, [{ descricao: "Ligar para o cliente", data_agendada: amanha, hora_agendada: "09:00" }]);
+
+  await abrirEmBreve(page, amanha);
+  const item = grupoDoDia(page, amanha).locator("li.lembretes__item").filter({ hasText: "Ligar para o cliente" });
+  await expect(item.locator("span.lembretes__agenda")).toHaveText("Amanhã · 09:00");
+  await item.getByRole("button", { name: "Editar lembrete" }).click();
+  await expect(page.locator("#lembretes-edicao-data")).toHaveValue(amanha);
+  await expect(page.locator("#lembretes-edicao-hora")).toHaveValue("09:00");
+  // Em edição o texto vira valor do campo: o item passa a ser achado pela classe, não pelo texto.
+  await page.locator("li.lembretes__item--editando").getByRole("button", { name: "Remover data", exact: true }).click();
+  await expect(page.locator("#lembretes-edicao-data")).toHaveValue("");
+  await expect(page.locator("#lembretes-edicao-hora")).toBeDisabled();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+
+  const semData = grupoDoDia(page, "sem-data");
+  await expect(semData.locator("li.lembretes__item").filter({ hasText: "Ligar para o cliente" })).toHaveCount(1);
+  await expect(semData.locator("span.lembretes__agenda")).toHaveCount(0);
+  await expect(grupoDoDia(page, amanha).locator("li.lembretes__item")).toHaveCount(0);
+  expect(await apiLembretes(page)).toMatchObject([{ descricao: "Ligar para o cliente", data_agendada: null, hora_agendada: null }]);
+});
+
+test("data agendada: a pílula Hoje conta atrasados e de hoje, e o contador de pendentes mantém o total", async ({ page }) => {
+  await semearLembretes(page, [
+    { descricao: "De ontem", data_agendada: diaSaoPaulo(-1) },
+    { descricao: "De hoje", data_agendada: diaSaoPaulo(0) },
+    { descricao: "De amanhã", data_agendada: diaSaoPaulo(1) },
+    { descricao: "Sem data" },
+  ]);
+  await expect(page.locator("#lembretes-hoje-n")).toHaveText("2");
+  await expect(page.locator("#lembretes-pendentes")).toHaveText("4");
+  // A vista Hoje mostra Atrasada, hoje e Sem data: só o de amanhã fica de fora.
+  await expect(pendentes(page)).toHaveCount(3);
+  await expect(pendentes(page).filter({ hasText: "De amanhã" })).toHaveCount(0);
 });
 
 // ----- Chamado e OS no texto: o número vira link e abre a janela Chamado × OS (#modal-chamado-os), só leitura -----
