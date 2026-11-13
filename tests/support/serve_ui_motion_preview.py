@@ -1031,6 +1031,9 @@ class Handler(BaseHTTPRequestHandler):
             lembretes_proxy(self, "GET", self.path)
         elif path == "/api/assinatura-tecnico":
             self.send(FIXTURE_ASSINATURA_SVG, content_type="image/svg+xml")
+        elif path == "/api/endpoint/powershell/codigos":
+            # The Home PowerShell form is always visible and loads the ready-made codes on the first selection.
+            self.send({"codigos": [{"id": "demo", "titulo": "Listar serviços", "modo": "sistema", "comando": "Get-Service"}]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
