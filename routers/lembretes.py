@@ -20,6 +20,8 @@ class NovoLembretePayload(BaseModel):
     origem: Optional[str] = None
     data_agendada: Optional[str] = None
     hora_agendada: Optional[str] = None
+    # Cópia dos dados do termo; formato validado pelo domínio (termo_invalido).
+    termo: Optional[Any] = None
 
 
 class AtualizarLembretePayload(BaseModel):
@@ -58,9 +60,9 @@ def create_lembretes_router(arquivo: Path) -> APIRouter:
 
     @router.post("", status_code=201)
     def criar(payload: NovoLembretePayload) -> Any:
-        return executar(
-            lambda: lembretes.criar(payload.descricao, payload.origem, payload.data_agendada, payload.hora_agendada),
-        )
+        return executar(lambda: lembretes.criar(
+            payload.descricao, payload.origem, payload.termo, payload.data_agendada, payload.hora_agendada,
+        ))
 
     # Rota fixa antes de `/{lembrete_id}`, para nunca ser lida como id.
     @router.post("/reagendar-atrasados")
