@@ -46,6 +46,8 @@ Folha impressa no mesmo padrão do Termo Entrega (pedido do usuário de 10/11/20
 
 Sim e Não são um par de botões de rádio por item (só um pode ficar marcado; item não respondido sai com as duas caixas vazias na folha).
 
+Padrão `Sim` (pedido do usuário de 12/11/2026): em todo termo novo, Entrega e Devolução, os 11 itens abrem com `Sim` marcado (atributo `checked` no partial `frontend/partials/cockpit-tool-panels.html`); o usuário troca para `Não` o que quiser, e a folha impressa traz o que estiver marcado. `Limpar` (`form.reset()`) volta a todos em `Sim`. Quando o termo é preenchido a partir de dados salvos (por exemplo, um lembrete), os valores gravados prevalecem, inclusive `Não`.
+
 ### Preenchimento pela Home (pedido do usuário de 10/11/2026)
 
 Cada equipamento exibido na Home (busca por `#input-serial` ou clique na lista) chama `app.termosPreencherDoEquipamento(eq)` dentro de `exibirEquipamento` (`static/js/features/equipment-search.js`). A função preenche os dois termos com os dados já carregados na página, sem rota nova nem gravação:
