@@ -603,6 +603,7 @@ test("link de chamado com OS no cartão do F5: abre o cartão do chamado e a OS 
   await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1378"));
   await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1378");
   await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
+  await expect(ladoOs(page)).not.toContainText("Carregando…");
   await expect(ladosVisiveis(page)).toHaveCount(2);
   await expect(page.locator("#chamado-os-janela-f6")).toBeVisible();
   if (testInfo.project.name === "desktop") {
@@ -629,7 +630,7 @@ test("link de chamado sem OS no cartão, mas com vínculo salvo: mostra a OS do 
   await clicarEEsperarJanela(page, linkChamado(page, "UTIC-2026-1336"));
   await expect(cartaoDoChamado(page)).toContainText("UTIC-2026-1336");
   await expect(linhaDaOs(page)).toContainText(OS_RELATORIO);
-  await expect(ladoOs(page)).not.toContainText("Nenhuma OS vinculada");
+  await expect(ladoOs(page)).not.toContainText(/Nenhuma OS vinculada|Carregando…/);
   await expect(ladosVisiveis(page)).toHaveCount(2);
   await expect(page.locator("#chamado-os-janela-f6")).toBeVisible();
 });
