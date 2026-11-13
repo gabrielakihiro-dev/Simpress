@@ -343,6 +343,21 @@ class EstadoTest(unittest.TestCase):
         self.assertFalse(fin.ja_finalizado(self.dir, "UTIC-2026-0002"))
         self.assertFalse(fin.ja_finalizado(self.dir, "UTIC-2026-0003"))
 
+    def test_finalizado_por_outro_tecnico_conta_como_finalizado_com_o_r_do_usuario(self):
+        fin.registrar_finalizacao(self.dir, UTIC, fin.STATUS_OUTRO_TECNICO, "12/11/2026 09:30")
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {UTIC: "12/11/2026 09:30"})
+        self.assertTrue(fin.ja_finalizado(self.dir, UTIC))
+
+    def test_finalizados_no_dashboard_trazem_o_status_e_incluem_o_finalizado_por_outro_tecnico(self):
+        a, b, c = UTIC, "UTIC-2026-0002", "UTIC-2026-0003"
+        fin.registrar_finalizacao(self.dir, a, fin.STATUS_OK, "30/10/2026 14:05")
+        fin.registrar_finalizacao(self.dir, b, fin.STATUS_OUTRO_TECNICO, "12/11/2026 09:30")
+        fin.registrar_finalizacao(self.dir, c, fin.STATUS_NAO_ENCONTRADO)
+        por_numero = {x["numero"]: x for x in fin.finalizados_no_dashboard(self.dir)}
+        self.assertEqual(sorted(por_numero), [a, b])
+        self.assertEqual((por_numero[a]["status"], por_numero[b]["status"]), ("ok", "finalizado_outro_tecnico"))
+        self.assertEqual(por_numero[b]["encerrado_em"], "12/11/2026 09:30")
+
     def test_finalizados_no_dashboard_listam_so_o_ok_do_softexpert_com_a_ficha(self):
         a, b, c = UTIC, "UTIC-2026-0002", "UTIC-2026-0003"
         for numero in (a, b, c):
@@ -405,10 +420,26 @@ class JobTest(unittest.TestCase):
         job = fin.consumir_job(self.dir)
         self.assertEqual(job, {
             "acao": fin.ACAO_FINALIZAR, "numeros": [UTIC], "confirmar_final": False,
-            "pulados": [{"numero": "linha:2", "motivo": "sem_numero"}],
+            "pulados": [{"numero": "linha:2", "motivo": "sem_numero"}], "encerramentos_manuais": {},
         })
         self.assertIsNone(fin.consumir_job(self.dir))
         self.assertFalse(fin.job_pendente(self.dir))
+
+    def test_job_leva_o_r_manual_e_descarta_r_fora_do_formato_e_numero_fora_do_pedido(self):
+        fin.gravar_job(self.dir, [UTIC, "UTIC-2026-0002"], encerramentos_manuais={
+            UTIC: "12/11/2026 09:30", "UTIC-2026-0002": "12-11-2026", "UTIC-2026-0099": "12/11/2026 09:30",
+        })
+        job = fin.consumir_job(self.dir)
+        self.assertEqual(job["encerramentos_manuais"], {UTIC: "12/11/2026 09:30"})
+
+    def test_job_com_encerramentos_manuais_de_tipo_errado_vira_vazio(self):
+        for bruto in (["12/11/2026 09:30"], "12/11/2026 09:30", None, {UTIC: 5}):
+            with self.subTest(bruto=bruto):
+                fin.gravar_job(self.dir, [UTIC])
+                job = json.loads(fin.caminho_job(self.dir).read_text(encoding="utf-8"))
+                job["encerramentos_manuais"] = bruto
+                fin.caminho_job(self.dir).write_text(json.dumps(job), encoding="utf-8")
+                self.assertEqual(fin.consumir_job(self.dir)["encerramentos_manuais"], {})
 
     def test_job_velho_ou_adulterado_e_descartado(self):
         fin.gravar_job(self.dir, [UTIC])
