@@ -1087,7 +1087,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 /* Relatório mensal: sub-abas (molde de .resumo-aba). A barra rola sozinha; min-width:0 em toda a cadeia flex evita rolagem horizontal da página (320 a 2560px). */
 .rel-abas-barra { min-width: 0; padding: 8px 20px; border-bottom: 1px solid var(--cor-borda-suave); }
 .rel-abas { display: flex; gap: 4px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
-.rel-aba { display: inline-flex; align-items: center; flex: none; gap: 6px; height: 28px; min-height: 0; padding: 0 10px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.rel-aba { display: inline-flex; align-items: center; flex: none; gap: 6px; height: 32px; min-height: 0; padding: 0 12px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .rel-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
 .rel-aba[aria-selected="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
 .rel-aba:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; } /* por dentro: a barra tem overflow-x e cortaria um contorno externo */
