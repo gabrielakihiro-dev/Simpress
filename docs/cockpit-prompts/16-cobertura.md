@@ -35,6 +35,10 @@ Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_sto
 
 `listar_cobertura(cidade?, data?, ate?, perfil?)`, só leitura (autorizada pelo usuário em 07/11/2026): mesmos números da tela, sem os casos nem dados pessoais. Detalhes em `docs/cockpit-prompts/15-assistente.md`, seção "Cobertura pelo chat (07/11/2026)".
 
+## Reuso pelos Backups regionais (Resumo F3, 12/11/2026)
+
+`domains/backups_regionais.py` usa `motivo_bloqueio` e `disponibilidade_efetiva` de `coverage.py` só para leitura, sem gravar nada na Cobertura. Reserva, movimentação, devolução pendente e manutenção tiram a série da contagem de backup (vai para `excluidos` com `bloqueio:<motivo>`). `sem_disponibilidade` só bloqueia quando a disponibilidade efetiva da série é `em_manutencao` ou `indisponivel`; série sem registro de disponibilidade não bloqueia. Cobertura ilegível vira a limitação `Cobertura ilegível: reservas e movimentações não conferidas.` e deixa só a manutenção bloqueando. Regras completas: `docs/cockpit-prompts/05-resumo-kpis.md`, seção "Sub-aba Backups".
+
 ## Riscos conhecidos
 
 Backlog, não regra: itens conferidos no código (07/11/2026) e ainda sem decisão ou correção.

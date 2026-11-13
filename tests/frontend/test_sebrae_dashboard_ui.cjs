@@ -252,6 +252,9 @@ test("textos de resultado e de chamado pulado ficam em português", () => {
   assert.equal(textoResultado({ status: "nao_encontrado", mensagem: "UTIC-2026-4 não está na central de tarefas" }),
     "Não encontrado na central de tarefas: UTIC-2026-4 não está na central de tarefas");
   assert.equal(textoResultado({ status: "nao_encontrado" }), "Não encontrado na central de tarefas");
+  assert.equal(textoResultado({ status: "finalizado_outro_tecnico", encerrado_em: "12/11/2026 09:30" }),
+    "Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada (encerrado em 12/11/2026 09:30)");
+  assert.deepEqual(sebraeDashboardModel.STATUS_DESFEITOS, ["ok", "finalizado_outro_tecnico"]);
   assert.equal(textoPulado({ numero: "UTIC-2026-9", motivo: "sem_descricao" }), "UTIC-2026-9: não será finalizado no SoftExpert (sem descrição para finalizar).");
   assert.match(textoPulado({ numero: "UTIC-2026-8", motivo: "ja_finalizado" }), /já finalizado no SoftExpert/);
   assert.match(textoPulado({ numero: "linha:3", motivo: "sem_numero" }), /sem número UTIC/);
@@ -263,6 +266,7 @@ test("resumos do início e do fim da finalização em massa contam cada resultad
   const resultado = { resultados: [{ status: "ok" }, { status: "ok" }, { status: "ja_finalizado" }, { status: "erro" }, { status: "nao_encontrado" }, { status: "sem_descricao" }] };
   assert.equal(resumoResultado(resultado), "Finalização no SoftExpert terminada: 2 finalizado(s), 1 já finalizado(s), 1 com erro, 1 não encontrado(s), 1 sem descrição.");
   assert.equal(resumoResultado({ resultados: [], cancelado: true }), "Finalização cancelada.");
+  assert.match(resumoResultado({ resultados: [{ status: "ok" }, { status: "finalizado_outro_tecnico" }, { status: "finalizado_outro_tecnico" }] }), /2 finalizado\(s\) por outro técnico/);
 });
 
 test("tamanho do PDF aparece em B, KB ou MB", () => {
@@ -819,6 +823,18 @@ test("o finalizado é só leitura, com a zona Concluída e sem pendências", asy
   assert.equal(cartao.querySelectorAll("li.sebrae-pend").length, 0);
   assert.equal(cartao.querySelector("textarea").readOnly, true);
   assert.equal(cartao.querySelector("textarea").placeholder, " ");
+});
+
+test("o finalizado por outro técnico leva o selo exato no resumo da lista Finalizados; o finalizado pelo SoftExpert não", async () => {
+  const seloDoResumo = el => el["sebrae-finalizados-lista"].querySelectorAll("summary.sebrae-finalizado__resumo .sebrae-selo").filter(no => no.textContent === "Finalizado por outro técnico");
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.importado.finalizados[0].status = "ok";
+  assert.equal(seloDoResumo((await renderizarCartoes(carga)).el).length, 0);
+  carga.importado.finalizados[0].status = "finalizado_outro_tecnico";
+  const { el } = await renderizarCartoes(carga);
+  assert.equal(seloDoResumo(el).length, 1);
+  assert.match(el["sebrae-finalizados-lista"].querySelector("summary.sebrae-finalizado__resumo").textContent, /UTIC-2026-1100/);
+  assert.match(el["sebrae-finalizados-lista"].querySelector(".sebrae-chamado__resultado").textContent, /^Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada/);
 });
 
 test("a falta de saída pronta avisa em Atualizar Dashboard com data-estado alerta", async () => {

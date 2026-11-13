@@ -10,7 +10,7 @@
     const { app, dom } = context;
     const {
       CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
-      MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
+      MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
       ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
       tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
       resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
@@ -444,7 +444,15 @@
       const encerramento = item.encerrado_em ? `encerrado em ${item.encerrado_em}` : "";
       const resumo = document.createElement("summary");
       resumo.className = "sebrae-finalizado__resumo";
-      resumo.append([item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · "), seloDestaque(item.numero));
+      const textoResumo = [item.numero, ficha.titulo, ficha.solicitante, encerramento].filter(Boolean).join(" · ");
+      if (item.status === STATUS_OUTRO_TECNICO) {
+        // dentro do mesmo item da grade do resumo: o texto e o selo seguem juntos, sem coluna nova
+        const selo = dom.createTextElement("span", "ck-badge sebrae-selo", "Finalizado por outro técnico");
+        selo.dataset.status = "info";
+        const bloco = document.createElement("span");
+        bloco.append(textoResumo, " ", selo);
+        resumo.append(bloco, seloDestaque(item.numero));
+      } else resumo.append(textoResumo, seloDestaque(item.numero));
       detalhe.appendChild(resumo);
       ligarLinha(detalhe, resumo, item.numero);
       const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
@@ -495,7 +503,7 @@
         colAnexo.append(tentar, feedback);
       }
       const quando = formatarDataHora(item.em);
-      const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", `${textoResultado({ status: "ok", encerrado_em: item.encerrado_em })}${quando ? ` · ${quando}` : ""}`);
+      const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", `${textoResultado({ status: item.status === STATUS_OUTRO_TECNICO ? STATUS_OUTRO_TECNICO : "ok", encerrado_em: item.encerrado_em })}${quando ? ` · ${quando}` : ""}`);
       resultado.dataset.estado = "ok";
       const rodape = document.createElement("div");
       rodape.className = "sebrae-final__rodape";
@@ -1604,7 +1612,7 @@
       const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
       const pulados = f.pulados.length ? f.pulados : res?.pulados || [];
       // Os finalizados saem daqui na hora (vão para "Chamados finalizados"); sobram só avisos, erros e pulados.
-      const restantes = (res?.resultados || []).filter(r => r.status !== "ok");
+      const restantes = (res?.resultados || []).filter(r => !STATUS_DESFEITOS.includes(r.status));
       let status = "";
       if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
       else if (f.mensagemInicio) status = f.mensagemInicio;
@@ -1813,7 +1821,7 @@
     /** Aplica o que o GET trouxe: estado da rotina, resultado por chamado (também nos cartões) e aviso do SharePoint. */
     /** O horário gravado pelo SoftExpert substitui o Encerramento (R) digitado: a tela já mostra o valor que o Dashboard terá. */
     function mostrarEncerramentoSoftExpert(r) {
-      const valor = r.status === "ok" ? encerramentoParaCampo(r.encerrado_em) : "";
+      const valor = STATUS_DESFEITOS.includes(r.status) ? encerramentoParaCampo(r.encerrado_em) : "";
       if (!valor) return;
       [estado.valores, estado.edicoes].forEach(guardados => { if (guardados[r.numero] && "R" in guardados[r.numero]) guardados[r.numero].R = valor; });
       document.querySelectorAll(`[data-sebrae-campo="R"][data-sebrae-numero="${CSS.escape(r.numero)}"]`).forEach(controle => { controle.value = valor; });
@@ -1853,11 +1861,14 @@
 
     /** Todo chamado `ok` sai da lista de abertos e aparece em "Chamados finalizados" assim que o SoftExpert confirma (uma recarga por novo `ok`). */
     function moverFinalizados(f) {
-      const oks = (f.resultado?.resultados || []).filter(r => r.status === "ok");
-      const chave = `${f.resultado?.iniciado_em || ""}:${oks.length}`;
-      if (!oks.length || f.recarregado === chave) return;
+      const finalizados = (f.resultado?.resultados || []).filter(r => STATUS_DESFEITOS.includes(r.status));
+      const oks = finalizados.filter(r => r.status === "ok");
+      const chave = `${f.resultado?.iniciado_em || ""}:${finalizados.length}`;
+      if (!finalizados.length || f.recarregado === chave) return;
       f.recarregado = chave;
-      app.showToast(`${oks.length} chamado(s) finalizado(s) no SoftExpert. Veja em Chamados finalizados.`, "success");
+      const outros = finalizados.length - oks.length;
+      app.showToast(oks.length ? `${oks.length} chamado(s) finalizado(s) no SoftExpert.${outros ? ` ${outros} finalizado(s) por outro técnico.` : ""} Veja em Chamados finalizados.`
+        : `${outros} chamado(s) finalizado(s) por outro técnico. Veja em Chamados finalizados.`, "success");
       carregarNovosSebrae();
     }
 

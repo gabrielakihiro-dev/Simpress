@@ -20,7 +20,7 @@ from domains.lembretes import Lembretes
 from routers.lembretes import create_lembretes_router
 
 SEGREDO = "descricao-sigilosa-zeta"
-CAMPOS = {"id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem"}
+CAMPOS = {"id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem", "termo"}
 
 
 class ListaDeLogs(logging.Handler):
@@ -243,7 +243,7 @@ class ErrosTests(LembretesBase):
     def test_item_sem_campos_opcionais_e_lido_com_null(self):
         item = {"id": "a1", "descricao": "Texto", "criado_em": "2026-11-12T08:00:00-03:00", "concluido": False}
         self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [item]}), encoding="utf-8")
-        self.assertEqual(self.lembretes(), [{**item, "alterado_em": None, "concluido_em": None, "origem": None}])
+        self.assertEqual(self.lembretes(), [{**item, "alterado_em": None, "concluido_em": None, "origem": None, "termo": None}])
         self.assertEqual(self.client.patch("/api/lembretes/a1", json={"concluido": True}).status_code, 200)
 
     def test_surrogate_isolado_devolve_422_e_nao_grava(self):
@@ -316,6 +316,83 @@ class SessaoTests(unittest.TestCase):
         caminhos = main.app.openapi()["paths"]
         self.assertEqual(set(caminhos["/api/lembretes"]), {"get", "post"})
         self.assertEqual(set(caminhos["/api/lembretes/{lembrete_id}"]), {"patch", "delete"})
+
+
+def termo_entrega(**campos) -> dict:
+    base = {"nome": "Ana Teste", "unidade": "Curitiba", "data": "2026-11-12", "serie_entregue": "SERIE1"}
+    return {"campos": {**base, **campos}, "itens": ["sim", "nao", ""] + [""] * 8, "obs": "Linha 1\nLinha 2\tok"}
+
+
+class TermoTests(LembretesBase):
+    def test_criar_com_termo_grava_a_copia_completa(self):
+        item = self.criar("Entrada: Ana", origem="entrega", termo=termo_entrega())
+        self.assertEqual(item["termo"]["campos"]["nome"], "Ana Teste")
+        # Chaves ausentes da origem viram texto vazio; a data fica crua.
+        self.assertEqual(set(item["termo"]["campos"]), {
+            "nome", "unidade", "data", "modelo_anterior", "modelo_entregue", "serie_anterior", "serie_entregue"})
+        self.assertEqual(item["termo"]["campos"]["modelo_anterior"], "")
+        self.assertEqual(item["termo"]["campos"]["data"], "2026-11-12")
+        self.assertEqual(item["termo"]["obs"], "Linha 1\nLinha 2\tok")
+        self.assertEqual(self.lembretes()[0]["termo"], item["termo"])
+        self.assertEqual(self.gravado()["lembretes"][0]["termo"], item["termo"])
+
+    def test_sem_termo_fica_nulo(self):
+        self.assertIsNone(self.criar()["termo"])
+        self.assertIsNone(self.criar("Saída", origem="devolucao")["termo"])
+
+    def test_editar_e_concluir_preservam_o_termo(self):
+        item = self.criar("Entrada: Ana", origem="entrega", termo=termo_entrega())
+        for corpo in ({"concluido": True}, {"descricao": "Outro texto"}, {"concluido": False}):
+            resposta = self.client.patch(f"/api/lembretes/{item['id']}", json=corpo)
+            self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(self.lembretes()[0]["termo"], item["termo"])
+
+    def test_patch_nao_aceita_termo(self):
+        item = self.criar("Entrada: Ana", origem="entrega", termo=termo_entrega())
+        resposta = self.client.patch(f"/api/lembretes/{item['id']}", json={"termo": None})
+        self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(self.lembretes()[0]["termo"], item["termo"])
+
+    def test_arquivo_antigo_sem_termo_continua_legivel(self):
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [{
+            "id": "abc", "descricao": "Antigo", "criado_em": "2026-11-01T10:00:00", "alterado_em": None,
+            "concluido": False, "concluido_em": None, "origem": "entrega"}]}), encoding="utf-8")
+        self.assertIsNone(self.lembretes()[0]["termo"])
+        self.criar("Novo")
+        self.assertEqual(len(self.gravado()["lembretes"]), 2)
+
+    def test_termo_invalido_devolve_422_sem_o_valor_e_nao_grava(self):
+        bom = termo_entrega()
+        invalidos = [
+            ({"origem": None}, bom),
+            ({"origem": "entrega"}, "texto"),
+            ({"origem": "entrega"}, {**bom, "extra": 1}),
+            ({"origem": "entrega"}, {"campos": bom["campos"], "itens": bom["itens"]}),
+            ({"origem": "devolucao"}, bom),  # serie_entregue não é campo da devolução
+            ({"origem": "entrega"}, {**bom, "campos": {"nome": 5}}),
+            ({"origem": "entrega"}, {**bom, "campos": {"nome": "x" * 201}}),
+            ({"origem": "entrega"}, {**bom, "campos": {"nome": f"{SEGREDO}\n"}}),
+            ({"origem": "entrega"}, {**bom, "itens": ["sim"] * 10}),
+            ({"origem": "entrega"}, {**bom, "itens": ["talvez"] + [""] * 10}),
+            ({"origem": "entrega"}, {**bom, "itens": "sim"}),
+            ({"origem": "entrega"}, {**bom, "obs": "x" * 2001}),
+            ({"origem": "entrega"}, {**bom, "obs": f"{SEGREDO}\x00"}),
+            ({"origem": "entrega"}, {**bom, "obs": None}),
+        ]
+        with capturar_logs() as linhas:
+            for extra, termo in invalidos:
+                resposta = self.client.post("/api/lembretes", json={"descricao": "Teste", **extra, "termo": termo})
+                self.assertEqual(resposta.status_code, 422, (extra, termo))
+                self.assertEqual(resposta.json()["codigo"], "termo_invalido", (extra, termo))
+                self.assertNotIn(SEGREDO, resposta.text)
+        self.assertFalse(self.arquivo.exists())
+        self.assertFalse(any(SEGREDO in linha for linha in linhas))
+
+    def test_limites_exatos_sao_aceitos(self):
+        termo = {"campos": {"nome": "x" * 200, "serie": "S"}, "itens": ["nao"] * 11, "obs": "y" * 2000}
+        item = self.criar("Saída", origem="devolucao", termo=termo)
+        self.assertEqual(len(item["termo"]["campos"]["nome"]), 200)
+        self.assertEqual(set(item["termo"]["campos"]), {"nome", "unidade", "data", "modelo", "serie"})
 
 
 if __name__ == "__main__":

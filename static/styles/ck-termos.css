@@ -84,4 +84,6 @@
   html.termos-imprimindo #termos-impressao .tp .tp__titulo,
   html.termos-imprimindo #termos-impressao .tp .tp__secao-titulo,
   html.termos-imprimindo #termos-impressao .tp .tp__marca { color: var(--tp-cor) !important; }
+  /* A assinatura desce abaixo da linha: com o fundo branco da regra acima, cobria a linha e o rótulo do técnico. */
+  html.termos-imprimindo #termos-impressao .tp__assinatura-img { background: transparent !important; }
 }
