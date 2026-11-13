@@ -244,6 +244,20 @@ test("criar de um termo envia uma cópia tirada ao abrir o diálogo: mudar o ter
   }, { formulario: () => dados });
 });
 
+test("a cópia do termo segue os limites do backend: controle vira espaço e texto longo é cortado", async () => {
+  const dados = entrega();
+  dados.campos.nome = `Maria\x0bTeste${"x".repeat(300)}`;
+  dados.obs = `Linha 1\r\nLinha\t2\x0b\u0085fim${"y".repeat(2500)}`;
+  await comCena(async (cena) => {
+    await criarDoTermo(cena, "entrega", "Descrição curta.");
+    const { campos, obs } = cena.posts[0].termo;
+    assert.equal([...campos.nome].length, 200);
+    assert.ok(campos.nome.startsWith("Maria Teste"));
+    assert.equal([...obs].length, 2000);
+    assert.ok(obs.startsWith("Linha 1\r\nLinha\t2  fim"));
+  }, { formulario: () => dados });
+});
+
 test("cancelar o diálogo zera a cópia: nada é enviado e o próximo POST não leva o termo antigo", async () => {
   await comCena(async (cena) => {
     cena.api.lembretesCriarDoTermo("entrega");
