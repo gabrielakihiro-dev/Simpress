@@ -182,6 +182,20 @@ Ferramenta de consulta `listar_cobertura(cidade?, data?, ate?, perfil?)`, autori
 - Roteamento: grupo `cobertura` em `GRUPOS_FERRAMENTAS` (cobertura, falta/faltar, vaga, necessidade).
 - Testes: `tests/test_assistant_cobertura.py` (router real com dados sintéticos e cliente falso).
 
+## Backups regionais pelo chat (12/11/2026)
+
+Ferramenta de consulta `listar_backups_regionais(cidade?)`. Exemplo: "Cascavel tem notebook de backup?" → `listar_backups_regionais(cidade="Cascavel")`. Regra 40 do prompt. A ferramenta só lê e não escreve em nada.
+
+- Fonte única: lê o campo `backups_regionais` de `GET /api/painel` (`build_backups_regionais`, o mesmo cálculo da sub-aba Backups do Resumo F3). O mínimo é 1 notebook de backup em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa.
+- Estado: `ok`, `conferir` (há candidatos para o usuário confirmar), `sem_backup` ou `dados_insuficientes`. `dados_insuficientes` NÃO quer dizer sem backup: falta uma fonte (veja `fontes` e `limitacoes`); o Assistente deve dizer isso e não contar como falta.
+- Privacidade: lista de campos permitidos. Vão ao modelo `gerado_em`, `minimo`, `fontes`, `limitacoes`, `pendencias`, `sobras` (cidade, quantidade, séries, prioritária; sem `itens`) e, por regional, cidade, status, contados, mínimo, excedente, backups (série, origem, última verificação, confirmado até) e candidatos (série, motivo, dias sem verificação); `conferencia` e `excluidos` chegam só como contagem. Candidatos de cidades sem mínimo vêm em `outras_candidatos` (cidade e candidatos com série, motivo e dias sem verificação, sem apelido). O `apelido` nunca vai, porque pode ser o nome de uma pessoa (apelido manual); nome em texto livre ainda passa por `limpar_texto_sensivel` e pela máscara da conversa.
+- `obter_painel` remove `backups_regionais` do resultado e deixa um aviso apontando para `listar_backups_regionais`, para a lista longa e os apelidos não entrarem no contexto.
+- Listas cortadas em 20 itens, com `omitidos`. `cidade` filtra por igualdade sem acento nem caixa; cidade que não é regional prioritária devolve só as sobras, os candidatos dela em `outras_candidatos` (se houver) e uma `mensagem` (sem concluir que falta backup); `outras_candidatos` corta em 20 cidades (`outras_candidatos_omitidas`) e em 20 candidatos por cidade (`candidatos_omitidos`).
+- Erro: se `/api/painel` falhar ou o campo vier com `indisponivel`, volta só `erro`, sem números, e o Assistente não inventa valores.
+- Só leitura: confirmar e desfazer um backup é feito pelo usuário na tela (rotas 208 e 209); o arquivo `data/state/backups_regionais.json` não muda.
+- Roteamento: grupo `backups` em `GRUPOS_FERRAMENTAS` (backup, backups, bkp).
+- Testes: `tests/test_assistant_backups.py` (router real do painel com dados sintéticos e cliente falso) e os casos de `backups_regionais` em `tests/test_dashboard.py`.
+
 ## PDF do chat no chamado do Sebrae (08/11/2026)
 
 Pedido do usuário de 08/11/2026. Exemplo (nome fictício): a Marina Beatriz Teixeira da Costa (login `mbteixeira`, UGP) pede chamados de desligamento; o usuário anexa o PDF no chat e diz "anexa esse PDF no chamado da Marina".

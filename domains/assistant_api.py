@@ -52,6 +52,7 @@ DECISOES_VALIDAS =("permitir", "recusar", "remover", "manter")
 
 # Limits keep the text returned to the model inside its context window.
 MAX_ITENS_LISTA = 20
+AVISO_BACKUPS_NO_PAINEL = "Omitido aqui (lista longa); para os Backups regionais use a ferramenta `listar_backups_regionais`."
 # Page cap (100 items each) when loading base names for the privacy mask.
 # shortcut: above 20,000 equipment rows with a user the name list is partial; raise it if the base grows.
 MAX_PAGINAS_NOMES = 200
@@ -1186,7 +1187,14 @@ class SimpressApi:
         }
 
     def obter_painel(self) -> Dict[str, Any]:
-        return self._leitura("/api/painel")
+        ok, dados = self._chamar("GET", "/api/painel")
+        if not ok:
+            return {"erro": dados}
+        if isinstance(dados, dict) and "backups_regionais" in dados:
+            # Long (alias and excluded lists) and may carry a person's name: only `listar_backups_regionais` reads it, by allowlist.
+            dados = {k: AVISO_BACKUPS_NO_PAINEL if k == "backups_regionais" else v for k, v in dados.items()}
+        # The size cut happens after the privacy mask, in the conversation.
+        return {"dados": _aparar(dados)}
 
     def obter_prontidao(self) -> Dict[str, Any]:
         return self._leitura("/api/prontidao")
@@ -2517,6 +2525,79 @@ class SimpressApi:
             "manutencao_verificada": bool(manutencao.get("verificada", True)),
             "aviso_manutencao": str(manutencao.get("aviso") or ""),
         })
+
+    def listar_backups_regionais(self, cidade: Any = None) -> Dict[str, Any]:
+        """Backups regionais (Resumo F3, sub-aba Backups), só leitura: o `backups_regionais` do GET /api/painel, filtrado aqui.
+
+        Allowlist: nunca o `apelido` (pode ser nome de pessoa), nem a `conferencia` e os `excluidos` em detalhe (só contagens).
+        `outras_candidatos` (cidades sem mínimo) segue o mesmo filtro de cidade e o mesmo corte das demais listas.
+        """
+        ok, dados = self._chamar("GET", "/api/painel")
+        if not ok:
+            return {"erro": dados}
+        bruto = _dict(_dict(dados).get("backups_regionais"))
+        if bruto.get("indisponivel") or not isinstance(bruto.get("prioritarias"), list):
+            return {"erro": "Os Backups regionais não puderam ser calculados agora. Não há números para informar."}
+        alvo = dobrar(cidade)
+        das_cidades = [_dict(g) for g in bruto["prioritarias"] if not alvo or dobrar(_dict(g).get("cidade")) == alvo]
+
+        def cortar(itens: Any, campos: Tuple[str, ...]) -> Tuple[List[Dict[str, Any]], int]:
+            validos = [i for i in itens or [] if isinstance(i, dict)]
+            return [{k: i.get(k) for k in campos} for i in validos[:MAX_ITENS_LISTA]], max(0, len(validos) - MAX_ITENS_LISTA)
+
+        def contar(itens: Any) -> Dict[str, Any]:
+            validos = [i for i in itens or [] if isinstance(i, dict)]
+            return {"total": len(validos), "por_motivo": dict(Counter(str(i.get("motivo") or "") for i in validos))}
+
+        prioritarias = []
+        for g in das_cidades:
+            backups, backups_omitidos = cortar(g.get("backups"), ("serie", "origem", "ultima_verificacao", "confirmado_ate"))
+            candidatos, candidatos_omitidos = cortar(g.get("candidatos"), ("serie", "motivo", "dias_sem_verificacao"))
+            prioritarias.append({
+                **{k: g.get(k) for k in ("cidade", "status", "contados", "minimo", "excedente")},
+                "backups": backups, "backups_omitidos": backups_omitidos,
+                "candidatos": candidatos, "candidatos_omitidos": candidatos_omitidos,
+                "conferencia": contar(g.get("conferencia")), "excluidos": contar(g.get("excluidos")),
+            })
+        sobras_todas = [
+            _dict(g) for g in bruto.get("sobras") or []
+            if isinstance(g, dict) and (not alvo or dobrar(g.get("cidade")) == alvo)
+        ]
+        sobras = []
+        for g in sobras_todas[:MAX_ITENS_LISTA]:
+            series = [x for x in g.get("series") or [] if isinstance(x, str)]
+            sobras.append({
+                "cidade": g.get("cidade"), "quantidade": g.get("quantidade"), "prioritaria": bool(g.get("prioritaria")),
+                "series": series[:MAX_ITENS_LISTA], "series_omitidas": max(0, len(series) - MAX_ITENS_LISTA),
+            })
+        # Candidates in cities without a minimum: the number a user asks for when the city is not one of the five.
+        outras_todas = [
+            _dict(g) for g in bruto.get("outras_candidatos") or []
+            if isinstance(g, dict) and (not alvo or dobrar(g.get("cidade")) == alvo)
+        ]
+        outras = []
+        for g in outras_todas[:MAX_ITENS_LISTA]:
+            candidatos, omitidos = cortar(g.get("candidatos"), ("serie", "motivo", "dias_sem_verificacao"))
+            outras.append({"cidade": g.get("cidade"), "candidatos": candidatos, "candidatos_omitidos": omitidos})
+        pendencias = {
+            tipo: [c for c in _dict(bruto.get("pendencias")).get(tipo) or [] if isinstance(c, str) and (not alvo or dobrar(c) == alvo)]
+            for tipo in ("sem_backup", "conferir")
+        }
+        resultado: Dict[str, Any] = {
+            "gerado_em": bruto.get("gerado_em"), "minimo": bruto.get("minimo"),
+            "fontes": {k: v for k, v in _dict(bruto.get("fontes")).items() if v is None or isinstance(v, (bool, str))},
+            "limitacoes": [x for x in bruto.get("limitacoes") or [] if isinstance(x, str)][:MAX_ITENS_LISTA],
+            "pendencias": pendencias, "prioritarias": prioritarias,
+            "sobras": sobras, "sobras_omitidas": max(0, len(sobras_todas) - MAX_ITENS_LISTA),
+            "outras_candidatos": outras, "outras_candidatos_omitidas": max(0, len(outras_todas) - MAX_ITENS_LISTA),
+        }
+        if alvo and not prioritarias:
+            resultado["mensagem"] = (
+                "Esta cidade não é uma das regionais com mínimo de backup; só as sobras e os candidatos dela (se houver) aparecem. "
+                "Isso não quer dizer que não há notebook de backup lá."
+            )
+            resultado["cidades_prioritarias"] = [str(_dict(g).get("cidade") or "") for g in bruto["prioritarias"]]
+        return _aparar(resultado)
 
     def montar_alteracao_representante(self, cidade: Any, *novos: Any) -> Tuple[str, Dict[str, str], List[Tuple[str, str, str]]]:
         """(city, body for the route, changes) of `alterar_representante_regional`; ValueError (pt-BR) when it cannot run."""

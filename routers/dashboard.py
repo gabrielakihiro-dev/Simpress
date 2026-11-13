@@ -66,6 +66,8 @@ class DashboardServices:
     get_comparison_history_signature: Optional[Callable[[], Optional[tuple]]] = None
     # Tickets marked as finalized by another technician and not yet checked (marks of OS finalizada, aba OS).
     get_other_technician_marks: Optional[Callable[[], Sequence[Dict[str, Any]]]] = None
+    # Backups regionais (Resumo F3): ``build_backups_regionais`` on its own inputs, independent of the history event.
+    get_backups_regionais: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 # Reapplying the display rules to the two newest events dominated the panel time; the result
@@ -178,6 +180,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "chamados_outro_tecnico": _other_technician_summary(services),
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
         "sem_acesso_60_dias": _long_unused_summary(services, history),
+        "backups_regionais": _backups_regionais_summary(services),
     }
 
 
@@ -362,6 +365,21 @@ def _other_technician_summary(services: DashboardServices) -> Dict[str, Any]:
         # The alert is optional; the inventory summary must still load. Only the class is logged (no ticket data).
         logger.warning("Falha ao calcular o aviso de chamados finalizados por outro técnico: %s.", type(error).__name__)
         return {"total": 0, "itens": [], "indisponivel": True}
+
+
+def _backups_regionais_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+    if services.get_backups_regionais is None:
+        return None
+    try:
+        return services.get_backups_regionais()
+    except Exception as error:
+        # The block is optional; the inventory summary must still load. Only the class is logged (no path or data).
+        logger.warning("Falha ao calcular os Backups regionais do painel: %s.", type(error).__name__)
+        return {
+            "fontes": {},
+            "limitacoes": ["Backups regionais indisponíveis: não foi possível calcular."],
+            "indisponivel": True,
+        }
 
 
 def _without_owner_exceptions(event: Dict[str, Any]) -> Dict[str, Any]:
