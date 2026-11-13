@@ -178,9 +178,10 @@
   const MAX_DESCRICAO = 4000;
   const NUMERO_UTIC = /^UTIC-\d{4}-\d+$/i;
   const INTERVALO_FECHAR_MS = 1500;
-  const STATUS_DESFEITOS = Object.freeze(["ok"]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
+  const STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"; // fora da central, com D=FINALIZADO e R do usuário (regra de 12/11/2026)
+  const STATUS_DESFEITOS = Object.freeze(["ok", STATUS_OUTRO_TECNICO]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
   const ROTULOS_RESULTADO = Object.freeze({
-    ok: "Finalizado no SoftExpert", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
+    ok: "Finalizado no SoftExpert", [STATUS_OUTRO_TECNICO]: "Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
     sem_descricao: "Sem descrição para finalizar", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
   });
   const MOTIVOS_PULADO = Object.freeze({
@@ -196,7 +197,7 @@
 
   function textoResultado(item) {
     const base = ROTULOS_RESULTADO[item?.status] || "Sem resultado";
-    const extra = item?.status === "ok" && item.encerrado_em ? ` (encerrado em ${item.encerrado_em})` : "";
+    const extra = STATUS_DESFEITOS.includes(item?.status) && item.encerrado_em ? ` (encerrado em ${item.encerrado_em})` : "";
     const mensagem = (item?.status === "erro" || item?.status === "nao_encontrado") && item.mensagem ? `: ${item.mensagem}` : "";
     return `${base}${extra}${mensagem}`;
   }
@@ -281,7 +282,7 @@
     if (!lista.length) return resultado?.cancelado ? "Finalização cancelada." : "Finalização terminada sem resultado por chamado.";
     const contar = status => lista.filter(r => r.status === status).length;
     const partes = [
-      [contar("ok"), "finalizado(s)"], [contar("ja_finalizado"), "já finalizado(s)"], [contar("erro"), "com erro"],
+      [contar("ok"), "finalizado(s)"], [contar(STATUS_OUTRO_TECNICO), "finalizado(s) por outro técnico"], [contar("ja_finalizado"), "já finalizado(s)"], [contar("erro"), "com erro"],
       [contar("nao_encontrado"), "não encontrado(s)"],
       [contar("sem_descricao"), "sem descrição"], [contar("pronto"), "só conferido(s)"],
     ].filter(([n]) => n > 0).map(([n, texto]) => `${n} ${texto}`);
@@ -437,7 +438,7 @@
     ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
-    MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
+    MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
     ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
     resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     CHAVE_RASCUNHO, NUMERO_RASCUNHO, limparValoresRascunho, PREFIXO_CAMPO, lerRascunho, gravarCampoRascunho, gravarRascunho, apagarRascunho, aplicarRascunho,

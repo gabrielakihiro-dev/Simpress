@@ -475,7 +475,7 @@ def _aviso_pendente_seguro(aviso: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-_STATUS_FINALIZACAO = frozenset({fin.STATUS_OK, fin.STATUS_JA_FINALIZADO, fin.STATUS_NAO_ENCONTRADO, fin.STATUS_ERRO,
+_STATUS_FINALIZACAO = frozenset({fin.STATUS_OK, fin.STATUS_OUTRO_TECNICO, fin.STATUS_JA_FINALIZADO, fin.STATUS_NAO_ENCONTRADO, fin.STATUS_ERRO,
                                  fin.STATUS_SEM_DESCRICAO, fin.STATUS_PRONTO})
 # Codes `sebrae_fechar`/`sebrae_softexpert` write in `motivo` (scripts/sebrae_softexpert.py MOTIVO_*); anything else is matched as text.
 _MOTIVOS_FINALIZACAO = frozenset({"numero_nao_confere", "titulo_nao_confere", "nao_encontrado_na_lista", "formulario_indisponivel",
@@ -1958,8 +1958,8 @@ class SimpressApi:
         if item is None:
             raise ValueError(f"{numero} não está entre os chamados antigos em aberto do Dashboard importado. Nada foi feito.")
         se = _dict(item.get("softexpert"))
-        if _dict(se.get("finalizacao")).get("status") == "ok":
-            raise ValueError(f"{numero} já foi finalizado no SoftExpert. Nada foi feito.")
+        if _dict(se.get("finalizacao")).get("status") in fin.STATUS_FINALIZADOS:
+            raise ValueError(f"{numero} já foi finalizado (no SoftExpert ou por outro técnico). Nada foi feito.")
         texto = str(descricao or "").strip() or str(se.get("descricao_finalizacao") or "").strip()
         if not texto:
             raise ValueError(f"Falta a descrição para finalizar {numero}: peça ao usuário o texto de \"Detalhes do Atendimento Realizado\".")
@@ -1998,8 +1998,8 @@ class SimpressApi:
         Same tickets the screen accepts: old open ticket of the imported Dashboard (read or not) or new ticket of the last search."""
         numero, antigo, novo = self._localizar_chamado_sebrae(numero)
         se = _dict(_dict(antigo if antigo is not None else novo).get("softexpert"))
-        if _dict(se.get("finalizacao")).get("status") == "ok":
-            raise ValueError(f"{numero} já foi finalizado no SoftExpert; não dá mais para anexar PDF. Nada foi feito.")
+        if _dict(se.get("finalizacao")).get("status") in fin.STATUS_FINALIZADOS:
+            raise ValueError(f"{numero} já foi finalizado (no SoftExpert ou por outro técnico); não dá mais para anexar PDF. Nada foi feito.")
         return {"numero": numero, "pdf_atual": str(_dict(se.get("pdf")).get("nome") or "")}
 
     def anexar_pdf_chamado_sebrae(self, numero: Any, nome: str, dados: bytes) -> Dict[str, Any]:
@@ -2025,8 +2025,8 @@ class SimpressApi:
             atual = str(se.get("descricao_editada") or antigo.get("descricao") or _dict(antigo.get("leitura_softexpert")).get("descricao") or "")
         else:
             se, atual = _dict(_dict(novo).get("softexpert")), str(_dict(_dict(novo).get("linha")).get("H") or "")
-        if _dict(se.get("finalizacao")).get("status") == "ok":
-            raise ValueError(f"{numero} já foi finalizado no SoftExpert; a descrição não pode mais ser editada. Nada foi feito.")
+        if _dict(se.get("finalizacao")).get("status") in fin.STATUS_FINALIZADOS:
+            raise ValueError(f"{numero} já foi finalizado (no SoftExpert ou por outro técnico); a descrição não pode mais ser editada. Nada foi feito.")
         texto = str(descricao or "").strip()
         if len(texto) > MAX_DESCRICAO_FINALIZACAO:
             raise ValueError(f"A descrição pode ter no máximo {MAX_DESCRICAO_FINALIZACAO} caracteres.")

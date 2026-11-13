@@ -380,6 +380,23 @@ async function preencherDevolucao(page) {
   await page.locator("#termos-devolucao-item-03-sim").check();
 }
 
+// Cópia do termo que o POST leva (e o servidor devolve) para o que preencherEntrega / preencherDevolucao digitam:
+// itens traz só as 11 respostas ("sim", "nao" ou vazio), na ordem do formulário.
+const vazios = quantidade => Array(quantidade).fill("");
+const TERMO_ENTREGA = {
+  campos: {
+    nome: "Maria Teste", unidade: "Curitiba", data: "2026-11-12", modelo_anterior: "Dell 5420",
+    modelo_entregue: "HP 640 G11", serie_anterior: "ANTIGA123", serie_entregue: "NOVA456",
+  },
+  itens: ["", "sim", "sim", ...vazios(8)],
+  obs: "Sem avarias.",
+};
+const termoDevolucao = (obs = "") => ({
+  campos: { nome: "Maria Teste", unidade: "Curitiba", data: "2026-11-12", modelo: "HP 640 G10", serie: "BRJ123" },
+  itens: ["sim", "nao", "sim", ...vazios(8)],
+  obs,
+});
+
 test("Criar lembrete sem série ou sem nome mostra só o aviso e nada abre", async ({ page }) => {
   await abrirTermo(page, "entrega");
   await botaoCriarLembrete(page, "entrega").click();
@@ -446,9 +463,9 @@ test("Termo Entrega: confirmar cria o lembrete com origem entrega e oferece Ver 
 
   await expect(dialogoCriar(page)).toBeHidden();
   await expect(page.locator("#termos-status-entrega")).toHaveText("Lembrete criado.Ver em Lembretes");
-  expect(posts).toEqual([{ descricao: revisado, origem: "entrega" }]);
+  expect(posts).toEqual([{ descricao: revisado, origem: "entrega", termo: TERMO_ENTREGA }]);
   const [criado] = await apiLembretes(page);
-  expect(criado).toMatchObject({ descricao: revisado, origem: "entrega" });
+  expect(criado).toMatchObject({ descricao: revisado, origem: "entrega", termo: TERMO_ENTREGA });
 
   await page.locator("#termos-status-entrega").getByRole("button", { name: "Ver em Lembretes" }).click();
   await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
@@ -469,9 +486,219 @@ test("Termo Devolução: a quebra de linha das Observações vira espaço e o PO
   await confirmarCriar(page).click();
 
   await expect(page.locator("#termos-status-devolucao")).toHaveText("Lembrete criado.Ver em Lembretes");
-  expect(posts).toEqual([{ descricao: esperado, origem: "devolucao" }]);
+  // A cópia do termo leva as Observações como digitadas (com a quebra de linha e o tab); só a descrição é limpa.
+  const termo = termoDevolucao("Carregador\ntrocado.\n\n\tRiscos na tampa.");
+  expect(posts).toEqual([{ descricao: esperado, origem: "devolucao", termo }]);
   const [criado] = await apiLembretes(page);
-  expect(criado).toMatchObject({ descricao: esperado, origem: "devolucao" });
+  expect(criado).toMatchObject({ descricao: esperado, origem: "devolucao", termo });
+});
+
+// Dados do termo no lembrete: bloco recolhível, PDF da cópia salva e Preencher no Termo.
+// Substitui window.print como em termos.spec.cjs: guarda título e texto da folha e não abre a janela do navegador.
+async function interceptarImpressao(page) {
+  await page.evaluate(() => {
+    window.__impressoes = [];
+    window.print = () => {
+      const folha = document.getElementById("termos-impressao");
+      window.__impressoes.push({ titulo: document.title, folhaFilhos: folha.childElementCount, texto: folha.textContent });
+    };
+  });
+}
+const impressoes = page => page.evaluate(() => window.__impressoes);
+const esperarImpressao = (page, n = 1) => page.waitForFunction(total => window.__impressoes.length >= total, n);
+const encerrarImpressao = page => page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+
+async function criarLembreteDoTermo(page, termo, preencher, opcoes) {
+  await abrirTermo(page, termo, opcoes);
+  await preencher(page);
+  await botaoCriarLembrete(page, termo).click();
+  await confirmarCriar(page).click();
+  await expect(page.locator(`#termos-status-${termo}`)).toContainText("Lembrete criado.");
+}
+
+const blocoDoTermo = page => pendentes(page).first().locator("details.lembretes__termo");
+const verEmLembretes = (page, termo) => page.locator(`#termos-status-${termo}`).getByRole("button", { name: "Ver em Lembretes" }).click();
+const confirmarSubstituir = async page => {
+  await expect(page.locator("#titulo-confirmar-acao")).toHaveText("Substituir o termo?");
+  await expect(page.locator("#btn-confirmar-acao-ok")).toHaveText("Substituir");
+  await expect(page.locator("#btn-confirmar-acao-cancelar")).toHaveText("Cancelar");
+};
+
+test("Lembrete do Termo Entrega: Dados do termo mostra os valores salvos, Gerar PDF imprime a cópia salva e Preencher no Termo devolve os dados ao formulário", async ({ page }) => {
+  await criarLembreteDoTermo(page, "entrega", preencherEntrega);
+  expect((await apiLembretes(page))[0].termo).toEqual(TERMO_ENTREGA);
+
+  // O formulário muda depois de criado: o lembrete segue com a cópia salva, e é ela que o bloco e o PDF usam.
+  await page.locator("#termos-entrega-nome").fill("Outro Nome");
+  await page.locator("#termos-entrega-serie-entregue").fill("ZZZ999");
+  await page.locator("#termos-entrega-item-02-nao").check();
+  await page.locator("#termos-entrega-obs").fill("Texto alterado depois.");
+  await verEmLembretes(page, "entrega");
+  await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
+
+  const bloco = blocoDoTermo(page);
+  await expect(bloco).toHaveJSProperty("open", false);
+  await expect(bloco.locator("summary")).toHaveText("Dados do termo");
+  await expect(bloco.getByRole("button", { name: "Gerar PDF" })).toBeHidden();
+  await bloco.locator("summary").click();
+  await expect(bloco).toHaveJSProperty("open", true);
+  await expect(bloco.locator("h3")).toHaveText([
+    "Dados do colaborador", "Identificação do equipamento", "Equipamentos e acessórios entregues", "Observações",
+  ]);
+  await expect(bloco.locator("dt")).toHaveText([
+    "Nome do colaborador", "Unidade / Departamento", "Data da entrega / troca",
+    "Modelo do computador, equipamento anterior", "Modelo do computador, equipamento entregue",
+    "Número de série / Service Tag, equipamento anterior", "Número de série / Service Tag, equipamento entregue",
+    "01 Mochila", "02 Notebook", "03 Teclado", "04 Mouse", "05 Hub USB", "06 Suporte notebook",
+    "07 Headset (modelo 8225 ou 3220)", "08 Case headset", "09 Mousepad",
+    "10 Monitor (HDMI / DisplayPort / Cabo de força / USB)", "11 Cabo de Segurança",
+  ]);
+  await expect(bloco.locator("dd")).toHaveText([
+    "Maria Teste", "Curitiba", "12/11/2026", "Dell 5420", "HP 640 G11", "ANTIGA123", "NOVA456",
+    "—", "Sim", "Sim", ...Array(8).fill("—"),
+  ]);
+  await expect(bloco.locator(".lembretes__termo-obs")).toHaveText("Sem avarias.");
+
+  // Gerar PDF: título "<SÉRIE> - <Nome>" e folha com a cópia salva, não com o que está no formulário agora.
+  await interceptarImpressao(page);
+  await bloco.getByRole("button", { name: "Gerar PDF" }).click();
+  await esperarImpressao(page);
+  const [impressao] = await impressoes(page);
+  expect(impressao.titulo).toBe("NOVA456 - Maria Teste");
+  expect(impressao.folhaFilhos).toBeGreaterThan(0);
+  expect(impressao.texto).toContain("Maria Teste");
+  expect(impressao.texto).toContain("NOVA456");
+  expect(impressao.texto).not.toContain("Outro Nome");
+  expect(impressao.texto).not.toContain("ZZZ999");
+  await encerrarImpressao(page);
+  await expect(bloco).toHaveJSProperty("open", true);
+
+  // Preencher no Termo: o formulário tem conteúdo, então pede confirmação e só troca ao confirmar.
+  await bloco.getByRole("button", { name: "Preencher no Termo" }).click();
+  await confirmarSubstituir(page);
+  await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
+  await page.locator("#btn-confirmar-acao-ok").click();
+
+  await expect(page.locator("#termos-aba-entrega")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#termos-painel-entrega")).toBeVisible();
+  await expect(page.locator("#termos-status-entrega")).toHaveText("Termo preenchido com os dados do lembrete.");
+  const nome = page.locator("#termos-entrega-nome");
+  await expect(nome).toHaveValue("Maria Teste");
+  await expect(nome).toBeFocused();
+  await expect(page.locator("#termos-entrega-unidade")).toHaveValue("Curitiba");
+  await expect(page.locator("#termos-entrega-data")).toHaveValue("2026-11-12");
+  await expect(page.locator("#termos-entrega-modelo-anterior")).toHaveValue("Dell 5420");
+  await expect(page.locator("#termos-entrega-modelo-entregue")).toHaveValue("HP 640 G11");
+  await expect(page.locator("#termos-entrega-serie-anterior")).toHaveValue("ANTIGA123");
+  await expect(page.locator("#termos-entrega-serie-entregue")).toHaveValue("NOVA456");
+  await expect(page.locator("#termos-entrega-item-02-sim")).toBeChecked();
+  await expect(page.locator("#termos-entrega-item-02-nao")).not.toBeChecked();
+  await expect(page.locator("#termos-entrega-item-03-sim")).toBeChecked();
+  await expect(page.locator("#termos-entrega-item-01-sim")).not.toBeChecked();
+  await expect(page.locator("#termos-entrega-obs")).toHaveValue("Sem avarias.");
+
+  // Os campos seguem editáveis, e editar o formulário não muda o lembrete salvo.
+  await expect(nome).toBeEditable();
+  await nome.fill("Maria Editada");
+  await expect(nome).toHaveValue("Maria Editada");
+  await page.locator("#termos-entrega-item-04-sim").check();
+  await expect(page.locator("#termos-entrega-item-04-sim")).toBeChecked();
+  await page.locator("#termos-entrega-obs").fill("Nova observação.");
+  await expect(page.locator("#termos-entrega-obs")).toHaveValue("Nova observação.");
+  expect((await apiLembretes(page))[0].termo).toEqual(TERMO_ENTREGA);
+});
+
+test("Preencher no Termo: Cancelar não troca nada no formulário e fica na pílula de Lembretes", async ({ page }) => {
+  await criarLembreteDoTermo(page, "entrega", preencherEntrega);
+  await page.locator("#termos-entrega-nome").fill("Outro Nome");
+  await page.locator("#termos-entrega-serie-entregue").fill("ZZZ999");
+  await verEmLembretes(page, "entrega");
+  const bloco = blocoDoTermo(page);
+  await bloco.locator("summary").click();
+  await bloco.getByRole("button", { name: "Preencher no Termo" }).click();
+  await confirmarSubstituir(page);
+  await page.locator("#btn-confirmar-acao-cancelar").click();
+
+  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
+  await page.locator("#termos-aba-entrega").click();
+  await expect(page.locator("#termos-entrega-nome")).toHaveValue("Outro Nome");
+  await expect(page.locator("#termos-entrega-serie-entregue")).toHaveValue("ZZZ999");
+  await expect(page.locator("#termos-status-entrega")).not.toContainText("Termo preenchido");
+});
+
+test("Preencher no Termo com o formulário vazio não pede confirmação; o termo salvo sobrevive a recarregar a página", async ({ page }) => {
+  await criarLembreteDoTermo(page, "entrega", preencherEntrega);
+  // Recarregar esvazia o formulário (nada do termo é guardado no navegador); o lembrete volta do servidor com o termo.
+  await abrirLembretes(page, { reiniciar: false });
+  await expect(pendentes(page)).toHaveCount(1);
+  const bloco = blocoDoTermo(page);
+  await expect(bloco).toHaveJSProperty("open", false);
+  await bloco.locator("summary").click();
+  await expect(bloco.locator("dd").first()).toHaveText("Maria Teste");
+
+  await bloco.getByRole("button", { name: "Preencher no Termo" }).click();
+  await expect(page.locator("#termos-aba-entrega")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#termos-status-entrega")).toHaveText("Termo preenchido com os dados do lembrete.");
+  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  await expect(page.locator("#termos-entrega-nome")).toHaveValue("Maria Teste");
+  await expect(page.locator("#termos-entrega-serie-entregue")).toHaveValue("NOVA456");
+  await expect(page.locator("#termos-entrega-item-03-sim")).toBeChecked();
+  await expect(page.locator("#termos-entrega-obs")).toHaveValue("Sem avarias.");
+});
+
+test("Lembrete do Termo Devolução: só as seções da devolução, Não e — formatados, PDF com a série da devolução e Preencher restaura os itens", async ({ page }) => {
+  await criarLembreteDoTermo(page, "devolucao", preencherDevolucao);
+  expect((await apiLembretes(page))[0].termo).toEqual(termoDevolucao());
+  await abrirLembretes(page, { reiniciar: false });
+  const bloco = blocoDoTermo(page);
+  await bloco.locator("summary").click();
+
+  await expect(bloco.locator("h3")).toHaveText(["Dados do colaborador", "Equipamentos e acessórios devolvidos", "Observações"]);
+  await expect(bloco.locator("dt")).toHaveText([
+    "Nome do colaborador", "Unidade", "Data", "Modelo do computador", "Número de série",
+    "1 - Mochila", "2 - Notebook", "3 - Teclado", "4 - Mouse", "5 - Hub USB", "6 - Suporte notebook",
+    "7 - Headset", "8 - Case headset (modelo 8225)", "9 - Mousepad",
+    "10 - Monitor (HDMI / DisplayPort / Cabo de força / USB)", "11 - Cabo de Segurança",
+  ]);
+  await expect(bloco.locator("dd")).toHaveText([
+    "Maria Teste", "Curitiba", "12/11/2026", "HP 640 G10", "BRJ123", "Sim", "Não", "Sim", ...Array(8).fill("—"),
+  ]);
+  await expect(bloco.locator(".lembretes__termo-obs")).toHaveText("—"); // Observações vazias viram —
+
+  await interceptarImpressao(page);
+  await bloco.getByRole("button", { name: "Gerar PDF" }).click();
+  await esperarImpressao(page);
+  expect((await impressoes(page))[0].titulo).toBe("BRJ123 - Maria Teste");
+  await encerrarImpressao(page);
+
+  await bloco.getByRole("button", { name: "Preencher no Termo" }).click();
+  await expect(page.locator("#termos-aba-devolucao")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#termos-devolucao-nome")).toHaveValue("Maria Teste");
+  await expect(page.locator("#termos-devolucao-modelo")).toHaveValue("HP 640 G10");
+  await expect(page.locator("#termos-devolucao-serie")).toHaveValue("BRJ123");
+  await expect(page.locator("#termos-devolucao-item-01-sim")).toBeChecked();
+  await expect(page.locator("#termos-devolucao-item-02-nao")).toBeChecked();
+  await expect(page.locator("#termos-devolucao-item-02-sim")).not.toBeChecked();
+  await expect(page.locator("#termos-devolucao-item-03-sim")).toBeChecked();
+  await expect(page.locator("#termos-devolucao-item-04-sim")).not.toBeChecked();
+  await expect(page.locator("#termos-devolucao-item-04-nao")).not.toBeChecked();
+});
+
+test("lembrete criado à mão não tem o bloco Dados do termo; o do termo tem, e o bloco aberto continua aberto ao adicionar outro", async ({ page }) => {
+  await criarLembreteDoTermo(page, "devolucao", preencherDevolucao);
+  await verEmLembretes(page, "devolucao");
+  const bloco = blocoDoTermo(page);
+  await bloco.locator("summary").click();
+  await expect(bloco).toHaveJSProperty("open", true);
+
+  await adicionarPelaTela(page, "Lembrete escrito à mão");
+  await expect(pendentes(page)).toHaveCount(2);
+  await expect(pendentes(page).filter({ hasText: "Lembrete escrito à mão" }).locator("details.lembretes__termo")).toHaveCount(0);
+  await expect(page.locator("details.lembretes__termo")).toHaveCount(1);
+  // A lista foi redesenhada com o novo item: o bloco que estava aberto segue aberto.
+  await expect(pendentes(page).filter({ has: page.locator("details.lembretes__termo") }).locator("details.lembretes__termo")).toHaveJSProperty("open", true);
 });
 
 test("Criar lembrete: quebra de linha digitada no diálogo também é limpa antes do POST", async ({ page }) => {
