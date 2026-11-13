@@ -71,7 +71,7 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 | Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
 | Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
 | Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
-| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 4.6) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
+| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
 | Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
 
 - Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
