@@ -161,6 +161,8 @@
 @container (max-width: 479px) {
   .lembretes__novo .lembretes__campo, .lembretes__novo .ck-btn { flex: 1 1 100%; min-height: 44px; }
   .lembretes__item { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "check corpo" "acoes acoes"; row-gap: 6px; padding: 8px 10px 6px 4px; }
+  /* Em edição o item não tem ações; o :hover repete o seletor para não voltar à coluna de 28px, que mudava a altura e fazia o layout oscilar. */
+  .lembretes__item--editando, .lembretes__item--editando:hover { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "check corpo"; }
   .lembretes__marcar { width: 44px; height: 44px; margin-top: -8px; }
   .lembretes__texto { padding-top: 4px; }
   .lembretes__acoes { justify-content: flex-end; margin: 0; padding-top: 4px; border-top: 1px solid var(--cor-borda-suave); }

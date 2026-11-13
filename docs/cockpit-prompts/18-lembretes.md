@@ -52,7 +52,8 @@ Referência visual aprovada em 13/11/2026: Claude Design https://claude.ai/artif
 - `Atrasada`: pendentes com data anterior a hoje, por data e hora crescentes, com a data em cor de erro e o botão `Reagendar para hoje`.
 - Dentro de um dia: com hora crescente e, depois, sem hora. Empates e `Sem data`: pela regra da lista (o mais recente no topo).
 - Cada grupo é uma `section.lembretes__grupo` com `h3` e `ul.lembretes__itens`; `#lembretes-lista` continua sendo o contêiner dos pendentes (agora um `div`). A data agendada do item usa `span.lembretes__agenda`, sem `<time>`, para não colidir com o `<time>` de `Criado em`.
-- `Reagendar para hoje` (`POST /api/lembretes/reagendar-atrasados`): todo pendente atrasado passa para hoje, mantendo a hora; concluídos, futuros e sem data não mudam. Sem confirmação (como no Todoist) e sem gravar quando não há atrasados. Quem calcula "hoje" é o servidor, em America/Sao_Paulo.
+- `Reagendar para hoje` (`POST /api/lembretes/reagendar-atrasados`): todo pendente atrasado passa para hoje, mantendo a hora; concluídos, futuros e sem data não mudam. Sem confirmação (como no Todoist) e sem gravar quando não há atrasados. Quem calcula "hoje" é o servidor, em America/Sao_Paulo. Depois, o aviso `1 lembrete reagendado para hoje.` ou `<n> lembretes reagendados para hoje.`
+- Em breve: dias anteriores a hoje ficam desabilitados na faixa da semana; o botão de cada dia tem o nome acessível `Adicionar lembrete em <título do dia>`.
 
 ### Formulário e edição
 
