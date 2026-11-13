@@ -25,6 +25,7 @@ async function interceptarImpressao(page) {
         folhaFilhos: folha.childElementCount,
         classe: document.documentElement.classList.contains("termos-imprimindo"),
         blocos: blocos.length,
+        marcas: [...folha.querySelectorAll("td.tp__marcas")].map(td => td.textContent),
         imagens: [...folha.querySelectorAll("img")].map(img => ({
           bloco: blocos.indexOf(img.closest(".tp__assinatura")),
           rotulo: img.closest(".tp__assinatura").textContent,
@@ -195,6 +196,29 @@ for (const [termo, rotulo] of [["entrega", "Assinatura do técnico responsável"
     expect(sem.blocoTecnico).toBe(com.blocoTecnico);
     expect(sem.alturaDaFolha).toBe(com.alturaDaFolha);
   });
+
+  // Bug de 12/11/2026: na impressão, o fundo branco da folha pintava a <img>, que cobria a linha e o rótulo do técnico.
+  test(`folha impressa do termo de ${termo}: assinatura larga sai inteira, transparente e sem esconder o rótulo`, async ({ page }) => {
+    // Sintética, ~4,9:1 como a real (viewBox sem width/height), traço de ponta a ponta.
+    const svgLargo = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 122.3"><path d="M5 80 L595 40 L590 120" stroke="#000" stroke-width="4" fill="none"/></svg>';
+    await page.route("**/api/assinatura-tecnico", route => route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgLargo }));
+    await page.setViewportSize({ width: 794, height: 1123 }); // largura de A4 a 96 dpi, como na impressão
+    await abrirTermos(page);
+    await gerarPdf(page, termo);
+    await page.emulateMedia({ media: "print" });
+    const m = await page.evaluate(() => {
+      const img = document.querySelector("#termos-impressao img.tp__assinatura-img");
+      const bloco = img.closest(".tp__assinatura");
+      const i = img.getBoundingClientRect();
+      const b = bloco.getBoundingClientRect();
+      return { fundo: getComputedStyle(img).backgroundColor, proporcao: i.width / i.height, esquerda: i.left - b.left, direita: b.right - i.right, rotulo: bloco.textContent };
+    });
+    expect(m.fundo).toBe("rgba(0, 0, 0, 0)");
+    expect(Math.abs(m.proporcao - 600 / 122.3)).toBeLessThanOrEqual(0.1);
+    expect(m.esquerda).toBeGreaterThanOrEqual(0);
+    expect(m.direita).toBeGreaterThanOrEqual(0);
+    expect(m.rotulo).toBe(rotulo);
+  });
 }
 
 for (const status of [404, 422]) {
@@ -249,14 +273,14 @@ test("Limpar pede confirmação e só apaga o termo ao confirmar", async ({ page
   await nome.fill("Maria Silva");
   await serie.fill("ABC123");
   await obs.fill("Sem avarias.");
-  await page.locator("#termos-entrega-item-01-sim").check();
+  await page.locator("#termos-entrega-item-01-nao").check();
 
   const limpar = page.locator("#termos-painel-entrega").getByRole("button", { name: "Limpar" });
   await limpar.click();
   await expect(page.locator("#titulo-confirmar-acao")).toHaveText("Limpar o termo?");
   await page.locator("#btn-confirmar-acao-cancelar").click();
   await expect(nome).toHaveValue("Maria Silva");
-  await expect(page.locator("#termos-entrega-item-01-sim")).toBeChecked();
+  await expect(page.locator("#termos-entrega-item-01-nao")).toBeChecked();
 
   await limpar.click();
   await expect(page.locator("#titulo-confirmar-acao")).toHaveText("Limpar o termo?");
@@ -264,7 +288,22 @@ test("Limpar pede confirmação e só apaga o termo ao confirmar", async ({ page
   await expect(nome).toHaveValue("");
   await expect(serie).toHaveValue("");
   await expect(obs).toHaveValue("");
-  await expect(page.locator("#termos-entrega-item-01-sim")).not.toBeChecked();
+  // Limpar volta ao padrão do termo novo: os 11 itens em Sim.
+  await expect(page.locator('#termos-form-entrega input[value="sim"]:checked')).toHaveCount(11);
+  await expect(page.locator('#termos-form-entrega input[value="nao"]:checked')).toHaveCount(0);
+});
+
+test("termo novo abre com os 11 itens em Sim, e o Não marcado sai no PDF", async ({ page }) => {
+  await abrirTermos(page);
+  for (const termo of ["entrega", "devolucao"]) {
+    await expect(page.locator(`#termos-form-${termo} input[value="sim"]:checked`)).toHaveCount(11);
+    await expect(page.locator(`#termos-form-${termo} input[value="nao"]:checked`)).toHaveCount(0);
+  }
+  await page.locator("#termos-entrega-item-04-nao").check();
+  const impressao = await gerarPdf(page, "entrega");
+  expect(impressao.marcas).toHaveLength(11);
+  expect(impressao.marcas[3]).toBe("[ ] Sim   [X] Não");
+  impressao.marcas.filter((_, i) => i !== 3).forEach(m => expect(m).toBe("[X] Sim   [ ] Não"));
 });
 
 test("os dois termos cabem em 320px sem rolagem horizontal", async ({ page }) => {
@@ -302,7 +341,7 @@ test("buscar a série na Home preenche nome, modelo, série e Notebook = Sim nos
   await expect(entrega.locator('[name="serie_entregue"]')).toHaveValue("TERMO123");
   await expect(entrega.locator('[name="modelo_anterior"]')).toHaveValue("");
   await expect(entrega.locator('input[name="item-02"][value="sim"]')).toBeChecked();
-  await expect(entrega.locator('input[name="item-01"]:checked')).toHaveCount(0);
+  await expect(entrega.locator('input[name="item-01"][value="sim"]')).toBeChecked();
 
   const devolucao = page.locator("#termos-form-devolucao");
   await expect(devolucao.locator('[name="nome"]')).toHaveValue("Maria Teste");

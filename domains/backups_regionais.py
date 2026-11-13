@@ -1,7 +1,7 @@
 """Backups regionais: notebooks de backup livres por regional, como função pura (sem I/O nem log).
 
 ``build_backups_regionais`` recebe dados já lidos e devolve o contrato de ``backups_regionais`` do painel; a saída
-não traz nome de pessoa nem login.
+não traz login nem usuário do Endpoint, mas ``apelido`` pode conter nome digitado à mão (apelido manual).
 
 Contrato de entrada:
 
@@ -277,13 +277,21 @@ def build_backups_regionais(
     sobras: List[Dict[str, Any]] = []
     outras_candidatos: List[Dict[str, Any]] = []
     for chave, grupo in grupos.items():
-        series = [backup["serie"] for backup in grupo["backups"]]
+        # ``itens`` acompanha ``series`` (mesma ordem) e diz como cada série contou; sem ``apelido``.
+        itens_sobra = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate")} for backup in grupo["backups"]]
+        series = [item["serie"] for item in itens_sobra]
         if chave in _PRIORITARIAS:
             if len(series) > MINIMO:
-                sobras.append({"cidade": grupo["cidade"], "quantidade": len(series) - MINIMO, "series": series[MINIMO:], "prioritaria": True})
+                sobras.append({
+                    "cidade": grupo["cidade"], "quantidade": len(series) - MINIMO, "series": series[MINIMO:],
+                    "itens": itens_sobra[MINIMO:], "prioritaria": True,
+                })
             continue
         if series:
-            sobras.append({"cidade": grupo["cidade"], "quantidade": len(series), "series": series, "prioritaria": False})
+            sobras.append({
+                "cidade": grupo["cidade"], "quantidade": len(series), "series": series, "itens": itens_sobra,
+                "prioritaria": False,
+            })
         if grupo["candidatos"]:
             outras_candidatos.append({"cidade": grupo["cidade"], "candidatos": grupo["candidatos"]})
 

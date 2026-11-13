@@ -1,0 +1,16 @@
+[mcp_servers.playwright]
+command = "cmd"
+args = [
+    "/c",
+    "npx",
+    "-y",
+    "@playwright/mcp@0.0.85",
+    "--isolated",
+    "--headless",
+    "--browser",
+    "chrome",
+    "--allowed-origins",
+    "http://127.0.0.1:8765;http://localhost:8765",
+    "--output-dir",
+    ".claude/prints/mcp",
+]

@@ -150,5 +150,94 @@
     };
   }
 
-  return Object.freeze({ montarParesChamadoOs, filtrarParesChamadoOs, chaveMarca, marcasPorOs, descreverMarca, formatarDataHora, formatarData });
+  // ----- referências em texto livre (Lembretes): UTIC-AAAA-N e número de OS viram link para a janela Chamado × OS -----
+  // Chamado como no Assistente (UTIC-\d{4}-\d{1,24}); OS = exatamente 7 dígitos (31/31 no relatório do F6, 14/14 nos vínculos).
+  // shortcut: OS fixa em 7 dígitos; ampliar a regex se o formato mudar.
+  const REFERENCIA = /UTIC-\d{4}-\d{1,24}|\d{7}/gi;
+  const PALAVRA = /[\p{L}\p{N}_-]/u;
+  const ehDigito = carac => /\d/.test(carac || "");
+
+  /** Divide o texto em trechos `{ texto }` e referências `{ tipo: "chamado"|"os", numero, texto }`; juntar os `texto` devolve o original. */
+  function referenciasNoTexto(entrada) {
+    const original = String(entrada ?? "");
+    const partes = [];
+    const juntar = trecho => {
+      if (!trecho) return;
+      const ultimo = partes[partes.length - 1];
+      if (ultimo && !ultimo.tipo) ultimo.texto += trecho;
+      else partes.push({ texto: trecho });
+    };
+    let cursor = 0;
+    for (const achado of original.matchAll(REFERENCIA)) {
+      const inicio = achado.index;
+      const fim = inicio + achado[0].length;
+      const chamado = /^U/i.test(achado[0]);
+      // Colada a letra, dígito ou hífen não é referência (parte de outro número). Na OS, "/" também recusa (data) e "." ou ","
+      // só recusam entre dígitos (valor, data); no fim de frase ("OS 1234567.") a pontuação não cola.
+      const colada = (carac, alem) => PALAVRA.test(carac) || (!chamado && (carac === "/" || ((carac === "." || carac === ",") && ehDigito(alem))));
+      if (colada(original[inicio - 1] || "", original[inicio - 2]) || colada(original[fim] || "", original[fim + 1])) continue;
+      juntar(original.slice(cursor, inicio));
+      partes.push({ tipo: chamado ? "chamado" : "os", numero: chamado ? achado[0].toUpperCase() : achado[0], texto: achado[0] });
+      cursor = fim;
+    }
+    juntar(original.slice(cursor));
+    return partes;
+  }
+
+  // Mesma prioridade do F6 (prioridadeVinculo em data-panels.js): sem origem = manual > finalizacao > dashboard.
+  const prioridadeVinculo = item => (item?.origem === "dashboard" ? 2 : item?.origem === "finalizacao" ? 1 : 0);
+  const chamadoDoVinculo = item => texto(item?.chamado).toUpperCase() || (item?.numero ? `UTIC-${item.ano}-${item.numero}` : "");
+
+  /** Só os vínculos da melhor prioridade entre os que passam no filtro. */
+  function melhoresVinculos(vinculos, filtro) {
+    const itens = (Array.isArray(vinculos) ? vinculos : lista(vinculos?.vinculos)).filter(item => item && filtro(item));
+    if (!itens.length) return [];
+    const melhor = Math.min(...itens.map(prioridadeVinculo));
+    return itens.filter(item => prioridadeVinculo(item) === melhor);
+  }
+
+  // null (nada), `{ [campo], serie }` (um só valor) ou `{ ambiguo: [...] }` (mais de um valor distinto; nunca escolhe).
+  // Série só quando todos os itens do valor concordam; senão fica vazia e a janela liga pela OS (soEssaOs).
+  function unicoOuAmbiguo(itens, campo, chave) {
+    const grupos = new Map();
+    itens.forEach(item => grupos.set(chave(item[campo]), [...(grupos.get(chave(item[campo])) || []), item]));
+    if (!grupos.size) return null;
+    if (grupos.size > 1) return { ambiguo: [...grupos.values()].map(grupo => grupo[0][campo]).sort() };
+    const [grupo] = grupos.values();
+    const series = new Set(grupo.map(item => serialKey(item.serie)).filter(Boolean));
+    return { [campo]: grupo[0][campo], serie: series.size === 1 ? grupo.find(item => serialKey(item.serie)).serie : "" };
+  }
+
+  /**
+   * Chamado ligado à OS: vínculos (manual > finalizacao > dashboard) e, sem vínculo, o F5 (abertos, sem finalizados). Casa a OS exata.
+   * @param {unknown} os
+   * @param {{ vinculos?: any, sebrae?: any }} [fontes]
+   */
+  function chamadoDaOs(os, { vinculos, sebrae } = {}) {
+    const alvo = orderKey(os);
+    if (!alvo) return null;
+    const dosVinculos = melhoresVinculos(vinculos, item => orderKey(item.os) === alvo && chamadoDoVinculo(item))
+      .map(item => ({ chamado: chamadoDoVinculo(item), serie: texto(item.serie) }));
+    const itens = dosVinculos.length ? dosVinculos
+      : chamadosComOs(sebrae).filter(item => orderKey(item.os) === alvo && item.numero).map(item => ({ chamado: item.numero.toUpperCase(), serie: item.serie }));
+    return unicoOuAmbiguo(itens, "chamado", valor => valor);
+  }
+
+  /**
+   * OS ligada ao chamado pelos vínculos (manual > finalizacao > dashboard); a OS do cartão do F5 é decidida por quem chama.
+   * @param {unknown} chamado
+   * @param {{ vinculos?: any }} [fontes]
+   */
+  function osDoChamado(chamado, { vinculos } = {}) {
+    const alvo = texto(chamado).toUpperCase();
+    if (!alvo) return null;
+    const itens = melhoresVinculos(vinculos, item => chamadoDoVinculo(item) === alvo && texto(item.os))
+      .map(item => ({ os: texto(item.os), serie: texto(item.serie) }));
+    return unicoOuAmbiguo(itens, "os", orderKey);
+  }
+
+  return Object.freeze({
+    montarParesChamadoOs, filtrarParesChamadoOs, chaveMarca, marcasPorOs, descreverMarca, formatarDataHora, formatarData,
+    referenciasNoTexto, chamadoDaOs, osDoChamado,
+  });
 });

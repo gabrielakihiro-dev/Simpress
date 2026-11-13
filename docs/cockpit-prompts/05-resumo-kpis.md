@@ -107,3 +107,36 @@ Os dados vêm da API ou do cálculo local de equipamentos por unidade.
 ## Desvio aprovado pelo usuário (etapa A, item 3)
 
 `#btn-cockpit-summary-export` passou a botão só ícone (`ck-btn--icone ck-btn--fantasma ck-btn--sm`, sprite `#i-download`), com `aria-label` e `title` `Exportar` e texto em `.ck-sr`, ao lado de "N registros". Não "corrigir de volta" para botão com texto.
+
+## Sub-aba Backups (Resumo F3, 12/11/2026)
+
+Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritária tem pelo menos 1 notebook de backup pronto? Cálculo puro em `domains/backups_regionais.py` (`build_backups_regionais`), servido no campo `backups_regionais` de `GET /api/painel`; tela em `static/js/features/backups-regionais.js`. Tela, foco e teclado: `docs/cockpit-prompts/14-cockpit-v2.md`, seção "Sub-aba Backups do Resumo". Contrato e rotas 208 e 209: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)".
+
+### Regras de contagem
+
+- Regionais prioritárias: Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa, mínimo de 1 backup em cada.
+- Só entra equipamento da categoria Notebook. MacBook e as séries do Sebrae ficam fora.
+- A regional é a cidade de retirada do cadastro (`EquipamentosDetalhes`). Cadastro sem cidade vai para conferência na regional prioritária indicada pelo apelido, se houver.
+- Um notebook conta como backup em dois casos:
+  - marca de backup no apelido (por exemplo `BACKUP<cidade ou sigla>NN` ou `PRNOTE` + `BACKUP`/`BKP`/`BK` + sigla + `NN`) com a mesma cidade do cadastro e verificação no Endpoint há menos de 7 dias (`origem: "marca"`);
+  - confirmação manual válida (`origem: "confirmacao"`).
+- Fica fora da contagem (`excluidos`): série com usuário vigente (usuário manual, retenção ativa ou usuário do Endpoint com verificação recente) ou bloqueada pela Cobertura ou pela manutenção (`bloqueio:<motivo>`; reuso descrito em `docs/cockpit-prompts/16-cobertura.md`).
+- Vai para conferência: série duplicada, leitura ambígua do apelido, cidade do apelido diferente da do cadastro, cadastro sem cidade.
+- Candidatos (sem usuário e sem bloqueio, mas ainda sem prova): `fonte_endpoint_indisponivel`, `ausente_no_endpoint`, `sem_verificacao_7_dias`, `encontrado_sem_usuario`.
+- Sobras: o que passa do mínimo nas prioritárias e todo backup das regionais fora das prioritárias. Cada sobra traz `series` e `itens` (`serie`, `origem`, `confirmado_ate`).
+
+### Status por regional prioritária
+
+- `ok`: pelo menos 1 backup contado.
+- `conferir`: nenhum contado, mas há candidatos.
+- `sem_backup`: nenhum contado nem candidato, com todas as fontes lidas (cadastro, Endpoint, Cobertura e manutenção).
+- `dados_insuficientes`: nenhum contado nem candidato, com alguma fonte faltando. A tela não conclui que falta backup.
+
+`sem_backup` e `conferir` alimentam `pendencias` e o cartão `#alerta-backups-regionais` do sino (`docs/operacao/alertas-os-divergencias.md`, seção 5).
+
+### Confirmação de 7 dias
+
+- `Confirmar disponível por 7 dias` grava `{serie, cidade, confirmado_em, expira_em}` só em `data/state/backups_regionais.json`, sem dado pessoal. Repetir com a confirmação vigente não estende o prazo.
+- A confirmação deixa de contar quando expira, quando a cidade do cadastro muda, quando a série ganha usuário vigente ou quando é bloqueada.
+- `Desfazer confirmação` remove a confirmação. Aparece na tabela da regional prioritária e, nas regionais fora das prioritárias, na própria sobra (só para `origem: "confirmacao"`).
+- O apelido pode ser nome de pessoa: aparece só na tela local, nunca no Assistente, em toast nem em log. O Assistente (`listar_backups_regionais`) só consulta e não confirma nem desfaz.

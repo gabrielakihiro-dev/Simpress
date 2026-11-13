@@ -135,8 +135,8 @@ class FecharBase(unittest.TestCase):
         for numero in numeros:
             fin.definir_descricao(self.dir, numero, f"feito {numero}")
 
-    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True):
-        fin.gravar_job(self.dir, numeros, confirmar_final=confirmar_final)
+    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True, manuais=None):
+        fin.gravar_job(self.dir, numeros, confirmar_final=confirmar_final, encerramentos_manuais=manuais or {})
         mod = modulo(respostas, self.aba)
         codigo = sebrae_fechar.executar(
             None, self.rotinas, state_dir=self.dir, modulo=mod, sem_finalizar=sem_finalizar, agora=lambda: AGORA,
@@ -205,6 +205,44 @@ class FinalizarTest(FecharBase):
         self.assertFalse(fin.ja_finalizado(self.dir, A))
         self.assertEqual(self.por_numero()[A]["status"], "nao_encontrado")
         self.assertEqual(self.por_numero()[A]["encerrado_em"], "")
+
+    def test_nao_encontrado_com_r_manual_vira_finalizado_por_outro_tecnico_grava_d_e_r_e_envia(self):
+        self.descrever(B)
+        codigo, mod = self.rodar({B: com_status("nao_encontrado")}, [B], manuais={B: "12/11/2026 09:30"})
+        self.assertEqual(codigo, 0)
+        self.assertEqual(len(mod.chamadas), 1)  # a rotina ainda abriu o chamado: só depois do nao_encontrado vale o R do usuário
+        self.assertTrue(fin.ja_finalizado(self.dir, B))
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {B: "12/11/2026 09:30"})
+        self.assertEqual(self.por_numero()[B]["status"], "finalizado_outro_tecnico")
+        self.assertEqual(self.por_numero()[B]["encerrado_em"], "12/11/2026 09:30")
+        self.assertEqual(self.por_numero()[B]["planilha"], "gravado")
+        linha = linha_xml(self.saida.read_bytes(), 3)  # B is on row 3
+        self.assertIn("FINALIZADO", linha)
+        self.assertRegex(linha, r'<c r="R\d+"[^>]*><v>46338\.395')  # 12/11/2026 09:30 em serial do Excel
+        self.assertNotIn("FINALIZADO", linha_xml(self.saida.read_bytes(), 2))
+        self.assertEqual(self.rotinas.enviadas, [None])  # a própria fechar subiu a saída ao SharePoint
+
+    def test_nao_encontrado_sem_r_manual_para_o_chamado_continua_igual(self):
+        self.descrever(A, B)
+        self.rodar({B: com_status("nao_encontrado")}, [B], manuais={A: "12/11/2026 09:30"})  # o R é de outro chamado
+        self.assertFalse(self.saida.exists())
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {})
+        self.assertFalse(fin.ja_finalizado(self.dir, B))
+        self.assertEqual(self.por_numero()[B]["status"], "nao_encontrado")
+
+    def test_r_manual_nao_vale_quando_o_softexpert_acha_o_chamado(self):
+        self.descrever(B)
+        self.rodar({B: ok()}, [B], manuais={B: "12/11/2026 09:30"})
+        self.assertEqual(self.por_numero()[B]["status"], "ok")
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {B: "30/10/2026 14:05"})  # vale a hora real do SoftExpert
+
+    def test_r_manual_nao_vale_no_sem_finalizar(self):
+        self.descrever(B)
+        self.rodar({B: com_status("nao_encontrado")}, [B], sem_finalizar=True, manuais={B: "12/11/2026 09:30"})
+        self.assertFalse(self.saida.exists())
+        self.assertEqual(self.rotinas.enviadas, [])
+        self.assertFalse(fin.ja_finalizado(self.dir, B))
 
     def test_nao_encontrado_nao_sobrescreve_r_que_ja_existe_na_saida(self):
         self.descrever(A, B)

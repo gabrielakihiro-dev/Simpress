@@ -9,16 +9,22 @@ const html = assembledHtml();
 const feature = fs.readFileSync(path.join(root, "static/js/features/chrome-automation.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "static/styles/ux-refinements.css"), "utf8");
 
-test("Automação keeps its actions grouped and user verification manual", () => {
-  const rotinas = html.match(/<div class="ck-rotinas"[\s\S]*?<\/div>\s*<div class="ck-cartao ck-linha-acao"/)?.[0] || html.match(/class="ck-rotinas"[\s\S]{0,4000}/)?.[0];
-  const userGroup = html.match(/<section class="[^"]*ck-linha-acao[^"]*"[^>]*data-rotina="usuarios"[\s\S]*?<\/section>/)?.[0];
+test("Automação agrupa as quatro rotinas na grade, na ordem, e a verificação de usuários é manual", () => {
+  const rotinas = html.match(/<div class="ck-rotinas"[\s\S]*?<\/section>/)?.[0];
   assert.ok(rotinas);
-  assert.ok(userGroup);
-  for (const id of ["btn-automacao-os", "btn-automacao-inventarios", "btn-automacao-ambas"]) {
-    assert.match(rotinas, new RegExp(`id="${id}"`));
-  }
-  assert.match(userGroup, /id="btn-automacao-usuarios"[\s\S]*?data-args='\["usuarios"\]'/);
-  assert.doesNotMatch(rotinas.split('data-rotina="usuarios"')[0], /btn-automacao-usuarios/);
+  assert.doesNotMatch(html, /ck-linha-acao/);
+  const ids = ["os", "inventarios", "usuarios", "ambas"];
+  const posicoes = ids.map(id => {
+    assert.match(rotinas, new RegExp(`<article class="ck-cartao ck-rotina" data-rotina="${id}" data-estado="ocioso">`));
+    const botao = rotinas.match(new RegExp(`<button[^>]*id="btn-automacao-${id}"[^>]*>`))?.[0];
+    assert.ok(botao, `botão de ${id} dentro de .ck-rotinas`);
+    assert.ok(botao.includes(`data-args='["${id}"]'`));
+    assert.match(botao, /class="[^"]*ck-btn--icone[^"]*"/);
+    assert.match(botao, /aria-label="Executar [^"]+"/);
+    assert.match(rotinas, new RegExp(`id="btn-automacao-${id}"[^>]*>[\\s\\S]*?<span class="ck-sr">Executar</span>`));
+    return rotinas.indexOf(`id="btn-automacao-${id}"`);
+  });
+  assert.deepEqual(posicoes, [...posicoes].sort((x, y) => x - y));
   assert.match(html, /id="btn-automacao-login"/);
   assert.match(html, /id="btn-automacao-cancelar"/);
 });

@@ -496,6 +496,8 @@
     { chave: "apelidos", rotulo: "Apelidos" },
     { chave: "usuarios", rotulo: "Usuários" },
     { chave: "sem-acesso", rotulo: "Sem acesso" },
+    // Fica fora de CATEGORIAS_POR_ABA e TEXTO_VAZIO_ABA: não é lista de linhas da comparação; quem o desenha é backups-regionais.js.
+    { chave: "backups", rotulo: "Backups" },
   ];
   const ROTULOS_CATEGORIA_RESUMO = {
     apelidos_sem_atualizacao: "Linhas mantidas para conferência",
@@ -549,6 +551,11 @@
   function rotuloContagemAba(chave, total, filtrando = false) {
     const rotulo = rotuloAba(chave);
     if (chave === "visao") return rotulo;
+    if (chave === "backups") {
+      if (total === null) return `${rotulo}: dados indisponíveis`;
+      const n = Number(total) || 0;
+      return `${rotulo}: ${n.toLocaleString("pt-BR")} ${n === 1 ? "regional pendente" : "regionais pendentes"}`;
+    }
     if (total === null) return `${rotulo}: lista indisponível neste resultado`;
     return `${rotulo}: ${textoLinhas(total, filtrando)}`;
   }

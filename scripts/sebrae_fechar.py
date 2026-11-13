@@ -3,7 +3,9 @@
 Única escrita no SoftExpert fora a confirmação de associar o chamado (``sebrae_softexpert.finalizar_chamado``).
 Entrada: o arquivo de pedido ``data/state/sebrae_fechar_job.json`` (números UTIC; o texto e o PDF de cada chamado
 são lidos do estado no momento da execução). Saída: ``data/state/sebrae_fechar_resultado.json`` com um resultado por
-chamado (``ok``, ``nao_encontrado``, ``erro``, ``sem_descricao`` e ``pronto`` no modo ``--sem-finalizar``).
+chamado (``ok``, ``nao_encontrado``, ``finalizado_outro_tecnico``, ``erro``, ``sem_descricao`` e ``pronto`` no modo ``--sem-finalizar``).
+Regra do usuário (12/11/2026): chamado fora da central que o usuário já marcou com D=FINALIZADO e R (campo ``encerramentos_manuais``
+do pedido) vira ``finalizado_outro_tecnico``: o R do usuário vai ao Dashboard como o horário do SoftExpert iria. Sem R, segue ``nao_encontrado``.
 
 Depois de finalizar, a data/hora do encerramento vai para a coluna R do Dashboard (linha achada pelo número na
 coluna C; o horário do SoftExpert substitui um R digitado à mão) e o arquivo é enviado ao SharePoint pela rotina ``enviar``. Se o envio falhar,
@@ -324,7 +326,8 @@ def executar(
     propagando = False  # True when an exception is leaving ``executar``; the final save must not replace it
     try:
         try:
-            _processar(context, rotinas, modulo, state_dir, job["numeros"], confirmar, resultado, encerramentos, salvar, agora, abas)
+            _processar(context, rotinas, modulo, state_dir, job["numeros"], confirmar, resultado, encerramentos, salvar, agora, abas,
+                       job.get("encerramentos_manuais") or {})
         except rotinas.RotinaCancelada:
             resultado["cancelado"] = True
             raise
@@ -364,9 +367,11 @@ def executar(
 def _processar(
     context: "BrowserContext", rotinas: Any, modulo: Any, state_dir: Path, numeros: List[str], confirmar: bool,
     resultado: Dict[str, Any], encerramentos: Dict[str, str], salvar: Callable[[], None], agora: Callable[[], datetime],
-    abas: List[Any],
+    abas: List[Any], manuais: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Um chamado por vez; a falha de um nunca interrompe os outros. A aba aberta entra em ``abas``."""
+    """Um chamado por vez; a falha de um nunca interrompe os outros. A aba aberta entra em ``abas``.
+
+    ``manuais`` = R digitado pelo usuário por chamado; só vale para ``nao_encontrado`` e nunca no modo sem finalizar."""
     log = lambda texto: rotinas.log(ORIGEM, texto)  # noqa: E731
     pagina: Optional["Page"] = None
     parada = ""  # preenchido quando o SoftExpert fica indisponível: os que faltam viram erro com esse motivo
@@ -422,12 +427,20 @@ def _processar(
             "mensagem": str(info.get("mensagem") or ""), "motivo": str(info.get("motivo") or ""),
             "captura": str(info.get("captura") or ""), "escritas": [str(e) for e in info.get("escritas") or []],
         }
+        manual = (manuais or {}).get(numero, "") if confirmar else ""
         if status == fin.STATUS_OK:
             quando = fin.texto_do_encerramento(agora())
             fin.registrar_finalizacao(state_dir, numero, fin.STATUS_OK, quando)
             encerramentos[numero] = quando
             anotar(numero, status, encerrado_em=quando, **extras)
             log(f"{numero}: finalizado no SoftExpert.")
+        elif status == fin.STATUS_NAO_ENCONTRADO and manual:
+            # Fora da central, com D=FINALIZADO e R do usuário: finalizado por outro técnico (regra do usuário, 12/11/2026).
+            quando = manual
+            fin.registrar_finalizacao(state_dir, numero, fin.STATUS_OUTRO_TECNICO, quando)
+            encerramentos[numero] = quando
+            anotar(numero, fin.STATUS_OUTRO_TECNICO, encerrado_em=quando, **extras)
+            log(f"{numero}: não está na central de tarefas; registrado como finalizado por outro técnico, com o encerramento informado.")
         elif status == fin.STATUS_NAO_ENCONTRADO:
             # Não registra: fora da central não prova que está finalizado, e o usuário pode tentar de novo. Sem R.
             anotar(numero, status, **extras)
