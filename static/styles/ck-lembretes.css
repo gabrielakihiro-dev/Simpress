@@ -28,6 +28,10 @@
 .lembretes__lista:empty { display: none; }
 .lembretes__item { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "check corpo acoes"; align-items: start; column-gap: 10px; min-width: 0; padding: 10px 8px 10px 6px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); animation: ck-surgir var(--duracao) var(--curva); transition: border-color var(--duracao) var(--curva); }
 .lembretes__item:hover { border-color: var(--cor-texto-apagado); }
+/* Chamado/OS dentro do texto (abre a janela Chamado × OS): segue o tamanho e a quebra do texto; o concluído mantém o link, riscado. */
+.lembretes__ref { display: inline; font-size: inherit; line-height: inherit; text-align: start; white-space: normal; overflow-wrap: anywhere; text-decoration: underline dotted; text-underline-offset: 2px; }
+.lembretes__ref:hover { text-decoration-style: solid; }
+.lembretes__item--feito .lembretes__ref, .lembretes__item--feito .lembretes__ref:hover { text-decoration-line: underline line-through; }
 .lembretes__item--editando, .lembretes__item--editando:hover { grid-template-columns: 28px minmax(0, 1fr); grid-template-areas: "check corpo"; border-color: var(--cor-borda); }
 .lembretes__corpo, .lembretes__edicao { grid-area: corpo; }
 .lembretes__corpo { display: grid; gap: 2px; min-width: 0; }
@@ -137,7 +141,7 @@
 .lembretes__recolher[aria-expanded="true"] .lembretes__seta { transform: rotate(90deg); }
 .lembretes__concluidos .lembretes__lista { animation: ck-surgir var(--duracao) var(--curva); }
 
-.lembretes__marcar:focus-visible, .lembretes__acao:focus-visible, .lembretes__recolher:focus-visible, .lembretes__data-botao:focus-visible, .lembretes__atalho:focus-visible, .lembretes__remover-data:focus-visible, .lembretes__nav:focus-visible, .lembretes__dia:focus-visible, .lembretes__reagendar:focus-visible, .lembretes__adicionar-dia:focus-visible, .lembretes__grupo-titulo:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.lembretes__marcar:focus-visible, .lembretes__acao:focus-visible, .lembretes__recolher:focus-visible, .lembretes__data-botao:focus-visible, .lembretes__atalho:focus-visible, .lembretes__remover-data:focus-visible, .lembretes__nav:focus-visible, .lembretes__dia:focus-visible, .lembretes__reagendar:focus-visible, .lembretes__adicionar-dia:focus-visible, .lembretes__grupo-titulo:focus-visible, .lembretes__ref:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 
 /* Diálogo de exclusão: fica fora da caixa, então não herda container-type. */
 .lembretes__dialogo { width: min(420px, 100%); max-width: 420px; }

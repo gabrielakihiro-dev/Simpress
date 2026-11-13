@@ -488,22 +488,28 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-auto__principal { min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px; }
 @media (min-width: 1200px) { .ck-auto__principal { overflow: auto; } }
 .ck-secao-titulo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-chrome { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 14px; }
-.ck-chrome__nome { display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-chrome__nome .ck-ico { color: var(--cor-destaque); }
-.ck-chrome__det { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
-.ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.ck-rotina { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+/* F4 Bloco 1: barra do Chrome numa linha e rotinas em blocos pequenos (artefato do Design, Main e Celular). */
+.ck-chrome { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.ck-chrome__nome { flex: none; display: flex; align-items: center; gap: 8px; font-size: var(--fs-base); font-weight: var(--peso-marca); white-space: nowrap; }
+.ck-chrome__nome .ck-ico { width: 16px; height: 16px; color: var(--cor-destaque); }
+.ck-chrome__det { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-rotinas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.ck-rotina { display: flex; align-items: center; gap: 8px; padding: 9px 10px; min-height: 54px; }
 .ck-rotina[data-estado="em-andamento"] { border-color: var(--cor-destaque); }
-.ck-rotina__cab { display: flex; align-items: center; gap: 8px; }
-.ck-rotina__icone { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-texto-suave); }
-.ck-rotina[data-estado="em-andamento"] .ck-rotina__icone { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
-.ck-rotina__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
-.ck-rotina__desc { flex: 1; font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); }
-.ck-rotina__rodape { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.ck-linha-acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; }
-.ck-linha-acao__texto { flex: 1 1 220px; display: flex; align-items: center; gap: 4px; min-width: 0; }
-.ck-linha-acao__texto > span:not(.info-tip) { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-rotina__icone { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+.ck-rotina__corpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.ck-rotina__cab { display: flex; align-items: center; gap: 2px; max-width: 100%; min-width: 0; }
+.ck-rotina__titulo { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-base); font-weight: var(--peso-marca); }
+.ck-rotina .ck-btn--icone { flex: none; width: 30px; height: 30px; }
+/* O `button { min-height }` global do app.css esticaria o bloco além dos ~54px do Design. */
+.ck-rotina :is(.ck-btn--icone, .info-tip-trigger) { min-height: 0; }
+.ck-rotina .info-tip-trigger { width: 18px; height: 18px; }
+/* A dica ⓘ ancora no bloco (não no ícone): a bolha de até 20rem não alarga a grade, a rolagem do painel nem a página. Até 640px vale o fixed de ux-refinements.css. */
+@media (min-width: 641px) {
+  .ck-rotina { position: relative; }
+  .ck-rotina .info-tip { position: static; }
+  .ck-rotina .info-tip .info-tip-text { inset-inline: 0; width: auto; max-width: none; }
+}
 .ck-fatos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
 .ck-fatos dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-fatos dd { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
@@ -550,7 +556,11 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 }
 @media (max-width: 767.98px) {
   .ck-auto__principal { padding: 14px 12px 20px; }
-  .ck-rotinas, .ck-fatos { grid-template-columns: minmax(0, 1fr); }
+  .ck-fatos { grid-template-columns: minmax(0, 1fr); }
+  .ck-chrome { flex-wrap: wrap; gap: 8px; }
+  .ck-chrome__det { display: none; }
+  .ck-rotina { gap: 10px; padding: 6px 6px 6px 10px; min-height: 56px; }
+  .ck-rotina .ck-btn--icone { width: 44px; height: 44px; }
   .ck-consulta__campos { grid-template-columns: minmax(0, 1fr); }
   .ck-console__linhas { flex: 1 1 100%; }
   .ck-log__linha { grid-template-columns: 62px minmax(0, 1fr) auto; padding: 8px 12px; }
@@ -890,6 +900,9 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #modal-chamado-os > .ck-dialogo { width: min(1200px, calc(100vw - 32px)); max-width: none; max-height: min(90vh, 960px); overflow-y: hidden; }
 #modal-chamado-os .chamado-os-janela__corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 4px; }
 #modal-chamado-os .chamado-os-janela__lado { min-width: 0; }
+/* Lado sem conteúdo (ex.: OS pedida sem chamado, ou chamado inexistente sem OS) some e o outro ocupa a largura toda. */
+#modal-chamado-os .chamado-os-janela__lado:empty { display: none; }
+#modal-chamado-os .chamado-os-janela__corpo:has(> .chamado-os-janela__lado:empty) { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 899.98px) {
   #modal-chamado-os .chamado-os-janela__corpo { grid-template-columns: minmax(0, 1fr); }
 }
@@ -926,8 +939,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #tab-panel-automacao .ck-log__origem:empty::before { content: "—"; color: var(--cor-texto-sutil); }
 #tab-panel-automacao .ck-log__linha { transition: background-color 150ms ease; }
 
-#automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-#automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
+#automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 #dashboard-agendamento-intervalo { width: auto; }
 /* B4: no card de chamados novos, a opção "Repetir a cada 30 minutos" e as três linhas de status ficam juntas (6px em vez de 14px) e se leem como um só grupo; o gap de 14px continua entre os grupos. */
 #tab-panel-automacao .ck-campo + #dashboard-agendamento-status,
@@ -950,7 +962,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
   #automacao-cards .ck-console { border-top: 1px solid var(--cor-borda); }
 }
 @media (max-width: 767.98px) {
-  #automacao-cards .ck-rotinas, #automacao-cards .automation-action-support { grid-template-columns: minmax(0, 1fr); }
+  #automacao-cards .ck-rotinas { gap: 6px; }
+  #automacao-cards .automation-action-support { grid-template-columns: minmax(0, 1fr); }
   .ck-console__ferramentas > .ck-console__linhas { flex: 1 1 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
