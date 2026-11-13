@@ -90,7 +90,20 @@ A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left:
 - Tag do tipo ("Notebook", pílula neutra)
 - Modelo (texto normal)
 - Badge de status ("Sincronizado" com ponto verde, etc.)
-- À direita: botão **Transporte** (primário, com atalho T), botão **Editar** (secundário, com atalho E), ícone de histórico de apelidos
+- À direita: botão **Transporte** (primário, com atalho T), botão **Editar** (secundário, com atalho E), ícone de histórico de apelidos. Desde 13/11/2026 (proposta C) o cabeçalho tem só essas três ações; as demais ficam no painel `Ações` abaixo.
+
+#### Layout em duas colunas: painel de ações à direita (proposta C, 13/11/2026)
+
+Aprovado pelo usuário em 13/11/2026 (proposta C, "Híbrido: painel de ações à direita", artboard `project/Hibrido.dc.html` do canvas https://claude.ai/artifact/HWD7o1cYayaCqxnh8YUNxv). Muda só onde ficam as ações; tokens, temas, lista à esquerda e grade de dados continuam iguais.
+
+- Abaixo do cabeçalho, o detalhe vira duas colunas (`.ck-home-layout`): principal (`.ck-home-layout__principal`) e lateral (`.ck-home-layout__lateral`, 340px).
+- Coluna principal: grade de dados (`#ck-dados-equipamento`, 4 colunas; 2 colunas entre 1200px e 1399px, quando a coluna principal fica estreita ao lado da lateral), edição dos dados cadastrais e o cartão de modelos de chamado (Deslocamento, Kit teclado + mouse, Mau funcionamento, Uso inadequado; Portal, Copiar, Abrir chamado no UX).
+- Coluna lateral, painel `Ações` (`section.ck-acoes`, `aria-labelledby="home-acoes-titulo"`):
+  - Seção `Endpoint`: `Consultar no Endpoint` (`#btn-consultar-endpoint`) e `Controle remoto` (`#btn-controle-remoto-endpoint`) lado a lado; logo abaixo, `#endpoint-lookup-result`; depois o formulário `PowerShell no Endpoint` (`section#endpoint-powershell`), **sempre visível**, sem `<details>`. `Gerenciar códigos` vira botão de ícone (lápis) com `aria-label="Gerenciar códigos"`. O aviso `O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.` fica logo abaixo do botão `Inserir no PowerShell`. Não existe botão `Executar` nem ícone de play.
+  - Seção `Outros`: `Enviar e-mail` (`#btn-enviar-email`) e `Ver dossiê` (`#btn-ver-dossie`).
+- Logo abaixo do painel, na mesma coluna lateral: `Chamados abertos`.
+- Abaixo de 1200px as colunas empilham na ordem do DOM (dados, modelos de chamado, Ações, Chamados abertos), sem rolagem horizontal de 320px a 2560px.
+- Os códigos prontos do PowerShell (`GET /api/endpoint/powershell/codigos`) são buscados na primeira seleção de equipamento (`exibirEquipamento`) e ficam em memória; se a carga falhar, a próxima seleção tenta de novo e o erro some quando uma carga dá certo; o hostname continua preenchido com o apelido a cada seleção. O `data-on-toggle="aoAbrirPowerShellEndpoint"` deixou de existir.
 
 #### Grade de dados 4×2
 
@@ -115,8 +128,8 @@ Em **Usuário** e **Local atual**: o ícone é de lápis (pencil) e abre ediçã
 - `#form-usuario-manual`, `#input-usuario-manual`, `#btn-salvar-usuario-manual`
 - `#form-nome-pessoa`, `#input-nome-pessoa`, `#btn-salvar-nome-pessoa`
 - `#equip-icon-box`, `#equip-icon`
-- `#endpoint-powershell` (06/11/2026, autorizado pelo usuário): card recolhível `PowerShell no Endpoint` dentro de `card-equipamento`, só visível com equipamento selecionado, com comando (`#input-powershell-comando`), modo `SYSTEM`/`Usuário logado`, hostname opcional (desde 10/11/2026, preenchido automaticamente com o apelido da série selecionada; sem apelido fica vazio e vale `PRNOTEUMU005`; o campo `Usuário (opcional)` foi removido e o front não envia mais `usuario`) e o botão `Inserir no PowerShell` (`#btn-powershell-endpoint`). Pede confirmação antes do envio e só **insere** o comando no prompt do terminal do Endpoint, sem executar: o Enter é do usuário, no terminal do Chrome (aviso `O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.`). Detalhes em `docs/operacao/automacao-chrome.md`.
-  - `#select-powershell-codigo` (10/11/2026, pedido do usuário): lista `Código pronto (opcional)` acima do comando, agrupada por modo (`Usuário logado` / `SYSTEM`), mostrando o título de cada código. A lista vem de `GET /api/endpoint/powershell/codigos` só na primeira abertura do card (`data-on-toggle="aoAbrirPowerShellEndpoint"`), nunca no carregamento da página. Escolher um código preenche o comando e o modo dele. Sem arquivo salvo, vêm 31 códigos de impressora por localidade (`Add-Printer -ConnectionName "\\prsrvvm-imp\VP_<LOCALIDADE>"`, modo `Usuário logado`). `Add-Printer ... -ConnectionName` no modo `SYSTEM` é bloqueado no cliente, sem confirmar nem chamar a API; outras formas de `Add-Printer` passam. Nada é executado: continua só a inserção no prompt.
+- `#endpoint-powershell` (06/11/2026, autorizado pelo usuário): formulário `PowerShell no Endpoint` dentro de `card-equipamento`, no painel `Ações` (sempre aberto desde 13/11/2026; antes era um `<details>` recolhível), só visível com equipamento selecionado, com comando (`#input-powershell-comando`), modo `SYSTEM`/`Usuário logado`, hostname opcional (desde 10/11/2026, preenchido automaticamente com o apelido da série selecionada; sem apelido fica vazio e vale `PRNOTEUMU005`; o campo `Usuário (opcional)` foi removido e o front não envia mais `usuario`) e o botão `Inserir no PowerShell` (`#btn-powershell-endpoint`). Pede confirmação antes do envio e só **insere** o comando no prompt do terminal do Endpoint, sem executar: o Enter é do usuário, no terminal do Chrome (aviso `O comando foi inserido no prompt, mas NÃO foi executado. Revise e aperte Enter no terminal do Chrome.`). Detalhes em `docs/operacao/automacao-chrome.md`.
+  - `#select-powershell-codigo` (10/11/2026, pedido do usuário): lista `Código pronto (opcional)` acima do comando, agrupada por modo (`Usuário logado` / `SYSTEM`), mostrando o título de cada código. A lista vem de `GET /api/endpoint/powershell/codigos` só na primeira seleção de equipamento (`exibirEquipamento`, desde 13/11/2026; antes era na primeira abertura do `<details>`), nunca no carregamento da página. Escolher um código preenche o comando e o modo dele. Sem arquivo salvo, vêm 31 códigos de impressora por localidade (`Add-Printer -ConnectionName "\\prsrvvm-imp\VP_<LOCALIDADE>"`, modo `Usuário logado`). `Add-Printer ... -ConnectionName` no modo `SYSTEM` é bloqueado no cliente, sem confirmar nem chamar a API; outras formas de `Add-Printer` passam. Nada é executado: continua só a inserção no prompt.
   - `#btn-powershell-codigos-gerenciar` / `#powershell-codigos-editor` (10/11/2026, pedido do usuário): botão `Gerenciar códigos` abre o editor com título, modo e comando de cada código, `Remover`, `Adicionar código`, `Salvar lista` e `Cancelar`. Salvar pede confirmação e grava a lista inteira com `PUT /api/endpoint/powershell/codigos` em `data/state/powershell_codigos.json` (dado local, gravação autorizada pelo usuário em 10/11/2026). O servidor rejeita comando com quebra de linha ou caractere de controle, igual ao envio. O editor só abre depois que a lista carregou, para não apagar a lista salva, e relê a lista do servidor a cada abertura (outra aba pode ter salvo). `Salvar lista` trava antes da confirmação, então um clique duplo manda um só `PUT`. O editor recusa `Add-Printer -ConnectionName` (inclusive abreviado até `-Con`) no modo SYSTEM, com a mesma regra do envio.
 - `#badge-apelido-status`
 - `#btn-ir-para-transporte`, `#btn-toggle-ticket-templates`
@@ -162,7 +175,7 @@ Substitui os 4 textareas de "Textos prontos para chamados manuais".
 
 ---
 
-#### "Chamados abertos" (coluna lateral direita do detalhe, ~300px)
+#### "Chamados abertos" (coluna lateral direita do detalhe, 340px, abaixo do painel `Ações`)
 
 Lista compacta com:
 
@@ -208,7 +221,7 @@ Pedido e autorização do usuário em 09/11/2026: montar na Home os e-mails repe
 
 ### Tela
 
-- Botão `Enviar e-mail` (`#btn-enviar-email`) em `.ck-eq-cab__acoes`, ao lado de Consultar no Endpoint, Controle remoto, Transporte e Editar; habilitado só com equipamento selecionado; sem atalho de teclado. `static/js/features/equipment-search.js` chama `app.atualizarEmailOutlook?.(equipment);` quando o equipamento selecionado muda (aceito pelo usuário em 10/11/2026).
+- Botão `Enviar e-mail` (`#btn-enviar-email`) na seção `Outros` do painel `Ações` (desde 13/11/2026; antes ficava em `.ck-eq-cab__acoes`), ao lado de `Ver dossiê`; habilitado só com equipamento selecionado; sem atalho de teclado. `static/js/features/equipment-search.js` chama `app.atualizarEmailOutlook?.(equipment);` quando o equipamento selecionado muda (aceito pelo usuário em 10/11/2026).
 - Modal `#modal-email-outlook` (`[data-accessible-modal]`, título `E-mail pelo Outlook`), em `static/js/features/outlook-email.js`. Esc fecha; foco no primeiro campo.
 - Linha do modelo: `Modelo` (`#email-modelo`), `Nome do modelo` e as ações `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão` (este só no `Modelo 1 - Cabo`).
 - Campos do modelo (salvos sozinhos): `Enviar de` (contas da API; a Sebrae é a padrão), `Para`, `Cc`, `Assunto`, `Mensagem`. Campos do envio (não salvos): `Nome da pessoa` (pré-preenchido com o colaborador do equipamento) e `Setor`, que substituem `{nome}` e `{setor}` no Assunto e na Mensagem.
@@ -255,7 +268,7 @@ Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a part
 
 ### Tela
 
-- Botão `Ver dossiê` (`#btn-ver-dossie`) em `.ck-eq-cab__acoes`, junto das outras ações do equipamento; habilitado só com equipamento selecionado; sem atalho de teclado.
+- Botão `Ver dossiê` (`#btn-ver-dossie`) na seção `Outros` do painel `Ações` (desde 13/11/2026; antes ficava em `.ck-eq-cab__acoes`), ao lado de `Enviar e-mail`; habilitado só com equipamento selecionado; sem atalho de teclado.
 - Diálogo `#modal-dossie-equipamento` no visual do Cockpit (`.ck-veu` e `.ck-dialogo`, temas claro e escuro), título `Dossiê do equipamento`, com a série e o modelo no cabeçalho. Abre por `app.abrirModalAcessivel`; `Fechar` e `Esc` fecham e devolvem o foco ao `Ver dossiê`.
 - Seção `OS e chamados`: tabela da situação atual por OS (cards de uma coluna no celular), a linha `Importações disponíveis: <N>`, o aviso de última observação quando houver e a lista do histórico.
 - `Ver OS` em cada OS da situação atual: fecha o diálogo e chama `abrirChamadoDaOs([], serie, os)`, que abre a OS na aba OS (F6); `serie` é a da linha do relatório (`ordens[].serie`, que pode diferir da do cadastro; sem ela, a série aberta) e `os` é o número da OS, porque a F6 acha a linha por essas duas grafias. Sem OS na importação mais recente, não há `Ver OS` (a aba OS esconde a série sem OS).
