@@ -500,8 +500,11 @@
     const data = porId(`lembretes-${escopo}-data`);
     const hora = porId(`lembretes-${escopo}-hora`);
     if (!data || !hora) return;
-    hora.disabled = !data.value;
-    if (!data.value) hora.value = "";
+    // Data digitada pela metade (badInput) também chega como "": não apaga a hora já escolhida.
+    if (!data.validity?.badInput) {
+      hora.disabled = !data.value;
+      if (!data.value) hora.value = "";
+    }
     if (escopo === "novo") atualizarBotaoData();
   }
 
@@ -571,6 +574,13 @@
     if (!campo || ocupado) return;
     const descricao = campo.value.trim();
     if (!descricao || tamanho(descricao) > LIMITE) return;
+    // Data incompleta: não cria o lembrete sem data; leva o foco ao campo para completar.
+    const campoData = porId("lembretes-novo-data");
+    if (campoData?.validity?.badInput) {
+      painelData(true);
+      campoData.focus();
+      return;
+    }
     const agenda = lerAgendaNova();
     ocupado = true;
     estadoBotaoNovo();
@@ -657,6 +667,12 @@
     if (!l || !campo || ocupado) return;
     const descricao = campo.value.trim();
     if (!descricao || tamanho(descricao) > LIMITE) return;
+    const campoData = porId("lembretes-edicao-data");
+    // Data incompleta chega como "": sem esta checagem o PATCH apagaria a data e a hora.
+    if (campoData?.validity?.badInput) {
+      campoData.focus();
+      return;
+    }
     const data = valorCampo("lembretes-edicao-data");
     if (data && !dataValida(data)) return;
     const campos = camposEditados(l, { descricao, data, hora: valorCampo("lembretes-edicao-hora") });
@@ -813,6 +829,7 @@
   // Vistas Hoje e Em breve (pílulas, tablist com setas) e navegação por semana.
   function lembretesSelecionarVista(qual) {
     if ((qual !== "hoje" && qual !== "embreve") || qual === vista) return;
+    editandoId = null;
     vista = qual;
     semanaAtual = 0;
     renderizar();
@@ -833,6 +850,7 @@
   function lembretesMudarSemana(delta) {
     const nova = Number(delta) === 0 ? 0 : Math.max(0, semanaAtual + Number(delta));
     if (nova === semanaAtual) return;
+    editandoId = null;
     semanaAtual = nova;
     renderizar();
     // Semana anterior fica desligada na semana de hoje: o foco passa para Próxima semana em vez de se perder.
@@ -855,6 +873,8 @@
   // Sem confirmação (como no Todoist): o backend move todo pendente atrasado para hoje, mantendo a hora.
   async function lembretesReagendarAtrasados() {
     if (ocupado) return;
+    // Uma edição aberta seria salva depois com a data antiga e desfaria o reagendamento.
+    editandoId = null;
     ocupado = true;
     let movidos = 0;
     try {
