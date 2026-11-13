@@ -213,6 +213,66 @@ test("o rótulo acessível da aba Backups acompanha o selo", async ({ page }) =>
   await expect(aba(page, "backups")).toHaveAttribute("aria-label", "Backups: 1 regional pendente");
 });
 
+// Regional fora das prioritárias (Curitiba): o candidato TSTBK0008 vira "sobra" ao confirmar, com o Desfazer na própria seção.
+test("sobra fora das prioritárias: confirmar mostra Desfazer em Sobras e desfazer devolve o candidato, com foco e sem rolagem horizontal", async ({ page }) => {
+  test.slow();
+  await abrirResumo(page);
+  await irParaBackupsPeloSino(page);
+  await esperarBackupsAberta(page);
+  const secao = titulo => page.locator(`${PAINEL} .ck-backups__secao`).filter({ has: page.getByRole("heading", { name: titulo }) });
+  const sobras = secao("Sobras");
+  const demais = secao("Candidatos nas demais regionais");
+  const nomeConfirmar = "Confirmar disponível por 7 dias: série TSTBK0008, Curitiba";
+  const nomeDesfazer = "Desfazer confirmação: série TSTBK0008, Curitiba";
+  const sobraCuritiba = sobras.locator("li").filter({ has: page.locator(".ck-backups__cidade", { hasText: "Curitiba" }) }).first();
+
+  // Estado inicial: TSTBK0008 é candidato de Curitiba; Curitiba não tem sobra. Pato Branco tem sobra prioritária (TSTBK0004) sem botão.
+  await expect(demais.getByRole("button", { name: nomeConfirmar })).toBeVisible();
+  await expect(sobras.locator(".ck-backups__cidade", { hasText: "Curitiba" })).toHaveCount(0);
+  await expect(sobras.locator(".ck-backups__cidade", { hasText: "Pato Branco" })).toHaveCount(1);
+  await expect(sobras.locator("code", { hasText: "TSTBK0004" })).toBeVisible();
+  await expect(sobras.getByRole("button")).toHaveCount(0);
+  const desfazerPato = page.getByRole("button", { name: "Desfazer confirmação: série TSTBK0004, Pato Branco" });
+  await expect(desfazerPato).toHaveCount(1); // o da tabela; a sobra prioritária não repete
+
+  // Confirmar: o candidato sai de "demais regionais" e aparece em Sobras, com origem, data e Desfazer.
+  await demais.getByRole("button", { name: nomeConfirmar }).click();
+  const desfazer = sobras.getByRole("button", { name: nomeDesfazer });
+  await expect(desfazer).toBeVisible();
+  await expect(desfazer).toHaveAttribute("data-serie", "TSTBK0008");
+  await expect(desfazer).toHaveAttribute("data-cidade", "Curitiba");
+  await expect(sobraCuritiba.locator("code", { hasText: "TSTBK0008" })).toBeVisible();
+  await expect(sobraCuritiba).toContainText("Confirmado manualmente");
+  await expect(sobraCuritiba).toContainText("confirmado até");
+  await expect(sobraCuritiba).toContainText("1 backup em regional fora das prioritárias");
+  await expect(page.getByRole("button", { name: nomeConfirmar })).toHaveCount(0);
+  await expect(demais).toHaveCount(0); // Curitiba era o único grupo com candidatos
+  await expect(desfazerPato).toHaveCount(1); // continua só o da tabela
+  await expect(sobras.getByRole("button")).toHaveCount(1);
+  // O redesenho troca Confirmar por Desfazer: o foco vai ao botão da mesma série e cidade.
+  await expect(desfazer).toBeFocused();
+
+  // 320px com a sobra confirmada: sem rolagem horizontal e o botão Desfazer inteiro na largura.
+  await page.setViewportSize({ width: 320, height: 800 });
+  for (const [nome, excesso] of Object.entries(await semRolagemHorizontal(page))) expect(excesso, `320px com sobra: ${nome}`).toBeLessThanOrEqual(0);
+  await desfazer.scrollIntoViewIfNeeded();
+  const caixa = await desfazer.boundingBox();
+  expect(caixa.x).toBeGreaterThanOrEqual(0);
+  expect(caixa.x + caixa.width).toBeLessThanOrEqual(320);
+
+  // Desfazer: a sobra de Curitiba some e o candidato volta, com o foco no Confirmar da mesma série.
+  await desfazer.click();
+  const confirmar = page.getByRole("button", { name: nomeConfirmar });
+  await expect(confirmar).toBeVisible();
+  await expect(demais.getByRole("button", { name: nomeConfirmar })).toBeVisible();
+  await expect(page.getByRole("button", { name: nomeDesfazer })).toHaveCount(0);
+  await expect(sobras.locator(".ck-backups__cidade", { hasText: "Curitiba" })).toHaveCount(0);
+  await expect(sobras.locator(".ck-backups__cidade", { hasText: "Pato Branco" })).toHaveCount(1); // a sobra prioritária segue
+  await expect(confirmar).toBeFocused();
+  expect(await page.evaluate(() => ({ ...document.activeElement.dataset }))).toEqual({ backupAcao: "confirmar", serie: "TSTBK0008", cidade: "Curitiba" });
+  for (const [nome, excesso] of Object.entries(await semRolagemHorizontal(page))) expect(excesso, `320px depois de desfazer: ${nome}`).toBeLessThanOrEqual(0);
+});
+
 for (const largura of [320]) {
   test(`${largura}px: sem rolagem horizontal com a sub-aba Backups e com o sino abertos, e a tabela vira cards`, async ({ page }) => {
     await page.setViewportSize({ width: largura, height: 800 });

@@ -134,13 +134,26 @@
     + "<thead><tr><th scope=\"col\">Regional</th><th scope=\"col\">Situação</th><th scope=\"col\">Backups</th><th scope=\"col\">Candidatos</th><th scope=\"col\">Conferência</th><th scope=\"col\">Excluídos</th></tr></thead>"
     + `<tbody>${regionais.map(regional => linhaRegional(regional, abertos)).join("")}</tbody></table>`;
 
+  function itemSobra(item, cidade) {
+    const detalhes = [
+      traduzir(ORIGENS, item.origem),
+      item.confirmado_ate ? `confirmado até ${data(item.confirmado_ate)}` : "",
+    ].filter(Boolean).map(escapar).join(" · ");
+    const desfazer = item.origem === "confirmacao" ? botao("desfazer", texto(item.serie), cidade) : "";
+    return `<code class="ck-backups__serie">${escapar(texto(item.serie))}</code>${detalhes ? `<span class="ck-backups__detalhe">${detalhes}</span>` : ""}${desfazer}`;
+  }
+
   function secaoSobras(sobras) {
     if (!sobras.length) return "";
     const linhas = sobras.map(sobra => {
       const n = inteiro(sobra.quantidade);
-      const series = (Array.isArray(sobra.series) ? sobra.series : []).map(serie => `<code class="ck-backups__serie">${escapar(texto(serie))}</code>`).join(" ");
+      const cidade = texto(sobra.cidade);
+      // Fora das prioritárias, cada série mostra a origem e o Desfazer; nas prioritárias o Desfazer já está na tabela.
+      const series = !sobra.prioritaria && Array.isArray(sobra.itens)
+        ? itens(lista(sobra.itens).map(item => itemSobra(item, cidade)))
+        : (Array.isArray(sobra.series) ? sobra.series : []).map(serie => `<code class="ck-backups__serie">${escapar(texto(serie))}</code>`).join(" ");
       const motivo = sobra.prioritaria ? "além do mínimo" : "em regional fora das prioritárias";
-      return `<strong class="ck-backups__cidade">${escapar(texto(sobra.cidade))}</strong> <span class="ck-backups__detalhe">${n} ${plural(n, "backup", "backups")} ${motivo}</span> ${series}`;
+      return `<strong class="ck-backups__cidade">${escapar(cidade)}</strong> <span class="ck-backups__detalhe">${n} ${plural(n, "backup", "backups")} ${motivo}</span> ${series}`;
     });
     return secao("Sobras", itens(linhas));
   }
@@ -173,6 +186,8 @@
   let dados;
   let htmlAtual = "";
   let emAndamento = false;
+  // `disabled` no clique tira o foco do botão (o navegador o manda ao body): guarda a marca para o redesenho.
+  let focoDaAcao = null;
 
   const painel = () => document.getElementById("resumo-painel-backups");
 
@@ -200,7 +215,10 @@
     const html = renderizarBackupsRegionais(dados, { abertos });
     if (html === htmlAtual) return;
     const foco = document.activeElement;
-    const marca = foco && alvo.contains?.(foco) ? { ...foco.dataset, lista: foco.closest?.("details[data-cidade]")?.dataset.cidade } : null;
+    const semFoco = !foco || foco === document.body;
+    const marca = foco && alvo.contains?.(foco) ? { ...foco.dataset, lista: foco.closest?.("details[data-cidade]")?.dataset.cidade }
+      : semFoco ? focoDaAcao : null;
+    focoDaAcao = null;
     alvo.innerHTML = html;
     htmlAtual = html;
     if (!marca) return;
@@ -230,6 +248,7 @@
     const { backupAcao: acao, serie, cidade } = botaoAcao.dataset;
     if ((acao !== "confirmar" && acao !== "desfazer") || !serie || !cidade) return;
     emAndamento = true;
+    focoDaAcao = { ...botaoAcao.dataset };
     botaoAcao.disabled = true;
     botaoAcao.setAttribute("aria-busy", "true");
     try {
@@ -248,6 +267,8 @@
     } catch (erro) {
       app.showToast(mensagemDoErro(erro, "Não foi possível concluir a ação."), "error");
       liberar(botaoAcao);
+      focoDaAcao = null;
+      if (!document.activeElement || document.activeElement === document.body) botaoAcao.focus?.();
     } finally {
       emAndamento = false;
     }
