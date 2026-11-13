@@ -1,4 +1,4 @@
-"""Regional representatives: per-city overrides in a git-ignored local file; the defaults live only in the backend."""
+"""Regional representatives: per-city overrides and local defaults in git-ignored files; the code keeps only cities and hours."""
 
 import json
 import subprocess
@@ -12,7 +12,10 @@ from fastapi.testclient import TestClient
 
 from core import config as app_config
 from domains import local_setup
-from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_FIELDS, load_regional_representatives
+from domains.local_setup import (
+    REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_FIELDS, effective_regional_representative_defaults,
+    load_regional_representatives,
+)
 from routers.local_setup import create_local_setup_router
 
 
@@ -21,6 +24,10 @@ VALID = {
     "horario": "08:00:00 às 18:00:00", "almoco": "12:00:00", "pausaDuracao": "1h30",
 }
 URL = "/api/config/representantes-regionais"
+LOCAL_DEFAULTS = {
+    "Londrina": {"nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"},
+    "Maringá": {"nome": "Outra Pessoa Exemplo", "email": "outra.exemplo@pr.sebrae.com.br"},
+}
 
 
 class RegionalRepresentativesTests(unittest.TestCase):
@@ -29,6 +36,7 @@ class RegionalRepresentativesTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.path = root / "config" / "representantes_regionais.json"
+        self.defaults_path = root / "state" / "representantes_regionais_padrao.json"  # never the real file of the checkout
         router, _ = create_local_setup_router(
             model_path=lambda _kind: root / "modelo.xlsx",
             transaction_root=lambda: root,
@@ -38,19 +46,26 @@ class RegionalRepresentativesTests(unittest.TestCase):
             export_dependency_paths=lambda: [],
             validate_export=lambda: None,
             regional_representatives_file=lambda: self.path,
+            regional_representative_defaults_file=lambda: self.defaults_path,
         )
         app = FastAPI()
         app.include_router(router)
         self.client = TestClient(app)
 
+    def write_local_defaults(self, content=LOCAL_DEFAULTS):
+        self.defaults_path.parent.mkdir(parents=True, exist_ok=True)
+        self.defaults_path.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
+
     def get_state(self):
-        """GET without `padroes` (checked on its own below), so the tests of the saved changes stay focused."""
+        """GET without the defaults (checked on their own below), so the tests of the saved changes stay focused."""
         body = self.client.get(URL).json()
         body.pop("padroes")
+        body.pop("padroes_arquivo_invalido")
         return body
 
     def test_missing_file_means_no_changes(self):
         self.assertEqual(self.get_state(), {"alteracoes": {}, "arquivo_invalido": False})
+        self.assertFalse(self.client.get(URL).json()["padroes_arquivo_invalido"])
 
     def test_get_returns_the_22_defaults_with_their_six_fields_in_display_order(self):
         padroes = self.client.get(URL).json()["padroes"]
@@ -59,11 +74,11 @@ class RegionalRepresentativesTests(unittest.TestCase):
         for item in padroes:
             self.assertTrue(set(REGIONAL_REPRESENTATIVE_FIELDS) <= set(item), item["cidade"])
             self.assertTrue(set(item) - {"cidade", *REGIONAL_REPRESENTATIVE_FIELDS} <= {"nomeOpcao"}, item["cidade"])
+        # Without the local defaults file the code keeps hours only: name, e-mail and phone are blank for every city.
+        for item in padroes:
+            self.assertEqual((item["nome"], item["email"], item["telefone"], item["nomeOpcao"]), ("", "", "", "Não definido ainda"))
         londrina = next(item for item in padroes if item["cidade"] == "Londrina")
-        self.assertEqual(londrina["nome"], "Renata Custodio de Oliveira Varasquim")
-        self.assertEqual(londrina["telefone"], "(43) 99643-8754")
-        arapongas = next(item for item in padroes if item["cidade"] == "Arapongas")
-        self.assertEqual((arapongas["nome"], arapongas["nomeOpcao"]), ("", "Não definido ainda"))
+        self.assertEqual((londrina["horario"], londrina["almoco"]), ("08:00:00 às 18:00:00", "Escritório não fecha"))
         # A saved change never alters the defaults; PUT/DELETE answer with the changes only.
         response = self.client.put(f"{URL}/Londrina", json=VALID)
         self.assertNotIn("padroes", response.json())
@@ -79,6 +94,59 @@ class RegionalRepresentativesTests(unittest.TestCase):
             self.assertTrue(response.json()["arquivo_invalido"])
             self.assertEqual(len(response.json()["padroes"]), 22)
 
+    def test_local_defaults_file_fills_name_email_and_phone_and_clears_the_empty_name_option(self):
+        self.write_local_defaults()
+        body = self.client.get(URL).json()
+        self.assertFalse(body["padroes_arquivo_invalido"])
+        padroes = {item["cidade"]: item for item in body["padroes"]}
+        londrina, maringa, cascavel = padroes["Londrina"], padroes["Maringá"], padroes["Cascavel"]
+        self.assertEqual((londrina["nome"], londrina["email"], londrina["telefone"]), tuple(LOCAL_DEFAULTS["Londrina"].values()))
+        self.assertNotIn("nomeOpcao", londrina)
+        self.assertEqual((maringa["nome"], maringa["telefone"]), ("Outra Pessoa Exemplo", ""))  # partial entry: the rest stays blank
+        self.assertEqual(londrina["horario"], "08:00:00 às 18:00:00")  # hours stay the code's
+        self.assertEqual((cascavel["nome"], cascavel["nomeOpcao"]), ("", "Não definido ainda"))  # every empty name gets the option
+
+    def test_local_defaults_file_ignores_unknown_cities_fields_and_non_text_values(self):
+        self.write_local_defaults({
+            "Londrina": {"nome": "Pessoa Exemplo", "horario": 5, "extra": "x", "telefone": None}, "Atlântida": {"nome": "Fora"},
+            "Cascavel": 7,
+        })
+        efetivos, invalido = effective_regional_representative_defaults(self.defaults_path)
+        self.assertFalse(invalido)
+        self.assertEqual(efetivos["Londrina"], {**local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS["Londrina"], "nome": "Pessoa Exemplo"})
+        self.assertEqual(efetivos["Cascavel"], local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS["Cascavel"])
+        self.assertNotIn("Atlântida", efetivos)
+
+    def test_invalid_local_defaults_file_is_flagged_and_the_code_defaults_stay(self):
+        for content in ("{não é json", "[1, 2]"):
+            self.write_local_defaults(content)
+            with self.assertLogs("domains.local_setup", level="WARNING"):
+                body = self.client.get(URL).json()
+            self.assertTrue(body["padroes_arquivo_invalido"])
+            self.assertEqual(len(body["padroes"]), 22)
+            self.assertTrue(all(not item["nome"] for item in body["padroes"]))
+            self.assertFalse(body["arquivo_invalido"])  # the overrides file is a separate flag
+
+    def test_without_a_defaults_path_the_code_defaults_alone_are_used(self):
+        # None never reads a file: the result is the same on a machine that has the real local file.
+        efetivos, invalido = effective_regional_representative_defaults()
+        self.assertEqual((efetivos, invalido), (local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS, False))
+        self.assertTrue(all(not d["nome"] and not d["email"] and not d["telefone"] for d in efetivos.values()))
+
+    def test_save_and_restore_use_the_effective_default(self):
+        self.write_local_defaults()
+        efetivo = {**local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS["Londrina"], **LOCAL_DEFAULTS["Londrina"]}
+        # Equal to the effective default: nothing is saved.
+        response = self.client.put(f"{URL}/Londrina", json=efetivo)
+        self.assertEqual((response.status_code, response.json()["alteracoes"]), (200, {}))
+        self.assertFalse(self.path.exists())
+        # Only the differing field is stored; putting the effective default back drops the city (Restaurar padrão).
+        response = self.client.put(f"{URL}/Londrina", json={**efetivo, "nome": "Pessoa Fictícia"})
+        self.assertEqual(response.json()["alteracoes"], {"Londrina": {"nome": "Pessoa Fictícia"}})
+        response = self.client.put(f"{URL}/Londrina", json=efetivo)
+        self.assertEqual(response.json()["alteracoes"], {})
+        self.assertEqual(self.client.get(URL).json()["alteracoes"], {})
+
     def test_unknown_cities_and_non_object_entries_in_the_file_are_ignored(self):
         self.path.parent.mkdir(parents=True)
         self.path.write_text(json.dumps({"Londrina": VALID, "Atlântida": VALID, "Cascavel": 5}), encoding="utf-8")
@@ -91,7 +159,8 @@ class RegionalRepresentativesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         expected = {
             "Maringá": {k: VALID[k] for k in ("nome", "email", "telefone", "almoco", "pausaDuracao")},  # horario equals the default
-            "Foz do Iguaçu": {"nome": "Outra Pessoa", "email": "", "horario": "08:00:00 às 18:00:00", "almoco": "Escritório não fecha", "pausaDuracao": ""},
+            # email and telefone are blank in the code default too, so they are not stored
+            "Foz do Iguaçu": {"nome": "Outra Pessoa", "horario": "08:00:00 às 18:00:00", "almoco": "Escritório não fecha", "pausaDuracao": ""},
         }
         self.assertEqual(self.get_state(), {"alteracoes": expected, "arquivo_invalido": False})
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), expected)
@@ -102,20 +171,21 @@ class RegionalRepresentativesTests(unittest.TestCase):
         self.assertEqual(self.client.delete(f"{URL}/Maringá").status_code, 404)
 
     def test_only_fields_that_differ_from_the_default_are_saved_and_equal_to_default_removes_the_city(self):
-        londrina = local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS["Londrina"]
+        londrina = local_setup.REGIONAL_REPRESENTATIVE_DEFAULTS["Londrina"]  # no local defaults file here: the code's
         # Equal to the default and nothing saved: no file is created, the route still answers like before.
         response = self.client.put(f"{URL}/Londrina", json=londrina)
         self.assertEqual((response.status_code, response.json()), (200, {"alteracoes": {}, "arquivo_invalido": False}))
         self.assertFalse(self.path.exists())
 
-        response = self.client.put(f"{URL}/Londrina", json={**londrina, "nome": "Pessoa Fictícia", "telefone": ""})
-        self.assertEqual(response.json()["alteracoes"], {"Londrina": {"nome": "Pessoa Fictícia", "telefone": ""}})
-        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"Londrina": {"nome": "Pessoa Fictícia", "telefone": ""}})
+        changed = {"nome": "Pessoa Fictícia", "telefone": "(41) 90000-0002"}
+        response = self.client.put(f"{URL}/Londrina", json={**londrina, **changed})
+        self.assertEqual(response.json()["alteracoes"], {"Londrina": changed})
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"Londrina": changed})
         self.client.put(f"{URL}/Maringá", json=VALID)
 
         # Changing a field back to the default drops only that field; changing all of them drops the city.
-        response = self.client.put(f"{URL}/Londrina", json={**londrina, "telefone": ""})
-        self.assertEqual(response.json()["alteracoes"]["Londrina"], {"telefone": ""})
+        response = self.client.put(f"{URL}/Londrina", json={**londrina, "telefone": "(41) 90000-0002"})
+        self.assertEqual(response.json()["alteracoes"]["Londrina"], {"telefone": "(41) 90000-0002"})
         response = self.client.put(f"{URL}/Londrina", json=londrina)
         self.assertEqual(list(response.json()["alteracoes"]), ["Maringá"])
         self.assertEqual(list(json.loads(self.path.read_text(encoding="utf-8"))), ["Maringá"])
@@ -191,6 +261,17 @@ class RegionalRepresentativesTests(unittest.TestCase):
             cwd=app_config.BASE_DIR, check=False,
         )
         self.assertEqual(ignored.returncode, 0)
+
+    def test_local_defaults_file_is_git_ignored_and_the_example_is_versioned(self):
+        self.assertEqual(
+            app_config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, app_config.STATE_DIR / "representantes_regionais_padrao.json",
+        )
+        for name, code in (("data/state/representantes_regionais_padrao.json", 0), ("config/representantes_regionais_padrao.exemplo.json", 1)):
+            with self.subTest(name=name):
+                self.assertEqual(subprocess.run(["git", "check-ignore", "-q", name], cwd=app_config.BASE_DIR, check=False).returncode, code)
+        example = json.loads((app_config.BASE_DIR / "config" / "representantes_regionais_padrao.exemplo.json").read_text(encoding="utf-8"))
+        self.assertTrue(set(example) <= set(REGIONAL_REPRESENTATIVE_CITIES))
+        self.assertTrue(all(set(v) <= set(REGIONAL_REPRESENTATIVE_FIELDS) for v in example.values()))
 
 
 if __name__ == "__main__":

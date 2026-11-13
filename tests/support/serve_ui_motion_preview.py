@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 STATIC = Path(__file__).resolve().parents[2] / "static"
 sys.path.insert(0, str(STATIC.parent))
 from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
-from domains.local_setup import regional_representative_defaults
+from domains.local_setup import REGIONAL_REPRESENTATIVE_DEFAULTS, regional_representative_defaults
 EQUIPMENT = {"serial": "LENTO", "modelo": "Notebook de demonstração", "tipo": "Notebook",
              "apelido": "DEMO-001", "retirada_cidade": "Curitiba", "retirada_endereco": "Endereço fictício"}
 DEMO_EVENT_ID = "fixture-event-001"
@@ -103,12 +103,27 @@ def origin_contact_config():
 # Regional representatives edited by the user, in memory only (GET/PUT/DELETE /api/config/representantes-regionais).
 regional_changes = {}
 REGIONAL_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
+# The code keeps no personal data, so the fixture plays the local defaults file with fictitious names: every city has one
+# except Arapongas, which keeps the "Não definido ainda" option.
+FIXTURE_REGIONAL_NAMES = {
+    "Londrina": {"nome": "Rita Exemplo de Oliveira Teste", "email": "rita.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"},
+    "Maringá": {"nome": "Tereza Exemplar Santos"},
+    "Toledo": {"nome": "Tania da Costa Fictícia"},
+}
+
+
+def fixture_regional_defaults():
+    efetivos = {cidade: dict(padrao) for cidade, padrao in REGIONAL_REPRESENTATIVE_DEFAULTS.items()}
+    for cidade, padrao in efetivos.items():
+        if cidade != "Arapongas":
+            padrao.update({"nome": f"Pessoa Exemplo {cidade}", **FIXTURE_REGIONAL_NAMES.get(cidade, {})})
+    return regional_representative_defaults(efetivos)
 
 
 def regional_config(with_defaults=False):
     # Like the real API: the defaults (single source: the backend) come only on GET.
     return {"alteracoes": regional_changes, "arquivo_invalido": False,
-            **({"padroes": regional_representative_defaults()} if with_defaults else {})}
+            **({"padroes": fixture_regional_defaults(), "padroes_arquivo_invalido": False} if with_defaults else {})}
 
 
 def regional_error(message):

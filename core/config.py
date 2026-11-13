@@ -103,8 +103,14 @@ SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBR
 # SIMPRESS_TRANSFER_ORIGIN_* environment variables or, field by field, from this git-ignored
 # file (see config/contato_origem.exemplo.json); missing values stay empty.
 TRANSFER_ORIGIN_CONTACT_FILE = BASE_DIR / "config" / "contato_origem.json"
-# Per-city overrides of the SEBRAE/PR regional representatives (the defaults live in the front end).
+# Per-city overrides of the SEBRAE/PR regional representatives (what the user edited on the Transferência screen).
 REGIONAL_REPRESENTATIVES_FILE = BASE_DIR / "config" / "representantes_regionais.json"
+# Local (git-ignored) default name, e-mail and phone of each representative; the versioned code keeps only the cities and
+# hours. Shape: config/representantes_regionais_padrao.exemplo.json. Without this file the defaults are blank.
+REGIONAL_REPRESENTATIVE_DEFAULTS_FILE = STATE_DIR / "representantes_regionais_padrao.json"
+# Local (git-ignored, read-only) default text of the Outlook "Modelo 1 - Cabo": any of conta, para, cc, assunto, corpo.
+# Shape: config/outlook_modelo_cabo_padrao.exemplo.json. Without this file the generic code default is used.
+OUTLOOK_MODELO_CABO_DEFAULTS_FILE = STATE_DIR / "outlook_modelo_cabo_padrao.json"
 
 
 def resolve_history_annotations_dir(base_dir: Path, environment: Mapping[str, str] | None = None) -> tuple[Path, bool]:

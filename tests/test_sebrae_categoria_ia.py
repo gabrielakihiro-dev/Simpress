@@ -204,12 +204,12 @@ class SugestorTest(SemCache):
         sugestor.registrar_nomes(["Maria Oliveira Santos", None, ""])
         sugestor.sugerir(
             f"Acesso de Maria Oliveira Santos CPF {CPF_VALIDO}",
-            "Maria Oliveira Santos pede ajuda. Telefone (41) 98751-2389 e-mail maria@exemplo.com\nsenha: Abc12345xyz",
+            "Maria Oliveira Santos pede ajuda. Telefone (41) 90000-0000 e-mail maria@exemplo.com\nsenha: Abc12345xyz",
             "Orientada por Maria Oliveira Santos",
             OPCOES,
         )
         enviado = cliente.enviado()
-        for segredo in ("Maria", "Oliveira", "Santos", CPF_VALIDO, "98751-2389", "maria@exemplo.com", "Abc12345xyz"):
+        for segredo in ("Maria", "Oliveira", "Santos", CPF_VALIDO, "90000-0000", "maria@exemplo.com", "Abc12345xyz"):
             self.assertNotIn(segredo, enviado)
         self.assertIn("[PESSOA_1]", enviado)
 
