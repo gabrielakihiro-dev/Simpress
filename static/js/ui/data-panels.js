@@ -279,7 +279,9 @@
     const casaOs = (st, termo, item) => casaFiltrosOs(st, termo, item) && naSituacaoOs(st, item);
     const statusOs = section => osExternas.get(section)?.status || section.querySelector(".ticket-summary-status");
     // OS finalizada = marca ativa para a série+OS (a mesma regra do selo "Chamado finalizado"); marcas null (leitura falhou) = tudo em Abertas.
-    const osFinalizada = (marcas, serie, os) => Boolean(marcas?.get(osObsKey(serie, os))?.some(marca => marca?.ativa));
+    const marcaAtivaOs = (marcas, serie, os) => Boolean(marcas?.get(osObsKey(serie, os))?.some(marca => marca?.ativa));
+    // OS com selo Entregue (Simpress, etapa "Pedido entregue" com data) também vai para Finalizadas, com ou sem vínculo UTIC.
+    const osFinalizada = (marcas, serie, order) => Boolean(order.entregue) || marcaAtivaOs(marcas, serie, order.os);
 
     // Leituras opcionais que falharam: a tabela segue montada e o status diz o que faltou.
     function sufixoFalhasOs(st) {
@@ -300,7 +302,7 @@
       const comAberta = new Set();
       let os = 0;
       records.forEach(record => record.ordens.forEach(order => {
-        if (osFinalizada(marcas, record.serie, order.os)) return;
+        if (osFinalizada(marcas, record.serie, order)) return;
         os += 1;
         comAberta.add(serialKey(record.serie));
       }));
@@ -1018,10 +1020,11 @@
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
-          // OS finalizada = marca ativa; a sub-aba filtra por este atributo (a janela Chamado × OS não usa).
+          // OS finalizada = marca ativa ou selo Entregue; a sub-aba filtra por este atributo (a janela Chamado × OS não usa).
+          // O vínculo "Vinculado automaticamente" segue só com a marca ativa (finalizada).
           const marcasDaOs = marcas?.get(osObsKey(record.serie, order.os)) || [];
           const finalizada = marcasDaOs.some(marca => marca?.ativa);
-          row.dataset.finalizada = String(finalizada);
+          row.dataset.finalizada = String(osFinalizada(marcas, record.serie, order));
           // Um único editor UTIC por linha: a fonte que já tem vínculo salvo, senão a primeira (nas sub-abas, a de maior prioridade).
           const salvoDe = source => links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }));
           const comVinculo = order.fontes.filter(salvoDe);

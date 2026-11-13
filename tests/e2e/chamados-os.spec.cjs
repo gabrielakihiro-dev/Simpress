@@ -12,7 +12,7 @@ async function abrirAba(page, botaoBarra, itemMenu, titulo) {
   await expect(page.locator("#cockpit-tool-title")).toHaveText(titulo);
 }
 
-// A OS com marca ativa fica na sub-aba Finalizadas; as demais, em Abertas (a padrão).
+// A OS com marca ativa (ou selo Entregue da Simpress) fica na sub-aba Finalizadas; as demais, em Abertas (a padrão).
 async function abrirAbaOsComVinculo(page, numero, { finalizadas = false } = {}) {
   const vinculo = { fonte: "oracle", serie: "DEMO-SN-001", os: "7285070", ano: 2026, numero, origem: "manual", chamado: `UTIC-2026-${numero}` };
   await page.route("**/api/operacoes/chamados/vinculos-os", route => route.request().method() === "GET"
