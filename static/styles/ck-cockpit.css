@@ -2471,3 +2471,59 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (prefers-reduced-motion: reduce) {
   .ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status { animation: none; }
 }
+
+/* ---------- F2 Catálogo de unidades (13/11/2026): KPIs em cartões, barra numa linha, lista e detalhe em cartões, detalhe em grade 2×2 ---------- */
+/* Só CSS, escopado ao painel; IDs, textos e dados (CNPJ e CEP sem máscara) não mudam. Mesmo padrão visual do Histórico de apelidos. */
+[data-cockpit-tool-panel="unidades"] { width: 100%; max-width: 1400px; min-width: 0; margin-inline: auto; }
+[data-cockpit-tool-panel="unidades"] .ck-kpis { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 20px 0; border-bottom: 0; }
+[data-cockpit-tool-panel="unidades"] .ck-kpis .ck-kpi { flex: 0 0 auto; min-width: 120px; padding: 8px 14px; border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); }
+
+/* Barra: busca larga, contagem ao lado e Nova unidade à direita, sem linhas sobrando */
+[data-cockpit-tool-panel="unidades"] .ck-barra-ferr { gap: 8px 12px; padding: 12px 20px; border-bottom: 0; }
+[data-cockpit-tool-panel="unidades"] .ck-barra-ferr .ck-campo { flex: 0 1 360px; }
+[data-cockpit-tool-panel="unidades"] .ck-barra-ferr__nota { flex: 0 1 auto; align-self: flex-end; display: flex; align-items: center; min-height: var(--altura-controle-sm); font-size: var(--fs-sm); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
+[data-cockpit-tool-panel="unidades"] #form-nova-unidade { margin-top: 0; }
+
+/* Lista e detalhe como cartões lado a lado */
+[data-cockpit-tool-panel="unidades"] .ck-dividido { gap: 16px; padding: 0 20px 20px; }
+[data-cockpit-tool-panel="unidades"] .ck-dividido__lista { padding: 0; }
+[data-cockpit-tool-panel="unidades"] .ck-tabela td:nth-child(3) { font-family: var(--fonte-mono); font-variant-numeric: tabular-nums; }
+[data-cockpit-tool-panel="unidades"] .ck-tabela td:nth-child(3)::before { font-family: var(--fonte-corpo); }
+@media (min-width: 1200px) {
+  [data-cockpit-tool-panel="unidades"] .ck-dividido__lista { align-self: start; }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela { border-collapse: separate; border-spacing: 0; border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); overflow: hidden; }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela th { padding: 9px 14px; background: var(--cor-superficie-funda); border-bottom-color: var(--cor-borda-suave); }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela td { padding: 11px 14px; vertical-align: middle; }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela tbody tr:last-child td { border-bottom: 0; }
+  [data-cockpit-tool-panel="unidades"] .ck-tabela tr[aria-selected="true"] { box-shadow: inset 3px 0 0 var(--cor-destaque); }
+  /* A lista rola (overflow: auto) e a tabela encosta nela: o anel de foco vai para dentro da linha */
+  [data-cockpit-tool-panel="unidades"] .ck-tabela tbody tr:focus-visible { outline-offset: -2px; }
+  #cockpit-tool-panels [data-cockpit-tool-panel="unidades"] .ck-dividido__detalhe { top: 12px; max-height: calc(100dvh - var(--ck-topbar-h, 48px) - 24px); }
+}
+[data-cockpit-tool-panel="unidades"] .ck-dividido__detalhe { border: 1px solid var(--cor-borda); border-radius: 10px; }
+[data-cockpit-tool-panel="unidades"] .ck-det__cab { gap: 4px; padding: 16px 20px; }
+[data-cockpit-tool-panel="unidades"] .ck-det__titulo { font-size: var(--fs-2xl); font-weight: var(--peso-marca); overflow-wrap: anywhere; }
+
+/* Detalhe: sem a faixa cinza; pares em grade 2×2 com linhas finas e Endereço na largura toda */
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo.ck-pares { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; padding: 4px 20px 8px; border: 0; border-radius: 0; background: transparent; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo.ck-pares:empty { padding: 0; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par { gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--cor-borda); background: transparent; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par:nth-child(3) { grid-column: 1 / -1; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par:nth-last-child(-n+2) { border-bottom: 0; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par dd { font-size: var(--fs-base); }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-par:nth-child(n+4) dd { font-family: var(--fonte-mono); font-variant-numeric: tabular-nums; }
+[data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-det__linha .ck-btn--icone { margin-block: -12px; }
+[data-cockpit-tool-panel="unidades"] .ck-det__rodape { padding: 12px 20px; }
+
+@media (max-width: 767.98px) {
+  [data-cockpit-tool-panel="unidades"] .ck-kpis { padding: 12px 12px 0; }
+  [data-cockpit-tool-panel="unidades"] .ck-kpis .ck-kpi { flex: 1 1 0; min-width: 0; }
+  [data-cockpit-tool-panel="unidades"] .ck-barra-ferr { padding-inline: 12px; }
+  [data-cockpit-tool-panel="unidades"] .ck-dividido { padding: 0 12px 16px; }
+  [data-cockpit-tool-panel="unidades"] :is(.ck-det__cab, .ck-det__rodape) { padding-inline: 14px; }
+  [data-cockpit-tool-panel="unidades"] .ck-det__corpo.ck-pares { padding-inline: 14px; }
+}
+/* Abaixo de 400px o lápis quebra para baixo do CNPJ: sem margem negativa ele não sobe sobre os dígitos */
+@media (max-width: 399.98px) {
+  [data-cockpit-tool-panel="unidades"] .ck-det__corpo .ck-det__linha .ck-btn--icone { margin-block: 0; }
+}
