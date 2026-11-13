@@ -28,7 +28,11 @@ const linha = (page, cidade) => page.locator(`${PAINEL} tbody tr`).filter({ has:
 const aba = (page, chave) => page.locator(`#resumo-aba-${chave}`);
 
 // openPanel recarrega o histórico e pode refazer o Resumo; só depois disso a aba e o teclado são estáveis.
+// Espera positiva: o conteúdo da comparação chega a um estado final (pronto, vazio ou erro), não só "sem Carregando".
 async function esperarResumoPronto(page) {
+  await expect(page.locator(CONTEUDO)).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
+  // openPanel só reaplica a aba pedida (ex.: Backups pelo sino) depois de carregar os ativos regionais.
+  await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
   await expect(page.locator("#cockpit-comparison-status")).not.toContainText("Carregando");
   await expect(page.locator(SELO_ABA)).toHaveText(/^\d+$/); // o /api/painel já chegou ao módulo
 }
@@ -90,6 +94,26 @@ test("o botão do sino abre o Resumo direto em Backups, mesmo sem nenhum evento 
   await expect(page.locator("#cockpit-comparison-event")).toBeDisabled();
   await esperarBackupsAberta(page);
   await expect(linha(page, "Cascavel").locator(".ck-badge")).toHaveText("Sem backup disponível");
+  // Sem comparação, as abas que só filtram a comparação ficam desabilitadas e o teclado as pula.
+  for (const chave of ["visao", "apelidos", "usuarios", "sem-acesso"]) await expect(aba(page, chave)).toHaveAttribute("aria-disabled", "true");
+  for (const chave of ["divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
+  await aba(page, "apelidos").click({ force: true });
+  await expect(aba(page, "backups")).toHaveAttribute("aria-selected", "true");
+  await aba(page, "backups").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(aba(page, "divergencias")).toBeFocused();
+  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(aba(page, "backups")).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(aba(page, "divergencias")).toBeFocused();
+  // Foco numa aba desabilitada (clique): as setas ainda levam a uma habilitada.
+  await aba(page, "apelidos").focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(aba(page, "backups")).toBeFocused();
+  await aba(page, "usuarios").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(aba(page, "divergencias")).toBeFocused();
 });
 
 test("o botão do sino abre Backups também com outro evento de comparação selecionado", async ({ page }) => {

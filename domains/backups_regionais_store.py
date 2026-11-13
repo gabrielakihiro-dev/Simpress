@@ -13,11 +13,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from core.integrity import AtomicFileTransaction, FileTransactionError, TransactionConflictError
+from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, TransactionConflictError
 from domains.regras_negocio import normalize_reference_value
 
 ESQUEMA = 1
 PRAZO_DIAS = 7
+# Confirmação expirada fica mais este tempo (a tela mostra "Antes: expirou"); depois sai na próxima gravação.
+RETENCAO_DIAS = PRAZO_DIAS
 CAMPOS = ("serie", "cidade", "confirmado_em", "expira_em")
 
 Estado = Dict[str, Any]
@@ -79,13 +81,22 @@ def _vigente(registro: Registro, agora: datetime) -> bool:
     return agora < expira
 
 
+def podar(estado: Estado, agora: datetime) -> Estado:
+    """Tira as confirmações expiradas há mais de ``RETENCAO_DIAS``; a recém-expirada fica para a nota "Antes: expirou".
+
+    Só roda dentro da transação de escrita (confirmar e desfazer): o GET nunca grava.
+    """
+    limite = agora - timedelta(days=RETENCAO_DIAS)
+    return {"esquema": ESQUEMA, "confirmacoes": [r for r in estado["confirmacoes"] if _vigente(r, limite)]}
+
+
 def confirmar(estado: Estado, serie: str, cidade: str, agora: datetime) -> Tuple[Estado, Registro, bool]:
     """``(novo_estado, registro, repetido)``; a confirmação vigente da mesma série e cidade fica como está."""
     if agora.tzinfo is None or agora.utcoffset() is None:
         raise ValueError("agora precisa ter fuso horário")
     existente = next((r for r in estado["confirmacoes"] if _mesma(r, serie, cidade)), None)
     if existente is not None and _vigente(existente, agora):
-        return estado, existente, True
+        return podar(estado, agora), existente, True
     registro: Registro = {
         "serie": serie,
         "cidade": cidade,
@@ -93,14 +104,19 @@ def confirmar(estado: Estado, serie: str, cidade: str, agora: datetime) -> Tuple
         "expira_em": (agora + timedelta(days=PRAZO_DIAS)).isoformat(timespec="seconds"),
     }
     restantes = [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]
-    return {"esquema": ESQUEMA, "confirmacoes": [*restantes, registro]}, registro, False
+    return podar({"esquema": ESQUEMA, "confirmacoes": [*restantes, registro]}, agora), registro, False
 
 
-def desfazer(estado: Estado, serie: str, cidade: str) -> Tuple[Estado, Optional[Registro]]:
-    """``(novo_estado, registro_removido | None)``; desfazer o que não existe não é erro."""
+def desfazer(
+    estado: Estado, serie: str, cidade: str, agora: Optional[datetime] = None,
+) -> Tuple[Estado, Optional[Registro]]:
+    """``(novo_estado, registro_removido | None)``; desfazer o que não existe não é erro.
+
+    Com ``agora``, poda as expiradas antigas depois de remover (o ``removido`` não muda por causa da poda).
+    """
     removido = next((r for r in estado["confirmacoes"] if _mesma(r, serie, cidade)), None)
-    restantes = [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]
-    return {"esquema": ESQUEMA, "confirmacoes": restantes}, removido
+    novo = {"esquema": ESQUEMA, "confirmacoes": [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]}
+    return (novo if agora is None else podar(novo, agora)), removido
 
 
 class BackupsRegionaisStore:
@@ -109,20 +125,35 @@ class BackupsRegionaisStore:
         self.transaction_root = Path(transaction_root)
 
     def ler(self) -> Estado:
-        if not self.arquivo.exists():
-            return estado_vazio()
+        """Sem arquivo: estado vazio. Conteúdo inválido: ``EstadoIlegivel``. Outro ``OSError`` (arquivo preso,
+        permissão passageira) sobe como está: não é "ilegível" e quem chama decide (409 na rota, aviso no painel)."""
         try:
-            bruto = json.loads(self.arquivo.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, ValueError) as error:
+            texto = self.arquivo.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return estado_vazio()
+        except UnicodeError as error:
+            raise EstadoIlegivel(f"'{self.arquivo.name}' está ilegível; os dados foram preservados.") from error
+        try:
+            bruto = json.loads(texto)
+        except ValueError as error:
             raise EstadoIlegivel(f"'{self.arquivo.name}' está ilegível; os dados foram preservados.") from error
         return validar_estado(bruto, self.arquivo.name)
 
     def escrever(self, operacao: Callable[[Estado], Tuple[Estado, Any]]) -> Any:
         """Relê o estado dentro da transação e aplica ``operacao``; ``EstadoIlegivel`` desfaz sem gravar.
 
-        ``FileBusyError`` (arquivo ocupado) e ``FileTransactionError`` (leitura ou gravação) sobem para o router.
+        ``FileBusyError`` (arquivo ocupado ou erro de disco passageiro na leitura) e ``FileTransactionError``
+        (leitura ou gravação) sobem para o router.
         """
         resultado: Dict[str, Any] = {}
+        # Leitura prévia: erro de disco passageiro (antivírus, sincronização) vira "ocupado" (409), não falha de gravação.
+        # shortcut: a transação relê logo depois; um erro que surja só nesse intervalo ainda sobe como FileTransactionError (500).
+        try:
+            self.ler()
+        except EstadoIlegivel:
+            pass  # a releitura dentro da transação levanta o mesmo erro, com o caminho de sempre (503)
+        except OSError as error:
+            raise FileBusyError(type(error).__name__) from error
 
         def atualizar(atual: Any) -> Estado:
             novo, resultado["valor"] = operacao(validar_estado(atual, self.arquivo.name))

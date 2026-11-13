@@ -138,5 +138,9 @@ Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritári
 
 - `Confirmar disponível por 7 dias` grava `{serie, cidade, confirmado_em, expira_em}` só em `data/state/backups_regionais.json`, sem dado pessoal. Repetir com a confirmação vigente não estende o prazo.
 - A confirmação deixa de contar quando expira, quando a cidade do cadastro muda, quando a série ganha usuário vigente ou quando é bloqueada.
-- `Desfazer confirmação` remove a confirmação. Aparece na tabela da regional prioritária e, nas regionais fora das prioritárias, na própria sobra (só para `origem: "confirmacao"`).
+- `Desfazer confirmação` remove a confirmação. Aparece na tabela da regional prioritária e, nas regionais fora das prioritárias, na própria sobra, sempre que há confirmação vigente: `origem: "confirmacao"`, backup contado pela marca com `confirmado_ate` e série na conferência com `confirmacao.estado: "vigente"` (13/11/2026). Confirmação invalidada só mostra a nota.
+- Confirmações expiradas há mais de 7 dias saem do arquivo na próxima gravação (confirmar ou desfazer); ler o painel nunca grava.
+- Erro da ação (13/11/2026): o toast mostra a mensagem do servidor; erro de rede mostra `Não foi possível confirmar o backup.` ou `Não foi possível desfazer a confirmação.`; 422 também atualiza o painel.
+- Rótulo da aba (13/11/2026): `Backups: aguardando dados` enquanto o painel não chegou; `Backups: dados indisponíveis` quando a leitura falha antes de qualquer resposta (evento `simpress:painel-indisponivel`). Falha depois de dados bons mantém a tabela.
+- Sem comparação na tela (histórico vazio, carregando ou erro), as abas `Visão geral`, `Apelidos`, `Usuários` e `Sem acesso` ficam com `aria-disabled="true"`, não abrem com clique e as setas, Home e End as pulam (com o foco numa delas, a seta direita vai à primeira aba habilitada e a esquerda à última); `Divergências` e `Backups` seguem habilitadas (13/11/2026).
 - O apelido pode ser nome de pessoa: aparece só na tela local, nunca no Assistente, em toast nem em log. O Assistente (`listar_backups_regionais`) só consulta e não confirma nem desfaz.
