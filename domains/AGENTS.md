@@ -41,9 +41,13 @@ Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto 
 
 ## Transporte e representantes (F2)
 
-- O padrão dos representantes tem uma só fonte, `REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`; só a alteração por cidade é gravada em `config/representantes_regionais.json`. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+- O padrão dos representantes é o código (`REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`: só cidades e horários, sem dado pessoal) mesclado com o arquivo local `data/state/representantes_regionais_padrao.json` (nome, e-mail e telefone; fora do Git; modelo em `config/representantes_regionais_padrao.exemplo.json`); só a alteração por cidade é gravada em `config/representantes_regionais.json`. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
+## E-mail por modelo (Outlook, Home F1)
+
+- O padrão do Modelo 1 no código é genérico (sem nome de terceiro nem assinatura) e se mescla com o arquivo local opcional `data/state/outlook_modelo_cabo_padrao.json` (só leitura, fora do Git; modelo em `config/outlook_modelo_cabo_padrao.exemplo.json`); arquivo ausente ou inválido vale o código, sem log de valores; a única escrita continua sendo `outlook_email_modelos.json` (`outlook_mail.py`). Doc: `docs/cockpit-prompts/03-home-split-view.md`.
 
 ## UX (chamado e ticket)
 
-- Envio real só com `enviar: true` e `confirmado: true`; `BRM551RN1Y` recusa envio real; descrição e dados do solicitante nunca vão a logs nem históricos (`ux_chamados.py`, `ux_ticket.py`, `SOLICITANTE_PADRAO`). Doc: `docs/operacao/automacao-chrome.md`.
+- Envio real só com `enviar: true` e `confirmado: true`; `BRM551RN1Y` recusa envio real; descrição e dados do solicitante nunca vão a logs nem históricos (`ux_chamados.py`, `ux_ticket.py`); o solicitante vem só de `data/state/ux_solicitante.json` (`SOLICITANTE_PADRAO` é vazio) e envio real sem solicitante é recusado antes do clique. Doc: `docs/operacao/automacao-chrome.md`.
 - Depois do clique em `Finalizar` ou `Enviar`, espere o número uma vez; timeout é `incerto` e nunca se repete. Doc: o mesmo.

@@ -1,0 +1,4 @@
+{
+  "Londrina": {"nome": "Pessoa Exemplo", "email": "nome.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"},
+  "Maringá": {"nome": "Outra Pessoa Exemplo", "email": "outra.exemplo@pr.sebrae.com.br"}
+}

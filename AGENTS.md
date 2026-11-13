@@ -24,7 +24,7 @@ Reorganização de 10/11/2026: a raiz guarda só o que vale no projeto inteiro. 
 - PowerShell do Endpoint: NUNCA envia Enter. Só `locator.fill()` em `#remotePowershellInputField`; comando vazio, com mais de 2000 caracteres ou com caractere de controle é rejeitado; o retorno traz `enter_enviado: false`; o Assistente nunca diz que o comando foi executado.
 - Chamado/ticket UX: a série `BRM551RN1Y` recusa envio real (422 `SERIES_SEM_ENVIO_REAL`); `SIMPRESS_UX_SEM_ENVIO=1` recusa qualquer envio real; o envio real exige `enviar: true` e `confirmado: true`.
 - SharePoint (`enviar`): cópia `Duplicata` antes de sobrepor (sem ela, para); aborta se a pasta mudou depois da importação; `Keep both` é recusado; `Save Conflict` não faz `Retry` nem novo envio.
-- E-mails por modelo pelo Outlook (Home F1, 09/11/2026): só por clique; envio real com `confirmado: true`, recusado com `SIMPRESS_OUTLOOK_SEM_ENVIO=1`; grava só `data/state/outlook_email_modelos.json`; log sem corpo nem destinatários; o Assistente não envia. Doc: `03-home-split-view.md`.
+- E-mails por modelo pelo Outlook (Home F1, 09/11/2026): só por clique; envio real com `confirmado: true`, recusado com `SIMPRESS_OUTLOOK_SEM_ENVIO=1`; grava só `data/state/outlook_email_modelos.json` (lê, sem gravar, o padrão local opcional `data/state/outlook_modelo_cabo_padrao.json`); log sem corpo nem destinatários; o Assistente não envia. Doc: `03-home-split-view.md`.
 - SoftExpert é só leitura, exceto `finalizar_chamado` (`scripts/sebrae_softexpert.py`), um chamado por vez, a pedido do usuário.
 - Cliques irreversíveis nunca se repetem; se a página sair do lugar, volte ao mesmo link com `goto`, nunca `reload` (Oracle e UX).
 - `versao_importacao` ausente ou antiga: 409, sem gerar saída nem finalizar.

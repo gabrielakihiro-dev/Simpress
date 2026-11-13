@@ -227,8 +227,8 @@ class TipoTest(unittest.TestCase):
 class IndiceEPrivacidadeTest(unittest.TestCase):
     def casos(self):
         comuns = [
-            caso(f"Computador lento {quase}", f"Chamado da Marina Teixeira, CPF {CPF_VALIDO}, e-mail marina.teixeira@sebrae.com.br, fone (41) 98751-2389. {unica}",
-                 "Atendimento realizado", "Marina Teixeira", "LENTIDÃO", "INCIDENTE")
+            caso(f"Computador lento {quase}", f"Chamado da Maria Exemplo, CPF {CPF_VALIDO}, e-mail maria.exemplo@sebrae.com.br, fone (41) 90000-0000. {unica}",
+                 "Atendimento realizado", "Maria Exemplo", "LENTIDÃO", "INCIDENTE")
             for quase, unica in (("quokka", "wombat"), ("quokka", "pangolim"), ("tucano", "gamba"), ("tucano", "ocapi"), ("tucano", "furao"), ("quokka", "lemure"))
         ]
         automaticos = [caso("apiexclusiva alerta", "apiexclusiva", "", "API SEBRAE", "REDE", "INCIDENTE") for _ in range(3)]
@@ -241,7 +241,7 @@ class IndiceEPrivacidadeTest(unittest.TestCase):
         conteudo = destino.read_text(encoding="utf-8")
         self.assertEqual(json.loads(conteudo), indice)
         self.assertEqual(set(indice), {"versao", "b", "j", "mapa_b_j"})
-        for proibido in ("marina", "teixeira", "529", "98751", "@", "sebrae", "wombat", "pangolim", "gamba", "ocapi", "furao", "lemure", "apiexclusiva", "ocultad", "oculto"):
+        for proibido in ("maria", "exemplo", "529", "90000", "@", "sebrae", "wombat", "pangolim", "gamba", "ocapi", "furao", "lemure", "apiexclusiva", "ocultad", "oculto"):
             with self.subTest(proibido):
                 self.assertNotIn(proibido, conteudo.lower())
         self.assertEqual(set(indice["b"]["vocab"]), {"computador", "lento", "quokka", "tucano", "atendimento", "realizado", "chamado", "cpf", "mail", "fone"})
@@ -250,7 +250,7 @@ class IndiceEPrivacidadeTest(unittest.TestCase):
         # Sem as palavras "CPF" e "e-mail" no texto: qualquer "cpf" ou "mail" no vocabulário só poderia vir de um marcador.
         # Os dígitos do CPF nunca viram palavra, porque as palavras seguem [a-z]{3,}.
         casos = [
-            caso("Computador lento", f"Contato zorroxpto.qualquer@dominiox.net e documento {CPF_VALIDO} tel (41) 98751-2389", "", "Marina Teixeira", "LENTIDÃO", "INCIDENTE")
+            caso("Computador lento", f"Contato zorroxpto.qualquer@dominiox.net e documento {CPF_VALIDO} tel (41) 90000-0000", "", "Maria Exemplo", "LENTIDÃO", "INCIDENTE")
             for _ in range(3)
         ]
         pasta = Path(tempfile.mkdtemp())
@@ -300,7 +300,7 @@ class IndiceEPrivacidadeTest(unittest.TestCase):
         self.assertEqual(linhas[0].solicitante, "João da Silva")
 
     def test_documento_da_linha_so_traz_palavras_e_rotulos(self):
-        linha = C.Linha("Notebook lento", f"CPF {CPF_VALIDO} fone (41) 98751-2389", "", "Fulana Souza", "lentidão", "incidente")
+        linha = C.Linha("Notebook lento", f"CPF {CPF_VALIDO} fone (41) 90000-0000", "", "Fulana Souza", "lentidão", "incidente")
         documento = C.documento_da_linha(linha, frozenset({"fulana", "souza"}))
         self.assertEqual(set(documento), {"tokens", "b", "j"})
         self.assertEqual((documento["b"], documento["j"]), ("LENTIDÃO", "INCIDENTE"))

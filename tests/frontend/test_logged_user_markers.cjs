@@ -86,7 +86,7 @@ test("history rows and ticket cards show the manual date and the ambiguous Endpo
     A: { usuario: "joao", origem: "manual", serial_cadastro: "A", informado_em: "2026-10-20T09:00:00-03:00", candidatos: [] },
     B: { usuario: "", origem: "", serial_cadastro: "B", informado_em: "", candidatos: ["ana", "bia"] },
     C: { usuario: "", origem: "", serial_cadastro: null, informado_em: "", candidatos: ["caio", "davi"] },
-    D: { usuario: "pedro", origem: "manual", serial_cadastro: "D", informado_em: "", candidatos: ["eva", "fabio"] },
+    D: { usuario: "pedro", origem: "manual", serial_cadastro: "D", informado_em: "", candidatos: ["eva", "fulano"] },
   }, ["A", "B", "C", "D"]);
   assert.match(manual.innerHTML, /title="Informado manualmente em 20\/10\/2026">Usuário: joao \(M\)<span class="sr-only">, informado manualmente em 20\/10\/2026<\/span>/);
   assert.doesNotMatch(manual.innerHTML, /data-logged-user-ambiguous/);
@@ -96,7 +96,7 @@ test("history rows and ticket cards show the manual date and the ambiguous Endpo
   assert.match(ambiguousOutside.innerHTML, /Endpoint ambíguo: caio \/ davi/);
   assert.doesNotMatch(ambiguousOutside.innerHTML, /data-logged-user-form/);
   assert.equal(ambiguousOutside.textContent, "");
-  assert.match(manualOverAmbiguous.innerHTML, /Usuário: pedro \(M\).*data não registrada.*Endpoint ambíguo: eva \/ fabio/s);
+  assert.match(manualOverAmbiguous.innerHTML, /Usuário: pedro \(M\).*data não registrada.*Endpoint ambíguo: eva \/ fulano/s);
 });
 
 test("search results carry the manual date in the title and an ambiguous chip with the candidates", () => {

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from core.async_workers import await_worker_completion
 from core.config import format_size_limit
 from domains.local_setup import (
-    REGIONAL_REPRESENTATIVE_CITIES, load_origin_contact, load_regional_representatives,
+    REGIONAL_REPRESENTATIVE_CITIES, effective_regional_representative_defaults, load_origin_contact, load_regional_representatives,
     regional_representative_defaults, remove_regional_representative, save_origin_contact, save_regional_representative, validate_local_model,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
@@ -110,7 +110,8 @@ class RepresentanteRegionalPayload(BaseModel):
 def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups_directory: Any,
                               max_upload_bytes: Any, parser_admission: Any, export_dependency_paths: Any,
                               validate_export: Any, origin_contact_file: Any = None,
-                              regional_representatives_file: Any = None) -> Any:
+                              regional_representatives_file: Any = None,
+                              regional_representative_defaults_file: Any = None) -> Any:
     router = APIRouter()
 
     @router.put("/api/config/transferencia/contato-origem")
@@ -141,6 +142,10 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
             raise HTTPException(404, "Configuração dos representantes regionais indisponível.")
         return regional_representatives_file()
 
+    def defaults_path() -> Any:
+        # None means "no local defaults file": the code defaults alone (name, e-mail and phone blank).
+        return None if regional_representative_defaults_file is None else regional_representative_defaults_file()
+
     def known_city(city: str) -> str:
         city = unicodedata.normalize("NFC", city)
         if city not in REGIONAL_REPRESENTATIVE_CITIES:
@@ -153,14 +158,18 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
 
     @router.get("/api/config/representantes-regionais")
     def get_regional_representatives() -> dict[str, Any]:
-        # `padroes` (the single source of the defaults) comes only on GET; PUT/DELETE answer with the changes alone.
-        return {**regional_representatives_state(regional_representatives_path()), "padroes": regional_representative_defaults()}
+        # `padroes` (the single source of the defaults: code plus the local defaults file) comes only on GET; PUT/DELETE answer with the changes alone.
+        defaults, defaults_invalid = effective_regional_representative_defaults(defaults_path())
+        return {
+            **regional_representatives_state(regional_representatives_path()),
+            "padroes": regional_representative_defaults(defaults), "padroes_arquivo_invalido": defaults_invalid,
+        }
 
     @router.put("/api/config/representantes-regionais/{cidade}")
     def save_regional_representative_route(cidade: str, payload: RepresentanteRegionalPayload) -> dict[str, Any]:
         path, cidade = regional_representatives_path(), known_city(cidade)
         try:
-            save_regional_representative(path, cidade, payload.model_dump())
+            save_regional_representative(path, cidade, payload.model_dump(), defaults_path())
         except (OSError, FileTransactionError, FileBusyError) as error:
             logger.warning("Falha ao gravar representante regional (erro=%s).", type(error).__name__)
             raise HTTPException(500, "Não foi possível gravar o representante regional.") from error

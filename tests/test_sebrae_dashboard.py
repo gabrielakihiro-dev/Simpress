@@ -265,14 +265,14 @@ class CredenciaisTest(unittest.TestCase):
                 self.assertIn(dash.OMITIDO, omitido)
 
     def test_senha_apos_login_e_senha_rotulada_sao_omitidas(self):
-        texto = "Criado o login\n\ncvalente@pr.sebrae.com.br\nSebrae@661"
+        texto = "Criado o login\n\nnome.exemplo@pr.sebrae.com.br\nSebrae@000"
         self.assertEqual(dash.omitir_credenciais(texto).splitlines()[-1], dash.OMITIDO)
-        self.assertIn("cvalente@pr.sebrae.com.br", dash.omitir_credenciais(texto))
+        self.assertIn("nome.exemplo@pr.sebrae.com.br", dash.omitir_credenciais(texto))
         self.assertEqual(dash.omitir_credenciais("Senha: abc123 ok"), "Senha: " + dash.OMITIDO)
 
     def test_senha_inicial_do_padrao_sebrae_some_mesmo_na_linha_do_email(self):
-        omitido = dash.omitir_credenciais("Login ana@pr.sebrae.com.br senha Sebrae@661 ok")
-        self.assertNotIn("661", omitido)
+        omitido = dash.omitir_credenciais("Login ana@pr.sebrae.com.br senha Sebrae@000 ok")
+        self.assertNotIn("@000", omitido)
         self.assertIn("ana@pr.sebrae.com.br", omitido)
 
     def test_lista_de_emails_e_texto_comum_ficam_intactos(self):
@@ -280,8 +280,8 @@ class CredenciaisTest(unittest.TestCase):
         self.assertEqual(dash.omitir_credenciais(texto), texto)
 
     def test_linha_montada_nao_carrega_a_senha(self):
-        chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado="Criado o login\n\nana@pr.sebrae.com.br\nSebrae@661")
-        self.assertNotIn("Sebrae@661", dash.montar_linha(chamado)["F"])
+        chamado = ChamadoSoftExpert("UTIC-2026-1", detalhes_atendimento_realizado="Criado o login\n\nana@pr.sebrae.com.br\nSebrae@000")
+        self.assertNotIn("Sebrae@000", dash.montar_linha(chamado)["F"])
 
 
 class ColagemTest(unittest.TestCase):

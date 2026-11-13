@@ -702,6 +702,7 @@ test("the Home page keeps the approved labels and no real e-mail domain or name"
   ]) assert.ok(modal.includes(rotulo), rotulo);
   for (const texto of [js, modal]) {
     assert.doesNotMatch(texto, /@simpress\.com\.br|@pr\.sebrae\.com\.br/i);
-    assert.doesNotMatch(texto, /Allex|Fabio|Robinson/);
+    // Nenhum destinatário "Nome Sobrenome;" no front: o texto padrão do Modelo 1 vem do servidor.
+    assert.doesNotMatch(texto, /[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;/u);
   }
 });

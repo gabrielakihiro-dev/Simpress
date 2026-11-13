@@ -29,7 +29,9 @@ from domains.assistant_chat import (
 from domains.assistant_openrouter import ModelReply, ModelToolCall, OpenRouterError, OpenRouterSettings
 from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS, grupos_da_mensagem, schemas_para_mensagem, tool_schemas
 from domains.sebrae_finalizacao import MAX_PDF_BYTES
-from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
+from domains.local_setup import (
+    REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS, regional_representative_defaults,
+)
 from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.local_setup import create_local_setup_router
 
@@ -2478,6 +2480,25 @@ REPR_SALVO = {  # fictitious change saved for Maringá
 }
 
 
+REPR_PADRAO_FICTICIO = {  # fictitious local defaults (the real ones live only in data/state/representantes_regionais_padrao.json)
+    "Londrina": {"nome": "Rita Exemplo de Oliveira Teste", "email": "rita.exemplo@pr.sebrae.com.br", "telefone": "(41) 90000-0000"},
+    "Maringá": {"nome": "Tereza Exemplar Santos"},
+    "Foz do Iguaçu": {"nome": "Marlene Modelo"},
+}
+
+
+def repr_padroes_ficticios() -> List[Dict[str, Any]]:
+    """What GET returns in `padroes`: code hours plus fictitious names for 21 cities (Arapongas stays without name)."""
+    itens = []
+    for numero, item in enumerate(regional_representative_defaults()):
+        if item["cidade"] != "Arapongas":
+            letra = chr(ord("A") + numero)
+            item.update({"nome": f"Nome{letra} Sobrenome{letra}", **REPR_PADRAO_FICTICIO.get(item["cidade"], {})})
+            item.pop("nomeOpcao", None)
+        itens.append(item)
+    return itens
+
+
 class RepresentativesSimpress(FakeSimpress):
     """GET/PUT/DELETE /api/config/representantes-regionais[/{cidade}] over an in-memory dict."""
 
@@ -2485,6 +2506,7 @@ class RepresentativesSimpress(FakeSimpress):
         super().__init__()
         self.salvos = {"Maringá": dict(REPR_SALVO)} if salvos is None else salvos
         self.invalido = invalido
+        self.padroes = repr_padroes_ficticios()
 
     def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
         if not path.startswith(REPR_URL):
@@ -2497,7 +2519,7 @@ class RepresentativesSimpress(FakeSimpress):
             if cidade not in self.salvos:
                 return 404, {"detail": "Esta cidade não tem alteração salva."}
             del self.salvos[cidade]
-        return 200, {"alteracoes": self.salvos, "arquivo_invalido": self.invalido}
+        return 200, {"alteracoes": self.salvos, "arquivo_invalido": self.invalido, "padroes": self.padroes, "padroes_arquivo_invalido": False}
 
 
 def alterar_representante(simpress: RepresentativesSimpress, **args: Any) -> Tuple[AssistantConversation, Optional[Dict[str, Any]]]:
@@ -2561,7 +2583,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         self.assertEqual((salvo["cidade"], salvo["alterada"], salvo["nome"], salvo["retirada_telefone"]), ("Maringá", True, "Representante Fictício", "(41) 90000-0001"))
         padrao = api.ver_representantes_regionais("foz do iguacu")
         self.assertEqual((padrao["cidade"], padrao["alterada"], padrao["pausa"]), ("Foz do Iguaçu", False, "1h30"))
-        self.assertEqual(padrao["nome"], "Marinez Martins")
+        self.assertEqual(padrao["nome"], "Marlene Modelo")
 
     def test_view_sends_only_markers_and_first_names_to_the_model(self) -> None:
         model = FakeModel(calls(call("ver_representantes_regionais", cidade="Maringá")), text("ok"))
@@ -2584,15 +2606,15 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
 
     def test_change_sends_one_put_with_the_six_fields_and_keeps_the_omitted_ones(self) -> None:
         simpress = RepresentativesSimpress()
-        conversation, pendente = alterar_representante(simpress, cidade="Londrina", nome="Ana Souza", telefone="43 98888 7777")
+        conversation, pendente = alterar_representante(simpress, cidade="Londrina", nome="Ana Souza", telefone="41 98888 7777")
         self.assertEqual(simpress.writes(), [])
-        for trecho in ("Londrina", "Nome", "Renata Custodio de Oliveira Varasquim", "Ana Souza", "(43) 99643-8754", "(43) 98888-7777"):
+        for trecho in ("Londrina", "Nome", "Rita Exemplo de Oliveira Teste", "Ana Souza", "(41) 90000-0000", "(41) 98888-7777"):
             self.assertIn(trecho, pendente["descricao"])  # type: ignore[index]
-        self.assertNotIn("rvarasquim", pendente["descricao"])  # type: ignore[index]
+        self.assertNotIn("rita.exemplo", pendente["descricao"])  # type: ignore[index]
         conversation.resolver_confirmacao(True)
         self.assertEqual(simpress.writes(), [("PUT", f"{REPR_URL}/Londrina")])
         self.assertEqual(simpress.calls[-1][3], {
-            "nome": "Ana Souza", "email": "rvarasquim@pr.sebrae.com.br", "telefone": "(43) 98888-7777",
+            "nome": "Ana Souza", "email": "rita.exemplo@pr.sebrae.com.br", "telefone": "(41) 98888-7777",
             "horario": "08:00:00 às 18:00:00", "almoco": "Escritório não fecha", "pausaDuracao": "",
         })
 
@@ -2612,7 +2634,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         casos = (
             {"email": "sem-arroba"}, {"telefone": "123"}, {"horario": "8h às 18h"}, {"horario": "20:00:00 às 08:00:00"}, {"horario": "09:00:00 às 09:00:00"}, {"almoco": "meio-dia"}, {"pausa": "uma hora"},
             {"nome": "x" * 161}, {"nome": "[PESSOA_1 OCULTADO]"}, {"email": "[E-MAIL OCULTADO]"}, {"telefone": "[TELEFONE OCULTADO]"},
-            {}, {"nome": "Renata Custodio de Oliveira Varasquim"}, {"almoco": "12:00:00"},  # no pause for a lunch that closes the office
+            {}, {"nome": "Rita Exemplo de Oliveira Teste"}, {"almoco": "12:00:00"},  # no pause for a lunch that closes the office
         )
         for args in casos:
             simpress = RepresentativesSimpress()
@@ -2635,7 +2657,7 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         simpress = RepresentativesSimpress()
         conversation, _ = make_conversation(FakeModel(calls(call("restaurar_representante_regional", cidade="Maringá")), text("feito")), simpress)
         pendente = conversation.enviar_mensagem("restaure").pendente
-        for trecho in ("Maringá", "Representante Fictício", "Tatiane Matsuguma Sanches", "Expediente"):
+        for trecho in ("Maringá", "Representante Fictício", "Tereza Exemplar Santos", "Expediente"):
             self.assertIn(trecho, pendente["descricao"])  # type: ignore[index]
         self.assertEqual(simpress.writes(), [])
         conversation.resolver_confirmacao(True)
@@ -2653,15 +2675,15 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         simpress = RepresentativesSimpress()
         model = FakeModel(text("ok"), text("ok"), text("ok"))
         conversation, _ = make_conversation(model, simpress)
-        conversation.enviar_mensagem("a Tatiane Matsuguma Sanches foi substituída por Representante Fictício?")
+        conversation.enviar_mensagem("a Tereza Exemplar Santos foi substituída por Representante Fictício?")
         enviado = json.dumps(model.sent[0], ensure_ascii=False)  # default name and saved name
-        for real in ("Matsuguma", "Representante Fictício", "Fictício"):
+        for real in ("Exemplar", "Representante Fictício", "Fictício"):
             self.assertNotIn(real, enviado)
-        self.assertIn("Tatiane [PESSOA_", enviado)
+        self.assertIn("Tereza [PESSOA_", enviado)
         self.assertIn("Maria Souza", conversation._mascara._por_valor)  # the users of the base are still there
-        marcador = conversation._mascara._por_valor["Tatiane Matsuguma Sanches"]
+        marcador = conversation._mascara._por_valor["Tereza Exemplar Santos"]
         model.replies.insert(0, text(f"Sobre {marcador}: nada a fazer."))
-        self.assertEqual(conversation.enviar_mensagem("e ela?").texto, "Sobre Tatiane Matsuguma Sanches: nada a fazer.")
+        self.assertEqual(conversation.enviar_mensagem("e ela?").texto, "Sobre Tereza Exemplar Santos: nada a fazer.")
         # A name edited meanwhile (screen or assistant) is masked from the next message; the cache of the users does not hide it.
         simpress.salvos["Londrina"] = {"nome": "Pessoa Inventada"}
         conversation.enviar_mensagem("fale da Pessoa Inventada")
@@ -2669,22 +2691,37 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         nomes = SimpressApi(simpress).listar_nomes_representantes()
         self.assertEqual(len(nomes), 21 + 2)  # 21 defaults (Arapongas has none) + the 2 saved names; the replaced ones stay masked
         self.assertIn("Pessoa Inventada", nomes)
-        self.assertIn("Renata Custodio de Oliveira Varasquim", nomes)  # Londrina was edited, the default name is still personal data
+        self.assertIn("Rita Exemplo de Oliveira Teste", nomes)  # Londrina was edited, the default name is still personal data
+
+    def test_representative_names_still_masked_when_the_route_is_down(self) -> None:
+        # The real names live only in the local defaults file: a failing route must not drop them from the mask.
+        class RotaFora(FakeSimpress):
+            def __call__(self, method: str, path: str, params: Any, body: Any) -> Tuple[int, Any]:
+                if path.startswith(REPR_URL):
+                    return 500, {"detail": "falhou"}
+                return super().__call__(method, path, params, body)
+
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "representantes_regionais_padrao.json"
+            arquivo.write_text(json.dumps({"Londrina": {"nome": "Pessoa Exemplo Local"}}), encoding="utf-8")
+            with mock.patch("core.config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", arquivo):
+                nomes = SimpressApi(RotaFora()).listar_nomes_representantes()
+        self.assertEqual(nomes, ["Pessoa Exemplo Local"])
 
     def test_card_of_a_change_shows_the_real_names_even_though_the_model_only_sees_markers(self) -> None:
         simpress = RepresentativesSimpress()
         model = FakeModel(text("ok"))
         conversation, _ = make_conversation(model, simpress)
         conversation.enviar_mensagem("oi")
-        marcador = conversation._mascara._por_valor["Tatiane Matsuguma Sanches"]
+        marcador = conversation._mascara._por_valor["Tereza Exemplar Santos"]
         model.replies.extend([calls(call("alterar_representante_regional", cidade="Londrina", nome=marcador)), text("feito")])
-        pendente = conversation.enviar_mensagem("coloque a Tatiane Matsuguma Sanches em Londrina").pendente
-        self.assertIn("Tatiane Matsuguma Sanches", pendente["descricao"])  # type: ignore[index]
-        self.assertIn("Renata Custodio de Oliveira Varasquim", pendente["descricao"])  # type: ignore[index]
+        pendente = conversation.enviar_mensagem("coloque a Tereza Exemplar Santos em Londrina").pendente
+        self.assertIn("Tereza Exemplar Santos", pendente["descricao"])  # type: ignore[index]
+        self.assertIn("Rita Exemplo de Oliveira Teste", pendente["descricao"])  # type: ignore[index]
         self.assertNotIn("PESSOA_", pendente["descricao"])  # type: ignore[index]
-        self.assertNotIn("Matsuguma", json.dumps(model.sent, ensure_ascii=False))
+        self.assertNotIn("Exemplar", json.dumps(model.sent, ensure_ascii=False))
         conversation.resolver_confirmacao(True)
-        self.assertEqual(simpress.calls[-1][3]["nome"], "Tatiane Matsuguma Sanches")  # type: ignore[index]
+        self.assertEqual(simpress.calls[-1][3]["nome"], "Tereza Exemplar Santos")  # type: ignore[index]
 
     def test_route_failure_is_reported_without_claiming_success(self) -> None:
         def falha(method: str, path: str, params: Any, body: Any) -> Tuple[int, Any]:
@@ -2706,14 +2743,25 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
         for cidade, padrao in REGIONAL_REPRESENTATIVE_DEFAULTS.items():
             self.assertEqual(tuple(padrao), REGIONAL_REPRESENTATIVE_FIELDS, cidade)
             self.assertEqual(representante_efetivo(cidade, {})[0], padrao, cidade)
+            self.assertEqual((padrao["nome"], padrao["email"], padrao["telefone"]), ("", "", ""), cidade)  # personal data is never in the code
+        # The effective default the route returns (`padroes`, code plus local file) wins over the code's.
+        efetivo = {"Londrina": {"nome": "Pessoa Exemplo", "telefone": "(41) 90000-0000"}}
+        valores, alterada = representante_efetivo("Londrina", {}, efetivo)
+        self.assertEqual((valores["nome"], valores["telefone"], valores["horario"], alterada), ("Pessoa Exemplo", "(41) 90000-0000", "08:00:00 às 18:00:00", False))
+        valores, alterada = representante_efetivo("Londrina", {"Londrina": {"nome": "Outra Pessoa"}}, efetivo)
+        self.assertEqual((valores["nome"], valores["telefone"], alterada), ("Outra Pessoa", "(41) 90000-0000", True))
 
     def test_real_route_round_trip_with_accented_and_spaced_city_names(self) -> None:
         with tempfile.TemporaryDirectory() as pasta:
             raiz = Path(pasta)
+            padroes_locais = raiz / "state" / "representantes_regionais_padrao.json"  # temp copy: never the real local file
+            padroes_locais.parent.mkdir()
+            padroes_locais.write_text(json.dumps({k: {"nome": v["nome"]} for k, v in REPR_PADRAO_FICTICIO.items()}), encoding="utf-8")
             router, _ = create_local_setup_router(
                 model_path=lambda _kind: raiz / "modelo.xlsx", transaction_root=lambda: raiz, backups_directory=lambda: raiz / "backups",
                 max_upload_bytes=lambda: 1024, parser_admission=lambda: None, export_dependency_paths=lambda: [], validate_export=lambda: None,
                 regional_representatives_file=lambda: raiz / "config" / "representantes_regionais.json",
+                regional_representative_defaults_file=lambda: padroes_locais,
             )
             app = FastAPI()
             app.include_router(router)
@@ -2724,13 +2772,13 @@ class RegionalRepresentativeToolTests(unittest.TestCase):
             self.assertEqual(simpress.ver_representantes_regionais("Foz do Iguaçu")["nome"], "Ana Souza")
             self.assertEqual(sum(c["alterada"] for c in simpress.ver_representantes_regionais()["cidades"]), 2)
             self.assertTrue(simpress.restaurar_representante_regional("Foz do Iguaçu")["sucesso"])
-            self.assertEqual(simpress.ver_representantes_regionais("Foz do Iguaçu")["nome"], "Marinez Martins")
+            self.assertEqual(simpress.ver_representantes_regionais("Foz do Iguaçu")["nome"], "Marlene Modelo")
             self.assertFalse(simpress.restaurar_representante_regional("Foz do Iguaçu")["sucesso"])
             # Editing back to the default is stored as no change at all (only differences are saved).
             self.assertTrue(simpress.alterar_representante_regional("Londrina", "Ana Souza", None, None, None, None, None)["sucesso"])
-            self.assertTrue(simpress.alterar_representante_regional("Londrina", "Renata Custodio de Oliveira Varasquim", None, None, None, None, None)["sucesso"])
+            self.assertTrue(simpress.alterar_representante_regional("Londrina", "Rita Exemplo de Oliveira Teste", None, None, None, None, None)["sucesso"])
             londrina = simpress.ver_representantes_regionais("Londrina")
-            self.assertEqual((londrina["alterada"], londrina["nome"]), (False, "Renata Custodio de Oliveira Varasquim"))
+            self.assertEqual((londrina["alterada"], londrina["nome"]), (False, "Rita Exemplo de Oliveira Teste"))
             self.assertIn("não tem alteração salva", simpress.restaurar_representante_regional("Londrina")["erro"])
             self.assertEqual(json.loads((raiz / "config" / "representantes_regionais.json").read_text(encoding="utf-8")), {"Maringá": {"nome": "Ana Souza"}})
 

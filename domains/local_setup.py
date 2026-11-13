@@ -180,53 +180,81 @@ def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> 
     atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})
 
 
-# Single source of the 22 regional representatives' defaults: the front end loads them from
-# GET /api/config/representantes-regionais (`padroes`); the git-ignored config/representantes_regionais.json
-# keeps only per-city overrides.
+# The 22 regional representatives of SEBRAE/PR (Transferência screen). The front end loads the effective defaults from
+# GET /api/config/representantes-regionais (`padroes`); the git-ignored config/representantes_regionais.json keeps only
+# per-city overrides. Name, e-mail and phone are personal data: the code keeps them blank and they come from the
+# git-ignored data/state/representantes_regionais_padrao.json (example: config/representantes_regionais_padrao.exemplo.json).
 REGIONAL_REPRESENTATIVE_CITIES = (
     "Cascavel", "Londrina", "Maringá", "Pato Branco", "Ponta Grossa", "Foz do Iguaçu", "Paranaguá",
     "Toledo", "Guarapuava", "Porecatu", "Irati", "Cornélio Procópio", "Apucarana", "Arapongas",
     "Cerro Azul", "Cianorte", "Francisco Beltrão", "Ivaiporã", "Jacarezinho", "Laranjeiras do Sul",
     "Paranavaí", "Campo Mourão",
 )
-# Defaults of each city (the overrides saved in the local file win over them).
+# Defaults of each city in the code (hours only; the local defaults file and the saved overrides win over them).
 REGIONAL_REPRESENTATIVE_FIELDS = ("nome", "email", "telefone", "horario", "almoco", "pausaDuracao")
 REGIONAL_REPRESENTATIVE_DEFAULTS = {
-    row[0]: dict(zip(REGIONAL_REPRESENTATIVE_FIELDS, row[1:])) for row in (
-        ("Cascavel", "Fernanda Colla Borretto", "fcolla@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
-        ("Londrina", "Renata Custodio de Oliveira Varasquim", "rvarasquim@pr.sebrae.com.br", "(43) 99643-8754", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
-        ("Maringá", "Tatiane Matsuguma Sanches", "tmatsuguma@pr.sebrae.com.br", "(44) 99810-1371", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
-        ("Pato Branco", "Kelen Simone Moreira", "kmoreira@pr.sebrae.com.br", "(46) 99102-7523", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
-        ("Ponta Grossa", "Gislaine Pratka dos Santos", "gpratka@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
-        ("Foz do Iguaçu", "Marinez Martins", "moliveira@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
-        ("Paranaguá", "Carolina Nunes Pereira Voi", "cnunes@pr.sebrae.com.br", "", "08:30:00 às 17:30:00", "12:00:00", "1h"),
-        ("Toledo", "Fernanda da Costa Goldacker", "fgoldacker@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
-        ("Guarapuava", "Chrislaine Caroline de Souza", "chsouza@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Porecatu", "Sandra de Souza Alves", "ssalves@pr.sebrae.com.br", "(43) 99818-0708", "08:00:00 às 17:00:00", "12:00:00", "2h"),
-        ("Irati", "Melany Evelyn Fernandes Ovando", "movando@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Cornélio Procópio", "Eloah Bueno Rocha", "erocha@pr.sebrae.com.br", "", "08:00:00 às 17:30:00", "12:00:00", "1h30"),
-        ("Apucarana", "Tiago Correia da Cunha", "tcorreia@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Arapongas", "", "", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Cerro Azul", "Ivan Silva Evangelista", "ievangelista@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "1h"),
-        ("Cianorte", "Valtemar Sartorelli", "vSartorelli@pr.sebrae.com.br", "", "08:00:00 às 17:00:00", "12:00:00", "2h"),
-        ("Francisco Beltrão", "Claudineia Cabral", "cprzysiesny@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
-        ("Ivaiporã", "Joelma Barbosa", "jbarbosa@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Jacarezinho", "Erika Cristina de Faria Possette", "epossette@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Laranjeiras do Sul", "Thaís Cristina da Costa", "tcosta@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Paranavaí", "Claudia Roberta Molocny Ferro", "cmolocny@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
-        ("Campo Mourão", "Sandro Nasser Santi", "ssanti@pr.sebrae.com.br", "", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+    city: {"nome": "", "email": "", "telefone": "", "horario": hours, "almoco": lunch, "pausaDuracao": pause}
+    for city, hours, lunch, pause in (
+        ("Cascavel", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Londrina", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Maringá", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Pato Branco", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
+        ("Ponta Grossa", "08:00:00 às 18:00:00", "Escritório não fecha", ""),
+        ("Foz do Iguaçu", "08:00:00 às 17:00:00", "12:00:00", "1h30"),
+        ("Paranaguá", "08:30:00 às 17:30:00", "12:00:00", "1h"),
+        ("Toledo", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
+        ("Guarapuava", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Porecatu", "08:00:00 às 17:00:00", "12:00:00", "2h"),
+        ("Irati", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Cornélio Procópio", "08:00:00 às 17:30:00", "12:00:00", "1h30"),
+        ("Apucarana", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Arapongas", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Cerro Azul", "08:00:00 às 17:00:00", "12:00:00", "1h"),
+        ("Cianorte", "08:00:00 às 17:00:00", "12:00:00", "2h"),
+        ("Francisco Beltrão", "08:00:00 às 18:00:00", "12:00:00", "1h30"),
+        ("Ivaiporã", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Jacarezinho", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Laranjeiras do Sul", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Paranavaí", "08:00:00 às 18:00:00", "12:00:00", "2h"),
+        ("Campo Mourão", "08:00:00 às 18:00:00", "12:00:00", "2h"),
     )
 }
-# Option text the selectors show while a city's default name is empty (display only, not an editable field).
-REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS = {"Arapongas": "Não definido ainda"}
+# Option text the selectors show while a city's effective default name is empty (display only, not an editable field).
+REGIONAL_REPRESENTATIVE_EMPTY_NAME_OPTION = "Não definido ainda"
 _regional_representatives_lock = threading.Lock()
 
 
-def regional_representative_defaults() -> list[dict]:
-    """The defaults in display order: city, the six fields and, when set, `nomeOpcao` (text for an empty name)."""
+def load_regional_representative_defaults(path: Optional[Path]) -> tuple[dict, bool]:
+    """Return the local defaults by city (only known cities and fields) and whether the file exists but could not be used.
+
+    A None path means "no local file": the defaults stay the ones in the code, so tests do not depend on the machine.
+    """
+    if path is None:
+        return {}, False
+    stored, invalid_file = _read_origin_contact_file(path, "padrões dos representantes regionais")
+    return {
+        city: {field: value for field, value in values.items()
+               if field in REGIONAL_REPRESENTATIVE_FIELDS and isinstance(value, str)}
+        for city, values in stored.items() if city in REGIONAL_REPRESENTATIVE_CITIES and isinstance(values, dict)
+    }, invalid_file
+
+
+def effective_regional_representative_defaults(path: Optional[Path] = None) -> tuple[dict, bool]:
+    """Return the default of every city (code merged with the local defaults file) and the invalid-file flag."""
+    local, invalid_file = load_regional_representative_defaults(path)
+    return {city: {**REGIONAL_REPRESENTATIVE_DEFAULTS[city], **local.get(city, {})}
+            for city in REGIONAL_REPRESENTATIVE_CITIES}, invalid_file
+
+
+def regional_representative_defaults(effective: Optional[Mapping[str, Mapping[str, str]]] = None) -> list[dict]:
+    """The defaults in display order: city, the six fields and, for an empty name, `nomeOpcao` (text for that name).
+
+    `effective` is the result of `effective_regional_representative_defaults`; None means the code defaults alone.
+    """
+    effective = REGIONAL_REPRESENTATIVE_DEFAULTS if effective is None else effective
     return [
-        {"cidade": city, **REGIONAL_REPRESENTATIVE_DEFAULTS[city],
-         **({"nomeOpcao": REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS[city]} if city in REGIONAL_REPRESENTATIVE_NAME_PLACEHOLDERS else {})}
+        {"cidade": city, **effective[city],
+         **({} if effective[city]["nome"] else {"nomeOpcao": REGIONAL_REPRESENTATIVE_EMPTY_NAME_OPTION})}
         for city in REGIONAL_REPRESENTATIVE_CITIES
     ]
 
@@ -237,14 +265,14 @@ def load_regional_representatives(path: Path) -> tuple[dict, bool]:
     return {c: v for c, v in stored.items() if c in REGIONAL_REPRESENTATIVE_CITIES and isinstance(v, dict)}, invalid_file
 
 
-def save_regional_representative(path: Path, city: str, values: dict) -> None:
+def save_regional_representative(path: Path, city: str, values: dict, defaults_path: Optional[Path] = None) -> None:
     """Write the already validated override for one city, keeping the others.
 
-    Only the fields that differ from the default are stored; when none differs the city is dropped
-    (same as "Restaurar padrão"), so a default changed in the code reaches every city not edited on that field.
+    Only the fields that differ from the effective default (code plus local defaults file) are stored; when none differs
+    the city is dropped (same as "Restaurar padrão"), so a default changed later reaches every city not edited on that field.
     """
     target = Path(path)
-    default = REGIONAL_REPRESENTATIVE_DEFAULTS[city]
+    default = effective_regional_representative_defaults(defaults_path)[0][city]
     changed = {f: values[f] for f in REGIONAL_REPRESENTATIVE_FIELDS if f in values and values[f] != default[f]}
     with _regional_representatives_lock:
         current, _ = load_regional_representatives(target)

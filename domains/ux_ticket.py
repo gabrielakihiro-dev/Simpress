@@ -18,7 +18,8 @@ from uuid import uuid4
 
 from core.integrity import atomic_write_json
 from domains.ux_chamados import (
-    MSG_SEM_ENVIO, MSG_SERIE_TESTE, PLACEHOLDER, SERIES_SEM_ENVIO_REAL, SOLICITANTE_PADRAO, ErroUX, envio_desativado,
+    MSG_SEM_ENVIO, MSG_SERIE_TESTE, PLACEHOLDER, PROFILE_NAME, SERIES_SEM_ENVIO_REAL, ErroUX, envio_desativado,
+    perfil_solicitante_ou_padrao,
 )
 
 SESSION_TTL = 30 * 60
@@ -150,11 +151,17 @@ class TicketsUX:
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self._history = state_dir / HISTORY_NAME
+        self._profile = state_dir / PROFILE_NAME
         self._conectar = conectar
         self._clock = clock
         self._lock = Lock()
         self._sessoes: dict[str, Sessao] = {}
         self._a_fechar: list[str] = []  # tabs of cancelled/expired/replaced sessions, closed at the next Chrome connection
+
+    def solicitante_padrao(self) -> dict[str, str]:
+        """Default requester of the modal: the local profile (data/state/ux_solicitante.json), blank when there is none."""
+        perfil = perfil_solicitante_ou_padrao(self._profile)
+        return {campo: perfil[campo] for campo in CAMPOS_SOLICITANTE}
 
     def _historico(self) -> list[dict[str, Any]]:
         try:
@@ -259,7 +266,7 @@ class TicketsUX:
                 "endereco": endereco, "opcoes_endereco": list(opcoes),
                 "cnpj_instalacao": entrega_cnpj.strip(), "cnpj_faturamento": CNPJ_FATURAMENTO,
                 "arquivo": arquivo_nome,
-                "solicitante": {campo: SOLICITANTE_PADRAO[campo] for campo in CAMPOS_SOLICITANTE},
+                "solicitante": self.solicitante_padrao(),
                 "ultimo_envio": {"ticket": ultimo["ticket"], "data": ultimo["data"]} if ultimo else None,
             }
 
@@ -280,7 +287,7 @@ class TicketsUX:
             return {
                 "status": "preparado", "tipo": TIPO_ENDERECO, "session_id": session_id, "serial": serial,
                 "modelo": modelo,
-                "solicitante": {campo: SOLICITANTE_PADRAO[campo] for campo in CAMPOS_SOLICITANTE},
+                "solicitante": self.solicitante_padrao(),
                 "ultimo_envio": {"ticket": ultimo["ticket"], "data": ultimo["data"]} if ultimo else None,
             }
 
