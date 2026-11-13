@@ -1239,6 +1239,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .resumo-abas { display: flex; flex: 0 1 auto; gap: 4px; min-width: 0; }
 .resumo-aba { display: inline-flex; align-items: center; flex: none; gap: 6px; height: 28px; min-height: 0; padding: 0 10px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-md); font-weight: var(--peso-medio); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .resumo-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
+.resumo-aba[aria-disabled="true"] { opacity: .5; cursor: not-allowed; background: transparent; color: var(--cor-texto-suave); }
 .resumo-aba[aria-selected="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
 .resumo-aba[aria-selected="true"] .resumo-aba__n { background: var(--cor-superficie); color: var(--cor-destaque-texto); }
 :is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }

@@ -374,6 +374,31 @@ class ConfirmacaoTests(unittest.TestCase):
         }])
         self.assertEqual((cascavel["status"], cascavel["candidatos"]), ("ok", []))
 
+    def test_confirmacao_em_serie_na_conferencia_aparece_para_desfazer(self):
+        expira = AGORA + timedelta(days=3)
+        resultado = calcular(
+            [notebook("NB1", base="Backup Cascavel 01")],
+            endpoint(("NB1", "PRNOTEBKLON01", antes(days=1))),
+            [self.confirmacao(expira_em=expira)],
+        )
+        cascavel = regional(resultado, "Cascavel")
+        self.assertEqual(cascavel["contados"], 0)
+        self.assertEqual(cascavel["conferencia"], [{
+            "serie": "NB1", "apelido": "Backup Cascavel 01", "motivo": "leitura_ambigua",
+            "confirmacao": {"estado": "vigente", "expira_em": expira.isoformat()},
+        }])
+
+    def test_marca_com_confirmacao_vigente_conta_pela_marca_e_mostra_o_prazo(self):
+        expira = AGORA + timedelta(days=3)
+        resultado = calcular(
+            [notebook("NB1", base="Backup Cascavel 01")],
+            endpoint(("NB1", "PRNOTE-X", antes(days=1))),
+            [self.confirmacao(expira_em=expira)],
+        )
+        backup = regional(resultado, "Cascavel")["backups"][0]
+        self.assertEqual((backup["origem"], backup["confirmado_ate"]), ("marca", expira.isoformat()))
+        self.assertEqual(backup["confirmacao"], {"estado": "vigente", "expira_em": expira.isoformat()})
+
     def test_confirmacao_vigente_vale_com_endpoint_indisponivel(self):
         resultado = calcular(
             [notebook("NB1")], unavailable_endpoint_alias_index(), [self.confirmacao()],

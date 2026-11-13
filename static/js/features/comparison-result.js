@@ -316,6 +316,10 @@
   const estadoResumo = { ...ESTADO_RESUMO_INICIAL };
   // Set by conectarFiltrosHistoricoComparacao for the content currently on screen; null when there is none.
   let atualizarResumo = null;
+  // Sem comparação na tela (vazio, carregando ou erro): as abas que só filtram a comparação ficam desabilitadas.
+  let semComparacao = true;
+  const ABAS_SEM_COMPARACAO = ["divergencias", "backups"];
+  const abaDesabilitada = chave => semComparacao && !ABAS_SEM_COMPARACAO.includes(chave) && chave !== estadoResumo.aba;
 
   const elementoAbaResumo = chave => document.getElementById(`resumo-aba-${chave}`);
 
@@ -327,6 +331,8 @@
       const ativa = chave === painelAtivo;
       botao.setAttribute("aria-selected", String(ativa));
       botao.tabIndex = ativa ? 0 : -1;
+      if (abaDesabilitada(chave)) botao.setAttribute("aria-disabled", "true");
+      else botao.removeAttribute("aria-disabled");
     });
     document.querySelectorAll("#comparacao-planilhas-conteudo [data-resumo-painel]").forEach(painel => {
       painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
@@ -344,7 +350,7 @@
 
   // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
   function selecionarAbaResumo(chave, { foco = false } = {}) {
-    if (!ABAS_RESUMO.includes(chave)) return;
+    if (!ABAS_RESUMO.includes(chave) || abaDesabilitada(chave)) return;
     const mudou = chave !== estadoResumo.aba;
     if (mudou) estadoResumo.tipo = "";
     estadoResumo.aba = chave;
@@ -366,13 +372,16 @@
     lista.addEventListener("keydown", event => {
       const botao = event.target.closest("[data-resumo-aba]");
       if (!botao) return;
-      const indice = ABAS_RESUMO.indexOf(botao.id.replace("resumo-aba-", ""));
+      // Setas, Home e End andam só pelas abas habilitadas.
+      const habilitadas = ABAS_RESUMO.filter(chave => !abaDesabilitada(chave));
+      const indice = habilitadas.indexOf(botao.id.replace("resumo-aba-", ""));
+      // Foco numa aba desabilitada (clique): a seta direita vai à primeira habilitada e a esquerda à última.
       const destino = {
-        ArrowRight: indice + 1, ArrowLeft: indice - 1, Home: 0, End: ABAS_RESUMO.length - 1,
+        ArrowRight: indice + 1, ArrowLeft: (indice < 0 ? habilitadas.length : indice) - 1, Home: 0, End: habilitadas.length - 1,
       }[event.key];
-      if (destino === undefined) return;
+      if (destino === undefined || !habilitadas.length) return;
       event.preventDefault();
-      selecionarAbaResumo(ABAS_RESUMO[(destino + ABAS_RESUMO.length) % ABAS_RESUMO.length], { foco: true });
+      selecionarAbaResumo(habilitadas[(destino + habilitadas.length) % habilitadas.length], { foco: true });
     });
   }
 
@@ -390,6 +399,7 @@
     Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);
     if (abaAtual === "backups") estadoResumo.aba = "backups";
     atualizarResumo = null;
+    semComparacao = true;
     desconectarObservadoresAnotacoes();
     ABAS_RESUMO.filter(chave => chave !== "visao" && chave !== "backups").forEach(chave => escreverContagemAba(chave, 0, false));
     const avisos = document.getElementById("comparacao-planilhas-avisos");
@@ -406,10 +416,11 @@
     conectarAbasResumo();
     const paineis = typeof content.querySelectorAll === "function" ? [...content.querySelectorAll("[data-resumo-painel]")] : [];
     const comPaineis = paineis.length > 0;
+    semComparacao = !comPaineis;
     // A barra fica sempre visível: a aba Backups existe com ou sem comparação.
     const barraAbas = document.querySelector(".resumo-abas-barra");
     if (barraAbas) barraAbas.hidden = false;
-    if (comPaineis || estadoResumo.aba === "backups") aplicarAbaResumo();
+    aplicarAbaResumo();
 
     const filterBar = content.querySelector("[data-history-filter-bar]");
     if (!filterBar && !comPaineis) return;

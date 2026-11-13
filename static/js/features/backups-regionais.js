@@ -83,7 +83,8 @@
       backup.ultima_verificacao ? `verificado em ${data(backup.ultima_verificacao)}` : "",
       backup.confirmado_ate ? `confirmado até ${data(backup.confirmado_ate)}` : "",
     ].filter(Boolean).map(escapar).join(" · ");
-    const desfazer = backup.origem === "confirmacao" ? botao("desfazer", texto(backup.serie), cidade) : "";
+    // Contado pela marca, mas com confirmação vigente (`confirmado_ate`): o Desfazer continua disponível.
+    const desfazer = backup.origem === "confirmacao" || backup.confirmado_ate ? botao("desfazer", texto(backup.serie), cidade) : "";
     return `${identificacao(backup)}<span class="ck-backups__detalhe">${detalhes}</span>${desfazer}`;
   }
 
@@ -97,7 +98,9 @@
     return `${identificacao(candidato)}<span class="ck-backups__detalhe">${detalhes}</span>${notaConfirmacaoAnterior(candidato.confirmacao)}${botao("confirmar", texto(candidato.serie), cidade)}`;
   }
 
-  const itemConferencia = item => `${identificacao(item)}<span class="ck-backups__detalhe">${escapar(traduzir(MOTIVOS, item.motivo))}</span>`;
+  // Confirmação vigente de série que caiu na conferência: não conta, mas pode ser desfeita.
+  const itemConferencia = (item, cidade) => `${identificacao(item)}<span class="ck-backups__detalhe">${escapar(traduzir(MOTIVOS, item.motivo))}</span>${notaConfirmacaoAnterior(item.confirmacao)}`
+    + (item.confirmacao?.estado === "vigente" ? botao("desfazer", texto(item.serie), cidade) : "");
   const itemExcluido = item => `${identificacao(item)}<span class="ck-backups__detalhe">${escapar(traduzir(MOTIVOS, item.motivo))}</span>${notaConfirmacaoAnterior(item.confirmacao)}`;
 
   function celulaExcluidos(excluidos, cidade, abertos) {
@@ -115,7 +118,7 @@
       + `<td class="ck-td--largo" data-label="Situação"><span class="ck-backups__contagem">${inteiro(regional.contados)}/${inteiro(regional.minimo)}</span> <span class="ck-badge" data-status="${status.tom}">${escapar(status.rotulo)}</span>${excedente > 0 ? ` <span class="ck-backups__nota">+${excedente} além do mínimo</span>` : ""}</td>`
       + `<td class="ck-td--largo" data-label="Backups">${itens(lista(regional.backups).map(backup => itemBackup(backup, cidade)))}</td>`
       + `<td class="ck-td--largo" data-label="Candidatos">${itens(lista(regional.candidatos).map(candidato => itemCandidato(candidato, cidade)))}</td>`
-      + `<td class="ck-td--largo" data-label="Conferência">${itens(lista(regional.conferencia).map(itemConferencia))}</td>`
+      + `<td class="ck-td--largo" data-label="Conferência">${itens(lista(regional.conferencia).map(item => itemConferencia(item, cidade)))}</td>`
       + `<td class="ck-td--largo" data-label="Excluídos">${celulaExcluidos(lista(regional.excluidos), cidade, abertos)}</td>`
       + "</tr>";
   }
@@ -139,7 +142,7 @@
       traduzir(ORIGENS, item.origem),
       item.confirmado_ate ? `confirmado até ${data(item.confirmado_ate)}` : "",
     ].filter(Boolean).map(escapar).join(" · ");
-    const desfazer = item.origem === "confirmacao" ? botao("desfazer", texto(item.serie), cidade) : "";
+    const desfazer = item.origem === "confirmacao" || item.confirmado_ate ? botao("desfazer", texto(item.serie), cidade) : "";
     return `<code class="ck-backups__serie">${escapar(texto(item.serie))}</code>${detalhes ? `<span class="ck-backups__detalhe">${detalhes}</span>` : ""}${desfazer}`;
   }
 
@@ -168,23 +171,35 @@
     return secao("Candidatos nas demais regionais", blocos.join(""));
   }
 
-  /** HTML do painel Backups. `dados`: undefined (sem painel ainda), null (serviço desligado) ou o `backups_regionais`. */
-  function renderizarBackupsRegionais(dados, { abertos = new Set() } = {}) {
+  /** `{ meta, corpo }`: `meta` é o texto puro da linha "Atualizado em…" (muda a cada leitura); `corpo`, o resto em HTML. */
+  function partes(dados, { abertos = new Set() } = {}) {
     const estado = mensagem => `<p class="ck-backups__estado">${mensagem}</p>`;
-    if (dados === undefined) return estado("Aguardando os dados do painel local…");
-    if (dados === null || typeof dados !== "object") return estado("O cálculo de backups regionais está desligado neste servidor.");
-    if (dados.indisponivel) return estado("Não foi possível calcular os backups regionais agora.") + limitacoes(dados);
+    if (dados === undefined) return { meta: null, corpo: estado("Aguardando os dados do painel local…") };
+    if (dados === null || typeof dados !== "object") return { meta: null, corpo: estado("O cálculo de backups regionais está desligado neste servidor.") };
+    if (dados.indisponivel) return { meta: null, corpo: estado("Não foi possível calcular os backups regionais agora.") + limitacoes(dados) };
     const regionais = lista(dados.prioritarias);
     const minimo = inteiro(dados.minimo);
-    const topo = `<p class="ck-backups__meta">${dados.gerado_em ? `Atualizado em ${escapar(data(dados.gerado_em))}. ` : ""}Mínimo: ${minimo} ${plural(minimo, "backup", "backups")} por regional prioritária.</p>`;
-    return topo + limitacoes(dados)
-      + (regionais.length ? tabela(regionais, abertos) : estado("Os dados recebidos não trazem regionais prioritárias."))
-      + secaoSobras(lista(dados.sobras)) + secaoOutrasCandidatos(lista(dados.outras_candidatos));
+    const meta = `${dados.gerado_em ? `Atualizado em ${data(dados.gerado_em)}. ` : ""}Mínimo: ${minimo} ${plural(minimo, "backup", "backups")} por regional prioritária.`;
+    return {
+      meta,
+      corpo: limitacoes(dados)
+        + (regionais.length ? tabela(regionais, abertos) : estado("Os dados recebidos não trazem regionais prioritárias."))
+        + secaoSobras(lista(dados.sobras)) + secaoOutrasCandidatos(lista(dados.outras_candidatos)),
+    };
+  }
+
+  const linhaMeta = meta => (meta === null ? "" : `<p class="ck-backups__meta">${escapar(meta)}</p>`);
+
+  /** HTML do painel Backups. `dados`: undefined (sem painel ainda), null (serviço desligado) ou o `backups_regionais`. */
+  function renderizarBackupsRegionais(dados, opcoes) {
+    const { meta, corpo } = partes(dados, opcoes);
+    return linhaMeta(meta) + corpo;
   }
 
   // ---- DOM ----
   let dados;
-  let htmlAtual = "";
+  let corpoAtual = "";
+  let metaAtual = null;
   let emAndamento = false;
   // `disabled` no clique tira o foco do botão (o navegador o manda ao body): guarda a marca para o redesenho.
   let focoDaAcao = null;
@@ -192,6 +207,7 @@
   const painel = () => document.getElementById("resumo-painel-backups");
 
   function pendencias() {
+    if (dados === undefined) return undefined;  // rótulo "aguardando dados"
     if (!dados || typeof dados !== "object" || dados.indisponivel) return null;
     const contar = valor => (Array.isArray(valor) ? valor.length : 0);
     return contar(dados.pendencias?.sem_backup) + contar(dados.pendencias?.conferir);
@@ -200,7 +216,7 @@
   function atualizarAba() {
     const total = pendencias();
     const selo = document.getElementById("resumo-backups-contagem");
-    if (selo) selo.textContent = total === null ? "—" : total.toLocaleString("pt-BR");
+    if (selo) selo.textContent = total === null || total === undefined ? "—" : total.toLocaleString("pt-BR");
     const aba = document.getElementById("resumo-aba-backups");
     const rotulo = renderer.rotuloContagemAba("backups", total);
     if (aba && rotulo) aba.setAttribute("aria-label", rotulo);
@@ -212,15 +228,27 @@
     if (!alvo) return;
     atualizarAba();
     const abertos = new Set([...(alvo.querySelectorAll?.("details[open][data-cidade]") || [])].map(item => item.dataset.cidade));
-    const html = renderizarBackupsRegionais(dados, { abertos });
-    if (html === htmlAtual) return;
+    const { meta, corpo } = partes(dados, { abertos });
+    // Depois de uma ação (repetida ou sem efeito) o botão ficou ocupado: redesenha sempre, para soltá-lo e devolver o foco.
+    if (!focoDaAcao && corpo === corpoAtual && (meta === null) === (metaAtual === null)) {
+      if (meta === metaAtual) return;
+      // Só o "Atualizado em" mudou: troca o texto da linha sem recriar o painel (foco e leitor de tela ficam onde estão).
+      const linha = alvo.querySelector?.(".ck-backups__meta");
+      if (linha) {
+        linha.textContent = meta;
+        metaAtual = meta;
+        return;
+      }
+    }
+    const html = linhaMeta(meta) + corpo;
     const foco = document.activeElement;
     const semFoco = !foco || foco === document.body;
     const marca = foco && alvo.contains?.(foco) ? { ...foco.dataset, lista: foco.closest?.("details[data-cidade]")?.dataset.cidade }
       : semFoco ? focoDaAcao : null;
     focoDaAcao = null;
     alvo.innerHTML = html;
-    htmlAtual = html;
+    corpoAtual = corpo;
+    metaAtual = meta;
     if (!marca) return;
     // Foco volta ao mesmo botão; se a ação o trocou (Confirmar vira Desfazer), ao botão da mesma série e cidade;
     // depois à lista de excluídos que estava em foco; por último à aba.
@@ -232,9 +260,11 @@
     (mesmo || document.getElementById("resumo-aba-backups"))?.focus?.();
   }
 
+  // Sem `status` é erro de rede: o texto cru do navegador ("Failed to fetch") não vai ao toast.
   function mensagemDoErro(erro, padrao) {
     const mensagem = erro?.detail?.mensagem;
-    return typeof mensagem === "string" && mensagem.trim() ? mensagem.trim() : erro?.message || padrao;
+    if (typeof mensagem === "string" && mensagem.trim()) return mensagem.trim();
+    return (erro?.status && erro?.message) || padrao;
   }
 
   function liberar(botao) {
@@ -252,12 +282,13 @@
     focoDaAcao = { ...botaoAcao.dataset };
     botaoAcao.disabled = true;
     botaoAcao.setAttribute("aria-busy", "true");
+    const errorMessage = acao === "confirmar" ? "Não foi possível confirmar o backup." : "Não foi possível desfazer a confirmação.";
     try {
       const resposta = await app.apiFetch(`/api/backups-regionais/${acao}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serie, cidade }),
-        errorMessage: acao === "confirmar" ? "Não foi possível confirmar o backup." : "Não foi possível desfazer a confirmação.",
+        errorMessage,
       });
       if (acao === "desfazer" && resposta?.removido === false) app.showToast(`Não havia confirmação para desfazer: série ${serie}, ${cidade}.`, "warning");
       else app.showToast(acao === "confirmar" ? `Backup confirmado por 7 dias: série ${serie}, ${cidade}.` : `Confirmação desfeita: série ${serie}, ${cidade}.`, "success");
@@ -266,8 +297,10 @@
       const reabrir = setTimeout(() => liberar(botaoAcao), 10000);
       reabrir?.unref?.();
     } catch (erro) {
-      app.showToast(mensagemDoErro(erro, "Não foi possível concluir a ação."), "error");
+      app.showToast(mensagemDoErro(erro, errorMessage), "error");
       liberar(botaoAcao);
+      // 422: a série saiu do cálculo depois que a tela foi desenhada; pede o painel para a tela mostrar o estado atual.
+      if (erro?.status === 422) document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
       if (!document.activeElement || document.activeElement === document.body) botaoAcao.focus?.();
     } finally {
       emAndamento = false;
@@ -278,6 +311,12 @@
     const painelLido = evento.detail;
     if (!painelLido || typeof painelLido !== "object") return;
     dados = "backups_regionais" in painelLido ? painelLido.backups_regionais : null;
+    renderizar();
+  });
+  // Leitura do painel falhou antes de qualquer resposta: "aguardando" vira "indisponível" (selo e rótulo da aba também).
+  document.addEventListener("simpress:painel-indisponivel", () => {
+    if (dados !== undefined) return;
+    dados = { indisponivel: true, limitacoes: [] };
     renderizar();
   });
   painel()?.addEventListener("click", aoClicar);

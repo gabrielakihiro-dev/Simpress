@@ -552,6 +552,7 @@
     const rotulo = rotuloAba(chave);
     if (chave === "visao") return rotulo;
     if (chave === "backups") {
+      if (total === undefined) return `${rotulo}: aguardando dados`;  // painel ainda não chegou
       if (total === null) return `${rotulo}: dados indisponíveis`;
       const n = Number(total) || 0;
       return `${rotulo}: ${n.toLocaleString("pt-BR")} ${n === 1 ? "regional pendente" : "regionais pendentes"}`;
