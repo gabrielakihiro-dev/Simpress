@@ -354,11 +354,44 @@
               <form class="lembretes__novo" id="lembretes-form-novo" autocomplete="off" novalidate data-on-submit="lembretesAdicionar">
                 <label class="lembretes__rotulo" for="lembretes-novo-descricao">Descrição</label>
                 <input type="text" id="lembretes-novo-descricao" class="ck-entrada lembretes__campo" placeholder="O que você precisa fazer?" autocomplete="off" aria-describedby="lembretes-novo-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'>
+                <button type="button" id="lembretes-data-botao" class="ck-btn ck-btn--secundario lembretes__data-botao" aria-expanded="false" aria-controls="lembretes-data-painel" data-on-click="lembretesAlternarPainelData"><svg class="lembretes__ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg><span id="lembretes-data-rotulo">Data</span></button>
                 <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled><svg class="ck-ico" aria-hidden="true"><use href="#i-plus"></use></svg>Adicionar</button>
+                <fieldset class="lembretes__data-painel" id="lembretes-data-painel" hidden data-on-keydown="lembretesTeclaPainelData" data-args-keydown='["$event"]'>
+                  <legend class="lembretes__data-legenda">Data agendada</legend>
+                  <div class="lembretes__atalhos">
+                    <button type="button" class="lembretes__atalho" id="lembretes-atalho-hoje" aria-pressed="false" data-on-click="lembretesAtalhoData" data-args='["hoje"]'>Hoje</button>
+                    <button type="button" class="lembretes__atalho" id="lembretes-atalho-amanha" aria-pressed="false" data-on-click="lembretesAtalhoData" data-args='["amanha"]'>Amanhã</button>
+                    <button type="button" class="lembretes__atalho" id="lembretes-atalho-segunda" aria-pressed="false" data-on-click="lembretesAtalhoData" data-args='["segunda"]'>Próxima segunda</button>
+                  </div>
+                  <div class="lembretes__campo-data">
+                    <label class="lembretes__rotulo-campo" for="lembretes-novo-data">Data</label>
+                    <input type="date" id="lembretes-novo-data" class="ck-entrada" max="9999-12-31" data-on-change="lembretesAoMudarData" data-args='["$this"]'>
+                  </div>
+                  <div class="lembretes__campo-data">
+                    <label class="lembretes__rotulo-campo" for="lembretes-novo-hora">Hora (opcional)</label>
+                    <input type="time" id="lembretes-novo-hora" class="ck-entrada" disabled data-on-change="lembretesAoMudarData" data-args='["$this"]'>
+                  </div>
+                  <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm lembretes__remover-data" data-on-click="lembretesRemoverData" data-args='["novo"]'><svg class="lembretes__ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>Remover data</button>
+                </fieldset>
                 <p class="lembretes__erro" id="lembretes-novo-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
               </form>
               <p class="lembretes__vazio" id="lembretes-vazio" hidden><span class="lembretes__vazio-ico" aria-hidden="true"><svg class="ck-ico"><use href="#i-check"></use></svg></span><span>Nenhum lembrete. Anote o que precisa fazer.</span></p>
-              <ul class="lembretes__lista" id="lembretes-lista" aria-label="Lembretes pendentes"></ul>
+              <div class="lembretes__barra">
+                <div class="ck-pilulas lembretes__vistas" role="tablist" aria-label="Vistas de lembretes" data-on-keydown="lembretesTeclaVista" data-args-keydown='["$event"]'>
+                  <button type="button" class="ck-pilula" role="tab" id="lembretes-aba-hoje" aria-selected="true" aria-controls="lembretes-lista" data-on-click="lembretesSelecionarVista" data-args='["hoje"]'>Hoje <span class="ck-pilula__n" id="lembretes-hoje-n">0</span></button>
+                  <button type="button" class="ck-pilula" role="tab" id="lembretes-aba-embreve" aria-selected="false" tabindex="-1" aria-controls="lembretes-lista" data-on-click="lembretesSelecionarVista" data-args='["embreve"]'>Em breve</button>
+                </div>
+                <div class="lembretes__navegar" id="lembretes-navegar" hidden>
+                  <button type="button" class="lembretes__nav lembretes__nav--anterior" id="lembretes-semana-anterior" aria-label="Semana anterior" disabled data-on-click="lembretesMudarSemana" data-args='[-1]'><svg class="ck-ico" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
+                  <button type="button" class="lembretes__nav lembretes__nav--hoje" data-on-click="lembretesMudarSemana" data-args='[0]'>Hoje</button>
+                  <button type="button" class="lembretes__nav" id="lembretes-semana-proxima" aria-label="Próxima semana" data-on-click="lembretesMudarSemana" data-args='[1]'><svg class="ck-ico" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
+                </div>
+              </div>
+              <div class="lembretes__semana" id="lembretes-semana" hidden>
+                <p class="lembretes__mes" id="lembretes-mes" aria-live="polite"></p>
+                <div class="lembretes__faixa" id="lembretes-faixa" role="group" aria-label="Dias da semana"></div>
+              </div>
+              <div class="lembretes__grupos" id="lembretes-lista" role="tabpanel" aria-labelledby="lembretes-aba-hoje"></div>
               <div class="lembretes__concluidos" id="lembretes-concluidos" hidden>
                 <button type="button" class="lembretes__recolher" id="lembretes-concluidos-botao" aria-expanded="false" aria-controls="lembretes-concluidos-lista" data-on-click="lembretesAlternarConcluidos"><svg class="ck-ico lembretes__seta" aria-hidden="true"><use href="#i-chevron-right"></use></svg><span id="lembretes-concluidos-rotulo">Concluídos (0)</span></button>
                 <ul class="lembretes__lista" id="lembretes-concluidos-lista" aria-label="Lembretes concluídos" hidden></ul>
