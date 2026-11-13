@@ -102,7 +102,8 @@
     campo.setAttribute("aria-describedby", "lembretes-edicao-dica lembretes-edicao-erro");
     ligar(campo, "input", "lembretesAoDigitar", ["$this"]);
     ligar(campo, "keydown", "lembretesTeclaEdicao", ["$event"]);
-    const dica = elemento("p", "lembretes__dica", "Enter salva · Esc cancela");
+    const dica = elemento("p", "lembretes__dica");
+    dica.append(elemento("kbd", "", "Enter"), " salva · ", elemento("kbd", "", "Esc"), " cancela");
     dica.id = "lembretes-edicao-dica";
     const erro = elemento("p", "lembretes__erro", `A descrição pode ter até ${LIMITE} caracteres.`);
     erro.id = "lembretes-edicao-erro";
@@ -160,7 +161,10 @@
     if (l.concluido) li.classList.add("lembretes__item--feito");
     if (String(l.id) === String(editandoId)) {
       li.classList.add("lembretes__item--editando");
-      li.append(criarEdicao(l));
+      // Anel só visual: o item segue no lugar, como no modelo; concluir fica para depois de salvar ou cancelar.
+      const anel = elemento("span", "lembretes__marcar lembretes__marcar--fixo");
+      anel.setAttribute("aria-hidden", "true");
+      li.append(anel, criarEdicao(l));
       return li;
     }
     const marcar = elemento("button", "lembretes__marcar");
@@ -168,7 +172,7 @@
     marcar.setAttribute("aria-label", `${l.concluido ? "Desmarcar" : "Concluir"}: ${l.descricao}`);
     ligar(marcar, "click", "lembretesAlternar", [l.id]);
     const corpo = elemento("div", "lembretes__corpo");
-    const data = elemento("time", "lembretes__data", `${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
+    const data = elemento("time", l.alterado_em ? "lembretes__data lembretes__data--alterado" : "lembretes__data",`${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`);
     data.setAttribute("datetime", dataExibida(l));
     corpo.append(elemento("p", "lembretes__texto", l.descricao), data);
     const blocoTermo = criarBlocoTermo(l);

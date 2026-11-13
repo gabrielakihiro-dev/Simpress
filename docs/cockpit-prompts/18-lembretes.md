@@ -4,6 +4,8 @@ Especificação da ferramenta **Lembretes**, que substitui a ferramenta **Termos
 
 Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj369oGQoYmw5inWncGh, artboards "Lembretes — 5 estados" e "Termo → Lembrete".
 
+Visual da aba Lembretes (12/11/2026): modelo estilo Todoist, artefato https://claude.ai/code/artifact/008ece32-67be-464b-bb80-7566cbb2e4b2 (artboard `Main.dc.html`). Só a camada visual mudou; textos, IDs, ARIA e regras seguem os desta especificação.
+
 ## Estrutura
 
 - Painel `section[data-cockpit-tool-panel="lembretes"]`, aberto pelo botão `#btn-lembretes` no menu Ferramentas. Sem atalho de teclado (Termos também não tinha).
@@ -59,7 +61,10 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 
 ## Interface
 
-- De 320 a 2560 px, sem rolagem horizontal. Abaixo de 480 px de largura do painel: cards com ações sempre visíveis e alvos de 44 px.
+- Painel em cartão (superfície, borda, `--raio-lg`, `--sombra-sm`), com o rótulo `Descrição` visível acima do campo e `Adicionar` preenchido com ícone `+`. Sem largura máxima: ocupa a área da ferramenta.
+- Cada lembrete é um cartão separado: círculo de concluir (anel de 18 px; concluído fica preenchido na cor de destaque, com o texto riscado), descrição, data (`Alterado em` na cor de destaque) e `Editar`/`Excluir` sempre visíveis.
+- Edição inline no próprio cartão: campo realçado, dica com as teclas em `<kbd>` e `Salvar` preenchido. Estado vazio com ícone em círculo. `Concluídos (n)` com linha superior e seta que gira 90°. No diálogo de exclusão, `Excluir` é preenchido na cor de erro.
+- De 320 a 2560 px, sem rolagem horizontal. Abaixo de 480 px de largura do painel: as ações descem para uma linha própria no cartão e os alvos têm 44 px.
 - Temas claro e escuro, só com os tokens de `ck-tokens.css`.
 - Animações de 180–260 ms; com `prefers-reduced-motion`, sem movimento.
 - Foco visível, navegação por teclado, foco devolvido ao item ou ao campo depois de fechar diálogo ou edição.
