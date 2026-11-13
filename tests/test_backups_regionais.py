@@ -541,9 +541,16 @@ class StatusESobrasTests(unittest.TestCase):
         self.assertEqual(cascavel["excedente"], 2)
         self.assertEqual([(b["serie"], b["origem"]) for b in cascavel["backups"]],
                          [("C1", "marca"), ("C3", "marca"), ("C2", "confirmacao")])
+        ate_c2 = (AGORA + timedelta(days=2)).isoformat()
         self.assertEqual(resultado["sobras"], [
-            {"cidade": "Cascavel", "quantidade": 2, "series": ["C3", "C2"], "prioritaria": True},
-            {"cidade": "Toledo", "quantidade": 2, "series": ["T1", "T2"], "prioritaria": False},
+            {"cidade": "Cascavel", "quantidade": 2, "series": ["C3", "C2"], "prioritaria": True, "itens": [
+                {"serie": "C3", "origem": "marca", "confirmado_ate": None},
+                {"serie": "C2", "origem": "confirmacao", "confirmado_ate": ate_c2},
+            ]},
+            {"cidade": "Toledo", "quantidade": 2, "series": ["T1", "T2"], "prioritaria": False, "itens": [
+                {"serie": "T1", "origem": "marca", "confirmado_ate": None},
+                {"serie": "T2", "origem": "marca", "confirmado_ate": None},
+            ]},
         ])
         self.assertEqual(
             [(g["cidade"], series(g["candidatos"])) for g in resultado["outras_candidatos"]],

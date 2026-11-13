@@ -91,8 +91,10 @@
                 <button type="button" role="tab" id="resumo-aba-apelidos" class="resumo-aba" data-resumo-aba="apelidos" aria-selected="false" tabindex="-1" aria-label="Apelidos: 0 linhas"><span class="resumo-aba__rotulo">Apelidos</span><span id="resumo-apelidos-contagem" class="ck-badge resumo-aba__n">0</span></button>
                 <button type="button" role="tab" id="resumo-aba-usuarios" class="resumo-aba" data-resumo-aba="usuarios" aria-selected="false" tabindex="-1" aria-label="Usuários: 0 linhas"><span class="resumo-aba__rotulo">Usuários</span><span id="resumo-usuarios-contagem" class="ck-badge resumo-aba__n">0</span></button>
                 <button type="button" role="tab" id="resumo-aba-sem-acesso" class="resumo-aba" data-resumo-aba="sem-acesso" aria-selected="false" tabindex="-1" aria-label="Sem acesso: 0 linhas"><span class="resumo-aba__rotulo">Sem acesso</span><span id="resumo-sem-acesso-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                <button type="button" role="tab" id="resumo-aba-backups" class="resumo-aba" data-resumo-aba="backups" aria-selected="false" tabindex="-1" aria-label="Backups: aguardando dados"><span class="resumo-aba__rotulo">Backups</span><span id="resumo-backups-contagem" class="ck-badge resumo-aba__n">—</span></button>
             </div>
           </div>
+          <div role="tabpanel" id="resumo-painel-backups" class="ck-comparacao-resultado ck-backups" aria-labelledby="resumo-aba-backups" data-resumo-painel="backups" hidden></div>
           <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
           <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
             <div class="ck-cartao ck-regionais">
@@ -326,12 +328,12 @@
           <div class="termos__painel lembretes__painel" role="tabpanel" id="termos-painel-lembretes" aria-labelledby="termos-aba-lembretes">
             <div class="lembretes__caixa">
               <form class="lembretes__novo" id="lembretes-form-novo" autocomplete="off" novalidate data-on-submit="lembretesAdicionar">
-                <label class="sr-only" for="lembretes-novo-descricao">Descrição</label>
+                <label class="lembretes__rotulo" for="lembretes-novo-descricao">Descrição</label>
                 <input type="text" id="lembretes-novo-descricao" class="ck-entrada lembretes__campo" placeholder="O que você precisa fazer?" autocomplete="off" aria-describedby="lembretes-novo-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'>
-                <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled>Adicionar</button>
+                <button type="submit" id="lembretes-adicionar" class="ck-btn ck-btn--primario" disabled><svg class="ck-ico" aria-hidden="true"><use href="#i-plus"></use></svg>Adicionar</button>
                 <p class="lembretes__erro" id="lembretes-novo-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
               </form>
-              <p class="lembretes__vazio" id="lembretes-vazio" hidden>Nenhum lembrete. Anote o que precisa fazer.</p>
+              <p class="lembretes__vazio" id="lembretes-vazio" hidden><span class="lembretes__vazio-ico" aria-hidden="true"><svg class="ck-ico"><use href="#i-check"></use></svg></span><span>Nenhum lembrete. Anote o que precisa fazer.</span></p>
               <ul class="lembretes__lista" id="lembretes-lista" aria-label="Lembretes pendentes"></ul>
               <div class="lembretes__concluidos" id="lembretes-concluidos" hidden>
                 <button type="button" class="lembretes__recolher" id="lembretes-concluidos-botao" aria-expanded="false" aria-controls="lembretes-concluidos-lista" data-on-click="lembretesAlternarConcluidos"><svg class="ck-ico lembretes__seta" aria-hidden="true"><use href="#i-chevron-right"></use></svg><span id="lembretes-concluidos-rotulo">Concluídos (0)</span></button>

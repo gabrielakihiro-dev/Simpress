@@ -23,7 +23,17 @@ logger = logging.getLogger(__name__)
 MAX_DESCRICAO = 2000
 ORIGENS = ("entrega", "devolucao")
 PADRAO_ID = re.compile(r"^[a-z0-9_-]{1,40}$")
-CAMPOS = ("id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem")
+CAMPOS = ("id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem", "termo")
+# Cópia dos dados do termo (12/11/2026): chaves do formulário por origem, como em static/js/features/termos.js.
+CAMPOS_TERMO = {
+    "entrega": ("nome", "unidade", "data", "modelo_anterior", "modelo_entregue", "serie_anterior", "serie_entregue"),
+    "devolucao": ("nome", "unidade", "data", "modelo", "serie"),
+}
+TOTAL_ITENS_TERMO = 11
+RESPOSTAS_ITEM = ("sim", "nao", "")
+MAX_CAMPO_TERMO = 200
+MAX_OBS_TERMO = 2000
+CONTROLE_OBS = "\n\r\t"
 
 # Mensagens técnicas (sem texto aprovado); os códigos viajam junto no JSON.
 MSG_DESCRICAO_TEXTO = "A descrição precisa ser um texto."
@@ -31,6 +41,7 @@ MSG_DESCRICAO_VAZIA = "A descrição não pode ficar vazia."
 MSG_DESCRICAO_CONTROLE = "A descrição não pode ter caracteres de controle."
 MSG_DESCRICAO_LIMITE = f"A descrição pode ter até {MAX_DESCRICAO} caracteres."
 MSG_ORIGEM = "A origem precisa ser entrega, devolucao ou vazia."
+MSG_TERMO = "Os dados do termo são inválidos."
 MSG_CONCLUIDO = "O campo concluido precisa ser verdadeiro ou falso."
 MSG_INEXISTENTE = "Lembrete não encontrado."
 MSG_ILEGIVEL = "O arquivo de lembretes está ilegível e foi preservado. Restaure uma cópia válida antes de alterar os lembretes."
@@ -72,6 +83,39 @@ def _origem(valor: Any) -> Optional[str]:
     return valor
 
 
+def _texto_termo(valor: Any, limite: int, controle_permitido: str = "") -> bool:
+    # Cs (surrogate isolado) não grava em UTF-8; Cc só os permitidos (quebra de linha e tab nas observações).
+    return (
+        isinstance(valor, str)
+        and len(valor) <= limite
+        and not any(
+            unicodedata.category(c) == "Cs" or (unicodedata.category(c) == "Cc" and c not in controle_permitido)
+            for c in valor
+        )
+    )
+
+
+def _termo(valor: Any, origem: Optional[str]) -> Optional[dict[str, Any]]:
+    """Cópia dos dados do termo como foram digitados; a mensagem de erro nunca leva o valor."""
+    if valor is None:
+        return None
+    erro = _invalido(MSG_TERMO, "termo_invalido")
+    if origem is None or not isinstance(valor, dict) or set(valor) != {"campos", "itens", "obs"}:
+        raise erro
+    campos, itens, obs = valor["campos"], valor["itens"], valor["obs"]
+    if (
+        not isinstance(campos, dict)
+        or not set(campos) <= set(CAMPOS_TERMO[origem])
+        or not all(_texto_termo(v, MAX_CAMPO_TERMO) for v in campos.values())
+        or not isinstance(itens, list)
+        or len(itens) != TOTAL_ITENS_TERMO
+        or not all(isinstance(i, str) and i in RESPOSTAS_ITEM for i in itens)
+        or not _texto_termo(obs, MAX_OBS_TERMO, CONTROLE_OBS)
+    ):
+        raise erro
+    return {"campos": {chave: campos.get(chave, "") for chave in CAMPOS_TERMO[origem]}, "itens": list(itens), "obs": obs}
+
+
 def _texto_ou_nulo(valor: Any) -> bool:
     return valor is None or isinstance(valor, str)
 
@@ -87,6 +131,8 @@ def _item_valido(item: Any) -> bool:
         and isinstance(item.get("concluido"), bool)
         and _texto_ou_nulo(item.get("concluido_em"))
         and item.get("origem") in (None, *ORIGENS)
+        # Leitura tolerante: um termo estranho não pode marcar o arquivo inteiro como ilegível; o front confere as chaves.
+        and (item.get("termo") is None or isinstance(item.get("termo"), dict))
     )
 
 
@@ -147,8 +193,9 @@ class Lembretes:
                 return item
         raise ErroLembrete(404, MSG_INEXISTENTE, codigo="lembrete_inexistente")
 
-    def criar(self, descricao: Any, origem: Any = None) -> dict[str, Any]:
+    def criar(self, descricao: Any, origem: Any = None, termo: Any = None) -> dict[str, Any]:
         texto, origem_ok = _descricao(descricao), _origem(origem)
+        termo_ok = _termo(termo, origem_ok)
 
         def acao(itens: list[dict[str, Any]]) -> dict[str, Any]:
             ids = {item["id"] for item in itens}
@@ -157,7 +204,7 @@ class Lembretes:
                 novo_id = secrets.token_hex(6)
             item = {
                 "id": novo_id, "descricao": texto, "criado_em": self._agora(), "alterado_em": None,
-                "concluido": False, "concluido_em": None, "origem": origem_ok,
+                "concluido": False, "concluido_em": None, "origem": origem_ok, "termo": termo_ok,
             }
             itens.append(item)
             return dict(item)

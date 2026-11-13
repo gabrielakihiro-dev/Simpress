@@ -739,6 +739,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
   const divergences = panel.locator("#alerta-divergencias-novas");
   const longUnused = panel.locator("#alerta-sem-acesso-60");
   const base = home.locator("#alerta-base-desatualizada");
+  await request.get("/__fixture_backups?estado=nulo"); // o cartão de backups também conta no sino; aqui só os outros
   await request.get("/__fixture_alertas_painel?estado=ocultos");
   await request.get("/__fixture_base_desatualizada?estado=atualizada");
   await page.reload();
@@ -866,6 +867,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
   } finally {
     await request.get("/__fixture_alertas_painel?estado=ocultos");
     await request.get("/__fixture_base_desatualizada?estado=atualizada");
+    await request.get("/__fixture_backups?estado=padrao");
   }
 });
 
@@ -874,6 +876,7 @@ test("finalizados por outro técnico aparecem como quarto aviso do sino e levam 
   const badge = page.locator("#badge-notificacoes");
   const panel = page.locator("#notification-center-panel");
   const aviso = panel.locator("#alerta-chamados-outro-tecnico");
+  await request.get("/__fixture_backups?estado=nulo");
   await request.get("/__fixture_alertas_painel?estado=ocultos");
   await request.get("/__fixture_base_desatualizada?estado=atualizada");
   try {
@@ -904,5 +907,52 @@ test("finalizados por outro técnico aparecem como quarto aviso do sino e levam 
   } finally {
     await request.get("/__fixture_alertas_painel?estado=ocultos");
     await request.get("/__fixture_base_desatualizada?estado=atualizada");
+    await request.get("/__fixture_backups?estado=padrao");
+  }
+});
+
+test("Sino: cartão de backups regionais aparece com o total certo e leva à sub-aba Backups do Resumo", async ({ page, request }) => {
+  const trigger = page.locator("#btn-notificacoes");
+  const badge = page.locator("#badge-notificacoes");
+  const panel = page.locator("#notification-center-panel");
+  const aviso = panel.locator("#alerta-backups-regionais");
+  await request.get("/__fixture_cockpit?comparacao=1");
+  await request.get("/__fixture_alertas_painel?estado=ocultos");
+  await request.get("/__fixture_base_desatualizada?estado=atualizada");
+  try {
+    // Há regional sem backup: urgente.
+    await request.get("/__fixture_backups?estado=padrao");
+    await page.goto("/");
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await expect(badge).toHaveText("1");
+    await expect(aviso.getByRole("heading", { name: "Sem backup disponível" })).toBeVisible();
+    await expect(aviso.locator(".ck-badge")).toHaveText("Urgente");
+    await expect(aviso.locator("li")).toHaveText(["Cascavel — sem backup disponível", "Londrina — conferir possível backup"]);
+    await aviso.getByRole("button", { name: "Ver backups no Resumo" }).click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+    await expect(page.locator("#resumo-aba-backups")).toHaveAttribute("aria-selected", "true");
+
+    // Só falta conferir: atenção, mesmo total.
+    await request.get("/__fixture_backups?estado=so_conferir");
+    await page.reload();
+    await trigger.click();
+    await expect(badge).toHaveText("1");
+    await expect(aviso.getByRole("heading", { name: "Conferir possível backup" })).toBeVisible();
+    await expect(aviso.locator(".ck-badge")).toHaveText("Atenção");
+
+    // Campo desligado ou indisponível: o cartão some e o sino fica sem selo.
+    for (const estado of ["nulo", "indisponivel"]) {
+      await request.get(`/__fixture_backups?estado=${estado}`);
+      await page.reload();
+      await trigger.click();
+      await expect(panel).toBeVisible();
+      await expect(aviso).toBeHidden();
+      await expect(badge).toBeHidden();
+    }
+  } finally {
+    await request.get("/__fixture_backups?estado=padrao");
+    await request.get("/__fixture_cockpit?comparacao=0");
   }
 });

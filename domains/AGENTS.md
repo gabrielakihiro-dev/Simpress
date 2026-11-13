@@ -35,6 +35,10 @@ Regras de negócio por domínio. Valem junto com o `AGENTS.md` da raiz; o texto 
 
 - Só lê o cadastro; grava em `data/state/operacao_cobertura*.json`; a elegibilidade é recalculada dentro de cada transação (`coverage.py`, `coverage_store.py`). Doc: `docs/cockpit-prompts/16-cobertura.md`.
 
+## Backups regionais (Resumo F3)
+
+- Cálculo puro em `backups_regionais.py` (só Notebook; MacBook e séries do Sebrae fora; mínimo 1 em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa); cadastro, Endpoint, Cobertura e manutenção são só leitura. A confirmação manual de 7 dias fica só em `data/state/backups_regionais.json` (`backups_regionais_store.py`), sem dado pessoal. `apelido` pode ser nome de pessoa: só na tela local, nunca no Assistente, toast nem log. Doc: `docs/cockpit-prompts/05-resumo-kpis.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
+
 ## Transporte e representantes (F2)
 
 - O padrão dos representantes tem uma só fonte, `REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`; só a alteração por cidade é gravada em `config/representantes_regionais.json`. Doc: `docs/arquitetura/CONTRATOS_API_BACKEND.md`.
