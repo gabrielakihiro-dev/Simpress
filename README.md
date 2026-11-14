@@ -93,6 +93,8 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
+Depois do clone, configure as contas das automações, o link da pasta do Dashboard, os dados do cliente e a chave do assistente pelo site, em **Prontidão da base > Configuração local** (botão `Configurar`). O site grava os arquivos abaixo por você, com backup; copiar e editar à mão continua funcionando.
+
 Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. O arquivo `.env` da raiz (fora do Git) só é lido pelo assistente, para `OPENROUTER_API_KEY`, os modelos opcionais e, se quiser usar o DeepSeek, `DEEPSEEK_API_KEY` e `DEEPSEEK_MODEL`; sem ele, o restante da aplicação funciona normalmente e o painel do assistente mostra o aviso de assistente desligado. Para criá-lo, copie o modelo:
 
 ```powershell

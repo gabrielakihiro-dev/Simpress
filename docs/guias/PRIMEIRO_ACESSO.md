@@ -5,8 +5,9 @@ Estas instruções se aplicam ao modo padrão de arquivos locais.
 1. Depois do `git clone`, execute `iniciar_servidor.bat`. O inicializador prepara o ambiente e inicia o servidor mesmo sem os inventários operacionais.
 2. Quando o servidor estiver pronto, o navegador abre o Simpress sozinho (o inicializador mostra o endereço, normalmente `http://127.0.0.1:8000`, ou outra porta se a 8000 estiver ocupada). Clonar o repositório, sozinho, não inicia o servidor. Não digite o endereço à mão: só o navegador aberto pelo inicializador recebe a sessão local, e sem ela a página mostra **"Sessão local ausente ou expirada"**.
 3. O primeiro acesso abre o modal **Dados do cliente**, que pede o contrato, o CNPJ de faturamento e as séries próprias do Sebrae e grava `config/cliente.json` (ignorado pelo Git; exemplo fictício em `config/cliente.exemplo.json`). As variáveis `SIMPRESS_CLIENTE_CONTRATO`, `SIMPRESS_CLIENTE_CNPJ_FATURAMENTO` e `SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA` (séries separadas por vírgula) vencem o arquivo. Sem contrato e CNPJ configurados, o ticket UX, a validação de contrato e as rotinas que usam o contrato recusam com uma mensagem; séries vazias significam nenhuma série excluída.
-4. O painel de disponibilidade abre automaticamente quando há pendências. A base começa com zero equipamentos e a mensagem **Base ainda não importada**.
-5. Use os botões de importação em **Funções**. Após cada importação, os indicadores e a disponibilidade são atualizados sem reiniciar o servidor.
+4. Em **Prontidão da base > Configuração local**, clique em `Configurar` e preencha as contas das automações (Conta Simpress, Conta Sebrae e Usuário do Endpoint Central), o link da pasta do Dashboard e, se quiser o assistente com IA, a chave. O cartão fica **Pendente** e lista o que falta até tudo estar preenchido. Senha e MFA você digita no Chrome de automação; o site nunca os pede.
+5. O painel de disponibilidade abre automaticamente quando há pendências. A base começa com zero equipamentos e a mensagem **Base ainda não importada**.
+6. Use os botões de importação em **Funções**. Após cada importação, os indicadores e a disponibilidade são atualizados sem reiniciar o servidor.
 
 ## Arquivos por função
 

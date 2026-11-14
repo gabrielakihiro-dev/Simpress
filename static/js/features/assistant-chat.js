@@ -7,7 +7,7 @@
   const { apiFetch } = context;
   const { createTextElement } = context.dom;
   const LIMITE = 4000;
-  const DESLIGADO = "Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.";
+  const DESLIGADO = "Assistente desligado. Configure a chave em Prontidão da base > Configuração local.";
   // Reserva caso o estado traga a pendência sem a descrição da ação.
   const PENDENTE_SEM_DESCRICAO = "Há uma ação aguardando sua confirmação.";
   let online = false;

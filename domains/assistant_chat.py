@@ -59,7 +59,7 @@ PROMESSA = re.compile(r"^\s*(vou|vamos|irei|deixe-me|um momento|aguarde)\b", re.
 # Asked once when the model ends a turn with empty text after tool calls; the results are already in the history.
 PEDIDO_RESPOSTA_FINAL = "Responda agora ao usuário, em texto, com os resultados que você já obteve. Não chame ferramentas."
 
-MSG_SEM_CHAVE = "A chave do OpenRouter não foi configurada. Abra o arquivo .env na pasta do Simpress e preencha OPENROUTER_API_KEY (ou DEEPSEEK_API_KEY)."
+MSG_SEM_CHAVE = "A chave do OpenRouter não foi configurada. Configure a chave em Prontidão da base > Configuração local."
 MSG_OCUPADO = "O assistente ainda está respondendo. Aguarde um instante."
 
 SYSTEM_PROMPT = """Você é o assistente oficial do parque de computadores Simpress.
