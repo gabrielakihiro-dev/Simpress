@@ -16,6 +16,24 @@ from unittest.mock import MagicMock, patch
 
 from scripts import automacao_rotinas_chrome as automacao
 
+# Fictitious accounts and folder: tests never depend on the machine's config/contas_automacao.json.
+_CONTAS_FICTICIAS = [
+    patch.object(automacao, "ENDPOINT_USUARIO", "usuario.exemplo"),
+    patch.object(automacao, "EMAIL_DASHBOARD", "pessoa.simpress@exemplo.invalid"),
+    patch.object(automacao, "EMAIL_SOFTEXPERT", "pessoa.sebrae@exemplo.invalid"),
+    patch.object(automacao, "DASHBOARD_PASTA_URL", "https://exemplo.invalid/sites/pasta-do-dashboard"),
+]
+
+
+def setUpModule():
+    for alvo in _CONTAS_FICTICIAS:
+        alvo.start()
+
+
+def tearDownModule():
+    for alvo in reversed(_CONTAS_FICTICIAS):
+        alvo.stop()
+
 
 class ChromeAutomationHelpersTests(unittest.TestCase):
     def setUp(self):
@@ -284,22 +302,22 @@ class LoginAbasTests(unittest.TestCase):
 
     def test_microsoft_clicks_only_the_requested_account(self):
         page, clicados, relogio = self._conta_microsoft(
-            ["Pessoa Exemplo", "gansouza@simpress.com.br", "GAkihiro@pr.sebrae.com.br", "Use outra conta"]
+            ["Pessoa Exemplo", "pessoa.simpress@exemplo.invalid", "pessoa.sebrae@exemplo.invalid", "Use outra conta"]
         )
         with (
             patch.object(automacao.time, "time", lambda: relogio["agora"]),
             patch.object(automacao, "visivel", return_value=False),
         ):
-            automacao.entrar_microsoft(page, "Oracle", "gansouza@simpress.com.br", espera_s=5)
-        self.assertEqual(clicados, ["gansouza@simpress.com.br"])
+            automacao.entrar_microsoft(page, "Oracle", "pessoa.simpress@exemplo.invalid", espera_s=5)
+        self.assertEqual(clicados, ["pessoa.simpress@exemplo.invalid"])
 
     def test_microsoft_uses_another_account_when_requested_one_is_not_listed(self):
-        page, clicados, relogio = self._conta_microsoft(["GAkihiro@pr.sebrae.com.br", "Use outra conta"])
+        page, clicados, relogio = self._conta_microsoft(["pessoa.sebrae@exemplo.invalid", "Use outra conta"])
         with (
             patch.object(automacao.time, "time", lambda: relogio["agora"]),
             patch.object(automacao, "visivel", return_value=False),
         ):
-            automacao.entrar_microsoft(page, "Oracle", "gansouza@simpress.com.br", espera_s=5)
+            automacao.entrar_microsoft(page, "Oracle", "pessoa.simpress@exemplo.invalid", espera_s=5)
         self.assertEqual(set(clicados), {"Use outra conta"})  # nunca a conta do Sebrae
 
     def test_microsoft_types_the_email_in_a_generic_text_field_and_advances(self):
@@ -314,8 +332,8 @@ class LoginAbasTests(unittest.TestCase):
             patch.object(automacao.time, "time", lambda: relogio["agora"]),
             patch.object(automacao, "visivel", return_value=False),
         ):
-            automacao.entrar_microsoft(page, "SoftExpert", "gakihiro@pr.sebrae.com.br", espera_s=3)
-        campo.filter.return_value.first.fill.assert_called_with("gakihiro@pr.sebrae.com.br")
+            automacao.entrar_microsoft(page, "SoftExpert", "pessoa.sebrae@exemplo.invalid", espera_s=3)
+        campo.filter.return_value.first.fill.assert_called_with("pessoa.sebrae@exemplo.invalid")
         avancar.filter.return_value.first.click.assert_called_once()
 
     def test_sharepoint_dashboard_signs_in_with_the_simpress_account(self):
@@ -325,7 +343,7 @@ class LoginAbasTests(unittest.TestCase):
             self.assertTrue(automacao.pasta_dashboard_entrar(page))
         self.assertEqual(entrar.call_args.args[2], automacao.EMAIL_DASHBOARD)
 
-    def _pagina_endpoint(self, usuario="gakihiro"):
+    def _pagina_endpoint(self, usuario="usuario.exemplo"):
         page = MagicMock()
         page.url = "https://centralendpoint.pr.sebrae.com.br/client#/login"
         filtrado = page.locator.return_value.filter.return_value
@@ -349,9 +367,30 @@ class LoginAbasTests(unittest.TestCase):
 
     def test_endpoint_does_not_click_login_without_saved_password(self):
         page, clicar, preencher = self._pagina_endpoint(usuario="")
-        self.assertTrue(self._entrar_endpoint(page, senha=False, dominio=True))
+        with patch.object(automacao, "ENDPOINT_USUARIO", "usuario.exemplo"):
+            self.assertTrue(self._entrar_endpoint(page, senha=False, dominio=True))
         clicar.assert_not_called()
-        preencher.assert_called_once_with(automacao.ENDPOINT_USUARIO)
+        preencher.assert_called_once_with("usuario.exemplo")
+
+    def test_endpoint_without_configured_user_neither_fills_nor_clicks(self):
+        page, clicar, preencher = self._pagina_endpoint(usuario="")
+        with (
+            patch.object(automacao, "ENDPOINT_USUARIO", ""),
+            patch.object(automacao, "visivel", return_value=True),
+            patch.object(automacao, "endpoint_senha_preenchida", return_value=True),
+            patch.object(automacao, "endpoint_escolher_dominio") as escolher,
+        ):
+            self.assertTrue(automacao.endpoint_entrar(page))
+        preencher.assert_not_called()
+        escolher.assert_not_called()
+        clicar.assert_not_called()
+
+    def test_microsoft_without_configured_email_neither_clicks_nor_types(self):
+        page = MagicMock()
+        page.url = "https://login.microsoftonline.com/"
+        automacao.entrar_microsoft(page, "Oracle", "", espera_s=1)
+        page.locator.assert_not_called()
+        page.get_by_text.assert_not_called()
 
     def test_endpoint_does_not_click_login_when_domain_not_confirmed(self):
         page, clicar, _ = self._pagina_endpoint()
@@ -1711,6 +1750,24 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(sebrae_fechar, "executar", return_value=0) as executar:
                 self.assertEqual(automacao.rodar_rotina_fechar(context, valor), 0)
             executar.assert_called_once_with(context, sys.modules[automacao.__name__], sem_finalizar=valor)
+
+
+class PastaDashboardNaoConfiguradaTests(unittest.TestCase):
+    def test_without_configured_folder_the_routines_refuse_before_opening_a_tab(self):
+        with (
+            patch.object(automacao, "DASHBOARD_PASTA_URL", ""),
+            patch.object(automacao, "nova_aba") as nova_aba,
+        ):
+            with self.assertRaisesRegex(automacao.RotinaErro, "SIMPRESS_DASHBOARD_PASTA_URL"):
+                automacao.exportar_dashboard_sebrae(MagicMock())
+            page = MagicMock()
+            with (
+                patch.object(automacao, "esperar_visivel", return_value=False),
+                self.assertRaises(automacao.RotinaErro),
+            ):
+                automacao.voltar_para_pasta_dashboard(page)
+        nova_aba.assert_not_called()
+        page.goto.assert_not_called()
 
 
 class RetomadaNoMesmoLinkTests(unittest.TestCase):

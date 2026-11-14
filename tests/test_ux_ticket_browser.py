@@ -643,14 +643,14 @@ class LoginTests(unittest.TestCase):
 
     def test_without_login_it_tries_gansouza_once_then_gives_up_with_503(self):
         pagina = Pagina(url="https://login.microsoftonline.com/x")
-        automacao = mock.Mock(ux_logado=lambda _p: False, EMAIL_DASHBOARD="gansouza@simpress.com.br")
+        automacao = mock.Mock(ux_logado=lambda _p: False, EMAIL_DASHBOARD="pessoa.simpress@exemplo.invalid")
         with mock.patch.object(browser, "automation", automacao), mock.patch.object(browser, "ESPERA_LOGIN_S", 0.05),                 self.assertRaises(ux_chamados.ErroUX) as erro:
             browser.PortalTicketUXChrome._esperar_consulta(pagina)
         self.assertEqual(erro.exception.status, 503)
         self.assertEqual(pagina.idas, [])
         automacao.aguardar_login.assert_called_once_with(
             pagina, "UX Simpress", automacao.ux_logado, entrar=automacao.ux_entrar,
-            email="gansouza@simpress.com.br", esperar_usuario=False)
+            email="pessoa.simpress@exemplo.invalid", esperar_usuario=False)
 
 
 class AbaTests(unittest.TestCase):

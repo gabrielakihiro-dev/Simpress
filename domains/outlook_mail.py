@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
+from core.config import local_setting
 from core.integrity import FileBusyError, FileTransactionError, atomic_write_json, lock_paths
 from domains import entra_users
 from domains.equipment_search import normalize_search_term
@@ -34,9 +35,11 @@ TIMEOUT_S = 60
 
 CONTA_PADRAO = "sebrae"
 # O front recebe as contas só pela API: o teste de privacidade proíbe estes domínios no HTML e no JS.
+# Os e-mails são dados pessoais: variável de ambiente ou config/contas_automacao.json (git-ignorado). Sem eles a
+# conta fica vazia e o envio é recusado (nunca cai em outra conta); os ids ficam fixos para os modelos salvos.
 CONTAS_REMETENTE: dict[str, dict[str, str]] = {
-    "sebrae": {"email": "gakihiro@pr.sebrae.com.br", "rotulo": "Sebrae"},
-    "simpress": {"email": "gansouza@simpress.com.br", "rotulo": "Simpress"},
+    "sebrae": {"email": local_setting("SIMPRESS_OUTLOOK_EMAIL_SEBRAE", "outlook_email_sebrae"), "rotulo": "Sebrae"},
+    "simpress": {"email": local_setting("SIMPRESS_OUTLOOK_EMAIL_SIMPRESS", "outlook_email_simpress"), "rotulo": "Simpress"},
 }
 MARCADOR_NOME = "[Nome da pessoa]"
 MARCADOR_SETOR = "[Setor]"
@@ -56,6 +59,10 @@ ROTULOS = {
 MSG_ULTIMO_MODELO = "Mantenha ao menos um modelo."
 MSG_NOME_DUPLICADO = "Já existe um modelo com esse nome."
 MSG_CONTA_AUSENTE = "A conta {conta} não está configurada no Outlook. Escolha outra conta ou adicione-a no Outlook."
+MSG_CONTA_NAO_CONFIGURADA = (
+    "A conta remetente {rotulo} não está configurada neste computador. Defina o e-mail em "
+    "config/contas_automacao.json ou na variável de ambiente e reinicie o servidor."
+)
 MSG_DESTINATARIO = "Alguns destinatários não foram reconhecidos no Outlook. Confira os nomes antes de enviar."
 MSG_INDISPONIVEL = "Outlook (classic) indisponível. Abra o Outlook clássico e tente de novo."
 MSG_FECHADO = "O Outlook (classic) não está aberto. Abra o Outlook e tente enviar de novo."
@@ -475,6 +482,9 @@ class EmailOutlook:
             raise ErroOutlook(
                 422, MSG_CONTA_AUSENTE.format(conta=str(conta)[:80]), codigo="conta_ausente",
             )
+        if not CONTAS_REMETENTE[conta]["email"]:
+            rotulo = CONTAS_REMETENTE[conta]["rotulo"]
+            raise ErroOutlook(422, MSG_CONTA_NAO_CONFIGURADA.format(rotulo=rotulo), codigo="conta_nao_configurada")
         campos = {
             "para": _texto(dados.get("para") or "", "para", LIMITES["para"]),
             "cc": _texto(dados.get("cc") or "", "cc", LIMITES["cc"]),

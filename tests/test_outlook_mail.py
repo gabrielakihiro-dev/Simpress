@@ -30,6 +30,12 @@ SEGREDO_PARA = "destino.sigiloso@exemplo.test"
 SEGREDO_MODELO = "Modelo Sigiloso Zeta"
 SEGREDO_BUSCA = "termobuscasigiloso"
 
+# Fictitious sender accounts: tests never depend on the machine's config/contas_automacao.json.
+CONTAS_FICTICIAS = {
+    "sebrae": {"email": "pessoa.sebrae@exemplo.invalid", "rotulo": "Sebrae"},
+    "simpress": {"email": "pessoa.simpress@exemplo.invalid", "rotulo": "Simpress"},
+}
+
 DIRETORIO = {
     "pexemploa": "Pessoa Exemplo A",
     "pexemplob": "Pessoa Exemplo B",
@@ -104,6 +110,9 @@ def pedido_email(**mudancas) -> dict:
 
 class OutlookMailBase(unittest.TestCase):
     def setUp(self):
+        contas = mock.patch.dict(outlook_mail.CONTAS_REMETENTE, {k: dict(v) for k, v in CONTAS_FICTICIAS.items()})
+        contas.start()
+        self.addCleanup(contas.stop)
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.pasta = Path(temp.name)
@@ -167,7 +176,7 @@ class ModelosTests(OutlookMailBase):
             {c["id"]: (c["padrao"], c["rotulo"]) for c in dados["contas"]},
             {"sebrae": (True, "Sebrae"), "simpress": (False, "Simpress")},
         )
-        self.assertEqual({c["email"] for c in dados["contas"]}, {"gakihiro@pr.sebrae.com.br", "gansouza@simpress.com.br"})
+        self.assertEqual({c["email"] for c in dados["contas"]}, {"pessoa.sebrae@exemplo.invalid", "pessoa.simpress@exemplo.invalid"})
         self.assertEqual(dados["diretorio"], {"disponivel": True, "total": len(DIRETORIO) - 2})
 
     def test_arquivo_so_e_criado_na_primeira_edicao(self):
@@ -631,7 +640,14 @@ class EnvioTests(OutlookMailBase):
         self.runner.saida = "ERRO:conta_ausente\n"
         resposta = self.enviar(modo="abrir")
         self.assertEqual((resposta.status_code, resposta.json()["codigo"]), (422, "conta_ausente"))
-        self.assertIn("gakihiro@pr.sebrae.com.br", resposta.json()["detail"])
+        self.assertIn("pessoa.sebrae@exemplo.invalid", resposta.json()["detail"])
+
+    def test_conta_nao_configurada_recusa_com_422_sem_chamar_o_powershell(self):
+        outlook_mail.CONTAS_REMETENTE["sebrae"]["email"] = ""
+        resposta = self.enviar(modo="enviar", confirmado=True)
+        self.assertEqual((resposta.status_code, resposta.json()["codigo"]), (422, "conta_nao_configurada"))
+        self.assertIn("contas_automacao.json", resposta.json()["detail"])
+        self.assertEqual(self.runner.chamadas, [])
 
     def test_sistema_sem_powershell_vira_outlook_indisponivel(self):
         cliente = self.novo_client(RunnerFalso(excecao=FileNotFoundError("powershell.exe")))
@@ -698,7 +714,7 @@ class EnvioTests(OutlookMailBase):
         self.runner.saida = "PASSO:antes_send\nOK:enviado\n"
         resposta = self.enviar(modo="enviar", confirmado=True, conta="simpress")
         self.assertEqual((resposta.status_code, resposta.json()), (200, {"status": "enviado", "conta": "simpress"}))
-        self.assertEqual(self.runner.pedido()["conta_email"], "gansouza@simpress.com.br")
+        self.assertEqual(self.runner.pedido()["conta_email"], "pessoa.simpress@exemplo.invalid")
 
     def test_timeout_no_enviar_depois_do_marcador_e_incerto(self):
         cliente = self.novo_client(RunnerFalso(expira_com=b"PASSO:antes_send\r\n"))
@@ -853,7 +869,7 @@ class EnvioTests(OutlookMailBase):
         self.runner.saida = "ERRO:conta_ausente\n"
         resposta = self.enviar(modo="enviar", confirmado=True, conta="simpress")
         self.assertEqual((resposta.status_code, resposta.json()["codigo"]), (422, "conta_ausente"))
-        self.assertEqual(self.runner.pedido()["conta_email"], "gansouza@simpress.com.br")
+        self.assertEqual(self.runner.pedido()["conta_email"], "pessoa.simpress@exemplo.invalid")
         script = SCRIPT_PS1.read_text(encoding="ascii")
         self.assertLess(script.index("-ieq [string]$pedido.conta_email"), script.index("CODE:conta_ausente"))
         self.assertNotRegex(script, r"Accounts\s*\[\s*(0|1)\s*\]|DefaultAccount")
