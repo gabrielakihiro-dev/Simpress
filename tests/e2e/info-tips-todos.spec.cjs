@@ -145,7 +145,15 @@ const TELAS = [
       return page.locator("#card-equipamento");
     },
   },
-  { nome: "Home sem equipamento", minimo: 0, abrir: async page => { await page.goto("/"); return page.locator("#tab-panel-home"); } },
+  {
+    nome: "Home sem equipamento", minimo: 0,
+    abrir: async page => {
+      await page.goto("/");
+      await expect(page.locator("#home-detail-empty")).toHaveText("Selecione um equipamento.");
+      await expect(page.locator(".ck-ac__dica")).toHaveCount(0); // "Esc fecha" saiu da lista de sugestões (redundante)
+      return page.locator("#tab-panel-home");
+    },
+  },
   {
     nome: "Home com equipamento", minimo: 0,
     abrir: async page => { await buscarEquipamento(page); return page.locator("#card-equipamento"); },
@@ -352,7 +360,6 @@ for (const tela of TELAS) {
     await expect(escopo.first()).toBeVisible();
     const gatilhos = escopo.first().locator(".info-tip-trigger:visible");
     const total = await gatilhos.count();
-    if (process.env.INFO_TIPS_DIAG) console.log(`DIAG ${testInfo.project.name} | ${tela.nome} | ${total} | ${await gatilhos.evaluateAll(lista => lista.map(no => no.getAttribute("aria-label")).join("; "))}`);
     expect(total, `${tela.nome}: quantidade de ⓘ`).toBeGreaterThanOrEqual(tela.minimo);
     const rotulos = [];
     for (let i = 0; i < total; i += 1) rotulos.push(await conferirDica(page, gatilhos.nth(i), escopo.first(), testInfo));
