@@ -129,6 +129,24 @@ test("no Resumo os botões vão para a linha do título, sem linha própria ante
   assert.equal(cabecalho.children.filter(child => child.className.includes("ux-table-tools")).length, 1);
 });
 
+test("título com ícone de ajuda (h4 dentro de um div) também recebe os botões", () => {
+  const cabecalho = el("div");
+  const linhaTitulo = el("div", "flex items-center gap-1");
+  linhaTitulo.append(el("h4", "", "Localidade divergente"), el("span", "info-tip"));
+  cabecalho.appendChild(linhaTitulo);
+  const grupo = el("div", "history-filter-group space-y-2");
+  const { wrap } = montarTabela();
+  grupo.appendChild(wrap);
+  const secao = el("section");
+  secao.append(cabecalho, grupo);
+  doc.body.appendChild(secao);
+
+  doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
+  assert.ok(cabecalho.className.includes("ux-table-tools-host"));
+  assert.equal(cabecalho.children.filter(child => child.className.includes("ux-table-tools")).length, 1);
+  assert.equal(grupo.children[0], wrap, "a tabela continua sem barra própria antes dela");
+});
+
 test("os renderizadores de .comparison-desktop-table disparam o evento", () => {
   const ler = arquivo => fs.readFileSync(path.join(__dirname, "..", "..", "static", "js", arquivo), "utf8");
   const dataPanels = ler("ui/data-panels.js");
