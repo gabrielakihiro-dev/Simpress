@@ -247,6 +247,24 @@ test("a conversa continua ao fechar e reabrir o chat", async ({ page }) => {
   await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Temos 12 notebooks.");
 });
 
+test("cartão da tela inicial só preenche a caixa (não envia) e a tela inicial some após a primeira mensagem", async ({ page }) => {
+  const chamadas = await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Achei o equipamento.", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const boasVindas = page.locator(".ck-assist__boas-vindas");
+  await expect(boasVindas).toBeVisible();
+  await boasVindas.getByRole("button", { name: /Buscar equipamento/ }).click();
+  await expect(page.locator("#assistente-texto")).toHaveValue("Buscar o equipamento com a série ou o hostname ");
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+  await expect(page.locator("#assistente-contador")).toHaveText("47 / 4000");
+  expect(chamadas.filter(c => c.nome === "mensagem")).toHaveLength(0);
+  await page.keyboard.type("ABC123");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Achei o equipamento.");
+  expect(chamadas.filter(c => c.nome === "mensagem")).toHaveLength(1);
+  await expect(boasVindas).toBeHidden();
+});
+
 test("Esc com um painel de ferramentas aberto fecha só o chat", async ({ page }) => {
   await mockAssistente(page, { estado: PRONTO });
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
