@@ -90,14 +90,28 @@ ticket_import_count = 0
 TICKET_TIMELINE_NOTES = {}
 DEFAULT_ORIGIN_CONTACT = {"contato": "Contato fictício", "email": "teste@example.invalid", "telefone": "41900000000"}
 origin_contact = dict(DEFAULT_ORIGIN_CONTACT)
+# Fictitious client data (the real values live only in the git-ignored config/cliente.json of an installation).
+DEFAULT_CLIENT_CONFIG = {"contrato": "10101", "cnpj_faturamento": "11.222.333/0001-81", "series_sebrae_fora": []}
+client_config = dict(DEFAULT_CLIENT_CONFIG)
+
+
+def client_config_state():
+    values = {key: client_config[key] for key in ("contrato", "cnpj_faturamento")}
+    return {**values, "series_sebrae_fora": list(client_config["series_sebrae_fora"]),
+            "cliente_configurado": all(values.values()),
+            "cliente_fontes": {key: "arquivo" if value else "" for key, value in values.items()},
+            "cliente_arquivo_invalido": False}
 
 
 def origin_contact_config():
     values = {"retirada_contato": origin_contact["contato"], "retirada_email": origin_contact["email"],
               "retirada_telefone": origin_contact["telefone"]}
+    client = client_config_state()
     return {**values, "contato_origem_configurado": all(values.values()),
             "contato_origem_fontes": {key: "arquivo" if value else "" for key, value in values.items()},
-            "contato_origem_arquivo_invalido": False}
+            "contato_origem_arquivo_invalido": False,
+            "contrato": client["contrato"], "cnpj_faturamento": client["cnpj_faturamento"],
+            "cliente_configurado": client["cliente_configurado"], "modelo_transferencia_disponivel": True}
 
 
 # Regional representatives edited by the user, in memory only (GET/PUT/DELETE /api/config/representantes-regionais).
@@ -929,6 +943,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send([])
         elif path == "/api/config/transferencia":
             self.send(origin_contact_config())
+        elif path == "/api/config/cliente":
+            self.send(client_config_state())
         elif path == "/api/config/representantes-regionais":
             self.send(regional_config(with_defaults=True))
         elif path == "/__fixture_representantes":
@@ -1116,6 +1132,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 regional_changes[unquote(path.rsplit("/", 1)[-1])] = {key: str(payload.get(key, "")) for key in REGIONAL_FIELDS}
                 self.send(regional_config())
+            return
+        if path == "/api/config/cliente":
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            if not all(str(payload.get(key) or "").strip() for key in ("contrato", "cnpj_faturamento")):
+                self.send({"detail": 'Preencha o campo "Contrato" dos dados do cliente.'}, 422)
+                return
+            client_config.update({key: str(payload[key]).strip() for key in ("contrato", "cnpj_faturamento")})
+            if payload.get("series_sebrae_fora") is not None:
+                client_config["series_sebrae_fora"] = [str(item) for item in payload["series_sebrae_fora"]]
+            self.send(client_config_state())
             return
         if path == "/api/config/transferencia/contato-origem":
             size = int(self.headers.get("Content-Length", "0"))

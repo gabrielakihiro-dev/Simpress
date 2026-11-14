@@ -190,7 +190,7 @@ class EquipamentoTests(unittest.TestCase):
     def test_header_refuses_other_series_contract_or_two_models(self):
         for texto in (
             CABECALHO.replace("ABC123", "ABC1234"),
-            CABECALHO.replace("10101 -", "164670 -"),
+            CABECALHO.replace("10101 -", "101010 -"),
             CABECALHO + "MODELO\nOutro\n",
         ):
             with self.subTest(texto=texto[-30:]), self.assertRaises(ux_chamados.ErroUX):
@@ -206,7 +206,7 @@ class EscolherTests(unittest.TestCase):
 
     def test_contract_is_picked_by_prefix_only_when_unique(self):
         pagina = Pagina()
-        ng_select(pagina, "selectContrato", ["164670 - OUTRO", "10101 - SERV DE APOIO SEBRAE PR"])
+        ng_select(pagina, "selectContrato", ["101010 - OUTRO", "10101 - SERV DE APOIO SEBRAE PR"])
         self.assertEqual(browser._escolher(pagina, "selectContrato", None, busca="10101"), "10101 - SERV DE APOIO SEBRAE PR")
         self.assertEqual(pagina.controles["input#selectContrato"].valor, "10101")
 

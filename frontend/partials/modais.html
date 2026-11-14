@@ -593,6 +593,39 @@
     </div>
   </div>
 
+  <div id="modal-cliente-config" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
+      <div class="local-setup-heading">
+        <h3><span id="titulo-cliente-config">Dados do cliente</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Dados do cliente" aria-describedby="tip-cliente-config"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-cliente-config" role="tooltip" class="info-tip-text">Contrato e CNPJ de faturamento usados nas transferências, nos chamados do UX e nas rotinas do Chrome. Ficam salvos somente neste computador, em config/cliente.json.</span></span></h3>
+        <button type="button" class="readiness-import" data-on-click="fecharConfiguracaoCliente" aria-label="Fechar configuração dos dados do cliente" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="cliente-config-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_CLIENTE_*</code> e têm prioridade sobre o arquivo.</p>
+      <div id="cliente-config-modelo-ausente" class="hidden" role="status">
+        <p>O modelo de transferência local não foi encontrado. Importe o modelo oficial antes de gerar transferências.</p>
+        <button type="button" id="btn-cliente-importar-modelo" class="readiness-import" data-on-click="abrirImportacaoModeloTransferencia">Importar modelo de transferência</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label for="cliente-config-contrato" class="block text-xs text-fg-subtle mb-1">Contrato: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="cliente-config-contrato" maxlength="12" required inputmode="numeric" autocomplete="off" placeholder="Somente números" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+        </div>
+        <div>
+          <label for="cliente-config-cnpj" class="block text-xs text-fg-subtle mb-1">CNPJ de faturamento: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="cliente-config-cnpj" maxlength="18" required inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
+        </div>
+        <div class="sm:col-span-2">
+          <label for="cliente-config-series" class="block text-xs text-fg-subtle mb-1">Séries dos notebooks do próprio cliente (uma por linha, opcional):</label>
+          <textarea id="cliente-config-series" rows="4" autocomplete="off" spellcheck="false" aria-describedby="cliente-config-series-ajuda" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono"></textarea>
+          <p id="cliente-config-series-ajuda" class="text-xs text-fg-subtle mt-1">Essas séries ficam fora das comparações de inventário. Só letras e números, até 32 caracteres cada.</p>
+        </div>
+      </div>
+      <p id="status-cliente-config" role="status" aria-live="polite" aria-atomic="true"></p>
+      <button id="btn-salvar-cliente-config" type="button" class="readiness-import" data-on-click="salvarConfiguracaoCliente">Salvar dados do cliente</button>
+    </div>
+  </div>
+
   <div id="modal-representante-regional" class="modal-overlay ck-veu hidden">
     <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">
