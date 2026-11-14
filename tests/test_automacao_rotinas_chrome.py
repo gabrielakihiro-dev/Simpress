@@ -1779,14 +1779,14 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
         page.goto.side_effect = lambda destino, **_: setattr(page, "url", destino)
         campo = page.locator.return_value  # #CodigosContratosFiltro (o fake devolve o mesmo locator para todo seletor)
         campo.count.return_value = 1
-        campo.input_value.return_value = automacao.CONTRATO_NOME
-        campo.get_attribute.return_value = automacao.CONTRATO
-        campo.locator.return_value.all_inner_texts.return_value = [f"Contrato: {automacao.CONTRATO_NOME}"]
+        campo.input_value.return_value = automacao.contrato_nome(automacao.contrato_configurado())
+        campo.get_attribute.return_value = automacao.contrato_configurado()
+        campo.locator.return_value.all_inner_texts.return_value = [f"Contrato: {automacao.contrato_nome(automacao.contrato_configurado())}"]
         return page, campo
 
     def _rodar_ux(self, rotina, page, campo):
         def selecionar(_pagina):  # a seleção real deixa o contrato certo no campo
-            campo.input_value.return_value = automacao.CONTRATO_NOME
+            campo.input_value.return_value = automacao.contrato_nome(automacao.contrato_configurado())
 
         with patch.object(automacao, "abrir_ux", return_value=page), \
                 patch.object(automacao, "selecionar_contrato_ux", side_effect=selecionar) as selecionar_mock, \

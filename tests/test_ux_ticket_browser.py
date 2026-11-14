@@ -190,7 +190,7 @@ class EquipamentoTests(unittest.TestCase):
     def test_header_refuses_other_series_contract_or_two_models(self):
         for texto in (
             CABECALHO.replace("ABC123", "ABC1234"),
-            CABECALHO.replace("10101 -", "164670 -"),
+            CABECALHO.replace("10101 -", "101010 -"),
             CABECALHO + "MODELO\nOutro\n",
         ):
             with self.subTest(texto=texto[-30:]), self.assertRaises(ux_chamados.ErroUX):
@@ -206,7 +206,7 @@ class EscolherTests(unittest.TestCase):
 
     def test_contract_is_picked_by_prefix_only_when_unique(self):
         pagina = Pagina()
-        ng_select(pagina, "selectContrato", ["164670 - OUTRO", "10101 - SERV DE APOIO SEBRAE PR"])
+        ng_select(pagina, "selectContrato", ["101010 - OUTRO", "10101 - SERV DE APOIO SEBRAE PR"])
         self.assertEqual(browser._escolher(pagina, "selectContrato", None, busca="10101"), "10101 - SERV DE APOIO SEBRAE PR")
         self.assertEqual(pagina.controles["input#selectContrato"].valor, "10101")
 
@@ -501,7 +501,7 @@ class ContingenciaTests(unittest.TestCase):
         self.assertEqual(logs.output, [
             f"WARNING:domains.ux_ticket_browser:UX ticket: passo Motivo, tentativa {n}/3, RuntimeError" for n in (1, 2, 3)
         ])
-        self.assertNotIn("75.110", str(erro.exception) + "".join(logs.output))
+        self.assertNotIn("11.222", str(erro.exception) + "".join(logs.output))
         self.assertIsNone(erro.exception.__cause__)
 
     def test_c_a_divergent_final_check_repeats_the_whole_preparation(self):

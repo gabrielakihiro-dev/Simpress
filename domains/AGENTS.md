@@ -27,7 +27,7 @@ Valem junto com o `AGENTS.md` da raiz; texto integral no doc de cada tema, seç�
 
 ## Cadastro e Histórico
 
-- Séries do Sebrae, prefixos de Curitiba e as duas leituras de MacBook vivem só em `regras_negocio.py`; quem precisa importa dali. Doc: `docs/operacao/regras-cadastro-historico.md`.
+- Séries do Sebrae, prefixos de Curitiba e as duas leituras de MacBook vivem só em `regras_negocio.py`; quem precisa importa dali. Séries, contrato e CNPJ de faturamento vêm de `config/cliente.json` (`core/config.py`, `require_client_contract`); não os copie para o código. Doc: `docs/operacao/regras-cadastro-historico.md`.
 - `EquipamentosDetalhes` é a fonte oficial; `InvAll` só auxilia. Rótulos do histórico só mudam na apresentação, sem regravar valores brutos (`history_*.py`). Doc: `docs/operacao/regras-cadastro-historico.md`.
 - Anotações têm id estável por evento, limite de 2.000 caracteres e se reaplicam só a linhas idênticas (`history_annotations.py`). Doc: `docs/operacao/ANOTACOES-HISTORICO.md`.
 

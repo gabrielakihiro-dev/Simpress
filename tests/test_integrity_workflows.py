@@ -1054,7 +1054,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual((cell.value, cell.data_type), (payload_text, "s"))
         workbook.close()
 
-    def test_equipment_edit_preserves_the_supported_16467_contract_metadata(self):
+    def test_equipment_edit_preserves_the_supported_10101_contract_metadata(self):
         headers = [
             "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
             "CodigoContrato", "RazaoSocial",

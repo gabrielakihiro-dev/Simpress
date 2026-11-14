@@ -31,7 +31,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 - Chrome de automação: CDP 9333 e trava `data/state/automacao_chrome.lock`; login, senha e MFA são do usuário; "pare" ou "cancelar" interrompe.
 - Máscaras: CPF `***.***.***-**`, senha `[DADO SENSÍVEL OMITIDO]`, apóstrofo inicial em texto que começa com `=`, `+`, `-` ou `@`.
 - Cadastro: a fonte oficial é `data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx`; `InvAll` só auxilia e nunca aumenta o total.
-- Séries do Sebrae (fora das comparações), hostnames de Curitiba (`PRNOTESJP`, `PRNOTERL`, `PRNOTEARC`: sem divergência de localidade) e MacBook (série do Endpoint sem `S` inicial = cadastro com `S`, só se o resultado for único; ambíguo fica ambíguo): fonte única em `domains/regras_negocio.py`; não copie para outro módulo nem para o front-end.
+- Séries do Sebrae (fora das comparações; lista em `config/cliente.json`, `series_sebrae_fora`), hostnames de Curitiba (`PRNOTESJP`, `PRNOTERL`, `PRNOTEARC`: sem divergência de localidade) e MacBook (série do Endpoint sem `S` inicial = cadastro com `S`, só se o resultado for único; ambíguo fica ambíguo): fonte única em `domains/regras_negocio.py`; não copie para outro módulo nem para o front-end.
 
 ## Dados operacionais
 
