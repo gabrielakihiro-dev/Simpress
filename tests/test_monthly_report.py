@@ -1,7 +1,7 @@
 """Monthly contract report: content rules (docs/operacao/relatorio-mensal.md), workbook and route.
 
 Every serial, hostname and OS below is fictitious, except the Sebrae-owned serial that
-AGENTS.md lists by name.
+domains/regras_negocio.py lists by name.
 """
 
 import json
