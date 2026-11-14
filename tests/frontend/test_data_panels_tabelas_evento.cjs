@@ -16,6 +16,13 @@ NodeProto.insertBefore = function insertBefore(node, ref) {
   return node;
 };
 Object.defineProperty(NodeProto, "lastChild", { get() { return this.children[this.children.length - 1] || null; } });
+// Nem previousElementSibling nem classList: enhanceTable usa os dois para pôr os botões na linha do título.
+Object.defineProperty(NodeProto, "previousElementSibling", { get() { const irmaos = this.parentNode?.children || []; return irmaos[irmaos.indexOf(this) - 1] || null; } });
+Object.defineProperty(NodeProto, "classList", { get() {
+  const node = this;
+  const contains = nome => node.className.split(/\s+/).includes(nome);
+  return { contains, add: nome => { if (!contains(nome)) node.className = `${node.className} ${nome}`.trim(); } };
+} });
 
 const listeners = new Map();
 doc.addEventListener = (type, listener) => listeners.set(type, [...(listeners.get(type) || []), listener]);
@@ -85,6 +92,41 @@ test("tabela nova só recebe ordenação e ferramentas depois do evento", () => 
   // Evento repetido não duplica a barra nem reprocessa a tabela.
   doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
   assert.equal(host.children.filter(child => child.className.includes("ux-table-tools")).length, 1);
+});
+
+test("no Resumo os botões vão para a linha do título, sem linha própria antes da tabela", () => {
+  // Seção com cabeçalho (h4 + descrição) e grupo de filtro com a tabela.
+  const secao = el("section");
+  const cabecalho = el("div");
+  cabecalho.append(el("h4", "", "Localidade divergente"), el("p", "", "Descrição"));
+  const grupo = el("div", "history-filter-group space-y-2");
+  const { wrap } = montarTabela();
+  grupo.appendChild(wrap);
+  secao.append(cabecalho, grupo);
+  // Subtítulo h5 logo antes da tabela (Sem correspondência — Endpoint).
+  const grupoH5 = el("div", "history-filter-group space-y-2");
+  const subtitulo = el("h5", "", "Sem correspondência — Endpoint (1)");
+  const tabelaH5 = montarTabela();
+  grupoH5.append(subtitulo, tabelaH5.wrap);
+  doc.body.append(secao, grupoH5);
+
+  doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
+  assert.equal(grupo.children[0], wrap);
+  assert.ok(cabecalho.className.includes("ux-table-tools-host"));
+  assert.equal(cabecalho.children.filter(child => child.className.includes("ux-table-tools")).length, 1);
+
+  const linha = grupoH5.children[0];
+  assert.ok(linha.className.includes("ux-table-tools-host"));
+  assert.deepEqual(linha.children.map(child => child.tagName), ["H5", "DIV"]);
+  assert.equal(subtitulo.children.filter(child => child.className.includes("ux-table-tools")).length, 0, "o h5 não recebe os botões");
+  assert.equal(grupoH5.children[1], tabelaH5.wrap);
+
+  // Tabela nova no mesmo cabeçalho troca a barra, sem duplicar.
+  const nova = montarTabela();
+  wrap.remove();
+  grupo.appendChild(nova.wrap);
+  doc.dispatchEvent(new win.CustomEvent("simpress:tabelas-renderizadas"));
+  assert.equal(cabecalho.children.filter(child => child.className.includes("ux-table-tools")).length, 1);
 });
 
 test("os renderizadores de .comparison-desktop-table disparam o evento", () => {
