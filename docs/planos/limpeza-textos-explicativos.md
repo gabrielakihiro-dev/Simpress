@@ -101,3 +101,16 @@ Pedido do usuário (14/11/2026): tirar os textos explicativos que poluem todas a
 - **Critérios de aceite:** layout igual aos dois artefatos da referência visual (captura); todos os blocos no PR; suítes verdes; cada critério relatado como `AC: <critério> — PROVEN BY <evidência>`.
 - **Verificar:** saída dos dois comandos de teste; link do PR; estado da CI.
 - **Proibidos:** merge, auto-merge, force push.
+
+## Status (14/11/2026)
+
+Os quatro blocos estão feitos, em commits empilhados (os quatro estão na história da branch `claude/limpeza-textos-b4`); falta só o push e o PR único (passo 8 do Bloco 4, do maestro).
+
+| Bloco | Commit | Resumo |
+|---|---|---|
+| 1 | `266fe55` | Painel F6 (OS) |
+| 2 | `ae48d06` | Resumo, Comparação, Relatório e Backups |
+| 3 | `e9bba71` | Lembretes, Termos, Planilhas e Conflitos do Dashboard |
+| 4 | `a7bc2e0` | Home, modais, Assistente, Automação, correções dos blocos 1 a 3 e E2E genérico `tests/e2e/info-tips-todos.spec.cjs` |
+
+Desvios do texto do plano, todos pela regra E (status e confirmação irreversível ficam visíveis): `#upload-impacto-aviso` continua na tela (a substituição das bases ativas é irreversível); `Campos bloqueados.` fica como cabeçalho curto com o ⓘ da frase longa; `Nada foi enviado.` ficou visível nos conflitos do Dashboard. O ⓘ de `Chamados novos do SoftExpert` só existe a partir de 768px (cartão compacto do F4, Bloco 2).
