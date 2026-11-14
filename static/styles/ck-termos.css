@@ -6,7 +6,9 @@
 .termos__form { display: grid; gap: 14px; min-width: 0; }
 .termos__grupo { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); }
 .termos__grupo > legend { padding: 0 6px; font-weight: var(--peso-medio); }
-.termos__dica { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+/* ⓘ dentro da legenda e ao lado de Gerar PDF: o botão herda min-height 2.5rem de app.css e não deve esticar a linha. */
+.termos__grupo > legend .info-tip { margin-block: -4px; margin-inline-start: 2px; }
+.termos__grupo > legend .info-tip-trigger, .termos__acoes .info-tip-trigger { min-height: 0; }
 .termos__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
 .termos__campos .ck-campo { min-width: 0; }
 .termos__obs { height: auto; min-height: 96px; padding: 8px 9px; resize: vertical; line-height: 1.4; }
@@ -19,7 +21,6 @@
 .termos__sn label { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle); }
 .termos__sn input { margin: 0; }
 .termos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.termos__aviso { margin: 0; flex: 1 1 100%; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .termos__estado { margin: 0; flex: 1 1 100%; min-height: 1.2em; font-size: var(--fs-sm); }
 .termos__estado[data-tipo="erro"] { color: var(--cor-erro-texto); }
 

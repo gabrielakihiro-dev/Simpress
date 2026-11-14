@@ -164,7 +164,7 @@ Marque cada item antes de abrir ou aprovar um PR que mexa em visual.
 - [ ] Toque: controles novos com alvo >= 44 px em `(pointer: coarse)`, sem mudar desktop.
 - [ ] Responsivo: 375, 390×844, 768, 1024 e 1366/1440; sem rolagem horizontal de 320 a 2560 px; tabelas viram cards abaixo de 1200 px.
 - [ ] Temas: claro e escuro conferidos; prints antes e depois (`.claude/prints/<assunto>/`, skill `ajuste-visual-ui`).
-- [ ] Motion: 150 a 300 ms, `prefers-reduced-motion` respeitado (manter 0.01ms no reset do cockpit), sem stagger em tabelas, sem pulso contínuo novo, sem hover com scale.
+- [ ] Motion: contrato bento (`docs/ui-motion/contrato-bento.md`: entrada 700/760 ms, hover 300 a 500 ms, só `opacity` e `transform`), `prefers-reduced-motion` respeitado (manter 0.01ms no reset do cockpit), brilho nunca em linha de tabela, sem stagger em tabelas, sem hover com scale, pulso só em status real "ao vivo".
 - [ ] CSP: nenhum estilo ou script inline; `!important` existente não removido mecanicamente.
 - [ ] Testes: `npm run verify` e `npm run test:ui:e2e` (inclui `color-contrast`, `ui`, `theme-toggle`, `sebrae-dashboard`); se o Tailwind mudar, `npm run build:ui`.
 - [ ] Assistente de IA: se texto, ferramenta ou comportamento mudou, alinhado e testado de verdade no servidor local.

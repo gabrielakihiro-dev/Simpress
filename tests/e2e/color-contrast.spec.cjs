@@ -35,8 +35,22 @@ for (const theme of ["dark", "light"]) {
     // Resumo (F3): cartão Ativos por regional (filtros + barras) dentro do painel de ferramenta.
     await openSidebarForTabs(page);
     await page.locator("#btn-resumo-aba").click();
+    // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026).
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
+    await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
+    await page.locator("#resumo-aba-visao").click();
+    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
     await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
     await expect(page.locator("#resumo-regionais-filtros .ck-pilula")).toHaveCount(2);
+    // O bento anima a entrada dos blocos (opacity 0→1): o Axe só mede contraste com a animação concluída.
+    // Só animações finitas em curso, com teto de 3 s (uma animação pausada nunca resolve `finished`).
+    await page.evaluate(() => Promise.race([
+      Promise.all(document.getAnimations()
+        .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
+        .map(item => item.finished.catch(() => undefined))),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]));
     expect(await contrastViolations(page, '[data-cockpit-tool-panel="comparacao"]')).toEqual([]);
 
     await openSidebarForTabs(page);

@@ -38,7 +38,7 @@ test("abre em Lembretes com as pílulas na ordem e o estado vazio", async ({ pag
   await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#termos-painel-entrega")).toBeHidden();
   await expect(page.locator("#termos-painel-devolucao")).toBeHidden();
-  await expect(page.locator("#lembretes-vazio")).toHaveText("Nenhum lembrete. Anote o que precisa fazer.");
+  await expect(page.locator("#lembretes-vazio")).toHaveText("Nenhum lembrete.");
   await expect(page.locator("#lembretes-concluidos")).toBeHidden();
   await expect(adicionar(page)).toBeDisabled();
 
@@ -304,11 +304,11 @@ test("tema escuro usa os tokens do Cockpit", async ({ page }) => {
   await expect.poll(async () => (await cores()).fundo).toBe("rgb(255, 255, 255)"); // --cor-superficie claro
   const claro = await cores();
   await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-  await expect.poll(async () => (await cores()).fundo).toBe("rgb(29, 32, 49)"); // --cor-superficie escuro
+  await expect.poll(async () => (await cores()).fundo).toBe("rgb(11, 13, 21)"); // --cor-superficie escuro (paleta bento, ck-bento.css)
   const escuro = await cores();
   expect(escuro.fundo).not.toBe(claro.fundo);
-  expect(escuro.texto).toBe("rgb(233, 233, 237)"); // --cor-texto escuro
-  expect(escuro.token.toLowerCase()).toBe("#1d2031");
+  expect(escuro.texto).toBe("rgb(248, 250, 252)"); // --cor-texto escuro
+  expect(escuro.token.toLowerCase()).toBe("#0b0d15");
 });
 
 test("data de cada item aparece como Criado em / Alterado em no formato dd/mm/aaaa hh:mm", async ({ page }) => {

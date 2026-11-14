@@ -19,6 +19,7 @@ const ALLOWED_MISSING = new Map([
   ["ux-sort-status", "região aria-live criada sob demanda por data-panels.js"],
   ["badge-divergencias-ux", "criado sob demanda por data-panels.js"],
   ["ux-pending-chip", "criado sob demanda por ux-enhancements.js"],
+  ["resumo-painel-visao", "painel da Visão geral renderizado pelo JS dentro do resultado da comparação (comparison-result.js)"],
 ]);
 
 function jsFiles(dir) {

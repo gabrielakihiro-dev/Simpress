@@ -256,7 +256,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ac { position: absolute; top: calc(100% + 6px); left: 0; z-index: 45; width: var(--largura-sugestoes); max-width: calc(100vw - 24px); display: flex; flex-direction: column; overflow: hidden; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); animation: ck-surgir var(--duracao) var(--curva); }
 .ck-ac__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--cor-borda-suave); font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-ac__cab strong { color: var(--cor-texto); font-weight: var(--peso-medio); }
-.ck-ac__dica { display: inline-flex; align-items: center; gap: 5px; }
 .ck-ac__lista { list-style: none; max-height: 384px; overflow: auto; padding: 4px; }
 .ck-ac__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 12px; border-radius: var(--raio-sm); cursor: pointer; transition: background-color var(--duracao) var(--curva); }
 .ck-ac__item:hover { background: var(--cor-neutro-fundo); }
@@ -585,7 +584,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ferramenta__textos { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ck-ferramenta__kicker { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-ferramenta__titulo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xl); font-weight: var(--peso-medio); }
-.ck-ferramenta__sub { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-ferramenta__linha { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .ck-barra-ferr { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--cor-borda-suave); }
 #form-nova-unidade { margin: 10px 20px; padding: 12px; gap: 10px; flex: none; }
 .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
@@ -1072,6 +1071,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-rel__cartao[data-status="alerta"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 .ck-rel__cartao[data-status="alerta"] :is(.ck-rel__cartao-titulo, .ck-rel__nota, .ck-rel__valor) { color: inherit; }
 .ck-rel__cartao-titulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
+.ck-rel__cartao-cab { display: flex; align-items: center; gap: 4px; }
 .ck-rel__nota { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-rel__numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 0; }
 .ck-rel__numero { display: flex; flex-direction: column-reverse; min-width: 0; }
@@ -1343,8 +1343,21 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
+/* ⓘ ao lado de rótulo ou título de Ferramentas (Lembretes, Planilhas, Conflitos do Dashboard): o botão herda min-height 2.5rem de app.css e não deve esticar a linha. */
+.ck-rotulo-info { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.ck-rotulo-info > :is(h2, label, strong) { margin: 0; }
+.ck-rotulo-info .info-tip { margin-block: -4px; }
+.ck-rotulo-info .info-tip-trigger { min-height: 0; }
+/* Detalhe de Planilhas: de 1200px em diante a coluna rola (overflow: auto) e cortaria o balão embaixo, porque o conteúdo é curto; o conteúdo cabe sem rolagem, então fica visível, e 17rem cabe na coluna de 400px. */
+@media (min-width: 1200px) {
+  #cockpit-tool-panels #cockpit-sheets-detail { overflow: visible; }
+  #cockpit-sheets-detail .info-tip-text { max-width: 17rem; }
+}
 /* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
+#resumo-painel-backups .ck-backups__cabeca { display: flex; align-items: center; gap: 4px; }
 #resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+/* O ⓘ herda min-height 2.5rem de app.css e não deve aumentar a altura do título (Backups e títulos de seção da Comparação). */
+:is(#resumo-painel-backups, #comparacao-planilhas-conteudo) .info-tip-trigger { min-height: 0; }
 #resumo-painel-backups .ck-backups__estado { margin: 0; padding: 24px 12px; text-align: center; color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
 #resumo-painel-backups .ck-backups__limites { padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); overflow-wrap: anywhere; }
 #resumo-painel-backups .ck-backups__limites-titulo { margin: 0 0 4px; font-size: var(--fs-md); font-weight: var(--peso-medio); }
@@ -1872,6 +1885,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__instrucoes[hidden] { display: none; }
 .ck-assist__instrucoes p { margin: 0; overflow-wrap: anywhere; }
 .ck-assist__instrucoes .ck-det__titulo { margin: 0; }
+.ck-assist .ck-det__titulo,
+.ck-assist__busca > div { position: relative; } /* âncora do balão do ⓘ (info-tip--bloco) */
 .ck-assist__lembretes-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
 .ck-assist__lembretes-lista[hidden], .ck-assist__lembretes p[hidden] { display: none; }
 .ck-assist__lembrete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--assist-borda-suave); border-radius: 12px; background: var(--assist-fundo); }
@@ -1983,7 +1998,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ckp-importar__status { grid-column: 1 / -1; margin: 0; }
 .ckp-importar__status:empty { display: none; }
 #cockpit-tickets-manage-panel .ckp-recolher__corpo { gap: 16px; padding: 16px; }
-#cockpit-tickets-sources, #cockpit-tickets-version-hint { margin: 0; overflow-wrap: anywhere; }
+#cockpit-tickets-sources { margin: 0; overflow-wrap: anywhere; }
 #cockpit-tickets-evolution { display: flex; flex-direction: column; gap: 6px; }
 .ck-chamados-evolucao__resumo { margin: 0; font-weight: var(--peso-medio); color: var(--cor-texto); }
 .ck-chamados-evolucao__lista { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; }
@@ -2128,7 +2143,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 
 /* ---------- 6b. Sub-abas Abertas e Finalizadas ---------- */
 /* Mesmo desenho de abas do F5, em abas de sublinhado: 44px de altura, aba ativa com 2px de destaque embaixo. O contador "N OS · N séries" fica à direita da barra. */
-.os-kpis-nota { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
 .os-abas-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 12px; margin-top: 2px; border-bottom: 1px solid var(--cor-borda); }
 .os-abas { display: flex; flex: 0 1 auto; gap: 4px; min-width: 0; }
 .os-aba {
@@ -2544,7 +2558,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-veu > .ck-dialogo.email-outlook p { margin: 0; font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .ck-veu > .ck-dialogo.email-outlook .email-outlook__pergunta > p { color: var(--cor-alerta-texto); font-size: var(--fs-ui); }
 .ck-veu > .ck-dialogo.email-outlook .email-outlook__aviso { padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-ui); }
-.ck-veu > .ck-dialogo.email-outlook .email-outlook__ajuda { color: var(--cor-texto-sutil); }
 .ck-veu > .ck-dialogo.email-outlook .email-outlook__autosave { min-height: 1.2em; color: var(--cor-texto-mudo); }
 .ck-veu > .ck-dialogo.email-outlook .email-outlook__autosave[data-estado="erro"] { color: var(--cor-erro-texto); }
 .ck-veu > .ck-dialogo.email-outlook .email-outlook__status { padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); font-size: var(--fs-ui); animation: ck-surgir var(--duracao) var(--curva); }

@@ -171,29 +171,34 @@
     return secao("Candidatos nas demais regionais", blocos.join(""));
   }
 
-  /** `{ meta, corpo }`: `meta` é o texto puro da linha "Atualizado em…" (muda a cada leitura); `corpo`, o resto em HTML. */
+  /**
+   * `{ meta, dica, corpo }`: `meta` é o texto puro da linha "Atualizado em…" (muda a cada leitura); `dica`, o ⓘ com o mínimo
+   * por regional (id fixo: só muda quando o mínimo muda); `corpo`, o resto em HTML.
+   */
   function partes(dados, { abertos = new Set() } = {}) {
     const estado = mensagem => `<p class="ck-backups__estado">${mensagem}</p>`;
-    if (dados === undefined) return { meta: null, corpo: estado("Aguardando os dados do painel local…") };
-    if (dados === null || typeof dados !== "object") return { meta: null, corpo: estado("O cálculo de backups regionais está desligado neste servidor.") };
-    if (dados.indisponivel) return { meta: null, corpo: estado("Não foi possível calcular os backups regionais agora.") + limitacoes(dados) };
+    if (dados === undefined) return { meta: null, dica: "", corpo: estado("Aguardando os dados do painel local…") };
+    if (dados === null || typeof dados !== "object") return { meta: null, dica: "", corpo: estado("O cálculo de backups regionais está desligado neste servidor.") };
+    if (dados.indisponivel) return { meta: null, dica: "", corpo: estado("Não foi possível calcular os backups regionais agora.") + limitacoes(dados) };
     const regionais = lista(dados.prioritarias);
     const minimo = inteiro(dados.minimo);
-    const meta = `${dados.gerado_em ? `Atualizado em ${data(dados.gerado_em)}. ` : ""}Mínimo: ${minimo} ${plural(minimo, "backup", "backups")} por regional prioritária.`;
+    const meta = dados.gerado_em ? `Atualizado em ${data(dados.gerado_em)}.` : "";
+    const dica = dom.infoTipHtml("os backups regionais", `Mínimo: ${minimo} ${plural(minimo, "backup", "backups")} por regional prioritária.`, { id: "resumo-backups-minimo" });
     return {
       meta,
+      dica,
       corpo: limitacoes(dados)
         + (regionais.length ? tabela(regionais, abertos) : estado("Os dados recebidos não trazem regionais prioritárias."))
         + secaoSobras(lista(dados.sobras)) + secaoOutrasCandidatos(lista(dados.outras_candidatos)),
     };
   }
 
-  const linhaMeta = meta => (meta === null ? "" : `<p class="ck-backups__meta">${escapar(meta)}</p>`);
+  const linhaMeta = (meta, dica) => (meta === null ? "" : `<div class="ck-backups__cabeca"><p class="ck-backups__meta">${escapar(meta)}</p>${dica}</div>`);
 
   /** HTML do painel Backups. `dados`: undefined (sem painel ainda), null (serviço desligado) ou o `backups_regionais`. */
   function renderizarBackupsRegionais(dados, opcoes) {
-    const { meta, corpo } = partes(dados, opcoes);
-    return linhaMeta(meta) + corpo;
+    const { meta, dica, corpo } = partes(dados, opcoes);
+    return linhaMeta(meta, dica) + corpo;
   }
 
   // ---- DOM ----
@@ -228,9 +233,10 @@
     if (!alvo) return;
     atualizarAba();
     const abertos = new Set([...(alvo.querySelectorAll?.("details[open][data-cidade]") || [])].map(item => item.dataset.cidade));
-    const { meta, corpo } = partes(dados, { abertos });
+    const { meta, dica, corpo } = partes(dados, { abertos });
+    const fixo = dica + corpo;
     // Depois de uma ação (repetida ou sem efeito) o botão ficou ocupado: redesenha sempre, para soltá-lo e devolver o foco.
-    if (!focoDaAcao && corpo === corpoAtual && (meta === null) === (metaAtual === null)) {
+    if (!focoDaAcao && fixo === corpoAtual && (meta === null) === (metaAtual === null)) {
       if (meta === metaAtual) return;
       // Só o "Atualizado em" mudou: troca o texto da linha sem recriar o painel (foco e leitor de tela ficam onde estão).
       const linha = alvo.querySelector?.(".ck-backups__meta");
@@ -240,14 +246,14 @@
         return;
       }
     }
-    const html = linhaMeta(meta) + corpo;
+    const html = linhaMeta(meta, dica) + corpo;
     const foco = document.activeElement;
     const semFoco = !foco || foco === document.body;
     const marca = foco && alvo.contains?.(foco) ? { ...foco.dataset, lista: foco.closest?.("details[data-cidade]")?.dataset.cidade }
       : semFoco ? focoDaAcao : null;
     focoDaAcao = null;
     alvo.innerHTML = html;
-    corpoAtual = corpo;
+    corpoAtual = fixo;
     metaAtual = meta;
     if (!marca) return;
     // Foco volta ao mesmo botão; se a ação o trocou (Confirmar vira Desfazer), ao botão da mesma série e cidade;

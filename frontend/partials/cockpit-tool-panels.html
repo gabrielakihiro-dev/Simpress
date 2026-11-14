@@ -2,8 +2,10 @@
         <header class="ck-ferramenta__cab">
           <div class="ck-ferramenta__textos">
             <p class="ck-ferramenta__kicker">Ferramentas do Cockpit</p>
-            <h1 id="cockpit-tool-title" class="ck-ferramenta__titulo" tabindex="-1">OS</h1>
-            <span id="cockpit-tool-subtitle" class="ck-ferramenta__sub" role="status" aria-live="polite"></span>
+            <div class="ck-ferramenta__linha">
+              <h1 id="cockpit-tool-title" class="ck-ferramenta__titulo" tabindex="-1">OS</h1>
+              <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a ferramenta" aria-describedby="cockpit-tool-subtitle"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-tool-subtitle" role="tooltip" class="info-tip-text">Acompanhamento local de ordens relacionadas por série.</span></span>
+            </div>
           </div>
           <kbd id="cockpit-tool-kbd" class="ck-kbd" aria-hidden="true">F6</kbd>
           <button type="button" class="ck-btn ck-btn--secundario" data-on-click="fecharPainelCockpit" aria-label="Voltar para a tela principal">Voltar <kbd class="ck-kbd">Esc</kbd></button>
@@ -12,7 +14,6 @@
         <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados" aria-labelledby="cockpit-tickets-heading" hidden>
           <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de OS por série</h2>
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
-          <p id="cockpit-tickets-kpis-nota" class="ckp-secao__desc os-kpis-nota">KPIs e triagem contam só as OS da sub-aba Abertas.</p>
           <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
@@ -51,10 +52,9 @@
               </form>
               <p id="cockpit-tickets-sources" class="ckp-secao__desc"></p>
               <div class="ckp-versao">
-                <label class="ckp-campo" for="cockpit-tickets-version"><span class="ckp-rotulo">Versão em uso</span><select id="cockpit-tickets-version" class="ck-entrada" data-on-change="selecionarVersaoChamadosCockpit" aria-describedby="cockpit-tickets-version-hint"><option value="">Nenhuma importação</option></select></label>
+                <div class="ckp-campo"><span class="ckp-rotulo"><label for="cockpit-tickets-version">Versão em uso</label> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a versão" aria-describedby="cockpit-tickets-version-hint"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-tickets-version-hint" role="tooltip" class="info-tip-text">A versão escolhida vale para Exportar Excel e para a comparação. A tabela mostra sempre a importação mais recente.</span></span></span><select id="cockpit-tickets-version" class="ck-entrada" data-on-change="selecionarVersaoChamadosCockpit" aria-describedby="cockpit-tickets-version-hint"><option value="">Nenhuma importação</option></select></div>
                 <button type="button" id="cockpit-tickets-delete-old" class="ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamadosCockpit" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-trash"></use></svg>Excluir importações antigas</button>
               </div>
-              <p id="cockpit-tickets-version-hint" class="ckp-secao__desc">A versão escolhida vale para Exportar Excel e para a comparação. A tabela mostra sempre a importação mais recente.</p>
               <details class="ckp-recolher ckp-recolher--interno">
                 <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Comparação com a importação anterior</summary>
                 <div class="ckp-recolher__corpo"><div id="cockpit-tickets-evolution" class="ckp-secao__desc" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div></div>
@@ -99,6 +99,7 @@
           <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
             <div class="ck-cartao ck-regionais">
               <div class="ck-cartao__cab">
+                <span class="ck-bento-icone" aria-hidden="true"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg></span>
                 <h3 id="resumo-regionais-titulo" class="ck-cartao__titulo">Ativos por regional</h3>
                 <span class="ck-espaco"></span>
                 <span id="resumo-regionais-contagem" class="ck-cartao__meta" role="status" aria-live="polite"></span>
@@ -269,9 +270,8 @@
                   </tbody>
                 </table>
               </fieldset>
-              <fieldset class="termos__grupo">
-                <legend>Equipamentos e acessórios entregues</legend>
-                <p class="termos__dica">Assinale Sim ou Não para cada item apresentado no ato da entrega.</p>
+              <fieldset class="termos__grupo" aria-labelledby="termos-entrega-itens-leg">
+                <legend><span id="termos-entrega-itens-leg">Equipamentos e acessórios entregues</span><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os itens entregues" aria-describedby="termos-entrega-itens-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="termos-entrega-itens-dica" role="tooltip" class="info-tip-text">Assinale Sim ou Não para cada item apresentado no ato da entrega.</span></span></legend>
                 <table class="termos__tabela"><thead class="sr-only"><tr><th scope="col">Equipamento / Acessório</th><th scope="col">Sim / Não</th></tr></thead>
                   <tbody>
                     <tr><th scope="row">01 Mochila</th><td><div class="termos__sn" role="radiogroup" aria-label="01 Mochila"><label><input type="radio" id="termos-entrega-item-01-sim" name="item-01" value="sim" checked> Sim</label><label><input type="radio" id="termos-entrega-item-01-nao" name="item-01" value="nao"> Não</label></div></td></tr>
@@ -288,17 +288,15 @@
                   </tbody>
                 </table>
               </fieldset>
-              <fieldset class="termos__grupo">
-                <legend>Observações</legend>
-                <p class="termos__dica" id="termos-entrega-obs-dica">Registre avarias no equipamento anterior ou itens pendentes.</p>
+              <fieldset class="termos__grupo" aria-labelledby="termos-entrega-obs-leg">
+                <legend><span id="termos-entrega-obs-leg">Observações</span><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre as observações" aria-describedby="termos-entrega-obs-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="termos-entrega-obs-dica" role="tooltip" class="info-tip-text">Registre avarias no equipamento anterior ou itens pendentes.</span></span></legend>
                 <label class="sr-only" for="termos-entrega-obs">Observações</label>
                 <textarea id="termos-entrega-obs" name="obs" class="ck-entrada termos__obs" rows="4" aria-describedby="termos-entrega-obs-dica"></textarea>
               </fieldset>
               <div class="termos__acoes">
-                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["entrega"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["entrega"]'>Gerar PDF</button><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o PDF" aria-describedby="termos-pdf-dica-entrega"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="termos-pdf-dica-entrega" role="tooltip" class="info-tip-text">Na janela que abrir, escolha Salvar como PDF e a pasta.</span></span>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="lembretesCriarDoTermo" data-args='["entrega"]'>Criar lembrete</button>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["entrega"]'>Limpar</button>
-                <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
                 <p class="termos__estado" id="termos-status-entrega" role="status" aria-live="polite"></p>
               </div>
             </form>
@@ -340,10 +338,9 @@
                 <textarea id="termos-devolucao-obs" name="obs" class="ck-entrada termos__obs" rows="4"></textarea>
               </fieldset>
               <div class="termos__acoes">
-                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["devolucao"]'>Gerar PDF</button>
+                <button type="button" class="ck-btn ck-btn--primario" data-on-click="termosGerarPdf" data-args='["devolucao"]'>Gerar PDF</button><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o PDF" aria-describedby="termos-pdf-dica-devolucao"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="termos-pdf-dica-devolucao" role="tooltip" class="info-tip-text">Na janela que abrir, escolha Salvar como PDF e a pasta.</span></span>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="lembretesCriarDoTermo" data-args='["devolucao"]'>Criar lembrete</button>
                 <button type="button" class="ck-btn ck-btn--secundario" data-on-click="termosLimpar" data-args='["devolucao"]'>Limpar</button>
-                <p class="termos__aviso">Na janela que abrir, escolha Salvar como PDF e a pasta.</p>
                 <p class="termos__estado" id="termos-status-devolucao" role="status" aria-live="polite"></p>
               </div>
             </form>
@@ -375,7 +372,7 @@
                 </fieldset>
                 <p class="lembretes__erro" id="lembretes-novo-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
               </form>
-              <p class="lembretes__vazio" id="lembretes-vazio" hidden><span class="lembretes__vazio-ico" aria-hidden="true"><svg class="ck-ico"><use href="#i-check"></use></svg></span><span>Nenhum lembrete. Anote o que precisa fazer.</span></p>
+              <p class="lembretes__vazio" id="lembretes-vazio" hidden><span class="lembretes__vazio-ico" aria-hidden="true"><svg class="ck-ico"><use href="#i-check"></use></svg></span><span>Nenhum lembrete.</span></p>
               <div class="lembretes__barra">
                 <div class="ck-pilulas lembretes__vistas" role="tablist" aria-label="Vistas de lembretes" data-on-keydown="lembretesTeclaVista" data-args-keydown='["$event"]'>
                   <button type="button" class="ck-pilula" role="tab" id="lembretes-aba-hoje" aria-selected="true" aria-controls="lembretes-lista" data-on-click="lembretesSelecionarVista" data-args='["hoje"]'>Hoje <span class="ck-pilula__n" id="lembretes-hoje-n">0</span></button>
@@ -414,9 +411,8 @@
           <div id="lembretes-criar" class="modal-overlay ck-veu hidden">
             <div class="ck-dialogo lembretes__dialogo lembretes__dialogo--criar" role="dialog" aria-modal="true" aria-labelledby="lembretes-criar-titulo">
               <h3 id="lembretes-criar-titulo">Criar lembrete</h3>
-              <label for="lembretes-criar-descricao">Descrição</label>
+              <span class="ck-rotulo-info"><label for="lembretes-criar-descricao">Descrição</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a descrição" aria-describedby="lembretes-criar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="lembretes-criar-dica" role="tooltip" class="info-tip-text">Texto montado com os dados do termo. Revise antes de criar.</span></span></span>
               <textarea id="lembretes-criar-descricao" class="ck-entrada lembretes__criar-campo" rows="7" autocomplete="off" aria-describedby="lembretes-criar-dica lembretes-criar-erro" data-on-input="lembretesAoDigitar" data-args='["$this"]'></textarea>
-              <p class="lembretes__dica" id="lembretes-criar-dica">Texto montado com os dados do termo. Revise antes de criar.</p>
               <p class="lembretes__erro" id="lembretes-criar-erro" role="alert" hidden>A descrição pode ter até 2000 caracteres.</p>
               <div class="lembretes__dialogo-acoes">
                 <button type="button" class="ck-btn ck-btn--secundario" id="lembretes-criar-cancelar" data-on-click="lembretesCancelarCriar">Cancelar</button>
@@ -444,12 +440,7 @@
             <aside class="ck-dividido__detalhe" id="cockpit-sheets-detail" aria-label="Detalhes da planilha selecionada">
               <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-sheets-detail-title">—</span><span id="cockpit-sheets-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-sheets-detail-sub">Selecione uma planilha.</span></div>
               <div class="ck-det__corpo">
-                <h2 class="ck-det__titulo">Ao atualizar</h2>
-                <ol class="ck-tempo">
-                  <li class="ck-tempo__item"><span class="ck-tempo__marca" data-status="info" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A planilha é importada e substitui a versão atual</p></div></li>
-                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A comparação com o Endpoint é refeita</p></div></li>
-                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">O resultado entra no histórico do Resumo</p></div></li>
-                </ol>
+                <div class="ck-rotulo-info"><h2 class="ck-det__titulo">Ao atualizar</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Ao atualizar" aria-describedby="cockpit-sheets-passos-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-sheets-passos-dica" role="tooltip" class="info-tip-text">1. A planilha é importada e substitui a versão atual. 2. A comparação com o Endpoint é refeita. 3. O resultado entra no histórico do Resumo.</span></span></div>
               </div>
               <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-submit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg>Atualizar planilhas</button></div>
             </aside>

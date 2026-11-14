@@ -159,7 +159,7 @@
   }
 
   function dismissInfoTips(doc) {
-    const open = [...doc.querySelectorAll(".info-tip:hover, .info-tip:focus-within")];
+    const open = [...doc.querySelectorAll(".info-tip:is(:hover, :focus-within):not([data-tip-dismissed])")];
     open.forEach(tip => tip.setAttribute("data-tip-dismissed", ""));
     return open.length;
   }
@@ -414,7 +414,13 @@
 
     // Info tips: Esc hides the open tip until the pointer or focus leaves it (WCAG 1.4.13).
     doc.addEventListener("keydown", event => {
-      if (event.key === "Escape") dismissInfoTips(doc);
+      if (event.key !== "Escape") return;
+      // Balão aberto pelo foco: o Esc só fecha o balão (nem o painel nem o diálogo, que ouve o Esc no document). Aberto só pelo mouse: fecha e o Esc segue (ex.: fecha o painel).
+      const focado = doc.activeElement?.closest?.(".info-tip:not([data-tip-dismissed])");
+      if (dismissInfoTips(doc) && focado) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     }, true);
     doc.addEventListener("click", event => {
       const menu = doc.querySelector(".cockpit-tools-dropdown[open]");

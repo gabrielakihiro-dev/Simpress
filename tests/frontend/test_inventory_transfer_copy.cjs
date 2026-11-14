@@ -7,7 +7,7 @@ const {
   apiResponse,
 } = require("./support/inventory-harness.cjs");
 
-test("stale-access report sorts by inactivity, shows its reference time, and signals horizontal scrolling", () => {
+test("stale-access report sorts by inactivity, shows its reference time, and keeps the table scrollable", () => {
   const harness = createAppHarness(async () => apiResponse({}), { stubDisplay: false });
   const referenceTime = "2026-09-30T15:00:00-03:00";
   harness.context.workflowComparison = {
@@ -24,7 +24,6 @@ test("stale-access report sorts by inactivity, shows its reference time, and sig
   assert.ok(html.indexOf("PRNOTE-40") < html.indexOf("PRNOTE-14"));
   const formattedReferenceTime = harness.run(`formatarHorarioHistorico(${JSON.stringify(referenceTime)})`);
   assert.ok(html.includes(`Atualização usada como referência: <time datetime="${referenceTime}">${formattedReferenceTime}</time>.`));
-  assert.ok(html.includes("Role a tabela horizontalmente para consultar todas as colunas."));
   assert.match(appCss, /\.accessible-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(appCss, /:root :focus-visible\s*\{/);
   assert.match(appCss, /\.accessible-table-wrap::-webkit-scrollbar\s*\{/);

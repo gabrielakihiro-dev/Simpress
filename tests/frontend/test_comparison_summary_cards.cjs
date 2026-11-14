@@ -197,3 +197,36 @@ test("strips stay with static cards at zero and the Usuários tab has no wrapper
   assert.doesNotMatch(painel(html, "usuarios"), /resumo-cartoes/);
   assert.doesNotMatch(painel(html, "visao"), /data-metric-tone/);
 });
+
+// Visão geral em bento (decisão de 14/11/2026): anel = (total_endpoint − "Sem correspondência — na Simpress") / total_endpoint,
+// com a legenda "com correspondência nas duas bases" no cartão grande, logo depois do anel (.ck-bento-anelbox). Os 6 contadores de Divergências seguem nos testes acima.
+const itens = (quantidade, prefixo) => Array.from({ length: quantidade }, (_, indice) => ({ computador: `${prefixo}-${indice}`, serie: `${prefixo}${indice}` }));
+
+function anelVisao(html) {
+  const visao = painel(html, "visao");
+  // Primeiro cartão (o grande): do primeiro data-bento-cartao até o segundo.
+  const inicio = visao.indexOf("data-bento-cartao");
+  const grande = visao.slice(inicio, visao.indexOf("data-bento-cartao", inicio + 1));
+  return {
+    fracao: visao.match(/data-bento-anel="([^"]+)"/)?.[1],
+    pct: visao.match(/data-bento-contar="(\d+)" data-bento-sufixo="%"/)?.[1],
+    legenda: grande.match(/<div class="ck-bento-anelbox">.*<p class="ck-bento-legenda">([^<]+)<\/p>/s)?.[1],
+    legendas: visao.split('class="ck-bento-legenda"').length - 1,
+  };
+}
+
+test("Visão geral: anel conta quem tem correspondência nas duas bases e traz a legenda exata", () => {
+  const casos = [
+    // [rótulo, comparação, fração, porcentagem]
+    ["1 sem correspondência na Simpress de 12", COMPARACAO_COMPLETA, "0.9167", "91"],
+    ["998 de 1000 não arredonda para 100%", { total_endpoint: 1000, ausentes_em_detalhes: itens(2, "S") }, "0.9980", "99"],
+    ["nenhum ausente na Simpress", { total_endpoint: 8 }, "1.0000", "100"],
+    ["3 ausentes na Simpress de 4", { total_endpoint: 4, ausentes_em_detalhes: itens(3, "S") }, "0.2500", "25"],
+    ["ausentes no endpoint não entram na conta", { total_endpoint: 10, ausentes_no_endpoint: itens(5, "E"), ausentes_em_detalhes: itens(2, "S") }, "0.8000", "80"],
+    ["mais ausentes que o total trava em 0", { total_endpoint: 2, ausentes_em_detalhes: itens(3, "S") }, "0.0000", "0"],
+    ["sem notebooks comparados", { total_endpoint: 0 }, "0.0000", "0"],
+  ];
+  for (const [rotulo, comparison, fracao, pct] of casos) {
+    assert.deepEqual(anelVisao(renderizar(comparison)), { fracao, pct, legenda: "com correspondência nas duas bases", legendas: 1 }, rotulo);
+  }
+});

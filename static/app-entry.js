@@ -10,6 +10,7 @@ import "./js/shared/history-annotation-autosave.js";
 import "./js/shared/api-errors.js";
 import "./js/shared/api-fetch.js";
 import "./js/ui/ui-motion.js";
+import "./js/ui/bento.js";
 import "./js/ui/accessible-dialogs.js";
 import "./js/ui/file-picker.js";
 import "./js/ui/ui-notifications.js";

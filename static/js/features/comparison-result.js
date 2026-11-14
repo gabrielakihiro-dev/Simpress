@@ -51,6 +51,8 @@
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
+    // Números, anel e traços dos cartões bento partem do zero (bento.js).
+    globalThis.SimpressBento?.animarDentro(content);
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
     // Ordenação e "Copiar tabela" (data-panels.js) entram nas tabelas recém-montadas.
     document.dispatchEvent(new CustomEvent("simpress:tabelas-renderizadas"));
@@ -318,7 +320,8 @@
   let atualizarResumo = null;
   // Sem comparação na tela (vazio, carregando ou erro): as abas que só filtram a comparação ficam desabilitadas.
   let semComparacao = true;
-  const ABAS_SEM_COMPARACAO = ["divergencias", "backups"];
+  // Visão geral abre também sem comparação: mostra só "Ativos por regional" (decisão de 14/11/2026, opção A).
+  const ABAS_SEM_COMPARACAO = ["visao", "divergencias", "backups"];
   const abaDesabilitada = chave => semComparacao && !ABAS_SEM_COMPARACAO.includes(chave) && chave !== estadoResumo.aba;
 
   const elementoAbaResumo = chave => document.getElementById(`resumo-aba-${chave}`);
@@ -338,14 +341,15 @@
       painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
     });
     // "Backups" não depende da comparação: o painel fixo fica fora do conteúdo recriado e, com ele aberto,
-    // o conteúdo inteiro (filtros e mensagem de vazio) e "Ativos por regional" saem de cena.
+    // o conteúdo inteiro (filtros e mensagem de vazio) sai de cena. "Ativos por regional" só aparece na
+    // Visão geral, como último cartão da grade (decisão de 14/11/2026).
     const noBackups = painelAtivo === "backups";
     const painelBackups = document.getElementById("resumo-painel-backups");
     if (painelBackups) painelBackups.hidden = !noBackups;
     const conteudo = document.getElementById("comparacao-planilhas-conteudo");
-    if (conteudo) conteudo.hidden = noBackups;
+    if (conteudo) conteudo.hidden = noBackups || (semComparacao && painelAtivo === "visao");
     const ativos = document.getElementById("resumo-ativos-secao");
-    if (ativos) ativos.hidden = noBackups;
+    if (ativos) ativos.hidden = painelAtivo !== "visao";
   }
 
   // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
@@ -357,6 +361,11 @@
     aplicarAbaResumo();
     atualizarResumo?.();
     if (foco) elementoAbaResumo(chave)?.focus();
+    // Clique na sub-aba repete contagem, anel e barras (contrato bento).
+    if (chave === "visao") {
+      globalThis.SimpressBento?.animarDentro(document.getElementById("resumo-painel-visao"));
+      document.dispatchEvent(new CustomEvent("simpress:bento-repetir"));
+    }
     // Pede dados novos só na chegada à aba (openPanel seleciona duas vezes e não pode gerar dois refresh).
     if (mudou && chave === "backups") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
   }

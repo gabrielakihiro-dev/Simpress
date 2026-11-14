@@ -26,6 +26,11 @@
 .ckp-veu[hidden] { display: none; }
 .ckp-dialogo { --largura: 720px; width: min(var(--largura), 100%); max-height: min(88vh, 880px); display: flex; flex-direction: column; background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); overflow: hidden; }
 .ckp-dialogo--estreito { --largura: 560px; }
+/* ⓘ do título do diálogo estreito (info-tip--bloco): o balão ancora no cabeçalho, com 1rem de folga de cada lado, para não passar da borda que corta (overflow hidden). */
+@media (min-width: 641px) {
+  .ckp-dialogo--estreito .ckp-cab { position: relative; }
+  .ckp-dialogo--estreito .ckp-cab .info-tip--bloco .info-tip-text { inset-inline-start: 1rem; max-width: calc(100% - 2rem); }
+}
 .ckp-dialogo:focus { outline: none; }
 
 .ckp-cab { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: start; gap: 4px 12px; padding: 14px 12px 12px 16px; border-bottom: 1px solid var(--cor-borda-suave); }
@@ -67,9 +72,6 @@
 .ckp-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ckp-linha--fim { justify-content: flex-end; }
 .ckp-meta { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
-.ckp-fatos { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
-.ckp-fatos li { display: inline-flex; align-items: center; gap: 5px; }
-.ckp-fatos .ck-ico { color: var(--cor-texto-sutil); }
 
 /* ---------- Seletor de arquivo (substitui o input nativo) ---------- */
 .ckp-arquivo { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 56px; padding: 10px 10px 10px 12px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); cursor: pointer; transition: border-color var(--duracao) var(--curva), background-color var(--duracao) var(--curva); }
@@ -114,7 +116,9 @@
 .ckp-importar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; }
 .ckp-rotulo { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ckp-rotulo .info-tip,
-.ckp-cab__titulo .info-tip { margin-block: -0.75rem; } /* o botão herda min-height 2.5rem de app.css e não deve aumentar a altura do rótulo */
+.ckp-cab__titulo .info-tip,
+.ck-ferramenta__linha .info-tip,
+.ck-chamados-triagem__resumo .info-tip { margin-block: -0.75rem; } /* o botão herda min-height 2.5rem de app.css e não deve aumentar a altura do rótulo */
 .ckp-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
 .ckp-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }

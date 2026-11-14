@@ -160,7 +160,7 @@
 
   <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook">
     <div class="ck-dialogo email-outlook">
-      <h3 id="titulo-email-outlook" class="text-base font-bold">E-mail pelo Outlook</h3>
+      <h3 class="text-base font-bold"><span id="titulo-email-outlook">E-mail pelo Outlook</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre E-mail pelo Outlook" aria-describedby="email-ajuda-autosave"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="email-ajuda-autosave" role="tooltip" class="info-tip-text">As alterações no modelo são salvas automaticamente.</span></span></h3>
       <p id="email-aviso-diretorio" class="email-outlook__aviso" role="status" hidden>A base do Microsoft Entra não foi importada; digite o e-mail completo.</p>
       <div class="email-outlook__modelo">
         <div class="ck-campo">
@@ -199,10 +199,9 @@
         <input type="text" id="email-assunto" class="ck-entrada" maxlength="200" autocomplete="off" aria-describedby="email-ajuda-marcadores" disabled>
       </div>
       <div class="ck-campo">
-        <label class="ck-campo__rotulo" for="email-corpo">Mensagem</label>
+        <span class="ck-rotulo-info"><label class="ck-campo__rotulo" for="email-corpo">Mensagem</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os marcadores" aria-describedby="email-ajuda-marcadores"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="email-ajuda-marcadores" role="tooltip" class="info-tip-text">Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.</span></span></span>
         <textarea id="email-corpo" class="ck-entrada email-outlook__corpo" rows="6" maxlength="4000" aria-describedby="email-ajuda-marcadores" disabled></textarea>
       </div>
-      <p id="email-ajuda-marcadores" class="email-outlook__ajuda">Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.</p>
       <div class="email-outlook__envio">
         <div class="ck-campo">
           <label class="ck-campo__rotulo" for="email-nome-pessoa">Nome da pessoa</label>
@@ -213,7 +212,6 @@
           <input type="text" id="email-setor" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
         </div>
       </div>
-      <p id="email-ajuda-autosave" class="email-outlook__ajuda">As alterações no modelo são salvas automaticamente.</p>
       <p id="email-autosave-status" class="email-outlook__autosave" role="status" aria-live="polite"></p>
       <p id="email-status" class="email-outlook__status" role="status" aria-live="polite" hidden></p>
       <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
@@ -393,7 +391,7 @@
               <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
             </div>
             <div id="edit-apelido-field">
-              <div class="flex items-center gap-1 mb-1"><label class="block text-fg-tertiary font-semibold">Apelido / Hostname:</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Apelido / Hostname" aria-describedby="tip-editar-apelido-campo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido-campo" role="tooltip" class="info-tip-text">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</span></span></div>
+              <div class="flex items-center gap-1 mb-1"><label class="block text-fg-tertiary font-semibold">Apelido / Hostname:</label><span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Apelido / Hostname" aria-describedby="tip-editar-apelido-campo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido-campo" role="tooltip" class="info-tip-text">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</span></span></div>
               <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
             </div>
             <div class="sm:col-span-2">
@@ -496,10 +494,10 @@
 
         <div id="upload-impacto-aviso" class="ckp-nota" data-status="alerta"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-alerta"></use></svg><p>Ao confirmar, <strong>as duas bases ativas serão substituídas</strong> pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p></div>
 
-        <label class="ckp-nota" for="auto-export-history-after-update">
+        <div class="ckp-nota">
           <input id="auto-export-history-after-update" type="checkbox">
-          <p><strong>Baixar o Histórico de Planilhas automaticamente.</strong> Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</p>
-        </label>
+          <span class="ck-rotulo-info"><label for="auto-export-history-after-update"><strong>Baixar o Histórico de Planilhas automaticamente.</strong></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o download automático" aria-describedby="auto-export-history-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="auto-export-history-dica" role="tooltip" class="info-tip-text">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span></span></span>
+        </div>
 
         <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
           <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
@@ -540,7 +538,7 @@
         <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-download"></use></svg></span>
         <div class="ckp-cab__textos">
           <span class="ckp-cab__kicker">Modelo .xlsx</span>
-          <h2 class="ckp-cab__titulo"><span id="titulo-importar-modelo">Importar arquivos</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Importar arquivos" aria-describedby="descricao-importar-modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="descricao-importar-modelo" role="tooltip" class="info-tip-text"></span></span></h2>
+          <h2 class="ckp-cab__titulo"><span id="titulo-importar-modelo">Importar arquivos</span> <span class="info-tip info-tip--bloco"><button type="button" class="info-tip-trigger" aria-label="Sobre Importar arquivos" aria-describedby="descricao-importar-modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="descricao-importar-modelo" role="tooltip" class="info-tip-text"></span></span></h2>
         </div>
         <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
       </header>
@@ -551,10 +549,6 @@
           <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-modelo-local" data-vazio="Escolher modelo ou arrastar aqui">Escolher modelo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio="Modelo .xlsx · até 60 MB">Modelo .xlsx · até 60 MB</span></span>
           <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
         </label>
-        <ul class="ckp-fatos">
-          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-history"></use></svg>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais.</li>
-          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-check"></use></svg>O modelo de transferência incluído no projeto é preservado.</li>
-        </ul>
       </div>
       <footer class="ckp-rodape">
         <p id="status-modelo-local" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -573,7 +567,7 @@
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
-      <p id="contato-origem-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</p>
+      <p id="contato-origem-ambiente" class="hidden">Campos bloqueados. <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os campos bloqueados" aria-describedby="tip-contato-origem-ambiente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-contato-origem-ambiente" role="tooltip" class="info-tip-text">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</span></span></p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
           <label for="contato-origem-nome" class="block text-xs text-fg-subtle mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
@@ -601,7 +595,7 @@
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
-      <p id="cliente-config-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_CLIENTE_*</code> e têm prioridade sobre o arquivo.</p>
+      <p id="cliente-config-ambiente" class="hidden">Campos bloqueados. <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os campos bloqueados" aria-describedby="tip-cliente-config-ambiente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-cliente-config-ambiente" role="tooltip" class="info-tip-text">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_CLIENTE_*</code> e têm prioridade sobre o arquivo.</span></span></p>
       <div id="cliente-config-modelo-ausente" class="hidden" role="status">
         <p>O modelo de transferência local não foi encontrado. Importe o modelo oficial antes de gerar transferências.</p>
         <button type="button" id="btn-cliente-importar-modelo" class="readiness-import" data-on-click="abrirImportacaoModeloTransferencia">Importar modelo de transferência</button>
@@ -616,9 +610,8 @@
           <input type="text" id="cliente-config-cnpj" maxlength="18" required inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono" />
         </div>
         <div class="sm:col-span-2">
-          <label for="cliente-config-series" class="block text-xs text-fg-subtle mb-1">Séries dos notebooks do próprio cliente (uma por linha, opcional):</label>
+          <span class="ck-rotulo-info mb-1"><label for="cliente-config-series" class="block text-xs text-fg-subtle">Séries dos notebooks do próprio cliente (uma por linha, opcional):</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre as séries do cliente" aria-describedby="cliente-config-series-ajuda"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cliente-config-series-ajuda" role="tooltip" class="info-tip-text">Essas séries ficam fora das comparações de inventário. Só letras e números, até 32 caracteres cada.</span></span></span>
           <textarea id="cliente-config-series" rows="4" autocomplete="off" spellcheck="false" aria-describedby="cliente-config-series-ajuda" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono"></textarea>
-          <p id="cliente-config-series-ajuda" class="text-xs text-fg-subtle mt-1">Essas séries ficam fora das comparações de inventário. Só letras e números, até 32 caracteres cada.</p>
         </div>
       </div>
       <p id="status-cliente-config" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -629,12 +622,12 @@
   <div id="modal-representante-regional" class="modal-overlay ck-veu hidden">
     <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">
-        <h3 id="titulo-representante-regional">Editar representante regional</h3>
+        <h3><span id="titulo-representante-regional">Editar representante regional</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Editar representante regional" aria-describedby="tip-representante-regional"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-representante-regional" role="tooltip" class="info-tip-text">A alteração fica salva somente neste computador, em config/representantes_regionais.json.</span></span></h3>
         <button type="button" class="readiness-import" data-on-click="fecharEdicaoRepresentanteRegional" aria-label="Fechar edição do representante regional" title="Fechar">
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
-      <p>Cidade: <strong id="representante-regional-cidade"></strong>. A alteração fica salva somente neste computador, em config/representantes_regionais.json.</p>
+      <p>Cidade: <strong id="representante-regional-cidade"></strong></p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
           <label for="representante-regional-nome" class="block text-xs text-fg-subtle mb-1">Nome completo:</label>

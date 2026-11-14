@@ -81,7 +81,7 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
   - Linha de modelo: select `Modelo` + `Nome do modelo` + ações `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão` (este só aparece no `cabo`).
   - Campos do modelo (autosave): `Enviar de` (select das contas), `Para`, `Cc`, `Assunto`, `Mensagem`.
   - Campos do envio (não salvos): `Nome da pessoa` (pré-preenchido com `nome_pessoa` do equipamento) e `Setor`.
-  - Ajudas: `Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.` e `As alterações no modelo são salvas automaticamente.`
+  - Ajudas: `Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.` e `As alterações no modelo são salvas automaticamente.` (desde 14/11/2026 ficam em ⓘ, sem texto fixo na tela; ver `docs/cockpit-prompts/03-home-split-view.md`)
   - Ações: `Abrir no Outlook`, `Enviar pelo Outlook` (com `app.confirmarAcao`), `Copiar Texto` (`app.copiarTextoParaAreaTransferencia`, Assunto e Mensagem já com `{nome}`/`{setor}` substituídos no front só para a cópia), `Cancelar`.
 - **Autosave:** 800 ms após a última tecla e na hora no `change`/`blur`, com `Alteração ainda não salva…`, `Salvando…`, `Salva.`, `Não foi possível salvar: …` (mesmo padrão das observações F5/F6). Trocar de modelo grava o pendente antes de carregar o outro. Último modelo escolhido fica no `localStorage` (try/catch), só conveniência.
 - **Autocompletar (Para e Cc):** combobox ARIA (`role="combobox"`, `aria-expanded`, `aria-activedescendant`, lista `role="listbox"`) sobre o token após o último `;`; debounce 200 ms; setas, Enter e Esc; escolher insere `Nome <email>; `. Sem resultado: `Nenhum contato encontrado no Entra.`

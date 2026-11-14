@@ -183,7 +183,7 @@ test("refinement layer defines both themes and respects reduced motion", () => {
 test("dismissInfoTips marks only the tips that are open", () => {
   const marked = [];
   const tip = { setAttribute: name => marked.push(name) };
-  const doc = { querySelectorAll: selector => (selector.includes(":hover") ? [tip] : []) };
+  const doc = { querySelectorAll: selector => (selector.includes(":hover") && selector.includes(":not([data-tip-dismissed])") ? [tip] : []) };
   assert.equal(ux.dismissInfoTips(doc), 1);
   assert.deepEqual(marked, ["data-tip-dismissed"]);
   assert.equal(ux.dismissInfoTips({ querySelectorAll: () => [] }), 0);

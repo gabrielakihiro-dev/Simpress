@@ -196,6 +196,37 @@ test("Sub-abas: KPIs e triagem contam só as OS abertas e não mudam ao trocar d
   expect(await kpis(page)).toEqual(esperado);
 });
 
+test("Textos explicativos do F6 ficam no ⓘ: abrem por mouse, toque ou foco e o Esc fecha só o balão", async ({ page }, testInfo) => {
+  await simular(page);
+  await abrirF6(page);
+  const subtitulo = page.locator("#cockpit-tool-subtitle");
+  const nota = page.locator("#cockpit-tickets-kpis-nota");
+  await expect(subtitulo).toHaveText("Acompanhamento local de ordens relacionadas por série.");
+  await expect(subtitulo).toBeHidden();
+  await expect(nota).toBeHidden();
+  await expect(page.locator("#cockpit-tickets-version-hint")).toBeHidden();
+  await expect(page.locator("#cockpit-tickets-version")).toHaveAttribute("aria-describedby", "cockpit-tickets-version-hint");
+
+  // Cabeçalho: mouse no desktop, toque no mobile.
+  const botaoCabecalho = page.locator('.info-tip-trigger[aria-describedby="cockpit-tool-subtitle"]');
+  if (testInfo.project.use.hasTouch) await botaoCabecalho.tap();
+  else await botaoCabecalho.hover();
+  await expect(subtitulo).toBeVisible();
+
+  // Nota dos KPIs: foco pelo teclado abre; Esc fecha o balão e o painel continua aberto.
+  const botaoNota = page.locator('#cockpit-tickets-triage .info-tip-trigger[aria-describedby="cockpit-tickets-kpis-nota"]');
+  await botaoNota.focus();
+  await expect(nota).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(nota).toBeHidden();
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-triage")).toContainText("de 3 séries com chamado aberto");
+  // Balão já fechado: o segundo Esc, com o foco ainda no ⓘ, fecha o painel.
+  await expect(botaoNota).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
 test("Sub-abas: busca e Relação valem nas duas sub-abas e os números das abas contam as linhas que passam nos filtros", async ({ page }) => {
   await simular(page);
   await abrirF6(page);

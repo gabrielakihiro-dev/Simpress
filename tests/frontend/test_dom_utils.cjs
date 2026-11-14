@@ -58,3 +58,26 @@ test("pluralize keeps the singular only for exactly one item", () => {
   assert.equal(pluralize("1", "filial catalogada", "filiais catalogadas"), "filial catalogada");
   assert.equal(pluralize(2, "filial catalogada", "filiais catalogadas"), "filiais catalogadas");
 });
+
+test("infoTipHtml escapa rótulo e texto, gera ids únicos e liga o botão ao balão", () => {
+  const { infoTipHtml } = createDomUtils(fakeDocument());
+  const primeiro = infoTipHtml('<b>"OS"</b>', "<img src=x onerror=alert(1)> & mais");
+  const segundo = infoTipHtml("Versão", "Texto", { fim: true });
+  const id = html => html.match(/<span id="(tip-auto-\d+)" role="tooltip" class="info-tip-text">/)[1];
+  assert.notEqual(id(primeiro), id(segundo));
+  assert.match(primeiro, new RegExp(`aria-describedby="${id(primeiro)}"`));
+  assert.match(primeiro, /aria-label="Sobre &lt;b&gt;&quot;OS&quot;&lt;\/b&gt;"/);
+  assert.match(primeiro, /class="info-tip-text">&lt;img src=x onerror=alert\(1\)&gt; &amp; mais<\/span>/);
+  assert.doesNotMatch(primeiro, /<img|<b>/);
+  assert.match(primeiro, /^<span class="info-tip"><button type="button" class="info-tip-trigger"/);
+  assert.match(segundo, /^<span class="info-tip info-tip--end">/);
+  assert.match(infoTipHtml("Seção", "Texto", { bloco: true }), /^<span class="info-tip info-tip--bloco">/);
+});
+
+test("infoTipHtml com id fixo repete o mesmo markup a cada chamada", () => {
+  const { infoTipHtml } = createDomUtils(fakeDocument());
+  const a = infoTipHtml("Backups", "Texto", { id: "dica-fixa" });
+  assert.equal(a, infoTipHtml("Backups", "Texto", { id: "dica-fixa" }));
+  assert.match(a, /aria-describedby="dica-fixa"/);
+  assert.match(a, /<span id="dica-fixa" role="tooltip" class="info-tip-text">Texto<\/span>/);
+});
