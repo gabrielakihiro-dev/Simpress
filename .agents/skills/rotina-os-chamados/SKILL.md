@@ -5,7 +5,7 @@ description: Rotina de exportação das OS do Oracle Service Cloud e do UX Simpr
 
 # Rotina de OS (Oracle e UX Simpress)
 
-Referência oficial (consultar quando o procedimento mudar): https://app.notion.com/p/Simpress-Ordem-de-Servi-o-OS-3f5922a1007780dd8dcadc98b978f2ed
+Referência oficial (consultar quando o procedimento mudar): página do Notion da equipe (o link não fica no Git; peça ao usuário)
 
 Gatilho: **"Executar OS Simpress"** executa o fluxo completo, do Oracle até a confirmação da importação, sem deixar etapas para outra solicitação. Para os inventários (Endpoint/Equipamentos), use `rotina-exportar-planilhas`.
 

@@ -88,6 +88,15 @@ class ClientConfigResolutionTests(ClientTestCase):
         self.assertEqual(client_own_serials(), ("BRT700XG01", "BRT700XG02"))
         self.assertEqual(client_billing_cnpj(), "11.222.333/0001-81")
 
+    def test_malformed_environment_values_fail_closed(self):
+        self.with_example()
+        for contrato in ("010101", "12A45", 'x"]', "1" * 13):
+            with self.subTest(contrato=contrato):
+                os.environ["SIMPRESS_CLIENTE_CONTRATO"] = contrato
+                self.assertEqual(client_contract(), "")
+        os.environ["SIMPRESS_CLIENTE_CNPJ_FATURAMENTO"] = "11222333000181"
+        self.assertEqual(client_billing_cnpj(), "")
+
     def test_values_are_read_on_every_call_and_the_series_follow_the_file(self):
         path = self.root / "cliente.json"
         self.configure(path)
@@ -328,6 +337,7 @@ class ClientConfigRouteTests(ClientTestCase):
             {**VALID_CLIENT, "cnpj_faturamento": ""},
             {**VALID_CLIENT, "contrato": "AB123"},
             {**VALID_CLIENT, "contrato": "1" * 13},
+            {**VALID_CLIENT, "contrato": "020202"},
             {**VALID_CLIENT, "cnpj_faturamento": "44555666000172"},
             {**VALID_CLIENT, "series_sebrae_fora": ["BRT 100"]},
             {**VALID_CLIENT, "series_sebrae_fora": ["A" * 33]},
@@ -346,6 +356,15 @@ class ClientConfigRouteTests(ClientTestCase):
         self.assertEqual(response.json()["cnpj_faturamento"], "11.222.333/0001-81")
         self.assertEqual(response.json()["cliente_fontes"]["cnpj_faturamento"], "ambiente")
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["cnpj_faturamento"], "")
+
+    def test_a_blank_environment_field_keeps_the_value_already_in_the_file(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(VALID_CLIENT), encoding="utf-8")
+        with patch.dict(os.environ, {"SIMPRESS_CLIENTE_CNPJ_FATURAMENTO": "11.222.333/0001-81"}):
+            response = self.put({"contrato": "20202", "cnpj_faturamento": ""})
+        self.assertEqual(response.status_code, 200, response.text)
+        stored = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(stored["cnpj_faturamento"], VALID_CLIENT["cnpj_faturamento"])
 
     def test_a_failed_reload_does_not_fail_the_save(self):
         self.after_saved.side_effect = RuntimeError("base indisponível")

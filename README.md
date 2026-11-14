@@ -349,7 +349,7 @@ Se o servidor estiver parado, processe a fila diretamente, sem upload HTTP:
 
 O comando usa o importador e a transação existentes. Confira `processadas/<lote>/_resultado.json` com `status: concluido` e o evento com `importacao_automatica_id` no histórico; a contagem do comando também inclui lotes arquivados por falha e não substitui o recibo. Prefira o importador do servidor quando ele estiver ativo, para manter seus dados em memória atualizados. A sincronização das anotações continua usando a pasta compartilhada já configurada e sua fila de pendências; os comandos não publicam planilhas em serviços externos.
 
-Procedimento de exportação e importação: [Exportações de planilhas — UX Simpress + Endpoint Central](https://app.notion.com/p/Exporta-es-de-planilhas-UX-Simpress-Endpoint-Central-3f5922a10077801f99e2e26a4fee14b9). Acione cada exportação uma vez e prossiga; confira Downloads depois das duas ações. Autenticação de dois fatores e bloqueios do navegador podem exigir intervenção do usuário.
+Procedimento de exportação e importação: Exportações de planilhas — UX Simpress + Endpoint Central (página do Notion da equipe (o link não fica no Git; peça ao usuário)). Acione cada exportação uma vez e prossiga; confira Downloads depois das duas ações. Autenticação de dois fatores e bloqueios do navegador podem exigir intervenção do usuário.
 
 Com o servidor local em execução, também é possível colocar os dois arquivos em um lote na pasta `data/state/entrada_automatica/pendentes`. O sistema verifica a fila a cada 10 segundos e usa a mesma validação, comparação, backups, histórico e transação da atualização manual.
 
