@@ -501,7 +501,7 @@ class ContingenciaTests(unittest.TestCase):
         self.assertEqual(logs.output, [
             f"WARNING:domains.ux_ticket_browser:UX ticket: passo Motivo, tentativa {n}/3, RuntimeError" for n in (1, 2, 3)
         ])
-        self.assertNotIn("75.110", str(erro.exception) + "".join(logs.output))
+        self.assertNotIn("11.222", str(erro.exception) + "".join(logs.output))
         self.assertIsNone(erro.exception.__cause__)
 
     def test_c_a_divergent_final_check_repeats_the_whole_preparation(self):
