@@ -357,6 +357,15 @@
     byId("assistente-contador").textContent = `${byId("assistente-texto").value.length} / ${LIMITE}`;
   }
 
+  // Cartões da tela inicial: só preenchem a caixa de mensagem; quem envia é o usuário.
+  function preencherAtalhoAssistente(texto) {
+    const campo = byId("assistente-texto");
+    campo.value = String(texto);
+    contarMensagemAssistente();
+    campo.focus();
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+  }
+
   function mostrarStatusInstrucoes(texto) {
     byId("assistente-instrucoes-status").textContent = texto;
   }
@@ -1381,7 +1390,7 @@
 
   return {
     carregarAssistente, alternarAssistente, minimizarAssistente, maximizarAssistente, voltarConversaAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
-    novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
+    novaConversaAssistente, contarMensagemAssistente, preencherAtalhoAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
     alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
     anexarArquivoAssistente, removerAnexoAssistente,
     alternarHistoricoAssistente, abrirConversaHistoricoAssistente, fecharConversaHistoricoAssistente,

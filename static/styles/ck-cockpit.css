@@ -1735,118 +1735,221 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 
 /* ---------- Assistente ---------- */
 /* Chat flutuante (canto inferior direito, aberto por #btn-assistente no topbar). Fica fora do #main-content, abaixo dos véus (60) e dos avisos. */
-.ck-assist-widget { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 24px)); height: min(640px, calc(100dvh - 96px)); overflow: hidden; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); transform-origin: bottom right; }
+/* Visual "D · Órbita + cartões": tokens próprios do widget; o tema claro usa a paleta C aprovada e o escuro, a D. */
+.ck-assist-widget {
+  --assist-fundo: #f2f3f8; --assist-superficie: #fff; --assist-texto: #23232f; --assist-mudo: #575a69; --assist-borda: #d7d8e2; --assist-borda-suave: #e6e6ed;
+  --assist-acento: #705dc6; --assist-acento-fundo: #edeafb; --assist-hover: #ececf2;
+  --assist-eclipse: #fbfbfe;
+  --assist-eclipse-sombra: 0 0 0 1.5px rgba(112, 93, 198, .5), 0 -6px 34px 6px rgba(145, 132, 217, .42), 0 -24px 100px 30px rgba(145, 132, 217, .22);
+  --assist-eclipse-sombra-max: 0 0 0 1.5px rgba(112, 93, 198, .5), 0 -8px 46px 8px rgba(145, 132, 217, .42), 0 -30px 160px 40px rgba(145, 132, 217, .22);
+  --assist-nevoa: rgba(145, 132, 217, .16);
+  --assist-orbe: radial-gradient(circle at 35% 30%, #fff 0%, #b9b0ea 35%, #705dc6 72%, #34276f 100%);
+  --assist-orbe-brilho: rgba(112, 93, 198, .35);
+  --assist-cartao-borda: #e6e6ed; --assist-cartao-fundo: rgba(255, 255, 255, .82);
+  --assist-cartao-ic-fundo: #edeafb; --assist-cartao-ic-borda: #dcd6f6; --assist-cartao-ic-cor: #5947a9; --assist-cartao-desc: #575a69;
+  --assist-cartao-hover-borda: #b9b0ea; --assist-cartao-hover-sombra: 0 8px 24px rgba(112, 93, 198, .14);
+  --assist-pilula-borda: #d7d8e2; --assist-pilula-fundo: rgba(255, 255, 255, .9);
+  --assist-msg-usuario: #edeafb; --assist-msg-usuario-borda: #d4cdf4;
+  --assist-lateral: #e9eaf2; --assist-lateral-borda: #dcdde6;
+  --assist-nova-borda: #b9b0ea; --assist-nova-fundo: #edeafb; --assist-nova-texto: #4a3b98;
+  position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 24px)); height: min(640px, calc(100dvh - 96px)); overflow: clip; isolation: isolate; background: var(--assist-fundo); color: var(--assist-texto); border: 1px solid var(--assist-borda); border-radius: 20px; box-shadow: var(--sombra-lg); transform-origin: bottom right;
+}
+[data-theme="dark"] .ck-assist-widget {
+  --assist-fundo: #161826; --assist-superficie: #1d2031; --assist-texto: #e9e9ed; --assist-mudo: #9a9dad; --assist-borda: #2f3244; --assist-borda-suave: rgba(255, 255, 255, .08);
+  --assist-acento: #9184d9; --assist-acento-fundo: #2a2550; --assist-hover: rgba(255, 255, 255, .07);
+  --assist-eclipse: #0c0d18;
+  --assist-eclipse-sombra: 0 0 0 1.5px rgba(206, 198, 255, .85), 0 6px 30px 4px rgba(145, 132, 217, .7), 0 20px 110px 30px rgba(112, 93, 198, .35), inset 0 -26px 70px rgba(145, 132, 217, .3);
+  --assist-eclipse-sombra-max: 0 0 0 1.5px rgba(206, 198, 255, .85), 0 8px 46px 6px rgba(145, 132, 217, .7), 0 30px 180px 50px rgba(112, 93, 198, .35), inset 0 -40px 110px rgba(145, 132, 217, .32);
+  --assist-nevoa: rgba(112, 93, 198, .22);
+  --assist-orbe: radial-gradient(circle at 35% 30%, #e8e5fb 0%, #9184d9 38%, #5947a9 72%, #2a2550 100%);
+  --assist-orbe-brilho: rgba(145, 132, 217, .6);
+  --assist-cartao-borda: rgba(255, 255, 255, .1); --assist-cartao-fundo: linear-gradient(180deg, rgba(35, 38, 58, .8), rgba(22, 24, 38, .8));
+  --assist-cartao-ic-fundo: rgba(145, 132, 217, .18); --assist-cartao-ic-borda: rgba(145, 132, 217, .3); --assist-cartao-ic-cor: #c9c1f5; --assist-cartao-desc: #a9acbb;
+  --assist-cartao-hover-borda: rgba(145, 132, 217, .6); --assist-cartao-hover-sombra: 0 0 0 1px rgba(145, 132, 217, .25), 0 10px 26px rgba(112, 93, 198, .28);
+  --assist-pilula-borda: rgba(255, 255, 255, .13); --assist-pilula-fundo: rgba(22, 24, 38, .8);
+  --assist-msg-usuario: rgba(112, 93, 198, .32); --assist-msg-usuario-borda: rgba(145, 132, 217, .35);
+  --assist-lateral: #11121d; --assist-lateral-borda: rgba(255, 255, 255, .06);
+  --assist-nova-borda: rgba(145, 132, 217, .45); --assist-nova-fundo: rgba(112, 93, 198, .18); --assist-nova-texto: #e8e5fb;
+}
 .ck-assist-widget[hidden] { display: none; }
-.ck-assist-widget > :not(.ck-assist__lista) { flex: none; }
-.ck-assist-widget__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
-.ck-assist-widget__acoes { display: flex; align-items: center; gap: 4px; }
+/* Eclipse (arco de luz no alto) e névoa (brilho no pé): decoração atrás do conteúdo. */
+.ck-assist-widget::before, .ck-assist-widget::after { content: ""; position: absolute; left: 50%; border-radius: 50%; pointer-events: none; }
+.ck-assist-widget::before { top: -830px; width: 960px; height: 960px; margin-left: -480px; background: var(--assist-eclipse); box-shadow: var(--assist-eclipse-sombra); }
+.ck-assist-widget::after { bottom: -200px; width: 560px; height: 320px; margin-left: -280px; background: radial-gradient(closest-side, var(--assist-nevoa), transparent); }
+.ck-assist-widget > :not(.ck-sr) { position: relative; z-index: 1; }
+.ck-assist-widget > :not(.ck-assist__lista, .ck-assist__boas-vindas) { flex: none; }
+.ck-assist-widget__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 56px; padding: 0 8px 0 16px; }
+.ck-assist__marca { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ck-assist-widget__titulo { margin: 0; font-size: 15px; font-weight: 600; color: var(--assist-texto); }
+.ck-assist-widget__acoes { display: flex; align-items: center; gap: 2px; }
+.ck-assist-widget__acoes > .ck-btn { width: 40px; height: 40px; border-radius: 10px; color: var(--assist-mudo); }
+.ck-assist-widget__acoes > .ck-btn:hover, .ck-assist__barra > .ck-btn--fantasma:hover { background: var(--assist-hover); color: var(--assist-texto); }
+/* O globo (canvas que reage ao estado: parado, ouvindo, pensando, falando) virou o orbe da marca. */
+.ck-assist__globo { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--assist-orbe); box-shadow: 0 0 14px var(--assist-orbe-brilho); color: #fff; }
 .ck-assist__voltar { align-self: flex-start; margin-bottom: 8px; }
 /* Minimizado: só a barra de título fica à mostra (o aviso de leitor de tela .ck-sr continua no DOM). */
 .ck-assist-widget[data-modo="minimizado"] { height: auto; width: min(280px, calc(100vw - 24px)); }
 .ck-assist-widget[data-modo="minimizado"] > :not(.ck-assist-widget__cab, .ck-sr) { display: none; }
-.ck-assist-widget[data-modo="minimizado"] > .ck-assist-widget__cab { border-bottom: 0; }
+.ck-assist-widget[data-modo="minimizado"]::before, .ck-assist-widget[data-modo="minimizado"]::after { display: none; }
 /* Maximizado: ocupa a tela toda; o conteúdo fica centralizado numa coluna legível. */
 .ck-assist-widget[data-modo="maximizado"] { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; z-index: 60; transform-origin: center; }
-.ck-assist-widget[data-modo="maximizado"] > :not(.ck-assist-widget__cab, .ck-sr) { width: min(960px, calc(100% - 24px)); align-self: center; margin-inline: 0; }
+.ck-assist-widget[data-modo="maximizado"] > :not(.ck-assist-widget__cab, .ck-sr) { width: min(776px, calc(100% - 32px)); align-self: center; margin-inline: 0; }
 .ck-assist-widget[data-modo="maximizado"] > .ck-assist__barra, .ck-assist-widget[data-modo="maximizado"] > .ck-assist__form { padding-inline: 0; }
-.ck-assist-widget__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
 .ck-assist-widget > .ck-assist__lista { flex: 1 1 auto; min-height: 0; }
 #btn-assistente[aria-expanded="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
-.ck-assist__status { flex: 1 1 auto; overflow-wrap: anywhere; }
-.ck-assist__barra { align-items: center; }
-.ck-assist__barra > .ck-btn { align-self: center; }
-.ck-assist__barra > .ck-btn--fantasma { padding-inline: 6px; } /* B4: os quatro atalhos (Nova conversa, Voz, Instruções, Lembretes) cabem numa linha no widget de 420px, sem Lembretes órfão */
-/* B4: o status fica ao lado do globo e os botões descem juntos; com o erro visível, "Tentar novamente" ocupa a própria linha antes dos atalhos. */
-.ck-assist__status { flex-basis: calc(100% - 64px); }
+/* Barra: Nova conversa, Voz, Instruções e Lembretes numa linha; o status (e o erro, quando há) fica na linha de cima. */
+.ck-assist-widget > .ck-assist__barra { align-items: center; gap: 2px 4px; padding: 0 12px; border-bottom: 0; }
+.ck-assist__status { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--assist-mudo); overflow-wrap: anywhere; }
+.ck-assist__barra > .ck-btn { align-self: center; border-radius: 8px; }
+.ck-assist__barra > .ck-btn--fantasma { padding-inline: 8px; color: var(--assist-mudo); }
 .ck-assist__barra > #assistente-tentar:not([hidden]) { flex-basis: 100%; }
 .ck-assist__cancelar-envio[hidden] { display: none; }
-.ck-assist__globo { flex: none; align-self: center; width: 56px; height: 56px; color: var(--cor-destaque); }
-.ck-assist__lista { min-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
-.ck-assist__msg { max-width: min(78ch, 88%); padding: 8px 12px; border-radius: var(--raio-md); border: 1px solid var(--cor-borda-suave); background: var(--cor-superficie); color: var(--cor-texto); align-self: flex-start; }
-.ck-assist__msg--usuario { align-self: flex-end; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque-forte); }
-.ck-assist__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-base); }
-.ck-assist__ferramentas { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+.ck-assist__lista { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 8px 4px; }
+/* Sem mensagens, a lista some e a tela inicial (saudação e cartões) aparece no lugar. */
+.ck-assist__lista:empty { display: none; }
+.ck-assist__lista:not(:empty) ~ .ck-assist__boas-vindas { display: none; }
+.ck-assist__msg { max-width: min(78ch, 88%); padding: 2px 4px; color: var(--assist-texto); align-self: flex-start; }
+.ck-assist__msg--usuario { align-self: flex-end; max-width: 70%; padding: 12px 16px; border: 1px solid var(--assist-msg-usuario-borda); border-radius: 18px 18px 6px 18px; background: var(--assist-msg-usuario); }
+.ck-assist__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-base); line-height: 1.55; }
+.ck-assist__ferramentas { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--assist-mudo); overflow-wrap: anywhere; }
 .ck-assist__arquivos { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
 .ck-assist__arquivos:empty { display: none; }
 .ck-assist__arquivo { max-width: 100%; height: auto; min-height: var(--altura-controle); padding-top: 6px; padding-bottom: 6px; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: 1.25; }
-.ck-assist__pendente { padding: 10px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); border: 1px solid currentColor; }
-.ck-assist__pendente:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-assist__pendente { padding: 12px 14px; border-radius: 14px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); border: 1px solid currentColor; }
+[data-theme="dark"] .ck-assist__pendente { border-color: rgba(241, 189, 85, .4); background: rgba(73, 53, 26, .55); color: var(--assist-texto); }
+[data-theme="dark"] .ck-assist__pendente .ck-det__titulo { color: #f1bd55; }
+.ck-assist__pendente:focus-visible { outline: 2px solid var(--assist-acento); outline-offset: 2px; }
 .ck-assist__pendente .ck-grupo-botoes { margin-top: 8px; }
-.ck-assist__form { display: flex; flex-direction: column; gap: 12px; }
+/* Tela inicial: saudação e seis cartões (os quatro primeiros só preenchem a caixa; Lembretes e Instruções abrem os painéis). */
+.ck-assist__boas-vindas { display: flex; flex-direction: column; align-items: center; min-height: 0; overflow-y: auto; padding: 52px 12px 8px; text-align: center; }
+.ck-assist-widget > .ck-assist__boas-vindas { flex: 1 1 auto; }
+.ck-assist__orbe { display: none; flex: none; width: 56px; height: 56px; margin-bottom: 20px; border-radius: 50%; background: var(--assist-orbe); box-shadow: 0 0 40px var(--assist-orbe-brilho); }
+.ck-assist__saudacao { margin: 0 0 20px; font-size: 22px; font-weight: 600; letter-spacing: -.01em; color: var(--assist-texto); }
+.ck-assist__subtitulo { display: none; margin: 8px 0 32px; font-size: 15px; color: var(--assist-mudo); }
+.ck-assist__atalhos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 776px; }
+.ck-assist__atalho { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-height: 92px; padding: 12px; border: 1px solid var(--assist-cartao-borda); border-radius: 14px; background: var(--assist-cartao-fundo); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--assist-texto); font: inherit; text-align: left; cursor: pointer; }
+.ck-assist__atalho:hover { border-color: var(--assist-cartao-hover-borda); box-shadow: var(--assist-cartao-hover-sombra); }
+.ck-assist__atalho:focus-visible { outline: 2px solid var(--assist-acento); outline-offset: 2px; }
+.ck-assist__atalho-ic { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 1px solid var(--assist-cartao-ic-borda); border-radius: 9px; background: var(--assist-cartao-ic-fundo); color: var(--assist-cartao-ic-cor); }
+.ck-assist__atalho-ic .ck-ico { width: 16px; height: 16px; }
+.ck-assist__atalho-corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ck-assist__atalho-titulo { font-size: 13px; font-weight: 600; color: var(--assist-texto); }
+.ck-assist__atalho-desc { font-size: 11px; line-height: 1.35; color: var(--assist-cartao-desc); }
+/* Caixa de mensagem em pílula: Anexar, texto, Gravar áudio e Enviar na mesma linha. */
+.ck-assist__form { display: flex; flex-direction: column; gap: 8px; }
+.ck-assist__pilula { display: flex; align-items: flex-end; gap: 4px; min-height: 52px; padding: 5px; border: 1px solid var(--assist-pilula-borda); border-radius: 26px; background: var(--assist-pilula-fundo); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.ck-assist__pilula:focus-within { border-color: var(--assist-acento); box-shadow: 0 0 0 3px var(--assist-acento-fundo); }
+.ck-assist__pilula .ck-assist__campo { display: flex; flex: 1 1 auto; min-width: 0; }
+.ck-assist__entrada { width: 100%; min-height: 40px; max-height: 30vh; padding: 10px 4px; border: 0; background: transparent; color: var(--assist-texto); font: inherit; font-size: 14px; line-height: 20px; resize: none; field-sizing: content; }
+.ck-assist__pilula .ck-assist__entrada:focus, .ck-assist__pilula .ck-assist__entrada:focus-visible { outline: none; box-shadow: none; } /* o foco aparece no contorno da pílula (:focus-within) */
+.ck-assist__entrada::placeholder { color: var(--assist-mudo); }
 .ck-assist__campo { width: 100%; }
-.ck-assist__campo textarea { width: 100%; resize: vertical; min-height: 4.5em; max-height: 40vh; }
+.ck-assist__campo textarea { width: 100%; }
+.ck-assist__instrucoes .ck-assist__campo textarea { resize: vertical; min-height: 4.5em; max-height: 40vh; }
 .ck-assist__acoes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 /* Anexar, Gravar áudio e Enviar são só ícone; o nome continua para leitores de tela e no title. */
 .ck-assist__icone { width: var(--altura-controle); padding: 0; justify-content: center; }
-.ck-assist__icone--gravando { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+.ck-assist__pilula .ck-assist__icone { flex: none; width: 40px; height: 40px; border-radius: 50%; color: var(--assist-mudo); }
+.ck-assist__pilula .ck-assist__icone:hover { background: var(--assist-hover); color: var(--assist-texto); }
+.ck-assist__pilula .ck-assist__enviar, .ck-assist__pilula .ck-assist__enviar:hover { border-color: transparent; background: #705dc6; color: #fff; }
+.ck-assist__pilula .ck-assist__enviar:hover { background: #5947a9; }
+.ck-assist__icone--gravando, .ck-assist__pilula .ck-assist__icone--gravando { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
 .ck-assist__icone-rotulo { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.ck-assist__contador { font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
+.ck-assist__rodape { display: flex; justify-content: flex-end; padding-inline: 16px; }
+.ck-assist__contador { font-size: var(--fs-xs); color: var(--assist-mudo); font-variant-numeric: tabular-nums; }
+.ck-assist__rodape .ck-assist__contador { font-size: 11px; }
 .ck-assist__anexos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ck-assist__anexos[hidden], .ck-assist__aviso[hidden] { display: none; }
-.ck-assist__anexos-status:empty { margin: -6px 0; } /* o aviso vazio não ocupa altura (nem a folga entre os itens) */
-.ck-assist__anexo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-assist__anexos-status:empty { margin: -4px 0; } /* o aviso vazio não ocupa altura (nem a folga entre os itens) */
+.ck-assist__anexo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--assist-borda-suave); border-radius: 12px; background: var(--assist-superficie); }
 .ck-assist__anexo-texto { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-ui); }
-.ck-assist__anexo-nome { overflow-wrap: anywhere; color: var(--cor-texto); }
-.ck-assist__anexo-meta { font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+.ck-assist__anexo-nome { overflow-wrap: anywhere; color: var(--assist-texto); }
+.ck-assist__anexo-meta { font-size: var(--fs-xs); color: var(--assist-mudo); }
 .ck-assist__anexo-alerta { font-size: var(--fs-xs); color: var(--cor-alerta-texto); overflow-wrap: anywhere; }
 .ck-assist__anexo .ck-btn { flex: none; }
-.ck-assist__aviso { margin: 0; padding: 8px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-xs); overflow-wrap: anywhere; }
-.ck-assist__instrucoes { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-assist__aviso { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.ck-assist__instrucoes { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--assist-borda-suave); border-radius: 14px; background: var(--assist-superficie); }
 .ck-assist__instrucoes[hidden] { display: none; }
 .ck-assist__instrucoes p { margin: 0; overflow-wrap: anywhere; }
 .ck-assist__instrucoes .ck-det__titulo { margin: 0; }
 .ck-assist__lembretes-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
 .ck-assist__lembretes-lista[hidden], .ck-assist__lembretes p[hidden] { display: none; }
-.ck-assist__lembrete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
-.ck-assist__lembrete-texto { overflow-wrap: anywhere; color: var(--cor-texto); }
-.ck-assist__lembrete--feito .ck-assist__lembrete-texto { text-decoration: line-through; color: var(--cor-texto-mudo); }
+.ck-assist__lembrete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--assist-borda-suave); border-radius: 12px; background: var(--assist-fundo); }
+.ck-assist__lembrete-texto { overflow-wrap: anywhere; color: var(--assist-texto); }
+.ck-assist__lembrete--feito .ck-assist__lembrete-texto { text-decoration: line-through; color: var(--assist-mudo); }
 .ck-assist__lembrete-acoes { flex: none; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .ck-assist__lembretes #assistente-lembretes-status:empty { display: none; }
 .ck-assist__historico-leitura { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
 .ck-assist__historico-leitura[hidden], .ck-assist__historico p[hidden], .ck-assist__historico .ck-assist__voltar[hidden], .ck-assist__historico #assistente-historico-status:empty { display: none; }
 .ck-assist__historico .ck-assist__lembrete-texto { background: none; border: 0; padding: 0; text-align: left; font: inherit; cursor: pointer; }
 .ck-assist__historico .ck-assist__lembrete-texto:hover { text-decoration: underline; }
-.ck-assist__busca { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cor-borda-suave); }
-.ck-assist__interruptor { display: inline-flex; align-items: center; gap: 8px; min-height: var(--altura-controle); font-size: var(--fs-ui); color: var(--cor-texto); cursor: pointer; }
-.ck-assist__interruptor input { flex: none; width: 18px; height: 18px; accent-color: var(--cor-destaque); }
+.ck-assist__busca { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--assist-borda-suave); }
+.ck-assist__interruptor { display: inline-flex; align-items: center; gap: 8px; min-height: var(--altura-controle); font-size: var(--fs-ui); color: var(--assist-texto); cursor: pointer; }
+.ck-assist__interruptor input { flex: none; width: 18px; height: 18px; accent-color: var(--assist-acento); }
 .ck-assist__interruptor input:disabled { cursor: not-allowed; }
 .ck-assist__busca .ck-assist__aviso:empty { display: none; }
 .ck-assist__buscas { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.ck-assist__busca-card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-left: 3px solid var(--cor-destaque); border-radius: var(--raio-md); background: var(--cor-superficie-funda); min-width: 0; }
+.ck-assist__busca-card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--assist-borda-suave); border-left: 3px solid var(--assist-acento); border-radius: 12px; background: var(--assist-superficie); min-width: 0; }
 .ck-assist__busca-card p, .ck-assist__busca-card ul { margin: 0; overflow-wrap: anywhere; }
-.ck-assist__busca-titulo { font-size: var(--fs-xs); font-weight: 600; color: var(--cor-texto-mudo); }
-.ck-assist__busca-resumo { font-size: var(--fs-ui); color: var(--cor-texto); white-space: pre-wrap; }
+.ck-assist__busca-titulo { font-size: var(--fs-xs); font-weight: 600; color: var(--assist-mudo); }
+.ck-assist__busca-resumo { font-size: var(--fs-ui); color: var(--assist-texto); white-space: pre-wrap; }
 .ck-assist__busca-fontes { padding-left: 18px; font-size: var(--fs-xs); }
 .ck-assist__busca-fontes a { color: var(--cor-destaque-texto); text-decoration: underline; overflow-wrap: anywhere; }
-.ck-assist__busca-dominio { color: var(--cor-texto-mudo); }
+.ck-assist__busca-dominio { color: var(--assist-mudo); }
 .ck-assist-widget > .ck-assist__instrucoes { margin-left: 12px; margin-right: 12px; flex: 0 1 auto; min-height: 0; overflow-y: auto; } /* aberto, rola dentro do widget em vez de cortar o campo de mensagem */
 .ck-assist-widget > .ck-assist__instrucoes:not([hidden]) { flex: 1 1 auto; } /* Instruções/Lembretes abertos ocupam o widget; a conversa volta ao fechar */
-.ck-assist-widget > .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__form) { display: none; }
+.ck-assist-widget > .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__boas-vindas, .ck-assist__form) { display: none; }
 .ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
-.ck-assist-widget > .ck-assist__form { padding: 0 12px 12px; }
-.ck-assist-widget > .ck-assist__barra { padding: 8px 12px; flex-wrap: wrap; }
+.ck-assist-widget > .ck-assist__form { padding: 0 12px 10px; }
+/* Expandido em tela larga: lateral de 272px com marca, status e atalhos da conversa; o eclipse fica centrado na coluna principal. */
+@media (min-width: 900px) {
+  .ck-assist-widget[data-modo="maximizado"] { padding-left: 272px; }
+  .ck-assist-widget[data-modo="maximizado"]::before { left: calc(272px + (100% - 272px) / 2); top: -1440px; width: 1640px; height: 1640px; margin-left: -820px; box-shadow: var(--assist-eclipse-sombra-max); }
+  .ck-assist-widget[data-modo="maximizado"]::after { left: calc(272px + (100% - 272px) / 2); bottom: -260px; width: 900px; height: 420px; margin-left: -450px; }
+  .ck-assist-widget[data-modo="maximizado"] > .ck-assist-widget__cab { position: static; justify-content: flex-end; height: 68px; padding: 0 16px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist-widget__acoes { position: relative; z-index: 1; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist-widget__acoes > .ck-btn { width: 44px; height: 44px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__marca { position: absolute; top: 16px; left: 16px; z-index: 2; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__globo { width: 24px; height: 24px; }
+  .ck-assist-widget[data-modo="maximizado"] > .ck-assist__barra { position: absolute; top: 0; bottom: 0; left: 0; z-index: 1; width: 272px; align-self: stretch; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 4px; padding: 64px 12px 16px; background: var(--assist-lateral); border-right: 1px solid var(--assist-lateral-borda); }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__status { flex: none; margin-bottom: 8px; padding: 6px 10px; border-radius: 10px; background: var(--assist-hover); }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > .ck-btn { flex: none; justify-content: flex-start; gap: 10px; width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; font-size: 14px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-nova { border: 1px solid var(--assist-nova-borda); background: var(--assist-nova-fundo); color: var(--assist-nova-texto); font-weight: 500; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-instrucoes-botao { order: 1; margin-top: auto; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-lembretes-botao { order: 2; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-voz { order: 3; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__boas-vindas { padding-top: clamp(24px, 15vh, 150px); }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__orbe, .ck-assist-widget[data-modo="maximizado"] .ck-assist__subtitulo { display: block; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__saudacao { margin: 0; font-size: 34px; letter-spacing: -.02em; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalhos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho { flex-direction: row; align-items: center; gap: 12px; min-height: 86px; padding: 14px; border-radius: 16px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho-ic { width: 36px; height: 36px; border-radius: 10px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho-titulo { font-size: 14px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho-desc { font-size: 12px; }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__pilula { min-height: 60px; padding: 9px; border-radius: 30px; }
+  .ck-assist-widget[data-modo="maximizado"] > .ck-assist__form { padding-bottom: 16px; }
+}
 /* Resumo: abaixo de 600px as seis sub-abas ficam em duas linhas de três, para os rótulos não serem cortados. */
 @media (max-width: 599px) { .resumo-abas { flex-wrap: wrap; } .resumo-aba { flex: 1 1 calc((100% - 4px) / 3); } }
-@media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
-@media (max-width: 599px) { .ck-assist-widget { left: 8px; right: 8px; bottom: 8px; width: auto; height: calc(100dvh - 72px); } }
 @media (max-width: 599px) {
-  /* Telas baixas: globo menor, botões da barra lado a lado (até três por linha) e menos altura mínima, para o Enviar continuar à vista. */
-  .ck-assist__globo { width: 36px; height: 36px; }
-  .ck-assist__status { flex-basis: calc(100% - 52px); }
-  .ck-assist__barra > .ck-btn { flex: 1 1 auto; }
-  /* Com quatro botões (Lembretes entrou) só cabem numa linha sem o ícone e com menos folga lateral; os nomes continuam visíveis. */
-  .ck-assist__barra > .ck-btn { padding-inline: 6px; }
+  /* Celular: o compacto ocupa a tela abaixo dos 64px do topo, onde fica o ícone do robô que o fecha; minimizado continua só a barra de título no pé. */
+  .ck-assist-widget { inset: 64px 0 0; width: auto; height: auto; border-width: 1px 0 0; border-radius: 20px 20px 0 0; }
+  .ck-assist-widget[data-modo="minimizado"] { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; border: 1px solid var(--assist-borda); border-radius: 16px; }
+  .ck-assist__msg { max-width: 100%; }
+  .ck-assist__msg--usuario { max-width: 85%; }
+  /* Botões com pelo menos 40px de altura; na barra, só os nomes (sem ícone) para os quatro caberem numa linha. */
+  .ck-assist__barra > .ck-btn { flex: 1 1 auto; min-height: 40px; padding-inline: 6px; }
   .ck-assist__barra > .ck-btn > .ck-ico { display: none; }
-  .ck-assist__lista { min-height: 120px; }
-  .ck-assist__campo textarea { min-height: 3.5em; }
+  .ck-assist__boas-vindas { padding-top: 32px; }
   .ck-assist__instrucoes { padding: 8px 10px; }
-  /* Sem altura para tudo: editando as instruções, a conversa e a caixa de mensagem esperam; o botão Instruções volta a mostrá-las. */
-  .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__form) { display: none; }
+  .ck-assist__instrucoes .ck-btn--sm { min-height: 40px; }
   .ck-assist__instrucoes textarea { min-height: 3em; max-height: 20vh; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .ck-assist-widget:not([hidden]) { animation: ck-assist-abrir 200ms var(--curva); }
   .ck-assist__cancelar-envio:not([hidden]), .ck-assist__msg, .ck-assist__pendente, .ck-assist__instrucoes, .ck-assist__anexo, .ck-assist__lembrete, .ck-assist__busca-card, .ck-assist__aviso:not([hidden]) { animation: ck-assist-entrada var(--duracao) var(--curva); }
+  .ck-assist__atalho, .ck-assist__pilula { transition: border-color 200ms var(--curva), box-shadow 200ms var(--curva), transform 200ms var(--curva); }
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho:hover { transform: translateY(-1px); }
 }
 @keyframes ck-assist-entrada { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes ck-assist-abrir { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
