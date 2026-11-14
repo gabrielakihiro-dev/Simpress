@@ -54,6 +54,31 @@
   let configuracaoContatoOrigem = null;
   let salvandoContatoOrigem = false;
 
+  // Client data (contract, billing CNPJ) of this installation: blank until config/cliente.json or the environment has it.
+  // The server refuses transfers, UX tickets and Chrome routines while it is blank; the modal below fills it.
+  let dadosClienteAtuais = { contrato: "", cnpj_faturamento: "" };
+  let salvandoCliente = false;
+  let abriuClienteAutomaticamente = false;
+  const FORMATO_CNPJ_CLIENTE = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+
+  function obterDadosCliente() {
+    return { ...dadosClienteAtuais };
+  }
+
+  function aplicarConfiguracaoCliente(config) {
+    const texto = (valor) => (typeof valor === "string" ? valor.trim() : "");
+    dadosClienteAtuais = { contrato: texto(config.contrato), cnpj_faturamento: texto(config.cnpj_faturamento) };
+    const contrato = document.getElementById("stat-contrato");
+    if (contrato) contrato.textContent = dadosClienteAtuais.contrato || "—";
+    const naoConfigurado = config.cliente_configurado === false;
+    document.getElementById("aviso-cliente-config")?.classList.toggle("hidden", !naoConfigurado);
+    // First access: open the form once, unless another dialog is already in front of the user.
+    if (naoConfigurado && !abriuClienteAutomaticamente) {
+      abriuClienteAutomaticamente = true;
+      if (!document.querySelector(".modal-overlay:not(.hidden)")) abrirConfiguracaoCliente();
+    }
+  }
+
   // Fills the pickup contact from the installation defaults, replacing only values the user did not edit.
   function aplicarConfiguracaoTransferencia(config) {
     configuracaoContatoOrigem = config;
@@ -66,6 +91,8 @@
       const input = document.getElementById(origin[inputKey]);
       if (input && (!input.value.trim() || input.value.trim() === anterior)) input.value = normalized;
     });
+    // The answer of the origin contact PUT carries no client fields: leave the client data alone then.
+    if ("cliente_configurado" in config) aplicarConfiguracaoCliente(config);
     const aviso = document.getElementById("aviso-contato-origem");
     if (aviso) {
       const texto = document.getElementById("aviso-contato-origem-texto");
@@ -156,6 +183,119 @@
       status.textContent = error.message || "Não foi possível salvar o contato de origem.";
     } finally {
       salvandoContatoOrigem = false;
+      button.disabled = false;
+      modal.removeAttribute("aria-busy");
+    }
+  }
+
+  async function lerJson(url) {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Falha ao carregar ${url}.`);
+    return response.json();
+  }
+
+  async function abrirConfiguracaoCliente() {
+    if (salvandoCliente) return;
+    const status = document.getElementById("status-cliente-config");
+    status.setAttribute("role", "status");
+    status.textContent = "";
+    let cliente = {};
+    let modeloDisponivel = true;
+    try {
+      const [dadosCliente, transferencia] = await Promise.all([
+        lerJson("/api/config/cliente"), lerJson("/api/config/transferencia"),
+      ]);
+      cliente = dadosCliente;
+      modeloDisponivel = transferencia.modelo_transferencia_disponivel !== false;
+    } catch (error) {
+      console.warn("Não foi possível ler os dados do cliente salvos:", error);
+      status.setAttribute("role", "alert");
+      status.textContent = "Não foi possível ler os dados atuais. Preencha os campos e salve.";
+    }
+    const fontes = cliente.cliente_fontes || {};
+    const campos = [["cliente-config-contrato", "contrato"], ["cliente-config-cnpj", "cnpj_faturamento"]];
+    campos.forEach(([inputId, chave]) => {
+      const input = document.getElementById(inputId);
+      const doAmbiente = fontes[chave] === "ambiente";
+      input.value = typeof cliente[chave] === "string" ? cliente[chave] : "";
+      input.readOnly = doAmbiente;
+      input.required = !doAmbiente;
+      input.setAttribute("aria-required", String(!doAmbiente));
+    });
+    const series = document.getElementById("cliente-config-series");
+    series.value = Array.isArray(cliente.series_sebrae_fora) ? cliente.series_sebrae_fora.join("\n") : "";
+    series.readOnly = fontes.series_sebrae_fora === "ambiente";
+    const algumAmbiente = Object.values(fontes).includes("ambiente");
+    document.getElementById("cliente-config-ambiente")?.classList.toggle("hidden", !algumAmbiente);
+    document.getElementById("cliente-config-modelo-ausente")?.classList.toggle("hidden", modeloDisponivel);
+    const primeiroEditavel = campos.map(([id]) => document.getElementById(id)).find((input) => !input.readOnly);
+    app.abrirModalAcessivel(
+      "modal-cliente-config",
+      primeiroEditavel ? `#${primeiroEditavel.id}` : "#btn-salvar-cliente-config",
+      "fecharConfiguracaoCliente",
+    );
+  }
+
+  function fecharConfiguracaoCliente() {
+    if (!salvandoCliente) app.fecharModalAcessivel("modal-cliente-config");
+  }
+
+  // The model import dialog is a separate modal: close this one first so only one stays in front.
+  function abrirImportacaoModeloTransferencia() {
+    if (salvandoCliente) return;
+    app.fecharModalAcessivel("modal-cliente-config");
+    app.abrirImportacaoModelo("transferencia");
+  }
+
+  async function salvarConfiguracaoCliente() {
+    if (salvandoCliente) return;
+    const modal = document.getElementById("modal-cliente-config");
+    const status = document.getElementById("status-cliente-config");
+    const button = document.getElementById("btn-salvar-cliente-config");
+    const contrato = document.getElementById("cliente-config-contrato");
+    const cnpj = document.getElementById("cliente-config-cnpj");
+    const series = document.getElementById("cliente-config-series");
+    const recusar = (input, mensagem) => {
+      status.setAttribute("role", "alert");
+      status.textContent = mensagem;
+      input.focus();
+    };
+    // Values from the environment stay out of the local file; the server keeps them in front.
+    if (!contrato.readOnly && !/^\d{1,12}$/.test(contrato.value.trim())) {
+      return recusar(contrato, 'Informe o "Contrato" só com números (até 12 dígitos).');
+    }
+    if (!cnpj.readOnly && !FORMATO_CNPJ_CLIENTE.test(cnpj.value.trim())) {
+      return recusar(cnpj, 'Informe o "CNPJ de faturamento" no formato 00.000.000/0000-00.');
+    }
+    const payload = {
+      contrato: contrato.readOnly ? "" : contrato.value.trim(),
+      cnpj_faturamento: cnpj.readOnly ? "" : cnpj.value.trim(),
+      // null keeps the stored list (also when the environment provides it).
+      series_sebrae_fora: series.readOnly ? null : series.value.split(/[\s,;]+/).filter(Boolean),
+    };
+    salvandoCliente = true;
+    button.disabled = true;
+    modal.setAttribute("aria-busy", "true");
+    status.setAttribute("role", "status");
+    status.textContent = "Salvando os dados do cliente…";
+    try {
+      const response = await fetch("/api/config/cliente", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw app.createApiError(result.detail, "Não foi possível salvar os dados do cliente.");
+      aplicarConfiguracaoCliente(result);
+      salvandoCliente = false;
+      app.fecharModalAcessivel("modal-cliente-config");
+      app.showToast("Dados do cliente salvos.", "success");
+      carregarConfiguracaoTransferencia();
+    } catch (error) {
+      status.setAttribute("role", "alert");
+      status.textContent = error.message || "Não foi possível salvar os dados do cliente.";
+    } finally {
+      salvandoCliente = false;
       button.disabled = false;
       modal.removeAttribute("aria-busy");
     }
@@ -558,6 +698,8 @@
   return {
     formatarTelefoneBrasileiro, carregarConfiguracaoTransferencia, entregaAlmocoNaoFecha,
     abrirConfiguracaoContatoOrigem, fecharConfiguracaoContatoOrigem, salvarConfiguracaoContatoOrigem,
+    obterDadosCliente, abrirConfiguracaoCliente, fecharConfiguracaoCliente, salvarConfiguracaoCliente,
+    abrirImportacaoModeloTransferencia,
     atualizarObrigatoriedadeDuracaoPausaEntrega, popularSeletoresRepresentantesRegionais,
     preencherRepresentanteRegional, handleRepresentanteRegionalChange, inicializarMascarasTelefone,
     carregarRepresentantesRegionais, abrirEdicaoRepresentanteRegional, fecharEdicaoRepresentanteRegional,

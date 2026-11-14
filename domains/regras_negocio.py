@@ -2,13 +2,15 @@
 
 O AGENTS.md (raiz) descreve as regras; este módulo é onde elas moram em código. Os demais módulos
 (`inventory_comparison`, `effective_alias`, `coverage`, `sebrae_cruzamento` etc.) chamam estas funções
-em vez de repetir o teste. Sem dependência de outros módulos do projeto, para não criar ciclo.
+em vez de repetir o teste. Só depende de `core.config` (que não importa `domains`), para não criar ciclo.
 """
 
 import math
 import re
 import unicodedata
 from typing import Any, FrozenSet
+
+from core.config import client_own_serials
 
 
 def is_missing_cell_value(value: Any) -> bool:
@@ -27,14 +29,12 @@ def normalize_reference_value(value: Any) -> str:
     return re.sub(r"[^A-Z0-9]", "", without_accents)
 
 
-# Séries de notebooks da própria Sebrae, fora das comparações (AGENTS.md, "Invariantes críticos").
-SERIES_SEBRAE: FrozenSet[str] = frozenset({
-    "BRT100XA01",
-    "BRT100XA02",
-    "BRT200XB0R",
-    "BRT200XB0F",
-    "BRT300XC01",
-})
+# Séries de notebooks da própria Sebrae, fora das comparações (AGENTS.md, "Invariantes críticos"). São dados reais do
+# cliente: vêm de `config/cliente.json` (ou da variável de ambiente) a cada chamada; sem configuração, nenhuma fica fora.
+def series_sebrae() -> FrozenSet[str]:
+    """Séries normalizadas dos notebooks da própria Sebrae, lidas da configuração local."""
+    return frozenset(filter(None, (normalize_reference_value(serie) for serie in client_own_serials())))
+
 
 # Sufixo após `PRNOTE` dos hostnames instalados em Curitiba, sem divergência de localidade.
 PREFIXOS_HOSTNAME_CURITIBA = ("SJP", "RL", "ARC")
@@ -42,7 +42,7 @@ PREFIXOS_HOSTNAME_CURITIBA = ("SJP", "RL", "ARC")
 
 def e_serie_sebrae(serie: Any) -> bool:
     """A série (qualquer caixa, hífen ou espaço) é de um notebook da própria Sebrae."""
-    return normalize_reference_value(serie) in SERIES_SEBRAE
+    return normalize_reference_value(serie) in series_sebrae()
 
 
 def hostname_de_curitiba(hostname: Any) -> bool:

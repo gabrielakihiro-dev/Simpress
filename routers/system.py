@@ -30,7 +30,7 @@ def create_system_router(services: SystemRouteServices) -> Tuple[APIRouter, Syst
 
     @router.get("/api/config/transferencia")
     def get_transfer_form_defaults():
-        """Return the origin contact defaults (environment, then config/contato_origem.json)."""
+        """Return the origin contact defaults (environment, then config/contato_origem.json) and the client data (contract, billing CNPJ, configured flag; environment, then config/cliente.json)."""
         return services.get_transfer_form_defaults()
 
     return router, SystemRouteExports(

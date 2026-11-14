@@ -31,7 +31,6 @@ __pycache__/
 # Operational workbooks and local comparison backups; retain the blank transfer template.
 /planilhas_entrada/*.xlsx
 /planilhas_entrada/**/*.xlsx
-!/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
 /planilhas_entrada/*.xls
 /planilhas_entrada/**/*.xls
 /planilhas_entrada/*.xlsm
@@ -62,7 +61,6 @@ __pycache__/
 /data/migration_conflicts/
 /data/planilhas_entrada/*.xlsx
 /data/planilhas_entrada/**/*.xlsx
-!/data/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
 /data/planilhas_entrada/*.xls
 /data/planilhas_entrada/**/*.xls
 /data/planilhas_entrada/*.xlsm
@@ -174,6 +172,8 @@ __pycache__/
 /config/contato_origem.json
 # Local automation accounts, Dashboard folder and Outlook sender accounts (personal data); only the example is versioned.
 /config/contas_automacao.json
+# Local client data (contract, billing CNPJ, own notebook series); only the example is versioned.
+/config/cliente.json
 # Local per-city edits of the regional representatives (names, e-mails, phones).
 /config/representantes_regionais.json
 

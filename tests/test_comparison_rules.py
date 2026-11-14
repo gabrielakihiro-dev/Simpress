@@ -456,7 +456,7 @@ class InventoryComparisonTests(unittest.TestCase):
     def test_legacy_history_event_without_update_filters_flag_leaves_without_sebrae_series(self):
         # O renderizador não filtra mais as séries do Sebrae: o backend entrega as listas já limpas,
         # inclusive para eventos antigos (sem filtros_atualizacao_aplicados) e para a resposta do envio.
-        sebrae_variants = ["BRT100XA01", "brt100xa02", "BRJ-9435VMR", " BRJ 9435VMF ", "BRT300XC01"]
+        sebrae_variants = ["BRT100XA01", "brt100xa02", "BRT-200XB0R", " BRT 200XB0F ", "BRT300XC01"]
         common_endpoint_item = {"computador": "PRNOTECOMUM01", "serie": "BRJ00000001"}
         common_detail_item = {"computador": "PRMAC-COMUM01", "serie": "BRJ00000002"}
         event = {

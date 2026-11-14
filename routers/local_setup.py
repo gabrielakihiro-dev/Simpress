@@ -8,7 +8,7 @@ import unicodedata
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field, field_validator
@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field, field_validator
 from core.async_workers import await_worker_completion
 from core.config import format_size_limit
 from domains.local_setup import (
-    REGIONAL_REPRESENTATIVE_CITIES, effective_regional_representative_defaults, load_origin_contact, load_regional_representatives,
-    regional_representative_defaults, remove_regional_representative, save_origin_contact, save_regional_representative, validate_local_model,
+    REGIONAL_REPRESENTATIVE_CITIES, effective_regional_representative_defaults, load_client_config, load_origin_contact,
+    load_regional_representatives, regional_representative_defaults, remove_regional_representative, save_client_config,
+    save_origin_contact, save_regional_representative, validate_local_model,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
@@ -47,6 +48,40 @@ class ContatoOrigemPayload(BaseModel):
     @classmethod
     def validate_phone(cls, value: str) -> str:
         return TransferenciaPayload.validate_phone(value)
+
+
+class ClienteConfigPayload(BaseModel):
+    """First-access client data: contract number, billing CNPJ and the client's own notebook series."""
+    contrato: str = Field("", max_length=12)
+    cnpj_faturamento: str = Field("", max_length=18)
+    # None keeps the stored list; a list (possibly empty) replaces it.
+    series_sebrae_fora: Optional[list[str]] = Field(None, max_length=200)
+
+    @field_validator("contrato")
+    @classmethod
+    def validate_contract(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"[1-9]\d{0,11}", value):
+            raise ValueError("Informe o contrato só com números (até 12 dígitos, sem zero à esquerda).")
+        return value
+
+    @field_validator("cnpj_faturamento")
+    @classmethod
+    def validate_cnpj(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", value):
+            raise ValueError("Informe o CNPJ de faturamento no formato 00.000.000/0000-00.")
+        return value
+
+    @field_validator("series_sebrae_fora")
+    @classmethod
+    def validate_series(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        cleaned = list(dict.fromkeys(item.strip().upper() for item in value if item.strip()))
+        if any(not re.fullmatch(r"[A-Z0-9]{1,32}", item) for item in cleaned):
+            raise ValueError("Cada série deve ter só letras e números (até 32 caracteres).")
+        return cleaned
 
 
 def _valid_time(value: str) -> bool:
@@ -111,8 +146,41 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
                               max_upload_bytes: Any, parser_admission: Any, export_dependency_paths: Any,
                               validate_export: Any, origin_contact_file: Any = None,
                               regional_representatives_file: Any = None,
-                              regional_representative_defaults_file: Any = None) -> Any:
+                              regional_representative_defaults_file: Any = None,
+                              client_config_file: Any = None, after_client_config_saved: Any = None) -> Any:
     router = APIRouter()
+
+    def client_config_path() -> Any:
+        if client_config_file is None:
+            raise HTTPException(404, "Configuração dos dados do cliente indisponível.")
+        return client_config_file()
+
+    @router.get("/api/config/cliente")
+    def get_client_config() -> Any:
+        return load_client_config(client_config_path())
+
+    @router.put("/api/config/cliente")
+    def save_client_config_route(payload: ClienteConfigPayload) -> Any:
+        path = client_config_path()
+        # Environment variables win over the file, so their fields may stay blank here.
+        sources = load_client_config(path)["cliente_fontes"]
+        labels = (("contrato", "Contrato"), ("cnpj_faturamento", "CNPJ de faturamento"))
+        missing = next((label for key, label in labels if sources[key] != "ambiente" and not getattr(payload, key)), None)
+        if missing:
+            raise HTTPException(422, f'Preencha o campo "{missing}" dos dados do cliente.')
+        try:
+            # A blank field that comes from the environment keeps what the file already holds (None = keep).
+            kept = {key: getattr(payload, key) or (None if sources[key] == "ambiente" else "") for key, _ in labels}
+            save_client_config(path, kept["contrato"], kept["cnpj_faturamento"], payload.series_sebrae_fora)
+        except (OSError, FileTransactionError, FileBusyError) as error:
+            logger.warning("Falha ao gravar os dados do cliente (erro=%s).", type(error).__name__)
+            raise HTTPException(500, "Não foi possível gravar os dados do cliente.") from error
+        if after_client_config_saved is not None:
+            try:
+                after_client_config_saved()  # the inventory refused every row while the contract was blank
+            except Exception as error:  # noqa: BLE001 - the data is saved; a failed reload only delays the refresh
+                logger.warning("Falha ao recarregar a base após salvar os dados do cliente (erro=%s).", type(error).__name__)
+        return load_client_config(path)
 
     @router.put("/api/config/transferencia/contato-origem")
     def save_transfer_origin_contact(payload: ContatoOrigemPayload) -> Any:
