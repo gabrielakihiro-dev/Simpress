@@ -104,7 +104,7 @@ Pedido do usuário (14/11/2026): tirar os textos explicativos que poluem todas a
 
 ## Status (14/11/2026)
 
-Os quatro blocos estão feitos, em commits empilhados (os quatro estão na história da branch `claude/limpeza-textos-b4`); falta só o push e o PR único (passo 8 do Bloco 4, do maestro).
+Os quatro blocos estão feitos, em commits empilhados (os quatro estão na história da branch `claude/limpeza-textos-b4`); faltam, do maestro, a revisão do diff inteiro (`main...HEAD`) pelo `model-super-power:revisor` (passo 7 do Bloco 4), o push e o PR único (passo 8). O `ponytail:ponytail-review` rodou depois do commit do Bloco 4, e o ajuste que ele pediu (E2E genérico sem a linha de diagnóstico e com o estado vazio da Home conferido) está no commit seguinte.
 
 | Bloco | Commit | Resumo |
 |---|---|---|
