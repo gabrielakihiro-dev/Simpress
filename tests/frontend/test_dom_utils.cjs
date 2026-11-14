@@ -71,6 +71,7 @@ test("infoTipHtml escapa rótulo e texto, gera ids únicos e liga o botão ao ba
   assert.doesNotMatch(primeiro, /<img|<b>/);
   assert.match(primeiro, /^<span class="info-tip"><button type="button" class="info-tip-trigger"/);
   assert.match(segundo, /^<span class="info-tip info-tip--end">/);
+  assert.match(infoTipHtml("Seção", "Texto", { bloco: true }), /^<span class="info-tip info-tip--bloco">/);
 });
 
 test("infoTipHtml com id fixo repete o mesmo markup a cada chamada", () => {

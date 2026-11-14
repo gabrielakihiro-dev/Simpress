@@ -104,7 +104,7 @@ Pedido do usuário (14/11/2026): tirar os textos explicativos que poluem todas a
 
 ## Status (14/11/2026)
 
-Os quatro blocos estão feitos, em commits empilhados (os quatro estão na história da branch `claude/limpeza-textos-b4`); faltam, do maestro, a revisão do diff inteiro (`main...HEAD`) pelo `model-super-power:revisor` (passo 7 do Bloco 4), o push e o PR único (passo 8). O `ponytail:ponytail-review` rodou depois do commit do Bloco 4, e o ajuste que ele pediu (E2E genérico sem a linha de diagnóstico e com o estado vazio da Home conferido) está no commit seguinte.
+Os quatro blocos estão feitos, em commits empilhados (os quatro estão na história da branch `claude/limpeza-textos-b4`); a revisão do diff inteiro (`main...HEAD`) pelo `model-super-power:revisor` (passo 7 do Bloco 4) foi feita, sem achado bloqueante. Depois dela vieram o merge da `main` (`ccddadb`), o ajuste do `tableToolsHost` para títulos com ⓘ (`f0da9ba`) e a correção da rolagem horizontal que o balão escondido do ⓘ criava nos títulos da Comparação a 641-700px (`info-tip--bloco` com `.info-tip-ancora`, teste em `tests/e2e/info-tips-resumo.spec.cjs`). Falta só o push e o PR único (passo 8). O `ponytail:ponytail-review` rodou depois do commit do Bloco 4, e o ajuste que ele pediu (E2E genérico sem a linha de diagnóstico e com o estado vazio da Home conferido) está no commit seguinte.
 
 | Bloco | Commit | Resumo |
 |---|---|---|
