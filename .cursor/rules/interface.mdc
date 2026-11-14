@@ -1,0 +1,9 @@
+---
+description: Regras da interface (frontend/ e static/).
+globs: static/**,frontend/**
+alwaysApply: false
+---
+
+Regras da interface em `frontend/AGENTS.md`. As regras gerais vêm do `AGENTS.md` da raiz, que o Cursor já carrega.
+
+@frontend/AGENTS.md

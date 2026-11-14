@@ -169,7 +169,8 @@
       });
 
       const wrap = table.closest(".comparison-desktop-table");
-      if (wrap && !wrap.previousElementSibling?.classList?.contains("ux-table-tools")) {
+      const host = wrap && tableToolsHost(wrap);
+      if (wrap && (host || !wrap.previousElementSibling?.classList?.contains("ux-table-tools"))) {
         const tools = el("div", "ux-table-tools");
         const copy = el("button", "ux-table-tool", "Copiar tabela");
         copy.type = "button";
@@ -184,8 +185,32 @@
           applyDensity(next);
         });
         tools.append(copy, density);
-        wrap.parentNode.insertBefore(tools, wrap);
+        if (host) {
+          // A barra antiga copiaria a tabela anterior: troca pela nova.
+          Array.from(host.children).filter(child => child.classList?.contains("ux-table-tools")).forEach(child => child.remove());
+          host.classList.add("ux-table-tools-host");
+          host.appendChild(tools);
+        } else {
+          wrap.parentNode.insertBefore(tools, wrap);
+        }
       }
+    }
+
+    // Botões na linha do título da tabela (Resumo F3), sem linha própria entre o título e a tabela.
+    function tableToolsHost(wrap) {
+      const prev = wrap.previousElementSibling;
+      if (prev?.classList?.contains("ux-table-tools-host")) return prev;
+      if (prev?.tagName === "H5") {
+        // Os botões não entram no h5: o nome do título ficaria com o texto deles.
+        const row = el("div", "ux-table-tools-host");
+        wrap.parentNode.insertBefore(row, prev);
+        row.appendChild(prev);
+        return row;
+      }
+      const group = wrap.parentNode;
+      if (!group?.classList?.contains("history-filter-group") || group.children[0] !== wrap) return null;
+      const header = group.previousElementSibling;
+      return header?.tagName === "DIV" && Array.from(header.children).some(child => child.tagName === "H4") ? header : null;
     }
 
     function announceSort(label, direction) {
