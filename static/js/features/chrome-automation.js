@@ -225,6 +225,8 @@
     const tituloShell = document.getElementById("cockpit-automation-shell-title");
     if (estadoShell && tituloShell) {
       estadoShell.dataset.state = ativo ? "occupied" : "idle";
+      // Pulso de "Chrome livre" só depois de um estado real vindo da API (ck-bento.css).
+      estadoShell.dataset.confirmado = "";
       tituloShell.textContent = ativo ? "Chrome ocupado" : "Chrome livre";
       estadoShell.title = ativo ? `${ROTINAS[dados.rotina] || dados.rotina || "Rotina"} em andamento.` : "Chrome livre para uma nova rotina.";
     }
@@ -636,9 +638,12 @@
     return carregarHistoricoAutomacao();
   }
 
+  // Sem consulta viva, o pulso de "Chrome livre" para (ck-bento.css: só com estado real).
+  const semEstadoReal = () => { delete document.getElementById("cockpit-automation-shell-status")?.dataset?.confirmado; };
+
   function agendar() {
     window.clearTimeout(estado.timer);
-    if (!painelVisivel() && !estado.acompanharFim) return;
+    if (!painelVisivel() && !estado.acompanharFim) return semEstadoReal();
     estado.timer = window.setTimeout(atualizarEstadoAutomacao, estado.emAndamento ? POLL_ATIVO_MS : POLL_LIVRE_MS);
   }
 
@@ -722,6 +727,7 @@
       aplicarEstado(dados);
       await carregarAgendamentoDashboard();
     } catch (err) {
+      semEstadoReal();
       console.error("Erro ao consultar a automação:", err);
     } finally {
       agendar();

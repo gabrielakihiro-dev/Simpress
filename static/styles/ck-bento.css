@@ -1,0 +1,233 @@
+/* =====================================================================
+   Visual bento (Bloco 1 de docs/planos/visual-bento.md). Carregado por último em static/index.html.
+   Contrato de movimento: docs/ui-motion/contrato-bento.md. Só opacity/transform em keyframes;
+   todo movimento fica em (prefers-reduced-motion: no-preference). Brilho nunca em linha de tabela.
+   ===================================================================== */
+
+/* ---------- 1. Paleta nova (os dois temas); cores de status não mudam ---------- */
+:root {
+  --cor-fundo: #f4f5fa; --cor-superficie: #ffffff; --cor-superficie-elevada: #ffffff; --cor-superficie-funda: #f8f9fc; --cor-campo: #ffffff;
+  --cor-texto: #0f172a; --cor-texto-forte: #334155; --cor-texto-suave: #475569; --cor-texto-mudo: #5b6577; --cor-texto-sutil: #5b6577; --cor-texto-apagado: #94a3b8;
+  --cor-borda: rgba(15, 23, 42, .10); --cor-borda-suave: rgba(15, 23, 42, .06);
+  --cor-destaque: #4f46e5; --cor-destaque-forte: #4338ca; --cor-destaque-fundo: #eef0fe; --cor-destaque-texto: #312e81;
+  --cor-neutro-fundo: rgba(15, 23, 42, .05);
+  --bento-brilho: .75; --bento-holo: .10; --bento-trilho: rgba(15, 23, 42, .07); --bento-linha: rgba(15, 23, 42, .06);
+  --bento-curva: cubic-bezier(.2, .7, .2, 1);
+}
+:root[data-theme="dark"] {
+  --cor-fundo: #07080d; --cor-superficie: #0b0d15; --cor-superficie-elevada: #0f111a; --cor-superficie-funda: #07080d; --cor-campo: #07080d;
+  --cor-texto: #f8fafc; --cor-texto-forte: #cbd5e1; --cor-texto-suave: #94a3b8; --cor-texto-mudo: #94a3b8; --cor-texto-sutil: #8391a7; --cor-texto-apagado: #64748b;
+  --cor-borda: rgba(255, 255, 255, .10); --cor-borda-suave: rgba(255, 255, 255, .07);
+  --cor-destaque: #818cf8; --cor-destaque-forte: #6366f1; --cor-destaque-fundo: rgba(129, 140, 248, .16); --cor-destaque-texto: #e0e7ff;
+  --cor-neutro-fundo: rgba(255, 255, 255, .06);
+  --bento-brilho: .95; --bento-holo: .14; --bento-trilho: rgba(255, 255, 255, .07); --bento-linha: rgba(255, 255, 255, .08);
+}
+
+/* O Assistente (F9) e o botão dele ficam com a paleta anterior, tema a tema. */
+:is(#assistente-widget, #btn-assistente) {
+  --cor-fundo: #f2f3f8; --cor-superficie: #ffffff; --cor-superficie-elevada: #ffffff; --cor-superficie-funda: #f7f7fb; --cor-campo: #f9f9fc;
+  --cor-texto: #23232f; --cor-texto-forte: #454756; --cor-texto-suave: #575a69; --cor-texto-mudo: #656777; --cor-texto-sutil: #656777; --cor-texto-apagado: #a1a3b0;
+  --cor-borda: #d7d8e2; --cor-borda-suave: #e6e6ed;
+  --cor-destaque: #705dc6; --cor-destaque-forte: #5947a9; --cor-destaque-fundo: #edeafb; --cor-destaque-texto: #34276f;
+  --cor-ok-texto: #087650; --cor-ok-fundo: #e5f5ee; --cor-alerta-texto: #8a5a08; --cor-alerta-fundo: #fff3d7; --cor-erro-texto: #a52d37; --cor-erro-fundo: #fbe8e9;
+  --cor-neutro-texto: #575a69; --cor-neutro-fundo: #ececf2;
+  --cor-veu: rgb(24 24 38 / 32%); --sombra-sm: 0 1px 2px rgb(24 24 38 / 8%); --sombra-lg: 0 16px 40px rgb(24 24 38 / 16%);
+}
+:root[data-theme="dark"] :is(#assistente-widget, #btn-assistente) {
+  --cor-fundo: #161826; --cor-superficie: #1d2031; --cor-superficie-elevada: #23263a; --cor-superficie-funda: #161826; --cor-campo: #23263a;
+  --cor-texto: #e9e9ed; --cor-texto-forte: #dcdde4; --cor-texto-suave: #c3c5d0; --cor-texto-mudo: #9a9dad; --cor-texto-sutil: #969bad; --cor-texto-apagado: #5a5e70;
+  --cor-borda: #2f3244; --cor-borda-suave: #23263a;
+  --cor-destaque: #9184d9; --cor-destaque-forte: #7568c1; --cor-destaque-fundo: #2a2550; --cor-destaque-texto: #e8e5fb;
+  --cor-ok-texto: #60d7a5; --cor-ok-fundo: #193d34; --cor-alerta-texto: #f1bd55; --cor-alerta-fundo: #49351a; --cor-erro-texto: #ff797c; --cor-erro-fundo: #4b262d;
+  --cor-neutro-texto: #b7bac8; --cor-neutro-fundo: #30313c;
+  --cor-veu: rgb(0 0 0 / 48%); --sombra-sm: 0 1px 2px rgb(0 0 0 / 28%); --sombra-lg: 0 16px 40px rgb(0 0 0 / 48%);
+}
+
+/* ---------- 2. Brilho que segue o ponteiro (bento.js grava --mx/--my no cartão) ---------- */
+/* Tudo em :where() (especificidade zero): qualquer position já existente vence (sticky da prévia do Transporte, absolute). */
+:where(.ck-cartao, .ck-kpi):where(:not(#assistente-widget *)) { position: relative; isolation: isolate; }
+:is(.ck-cartao, .ck-kpi):not(#assistente-widget *)::before {
+  content: ""; position: absolute; inset: -1px; z-index: -1; padding: 1px; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac, 129, 140, 248), var(--bento-brilho)), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+}
+:is(.ck-cartao, .ck-kpi):not(#assistente-widget *):hover::before { opacity: 1; }
+/* Pop-ups (ⓘ) de um cartão não ficam presos sob o vizinho. */
+:is(.ck-cartao, .ck-kpi):not(#assistente-widget *):is(:hover, :focus-within) { z-index: 1; }
+
+/* ---------- 3. Abas principais ---------- */
+.ck-aba { border-radius: 10px; color: var(--cor-texto-suave); }
+.ck-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
+.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"] {
+  background: rgba(129, 140, 248, .16); color: var(--cor-destaque-texto);
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, .45), 0 8px 24px -12px rgba(129, 140, 248, .6);
+}
+
+/* ---------- 4. Resumo (F3): barra de ferramentas, sub-abas e entrada do painel ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .ck-barra-ferr { padding: 14px; border-color: var(--cor-borda); border-radius: 18px; box-shadow: none; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn { border-radius: 12px; padding: 0 16px; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn--secundario { background: var(--cor-superficie); border-color: var(--cor-borda); }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn--primario { background: #4f46e5; border-color: #4f46e5; color: #fff; font-weight: 600; }
+:root[data-theme="dark"] .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn--primario { background: #818cf8; border-color: #818cf8; color: #07080d; }
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn:not(:disabled):hover { border-color: rgba(129, 140, 248, .5); }
+
+/* Sub-abas em pílula; a faixa rola sozinha (nunca a página) quando não cabe. */
+/* Como no desenho, a faixa é a mesma em qualquer largura: substitui o molde de duas linhas (abaixo de 768px) e as duas linhas de três (abaixo de 600px) de ck-cockpit.css. */
+.resumo-abas { flex: 0 1 auto; flex-wrap: nowrap; gap: 6px; padding: 2px; overflow-x: auto; scrollbar-width: none; }
+.resumo-abas::-webkit-scrollbar { display: none; }
+.resumo-aba { flex: none; flex-direction: row; gap: 6px; height: 38px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 999px; background: transparent; color: var(--cor-texto-mudo); font-size: 13px; }
+.resumo-aba:hover { background: transparent; color: var(--cor-texto); }
+.resumo-aba[aria-disabled="true"] { border-color: var(--cor-borda-suave); }
+.resumo-aba[aria-selected="true"] { background: var(--cor-superficie); color: var(--cor-texto); border-color: rgba(34, 211, 238, .55); box-shadow: 0 8px 24px -14px rgba(34, 211, 238, .8); }
+@media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
+
+/* ---------- 5. Visão geral em bento: a grade é o próprio painel; os invólucros somem do layout ---------- */
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-content: start;
+}
+.ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
+  & > * { grid-column: 1 / -1; min-width: 0; }
+  & > :is(#comparacao-planilhas-fontes, #comparacao-planilhas-avisos):empty { display: none; }
+  & :is(#comparacao-planilhas-conteudo, #resumo-painel-visao, .ck-bento, #resumo-ativos-secao) { display: contents; }
+  & #comparacao-planilhas-conteudo > *, & #resumo-painel-visao > * { grid-column: 1 / -1; order: 0; min-width: 0; }
+  & .ck-bento > .ck-bento-cartao { grid-column: auto; min-height: 210px; }
+  & .ck-bento > .ck-bento-cartao--grande { grid-column: span 2; grid-row: span 2; }
+  & .ck-regionais { grid-column: span 3; order: 1; }
+}
+@media (max-width: 1023.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    & .ck-bento > .ck-bento-cartao--grande { grid-column: span 2; grid-row: auto; }
+    & .ck-regionais { grid-column: auto; }
+  }
+}
+@media (max-width: 639.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    & .ck-bento > .ck-bento-cartao--grande { grid-column: auto; grid-row: auto; }
+    & .ck-regionais { grid-column: 1 / -1; }
+  }
+}
+
+/* ---------- 6. Cartão bento: moldura de 1px que acende + face com holofote e grade ---------- */
+.ck-bento-cartao { --ac: 129, 140, 248; --tom: #4f46e5; position: relative; isolation: isolate; border-radius: 24px; padding: 1px; background: var(--cor-borda); min-width: 0; }
+.ck-bento-cartao[data-tom="ciano"] { --ac: 34, 211, 238; --tom: #0e7490; }
+.ck-bento-cartao[data-tom="fucsia"] { --ac: 232, 121, 249; --tom: #a21caf; }
+.ck-bento-cartao[data-tom="ambar"] { --ac: 251, 191, 36; --tom: #b45309; }
+.ck-bento-cartao[data-tom="esmeralda"] { --ac: 52, 211, 153; --tom: #047857; }
+:root[data-theme="dark"] .ck-bento-cartao { --tom: #a5b4fc; }
+:root[data-theme="dark"] .ck-bento-cartao[data-tom="ciano"] { --tom: #67e8f9; }
+:root[data-theme="dark"] .ck-bento-cartao[data-tom="fucsia"] { --tom: #f0abfc; }
+:root[data-theme="dark"] .ck-bento-cartao[data-tom="ambar"] { --tom: #fcd34d; }
+:root[data-theme="dark"] .ck-bento-cartao[data-tom="esmeralda"] { --tom: #6ee7b7; }
+.ck-bento-cartao::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac), var(--bento-brilho)), transparent 70%);
+}
+.ck-bento-cartao:hover::before { opacity: 1; }
+.ck-bento-face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; height: 100%; padding: 24px; border-radius: 23px; background: var(--cor-superficie); }
+.ck-bento-face::before, .ck-bento-face::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
+.ck-bento-face::before { background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac), var(--bento-holo)), transparent 65%); }
+.ck-bento-face::after {
+  background-image: linear-gradient(var(--bento-linha) 1px, transparent 1px), linear-gradient(90deg, var(--bento-linha) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), #000, transparent 75%);
+  mask-image: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), #000, transparent 75%);
+}
+.ck-bento-cartao:hover .ck-bento-face::before, .ck-bento-cartao:hover .ck-bento-face::after { opacity: 1; }
+.ck-bento-face > * { position: relative; z-index: 1; }
+.ck-bento-cab { display: flex; align-items: flex-start; gap: 12px; }
+.ck-bento-icone { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: var(--tom); background: rgba(var(--ac), .12); border: 1px solid rgba(var(--ac), .28); }
+.ck-bento-svg { width: 20px; height: 20px; }
+#comparacao-planilhas-conteudo .ck-bento-titulo { flex: 1; min-width: 0; margin: 0; font: 500 14px/1.35 var(--fonte-corpo); color: var(--cor-texto-forte); }
+.ck-bento-abrir { display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; min-height: 44px; margin: -10px -10px 0 0; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--cor-texto-sutil); cursor: pointer; }
+.ck-bento-abrir:hover { color: var(--tom); }
+.ck-bento-abrir:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-bento-num { margin: auto 0 0; font: 600 44px/1 var(--fonte-corpo); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
+.ck-bento-cartao--grande .ck-bento-num { font-size: 64px; }
+.ck-bento-traco { height: 3px; border-radius: 3px; background: var(--bento-trilho); overflow: hidden; }
+.ck-bento-traco > i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--tom); transform-origin: left center; }
+.ck-bento-anelbox { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; margin-top: auto; }
+.ck-bento-anelbox > .ck-bento-num { margin: 0; }
+.ck-bento-espaco { flex: 1; }
+#comparacao-planilhas-conteudo .ck-bento-legenda { margin: 0; font: 500 13px/1.4 var(--fonte-corpo); color: var(--cor-texto-mudo); }
+.ck-bento-anel { position: relative; flex: none; width: 132px; height: 132px; }
+.ck-bento-anel > svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ck-bento-anel > span { position: absolute; inset: 0; display: grid; place-items: center; font: 600 24px/1 var(--fonte-corpo); font-variant-numeric: tabular-nums; color: var(--cor-texto); }
+.ck-bento-anel__trilho { stroke: var(--bento-trilho); }
+.ck-bento-anel__cheio { stroke: var(--tom); }
+
+/* ---------- 7. Ativos por regional no mesmo visual ---------- */
+.ck-regionais.ck-cartao { --ac: 34, 211, 238; --tom: #0e7490; display: flex; flex-direction: column; gap: 14px; padding: 24px; border-color: var(--cor-borda); border-radius: 24px; box-shadow: none; }
+:root[data-theme="dark"] .ck-regionais.ck-cartao { --tom: #67e8f9; }
+.ck-regionais.ck-cartao::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac), var(--bento-holo)), transparent 65%);
+}
+.ck-regionais.ck-cartao:hover::after { opacity: 1; }
+.ck-regionais > .ck-cartao__cab { gap: 12px; min-height: 0; padding: 0; border-bottom: 0; }
+.ck-regionais .ck-cartao__titulo { font: 500 14px/1.35 var(--fonte-corpo); color: var(--cor-texto-forte); }
+.ck-regionais .ck-cartao__meta { font: 500 12px/1.35 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+.ck-regionais__filtros { gap: 8px; padding: 0; }
+.ck-regionais .ck-pilula { gap: 8px; min-height: 36px; height: auto; padding: 0 14px; border: 1px solid var(--cor-borda); border-radius: 999px; color: var(--cor-texto-mudo); font-size: 13px; font-weight: 500; }
+.ck-regionais .ck-pilula:hover { background: transparent; color: var(--cor-texto); }
+.ck-regionais .ck-pilula[aria-pressed="true"] { border-color: rgba(var(--ac), .6); background: rgba(var(--ac), .12); color: var(--cor-texto); box-shadow: none; }
+.ck-regionais .ck-pilula__n { font-weight: 600; color: var(--cor-texto); opacity: 1; }
+#resumo-regionais.ck-barras { gap: 12px; padding: 0; }
+#resumo-regionais.ck-barras:has(> .ck-barra):not([data-estado="carregando"]) { display: flex; }
+#resumo-regionais .ck-barra { grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 56px; gap: 12px; min-height: 0; padding: 0; font: 500 13px/1.35 var(--fonte-corpo); color: var(--cor-texto-forte); }
+#resumo-regionais .ck-barra:hover { background: transparent; }
+#resumo-regionais .ck-barra__nome { color: var(--cor-texto-forte); }
+#resumo-regionais .ck-barra__trilho, #resumo-regionais .ck-barra:hover .ck-barra__trilho { height: 10px; border-radius: 6px; background: var(--bento-trilho); }
+#resumo-regionais .ck-barra__cheio { background: var(--tom); transform-origin: left center; }
+#resumo-regionais .ck-barra__valor { font-weight: 600; color: var(--cor-texto); }
+.ck-regionais__rodape { padding: 0; }
+
+@media (max-width: 639.98px) {
+  .ck-bento-face, .ck-regionais.ck-cartao { padding: 20px; }
+  .ck-bento-num { font-size: 40px; }
+  .ck-bento-cartao--grande .ck-bento-num { font-size: 52px; }
+  .ck-bento-anel { width: 112px; height: 112px; }
+  #resumo-regionais .ck-barra { grid-template-columns: minmax(0, 1fr) 48px; row-gap: 6px; }
+  #resumo-regionais .ck-barra__trilho { grid-column: 1 / -1; grid-row: 2; }
+  .ck-regionais .ck-pilula { min-height: 44px; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-btn { flex: 1 1 100%; min-height: 44px; }
+}
+
+/* ---------- 8. Chrome livre: pulso só depois de um estado real (data-confirmado, chrome-automation.js) ---------- */
+#cockpit-automation-shell-status[data-state="idle"][data-confirmado] .ck-chip__ponto { position: relative; background: #34d399; }
+#cockpit-automation-shell-status[data-state="idle"][data-confirmado] .ck-chip__ponto::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #34d399; opacity: 0; }
+
+/* ---------- 9. Movimento (só sem redução de movimento) ---------- */
+@keyframes ck-bento-entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ck-bento-barra { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes ck-bento-pulsa { 0% { transform: scale(1); opacity: .7; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .ck-ferr-painel:not([hidden]) { animation: ck-bento-entra 700ms var(--bento-curva) backwards; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .ck-barra-ferr { animation: ck-bento-entra 700ms var(--bento-curva) 80ms backwards; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .resumo-abas-barra { animation: ck-bento-entra 700ms var(--bento-curva) 140ms backwards; }
+  .ck-bento-cartao { animation: ck-bento-entra 760ms var(--bento-curva) backwards; }
+  .ck-bento-cartao:nth-child(2) { animation-delay: 80ms; }
+  .ck-bento-cartao:nth-child(3) { animation-delay: 160ms; }
+  .ck-bento-cartao:nth-child(4) { animation-delay: 240ms; }
+  .ck-bento-cartao:nth-child(5) { animation-delay: 320ms; }
+  .ck-bento-cartao:nth-child(6) { animation-delay: 400ms; }
+  .ck-regionais.ck-cartao { animation: ck-bento-entra 760ms var(--bento-curva) 480ms backwards; }
+  #resumo-regionais .ck-barra__cheio { animation: ck-bento-barra 700ms cubic-bezier(.33, 1, .68, 1) 200ms backwards; }
+
+  :is(.ck-cartao, .ck-kpi):not(#assistente-widget *)::before, .ck-bento-cartao::before,
+  .ck-bento-face::before, .ck-bento-face::after, .ck-regionais.ck-cartao::after { transition: opacity 500ms var(--bento-curva); }
+  .ck-aba { transition: background-color 300ms var(--bento-curva), color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva); }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn { transition: transform 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), border-color 300ms var(--bento-curva), background-color 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr .ck-btn:not(:disabled):hover { transform: translateY(-3px); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+  .resumo-aba { transition: color 300ms var(--bento-curva), background-color 300ms var(--bento-curva), border-color 300ms var(--bento-curva), transform 300ms var(--bento-curva); }
+  .resumo-aba:not([aria-disabled="true"]):hover { transform: translateY(-2px); }
+  .ck-regionais .ck-pilula { transition: all 300ms var(--bento-curva); }
+  .ck-bento-icone { transition: transform 500ms var(--bento-curva); }
+  :is(.ck-bento-cartao, .ck-regionais):hover .ck-bento-icone { transform: translateY(-2px) rotate(-6deg); }
+  .ck-bento-abrir { transition: color 300ms var(--bento-curva), transform 300ms var(--bento-curva); }
+  .ck-bento-abrir:hover { transform: translate(3px, -3px); }
+  #cockpit-automation-shell-status[data-state="idle"][data-confirmado] .ck-chip__ponto::after { animation: ck-bento-pulsa 1.6s cubic-bezier(.4, 0, .6, 1) infinite; }
+}

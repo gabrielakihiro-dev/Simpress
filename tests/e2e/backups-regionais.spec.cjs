@@ -94,26 +94,36 @@ test("o botão do sino abre o Resumo direto em Backups, mesmo sem nenhum evento 
   await expect(page.locator("#cockpit-comparison-event")).toBeDisabled();
   await esperarBackupsAberta(page);
   await expect(linha(page, "Cascavel").locator(".ck-badge")).toHaveText("Sem backup disponível");
-  // Sem comparação, as abas que só filtram a comparação ficam desabilitadas e o teclado as pula.
-  for (const chave of ["visao", "apelidos", "usuarios", "sem-acesso"]) await expect(aba(page, chave)).toHaveAttribute("aria-disabled", "true");
-  for (const chave of ["divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
+  // Sem comparação, as abas que só filtram a comparação ficam desabilitadas e o teclado as pula; Visão geral fica habilitada (decisão de 14/11/2026).
+  for (const chave of ["apelidos", "usuarios", "sem-acesso"]) await expect(aba(page, chave)).toHaveAttribute("aria-disabled", "true");
+  for (const chave of ["visao", "divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
   await aba(page, "apelidos").click({ force: true });
   await expect(aba(page, "backups")).toHaveAttribute("aria-selected", "true");
-  await aba(page, "backups").focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(aba(page, "divergencias")).toBeFocused();
-  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("ArrowRight");
-  await expect(aba(page, "backups")).toBeFocused();
-  await page.keyboard.press("Home");
-  await expect(aba(page, "divergencias")).toBeFocused();
-  // Foco numa aba desabilitada (clique): as setas ainda levam a uma habilitada.
-  await aba(page, "apelidos").focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(aba(page, "backups")).toBeFocused();
-  await aba(page, "usuarios").focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(aba(page, "divergencias")).toBeFocused();
+  // Habilitadas: visao, divergencias, backups (circular).
+  // openPanel reaplica Backups depois de carregar comparação e ativos, sem sinal na tela: uma seta dada antes disso é desfeita.
+  // A sequência recomeça de Backups e termina em Visão geral, então repete até a abertura assentar.
+  await expect(async () => {
+    await aba(page, "backups").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(aba(page, "visao")).toBeFocused();
+    await expect(aba(page, "visao")).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowRight");
+    await expect(aba(page, "divergencias")).toBeFocused();
+    await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowRight");
+    await expect(aba(page, "backups")).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(aba(page, "visao")).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(aba(page, "backups")).toBeFocused();
+    // Foco numa aba desabilitada (clique): as setas ainda levam a uma habilitada.
+    await aba(page, "apelidos").focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(aba(page, "backups")).toBeFocused();
+    await aba(page, "usuarios").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(aba(page, "visao")).toBeFocused();
+  }).toPass({ timeout: 15_000 });
 });
 
 test("o botão do sino abre Backups também com outro evento de comparação selecionado", async ({ page }) => {
@@ -167,6 +177,58 @@ test("teclado: End chega em Backups, Home volta à primeira aba e as setas circu
     await page.keyboard.press("ArrowLeft");
     await foco(chave);
   }
+});
+
+// Decisão de 14/11/2026: "Ativos por regional" só existe na Visão geral, como último cartão da grade bento.
+test("com comparação: Ativos por regional fica escondido em Divergências e vira o último cartão da grade na Visão geral", async ({ page }) => {
+  await abrirResumo(page);
+  const ativos = page.locator("#resumo-ativos-secao");
+  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
+  await expect(ativos).toBeHidden();
+
+  await aba(page, "visao").click();
+  await expect(aba(page, "visao")).toHaveAttribute("aria-selected", "true");
+  await expect(ativos).toBeVisible();
+  await expect(page.locator("#resumo-regionais")).toBeVisible();
+  await expect(page.locator(CONTEUDO)).toBeVisible();
+  await expect(page.locator("#resumo-painel-visao .ck-bento-cartao")).toHaveCount(6);
+  // Último na ordem visual: `order` maior que o dos 6 cartões e, na caixa, depois de todos (abaixo ou à direita na mesma linha).
+  await expect.poll(() => page.evaluate(() => {
+    const regional = document.querySelector("#resumo-ativos-secao .ck-regionais");
+    const caixa = regional.getBoundingClientRect();
+    const cartoes = [...document.querySelectorAll("#resumo-painel-visao .ck-bento-cartao")];
+    const painel = document.querySelector('[data-cockpit-tool-panel="comparacao"]');
+    return {
+      grade: getComputedStyle(painel).display,
+      ordemMaior: cartoes.every(cartao => Number(getComputedStyle(regional).order) > Number(getComputedStyle(cartao).order)),
+      depois: cartoes.every(cartao => {
+        const outra = cartao.getBoundingClientRect();
+        return caixa.top > outra.top + 1 || (Math.abs(caixa.top - outra.top) <= 1 && caixa.left > outra.left);
+      }),
+    };
+  })).toEqual({ grade: "grid", ordemMaior: true, depois: true });
+
+  // Voltar a Divergências tira o cartão de novo.
+  await aba(page, "divergencias").click();
+  await expect(ativos).toBeHidden();
+});
+
+test("sem comparação: Visão geral fica habilitada e mostra só Ativos por regional", async ({ page }) => {
+  await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [], total: 0 } }));
+  const erros = [];
+  page.on("pageerror", erro => erros.push(erro.message));
+  await abrirResumo(page);
+  const ativos = page.locator("#resumo-ativos-secao");
+  await expect(aba(page, "visao")).not.toHaveAttribute("aria-disabled", "true");
+  await expect(ativos).toBeHidden(); // abre em Divergências
+
+  await aba(page, "visao").click();
+  await expect(aba(page, "visao")).toHaveAttribute("aria-selected", "true");
+  await expect(ativos).toBeVisible();
+  await expect(page.locator("#resumo-regionais")).toBeVisible();
+  await expect(page.locator(CONTEUDO)).toBeHidden();
+  await expect(page.locator(".ck-bento-cartao")).toHaveCount(0);
+  expect(erros).toEqual([]);
 });
 
 test("confirmar e desfazer atualizam a linha, o cartão do sino e o selo da aba", async ({ page }) => {
@@ -386,7 +448,7 @@ for (const tema of ["light", "dark"]) {
 }
 
 for (const reduzir of [true, false]) {
-  test(`${reduzir ? "movimento reduzido" : "movimento normal"}: transições e animações da sub-aba e do cartão ${reduzir ? "≤ 1 ms" : "≤ 300 ms"}`, async ({ page }) => {
+  test(`${reduzir ? "movimento reduzido" : "movimento normal"}: transições e animações da sub-aba e do cartão ${reduzir ? "≤ 1 ms" : "≤ 300 ms (brilho do cartão ≤ 500 ms)"}`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: reduzir ? "reduce" : "no-preference" });
     await page.goto("/");
     await abrirSino(page);
@@ -410,7 +472,9 @@ for (const reduzir of [true, false]) {
     resultado = { total: resultado.total + painel.total, estilos: [...resultado.estilos, ...painel.estilos], emCurso: [...resultado.emCurso, ...painel.emCurso] };
     expect(resultado.total).toBeGreaterThan(20); // cartão + aba + painel de fato medidos
     const limite = reduzir ? 0.001 : 0.3;
-    expect(resultado.estilos.filter(item => item.transicao > limite || item.animacao > limite)).toEqual([]);
+    // Contrato bento (docs/ui-motion/contrato-bento.md): o brilho do cartão (::before e ::after) aparece em 500 ms; o resto segue em 300 ms.
+    const limiteDe = item => (!reduzir && item.no.includes("::") ? 0.5 : limite);
+    expect(resultado.estilos.filter(item => item.transicao > limiteDe(item) || item.animacao > limiteDe(item))).toEqual([]);
     expect(resultado.emCurso.filter(item => item.ms > limite * 1000)).toEqual([]);
     if (!reduzir) {
       // Sem a preferência há movimento: o teste não pode passar por não medir nada.

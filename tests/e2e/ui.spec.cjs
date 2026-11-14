@@ -340,7 +340,7 @@ test("comparison summary cards jump to their section and clear filters that hide
   await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
   const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
   await expect(heading).toBeHidden();
-  // Os cartões ficam numa faixa no topo da sub-aba da própria seção (Apelidos); Visão geral não tem cartões.
+  // Os cartões ficam numa faixa no topo da sub-aba da própria seção (Apelidos); a Visão geral tem a grade bento (sem data-metric-tone).
   await dialog.locator("#resumo-aba-visao").click();
   await expect(dialog.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
   await dialog.locator("#resumo-aba-apelidos").click();
@@ -534,7 +534,7 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
     await annotation.focus();
     // Dentro do Resumo vale o anel do Cockpit (2px, cor de destaque), igual aos demais controles do shell; no tema claro theme.css mantém a cor `--focus-color`.
     await expect(annotation).toHaveCSS("outline-width", "2px");
-    await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(145, 132, 217)");
+    await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(129, 140, 248)"); // escuro: --cor-destaque da paleta bento
   }
 });
 
@@ -673,6 +673,11 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await openSidebarIfNeeded(page);
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
+  // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026).
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
+  await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
+  await page.locator("#resumo-aba-visao").click();
+  await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#resumo-regionais")).toBeVisible();
   await expect(page.locator("#tab-resumo")).toHaveCount(0);
 

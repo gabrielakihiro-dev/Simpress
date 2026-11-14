@@ -22,6 +22,25 @@ const comparison = {
   },
 };
 
+// openPanel recarrega a comparação e o render volta a Divergências: só depois do estado final o clique na Visão geral é estável.
+async function abrirVisaoGeral(page) {
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
+  await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
+  await page.locator("#resumo-aba-visao").click();
+  await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+}
+
+// O bento anima a entrada dos blocos (opacity 0→1, 700 ms): o Axe só mede contraste com a animação concluída.
+// Só espera animações finitas em curso e desiste em 3 s (uma animação pausada nunca resolve `finished`).
+async function esperarAnimacoes(page) {
+  await page.evaluate(() => Promise.race([
+    Promise.all(document.getAnimations()
+      .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
+      .map(item => item.finished.catch(() => undefined))),
+    new Promise(resolve => setTimeout(resolve, 3000)),
+  ]));
+}
+
 async function mockComparison(page) {
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [comparison] } }));
   await page.route("**/api/historico-comparacoes/review-comparison", route => route.fulfill({ json: { evento: comparison } }));
@@ -98,6 +117,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
     await openTool(page, id);
     for (const theme of ["dark", "light"]) {
       await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+      await esperarAnimacoes(page);
       const selector = `[data-cockpit-tool-panel="${tool}"]`;
       const audit = await new AxeBuilder({ page }).include(selector).analyze();
       expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), `${tool} ${theme}`).toEqual([]);
@@ -505,6 +525,8 @@ test("Resumo mostra Ativos por regional com filtros por categoria ao abrir, sem 
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
+  // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026); o Resumo abre em Divergências.
+  await abrirVisaoGeral(page);
   await expect(painel.getByRole("heading", { name: "Ativos por regional" })).toBeVisible();
   await expect(painel.getByRole("heading", { name: "Total de ativos" })).toHaveCount(0);
   await expect(page.locator("#resumo-total-ativos")).toHaveCount(0);
@@ -525,8 +547,15 @@ test("Resumo passa pela auditoria de acessibilidade", async ({ page }) => {
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
+  await esperarAnimacoes(page);
   const results = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(results.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
+  // O cartão "Ativos por regional" só fica visível na Visão geral: a auditoria também passa por lá.
+  await abrirVisaoGeral(page);
+  await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
+  await esperarAnimacoes(page);
+  const visao = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+  expect(visao.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
   const nav = await new AxeBuilder({ page }).include("#ck-abas").withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(nav.violations.map(v => v.id)).toEqual([]);
 });

@@ -98,7 +98,7 @@ function criarNavegacao(linhas) {
   const content = { querySelectorAll: seletor => (seletor.includes("data-comparison-category") ? linhas : []), querySelector: () => null };
   const revealed = [];
   // querySelectorAll: selecionarAbaResumo (chamada antes de rolar até a linha) procura os painéis das sub-abas.
-  globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), querySelectorAll: () => [] };
+  globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), querySelectorAll: () => [], dispatchEvent: () => true };
   globalThis.window = { matchMedia: () => ({ matches: true }) };
   const api = createComparisonResult({
     app: {}, appState: {}, motion: { reveal: row => revealed.push(row) }, dom, historyFormat,

@@ -12,7 +12,7 @@ description: Ajustes visuais pontuais na interface do Simpress com prints antes/
 - Direção visual: escura e coordenada, tão escura quanto possível, sem contrariar o artefato aprovado; distinga posição, quebra de linha e espaço vertical.
 - Use os tokens de cor existentes; não introduza cores soltas. Não remova `!important` mecanicamente: corrija a causa.
 - Para telas novas, escreva ou atualize a especificação antes. Se o usuário disser "Exclua o JavaScript por enquanto", fique em HTML/CSS.
-- Animações sutis (150–300 ms) e com suporte a `prefers-reduced-motion`.
+- Animações seguem o contrato bento (`docs/ui-motion/contrato-bento.md`), com suporte a `prefers-reduced-motion`.
 - Em telas menores, tabelas viram cards com os mesmos dados e ações; o desktop mantém a tabela.
 - Textos visíveis seguem o `AGENTS.md` (por exemplo `Planilha Exportada com Sucesso!`, `No Endpoint`, `na Simpress`).
 

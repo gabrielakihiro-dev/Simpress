@@ -442,6 +442,52 @@
     return `<button type="button" class="comparison-metric-link rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${numero.toLocaleString("pt-BR")}. Ir para ${secao.titulo}`)}">${conteudo}</button>`;
   }
 
+  // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.js
+  // anima do zero até eles e aplica as larguras de data-bento-largura (CSP: nada de style= no HTML).
+  const ICONES_BENTO = {
+    notebook: '<rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M2 20h20"></path>',
+    link: '<path d="M9 17H7a5 5 0 0 1 0-10h2M15 7h2a5 5 0 0 1 4 8M8 12h4M3 3l18 18"></path>',
+    predio: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M8 7h4M8 11h4M8 15h4M2 21h20"></path>',
+    local: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle>',
+    copia: '<rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>',
+    etiqueta: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"></path><path d="M7.5 7.5h.01"></path>',
+  };
+  const svgBento = corpo => `<svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${corpo}</svg>`;
+
+  function cartaoBento({ rotulo, valor, tom, icone, chaveSecao = "", extra = "", grande = false }) {
+    const numero = Number(valor || 0);
+    const texto = numero.toLocaleString("pt-BR");
+    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
+    const abrir = secao && numero > 0
+      ? `<button type="button" class="ck-bento-abrir" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${texto}. Ir para ${secao.titulo}`)}">${svgBento('<path d="M7 17 17 7M9 7h8v8"></path>')}</button>`
+      : "";
+    return `<article class="ck-bento-cartao${grande ? " ck-bento-cartao--grande" : ""}" data-tom="${tom}" data-bento-cartao>
+          <div class="ck-bento-face">
+            <div class="ck-bento-cab"><span class="ck-bento-icone">${svgBento(ICONES_BENTO[icone])}</span><h4 class="ck-bento-titulo">${escapeHtml(rotulo)}</h4>${abrir}</div>
+            ${grande ? extra.replace("%NUM%", `<p class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>`) : `<p class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>${extra}`}
+          </div>
+        </article>`;
+  }
+
+  function cartoesBentoVisao(comparison, contagens) {
+    const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
+    const { endpoint, simpress, local, duplicidades, series } = contagens;
+    const maximo = Math.max(endpoint, simpress, local, duplicidades, series, 1);
+    const traco = valor => `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${((valor / maximo) * 100).toFixed(1)}"></i></div>`;
+    // Decisão de 14/11/2026: anel = (total_endpoint − "Sem correspondência — na Simpress") / total_endpoint.
+    const fracao = comparados > 0 ? Math.min(1, Math.max(0, (comparados - simpress) / comparados)) : 0;
+    const pct = Math.floor(fracao * 100); // floor: 998 de 1000 não vira "100%"
+    const anel = `<div class="ck-bento-anelbox">%NUM%<span class="ck-bento-espaco"></span><div class="ck-bento-anel"><svg viewBox="0 0 120 120" aria-hidden="true" focusable="false"><circle class="ck-bento-anel__trilho" cx="60" cy="60" r="52" fill="none" stroke-width="10"></circle><circle class="ck-bento-anel__cheio" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.73" data-bento-anel="${fracao.toFixed(4)}"></circle></svg><span data-bento-contar="${pct}" data-bento-sufixo="%">${pct}%</span></div></div><p class="ck-bento-legenda">com correspondência nas duas bases</p>`;
+    return `<div class="ck-bento" role="group" aria-label="Contadores de Visão geral">
+        ${cartaoBento({ rotulo: "Notebooks comparados", valor: comparados, tom: "indigo", icone: "notebook", extra: anel, grande: true })}
+        ${cartaoBento({ rotulo: "Sem correspondência — no endpoint", valor: endpoint, tom: "ciano", icone: "link", chaveSecao: "ausentes_no_endpoint", extra: traco(endpoint) })}
+        ${cartaoBento({ rotulo: "Sem correspondência — na Simpress", valor: simpress, tom: "fucsia", icone: "predio", chaveSecao: "ausentes_em_detalhes", extra: traco(simpress) })}
+        ${cartaoBento({ rotulo: "Divergências de local", valor: local, tom: "ambar", icone: "local", chaveSecao: "divergencias_local", extra: traco(local) })}
+        ${cartaoBento({ rotulo: "Duplicidades e ambiguidades", valor: duplicidades, tom: "esmeralda", icone: "copia", chaveSecao: "correspondencias_ambiguas", extra: traco(duplicidades) })}
+        ${cartaoBento({ rotulo: "Séries sem mapeamento", valor: series, tom: "indigo", icone: "etiqueta", chaveSecao: "series_sem_mapeamento", extra: traco(series) })}
+      </div>`;
+  }
+
   function conteudoAnotacoesSincronizadas(comparison, colunas) {
     const barra = barraFiltrosHistorico(comparison);
     const anotacoesSincronizadasRows = linhasAnotacoesSincronizadas(comparison.anotacoes_sincronizadas || [], colunas);
@@ -654,6 +700,10 @@
         ${Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
         ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
         : ""}
+        ${cartoesBentoVisao(comparison, {
+          endpoint: ausentesEndpoint.length, simpress: ausentesDetalhes.length, local: divergenciasLocal.length,
+          duplicidades: ambiguityRows.length, series: seriesSemMapa.length,
+        })}
         `, true)}
         ${painelResumo("divergencias", `
         <section class="space-y-2" data-history-filter-section>
