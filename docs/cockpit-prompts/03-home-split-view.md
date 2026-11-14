@@ -236,7 +236,7 @@ Pedido e autorização do usuário em 09/11/2026: montar na Home os e-mails repe
 - Campos: `Modelo`, `Nome do modelo`, `Enviar de`, `Para`, `Cc`, `Assunto`, `Nome da pessoa`, `Setor`, `Mensagem`.
 - Ações de modelo: `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão`. Modelo da semente: `Modelo 1 - Cabo`.
 - Ações do e-mail: `Abrir no Outlook`, `Enviar pelo Outlook`, `Copiar Texto`, `Cancelar`.
-- Ajudas: `Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.` e `As alterações no modelo são salvas automaticamente.`
+- Ajudas (ⓘ desde 14/11/2026, plano de limpeza dos textos): `Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.` é o balão `#email-ajuda-marcadores`, do ⓘ `Sobre os marcadores` ao lado do rótulo `Mensagem`; `As alterações no modelo são salvas automaticamente.` é o balão `#email-ajuda-autosave`, do ⓘ `Sobre E-mail pelo Outlook` ao lado do título (`span#titulo-email-outlook`, que nomeia o diálogo sem o balão). Nenhuma das duas fica visível sem o ⓘ; o `aria-describedby` de cada ⓘ aponta para o balão.
 - Confirmação do envio: título `Enviar o e-mail pelo Outlook?`; texto `O e-mail será enviado de <conta> para <Para>, com cópia para <Cc>. Depois de enviado, não há como desfazer.`; botões `Enviar` / `Cancelar`. O trecho `, com cópia para <Cc>` só aparece se o Cc tiver conteúdo (só `;` e espaços não contam); sem Cc, vale o texto sem esse trecho (`O e-mail será enviado de <conta> para <Para>. Depois de enviado, não há como desfazer.`). Decisão do usuário, 10/11/2026.
 - Excluir modelo: título `Excluir o modelo?`; texto `O modelo <nome> será excluído deste site. Não há como desfazer.`; botões `Excluir` / `Cancelar`.
 - Restaurar padrão: título `Restaurar o padrão?`; texto `Para, Cc, Assunto, Mensagem e conta do Modelo 1 - Cabo voltam ao texto original.`; botões `Restaurar` / `Cancelar`.
@@ -288,3 +288,16 @@ Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a part
 ### Verificação
 
 - `npm run verify` (inclui `tests/test_equipment_dossier.py`) e `npm run test:ui:e2e` (`tests/e2e/dossie-equipamento.spec.cjs`: abrir, trocar de série rapidamente, foco e teclado, temas claro e escuro, tela estreita).
+
+## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4): o texto que só explica sai da tela e fica num ⓘ (`.info-tip`), aberto por mouse, foco ou toque; `Esc` fecha. Componente, helper, modificadores `info-tip--end` e `info-tip--bloco` e o E2E genérico: `docs/cockpit-prompts/14-cockpit-v2.md`.
+
+- Home sem equipamento: `#home-detail-empty` diz só `Selecione um equipamento.` O aviso `Esc fecha` (`span.ck-ac__dica`) saiu por redundante (regra C).
+- PowerShell no Endpoint: o título `Códigos prontos: título, modo e comando de uma linha.` virou `Códigos prontos` (`span#powershell-codigos-titulo`, mantido para o `aria-labelledby`) mais o ⓘ `Sobre Códigos prontos` (`info-tip--end`), cujo balão `#powershell-codigos-dica` guarda a frase antiga. A nota fixa `O comando só é inserido no prompt. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome.` e o aviso `O comando foi inserido no prompt, mas NÃO foi executado...` continuam visíveis e exatos (invariante do projeto).
+- E-mail pelo Outlook: as duas ajudas viraram ⓘ (ver "Ajudas" acima); o título e o rótulo `Mensagem` ficam fora do botão do ⓘ.
+- Pesquisa completa (`static/js/features/full-equipment-search.js`): sem equipamento, a linha vazia diz `Nenhum equipamento a listar.`
+- Modal `Atualizar planilhas`: o parágrafo da caixa `Baixar o Histórico de Planilhas automaticamente.` virou o ⓘ `Sobre o download automático` (`#auto-export-history-dica`) ao lado do rótulo; a caixa agora é `div.ckp-nota`, com o `label` só no texto em negrito, e o `input` mantém o `id`.
+- Modais de configuração (`#modal-importar-modelo`, `#modal-cliente-config`, contato de origem, representante regional, editar equipamento): ver `docs/cockpit-prompts/11-modais-ajustes-finais.md`.
+- Visível de propósito (regras E e D): a nota do PowerShell, `Campos bloqueados.` (cabeçalho curto, com o ⓘ explicando as variáveis de ambiente), `#upload-impacto-aviso` (substituição irreversível do modelo), `#cliente-config-modelo-ausente`, os avisos `#aviso-*`, os estados e as mensagens de erro.
+- Testes: `tests/e2e/info-tips-todos.spec.cjs` cobre Home com e sem equipamento, PowerShell, modal `E-mail pelo Outlook`, `Atualizar planilhas` e os modais de configuração; os testes de e-mail existentes (`outlook-email.spec.cjs`, `test_outlook_email_ui.cjs`) não liam o texto das ajudas e seguem verdes.

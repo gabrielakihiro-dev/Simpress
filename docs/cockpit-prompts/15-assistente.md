@@ -329,3 +329,7 @@ O Assistente é o chat flutuante do Cockpit (F9) que responde sobre dados do Sim
 - Regra permanente (03/11/2026): toda mudança de funcionalidade mantém o Assistente alinhado (ferramentas, descrições, cartão de confirmação, máscara de dados e esta seção) e testado de verdade: `tests/test_assistant*.py` com cliente falso e, além deles, peça a mudança ao assistente real no servidor local e confira o resultado na tela (mesma exigência em "Documentação de mudanças em qualquer aba").
 
 Detalhes (catálogo de ferramentas, limites numéricos, painel, "Limites conhecidos" com o item de roteamento não corrigido): `docs/cockpit-prompts/15-assistente.md`; rotas: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Assistente (IA própria via OpenRouter)".
+
+## ⓘ dos títulos do painel (Bloco 4 da limpeza de textos, 14/11/2026)
+
+Só apresentação, sem mudança de ferramenta, rota, máscara nem texto do prompt. Os ⓘ de `Instruções permanentes`, `Lembretes e notas`, `Histórico de conversas` e `Busca na web` passaram a `info-tip--bloco` (balão ancorado no bloco do título, com a largura dele) porque o widget do Assistente corta o que passa da borda (`overflow: hidden`); `ck-cockpit.css` marca `.ck-assist .ck-det__titulo` e `.ck-assist__busca > div` como `position: relative`. O E2E `tests/e2e/info-tips-todos.spec.cjs` abre o Assistente e confere cada balão inteiro dentro da janela e por cima. Componente: `docs/cockpit-prompts/14-cockpit-v2.md`.

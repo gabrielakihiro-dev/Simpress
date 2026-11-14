@@ -61,9 +61,10 @@
     modal.dataset.tipo = tipo;
     document.getElementById("titulo-importar-modelo").textContent = tipo === "transferencia"
       ? "Arquivos para transferência" : "Arquivos para exportação";
-    document.getElementById("descricao-importar-modelo").textContent = tipo === "transferencia"
+    document.getElementById("descricao-importar-modelo").textContent = (tipo === "transferencia"
       ? "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo oficial de transferência da Simpress."
-      : "Importe a planilha do modelo de exportação que atualiza os apelidos/hostnames.";
+      : "Importe a planilha do modelo de exportação que atualiza os apelidos/hostnames.")
+      + " Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.";
     const modelFile = document.getElementById("arquivo-modelo-local");
     modelFile.value = "";
     redesenharSeletorArquivo(modelFile);
