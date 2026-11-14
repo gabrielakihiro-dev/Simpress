@@ -1,6 +1,6 @@
 # 19. Configuração local pelo site (Prontidão da base)
 
-Especificação aprovada para implementar, de 14/11/2026. Ainda **não implementada**: a Fase 3 depende do merge da branch `claude/dados-reais-config-local-19c87f`, que cria `config/cliente.json` e mexe em `core/config.py` e `domains/local_setup.py`.
+Especificação de 14/11/2026. A branch `dados-reais-config` (que criou `config/cliente.json`) já foi mesclada no `main`.
 
 ## Objetivo
 
@@ -64,15 +64,13 @@ Regras:
 
 ### Seção 2: Dados do cliente (`config/cliente.json`)
 
-Usa o arquivo e o leitor criados pela branch `dados-reais-config`, sem duplicar.
+Reaproveita o que já existe: `GET` e `PUT /api/config/cliente` (`routers/local_setup.py`, `load_client_config` e `save_client_config` em `domains/local_setup.py`). Nada é duplicado; o modal só chama essas rotas.
 
 | Campo | Validação |
 |---|---|
-| Contrato | só dígitos, de 1 a 10 |
-| CNPJ de faturamento | 14 dígitos com dígito verificador válido; mostrado com máscara `00.000.000/0000-00` |
-| Séries do Sebrae fora das comparações | lista, uma por linha; letras e dígitos maiúsculos |
-
-O cabeçalho do painel ("Contrato 16467") passa a ler este arquivo.
+| Contrato | só dígitos, até 12, sem zero à esquerda (já existe) |
+| CNPJ de faturamento | formato `00.000.000/0000-00` (já existe) e, novo, dígito verificador válido |
+| Séries do Sebrae fora das comparações | lista, uma por linha; letras e dígitos maiúsculos (já existe) |
 
 ### Seção 3: Assistente com IA (`.env`)
 
@@ -108,7 +106,7 @@ Todos os endpoints exigem o cookie `simpress_sessao_<porta>` (401 sem ele).
 |---|---|
 | `GET /api/config/local` | status de cada seção; e-mails e usuário voltam inteiros (são do próprio usuário, na máquina dele); chaves só como `configurada` e `final` |
 | `PUT /api/config/local/contas` | grava `config/contas_automacao.json` |
-| `PUT /api/config/local/cliente` | grava `config/cliente.json` |
+| `GET` e `PUT /api/config/cliente` (já existem) | lê e grava `config/cliente.json` |
 | `PUT /api/config/local/assistente` | grava as chaves no `.env`; corpo vazio numa chave mantém o valor |
 | `DELETE /api/config/local/assistente/{chave}` | remove a chave do `.env` |
 
