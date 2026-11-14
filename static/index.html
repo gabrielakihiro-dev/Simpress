@@ -702,6 +702,11 @@
       <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
       <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
       <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
+      <nav id="assistente-lateral-conversas" class="ck-assist__conversas" aria-label="Conversas guardadas">
+        <p class="ck-assist__conversas-titulo" aria-hidden="true">Conversas</p>
+        <ul id="assistente-lateral-conversas-lista" class="ck-assist__conversas-lista" hidden></ul>
+        <p id="assistente-lateral-conversas-vazio" class="ck-assist__conversas-vazio">Nenhuma conversa guardada.</p>
+      </nav>
       <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
       <button type="button" id="assistente-instrucoes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarInstrucoesAssistente" aria-expanded="false" aria-controls="assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Instruções</button>
       <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
