@@ -55,6 +55,9 @@
   <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
   <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
   <symbol id="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
   <symbol id="i-alerta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
   <symbol id="i-erro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
@@ -684,7 +687,10 @@
 
   <section id="assistente-widget" class="ck-assist ck-assist-widget" role="dialog" aria-modal="false" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
     <div class="ck-assist-widget__cab">
-      <h2 id="assistente-heading" class="ck-assist-widget__titulo">Assistente</h2>
+      <div class="ck-assist__marca">
+        <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
+        <h2 id="assistente-heading" class="ck-assist-widget__titulo">Assistente</h2>
+      </div>
       <div class="ck-assist-widget__acoes">
         <button type="button" id="assistente-historico-botao" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Histórico de conversas" title="Histórico de conversas" aria-expanded="false" aria-controls="assistente-historico" data-on-click="alternarHistoricoAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg></button>
         <button type="button" id="assistente-minimizar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Minimizar Assistente" title="Minimizar" aria-expanded="true" data-on-click="minimizarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-minus"></use></svg></button>
@@ -693,10 +699,14 @@
       </div>
     </div>
     <div class="ck-barra-ferr ck-assist__barra">
-      <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
       <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
       <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
       <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
+      <nav id="assistente-lateral-conversas" class="ck-assist__conversas" aria-label="Conversas guardadas">
+        <p class="ck-assist__conversas-titulo" aria-hidden="true">Conversas</p>
+        <ul id="assistente-lateral-conversas-lista" class="ck-assist__conversas-lista" hidden></ul>
+        <p id="assistente-lateral-conversas-vazio" class="ck-assist__conversas-vazio">Nenhuma conversa guardada.</p>
+      </nav>
       <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
       <button type="button" id="assistente-instrucoes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarInstrucoesAssistente" aria-expanded="false" aria-controls="assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Instruções</button>
       <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
@@ -737,6 +747,19 @@
       <p id="assistente-historico-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
     </section>
     <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
+    <div class="ck-assist__boas-vindas">
+      <span class="ck-assist__orbe" aria-hidden="true"></span>
+      <p class="ck-assist__saudacao">Olá! Como posso ajudar?</p>
+      <p class="ck-assist__subtitulo">Escolha um atalho ou escreva sua pergunta.</p>
+      <div class="ck-assist__atalhos" role="group" aria-label="Atalhos do Assistente">
+        <button type="button" class="ck-assist__atalho" data-on-click="preencherAtalhoAssistente" data-args='["Buscar o equipamento com a série ou o hostname "]'><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-search"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Buscar equipamento</span> <span class="ck-assist__atalho-desc">Por série ou hostname</span></span></button>
+        <button type="button" class="ck-assist__atalho" data-on-click="preencherAtalhoAssistente" data-args='["Qual o andamento do chamado "]'><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-ticket"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Status de chamado</span> <span class="ck-assist__atalho-desc">Andamento de um chamado</span></span></button>
+        <button type="button" class="ck-assist__atalho" data-on-click="preencherAtalhoAssistente" data-args='["Quais divergências de OS existem entre as fontes?"]'><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-alerta"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Divergências de OS</span> <span class="ck-assist__atalho-desc">O que não bate entre as fontes</span></span></button>
+        <button type="button" class="ck-assist__atalho" data-on-click="preencherAtalhoAssistente" data-args='["Como está a cobertura de equipamentos por unidade?"]'><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-pin"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Cobertura</span> <span class="ck-assist__atalho-desc">Equipamentos por unidade</span></span></button>
+        <button type="button" class="ck-assist__atalho" data-on-click="alternarLembretesAssistente"><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-clipboard"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Lembretes</span> <span class="ck-assist__atalho-desc">O que você pediu para guardar</span></span></button>
+        <button type="button" class="ck-assist__atalho" data-on-click="alternarInstrucoesAssistente"><span class="ck-assist__atalho-ic" aria-hidden="true"><svg class="ck-ico" focusable="false"><use href="#i-pencil"></use></svg></span><span class="ck-assist__atalho-corpo"><span class="ck-assist__atalho-titulo">Instruções</span> <span class="ck-assist__atalho-desc">Como o Assistente deve responder</span></span></button>
+      </div>
+    </div>
     <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
     <div id="assistente-pendente" class="ck-assist__pendente" role="group" aria-labelledby="assistente-pendente-titulo" aria-describedby="assistente-pendente-descricao" tabindex="-1" hidden>
       <p id="assistente-pendente-titulo" class="ck-det__titulo">Confirmação necessária</p>
@@ -747,18 +770,19 @@
       </div>
     </div>
     <form id="assistente-form" class="ck-assist__form" data-on-submit="enviarMensagemAssistente" autocomplete="off">
-      <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
       <input id="assistente-anexo-arquivo" type="file" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden data-on-change="anexarArquivoAssistente" data-args='["$event"]'>
       <ul id="assistente-anexos" class="ck-assist__anexos" aria-label="Arquivos anexados" hidden></ul>
       <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens vão ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Anexe só o que pode sair deste computador.</p>
       <p id="assistente-anexos-status" class="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"></p>
-      <div class="ck-assist__acoes">
+      <div class="ck-assist__pilula">
+        <button type="button" id="assistente-anexar" class="ck-btn ck-btn--fantasma ck-assist__icone" data-click-target="assistente-anexo-arquivo" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)" aria-describedby="assistente-anexar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-paperclip"></use></svg><span class="ck-assist__icone-rotulo">Anexar</span></button>
+        <label class="ck-assist__campo"><span class="ck-sr">Mensagem</span><textarea id="assistente-texto" class="ck-assist__entrada" rows="1" maxlength="4000" placeholder="Digite sua pergunta…" aria-describedby="assistente-contador assistente-texto-dica" data-on-input="contarMensagemAssistente"></textarea></label>
+        <button type="button" id="assistente-gravar" class="ck-btn ck-btn--fantasma ck-assist__icone" data-on-click="alternarGravacaoAssistente" title="Gravar áudio" aria-describedby="assistente-gravar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span id="assistente-gravar-rotulo" class="ck-assist__icone-rotulo">Gravar áudio</span></button>
+        <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario ck-assist__icone ck-assist__enviar" title="Enviar"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-up"></use></svg><span class="ck-assist__icone-rotulo">Enviar</span></button>
+      </div>
+      <div class="ck-assist__rodape">
         <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>
-        <div class="ck-grupo-botoes">
-          <button type="button" id="assistente-anexar" class="ck-btn ck-btn--secundario ck-assist__icone" data-click-target="assistente-anexo-arquivo" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)" aria-describedby="assistente-anexar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-assist__icone-rotulo">Anexar</span></button>
-          <button type="button" id="assistente-gravar" class="ck-btn ck-btn--secundario ck-assist__icone" data-on-click="alternarGravacaoAssistente" title="Gravar áudio" aria-describedby="assistente-gravar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span id="assistente-gravar-rotulo" class="ck-assist__icone-rotulo">Gravar áudio</span></button>
-          <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario ck-assist__icone" title="Enviar"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg><span class="ck-assist__icone-rotulo">Enviar</span></button>
-        </div>
+        <span id="assistente-texto-dica" class="ck-sr">Enter envia; Shift+Enter quebra a linha.</span>
         <span id="assistente-anexar-dica" class="ck-sr">Aceita PDF, .docx, PNG e JPEG, até 5 arquivos. O texto de PDF e .docx passa pela ocultação de dados pessoais antes de ir para a IA. Os anexos são apagados em Nova conversa.</span>
         <span id="assistente-gravar-dica" class="ck-sr">A fala é transcrita para a caixa de mensagem; revise o texto antes de enviar. Esc cancela a gravação.</span>
       </div>
