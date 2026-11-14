@@ -156,7 +156,7 @@
 /* Diálogo Criar lembrete (Termo → Lembrete). O kit pinta todo p e textarea de .ck-veu > .ck-dialogo; por isso os seletores repetem esse escopo. */
 .ck-veu > .ck-dialogo.lembretes__dialogo--criar { width: min(560px, 100%); max-width: 560px; }
 .lembretes__dialogo .lembretes__criar-campo { height: auto; min-height: 9em; padding: 8px 9px; line-height: 1.4; resize: vertical; }
-.lembretes__dialogo .lembretes__dica, .lembretes__dialogo .lembretes__erro { flex: none; font-size: var(--fs-xs); }
+.lembretes__dialogo .lembretes__erro { flex: none; font-size: var(--fs-xs); }
 .ck-veu > .ck-dialogo.lembretes__dialogo p.lembretes__erro { color: var(--cor-alerta-texto); }
 .ck-veu > .ck-dialogo.lembretes__dialogo .lembretes__criar-campo[aria-invalid="true"] { border-color: var(--cor-alerta-texto); }
 .termos__estado .lembretes__ver { margin-inline-start: 8px; }

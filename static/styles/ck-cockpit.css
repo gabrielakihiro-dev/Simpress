@@ -1303,7 +1303,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-conflitos { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .sebrae-conflitos[hidden] { display: none; }
 .sebrae-conflitos__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-alerta-texto); }
-.sebrae-conflitos > p { margin: 0; }
 .sebrae-conflitos__lista { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .sebrae-conflito { min-width: 0; margin: 0; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); }
 .sebrae-conflito__texto { max-width: 100%; padding: 0 4px; white-space: pre-wrap; font-weight: 600; }
@@ -1344,6 +1343,22 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(.resumo-aba, .resumo-painel):focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
+/* ⓘ ao lado de rótulo ou título de Ferramentas (Lembretes, Planilhas, Conflitos do Dashboard): o botão herda min-height 2.5rem de app.css e não deve esticar a linha. */
+.ck-rotulo-info { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.ck-rotulo-info > :is(h2, label, strong) { margin: 0; }
+.ck-rotulo-info .info-tip { margin-block: -4px; }
+.ck-rotulo-info .info-tip-trigger { min-height: 0; }
+/* Até 640px o balão de ux-refinements.css é fixed e fica onde o layout o pôs (posição estática); com o ⓘ abaixo da dobra ele sai da tela. Aqui o balão ancora na linha do rótulo e ocupa a largura dela. */
+@media (max-width: 640px) {
+  .ck-rotulo-info { display: flex; position: relative; }
+  .ck-rotulo-info .info-tip { position: static; }
+  .ck-rotulo-info .info-tip-text { position: absolute; inset-block-start: calc(100% + 0.4rem); inset-inline: 0; width: auto; max-width: none; }
+}
+/* Detalhe de Planilhas: de 1200px em diante a coluna rola (overflow: auto) e cortaria o balão embaixo, porque o conteúdo é curto; o conteúdo cabe sem rolagem, então fica visível, e 17rem cabe na coluna de 400px. */
+@media (min-width: 1200px) {
+  #cockpit-tool-panels #cockpit-sheets-detail { overflow: visible; }
+  #cockpit-sheets-detail .info-tip-text { max-width: 17rem; }
+}
 /* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
 #resumo-painel-backups .ck-backups__cabeca { display: flex; align-items: center; gap: 4px; }
 #resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }

@@ -415,9 +415,12 @@
     // Info tips: Esc hides the open tip until the pointer or focus leaves it (WCAG 1.4.13).
     doc.addEventListener("keydown", event => {
       if (event.key !== "Escape") return;
-      // Balão aberto pelo foco: o Esc só fecha o balão. Aberto só pelo mouse: fecha e o Esc segue (ex.: fecha o painel).
+      // Balão aberto pelo foco: o Esc só fecha o balão (nem o painel nem o diálogo, que ouve o Esc no document). Aberto só pelo mouse: fecha e o Esc segue (ex.: fecha o painel).
       const focado = doc.activeElement?.closest?.(".info-tip:not([data-tip-dismissed])");
-      if (dismissInfoTips(doc) && focado) event.preventDefault();
+      if (dismissInfoTips(doc) && focado) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     }, true);
     doc.addEventListener("click", event => {
       const menu = doc.querySelector(".cockpit-tools-dropdown[open]");

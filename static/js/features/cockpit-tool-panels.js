@@ -921,7 +921,7 @@
   function renderAliasDetail(event) {
     const target = byId("cockpit-alias-detail");
     const request = ++aliasEquipmentRequest;
-    if (!event) return renderEmpty(target, "Selecione uma alteração do histórico.");
+    if (!event) return renderEmpty(target, "Selecione uma alteração.");
     target.replaceChildren();
 
     // 1. Cabeçalho: tipo, data, série e ações.

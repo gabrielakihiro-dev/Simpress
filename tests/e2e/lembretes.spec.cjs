@@ -38,7 +38,7 @@ test("abre em Lembretes com as pílulas na ordem e o estado vazio", async ({ pag
   await expect(page.locator("#termos-aba-lembretes")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#termos-painel-entrega")).toBeHidden();
   await expect(page.locator("#termos-painel-devolucao")).toBeHidden();
-  await expect(page.locator("#lembretes-vazio")).toHaveText("Nenhum lembrete. Anote o que precisa fazer.");
+  await expect(page.locator("#lembretes-vazio")).toHaveText("Nenhum lembrete.");
   await expect(page.locator("#lembretes-concluidos")).toBeHidden();
   await expect(adicionar(page)).toBeDisabled();
 
