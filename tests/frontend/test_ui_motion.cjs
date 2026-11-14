@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const createMotion = require("../../static/js/ui/ui-motion.js");
 
@@ -211,4 +213,83 @@ test("validation feedback clears only after a field becomes valid", () => {
   field.validity.valid = true;
   fixture.events.get("input")({ target: field });
   assert.equal(field.getAttribute("aria-invalid"), null);
+});
+
+// Contrato bento (docs/ui-motion/contrato-bento.md): 700/760 ms e 1.6 s ficam fora da faixa 150-300 ms do SimpressMotion,
+// então ck-bento.css é checado à parte, lendo o CSS em vez de rodar animações.
+const SEM_REDUCAO = /@media\s*\(\s*prefers-reduced-motion\s*:\s*no-preference\s*\)/;
+
+// Árvore mínima de blocos: cada nó guarda o prelúdio (seletor ou @regra), as declarações próprias e os filhos (aninhamento com &).
+function arvoreCss(texto) {
+  let i = 0;
+  function bloco() {
+    const no = { prelude: "", decls: "", filhos: [] };
+    let buf = "";
+    while (i < texto.length) {
+      const c = texto[i++];
+      if (c === "{") { const filho = bloco(); filho.prelude = buf.trim(); no.filhos.push(filho); buf = ""; }
+      else if (c === "}") break;
+      else { buf += c; if (c === ";") { no.decls += buf; buf = ""; } }
+    }
+    no.decls += buf;
+    return no;
+  }
+  return bloco();
+}
+
+function percorrer(no, fn, cadeia = []) {
+  for (const filho of no.filhos) {
+    fn(filho, cadeia);
+    percorrer(filho, fn, [...cadeia, filho.prelude]);
+  }
+}
+
+test("ck-bento.css follows the bento motion contract", () => {
+  const bruto = fs.readFileSync(path.join(__dirname, "../../static/styles/ck-bento.css"), "utf8");
+  const css = bruto.replace(/\/\*[\s\S]*?\*\//g, "");
+  const compacto = css.replace(/\s+/g, "");
+  const arvore = arvoreCss(css);
+
+  // Quadros-chave só com opacity e transform.
+  const quadros = new Map();
+  percorrer(arvore, no => {
+    const nome = no.prelude.match(/^@keyframes\s+(ck-bento-[\w-]+)/)?.[1];
+    if (!nome) return;
+    const props = [];
+    percorrer(no, passo => props.push(...[...passo.decls.matchAll(/([a-z-]+)\s*:/g)].map(m => m[1])));
+    quadros.set(nome, new Set(props));
+  });
+  assert.deepEqual([...quadros.keys()].sort(), ["ck-bento-barra", "ck-bento-entra", "ck-bento-pulsa"]);
+  for (const [nome, props] of quadros) {
+    assert.ok(props.size > 0, `${nome} sem declarações`);
+    assert.deepEqual([...props].filter(p => p !== "opacity" && p !== "transform"), [], `${nome} anima propriedade fora de opacity/transform`);
+  }
+
+  // Durações e curva do contrato.
+  for (const valor of ["700ms", "760ms", "1.6s", "cubic-bezier(.2,.7,.2,1)"]) {
+    assert.ok(compacto.includes(valor), `falta ${valor}`);
+  }
+
+  // Toda animation/transition fica em (prefers-reduced-motion: no-preference).
+  let movimentos = 0;
+  percorrer(arvore, (no, cadeia) => {
+    if (!/(^|;|\s)(animation|transition)(-[a-z-]+)?\s*:/.test(no.decls)) return;
+    movimentos++;
+    assert.ok(cadeia.some(prelude => SEM_REDUCAO.test(prelude)), `movimento fora de no-preference em "${no.prelude}"`);
+  });
+  assert.ok(movimentos > 0, "nenhuma animation/transition encontrada");
+
+  // Cartão real nunca corta menus, ⓘ nem tabelas roláveis.
+  percorrer(arvore, no => {
+    if (/\.ck-bento-cartao\b/.test(no.prelude)) {
+      assert.doesNotMatch(no.decls, /overflow(-[xy])?\s*:\s*hidden/, `overflow hidden em "${no.prelude}"`);
+    }
+  });
+
+  // Sem largura mínima de desktop e sem brilho em linha de tabela.
+  assert.doesNotMatch(compacto, /min-width:1200px/);
+  percorrer(arvore, no => {
+    if (no.prelude.startsWith("@")) return;
+    assert.doesNotMatch(no.prelude, /(^|[\s>+~,(])tr(?![\w-])|\.ck-tabela\b/, `seletor de tabela em "${no.prelude}"`);
+  });
 });

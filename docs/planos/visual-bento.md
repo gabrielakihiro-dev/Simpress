@@ -10,6 +10,11 @@ Pedido do usuário (14/11/2026): imitar em todas as abas e sub-abas o layout do 
 - **Regras novas de animação do projeto (pedido de 14/11/2026, "crie novas regras depois de animações, para manter desse projeto"):** o Bloco 1 troca a regra antiga de 150–300 ms pelo contrato de movimento bento (seção "Especificação visual") em `frontend/AGENTS.md` (regra curta + caminho), `docs/design/DESIGN.md` (checklist de Motion), `docs/ui-motion/` (contrato completo), `.claude/skills/ajuste-visual-ui/SKILL.md` e `.agents/skills/ajuste-visual-ui/SKILL.md`. A regra diz que, neste projeto, o contrato bento prevalece sobre a preferência global de 150–300 ms, e que toda tela nova segue o mesmo contrato.
 - **Referência visual aprovada (14/11/2026):** canvas "Simpress Bento", https://claude.ai/artifact/1MBeThmaD94YS5L4fCV3vp — piloto Resumo › Visão geral em 1366 px e 390 px, escuro e claro. A implementação imita esse desenho (cores, cartões, brilho, grade, ordem dos cartões, adaptação ao celular); números, regionais e categorias do desenho são ilustrativos e vêm dos dados reais.
 - **Desenho antes de cada bloco seguinte (pedido de 14/11/2026):** terminado o Bloco 1, cada bloco (2, 3, 4) começa com o desenho das suas abas e sub-abas no mesmo canvas. O usuário decide depois do desenho se e quando implementar; a implementação se baseia sempre no desenho aprovado. Nenhuma sessão de bloco abre antes desse "aprovado".
+- **Decisões do usuário sobre a Visão geral do Resumo (14/11/2026):**
+  1. Os 6 contadores ficam nos dois lugares: Visão geral em grade bento e Divergências mantém a faixa (substitui a decisão de 11/11/2026, "contadores só em Divergências").
+  2. "Ativos por regional" fica só na Visão geral, como último cartão da grade, e sai das outras sub-abas.
+  3. O anel tem a legenda "com correspondência nas duas bases" e a conta (total_endpoint − "Sem correspondência — na Simpress") / total_endpoint.
+  4. Opção A: sem comparação, a Visão geral fica habilitada e mostra só o cartão "Ativos por regional"; a grade completa aparece com comparação.
 - **Base:** branch `claude/tech-stack-bento-grid-67b90e`, que parte de `claude/limpeza-textos-b4` (limpeza dos textos explicativos já aplicada).
 
 ## Especificação visual (valores do componente)

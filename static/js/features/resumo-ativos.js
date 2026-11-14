@@ -103,6 +103,7 @@
       const count = document.createElement("span");
       count.className = "ck-barra__valor";
       count.textContent = format(city.total);
+      globalThis.SimpressBento?.contarAte(count, city.total);
       row.append(name, track, count);
       return row;
     }));
@@ -140,6 +141,8 @@
   function carregarResumoAtivos() { return carregarRegionaisResumo(); }
 
   document.getElementById("resumo-regionais-mais")?.addEventListener("click", () => { expanded = !expanded; renderRegions(); });
+  // Clique numa sub-aba do Resumo repete barras e contagens (comparison-result.js).
+  document.addEventListener("simpress:bento-repetir", () => { if (dashboard) renderRegions(); });
 
   return { carregarResumoAtivos };
 });
