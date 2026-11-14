@@ -9,6 +9,7 @@ description: Ajustes visuais pontuais na interface do Simpress com prints antes/
 
 - Mudanças pequenas e revisáveis; não substitua o design de forma ampla. Respeite medidas em pixels literalmente.
 - Preserve IDs, atributos ARIA e `data-*`, manipuladores, regras de negócio, foco, acessibilidade, responsividade e os temas claro e escuro.
+- Direção visual: escura e coordenada, tão escura quanto possível, sem contrariar o artefato aprovado; distinga posição, quebra de linha e espaço vertical.
 - Use os tokens de cor existentes; não introduza cores soltas. Não remova `!important` mecanicamente: corrija a causa.
 - Para telas novas, escreva ou atualize a especificação antes. Se o usuário disser "Exclua o JavaScript por enquanto", fique em HTML/CSS.
 - Animações sutis (150–300 ms) e com suporte a `prefers-reduced-motion`.
