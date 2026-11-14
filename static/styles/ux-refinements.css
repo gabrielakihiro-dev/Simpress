@@ -281,6 +281,19 @@ p.text-center:is(.py-5, .py-8)[role="alert"] {
   justify-content: flex-end;
   margin-bottom: var(--ux-space-2);
 }
+/* Título da tabela com os botões à direita (Resumo F3); abaixo de 640px os botões descem para baixo do título. */
+.ux-table-tools-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--ux-space-2);
+  align-items: start;
+}
+.ux-table-tools-host > :not(.ux-table-tools) { grid-column: 1; }
+.ux-table-tools-host > .ux-table-tools { grid-column: 2; grid-row: 1 / span 2; margin-bottom: 0; }
+@media (max-width: 639px) {
+  .ux-table-tools-host { grid-template-columns: minmax(0, 1fr); }
+  .ux-table-tools-host > .ux-table-tools { grid-column: 1; grid-row: auto; justify-content: flex-start; margin-top: var(--ux-space-2); }
+}
 .ux-table-tool {
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--ux-border-strong);
