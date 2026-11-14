@@ -37,9 +37,22 @@ CONTA_PADRAO = "sebrae"
 # O front recebe as contas só pela API: o teste de privacidade proíbe estes domínios no HTML e no JS.
 # Os e-mails são dados pessoais: variável de ambiente ou config/contas_automacao.json (git-ignorado). Sem eles a
 # conta fica vazia e o envio é recusado (nunca cai em outra conta); os ids ficam fixos para os modelos salvos.
+class _ContaRemetente(dict):
+    """``{"email", "rotulo"}``; o e-mail é lido a cada uso, então salvar a conta pelo site vale sem reiniciar."""
+
+    def __init__(self, variavel: str, chave: str, rotulo: str) -> None:
+        super().__init__(rotulo=rotulo)
+        self._variavel, self._chave = variavel, chave
+
+    def __missing__(self, campo: str) -> str:
+        if campo != "email":
+            raise KeyError(campo)
+        return local_setting(self._variavel, self._chave)
+
+
 CONTAS_REMETENTE: dict[str, dict[str, str]] = {
-    "sebrae": {"email": local_setting("SIMPRESS_OUTLOOK_EMAIL_SEBRAE", "outlook_email_sebrae"), "rotulo": "Sebrae"},
-    "simpress": {"email": local_setting("SIMPRESS_OUTLOOK_EMAIL_SIMPRESS", "outlook_email_simpress"), "rotulo": "Simpress"},
+    "sebrae": _ContaRemetente("SIMPRESS_OUTLOOK_EMAIL_SEBRAE", "outlook_email_sebrae", "Sebrae"),
+    "simpress": _ContaRemetente("SIMPRESS_OUTLOOK_EMAIL_SIMPRESS", "outlook_email_simpress", "Simpress"),
 }
 MARCADOR_NOME = "[Nome da pessoa]"
 MARCADOR_SETOR = "[Setor]"
@@ -61,7 +74,7 @@ MSG_NOME_DUPLICADO = "Já existe um modelo com esse nome."
 MSG_CONTA_AUSENTE = "A conta {conta} não está configurada no Outlook. Escolha outra conta ou adicione-a no Outlook."
 MSG_CONTA_NAO_CONFIGURADA = (
     "A conta remetente {rotulo} não está configurada neste computador. Defina o e-mail em "
-    "config/contas_automacao.json ou na variável de ambiente e reinicie o servidor."
+    "Prontidão da base > Configuração local (config/contas_automacao.json) ou na variável de ambiente."
 )
 MSG_DESTINATARIO = "Alguns destinatários não foram reconhecidos no Outlook. Confira os nomes antes de enviar."
 MSG_INDISPONIVEL = "Outlook (classic) indisponível. Abra o Outlook clássico e tente de novo."

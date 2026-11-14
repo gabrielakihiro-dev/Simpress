@@ -172,6 +172,8 @@ __pycache__/
 /config/contato_origem.json
 # Local automation accounts, Dashboard folder and Outlook sender accounts (personal data); only the example is versioned.
 /config/contas_automacao.json
+# Backups of the local configuration made by the site (contas and the keys file; may hold secrets).
+/data/state/config_backups/
 # Local client data (contract, billing CNPJ, own notebook series); only the example is versioned.
 /config/cliente.json
 # Local per-city edits of the regional representatives (names, e-mails, phones).

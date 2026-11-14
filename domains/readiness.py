@@ -85,6 +85,8 @@ class ReadinessServices:
     logger: logging.Logger
     # Optional: the Entra names enrich the display but no function depends on them.
     entra_names_file: Optional[Callable[[], Path]] = None
+    # {state, faltando, reason, assistente_ia} of the local configuration card; absent when not wired.
+    configuracao_local: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 def check_startup_xlsx(path: Optional[Path], validate: Callable[[Any], Any] = validate_xlsx) -> Dict[str, Any]:
@@ -306,6 +308,8 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
     # Additive key, present only in read-only mode, so existing consumers keep their shape.
     if (recovery_block := services.get_transaction_recovery_block()) is not None:
         report["gravacao_bloqueada"] = {"available": False, "state": "invalid", "reason": recovery_block}
+    if services.configuracao_local is not None:
+        report["configuracao_local"] = services.configuracao_local()
     return report
 
 

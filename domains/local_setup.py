@@ -180,6 +180,23 @@ def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> 
     atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})
 
 
+CNPJ_FORMATO = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
+
+
+def cnpj_valido(value: str) -> bool:
+    """True for a CNPJ in the 00.000.000/0000-00 format whose two check digits (modulo 11) match."""
+    if not CNPJ_FORMATO.fullmatch(value):
+        return False
+    digits = [int(char) for char in value if char.isdigit()]
+    if len(set(digits)) == 1:
+        return False
+    for size, weights in ((12, (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)), (13, (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2))):
+        remainder = sum(digit * weight for digit, weight in zip(digits[:size], weights)) % 11
+        if digits[size] != (0 if remainder < 2 else 11 - remainder):
+            return False
+    return True
+
+
 # Client data (config/cliente.json): contract, billing CNPJ and own notebook series. Environment variable, then file.
 CLIENT_CONFIG_FIELDS = (
     ("contrato", "SIMPRESS_CLIENTE_CONTRATO"),
