@@ -8,7 +8,7 @@ from domains.ux_ticket import INCIDENTE, MOTIVO, TIPO_ENDERECO, Formulario
 ORIGEM = "https://ux.simpress.com.br"
 CABECALHO = (
     "Gerar ticket\nNÚMERO DE SÉRIE\nABC123\nNOME DO CONTRATO\n"
-    "16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR\nMODELO\nHP 250R G9\n"
+    "10101 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR\nMODELO\nHP 250R G9\n"
 )
 CEP = "85504-000"
 ENDERECO = "AV TUPI, 333 - BORTOT, Pato Branco - PR, 85504000"
@@ -16,7 +16,7 @@ ENDERECO = "AV TUPI, 333 - BORTOT, Pato Branco - PR, 85504000"
 
 def formulario(**alteracoes):
     return Formulario(**{
-        "endereco": ENDERECO, "cnpj_instalacao": "75.110.585/0005-25", "cnpj_faturamento": "75.110.585/0001-00",
+        "endereco": ENDERECO, "cnpj_instalacao": "11.222.333/0002-62", "cnpj_faturamento": "11.222.333/0001-81",
         "descricao": "Atualizar o endereço.", "nome": "Pessoa Fictícia", "email": "teste@example.test",
         "telefone": "(41) 99999-0000", "chamado_interno": "", "arquivo_nome": "planilha.xlsx", "arquivo": b"xlsx",
         **alteracoes,
@@ -185,12 +185,12 @@ class EquipamentoTests(unittest.TestCase):
     def test_header_gives_the_single_model_of_the_contract_and_series(self):
         self.assertEqual(browser.PortalTicketUXChrome._equipamento(Pagina(), "ABC123"), "HP 250R G9")
         self.assertEqual(browser.PortalTicketUXChrome._equipamento(
-            Pagina(texto="ABC123\nNOME DO CONTRATO: 16467 - SEBRAE\nMODELO: HP 250R G9"), "ABC123"), "HP 250R G9")
+            Pagina(texto="ABC123\nNOME DO CONTRATO: 10101 - SEBRAE\nMODELO: HP 250R G9"), "ABC123"), "HP 250R G9")
 
     def test_header_refuses_other_series_contract_or_two_models(self):
         for texto in (
             CABECALHO.replace("ABC123", "ABC1234"),
-            CABECALHO.replace("16467 -", "164670 -"),
+            CABECALHO.replace("10101 -", "101010 -"),
             CABECALHO + "MODELO\nOutro\n",
         ):
             with self.subTest(texto=texto[-30:]), self.assertRaises(ux_chamados.ErroUX):
@@ -206,9 +206,9 @@ class EscolherTests(unittest.TestCase):
 
     def test_contract_is_picked_by_prefix_only_when_unique(self):
         pagina = Pagina()
-        ng_select(pagina, "selectContrato", ["164670 - OUTRO", "16467 - SERV DE APOIO SEBRAE PR"])
-        self.assertEqual(browser._escolher(pagina, "selectContrato", None, busca="16467"), "16467 - SERV DE APOIO SEBRAE PR")
-        self.assertEqual(pagina.controles["input#selectContrato"].valor, "16467")
+        ng_select(pagina, "selectContrato", ["101010 - OUTRO", "10101 - SERV DE APOIO SEBRAE PR"])
+        self.assertEqual(browser._escolher(pagina, "selectContrato", None, busca="10101"), "10101 - SERV DE APOIO SEBRAE PR")
+        self.assertEqual(pagina.controles["input#selectContrato"].valor, "10101")
 
     def test_identical_repeated_labels_are_one_choice(self):
         # The UX lists Irati twice with the same label: picking it must not stop the flow.
@@ -218,7 +218,7 @@ class EscolherTests(unittest.TestCase):
         self.assertEqual((lista.escolhida, rotulo.texto), (ENDERECO, ENDERECO))
 
     def test_zero_or_different_matches_close_the_list_and_refuse(self):
-        casos = ((["Outro"], "selectMotivo", "Alvo"), (["16467 - A", "16467 - B"], "selectContrato", None))
+        casos = ((["Outro"], "selectMotivo", "Alvo"), (["10101 - A", "10101 - B"], "selectContrato", None))
         for opcoes, campo, alvo in casos:
             pagina = Pagina()
             lista, _ = ng_select(pagina, campo, opcoes)
@@ -265,7 +265,7 @@ class PreencherTests(unittest.TestCase):
         campo = Controle()
         campo.fill = lambda valor, **_k: setattr(campo, "valor", valor[:-1])
         with self.assertRaises(ux_chamados.ErroUX):
-            browser._preencher(campo, "75.110.585/0001-00")
+            browser._preencher(campo, "11.222.333/0001-81")
         telefone = Controle()
         browser._preencher(telefone, "(41) 90000-0000", nome="telefone", digitado="41900000000")
         self.assertEqual(telefone.valor, "41900000000")
@@ -306,7 +306,7 @@ class EnviarTests(unittest.TestCase):
 
     def test_reads_the_single_ticket_number_ignoring_contract_and_internal_number(self):
         self.pagina.controles["[role=dialog], .modal, app-modal"] = Controle(0)
-        self.dialogo("Ticket 987654 aberto para o contrato 16467. Chamado interno 4321.")
+        self.dialogo("Ticket 987654 aberto para o contrato 10101. Chamado interno 4321.")
         self.assertEqual(self.portal.enviar("sessao", self.antes), "987654")
         self.assertEqual(self.finalizar.cliques, 1)
         self.antes.assert_called_once_with()  # the service records "incerto" before the click
@@ -377,8 +377,8 @@ def pagina_preenchida(form):
     for campo, valor in (("selectIncidente", INCIDENTE), ("selectMotivo", MOTIVO), ("novo-endereco", form.endereco)):
         pagina.controles[f"ng-select:has(input#{campo}) .ng-value-label"] = Controle(texto=valor)
     for seletor, valor in (
-        ("input#cep-novo-endereco", "85504000"), ("input#atualizarCnpjInstalacao", "75110585000525"),
-        ("input#atualizarCnpjFaturamento", "75110585000100"), (browser.DESCRICAO, form.descricao),
+        ("input#cep-novo-endereco", "85504000"), ("input#atualizarCnpjInstalacao", "11222333000262"),
+        ("input#atualizarCnpjFaturamento", "11222333000181"), (browser.DESCRICAO, form.descricao),
         ("input#nome", form.nome), ("input#email", form.email), ("input#telefone", "41999990000"),
         ("input#InputNumeroChamado", form.chamado_interno),
     ):
@@ -398,7 +398,7 @@ class ConferenciaFinalTests(unittest.TestCase):
             "endereço": lambda p: setattr(p.controles["ng-select:has(input#novo-endereco) .ng-value-label"], "texto", "X"),
             "motivo": lambda p: setattr(p.controles["ng-select:has(input#selectMotivo) .ng-value-label"], "texto", ""),
             "cep": lambda p: setattr(p.controles["input#cep-novo-endereco"], "valor", "85504001"),
-            "cnpj": lambda p: setattr(p.controles["input#atualizarCnpjFaturamento"], "valor", "75110585000525"),
+            "cnpj": lambda p: setattr(p.controles["input#atualizarCnpjFaturamento"], "valor", "11222333000262"),
             "registro": lambda p: setattr(p.controles[browser.DESCRICAO], "valor", "Atualizar o endereço"),
             "nome": lambda p: setattr(p.controles["input#nome"], "valor", "Outra"),
             "email": lambda p: setattr(p.controles["input#email"], "valor", ""),
@@ -489,7 +489,7 @@ class ContingenciaTests(unittest.TestCase):
             page.url = ORIGEM + browser.ROTA_ABRIR
 
             def motivo():
-                raise RuntimeError("selector input#nome value=Pessoa CNPJ 75.110.585/0005-25")
+                raise RuntimeError("selector input#nome value=Pessoa CNPJ 11.222.333/0002-62")
             self.portal._passo(page, "Motivo", motivo)
 
         self.portal._ate_enderecos = ate_enderecos

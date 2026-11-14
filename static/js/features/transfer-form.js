@@ -6,7 +6,12 @@
   "use strict";
   const { app, appState, motion, transferUtils } = context;
 
-  const CNPJ_FATURAMENTO_PADRAO = "75.110.585/0001-00";
+  // Contract and billing CNPJ come from the installation (GET /api/config/transferencia, kept by regional-contacts);
+  // blank until configured, and the server refuses a blank contract.
+  function dadosCliente() {
+    return app.obterDadosCliente?.() || { contrato: "", cnpj_faturamento: "" };
+  }
+  const AVISO_CNPJ_FATURAMENTO_VAZIO = "Configure os dados do cliente antes de copiar o CNPJ de faturamento.";
   const transferDraftTracker = window.SimpressFormDraftGuard.createDraftTracker();
 
   function atualizarResumoSerieTransferencia(equipment) {
@@ -378,7 +383,7 @@
       serial: serialVal,
       descricao_equipamento: "",
       razao_social: "SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR",
-      contrato: 16467,
+      contrato: dadosCliente().contrato,
       retirada_cidade: appState.retiradaCidadeSelecionada,
       retirada_cnpj: document.getElementById("retirada-cnpj").value.trim(),
       retirada_endereco: document.getElementById("retirada-endereco").value.trim(),
@@ -438,7 +443,7 @@
 • Observações do Chamado: ${payload.entrega_obs || 'Sem observações adicionais'}
 
 🚚 INFORMAÇÕES LOGÍSTICAS & CONTRATO:
-• Contrato: 16467 - Simpress / SEBRAE-PR
+• Contrato: ${payload.contrato || "não configurado"} - Simpress / SEBRAE-PR
 • Voltagem: Bivolt
 • Tipo de Acesso: Elevador / Rampa / Térreo
 ======================================================================`;
@@ -640,7 +645,7 @@
   async function copiarDadoLocalAtual(tipo) {
     const dados = {
       cep: { valor: obterCepRetiradaSelecionada(), nome: "CEP" },
-      faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+      faturamento: { valor: dadosCliente().cnpj_faturamento, nome: "CNPJ de faturamento", vazio: AVISO_CNPJ_FATURAMENTO_VAZIO },
       instalacao: {
         valor: document.getElementById("retirada-cnpj")?.value || "",
         nome: "CNPJ de instalação"
@@ -651,7 +656,7 @@
 
     const valor = String(dado.valor || "").trim();
     if (!valor) {
-      app.showToast(`Pesquise um equipamento com ${dado.nome.toLowerCase()} informado antes de copiar.`, "warning");
+      app.showToast(dado.vazio || `Pesquise um equipamento com ${dado.nome.toLowerCase()} informado antes de copiar.`, "warning");
       return;
     }
 
@@ -667,7 +672,7 @@
     const unidadeId = document.getElementById("select-unidade-destino")?.value;
     const unidadeDestino = appState.unidadesList.find(unit => String(unit.id) === String(unidadeId));
     const dados = {
-      faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+      faturamento: { valor: dadosCliente().cnpj_faturamento, nome: "CNPJ de faturamento", vazio: AVISO_CNPJ_FATURAMENTO_VAZIO },
       instalacao: { valor: unidadeDestino?.cnpj || "", nome: "CNPJ de instalação" }
     };
     const dado = dados[tipo];
@@ -675,7 +680,7 @@
 
     const valor = String(dado.valor || "").trim();
     if (!valor) {
-      app.showToast("Selecione uma unidade de destino antes de copiar o CNPJ de instalação.", "warning");
+      app.showToast(dado.vazio || "Selecione uma unidade de destino antes de copiar o CNPJ de instalação.", "warning");
       return;
     }
 

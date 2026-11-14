@@ -18,7 +18,7 @@ from domains.assistant_relatorios import FORMATOS, MAX_CELULA, PLANILHAS, TIPOS,
 from domains.assistant_tools import TOOLS
 from routers.assistant import AssistantRouteServices, create_assistant_router
 
-SEBRAE_SERIE = "BRJ149SCJG"
+SEBRAE_SERIE = "BRT300XC01"
 CPF = "529.982.247-25"
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 

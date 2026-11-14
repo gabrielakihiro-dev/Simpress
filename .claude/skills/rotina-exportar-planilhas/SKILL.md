@@ -37,9 +37,9 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
    - UX: https://ux.simpress.com.br/MeusEquipamentos/Index
    - Endpoint: https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers
 3. **UX Simpress**:
-   1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, em `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`. Não clique fora. Pesquise apenas na busca interna do seletor.
+   1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, na opção do contrato configurado em `config/cliente.json` (formato `<contrato> - <nome do contrato>`). Não clique fora. Pesquise apenas na busca interna do seletor.
    2. Confirme a marca ✓ na opção e o contrato no campo. Remova restrições indevidas dos demais filtros.
-   3. Clique em **Buscar**, confirme que os resultados são do contrato 16467 e registre a quantidade exibida.
+   3. Clique em **Buscar**, confirme que os resultados são do contrato configurado em `config/cliente.json` e registre a quantidade exibida.
    4. **Baixar detalhes → Excel**, uma vez (pode vir como ZIP). Siga direto para o Endpoint.
 4. **Endpoint Central**:
    1. Selecione **Todos os computadores** e confirme a marcação.

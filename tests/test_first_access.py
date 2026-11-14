@@ -417,6 +417,10 @@ class FirstAccessTests(unittest.TestCase):
         self.assertEqual(main.get_local_transfer_template().read_bytes(), before)
         self.import_model("transferencia", transfer_bytes())
 
+    @unittest.skipUnless(
+        (fixtures.PROJECT_ROOT / "data" / "planilhas_entrada" / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx").is_file(),
+        "o modelo local de transferência não é versionado; só existe na máquina que o importou",
+    )
     def test_versioned_transfer_model_passes_layout_validation(self):
         source = fixtures.PROJECT_ROOT / "data" / "planilhas_entrada" / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
         validate_local_model(source, "transferencia")

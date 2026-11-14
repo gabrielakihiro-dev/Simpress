@@ -10,8 +10,9 @@ from unittest import mock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core.config import client_billing_cnpj
 from domains import ux_chamados, ux_ticket
-from domains.ux_ticket import CNPJ_FATURAMENTO, TicketsUX, enderecos_correspondentes
+from domains.ux_ticket import TicketsUX, enderecos_correspondentes
 from routers import ux_ticket as ux_ticket_router
 
 PATO_BRANCO = "AV TUPI, 333 - BORTOT, Pato Branco - PR, 85504000"
@@ -92,39 +93,39 @@ class EnderecoTests(unittest.TestCase):
         self.assertEqual(enderecos_correspondentes(opcoes, "R José de Alencar, 10", "São José dos Pinhais", "8300500"), [])
 
     def test_real_ux_lists_of_08_11_2026_pick_one_address(self):
-        # Option strings read from the real UX in the 30-city simulation.
+        # Option strings shaped like the real UX lists of the 30-city simulation (fictitious addresses).
         casos = {
-            "Barracão": ("R HELMONT THILLI, 379 - SALA 02 - Barracão/PR - CEP 85700-000", "85700-000",
-                         ["R HELMONT THILLI, 379 , SALA 02 - Centro, Barracão - PR, 85700000"], 0),
-            "Cerro Azul": ("R BR do Rio Branco, 89 - Em Frente Bilu Mat Construção - Cerro Azul/PR - CEP 83570-000", "83570-000",
-                           ["R BARAO DO RIO BRANCO, 89 , SALA 2 - CENTRO, Cerro Azul - PR, 83570000",
-                            "R Caetê, 150 - Centro, Cerro Azul - PR, 83570000",
-                            "R BR do Rio Branco, 89 , Em Frente Bilu Mat Construção - Centro, Cerro Azul - PR, 83570000"], 2),
-            "Maringá": ("AV Bento Munhoz da Rocha Netto, 1116 - TERREO - Maringá/PR - CEP 87030-010", "87030-010",
-                        ["AV Bento Munhoz da Rocha Netto, 1116 , TERREO - Zona 7, Maringá - PR, 87030010",
-                         "AV Bento Munhoz da Rocha Neto, 116 - Zona 7, Maringá - PR, 87030010"], 0),
-            "Londrina": ("AV Santos Dumont, 1335 - Londrina/PR - CEP 86039-090", "86039-090",
-                         ["AV Santos Dumont, 1335 - AER, Londrina - PR, 86039090",
-                          "AV Santos Dumont, 1335 - AEROPORTO, Londrina - PR, 86039090"], 1),
-            "Curitiba": ("R Caeté, 150 - Curitiba/PR - CEP 80220-300", "80220-300",
-                         ["R Caeté, 150 - Prado Velho, Curitiba - PR, 80220300",
-                          "R Caeté, 150 , SEDE - Prado Velho, Curitiba - PR, 80220300"], 0),
-            "Cianorte": ("AV Goias, 1055 - Sala 4 - Cianorte/PR - CEP 87209-008", "87209-008",
-                         ["AV Goiás, 1055 - Zona de Armazém, Cianorte - PR, 87209008",
-                          "AV Goias, 1055 , Sala 4 - Centro, Cianorte - PR, 87209008"], 1),
-            "Toledo": ("AV Parigot de Souza, 2339 - Toledo/PR - CEP 85905-380", "85905-380",
-                       ["AV PARIGOT DE SOUZA, 2339 - CENTRO, Toledo - PR, 85905380",
-                        "AV Parigot de Souza, 2339 - Centro, Toledo - PR, 85905380"], 1),
+            "Vila Alfa": ("R DAS ACACIAS, 100 - SALA 01 - Vila Alfa/PR - CEP 85000-100", "85000-100",
+                          ["R DAS ACACIAS, 100 , SALA 01 - Centro, Vila Alfa - PR, 85000100"], 0),
+            "Vila Beta": ("R BR do Ipe, 20 - Em Frente Mercado Modelo - Vila Beta/PR - CEP 85000-200", "85000-200",
+                          ["R BARAO DO IPE, 20 , SALA 3 - CENTRO, Vila Beta - PR, 85000200",
+                           "R Caetê, 150 - Centro, Vila Beta - PR, 85000200",
+                           "R BR do Ipe, 20 , Em Frente Mercado Modelo - Centro, Vila Beta - PR, 85000200"], 2),
+            "Vila Gama": ("AV Professor Exemplo Netto, 1116 - TERREO - Vila Gama/PR - CEP 85000-300", "85000-300",
+                          ["AV Professor Exemplo Netto, 1116 , TERREO - Zona 7, Vila Gama - PR, 85000300",
+                           "AV Professor Exemplo Neto, 116 - Zona 7, Vila Gama - PR, 85000300"], 0),
+            "Vila Delta": ("AV das Nuvens, 500 - Vila Delta/PR - CEP 85000-400", "85000-400",
+                           ["AV das Nuvens, 500 - AER, Vila Delta - PR, 85000400",
+                            "AV das Nuvens, 500 - AEROPORTO, Vila Delta - PR, 85000400"], 1),
+            "Vila Epsilon": ("R Caeté, 150 - Vila Epsilon/PR - CEP 85000-500", "85000-500",
+                             ["R Caeté, 150 - Prado Velho, Vila Epsilon - PR, 85000500",
+                              "R Caeté, 150 , SEDE - Prado Velho, Vila Epsilon - PR, 85000500"], 0),
+            "Vila Zeta": ("AV Goias, 700 - Sala 9 - Vila Zeta/PR - CEP 85000-600", "85000-600",
+                          ["AV Goiás, 700 - Zona de Armazém, Vila Zeta - PR, 85000600",
+                           "AV Goias, 700 , Sala 9 - Centro, Vila Zeta - PR, 85000600"], 1),
+            "Vila Eta": ("AV Modelo de Souza, 2339 - Vila Eta/PR - CEP 85000-700", "85000-700",
+                         ["AV MODELO DE SOUZA, 2339 - CENTRO, Vila Eta - PR, 85000700",
+                          "AV Modelo de Souza, 2339 - Centro, Vila Eta - PR, 85000700"], 1),
         }
         for cidade, (endereco, cep, opcoes, certa) in casos.items():
             with self.subTest(cidade=cidade):
                 self.assertEqual(enderecos_correspondentes(opcoes, endereco, cidade, cep), [opcoes[certa]])
 
     def test_two_different_complements_or_neighbourhoods_still_go_to_the_user(self):
-        opcoes = ["AV X, 10 , SALA 1 - Centro, Irati - PR, 84500056", "AV X, 10 , SALA 2 - Centro, Irati - PR, 84500056"]
-        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Irati/PR - CEP 84500-056", "Irati", "84500-056"), [])
-        opcoes = ["AV X, 10 - Centro, Irati - PR, 84500056", "AV X, 10 - Vila Nova, Irati - PR, 84500056"]
-        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Irati/PR - CEP 84500-056", "Irati", "84500-056"), opcoes)
+        opcoes = ["AV X, 10 , SALA 1 - Centro, Vila Teta - PR, 84500056", "AV X, 10 , SALA 2 - Centro, Vila Teta - PR, 84500056"]
+        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Vila Teta/PR - CEP 84500-056", "Vila Teta", "84500-056"), [])
+        opcoes = ["AV X, 10 - Centro, Vila Teta - PR, 84500056", "AV X, 10 - Vila Nova, Vila Teta - PR, 84500056"]
+        self.assertEqual(enderecos_correspondentes(opcoes, "AV X, 10 - Vila Teta/PR - CEP 84500-056", "Vila Teta", "84500-056"), opcoes)
 
 
 class TicketsUXTests(unittest.TestCase):
@@ -144,7 +145,7 @@ class TicketsUXTests(unittest.TestCase):
     def preparar(self, **alteracoes):
         return self.servico.preparar(**{
             "serial": "abc123", "entrega_endereco": "Av. Tupi, 333 - Bortot - Pato Branco/PR - CEP 85504-000",
-            "entrega_cidade": "Pato Branco", "entrega_cep": "85504-000", "entrega_cnpj": "75.110.585/0005-25",
+            "entrega_cidade": "Pato Branco", "entrega_cep": "85504-000", "entrega_cnpj": "11.222.333/0002-62",
             "arquivo_nome": "Transferencia_ABC123_Curitiba-Pato_Branco.xlsx", "arquivo": b"xlsx", **alteracoes,
         })
 
@@ -161,8 +162,8 @@ class TicketsUXTests(unittest.TestCase):
         sessao = self.preparar()
         self.assertEqual(sessao["status"], "preparado")
         self.assertEqual(sessao["endereco"], PATO_BRANCO)
-        self.assertEqual(sessao["cnpj_faturamento"], "75.110.585/0001-00")
-        self.assertEqual(sessao["cnpj_instalacao"], "75.110.585/0005-25")
+        self.assertEqual(sessao["cnpj_faturamento"], client_billing_cnpj())
+        self.assertEqual(sessao["cnpj_instalacao"], "11.222.333/0002-62")
         # No local profile file here and the code default is blank: the modal gets empty fields (public repository).
         self.assertEqual(sessao["solicitante"], {"nome": "", "email": "", "telefone": ""})
         self.assertEqual(self.portal.ceps, ["85504-000"])
@@ -217,8 +218,8 @@ class TicketsUXTests(unittest.TestCase):
         resultado = self.executar(sessao, chamado_interno="AB-123")
         self.assertEqual(resultado, {"status": "preenchido", "serial": "ABC123"})
         formulario = self.portal.formularios[-1]
-        self.assertEqual(formulario.cnpj_faturamento, CNPJ_FATURAMENTO)
-        self.assertEqual(formulario.cnpj_instalacao, "75.110.585/0005-25")
+        self.assertEqual(formulario.cnpj_faturamento, client_billing_cnpj())
+        self.assertEqual(formulario.cnpj_instalacao, "11.222.333/0002-62")
         self.assertEqual((formulario.nome, formulario.chamado_interno), ("Pessoa Fictícia", "AB-123"))
         self.assertEqual(formulario.arquivo_nome, "Transferencia_ABC123_Curitiba-Pato_Branco.xlsx")
         self.assertEqual(self.portal.envios, 0)
@@ -376,7 +377,7 @@ class RouterTests(unittest.TestCase):
         self.gerar = planilha.start()
         self.addCleanup(planilha.stop)
         self.corpo = {
-            "serial": "ABC123", "entrega_cidade": "Pato Branco", "entrega_cnpj": "75.110.585/0005-25",
+            "serial": "ABC123", "entrega_cidade": "Pato Branco", "entrega_cnpj": "11.222.333/0002-62",
             "entrega_endereco": "Av. Tupi, 333 - Bortot - Pato Branco/PR - CEP 85504-000", "entrega_contato": "Pessoa",
             "entrega_cep": "85504-000",
         }
@@ -453,7 +454,7 @@ class RouterTests(unittest.TestCase):
 
     def test_unexpected_playwright_error_becomes_plain_message_and_logs_only_the_class(self):
         def falhar(*_args):
-            raise RuntimeError("selector input#nome value=Pessoa CNPJ 75.110.585/0005-25")
+            raise RuntimeError("selector input#nome value=Pessoa CNPJ 11.222.333/0002-62")
         self.portal.preparar = falhar
         with self.assertLogs("routers.ux_chamados", level=logging.WARNING) as logs:
             resposta = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo)

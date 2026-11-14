@@ -224,10 +224,10 @@ class CoberturaRegrasTests(unittest.TestCase):
     def test_serie_do_sebrae_fica_fora(self):
         estado = cov.estado_vazio()
         with self.assertRaises(CoberturaErro) as erro:
-            aplicar(estado, cov.registrar_disponibilidade, serie="brj135p5xs", situacao="disponivel", cidade="Cidade A")
+            aplicar(estado, cov.registrar_disponibilidade, serie="brt100xa01", situacao="disponivel", cidade="Cidade A")
         self.assertEqual(erro.exception.extra["motivo"], "fora_do_inventario")
-        estado["disponibilidade"]["BRJ135P5XS"] = {
-            "id": "BRJ135P5XS", "serie": "BRJ135P5XS", "estado": "disponivel", "cidade": "Cidade A",
+        estado["disponibilidade"]["BRT100XA01"] = {
+            "id": "BRT100XA01", "serie": "BRT100XA01", "estado": "disponivel", "cidade": "Cidade A",
             "valida_ate": "2026-11-13", "rev": 1,
         }
         estado, demanda = aplicar(estado, cov.registrar_demanda, data="2026-11-20", cidade="Cidade A", quantidade=1)
@@ -235,7 +235,7 @@ class CoberturaRegrasTests(unittest.TestCase):
         self.assertEqual(resultado["disponiveis"], [])
         self.assertEqual(resultado["vagas"][0]["situacao"], "sem_cobertura")
         with self.assertRaises(CoberturaErro):
-            aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="BRJ135P5XS")
+            aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="BRT100XA01")
 
     def test_prnotesjp_conta_como_curitiba(self):
         cadastro = cov.indexar_cadastro([
@@ -382,7 +382,7 @@ class CoberturaMovimentacaoTests(unittest.TestCase):
         self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (409, "serie_entregue"))
 
         with self.assertRaises(CoberturaErro) as erro:
-            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="BRJ135P5XS")
+            aplicar(estado, cov.resolver_divergencia, mov["id"], mov["rev"], "corrigir", serie_recebida="BRT100XA01")
         self.assertEqual((erro.exception.status, erro.exception.extra["motivo"]), (422, "fora_do_inventario"))
 
         em_manutencao = ctx(manutencao=Manutencao(series=frozenset({"SINT012"})))

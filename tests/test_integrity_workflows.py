@@ -159,7 +159,7 @@ def make_transfer_payload(**overrides):
     values = {
         "serial": "SERIE-FICTICIA",
         "descricao_equipamento": "EQUIPAMENTO FICTICIO",
-        "contrato": 16467,
+        "contrato": 10101,
         "retirada_cnpj": "00.000.000/0000-00",
         "retirada_endereco": "ORIGEM FICTICIA",
         "retirada_contato": "REMETENTE FICTICIO",
@@ -823,7 +823,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
     def test_same_address_with_conflicting_cnpj_uses_the_majority(self):
         # Real export of 08/11/2026: one Toledo notebook (BRJ5512GCT) carries Paranaguá's CNPJ in the UX.
-        certo, errado = "75.110.585/0018-40", "75.110.585/0019-20"
+        certo, errado = "11.222.333/0005-05", "11.222.333/0006-96"
         make_details(
             self.details,
             [
@@ -1054,30 +1054,30 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual((cell.value, cell.data_type), (payload_text, "s"))
         workbook.close()
 
-    def test_equipment_edit_preserves_the_supported_16467_contract_metadata(self):
+    def test_equipment_edit_preserves_the_supported_10101_contract_metadata(self):
         headers = [
             "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
             "CodigoContrato", "RazaoSocial",
         ]
         make_details(
             self.details,
-            [("SN-16467", "HOST-16467", "Modelo original", "Maringá", "Notebook", "87000000", 16467, "RAZAO SOCIAL FICTICIA")],
+            [("SN-10101", "HOST-10101", "Modelo original", "Maringá", "Notebook", "87000000", 10101, "RAZAO SOCIAL FICTICIA")],
             headers=headers,
         )
-        make_endpoint(self.endpoint, [("SN-16467", "HOST-16467")])
+        make_endpoint(self.endpoint, [("SN-10101", "HOST-10101")])
         make_model(self.model)
         self.assertTrue(main.load_database())
-        selected = main.get_equipamento("SN-16467")
-        self.assertEqual(selected["contrato"], "16467")
+        selected = main.get_equipamento("SN-10101")
+        self.assertEqual(selected["contrato"], "10101")
         self.assertEqual(selected["razao_social"], "RAZAO SOCIAL FICTICIA")
 
         main.salvar_equipamento(equipment_routes.EquipamentoUpdatePayload(
-            serial="SN-16467",
+            serial="SN-10101",
             revisao=selected["revisao"],
             modelo="Modelo atualizado",
         ))
-        updated = main.get_equipamento("SN-16467")
-        self.assertEqual(updated["contrato"], "16467")
+        updated = main.get_equipamento("SN-10101")
+        self.assertEqual(updated["contrato"], "10101")
         self.assertEqual(updated["razao_social"], "RAZAO SOCIAL FICTICIA")
 
         previous_cache = copy.deepcopy(inventory_state.equipamentos_cache)
@@ -1624,7 +1624,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         payload = main.TransferenciaPayload(
             serial="SERIE-FICTICIA",
             descricao_equipamento="EQUIPAMENTO FICTICIO",
-            contrato=16467,
+            contrato=10101,
             retirada_cnpj="00.000.000/0000-00",
             retirada_endereco="ORIGEM FICTICIA",
             retirada_contato="REMETENTE FICTICIO",

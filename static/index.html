@@ -144,7 +144,7 @@
         <dl class="ck-pront__resumo">
           <div class="ck-pront__par"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
           <div class="ck-pront__par"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
-          <div class="ck-pront__par"><dt>Contrato</dt><dd class="ck-mono"><strong>16467</strong></dd></div>
+          <div class="ck-pront__par"><dt>Contrato</dt><dd class="ck-mono"><strong id="stat-contrato">—</strong></dd></div>
         </dl>
         <div class="ckp-progresso"><span class="ckp-progresso__trilho" aria-hidden="true"><span class="ckp-progresso__cheio" id="ckp-progresso-cheio"></span></span><span><strong id="ckp-progresso-texto">0 de 4</strong> fontes em dia</span></div>
         <ul id="readiness-details-content" class="ck-pront__lista" aria-label="Fontes da base"></ul>
@@ -382,6 +382,13 @@
             <label class="ck-campo ck-span-3" for="retirada-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="retirada-obs" required class="ck-entrada" placeholder="Ex: Notebook + kit na mochila" />
             </label>
+          </div>
+          <div id="aviso-cliente-config" class="ck-nota hidden" data-status="alerta" role="status">
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
+            <div>
+              <p id="aviso-cliente-config-texto">Dados do cliente (contrato e CNPJ de faturamento) não configurados nesta instalação. Sem eles, transferências, chamados e rotinas do Chrome ficam bloqueados.</p>
+              <button type="button" id="btn-configurar-cliente" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-cliente-config" data-on-click="abrirConfiguracaoCliente">Configurar dados do cliente</button>
+            </div>
           </div>
           <div id="aviso-contato-origem" class="ck-nota hidden" data-status="alerta" role="status">
             <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>

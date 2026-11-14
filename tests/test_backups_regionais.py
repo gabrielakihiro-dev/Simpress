@@ -262,10 +262,10 @@ class MarcaEContagemTests(unittest.TestCase):
             [
                 notebook("NB1", base="Backup Cascavel 01"),
                 notebook("MAC1", base="Backup Cascavel 02", tipo="MacBook", modelo="MacBook Air"),
-                notebook("BRJ135P5XS", base="Backup Cascavel 03"),
+                notebook("BRT100XA01", base="Backup Cascavel 03"),
                 notebook("MON1", base="Backup Cascavel 04", tipo="Monitor", modelo="Dell P2422H"),
             ],
-            endpoint(*[(s, "X", antes(days=1)) for s in ("NB1", "MAC1", "BRJ135P5XS", "MON1")]),
+            endpoint(*[(s, "X", antes(days=1)) for s in ("NB1", "MAC1", "BRT100XA01", "MON1")]),
         )
         self.assertEqual(todas_as_series(resultado), ["NB1"])
         self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
@@ -450,9 +450,9 @@ class ConfirmacaoTests(unittest.TestCase):
 
     def test_confirmacao_de_serie_fora_do_escopo_ou_do_cadastro_e_ignorada(self):
         resultado = calcular(
-            [notebook("MAC1", tipo="MacBook", modelo="MacBook Pro"), notebook("BRJ135P5XS")],
+            [notebook("MAC1", tipo="MacBook", modelo="MacBook Pro"), notebook("BRT100XA01")],
             endpoint(),
-            [self.confirmacao("MAC1"), self.confirmacao("BRJ135P5XS"), self.confirmacao("DESCONHECIDA")],
+            [self.confirmacao("MAC1"), self.confirmacao("BRT100XA01"), self.confirmacao("DESCONHECIDA")],
         )
         self.assertEqual(todas_as_series(resultado), [])
 

@@ -10,7 +10,7 @@ from domains.local_setup import REGIONAL_REPRESENTATIVE_DEFAULTS
 from domains.assistant_tools import QUERY_TOOLS, TOOLS
 from tests.test_assistant import CPF, FakeModel, abrir, call, calls, temp_json, text
 
-SEBRAE_SERIES = ("BRJ135P5XS", "BRJ142QKBQ", "BRJ9435VMR", "BRJ9435VMF", "BRJ149SCJG")
+SEBRAE_SERIES = ("BRT100XA01", "BRT100XA02", "BRT200XB0R", "BRT200XB0F", "BRT300XC01")
 EMAIL = "maria.souza@exemplo.com"
 
 

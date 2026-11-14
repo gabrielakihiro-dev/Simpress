@@ -97,7 +97,6 @@ ASSISTANT_NOTES_FILE = STATE_DIR / "assistente_notas.json"
 ASSISTANT_WEB_SEARCH_FILE = STATE_DIR / "assistente_busca_web.json"
 TRANSACTION_ROOT = BASE_DIR
 
-SUPPORTED_CONTRACT = 16467
 SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
 
 # The transfer origin contact is personal data and is never versioned. It comes from the
@@ -120,6 +119,61 @@ def local_setting(variable: str, key: str, path: Path = AUTOMATION_ACCOUNTS_FILE
         return ""
     from_file = stored.get(key) if isinstance(stored, dict) else None
     return from_file.strip() if isinstance(from_file, str) else ""
+
+
+# The client's contract, billing CNPJ and own notebook series are real client data and never versioned:
+# environment variable first, then this git-ignored file (see config/cliente.exemplo.json, written by the first
+# access), else empty. Read on every call, so a file saved by the first access applies without restarting.
+CLIENT_CONFIG_FILE = BASE_DIR / "config" / "cliente.json"
+CLIENT_NOT_CONFIGURED = (
+    "Dados do cliente não configurados nesta instalação (config/cliente.json). "
+    "Preencha contrato e CNPJ de faturamento no primeiro acesso."
+)
+
+
+def client_contract() -> str:
+    """Contract number of the client ("" when not configured)."""
+    return local_setting("SIMPRESS_CLIENTE_CONTRATO", "contrato", CLIENT_CONFIG_FILE)
+
+
+def client_billing_cnpj() -> str:
+    """Billing CNPJ used by the UX ticket ("" when not configured)."""
+    return local_setting("SIMPRESS_CLIENTE_CNPJ_FATURAMENTO", "cnpj_faturamento", CLIENT_CONFIG_FILE)
+
+
+_own_serials_cache: tuple[tuple, tuple[str, ...]] = ((), ())
+
+
+def client_own_serials() -> tuple[str, ...]:
+    """Raw serials of the client's own notebooks, left out of comparisons (comma list in the env, list in the file)."""
+    global _own_serials_cache
+    from_env = str(os.environ.get("SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA") or "").strip()
+    if from_env:
+        return tuple(item.strip() for item in from_env.split(",") if item.strip())
+    try:
+        info = CLIENT_CONFIG_FILE.stat()
+    except OSError:
+        return ()
+    # Comparisons call this once per row: parse again only when the file changed (path, mtime and size).
+    key = (str(CLIENT_CONFIG_FILE), info.st_mtime_ns, info.st_size)
+    if _own_serials_cache[0] == key:
+        return _own_serials_cache[1]
+    try:
+        stored = json.loads(CLIENT_CONFIG_FILE.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return ()
+    series = stored.get("series_sebrae_fora") if isinstance(stored, dict) else None
+    result = tuple(str(item).strip() for item in series if str(item).strip()) if isinstance(series, list) else ()
+    _own_serials_cache = (key, result)
+    return result
+
+
+def require_client_contract() -> str:
+    """The configured contract, or ValueError with the first-access message (never a guessed value)."""
+    contract = client_contract()
+    if not contract:
+        raise ValueError(CLIENT_NOT_CONFIGURED)
+    return contract
 
 
 # Per-city overrides of the SEBRAE/PR regional representatives (what the user edited on the Transferência screen).

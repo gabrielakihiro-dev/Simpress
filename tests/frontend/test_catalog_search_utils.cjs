@@ -10,7 +10,7 @@ test("normalizes accents and case for unit catalog search", () => {
 test("matches normalized address, CNPJ and postal-code fields", () => {
   const unit = {
     endereco: "AV Bento Munhoz da Rocha Netto",
-    cnpj: "75.110.585/0007-97",
+    cnpj: "11.222.333/0003-43",
     cep: "87030-010",
   };
 

@@ -83,7 +83,7 @@ def october_comparison():
         "ausentes_em_detalhes": [
             {"computador": "PRMACFIC01", "serie": "CFICMAC001", "local_previsto": "Curitiba"},
             # Sebrae-owned notebook: never counted as missing in the Simpress base.
-            {"computador": "PRMACFIC02", "serie": "BRJ135P5XS", "local_previsto": "Curitiba"},
+            {"computador": "PRMACFIC02", "serie": "BRT100XA01", "local_previsto": "Curitiba"},
         ],
         "divergencias_local": [
             {"computador": "PRNOTEMARFIC1", "serie": "SN-FIC-010", "local_previsto": "Maringá", "local_detalhes": "Londrina"},
@@ -219,7 +219,7 @@ class ComparisonSectionTests(unittest.TestCase):
         self.assertEqual(section["atualizacoes_no_mes"], 2)
         self.assertEqual(section["contagens"], {SECTION_ENDPOINT: 1, SECTION_SIMPRESS: 1, SECTION_LOCATION: 1})
         serials = {line["serie"] for line in section["linhas"]}
-        self.assertNotIn("BRJ135P5XS", serials)
+        self.assertNotIn("BRT100XA01", serials)
         self.assertFalse({"SN-FIC-011", "SN-FIC-012", "SN-FIC-013"} & serials)
         self.assertNotIn("BRJFIC0099", serials)
 
@@ -433,7 +433,7 @@ class WorkbookTests(unittest.TestCase):
         self.assertEqual(values["OS Oracle pendentes no fim do mês"], 1)
         self.assertEqual(values["Pedidos Simpress entregues no mês"], 1)
         self.assertNotIn("Transferências geradas", values)
-        self.assertTrue(any("16467" in str(cell.value) for cell in workbook["Resumo"]["A"]))
+        self.assertTrue(any("10101" in str(cell.value) for cell in workbook["Resumo"]["A"]))
 
     def test_approved_source_labels_and_no_raw_source_names(self):
         workbook, _ = self.workbook(build())
@@ -443,7 +443,7 @@ class WorkbookTests(unittest.TestCase):
         self.assertIn("Sem correspondência — no endpoint", text)
         self.assertIn("Sem correspondência — na Simpress", text)
         self.assertNotIn("InvAll", text)
-        self.assertNotIn("BRJ135P5XS", text)
+        self.assertNotIn("BRT100XA01", text)
 
     def test_detail_sheets_match_summary(self):
         workbook, _ = self.workbook(build())

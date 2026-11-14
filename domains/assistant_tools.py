@@ -28,7 +28,7 @@ from domains.assistant_relatorios import (
 
 Args = Dict[str, Any]
 
-SERIAL = {"type": "string", "description": "Número de série da máquina (ex.: 'BRJ149SCJG', 'CMVXKV7YCM')."}
+SERIAL = {"type": "string", "description": "Número de série da máquina (ex.: 'BRT400XD01', 'CMVXKV7YCM')."}
 
 
 class ApiEAnexos(NamedTuple):

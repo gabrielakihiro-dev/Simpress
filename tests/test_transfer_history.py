@@ -15,10 +15,10 @@ from routers.transfer_history import TransferHistoryServices, create_transfer_hi
 VALID_PAYLOAD = {
     "serial": "brj5512fgd",
     "retirada_cidade": "Curitiba",
-    "retirada_cnpj": "75.110.585/0001-00",
+    "retirada_cnpj": "11.222.333/0001-81",
     "retirada_endereco": "R Caeté, 150 - Curitiba/PR",
     "entrega_cidade": "Londrina",
-    "entrega_cnpj": "75.110.585/0010-00",
+    "entrega_cnpj": "11.222.333/0004-24",
     "entrega_endereco": "Av Higienópolis, 100 - Londrina/PR",
     "entrega_contato": "Ana Souza",
     "entrega_email": "ana@pr.sebrae.com.br",

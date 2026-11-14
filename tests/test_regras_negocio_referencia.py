@@ -105,10 +105,10 @@ class RegrasNegocioTests(unittest.TestCase):
         self.assertFalse(cadastro_e_macbook("PRMACEND01"))
 
     def test_e_serie_sebrae_ignora_caixa_hifen_e_espaco(self):
-        for serie in ("BRJ135P5XS", "brj135p5xs", "brj-135p5xs", " BRJ 9435VMR "):
+        for serie in ("BRT100XA01", "brt100xa01", "brt-100xa01", " BRT 200XB0R "):
             with self.subTest(serie=serie):
                 self.assertTrue(e_serie_sebrae(serie))
-        for serie in ("BRJ135P5XT", "", None):
+        for serie in ("BRT100XA09", "", None):
             with self.subTest(serie=serie):
                 self.assertFalse(e_serie_sebrae(serie))
 

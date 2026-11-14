@@ -9,6 +9,20 @@ const {
   priorEquipment,
 } = require("./support/inventory-harness.cjs");
 
+// Billing CNPJ comes from the client data of the installation (GET /api/config/transferencia), never from the code.
+const CNPJ_FATURAMENTO_FICTICIO = "11.222.333/0001-81";
+
+async function createHarnessWithClientData() {
+  const harness = createAppHarness(async (url) => {
+    if (url === "/api/config/transferencia") {
+      return apiResponse({ contrato: "10101", cnpj_faturamento: CNPJ_FATURAMENTO_FICTICIO, cliente_configurado: true });
+    }
+    throw new Error(`Chamada API inesperada: ${url}`);
+  });
+  await harness.run("carregarConfiguracaoTransferencia()");
+  return harness;
+}
+
 const restorePreview = {
   tipo_evento: "atualizacao",
   evento_horario: "2026-10-03T10:00:00-03:00",
@@ -109,7 +123,7 @@ test("copies the selected location postal code and installation CNPJ with the fi
     retirada_cep: "80000-123",
     retirada_cnpj: "12.345.678/0001-90",
   };
-  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  const harness = await createHarnessWithClientData();
   harness.selectEquipment(equipment);
   harness.element("retirada-cnpj").value = equipment.retirada_cnpj;
   harness.element("retirada-endereco").value = `Rua da unidade, 10 - CEP ${equipment.retirada_cep}`;
@@ -120,10 +134,28 @@ test("copies the selected location postal code and installation CNPJ with the fi
 
   assert.deepEqual(harness.effects.clipboardWrites, [
     "80000-123",
-    "75.110.585/0001-00",
+    CNPJ_FATURAMENTO_FICTICIO,
     "12.345.678/0001-90",
   ]);
   assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+});
+
+test("without client data the billing CNPJ is not copied and the user is sent to the client form", async () => {
+  const harness = createAppHarness(async (url) => {
+    if (url === "/api/config/transferencia") return apiResponse({ contrato: "", cnpj_faturamento: "", cliente_configurado: false });
+    throw new Error(`Chamada API inesperada: ${url}`);
+  });
+  harness.context.workflowUnits = [{ id: 11, cidade: "Londrina", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" }];
+  harness.run("SimpressApp.state.unidadesList = workflowUnits");
+  await harness.run("carregarConfiguracaoTransferencia()");
+  harness.element("select-unidade-destino").value = "11";
+
+  await harness.run('copiarDadoLocalAtual("faturamento")');
+  await harness.run('copiarDadoEntrega("faturamento")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, []);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["warning", "warning"]);
+  assert.match(harness.effects.toasts[0].message, /Configure os dados do cliente/);
 });
 
 test("copies the currently selected pickup locality after forcing the headquarters", async () => {
@@ -153,7 +185,7 @@ test("copies the fixed billing CNPJ and installation CNPJ for the selected deliv
     { id: 11, cidade: "Londrina", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" },
     { id: 22, cidade: "Maringá", cnpj: "22.222.222/0001-22", endereco_completo: "Rua Beta, 2" },
   ];
-  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  const harness = await createHarnessWithClientData();
   harness.context.workflowUnits = units;
   harness.run("SimpressApp.state.unidadesList = workflowUnits");
   const installCopyButton = harness.element("btn-copiar-cnpj-instalacao-entrega");
@@ -171,7 +203,7 @@ test("copies the fixed billing CNPJ and installation CNPJ for the selected deliv
   await harness.run('copiarDadoEntrega("instalacao")');
 
   assert.deepEqual(harness.effects.clipboardWrites, [
-    "75.110.585/0001-00",
+    CNPJ_FATURAMENTO_FICTICIO,
     "11.111.111/0001-11",
     "22.222.222/0001-22",
   ]);

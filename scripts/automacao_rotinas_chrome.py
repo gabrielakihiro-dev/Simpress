@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:  # o script roda sozinho (python scripts/...) e lê a configuração local do projeto
     sys.path.insert(0, str(ROOT))
-from core.config import local_setting  # noqa: E402
+from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract, local_setting  # noqa: E402
 
 ONEDRIVE_DOWNLOADS = Path.home() / "OneDrive - SEBRAE" / "Downloads"
 DOWNLOADS_DIR = ONEDRIVE_DOWNLOADS if ONEDRIVE_DOWNLOADS.is_dir() else Path.home() / "Downloads"
@@ -59,10 +59,6 @@ CHROME_PROFILE_DIR = Path(os.environ.get("SIMPRESS_CHROME_PROFILE", str(Path.hom
 CDP_PORT = int(os.environ.get("SIMPRESS_CHROME_PORT", "9333"))
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 ERROS_DIR = ROOT / "data" / "logs" / "automacao_chrome"
-
-CONTRATO = "16467"
-CONTRATO_NOME = "16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
-FILTRO_ORACLE = f"{CONTRATO}/%"
 
 ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
@@ -98,6 +94,19 @@ _inicio_execucao = 0.0
 
 class RotinaErro(RuntimeError):
     """Falha de uma etapa que interrompe a rotina sem repetir cliques."""
+
+
+def contrato_configurado() -> str:
+    """Contrato do cliente (config/cliente.json), lido a cada chamada; sem ele a rotina para antes de abrir o site."""
+    contrato = client_contract()
+    if not contrato:
+        raise RotinaErro(CLIENT_NOT_CONFIGURED)
+    return contrato
+
+
+def contrato_nome(contrato: str) -> str:
+    """Texto que o UX mostra para o contrato: código, hífen e razão social."""
+    return f"{contrato} - {SUPPORTED_CONTRACT_LEGAL_NAME}"
 
 
 class EtapaInstavel(RotinaErro):
@@ -1051,6 +1060,7 @@ def abrir_gestao_solicitacoes(page: "Page", tentativas: int = 3):
 
 
 def exportar_oracle(context: "BrowserContext") -> Path:
+    filtro = f"{contrato_configurado()}/%"  # antes de abrir a aba: sem contrato configurado nada é aberto
     page = nova_aba(context, ORACLE_URL, "Oracle")
     try:
         aguardar_login(page, "Oracle", oracle_logado, email=EMAIL_DASHBOARD)
@@ -1061,14 +1071,14 @@ def exportar_oracle(context: "BrowserContext") -> Path:
                 # Reabre a Gestão de Solicitações a cada tentativa: se algo dentro do Oracle foi fechado
                 # (não a aba) no meio da pesquisa anterior, o campo antigo pode não existir mais.
                 campo = abrir_gestao_solicitacoes(page)
-                log("Oracle", f"Preenchendo Contrato/Item com {FILTRO_ORACLE}...")
+                log("Oracle", f"Preenchendo Contrato/Item com {filtro}...")
                 campo.click()
                 campo.press("Control+A")
-                campo.press_sequentially(FILTRO_ORACLE, delay=60)
+                campo.press_sequentially(filtro, delay=60)
                 campo.press("Tab")
-                if campo.input_value().strip() != FILTRO_ORACLE:
-                    campo.fill(FILTRO_ORACLE)
-                if campo.input_value().strip() != FILTRO_ORACLE:
+                if campo.input_value().strip() != filtro:
+                    campo.fill(filtro)
+                if campo.input_value().strip() != filtro:
                     raise RotinaErro(f"O campo Contrato/Item ficou com {campo.input_value()!r}.")
 
                 log("Oracle", "Pesquisando...")
@@ -1157,13 +1167,15 @@ def aguardar_ux_livre(page: "Page") -> None:
 
 
 def selecionar_contrato_ux(page: "Page") -> None:
+    contrato = contrato_configurado()
+    nome_contrato = contrato_nome(contrato)
     campo = page.locator("#CodigosContratosFiltro").first
     aguardar_estado(campo, "visible")
     aguardar_ux_livre(page)
     definir_pagina_ativa_para_recuperacao(page)
 
     def _selecionar() -> None:
-        log("UX Simpress", f"Selecionando o contrato {CONTRATO_NOME}...")
+        log("UX Simpress", f"Selecionando o contrato {nome_contrato}...")
         campo.click()
         desmarcar = page.get_by_text("Desmarcar todos", exact=True).filter(visible=True)
         if campo.input_value().strip() and visivel(desmarcar):
@@ -1171,14 +1183,14 @@ def selecionar_contrato_ux(page: "Page") -> None:
         busca = page.get_by_placeholder("Buscar Contrato/Nome").filter(visible=True).first
         busca.wait_for(state="visible", timeout=10000)
         busca.fill("")
-        busca.press_sequentially(CONTRATO, delay=50)
-        opcoes = page.locator(f'li[data-valor="{CONTRATO}"]').filter(visible=True)
+        busca.press_sequentially(contrato, delay=50)
+        opcoes = page.locator(f'li[data-valor="{contrato}"]').filter(visible=True)
         opcao = opcoes.first
         opcao.wait_for(state="visible", timeout=15000)
         if opcoes.count() != 1:
             raise RotinaErro("A opção do contrato não é única.")
         texto = (opcao.get_attribute("data-texto") or "").strip()
-        if texto != CONTRATO_NOME:
+        if texto != nome_contrato:
             raise RotinaErro(f"A opção do contrato não confere: {texto!r}.")
         if opcao.locator("i.icon-ok-squared").count() == 0:
             opcao.click()
@@ -1188,13 +1200,13 @@ def selecionar_contrato_ux(page: "Page") -> None:
         # filtros dependentes ("Aguarde...") e só depois grava o código no campo.
         page.locator("h1, h2").filter(visible=True).first.click()
         limite = time.time() + 60
-        while time.time() < limite and (campo.get_attribute("data-valor") or "") != CONTRATO:
+        while time.time() < limite and (campo.get_attribute("data-valor") or "") != contrato:
             verificar_cancelamento()
             page.wait_for_timeout(500)
         aguardar_ux_livre(page)
         valor = campo.input_value().strip()
         codigo = campo.get_attribute("data-valor") or ""
-        if valor != CONTRATO_NOME or codigo != CONTRATO:
+        if valor != nome_contrato or codigo != contrato:
             raise EtapaInstavel(f"O campo Contrato/Nome ficou com {valor!r} (código {codigo!r}).")
         log("UX Simpress", "Contrato confirmado no campo (✓).")
 
@@ -1213,12 +1225,15 @@ def ux_no_contrato(page: "Page", url: str) -> bool:
     """A aba continua na tela da rotina e com o contrato certo no filtro (nada de outro link nem outro contrato)."""
     # Mesma rota com ou sem "/Index", barra final, query ou âncora; outro link do menu não passa.
     atual, tela = (re.sub(r"(/index)?/*([?#].*)?$", "", u.lower()) for u in (page.url, url))
+    contrato = client_contract()
+    if not contrato:
+        return False  # sem contrato configurado nenhuma aba está "no contrato certo"
     campo = page.locator("#CodigosContratosFiltro")
     return (
         (atual == tela or atual.startswith(tela + "/"))
         and campo.count() == 1
-        and campo.input_value().strip() == CONTRATO_NOME
-        and campo.get_attribute("data-valor") == CONTRATO
+        and campo.input_value().strip() == contrato_nome(contrato)
+        and campo.get_attribute("data-valor") == contrato
     )
 
 
@@ -1243,6 +1258,8 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
     try:
         if not arquivo.is_file() or arquivo.suffix.lower() != ".xlsx" or arquivo.stat().st_size == 0:
             raise RotinaErro("A planilha exportada não está disponível; nenhuma edição foi salva.")
+        contrato = contrato_configurado()
+        nome_contrato = contrato_nome(contrato)
         page = abrir_ux(context, UX_EQUIPAMENTOS_URL)
 
         def unico(locator, nome):
@@ -1300,7 +1317,7 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
         if inputs.count() != 1 or inputs.evaluate("e => e.files.length !== 1 || e.files[0].name !== " + json.dumps(arquivo.name)):
             raise RotinaErro("O arquivo selecionado no editor não confere; nenhuma edição foi salva.")
         campo = page.locator("#CodigosContratosFiltro")
-        if campo.input_value().strip() != CONTRATO_NOME or campo.get_attribute("data-valor") != CONTRATO:
+        if campo.input_value().strip() != nome_contrato or campo.get_attribute("data-valor") != contrato:
             raise RotinaErro("O contrato mudou antes da gravação; nenhuma edição foi salva.")
         # No UX real o botão só aparece depois de escolher o arquivo.
         salvar = controle(editor, "Salvar edições")
@@ -1336,6 +1353,8 @@ def atualizar_apelidos_ux(context: "BrowserContext", arquivo: Path) -> int:
 def exportar_ux_pedidos(context: "BrowserContext") -> Path:
     page = None
     try:
+        contrato = contrato_configurado()
+        nome_contrato = contrato_nome(contrato)
         page = abrir_ux(context, UX_PEDIDOS_URL)
         selecionar_contrato_ux(page)
         definir_pagina_ativa_para_recuperacao(page)
@@ -1349,10 +1368,10 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
                 log("UX Simpress", f"Busca concluída: {resumo.inner_text().strip()}.")
                 contratos = page.locator("strong", has_text=re.compile(r"^\s*Contrato:\s*$")).locator("xpath=..")
                 textos = [t.replace("Contrato:", "").strip() for t in contratos.all_inner_texts()]
-                divergentes = [t for t in textos if t != CONTRATO_NOME]
+                divergentes = [t for t in textos if t != nome_contrato]
                 if not textos or divergentes:
-                    raise RotinaErro(f"Cartões com contrato diferente de {CONTRATO}: {divergentes or 'nenhum cartão'}.")
-                log("UX Simpress", f"{len(textos)} cartões visíveis conferidos com o contrato {CONTRATO}.")
+                    raise RotinaErro(f"Cartões com contrato diferente de {contrato}: {divergentes or 'nenhum cartão'}.")
+                log("UX Simpress", f"{len(textos)} cartões visíveis conferidos com o contrato {contrato}.")
             except RotinaErro:
                 raise
             except Exception as erro:
@@ -1387,6 +1406,7 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
 def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
     page = None
     try:
+        contrato_configurado()  # antes de abrir a aba: sem contrato configurado nada é aberto
         page = abrir_ux(context, UX_EQUIPAMENTOS_URL)
         selecionar_contrato_ux(page)
         definir_pagina_ativa_para_recuperacao(page)

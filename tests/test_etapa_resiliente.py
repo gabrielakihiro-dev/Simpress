@@ -96,7 +96,7 @@ class ExportarOracleRetryTests(unittest.TestCase):
         # tentativa, nunca reusar o campo (possivelmente morto) da tentativa anterior.
         campo1, campo2 = unittest.mock.MagicMock(), unittest.mock.MagicMock()
         for campo in (campo1, campo2):
-            campo.input_value.return_value = automacao.FILTRO_ORACLE
+            campo.input_value.return_value = f"{automacao.contrato_configurado()}/%"
         page = unittest.mock.MagicMock()
 
         with (
