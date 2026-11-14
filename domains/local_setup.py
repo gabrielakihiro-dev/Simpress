@@ -221,11 +221,17 @@ def load_client_config(path: Path, environment: Optional[Mapping[str, str]] = No
     }
 
 
-def save_client_config(path: Path, contrato: str, cnpj_faturamento: str, series: Optional[list] = None) -> None:
-    """Write the already validated client data to the git-ignored file; ``series`` None keeps the stored list."""
+def save_client_config(
+    path: Path, contrato: Optional[str], cnpj_faturamento: Optional[str], series: Optional[list] = None
+) -> None:
+    """Write the already validated client data to the git-ignored file; a None field keeps the stored value."""
     target = Path(path)
+    stored, _ = _read_origin_contact_file(target, "dados do cliente")
+    if contrato is None:
+        contrato = str(stored.get("contrato") or "")
+    if cnpj_faturamento is None:
+        cnpj_faturamento = str(stored.get("cnpj_faturamento") or "")
     if series is None:
-        stored, _ = _read_origin_contact_file(target, "dados do cliente")
         kept = stored.get("series_sebrae_fora")
         series = [str(item) for item in kept] if isinstance(kept, list) else []
     target.parent.mkdir(parents=True, exist_ok=True)

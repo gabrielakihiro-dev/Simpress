@@ -61,8 +61,8 @@ class ClienteConfigPayload(BaseModel):
     @classmethod
     def validate_contract(cls, value: str) -> str:
         value = value.strip()
-        if value and not re.fullmatch(r"\d{1,12}", value):
-            raise ValueError("Informe o contrato só com números (até 12 dígitos).")
+        if value and not re.fullmatch(r"[1-9]\d{0,11}", value):
+            raise ValueError("Informe o contrato só com números (até 12 dígitos, sem zero à esquerda).")
         return value
 
     @field_validator("cnpj_faturamento")
@@ -169,7 +169,9 @@ def create_local_setup_router(*, model_path: Any, transaction_root: Any, backups
         if missing:
             raise HTTPException(422, f'Preencha o campo "{missing}" dos dados do cliente.')
         try:
-            save_client_config(path, payload.contrato, payload.cnpj_faturamento, payload.series_sebrae_fora)
+            # A blank field that comes from the environment keeps what the file already holds (None = keep).
+            kept = {key: getattr(payload, key) or (None if sources[key] == "ambiente" else "") for key, _ in labels}
+            save_client_config(path, kept["contrato"], kept["cnpj_faturamento"], payload.series_sebrae_fora)
         except (OSError, FileTransactionError, FileBusyError) as error:
             logger.warning("Falha ao gravar os dados do cliente (erro=%s).", type(error).__name__)
             raise HTTPException(500, "Não foi possível gravar os dados do cliente.") from error

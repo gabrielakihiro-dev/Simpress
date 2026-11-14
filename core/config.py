@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -132,13 +133,15 @@ CLIENT_NOT_CONFIGURED = (
 
 
 def client_contract() -> str:
-    """Contract number of the client ("" when not configured)."""
-    return local_setting("SIMPRESS_CLIENTE_CONTRATO", "contrato", CLIENT_CONFIG_FILE)
+    """Contract number of the client ("" when not configured or malformed: fail closed)."""
+    value = local_setting("SIMPRESS_CLIENTE_CONTRATO", "contrato", CLIENT_CONFIG_FILE)
+    return value if re.fullmatch(r"[1-9]\d{0,11}", value) else ""
 
 
 def client_billing_cnpj() -> str:
-    """Billing CNPJ used by the UX ticket ("" when not configured)."""
-    return local_setting("SIMPRESS_CLIENTE_CNPJ_FATURAMENTO", "cnpj_faturamento", CLIENT_CONFIG_FILE)
+    """Billing CNPJ used by the UX ticket ("" when not configured or malformed: fail closed)."""
+    value = local_setting("SIMPRESS_CLIENTE_CNPJ_FATURAMENTO", "cnpj_faturamento", CLIENT_CONFIG_FILE)
+    return value if re.fullmatch(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", value) else ""
 
 
 _own_serials_cache: tuple[tuple, tuple[str, ...]] = ((), ())

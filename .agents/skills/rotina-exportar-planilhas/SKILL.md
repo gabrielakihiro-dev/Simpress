@@ -5,7 +5,7 @@ description: Rotina que exporta o UX Simpress (Meus Equipamentos) e o Endpoint C
 
 # Exportações de planilhas — UX Simpress + Endpoint Central
 
-Referência oficial (consultar quando o procedimento mudar): (link do Notion fora do Git)
+Referência oficial (consultar quando o procedimento mudar): página do Notion da equipe (o link não fica no Git; peça ao usuário)
 
 Gatilho: o usuário diz "Executar" ou "exportar planilhas" neste contexto. Para OS/chamados, use a skill `rotina-os-chamados`.
 
