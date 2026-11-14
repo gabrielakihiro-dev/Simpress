@@ -1072,6 +1072,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-rel__cartao[data-status="alerta"] { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 .ck-rel__cartao[data-status="alerta"] :is(.ck-rel__cartao-titulo, .ck-rel__nota, .ck-rel__valor) { color: inherit; }
 .ck-rel__cartao-titulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
+.ck-rel__cartao-cab { display: flex; align-items: center; gap: 4px; }
 .ck-rel__nota { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-rel__numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 0; }
 .ck-rel__numero { display: flex; flex-direction: column-reverse; min-width: 0; }
@@ -1344,7 +1345,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .resumo-aba { transition: none; } }
 /* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
+#resumo-painel-backups .ck-backups__cabeca { display: flex; align-items: center; gap: 4px; }
 #resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+/* O ⓘ herda min-height 2.5rem de app.css e não deve aumentar a altura do título (Backups e títulos de seção da Comparação). */
+:is(#resumo-painel-backups, #comparacao-planilhas-conteudo) .info-tip-trigger { min-height: 0; }
 #resumo-painel-backups .ck-backups__estado { margin: 0; padding: 24px 12px; text-align: center; color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
 #resumo-painel-backups .ck-backups__limites { padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); overflow-wrap: anywhere; }
 #resumo-painel-backups .ck-backups__limites-titulo { margin: 0 0 4px; font-size: var(--fs-md); font-weight: var(--peso-medio); }

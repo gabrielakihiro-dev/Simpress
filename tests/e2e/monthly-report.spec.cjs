@@ -529,3 +529,48 @@ test("every report tab passes axe in both themes", async ({ page }) => {
     }
   }
 });
+
+// Limpeza dos textos explicativos (Bloco 2): as notas dos cartões ficam num ⓘ escondido até mouse, toque ou foco; Esc fecha só o balão.
+test("the report keeps the card notes in an ⓘ that opens on hover, tap or focus and closes with Esc", async ({ page }, testInfo) => {
+  await routeMonthly(page);
+  await page.goto("/");
+  const panel = await openMonthlyReport(page);
+  const abrir = async (trigger, bubble) => {
+    await expect(bubble).toBeHidden();
+    if (testInfo.project.use.hasTouch) await trigger.tap();
+    else await trigger.hover();
+    await expect(bubble).toBeVisible();
+    await page.mouse.move(0, 0);
+    await trigger.focus();
+    await page.keyboard.press("Escape");
+    await expect(bubble).toBeHidden();
+    await expect(panel).toBeVisible();
+    await expect(trigger).toBeFocused();
+  };
+
+  const pending = page.locator("#cockpit-monthly-pendentes-nota");
+  await expect(pending).toHaveText("Criados até o corte e ainda sem conclusão ou entrega.");
+  await expect(page.locator("#cockpit-monthly-kpis p.ck-rel__nota", { hasText: "Criados até o corte" })).toHaveCount(0);
+  const pendingTrigger = page.locator('#cockpit-monthly-kpis .info-tip-trigger[aria-describedby="cockpit-monthly-pendentes-nota"]');
+  await expect(pendingTrigger).toHaveAttribute("aria-label", "Sobre as OS pendentes");
+  // O ⓘ (24px) não estica a linha do título até os 40px do botão padrão.
+  expect(await pendingTrigger.evaluate(no => no.closest(".ck-rel__cartao-cab").getBoundingClientRect().height)).toBeLessThanOrEqual(28);
+  await abrir(pendingTrigger, pending);
+
+  const fora = page.locator("#cockpit-monthly-fora-nota");
+  await expect(fora).toHaveText("Datas ou vínculo insuficientes: não entram nos números do mês.");
+  await expect(page.locator("#cockpit-monthly-kpis p.ck-rel__nota", { hasText: "Datas ou vínculo" })).toHaveCount(0);
+  const foraTrigger = page.locator('#cockpit-monthly-kpis .info-tip-trigger[aria-describedby="cockpit-monthly-fora-nota"]');
+  await expect(foraTrigger).toHaveAttribute("aria-label", "Sobre fora das contagens");
+  // O total e o botão de listar continuam na tela, fora do ⓘ.
+  await expect(page.locator('#cockpit-monthly-kpis .ck-rel__atencao[data-status="alerta"]').getByRole("button", { name: "Mostrar registros" })).toBeVisible();
+  await abrir(foraTrigger, fora);
+
+  await openReportTab(page, "sebrae");
+  const note = page.locator("#cockpit-monthly-sebrae-nota");
+  await expect(note).toHaveText("Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.");
+  await expect(page.locator("#rel-painel-sebrae h4")).toHaveText("Com data em outubro de 2026");
+  // O que é número ou aviso de dado segue na tela, fora do ⓘ.
+  await expect(page.locator("#rel-painel-sebrae")).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
+  await abrir(page.locator('#rel-painel-sebrae .info-tip-trigger[aria-describedby="cockpit-monthly-sebrae-nota"]'), note);
+});
