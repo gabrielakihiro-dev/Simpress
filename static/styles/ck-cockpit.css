@@ -1901,6 +1901,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist-widget > .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__boas-vindas, .ck-assist__form) { display: none; }
 .ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
 .ck-assist-widget > .ck-assist__form { padding: 0 12px 10px; }
+.ck-assist__conversas { display: none; } /* lista de conversas da lateral: só no expandido a partir de 900px */
 /* Expandido em tela larga: lateral de 272px com marca, status e atalhos da conversa; o eclipse fica centrado na coluna principal. */
 @media (min-width: 900px) {
   .ck-assist-widget[data-modo="maximizado"] { padding-left: 272px; }
@@ -1918,6 +1919,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-instrucoes-botao { order: 1; margin-top: auto; }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-lembretes-botao { order: 2; }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__barra > #assistente-voz { order: 3; }
+  /* Conversas guardadas: ocupam o meio da lateral (entre Nova conversa e Instruções) com rolagem própria. */
+  .ck-assist-widget[data-modo="maximizado"] .ck-assist__conversas { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; margin: 12px 0 8px; }
+  .ck-assist__conversas-titulo { margin: 0 0 6px; padding: 0 12px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--assist-mudo); }
+  .ck-assist__conversas-lista { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-height: 0; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+  .ck-assist__conversas-lista[hidden] { display: none; }
+  .ck-assist__conversa { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 12px; border: 0; border-radius: 10px; background: none; color: var(--assist-texto); font: inherit; text-align: left; cursor: pointer; }
+  .ck-assist__conversa:hover { background: var(--assist-hover); }
+  .ck-assist__conversa:focus-visible { outline: 2px solid var(--assist-acento); outline-offset: -2px; }
+  .ck-assist__conversa-titulo { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .ck-assist__conversa-data { font-size: 11px; color: var(--assist-mudo); }
+  .ck-assist__conversas-vazio { margin: 0; padding: 4px 12px; font-size: 12px; color: var(--assist-mudo); }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__boas-vindas { padding-top: clamp(24px, 15vh, 150px); }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__orbe, .ck-assist-widget[data-modo="maximizado"] .ck-assist__subtitulo { display: block; }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__saudacao { margin: 0; font-size: 34px; letter-spacing: -.02em; }
@@ -1948,6 +1960,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @media (prefers-reduced-motion: no-preference) {
   .ck-assist-widget:not([hidden]) { animation: ck-assist-abrir 200ms var(--curva); }
   .ck-assist__cancelar-envio:not([hidden]), .ck-assist__msg, .ck-assist__pendente, .ck-assist__instrucoes, .ck-assist__anexo, .ck-assist__lembrete, .ck-assist__busca-card, .ck-assist__aviso:not([hidden]) { animation: ck-assist-entrada var(--duracao) var(--curva); }
+  .ck-assist__conversa { transition: background-color 150ms var(--curva); }
   .ck-assist__atalho, .ck-assist__pilula { transition: border-color 200ms var(--curva), box-shadow 200ms var(--curva), transform 200ms var(--curva); }
   .ck-assist-widget[data-modo="maximizado"] .ck-assist__atalho:hover { transform: translateY(-1px); }
 }
