@@ -52,6 +52,24 @@ def _remove_stale_temp_roots(max_age_seconds: int = 3600) -> None:
                     shutil.rmtree(stale, ignore_errors=True)
 
 
+def _select_shard(suite: unittest.TestSuite, shard: str) -> unittest.TestSuite:
+    """Keep only part "i/n" of the test modules (CI runs the parts in parallel); empty = all."""
+    if not shard:
+        return suite
+    index, total = (int(part) for part in shard.split("/"))
+    if not 1 <= index <= total:
+        raise ValueError(f"SIMPRESS_TEST_SHARD inválido: {shard}")
+    # Greedy by test count over a stable order: every module lands in exactly one part.
+    modules = sorted(suite, key=lambda module: (-module.countTestCases(), str(module)))
+    buckets: list[list[unittest.TestSuite]] = [[] for _ in range(total)]
+    sizes = [0] * total
+    for module in modules:
+        target = sizes.index(min(sizes))
+        buckets[target].append(module)
+        sizes[target] += module.countTestCases()
+    return unittest.TestSuite(buckets[index - 1])
+
+
 def run() -> bool:
     if is_link_or_junction(TEMP_ROOT):
         raise RuntimeError("A pasta TEMP do projeto não pode ser um link ou junção.")
@@ -85,6 +103,7 @@ def run() -> bool:
             module = importlib.import_module(module_name)
             module.PROJECT_ROOT = Path(temporary_root)
 
+        suite = _select_shard(suite, os.environ.get("SIMPRESS_TEST_SHARD", ""))
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         return result.wasSuccessful()
 
