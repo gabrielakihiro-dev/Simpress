@@ -2310,10 +2310,12 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   padding: 14px 16px 16px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
 }
 #comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) { padding: 10px 16px 12px; box-shadow: none; background: var(--cor-superficie-funda); }
+/* Nas sub-abas do Resumo as seções ficam dentro de .resumo-painel: o espaço acima do título separa da tabela anterior. */
+#comparacao-planilhas-conteudo .resumo-painel > [data-history-filter-section] + [data-history-filter-section] { margin-top: 24px; }
 #comparacao-planilhas-conteudo h4 { gap: 8px; color: var(--cor-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); line-height: 1.3; }
 #comparacao-planilhas-conteudo [data-history-filter-section] > div:first-child > p { max-width: 80ch; margin-top: 2px; font-size: var(--fs-ui); line-height: 1.5; color: var(--cor-texto-mudo); }
 #comparacao-planilhas-conteudo [data-history-filter-group] + [data-history-filter-group] { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cor-borda-suave); }
-#comparacao-planilhas-conteudo [data-history-filter-group] > h5 { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-forte); }
+#comparacao-planilhas-conteudo [data-history-filter-group] > h5, #comparacao-planilhas-conteudo [data-history-filter-group] > .ux-table-tools-host > h5 { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto-forte); }
 #comparacao-planilhas-conteudo [tabindex="-1"] { scroll-margin-top: 16px; }
 /* "Nenhuma divergência…" : uma linha, ponto verde, sem a faixa alta centralizada */
 #comparacao-planilhas-conteudo [role="status"].text-center {
