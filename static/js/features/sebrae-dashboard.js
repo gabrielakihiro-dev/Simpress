@@ -2167,7 +2167,7 @@
       // o resumo também é o vazio da aba Antigos (CSS): escrito mesmo sem o botão Atualizar montado
       definirTexto("sebrae-antigos-resumo", visiveis
         ? `${visiveis} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
-        : "Nenhum chamado antigo em aberto.");
+        : "Nenhum chamado antigo em aberto ou sem status.");
       const faltaEncerramento = mostrarFaltaEncerramento(pendentesEncerramento());
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;
@@ -2267,8 +2267,8 @@
       lista?.replaceChildren(...linhasNovos);
       lista?.removeAttribute("aria-busy"); // a lista já está pronta (também vale para a importação, que chama renderizar direto)
       renderizarAvisos(novos);
-      if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard para buscar os chamados novos.");
-      else if (!novos) definirTexto("sebrae-novos-resumo", "Nenhuma busca feita ainda. Use Buscar chamados novos.");
+      if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard primeiro.");
+      else if (!novos) definirTexto("sebrae-novos-resumo", "Nenhuma busca feita ainda.");
       else {
         const quando = formatarDataHora(novos.lidos_em);
         definirTexto("sebrae-novos-resumo",

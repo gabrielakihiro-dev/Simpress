@@ -92,3 +92,13 @@ TODOS os IDs dentro dos modais permanecem iguais. Só muda o CSS.
   - Painel de prontidão (`#readiness-panel`) acessível pelo chip "Base 2 h"
 
 **Commit:** `style(cockpit): ajusta modais ao tema Nocturne e finaliza responsividade`
+
+## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4): texto que só explica sai do modal e fica num ⓘ (`.info-tip`) ao lado do título ou do rótulo; o texto de cada balão não mudou. Componente, `info-tip--end`, `info-tip--bloco` e o E2E genérico: `docs/cockpit-prompts/14-cockpit-v2.md`.
+
+- `#modal-importar-modelo` (`Importar arquivos`): `ul.ckp-fatos` (cópia anterior nos backups locais; modelo de transferência preservado) foi apagada junto com o CSS; as duas frases entraram no balão `#descricao-importar-modelo` (`static/js/features/inventory-upload.js` as acrescenta ao texto do tipo escolhido). O ⓘ usa `info-tip--bloco`, ancorado no cabeçalho (`.ckp-dialogo--estreito .ckp-cab`), porque o diálogo corta o que passa da borda. `#upload-impacto-aviso` continua visível (a substituição do modelo é irreversível; regra E, desvio do texto do plano).
+- `#modal-cliente-config` e `#modal-contato-origem`: `Campos bloqueados vêm das variáveis de ambiente ...` virou `Campos bloqueados.` mais um ⓘ (`Sobre os campos bloqueados`) com a frase original (`SIMPRESS_CLIENTE_*` e `SIMPRESS_TRANSFER_ORIGIN_*`); `#cliente-config-modelo-ausente` fica visível. `Séries dos notebooks do próprio cliente` ganhou o ⓘ `Sobre as séries do cliente` (balão `#cliente-config-series-ajuda`) ao lado do rótulo, fora do `label`.
+- `#modal-representante-regional`: a linha `A alteração fica salva somente neste computador, em config/representantes_regionais.json.` foi para o ⓘ `Sobre Editar representante regional` ao lado do título (`span#titulo-representante-regional` nomeia o diálogo); sobra `Cidade: <cidade>`.
+- `#modal-editar-equipamento` (`Cadastrar novo equipamento`): o ⓘ `Sobre Apelido / Hostname` passou a `info-tip--end` (o balão passava da borda direita do modal).
+- Modal `Atualizar planilhas`: ver `docs/cockpit-prompts/03-home-split-view.md`, seção do Bloco 4.

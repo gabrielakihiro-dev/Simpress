@@ -132,3 +132,11 @@ Os subtítulos de "Verificar usuários" e "Sincronizar chamados Sebrae" viraram 
 ## Desvio aprovado pelo usuário (F4 Bloco 1, 12/11/2026)
 
 Barra do Chrome numa linha e as quatro rotinas em blocos pequenos numa só grade `.ck-rotinas` (`auto-fill`, `minmax(200px, 1fr)`), na ordem `Rotina de OS`, `Inventários`, `Verificar usuários`, `Rotina Completa`; `Verificar usuários` saiu da linha separada (`ck-linha-acao`, removida). O botão de cada rotina é só o ícone ▶ com `aria-label` (`Executar <rotina>`) e `title`; abaixo de 768px o bloco tem 56px, o botão 44x44 e o detalhe do Chrome some. Documento completo: `docs/operacao/automacao-chrome.md`.
+
+## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4). Componente, modificadores e E2E genérico: `docs/cockpit-prompts/14-cockpit-v2.md`.
+
+- Rotinas (`Rotina de OS`, `Inventários`, `Verificar usuários`, `Rotina Completa`) e o cartão `Chamados novos do SoftExpert` já tinham o ⓘ; o E2E `tests/e2e/info-tips-todos.spec.cjs` agora cobra os cinco (o do cartão só a partir de 768px: no celular o cabeçalho compacto do cartão o esconde, `ck-cockpit.css`, F4 Bloco 2).
+- Estados vazios do cartão encurtados (regra D): `#sebrae-novos-resumo` diz `Importe o Dashboard primeiro.` (antes `Importe o Dashboard para buscar os chamados novos.`) ou `Nenhuma busca feita ainda.` (antes com `Use Buscar chamados novos.`; o botão já diz isso). `#sebrae-antigos-resumo` sem chamado diz `Nenhum chamado antigo em aberto ou sem status.`
+- Continuam visíveis: o log, o status das rotinas, as contagens e os avisos de estado.

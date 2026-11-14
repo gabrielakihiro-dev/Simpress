@@ -99,6 +99,8 @@ test("Lembretes: o estado vazio é uma linha curta e a dica de Criar lembrete fi
   const moldura = await dialogo.locator(".lembretes__dialogo").boundingBox();
   expect(caixa.x).toBeGreaterThanOrEqual(moldura.x);
   expect(caixa.x + caixa.width).toBeLessThanOrEqual(moldura.x + moldura.width);
+  // No celular o balão fixo cai onde o último toque ficou; tira o mouse de cima dele para só o foco o manter aberto.
+  await page.mouse.move(0, 0);
   await page.locator("#lembretes-criar-descricao").focus();
   await conferirDica(page, {
     trigger: rotulo.locator(".info-tip-trigger"),
@@ -216,7 +218,9 @@ test("Conflitos do Dashboard: a ajuda fica no ⓘ ao lado do título, que contin
   const painel = await abrirPainelSebrae(page, request, "&conflitos=1");
   const secao = painel.locator("#sebrae-conflitos");
   await expect(secao).toBeVisible();
-  await expect(secao.locator("p.ck-campo__ajuda")).toHaveCount(0);
+  // Status de envio (regra E): "Nada foi enviado." continua visível; o resto da ajuda foi para o ⓘ.
+  await expect(secao.locator("p.ck-campo__ajuda")).toBeVisible();
+  await expect(secao.locator("p.ck-campo__ajuda")).toHaveText("Nada foi enviado.");
   await expect(secao).toHaveAttribute("aria-labelledby", "sebrae-conflitos-titulo");
   await expect(secao.locator("#sebrae-conflitos-titulo .info-tip")).toHaveCount(0); // o ⓘ é irmão do título: não entra no nome da seção
   await expect(page.getByRole("region", { name: "Conflitos de edição no Dashboard", exact: true })).toBeVisible();
@@ -226,7 +230,7 @@ test("Conflitos do Dashboard: a ajuda fica no ⓘ ao lado do título, que contin
   await conferirDica(page, {
     trigger: secao.locator(".ck-rotulo-info .info-tip-trigger"),
     balao: secao.locator("#sebrae-conflitos-dica"),
-    texto: "Estas células mudaram no SharePoint e também no site. Nada foi enviado. Escolha qual valor manter em cada uma e reenvie.",
+    texto: "Estas células mudaram no SharePoint e também no site. Escolha qual valor manter em cada uma e reenvie.",
     rotulo: "Sobre os conflitos de edição",
     contexto: painel,
   }, testInfo);
@@ -240,5 +244,5 @@ test("Chamados antigos: o vazio da aba é uma linha curta", async ({ page, reque
     await route.fulfill({ response: resposta, json: dados });
   });
   const painel = await abrirPainelSebrae(page, request);
-  await expect(painel.locator("#sebrae-antigos-resumo")).toHaveText("Nenhum chamado antigo em aberto.");
+  await expect(painel.locator("#sebrae-antigos-resumo")).toHaveText("Nenhum chamado antigo em aberto ou sem status.");
 });
