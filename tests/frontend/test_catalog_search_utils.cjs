@@ -15,7 +15,7 @@ test("matches normalized address, CNPJ and postal-code fields", () => {
   };
 
   assert.equal(matchesCatalogSearch(unit, "bento munhoz"), true);
-  assert.equal(matchesCatalogSearch(unit, "75.110"), true);
+  assert.equal(matchesCatalogSearch(unit, "11.222"), true);
   assert.equal(matchesCatalogSearch(unit, "87030"), true);
   assert.equal(matchesCatalogSearch(unit, "londrina"), false);
 });

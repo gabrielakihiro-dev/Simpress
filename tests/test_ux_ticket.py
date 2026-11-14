@@ -270,7 +270,7 @@ class TicketsUXTests(unittest.TestCase):
         self.assertEqual(set(registro), {"serie", "data", "ticket", "estado"})
         self.assertEqual((registro["serie"], registro["ticket"], registro["estado"]), ("ABC123", "987654", "enviado"))
         texto = (self.state / ux_ticket.HISTORY_NAME).read_text(encoding="utf-8")
-        for dado in ("Pessoa", "75.110", "TUPI", "Atualizar"):
+        for dado in ("Pessoa", "11.222", "TUPI", "Atualizar"):
             self.assertNotIn(dado, texto)
         with self.assertRaises(ux_chamados.ErroUX):
             self.executar(sessao, enviar=True, confirmado=True)  # the session is gone: never clicks twice
@@ -460,7 +460,7 @@ class RouterTests(unittest.TestCase):
             resposta = self.client.post("/api/ux/gerar-ticket/preparar", json=self.corpo)
         self.assertEqual(resposta.status_code, 503)
         self.assertEqual(resposta.json()["codigo"], "ux_falha")
-        self.assertNotIn("75.110", resposta.text + "".join(logs.output))
+        self.assertNotIn("11.222", resposta.text + "".join(logs.output))
         self.assertEqual(logs.output, ["WARNING:routers.ux_chamados:UX: RuntimeError"])
 
     def test_busy_chrome_and_unavailable_chrome_keep_their_status(self):
