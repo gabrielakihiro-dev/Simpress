@@ -74,9 +74,12 @@ class AssistenteTermosTests(unittest.TestCase):
         self.assertTrue(nomes)
         for nome in nomes:
             self.assertNotIn(nome, SYSTEM_PROMPT)
-        # Rule 33 already names the UX login account; rule 38 must not name any sender account.
+        # Rule 38 must not name any sender account (configured or not, no e-mail address at all).
+        texto_38 = regra("38. E-mails por modelo pelo Outlook")
+        self.assertNotIn("@", texto_38)
         for conta in CONTAS_REMETENTE.values():
-            self.assertNotIn(conta["email"], regra("38. E-mails por modelo pelo Outlook"))
+            if conta["email"]:
+                self.assertNotIn(conta["email"], texto_38)
 
 
 class AssistenteDossieTests(unittest.TestCase):

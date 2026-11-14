@@ -7,7 +7,7 @@ Hoje o pedido de instalação do cabo de segurança é escrito à mão no Outloo
 - **Modelos de e-mail:** um select `Modelo` carrega um modelo inteiro (conta, Para, Cc, Assunto, Mensagem). "Modelo 1 - Cabo" traz o texto do cabo; "Modelo 2 - Gestor" (criado depois pelo usuário) traz o texto que ele editar; e assim por diante. Toda edição no modal é salva automaticamente no modelo selecionado, inclusive os padrões (Para/Cc/conta podem ser trocados no futuro).
 - **Autocompletar no Para e no Cc:** sugere pessoas da base do Microsoft Entra já importada (`@pr.sebrae.com.br`) por nome ou login, e transforma um nome digitado no e-mail real quando há só uma pessoa possível.
 - **Dois modos:** `Abrir no Outlook` (`Display`, o usuário revisa e envia) e `Enviar pelo Outlook` (`Send`, com confirmação).
-- **Duas contas remetentes:** `gakihiro@pr.sebrae.com.br` (padrão, a mais usada) e `gansouza@simpress.com.br`, escolhidas via `SendUsingAccount`. Conta ausente no Outlook dá erro claro; nunca cai em outra conta em silêncio.
+- **Duas contas remetentes:** a conta Sebrae configurada (`SIMPRESS_OUTLOOK_EMAIL_SEBRAE`) (padrão, a mais usada) e a conta Simpress configurada (`SIMPRESS_OUTLOOK_EMAIL_SIMPRESS`), escolhidas via `SendUsingAccount`. Conta ausente no Outlook dá erro claro; nunca cai em outra conta em silêncio.
 - **Só Outlook (classic)** via COM. O Outlook novo (`olk.exe`) não tem COM: erro claro.
 - **"Faça vários testes reais"**: matriz de testes reais no passo 5.
 
@@ -21,7 +21,7 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 
 `domains/outlook_mail.py` (novo) e `routers/outlook_mail.py` (novo, factory `create_outlook_mail_router()` registrada em `main.py`). Erros JSON `{detail, codigo}` como em `routers/ux_chamados.py:76-89`; `confirmado: StrictBool` como em `routers/ux_ticket.py:47-53`.
 
-**Contas** (`CONTAS_REMETENTE`, constante do backend): `sebrae` = `gakihiro@pr.sebrae.com.br` (padrão), `simpress` = `gansouza@simpress.com.br`. O front recebe as contas só pela API (o teste de privacidade `tests/test_maintenance_contracts.py:333-347` proíbe esses domínios no HTML/JS).
+**Contas** (`CONTAS_REMETENTE`, constante do backend): `sebrae` = a conta Sebrae configurada (`SIMPRESS_OUTLOOK_EMAIL_SEBRAE`) (padrão), `simpress` = a conta Simpress configurada (`SIMPRESS_OUTLOOK_EMAIL_SIMPRESS`). O front recebe as contas só pela API (o teste de privacidade `tests/test_maintenance_contracts.py:333-347` proíbe esses domínios no HTML/JS).
 
 **Modelos** (`data/state/outlook_email_modelos.json`):
 - Formato `{version: 1, modelos: [{id, nome, conta, para, cc, assunto, corpo, atualizado_em}]}`.
@@ -66,6 +66,7 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 
 **Mapeamento de resultado:**
 - `conta_ausente` → 422.
+- Conta sem e-mail configurado (variável `SIMPRESS_OUTLOOK_EMAIL_*` ou `config/contas_automacao.json`, 13/11/2026) → 422 `conta_nao_configurada`, antes de chamar o PowerShell; a tela mostra a conta como "não configurada".
 - `destinatario_nao_resolvido` → 422 só no `enviar`; no `abrir` abre assim mesmo e devolve `aviso`.
 - COM indisponível, Outlook novo ou sistema não Windows → 503 `outlook_indisponivel`.
 - Outlook fechado no `enviar` → 503 `outlook_fechado`, nada criado.

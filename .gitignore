@@ -172,6 +172,8 @@ __pycache__/
 
 # Local transfer origin contact (personal data); only the example is versioned.
 /config/contato_origem.json
+# Local automation accounts, Dashboard folder and Outlook sender accounts (personal data); only the example is versioned.
+/config/contas_automacao.json
 # Local per-city edits of the regional representatives (names, e-mails, phones).
 /config/representantes_regionais.json
 

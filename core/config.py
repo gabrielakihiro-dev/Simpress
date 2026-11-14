@@ -1,5 +1,6 @@
 """Project-relative paths and limits used by the local application."""
 
+import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -103,6 +104,24 @@ SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBR
 # SIMPRESS_TRANSFER_ORIGIN_* environment variables or, field by field, from this git-ignored
 # file (see config/contato_origem.exemplo.json); missing values stay empty.
 TRANSFER_ORIGIN_CONTACT_FILE = BASE_DIR / "config" / "contato_origem.json"
+# Personal accounts and the Dashboard folder used by the automation and the Outlook e-mail are never versioned either:
+# environment variable first, then this git-ignored file (see config/contas_automacao.exemplo.json), else empty.
+AUTOMATION_ACCOUNTS_FILE = BASE_DIR / "config" / "contas_automacao.json"
+
+
+def local_setting(variable: str, key: str, path: Path = AUTOMATION_ACCOUNTS_FILE) -> str:
+    """Environment variable (blank counts as missing), then ``key`` in the local JSON file, then ""."""
+    value = str(os.environ.get(variable) or "").strip()
+    if value:
+        return value
+    try:
+        stored = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return ""
+    from_file = stored.get(key) if isinstance(stored, dict) else None
+    return from_file.strip() if isinstance(from_file, str) else ""
+
+
 # Per-city overrides of the SEBRAE/PR regional representatives (what the user edited on the Transferência screen).
 REGIONAL_REPRESENTATIVES_FILE = BASE_DIR / "config" / "representantes_regionais.json"
 # Local (git-ignored) default name, e-mail and phone of each representative; the versioned code keeps only the cities and

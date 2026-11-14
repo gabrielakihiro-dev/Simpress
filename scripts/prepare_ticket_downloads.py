@@ -21,7 +21,7 @@ from core.local_paths import is_link_or_junction
 
 
 def get_default_downloads() -> Path:
-    onedrive_downloads = Path(r"C:\Users\gakihiro\OneDrive - SEBRAE\Downloads")
+    onedrive_downloads = Path.home() / "OneDrive - SEBRAE" / "Downloads"
     if onedrive_downloads.is_dir():
         return onedrive_downloads
     return Path.home() / "Downloads"

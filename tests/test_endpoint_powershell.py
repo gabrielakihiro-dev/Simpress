@@ -384,7 +384,7 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual((res["status"], aba.fechada), ("erro_terminal", True))
 
     def test_never_sends_enter_anywhere(self):
-        for modo, usuarios in (("sistema", []), ("usuario", ["GAkihiro"])):
+        for modo, usuarios in (("sistema", []), ("usuario", ["usuario.exemplo"])):
             aba = AbaTerminal(usuarios=usuarios)
             res, pagina = abrir([("PRNOTEUMU005", "Ao vivo")], aba, modo=modo, comando="Get-Process | Select -First 3")
             self.assertEqual((res["status"], res["enter_enviado"]), ("inserido", False))
@@ -400,15 +400,15 @@ class UserModeTests(unittest.TestCase):
         return res, aba
 
     def test_single_user_is_used_after_refresh(self):
-        res, aba = self.run_user(["GAkihiro"])
-        self.assertEqual((res["status"], res["usuario"], res["modo"]), ("inserido", "GAkihiro", "usuario"))
+        res, aba = self.run_user(["usuario.exemplo"])
+        self.assertEqual((res["status"], res["usuario"], res["modo"]), ("inserido", "usuario.exemplo", "usuario"))
         self.assertIn(("button#runAsUserTargetBind", 0), aba.cliques)
         self.assertIn((".popover-list li#availableUsersHeader button", 0), aba.cliques)
         self.assertEqual(aba.preenchidos, ["Get-Date"])
 
     def test_chosen_user_matches_case_insensitive(self):
-        res, aba = self.run_user(["A", "GAkihiro"], usuario="gakihiro")
-        self.assertEqual((res["status"], res["usuario"]), ("inserido", "GAkihiro"))
+        res, aba = self.run_user(["A", "usuario.exemplo"], usuario="usuario.exemplo")
+        self.assertEqual((res["status"], res["usuario"]), ("inserido", "usuario.exemplo"))
         self.assertIn((".popover-list li:not([id])", 1), aba.cliques)
 
     def test_no_user_ambiguous_or_unknown_choice_never_injects(self):
@@ -421,7 +421,7 @@ class UserModeTests(unittest.TestCase):
                 self.assertTrue(aba.fechada)
 
     def test_user_switch_that_never_connects_reloads_once_and_cancels(self):
-        aba = AbaTerminal(usuarios=["GAkihiro"], troca=False)  # o clique não troca o usuário
+        aba = AbaTerminal(usuarios=["usuario.exemplo"], troca=False)  # o clique não troca o usuário
         res, _ = abrir([("PRNOTEUMU005", "Ao vivo")], aba, modo="usuario")
         self.assertEqual((res["status"], aba.reloads, aba.fechada), ("erro_terminal", 1, True))
         self.assertEqual(aba.preenchidos, [])

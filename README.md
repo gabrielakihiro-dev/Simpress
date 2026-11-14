@@ -161,6 +161,20 @@ $env:SIMPRESS_TRANSFER_ORIGIN_EMAIL = "contato@empresa.com"
 $env:SIMPRESS_TRANSFER_ORIGIN_PHONE = "(41) 00000-0000"
 ```
 
+### Contas e pasta das automações
+
+Os e-mails das contas, o usuário do Endpoint Central e o endereço da pasta do Dashboard são dados pessoais e não ficam no código. Cada valor é lido nesta ordem:
+
+1. variável de ambiente (tabela abaixo);
+2. arquivo local `config/contas_automacao.json`, ignorado pelo Git;
+3. vazio.
+
+Sem valor, a rotina não escolhe conta nenhuma: espera você escolher a conta no Chrome de automação e registra `AÇÃO NECESSÁRIA` no log. Sem a pasta do Dashboard, as rotinas do Dashboard recusam com mensagem clara antes de abrir a aba. Sem a conta remetente, o e-mail pelo Outlook recusa com `conta_nao_configurada`. Para criar o arquivo, copie o exemplo com dados fictícios, edite os valores e reinicie o servidor:
+
+```powershell
+Copy-Item config\contas_automacao.exemplo.json config\contas_automacao.json
+```
+
 ### Variáveis de ambiente
 
 Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as rotinas; reinicie o processo depois de alterá-las.
@@ -172,8 +186,10 @@ Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as 
 | `SIMPRESS_ENABLE_DOCS=1` | Liga `/docs`, `/redoc` e `/openapi.json` (desligados por padrão). |
 | `SIMPRESS_VERIFICAR_ATUALIZACAO=0` | Desliga a oferta de atualização do inicializador. |
 | `SIMPRESS_CHROME_PORT` e `SIMPRESS_CHROME_PROFILE` | Porta CDP (padrão `9333`) e pasta do perfil (padrão `%USERPROFILE%\.chrome-automation`) do Chrome de automação. |
-| `SIMPRESS_DASHBOARD_EMAIL` e `SIMPRESS_SOFTEXPERT_EMAIL` | Contas escolhidas pelas rotinas nos logins Microsoft (Oracle, UX e Dashboard) e no SoftExpert. |
-| `SIMPRESS_ENDPOINT_USUARIO` | Usuário preenchido pela rotina no login local do Endpoint Central (a senha continua com você). |
+| `SIMPRESS_DASHBOARD_EMAIL` e `SIMPRESS_SOFTEXPERT_EMAIL` | Contas escolhidas pelas rotinas nos logins Microsoft (Oracle, UX e Dashboard) e no SoftExpert. No arquivo: `dashboard_email` e `softexpert_email`. |
+| `SIMPRESS_ENDPOINT_USUARIO` | Usuário preenchido pela rotina no login local do Endpoint Central (a senha continua com você). No arquivo: `endpoint_usuario`. |
+| `SIMPRESS_DASHBOARD_PASTA_URL` | Endereço da pasta `DASHBOARD SEBRAE` no SharePoint, aberta pelas rotinas do Dashboard. No arquivo: `dashboard_pasta_url`. |
+| `SIMPRESS_OUTLOOK_EMAIL_SEBRAE` e `SIMPRESS_OUTLOOK_EMAIL_SIMPRESS` | Contas remetentes do e-mail por modelo pelo Outlook (Home F1). No arquivo: `outlook_email_sebrae` e `outlook_email_simpress`. |
 | `SIMPRESS_CHROME_OCIOSO_S` | Segundos sem rotina até fechar o Chrome de automação. Sem a variável, ou com `0`, o Chrome fica aberto. |
 | `SIMPRESS_IMPORT_INBOX_DIR` e `SIMPRESS_TICKET_IMPORT_INBOX_DIR` | Pastas das filas de importação automática de inventários e de chamados, no lugar de `data/state/entrada_automatica` e `data/state/entrada_chamados`. |
 | `SIMPRESS_SUGESTAO_IA=1` | Liga a sugestão por IA de categoria e tipo dos chamados do Sebrae que as regras locais deixaram como `OUTRO`. O texto vai mascarado ao OpenRouter; só vale definida no processo, não no `.env`. |

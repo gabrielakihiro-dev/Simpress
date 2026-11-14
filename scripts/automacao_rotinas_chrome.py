@@ -49,8 +49,11 @@ if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, Page
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:  # o script roda sozinho (python scripts/...) e lê a configuração local do projeto
+    sys.path.insert(0, str(ROOT))
+from core.config import local_setting  # noqa: E402
 
-ONEDRIVE_DOWNLOADS = Path(r"C:\Users\gakihiro\OneDrive - SEBRAE\Downloads")
+ONEDRIVE_DOWNLOADS = Path.home() / "OneDrive - SEBRAE" / "Downloads"
 DOWNLOADS_DIR = ONEDRIVE_DOWNLOADS if ONEDRIVE_DOWNLOADS.is_dir() else Path.home() / "Downloads"
 CHROME_PROFILE_DIR = Path(os.environ.get("SIMPRESS_CHROME_PROFILE", str(Path.home() / ".chrome-automation")))
 CDP_PORT = int(os.environ.get("SIMPRESS_CHROME_PORT", "9333"))
@@ -68,19 +71,18 @@ ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/invento
 # Telas de login abertas por `login` ("Abrir Chrome para login").
 ENDPOINT_LOGIN_URL = "https://centralendpoint.pr.sebrae.com.br/client#/login"
 UX_LOGIN_URL = "https://ux.simpress.com.br/ng/autenticacao/login"
-ENDPOINT_USUARIO = os.environ.get("SIMPRESS_ENDPOINT_USUARIO", "gakihiro")
+# Contas e pasta são dados pessoais: vêm da variável de ambiente ou de config/contas_automacao.json (git-ignorado);
+# sem nenhum dos dois ficam vazias e a rotina espera o usuário (ou recusa, no caso da pasta do Dashboard).
+ENDPOINT_USUARIO = local_setting("SIMPRESS_ENDPOINT_USUARIO", "endpoint_usuario")
 ENDPOINT_DOMINIO = "pr-sebrae"  # valor do <select name="domainName"> (padrão da tela: "Autenticação local")
 # Pasta do SharePoint de onde `dashboard` baixa (Mais ações > Baixar) e que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
-DASHBOARD_PASTA_URL = (
-    "https://simpress-my.sharepoint.com/shared?id=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments%2FClientes%2FSEBRAE%2FDASHBOARD%20SEBRAE"
-    "&listurl=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments&viewid=4b249dd9%2D2ef5%2D4757%2Da0e3%2D2aa051004ae2"
-)
+DASHBOARD_PASTA_URL = local_setting("SIMPRESS_DASHBOARD_PASTA_URL", "dashboard_pasta_url")
 DASHBOARD_FINAL = "Dashboard Operacional_SEBRAE.xlsx"  # nome gravado por routers/sebrae_dashboard.py
 # Cópia do último "Atualizar Dashboard" (gravada pelo site); é a que `enviar` sobe, nunca um arquivo de Downloads.
 DASHBOARD_SAIDA_DIR = ROOT / "data" / "state" / "sebrae_dashboard_saida"
 # Contas escolhidas/digitadas na tela da Microsoft (só o e-mail; senha e MFA são sempre do usuário).
-EMAIL_DASHBOARD = os.environ.get("SIMPRESS_DASHBOARD_EMAIL", "gansouza@simpress.com.br")
-EMAIL_SOFTEXPERT = os.environ.get("SIMPRESS_SOFTEXPERT_EMAIL", "gakihiro@pr.sebrae.com.br")
+EMAIL_DASHBOARD = local_setting("SIMPRESS_DASHBOARD_EMAIL", "dashboard_email")
+EMAIL_SOFTEXPERT = local_setting("SIMPRESS_SOFTEXPERT_EMAIL", "softexpert_email")
 
 LOGIN_TIMEOUT_S = 10 * 60
 CARREGAMENTO_MS = 90_000
@@ -697,7 +699,7 @@ def aguardar_login(
         if email and not clicou_sso and "microsoftonline" not in page.url.lower() and clicar_sso(page, origem):
             clicou_sso = True
             limite = time.time() + apos_acao_s
-        if email and not escolheu_conta and "microsoftonline" in page.url.lower():
+        if email is not None and not escolheu_conta and "microsoftonline" in page.url.lower():
             escolheu_conta = True
             entrar_microsoft(page, origem, email, concluido=logado)
             limite = time.time() + apos_acao_s
@@ -752,6 +754,10 @@ def entrar_microsoft(
     Cada passo é feito uma única vez; termina ao aparecer a senha, quando ``concluido(page)`` ficar
     verdadeiro ou ao esgotar ``espera_s``.
     """
+    if not email:  # sem conta configurada nunca escolhe nem digita outra: o usuário escolhe
+        log(origem, "[AVISO] Conta Microsoft não configurada (variável de ambiente ou config/contas_automacao.json); "
+            "AÇÃO NECESSÁRIA: escolha a conta na janela do Chrome de automação.")
+        return
     escolheu = digitou = diagnosticou = False
     escolhas = 0
     ultima_escolha = 0.0
@@ -1502,6 +1508,10 @@ def endpoint_entrar(page: "Page") -> bool:
         page.wait_for_timeout(500)
     com_senha = endpoint_senha_preenchida(page)
     if not usuario.first.input_value().strip():
+        if not ENDPOINT_USUARIO:  # sem usuário configurado não preenche nem clica: o usuário termina o login
+            log("Endpoint Central", "[AVISO] Usuário do Endpoint não configurado (SIMPRESS_ENDPOINT_USUARIO ou "
+                "config/contas_automacao.json); AÇÃO NECESSÁRIA: digite o usuário e faça o login.")
+            return True
         log("Endpoint Central", f"Preenchendo o usuário {ENDPOINT_USUARIO}...")
         usuario.first.fill(ENDPOINT_USUARIO)
     log("Endpoint Central", f"Escolhendo '{ENDPOINT_DOMINIO}' na lista de autenticação...")
@@ -2025,12 +2035,22 @@ def _linha_do_dashboard(page: "Page"):
     return linha
 
 
+def pasta_dashboard_url() -> str:
+    """Endereço da pasta do Dashboard no SharePoint; sem configuração a rotina recusa antes de abrir qualquer aba."""
+    if not DASHBOARD_PASTA_URL:
+        raise RotinaErro(
+            "Pasta do Dashboard não configurada: defina SIMPRESS_DASHBOARD_PASTA_URL ou dashboard_pasta_url "
+            "em config/contas_automacao.json (veja config/contas_automacao.exemplo.json)."
+        )
+    return DASHBOARD_PASTA_URL
+
+
 def voltar_para_pasta_dashboard(page: "Page") -> None:
     """Fora da pasta DASHBOARD SEBRAE (clique em outro link): volta ao mesmo endereço e retoma; chamada dentro das etapas repetidas."""
     if esperar_visivel(_localizar_linha_do_dashboard(page), 15000):
         return
     log("Dashboard", "[AVISO] A aba saiu da pasta DASHBOARD SEBRAE; voltando ao mesmo endereço e retomando.")
-    page.goto(DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    page.goto(pasta_dashboard_url(), wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
     aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
 
 
@@ -2060,7 +2080,7 @@ def baixar_dashboard_da_pasta(page: "Page") -> Path:
 def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
     page = None
     try:
-        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        page = nova_aba(context, pasta_dashboard_url(), "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         definir_pagina_ativa_para_recuperacao(page)
 
@@ -2430,7 +2450,7 @@ def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
         raise RotinaErro("A cópia pendente não pode ter o nome do Dashboard: substituiria o original sem conferência.")
     page = None
     try:
-        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        page = nova_aba(context, pasta_dashboard_url(), "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         enviar_arquivo_para_pasta(page, arquivo)
     except Exception:
@@ -2454,12 +2474,13 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
 
     print(f"\n=== ENVIAR DASHBOARD ATUALIZADO (início {agora_iso()}) ===", flush=True)
     state_dir = DASHBOARD_SAIDA_DIR.parent
+    pasta_dashboard_url()  # recusa antes de qualquer gravação de estado se a pasta não estiver configurada
     if envio_id is None:
         sebrae_finalizacao.exigir_envio_livre(state_dir)
     arquivo = arquivo if arquivo is not None else arquivo_final_dashboard()
     page = None
     try:
-        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        page = nova_aba(context, pasta_dashboard_url(), "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         definir_pagina_ativa_para_recuperacao(page)
 
