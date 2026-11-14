@@ -230,7 +230,7 @@ Erros das regras vêm como `{detail, codigo}`, com `detail` em texto simples e s
 503 `modelos_ilegiveis` (nada é sobrescrito); trava ocupada 503 `modelos_ocupados`; falha ao gravar 503
 `modelos_gravacao`. E-mail: `enviar` sem `confirmado:true` 422 `confirmacao_necessaria`; `SIMPRESS_OUTLOOK_SEM_ENVIO=1`
 422 `envio_desativado` (o `abrir` continua); marcador restante no Assunto ou na Mensagem no `enviar` 422
-`marcador_pendente`; outro e-mail em preparo 409 `ocupado`; conta desconhecida ou fora do Outlook 422 `conta_ausente`; destinatário
+`marcador_pendente`; outro e-mail em preparo 409 `ocupado`; conta desconhecida ou fora do Outlook 422 `conta_ausente`; conta sem e-mail configurado 422 `conta_nao_configurada` (sem chamar o PowerShell); destinatário
 não reconhecido 422 `destinatario_nao_resolvido` só no `enviar` (no `abrir` vira `aviso`); Outlook novo, sem COM ou
 fora do Windows 503 `outlook_indisponivel`; Outlook fechado no `enviar` 503 `outlook_fechado` (nada criado);
 timeout antes do envio 504 `outlook_sem_resposta`; timeout,

@@ -145,7 +145,7 @@
 
   function montarContas() {
     byId("email-conta").replaceChildren(...config.contas.map(conta => {
-      const opcao = el("option", "", `${conta.rotulo} (${conta.email})`);
+      const opcao = el("option", "", `${conta.rotulo} (${conta.email || "não configurada"})`);
       opcao.value = conta.id;
       return opcao;
     }));
