@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from core.config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
 from domains.assistant_lgpd import omitir_senhas
 from domains.equipment_search import normalize_search_term
-from domains.regras_negocio import SERIES_SEBRAE, cadastro_e_macbook
+from domains.regras_negocio import cadastro_e_macbook, series_sebrae
 from domains.sebrae_chamados import (
     ChamadoSoftExpert,
     PENDENCIAS_DEFINIDAS,
@@ -253,11 +253,12 @@ def cruzar_por_nome(nome: str, registros: Iterable[Mapping[str, Any]]) -> Cruzam
     if not alvo:
         return Cruzamento(CRUZ_AUSENTE)
     achados: Dict[str, Dict[str, str]] = {}
+    proprias = series_sebrae()
     for registro in registros:
         if normalize_search_term(" ".join(str(registro.get("nome") or "").split())) != alvo:
             continue
         chave = _chave_serie(registro.get("serie"))
-        if not chave or chave in SERIES_SEBRAE:
+        if not chave or chave in proprias:
             continue
         mac = cadastro_e_macbook(registro.get("modelo"))
         equivalente = next((k for k in achados if _mesma_serie(k, chave, mac or bool(achados[k]["mac"]))), chave)

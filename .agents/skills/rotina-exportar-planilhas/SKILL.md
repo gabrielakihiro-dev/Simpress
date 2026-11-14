@@ -5,7 +5,7 @@ description: Rotina que exporta o UX Simpress (Meus Equipamentos) e o Endpoint C
 
 # Exportações de planilhas — UX Simpress + Endpoint Central
 
-Referência oficial (consultar quando o procedimento mudar): https://app.notion.com/p/Exporta-es-de-planilhas-UX-Simpress-Endpoint-Central-3f5922a10077801f99e2e26a4fee14b9
+Referência oficial (consultar quando o procedimento mudar): página do Notion da equipe (o link não fica no Git; peça ao usuário)
 
 Gatilho: o usuário diz "Executar" ou "exportar planilhas" neste contexto. Para OS/chamados, use a skill `rotina-os-chamados`.
 
@@ -40,9 +40,9 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
    - UX: https://ux.simpress.com.br/MeusEquipamentos/Index
    - Endpoint: https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers
 3. **UX Simpress**:
-   1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, em `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`. Não clique fora. Pesquise apenas na busca interna do seletor.
+   1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, na opção do contrato configurado em `config/cliente.json` (formato `<contrato> - <nome do contrato>`). Não clique fora. Pesquise apenas na busca interna do seletor.
    2. Confirme a marca ✓ na opção e o contrato no campo. Remova restrições indevidas dos demais filtros.
-   3. Clique em **Buscar**, confirme que os resultados são do contrato 16467 e registre a quantidade exibida.
+   3. Clique em **Buscar**, confirme que os resultados são do contrato configurado em `config/cliente.json` e registre a quantidade exibida.
    4. **Baixar detalhes → Excel**, uma vez (pode vir como ZIP). Siga direto para o Endpoint.
 4. **Endpoint Central**:
    1. Selecione **Todos os computadores** e confirme a marcação.

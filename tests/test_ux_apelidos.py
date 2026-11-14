@@ -173,13 +173,13 @@ class FluxoUxBrowserTests(unittest.TestCase):
                 contexto = browser.new_context()
                 contexto.route("**/*", lambda rota: rota.abort())
                 pagina = contexto.new_page()
-                html = PAGINA_UX % {"estilo": ESTILO, "contrato": automacao.CONTRATO,
-                                   "contrato_nome": automacao.CONTRATO_NOME}
+                html = PAGINA_UX % {"estilo": ESTILO, "contrato": automacao.contrato_configurado(),
+                                   "contrato_nome": automacao.contrato_nome(automacao.contrato_configurado())}
                 pagina.set_content(html.replace("</body>", EDITOR + "</body>"))
                 if modo == "contrato":
-                    pagina.locator('li[data-valor="16467"]').evaluate("e=>e.dataset.texto='OUTRO'")
+                    pagina.locator('li[data-valor="10101"]').evaluate("e=>e.dataset.texto='OUTRO'")
                 if modo == "contrato_duplicado":
-                    pagina.locator('li[data-valor="16467"]').evaluate("e=>e.after(e.cloneNode(true))")
+                    pagina.locator('li[data-valor="10101"]').evaluate("e=>e.after(e.cloneNode(true))")
                 if modo == "sem_upload":
                     pagina.locator("#enviar").evaluate("e=>e.remove()")
                 if modo == "save_duplicado":

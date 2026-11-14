@@ -18,7 +18,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from core.config import SUPPORTED_CONTRACT, SUPPORTED_CONTRACT_LEGAL_NAME
+from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract
 from core.errors import DomainBusyError, DomainValidationError
 from domains import sebrae_finalizacao, sebrae_novos
 from domains.history_insights import is_restoration, PINNED_BASELINE_ID
@@ -723,13 +723,16 @@ def report_filename(month: ReportMonth) -> str:
 
 
 def build_monthly_report_workbook(report: Mapping[str, Any]) -> Tuple[BytesIO, str]:
+    contract = client_contract()
+    if not contract:
+        raise DomainValidationError(CLIENT_NOT_CONFIGURED, status_code=422)
     month: ReportMonth = report["mes"]
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Resumo"
     summary.append([f"Relatório mensal — {month.label}"])
     summary["A1"].font = Font(bold=True, size=14)
-    summary.append([f"Contrato {SUPPORTED_CONTRACT} - {SUPPORTED_CONTRACT_LEGAL_NAME}"])
+    summary.append([f"Contrato {contract} - {SUPPORTED_CONTRACT_LEGAL_NAME}"])
     summary.append([f"Gerado em {_date_text(report['gerado_em'])}"])
     inventory = report["inventario"]
     summary.append([f"Inventário: base atual ({inventory['arquivo_origem'] or 'sem arquivo'}, carregada em {inventory['carregada_em'] or '-'})."])

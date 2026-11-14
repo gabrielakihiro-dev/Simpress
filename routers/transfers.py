@@ -5,11 +5,12 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+from core.config import CLIENT_NOT_CONFIGURED, client_contract
 from core.xlsx_safety import set_cell_value_as_text
 
 from core.integrity import (
@@ -29,7 +30,7 @@ class TransferenciaPayload(BaseModel):
     serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
     descricao_equipamento: str = Field("", max_length=2000, description="Descrição e Acessórios do Equipamento")
     razao_social: str = Field("SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR", max_length=300)
-    contrato: Literal[16467] = Field(16467, description="Número do Contrato")
+    contrato: str = Field("", description="Número do Contrato (o configurado em config/cliente.json)", validate_default=True)
 
     # Retirada (Origem)
     retirada_cidade: str = Field("", max_length=160)
@@ -62,6 +63,18 @@ class TransferenciaPayload(BaseModel):
     entrega_telefone: str = Field("", max_length=64, description="Telefone do Destinatário")
     entrega_obs: str = Field("", max_length=2000, description="Observações do Chamado")
     entrega_voltagem: str = Field("Bivolt", max_length=64)
+
+    @field_validator("contrato", mode="before")
+    @classmethod
+    def validate_contract(cls, value: Any) -> str:
+        """Only the configured contract passes; without configuration nothing does (blank must not equal blank)."""
+        configured = client_contract()
+        if not configured:
+            raise ValueError(CLIENT_NOT_CONFIGURED)
+        received = configured if value is None or str(value).strip() == "" else str(value).strip()
+        if received != configured:
+            raise ValueError(f"Este sistema só gera transferências do contrato {configured}.")
+        return configured
 
     @field_validator("retirada_cnpj", "entrega_cnpj")
     @classmethod

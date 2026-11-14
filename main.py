@@ -35,6 +35,7 @@ from core.integrity import (
     stage_workbook_update,
     workbook_snapshot,
 )
+import core.config
 from core.errors import DomainBusyError, DomainError
 from core.config import (
     ALIAS_HISTORY_FILE,
@@ -122,7 +123,7 @@ from routers.inventory_update import (
     InventoryUpdateRouteServices,
     create_inventory_update_router,
 )
-from domains.local_setup import load_origin_contact, validate_local_model
+from domains.local_setup import load_client_config, load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
     XlsxLimitExceeded,
@@ -135,7 +136,6 @@ from domains.inventory_comparison import (
     CURITIBA_HOSTNAME_PREFIXES,
     PINNED_COMPARISON_EVENT_ID,
     PINNED_COMPARISON_EVENT_TIME,
-    SEBRAE_OWNED_NOTEBOOK_SERIALS,
     SERIE_LOCAL_MAP,
     _comparison_source_records,
     _record_value,
@@ -1779,9 +1779,22 @@ def _unit_cache_snapshot() -> List[Dict[str, Any]]:
 
 
 
+def _transfer_form_defaults() -> Dict[str, Any]:
+    """Origin contact plus the client data (config/cliente.json) the transfer form and the first access need."""
+    # Read through the module on every call, so a file saved by the first access applies without restarting.
+    client = load_client_config(core.config.CLIENT_CONFIG_FILE)
+    return {
+        **load_origin_contact(TRANSFER_ORIGIN_CONTACT_FILE),
+        "contrato": client["contrato"],
+        "cnpj_faturamento": client["cnpj_faturamento"],
+        "cliente_configurado": client["cliente_configurado"],
+        "modelo_transferencia_disponivel": get_local_transfer_template().is_file(),
+    }
+
+
 system_router, _system_exports = create_system_router(SystemRouteServices(
     get_readiness_status=lambda: get_startup_readiness(),
-    get_transfer_form_defaults=lambda: load_origin_contact(TRANSFER_ORIGIN_CONTACT_FILE),
+    get_transfer_form_defaults=_transfer_form_defaults,
 ))
 get_readiness_status = _system_exports.get_readiness_status
 get_transfer_form_defaults = _system_exports.get_transfer_form_defaults
@@ -2024,6 +2037,8 @@ local_setup_router, importar_modelo_local = create_local_setup_router(
     origin_contact_file=lambda: TRANSFER_ORIGIN_CONTACT_FILE,
     regional_representatives_file=lambda: REGIONAL_REPRESENTATIVES_FILE,
     regional_representative_defaults_file=lambda: REGIONAL_REPRESENTATIVE_DEFAULTS_FILE,
+    client_config_file=lambda: core.config.CLIENT_CONFIG_FILE,
+    after_client_config_saved=lambda: load_database(),
 )
 app.include_router(local_setup_router)
 

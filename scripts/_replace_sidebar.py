@@ -66,7 +66,7 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 <dl class="readiness-grid">
 <div class="readiness-item"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
 <div class="readiness-item"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
-<div class="readiness-item"><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
+<div class="readiness-item"><dt>Contrato</dt><dd><strong id="stat-contrato">—</strong></dd></div>
 </dl>
 </div>
 </details>

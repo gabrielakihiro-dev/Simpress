@@ -18,8 +18,14 @@ TEMP_ROOT = PROJECT_ROOT / "TEMP"
 os.environ.setdefault("SIMPRESS_CHROME_OCIOSO_S", "0")
 # The optional AI category suggestion must never call the network during the suite.
 os.environ.setdefault("SIMPRESS_SUGESTAO_IA", "0")
+# Client data comes from the fictitious example, never from a local config/cliente.json or the environment.
+for _variable in ("SIMPRESS_CLIENTE_CONTRATO", "SIMPRESS_CLIENTE_CNPJ_FATURAMENTO", "SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA"):
+    os.environ.pop(_variable, None)
 sys.path.insert(0, str(PROJECT_ROOT))
+import core.config
 from core.local_paths import is_link_or_junction
+
+core.config.CLIENT_CONFIG_FILE = PROJECT_ROOT / "config" / "cliente.exemplo.json"
 
 FIXTURE_ONLY_MODULES = (
     "test_integrity_transactions",

@@ -9,13 +9,15 @@ from time import monotonic
 from typing import Any, Callable, Iterator, TypeVar
 from urllib.parse import urlsplit
 
+from core.config import client_contract
 from domains.ux_chamados import MSG_SEM_ENVIO, SERIES_SEM_ENVIO_REAL, ErroUX, envio_desativado
 from domains.ux_chamados_browser import (
     CONTROLES_MS, ESPERA_LOGIN_S, ESPERA_OS_S, ORIGEM_UX, _botao, _fechar_aviso_backup, _ler_lista_acessivel, _rota,
     _unico, _valor_confere, automation, contexto_chrome_ux,
 )
 from domains.ux_ticket import (
-    ANEXO_MAX, CHAMADO_INTERNO_MAX, CONTRATO, DESCRICAO_MAX, ESCOLHAS, TIPO_ATUALIZACAO, TIPO_ENDERECO, Formulario,
+    ANEXO_MAX, CHAMADO_INTERNO_MAX, DESCRICAO_MAX, ESCOLHAS, TIPO_ATUALIZACAO, TIPO_ENDERECO, Formulario,
+    exigir_dados_cliente,
 )
 
 T = TypeVar("T")
@@ -36,7 +38,9 @@ SEM_RETENTATIVA = {"aba_perdida", "endereco_ambiguo"}
 
 
 def _do_contrato(texto: str) -> bool:
-    return re.match(rf"{CONTRATO}(?!\d)", texto.strip()) is not None
+    """True for text that starts with the configured contract; false when none is configured (never "" == anything)."""
+    contrato = client_contract()
+    return bool(contrato) and re.match(rf"{re.escape(contrato)}(?!\d)", texto.strip()) is not None
 
 
 def _na_rota(page: Any, rota: str) -> None:
@@ -189,7 +193,7 @@ class PortalTicketUXChrome:
 
     @staticmethod
     def _equipamento(page: Any, serial: str) -> str:
-        """Check série, contract 16467 and a single MODELO in the header; return the model."""
+        """Check série, the configured contract and a single MODELO in the header; return the model."""
         texto = str(_unico(page.locator("body")).inner_text(timeout=CONTROLES_MS))
         contratos = ROTULO_CONTRATO.findall(texto)
         modelos = ROTULO_MODELO.findall(texto)
@@ -238,7 +242,7 @@ class PortalTicketUXChrome:
             anterior = atual
             page.wait_for_timeout(300)
         if da_serie.count() != 1:
-            raise ErroUX(409, "O UX não mostrou exatamente um equipamento com essa série no contrato 16467.")
+            raise ErroUX(409, "O UX não mostrou exatamente um equipamento com essa série no contrato configurado.")
         _unico(da_serie.locator("div.card.cursor-pointer")).click(timeout=CONTROLES_MS)
         prazo = monotonic() + CONTROLES_MS / 1000
         while _rota(page.url) != ROTA_ABRIR:
@@ -265,7 +269,8 @@ class PortalTicketUXChrome:
 
     def _ate_motivo(self, page: Any, serial: str, aba: str, tipo: str) -> str:
         """From the consulta screen: contract → série → card → Incidente → Motivo of this kind; returns the model."""
-        self._passo(page, "Contrato", lambda: _escolher(page, "selectContrato", None, busca=CONTRATO), rota=ROTA_CONSULTA)
+        contrato, _ = exigir_dados_cliente()
+        self._passo(page, "Contrato", lambda: _escolher(page, "selectContrato", None, busca=contrato), rota=ROTA_CONSULTA)
         self._passo(page, "Número de série", lambda: _preencher(_unico(page.locator("input#inputNumeroSerie")), serial),
                     rota=ROTA_CONSULTA)
         self._passo(page, "Buscar", lambda: _unico(_botao(page, "Buscar")).click(timeout=CONTROLES_MS), rota=ROTA_CONSULTA)
@@ -435,6 +440,7 @@ class PortalTicketUXChrome:
         pronto, self._pronto = self._pronto, None
         if envio_desativado() or (pronto is not None and pronto[0] in SERIES_SEM_ENVIO_REAL):
             raise ErroUX(422, MSG_SEM_ENVIO)  # last barrier before the click
+        contrato, _ = exigir_dados_cliente()  # read before the click: nothing after Finalizar may fail
         if pronto is None or pronto[2] != aba:
             raise ErroUX(409, "A aba não está pronta para envio.")
         serial, modelo, _, cep, formulario = pronto
@@ -447,7 +453,7 @@ class PortalTicketUXChrome:
         # NUNCA repetir daqui em diante: depois do clique em Finalizar não há contingência, recarga nem volta à
         # consulta (risco de ticket duplicado). Timeout ou qualquer anomalia vira "incerto" com conferência manual.
         _unico(_botao(page, "Finalizar")).click(timeout=CONTROLES_MS)
-        ignorar = {CONTRATO, formulario.chamado_interno.strip()}
+        ignorar = {contrato, formulario.chamado_interno.strip()}
         prazo = monotonic() + ESPERA_OS_S
         while monotonic() < prazo:
             dialogos = page.locator("[role=dialog], .modal, app-modal").filter(visible=True)

@@ -1154,11 +1154,11 @@ class ComparePeriodsTests(unittest.TestCase):
     def test_sebrae_series_are_ignored_in_unmatched_lists_only(self) -> None:
         historico = FakeHistorico({
             "novos": [
-                mudanca(*SEM_ENDPOINT, serie="BRJ135P5XS"), mudanca(*SEM_ENDPOINT, serial="BRJ149SCJG"),
-                mudanca(*SEM_ENDPOINT, serie="X1"), mudanca(*LOCAL, serie="BRJ135P5XS"),
+                mudanca(*SEM_ENDPOINT, serie="BRT100XA01"), mudanca(*SEM_ENDPOINT, serial="BRT300XC01"),
+                mudanca(*SEM_ENDPOINT, serie="X1"), mudanca(*LOCAL, serie="BRT100XA01"),
             ],
-            "continuam": [mudanca(*SEM_ENDPOINT, serie="BRJ142QKBQ")],
-            "resolvidos": [mudanca(*SEM_ENDPOINT, serie="BRJ9435VMR")],
+            "continuam": [mudanca(*SEM_ENDPOINT, serie="BRT100XA02")],
+            "resolvidos": [mudanca(*SEM_ENDPOINT, serie="BRT200XB0R")],
         })
         resultado, _ = self.comparar("ev1", "ev2", historico)
         secoes = {s["secao"]: s for s in resultado["secoes"]}
@@ -1305,7 +1305,7 @@ class ExplainDivergenceTests(unittest.TestCase):
             self.assertEqual(resultado["fontes"]["no_endpoint"]["situacao"], endpoint, status)
 
     def test_sebrae_series_and_curitiba_hostnames_are_rule_causes(self) -> None:
-        resultado, _ = self.explicar("brj149scjg", FakeExplica({"BRJ149SCJG": registro("BRJ149SCJG")}))
+        resultado, _ = self.explicar("brt300xc01", FakeExplica({"BRT300XC01": registro("BRT300XC01")}))
         self.assertEqual(codigos(resultado), ["serie_sebrae_ignorada"])
         # Given hostname, and the hostname that is already on the record.
         resultado, _ = self.explicar("ABC123", FakeExplica({"ABC123": registro("ABC123")}), hostname="PRNOTEARC042")

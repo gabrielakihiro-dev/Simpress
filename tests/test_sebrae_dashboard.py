@@ -85,7 +85,7 @@ class CruzamentoTest(unittest.TestCase):
         self.assertEqual(dash.cruzar_por_nome("Ana", nao_mac).status, dash.CRUZ_AMBIGUO)
 
     def test_serie_propria_do_sebrae_e_ignorada(self):
-        self.assertEqual(dash.cruzar_por_nome("Ana", [reg("Ana", "BRJ135P5XS")]).status, dash.CRUZ_AUSENTE)
+        self.assertEqual(dash.cruzar_por_nome("Ana", [reg("Ana", "BRT100XA01")]).status, dash.CRUZ_AUSENTE)
 
 
 CHAMADO = ChamadoSoftExpert(

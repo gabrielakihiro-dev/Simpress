@@ -16,6 +16,7 @@ from typing import Any, Callable, Protocol
 import unicodedata
 from uuid import uuid4
 
+from core.config import CLIENT_NOT_CONFIGURED, client_billing_cnpj, client_contract
 from core.integrity import atomic_write_json
 from domains.ux_chamados import (
     MSG_SEM_ENVIO, MSG_SERIE_TESTE, PLACEHOLDER, PROFILE_NAME, SERIES_SEM_ENVIO_REAL, ErroUX, envio_desativado,
@@ -24,9 +25,6 @@ from domains.ux_chamados import (
 
 SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_tickets_historico.json"
-# Single backend source of the billing CNPJ (static/js/features/transfer-form.js keeps a copy for the form).
-CNPJ_FATURAMENTO = "75.110.585/0001-00"
-CONTRATO = "16467"
 INCIDENTE = "Atualização Cadastral"
 MOTIVO = "Alteração de Endereço ou Razão Social"
 TIPO_ATUALIZACAO = "atualizacao"  # button "Transporte" (workbook + Atualização Cadastral)
@@ -41,6 +39,14 @@ CHAMADO_INTERNO_MAX = 10  # maxlength of input#InputNumeroChamado
 ANEXO_MAX = 5 * 1024 * 1024  # "arquivo ... com até 5MB"
 CAMPOS_SOLICITANTE = ("nome", "email", "telefone")
 INCERTO = "O UX não confirmou o ticket. Confira se ele foi criado antes de tentar novamente."
+
+
+def exigir_dados_cliente() -> tuple[str, str]:
+    """Contract and billing CNPJ from config/cliente.json (read per call); without both the ticket is refused."""
+    contrato, cnpj = client_contract(), client_billing_cnpj()
+    if not contrato or not cnpj:
+        raise ErroUX(422, CLIENT_NOT_CONFIGURED)
+    return contrato, cnpj
 
 
 class PortalTicket(Protocol):
@@ -232,6 +238,7 @@ class TicketsUX:
         arquivo_nome: str, arquivo: bytes, conferido: bool = False,
     ) -> dict[str, Any]:
         serial = serial.strip().upper()
+        _, cnpj_faturamento = exigir_dados_cliente()
         cep = re.sub(r"\D", "", entrega_cep)
         if len(cep) != 8:
             raise ErroUX(422, "Informe o CEP da unidade de entrega com 8 dígitos.")
@@ -264,7 +271,7 @@ class TicketsUX:
                 "status": "preparado" if endereco else "endereco_ambiguo", "tipo": TIPO_ATUALIZACAO,
                 "session_id": session_id, "serial": serial, "modelo": modelo,
                 "endereco": endereco, "opcoes_endereco": list(opcoes),
-                "cnpj_instalacao": entrega_cnpj.strip(), "cnpj_faturamento": CNPJ_FATURAMENTO,
+                "cnpj_instalacao": entrega_cnpj.strip(), "cnpj_faturamento": cnpj_faturamento,
                 "arquivo": arquivo_nome,
                 "solicitante": self.solicitante_padrao(),
                 "ultimo_envio": {"ticket": ultimo["ticket"], "data": ultimo["data"]} if ultimo else None,
@@ -273,6 +280,7 @@ class TicketsUX:
     def preparar_alterar_endereco(self, *, serial: str, conferido: bool = False) -> dict[str, Any]:
         """"Alterar Endereço": Transporte / Transferência Fisica in the UX; no workbook, CNPJ, CEP or address choice."""
         serial = serial.strip().upper()
+        exigir_dados_cliente()
         aba = f"simpress-gerar-ticket-{uuid4().hex}"
         with self._conectar() as portal:
             historico = self._liberar_incerto(serial, conferido)
@@ -348,6 +356,7 @@ class TicketsUX:
             raise ErroUX(422, MSG_SERIE_TESTE)
         if enviar and envio_desativado():
             raise ErroUX(422, MSG_SEM_ENVIO)
+        _, cnpj_faturamento = exigir_dados_cliente()
         descricao = validar_descricao_ticket(descricao)
         dados = {campo: str(solicitante.get(campo) or "").strip() for campo in CAMPOS_SOLICITANTE}
         if any(not valor or any(ord(c) < 32 for c in valor) for valor in dados.values()):
@@ -361,7 +370,7 @@ class TicketsUX:
         if sessao.endereco is None:
             raise ErroUX(409, "Escolha o endereço em Meus Endereços antes de continuar.", codigo="endereco_ambiguo")
         formulario = Formulario(
-            sessao.endereco, sessao.cnpj_instalacao, CNPJ_FATURAMENTO, descricao,
+            sessao.endereco, sessao.cnpj_instalacao, cnpj_faturamento, descricao,
             dados["nome"], dados["email"], dados["telefone"], interno, sessao.arquivo_nome, sessao.arquivo, sessao.tipo,
         )
         with self._conectar() as portal:

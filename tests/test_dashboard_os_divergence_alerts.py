@@ -100,9 +100,9 @@ class NewDivergencesStatusTests(unittest.TestCase):
     def test_sebrae_series_and_curitiba_prnote_hosts_never_count(self):
         previous = update("a", NOW - timedelta(days=7))
         current = update("b", NOW, ausentes_em_detalhes=[
-            {"computador": "NOTE-SEBRAE", "serie": "BRJ135P5XS"},
+            {"computador": "NOTE-SEBRAE", "serie": "BRT100XA01"},
         ], ausentes_no_endpoint=[
-            {"computador": "", "serie": "BRJ149SCJG"},
+            {"computador": "", "serie": "BRT300XC01"},
         ], divergencias_local=[
             {"computador": "PRNOTESJP01", "serie": "S9", "local_previsto": "Curitiba", "local_detalhes": "São José dos Pinhais"},
             {"computador": "PRNOTEARC77", "serie": "S8", "local_previsto": "Curitiba", "local_detalhes": "Araucária"},
@@ -173,10 +173,10 @@ class LongUnusedStatusTests(unittest.TestCase):
         )
 
     def test_move_is_ignored_when_the_row_is_still_listed_or_belongs_to_sebrae(self):
-        previous = update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("BRJ135P5XS", 58), idle("KEEP", 58)])
+        previous = update("a", NOW - timedelta(days=7), sem_acesso_7_dias=[idle("BRT100XA01", 58), idle("KEEP", 58)])
         current = update(
             "b", NOW, sem_acesso_7_dias=[idle("KEEP", 65)],
-            ausentes_no_endpoint=[{"serie": "BRJ135P5XS"}, {"serie": "KEEP"}],
+            ausentes_no_endpoint=[{"serie": "BRT100XA01"}, {"serie": "KEEP"}],
         )
         result = long_unused_status([previous, current])
         self.assertEqual((result["total_passou"], result["total_saiu_endpoint"]), (1, 0))

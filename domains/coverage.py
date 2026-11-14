@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from domains.equipment_search import normalize_search_term
-from domains.regras_negocio import SERIES_SEBRAE, hostname_de_curitiba
+from domains.regras_negocio import hostname_de_curitiba, series_sebrae
 from domains.sebrae_cruzamento import CIDADE_CURITIBA
 
 Estado = Dict[str, Any]
@@ -107,11 +107,9 @@ def chave_serie(serie: Any) -> str:
     return "".join(c for c in normalize_search_term(serie) if c.isalnum())
 
 
-_SEBRAE = frozenset(chave_serie(serie) for serie in SERIES_SEBRAE)
-
-
 def eh_sebrae(serie: Any) -> bool:
-    return chave_serie(serie) in _SEBRAE
+    """Série própria da Sebrae (lida de config/cliente.json a cada chamada; sem configuração, nenhuma é)."""
+    return chave_serie(serie) in series_sebrae()
 
 
 def dobrar(texto: Any) -> str:

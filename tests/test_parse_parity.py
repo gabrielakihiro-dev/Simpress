@@ -109,9 +109,9 @@ ENDPOINT_ROWS: List[Any] = [
     ("PRMACMTZ02", "C02XYZ123", "sebrae\\edu", "12 out 2026 09:00", "macOS"),
     ("PRMACAMB01", "FVFAMB001", "sebrae\\fabi", None, "macOS"),
     # Notebooks próprios do Sebrae: ignorados nos ausentes em Simpress.
-    ("PRNOTEMTZ90", "BRJ135P5XS", "sebrae\\gil", datetime(2026, 10, 14), "Windows 11"),
-    ("PRNOTEMTZ91", "BRJ142QKBQ", "", None, "Windows 11"),
-    ("PRNOTEMTZ92", "brj9435vmr", "", None, "Windows 11"),
+    ("PRNOTEMTZ90", "BRT100XA01", "sebrae\\gil", datetime(2026, 10, 14), "Windows 11"),
+    ("PRNOTEMTZ91", "BRT100XA02", "", None, "Windows 11"),
+    ("PRNOTEMTZ92", "brt200xb0r", "", None, "Windows 11"),
     # Duplicidade de série no Endpoint.
     ("PRNOTECAS01", "BRJ300DUP1", "", None, "Windows 11"),
     # Casa por hostname, sem série no Endpoint.
@@ -325,7 +325,7 @@ class ParseParityTests(unittest.TestCase):
         """Âncoras legíveis das regras do AGENTS.md, além do snapshot bruto."""
         comparison = self.actual["upload"]["comparacao"]
         missing_in_details = {item["serie"] for item in comparison["ausentes_em_detalhes"]}
-        for serial in ("BRJ135P5XS", "BRJ142QKBQ", "brj9435vmr"):
+        for serial in ("BRT100XA01", "BRT100XA02", "brt200xb0r"):
             self.assertNotIn(serial, missing_in_details)
         self.assertIn("BRJ700ENDP", missing_in_details)
 

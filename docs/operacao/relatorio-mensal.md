@@ -1,6 +1,6 @@
 # Relatório mensal do contrato
 
-Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mês escolhido (inventário, última comparação e OS), montada somente com dados que o Simpress já guarda localmente.
+Objetivo: entregar ao gestor do contrato configurado em `config/cliente.json` uma planilha com o retrato do mês escolhido (inventário, última comparação e OS), montada somente com dados que o Simpress já guarda localmente.
 
 ## Formato
 
@@ -14,7 +14,7 @@ Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mê
 
 ### `Resumo`
 
-Cabeçalho: título `Relatório mensal — <mês> de <ano>`, contrato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, data de geração. Depois, uma tabela `Indicador | Valor | Origem` em quatro blocos:
+Cabeçalho: título `Relatório mensal — <mês> de <ano>`, contrato (no formato `<contrato> - <nome do contrato>`, como `10101 - NOME DO CONTRATO`), data de geração. Depois, uma tabela `Indicador | Valor | Origem` em quatro blocos:
 
 | Bloco | Indicador | Origem |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Cabeçalho: título `Relatório mensal — <mês> de <ano>`, contrato `16467 - S
 | Inventário | Séries duplicadas | Séries que aparecem em mais de uma linha da base oficial (contam uma vez no total). |
 | Última comparação | Data da comparação | Atualização de inventário mais recente do histórico até o corte do período (data atual para o mês atual; último dia para mês encerrado). Restaurações e a linha de base fixa ficam de fora. |
 | Última comparação | Sem correspondência — no endpoint | `ausentes_no_endpoint` dessa atualização, com a classificação atual do histórico. |
-| Última comparação | Sem correspondência — na Simpress | `ausentes_em_detalhes`, sem as séries do Sebrae (`BRJ135P5XS`, `BRJ142QKBQ`, `BRJ9435VMR`, `BRJ9435VMF`, `BRJ149SCJG`). |
+| Última comparação | Sem correspondência — na Simpress | `ausentes_em_detalhes`, sem as séries do Sebrae (lista em `config/cliente.json`, `series_sebrae_fora`; por exemplo `BRT100XA01`, `BRT100XA02`, `BRT200XB0R`, `BRT200XB0F`, `BRT300XC01`). |
 | Última comparação | Localidade divergente | `divergencias_local`, sem os hostnames `PRNOTESJP*`, `PRNOTERL*` e `PRNOTEARC*` (instalados em Curitiba). |
 | Última comparação | Atualizações registradas no mês | Atualizações de inventário do histórico com horário dentro do mês. |
 | OS do mês | OS Oracle abertas no mês | OS distintas (pela `ordem_servico`, ou `solicitacao` quando não houver) cuja `data_criacao` cai no mês. |
