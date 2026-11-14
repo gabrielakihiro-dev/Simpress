@@ -61,5 +61,15 @@ function createDomUtils(document) {
     return result + escapeHtml(value.slice(cursor));
   }
 
-  return { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize };
+  let infoTipCount = 0;
+  // Markup do ⓘ (.info-tip de ux-refinements.css) com id único por documento; rótulo e texto escapados.
+  /** @param {unknown} rotulo @param {unknown} texto @param {{ fim?: boolean }} [opcoes] @returns {string} */
+  function infoTipHtml(rotulo, texto, { fim = false } = {}) {
+    const id = `tip-auto-${++infoTipCount}`;
+    return `<span class="info-tip${fim ? " info-tip--end" : ""}"><button type="button" class="info-tip-trigger" aria-label="Sobre ${escapeHtml(rotulo)}" aria-describedby="${id}">`
+      + '<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg>'
+      + `</button><span id="${id}" role="tooltip" class="info-tip-text">${escapeHtml(texto)}</span></span>`;
+  }
+
+  return { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize, infoTipHtml };
 });

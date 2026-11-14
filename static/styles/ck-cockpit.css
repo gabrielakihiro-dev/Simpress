@@ -585,7 +585,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ferramenta__textos { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ck-ferramenta__kicker { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-ferramenta__titulo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xl); font-weight: var(--peso-medio); }
-.ck-ferramenta__sub { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-ferramenta__linha { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .ck-barra-ferr { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--cor-borda-suave); }
 #form-nova-unidade { margin: 10px 20px; padding: 12px; gap: 10px; flex: none; }
 .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
@@ -1867,7 +1867,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ckp-importar__status { grid-column: 1 / -1; margin: 0; }
 .ckp-importar__status:empty { display: none; }
 #cockpit-tickets-manage-panel .ckp-recolher__corpo { gap: 16px; padding: 16px; }
-#cockpit-tickets-sources, #cockpit-tickets-version-hint { margin: 0; overflow-wrap: anywhere; }
+#cockpit-tickets-sources { margin: 0; overflow-wrap: anywhere; }
 #cockpit-tickets-evolution { display: flex; flex-direction: column; gap: 6px; }
 .ck-chamados-evolucao__resumo { margin: 0; font-weight: var(--peso-medio); color: var(--cor-texto); }
 .ck-chamados-evolucao__lista { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; }
@@ -2012,7 +2012,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 
 /* ---------- 6b. Sub-abas Abertas e Finalizadas ---------- */
 /* Mesmo desenho de abas do F5, em abas de sublinhado: 44px de altura, aba ativa com 2px de destaque embaixo. O contador "N OS · N séries" fica à direita da barra. */
-.os-kpis-nota { margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
 .os-abas-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 12px; margin-top: 2px; border-bottom: 1px solid var(--cor-borda); }
 .os-abas { display: flex; flex: 0 1 auto; gap: 4px; min-width: 0; }
 .os-aba {

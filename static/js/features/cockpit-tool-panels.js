@@ -168,6 +168,17 @@
 
   function byId(id) { return document.getElementById(id); }
 
+  // Ícone do sprite (ck-ico--sm), decorativo; criado por DOM porque este módulo não monta HTML.
+  function svgIcon(href) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(svgNs, "svg");
+    icon.setAttribute("class", "ck-ico ck-ico--sm");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("focusable", "false");
+    icon.appendChild(document.createElementNS(svgNs, "use")).setAttribute("href", href);
+    return icon;
+  }
+
   function element(tag, className = "", text = "") {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -391,6 +402,21 @@
 
   const ticketTriageGroups = [["ativos", "Ativos", ""], ["atrasados", "3+ dias", "alerta"], ["sem_data", "Sem data", "alerta"], ["em_dia", "Atualizados <3 dias", "ok"]];
 
+  // ⓘ da nota dos KPIs no fim da linha de resumo; id fixo porque o e2e e o doc 07 o citam. --end: a triagem tem overflow:hidden e o balão para a direita era cortado.
+  function kpisNotaTip() {
+    const tip = element("span", "info-tip info-tip--end");
+    const trigger = element("button", "info-tip-trigger");
+    trigger.type = "button";
+    trigger.setAttribute("aria-label", "Sobre a contagem");
+    trigger.setAttribute("aria-describedby", "cockpit-tickets-kpis-nota");
+    trigger.append(svgIcon("#i-info"));
+    const text = element("span", "info-tip-text", "KPIs e triagem contam só as OS da sub-aba Abertas.");
+    text.id = "cockpit-tickets-kpis-nota";
+    text.setAttribute("role", "tooltip");
+    tip.append(trigger, text);
+    return tip;
+  }
+
   // Triagem pelo grupo da série (regra em ticket-rules): os números contam só as séries com OS na sub-aba Abertas, não o filtro atual nem a sub-aba visível.
   function renderTicketTriage() {
     const host = byId("cockpit-tickets-triage");
@@ -408,8 +434,10 @@
     const head = element("div", "ckp-triagem__cab");
     const title = element("h3", "ckp-triagem__titulo", "Triagem por atualização no Oracle");
     title.id = "cockpit-tickets-triage-title";
-    head.append(title, element("span", "ck-chamados-triagem__resumo",
-      `${counts.ativos} de ${records.length} séries com chamado aberto no Oracle · ${records.length - counts.ativos} sem chamado aberto`));
+    const resumo = element("span", "ck-chamados-triagem__resumo",
+      `${counts.ativos} de ${records.length} séries com chamado aberto no Oracle · ${records.length - counts.ativos} sem chamado aberto `);
+    resumo.append(kpisNotaTip());
+    head.append(title, resumo);
     const buttons = element("div", "ckp-triagem__nums");
     ticketTriageGroups.forEach(([key, label, status]) => {
       const button = element("button", "ckp-triagem__num ck-chamados-triagem__botao");
@@ -2003,13 +2031,7 @@
     edit.type = "button";
     edit.title = label;
     edit.setAttribute("aria-label", label);
-    const svgNs = "http://www.w3.org/2000/svg";
-    const icon = document.createElementNS(svgNs, "svg");
-    icon.setAttribute("class", "ck-ico ck-ico--sm");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute("focusable", "false");
-    icon.appendChild(document.createElementNS(svgNs, "use")).setAttribute("href", "#i-pencil");
-    edit.append(icon, element("span", "ck-sr", label));
+    edit.append(svgIcon("#i-pencil"), element("span", "ck-sr", label));
     edit.addEventListener("click", () => app.editarUnidade(Number(unit.id), "form-unidade-cnpj"));
     wrap.append(element("span", "", unit.cnpj || "—"), edit);
     return wrap;
