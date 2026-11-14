@@ -357,6 +357,15 @@
     byId("assistente-contador").textContent = `${byId("assistente-texto").value.length} / ${LIMITE}`;
   }
 
+  // Cartões da tela inicial: só preenchem a caixa de mensagem; quem envia é o usuário.
+  function preencherAtalhoAssistente(texto) {
+    const campo = byId("assistente-texto");
+    campo.value = String(texto);
+    contarMensagemAssistente();
+    campo.focus();
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+  }
+
   function mostrarStatusInstrucoes(texto) {
     byId("assistente-instrucoes-status").textContent = texto;
   }
@@ -686,9 +695,8 @@
       abrir.dataset.onClick = "abrirConversaHistoricoAssistente";
       abrir.dataset.args = JSON.stringify([id]);
       corpo.append(abrir);
-      const quando = String(conversa.atualizada_em || "");
       const partes = [];
-      if (quando) partes.push(`${dataBrasileira(quando)} ${quando.slice(11, 16)}`);
+      if (conversa.atualizada_em) partes.push(dataHoraConversa(conversa));
       partes.push(`${Number(conversa.mensagens) || 0} mensagens`);
       corpo.append(createTextElement("span", "ck-assist__anexo-meta", partes.join(" · ")));
       item.append(corpo);
@@ -709,8 +717,41 @@
       item.append(acoes);
       return item;
     }));
+    // Recarga com uma conversa aberta (lateral ou 404) não pode reexibir a lista por cima da leitura.
+    lista.hidden = !historico.length || Boolean(conversaAberta);
+    byId("assistente-historico-vazio").hidden = historico.length > 0 || Boolean(conversaAberta);
+    desenharConversasLateral();
+  }
+
+  function dataHoraConversa(conversa) {
+    const quando = String(conversa.atualizada_em || "");
+    return quando ? `${dataBrasileira(quando)} ${quando.slice(11, 16)}` : "";
+  }
+
+  // Lateral do expandido (só o CSS a mostra, a partir de 900px): mesmo array `historico`; só lista e abre (exportar e apagar ficam no painel).
+  function desenharConversasLateral() {
+    const lista = byId("assistente-lateral-conversas-lista");
+    lista.replaceChildren(...historico.map(conversa => {
+      const item = document.createElement("li");
+      const abrir = document.createElement("button");
+      abrir.type = "button";
+      abrir.className = "ck-assist__conversa";
+      abrir.dataset.onClick = "abrirConversaLateralAssistente";
+      abrir.dataset.args = JSON.stringify([String(conversa.id)]);
+      abrir.append(
+        createTextElement("span", "ck-assist__conversa-titulo", String(conversa.titulo || "Conversa sem título")),
+        createTextElement("span", "ck-assist__conversa-data", dataHoraConversa(conversa)),
+      );
+      item.append(abrir);
+      return item;
+    }));
     lista.hidden = !historico.length;
-    byId("assistente-historico-vazio").hidden = historico.length > 0;
+    byId("assistente-lateral-conversas-vazio").hidden = historico.length > 0;
+  }
+
+  // Recarrega a lista da lateral depois de conversa nova ou mensagem, só quando ela está à mostra.
+  function atualizarConversasLateral() {
+    if (byId("assistente-widget").dataset.modo === "maximizado" && !historicoOcupado) void carregarHistorico();
   }
 
   function focarConversaHistorico(id, seletor) {
@@ -740,15 +781,26 @@
       byId("assistente-historico-botao").focus();
       return;
     }
-    byId("assistente-instrucoes").hidden = true;
-    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
-    fecharLembretes();
-    area.hidden = false;
-    byId("assistente-historico-botao").setAttribute("aria-expanded", "true");
+    mostrarPainelHistorico();
     mostrarListaHistorico();
     mostrarStatusHistorico("Carregando o histórico…");
     if (await carregarHistorico()) mostrarStatusHistorico("");
     byId("assistente-historico-titulo").focus();
+  }
+
+  function mostrarPainelHistorico() {
+    byId("assistente-instrucoes").hidden = true;
+    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
+    fecharLembretes();
+    byId("assistente-historico").hidden = false;
+    byId("assistente-historico-botao").setAttribute("aria-expanded", "true");
+  }
+
+  // Clique na lateral: abre o painel do histórico (se fechado) e a conversa em modo leitura, pelo fluxo de sempre.
+  async function abrirConversaLateralAssistente(id) {
+    if (historicoOcupado) return;
+    mostrarPainelHistorico();
+    await abrirConversaHistoricoAssistente(id);
   }
 
   async function buscarConversaHistorico(id) {
@@ -791,7 +843,7 @@
     const conversa = typeof id === "string" && id !== conversaAberta?.id ? await buscarConversaHistorico(id) : conversaAberta;
     if (!conversa) return;
     const quando = String(conversa.atualizada_em || "");
-    const dataHora = quando ? `${dataBrasileira(quando)} ${quando.slice(11, 16)}` : "";
+    const dataHora = dataHoraConversa(conversa);
     const titulo = String(conversa.titulo || "Conversa sem título");
     const mensagens = Array.isArray(conversa.mensagens) ? conversa.mensagens : [];
     document.querySelectorAll("iframe[data-assistente-pdf]").forEach(antigo => antigo.remove());
@@ -1055,6 +1107,7 @@
         errorMessage: "Não foi possível falar com o Assistente.",
       });
       mostrarResposta(dados);
+      atualizarConversasLateral();
     } catch (error) {
       if (error?.status === 503) online = false;
       if (error?.name === "AbortError") mostrarStatus(envio.motivo === "prazo" ? MSG_PRAZO : MSG_CANCELADO);
@@ -1138,6 +1191,7 @@
     botaoMax.setAttribute("aria-label", maximizado ? "Restaurar tamanho do Assistente" : "Maximizar Assistente");
     botaoMax.title = maximizado ? "Restaurar tamanho" : "Maximizar";
     botaoMax.querySelector("use").setAttribute("href", maximizado ? "#i-restaurar" : "#i-maximize");
+    atualizarConversasLateral();
     // O conteúdo some ao minimizar: o foco vai para o botão, para não ficar preso num campo oculto.
     if (minimizado && widget.contains(document.activeElement) && document.activeElement !== botaoMin) botaoMin.focus();
     else if (!minimizado) focarProximo();
@@ -1352,6 +1406,7 @@
       mostrarStatusAnexos("");
       desenharAnexos();
       if (online) statusPronto();
+      atualizarConversasLateral();
     } catch (error) {
       mostrarStatus(error?.message || "Não foi possível iniciar uma nova conversa.");
     }
@@ -1381,10 +1436,10 @@
 
   return {
     carregarAssistente, alternarAssistente, minimizarAssistente, maximizarAssistente, voltarConversaAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
-    novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
+    novaConversaAssistente, contarMensagemAssistente, preencherAtalhoAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
     alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
     anexarArquivoAssistente, removerAnexoAssistente,
-    alternarHistoricoAssistente, abrirConversaHistoricoAssistente, fecharConversaHistoricoAssistente,
+    alternarHistoricoAssistente, abrirConversaHistoricoAssistente, abrirConversaLateralAssistente, fecharConversaHistoricoAssistente,
     exportarPdfHistoricoAssistente, pedirApagarConversaHistoricoAssistente, cancelarApagarConversaHistoricoAssistente, apagarConversaHistoricoAssistente,
     alternarLembretesAssistente, marcarLembreteAssistente, pedirApagarLembreteAssistente, cancelarApagarLembreteAssistente, apagarLembreteAssistente,
   };

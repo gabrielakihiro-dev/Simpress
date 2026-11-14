@@ -18,13 +18,16 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  # Os testes Python levavam ~12 min num job só; divididos em 4 partes que rodam em paralelo.
+  verify-shard:
+    name: verify (${{ matrix.python-version }}, parte ${{ matrix.shard }}/4)
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.14"]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -45,6 +48,7 @@ jobs:
         run: node scripts/verify.cjs
         env:
           PYTHON: python
+          SIMPRESS_TEST_SHARD: ${{ matrix.shard }}/4
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=moderate
       - name: Rebuild local interface assets
@@ -60,3 +64,13 @@ jobs:
             Write-Error "Rebuilt interface assets contain untracked files: $untracked"
             exit 1
           }
+
+  # Mantém um check único chamado verify, que só passa se todas as partes passarem.
+  verify:
+    needs: verify-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every part to pass
+        run: test "${{ needs.verify-shard.result }}" = "success"

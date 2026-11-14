@@ -150,6 +150,46 @@ test("histórico: lista, lê, apaga com confirmação e volta à conversa", asyn
   await expect(page.locator("#assistente-texto")).toBeVisible();
 });
 
+test("lateral do expandido: lista as conversas guardadas, abre a leitura e some no compacto", async ({ page, isMobile }) => {
+  test.skip(isMobile, "a lateral só existe a partir de 900px");
+  let conversas = [
+    { id: "aaa111", titulo: "Quantos notebooks temos?", atualizada_em: "2026-10-30T10:15:00-03:00", mensagens: 2 },
+    { id: "bbb222", titulo: "Resumo do mês", atualizada_em: "2026-10-29T09:00:00-03:00", mensagens: 4 },
+  ];
+  await mockAssistente(page, {
+    estado: PRONTO,
+    conversas: () => ({ conversas }),
+    "conversas/item": (_corpo, _metodo, caminho) => ({ id: caminho.split("/").pop(), titulo: "Resumo do mês", mensagens: [{ papel: "assistente", texto: "Fechamos o mês com 3 OS." }] }),
+    limpar: () => { conversas = []; return { ok: true }; },
+  });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const lateral = page.getByRole("navigation", { name: "Conversas guardadas" });
+  // Compacto (modo normal): a lista da lateral não aparece.
+  await expect(page.locator("#assistente-lateral-conversas")).toBeHidden();
+  await page.getByRole("button", { name: "Maximizar Assistente" }).click();
+  // Expandido: aparece sem clicar no botão de histórico, que continua fechado.
+  await expect(lateral.getByRole("button")).toHaveCount(2);
+  await expect(lateral.getByRole("button").first()).toContainText("Quantos notebooks temos?");
+  await expect(lateral.getByRole("button").first()).toContainText("30/10/2026 10:15");
+  await expect(page.locator("#assistente-historico")).toBeHidden();
+  await expect(lateral).not.toContainText("Exportar");
+  // Clique abre a conversa em modo leitura no painel do histórico.
+  await lateral.getByRole("button", { name: /Resumo do mês/ }).click();
+  await expect(page.locator("#assistente-historico")).toBeVisible();
+  await expect(page.locator("#assistente-historico-botao")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#assistente-historico-leitura")).toContainText("Fechamos o mês com 3 OS.");
+  await expect(page.locator("#assistente-historico-lista")).toBeHidden();
+  // Histórico muda (nova conversa): a lateral recarrega e mostra o texto de lista vazia.
+  await page.locator("#assistente-historico").getByRole("button", { name: "Voltar à conversa" }).click();
+  await page.getByRole("button", { name: "Nova conversa" }).click();
+  await expect(lateral.getByRole("button")).toHaveCount(0);
+  await expect(lateral).toContainText("Nenhuma conversa guardada.");
+  // Restaurar o tamanho esconde a lateral de novo.
+  await page.getByRole("button", { name: "Restaurar tamanho do Assistente" }).click();
+  await expect(page.locator("#assistente-lateral-conversas")).toBeHidden();
+});
+
 test("histórico: exportar PDF monta o documento Cockpit na lista e na leitura", async ({ page }) => {
   const conversas = [{ id: "aaa111", titulo: "Quantos notebooks temos?", atualizada_em: "2026-10-30T10:15:00-03:00", mensagens: 2 }];
   // O navegador sem tela dispara "afterprint" na hora e o iframe some; o stub só conta as chamadas a print().
@@ -245,6 +285,24 @@ test("a conversa continua ao fechar e reabrir o chat", async ({ page }) => {
   await expect(page.locator("#assistente-widget")).toBeVisible();
   await expect(page.locator(".ck-assist__msg--usuario .ck-assist__texto")).toHaveText("quantos?");
   await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Temos 12 notebooks.");
+});
+
+test("cartão da tela inicial só preenche a caixa (não envia) e a tela inicial some após a primeira mensagem", async ({ page }) => {
+  const chamadas = await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Achei o equipamento.", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const boasVindas = page.locator(".ck-assist__boas-vindas");
+  await expect(boasVindas).toBeVisible();
+  await boasVindas.getByRole("button", { name: /Buscar equipamento/ }).click();
+  await expect(page.locator("#assistente-texto")).toHaveValue("Buscar o equipamento com a série ou o hostname ");
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+  await expect(page.locator("#assistente-contador")).toHaveText("47 / 4000");
+  expect(chamadas.filter(c => c.nome === "mensagem")).toHaveLength(0);
+  await page.keyboard.type("ABC123");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Achei o equipamento.");
+  expect(chamadas.filter(c => c.nome === "mensagem")).toHaveLength(1);
+  await expect(boasVindas).toBeHidden();
 });
 
 test("Esc com um painel de ferramentas aberto fecha só o chat", async ({ page }) => {
