@@ -1,0 +1,9 @@
+---
+description: Fonte oficial do cadastro, rótulos do Histórico de Planilhas e equipamentos do Sebrae nas comparações.
+globs: domains/**/*.py,routers/**/*.py,static/**/*.js,frontend/**/*.html,tests/**/*.py
+alwaysApply: false
+---
+
+Regras em `docs/operacao/regras-cadastro-historico.md`, seções "Fonte oficial do cadastro de equipamentos", "Rótulos do Histórico de Planilhas" e "Equipamentos do Sebrae nas comparações Simpress". As regras gerais vêm do `AGENTS.md` da raiz, que o Cursor já carrega.
+
+@docs/operacao/regras-cadastro-historico.md

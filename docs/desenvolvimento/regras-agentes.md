@@ -113,3 +113,22 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - O servidor só carrega em sessão nova do Claude Code (reiniciar a sessão depois de mudar `.mcp.json` ou `settings.json`).
 - Como usar: suba o `ui-fixture` e peça "use a skill playwright-teste" (fluxo em `.claude/skills/playwright-teste`).
 - LGPD: aponte só para a fixture em `127.0.0.1:8765`, nunca para o app real; os snapshots do navegador vão ao modelo e poderiam levar dado pessoal.
+
+## Tamanho das regras
+
+Arquivos de regras entram no contexto de toda conversa (a raiz) ou ao abrir arquivos da pasta (as pastas). Cada 1 KB custa de 250 a 300 tokens por mensagem. `tests/test_rules_size.py` falha acima do teto.
+
+| Arquivo | Meta | Teto |
+|---|---|---|
+| `AGENTS.md` da raiz | 6 KB | 8 KB |
+| `CLAUDE.md` + `AGENTS.md` da raiz (o que o Claude Code carrega) | 8 KB | 10 KB |
+| `AGENTS.md` de pasta | 4 KB | 6 KB |
+| `CLAUDE.md` de pasta (só `@AGENTS.md`) | — | 512 B |
+| Cada `.cursor/rules/*.mdc` e `.claude/rules/*.md` | — | 1 KB |
+
+- Passou da meta: avise o usuário com o tamanho e o arquivo.
+- Passou do teto: mova o detalhe para o `AGENTS.md` da pasta ou para o doc do tema e deixe no lugar só o gatilho e o caminho ("Ao fazer X, leia Y"). Não mova para fora da raiz regra que precisa valer em toda conversa sem gatilho (invariantes críticos, LGPD).
+- Pasta nova com regras: crie `AGENTS.md` e um `CLAUDE.md` só com `@AGENTS.md` (o Claude Code lê `CLAUDE.md`; Codex, Cursor e Antigravity leem `AGENTS.md`). Cite a pasta no Índice e na linha "Antes de editar arquivo em..." do `AGENTS.md` da raiz, porque o Codex só carrega os `AGENTS.md` da raiz até a pasta onde a sessão começou.
+- Regra que vale só para alguns arquivos fora de uma pasta com `AGENTS.md` (ex.: `static/`, que é pública e não aceita `.md`): ponha o texto num `AGENTS.md` de pasta ou num doc e aponte para ele com `.claude/rules/<tema>.md` (frontmatter `paths:`, carregado só quando o Claude Code toca um arquivo que casa) e `.cursor/rules/<tema>.mdc` (`globs:`). Exemplo: `.claude/rules/interface.md` aponta `static/**` para `frontend/AGENTS.md`.
+- Comentário HTML de bloco (`<!-- ... -->`) em `CLAUDE.md` não entra no contexto do Claude Code: use para nota de mantenedor. `@import` organiza, mas não economiza (o arquivo importado carrega junto).
+- Regras globais (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`) ficam fora do Git e do teste; o limite delas está escrito nos próprios arquivos.
