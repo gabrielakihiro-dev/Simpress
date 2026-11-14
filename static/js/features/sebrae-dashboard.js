@@ -2167,7 +2167,7 @@
       // o resumo também é o vazio da aba Antigos (CSS): escrito mesmo sem o botão Atualizar montado
       definirTexto("sebrae-antigos-resumo", visiveis
         ? `${visiveis} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
-        : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
+        : "Nenhum chamado antigo em aberto.");
       const faltaEncerramento = mostrarFaltaEncerramento(pendentesEncerramento());
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;

@@ -15,7 +15,7 @@ Autorização: pedido do usuário de 09/11/2026 (painel novo, sem atalho de tecl
 
 ## Tela
 
-Menu Ferramentas, grupo `Painéis`, botão `Lembretes` (sem tecla). O painel `section[data-cockpit-tool-panel="lembretes"]` traz as sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega`, `Termo Devolução` e `Lembretes` (a lista, em `18-lembretes.md`); o painel abre em `Lembretes`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais o aviso visível `Na janela que abrir, escolha Salvar como PDF e a pasta.` e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo.
+Menu Ferramentas, grupo `Painéis`, botão `Lembretes` (sem tecla). O painel `section[data-cockpit-tool-panel="lembretes"]` traz as sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega`, `Termo Devolução` e `Lembretes` (a lista, em `18-lembretes.md`); o painel abre em `Lembretes`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais um ⓘ depois de `Gerar PDF` (`aria-label="Sobre o PDF"`, balões `#termos-pdf-dica-entrega` e `#termos-pdf-dica-devolucao`) com o texto `Na janela que abrir, escolha Salvar como PDF e a pasta.` (era um aviso visível; foi para o ⓘ em 14/11/2026, limpeza dos textos explicativos, Bloco 3), e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo, que continua visível.
 
 ### Termo Entrega
 
@@ -23,8 +23,8 @@ Título impresso `Termo de Entrega`, cabeçalho `SEBRAE/PR`, marca `Interno` no 
 
 - `Dados do colaborador`: `Nome do colaborador`, `Unidade / Departamento`, `Data da entrega / troca`.
 - `Identificação do equipamento`: tabela com colunas `Campo`, `Equipamento anterior`, `Equipamento entregue` e linhas `Modelo do computador` e `Número de série / Service Tag` (quatro campos). Abaixo de 768 px a tabela vira cartões com os mesmos dados.
-- `Equipamentos e acessórios entregues`, com a dica `Assinale Sim ou Não para cada item apresentado no ato da entrega.` Itens, cada um com `Sim` / `Não`: 01 Mochila; 02 Notebook; 03 Teclado; 04 Mouse; 05 Hub USB; 06 Suporte notebook; 07 Headset (modelo 8225 ou 3220); 08 Case headset; 09 Mousepad; 10 Monitor (HDMI / DisplayPort / Cabo de força / USB); 11 Cabo de Segurança.
-- `Observações`, com a dica `Registre avarias no equipamento anterior ou itens pendentes.`
+- `Equipamentos e acessórios entregues`, com a dica `Assinale Sim ou Não para cada item apresentado no ato da entrega.` (na tela, num ⓘ dentro da `legend`, balão `#termos-entrega-itens-dica`; na folha impressa segue visível). Itens, cada um com `Sim` / `Não`: 01 Mochila; 02 Notebook; 03 Teclado; 04 Mouse; 05 Hub USB; 06 Suporte notebook; 07 Headset (modelo 8225 ou 3220); 08 Case headset; 09 Mousepad; 10 Monitor (HDMI / DisplayPort / Cabo de força / USB); 11 Cabo de Segurança.
+- `Observações`, com a dica `Registre avarias no equipamento anterior ou itens pendentes.` (na tela, num ⓘ dentro da `legend`, balão `#termos-entrega-obs-dica`, que o campo continua citando em `aria-describedby`; só existe na tela, não na folha).
 - `Validação do recebimento`: `Declaro que conferi as informações deste termo e recebi os equipamentos e acessórios assinalados acima.`
 - Assinaturas: `Assinatura do colaborador` e `Assinatura do técnico responsável`.
 - Sem rodapé (removido a pedido do usuário em 10/11/2026: ficava colado às assinaturas).

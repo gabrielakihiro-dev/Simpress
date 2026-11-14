@@ -23,7 +23,7 @@ Visual da aba Lembretes (12/11/2026): modelo estilo Todoist, artefato https://cl
 - Edição inline: Enter salva e Esc cancela. Dica: `Enter salva · Esc cancela`. Botões `Cancelar` e `Salvar`. Rótulo oculto: `Editar descrição`.
 - Concluídos vão para a seção recolhível `Concluídos (n)` (`aria-expanded`).
 - Excluir pede confirmação em `role="alertdialog"`: título `Excluir este lembrete?`, a descrição do item, `Esta ação não pode ser desfeita.`, botões `Cancelar` e `Excluir`. Esc cancela.
-- Estado vazio: `Nenhum lembrete. Anote o que precisa fazer.`
+- Estado vazio: `Nenhum lembrete.` (uma linha; a frase de instrução saiu da tela em 14/11/2026, limpeza dos textos explicativos, Bloco 3).
 
 ## Data agendada (13/11/2026)
 
@@ -100,7 +100,7 @@ Pedido do usuário (12/11/2026). Só leitura: nenhum endpoint novo, nada é grav
 
 - Barra de cada termo: novo botão `Criar lembrete`, ao lado de `Gerar PDF` e `Limpar`.
 - Sem `Nome do colaborador` ou sem número de série, aparece `Preencha o número de série e o nome do colaborador.` e nada abre.
-- Com os dois preenchidos, abre o diálogo `Criar lembrete` com o campo `Descrição` já montado e a dica `Texto montado com os dados do termo. Revise antes de criar.` Botões `Cancelar` e `Criar lembrete`. Esc cancela. Nada é criado sem o clique.
+- Com os dois preenchidos, abre o diálogo `Criar lembrete` com o campo `Descrição` já montado; a dica `Texto montado com os dados do termo. Revise antes de criar.` fica num ⓘ ao lado do rótulo `Descrição` (`aria-label="Sobre a descrição"`, balão `#lembretes-criar-dica`, que o campo continua referenciando em `aria-describedby`; desde 14/11/2026). Botões `Cancelar` e `Criar lembrete`. Esc cancela. Nada é criado sem o clique.
 - Depois de criar: `Lembrete criado.` com o link `Ver em Lembretes`.
 - Modelo da descrição (as partes vazias ficam de fora):
   - Entrada: `Entrada: <Nome> (<Unidade>) recebeu <Modelo>, série <Série> em <dd/mm/aaaa>. Itens: <itens marcados Sim>. Anterior: <Modelo>, série <Série>. Obs.: <Observações>`
