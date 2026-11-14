@@ -161,7 +161,7 @@ def zip_ux() -> bytes:
 
 
 def criar_servidor() -> ThreadingHTTPServer:
-    valores = {"estilo": ESTILO, "contrato": automacao.CONTRATO, "contrato_nome": automacao.CONTRATO_NOME}
+    valores = {"estilo": ESTILO, "contrato": automacao.contrato_configurado(), "contrato_nome": automacao.contrato_nome(automacao.contrato_configurado())}
     paginas = {
         "/MeusEquipamentos/Index": PAGINA_UX % valores,
         "/webclient": PAGINA_ENDPOINT % valores,

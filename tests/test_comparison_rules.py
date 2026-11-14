@@ -362,14 +362,14 @@ class InventoryComparisonTests(unittest.TestCase):
 
     def test_sebrae_owned_serials_are_filtered_from_old_and_new_history_without_rewriting_events(self):
         owned_serials = [
-            "BRJ135P5XS",
-            "BRJ142QKBQ",
-            "BRJ9435VMR",
-            "BRJ9435VMF",
-            "BRJ149SCJG",
+            "BRT100XA01",
+            "BRT100XA02",
+            "BRT200XB0R",
+            "BRT200XB0F",
+            "BRT300XC01",
         ]
         result = main.compare_uploaded_workbooks(
-            source_table([{"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "BRJ135P5XS"}]),
+            source_table([{"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "BRT100XA01"}]),
             source_table([]),
             {},
         )
@@ -456,7 +456,7 @@ class InventoryComparisonTests(unittest.TestCase):
     def test_legacy_history_event_without_update_filters_flag_leaves_without_sebrae_series(self):
         # O renderizador não filtra mais as séries do Sebrae: o backend entrega as listas já limpas,
         # inclusive para eventos antigos (sem filtros_atualizacao_aplicados) e para a resposta do envio.
-        sebrae_variants = ["BRJ135P5XS", "brj142qkbq", "BRJ-9435VMR", " BRJ 9435VMF ", "BRJ149SCJG"]
+        sebrae_variants = ["BRT100XA01", "brt100xa02", "BRT-200XB0R", " BRT 200XB0F ", "BRT300XC01"]
         common_endpoint_item = {"computador": "PRNOTECOMUM01", "serie": "BRJ00000001"}
         common_detail_item = {"computador": "PRMAC-COMUM01", "serie": "BRJ00000002"}
         event = {

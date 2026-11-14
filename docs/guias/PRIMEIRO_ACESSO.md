@@ -4,8 +4,9 @@ Estas instruções se aplicam ao modo padrão de arquivos locais.
 
 1. Depois do `git clone`, execute `iniciar_servidor.bat`. O inicializador prepara o ambiente e inicia o servidor mesmo sem os inventários operacionais.
 2. Quando o servidor estiver pronto, o navegador abre o Simpress sozinho (o inicializador mostra o endereço, normalmente `http://127.0.0.1:8000`, ou outra porta se a 8000 estiver ocupada). Clonar o repositório, sozinho, não inicia o servidor. Não digite o endereço à mão: só o navegador aberto pelo inicializador recebe a sessão local, e sem ela a página mostra **"Sessão local ausente ou expirada"**.
-3. O painel de disponibilidade abre automaticamente quando há pendências. A base começa com zero equipamentos e a mensagem **Base ainda não importada**.
-4. Use os botões de importação em **Funções**. Após cada importação, os indicadores e a disponibilidade são atualizados sem reiniciar o servidor.
+3. O primeiro acesso abre o modal **Dados do cliente**, que pede o contrato, o CNPJ de faturamento e as séries próprias do Sebrae e grava `config/cliente.json` (ignorado pelo Git; exemplo fictício em `config/cliente.exemplo.json`). As variáveis `SIMPRESS_CLIENTE_CONTRATO`, `SIMPRESS_CLIENTE_CNPJ_FATURAMENTO` e `SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA` (séries separadas por vírgula) vencem o arquivo. Sem contrato e CNPJ configurados, o ticket UX, a validação de contrato e as rotinas que usam o contrato recusam com uma mensagem; séries vazias significam nenhuma série excluída.
+4. O painel de disponibilidade abre automaticamente quando há pendências. A base começa com zero equipamentos e a mensagem **Base ainda não importada**.
+5. Use os botões de importação em **Funções**. Após cada importação, os indicadores e a disponibilidade são atualizados sem reiniciar o servidor.
 
 ## Arquivos por função
 
@@ -29,7 +30,7 @@ O ZIP é lido em memória, sem extrair caminhos para o computador. Arquivos com 
 
 Os botões continuam acessíveis nos detalhes depois da configuração, permitindo substituir arquivos. O painel começa recolhido quando todas as funções estão disponíveis; atualizar o status respeita a abertura ou o fechamento escolhido pelo usuário.
 
-O modelo de transferência versionado continua intacto. Uma importação pela tela cria a preferência local em `data/planilhas_entrada/_modelos/transferencia.xlsx`; quando existe, esse modelo passa a ser usado na geração. O modelo de exportação fica em `modelos/EquipamentosDetalhes-exportacao.xlsx`.
+O modelo de transferência deixou de ser versionado: importe-o pela tela (importador de modelo). A importação cria a cópia local em `data/planilhas_entrada/_modelos/transferencia.xlsx`; quando existe, esse modelo passa a ser usado na geração. O modelo de exportação fica em `modelos/EquipamentosDetalhes-exportacao.xlsx`.
 
 Substituições dos modelos importados guardam a cópia anterior em `data/planilhas_entrada/_backups/modelos/`. A gravação usa uma transação recuperável. Um envio inválido ou uma falha de gravação preserva o arquivo anterior. Os modelos operacionais e backups ficam fora do Git. Para restaurar uma cópia, selecione o arquivo do backup no mesmo importador de modelo.
 

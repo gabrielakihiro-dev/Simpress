@@ -9,7 +9,6 @@ from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from domains.regras_negocio import (
     PREFIXOS_HOSTNAME_CURITIBA,
-    SERIES_SEBRAE,
     e_serie_sebrae,
     hostname_de_curitiba,
     hostname_e_macbook,
@@ -304,7 +303,6 @@ SERIE_LOCAL_MAP = {
 
 # Nomes antigos das regras de domains/regras_negocio.py, mantidos para quem já os importa.
 CURITIBA_HOSTNAME_PREFIXES = PREFIXOS_HOSTNAME_CURITIBA
-SEBRAE_OWNED_NOTEBOOK_SERIALS = SERIES_SEBRAE
 is_sebrae_owned_notebook_serial = e_serie_sebrae
 is_curitiba_hostname_exception = hostname_de_curitiba
 

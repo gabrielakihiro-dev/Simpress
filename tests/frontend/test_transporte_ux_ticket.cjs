@@ -11,7 +11,7 @@ const PAYLOAD = { serial: "LENTO", entrega_contato: "Maria Teste", entrega_telef
 const SOLICITANTE = { nome: "Pessoa Teste", email: "pessoa@exemplo.com", telefone: "(41) 90000-0000" };
 const PREPARADO = {
   status: "preparado", session_id: "a".repeat(32), serial: "LENTO", modelo: "Modelo X", endereco: "Rua Um, 1",
-  opcoes_endereco: [], cnpj_instalacao: "11.111.111/0001-11", cnpj_faturamento: "75.110.585/0001-00",
+  opcoes_endereco: [], cnpj_instalacao: "11.111.111/0001-11", cnpj_faturamento: "11.222.333/0001-81",
   arquivo: "transferencia.xlsx", solicitante: SOLICITANTE, ultimo_envio: null,
 };
 const REGISTRO_OK = "Prezados,\nContato no local: Maria Teste\nColaborador(a) Novo(a): Fulano\nData de Instalação: 10/11/2026\nHorário da Instalação: 09h";

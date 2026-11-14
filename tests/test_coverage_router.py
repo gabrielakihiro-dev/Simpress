@@ -146,7 +146,7 @@ class CoverageRouterTests(unittest.TestCase):
         self.post("/api/cobertura/reservas", {"demanda_id": demanda["id"], "serie": "SINT-001", "manutencao_conferida": True})
 
     def test_serie_do_sebrae_fica_fora(self):
-        erro = self.post("/api/cobertura/disponibilidade", {"serie": "BRJ142QKBQ", "estado": "disponivel", "cidade": "Cidade A"}, 422)
+        erro = self.post("/api/cobertura/disponibilidade", {"serie": "BRT100XA02", "estado": "disponivel", "cidade": "Cidade A"}, 422)
         self.assertEqual(erro["detail"]["motivo"], "fora_do_inventario")
         self.assertFalse(self.state.exists())
 

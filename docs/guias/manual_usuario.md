@@ -46,10 +46,12 @@ O Simpress é um site que roda **somente no seu computador** (Windows). Os dados
 | --- | --- | --- |
 | Inventário Simpress (`EquipamentosDetalhes`) | enviado pela tela (seção 4) | Busca, transferência, exportação |
 | Inventário do Endpoint (`InvAllComputersSummary`) | enviado pela tela (seção 4) | Hostname e comparação |
-| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` (já vem no projeto) | Gerar transferência |
+| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | enviado pela tela, no importador de modelo (a cópia local fica em `data/planilhas_entrada/_modelos`) | Gerar transferência |
 | `EquipamentosDetalhes-exportacao.xlsx` | pasta `modelos` | Botão **Exportar Excel** (aba **Comparação**) |
 
 Sem algum desses arquivos o sistema abre normalmente; só as funções que dependem dele ficam indisponíveis.
+
+**Dados do cliente:** o contrato, o CNPJ de faturamento e as séries próprias do Sebrae também não vêm no repositório. No primeiro acesso o Simpress abre o modal **Dados do cliente**, pede esses três dados e os guarda só neste computador, em `config/cliente.json`. Sem contrato e CNPJ de faturamento, o ticket no UX e as rotinas que usam o contrato recusam com uma mensagem.
 
 ## 2. Iniciar o sistema
 
@@ -140,7 +142,7 @@ O resultado traz, entre outras seções:
 
 **Comparar duas atualizações:** a tela **Evolução das atualizações** foi removida em 31/10/2026. A comparação de cada atualização fica em **Comparação** (menu **Ferramentas**); o aviso **Divergências novas** (Home e sino) traz o botão **Ver evolução**, que abre **Comparação**.
 
-**Exportar Excel** (barra da aba **Comparação**, F3, ao lado de **Exportar**) baixa o modelo com `Apelido` e `IdCliente` atualizados e inicia o envio dessa mesma planilha ao UX Simpress (autorizado em 03/11/2026). Por exemplo: o arquivo que acabou de baixar é o mesmo escolhido em **Enviar planilha**, sem procurar outro em Downloads. A rotina confirma o contrato **16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR**, abre **Editar apelido e id**, envia e clica **Salvar edições** uma vez. Login/senha/MFA ficam com você no Chrome de automação. Acompanhe em **Automação (F4)**; pode cancelar ali.
+**Exportar Excel** (barra da aba **Comparação**, F3, ao lado de **Exportar**) baixa o modelo com `Apelido` e `IdCliente` atualizados e inicia o envio dessa mesma planilha ao UX Simpress (autorizado em 03/11/2026). Por exemplo: o arquivo que acabou de baixar é o mesmo escolhido em **Enviar planilha**, sem procurar outro em Downloads. A rotina confirma o contrato configurado em `config/cliente.json` (**<contrato> - <nome do contrato>**), abre **Editar apelido e id**, envia e clica **Salvar edições** uma vez. Login/senha/MFA ficam com você no Chrome de automação. Acompanhe em **Automação (F4)**; pode cancelar ali.
 
 **Planilha Exportada com Sucesso!** confirma o download. A atualização no UX tem mensagem e resultado separados: se houver erro de contrato/editor/arquivo, ela para antes de salvar; se o clique em salvar já ocorreu e o aviso não for claro, confira manualmente no UX antes de tentar novamente. Se a resposta do início se perder, consulte Automação (F4) antes de tentar de novo. A rotina não repete o clique. Os controles e o aviso real do UX ainda precisam de validação supervisionada; os testes usam uma bancada local. Pedir uma exportação no **Assistente** continua fornecendo apenas o arquivo para baixar e não inicia essa escrita externa.
 
@@ -155,9 +157,9 @@ O resultado traz, entre outras seções:
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).
 
-Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação. Se o UX estiver deslogado, a automação clica em **Acesso Time Simpress** e escolhe a conta Simpress configurada (`SIMPRESS_DASHBOARD_EMAIL`) (nunca digita senha nem MFA). O endereço da unidade de entrega é escolhido sozinho quando sobra um só: o mesmo endereço repetido (como Irati), o complemento igual ao do cadastro (como "Sala 4") ou o bairro abreviado (como "AER" e "AEROPORTO") contam como um. Se ainda houver mais de um, o modal lista e você escolhe.
+Depois de cada planilha gerada, abre-se o modal **Gerar ticket no UX** (Atualização Cadastral no portal UX). Confira o endereço e os campos; **Simular preenchimento** preenche o portal sem finalizar, e **Revisar e finalizar** pede confirmação antes de enviar. O ticket só é enviado com a sua confirmação. Se o UX estiver deslogado, a automação clica em **Acesso Time Simpress** e escolhe a conta Simpress configurada (`SIMPRESS_DASHBOARD_EMAIL`) (nunca digita senha nem MFA). O endereço da unidade de entrega é escolhido sozinho quando sobra um só: o mesmo endereço repetido (como a Cidade A), o complemento igual ao do cadastro (como "Sala 9") ou o bairro abreviado (como "JD" e "JARDIM") contam como um. Se ainda houver mais de um, o modal lista e você escolhe.
 
-Se **Transporte** não gerar a planilha, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` está em `data/planilhas_entrada` e se a base foi atualizada (seção 4).
+Se **Transporte** não gerar a planilha, confira se o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` foi importado pela tela e se a base foi atualizada (seção 4).
 
 **Só alterar o endereço do equipamento:** o segundo botão, **Alterar Endereço**, acende assim que a série e os endereços de retirada e entrega estão na tela (não precisa de representante, telefone nem e-mail). Ele não gera planilha: abre **Alterar Endereço no UX** com o Incidente **Transporte** e o Motivo **Transferência Fisica de Equipamentos**, e o Registro vem com "Solicito alteração do endereço do equipamento da Unidade de (cidade de retirada) para (cidade de entrega)." (ex.: de Curitiba/PR para Arapongas/PR), editável. Sem CNPJ, CEP, anexo nem Nº do chamado interno; **Revisar e finalizar** continua pedindo a sua confirmação.
 
@@ -180,7 +182,7 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 ### Opção B — pela pasta local
 
-1. Exporte as duas planilhas (UX Simpress, contrato 16467, e Oracle) e guarde-as em um lugar conhecido. Se uma exportação for bloqueada pelo site, não tente contornar: peça ao responsável.
+1. Exporte as duas planilhas (UX Simpress, contrato configurado em `config/cliente.json`, e Oracle) e guarde-as em um lugar conhecido. Se uma exportação for bloqueada pelo site, não tente contornar: peça ao responsável.
 2. Abra a pasta `data/state/entrada_chamados`.
 3. **Copie** a pasta `modelo_lote` para dentro de `pendentes` e renomeie a cópia com um nome **único**, por exemplo `2026-10-10_os-simpress`.
 4. Coloque **um** arquivo `.xlsx` em cada subpasta:

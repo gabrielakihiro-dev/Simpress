@@ -180,6 +180,64 @@ def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> 
     atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})
 
 
+# Client data (config/cliente.json): contract, billing CNPJ and own notebook series. Environment variable, then file.
+CLIENT_CONFIG_FIELDS = (
+    ("contrato", "SIMPRESS_CLIENTE_CONTRATO"),
+    ("cnpj_faturamento", "SIMPRESS_CLIENTE_CNPJ_FATURAMENTO"),
+)
+CLIENT_SERIES_VARIABLE = "SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA"
+
+
+def load_client_config(path: Path, environment: Optional[Mapping[str, str]] = None) -> dict:
+    """Resolve the client data: environment variable, then local file, then empty. Never invents a value."""
+    env = os.environ if environment is None else environment
+    stored, invalid_file = _read_origin_contact_file(path, "dados do cliente")
+    values, sources = {}, {}
+    for key, variable in CLIENT_CONFIG_FIELDS:
+        from_env = str(env.get(variable) or "").strip()
+        from_file = stored.get(key)
+        from_file = from_file.strip() if isinstance(from_file, str) else ""
+        if from_env:
+            values[key], sources[key] = from_env, "ambiente"
+        elif from_file:
+            values[key], sources[key] = from_file, "arquivo"
+        else:
+            values[key], sources[key] = "", ""
+    series_env = str(env.get(CLIENT_SERIES_VARIABLE) or "").strip()
+    series_file = stored.get("series_sebrae_fora")
+    if series_env:
+        series, series_source = [item.strip() for item in series_env.split(",") if item.strip()], "ambiente"
+    elif isinstance(series_file, list):
+        series, series_source = [str(item).strip() for item in series_file if str(item).strip()], "arquivo"
+    else:
+        series, series_source = [], ""
+    sources["series_sebrae_fora"] = series_source
+    return {
+        **values,
+        "series_sebrae_fora": series,
+        "cliente_configurado": all(values.values()),
+        "cliente_fontes": sources,
+        "cliente_arquivo_invalido": invalid_file,
+    }
+
+
+def save_client_config(
+    path: Path, contrato: Optional[str], cnpj_faturamento: Optional[str], series: Optional[list] = None
+) -> None:
+    """Write the already validated client data to the git-ignored file; a None field keeps the stored value."""
+    target = Path(path)
+    stored, _ = _read_origin_contact_file(target, "dados do cliente")
+    if contrato is None:
+        contrato = str(stored.get("contrato") or "")
+    if cnpj_faturamento is None:
+        cnpj_faturamento = str(stored.get("cnpj_faturamento") or "")
+    if series is None:
+        kept = stored.get("series_sebrae_fora")
+        series = [str(item) for item in kept] if isinstance(kept, list) else []
+    target.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(target, {"contrato": contrato, "cnpj_faturamento": cnpj_faturamento, "series_sebrae_fora": series})
+
+
 # The 22 regional representatives of SEBRAE/PR (Transferência screen). The front end loads the effective defaults from
 # GET /api/config/representantes-regionais (`padroes`); the git-ignored config/representantes_regionais.json keeps only
 # per-city overrides. Name, e-mail and phone are personal data: the code keeps them blank and they come from the

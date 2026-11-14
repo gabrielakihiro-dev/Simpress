@@ -10,12 +10,12 @@ test("normalizes accents and case for unit catalog search", () => {
 test("matches normalized address, CNPJ and postal-code fields", () => {
   const unit = {
     endereco: "AV Bento Munhoz da Rocha Netto",
-    cnpj: "75.110.585/0007-97",
+    cnpj: "11.222.333/0003-43",
     cep: "87030-010",
   };
 
   assert.equal(matchesCatalogSearch(unit, "bento munhoz"), true);
-  assert.equal(matchesCatalogSearch(unit, "75.110"), true);
+  assert.equal(matchesCatalogSearch(unit, "11.222"), true);
   assert.equal(matchesCatalogSearch(unit, "87030"), true);
   assert.equal(matchesCatalogSearch(unit, "londrina"), false);
 });

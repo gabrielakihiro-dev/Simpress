@@ -355,6 +355,8 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotRegex(modal_email + outlook, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;")
 
         template = app_config.TEMPLATE_FILE
+        if not template.exists():
+            self.skipTest("o modelo de transferência é local e fica fora do Git")
         with zipfile.ZipFile(template) as archive:
             package_xml = "\n".join(
                 archive.read(name).decode("utf-8", "replace")

@@ -20,8 +20,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, ContextManager, Dict, List, Optional, Set, Tuple
 
-from core.config import SUPPORTED_CONTRACT, SUPPORTED_CONTRACT_LEGAL_NAME
-from core.errors import DomainConflictError, DomainError
+from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract
+from core.errors import DomainConflictError, DomainError, DomainValidationError
 from core.integrity import (
     AtomicFileTransaction,
     FileBusyError,
@@ -59,6 +59,14 @@ class EquipmentEditServices:
     publish_database_state: Callable[[Dict[str, Any]], None]
 
 
+def _configured_contract() -> str:
+    """Contract from config/cliente.json; without it no equipment is edited or created (never a guessed contract)."""
+    contract = client_contract()
+    if not contract:
+        raise DomainValidationError(CLIENT_NOT_CONFIGURED, status_code=422)
+    return contract
+
+
 def edit_equipment_workbook(
     services: EquipmentEditServices,
     wb: Any,
@@ -90,6 +98,7 @@ def edit_equipment_workbook(
     )
     if not serial_col:
         return None
+    contract = _configured_contract()
 
     target_serial = normalize_reference_value(payload.serial)
     matching_rows = [
@@ -106,10 +115,10 @@ def edit_equipment_workbook(
         if contract_col:
             raw_contract = ws.cell(row=matching_rows[0], column=contract_col).value
             normalized_contract = normalize_contract_value(raw_contract)
-            if normalized_contract and normalized_contract != str(SUPPORTED_CONTRACT):
+            if normalized_contract and normalized_contract != contract:
                 raise DomainConflictError(
                     f"O equipamento pertence ao contrato {normalized_contract}; "
-                    f"este sistema só edita o contrato {SUPPORTED_CONTRACT}."
+                    f"este sistema só edita o contrato {contract}."
                 )
     if matching_rows and expected_revision:
         target_row_for_revision = matching_rows[0]
@@ -155,7 +164,7 @@ def edit_equipment_workbook(
 
     if not matching_rows:
         set_value(serial_col, payload.serial.strip().upper())
-        set_value(col_map.get("CODIGOCONTRATO"), SUPPORTED_CONTRACT)
+        set_value(col_map.get("CODIGOCONTRATO"), contract)
         set_value(col_map.get("ITEMDECONTRATO"), target_row - 1)
         set_value(col_map.get("RAZAOSOCIAL"), SUPPORTED_CONTRACT_LEGAL_NAME)
 
@@ -443,8 +452,8 @@ def save_equipment_to_excel(
                 "retirada_uf": uf,
                 "retirada_cep": cep_formatado,
                 "contrato": (
-                    cached_equipment.get("contrato", str(SUPPORTED_CONTRACT))
-                    if cached_equipment else str(SUPPORTED_CONTRACT)
+                    cached_equipment.get("contrato", client_contract())
+                    if cached_equipment else client_contract()
                 ),
                 "razao_social": (
                     cached_equipment.get("razao_social", SUPPORTED_CONTRACT_LEGAL_NAME)

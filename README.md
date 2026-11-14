@@ -20,7 +20,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
 - Central de pendências e comparação entre atualizações.
-- Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local; a mesma planilha é enviada em seguida ao UX Simpress pela rotina `ux_apelidos`, que salva os apelidos/id do contrato 16467.
+- Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local; a mesma planilha é enviada em seguida ao UX Simpress pela rotina `ux_apelidos`, que salva os apelidos/id do contrato configurado.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 - Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter (ou, opcionalmente, o DeepSeek) com a chave do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Aceita anexos e áudio, guarda conversas, notas e instruções localmente e pode buscar na web quando você liga essa opção. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
 - Menu **Ferramentas** > **Lembretes**: lembretes com data opcional, gravados só em `data/state/lembretes.json`, e os formulários **Termo Entrega** e **Termo Devolução**, que geram o PDF pelo navegador sem gravar nada no servidor. Veja [Termos](docs/cockpit-prompts/17-termos.md) e [Lembretes](docs/cockpit-prompts/18-lembretes.md).
@@ -52,6 +52,10 @@ cd Simpress
 ### Primeira vez em uma máquina nova
 
 Execute `instalar_primeira_vez.bat` (duplo clique ou `.\instalar_primeira_vez.bat`). Ele instala o Python 3.12 pelo `winget` se faltar, cria `.venv`, instala as dependências fixadas (inclusive o Playwright), baixa o Chromium do Playwright, confere o Google Chrome usado pela automação (`executar_automacao.bat`) e verifica as pastas de `data/`. Instala também o ripgrep (`rg`) pelo `winget`, se faltar, usado pelo `rtk rg` dos agentes, e o RTK (`winget install rtk-ai.rtk`, que condensa as saídas dos comandos), ambos opcionais; abra um terminal novo depois. O instalador não ativa o hook do RTK no Claude Code: para isso, rode uma vez `rtk init -g`. Instala ainda o graphify (`uv tool install graphifyy`, ou `pip install --user` sem o `uv`), opcional, que gera o grafo de conhecimento do projeto; para registrar a skill no Claude Code rode uma vez `graphify install` e, para criar o grafo, `/graphify .` (a extração de documentos consome tokens; nada disso é feito pelo instalador). Se o Node.js estiver instalado, também roda `npm ci` e baixa o Chromium dos testes de interface (`npm run test:ui:e2e`); sem Node.js, o servidor e a automação funcionam normalmente. Sincroniza também as skills dos agentes (inclusive `monitoramento-pr-ci`) em `~/.claude/skills` e `~/.gemini/config/skills`. Se o comando `claude` estiver no PATH e o plugin `model-super-power` ainda não estiver instalado, instala-o no Claude Code, no escopo do usuário (`claude plugin install model-super-power --marketplace johnnyhelder/claude-model-super-power`, que altera `~/.claude`); ele traz os subagentes da tabela "Delegação em subagentes" do `AGENTS.md`. Plugin já instalado não é atualizado. Sem o comando `claude` (só o app desktop), rode no Claude Code `/plugin install model-super-power --marketplace johnnyhelder/claude-model-super-power`. Requer internet, pode ser repetido com segurança e, ao final, oferece iniciar o servidor. No uso diário, abra apenas `iniciar_servidor.bat`.
+
+### Primeiro acesso depois do `git clone`
+
+Depois do `git clone`, o primeiro acesso ao Simpress abre o modal **Dados do cliente**, que pede o contrato, o CNPJ de faturamento e as séries próprias do Sebrae, e grava `config/cliente.json` (ignorado pelo Git; veja [Dados do cliente](#dados-do-cliente)). O modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` deixou de ser versionado: importe-o pelo fluxo de importação de modelo da tela, para poder gerar transferências.
 
 ### Inicializador do servidor
 
@@ -101,7 +105,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 
 | Arquivo | Local | Uso |
 | --- | --- | --- |
-| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial, versionado no Git. É necessário para gerar transferências, mas sua ausência não impede o servidor de iniciar. |
+| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial; deixou de ser versionado no Git e é importado pela tela (importador de modelo). É necessário para gerar transferências, mas sua ausência não impede o servidor de iniciar. |
 | `EquipamentosDetalhes*.xlsx` | `data/planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
 | `EquipamentosDetalhes_atual.xlsx` | `data/planilhas_entrada` | Destino da atualização Simpress, extraído do workbook contido no ZIP `EquipamentosDetalhes` enviado para a atualização. É a fonte oficial da composição e contagem do cadastro; não some registros da InvAll nem de snapshots anteriores. |
 | `InvAllComputersSummary_atual.xlsx` | `data/planilhas_entrada` | Fonte auxiliar de hostname por série e comparação. Não adiciona equipamentos à base oficial. |
@@ -175,6 +179,20 @@ Sem valor, a rotina não escolhe conta nenhuma: espera você escolher a conta no
 Copy-Item config\contas_automacao.exemplo.json config\contas_automacao.json
 ```
 
+### Dados do cliente
+
+O contrato, o CNPJ de faturamento do ticket no UX e as séries dos notebooks próprios do Sebrae são dados reais do cliente e não ficam no código. Cada valor é lido nesta ordem:
+
+1. variável de ambiente (`SIMPRESS_CLIENTE_CONTRATO`, `SIMPRESS_CLIENTE_CNPJ_FATURAMENTO`, `SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA`, esta com as séries separadas por vírgula);
+2. arquivo local `config/cliente.json` (campos `contrato`, `cnpj_faturamento` e `series_sebrae_fora`), ignorado pelo Git;
+3. vazio.
+
+A variável vence o arquivo. Sem configuração, o ticket UX, a validação de contrato e as rotinas que usam o contrato recusam com uma mensagem; séries vazias significam que nenhuma série fica fora das comparações. O modal **Dados do cliente** do primeiro acesso grava o arquivo sem reiniciar o servidor. Para criá-lo manualmente, copie o exemplo com dados fictícios, edite os valores e salve:
+
+```powershell
+Copy-Item config\cliente.exemplo.json config\cliente.json
+```
+
 ### Variáveis de ambiente
 
 Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as rotinas; reinicie o processo depois de alterá-las.
@@ -190,6 +208,8 @@ Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as 
 | `SIMPRESS_ENDPOINT_USUARIO` | Usuário preenchido pela rotina no login local do Endpoint Central (a senha continua com você). No arquivo: `endpoint_usuario`. |
 | `SIMPRESS_DASHBOARD_PASTA_URL` | Endereço da pasta `DASHBOARD SEBRAE` no SharePoint, aberta pelas rotinas do Dashboard. No arquivo: `dashboard_pasta_url`. |
 | `SIMPRESS_OUTLOOK_EMAIL_SEBRAE` e `SIMPRESS_OUTLOOK_EMAIL_SIMPRESS` | Contas remetentes do e-mail por modelo pelo Outlook (Home F1). No arquivo: `outlook_email_sebrae` e `outlook_email_simpress`. |
+| `SIMPRESS_CLIENTE_CONTRATO` e `SIMPRESS_CLIENTE_CNPJ_FATURAMENTO` | Contrato do cliente e CNPJ de faturamento do ticket UX. No arquivo `config/cliente.json`: `contrato` e `cnpj_faturamento`. |
+| `SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA` | Séries dos notebooks próprios do Sebrae, separadas por vírgula, deixadas fora das comparações. No arquivo: `series_sebrae_fora` (lista). |
 | `SIMPRESS_CHROME_OCIOSO_S` | Segundos sem rotina até fechar o Chrome de automação. Sem a variável, ou com `0`, o Chrome fica aberto. |
 | `SIMPRESS_IMPORT_INBOX_DIR` e `SIMPRESS_TICKET_IMPORT_INBOX_DIR` | Pastas das filas de importação automática de inventários e de chamados, no lugar de `data/state/entrada_automatica` e `data/state/entrada_chamados`. |
 | `SIMPRESS_SUGESTAO_IA=1` | Liga a sugestão por IA de categoria e tipo dos chamados do Sebrae que as regras locais deixaram como `OUTRO`. O texto vai mascarado ao OpenRouter; só vale definida no processo, não no `.env`. |
@@ -315,7 +335,7 @@ Para preparar automaticamente o par recém-exportado de Downloads, registre o ho
 
 ```powershell
 $inicioInventarios = (Get-Date).ToString("o")
-# Exporte UX Simpress (contrato 16467) e Endpoint Central no Chrome.
+# Exporte UX Simpress (contrato configurado em config/cliente.json) e Endpoint Central no Chrome.
 & .\.venv\Scripts\python.exe scripts\prepare_inventory_downloads.py --since $inicioInventarios
 ```
 
@@ -329,7 +349,7 @@ Se o servidor estiver parado, processe a fila diretamente, sem upload HTTP:
 
 O comando usa o importador e a transação existentes. Confira `processadas/<lote>/_resultado.json` com `status: concluido` e o evento com `importacao_automatica_id` no histórico; a contagem do comando também inclui lotes arquivados por falha e não substitui o recibo. Prefira o importador do servidor quando ele estiver ativo, para manter seus dados em memória atualizados. A sincronização das anotações continua usando a pasta compartilhada já configurada e sua fila de pendências; os comandos não publicam planilhas em serviços externos.
 
-Procedimento de exportação e importação: [Exportações de planilhas — UX Simpress + Endpoint Central](https://app.notion.com/p/Exporta-es-de-planilhas-UX-Simpress-Endpoint-Central-3f5922a10077801f99e2e26a4fee14b9). Acione cada exportação uma vez e prossiga; confira Downloads depois das duas ações. Autenticação de dois fatores e bloqueios do navegador podem exigir intervenção do usuário.
+Procedimento de exportação e importação: Exportações de planilhas — UX Simpress + Endpoint Central (página do Notion da equipe (o link não fica no Git; peça ao usuário)). Acione cada exportação uma vez e prossiga; confira Downloads depois das duas ações. Autenticação de dois fatores e bloqueios do navegador podem exigir intervenção do usuário.
 
 Com o servidor local em execução, também é possível colocar os dois arquivos em um lote na pasta `data/state/entrada_automatica/pendentes`. O sistema verifica a fila a cada 10 segundos e usa a mesma validação, comparação, backups, histórico e transação da atualização manual.
 
@@ -370,7 +390,7 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 **Exportar Excel** baixa uma cópia do modelo local atualizada com os dados do inventário principal. O sistema processa somente séries com correspondência única, atualiza células graváveis de `Apelido` e, quando a coluna existe nos dois arquivos, `IdCliente`. Fórmulas não são sobrescritas; as demais abas e formatações do modelo são preservadas. Se a exportação for parcial, a notificação informa os motivos e exemplos para conferência. Desde 31/10/2026 o botão **Exportar Excel** fica na barra da seção **Comparação** do **Resumo** (ao lado de **Exportar**, que baixa só o resultado da comparação) e some quando não há alterações exportáveis; ele não está mais no menu **Ferramentas**.
 
-Depois do download, o mesmo clique envia a planilha ao UX Simpress (rotina `ux_apelidos`, no Chrome de automação): a rotina confirma o contrato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, carrega o arquivo e clica **uma única vez** em **Salvar edições**. Só os apelidos/id desse contrato são gravados no UX. `Planilha Exportada com Sucesso!` confirma apenas o download; o início, a falha e a conclusão do envio ao UX aparecem como mensagens separadas no **Resumo** e na **Automação**. Se o clique em **Salvar edições** acontecer e a confirmação não chegar, o resultado fica incerto: confira manualmente no UX, porque a rotina nunca repete o envio sozinha. O login é manual e a rotina pode ser cancelada como as demais. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+Depois do download, o mesmo clique envia a planilha ao UX Simpress (rotina `ux_apelidos`, no Chrome de automação): a rotina confirma o contrato configurado em `config/cliente.json`, carrega o arquivo e clica **uma única vez** em **Salvar edições**. Só os apelidos/id desse contrato são gravados no UX. `Planilha Exportada com Sucesso!` confirma apenas o download; o início, a falha e a conclusão do envio ao UX aparecem como mensagens separadas no **Resumo** e na **Automação**. Se o clique em **Salvar edições** acontecer e a confirmação não chegar, o resultado fica incerto: confira manualmente no UX, porque a rotina nunca repete o envio sozinha. O login é manual e a rotina pode ser cancelada como as demais. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
 
 ### Catálogo de unidades e acessibilidade
 
@@ -453,7 +473,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | Situação | O que conferir |
 | --- | --- |
 | O inicializador informa que não encontrou Python 3.12 ou superior | Instale Python 3.12 ou superior e execute o inicializador novamente. |
-| A geração de transferência está indisponível | Confira o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `data/planilhas_entrada`; a ausência dele não impede iniciar o servidor. |
+| A geração de transferência está indisponível | Importe o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` pela tela (ele não vem no repositório); a ausência dele não impede iniciar o servidor. |
 | O servidor iniciou, mas algumas funções estão indisponíveis | Confira o painel de prontidão e forneça localmente os arquivos listados para as funções necessárias. |
 | A migração não consegue concluir uma recuperação ou encontra upload em andamento | Preserve os arquivos indicados. Confira `.transactions`; aguarde o upload terminar e execute a migração novamente quando a operação estiver resolvida. |
 | A migração informa que já existe um arquivo diferente no destino | Compare os dois arquivos e resolva o conflito manualmente antes de repetir `scripts/migrate_local_data.py`. A migração não substitui nenhum deles. |
@@ -685,13 +705,13 @@ As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os
 
 O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site. Toda chamada a `/api/` exige o cookie `simpress_sessao_<porta>` (`HttpOnly`, `SameSite=Strict`), criado ao abrir `/bootstrap?t=<segredo>`; o segredo muda a cada início do servidor e fica gravado em `%LOCALAPPDATA%\Simpress\sessao_<porta>.txt`. O navegador também o guarda no cookie e no histórico (o link `/bootstrap`). Sem o cookie, a resposta é 401.
 
-Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
+Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo de transferência (`(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`) deixou de ser versionado e é importado pela tela. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 
 Algumas ações gravam ou enviam dados para fora do computador, sempre a partir de um clique seu (ou do cartão de confirmação do assistente):
 
 - **Enviar ao SharePoint**: envia a cópia atualizada do Dashboard do Sebrae.
 - **Finalizar no SoftExpert**: finaliza o chamado no SoftExpert, de forma irreversível; a rotina `fechar` também atualiza o Dashboard e o envia.
-- Sincronização com o UX Simpress na exportação de equipamentos: grava apelidos no contrato 16467.
+- Sincronização com o UX Simpress na exportação de equipamentos: grava apelidos no contrato configurado.
 - **Controle remoto**: abre uma conexão com o computador escolhido pelo Endpoint Central.
 - **Abrir chamado no UX** e ticket UX: enviam o chamado ou o ticket ao UX Simpress, só com confirmação (`SIMPRESS_UX_SEM_ENVIO=1` recusa o envio real).
 - **Enviar pelo Outlook**: envia o e-mail do modelo pela conta do Outlook, só com confirmação (`SIMPRESS_OUTLOOK_SEM_ENVIO=1` recusa o envio real).

@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
-from core.config import SUPPORTED_CONTRACT, SUPPORTED_CONTRACT_LEGAL_NAME
+from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract
 from core.integrity import FileBusyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
 from domains.effective_alias import manual_aliases_by_serial, with_details_serials
@@ -258,6 +258,12 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
         )
         return False
 
+    # Read once per load. Without a configured contract nothing is accepted ("" would match an empty cell).
+    contrato_suportado = client_contract()
+    if not contrato_suportado:
+        logger.error("%s O cache anterior foi mantido.", CLIENT_NOT_CONFIGURED)
+        return False
+
     # Strip column names e criar mapa normalizado de colunas
     norm_cols = {normalize_workbook_header(column): column for column in headers}
     new_equipamentos_cache: Dict[str, Dict[str, Any]] = {}
@@ -316,14 +322,14 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
         cnpj_instalacao = get_installation_cnpj(row)
 
         contrato_value = get_row_val(
-            row, "CodigoContrato", "Codigo Contrato", default=str(SUPPORTED_CONTRACT)
+            row, "CodigoContrato", "Codigo Contrato", default=contrato_suportado
         )
-        contrato = normalize_contract_value(contrato_value) or str(SUPPORTED_CONTRACT)
-        if contrato != str(SUPPORTED_CONTRACT):
+        contrato = normalize_contract_value(contrato_value) or contrato_suportado
+        if contrato != contrato_suportado:
             logger.error(
                 "A base contém contrato %s; somente o contrato %s é suportado. O cache anterior foi mantido.",
                 contrato,
-                SUPPORTED_CONTRACT,
+                contrato_suportado,
             )
             return False
         razao_social = get_row_val(
