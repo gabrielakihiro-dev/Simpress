@@ -17,7 +17,7 @@ Depois de um `git clone`, o usuário configura pelo site, no painel **Prontidão
 
 - Entra no fim da lista do painel, com o mesmo componente dos outros cartões: ícone, título, linha de status e botão à direita.
 - Status:
-  - **Em dia**: as três contas preenchidas e `config/cliente.json` válido.
+  - **Em dia**: as três contas e o link da pasta do Dashboard preenchidos e `config/cliente.json` válido.
   - **Pendente**: a linha diz exatamente o que falta, por exemplo `Pendente · Falta: Conta Sebrae (e-mail), Usuário do Endpoint Central`.
   - **Inválido**: arquivo existe, mas não é JSON válido ou tem valor recusado pela validação.
 - Botão: `Configurar`. Ele abre o modal descrito abaixo.
@@ -46,7 +46,9 @@ Cada conta é pedida **uma vez**, com o texto de onde é usada. O formato do arq
 | Conta Simpress (e-mail) | `nome@simpress.com.br` | Usada para: Dashboard, UX Simpress, Oracle | `dashboard_email`; `outlook_email_simpress` se "Usar também no Outlook" estiver marcado (padrão marcado) |
 | Conta Sebrae (e-mail) | `nome@sebrae.com.br` | Usada para: SoftExpert | `softexpert_email`; `outlook_email_sebrae` se "Usar também no Outlook" estiver marcado (padrão marcado) |
 | Usuário do Endpoint Central (login, sem domínio) | `nome.usuario` | Usada para: Endpoint Central | `endpoint_usuario` |
-| Pasta do Dashboard (endereço do SharePoint) | `https://empresa.sharepoint.com/sites/...` | Usada para: exportação do Dashboard | `dashboard_pasta_url` |
+| Link da pasta do Dashboard (SharePoint) | `https://exemplo.invalid/sites/pasta-do-dashboard` | Usado para: Dashboard | `dashboard_pasta_url` |
+
+Os links ficam numa subseção "Links internos", montada a partir de uma lista de campos no servidor (`chave`, `rotulo`, `placeholder`, `usado_para`). Um link novo (UX, Endpoint, Oracle, SoftExpert, Notion) entra só com uma linha nessa lista, com a mesma validação `https://`.
 
 Quem lê cada chave (conferido em 14/11/2026):
 
