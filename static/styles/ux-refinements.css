@@ -225,8 +225,6 @@ html[data-theme="light"] .transfer-form-grid button.text-fg-subtle { color: var(
   -webkit-mask-image: linear-gradient(to right, transparent, #000 2.25rem, #000 calc(100% - 2.25rem), transparent);
   mask-image: linear-gradient(to right, transparent, #000 2.25rem, #000 calc(100% - 2.25rem), transparent);
 }
-/* Only hide the "scroll horizontally" hint once JS has confirmed nothing overflows. */
-html[data-ux-enhanced="true"] .accessible-table-wrap:not([data-ux-overflow]) > .comparison-table-scroll-hint { display: none; }
 
 /* ---------- 8. Empty, loading and error state cards ---------- */
 :is(p.text-center:is(.py-5, .py-8), div.text-center.py-8:not(.flex)) {

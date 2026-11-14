@@ -402,16 +402,16 @@
 
   const ticketTriageGroups = [["ativos", "Ativos", ""], ["atrasados", "3+ dias", "alerta"], ["sem_data", "Sem data", "alerta"], ["em_dia", "Atualizados <3 dias", "ok"]];
 
-  // ⓘ da nota dos KPIs no fim da linha de resumo; id fixo porque o e2e e o doc 07 o citam. --end: a triagem tem overflow:hidden e o balão para a direita era cortado.
-  function kpisNotaTip() {
-    const tip = element("span", "info-tip info-tip--end");
+  // ⓘ (.info-tip) com id fixo, porque o e2e e os docs o citam. `fim`: o balão abre para a esquerda (contêiner com overflow:hidden cortava o da direita).
+  function infoTip(rotulo, texto, id, { fim = false } = {}) {
+    const tip = element("span", fim ? "info-tip info-tip--end" : "info-tip");
     const trigger = element("button", "info-tip-trigger");
     trigger.type = "button";
-    trigger.setAttribute("aria-label", "Sobre a contagem");
-    trigger.setAttribute("aria-describedby", "cockpit-tickets-kpis-nota");
+    trigger.setAttribute("aria-label", `Sobre ${rotulo}`);
+    trigger.setAttribute("aria-describedby", id);
     trigger.append(svgIcon("#i-info"));
-    const text = element("span", "info-tip-text", "KPIs e triagem contam só as OS da sub-aba Abertas.");
-    text.id = "cockpit-tickets-kpis-nota";
+    const text = element("span", "info-tip-text", texto);
+    text.id = id;
     text.setAttribute("role", "tooltip");
     tip.append(trigger, text);
     return tip;
@@ -436,7 +436,7 @@
     title.id = "cockpit-tickets-triage-title";
     const resumo = element("span", "ck-chamados-triagem__resumo",
       `${counts.ativos} de ${records.length} séries com chamado aberto no Oracle · ${records.length - counts.ativos} sem chamado aberto `);
-    resumo.append(kpisNotaTip());
+    resumo.append(infoTip("a contagem", "KPIs e triagem contam só as OS da sub-aba Abertas.", "cockpit-tickets-kpis-nota", { fim: true }));
     head.append(title, resumo);
     const buttons = element("div", "ckp-triagem__nums");
     ticketTriageGroups.forEach(([key, label, status]) => {
@@ -1339,15 +1339,24 @@
     return grid;
   }
 
-  function monthlyCard(title, tone) {
+  // Título do cartão; `tip` (ⓘ com a explicação) fica ao lado dele, na mesma linha.
+  function monthlyCardTitle(title, tip) {
+    const heading = element("h4", "ck-rel__cartao-titulo", title);
+    if (!tip) return heading;
+    const head = element("div", "ck-rel__cartao-cab");
+    head.append(heading, tip);
+    return head;
+  }
+
+  function monthlyCard(title, tone, tip) {
     const card = element("article", "ck-rel__cartao ck-rel__atencao");
     if (tone) card.dataset.status = tone;
-    card.append(element("h4", "ck-rel__cartao-titulo", title));
+    card.append(monthlyCardTitle(title, tip));
     return card;
   }
 
   function monthlyOutsideCard(rows) {
-    const card = monthlyCard("Fora das contagens", "alerta");
+    const card = monthlyCard("Fora das contagens", "alerta", infoTip("fora das contagens", "Datas ou vínculo insuficientes: não entram nos números do mês.", "cockpit-monthly-fora-nota"));
     const total = element("p", "ck-rel__total");
     total.append(element("strong", "ck-rel__valor", displayCount(rows.length)), document.createTextNode(` ${plural(rows.length, "registro", "registros")}`));
     const list = element("ul", "ck-rel__fora");
@@ -1362,7 +1371,7 @@
     });
     toggle.setAttribute("aria-expanded", String(monthlyView.foraAberto));
     toggle.setAttribute("aria-controls", list.id);
-    card.append(total, element("p", "ck-rel__nota", "Datas ou vínculo insuficientes: não entram nos números do mês."), toggle, list);
+    card.append(total, toggle, list);
     return card;
   }
 
@@ -1370,10 +1379,9 @@
     const tickets = report.os || {};
     const comparison = report.comparacao || {};
     const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
-    const pending = monthlyCard("OS pendentes no fim do período");
+    const pending = monthlyCard("OS pendentes no fim do período", "", infoTip("as OS pendentes", "Criados até o corte e ainda sem conclusão ou entrega.", "cockpit-monthly-pendentes-nota"));
     pending.append(
       monthlyNumbers([["OS Oracle", tickets.oracle?.pendentes], ["Pedidos Simpress", tickets.simpress?.pendentes]]),
-      element("p", "ck-rel__nota", "Criados até o corte e ainda sem conclusão ou entrega."),
       monthlyButton("Ver lista", () => {
         monthlyView.filtro = "pendentes";
         monthlyView.limiteOs = MONTHLY_PAGE;
@@ -1600,7 +1608,8 @@
     const hasCurrent = monthlySebraeCurrent(section);
     if (!hasCurrent) section.append(element("p", "ck-lista__vazio", empty));
     if (!hasCurrent && !month) return section;
-    section.append(element("h4", "ck-rel__cartao-titulo", `Com data em ${report?.mes?.label || "mês selecionado"}`));
+    section.append(monthlyCardTitle(`Com data em ${report?.mes?.label || "mês selecionado"}`,
+      infoTip("a contagem do mês", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.", "cockpit-monthly-sebrae-nota")));
     if (!month) {
       section.append(element("p", "ck-lista__vazio", empty));
       return section;
@@ -1615,7 +1624,6 @@
     section.append(
       monthlyNumbers([["Abertos no mês", counts.abertos], ["Finalizados no mês", counts.finalizados]]),
       noDate,
-      element("p", "ck-rel__nota", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site."),
     );
     const rows = monthlyRows(counts);
     if (!rows.length) {

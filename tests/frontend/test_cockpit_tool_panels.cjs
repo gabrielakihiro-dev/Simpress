@@ -1117,6 +1117,7 @@ function criarAmbienteRelatorio() {
     querySelectorAll: () => [],
     addEventListener: (tipo, fn) => ouvintesDocumento.push([tipo, fn]),
     createElement: tag => fake.createElement(tag),
+    createElementNS: (ns, tag) => fake.createElementNS(ns, tag),
     createTextNode: texto => fake.createTextNode(texto),
     createDocumentFragment: () => fake.createElement("#fragment"),
   };
@@ -1186,6 +1187,49 @@ test("Relatório mensal (F8): abre na Visão geral e preenche painéis, seções
     assert.deepEqual(["os", "comp", "sebrae"].map(nome => el(`rel-${nome}-contagem`).dataset.status), ["alerta", "alerta", undefined]);
     assert.equal(aba("visao").tabIndex, 0);
   });
+});
+
+test("Relatório mensal (F8): as notas explicativas dos cartões ficam num ⓘ ligado por aria-describedby, não num parágrafo", async () => {
+  await comRelatorio(async ({ el, painel }) => {
+    const kpis = el("cockpit-monthly-kpis");
+    const sebrae = painel("sebrae");
+    const notas = [
+      ["cockpit-monthly-pendentes-nota", "Criados até o corte e ainda sem conclusão ou entrega.", kpis],
+      ["cockpit-monthly-sebrae-nota", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.", sebrae],
+    ];
+    for (const [id, texto, area] of notas) {
+      const balao = area.querySelector(`[id="${id}"]`);
+      assert.ok(balao, `balão ${id}`);
+      assert.equal(balao.getAttribute("role"), "tooltip");
+      assert.equal(balao.textContent, texto);
+      const gatilho = area.querySelector(`[aria-describedby="${id}"]`);
+      assert.equal(gatilho?.tagName, "BUTTON", `gatilho de ${id}`);
+    }
+    // O parágrafo antigo não volta: só "Comparação usada" e "Mostrando X de Y" ficam como ck-rel__nota.
+    const paragrafos = [...kpis.querySelectorAll("p.ck-rel__nota"), ...sebrae.querySelectorAll("p.ck-rel__nota")].map(textoDe);
+    assert.ok(paragrafos.every(texto => !/Criados até o corte|Contagem pelo Dashboard|Datas ou vínculo/.test(texto)), paragrafos.join(" | "));
+  });
+});
+
+test("Relatório mensal (F8): \"Fora das contagens\" leva a nota ao ⓘ e mantém o total e o botão na tela", async () => {
+  const ambiente = criarAmbienteRelatorio();
+  try {
+    ambiente.servidor.relatorio = mes => {
+      const base = relatorioExemplo(mes);
+      return { ...base, os: { ...base.os, dados_insuficientes: [{ fonte: "OS Oracle", serie: "SN-9", identificadores: ["OS-9"], motivo: "Sem data" }] } };
+    };
+    await ambiente.abrir();
+    const kpis = ambiente.el("cockpit-monthly-kpis");
+    const balao = kpis.querySelector('[id="cockpit-monthly-fora-nota"]');
+    assert.ok(balao, "balão cockpit-monthly-fora-nota");
+    assert.equal(balao.getAttribute("role"), "tooltip");
+    assert.equal(balao.textContent, "Datas ou vínculo insuficientes: não entram nos números do mês.");
+    assert.equal(kpis.querySelector('[aria-describedby="cockpit-monthly-fora-nota"]')?.tagName, "BUTTON");
+    const texto = textoDe(kpis);
+    assert.match(texto, /1 registro/, "o total segue visível");
+    assert.match(texto, /Mostrar registros/, "o botão de listar segue visível");
+    assert.ok(kpis.querySelectorAll("p.ck-rel__nota").map(textoDe).every(nota => !/Datas ou vínculo/.test(nota)), "a nota não volta como parágrafo");
+  } finally { delete global.document; }
 });
 
 test("Relatório mensal (F8): contador some sem a fonte e fica neutro com zero linhas", async () => {

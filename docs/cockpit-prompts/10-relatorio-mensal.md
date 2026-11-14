@@ -126,3 +126,17 @@ Comportamento:
 - Telas pequenas: a tablist rola sozinha na horizontal (a página nunca rola); em ponteiro grosso cada aba tem no mínimo 44px de altura.
 
 Verificação: `tests/e2e/monthly-report.spec.cjs` (abas, contadores, clique, teclado, `Ver lista ↓`, `Ver chamados →`, mudança de mês, 320px e axe nas cinco abas nos dois temas) e `tests/frontend/test_cockpit_tool_panels.cjs`.
+
+## Notas dos cartões no ⓘ (Bloco 2, 14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 2): as três notas que só explicavam o número saíram da tela e foram para um ⓘ (`.info-tip`) ao lado do título do cartão, na mesma linha (`div.ck-rel__cartao-cab`, em `flex`). O texto de cada nota é o mesmo de antes (texto aprovado, ver acima); mudou só o lugar. Componente e contrato: `docs/cockpit-prompts/14-cockpit-v2.md`.
+
+| Cartão | Balão (`role="tooltip"`) | `aria-label` do botão |
+|---|---|---|
+| `OS pendentes no fim do período` | `#cockpit-monthly-pendentes-nota` | `Sobre as OS pendentes` |
+| `Fora das contagens` | `#cockpit-monthly-fora-nota` | `Sobre fora das contagens` |
+| `Com data em <mês>` (Chamados (F5), `Situação atual`) | `#cockpit-monthly-sebrae-nota` | `Sobre a contagem do mês` |
+
+- Os ids são fixos porque o painel é redesenhado a cada leitura e o e2e os usa.
+- Continuam visíveis, por serem dado: o total e a lista de `Fora das contagens`, a linha `Comparação usada` (`p.ck-rel__nota`), `Mostrando X de Y`, `Sem data de abertura ou de encerramento: N` e a origem dos dados. O estado vazio não mudou.
+- Testes: `tests/frontend/test_cockpit_tool_panels.cjs` (os três balões com texto exato e nenhuma `p.ck-rel__nota` com o texto antigo) e `tests/e2e/monthly-report.spec.cjs` (texto escondido até mouse, toque ou foco; foco + `Esc` fecha só o balão; a altura da linha do título não cresce além do ⓘ de 24px).

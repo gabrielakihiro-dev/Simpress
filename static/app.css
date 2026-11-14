@@ -393,7 +393,6 @@
     .history-modal-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-strong); background-clip: padding-box; }
     .modal-panel-fill { width: calc(100vw - 2rem); max-width: none; height: calc(100vh - 2rem); height: calc(100dvh - 2rem); max-height: none; padding: 1rem; }
     @media (min-width: 640px) { .modal-panel-fill { padding: 1.25rem; } }
-    .comparison-table-scroll-hint { color: var(--text-subtle); font-size: 0.75rem; line-height: 1.4; }
     .accessible-table-wrap th, .accessible-table-wrap td { vertical-align: top; }
     .accessible-table-wrap th { color: var(--text-body); font-size: 0.8rem; }
     .accessible-table-wrap td { font-size: 0.8rem; line-height: 1.45; }

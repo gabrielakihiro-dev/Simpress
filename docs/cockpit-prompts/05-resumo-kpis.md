@@ -144,3 +144,13 @@ Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritári
 - Rótulo da aba (13/11/2026): `Backups: aguardando dados` enquanto o painel não chegou; `Backups: dados indisponíveis` quando a leitura falha antes de qualquer resposta (evento `simpress:painel-indisponivel`). Falha depois de dados bons mantém a tabela.
 - Sem comparação na tela (histórico vazio, carregando ou erro), as abas `Visão geral`, `Apelidos`, `Usuários` e `Sem acesso` ficam com `aria-disabled="true"`, não abrem com clique e as setas, Home e End as pulam (com o foco numa delas, a seta direita vai à primeira aba habilitada e a esquerda à última); `Divergências` e `Backups` seguem habilitadas (13/11/2026).
 - O apelido pode ser nome de pessoa: aparece só na tela local, nunca no Assistente, em toast nem em log. O Assistente (`listar_backups_regionais`) só consulta e não confirma nem desfaz.
+
+## Textos explicativos no ⓘ (Bloco 2, 14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 2): o texto que só explica sai da tela e fica num ⓘ (`.info-tip`), aberto por mouse, foco ou toque; `Esc` fecha. Componente e helper: `docs/cockpit-prompts/14-cockpit-v2.md`.
+
+- Sub-abas `Divergências`, `Apelidos`, `Usuários` e `Sem acesso`: a descrição de cada seção virou o ⓘ ao lado do título (lista e regras em `docs/cockpit-prompts/08-comparacao-operacional.md`, seção "Textos explicativos no ⓘ"). Os contadores, os estados vazios e os avisos seguem visíveis.
+- Sub-aba `Backups`: `Atualizado em dd/mm/aaaa, hh:mm:ss.` continua visível (`p.ck-backups__meta`, é dado). `Mínimo: N backup(s) por regional prioritária.` virou o balão `span#resumo-backups-minimo` (`role="tooltip"`) de um ⓘ (`aria-label="Sobre os backups regionais"`) na mesma linha (`div.ck-backups__cabeca`, em `flex`). O `id` é fixo (`infoTipHtml(..., { id })`) porque o painel é redesenhado a cada leitura; o ⓘ some com a meta nos estados sem dados (`Carregando`, indisponível, sem painel). Mudar só a meta mantém o atalho do `textContent`; mudar o mínimo recria o painel.
+- Visível de propósito (regra E, dado ou aviso de qualidade): `Limitações dos dados`, a tabela das regionais, `Sobras`, `Candidatos nas demais regionais` e os estados de erro.
+- `static/styles/ck-cockpit.css`: `#resumo-painel-backups .info-tip-trigger` com `min-height: 0` (o botão herda `2.5rem` de `app.css`); a linha da meta passa de ~16px para 24px.
+- Testes: `tests/frontend/test_backups_regionais.cjs` (meta sem `Mínimo`; ⓘ de `id` fixo; mudança do mínimo recria o painel) e `tests/e2e/info-tips-resumo.spec.cjs` (aba `Backups`).

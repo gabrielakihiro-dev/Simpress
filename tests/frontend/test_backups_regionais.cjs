@@ -359,13 +359,34 @@ test("só o gerado_em mudou: troca o texto da linha e não recria o painel", t =
   depois.backups_regionais.gerado_em = "2026-11-12T09:05:00-03:00";
   ctx.enviar(depois);
   assert.equal(atribuicoes, 0, "innerHTML não é reatribuído");
-  assert.match(linha.textContent, /^Atualizado em .+Mínimo: 2 backups por regional prioritária\.$/);
+  assert.match(linha.textContent, /^Atualizado em .+\.$/);
+  assert.doesNotMatch(linha.textContent, /Mínimo/, "o mínimo mora no ⓘ, fora da linha que só troca o texto");
 
   const mudou = painelBase();
   mudou.backups_regionais.pendencias = { sem_backup: [], conferir: [] };
   mudou.backups_regionais.prioritarias[1].status = "ok";
   ctx.enviar(mudou);
   assert.equal(atribuicoes, 1, "mudança no corpo recria o painel");
+});
+
+test("o mínimo por regional fica num ⓘ de id fixo e a mudança do mínimo recria o painel", t => {
+  const ctx = montar(t);
+  ctx.painel.querySelector = seletor => (seletor === ".ck-backups__meta" ? { textContent: "" } : null);
+  ctx.enviar(painelBase());
+  const html = ctx.painel.innerHTML;
+  assert.match(html, /<p class="ck-backups__meta">Atualizado em [^<]+\.<\/p><span class="info-tip">/);
+  assert.match(html, /aria-describedby="resumo-backups-minimo"/);
+  assert.match(html, /<span id="resumo-backups-minimo" role="tooltip" class="info-tip-text">Mínimo: 2 backups por regional prioritária\.<\/span>/);
+  assert.doesNotMatch(html, /<p class="ck-backups__meta">[^<]*Mínimo/);
+
+  let atribuicoes = 0;
+  let valor = html;
+  Object.defineProperty(ctx.painel, "innerHTML", { get: () => valor, set: novo => { atribuicoes += 1; valor = novo; } });
+  const outroMinimo = painelBase();
+  outroMinimo.backups_regionais.minimo = 3;
+  ctx.enviar(outroMinimo);
+  assert.equal(atribuicoes, 1, "só o ⓘ mudou, mas o painel é recriado");
+  assert.match(valor, /Mínimo: 3 backups por regional prioritária\./);
 });
 
 test("ação sem efeito no corpo (repetido) ainda redesenha: solta o botão e devolve o foco", async t => {

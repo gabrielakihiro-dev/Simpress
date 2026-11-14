@@ -72,3 +72,11 @@ test("infoTipHtml escapa rótulo e texto, gera ids únicos e liga o botão ao ba
   assert.match(primeiro, /^<span class="info-tip"><button type="button" class="info-tip-trigger"/);
   assert.match(segundo, /^<span class="info-tip info-tip--end">/);
 });
+
+test("infoTipHtml com id fixo repete o mesmo markup a cada chamada", () => {
+  const { infoTipHtml } = createDomUtils(fakeDocument());
+  const a = infoTipHtml("Backups", "Texto", { id: "dica-fixa" });
+  assert.equal(a, infoTipHtml("Backups", "Texto", { id: "dica-fixa" }));
+  assert.match(a, /aria-describedby="dica-fixa"/);
+  assert.match(a, /<span id="dica-fixa" role="tooltip" class="info-tip-text">Texto<\/span>/);
+});
