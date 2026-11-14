@@ -672,10 +672,11 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   pointer-events: none;
 }
 .info-tip--end .info-tip-text { inset-inline-start: auto; inset-inline-end: -0.5rem; }
-/* ⓘ de título dentro de painel ou diálogo que corta o que passa da borda (overflow): o balão ancora no bloco do título (o pai precisa de position: relative) e nunca passa da largura dele. Só no desktop; no celular o balão já ocupa a janela. */
+/* ⓘ de título dentro de painel ou diálogo que corta o que passa da borda (overflow): o balão ancora no bloco do título (o pai precisa de position: relative, por exemplo .info-tip-ancora) e nunca passa da largura dele, nem escondido. Só no desktop; no celular o balão já ocupa a janela. */
+.info-tip-ancora { position: relative; }
 @media (min-width: 641px) {
   .info-tip--bloco { position: static; }
-  .info-tip--bloco .info-tip-text { inset-inline-start: 0; max-width: 100%; }
+  .info-tip--bloco .info-tip-text { inset-inline-start: 0; max-width: min(20rem, 100%); }
 }
 /* Phones: span the viewport so the bubble never overflows or widens the page. Fixed to the bottom of the screen (Componente prancha, "Celular"): with `top: auto` alone it stayed where the layout put it and opened off-screen for an ⓘ below the fold. */
 @media (max-width: 640px) {

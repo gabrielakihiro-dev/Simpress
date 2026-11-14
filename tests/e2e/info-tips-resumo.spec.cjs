@@ -81,3 +81,25 @@ test("Backups: só o mínimo por regional vai para o ⓘ; Atualizado em fica vis
   await page.mouse.move(0, 0);
   await focoEscFechaSoOBalao(page, trigger, balao, page.locator(PAINEL_RESUMO));
 });
+
+// O balão escondido do ⓘ conta na largura do conteúdo: preso à linha do título (info-tip--bloco), ele não cria rolagem horizontal no painel.
+// Só no desktop: até 640px o balão fica fixo no rodapé da tela.
+for (const largura of [641, 700]) {
+  test(`Comparação (Resumo) a ${largura}px: ⓘ dos títulos não cria rolagem horizontal e o balão abre inteiro`, async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "No celular o balão fica fixo no rodapé.");
+    await request.get("/__fixture_cockpit?comparacao=1");
+    await page.setViewportSize({ width: largura, height: 900 });
+    for (const aba of ["divergencias", "apelidos"]) {
+      await abrirResumo(page, aba);
+      const painel = page.locator("#cockpit-tool-panels");
+      const { scrollWidth, clientWidth } = await painel.evaluate(no => ({ scrollWidth: no.scrollWidth, clientWidth: no.clientWidth }));
+      expect(scrollWidth, `rolagem horizontal em ${aba}`).toBeLessThanOrEqual(clientWidth);
+      const dica = page.locator(`#resumo-painel-${aba} .info-tip--bloco`).first();
+      await dica.locator(".info-tip-trigger").hover();
+      const caixa = await dica.locator(".info-tip-text").boundingBox();
+      expect(caixa.x).toBeGreaterThanOrEqual(0);
+      expect(caixa.x + caixa.width).toBeLessThanOrEqual(largura);
+      await page.mouse.move(0, 0);
+    }
+  });
+}

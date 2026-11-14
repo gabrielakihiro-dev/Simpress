@@ -426,7 +426,8 @@
   function tituloSecaoComparacao(titulo, tom, idSecao = "", descricao = "") {
     const alvo = idSecao ? ` id="${idSecao}" tabindex="-1"` : "";
     const h4 = `<h4${alvo} class="flex items-center gap-2 text-sm font-bold text-white"><span class="h-2 w-2 shrink-0 rounded-full ${PONTOS_SECAO[tom]}" aria-hidden="true"></span>${escapeHtml(titulo)}</h4>`;
-    return descricao ? `<div class="flex items-center gap-1">${h4}${infoTipHtml(titulo, descricao)}</div>` : h4;
+    // Balão preso à linha do título: escondido, ele não pode alargar o painel (rolagem horizontal a 641-700px).
+    return descricao ? `<div class="info-tip-ancora flex items-center gap-1">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
   }
 
   // Cards with a count above zero and a matching section become buttons that scroll to it; the rest stay static.
