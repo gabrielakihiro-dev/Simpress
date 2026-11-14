@@ -210,7 +210,9 @@
       const group = wrap.parentNode;
       if (!group?.classList?.contains("history-filter-group") || group.children[0] !== wrap) return null;
       const header = group.previousElementSibling;
-      return header?.tagName === "DIV" && Array.from(header.children).some(child => child.tagName === "H4") ? header : null;
+      // O h4 pode vir dentro de um div com o ícone de ajuda (ⓘ) ao lado.
+      const temH4 = node => node.tagName === "H4" || Array.from(node.children || []).some(filho => filho.tagName === "H4");
+      return header?.tagName === "DIV" && Array.from(header.children).some(temH4) ? header : null;
     }
 
     function announceSort(label, direction) {
