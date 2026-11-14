@@ -344,13 +344,22 @@ test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e man
   assert.match(html, /<div id="cockpit-tickets-os" class="ck-ferr-os" role="tabpanel" aria-labelledby="os-aba-abertas"><\/div>/);
   assert.doesNotMatch(html, /id="cockpit-tickets-(list|detail)"/);
   const idsChamados = [
-    "cockpit-tickets-kpis", "cockpit-tickets-kpis-nota", "cockpit-tickets-triage", "cockpit-tickets-contagem", "os-aba-abertas", "os-aba-finalizadas", "os-abertas-contagem", "os-finalizadas-contagem",
+    "cockpit-tickets-kpis", "cockpit-tickets-triage", "cockpit-tickets-contagem", "os-aba-abertas", "os-aba-finalizadas", "os-abertas-contagem", "os-finalizadas-contagem",
     "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-attention",
     "cockpit-tickets-export", "cockpit-tickets-clear", "cockpit-tickets-manage", "cockpit-tickets-manage-panel",
     "cockpit-tickets-form", "cockpit-tickets-file-simpress", "cockpit-tickets-file-oracle", "cockpit-tickets-import", "cockpit-tickets-import-status",
     "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution",
   ];
   for (const id of idsChamados) assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  // Textos explicativos no ⓘ: o seletor de versão segue descrito pelo balão, sem texto visível fora dele.
+  assert.match(html, /<button type="button" class="info-tip-trigger" aria-label="Sobre a versão" aria-describedby="cockpit-tickets-version-hint">/);
+  assert.match(html, /<span id="cockpit-tickets-version-hint" role="tooltip" class="info-tip-text">A versão escolhida vale para Exportar Excel e para a comparação\. A tabela mostra sempre a importação mais recente\.<\/span>/);
+  assert.match(html, /<select id="cockpit-tickets-version"[^>]*aria-describedby="cockpit-tickets-version-hint"/);
+  assert.doesNotMatch(html, /ckp-secao__desc"[^>]*>A versão escolhida/);
+  // Subtítulo do cabeçalho: balão do ⓘ ao lado do título (fora do h1, que tem textContent trocado), sem aria-live.
+  assert.match(html, /<\/h1>\s*<span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a ferramenta" aria-describedby="cockpit-tool-subtitle">/);
+  assert.match(html, /<span id="cockpit-tool-subtitle" role="tooltip" class="info-tip-text">[^<]+<\/span>/);
+  assert.doesNotMatch(html.match(/<span id="cockpit-tool-subtitle"[^>]*>/)[0], /aria-live/);
   // Importar e gerenciar rola até o bloco do painel e o abre.
   assert.match(html.match(/<button[^>]*id="cockpit-tickets-manage"[^>]*>/)[0], /data-on-click="abrirGestaoChamadosCockpit"/);
   assert.doesNotMatch(source, /cockpit-tickets-manage"\)\.addEventListener/);
@@ -424,6 +433,19 @@ function usarNosSimples() {
     node.setAttribute = (nome, valor) => { node.attrs[nome] = valor; };
     return node;
   };
+  global.document.createElementNS = (_ns, tag) => {
+    const node = global.document.createElement(tag);
+    node.appendChild = filho => { node.children.push(filho); return filho; };
+    return node;
+  };
+}
+
+// ⓘ no fim do resumo da triagem: id, texto e ARIA do balão.
+function notaDaTriagem(resumo) {
+  const tip = resumo.children.find(filho => filho.className === "info-tip info-tip--end");
+  if (!tip) return null;
+  const [botao, texto] = tip.children;
+  return { id: texto.id, texto: texto.textContent, rotulo: botao.attrs["aria-label"], descritoPor: botao.attrs["aria-describedby"] };
 }
 
 // Abre o painel OS com a tabela falsa e devolve o que o painel ligou nela (opções) e o que ele filtrou.
@@ -441,7 +463,7 @@ async function abrirOsComTabelaFalsa(ambiente) {
   const triagem = [];
   ambiente.el("cockpit-tickets-kpis").replaceChildren = (...cartoes) => { kpis.push(cartoes.map(cartao => [cartao.children[0].textContent, cartao.children[1].textContent])); };
   ambiente.el("cockpit-tickets-triage").replaceChildren = (cabecalho, botoes) => {
-    triagem.push({ resumo: cabecalho.children[1].textContent, numeros: botoes.children.map(botao => [botao.dataset.triagem, botao.children[1].textContent]) });
+    triagem.push({ resumo: cabecalho.children[1].textContent.trim(), nota: notaDaTriagem(cabecalho.children[1]), numeros: botoes.children.map(botao => [botao.dataset.triagem, botao.children[1].textContent]) });
   };
   await ambiente.api.abrirPainelCockpit("chamados");
   return { ...dados, filtros, kpis, triagem };
@@ -464,6 +486,7 @@ test("KPIs e triagem contam só as OS abertas e não mudam ao trocar de sub-aba"
     ], "'OS abertas' vem primeiro e as séries são só as com OS aberta");
     assert.deepEqual(triagem.at(-1), {
       resumo: "2 de 3 séries com chamado aberto no Oracle · 1 sem chamado aberto",
+      nota: { id: "cockpit-tickets-kpis-nota", texto: "KPIs e triagem contam só as OS da sub-aba Abertas.", rotulo: "Sobre a contagem", descritoPor: "cockpit-tickets-kpis-nota" },
       numeros: [["ativos", "2"], ["atrasados", "1"], ["sem_data", "0"], ["em_dia", "1"]],
     });
     const antesKpis = kpis.length;
@@ -481,7 +504,7 @@ test("KPIs e triagem contam só as OS abertas e não mudam ao trocar de sub-aba"
     opcoes.aoContarSituacao({ os: 5, chamados: [{ serie: "A", relacao: "conferida", grupo: "atrasados" }, { serie: "B", relacao: "divergente", grupo: "em_dia" }, { serie: "C", relacao: "somente_oracle", grupo: "" }, { serie: "D", relacao: "somente_simpress", grupo: "sem_data" }] });
     assert.deepEqual(kpis.at(-1).slice(0, 2), [["OS abertas", "5"], ["Séries", "4"]]);
     assert.equal(triagem.at(-1).numeros[0][1], "3");
-    assert.match(html, /<p[^>]*id="cockpit-tickets-kpis-nota"[^>]*>KPIs e triagem contam só as OS da sub-aba Abertas\.<\/p>/);
+    assert.doesNotMatch(html, /id="cockpit-tickets-kpis-nota"/, "a nota dos KPIs saiu da tela e vive no ⓘ da triagem");
     assert.ok(el("cockpit-tickets-triage").hidden === false);
   } finally { delete global.document; delete global.SimpressDataPanels; }
 });

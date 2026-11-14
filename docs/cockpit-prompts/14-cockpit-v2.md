@@ -227,6 +227,18 @@ Pedido do usuário: deixar os blocos do painel `unidades` mais organizados e lim
 - Temas claro e escuro só com tokens de `ck-tokens.css`; sem `!important`.
 - Verificado no fixture com 6 unidades fictícias, em 1366×900 e 390×844, nos dois temas, sem rolagem horizontal. Não verificado com os dados reais nem no navegador do usuário.
 
+## Textos explicativos no ⓘ (14/11/2026)
+
+Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`): texto que só explica (subtítulo, descrição de seção, dica de campo) sai da tela e vai para o ⓘ ao lado do título ou do rótulo, na mesma linha. Status, erros, dados, contagens, textos aprovados e avisos de envio real ou de privacidade continuam visíveis.
+
+- Componente único: `.info-tip` de `static/styles/ux-refinements.css` (botão `.info-tip-trigger` com `aria-label="Sobre X"` e `aria-describedby` apontando para o `span.info-tip-text` com `role="tooltip"`). Abre por mouse, foco ou toque; Esc fecha (`dismissInfoTips` em `static/js/ui/ux-enhancements.js`). Com o foco num ⓘ de balão aberto, o Esc só fecha o balão (`preventDefault`) e o painel da ferramenta continua aberto; um segundo Esc já fecha o painel. Balão aberto só pelo mouse: o Esc fecha o balão e segue normalmente (fecha o painel). Atalhos de Esc que não checam `defaultPrevented` (por exemplo, o fechamento de `details` em `static/js/ui/accessible-dialogs.js`) continuam agindo como antes. Não crie outro componente.
+- No HTML estático (partials), o `span` do balão segue a ordem `id`, `role="tooltip"`, `class="info-tip-text"` e não fica vazio: `tests/frontend/test_ux_enhancements.cjs` confere cada ⓘ do HTML montado.
+- Para markup gerado em string, use `infoTipHtml(rotulo, texto, { fim })` de `static/js/shared/dom-utils.js`: devolve o markup acima com `aria-label="Sobre <rotulo>"`, `id` único `tip-auto-<n>` (contador por instância de `SimpressDomUtils`, uma por documento), rótulo e texto escapados por `escapeHtml`, e `info-tip--end` quando `fim` for verdadeiro (balão alinhado à direita). Quando o balão precisa de um `id` fixo (por exemplo, apontado por `aria-describedby` de outro campo), monte o ⓘ por DOM com esse `id`.
+- Dentro de linhas com altura justa (`.ckp-rotulo`, `.ckp-cab__titulo`, `.ck-ferramenta__linha`, `.ck-chamados-triagem__resumo`), o `.info-tip` usa `margin-block: -0.75rem` (`static/styles/ck-pendencias.css`), porque o botão herda `min-height: 2.5rem` de `app.css` e não pode aumentar a linha.
+- Não ponha o ⓘ dentro de um `label` nem de um título cujo texto o JS troca por `textContent`: o texto do balão entraria no nome acessível, ou o ⓘ seria apagado.
+- Cabeçalho das ferramentas (Bloco 1): o subtítulo de cada ferramenta (`toolInfo` em `static/js/features/cockpit-tool-panels.js`) virou o balão `span#cockpit-tool-subtitle` (`role="tooltip"`, sem `aria-live`, porque o título recebe o foco) do ⓘ ao lado de `#cockpit-tool-title`, em `div.ck-ferramenta__linha`. `openPanel` troca só o texto do balão; o botão tem `aria-label="Sobre a ferramenta"` fixo (o nome da ferramenta já está no título ao lado).
+- Testes: texto no ⓘ não passa em `toBeVisible`, `innerText` nem `getByText().click`; use `toHaveText`, `textContent` ou leitura do HTML.
+
 ## `index.html` dividido em partials (10/11/2026)
 
 Para reduzir conflitos entre sessões paralelas, trechos grandes do `static/index.html` ficam em `frontend/partials/<nome>.html`, fora de `static/` (não são servidos sozinhos). No `index.html`, uma linha que contém só `<!-- include: partials/<nome>.html -->` é trocada pelo arquivo inteiro antes de a página sair; o navegador recebe o mesmo HTML de antes, byte a byte.
