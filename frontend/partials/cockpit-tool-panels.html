@@ -519,41 +519,6 @@
           </div>
         </section>
 
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" aria-labelledby="cockpit-units-heading" hidden>
-          <h2 id="cockpit-units-heading" class="sr-only">Catálogo de unidades</h2>
-          <div id="cockpit-units-kpis" class="ck-kpis" role="group" aria-label="Resumo do catálogo"></div>
-          <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar unidade</span><input class="ck-entrada ck-entrada--sm" id="cockpit-units-search" type="search" autocomplete="off" placeholder="Nome, cidade ou CNPJ"></label>
-            <span id="cockpit-units-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
-            <span class="ck-espaco"></span>
-            <button type="button" id="cockpit-units-new" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="toggleFormNovaUnidade" data-args='[true]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova unidade</button>
-          </div>
-          <div id="form-nova-unidade" class="hidden ckp-secao">
-            <h3 class="ckp-secao__titulo" id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</h3>
-            <input type="hidden" id="form-unidade-id" />
-            <div class="ckp-form">
-              <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input type="text" id="form-unidade-cidade" class="ck-entrada" placeholder="Ex: Paranaguá" /></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">CEP</span><input type="text" id="form-unidade-cep" class="ck-entrada ck-mono" placeholder="83203-000" /></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">CNPJ</span><input type="text" id="form-unidade-cnpj" class="ck-entrada ck-mono" placeholder="CNPJ da instalação / filial" /></label>
-              <label class="ck-campo ckp-span"><span class="ck-campo__rotulo">Endereço</span><input type="text" id="form-unidade-endereco" class="ck-entrada" placeholder="Ex: Rua Princesa Isabel, 100" /></label>
-              <div class="ckp-linha ckp-linha--fim ckp-span">
-                <button type="button" data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--fantasma">Cancelar</button>
-                <button type="button" id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Salvar</button>
-              </div>
-            </div>
-          </div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista">
-              <table class="ck-tabela ck-tabela--cards" id="cockpit-units-list">
-                <thead><tr><th scope="col">Unidade</th><th scope="col">Cidade</th><th scope="col">CNPJ</th></tr></thead>
-                <tbody id="cockpit-units-list-body"></tbody>
-              </table>
-            </div>
-            <aside class="ck-dividido__detalhe" id="cockpit-units-detail" aria-label="Detalhes da unidade selecionada">
-              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-units-detail-title">—</span><span id="cockpit-units-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-units-detail-sub">Selecione uma unidade.</span></div>
-              <dl class="ck-pares ck-det__corpo" id="cockpit-units-detail-pares"></dl>
-              <div class="ck-det__rodape"><button type="button" id="cockpit-units-copy-cnpj" class="ck-btn ck-btn--secundario ck-btn--sm" disabled>Copiar CNPJ</button><button type="button" id="cockpit-units-copy-cep" class="ck-btn ck-btn--secundario ck-btn--sm" disabled>Copiar CEP</button></div>
-            </aside>
-          </div>
-        </section>
+        <!-- Conteúdo em React: frontend/src/paineis/unidades/corpo.tsx. -->
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" data-react-painel="unidades" aria-labelledby="cockpit-units-heading" hidden></section>
       </section>

@@ -30,9 +30,6 @@
   let sheetsRequest = 0;
   let sheetsRows = [];
   let selectedSheetKey = "";
-  let unitsRequest = 0;
-  let unitsList = [];
-  let selectedUnitKey = "";
   let returnTarget = null;
   let ticketData = null;
   let ticketTriage = "";
@@ -2059,86 +2056,6 @@
     }
   }
 
-  // Unidades
-  function unitName(unit) { return unit?.label || unit?.cidade || "Unidade sem nome"; }
-
-  function filteredUnits() {
-    const terms = normalize(byId("cockpit-units-search").value).split(/\s+/).filter(Boolean);
-    return unitsList.map((unit, index) => ({ unit, key: String(unit?.id ?? index) })).filter(({ unit }) => {
-      const searchable = normalize([unitName(unit), unit.cidade, unit.cnpj, unit.endereco].join(" "));
-      return terms.every(term => searchable.includes(term));
-    });
-  }
-
-  function selectedUnit() { return unitsList.find((unit, index) => String(unit?.id ?? index) === selectedUnitKey); }
-
-  // Lápis ao fim do CNPJ: abre o formulário preenchido com o foco no campo CNPJ.
-  function cnpjWithPencil(unit) {
-    const wrap = element("span", "ck-det__linha", "");
-    // Sem id numérico o formulário não acha a unidade: mostra só o CNPJ.
-    if (unit.id === null || unit.id === undefined || !Number.isFinite(Number(unit.id))) { wrap.append(element("span", "", unit.cnpj || "—")); return wrap; }
-    const edit = element("button", "ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm");
-    const label = `Editar CNPJ da unidade ${unit.cidade || unitName(unit)}`;
-    edit.type = "button";
-    edit.title = label;
-    edit.setAttribute("aria-label", label);
-    edit.append(svgIcon("#i-pencil"), element("span", "ck-sr", label));
-    edit.addEventListener("click", () => app.editarUnidade(Number(unit.id), "form-unidade-cnpj"));
-    wrap.append(element("span", "", unit.cnpj || "—"), edit);
-    return wrap;
-  }
-
-  function unitNameCell(unit) {
-    const wrap = element("span", "ck-det__linha", unitName(unit));
-    if (unit.is_sede) wrap.append(badge("SEDE", "success"));
-    return wrap;
-  }
-
-  function renderUnits() {
-    const visible = filteredUnits();
-    const body = byId("cockpit-units-list-body");
-    if (!visible.some(({ key }) => key === selectedUnitKey)) selectedUnitKey = visible[0]?.key || "";
-    if (!visible.length) tableEmpty(body, 3, unitsList.length ? "Nenhuma unidade corresponde à busca." : "O catálogo não contém unidades.");
-    else {
-      body.replaceChildren(...visible.map(({ unit, key }) => tableRow([
-        ["Unidade", unitNameCell(unit)], ["Cidade", unit.cidade || "—"], ["CNPJ", cnpjWithPencil(unit)],
-      ], { selected: key === selectedUnitKey, onSelect: () => { selectedUnitKey = key; renderUnits(); } })));
-    }
-    byId("cockpit-units-status").textContent = `${visible.length} de ${unitsList.length} ${unitsList.length === 1 ? "unidade" : "unidades"}`;
-    const selected = visible.find(({ key }) => key === selectedUnitKey)?.unit;
-    byId("cockpit-units-detail-title").textContent = selected ? unitName(selected) : "—";
-    byId("cockpit-units-detail-sub").textContent = selected ? ([selected.cidade, selected.uf].filter(Boolean).join("/") || "Cidade não informada") : "Selecione uma unidade.";
-    byId("cockpit-units-detail-badge").replaceChildren(...(selected?.is_sede ? [badge("SEDE", "success")] : []));
-    byId("cockpit-units-copy-cnpj").disabled = !selected;
-    byId("cockpit-units-copy-cep").disabled = !selected;
-    // A ordem dos pares (e das colunas da lista) é usada pelo CSS do painel (nth-child em ck-cockpit.css): mude os dois juntos.
-    renderPares(byId("cockpit-units-detail-pares"), selected ? [
-      ["Cidade", selected.cidade], ["UF", selected.uf], ["Endereço", selected.endereco], ["CEP", selected.cep], ["CNPJ", cnpjWithPencil(selected)],
-    ] : []);
-  }
-
-  async function loadUnits() {
-    const request = ++unitsRequest;
-    const status = byId("cockpit-units-status");
-    status.textContent = "Carregando…";
-    renderKpis(byId("cockpit-units-kpis"), []);
-    tableEmpty(byId("cockpit-units-list-body"), 3, "Carregando…");
-    try {
-      const data = await apiFetch("/api/unidades", { errorMessage: "Não foi possível carregar o catálogo de unidades." });
-      if (request !== unitsRequest || activeTool !== "unidades") return;
-      unitsList = Array.isArray(data) ? data : [];
-      renderKpis(byId("cockpit-units-kpis"), [
-        ["Unidades", unitsList.length], ["Cidades", new Set(unitsList.map(unit => normalize(unit.cidade)).filter(Boolean)).size],
-        ["Com CNPJ", unitsList.filter(unit => unit.cnpj).length],
-      ]);
-      renderUnits();
-    } catch (error) {
-      if (request !== unitsRequest || activeTool !== "unidades") return;
-      status.textContent = error.message || "Não foi possível carregar as unidades.";
-      tableEmpty(byId("cockpit-units-list-body"), 3, status.textContent);
-    }
-  }
-
   function ensureEvents() {
     if (eventsBound || typeof document === "undefined") return;
     const root = byId("cockpit-tool-panels");
@@ -2205,9 +2122,6 @@
     document.addEventListener("simpress:chamados-atualizados", refreshMonthlyAfterChange);
     document.addEventListener("simpress:painel-atualizado", refreshMonthlyAfterChange);
     byId("cockpit-sheets-refresh").addEventListener("click", loadSheets);
-    byId("cockpit-units-search").addEventListener("input", renderUnits);
-    byId("cockpit-units-copy-cnpj").addEventListener("click", () => app.copiarDadoUnidade(selectedUnit()?.cnpj, "CNPJ"));
-    byId("cockpit-units-copy-cep").addEventListener("click", () => app.copiarDadoUnidade(selectedUnit()?.cep, "CEP"));
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || event.defaultPrevented || root.hidden) return;
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
@@ -2332,7 +2246,8 @@
     }
     if (tool === "unidades") {
       app.toggleFormNovaUnidade?.(false);
-      await loadUnits();
+      // Painel em React (frontend/src/paineis/unidades/).
+      await app.recarregarUnidadesCockpit();
     }
   }
 
@@ -2499,7 +2414,6 @@
     fecharJanelaChamadoOs,
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
-    recarregarUnidadesCockpit: loadUnits,
     filterTicketRecords,
     mostrarResultadoNaAbaComparacao,
     comparisonMetrics,
