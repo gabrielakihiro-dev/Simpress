@@ -22,7 +22,7 @@ function listSourceFiles(staticDir) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const fullPath = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name !== "vendor") walk(fullPath);
+        if (entry.name !== "vendor" && entry.name !== "dist") walk(fullPath);
       } else if (/\.(html|js)$/.test(entry.name)) {
         files.push(fullPath);
       }

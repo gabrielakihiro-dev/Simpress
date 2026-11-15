@@ -354,6 +354,18 @@ class MaintenanceContractTests(unittest.TestCase):
         # Nenhum destinatário "Nome Sobrenome;" no front: o texto padrão do Modelo 1 vem do servidor.
         self.assertNotRegex(modal_email + outlook, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;")
 
+        # O código React (fonte e bundle gerado) segue as mesmas regras de privacidade do JS antigo.
+        react_sources = sorted((app_config.BASE_DIR / "frontend" / "src").rglob("*.ts*"))
+        react_sources += sorted(p for p in (app_config.STATIC_DIR / "dist").rglob("*") if p.is_file())
+        self.assertTrue(react_sources)
+        for path in react_sources:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)", path.name)
+            # Caminho absoluto da máquina de quem gerou o bundle (nome de usuário).
+            self.assertNotRegex(text, r"(?i)[a-z]:[\\/]+users[\\/]|/home/[a-z]", path.name)
+        # static/** é servido publicamente: nenhum .md lá.
+        self.assertEqual([p.name for p in app_config.STATIC_DIR.rglob("*.md")], [])
+
         template = app_config.TEMPLATE_FILE
         if not template.exists():
             self.skipTest("o modelo de transferência é local e fica fora do Git")
@@ -670,6 +682,11 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('<script src="/static/vendor/lucide-1.48.0-subset.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
         self.assertIn('<script type="module" src="/static/app-entry.js"></script>', html)
+        react_tag = '<script type="module" src="/static/dist/react-entry.js"></script>'
+        self.assertIn(react_tag, html)
+        # React roda depois do código antigo, que define window.SimpressApiFetch.
+        self.assertLess(html.index('src="/static/app-entry.js"'), html.index(react_tag))
+        self.assertTrue((app_config.STATIC_DIR / "dist" / "react-entry.js").is_file())
         entry = (app_config.STATIC_DIR / "app-entry.js").read_text(encoding="utf-8")
         self.assertIn('import "./js/shared/transfer-utils.js";', entry)
         self.assertIn('import "./js/shared/coverage-model.js";', entry)

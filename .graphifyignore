@@ -18,3 +18,6 @@ data/
 logs/
 playwright-report/
 graphify-out/
+# Arquivos gerados: a fonte é frontend/src/ e scripts/build/
+static/dist/
+static/vendor/
