@@ -150,6 +150,14 @@ O sistema registra a conferência daquela tentativa e só volta a exigir o passo
 Fechar o modal ou mudar de equipamento descarta a preparação antiga e cancela a sessão
 se o envio ainda não começou.
 
+Migração React (Dia 2, grupo G4, 15/11/2026; plano `docs/planos/migracao-react-vite.md`): o modal
+`#modal-chamado-ux` e a seção `Nomes do Microsoft Entra` (`#esc-inv-entra`, no modal de importação) viraram
+painéis React, com os mesmos IDs, ARIA, classes e textos. Código em `frontend/src/paineis/ux-chamados/` e
+`frontend/src/paineis/entra-users/`; `static/js/features/ux-chamados.js` e `entra-users.js` viraram pontes
+que repassam as ações ao React. O envio real continua só com `enviar: true` e `confirmado: true`, depois de
+**Enviar solicitação**; falha de rede no envio real nunca reenvia e pede conferência no UX. Testes:
+`tests/e2e/react-g4.spec.cjs` (invariante do envio, telas nos temas claro e escuro) e `tests/e2e/ux-chamados.spec.cjs`.
+
 Substitui os 4 textareas de "Textos prontos para chamados manuais".
 
 **Barra de pílulas:** Deslocamento, Kit teclado + mouse, Mau funcionamento, Uso inadequado.

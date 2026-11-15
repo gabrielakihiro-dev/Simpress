@@ -93,35 +93,8 @@
   <!-- ========================================== -->
   <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
   <!-- ========================================== -->
-  <div id="modal-chamado-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-ux">
-    <div class="ck-dialogo">
-      <h3 id="titulo-chamado-ux" class="text-base font-bold">Abrir chamado no UX</h3>
-      <p>Série: <strong id="ux-chamado-serie"></strong> · Modelo: <strong id="ux-chamado-modelo"></strong></p>
-      <label for="ux-chamado-problema">Problema</label>
-      <select id="ux-chamado-problema" class="ck-input" data-on-change="atualizarProblemaChamadoUX" disabled></select>
-      <fieldset id="ux-chamado-solicitante" class="ux-chamado-solicitante" disabled>
-        <legend class="font-bold">Solicitante</legend>
-        <label for="ux-solicitante-nome">Nome</label>
-        <input type="text" id="ux-solicitante-nome" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
-        <label for="ux-solicitante-email">E-mail</label>
-        <input type="email" id="ux-solicitante-email" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
-        <label for="ux-solicitante-telefone">Telefone</label>
-        <input type="tel" id="ux-solicitante-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
-        <label for="ux-solicitante-cargo">Departamento/Cargo</label>
-        <input type="text" id="ux-solicitante-cargo" class="ck-input" maxlength="200" autocomplete="off" data-on-input="atualizarProblemaChamadoUX">
-      </fieldset>
-      <p class="font-bold">Descrição</p>
-      <div id="ux-chamado-descricao"></div>
-      <p id="ux-chamado-status" role="status"></p>
-      <p id="ux-chamado-motivo" class="font-bold" hidden></p>
-      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-fechar" data-on-click="fecharChamadoUX">Fechar</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-conferido" data-on-click="conferirChamadoUX" hidden>Conferi no UX; preparar de novo</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-chamado-simular" data-on-click="executarChamadoUX" data-args='[false]' aria-describedby="ux-chamado-motivo" disabled>Simular preenchimento</button>
-        <button type="button" class="ck-btn ck-btn--primario" id="ux-chamado-enviar" data-on-click="executarChamadoUX" data-args='[true]' aria-describedby="ux-chamado-motivo" disabled>Revisar e enviar</button>
-      </div>
-    </div>
-  </div>
+  <!-- Modal "Abrir chamado no UX" em React: frontend/src/paineis/ux-chamados/dialogo.tsx. -->
+  <div id="modal-chamado-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-ux" data-react-painel="ux-chamados"></div>
 
   <!-- Dossiê do equipamento (Home F1): só leitura; OS e chamados da série selecionada -->
   <div id="modal-dossie-equipamento" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-dossie-equipamento">
@@ -499,22 +472,8 @@
           <span class="ck-rotulo-info"><label for="auto-export-history-after-update"><strong>Baixar o Histórico de Planilhas automaticamente.</strong></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o download automático" aria-describedby="auto-export-history-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="auto-export-history-dica" role="tooltip" class="info-tip-text">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span></span></span>
         </div>
 
-        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
-          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
-          <form class="ckp-secao__corpo" data-on-submit="importarNomesEntra">
-            <label class="ckp-arquivo" data-estado="vazio">
-              <input id="entra-csv-file" type="file" accept=".csv,text/csv">
-              <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="entra-csv-name" data-vazio="Escolher CSV ou arrastar aqui">Escolher CSV ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".csv do Microsoft Entra">.csv do Microsoft Entra</span></span>
-              <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-            </label>
-            <p id="entra-import-status" class="ckp-secao__desc" role="status" aria-live="polite">Consultando cadastro…</p>
-            <div class="ckp-linha ckp-linha--fim">
-              <button type="button" id="btn-exportar-nomes-entra" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="exportarNomesEntra" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-download"></use></svg>Baixar XLSX compacto</button>
-              <button type="submit" id="btn-importar-nomes-entra" class="ck-btn ck-btn--secundario ck-btn--sm">Importar nomes</button>
-            </div>
-          </form>
-        </section>
+        <!-- Seção "Nomes do Microsoft Entra" em React: frontend/src/paineis/entra-users/secao.tsx. -->
+        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title" data-react-painel="entra-users"></section>
       </div>
 
       <div class="ckp-corpo" data-so-etapa="impacto" hidden>
