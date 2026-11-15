@@ -108,4 +108,29 @@ test.describe("estrutura (1366 px)", () => {
     });
     expect(repetidos).toEqual([]);
   });
+
+  test("data malformada (objeto) no histórico: o diálogo continua desenhado, como no código antigo", async ({ page }) => {
+    const historico = { ...DOSSIE.os.historico, eventos: [{ ...DOSSIE.os.historico.eventos[0], atualizado_em: {} }] };
+    await abrirDossie(page, { tema: "light", dossie: { ...DOSSIE, os: { ...DOSSIE.os, ultima_vez_observada_em: {}, historico } } });
+    await expect(page.locator("#dossie-historico-lista > li")).toHaveCount(1);
+    await expect(page.locator("#titulo-dossie-equipamento")).toHaveText("Dossiê do equipamento");
+    await expect(page.locator("#dossie-fechar")).toBeVisible();
+    await expect(page.locator("#dossie-status")).toBeHidden();
+  });
+
+  test("sem o bundle React: a busca funciona, Ver dossiê liga, o diálogo não abre e o erro vai para o console", async ({ page }) => {
+    const erros = [];
+    page.on("console", mensagem => { if (mensagem.type() === "error") erros.push(mensagem.text()); });
+    await page.route("**/static/dist/react-entry.js*", route => route.abort());
+    await page.route("**/api/equipamento/*", route => route.fulfill({ json: { ...EQUIPAMENTO } }));
+    await page.goto("/");
+    await page.locator("#input-serial").fill("LENTO");
+    await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+    await expect(page.locator("#card-serial")).toHaveText("LENTO");
+    await expect(page.locator("#btn-ver-dossie")).toBeEnabled();
+    await page.locator("#btn-ver-dossie").click();
+    await expect.poll(() => erros.filter(texto => texto.includes('O painel React "dossie-equipamento" não carregou.')).length).toBeGreaterThanOrEqual(2);
+    await expect(page.locator("#modal-dossie-equipamento")).toBeHidden();
+    await expect(page.locator("#modal-dossie-equipamento > .ck-dialogo")).toBeEmpty();
+  });
 });
