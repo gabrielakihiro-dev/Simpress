@@ -217,7 +217,8 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, cont
     addEventListener: (tipo, fn) => ouvintes.push([tipo, fn]),
     createElement: () => novo("novo"),
   };
-  const app = { apiFetch, showToast() {}, ...appExtra };
+  // recarregarUnidadesCockpit vem da ponte React (units-catalog.js), sempre publicada no app real.
+  const app = { apiFetch, showToast() {}, async recarregarUnidadesCockpit() {}, ...appExtra };
   const api = createCockpitToolPanels({ app, appState: {}, apiFetch, ...contextExtra });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
@@ -873,16 +874,19 @@ test("histórico vazio ainda mostra a seção Sem usuário abaixo da mensagem va
   } finally { delete global.document; }
 });
 
-test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026)", () => {
-  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="unidades"[\s\S]*?\n        <\/section>/)?.[0] || "";
-  for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-copy-cnpj", "cockpit-units-copy-cep", "cockpit-units-detail-badge"]) {
-    assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} uma vez no painel`);
-    assert.equal(html.split(`id="${id}"`).length - 1, 1, `${id} uma vez na página`);
+test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026); conteúdo em React (15/11/2026)", () => {
+  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="unidades"[^>]*>/)?.[0] || "";
+  assert.match(painel, /data-react-painel="unidades"/);
+  assert.match(html, /data-react-painel="unidades"[^>]*hidden><\/section>/, "a seção fica vazia: o React desenha o conteúdo");
+  const corpo = fs.readFileSync(path.join(root, "frontend/src/paineis/unidades/corpo.tsx"), "utf8");
+  for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-copy-cnpj", "cockpit-units-copy-cep", "cockpit-units-detail-badge", "cockpit-units-new"]) {
+    assert.equal(corpo.split(`id="${id}"`).length - 1, 1, `${id} uma vez no corpo`);
+    assert.equal(html.split(`id="${id}"`).length - 1, 0, `${id} fora do HTML estático`);
   }
-  assert.match(painel, /id="cockpit-units-new"[^>]*data-on-click="toggleFormNovaUnidade"[^>]*data-args='\[true\]'/);
-  assert.match(painel, /id="btn-salvar-unidade"[^>]*data-on-click="salvarUnidadeForm"|data-on-click="salvarUnidadeForm"[^>]*id="btn-salvar-unidade"/);
+  assert.match(corpo, /id="cockpit-units-new"[^>]*data-on-click="toggleFormNovaUnidade" data-args="\[true\]"/);
+  assert.match(corpo, /id="btn-salvar-unidade" data-on-click="salvarUnidadeForm"/);
   assert.doesNotMatch(html, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit|lista-unidades-container/);
-  assert.doesNotMatch(painel, /Fluxo completo/);
+  assert.doesNotMatch(corpo, /Fluxo completo/);
 });
 
 test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada uma vez)", async () => {

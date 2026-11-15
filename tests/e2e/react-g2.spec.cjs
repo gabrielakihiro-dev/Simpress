@@ -463,3 +463,150 @@ for (const tema of ["light", "dark"]) {
     await expect(painelUnidades(page)).toHaveScreenshot(`unidades-vazio-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
   });
 }
+
+// Comportamento do catálogo em React. Substitui tests/frontend/test_units_catalog.cjs (carregarUnidades) e o caso
+// 422 de salvarUnidadeForm que estava em tests/frontend/test_api_errors.cjs.
+async function abrirUnidadesComportamento(page, { unidades = unidadesFicticias(), salvar = null } = {}) {
+  await prepararTema(page, "light");
+  const pedidos = [];
+  let lista = unidades;
+  await page.route("**/api/unidades", route => {
+    pedidos.push("GET");
+    return typeof lista === "function" ? lista(route) : route.fulfill({ json: lista });
+  });
+  await page.route("**/api/unidade/salvar", async route => {
+    pedidos.push(["POST", route.request().postDataJSON()]);
+    const { status = 200, json = { mensagem: "Unidade salva com sucesso!" } } = salvar ? await salvar() : {};
+    return route.fulfill({ status, json });
+  });
+  await abrirApp(page, "light");
+  await page.evaluate(() => {
+    window.__toasts = [];
+    const showToast = window.showToast;
+    window.showToast = (mensagem, tipo) => { window.__toasts.push([mensagem, tipo]); return showToast(mensagem, tipo); };
+  });
+  return { pedidos, trocarLista: nova => { lista = nova; }, toasts: () => page.evaluate(() => window.__toasts) };
+}
+
+test.describe("Catálogo de unidades em React: comportamento", () => {
+  test("busca filtra lista e detalhe, Enter seleciona a linha e o lápis abre o formulário com o CNPJ", async ({ page }) => {
+    await abrirUnidadesComportamento(page);
+    await page.evaluate(() => window.abrirModalGerenciarUnidades());
+    const corpo = page.locator("#cockpit-units-list-body");
+    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3 unidades");
+    await expect(page.locator("#cockpit-units-kpis .ck-kpi__valor")).toHaveText(["3", "3", "2"]);
+    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Curitiba Sede");
+    await expect(corpo.locator("tr").first()).toHaveAttribute("aria-selected", "true");
+
+    await corpo.locator("tr").nth(2).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Maringá");
+    await expect(page.locator("#cockpit-units-detail-sub")).toHaveText("Maringá/PR");
+    await expect(page.locator("#cockpit-units-detail-pares dd")).toHaveText(["Maringá", "PR", "Rua Teste, 7", "—", /—/]);
+
+    await page.locator("#cockpit-units-search").fill("londrina");
+    await expect(page.locator("#cockpit-units-status")).toHaveText("1 de 3 unidades");
+    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Londrina");
+    await page.locator("#cockpit-units-search").fill("nada disso");
+    await expect(corpo).toHaveText("Nenhuma unidade corresponde à busca.");
+    await expect(page.locator("#cockpit-units-copy-cnpj")).toBeDisabled();
+    await expect(page.locator("#cockpit-units-detail-sub")).toHaveText("Selecione uma unidade.");
+
+    await page.locator("#cockpit-units-search").fill("");
+    await page.locator("#cockpit-units-detail").getByRole("button", { name: "Editar CNPJ da unidade Curitiba" }).click();
+    await expect(page.locator("#form-nova-unidade")).toBeVisible();
+    await expect(page.locator("#form-unidade-titulo")).toHaveText("Editar Unidade: Curitiba");
+    await expect(page.locator("#form-unidade-cnpj")).toBeFocused();
+    await expect(page.locator("#form-unidade-cnpj")).toHaveValue("00.000.000/0001-91");
+    await expect(page.locator("#form-unidade-id")).toHaveValue("1");
+
+    await page.locator('#form-nova-unidade [data-on-click="toggleFormNovaUnidade"]').click();
+    await expect(page.locator("#form-nova-unidade")).toBeHidden();
+    await expect(page.locator("#cockpit-units-new")).toBeFocused();
+    await page.locator("#cockpit-units-new").click();
+    await expect(page.locator("#form-unidade-titulo")).toHaveText("Cadastrar Nova Unidade / Filial");
+    await expect(page.locator("#form-unidade-cnpj")).toHaveValue("");
+    await expect(page.locator("#form-unidade-cidade")).toBeFocused();
+  });
+
+  test("adaptador: carregarUnidades grava SimpressApp.state.unidadesList e editarUnidade lê a lista trocada por fora", async ({ page }) => {
+    await abrirUnidadesComportamento(page);
+    await page.evaluate(() => window.carregarUnidades());
+    expect(await page.evaluate(() => window.SimpressApp.state.unidadesList.map(u => u.id))).toEqual([1, 2, 3]);
+
+    // O código antigo troca o valor: o React tem de ler o novo, não uma cópia.
+    await page.evaluate(() => {
+      window.SimpressApp.state.unidadesList = [{ id: 42, cidade: "Ponta Grossa", endereco: "Rua Nova, 1", cep: "84000-000", cnpj: "00.000.000/0003-53" }];
+    });
+    await page.evaluate(() => window.abrirModalGerenciarUnidades());
+    await page.evaluate(() => window.editarUnidade(42));
+    await expect(page.locator("#form-unidade-titulo")).toHaveText("Editar Unidade: Ponta Grossa");
+    await expect(page.locator("#form-unidade-endereco")).toBeFocused();
+    await page.evaluate(() => window.editarUnidade(1));
+    await expect(page.locator("#form-unidade-titulo")).toHaveText("Editar Unidade: Ponta Grossa");
+  });
+
+  test("carregarUnidades atualiza o seletor do Transporte, mantém a filial válida e conta as filiais", async ({ page }) => {
+    await abrirUnidadesComportamento(page);
+    await page.evaluate(() => window.carregarUnidades());
+    await page.locator("#select-unidade-destino").evaluate(select => { select.value = "2"; });
+    await page.evaluate(() => window.carregarUnidades());
+    await expect(page.locator("#select-unidade-destino option")).toHaveText(["Selecione a filial", "Curitiba Sede", "Londrina", "Maringá - Rua Teste, 7 ()"]);
+    await expect(page.locator("#select-unidade-destino")).toHaveValue("2");
+    await expect(page.locator("#filiais-count")).toHaveText("3 filiais catalogadas");
+  });
+
+  for (const falha of [404, 503, "rede"]) {
+    test(`carregarUnidades com falha ${falha} avisa e preserva a lista, o seletor e o contador`, async ({ page }) => {
+      const env = await abrirUnidadesComportamento(page);
+      await page.evaluate(() => window.carregarUnidades());
+      await page.locator("#select-unidade-destino").evaluate(select => { select.value = "1"; });
+      env.trocarLista(route => falha === "rede" ? route.abort("failed") : route.fulfill({ status: falha, body: "indisponível" }));
+      await page.evaluate(() => window.carregarUnidades());
+      expect(await env.toasts()).toEqual([["Não foi possível carregar o catálogo de unidades. Recarregue a página e tente de novo.", "error"]]);
+      expect(await page.evaluate(() => window.SimpressApp.state.unidadesList.length)).toBe(3);
+      await expect(page.locator("#select-unidade-destino")).toHaveValue("1");
+      await expect(page.locator("#select-unidade-destino option")).toHaveCount(4);
+      await expect(page.locator("#filiais-count")).toHaveText("3 filiais catalogadas");
+    });
+  }
+
+  test("painel mostra o erro da carga na lista e no status, sem KPIs", async ({ page }) => {
+    await abrirUnidadesComportamento(page, { unidades: route => route.fulfill({ status: 503, json: { detail: "Catálogo indisponível." } }) });
+    await page.evaluate(() => window.abrirModalGerenciarUnidades());
+    await expect(page.locator("#cockpit-units-status")).toHaveText("Catálogo indisponível.");
+    await expect(page.locator("#cockpit-units-list-body")).toHaveText("Catálogo indisponível.");
+    await expect(page.locator("#cockpit-units-kpis .ck-kpi")).toHaveCount(0);
+  });
+
+  test("salvar valida obrigatórios, envia o contrato, recarrega e fecha o formulário", async ({ page }) => {
+    const env = await abrirUnidadesComportamento(page);
+    await page.evaluate(() => window.abrirModalGerenciarUnidades());
+    await page.locator("#cockpit-units-new").click();
+    await page.locator("#btn-salvar-unidade").click();
+    await expect.poll(env.toasts).toEqual([["Cidade, endereço e CNPJ são campos obrigatórios.", "warning"]]);
+    expect(env.pedidos.filter(p => p[0] === "POST")).toHaveLength(0);
+
+    await page.locator("#form-unidade-cidade").fill(" Paranaguá ");
+    await page.locator("#form-unidade-endereco").fill("Rua Fictícia, 9");
+    await page.locator("#form-unidade-cep").fill("83203-000");
+    await page.locator("#form-unidade-cnpj").fill("00.000.000/0004-34");
+    const antes = env.pedidos.filter(p => p === "GET").length;
+    await page.locator("#btn-salvar-unidade").click();
+    await expect(page.locator("#form-nova-unidade")).toBeHidden();
+    expect(env.pedidos.find(p => p[0] === "POST")[1]).toEqual({ id: null, cidade: "Paranaguá", endereco: "Rua Fictícia, 9", uf: "PR", cep: "83203-000", cnpj: "00.000.000/0004-34" });
+    expect(env.pedidos.filter(p => p === "GET").length - antes).toBe(2);
+    await expect.poll(async () => (await env.toasts()).at(-1)).toEqual(["Unidade salva com sucesso!", "success"]);
+  });
+
+  test("salvar com erro 422 mostra a mensagem da API e mantém o formulário aberto", async ({ page }) => {
+    const env = await abrirUnidadesComportamento(page, { salvar: () => ({ status: 422, json: { detail: "CEP deve conter 8 dígitos." } }) });
+    await page.evaluate(() => window.abrirModalGerenciarUnidades());
+    await page.evaluate(() => window.editarUnidade(2));
+    await page.locator("#form-unidade-cep").fill("123");
+    await page.locator("#btn-salvar-unidade").click();
+    await expect.poll(env.toasts).toEqual([["CEP deve conter 8 dígitos.", "error"]]);
+    expect(env.pedidos.find(p => p[0] === "POST")[1].id).toBe(2);
+    await expect(page.locator("#form-nova-unidade")).toBeVisible();
+  });
+});
