@@ -139,11 +139,28 @@ O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), s
 
 `MSG_SEM_CHAVE` (`domains/assistant_chat.py`) passa a dizer: "Configure a chave em Prontidão da base > Configuração local." O Assistente não grava configuração e não tem ferramenta para isso.
 
-## Testes previstos
+## Front implementado (14/11/2026)
+
+- Cartão: `#readiness-configuracao-local`, montado em `static/js/features/dashboard.js` (`carregarProntidao`) com o mesmo componente dos outros cartões (ícone `i-pencil`, linha de status, botão `#btn-configuracao-local` com o texto `Configurar`). O cartão só aparece quando `/api/prontidao` traz `configuracao_local`; servidor antigo e a fixture da interface não mostram o cartão. Estados: `Em dia`, `Pendente · <reason>` (o `reason` do servidor já vem como `Falta: <rótulos>`) e `Inválido`. `Assistente sem IA` entra em texto secundário (`.ck-pront__secundario`) quando `assistente_ia` é falso. A contagem `N de N fontes em dia` vem dos itens `[data-pendencia]` e já inclui o cartão; o resumo `Tudo disponível` do cabeçalho continua contando só os cinco arquivos.
+- Modal: `#modal-configuracao-local` em `frontend/partials/modais.html`, lógica em `static/js/features/configuracao-local.js` (módulo `configuracaoLocal`, registrado em `static/app-entry.js` e na `FEATURE_ORDER` de `static/app.js`). Usa o casco `ckp-*` e o kit `ck-*` dos outros modais, `abrirModalAcessivel` e `confirmarAcao`; não criou componente novo. Ao fechar, o foco volta a `#btn-configuracao-local` (o painel se redesenha, então o foco é reaplicado no quadro seguinte).
+- Seções, cada uma com o próprio `Salvar` (`#cfg-local-salvar-contas|links|cliente|assistente`) e uma linha de status própria (`#cfg-local-status-<seção>`, `role="status"`):
+  - Contas e Links internos: campos gerados de `contas` e `links` da API (nada fixo no código), placeholder e ajuda vindos do servidor, `Usar também no Outlook` nas contas de e-mail, `Definido por variável de ambiente` nos campos `somente_leitura`. As duas seções usam o mesmo `PUT /api/config/local/contas`; ao salvar uma, só ela é redesenhada, então o que foi digitado na outra não se perde. Campo em branco mantém o valor atual.
+  - Dados do cliente: reaproveita `GET`/`PUT /api/config/cliente` (contrato, CNPJ, séries uma por linha); a validação do formato é feita antes de enviar e o foco vai ao campo com erro. Campo vindo de variável de ambiente segue como em `#modal-cliente-config`: vai `""` (e `null` nas séries) no corpo.
+  - Assistente com IA: campo `type="password"`, `autocomplete="new-password"`, sempre vazio, com `final` como placeholder. Campo vazio mantém a chave e não faz requisição. A chave digitada é apagada do campo em qualquer resultado (sucesso ou erro) e nunca aparece na tela nem no aviso. `Remover chave` (`aria-label` `Remover chave do <nome>`) só existe para chave própria configurada, pede confirmação (`Remover chave?`) e chama `DELETE /api/config/local/assistente/{chave}`.
+  - Outros formulários: botão para o contato de origem da transferência (`app.abrirConfiguracaoContatoOrigem`), que abre por cima do modal; some se a ação não existir.
+- Depois de cada gravação o front chama `app.carregarProntidao()` e o cartão muda sem recarregar a página.
+- Desvios desta entrega em relação ao que a spec previa:
+  - Os atalhos mostram só o botão, sem a linha de status do contato de origem (a API não devolve esse status).
+  - Representantes regionais ficaram sem atalho: editar um representante exige uma cidade escolhida no formulário de transferência.
+  - O Solicitante do UX não aparece (já tem tela no modal do UX e a API não devolve status).
+  - O artefato de referência (`DGgv5VBXhu4NrZ9DbxFQhC`) não pôde ser lido; o visual segue o painel e os modais atuais.
+  - `Usar também no Outlook` usa o `.ckp-alternar` existente, que marcado fica em âmbar como nos outros interruptores.
+
+## Testes
 
 - Backend: validação (CNPJ, contrato, e-mail, usuário, URL), gravação atômica com backup, segredo nunca devolvido nem logado, chave vazia mantém a atual, variável de ambiente deixa o campo só leitura, 401 sem cookie, status Pendente lista o que falta.
-- Front (node): cartão e modal com os mesmos IDs e ARIA do painel.
-- E2E: clone sem `config/*.json` mostra Pendente; preencher deixa Em dia; capturas nos temas claro e escuro.
+- Front (node): `tests/frontend/test_configuracao_local.cjs` (campos gerados da API, chave vazia e nunca exibida, payloads, 422 sem toast, foco ao fechar, duplo clique, `Remover chave` com confirmação).
+- E2E: `tests/e2e/configuracao-local.spec.cjs` com a API simulada e com estado: Pendente lista o que falta, preencher e salvar deixa Em dia, a chave some do campo, validação do cliente, `Remover chave` com confirmação, auditoria axe do modal e ausência de rolagem horizontal de 320 a 2560 px nos dois temas. As capturas (painel e modal, claro e escuro) saem só com `SIMPRESS_CAPTURAS_DIR=<pasta fora de static/>` definida; o teste que as salva é pulado sem ela.
 
 ## Pendente para depois do merge da `dados-reais-config`
 
