@@ -110,7 +110,7 @@ test("comparison tab without a saved comparison still lists the notebooks withou
 });
 
 test("each tool is accessible in both themes and remains reachable below 1200px", async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000); // ~43 s local; runner lento da CI chega a ~70 s
   await mockComparison(page);
   await page.goto("/");
   for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-resumo-aba", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-aba", "sebrae-chamados"]]) {

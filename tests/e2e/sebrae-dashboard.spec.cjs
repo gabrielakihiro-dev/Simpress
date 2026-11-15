@@ -261,6 +261,7 @@ async function completarCampos(antigo, encerramento = "2026-10-27T09:00") {
 const TOAST = "#toast-container .ck-toast";
 
 test("cada chamado em aberto tem o campo de descrição e o botão avisa na tela o que falta preencher", async ({ page, request }) => {
+  test.setTimeout(60_000); // fluxo longo com reload: ~21 s no mobile, acima do limite padrão de 20 s
   const { antigo } = await abrirAntigo(page, request);
   const botao = antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true });
   const campo = antigo.getByLabel(ROTULO_DESCRICAO);
