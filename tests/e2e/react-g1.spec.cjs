@@ -42,6 +42,19 @@ async function abrirPainel(page, request, { tema = "light", extra = "" } = {}) {
   return painel.locator("#sebrae-conflitos");
 }
 
+// Conta as chamadas às ações do código antigo que o painel aciona (lidas de window na hora da chamada).
+async function contarAcoes(page, nomes) {
+  await page.evaluate(lista => {
+    window.__contagem = {};
+    lista.forEach(nome => {
+      const original = window[nome];
+      window.__contagem[nome] = 0;
+      window[nome] = (...args) => { window.__contagem[nome] += 1; return original?.(...args); };
+    });
+  }, nomes);
+  return () => page.evaluate(() => ({ ...window.__contagem }));
+}
+
 for (const tema of ["light", "dark"]) {
   test(`baseline: conflitos de edição da fixture, tema ${tema}`, async ({ page, request }) => {
     const secao = await abrirPainel(page, request, { tema, extra: "&conflitos=1" });
@@ -98,8 +111,10 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(botao).toBeEnabled();
     await expect(status).toHaveText("");
     expect(chamadas.filter(item => item.metodo === "POST")).toEqual([]);
+    const contagem = await contarAcoes(page, ["atualizarEstadoAutomacao"]);
     await botao.click();
     await expect(status).toHaveText("Escolhas salvas. Reenviando ao SharePoint…");
+    expect(await contagem()).toEqual({ atualizarEstadoAutomacao: 1 }); // mostra a rotina enviar na Automação
     await expect(botao).toBeDisabled(); // fica desligado enquanto o envio roda
     const posts = chamadas.filter(item => item.metodo === "POST");
     expect(posts).toHaveLength(1);
@@ -128,6 +143,7 @@ test.describe("conflitos de edição: comportamento", () => {
     await antigo.getByRole("radio", { name: "Usar o do site" }).check();
     await botao.click();
     await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolhas salvas, mas o envio não começou: x");
+    await expect(botao).toBeEnabled();
     expect(chamadas.filter(item => item.metodo === "POST").map(item => item.corpo.escolhas)).toEqual([{ u: "sharepoint", a: "site", b: "site" }]);
   });
 
@@ -178,6 +194,7 @@ test.describe("conflitos de edição: comportamento", () => {
     const botao = secao.locator("#btn-sebrae-conflitos-enviar");
     await expect(botao).toBeEnabled();
     const antes = consultas;
+    const contagem = await contarAcoes(page, ["carregarNovosSebrae"]);
     await botao.click();
     await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolhas salvas. Reenviando ao SharePoint…");
     await expect.poll(() => consultas - antes, { timeout: 8000 }).toBeGreaterThanOrEqual(2); // segue consultando a automação
@@ -188,6 +205,7 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(botao).toBeEnabled({ timeout: 8000 });
     await expect(secao).toBeVisible();
     await expect(secao.getByRole("group")).toHaveCount(1);
+    expect((await contagem()).carregarNovosSebrae).toBeGreaterThanOrEqual(1); // atualiza o aviso e a lista de chamados
     await expect(page.locator(TOAST).filter({ hasText: "Conflitos" })).toHaveCount(0);
   });
 
