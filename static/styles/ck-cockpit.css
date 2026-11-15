@@ -187,7 +187,12 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-topbar { position: relative; z-index: 30; flex: none; display: flex; align-items: center; gap: 6px; height: var(--altura-barra); padding: 0 14px; background: var(--cor-superficie); border-bottom: 1px solid var(--cor-borda); }
 .ck-marca { display: flex; align-items: center; gap: 8px; height: 24px; margin-right: 4px; padding-right: 14px; border-right: 1px solid var(--cor-borda); color: var(--cor-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); white-space: nowrap; }
 .ck-marca:hover { color: var(--cor-texto); text-decoration: none; }
-.ck-marca .ck-ico { width: 18px; height: 18px; color: var(--cor-destaque); }
+.ck-marca__cromo { display: none; width: 136px; height: 34px; margin-block: -5px; }
+.ck-marca--cromo .ck-marca__cromo { display: block; }
+/* regras que a Paper injetaria via <style> (a CSP bloqueia); a de tamanho do canvas fica aqui */
+.ck-marca__cromo { position: relative; isolation: isolate; }
+.ck-marca__cromo canvas { contain: strict; display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.ck-marca--cromo .ck-marca__texto { display: none; }
 .ck-abas { display: flex; gap: 2px; }
 .ck-aba--painel { margin-left: -4px; }
 .ck-menu__item.ck-menu__item--so-compacto { display: none; }
