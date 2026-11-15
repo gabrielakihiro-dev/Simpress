@@ -14,6 +14,17 @@ from tests.test_assistant import CPF, FakeModel, abrir, call, calls, temp_json, 
 SEBRAE_SERIES = ("BRT100XA01", "BRT100XA02", "BRT200XB0R", "BRT200XB0F", "BRT300XC01")
 EMAIL = "maria.souza@exemplo.com"
 
+# With the route down the chat mask reads the local defaults file: every test here points it at a missing temp path, never the real data/state one.
+_defaults_patch = mock.patch("core.config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", temp_json())
+
+
+def setUpModule() -> None:
+    _defaults_patch.start()
+
+
+def tearDownModule() -> None:
+    _defaults_patch.stop()
+
 
 def comparacao_padrao() -> Dict[str, Any]:
     return {
@@ -158,9 +169,7 @@ class RascunhoNoChatTests(unittest.TestCase):
             text(f"Olá! Segue a lista:\n- AAA111 ({marcador}) — 9 dias sem verificação\nObrigado."),
         )
         conversa = AssistantConversation(model, SimpressApi(FakeTransport()), "modelo-teste", lambda: "", NotasStore(temp_json()))  # type: ignore[arg-type]
-        # With the route down the mask reads the local defaults file: point it at a missing temp path, never the real data/state one.
-        with mock.patch("core.config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", temp_json()):
-            resposta = conversa.enviar_mensagem("escreve a cobrança dos equipamentos sem acesso há 7 dias")
+        resposta = conversa.enviar_mensagem("escreve a cobrança dos equipamentos sem acesso há 7 dias")
         enviado = json.dumps(model.sent[1], ensure_ascii=False)
         self.assertNotIn("PRNOTE01", enviado)
         self.assertNotIn("PRNOTE02", enviado)
