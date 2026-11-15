@@ -106,6 +106,24 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
         self.assertNotIn("<style", html.lower())
 
+    def test_react_bundle_is_a_single_file_that_fits_the_unchanged_policy(self):
+        # O React não pode afrouxar o CSP: nada de eval, data: ou chunks fora do versioned_html.
+        self.assertEqual(
+            CONTENT_SECURITY_POLICY,
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
+            "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "frame-ancestors 'none'; form-action 'self'",
+        )
+        dist = app_config.STATIC_DIR / "dist"
+        self.assertEqual(sorted(p.name for p in dist.rglob("*")), ["react-entry.js"])
+        bundle = (dist / "react-entry.js").read_text(encoding="utf-8")
+        # URI data: (o React tem chaves de objeto "data:", que não contam).
+        self.assertNotRegex(bundle, r"(?i)\bdata:(?:image|font|text|application|audio|video)/")
+        self.assertNotRegex(bundle, r"\bimport\s*\(")
+        self.assertNotRegex(bundle, r"\beval\s*\(|new Function\s*\(")
+        html = versioned_html(app_config.STATIC_DIR)
+        self.assertRegex(html, r'<script type="module" src="/static/dist/react-entry\.js\?v=[0-9a-f]{16}"></script>')
+
     def test_logo_metal_imports_a_vendored_file_that_exists(self):
         static = Path(__file__).resolve().parents[1] / "static"
         source = (static / "js" / "ui" / "cromo-marca.js").read_text(encoding="utf-8")

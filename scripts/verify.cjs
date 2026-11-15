@@ -55,6 +55,35 @@ function resolveTsc() {
   );
 }
 
+function resolveVite() {
+  return findInRootOrMain([["node_modules", "vite", "bin", "vite.js"]]);
+}
+
+// Refaz o bundle do React numa pasta temporária e compara com o static/dist commitado,
+// para a diferença falhar já no verify local, não só na CI. Não toca em static/dist.
+function checkReactBuild() {
+  const vite = resolveVite();
+  if (!vite) {
+    console.error("vite não encontrado: rode `npm ci` neste checkout (ou no checkout principal, se for um worktree em .claude/worktrees/).");
+    return false;
+  }
+  const outDir = "TEMP/react-dist-check";
+  const result = spawnSync(process.execPath, [vite, "build", "--logLevel", "warn", "--outDir", outDir, "--emptyOutDir"], {
+    cwd: ROOT,
+    stdio: "inherit",
+  });
+  if (result.error) console.error(result.error.message);
+  if (result.status !== 0) return false;
+  const names = (dir) => listFiles(dir, "", { recursive: true }).map((file) => path.posix.relative(dir, file));
+  const built = names(outDir);
+  const committed = fs.existsSync(path.join(ROOT, "static/dist")) ? names("static/dist") : [];
+  const read = (dir, name) => fs.readFileSync(path.join(ROOT, dir, name));
+  const upToDate = JSON.stringify(built) === JSON.stringify(committed)
+    && built.every((name) => read(outDir, name).equals(read("static/dist", name)));
+  if (!upToDate) console.error("static/dist está desatualizado: rode `npm run build:react` e commite o resultado.");
+  return upToDate;
+}
+
 // Lista arquivos com a extensão indicada, em ordem estável, ignorando as pastas excluídas.
 function listFiles(relativeDir, extension, { recursive = false, prefix = "", exclude = [] } = {}) {
   const results = [];
@@ -99,7 +128,7 @@ const MYPY_STRICT_TARGETS = ["core", "domains", "security"];
 
 function javascriptFilesToCheck() {
   return [
-    ...listFiles("static", ".js", { recursive: true, exclude: ["static/vendor"] }),
+    ...listFiles("static", ".js", { recursive: true, exclude: ["static/vendor", "static/dist"] }),
     "playwright.config.cjs",
     ...listFiles("tests/e2e", ".cjs"),
     ...listFiles("config", ".cjs"),
@@ -132,6 +161,12 @@ function buildSteps(python) {
       command: process.execPath,
       args: [resolveTsc(), "--project", "tsconfig.ui.json"],
     },
+    {
+      name: "Tipos TypeScript (frontend/src, strict)",
+      command: process.execPath,
+      args: [resolveTsc(), "--project", "tsconfig.json"],
+    },
+    { name: "Bundle React atualizado (static/dist)", run: checkReactBuild },
     { name: "Sintaxe Python (compileall)", command: python, args: ["-m", "compileall", "-q", ...PYTHON_COMPILE_TARGETS] },
     {
       name: "Tipos (mypy gradual)",
@@ -165,6 +200,7 @@ function main() {
   const python = resolvePython();
   console.log(`Python: ${python}`);
   console.log(`tsc: ${resolveTsc()}`);
+  console.log(`vite: ${resolveVite() || "não encontrado"}`);
   const summary = [];
   for (const step of buildSteps(python)) {
     console.log(`\n=== ${step.name} ===`);
@@ -187,4 +223,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildSteps, javascriptFilesToCheck, listFiles, resolvePython, resolveTsc };
+module.exports = { buildSteps, javascriptFilesToCheck, listFiles, resolvePython, resolveTsc, resolveVite };
