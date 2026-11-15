@@ -48,6 +48,8 @@ Cada conta é pedida **uma vez**, com o texto de onde é usada. O formato do arq
 | Usuário do Endpoint Central (login, sem domínio) | `nome.usuario` | Usada para: Endpoint Central | `endpoint_usuario` |
 | Link da pasta do Dashboard (SharePoint) | `https://exemplo.invalid/sites/pasta-do-dashboard` | Usado para: Dashboard | `dashboard_pasta_url` |
 
+O usuário confirmou em 15/11/2026 que os e-mails do Outlook são as mesmas contas Simpress e Sebrae; por isso "Usar também no Outlook" vem marcado.
+
 Os links ficam numa subseção "Links internos", montada a partir de uma lista de campos no servidor (`chave`, `rotulo`, `placeholder`, `usado_para`). Um link novo (UX, Endpoint, Oracle, SoftExpert, Notion) entra só com uma linha nessa lista, com a mesma validação `https://`.
 
 Quem lê cada chave (conferido em 14/11/2026):
