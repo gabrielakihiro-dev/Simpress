@@ -56,9 +56,9 @@ jobs:
       - name: Verify rebuilt interface assets match the commit
         shell: pwsh
         run: |
-          git diff --exit-code -- static/vendor
+          git diff --exit-code -- static/vendor static/dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $untracked = git ls-files --others --exclude-standard -- static/vendor
+          $untracked = git ls-files --others --exclude-standard -- static/vendor static/dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ($untracked) {
             Write-Error "Rebuilt interface assets contain untracked files: $untracked"

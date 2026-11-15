@@ -7,6 +7,7 @@ import urllib.request
 from typing import Any, Collection
 from importlib import import_module
 
+from core.config import local_setting
 from domains.effective_alias import mac_endpoint_serial_key
 from domains.inventory_comparison import normalize_reference_value
 
@@ -17,6 +18,11 @@ grid = import_module("scripts.verificar_usuarios_endpoint")
 # CDP target ids of the PowerShell/remote-control tabs left open for the user; the idle Chrome stays open while one exists.
 _abas_de_sessao: set[str] = set()
 _abas_de_sessao_trava = threading.Lock()
+
+
+def _email_endpoint() -> str:
+    # Lido a cada consulta: salvar a conta pelo site vale sem reiniciar o servidor.
+    return local_setting("SIMPRESS_SOFTEXPERT_EMAIL", "softexpert_email")
 
 
 def _registrar_sessao(aba: Any) -> None:
@@ -118,7 +124,7 @@ def _preparar_aba(pw: Any) -> Any:
     def esperar_login() -> None:
         automation.aguardar_login(
             page, "Endpoint Central", automation.endpoint_logado,
-            entrar=automation.endpoint_entrar, email=automation.EMAIL_SOFTEXPERT,
+            entrar=automation.endpoint_entrar, email=_email_endpoint(),
         )
 
     esperar_login()

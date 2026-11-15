@@ -33,7 +33,7 @@ CLIENT_VARIABLES = (
 )
 EXAMPLE_FILE = app_config.BASE_DIR / "config" / "cliente.exemplo.json"
 EXAMPLE_SERIES = {"BRT100XA01", "BRT100XA02", "BRT200XB0R", "BRT200XB0F", "BRT300XC01"}
-VALID_CLIENT = {"contrato": "20202", "cnpj_faturamento": "44.555.666/0001-72"}
+VALID_CLIENT = {"contrato": "20202", "cnpj_faturamento": "44.555.666/0001-81"}
 TRANSFER_FIELDS = {
     "serial": "SERIE-FICTICIA", "entrega_cnpj": "00.000.000/0000-00",
     "entrega_endereco": "DESTINO FICTICIO", "entrega_contato": "DESTINATARIO FICTICIO",
@@ -136,9 +136,9 @@ class ClientConfigFileTests(ClientTestCase):
         self.assertEqual(result["cliente_fontes"], {"contrato": "", "cnpj_faturamento": "", "series_sebrae_fora": ""})
 
     def test_save_round_trips_and_marks_the_file_as_the_source(self):
-        save_client_config(self.path, "20202", "44.555.666/0001-72", ["BRT100XA01"])
+        save_client_config(self.path, "20202", "44.555.666/0001-81", ["BRT100XA01"])
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {
-            "contrato": "20202", "cnpj_faturamento": "44.555.666/0001-72", "series_sebrae_fora": ["BRT100XA01"],
+            "contrato": "20202", "cnpj_faturamento": "44.555.666/0001-81", "series_sebrae_fora": ["BRT100XA01"],
         })
         result = load_client_config(self.path, environment={})
         self.assertTrue(result["cliente_configurado"])
@@ -146,14 +146,14 @@ class ClientConfigFileTests(ClientTestCase):
         self.assertEqual(result["series_sebrae_fora"], ["BRT100XA01"])
 
     def test_series_none_keeps_the_stored_list_and_a_list_replaces_it(self):
-        save_client_config(self.path, "20202", "44.555.666/0001-72", ["BRT100XA01", "BRT100XA02"])
-        save_client_config(self.path, "30303", "44.555.666/0001-72")
+        save_client_config(self.path, "20202", "44.555.666/0001-81", ["BRT100XA01", "BRT100XA02"])
+        save_client_config(self.path, "30303", "44.555.666/0001-81")
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["series_sebrae_fora"], ["BRT100XA01", "BRT100XA02"])
-        save_client_config(self.path, "30303", "44.555.666/0001-72", [])
+        save_client_config(self.path, "30303", "44.555.666/0001-81", [])
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["series_sebrae_fora"], [])
 
     def test_environment_marks_its_fields_and_wins(self):
-        save_client_config(self.path, "20202", "44.555.666/0001-72", ["BRT100XA01"])
+        save_client_config(self.path, "20202", "44.555.666/0001-81", ["BRT100XA01"])
         result = load_client_config(self.path, environment={
             "SIMPRESS_CLIENTE_CNPJ_FATURAMENTO": "11.222.333/0001-81",
             "SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA": "BRT200XB0R,BRT200XB0F",
@@ -193,8 +193,8 @@ class RefusalWithoutClientDataTests(ClientTestCase):
         os.environ["SIMPRESS_CLIENTE_CONTRATO"] = "20202"
         with self.assertRaises(ErroUX):
             exigir_dados_cliente()
-        os.environ["SIMPRESS_CLIENTE_CNPJ_FATURAMENTO"] = "44.555.666/0001-72"
-        self.assertEqual(exigir_dados_cliente(), ("20202", "44.555.666/0001-72"))
+        os.environ["SIMPRESS_CLIENTE_CNPJ_FATURAMENTO"] = "44.555.666/0001-81"
+        self.assertEqual(exigir_dados_cliente(), ("20202", "44.555.666/0001-81"))
 
     def test_ux_ticket_service_refuses_before_opening_the_portal(self):
         conectar = MagicMock(side_effect=AssertionError("o portal não pode ser aberto sem os dados do cliente"))
@@ -316,7 +316,7 @@ class ClientConfigRouteTests(ClientTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertTrue(body["cliente_configurado"])
-        self.assertEqual((body["contrato"], body["cnpj_faturamento"]), ("20202", "44.555.666/0001-72"))
+        self.assertEqual((body["contrato"], body["cnpj_faturamento"]), ("20202", "44.555.666/0001-81"))
         self.assertEqual(body["series_sebrae_fora"], ["BRT100XA01", "BRT100XA02"])
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {
             **VALID_CLIENT, "series_sebrae_fora": ["BRT100XA01", "BRT100XA02"],
@@ -339,6 +339,8 @@ class ClientConfigRouteTests(ClientTestCase):
             {**VALID_CLIENT, "contrato": "1" * 13},
             {**VALID_CLIENT, "contrato": "020202"},
             {**VALID_CLIENT, "cnpj_faturamento": "44555666000172"},
+            {**VALID_CLIENT, "cnpj_faturamento": "44.555.666/0001-72"},  # formato certo, dígito verificador errado
+            {**VALID_CLIENT, "cnpj_faturamento": "11.111.111/1111-11"},  # 14 dígitos iguais
             {**VALID_CLIENT, "series_sebrae_fora": ["BRT 100"]},
             {**VALID_CLIENT, "series_sebrae_fora": ["A" * 33]},
             {**VALID_CLIENT, "series_sebrae_fora": ["BRT100XA01"] * 201},
@@ -348,6 +350,12 @@ class ClientConfigRouteTests(ClientTestCase):
                 self.assertEqual(self.put(payload).status_code, 422)
         self.assertFalse(self.path.exists())
         self.after_saved.assert_not_called()
+
+    def test_wrong_check_digit_is_refused_with_its_own_message(self):
+        response = self.put({**VALID_CLIENT, "cnpj_faturamento": "44.555.666/0001-72"})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("confira os dois últimos dígitos", response.text)
+        self.assertFalse(self.path.exists())
 
     def test_environment_fields_may_stay_blank_in_the_file(self):
         with patch.dict(os.environ, {"SIMPRESS_CLIENTE_CNPJ_FATURAMENTO": "11.222.333/0001-81"}):

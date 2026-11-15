@@ -93,6 +93,8 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
+Depois do clone, configure as contas das automações, o link da pasta do Dashboard, os dados do cliente e a chave do assistente pelo site, em **Prontidão da base > Configuração local** (botão `Configurar`). O site grava os arquivos abaixo por você, com backup; copiar e editar à mão continua funcionando.
+
 Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. O arquivo `.env` da raiz (fora do Git) só é lido pelo assistente, para `OPENROUTER_API_KEY`, os modelos opcionais e, se quiser usar o DeepSeek, `DEEPSEEK_API_KEY` e `DEEPSEEK_MODEL`; sem ele, o restante da aplicação funciona normalmente e o painel do assistente mostra o aviso de assistente desligado. Para criá-lo, copie o modelo:
 
 ```powershell
@@ -517,14 +519,16 @@ Esses diagnósticos carregam o runtime local do Codex; não iniciam agentes nem 
 
 ### Reconstruir os arquivos da interface
 
-Os arquivos distribuídos em `static/vendor` são servidos localmente. Depois de alterar fontes, ícones ou estilos utilitários, reconstrua-os com Node.js e npm:
+Os arquivos distribuídos em `static/vendor` e `static/dist` são servidos localmente. A interface tem duas partes: o JavaScript antigo, em `static/js` e `static/app-entry.js`, e o React em migração, escrito em TypeScript em `frontend/src/` e empacotado pelo Vite em `static/dist/react-entry.js` (plano: `docs/planos/migracao-react-vite.md`). Depois de alterar fontes, ícones, estilos utilitários ou `frontend/src/`, reconstrua-os com Node.js e npm e commite o resultado:
 
 ```powershell
 npm ci
 npm run build:ui
 ```
 
-O servidor Python usa os arquivos gerados e não precisa de um processo Node.js em execução.
+O servidor Python usa os arquivos gerados e não precisa de um processo Node.js em execução. Para recompilar o React a cada alteração, use `npm run dev:react`; `npm run build:react` gera só o bundle do React.
+
+Depois de atualizar o `main` com a entrada do Vite e do React (15/11/2026), rode `npm ci` uma vez no checkout principal: os worktrees em `.claude/worktrees/` usam o `node_modules` dele, e sem isso o `npm run verify` dos worktrees novos falha na etapa do bundle React.
 
 ### Executar testes
 
@@ -624,6 +628,7 @@ routers/outlook_mail.py              E-mails por modelo pelo Outlook
 routers/ux_chamados.py / ux_ticket.py  Chamado e ticket UX
 frontend/partials/                   Partes do static/index.html, montadas pelo servidor
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
+frontend/src/                        React + TypeScript em migração (fonte de static/dist/, gerado pelo Vite)
 static/js/features/                  Módulos da interface por funcionalidade
 motor_ia/                            Pipeline experimental isolado, com testes próprios fora do npm run verify
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface

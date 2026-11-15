@@ -8,6 +8,7 @@
 @source "../../frontend/partials";
 @source "../app.js";
 @source "../js";
+@source "../../frontend/src";
 
 /* Retain the defaults used by the existing interface during the v4 migration. */
 @theme {

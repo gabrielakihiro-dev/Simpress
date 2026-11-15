@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { buildSteps, javascriptFilesToCheck, listFiles } = require("../../scripts/verify.cjs");
+const { buildSteps, javascriptFilesToCheck, listFiles, resolveVite } = require("../../scripts/verify.cjs");
 
 test("verification discovers recent-equipment tests and all five previously omitted modules", () => {
   const steps = buildSteps("python");
@@ -28,4 +28,13 @@ test("compileall and gradual mypy cover every Python application module", () => 
   }
   assert.ok(compile.includes("main.py"));
   assert.ok(mypy.includes("main.py"));
+});
+
+test("verification type-checks frontend/src and checks the committed React bundle", () => {
+  const steps = buildSteps("python");
+  assert.ok(steps.find(step => step.name === "Tipos TypeScript (frontend/src, strict)")?.args?.includes("tsconfig.json"));
+  assert.equal(typeof steps.find(step => step.name === "Bundle React atualizado (static/dist)")?.run, "function");
+  // Worktrees sem node_modules usam o vite do checkout principal, como o tsc.
+  assert.match(resolveVite() || "", /node_modules[\\/]vite[\\/]bin[\\/]vite\.js$/);
+  assert.ok(!javascriptFilesToCheck().some(file => file.startsWith("static/dist/")));
 });

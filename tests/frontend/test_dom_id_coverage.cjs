@@ -25,7 +25,7 @@ const ALLOWED_MISSING = new Map([
 function jsFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "vendor" ? [] : jsFiles(full);
+    if (entry.isDirectory()) return ["vendor", "dist"].includes(entry.name) ? [] : jsFiles(full);
     return entry.name.endsWith(".js") ? [full] : [];
   });
 }

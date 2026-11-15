@@ -43,7 +43,7 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, Page
@@ -69,7 +69,8 @@ ENDPOINT_LOGIN_URL = "https://centralendpoint.pr.sebrae.com.br/client#/login"
 UX_LOGIN_URL = "https://ux.simpress.com.br/ng/autenticacao/login"
 # Contas e pasta são dados pessoais: vêm da variável de ambiente ou de config/contas_automacao.json (git-ignorado);
 # sem nenhum dos dois ficam vazias e a rotina espera o usuário (ou recusa, no caso da pasta do Dashboard).
-ENDPOINT_USUARIO = local_setting("SIMPRESS_ENDPOINT_USUARIO", "endpoint_usuario")
+# None = ler na hora do uso (valor salvo pelo site vale sem reiniciar o servidor); texto (inclusive "") força o valor, como nos testes.
+ENDPOINT_USUARIO: Optional[str] = None
 ENDPOINT_DOMINIO = "pr-sebrae"  # valor do <select name="domainName"> (padrão da tela: "Autenticação local")
 # Pasta do SharePoint de onde `dashboard` baixa (Mais ações > Baixar) e que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
 DASHBOARD_PASTA_URL = local_setting("SIMPRESS_DASHBOARD_PASTA_URL", "dashboard_pasta_url")
@@ -1514,6 +1515,13 @@ def endpoint_escolher_dominio(page: "Page") -> bool:
     return False
 
 
+def usuario_endpoint() -> str:
+    """Login do Endpoint, lido a cada uso: variável de ambiente, depois ``config/contas_automacao.json``."""
+    if ENDPOINT_USUARIO is not None:
+        return ENDPOINT_USUARIO
+    return local_setting("SIMPRESS_ENDPOINT_USUARIO", "endpoint_usuario")
+
+
 def endpoint_entrar(page: "Page") -> bool:
     """Tela de login do Endpoint: preenche só o usuário (se vazio), escolhe o domínio ``pr-sebrae`` e clica em
     "Fazer login" apenas quando o Chrome já preencheu a senha. Nunca digita senha nem o código do autenticador."""
@@ -1528,12 +1536,13 @@ def endpoint_entrar(page: "Page") -> bool:
         page.wait_for_timeout(500)
     com_senha = endpoint_senha_preenchida(page)
     if not usuario.first.input_value().strip():
-        if not ENDPOINT_USUARIO:  # sem usuário configurado não preenche nem clica: o usuário termina o login
+        usuario_configurado = usuario_endpoint()
+        if not usuario_configurado:  # sem usuário configurado não preenche nem clica: o usuário termina o login
             log("Endpoint Central", "[AVISO] Usuário do Endpoint não configurado (SIMPRESS_ENDPOINT_USUARIO ou "
                 "config/contas_automacao.json); AÇÃO NECESSÁRIA: digite o usuário e faça o login.")
             return True
-        log("Endpoint Central", f"Preenchendo o usuário {ENDPOINT_USUARIO}...")
-        usuario.first.fill(ENDPOINT_USUARIO)
+        log("Endpoint Central", f"Preenchendo o usuário {usuario_configurado}...")
+        usuario.first.fill(usuario_configurado)
     log("Endpoint Central", f"Escolhendo '{ENDPOINT_DOMINIO}' na lista de autenticação...")
     if not endpoint_escolher_dominio(page):
         return True  # sem a lista confirmada não envia a senha; o usuário termina

@@ -6,7 +6,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 ## Stack e arquitetura
 
-- FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front sem framework em `static/`.
+- FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front em `static/` (JS antigo) e React em migração (`frontend/src/`, gerado em `static/dist/`; plano `docs/planos/migracao-react-vite.md`).
 - Só local, dados em `data/`, sem backend remoto nem Supabase; migrar para serviço externo começa por análise que não altera código nem dados; preserve auditoria, sincronização, restauração e reversibilidade.
 - `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem cookie, 401. Todo cliente interno novo precisa enviá-lo.
 
@@ -67,4 +67,5 @@ O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples pri
 - `domains/AGENTS.md` (cada tema com seu doc): Sebrae e Chamados (F5), OS (F6), UX, Assistente (F9), Histórico e cadastro, Cobertura (F10), Backups (F3), Transporte (F2), Outlook.
 - `scripts/AGENTS.md`: Endpoint, Chrome de automação, SharePoint, SoftExpert, rotinas de OS e inventário. `routers/AGENTS.md`: contratos de API. `tests/AGENTS.md`: testes e verificação.
 - `frontend/AGENTS.md`: interface (`frontend/` e `static/`), responsividade, atalhos, Playwright e docs de cada tela.
+- Configuração local pelo site (contas, links, chaves): `docs/cockpit-prompts/19-configuracao-local.md`.
 - Alertas e manual: `docs/operacao/alertas-os-divergencias.md`, `docs/guias/manual_usuario.md`.

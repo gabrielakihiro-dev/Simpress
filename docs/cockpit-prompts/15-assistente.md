@@ -74,7 +74,7 @@ Texto movido da seção "Assistente (OpenRouter)" do `AGENTS.md`, que mantém s�
 
 ## Comportamento
 
-- Ao abrir, consulta o estado. Desligado: mostra exatamente `Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.`, bloqueia a entrada e oferece `Tentar novamente`.
+- Ao abrir, consulta o estado. Desligado: mostra exatamente `Assistente desligado. Configure a chave em Prontidão da base > Configuração local.`, bloqueia a entrada e oferece `Tentar novamente`.
 - Balões do usuário (à direita, lilás claro) e respostas do Assistente (à esquerda, texto sem balão); linha discreta `Ferramentas: …` quando houver.
 - Campo `Mensagem` na pílula, com contador `N / 4000` abaixo; Enter envia, Shift+Enter quebra a linha (dica só para leitor de tela, `#assistente-texto-dica`). Durante a resposta, status `Pensando…` e entrada bloqueada.
 - Ação pendente: cartão de alerta com a descrição e os botões `Confirmar e executar` e `Cancelar`; o foco vai para o cartão, Esc cancela (sem fechar o chat) e a entrada fica bloqueada até a resposta.
