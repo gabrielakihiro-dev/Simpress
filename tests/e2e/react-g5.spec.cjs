@@ -453,6 +453,61 @@ test.describe("comportamento (1366 px)", () => {
     await expect(cartao).not.toHaveAttribute("data-sem-entrada", /.*/);
   });
 
+  test("backups: erro que não é 422 mostra a mensagem do servidor, solta o botão e não pede o painel de novo", async ({ page }) => {
+    await page.route("**/api/backups-regionais/confirmar", route => route.fulfill({ status: 409, json: { detail: { codigo: "BLOQUEADO", mensagem: "Máquina com usuário vigente." } } }));
+    await abrirBackups(page);
+    await page.evaluate(() => {
+      window.__pedidosG5 = 0;
+      document.addEventListener("simpress:atualizar-notificacoes", () => { window.__pedidosG5 += 1; });
+    });
+    const botao = botaoConfirmar(page, "TSTBK0001", "Londrina");
+    await botao.click();
+    await expect(page.locator("#toast-container")).toContainText("Máquina com usuário vigente.");
+    await expect(botao).toBeEnabled();
+    await expect(botao).not.toHaveAttribute("aria-busy", /.*/);
+    expect(await page.evaluate(() => window.__pedidosG5)).toBe(0);
+  });
+
+  test("backups: dado novo devolve o foco ao botão da mesma série, à lista de excluídos ou à aba", async ({ page }) => {
+    await page.route("**/api/painel", () => { /* só os eventos do teste desenham o painel */ });
+    await page.goto("/");
+    await page.locator("#btn-resumo-aba").click();
+    await page.locator("#resumo-aba-backups").click();
+    await enviarPainel(page, BACKUPS_FIXOS);
+    const londrina = BACKUPS_FIXOS.prioritarias.find(item => item.cidade === "Londrina");
+    const [candidato, ...outrosCandidatos] = londrina.candidatos;
+    // Confirmar vira Desfazer: a série passa de candidato para conferência com confirmação vigente.
+    await botaoConfirmar(page, "TSTG50001", "Londrina").focus();
+    const conferida = { ...londrina, candidatos: outrosCandidatos, conferencia: [...londrina.conferencia, { ...candidato, motivo: "cidade_divergente", confirmacao: { estado: "vigente" } }] };
+    await enviarPainel(page, { ...BACKUPS_FIXOS, prioritarias: BACKUPS_FIXOS.prioritarias.map(item => (item === londrina ? conferida : item)) });
+    await expect(botaoDesfazer(page, "TSTG50001", "Londrina")).toBeFocused();
+    // Lista de excluídos em foco continua em foco.
+    const resumoExcluidos = page.locator(`${PAINEL} details[data-cidade="Cascavel"] > summary`);
+    await resumoExcluidos.focus();
+    await enviarPainel(page, { ...BACKUPS_FIXOS, minimo: 2 });
+    await expect(resumoExcluidos).toBeFocused();
+    // A série some do painel: o foco vai para a aba.
+    await botaoConfirmar(page, "TSTG50001", "Londrina").focus();
+    await enviarPainel(page, { ...BACKUPS_FIXOS, pendencias: { sem_backup: ["Cascavel"], conferir: [] }, prioritarias: BACKUPS_FIXOS.prioritarias.filter(item => item !== londrina) });
+    await expect(page.locator("#resumo-aba-backups")).toBeFocused();
+  });
+
+  test("backups: selo e rótulo da aba seguem as pendências; evento sem o campo vale como serviço desligado", async ({ page }) => {
+    await page.route("**/api/painel", () => { /* só os eventos do teste desenham o painel */ });
+    await page.goto("/");
+    const aba = page.locator("#resumo-aba-backups");
+    await enviarPainel(page, { ...BACKUPS_FIXOS, pendencias: { sem_backup: [], conferir: ["Londrina"] } });
+    await expect(aba).toHaveAttribute("aria-label", "Backups: 1 regional pendente");
+    await expect(page.locator(SELO_ABA)).toHaveText("1");
+    await enviarPainel(page, { ...BACKUPS_FIXOS, pendencias: { sem_backup: [], conferir: [] } });
+    await expect(aba).toHaveAttribute("aria-label", "Backups: 0 regionais pendentes");
+    await expect(page.locator(SELO_ABA)).toHaveText("0");
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:painel-atualizado", { detail: {} })));
+    await expect(aba).toHaveAttribute("aria-label", "Backups: dados indisponíveis");
+    await expect(page.locator(SELO_ABA)).toHaveText("—");
+    await expect(page.locator(PAINEL)).toContainText("O cálculo de backups regionais está desligado neste servidor.");
+  });
+
   test("backups: a cada 5 min pede o painel, só com a aba visível", async ({ page }) => {
     await page.clock.install();
     await page.goto("/");
@@ -470,13 +525,20 @@ test.describe("comportamento (1366 px)", () => {
     expect(await page.evaluate(() => window.__pedidosG5)).toBe(1);
   });
 
-  // Ninguém chama uma ponte deste painel (o módulo antigo é vazio), então não há "O painel React ... não carregou.":
-  // o que se garante é que o resto do app segue de pé e a sub-aba abre vazia.
-  test("sem o bundle React: o Resumo abre, a sub-aba Backups fica vazia e a página não quebra", async ({ page }) => {
+  // Ninguém chama uma ponte deste painel (o módulo antigo só tem o intervalo), então não há "O painel React ... não
+  // carregou.": o que se garante é que o resto do app segue de pé, a sub-aba abre vazia e o sino segue pedindo o painel.
+  test("sem o bundle React: o Resumo abre, a sub-aba Backups fica vazia, o pedido de 5 min segue e a página não quebra", async ({ page }) => {
     const errosDePagina = [];
     page.on("pageerror", erro => errosDePagina.push(erro.message));
     await page.route("**/static/dist/react-entry.js*", route => route.abort());
+    await page.clock.install();
     await page.goto("/");
+    await page.evaluate(() => {
+      window.__pedidosG5 = 0;
+      document.addEventListener("simpress:atualizar-notificacoes", () => { window.__pedidosG5 += 1; });
+    });
+    await page.clock.runFor(5 * 60 * 1000);
+    expect(await page.evaluate(() => window.__pedidosG5)).toBeGreaterThanOrEqual(1);
     await page.locator("#btn-resumo-aba").click();
     await expect(page.locator(CONTEUDO)).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
     await expect(page.locator("html")).not.toHaveAttribute("data-react-pronto", /.*/);

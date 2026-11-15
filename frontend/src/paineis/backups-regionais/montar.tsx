@@ -5,8 +5,8 @@ import { PainelBackups } from "./painel";
 
 // Chamado por frontend/src/main.tsx com o painel #resumo-painel-backups (data-react-painel="backups-regionais").
 // Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho.
-// Nenhuma ação vai pela ponte: ninguém de fora chama este painel (static/js/features/backups-regionais.js fica vazio).
-const INTERVALO_ATUALIZACAO_MS = 5 * 60 * 1000;
+// Nenhuma ação vai pela ponte: ninguém de fora chama este painel. O pedido do painel a cada 5 min fica no módulo
+// antigo (static/js/features/backups-regionais.js), para os alertas do sino não dependerem do bundle React.
 
 type Marca = Record<string, string | undefined>;
 const mostrarToast = (mensagem: string, tipo: string) => (window as unknown as { showToast?: (m: string, t: string) => void }).showToast?.(mensagem, tipo);
@@ -152,8 +152,5 @@ export function montar(container: HTMLElement) {
   container.addEventListener("click", evento => { void aoClicar(evento); });
   // flushSync: o painel já existe no DOMContentLoaded, como no HTML antigo.
   desenhar();
-  // Cartão do sino e sub-aba ficam em dia sem ação do usuário: pede o painel a cada 5 min, só com a aba visível
-  // (importações e abrir o sino já pedem atualização por conta própria).
-  window.setInterval(() => { if (!document.hidden) pedirPainel(); }, INTERVALO_ATUALIZACAO_MS);
   return {};
 }

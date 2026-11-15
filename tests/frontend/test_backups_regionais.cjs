@@ -1,8 +1,8 @@
 // Resumo (F3), sub-aba Backups. Desde a migração React (Dia 2, G5) o painel vive em
 // frontend/src/paineis/backups-regionais/ e o comportamento (estados, tabela, Confirmar/Desfazer, foco, toasts,
-// "Atualizado em", mínimo no ⓘ, intervalo de 5 min, escape de HTML, apelido fora do console) é testado no navegador:
-// tests/e2e/react-g5.spec.cjs e tests/e2e/backups-regionais.spec.cjs. Aqui ficam o registro, o módulo antigo vazio e
-// o HTML montado.
+// "Atualizado em", mínimo no ⓘ, escape de HTML, apelido fora do console) é testado no navegador:
+// tests/e2e/react-g5.spec.cjs e tests/e2e/backups-regionais.spec.cjs. Aqui ficam o registro, o módulo antigo (só o
+// intervalo de 5 min, que não depende do bundle) e o HTML montado.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -20,20 +20,32 @@ test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e pai
   assert.ok(fs.existsSync(path.join(root, "frontend/src/paineis/backups-regionais/montar.tsx")));
 });
 
-test("módulo antigo vazio: não desenha, não ouve eventos e não cria intervalo", () => {
+test("módulo antigo: não desenha nem ouve eventos; só pede o painel a cada 5 min com a aba visível", () => {
   const ouvintes = [];
   const intervalos = [];
-  const original = { document: globalThis.document, setInterval: globalThis.setInterval };
-  globalThis.document = { addEventListener: (...args) => ouvintes.push(args) };
-  globalThis.setInterval = (...args) => intervalos.push(args);
+  const pedidos = [];
+  const original = { window: globalThis.window, document: globalThis.document };
+  globalThis.window = { setInterval: (...args) => intervalos.push(args) };
+  globalThis.document = {
+    hidden: false,
+    addEventListener: (...args) => ouvintes.push(args),
+    dispatchEvent: evento => pedidos.push(evento.type),
+  };
   try {
     assert.deepEqual(createBackupsRegionais({}), {});
+    assert.deepEqual(ouvintes, []);
+    assert.equal(intervalos.length, 1);
+    assert.equal(intervalos[0][1], 5 * 60 * 1000);
+    globalThis.document.hidden = true;
+    intervalos[0][0]();
+    assert.deepEqual(pedidos, [], "aba escondida: não pede o painel");
+    globalThis.document.hidden = false;
+    intervalos[0][0]();
+    assert.deepEqual(pedidos, ["simpress:atualizar-notificacoes"]);
   } finally {
+    globalThis.window = original.window;
     globalThis.document = original.document;
-    globalThis.setInterval = original.setInterval;
   }
-  assert.deepEqual(ouvintes, []);
-  assert.deepEqual(intervalos, []);
 });
 
 test("index.html: painel Backups vazio, com data-react-painel e os atributos de sub-aba de antes", () => {
