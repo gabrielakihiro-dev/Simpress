@@ -286,7 +286,7 @@ Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a part
 - Trocar de série com o diálogo aberto (por exemplo, outra busca aplicada por baixo dele) **fecha o diálogo** (pelo mesmo caminho de `Fechar`) e cancela a consulta. Reabrir mostra a série nova. Reaplicar a mesma série mantém o diálogo aberto.
 - Em estado diferente de `ok`, o diálogo mostra só a mensagem do estado (sem a linha de importações, sem tabela e sem histórico). Em `ok` sem OS na importação mais recente, a tabela some inteira (sem texto novo) e ficam a linha de importações, o aviso de última observação (quando houver) e o histórico.
 - Acessibilidade: a coluna da ação tem o cabeçalho `Ver OS` só para leitores de tela (classe `ck-sr`); cada botão leva `aria-label="Ver OS <número>"`; `#btn-ver-dossie` tem `title` com a explicação curta (`Ver as OS e os chamados deste equipamento nas importações`, dica de tela, fora da lista de textos aprovados). O erro da consulta é sempre o texto aprovado, nunca o `detail` do servidor.
-- Layout: abaixo de 1200px a tabela vira cards (`.ck-tabela--cards`); abaixo de 768px os cards têm uma coluna só. Estilos em `static/styles/ck-cockpit.css` (bloco "Dossiê do equipamento"), só com os tokens existentes; sem animação nova (a abertura é a de `abrirModalAcessivel`; a linha de carregamento reaproveita `ck-surgir` e respeita `prefers-reduced-motion`). Código: `static/js/features/equipment-dossier.js` (ação `abrirDossieEquipamento`, `fecharDossieEquipamento`, `atualizarDossieEquipamento`, esta chamada por `definirEquipamentoAtual`).
+- Layout: abaixo de 1200px a tabela vira cards (`.ck-tabela--cards`); abaixo de 768px os cards têm uma coluna só. Estilos em `static/styles/ck-cockpit.css` (bloco "Dossiê do equipamento"), só com os tokens existentes; sem animação nova (a abertura é a de `abrirModalAcessivel`; a linha de carregamento reaproveita `ck-surgir` e respeita `prefers-reduced-motion`). Código (React desde 15/11/2026, migração Dia 2, G3): o conteúdo do `.ck-dialogo` é desenhado por `frontend/src/paineis/dossie-equipamento/` (`data-react-painel="dossie-equipamento"`, mesmos IDs, classes e ARIA); `static/js/features/equipment-dossier.js` é só a ponte que mantém em `window` as ações `abrirDossieEquipamento`, `fecharDossieEquipamento` e `atualizarDossieEquipamento` (esta chamada por `definirEquipamentoAtual`, que liga e desliga `Ver dossiê` na hora). Sem o bundle React, `Ver dossiê` não abre o diálogo e o erro vai para o console.
 
 ### Textos aprovados (exatos)
 
@@ -297,7 +297,7 @@ Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a part
 
 ### Verificação
 
-- `npm run verify` (inclui `tests/test_equipment_dossier.py`) e `npm run test:ui:e2e` (`tests/e2e/dossie-equipamento.spec.cjs`: abrir, trocar de série rapidamente, foco e teclado, temas claro e escuro, tela estreita).
+- `npm run verify` (inclui `tests/test_equipment_dossier.py`) e `npm run test:ui:e2e` (`tests/e2e/dossie-equipamento.spec.cjs`: abrir, trocar de série rapidamente, foco e teclado, temas claro e escuro, tela estreita; `tests/e2e/react-g3.spec.cjs`: screenshots do diálogo antigo como baseline, estrutura e sem o bundle). Ponte: `tests/frontend/test_equipment_dossier.cjs`.
 
 ## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
 
