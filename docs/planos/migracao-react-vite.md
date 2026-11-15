@@ -5,7 +5,7 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 ## Decisões
 
 - **Ordem:** TypeScript em `shared/` e `ui/` (sem build) → infraestrutura Vite → piloto em React → um painel por bloco → remoção do código antigo. Nunca tudo junto.
-- **Visual bento primeiro.** Em 14/11/2026: bento Bloco 1 mesclado (PR #247; o "Status" de `docs/planos/visual-bento.md` ainda diz "em andamento"); Bloco 2 em sessão aberta, sem PR (branch `claude/nervous-agnesi-e0c73d`); Blocos 3 e 4 pendentes. Juntos eles tocam quase todos os painéis. Regra: um painel só migra para React depois que o bloco bento dele foi **mesclado no `main`**; "bloco bento aberto" = sessão ou PR do bento ainda não mesclado. Os Blocos 1 e 2 deste plano não tocam painéis, mas tocam arquivos comuns (`static/index.html`, `tailwind.input.css`, `static/js/ui/`, `AGENTS.md`, `frontend/AGENTS.md`, `visual-bento.md`): no início, a sessão compara com `git diff --stat origin/main...<branch do bento aberto>` e só segue se não houver arquivo em comum; havendo, espera o PR do bento mesclar.
+- **Visual bento primeiro.** Em 14/11/2026: bento Bloco 1 mesclado (PR #247; o "Status" de `docs/planos/visual-bento.md` ainda diz "em andamento"); Bloco 2 em sessão aberta, sem PR (branch `claude/nervous-agnesi-e0c73d`); Blocos 3 e 4 pendentes. **Nova ordem (usuário, 14/11/2026):** o bento para no Bloco 2 (Resumo F3, F7 e F8); com ele mesclado, o usuário libera a migração definitiva de todo o código, inclusive dos painéis que o bento ainda não redesenhou; os Blocos 3 e 4 do bento voltam depois, já sobre o React. Regra: o Bloco 2 deste plano e os painéis só começam com o bento Bloco 2 **mesclado no `main`**; painel ainda sem bento migra com o visual atual dele; "bloco bento aberto" = sessão ou PR do bento ainda não mesclado. Os Blocos 1 e 2 deste plano não tocam painéis, mas tocam arquivos comuns (`static/index.html`, `tailwind.input.css`, `static/js/ui/`, `AGENTS.md`, `frontend/AGENTS.md`, `visual-bento.md`): no início, a sessão compara com `git diff --stat origin/main...<branch do bento aberto>` e só segue se não houver arquivo em comum; havendo, espera o PR do bento mesclar.
 - **O bento manda (pedido do usuário, 14/11/2026).** O usuário segue mudando o visual bento em todas as abas, exceto o Assistente (F9). Toda sessão deste plano parte do `main` mais recente. Arquivo que o bento mudou desde este plano: a sessão adapta o bloco ao visual bento atual primeiro, em partes, e nunca reverte nem "corrige" o bento para caber no React. O React reproduz o bento como estiver no `main`, não como estava quando o plano foi escrito.
 - **Um servidor só.** O FastAPI continua servindo tudo. Sem servidor Node e sem `vite dev` em outra porta (quebraria o cookie `simpress_sessao_<porta>`). No desenvolvimento, `vite build --watch` grava em `static/dist/` e o FastAPI serve; o `?v=` acompanha porque `_asset_digest` (`domains/frontend_assets.py:38-51`) recalcula quando o mtime ou o tamanho mudam.
 - **Build commitado, igual a `static/vendor`.** `static/dist/` entra no Git; a CI refaz o build e falha se houver diferença. Quem só roda o app continua sem `npm`.
@@ -58,11 +58,60 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 - **Critérios de aceite:** mesmos IDs, ARIA, `data-*`, textos e atalhos; screenshots iguais ao baseline (tolerância definida no teste) e `getComputedStyle` dos tokens bento; `prefers-reduced-motion` zera o movimento; cada teste do inventário passa ou foi movido para o Playwright com a mesma checagem; doc da tela atualizado.
 - **Verificar:** `npm run verify`; `npm run test:ui:e2e`; app real aberto com dados locais.
 - **Saída extra:** ordem dos painéis restantes (do mais isolado ao mais acoplado; Home/busca, Transferência e Comparação por último) registrada neste arquivo.
+- **Saída extra (modo rápido):** o mecanismo de painéis independentes descrito em "Modo rápido", provado no próprio piloto, e a tabela de grupos conferida (acoplamento real, invariantes) e registrada neste arquivo.
 
-## Blocos 4 em diante — um painel por bloco
+## Modo rápido (escolha do usuário, 14/11/2026)
 
-- Mesmo formato do Bloco 3 (baseline, inventário de testes, critérios), um painel por sessão e por PR, na ordem registrada no piloto, cada um só depois do bloco bento do painel.
-- JSDoc em `static/js/features/` acompanha: o módulo de um painel que ainda não migrou ganha JSDoc quando o bloco bento dele mesclar.
+Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos grupos abaixo, rodando em paralelo depois do piloto.
+
+- **Cronograma:**
+  - Dia 1: Bloco 2 e piloto, em sequência.
+  - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo.
+  - Dia 3: grupo final (G7) e Bloco final.
+  - Dia 4: revisão geral e correção (ver "Dia 4").
+- **Pendências:** todo PR da migração tem no corpo a seção "Pendências para o Dia 4" (ou "nenhuma"). Ela lista: falha de CI ou teste que apareceu no caminho, item da revisão ponytail ou do revisor não corrigido, falha que bateu o teto de 3 ciclos e atalho com limite conhecido.
+- **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
+- **Painéis independentes (o piloto cria; nenhum grupo edita depois):** nenhum grupo toca arquivo compartilhado (`frontend/src/main.tsx`, `static/app.js`, `static/app-entry.js`, `static/index.html`, `tailwind.input.css`, `tests/frontend/support/`). O piloto faz:
+  - `main.tsx` achar os painéis sozinho (por exemplo, `import.meta.glob` eager em `frontend/src/paineis/*/montar.tsx`, que cabe no bundle único);
+  - o código antigo pular a fábrica de um painel migrado por uma marca no arquivo do próprio painel, sem editar `FEATURE_ORDER`;
+  - o estado compartilhado (`appState` de `static/app.js`) ser lido e gravado pelo React por um adaptador em `frontend/src/`, que só o piloto e o Bloco final alteram.
+
+  Se algum desses pontos não couber, a sessão do piloto pergunta a quem escreveu o plano antes de seguir.
+- **Grupos:** proposta por arquivo de `static/js/features/`, de cerca de 2 a 3 mil linhas cada. O piloto confere e ajusta. Os arquivos não se repetem entre grupos.
+  - G1 Sebrae: `sebrae-dashboard`, `sebrae-historico`, `sebrae-conflitos`, `cockpit-chamados`.
+  - G2 Ferramentas: `cockpit-tool-panels`, `inventory-upload`, `units-catalog`.
+  - G3 Equipamentos: `equipment-search`, `equipment-editor`, `equipment-dossier`, `full-equipment-search`, `alias-history`.
+  - G4 Transporte e contatos: `transfer-form`, `regional-contacts`, `ux-chamados`, `entra-users`.
+  - G5 Resumo e comparação: `dashboard`, `resumo-ativos`, `backups-regionais`, `comparison-result`, `comparison-history`, `monthly-report`.
+  - G6 Cobertura e agenda: `coverage`, `termos`, `lembretes`.
+  - G7 final (envio real e Assistente): `assistant-chat`, `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
+  - `app-shell` vai para o piloto ou para o Bloco final.
+- **Invariantes:** grupo com arquivo que trata `confirmado`, `enviar` ou recusa de envio (G1, G3, G4, G5 e G6 hoje) escreve o teste Playwright do invariante **antes** de trocar o código. O revisor é obrigatório nesses grupos. G7 não roda em paralelo.
+- **Testes:** cada grupo cria spec próprio (`tests/e2e/react-<grupo>.spec.cjs`) e baseline próprio, sem editar spec de outro grupo.
+- **Riscos aceitos pelo usuário:** custo alto de tokens em pouco tempo e PRs maiores. Conflito entre grupos volta para a sessão do grupo, pelo Auto-fix.
+
+## Dia 4 — revisão geral e correção (pedido do usuário, 15/11/2026)
+
+- **Objetivo:** revisar todas as alterações da migração com `ponytail:ponytail-review` e corrigir tudo que deu erro no processo. O usuário exige a correção: nada fica só anotado.
+- **Quando:** sessão nova, depois que o Antigravity mesclar todos os PRs dos Dias 1 a 3. Parte do `main` atualizado, em branch própria.
+- **Entrada:**
+  - o diff inteiro da migração, do último commit do `main` antes do Bloco 2 até o `main` atual;
+  - a seção "Pendências para o Dia 4" de cada PR da migração (`gh pr view <N>`);
+  - as execuções de CI que falharam nesses PRs (`gh run list`).
+- **Passos:**
+  1. Revisão ponytail do diff inteiro, por grupo (Bloco 2, piloto, G1 a G7, Bloco final), porque o diff todo não cabe numa leitura.
+  2. Uma lista única: achados "Corrigir antes" e "Deveria corrigir", pendências dos PRs e falhas de CI que voltaram.
+  3. Corrigir todos. "Opcional" só se for pequeno; o resto vai para o relatório.
+  4. Nova revisão ponytail no diff das correções, até o veredito "pode enviar".
+- **Nível:** alto (ver "Nível de cada sessão"). Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos. Se ainda falhar, a sessão para e devolve o que tentou e o que falha. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
+- **Critérios de aceite:** lista única zerada, ou cada item restante com o motivo; `npm run verify` e `npm run test:ui:e2e` verdes; veredito ponytail "pode enviar"; `model-super-power:revisor` no conjunto; invariantes do `AGENTS.md` intactos (Endpoint sem Enter, envio real só com `confirmado: true`, SharePoint, Outlook, UX).
+- **Verificar:** as linhas `AC: <critério> — PROVEN BY <evidência>`; app real com dados locais em cada aba.
+- **Proibido:** mudar o visual bento aprovado, ligar auto-merge, fazer merge.
+
+## Blocos 4 em diante — um painel por bloco (modo normal)
+
+- Usado só se o modo rápido for abandonado. Mesmo formato do Bloco 3 (baseline, inventário de testes, critérios), um painel por sessão e por PR, na ordem registrada no piloto (depois do bento Bloco 2 mesclado, sem esperar os Blocos 3 e 4 do bento).
+- JSDoc em `static/js/features/` acompanha: o módulo de um painel que ainda não migrou ganha JSDoc no bloco anterior ao dele.
 - Bloco do Assistente e dos cartões de confirmação: testes Playwright das recusas e dos envios reais primeiro; revisão obrigatória do `model-super-power:revisor`.
 
 ## Bloco final — remoção do código antigo
@@ -74,8 +123,14 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 
 ## Execução
 
-- Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão, sem merge automático).
+- Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão; o merge fica com o Antigravity, ver "Modo rápido").
+- **Nível de cada sessão (decisão do usuário, 15/11/2026):** quem abre a sessão escolhe o nível pela complexidade e o define na abertura (`effort` no `start_session`; acima do próprio nível, `set_session_effort`). A sessão já nasce no nível certo e não pede troca ao usuário. Para subir no meio do trabalho (falha que resiste a 3 ciclos), a sessão avisa quem a abriu por `SendMessage`, e quem a abriu sobe o nível. Escolha inicial, revista na abertura de cada sessão:
+  - Grupo G2 (sem invariante de envio): médio.
+  - Bloco 2 (CSP, bundle e `verify`), piloto, grupos com invariante (G1, G3, G4, G5 e G6), Bloco final e Dia 4: alto.
+  - G7 (envio real e Assistente): alto; extra high se o piloto achar acoplamento difícil.
+- **Sem o usuário acordado (pedido do usuário, 15/11/2026: "não quero parar de jeito nenhum"):** a sessão não usa `AskUserQuestion` nem espera resposta do usuário. Dúvida de design vai para quem a abriu, por `SendMessage`; sem resposta, segue a opção mais conservadora (a que não muda tela, texto nem regra) e registra a escolha no PR. Falha que bate o teto de ciclos vira item de "Pendências para o Dia 4", e a sessão segue com o resto. Termina sempre em PR, mesmo com pendências.
 - Dentro da sessão: `model-super-power:batedor` para leitura, `executor` para o código, `revisor` antes do PR.
+- **Não erre, mesmo com PR grande (exigência do usuário):** PR grande não desculpa erro. Revise o diff inteiro, arquivo por arquivo, sem amostragem; cada achado com o trecho e o caso que falha. Antes do PR, confira cada arquivo alterado contra o original (mesma regra, mesmo texto aprovado, mesmo invariante). Na dúvida, pare e pergunte.
 - Relatório final de cada bloco: uma linha `AC: <critério> — PROVEN BY <evidência>` por critério; sem evidência, não verificado.
 - Teto de 3 ciclos de correção sobre a mesma falha; depois, a sessão para e devolve o que tentou.
 - Dúvida de design que muda o plano: a sessão pergunta a quem escreveu o plano, sem decidir sozinha.

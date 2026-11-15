@@ -101,7 +101,7 @@ class FrontendAssetTests(unittest.TestCase):
         policy = self.client.get("/").headers["content-security-policy"]
         directives = {part.split()[0]: part.split()[1:] for part in policy.split(";") if part.strip()}
         self.assertEqual(directives["style-src"], ["'self'"])
-        self.assertEqual(directives["img-src"], ["'self'"])
+        self.assertEqual(directives["img-src"], ["'self'", "blob:"])  # blob: só para a máscara da marca em metal
         html = assembled_html(app_config.STATIC_DIR)
         self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
         self.assertNotIn("<style", html.lower())
@@ -110,7 +110,7 @@ class FrontendAssetTests(unittest.TestCase):
         # O React não pode afrouxar o CSP: nada de eval, data: ou chunks fora do versioned_html.
         self.assertEqual(
             CONTENT_SECURITY_POLICY,
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; "
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
             "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
             "frame-ancestors 'none'; form-action 'self'",
         )
@@ -123,6 +123,13 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertNotRegex(bundle, r"\beval\s*\(|new Function\s*\(")
         html = versioned_html(app_config.STATIC_DIR)
         self.assertRegex(html, r'<script type="module" src="/static/dist/react-entry\.js\?v=[0-9a-f]{16}"></script>')
+
+    def test_logo_metal_imports_a_vendored_file_that_exists(self):
+        static = Path(__file__).resolve().parents[1] / "static"
+        source = (static / "js" / "ui" / "cromo-marca.js").read_text(encoding="utf-8")
+        imported = re.search(r'from "(/static/vendor/paper-shaders-[^"]+)"', source)
+        self.assertIsNotNone(imported)
+        self.assertTrue((static.parent / imported.group(1).lstrip("/")).is_file(), imported.group(1))
 
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
         for name in ("index.html",):
