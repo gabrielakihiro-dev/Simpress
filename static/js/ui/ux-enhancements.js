@@ -9,6 +9,7 @@
   "use strict";
 
   // Mirrors validarCamposObrigatoriosPlanilha() in app.js, which stays the gate for generating the sheet.
+  /** @typedef {{ id: string, label: string, conditional?: boolean }} CampoObrigatorio */
   const REQUIRED_FIELDS = Object.freeze([
     { id: "retirada-contato", label: "Nome do contato na retirada" },
     { id: "retirada-email", label: "E-mail do contato na retirada" },
@@ -21,7 +22,7 @@
     { id: "entrega-pausa-duracao", label: "Duração da pausa da entrega", conditional: true },
     { id: "entrega-obs", label: "Observações da entrega" },
   ].map(Object.freeze));
-  const REQUIRED_IDS = new Set(REQUIRED_FIELDS.map(field => field.id));
+  const REQUIRED_IDS = new Set(REQUIRED_FIELDS.map(/** @param {CampoObrigatorio} field */ field => field.id));
   const MESSAGES = Object.freeze({
     required: "Campo obrigatório.",
     email: "E-mail em formato inválido.",
@@ -112,7 +113,7 @@
   }
 
   function listPendingFields(getElementById) {
-    return REQUIRED_FIELDS.flatMap(definition => {
+    return REQUIRED_FIELDS.flatMap(/** @param {CampoObrigatorio} definition */ definition => {
       const field = getElementById(definition.id);
       if (!isFieldActive(definition, field)) return [];
       const problem = fieldProblem(field);
@@ -273,7 +274,7 @@
     }
 
     function validateTouchedFields() {
-      REQUIRED_FIELDS.forEach(definition => {
+      REQUIRED_FIELDS.forEach(/** @param {CampoObrigatorio} definition */ definition => {
         const field = byId(definition.id);
         if (!field) return;
         const problem = isFieldActive(definition, field) ? fieldProblem(field) : null;
@@ -283,7 +284,7 @@
     }
 
     function setTouched(touched) {
-      REQUIRED_FIELDS.forEach(({ id }) => {
+      REQUIRED_FIELDS.forEach(/** @param {CampoObrigatorio} campo */ ({ id }) => {
         const field = byId(id);
         if (!field) return;
         if (touched) field.dataset.uxTouched = "true";

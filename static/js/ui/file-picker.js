@@ -7,10 +7,10 @@
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
   function validarRequisitos() {
-    document.querySelectorAll("[data-requer]").forEach(botao => {
+    document.querySelectorAll("[data-requer]").forEach(/** @param {any} botao */ botao => {
       const escopo = document.getElementById(botao.dataset.requer);
       if (!escopo) return;
-      botao.disabled = ![...escopo.querySelectorAll("input[data-obrigatorio]")].every(input => input.files?.length);
+      botao.disabled = ![...escopo.querySelectorAll("input[data-obrigatorio]")].every(/** @param {HTMLInputElement} input */ input => input.files?.length);
     });
   }
 
@@ -35,21 +35,21 @@
     raiz.querySelectorAll(".ckp-arquivo").forEach(atualizar);
   }
 
-  document.addEventListener("change", event => {
+  document.addEventListener("change", /** @param {any} event */ event => {
     const rotulo = event.target.closest?.(".ckp-arquivo");
     if (rotulo && event.target.matches("input[type=file]")) atualizar(rotulo);
   });
-  document.addEventListener("dragover", event => {
+  document.addEventListener("dragover", /** @param {any} event */ event => {
     const rotulo = event.target.closest?.(".ckp-arquivo");
     if (!rotulo) return;
     event.preventDefault();
     rotulo.dataset.arrastando = "true";
   });
-  document.addEventListener("dragleave", event => {
+  document.addEventListener("dragleave", /** @param {any} event */ event => {
     const rotulo = event.target.closest?.(".ckp-arquivo");
     if (rotulo) rotulo.dataset.arrastando = "false";
   });
-  document.addEventListener("drop", event => {
+  document.addEventListener("drop", /** @param {any} event */ event => {
     const rotulo = event.target.closest?.(".ckp-arquivo");
     if (!rotulo) return;
     event.preventDefault();
@@ -59,7 +59,7 @@
     input.files = event.dataTransfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  document.addEventListener("click", event => {
+  document.addEventListener("click", /** @param {any} event */ event => {
     const remover = event.target.closest?.(".ckp-arquivo [data-remover]");
     if (!remover) return;
     event.preventDefault();
