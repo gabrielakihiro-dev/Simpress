@@ -527,6 +527,8 @@ test("chamado FINALIZADO sem descrição é pulado; o envio ao SharePoint pede c
 });
 
 test("falha no SharePoint mostra o aviso com motivo, cópia local e sugestões, e Tentar substituir de novo reenvia", async ({ page, request }) => {
+  // Duas esperas pelo polling e dois axe: no runner Windows (com o shader da marca) passa de 20 s.
+  test.slow();
   const { painel, antigo } = await abrirAntigo(page, request, "&sharepoint_falha=1");
   const aviso = painel.locator("#sebrae-sharepoint-aviso");
   await expect(aviso).toBeHidden();
