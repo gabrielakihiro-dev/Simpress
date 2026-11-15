@@ -418,3 +418,48 @@ test.describe("Configuração local em React: comportamento", () => {
     await expect(page.locator("#cfg-local-status-contas")).toHaveAttribute("role", "alert");
   });
 });
+
+// ---------------------------------------------------------------- Catálogo de unidades
+// Unidades fictícias; o contrato é o de routers/units.py (GET /api/unidades, POST /api/unidade/salvar).
+function unidadesFicticias() {
+  return [
+    { id: 1, label: "Curitiba Sede", cidade: "Curitiba", uf: "PR", endereco: "Rua Exemplo, 100", cep: "80000-000", cnpj: "00.000.000/0001-91", is_sede: true },
+    { id: 2, label: "Londrina", cidade: "Londrina", uf: "PR", endereco: "Av. Fictícia, 50", cep: "86000-000", cnpj: "00.000.000/0002-72", is_sede: false },
+    { id: 3, label: "", cidade: "Maringá", uf: "PR", endereco: "Rua Teste, 7", cep: "", cnpj: "", is_sede: false },
+  ];
+}
+
+async function abrirUnidades(page, { tema = "light", unidades = unidadesFicticias() } = {}) {
+  await prepararTema(page, tema);
+  await page.route("**/api/unidades", route => route.fulfill({ json: unidades }));
+  await abrirApp(page, tema);
+  await page.evaluate(() => window.abrirModalGerenciarUnidades());
+  await expect(page.locator('[data-cockpit-tool-panel="unidades"]')).toBeVisible();
+}
+
+const painelUnidades = page => page.locator('[data-cockpit-tool-panel="unidades"]');
+
+for (const tema of ["light", "dark"]) {
+  test(`baseline: catálogo de unidades com lista e detalhe, tema ${tema}`, async ({ page }) => {
+    await abrirUnidades(page, { tema });
+    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3 unidades");
+    await expect(painelUnidades(page)).toHaveScreenshot(`unidades-lista-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
+  });
+
+  test(`baseline: catálogo de unidades com formulário de edição, tema ${tema}`, async ({ page }) => {
+    await abrirUnidades(page, { tema });
+    await page.locator("#cockpit-units-list-body").getByRole("button", { name: "Editar CNPJ da unidade Curitiba" }).first().click();
+    await expect(page.locator("#form-unidade-cnpj")).toBeFocused();
+    await page.locator("#form-unidade-cnpj").blur();
+    await expect(painelUnidades(page)).toHaveScreenshot(`unidades-formulario-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
+  });
+
+  test(`baseline: catálogo de unidades vazio abre o formulário, tema ${tema}`, async ({ page }) => {
+    await abrirUnidades(page, { tema, unidades: [] });
+    await expect(page.locator("#form-nova-unidade")).toBeVisible();
+    await expect(page.locator("#form-unidade-cidade")).toBeFocused();
+    await page.locator("#form-unidade-cidade").blur();
+    await expect(page.locator("#cockpit-units-list-body")).toContainText("O catálogo não contém unidades.");
+    await expect(painelUnidades(page)).toHaveScreenshot(`unidades-vazio-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
+  });
+}
