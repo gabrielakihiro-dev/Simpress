@@ -128,6 +128,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - Grupo G2 (sem invariante de envio): médio.
   - Bloco 2 (CSP, bundle e `verify`), piloto, grupos com invariante (G1, G3, G4, G5 e G6), Bloco final e Dia 4: alto.
   - G7 (envio real e Assistente): alto; extra high se o piloto achar acoplamento difícil.
+- **Sem o usuário acordado (pedido do usuário, 15/11/2026: "não quero parar de jeito nenhum"):** a sessão não usa `AskUserQuestion` nem espera resposta do usuário. Dúvida de design vai para quem a abriu, por `SendMessage`; sem resposta, segue a opção mais conservadora (a que não muda tela, texto nem regra) e registra a escolha no PR. Falha que bate o teto de ciclos vira item de "Pendências para o Dia 4", e a sessão segue com o resto. Termina sempre em PR, mesmo com pendências.
 - Dentro da sessão: `model-super-power:batedor` para leitura, `executor` para o código, `revisor` antes do PR.
 - **Não erre, mesmo com PR grande (exigência do usuário):** PR grande não desculpa erro. Revise o diff inteiro, arquivo por arquivo, sem amostragem; cada achado com o trecho e o caso que falha. Antes do PR, confira cada arquivo alterado contra o original (mesma regra, mesmo texto aprovado, mesmo invariante). Na dúvida, pare e pergunte.
 - Relatório final de cada bloco: uma linha `AC: <critério> — PROVEN BY <evidência>` por critério; sem evidência, não verificado.
