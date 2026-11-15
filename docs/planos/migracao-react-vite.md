@@ -20,7 +20,7 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 - **Build** (`vite.config.ts`; confirmar cada opção na doc da versão instalada): entrada `frontend/src/main.tsx`; saída `static/dist/react-entry.js` com nome fixo e **bundle único** (`inlineDynamicImports: true`, sem chunks), porque `versioned_html` (`domains/frontend_assets.py:92-104`) só versiona o arquivo citado no HTML; `base: "/static/dist/"`; `assetsInlineLimit: 0` (nada de `data:`); polyfill de `modulePreload` desligado; nenhum script inline nem `eval`.
 - **CSS:** `.tsx` não importa CSS (viraria `<style>` ou arquivo sem link). Estilo vem de classes Tailwind e de `static/app.css`/`ck-*.css`. `static/styles/tailwind.input.css` ganha `@source "../../frontend/src";` (hoje usa `source(none)` e só varre `index.html`, partials, `app.js` e `js`).
 - **HTML:** `static/index.html` ganha `<script type="module" src="/static/dist/react-entry.js">` depois de `/static/app-entry.js`. Os dois são módulos diferidos e rodam nessa ordem; `app.js:139-141` chama `inicializarAplicacao()` antes do React.
-- **Montagem:** `main.tsx` importa os painéis migrados e monta cada um no contêiner `<div id="<painel>-react-root">` do partial. Ao migrar um painel, a fábrica dele sai de `FEATURE_ORDER` (`static/app.js:14`) e de `inicializarAplicacao`. O código antigo fala com o React só por `window` (funções que `main.tsx` publica, chamadas no clique) ou `CustomEvent`.
+- **Montagem:** como o piloto fez (ver "Resultado do piloto"): `main.tsx` acha os painéis sozinho e monta cada um no elemento `[data-react-painel="<painel>"]` do partial; a fábrica antiga fica em `FEATURE_ORDER` como ponte. O código antigo fala com o React só por `window` (`window.SimpressReact`, pela ponte `context.ponteReact`) ou `CustomEvent`. Texto original, substituído pelo piloto: contêiner `<div id="<painel>-react-root">` e fábrica fora de `FEATURE_ORDER`.
 - **DOM com um dono só:** dentro de um contêiner React, nada do código antigo escreve no DOM. Ícones viram componente lido de `lucide.icons` (sem `lucide.createIcons` lá dentro); a contagem dos números vira hook; os aprimoramentos globais (`ux-enhancements`, `ck-cockpit-visual`, `data-panels`, `app-entry.js:56-59`) ganham versão por painel quando o painel migra.
 - **API:** `frontend/src/api.ts` chama `window.SimpressApiFetch.apiFetch` (`static/js/shared/api-fetch.js:69-91`), que mantém o evento `simpress:servidor-offline`, o `detail` do 422 e `error.status` (409 de `versao_importacao`). Sem `fetch` cru.
 - **Marca de vida:** `main.tsx` põe `data-react-pronto` no `<html>` ao terminar; o e2e confere a marca e escuta `securitypolicyviolation`.
@@ -60,6 +60,49 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 - **Saída extra:** ordem dos painéis restantes (do mais isolado ao mais acoplado; Home/busca, Transferência e Comparação por último) registrada neste arquivo.
 - **Saída extra (modo rápido):** o mecanismo de painéis independentes descrito em "Modo rápido", provado no próprio piloto, e a tabela de grupos conferida (acoplamento real, invariantes) e registrada neste arquivo.
 
+### Resultado do piloto (15/11/2026)
+
+- **Painel:** `resumo-ativos` (cartão `Ativos por regional`, Resumo F3). Motivo: um módulo só, sem estado compartilhado (`appState`), sem invariante de envio, só leitura de `GET /api/painel`, já no visual bento. Doc da tela: `docs/cockpit-prompts/08-comparacao-operacional.md`, "Piloto React". Spec modelo para os grupos: `tests/e2e/react-piloto.spec.cjs`.
+- **Build:** o arquivo real é `vite.config.mts` (o contrato acima cita `vite.config.ts`).
+- **Mecanismo de painéis independentes (os 4 pontos do "Modo rápido"):**
+  1. `frontend/src/main.tsx` acha os painéis com `import.meta.glob("./paineis/*/montar.tsx", { eager: true })`. Cada `montar(container)` recebe o elemento `[data-react-painel="<painel>"]` do partial e devolve as ações que o código antigo chama. O registro fica congelado em `window.SimpressReact`, e o evento `simpress:react-pronto` avisa que terminou. Painel que falha dentro de `montar()` não derruba os outros; erro no topo de um `montar.tsx` (na importação) derruba o bundle inteiro, então cada `montar.tsx` só importa e não executa nada no topo. Painel novo = pasta nova; ninguém edita `main.tsx`.
+  2. **Desvio:** em vez de uma marca que pula a fábrica, o módulo antigo continua em `FEATURE_ORDER` e em `app-entry.js`, reduzido a ponte: `context.ponteReact("<painel>", ["acao"])` (`static/app.js`) devolve funções assíncronas que esperam o painel React (evento `simpress:react-pronto` ou, se o bundle falhar, o `load` da janela) e rejeitam com `O painel React "<painel>" não carregou.` se ele faltar. Motivo: as ações continuam publicadas em `window` como antes, os chamadores antigos (por exemplo `cockpit-tool-panels.js`) não mudam e `FEATURE_ORDER`, `app-entry.js` e os testes que os leem ficam intactos. Cada grupo edita só o próprio módulo-ponte. Regra: ação que o código antigo chama sem tratar erro captura a rejeição na ponte (como `resumo-ativos.js`), para a tela antiga não quebrar.
+  3. Estado compartilhado: `frontend/src/estado-app.ts` (`lerEstado`/`gravarEstado` sobre `window.SimpressApp.state`), com as chaves de `appState` (`currentEquipamento`, `equipamentoSelectionRevision`, `retiradaCidadeSelecionada`, `unidadesList`, `previaPlanilhasAtual`). O piloto não usa estado compartilhado, então o adaptador ainda não rodou em tela: o primeiro grupo que o usar prova com teste próprio. `movimentacaoPendente` fica fora: só `transfer-form` (G4) a usa.
+  4. Testes compartilhados: nenhuma edição necessária. `tests/frontend/test_feature_modules.cjs` e `tests/frontend/support/app-sources.cjs` derivam a lista de `FEATURE_ORDER` e dos imports de `app-entry.js`, que a ponte mantém.
+- **Desvio no contêiner:** a seção que já existe no partial ganha `data-react-painel="<painel>"` e fica vazia, em vez de um `<div id="<painel>-react-root">` novo. Assim ID e ARIA da seção ficam iguais e não entra um elemento a mais (screenshots iguais ao baseline).
+- **Edições compartilhadas** (só na revisão de integração ou no Bloco final):
+  - `static/styles/tailwind.input.css`: `@source "../../frontend/src";` quando um painel React usar classe utilitária do Tailwind que não exista no HTML nem no JS antigo (o piloto usa só classes `ck-*` existentes e não precisou);
+  - remoção das pontes, das fábricas em `FEATURE_ORDER` e dos imports em `app-entry.js`: Bloco final.
+- **Dono de cada arquivo compartilhado:** `frontend/src/main.tsx`, `frontend/src/estado-app.ts`, `static/app.js`, `static/app-entry.js`, `static/index.html`, `static/js/shared/`, `static/js/ui/`, `tailwind.input.css` e `tests/frontend/support/`, `frontend/types/globais.d.ts`: piloto (feito) e Bloco final; a revisão de integração faz só a lista "Edições compartilhadas". Nenhum grupo os edita.
+- **Arquivos compartilhados que o piloto tocou e que têm outro dono** (edição restrita ao trecho do `resumo-ativos`; o dono não precisa mudar nada por causa do piloto):
+  - `frontend/partials/cockpit-tool-panels.html`: cada grupo edita só a seção do próprio painel; o piloto mudou só `#resumo-ativos-secao` (ganhou `data-react-painel`, ficou vazia);
+  - `tests/frontend/test_cockpit_tool_panels.cjs`: dono G2; o piloto trocou só a lista de IDs do painel Resumo (os `resumo-regionais*` saíram para `react-piloto.spec.cjs`, entrou `resumo-ativos-secao`);
+  - `static/dist/react-entry.js`: gerado, sem dono; em conflito de merge, gere de novo com `npm run build:react` e commite, nunca resolva à mão.
+- **`cockpit-tool-panels.js` (G2) não mudou:** a ponte mantém o nome `carregarResumoAtivos`, o registro em `FEATURE_ORDER` e o efeito (promessa que nunca rejeita, como no cartão antigo).
+- **Grupos conferidos** (linhas de `static/js/features/` em 15/11/2026; estado = chaves de `appState` usadas; invariante = trata `confirmado`, `enviar` ou recusa de envio):
+
+  | Grupo | Arquivos (linhas) | Estado compartilhado | Invariante |
+  |---|---|---|---|
+  | G1 | `sebrae-dashboard` 2443, `cockpit-chamados` 421, `sebrae-conflitos` 204, `sebrae-historico` 104 (3172) | nenhum | sim |
+  | G2 | `cockpit-tool-panels` 2512, `inventory-upload` 427, `configuracao-local` 401, `units-catalog` 154 (3494) | `currentEquipamento`, `previaPlanilhasAtual`, `unidadesList` | não |
+  | G3 | `equipment-search` 1402, `equipment-editor` 502, `full-equipment-search` 221, `equipment-dossier` 217, `alias-history` 139 (2481) | `currentEquipamento`, `equipamentoSelectionRevision`, `retiradaCidadeSelecionada` | sim |
+  | G4 | `transfer-form` 893, `regional-contacts` 708, `ux-chamados` 202, `entra-users` 89 (1892) | `currentEquipamento`, `equipamentoSelectionRevision`, `retiradaCidadeSelecionada`, `unidadesList` | sim |
+  | G5 | `comparison-result` 850, `dashboard` 674, `comparison-history` 563, `backups-regionais` 349, `monthly-report` 87 (2523) | `currentEquipamento` | sim |
+  | G6 | `lembretes` 990, `coverage` 569, `termos` 451 (2010) | nenhum | sim |
+  | G7 | `assistant-chat` 1446, `chrome-automation` 837, `outlook-email` 720, `ux-ticket` 421, `ticket-rules` 234 (3658) | `currentEquipamento`, `unidadesList` | sim |
+  | Bloco final | `app-shell` 140 | nenhum | não |
+  | Piloto (já migrado, Bloco 3) | `resumo-ativos` (ponte de 19 linhas; cartão em `frontend/src/paineis/resumo-ativos/`) | nenhum | não |
+
+  Todo arquivo de `static/js/features/` tem um dono só. Acoplamento entre grupos: só pelo `appState` (pelo adaptador, nunca cópia) e pelas ações publicadas em `window` (pela ponte). `cockpit-tool-panels` (G2) chama ações de painéis de outros grupos ao abrir cada ferramenta; como as pontes mantêm os nomes, isso não cria edição cruzada.
+- **Ordem dos painéis restantes** (modo normal; no modo rápido, a ordem sugerida dentro de cada grupo), do mais isolado ao mais acoplado:
+  1. sem estado compartilhado nem envio: `monthly-report`, `sebrae-historico`, `configuracao-local`, `cockpit-chamados`, `dashboard`, `comparison-history`;
+  2. com invariante, sem estado compartilhado (teste Playwright do invariante antes): `termos`, `coverage`, `lembretes`, `sebrae-conflitos`, `backups-regionais`, `sebrae-dashboard`;
+  3. com `unidadesList` ou `previaPlanilhasAtual`: `units-catalog`, `inventory-upload`, `cockpit-tool-panels`;
+  4. com `currentEquipamento`: `alias-history`, `entra-users`, `equipment-dossier`, `regional-contacts`, `ux-chamados`, `equipment-editor`;
+  5. envio real e Assistente: `ticket-rules`, `ux-ticket`, `outlook-email`, `chrome-automation`, `assistant-chat`;
+  6. por último: `comparison-result` (Comparação), `transfer-form` (Transferência), `full-equipment-search` e `equipment-search` (Home/busca);
+  7. `app-shell`: Bloco final.
+
 ## Modo rápido (escolha do usuário, 14/11/2026)
 
 Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos grupos abaixo, rodando em paralelo depois do piloto.
@@ -84,13 +127,14 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 - **Revisão de integração (fim do Dia 2):** sessão nova a partir do `main` com G1 a G6 mesclados. Faz as "Edições compartilhadas", roda `npm run verify` e `npm run test:ui:e2e` completos, roda `ponytail:ponytail-review` no diff do Dia 2, usa o `model-super-power:revisor`, abre o app real com dados locais em cada aba migrada e corrige o que falhar. Termina em PR. O Dia 3 só começa com esse PR mesclado.
 - **Grupos:** proposta por arquivo de `static/js/features/`, de cerca de 2 a 3 mil linhas cada. O piloto confere e ajusta. Os arquivos não se repetem entre grupos.
   - G1 Sebrae: `sebrae-dashboard`, `sebrae-historico`, `sebrae-conflitos`, `cockpit-chamados`.
-  - G2 Ferramentas: `cockpit-tool-panels`, `inventory-upload`, `units-catalog`.
+  - G2 Ferramentas: `cockpit-tool-panels`, `inventory-upload`, `units-catalog`, `configuracao-local` (este entrou no piloto: não tinha dono).
   - G3 Equipamentos: `equipment-search`, `equipment-editor`, `equipment-dossier`, `full-equipment-search`, `alias-history`.
   - G4 Transporte e contatos: `transfer-form`, `regional-contacts`, `ux-chamados`, `entra-users`.
-  - G5 Resumo e comparação: `dashboard`, `resumo-ativos`, `backups-regionais`, `comparison-result`, `comparison-history`, `monthly-report`.
+  - G5 Resumo e comparação: `dashboard`, `backups-regionais`, `comparison-result`, `comparison-history`, `monthly-report` (`resumo-ativos` saiu: migrou no piloto).
   - G6 Cobertura e agenda: `coverage`, `termos`, `lembretes`.
   - G7 final (envio real e Assistente): `assistant-chat`, `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
-  - `app-shell` vai para o piloto ou para o Bloco final.
+  - `app-shell` vai para o Bloco final (decisão do piloto: é a casca da página, que o React só assume no fim).
+  - Conferência do piloto: ver "Grupos conferidos" em "Resultado do piloto".
 - **Invariantes:** grupo com arquivo que trata `confirmado`, `enviar` ou recusa de envio (G1, G3, G4, G5 e G6 hoje) escreve o teste Playwright do invariante **antes** de trocar o código. O revisor é obrigatório nesses grupos. G7 não roda em paralelo.
 - **Testes:** cada grupo cria spec próprio (`tests/e2e/react-<grupo>.spec.cjs`) e baseline próprio, sem editar spec de outro grupo.
 - **Riscos aceitos pelo usuário:** custo alto de tokens em pouco tempo e PRs maiores. Conflito entre grupos volta para a sessão do grupo, pelo Auto-fix.

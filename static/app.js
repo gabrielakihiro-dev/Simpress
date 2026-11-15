@@ -79,6 +79,34 @@
   // Logged user next to a series in the Histórico de Planilhas rows and the equipment dialogs.
   context.loggedUserMarkers = window.SimpressLoggedUserMarkers(context);
 
+  // Panels migrated to React (frontend/src/paineis/<panel>/, plan docs/planos/migracao-react-vite.md).
+  // react-entry.js runs after this file and publishes each panel's actions in window.SimpressReact, so the
+  // panel's old feature module stays in FEATURE_ORDER as a bridge: ponteReact(panel, names) returns async
+  // forwarders that wait for that registry. Nothing waits until the first call; if react-entry.js never
+  // loads (window "load" with no registry) or the panel failed to mount, every call rejects.
+  const reactPanels = new Map();
+  function waitForReactPanel(panel) {
+    if (!reactPanels.has(panel)) {
+      reactPanels.set(panel, new Promise((resolve, reject) => {
+        const settle = () => {
+          if (!window.SimpressReact && document.readyState !== "complete") return false;
+          const actions = window.SimpressReact?.[panel];
+          if (actions) resolve(actions);
+          else reject(new Error(`O painel React "${panel}" não carregou.`));
+          return true;
+        };
+        if (settle()) return;
+        document.addEventListener("simpress:react-pronto", settle, { once: true });
+        window.addEventListener("load", settle, { once: true });
+      }));
+    }
+    return reactPanels.get(panel);
+  }
+  context.ponteReact = (panel, names) => Object.fromEntries(names.map(name => [
+    name,
+    (...args) => waitForReactPanel(panel).then(actions => actions[name](...args)),
+  ]));
+
   const publishedBy = new Map();
   function publish(actions, source) {
     Object.entries(actions).forEach(([name, action]) => {

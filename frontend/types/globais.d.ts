@@ -26,6 +26,7 @@ declare var SimpressHistoryFormat: any;
 declare var SimpressLoggedUserMarkers: any;
 declare var SimpressMotion: any;
 declare var SimpressNotifications: any;
+declare var SimpressReact: any; // ações dos painéis React, publicadas por frontend/src/main.tsx
 declare var SimpressRecentEquipment: any;
 declare var SimpressSebraeDashboardModel: any;
 declare var SimpressTransferHistory: any;

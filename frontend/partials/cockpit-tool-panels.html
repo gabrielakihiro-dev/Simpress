@@ -96,19 +96,8 @@
           </div>
           <div role="tabpanel" id="resumo-painel-backups" class="ck-comparacao-resultado ck-backups" aria-labelledby="resumo-aba-backups" data-resumo-painel="backups" hidden></div>
           <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
-          <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo">
-            <div class="ck-cartao ck-regionais">
-              <div class="ck-cartao__cab">
-                <span class="ck-bento-icone" aria-hidden="true"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg></span>
-                <h3 id="resumo-regionais-titulo" class="ck-cartao__titulo">Ativos por regional</h3>
-                <span class="ck-espaco"></span>
-                <span id="resumo-regionais-contagem" class="ck-cartao__meta" role="status" aria-live="polite"></span>
-              </div>
-              <div id="resumo-regionais-filtros" class="ck-pilulas ck-regionais__filtros" role="group" aria-label="Filtrar ativos por categoria"></div>
-              <div id="resumo-regionais" class="ck-barras" aria-busy="true"></div>
-              <div class="ck-regionais__rodape"><button type="button" id="resumo-regionais-mais" class="ck-btn ck-btn--fantasma ck-btn--sm" aria-expanded="true" hidden></button></div>
-            </div>
-          </section>
+          <!-- Cartão "Ativos por regional" em React: frontend/src/paineis/resumo-ativos/cartao.tsx. -->
+          <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo" data-react-painel="resumo-ativos"></section>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="apelidos" aria-labelledby="cockpit-alias-heading" hidden>

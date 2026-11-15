@@ -94,6 +94,15 @@ Pedido do usuário em 04/11/2026: as seções `Ativos por regional` e `Total de 
 - Estados: `data-estado` carregando/pronto/erro, `aria-busy`, mensagens `Nenhum ativo de <categoria> na base local.`, `A distribuição por cidade não está disponível.` e `A distribuição por regional está indisponível enquanto o servidor local não responde.`
 - Assistente: nenhuma ferramenta nova; a descrição de `obter_painel` agora cita `cidades_por_categoria` (o mesmo filtro da tela). Testes: `tests/frontend/test_resumo_ativos.cjs`, `tests/e2e/cockpit-tools.spec.cjs`, `tests/test_assistant.py` (`PanelRegionalToolTests`).
 
+### Piloto React (Bloco 3 da migração, 15/11/2026)
+
+O cartão foi o piloto da migração para React (`docs/planos/migracao-react-vite.md`, Bloco 3). Mesma tela, mesmos IDs, ARIA, `data-*`, textos e comportamento descritos acima; sem endpoint, rotina, dado gravado nem escrita em sistema externo.
+
+- Código: `frontend/src/paineis/resumo-ativos/` (`cartao.tsx` desenha, `estado.ts` busca `GET /api/painel` por `frontend/src/api.ts` e guarda o filtro, `montar.tsx` monta). O partial (`frontend/partials/cockpit-tool-panels.html`) deixa `#resumo-ativos-secao` vazia, com `data-react-painel="resumo-ativos"`; o React desenha o cartão dentro dela.
+- `static/js/features/resumo-ativos.js` virou ponte: publica `carregarResumoAtivos` (chamada ao abrir o Resumo) e repassa ao React. Se o bundle React não carregar, o Resumo abre com a seção vazia e o console registra `O painel React "resumo-ativos" não carregou.`
+- Movimento: o cartão segue o contrato bento (`ck-bento.css`: entrada, barras e contagem repetem com `simpress:bento-repetir`); com `prefers-reduced-motion: reduce` nada anima.
+- Testes: `tests/e2e/react-piloto.spec.cjs` (screenshots de 390 px e 1366 px, claro e escuro, iguais ao baseline; ordem, larguras, pílulas, filtro, `Ver menos`, avisos, esqueleto, IDs e ARIA, tokens bento por `getComputedStyle`, movimento normal e reduzido, falha do bundle) e `tests/frontend/test_resumo_ativos.cjs` (registro, ponte e HTML montado).
+
 ## Sub-abas do Resumo (F3, bloco 1a, 09/11/2026)
 
 Pedido do usuário em 09/11/2026: dividir o painel `comparacao` do Resumo em cinco sub-abas, conforme o desenho aprovado. Escopo: front-end (`static/index.html`, `static/js/features/comparison-result.js`, `static/js/ui/comparison-result-renderer.js`, `static/js/features/cockpit-tool-panels.js`, `static/styles/ck-cockpit.css`); sem endpoint, rotina, dado gravado nem escrita em sistema externo. Só dados reais do resultado já carregado.
