@@ -329,6 +329,12 @@ test.describe("comportamento (1366 px)", () => {
     const pedidos = await rotaUx(page, padraoUx);
     const modal = await abrirChamado(page);
     await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
+    // #modal-confirmar-acao é um elemento só, reaproveitado: conta as chamadas, não os diálogos visíveis.
+    await page.evaluate(() => {
+      const original = window.confirmarAcao;
+      window.__confirmacoesUx = 0;
+      window.confirmarAcao = (...args) => { window.__confirmacoesUx += 1; return original(...args); };
+    });
     await modal.getByRole("button", { name: "Revisar e enviar" }).dblclick();
     const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
     await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -339,6 +345,7 @@ test.describe("comportamento (1366 px)", () => {
     // Chamada direta (o atalho do código antigo ainda existe em window) também não reenvia.
     await page.evaluate(() => window.executarChamadoUX(true));
     await expect(confirmacao).toBeHidden();
+    expect(await page.evaluate(() => window.__confirmacoesUx)).toBe(1);
     expect(pedidos.filter(({ caminho }) => caminho.endsWith("/enviar"))).toHaveLength(1);
   });
 
