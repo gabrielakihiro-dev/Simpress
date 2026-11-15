@@ -372,13 +372,34 @@ test.describe("comportamento (1366 px)", () => {
     await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeEnabled();
     await expect(modal.getByRole("button", { name: "Revisar e enviar" })).toHaveAttribute("title", "");
     await modal.getByLabel("Nome").fill("  ");
-    await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
+    for (const nome of ["Simular preenchimento", "Revisar e enviar"]) await expect(modal.getByRole("button", { name: nome })).toBeDisabled();
+    await page.evaluate(() => window.executarChamadoUX(true));
+    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
     expect(pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar"]);
     // Espaços nas pontas não vão para o UX.
     await modal.getByLabel("Nome").fill(SOLICITANTE.nome);
     await modal.getByLabel("Departamento/Cargo").fill(" " + SOLICITANTE.departamento_cargo + " ");
     await modal.getByRole("button", { name: "Simular preenchimento" }).click();
     await expect.poll(() => pedidos.at(-1)?.corpo?.solicitante).toEqual(SOLICITANTE);
+  });
+
+  // Formato real do backend sem data/state/ux_solicitante.json: os 4 campos com "".
+  test("UX: solicitante com os 4 campos vazios do backend mantém o envio bloqueado", async ({ page }) => {
+    const vazio = { nome: "", email: "", telefone: "", departamento_cargo: "" };
+    const pedidos = await rotaUx(page, (caminho, corpo) => (caminho.endsWith("/preparar")
+      ? { json: { ...PREPARADO, solicitante: vazio } } : padraoUx(caminho, corpo)));
+    const modal = await abrirChamado(page);
+    await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
+    for (const rotulo of ["Nome", "E-mail", "Telefone", "Departamento/Cargo"]) {
+      await expect(modal.getByLabel(rotulo)).toHaveValue("");
+      await expect(modal.getByLabel(rotulo)).toBeEditable();
+    }
+    await expect(page.locator("#ux-chamado-motivo")).toHaveText("Preencha todos os campos do solicitante para liberar a simulação e o envio.");
+    for (const nome of ["Simular preenchimento", "Revisar e enviar"]) await expect(modal.getByRole("button", { name: nome })).toBeDisabled();
+    await page.evaluate(() => window.executarChamadoUX(false));
+    await page.evaluate(() => window.executarChamadoUX(true));
+    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
+    expect(pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar"]);
   });
 
   test("UX: descrição com campo em branco não abre o modal", async ({ page }) => {
