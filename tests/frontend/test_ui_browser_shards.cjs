@@ -27,7 +27,8 @@ function groupsFromWorkflow() {
   return groups;
 }
 
-const onDisk = fs.readdirSync(E2E_DIR).filter((name) => name.endsWith(".spec.cjs")).sort();
+// Recursivo como o testDir do Playwright: spec em subpasta não cabe nos grupos e precisa falhar aqui.
+const onDisk = fs.readdirSync(E2E_DIR, { recursive: true }).filter((name) => name.endsWith(".spec.cjs")).sort();
 const groups = groupsFromWorkflow();
 const listed = groups.flat();
 
@@ -37,6 +38,8 @@ test("ui-browser tem 8 grupos de specs", () => {
 });
 
 test("todo spec de tests/e2e está em um grupo do ui-browser.yml", () => {
+  const nested = onDisk.filter((name) => /[\/]/.test(name));
+  assert.deepEqual(nested, [], `Spec em subpasta de tests/e2e: ${nested.join(", ")}. Mova-o para tests/e2e/.`);
   const missing = onDisk.filter((name) => !listed.includes(name));
   assert.deepEqual(
     missing,
@@ -52,9 +55,9 @@ test("nenhum spec do ui-browser.yml está repetido ou não existe mais", () => {
   assert.deepEqual(gone, [], `Spec listado que não existe em tests/e2e: ${gone.join(", ")}`);
 });
 
-test("o filtro do Playwright (regex sem âncora) de cada nome acerta só o próprio arquivo", () => {
+test("o filtro do Playwright (regex sem âncora, sem diferenciar maiúsculas) de cada nome acerta só o próprio arquivo", () => {
   for (const name of listed) {
-    const hits = onDisk.filter((file) => new RegExp(name).test(file));
+    const hits = onDisk.filter((file) => new RegExp(name, "i").test(file));
     assert.deepEqual(hits, [name], `O nome ${name} também casa com: ${hits.join(", ")}`);
   }
 });
