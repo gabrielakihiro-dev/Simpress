@@ -58,10 +58,39 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 - **Critérios de aceite:** mesmos IDs, ARIA, `data-*`, textos e atalhos; screenshots iguais ao baseline (tolerância definida no teste) e `getComputedStyle` dos tokens bento; `prefers-reduced-motion` zera o movimento; cada teste do inventário passa ou foi movido para o Playwright com a mesma checagem; doc da tela atualizado.
 - **Verificar:** `npm run verify`; `npm run test:ui:e2e`; app real aberto com dados locais.
 - **Saída extra:** ordem dos painéis restantes (do mais isolado ao mais acoplado; Home/busca, Transferência e Comparação por último) registrada neste arquivo.
+- **Saída extra (modo rápido):** o mecanismo de painéis independentes descrito em "Modo rápido", provado no próprio piloto, e a tabela de grupos conferida (acoplamento real, invariantes) e registrada neste arquivo.
 
-## Blocos 4 em diante — um painel por bloco
+## Modo rápido (escolha do usuário, 14/11/2026)
 
-- Mesmo formato do Bloco 3 (baseline, inventário de testes, critérios), um painel por sessão e por PR, na ordem registrada no piloto (depois do bento Bloco 2 mesclado, sem esperar os Blocos 3 e 4 do bento).
+Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos grupos abaixo, rodando em paralelo depois do piloto.
+
+- **Cronograma:**
+  - Dia 1: Bloco 2 e piloto, em sequência.
+  - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo.
+  - Dia 3: grupo final (G7) e Bloco final.
+- **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
+- **Painéis independentes (o piloto cria; nenhum grupo edita depois):** nenhum grupo toca arquivo compartilhado (`frontend/src/main.tsx`, `static/app.js`, `static/app-entry.js`, `static/index.html`, `tailwind.input.css`, `tests/frontend/support/`). O piloto faz:
+  - `main.tsx` achar os painéis sozinho (por exemplo, `import.meta.glob` eager em `frontend/src/paineis/*/montar.tsx`, que cabe no bundle único);
+  - o código antigo pular a fábrica de um painel migrado por uma marca no arquivo do próprio painel, sem editar `FEATURE_ORDER`;
+  - o estado compartilhado (`appState` de `static/app.js`) ser lido e gravado pelo React por um adaptador em `frontend/src/`, que só o piloto e o Bloco final alteram.
+
+  Se algum desses pontos não couber, a sessão do piloto pergunta a quem escreveu o plano antes de seguir.
+- **Grupos:** proposta por arquivo de `static/js/features/`, de cerca de 2 a 3 mil linhas cada. O piloto confere e ajusta. Os arquivos não se repetem entre grupos.
+  - G1 Sebrae: `sebrae-dashboard`, `sebrae-historico`, `sebrae-conflitos`, `cockpit-chamados`.
+  - G2 Ferramentas: `cockpit-tool-panels`, `inventory-upload`, `units-catalog`.
+  - G3 Equipamentos: `equipment-search`, `equipment-editor`, `equipment-dossier`, `full-equipment-search`, `alias-history`.
+  - G4 Transporte e contatos: `transfer-form`, `regional-contacts`, `ux-chamados`, `entra-users`.
+  - G5 Resumo e comparação: `dashboard`, `resumo-ativos`, `backups-regionais`, `comparison-result`, `comparison-history`, `monthly-report`.
+  - G6 Cobertura e agenda: `coverage`, `termos`, `lembretes`.
+  - G7 final (envio real e Assistente): `assistant-chat`, `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
+  - `app-shell` vai para o piloto ou para o Bloco final.
+- **Invariantes:** grupo com arquivo que trata `confirmado`, `enviar` ou recusa de envio (G1, G3, G4, G5 e G6 hoje) escreve o teste Playwright do invariante **antes** de trocar o código. O revisor é obrigatório nesses grupos. G7 não roda em paralelo.
+- **Testes:** cada grupo cria spec próprio (`tests/e2e/react-<grupo>.spec.cjs`) e baseline próprio, sem editar spec de outro grupo.
+- **Riscos aceitos pelo usuário:** custo alto de tokens em pouco tempo e PRs maiores. Conflito entre grupos volta para a sessão do grupo, pelo Auto-fix.
+
+## Blocos 4 em diante — um painel por bloco (modo normal)
+
+- Usado só se o modo rápido for abandonado. Mesmo formato do Bloco 3 (baseline, inventário de testes, critérios), um painel por sessão e por PR, na ordem registrada no piloto (depois do bento Bloco 2 mesclado, sem esperar os Blocos 3 e 4 do bento).
 - JSDoc em `static/js/features/` acompanha: o módulo de um painel que ainda não migrou ganha JSDoc no bloco anterior ao dele.
 - Bloco do Assistente e dos cartões de confirmação: testes Playwright das recusas e dos envios reais primeiro; revisão obrigatória do `model-super-power:revisor`.
 
@@ -74,7 +103,7 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 
 ## Execução
 
-- Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão, sem merge automático).
+- Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão; o merge fica com o Antigravity, ver "Modo rápido").
 - Dentro da sessão: `model-super-power:batedor` para leitura, `executor` para o código, `revisor` antes do PR.
 - Relatório final de cada bloco: uma linha `AC: <critério> — PROVEN BY <evidência>` por critério; sem evidência, não verificado.
 - Teto de 3 ciclos de correção sobre a mesma falha; depois, a sessão para e devolve o que tentou.
