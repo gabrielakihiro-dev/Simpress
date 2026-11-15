@@ -14,6 +14,7 @@
     fecharTodos(); pop.hidden = false;
     if (opener) opener.setAttribute("aria-expanded", "true");
     abertos.push({ pop: pop, opener: opener });
+    /** @type {any} */
     var primeiro = pop.querySelector('[role=menuitem], button, [href], input, select, [tabindex="0"]');
     if (primeiro && pop.getAttribute("role") === "menu") primeiro.focus();
   }
@@ -30,6 +31,7 @@
   function abrirDialogo(id, opener) {
     var veu = doc.getElementById(id); if (!veu) return;
     fecharTodos(); veu.hidden = false; dialogo = { veu: veu, opener: opener };
+    /** @type {any} */
     var f = veu.querySelector("[data-fechar]"); if (f) f.focus();
   }
   function fecharDialogo() { if (!dialogo) return; dialogo.veu.hidden = true; if (dialogo.opener) dialogo.opener.focus(); dialogo = null; }
@@ -61,6 +63,7 @@
     abertos.slice().forEach(function (a) { if (!a.pop.contains(t) && !(a.opener && a.opener.contains(t))) fecharPop(a.pop, false); });
 
     /* grupos de seleção única (filtros, unidades, KPIs, segmentado) */
+    /** @type {any} */
     var op = t.closest("[data-grupo] > button, [data-grupo] > li > button");
     if (op && !op.disabled) { var g = op.closest("[data-grupo]"); $$("button[aria-pressed]", g).forEach(function (b) { b.setAttribute("aria-pressed", String(b === op)); }); }
 

@@ -18,6 +18,7 @@
   const DATE_BR = /^(\d{2})\/(\d{2})\/(\d{4})(?:\D+(\d{2}):(\d{2}))?/;
   const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
+  /** @returns {{ kind: string, value: any }} */
   function sortKey(text) {
     const value = String(text ?? "").replace(/\s+/g, " ").trim();
     if (!value || value === "—" || value === "-") return { kind: "empty", value: "" };
@@ -91,7 +92,9 @@
   // ---------- browser behaviour ----------
   function install(win) {
     const doc = win.document;
+    // @ts-expect-error marca de instalação guardada na própria função
     if (!doc || install.done) return;
+    // @ts-expect-error idem
     install.done = true;
 
     const el = (tag, className, text) => {
@@ -1403,6 +1406,7 @@
   }
 
   // Ponte para a instalação ativa: permite window.SimpressDataPanels.montarTabelaOs(...) após o install.
+  /** @type {{ montar: (host?: any, opcoes?: any) => any, atualizar: (force?: boolean) => Promise<any>, filtrar: (filtro?: any) => any, revelar: (row?: any) => boolean, series: () => any }} */
   let osApi = { montar: () => null, atualizar: async () => {}, filtrar: () => {}, revelar: () => false, series: () => null };
   const montarTabelaOs = (host, opcoes) => osApi.montar(host, opcoes);
   const atualizarTabelaOs = force => osApi.atualizar(Boolean(force));
