@@ -68,6 +68,8 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - Dia 1: Bloco 2 e piloto, em sequência.
   - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo.
   - Dia 3: grupo final (G7) e Bloco final.
+  - Dia 4: revisão geral e correção (ver "Dia 4").
+- **Pendências:** todo PR da migração tem no corpo a seção "Pendências para o Dia 4" (ou "nenhuma"). Ela lista: falha de CI ou teste que apareceu no caminho, item da revisão ponytail ou do revisor não corrigido, falha que bateu o teto de 3 ciclos e atalho com limite conhecido.
 - **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
 - **Painéis independentes (o piloto cria; nenhum grupo edita depois):** nenhum grupo toca arquivo compartilhado (`frontend/src/main.tsx`, `static/app.js`, `static/app-entry.js`, `static/index.html`, `tailwind.input.css`, `tests/frontend/support/`). O piloto faz:
   - `main.tsx` achar os painéis sozinho (por exemplo, `import.meta.glob` eager em `frontend/src/paineis/*/montar.tsx`, que cabe no bundle único);
@@ -88,6 +90,24 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 - **Testes:** cada grupo cria spec próprio (`tests/e2e/react-<grupo>.spec.cjs`) e baseline próprio, sem editar spec de outro grupo.
 - **Riscos aceitos pelo usuário:** custo alto de tokens em pouco tempo e PRs maiores. Conflito entre grupos volta para a sessão do grupo, pelo Auto-fix.
 
+## Dia 4 — revisão geral e correção (pedido do usuário, 15/11/2026)
+
+- **Objetivo:** revisar todas as alterações da migração com `ponytail:ponytail-review` e corrigir tudo que deu erro no processo. O usuário exige a correção: nada fica só anotado.
+- **Quando:** sessão nova, depois que o Antigravity mesclar todos os PRs dos Dias 1 a 3. Parte do `main` atualizado, em branch própria.
+- **Entrada:**
+  - o diff inteiro da migração, do último commit do `main` antes do Bloco 2 até o `main` atual;
+  - a seção "Pendências para o Dia 4" de cada PR da migração (`gh pr view <N>`);
+  - as execuções de CI que falharam nesses PRs (`gh run list`).
+- **Passos:**
+  1. Revisão ponytail do diff inteiro, por grupo (Bloco 2, piloto, G1 a G7, Bloco final), porque o diff todo não cabe numa leitura.
+  2. Uma lista única: achados "Corrigir antes" e "Deveria corrigir", pendências dos PRs e falhas de CI que voltaram.
+  3. Corrigir todos. "Opcional" só se for pequeno; o resto vai para o relatório.
+  4. Nova revisão ponytail no diff das correções, até o veredito "pode enviar".
+- **Nível:** a sessão abre em Opus 5.5 alto. Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos: a sessão não muda o próprio nível, então pede ao usuário (`AskUserQuestion`) para trocar o seletor e confere a troca com `get_session`. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
+- **Critérios de aceite:** lista única zerada, ou cada item restante com o motivo; `npm run verify` e `npm run test:ui:e2e` verdes; veredito ponytail "pode enviar"; `model-super-power:revisor` no conjunto; invariantes do `AGENTS.md` intactos (Endpoint sem Enter, envio real só com `confirmado: true`, SharePoint, Outlook, UX).
+- **Verificar:** as linhas `AC: <critério> — PROVEN BY <evidência>`; app real com dados locais em cada aba.
+- **Proibido:** mudar o visual bento aprovado, ligar auto-merge, fazer merge.
+
 ## Blocos 4 em diante — um painel por bloco (modo normal)
 
 - Usado só se o modo rápido for abandonado. Mesmo formato do Bloco 3 (baseline, inventário de testes, critérios), um painel por sessão e por PR, na ordem registrada no piloto (depois do bento Bloco 2 mesclado, sem esperar os Blocos 3 e 4 do bento).
@@ -105,6 +125,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 
 - Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão; o merge fica com o Antigravity, ver "Modo rápido").
 - Dentro da sessão: `model-super-power:batedor` para leitura, `executor` para o código, `revisor` antes do PR.
+- **Não erre, mesmo com PR grande (exigência do usuário):** PR grande não desculpa erro. Revise o diff inteiro, arquivo por arquivo, sem amostragem; cada achado com o trecho e o caso que falha. Antes do PR, confira cada arquivo alterado contra o original (mesma regra, mesmo texto aprovado, mesmo invariante). Na dúvida, pare e pergunte.
 - Relatório final de cada bloco: uma linha `AC: <critério> — PROVEN BY <evidência>` por critério; sem evidência, não verificado.
 - Teto de 3 ciclos de correção sobre a mesma falha; depois, a sessão para e devolve o que tentou.
 - Dúvida de design que muda o plano: a sessão pergunta a quem escreveu o plano, sem decidir sozinha.
