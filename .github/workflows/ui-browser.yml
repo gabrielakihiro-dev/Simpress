@@ -50,7 +50,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A suíte inteira levava ~30 min num job só; dividida em 5 partes que rodam em paralelo.
+  # A suíte inteira levava ~30 min num job só; dividida em 8 partes que rodam em paralelo.
   ui-browser-shard:
     name: ui-browser (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: windows-latest
@@ -59,8 +59,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 5 shards: com 4, cada um levava 18–22 min e runner lento passava do limite de 30
-        shard: [1, 2, 3, 4, 5]
+        # 8 shards: regra do usuário, shard acima de 15 min ganha mais shards (com 5, de 14 a 27 min de teste)
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
