@@ -197,7 +197,7 @@ Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere 
 
 ## Sub-aba Backups do Resumo (F3, 12/11/2026)
 
-Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups`; `static/js/features/backups-regionais.js`). Mostra o campo `backups_regionais` de `GET /api/painel` (contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)"); o módulo não consulta o painel, escuta `simpress:painel-atualizado`.
+Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups` com `data-react-painel="backups-regionais"`; React em `frontend/src/paineis/backups-regionais/` desde a migração React, Dia 2, G5, 15/11/2026, com `static/js/features/backups-regionais.js` vazio). Mostra o campo `backups_regionais` de `GET /api/painel` (contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)"); o painel não consulta o /api/painel, escuta `simpress:painel-atualizado`. Comportamento testado no navegador em `tests/e2e/react-g5.spec.cjs` (baseline de screenshots gravado no código antigo) e `tests/e2e/backups-regionais.spec.cjs`.
 
 - Funciona sem comparação importada e com qualquer evento selecionado: não depende de `ultima_comparacao` nem do histórico.
 - Teclado: `Setas`, `Home` e `End` movem o foco entre as abas do Resumo.

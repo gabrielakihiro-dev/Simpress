@@ -404,7 +404,7 @@
   }
 
   // Back to the empty state: tab "Divergências" (where F3 and the alert land), no filters, zeroed counters, no notice from the previous result.
-  // "Backups" não é da comparação: a aba aberta continua aberta e o selo dela (escrito por backups-regionais.js) não é zerado.
+  // "Backups" não é da comparação: a aba aberta continua aberta e o selo dela (escrito pelo painel React frontend/src/paineis/backups-regionais/) não é zerado.
   function limparAbasResumo() {
     const abaAtual = estadoResumo.aba;
     Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);

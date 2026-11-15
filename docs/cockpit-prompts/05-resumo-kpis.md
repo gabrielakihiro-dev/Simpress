@@ -110,7 +110,7 @@ Os dados vêm da API ou do cálculo local de equipamentos por unidade.
 
 ## Sub-aba Backups (Resumo F3, 12/11/2026)
 
-Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritária tem pelo menos 1 notebook de backup pronto? Cálculo puro em `domains/backups_regionais.py` (`build_backups_regionais`), servido no campo `backups_regionais` de `GET /api/painel`; tela em `static/js/features/backups-regionais.js`. Tela, foco e teclado: `docs/cockpit-prompts/14-cockpit-v2.md`, seção "Sub-aba Backups do Resumo". Contrato e rotas 208 e 209: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)".
+Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritária tem pelo menos 1 notebook de backup pronto? Cálculo puro em `domains/backups_regionais.py` (`build_backups_regionais`), servido no campo `backups_regionais` de `GET /api/painel`; tela em React, `frontend/src/paineis/backups-regionais/` (migração React, Dia 2, G5, 15/11/2026; `static/js/features/backups-regionais.js` ficou vazio). Tela, foco e teclado: `docs/cockpit-prompts/14-cockpit-v2.md`, seção "Sub-aba Backups do Resumo". Contrato e rotas 208 e 209: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Backups regionais (Resumo F3)".
 
 ### Regras de contagem
 
