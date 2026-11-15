@@ -1,6 +1,7 @@
 import json
 import unittest
 from typing import Any, Dict, List, Optional, Tuple
+from unittest import mock
 
 from domains.assistant_api import SimpressApi
 from domains.assistant_chat import MAX_CARACTERES_RESPOSTA, SYSTEM_PROMPT, AssistantConversation
@@ -157,7 +158,9 @@ class RascunhoNoChatTests(unittest.TestCase):
             text(f"Olá! Segue a lista:\n- AAA111 ({marcador}) — 9 dias sem verificação\nObrigado."),
         )
         conversa = AssistantConversation(model, SimpressApi(FakeTransport()), "modelo-teste", lambda: "", NotasStore(temp_json()))  # type: ignore[arg-type]
-        resposta = conversa.enviar_mensagem("escreve a cobrança dos equipamentos sem acesso há 7 dias")
+        # With the route down the mask reads the local defaults file: point it at a missing temp path, never the real data/state one.
+        with mock.patch("core.config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", temp_json()):
+            resposta = conversa.enviar_mensagem("escreve a cobrança dos equipamentos sem acesso há 7 dias")
         enviado = json.dumps(model.sent[1], ensure_ascii=False)
         self.assertNotIn("PRNOTE01", enviado)
         self.assertNotIn("PRNOTE02", enviado)

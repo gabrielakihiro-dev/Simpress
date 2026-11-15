@@ -90,18 +90,18 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
   | G5 | `comparison-result` 850, `dashboard` 674, `comparison-history` 563, `backups-regionais` 349, `monthly-report` 87 (2523) | `currentEquipamento` | sim |
   | G6 | `lembretes` 990, `coverage` 569, `termos` 451 (2010) | nenhum | sim |
   | G7 | `assistant-chat` 1446, `chrome-automation` 837, `outlook-email` 720, `ux-ticket` 421, `ticket-rules` 234 (3658) | `currentEquipamento`, `unidadesList` | sim |
-  | Bloco final | `app-shell` 140 | nenhum | não |
+  | Bloco final | `app-shell` 140, `cockpit-tool-panels` 2426 (revisão de integração, 15/11/2026) | `currentEquipamento`, `previaPlanilhasAtual`, `unidadesList` | não |
   | Piloto (já migrado, Bloco 3) | `resumo-ativos` (ponte de 19 linhas; cartão em `frontend/src/paineis/resumo-ativos/`) | nenhum | não |
 
   Todo arquivo de `static/js/features/` tem um dono só. Acoplamento entre grupos: só pelo `appState` (pelo adaptador, nunca cópia) e pelas ações publicadas em `window` (pela ponte). `cockpit-tool-panels` (G2) chama ações de painéis de outros grupos ao abrir cada ferramenta; como as pontes mantêm os nomes, isso não cria edição cruzada.
 - **Ordem dos painéis restantes** (modo normal; no modo rápido, a ordem sugerida dentro de cada grupo), do mais isolado ao mais acoplado:
   1. sem estado compartilhado nem envio: `monthly-report`, `sebrae-historico`, `configuracao-local`, `cockpit-chamados`, `dashboard`, `comparison-history`;
   2. com invariante, sem estado compartilhado (teste Playwright do invariante antes): `termos`, `coverage`, `lembretes`, `sebrae-conflitos`, `backups-regionais`, `sebrae-dashboard`;
-  3. com `unidadesList` ou `previaPlanilhasAtual`: `units-catalog`, `inventory-upload`, `cockpit-tool-panels`;
+  3. com `unidadesList` ou `previaPlanilhasAtual`: `units-catalog`, `inventory-upload`;
   4. com `currentEquipamento`: `alias-history`, `entra-users`, `equipment-dossier`, `regional-contacts`, `ux-chamados`, `equipment-editor`;
   5. envio real e Assistente: `ticket-rules`, `ux-ticket`, `outlook-email`, `chrome-automation`, `assistant-chat`;
   6. por último: `comparison-result` (Comparação), `transfer-form` (Transferência), `full-equipment-search` e `equipment-search` (Home/busca);
-  7. `app-shell`: Bloco final.
+  7. `app-shell` e `cockpit-tool-panels`: Bloco final.
 
 ## Modo rápido (escolha do usuário, 14/11/2026)
 
@@ -111,7 +111,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - Dia 1: Bloco 2 e piloto, em sequência.
   - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo. Só começa depois que o Dia 1 terminar, com os PRs do Bloco 2 e do piloto mesclados no `main`.
   - Fim do Dia 2: revisão de integração (ver abaixo), só depois que todas as sessões de grupo abrirem PR e o Antigravity mesclar os PRs.
-  - Dia 3: grupo final (G7) sozinho, depois o Bloco final.
+  - Dia 3: grupo final (G7) sozinho; depois G8, G9 e G10 (módulos adiados do Dia 2, ver "Adiados do Dia 2"), um de cada vez; depois o Bloco final.
   - Dia 4: revisão geral e correção (ver "Dia 4").
 - **Pendências:** todo PR da migração tem no corpo a seção "Pendências para o Dia 4" (ou "nenhuma"). Ela lista: falha de CI ou teste que apareceu no caminho, item da revisão ponytail ou do revisor não corrigido, falha que bateu o teto de 3 ciclos e atalho com limite conhecido.
 - **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
@@ -134,6 +134,12 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - G6 Cobertura e agenda: `coverage`, `termos`, `lembretes`.
   - G7 final (envio real e Assistente): `assistant-chat`, `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
   - `app-shell` vai para o Bloco final (decisão do piloto: é a casca da página, que o React só assume no fim).
+  - `cockpit-tool-panels` também vai para o Bloco final (revisão de integração, 15/11/2026): é o roteador das ferramentas e chama ações de quase todos os grupos; o G2 só tirou dele o bloco de Unidades.
+  - **Adiados do Dia 2** (decisão da revisão de integração, 15/11/2026; motivos nas "Pendências para o Dia 4" de cada PR). Os grupos do Dia 2 deixaram estes módulos no código antigo porque outros módulos antigos leem IDs deles ou chamam funções síncronas deles. Vão para o Dia 3, depois do G7, em três grupos, **um de cada vez** (cada um parte do `main` com o anterior mesclado), porque os IDs e as funções cruzam os grupos e o G7 usa `currentEquipamento` e `unidadesList`:
+    - G8 Sebrae e importação (#258, #257): `sebrae-dashboard` 2443, `cockpit-chamados` 421, `inventory-upload` 427 (3291). Invariante: sim (SharePoint `enviar`). `cockpit-chamados` depende dos contêineres no partial do G2 e em `card-equipamento.html`; `inventory-upload` mistura o modal com Entra e tem o botão `#btn-exportar-equipamentos`, lido pelo `dashboard`.
+    - G9 Resumo e comparação (#260): `comparison-result` 850, `dashboard` 674, `comparison-history` 563, `monthly-report` 87 (2174). Invariante: não. `monthly-report` é lido por `cockpit-tool-panels`, `comparison-history` por `static/js/ui/data-panels.js`, e outros módulos leem IDs do `dashboard` (`alerta-backups-regionais`, `btn-exportar-equipamentos`, `readiness-panel`) e do `comparison-result`: a ponte mantém os nomes e os IDs.
+    - G10 Equipamento e transporte (#261, #259): `equipment-search` 1402, `transfer-form` 893, `regional-contacts` 708, `equipment-editor` 502, `full-equipment-search` 221, `alias-history` 139 (3865). Estado: `currentEquipamento`, `equipamentoSelectionRevision`, `retiradaCidadeSelecionada`, `unidadesList`. Invariante: sim. Ficam juntos porque `transfer-form` chama `limparSelecaoEquipamento` de `equipment-search`, `cockpit-tool-panels` chama `acoesEventoHistorico` de `alias-history` sem esperar, `ui/ck-cockpit-visual.js` chama `window.cancelarDadosCadastrais` de `equipment-editor`, e `transfer-form` tem 25 IDs lidos por outros módulos. `equipment-editor` ganha o teste Playwright do invariante antes de mudar.
+    - Nível: alto nos três. Se um grupo não couber numa sessão, o que sobrar vai para o Bloco final, registrado no PR.
   - Conferência do piloto: ver "Grupos conferidos" em "Resultado do piloto".
 - **Invariantes:** grupo com arquivo que trata `confirmado`, `enviar` ou recusa de envio (G1, G3, G4, G5 e G6 hoje) escreve o teste Playwright do invariante **antes** de trocar o código. O revisor é obrigatório nesses grupos. G7 não roda em paralelo.
 - **Testes:** cada grupo cria spec próprio (`tests/e2e/react-<grupo>.spec.cjs`) e baseline próprio, sem editar spec de outro grupo.
@@ -152,7 +158,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   2. Uma lista única: achados "Corrigir antes" e "Deveria corrigir", pendências dos PRs e falhas de CI que voltaram.
   3. Corrigir todos. "Opcional" só se for pequeno; o resto vai para o relatório.
   4. Nova revisão ponytail no diff das correções, até o veredito "pode enviar".
-- **Nível:** alto (ver "Nível de cada sessão"). Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos. Se ainda falhar, a sessão para e devolve o que tentou e o que falha. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
+- **Nível:** alto (ver "Nível de cada sessão"). Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
 - **Critérios de aceite:** lista única zerada, ou cada item restante com o motivo; `npm run verify` e `npm run test:ui:e2e` verdes; veredito ponytail "pode enviar"; `model-super-power:revisor` no conjunto; invariantes do `AGENTS.md` intactos (Endpoint sem Enter, envio real só com `confirmado: true`, SharePoint, Outlook, UX).
 - **Verificar:** as linhas `AC: <critério> — PROVEN BY <evidência>`; app real com dados locais em cada aba.
 - **Proibido:** mudar o visual bento aprovado, ligar auto-merge, fazer merge.
@@ -166,7 +172,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 ## Bloco final — remoção do código antigo
 
 - **Objetivo:** o React assume a página inteira.
-- **Arquivos:** `static/app.js`, `static/app-entry.js`, `static/js/` restantes, `frontend/partials/` e a montagem em `assembled_html` (o `index.html` vira casca com o contêiner raiz); `tsconfig.ui.json`; `@source` mortos em `tailwind.input.css`; harness `tests/frontend/support/` e testes que liam o HTML montado; `frontend/AGENTS.md` e docs que citam partials.
+- **Arquivos:** `static/js/features/app-shell.js` e `static/js/features/cockpit-tool-panels.js` (migram aqui), `static/app.js`, `static/app-entry.js`, `static/js/` restantes, `frontend/partials/` e a montagem em `assembled_html` (o `index.html` vira casca com o contêiner raiz); `tsconfig.ui.json`; `@source` mortos em `tailwind.input.css`; harness `tests/frontend/support/` e testes que liam o HTML montado; `frontend/AGENTS.md` e docs que citam partials.
 - **Critérios de aceite:** nenhum arquivo em `static/js/`; suíte completa verde; CSP e cookie inalterados.
 - **Verificar:** `npm run verify`; `npm run test:ui:e2e`; `git grep "app-entry\|partials/"` sem referências vivas; app real com dados locais.
 
