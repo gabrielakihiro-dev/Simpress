@@ -178,57 +178,8 @@
           </div>
         </section>
 
-        <section class="ck-ferr-painel cob" data-cockpit-tool-panel="cobertura" aria-labelledby="cobertura-heading" hidden>
-          <h2 id="cobertura-heading" class="sr-only">Cobertura de equipamentos</h2>
-          <div class="ck-barra-ferr">
-            <p id="cobertura-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Abra o painel para carregar a cobertura.</p>
-          </div>
-          <div id="cobertura-alertas" class="cob__alertas"></div>
-          <div class="ck-pilulas cob__abas" role="tablist" aria-label="Cobertura">
-            <button type="button" class="ck-pilula" role="tab" id="cobertura-aba-necessidades" aria-selected="true" aria-controls="cobertura-painel-necessidades" data-cobertura-aba="necessidades">Necessidades <span class="ck-pilula__n" data-cobertura-n="necessidades">0</span></button>
-            <button type="button" class="ck-pilula" role="tab" id="cobertura-aba-disponiveis" aria-selected="false" aria-controls="cobertura-painel-disponiveis" data-cobertura-aba="disponiveis" tabindex="-1">Disponíveis <span class="ck-pilula__n" data-cobertura-n="disponiveis">0</span></button>
-            <button type="button" class="ck-pilula" role="tab" id="cobertura-aba-reservas" aria-selected="false" aria-controls="cobertura-painel-reservas" data-cobertura-aba="reservas" tabindex="-1">Reservas <span class="ck-pilula__n" data-cobertura-n="reservas">0</span></button>
-            <button type="button" class="ck-pilula" role="tab" id="cobertura-aba-movimento" aria-selected="false" aria-controls="cobertura-painel-movimento" data-cobertura-aba="movimento" tabindex="-1">Em movimento <span class="ck-pilula__n" data-cobertura-n="movimento">0</span></button>
-            <button type="button" class="ck-pilula" role="tab" id="cobertura-aba-devolucoes" aria-selected="false" aria-controls="cobertura-painel-devolucoes" data-cobertura-aba="devolucoes" tabindex="-1">Devoluções <span class="ck-pilula__n" data-cobertura-n="devolucoes">0</span></button>
-          </div>
-          <div id="cobertura-painel-necessidades" class="cob__painel" role="tabpanel" aria-labelledby="cobertura-aba-necessidades" tabindex="0">
-            <form id="cobertura-form-necessidade" class="ck-barra-ferr cob__form" data-cobertura-escrita>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Data</span><input class="ck-entrada" type="date" name="data" required></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input class="ck-entrada" type="text" name="cidade" required autocomplete="off"></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Quantidade</span><input class="ck-entrada" type="number" name="quantidade" min="1" max="50" value="1" required></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Perfil</span><input class="ck-entrada" type="text" name="perfil" maxlength="80" autocomplete="off"></label>
-              <label class="ck-campo cob__check"><input type="checkbox" name="monitor"><span class="ck-campo__rotulo">Monitor</span></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Observação</span><input class="ck-entrada" type="text" name="observacao" maxlength="500" autocomplete="off"></label>
-              <button type="submit" class="ck-btn ck-btn--primario">Registrar necessidade</button>
-            </form>
-            <div id="cobertura-lista-necessidades" class="cob__lista"></div>
-          </div>
-          <div id="cobertura-painel-disponiveis" class="cob__painel" role="tabpanel" aria-labelledby="cobertura-aba-disponiveis" tabindex="0" hidden>
-            <form id="cobertura-form-disponibilidade" class="ck-barra-ferr cob__form" data-cobertura-escrita>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Série</span><input class="ck-entrada" type="text" name="serie" required autocomplete="off"></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input class="ck-entrada" type="text" name="cidade" autocomplete="off"></label>
-              <button type="submit" class="ck-btn ck-btn--primario" value="disponivel">Confirmar disponível</button>
-              <button type="submit" class="ck-btn ck-btn--secundario" value="em_manutencao">Marcar manutenção</button>
-              <button type="submit" class="ck-btn ck-btn--fantasma" value="indisponivel">Marcar indisponível</button>
-            </form>
-            <div id="cobertura-lista-disponiveis" class="cob__lista"></div>
-          </div>
-          <div id="cobertura-painel-reservas" class="cob__painel" role="tabpanel" aria-labelledby="cobertura-aba-reservas" tabindex="0" hidden>
-            <div id="cobertura-lista-reservas" class="cob__lista"></div>
-          </div>
-          <div id="cobertura-painel-movimento" class="cob__painel" role="tabpanel" aria-labelledby="cobertura-aba-movimento" tabindex="0" hidden>
-            <div id="cobertura-lista-movimento" class="cob__lista"></div>
-          </div>
-          <div id="cobertura-painel-devolucoes" class="cob__painel" role="tabpanel" aria-labelledby="cobertura-aba-devolucoes" tabindex="0" hidden>
-            <form id="cobertura-form-devolucao" class="ck-barra-ferr cob__form" data-cobertura-escrita>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Série</span><input class="ck-entrada" type="text" name="serie" required autocomplete="off"></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Data prevista</span><input class="ck-entrada" type="date" name="data_prevista" required></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input class="ck-entrada" type="text" name="cidade" autocomplete="off"></label>
-              <label class="ck-campo"><span class="ck-campo__rotulo">Observação</span><input class="ck-entrada" type="text" name="observacao" maxlength="500" autocomplete="off"></label>
-              <button type="submit" class="ck-btn ck-btn--primario">Registrar devolução</button>
-            </form>
-            <div id="cobertura-lista-devolucoes" class="cob__lista"></div>
-          </div>
+        <section class="ck-ferr-painel cob" data-cockpit-tool-panel="cobertura" data-react-painel="cobertura" aria-labelledby="cobertura-heading" hidden>
+          <!-- Painel Cobertura em React: frontend/src/paineis/cobertura/painel.tsx. -->
         </section>
 
         <section class="ck-ferr-painel termos lembretes" data-cockpit-tool-panel="lembretes" aria-labelledby="lembretes-heading" hidden>

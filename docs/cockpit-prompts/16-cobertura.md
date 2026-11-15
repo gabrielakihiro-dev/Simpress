@@ -2,7 +2,15 @@
 
 Painel de ferramenta `cobertura` (`data-cockpit-tool-panel="cobertura"`), aberto pelo item `Cobertura` do menu Ferramentas (`#btn-cobertura`) ou pela tecla `F10`. Responde a uma pergunta: as necessidades de equipamento cadastradas vão ser atendidas, e com qual série?
 
-Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_store.py`, rotas em `routers/coverage.py` (contratos 173–190 em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos"), tela em `static/js/features/coverage.js` e `static/js/shared/coverage-model.js`.
+Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_store.py`, rotas em `routers/coverage.py` (contratos 173–190 em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos"), tela em `frontend/src/paineis/cobertura/` (React, desde 15/11/2026) e regras de vaga, kit e ações em `static/js/shared/coverage-model.js`.
+
+## Código da tela (React, Grupo 6)
+
+- `frontend/src/paineis/cobertura/`: `painel.tsx` (status, alertas, abas e os três formulários), `listas.tsx` (as cinco listas), `componentes.tsx` (botão, selo, campo e tabela), `acoes.ts` (escritas e confirmações), `estado.ts` (leitura em fila, `escrever` e status) e `montar.tsx` (monta em `[data-react-painel="cobertura"]`). Toda chamada à API passa por `frontend/src/api.ts`.
+- O partial (`frontend/partials/cockpit-tool-panels.html`) deixa a seção `data-cockpit-tool-panel="cobertura"` vazia, só com `data-react-painel="cobertura"`; o React desenha o painel dentro dela com os mesmos ids, classes, ARIA e `data-cobertura-*` de antes. O atributo `hidden` da seção continua sendo do `cockpit-tool-panels.js`.
+- `static/js/features/coverage.js` virou ponte: publica `carregarCobertura` (chamada ao abrir o painel) e repassa ao React. Se o bundle não carregar, o painel abre vazio e o console registra `O painel React "cobertura" não carregou.`
+- Sem mudança de comportamento: a reserva com manutenção não verificada continua pedindo `Manutenção não verificada` e só grava com `manutencao_conferida: true`; todo cancelamento e a reserva usam o diálogo do app antigo (`window.confirmarAcao`, `#modal-confirmar-acao`); `Preparar Transporte` grava a movimentação e só preenche o Transporte por `window.prepararTransporte`. 404, 409 e 503 recarregam antes de mostrar a mensagem do servidor. O evento `simpress:cobertura-atualizada` (vínculo de planilha) continua relendo a cobertura.
+- Escrita em sistema externo: nenhuma; dado gravado: o mesmo de antes (`data/state/operacao_cobertura*.json`).
 
 ## Regras
 
