@@ -209,6 +209,45 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(page.locator(TOAST).filter({ hasText: "Conflitos" })).toHaveCount(0);
   });
 
+  test("fim do envio: o botão só volta depois da lista nova; lista vazia sem concluir avisa e a consulta para", async ({ page, request }) => {
+    test.setTimeout(30_000);
+    let soltar;
+    let segurar = false;
+    const lista = { conflitos: [celula("a")], escolhas: { a: "site" }, criado_em: "", versao_importacao: "v1" };
+    const posts = [];
+    await page.route("**/api/sebrae/dashboard/conflitos", async route => {
+      if (route.request().method() === "POST") {
+        posts.push(route.request().postDataJSON());
+        return route.fulfill({ json: { escolhas: { a: "site" }, enviar: { iniciado: true, motivo: "" } } });
+      }
+      if (segurar) await new Promise(resolve => { soltar = resolve; });
+      return route.fulfill({ json: lista });
+    });
+    let consultas = 0;
+    await page.route("**/api/automacao/estado*", route => {
+      consultas += 1;
+      return route.fulfill({ json: { estado: "livre", rotina: "enviar", ultima: { status: "erro" } } });
+    });
+    const secao = await abrirPainel(page, request);
+    const botao = secao.locator("#btn-sebrae-conflitos-enviar");
+    await expect(botao).toBeEnabled();
+    segurar = true;
+    await botao.click();
+    await expect.poll(() => typeof soltar, { timeout: 8000 }).toBe("function"); // a rotina acabou e o GET da lista está pendente
+    await expect(botao).toBeDisabled();
+    await botao.click({ force: true });
+    expect(posts).toHaveLength(1);
+    segurar = false;
+    lista.conflitos = [];
+    soltar();
+    await expect(page.locator(TOAST).filter({ hasText: "O envio terminou sem concluir. Veja o resultado na Automação." })).toHaveCount(1);
+    await expect(secao).toBeHidden();
+    const depois = consultas;
+    await page.waitForTimeout(3500);
+    expect(consultas).toBe(depois); // nada mais consulta a automação depois do fim
+    expect(posts).toHaveLength(1);
+  });
+
   test("422 mostra o erro, avisa e recarrega a lista", async ({ page, request }) => {
     const detalhe = "Há escolha para um conflito que não existe mais; recarregue a lista.";
     const chamadas = await rotaConflitos(page, {
@@ -252,5 +291,86 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(secao).toBeHidden();
     await page.waitForTimeout(500);
     expect(erros).toEqual([]);
+  });
+});
+
+// ---- Resumo do histórico do Dashboard Sebrae (Automação, cartão "Chamados novos do SoftExpert") ----
+// Baseline e comportamento gravados com o código antigo (static/js/features/sebrae-historico.js), antes do React.
+
+async function abrirResumoHistorico(page, request, { tema = "light" } = {}) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(valor => { try { localStorage.setItem("simpress:theme", valor); } catch (erro) { /* sem armazenamento */ } }, tema);
+  await request.get("/__fixture_automacao?quantidade=0&sebrae=padrao&run=&antigos=");
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", tema);
+  await page.locator("#tab-automacao").click();
+  return page.locator("#sebrae-novos-painel #sebrae-historico-resumo");
+}
+
+for (const tema of ["light", "dark"]) {
+  test(`baseline: resumo do histórico da fixture, tema ${tema}`, async ({ page, request }) => {
+    const resumo = await abrirResumoHistorico(page, request, { tema });
+    await expect(resumo.locator("li")).toHaveCount(3);
+    await resumo.scrollIntoViewIfNeeded();
+    await page.mouse.move(0, 0);
+    await expect(resumo).toHaveScreenshot(`historico-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
+  });
+}
+
+test.describe("resumo do histórico: comportamento", () => {
+  test.skip(({ viewport }) => viewport.width < 1366, "comportamento: basta um tamanho");
+
+  const rotaHistorico = (page, resposta) => {
+    const urls = [];
+    return page.route("**/api/sebrae/historico?*", route => {
+      urls.push(new URL(route.request().url()).search);
+      return resposta.status ? route.fulfill({ status: resposta.status, json: { detail: resposta.detail } }) : route.fulfill({ json: resposta });
+    }).then(() => urls);
+  };
+
+  test("mostra só as três entradas mais recentes, com selo, contagens e repetições, só como texto", async ({ page, request }) => {
+    const urls = await rotaHistorico(page, { itens: [
+      { tipo: "busca", em: "2026-11-10T09:00:00-03:00", n_lidos: 1, ignorados: 2, n_pendentes: 3, n_erros: 1 },
+      { tipo: "importacao", em: "2026-11-09T09:00:00-03:00", n_adicionados: 2, n_removidos: 1, n_alterados: 4, repeticoes: 1 },
+      { tipo: "importacao", em: "data ruim", inicial: true, total: 1 },
+      { tipo: "importacao", em: "2026-11-01T09:00:00-03:00", n_adicionados: 9 },
+    ] });
+    const resumo = await abrirResumoHistorico(page, request);
+    await expect(resumo.locator("p.ck-campo__rotulo")).toHaveText("Últimos registros do histórico");
+    const linhas = resumo.locator("ul.sebrae-historico-mini > li");
+    await expect(linhas).toHaveCount(3);
+    expect(urls.every(busca => busca === "?limite=3")).toBe(true);
+    await expect(linhas.nth(0).locator(".ck-badge")).toHaveText("Busca");
+    await expect(linhas.nth(0).locator(".ck-badge")).toHaveAttribute("data-status", "alerta");
+    await expect(linhas.nth(0).locator(".sebrae-historico-mini__texto")).toHaveText("1 lido, 2 já no Dashboard, 3 pendentes, 1 com erro");
+    await expect(linhas.nth(1).locator(".ck-badge")).toHaveText("Importação");
+    await expect(linhas.nth(1).locator(".ck-badge")).not.toHaveAttribute("data-status", /.*/);
+    await expect(linhas.nth(1).locator(".sebrae-historico-mini__texto")).toHaveText("2 adicionados, 1 removido, 4 com status alterado · Reimportado 1 vez");
+    await expect(linhas.nth(2).locator(".sebrae-historico-mini__quando")).toHaveText("—");
+    await expect(linhas.nth(2).locator(".sebrae-historico-mini__texto")).toHaveText("Primeira importação: 1 chamado");
+    await expect(linhas.nth(0).locator(".sebrae-historico-mini__quando")).toHaveText(/^\d{2}\/\d{2}\/\d{4},? \d{2}:\d{2}$/);
+    await expect(linhas.nth(0).locator("> *")).toHaveCount(3);
+  });
+
+  test("tipo desconhecido vira rótulo com inicial maiúscula e texto com < > fica texto", async ({ page, request }) => {
+    await rotaHistorico(page, { itens: [{ tipo: "<b>x</b>", em: "2026-11-10T09:00:00-03:00" }] });
+    const resumo = await abrirResumoHistorico(page, request);
+    await expect(resumo.locator(".ck-badge")).toHaveText("<b>x</b>");
+    await expect(resumo.locator("b")).toHaveCount(0);
+    await expect(resumo.locator(".sebrae-historico-mini__texto")).toHaveText("Sem mudanças");
+  });
+
+  test("lista vazia avisa que não há importação registrada", async ({ page, request }) => {
+    await rotaHistorico(page, { itens: [] });
+    const resumo = await abrirResumoHistorico(page, request);
+    await expect(resumo.locator("p.ck-campo__ajuda")).toHaveText("Nenhuma importação registrada ainda.");
+    await expect(resumo.locator("li")).toHaveCount(0);
+  });
+
+  test("falha na consulta mostra a mensagem do servidor no lugar da lista", async ({ page, request }) => {
+    await rotaHistorico(page, { status: 500, detail: "Histórico indisponível." });
+    const resumo = await abrirResumoHistorico(page, request);
+    await expect(resumo.locator("p.ck-campo__ajuda")).toHaveText("Histórico indisponível.");
+    await expect(resumo.locator("li")).toHaveCount(0);
   });
 });
