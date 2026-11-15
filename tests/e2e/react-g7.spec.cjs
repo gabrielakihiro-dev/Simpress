@@ -478,3 +478,349 @@ test.describe("comportamento (1366 px)", () => {
     await expect(page.locator("#assistente-widget")).toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Ticket UX: casos que antes eram testados contra o JS antigo com DOM falso (tests/frontend/test_transporte_ux_ticket.cjs).
+// Com o modal em React (frontend/src/paineis/ux-ticket/), o comportamento de tela é provado aqui, no navegador.
+// ---------------------------------------------------------------------------------------------------------------
+
+const SOLICITANTE_PADRAO = { nome: "Pessoa Padrão", email: "padrao@exemplo.com", telefone: "(41) 92222-2222" };
+const PREPARADO_ENDERECO = {
+  status: "preparado", tipo: "endereco", session_id: SESSION, serial: "LENTO", modelo: PREPARADO.modelo, solicitante: SOLICITANTE, ultimo_envio: null,
+};
+const TRANSPORTE_INICIO = /^Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de .+ para a unidade do Sebrae de Cidade Teste/;
+const ALTERAR_INICIO = /^Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de .+ para .*Cidade Teste.*\.$/;
+const FALHA_CHROME = { status: 503, json: { detail: "O Chrome de automação não abriu.", codigo: "chrome_indisponivel" } };
+
+// Monta a tela como abrirTicket, mas sem apertar "Transporte": cada teste decide quando baixar a planilha ou usar "Alterar Endereço".
+// `buscar: false` deixa a página sem equipamento; `escolher: false` busca o equipamento mas não escolhe a unidade de destino.
+async function telaTicket(page, ticket, { unidade = UNIDADE, padrao = SOLICITANTE, buscar = true, escolher = true } = {}) {
+  const chamadas = [];
+  await page.route("**/api/unidades", route => route.fulfill({ json: [unidade] }));
+  await page.route("**/api/gerar-planilha", route => route.fulfill({
+    status: 200, body: "planilha-ficticia",
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="Transferencia_LENTO.xlsx"',
+    },
+  }));
+  await page.route("**/api/ux/gerar-ticket/**", async route => {
+    const etapa = new URL(route.request().url()).pathname.split("/").pop();
+    if (etapa === "solicitante") return route.fulfill({ json: padrao });
+    const corpo = route.request().postDataJSON();
+    chamadas.push({ etapa, corpo });
+    const resposta = await ticket(etapa, corpo);
+    return route.fulfill({ status: resposta.status ?? 200, json: resposta.json });
+  });
+  await page.goto("/");
+  if (!buscar) return chamadas;
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  await page.locator("#input-serial").focus();
+  await page.keyboard.press("F2");
+  await expect(page.locator("#btn-gerar-planilha")).toBeVisible();
+  if (!escolher) return chamadas;
+  await page.evaluate(() => {
+    const select = document.getElementById("select-unidade-destino");
+    select.value = "7";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#entrega-cnpj")).toHaveText(unidade.cnpj);
+  const campos = {
+    "retirada-contato": "Pessoa Retirada", "retirada-email": "retirada@exemplo.com", "retirada-telefone": "(41) 91111-1111",
+    "retirada-obs": "Notebook + kit", "entrega-contato": "Maria Teste", "entrega-email": "entrega@exemplo.com",
+    "entrega-telefone": "(41) 3333-0000", "entrega-obs": "Nova contratação",
+  };
+  for (const [id, valor] of Object.entries(campos)) await page.locator(`#${id}`).fill(valor);
+  return chamadas;
+}
+
+// "Transporte": baixa a planilha e abre o modal "Gerar ticket no UX" (o download não espera o ticket).
+async function baixarPlanilha(page) {
+  const download = page.waitForEvent("download");
+  await page.locator("#btn-gerar-planilha").click();
+  expect((await download).suggestedFilename()).toBe("Transferencia_LENTO.xlsx");
+  const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+const etapasDe = chamadas => chamadas.map(({ etapa }) => etapa);
+
+test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
+  test.skip(({ viewport }) => viewport.width < 1366, "comportamento não depende da largura: roda só no desktop");
+
+  test.beforeEach(async ({ page }) => {
+    await prepararPagina(page);
+  });
+
+  test("Transporte abre o modal com série, modelo, endereço e solicitante; Esc fecha pela ponte e cancela a sessão", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo));
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    await expect(page.locator("#ux-ticket-serie")).toHaveText("LENTO");
+    await expect(page.locator("#ux-ticket-modelo")).toHaveText(PREPARADO.modelo);
+    await expect(page.locator("#ux-ticket-endereco")).toHaveText(PREPARADO.endereco);
+    await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
+    await expect(modal.getByLabel("Registro")).toHaveValue(TRANSPORTE_INICIO);
+    await expect(modal.getByRole("alert")).toBeHidden();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].etapa).toBe("preparar");
+    expect(chamadas[0].corpo).toMatchObject({ serial: "LENTO", entrega_cep: "80000-000", entrega_contato: "Maria Teste", entrega_telefone: "(41) 3333-0000", entrega_cnpj: UNIDADE.cnpj });
+    expect(chamadas[0].corpo).not.toHaveProperty("conferido");
+    await page.keyboard.press("Escape");
+    await expect(modal).toBeHidden();
+    await expect.poll(() => chamadas.at(-1)).toEqual({ etapa: "cancelar", corpo: { session_id: SESSION } });
+    expect(enviosReais(chamadas)).toEqual([]);
+  });
+
+  test("Unidade sem CEP de 8 dígitos: o download sai, o alerta explica e /preparar nunca é chamado", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { unidade: { ...UNIDADE, cep: "" } });
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("alert")).toContainText("CEP com 8 dígitos");
+    await expect(page.locator("#ux-ticket-estado")).toHaveText("Erro");
+    await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
+    await expect(modal.getByRole("button", { name: "Revisar e finalizar" })).toBeDisabled();
+    await page.waitForTimeout(300);
+    expect(chamadas).toEqual([]);
+  });
+
+  test("Falha no /preparar mantém o Registro digitado: Preparar novamente refaz com o mesmo payload e sem conferido", async ({ page }) => {
+    let falhar = true;
+    const chamadas = await telaTicket(page, (etapa, corpo) => (etapa === "preparar" && falhar ? FALHA_CHROME : padraoTicket(etapa, corpo)));
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("alert")).toHaveText(FALHA_CHROME.json.detail);
+    await expect(page.locator("#ux-ticket-estado")).toHaveText("Erro");
+    await expect(page.locator("#ux-ticket-conferido")).toBeHidden();
+    await expect(modal.getByLabel("Registro")).toBeEnabled();
+    await modal.getByLabel("Registro").fill(REGISTRO_OK);
+    falhar = false;
+    await modal.getByRole("button", { name: "Preparar novamente" }).click();
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    expect(etapasDe(chamadas)).toEqual(["preparar", "preparar"]);
+    expect(chamadas[1].corpo).toEqual(chamadas[0].corpo);
+    expect(chamadas[1].corpo).not.toHaveProperty("conferido");
+    await expect(modal.getByLabel("Registro")).toHaveValue(REGISTRO_OK);
+    await expect(modal.getByRole("alert")).toBeHidden();
+    await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeEnabled();
+  });
+
+  test("envio_incerto no /preparar exige 'Conferi no UX', que manda conferido true; Preparar novamente não é oferecido", async ({ page }) => {
+    let incerto = true;
+    const chamadas = await telaTicket(page, (etapa, corpo) => (
+      etapa === "preparar" && incerto
+        ? { status: 409, json: { detail: "A última tentativa ficou incerta. Confira no UX.", codigo: "envio_incerto" } }
+        : padraoTicket(etapa, corpo)
+    ));
+    const modal = await baixarPlanilha(page);
+    await expect(page.locator("#ux-ticket-estado")).toHaveText("Incerto — confira no UX");
+    await expect(modal.getByRole("button", { name: "Conferi no UX; preparar de novo" })).toBeVisible();
+    await expect(page.locator("#ux-ticket-preparar")).toBeHidden();
+    await page.waitForTimeout(300);
+    expect(chamadas).toHaveLength(1);
+    incerto = false;
+    await modal.getByRole("button", { name: "Conferi no UX; preparar de novo" }).click();
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    expect(etapasDe(chamadas)).toEqual(["preparar", "preparar"]);
+    expect(chamadas[1].corpo).toEqual({ ...chamadas[0].corpo, conferido: true });
+    await expect(page.locator("#ux-ticket-conferido")).toBeHidden();
+  });
+
+  test("/enviar com status incerto trava a sessão e o formulário; só a conferência explícita reabre", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => (
+      etapa === "enviar" ? { json: { status: "incerto", mensagem: "Não deu para confirmar o ticket. Confira no UX." } } : padraoTicket(etapa, corpo)
+    ));
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    await modal.getByLabel("Registro").fill(REGISTRO_OK);
+    await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
+    await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+    await expect(page.locator("#ux-ticket-estado")).toHaveText("Incerto — confira no UX");
+    await expect(modal.getByRole("button", { name: "Revisar e finalizar" })).toBeDisabled();
+    await expect(modal.getByLabel("Registro")).toBeDisabled();
+    await expect(modal.getByRole("button", { name: "Conferi no UX; preparar de novo" })).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(enviosReais(chamadas)).toHaveLength(1);
+    await modal.getByRole("button", { name: "Conferi no UX; preparar de novo" }).click();
+    await expect.poll(() => chamadas.filter(({ etapa }) => etapa === "preparar").length).toBe(2);
+    expect(chamadas.filter(({ etapa }) => etapa === "preparar")[1].corpo.conferido).toBe(true);
+    await expect(modal.getByLabel("Registro")).toBeEnabled();
+    await expect(modal.getByRole("button", { name: "Revisar e finalizar" })).toBeEnabled();
+    expect(enviosReais(chamadas)).toHaveLength(1); // a conferência não reenvia nada
+  });
+
+  test("Cancelar chama /cancelar para a sessão aberta, engole o 409 e fecha o modal", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => (
+      etapa === "cancelar" ? { status: 409, json: { detail: "Sessão já encerrada.", codigo: "sessao_inexistente" } } : padraoTicket(etapa, corpo)
+    ));
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    await expect(page.locator("#ux-ticket-cancelar")).toHaveText("Cancelar");
+    await page.locator("#ux-ticket-cancelar").click();
+    await expect(modal).toBeHidden();
+    await expect.poll(() => chamadas.at(-1)).toEqual({ etapa: "cancelar", corpo: { session_id: SESSION } });
+    await expect(page.locator("#toast-container")).not.toContainText("Sessão já encerrada");
+  });
+
+  test("O solicitante padrão aparece na hora, segue editável durante o /preparar e o valor editado sobrevive à falha", async ({ page }) => {
+    const retido = portao();
+    await telaTicket(page, async (etapa, corpo) => {
+      if (etapa === "preparar") { await retido.espera; return FALHA_CHROME; }
+      return padraoTicket(etapa, corpo);
+    }, { padrao: SOLICITANTE_PADRAO });
+    try {
+      const modal = await baixarPlanilha(page);
+      // O /preparar pode levar minutos no UX real: já dá para preencher o Registro e editar o solicitante.
+      await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE_PADRAO.nome);
+      await expect(modal.getByLabel("E-mail", { exact: true })).toHaveValue(SOLICITANTE_PADRAO.email);
+      await expect(modal.getByLabel("Contato", { exact: true })).toHaveValue(SOLICITANTE_PADRAO.telefone);
+      await expect(modal.getByLabel("Registro")).toBeEnabled();
+      const registro = modal.getByLabel("Registro");
+      await registro.fill("Prezados,\nColaborador(a) Novo(a):");
+      await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
+      await modal.getByLabel("E-mail", { exact: true }).fill("outra@exemplo.com");
+      // O ui-motion.js tira aria-invalid do campo digitado; a atualização seguinte da tela (aqui, o e-mail) o repõe, como no módulo antigo.
+      await expect(registro).toHaveAttribute("aria-invalid", "true");
+      retido.liberar();
+      await expect(modal.getByRole("alert")).toHaveText(FALHA_CHROME.json.detail);
+      await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE_PADRAO.nome);
+      await expect(modal.getByLabel("E-mail", { exact: true })).toHaveValue("outra@exemplo.com");
+      await registro.fill(REGISTRO_OK);
+      await expect(registro).toHaveAttribute("aria-invalid", "false");
+    } finally {
+      retido.liberar();
+    }
+  });
+
+  test("Fechar durante o /preparar cancela a sessão que chega depois", async ({ page }) => {
+    const retido = portao();
+    const chamadas = await telaTicket(page, async (etapa, corpo) => {
+      if (etapa === "preparar") await retido.espera;
+      return padraoTicket(etapa, corpo);
+    });
+    try {
+      const modal = await baixarPlanilha(page);
+      await modal.getByRole("button", { name: "Cancelar" }).click();
+      retido.liberar();
+      await expect.poll(() => chamadas.at(-1)).toEqual({ etapa: "cancelar", corpo: { session_id: SESSION } });
+      await expect(modal).toBeHidden();
+      expect(etapasDe(chamadas)).toEqual(["preparar", "cancelar"]);
+    } finally {
+      retido.liberar();
+    }
+  });
+
+  test("Fechar é ignorado com o envio real em voo; Cancelar volta depois do resultado", async ({ page }) => {
+    const retido = portao();
+    const chamadas = await telaTicket(page, async (etapa, corpo) => {
+      if (etapa === "enviar" && corpo.enviar) await retido.espera;
+      return padraoTicket(etapa, corpo);
+    });
+    try {
+      const modal = await baixarPlanilha(page);
+      await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+      await modal.getByLabel("Registro").fill(REGISTRO_OK);
+      await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
+      await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+      await expect.poll(() => enviosReais(chamadas).length).toBe(1);
+      const cancelar = page.locator("#ux-ticket-cancelar");
+      await expect(cancelar).toBeDisabled();
+      await page.evaluate(() => window.fecharTicketUX());
+      await page.waitForTimeout(300);
+      await expect(modal).toBeVisible();
+      expect(chamadas.some(({ etapa }) => etapa === "cancelar")).toBe(false);
+      retido.liberar();
+      await expect(modal.getByRole("status")).toContainText("Ticket nº 445566");
+      await expect(cancelar).toBeEnabled();
+      expect(enviosReais(chamadas)).toHaveLength(1);
+    } finally {
+      retido.liberar();
+    }
+  });
+
+  test("Simular manda o Nº de chamado interno digitado", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo));
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    await modal.getByLabel("Registro").fill(REGISTRO_OK);
+    await modal.getByLabel("Nº de chamado interno").fill("INT-1");
+    await modal.getByRole("button", { name: "Simular preenchimento" }).click();
+    await expect.poll(() => envios(chamadas).length).toBe(1);
+    expect(envios(chamadas).map(({ corpo }) => corpo)).toEqual([{
+      session_id: SESSION, serial: "LENTO", descricao: REGISTRO_OK, solicitante: SOLICITANTE, chamado_interno: "INT-1", enviar: false, confirmado: false,
+    }]);
+  });
+
+  test("Alterar Endereço prepara só com a série, esconde os campos do Transporte e confirma com o incidente do Transporte", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => (
+      etapa === "preparar-alterar-endereco" ? { json: PREPARADO_ENDERECO } : padraoTicket(etapa, corpo)
+    ));
+    await page.locator("#btn-alterar-endereco").click();
+    const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
+    expect(chamadas).toEqual([{ etapa: "preparar-alterar-endereco", corpo: { serial: "LENTO" } }]);
+    const registro = modal.getByLabel("Registro");
+    await expect(registro).toHaveValue(ALTERAR_INICIO);
+    await expect(modal.locator("dt").filter({ hasText: "Endereço escolhido" })).toBeHidden();
+    for (const id of ["#ux-ticket-endereco", "#ux-ticket-cnpj-instalacao", "#ux-ticket-cnpj-faturamento", "#ux-ticket-anexo", "#ux-ticket-chamado-interno"]) {
+      await expect(page.locator(id)).toBeHidden();
+    }
+    const descricao = await registro.inputValue();
+    await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
+    const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+    await expect(confirmacao).toContainText("Série: LENTO");
+    await expect(confirmacao).toContainText("Incidente: Transporte · Transferência Fisica de Equipamentos");
+    await confirmacao.getByRole("button", { name: "Finalizar ticket" }).click();
+    await expect(modal.getByRole("status")).toContainText("Ticket nº 445566");
+    expect(enviosReais(chamadas).map(({ corpo }) => corpo)).toEqual([{
+      session_id: SESSION, serial: "LENTO", descricao, solicitante: SOLICITANTE, chamado_interno: "", enviar: true, confirmado: true,
+    }]);
+    expect(etapasDe(chamadas)).not.toContain("preparar");
+  });
+
+  test("Alterar Endereço sem equipamento pesquisado só avisa e não chama o UX", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { buscar: false });
+    await page.evaluate(() => window.alterarEnderecoTicketUX());
+    await expect(page.locator("#toast-container")).toContainText("Pesquise e selecione o equipamento antes de alterar o endereço.");
+    await page.waitForTimeout(300);
+    expect(chamadas).toEqual([]);
+    await expect(page.locator("#modal-ticket-ux")).toBeHidden();
+  });
+
+  test("Alterar Endereço com equipamento mas sem endereços carregados só avisa e não chama o UX", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { escolher: false });
+    await page.evaluate(() => window.alterarEnderecoTicketUX());
+    await expect(page.locator("#toast-container")).toContainText("Selecione o equipamento de origem e a unidade de destino para carregar os endereços.");
+    await page.waitForTimeout(300);
+    expect(chamadas).toEqual([]);
+    await expect(page.locator("#modal-ticket-ux")).toBeHidden();
+  });
+
+  test("Depois de Alterar Endereço, Transporte restaura o modal completo e o Registro do Transporte", async ({ page }) => {
+    await telaTicket(page, (etapa, corpo) => (
+      etapa === "preparar-alterar-endereco" ? { json: PREPARADO_ENDERECO } : padraoTicket(etapa, corpo)
+    ));
+    await page.locator("#btn-alterar-endereco").click();
+    const alterar = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
+    await expect(alterar).toBeVisible();
+    await alterar.getByRole("button", { name: "Cancelar" }).click();
+    await expect(alterar).toBeHidden();
+    const modal = await baixarPlanilha(page);
+    await expect(modal.getByRole("heading", { name: "Gerar ticket no UX" })).toBeVisible();
+    await expect(modal.getByLabel("Registro")).toHaveValue(TRANSPORTE_INICIO);
+    await expect(page.locator("#ux-ticket-cnpj-instalacao")).toBeVisible();
+    await expect(page.locator("#ux-ticket-chamado-interno")).toBeVisible();
+  });
+
+  test("O evento simpress:transfer-generated sem payload não abre o modal nem chama o UX", async ({ page }) => {
+    const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { buscar: false });
+    await page.waitForFunction(() => Boolean(window.SimpressReact?.["ux-ticket"]));
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated", { detail: {} })));
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated")));
+    await page.waitForTimeout(300);
+    await expect(page.locator("#modal-ticket-ux")).toBeHidden();
+    expect(chamadas).toEqual([]);
+  });
+});
