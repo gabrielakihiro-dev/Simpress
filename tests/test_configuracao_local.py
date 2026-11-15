@@ -199,6 +199,12 @@ class RotasContasTests(ConfiguracaoBase):
         self.put_contas(conta_simpress="", usar_no_outlook_simpress=False)
         self.assertEqual(self.contas_gravadas(), {"dashboard_email": "pessoa@exemplo.invalid"})
 
+    def test_conta_vinda_de_variavel_de_ambiente_nao_e_copiada_para_o_arquivo_pelo_espelho_do_outlook(self):
+        os.environ["SIMPRESS_DASHBOARD_EMAIL"] = "ambiente@exemplo.invalid"
+        resposta = self.put_contas(conta_simpress="", usar_no_outlook_simpress=True)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertFalse(self.contas.exists())
+
     def test_campo_em_branco_mantem_o_valor_e_nao_regrava_nem_faz_backup(self):
         self.put_contas(conta_simpress="pessoa@exemplo.invalid", usuario_endpoint="nome.usuario")
         antes = self.contas.read_bytes()

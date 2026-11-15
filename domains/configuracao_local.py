@@ -257,7 +257,7 @@ def gravar_contas(arquivo: Path, pasta_backups: Path, contas: Mapping[str, str],
         valor = str(contas.get(conta["id"]) or "").strip()
         if valor and (erro := validar_valor(conta["tipo"], valor)):
             raise ValueError(f'{conta["rotulo"]}: {erro}')
-        atual, _ = _resolver(variavel, chave, guardado, env)
+        atual, fonte = _resolver(variavel, chave, guardado, env)
         if valor and not _ambiente(variavel, env):
             novos[chave] = valor
         # Campo em branco só mexe no espelho do Outlook quando a caixa veio no pedido (ausente = deixa como está).
@@ -267,8 +267,10 @@ def gravar_contas(arquivo: Path, pasta_backups: Path, contas: Mapping[str, str],
         if _ambiente(variavel_outlook, env):
             continue
         if usar_no_outlook.get(conta["id"], True):
-            if valor or atual:
-                novos[chave_outlook] = valor or atual
+            # Conta vinda do ambiente não é copiada para o arquivo: valeria mesmo depois de a variável sair.
+            espelho = valor or (atual if fonte != "ambiente" else "")
+            if espelho:
+                novos[chave_outlook] = espelho
         elif guardado.get(chave_outlook) == atual:
             # Desmarcar tira só o espelho (igual à conta); e-mail do Outlook diferente da conta foi escolhido à mão e fica.
             remover.add(chave_outlook)

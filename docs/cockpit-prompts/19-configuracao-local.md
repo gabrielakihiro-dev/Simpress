@@ -118,7 +118,7 @@ Erros de validação: 422 com o campo e a mensagem, sem repetir o valor recebido
 - Antes de sobrepor, copia o arquivo anterior para `data/state/config_backups/<arquivo>.<AAAAMMDD-HHMMSS>.bak` e mantém os 5 mais recentes. A pasta precisa entrar no `.gitignore`.
 - `Remover chave` não faz backup: a cópia guardaria a chave removida. Cópias feitas por gravações anteriores continuam na pasta e não são apagadas; apague-as à mão se a chave removida vazou.
 - Chave de IA vinda de variável de ambiente não é gravada nem removida pelo site (422, nada muda; a mensagem traz só o rótulo): altere a variável.
-- `Usar também no Outlook` desmarcado remove o espelho `outlook_email_*` quando ele é igual à conta, mesmo com o campo em branco; espelho diferente da conta (escolhido à mão) fica. Caixa ausente no pedido, com o campo em branco, não mexe no espelho.
+- `Usar também no Outlook` desmarcado remove o espelho `outlook_email_*` quando ele é igual à conta, mesmo com o campo em branco; espelho diferente da conta (escolhido à mão) fica. Caixa ausente no pedido, com o campo em branco, não mexe no espelho. Conta vinda de variável de ambiente nunca é copiada para o espelho do arquivo com o campo em branco.
 - O log registra só `configuracao_local: <seção> gravada`, sem valores.
 
 ## Quando a automação passa a usar o valor novo
