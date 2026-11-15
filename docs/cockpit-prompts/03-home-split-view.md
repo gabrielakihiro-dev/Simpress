@@ -154,7 +154,9 @@ Migração React (Dia 2, grupo G4, 15/11/2026; plano `docs/planos/migracao-react
 `#modal-chamado-ux` e a seção `Nomes do Microsoft Entra` (`#esc-inv-entra`, no modal de importação) viraram
 painéis React, com os mesmos IDs, ARIA, classes e textos. Código em `frontend/src/paineis/ux-chamados/` e
 `frontend/src/paineis/entra-users/`; `static/js/features/ux-chamados.js` e `entra-users.js` viraram pontes
-que repassam as ações ao React. O envio real continua só com `enviar: true` e `confirmado: true`, depois de
+que repassam as ações ao React. Na seção do Entra, só o corpo do `<form>` é React: o cabeçalho, com a dica
+que cita o domínio das contas, fica em `frontend/partials/modais.html`, porque o código React não pode conter
+domínio de e-mail (`tests/test_maintenance_contracts.py`). O envio real continua só com `enviar: true` e `confirmado: true`, depois de
 **Enviar solicitação**; falha de rede no envio real nunca reenvia e pede conferência no UX. Testes:
 `tests/e2e/react-g4.spec.cjs` (invariante do envio, telas nos temas claro e escuro) e `tests/e2e/ux-chamados.spec.cjs`.
 

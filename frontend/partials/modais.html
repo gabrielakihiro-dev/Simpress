@@ -472,8 +472,11 @@
           <span class="ck-rotulo-info"><label for="auto-export-history-after-update"><strong>Baixar o Histórico de Planilhas automaticamente.</strong></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o download automático" aria-describedby="auto-export-history-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="auto-export-history-dica" role="tooltip" class="info-tip-text">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span></span></span>
         </div>
 
-        <!-- Seção "Nomes do Microsoft Entra" em React: frontend/src/paineis/entra-users/secao.tsx. -->
-        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title" data-react-painel="entra-users"></section>
+        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
+          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
+          <!-- Corpo da seção em React: frontend/src/paineis/entra-users/secao.tsx. O cabeçalho fica aqui porque a dica cita o domínio, proibido no código React (tests/test_maintenance_contracts.py). -->
+          <form class="ckp-secao__corpo" data-react-painel="entra-users"></form>
+        </section>
       </div>
 
       <div class="ckp-corpo" data-so-etapa="impacto" hidden>

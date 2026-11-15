@@ -315,6 +315,33 @@ test.describe("comportamento (1366 px)", () => {
     await expect(page.locator("#ux-chamado-problema option")).toHaveCount(0);
   });
 
+  // Caminho real da troca: equipment-search.js chama fecharChamadoUX pela ponte (assíncrona) antes de trocar a série.
+  test("UX: trocar o equipamento pelo caminho real fecha o modal e cancela a sessão", async ({ page }) => {
+    const pedidos = await rotaUx(page, padraoUx);
+    const modal = await abrirChamado(page);
+    await expect(modal.getByLabel("Problema")).toBeEnabled();
+    await page.evaluate(() => window.definirEquipamentoAtual({ serial: "S2" }));
+    await expect(page.locator("#modal-chamado-ux")).toBeHidden();
+    await expect.poll(() => pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar", "/api/ux/abrir-chamado/cancelar"]);
+  });
+
+  test("UX: depois do envio real a sessão fica usada e o clique duplo pede uma confirmação só", async ({ page }) => {
+    const pedidos = await rotaUx(page, padraoUx);
+    const modal = await abrirChamado(page);
+    await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
+    await modal.getByRole("button", { name: "Revisar e enviar" }).dblclick();
+    const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+    await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();
+    await expect(page.locator("#ux-chamado-status")).toHaveText("Chamado enviado. OS #98765.");
+    await expect(confirmacao).toBeHidden();
+    await expect(modal.getByRole("button", { name: "Revisar e enviar" })).toBeDisabled();
+    await expect(page.locator("#ux-chamado-motivo")).toHaveText("Simulação e envio indisponíveis: esta sessão do UX já foi usada. Abra o chamado de novo se precisar.");
+    // Chamada direta (o atalho do código antigo ainda existe em window) também não reenvia.
+    await page.evaluate(() => window.executarChamadoUX(true));
+    await expect(confirmacao).toBeHidden();
+    expect(pedidos.filter(({ caminho }) => caminho.endsWith("/enviar"))).toHaveLength(1);
+  });
+
   // Portado de tests/frontend/test_home_ux_chamado.cjs (DOM falso) para a página real.
   test("UX: sem solicitante salvo, os campos ficam editáveis e as duas ações esperam o preenchimento", async ({ page }) => {
     const pedidos = await rotaUx(page, (caminho, corpo) => (caminho.endsWith("/preparar")
@@ -330,6 +357,9 @@ test.describe("comportamento (1366 px)", () => {
       await expect(botao).toBeDisabled();
       await expect(botao).toHaveAttribute("title", "Preencha todos os campos do solicitante para liberar a simulação e o envio.");
     }
+    // A guarda vale também na chamada direta (window.executarChamadoUX), sem passar pelo botão.
+    await page.evaluate(() => window.executarChamadoUX(true));
+    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
     for (const [rotulo, valor] of Object.entries(campos)) await modal.getByLabel(rotulo).fill(valor);
     await expect(motivo).toBeHidden();
     await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeEnabled();
@@ -337,6 +367,11 @@ test.describe("comportamento (1366 px)", () => {
     await modal.getByLabel("Nome").fill("  ");
     await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
     expect(pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar"]);
+    // Espaços nas pontas não vão para o UX.
+    await modal.getByLabel("Nome").fill(SOLICITANTE.nome);
+    await modal.getByLabel("Departamento/Cargo").fill(" " + SOLICITANTE.departamento_cargo + " ");
+    await modal.getByRole("button", { name: "Simular preenchimento" }).click();
+    await expect.poll(() => pedidos.at(-1)?.corpo?.solicitante).toEqual(SOLICITANTE);
   });
 
   test("UX: descrição com campo em branco não abre o modal", async ({ page }) => {
