@@ -824,3 +824,402 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     expect(chamadas).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Outlook: casos do módulo antigo (a versão de tests/frontend/test_outlook_email_ui.cjs com módulo simulado) no painel React.
+// O servidor falso salva modelos, devolve contatos e tem portões para segurar uma resposta; nada real é chamado.
+// ---------------------------------------------------------------------------------------------------------------
+
+const AVISO_MODELO = {
+  id: "aviso", nome: "Modelo 2 - Aviso", conta: "simpress", para: "grupo@exemplo.test", cc: "copia@exemplo.test",
+  assunto: "Aviso geral", corpo: "Texto do aviso geral.",
+};
+const ANA = { nome: "Ana Exemplo", email: "ana.exemplo@exemplo.test" };
+const ANA_TESTE = { nome: "Ana Teste", email: "ana.teste@exemplo.test" };
+const PESSOA = { nome: "Pessoa Teste", email: "pessoa.teste@exemplo.test" };
+
+function resolverContato(token) {
+  if (token === "unico") return { token, status: "unico", ...PESSOA };
+  if (token === "ambiguo") return { token, status: "ambiguo", opcoes: [ANA, ANA_TESTE] };
+  return { token, status: "nenhum" };
+}
+
+// `segurar*` guardam um portão() que a rota espera; `falharPut` e `recusarCampo` fazem o PUT do modelo falhar.
+async function servidorOutlook(page, { diretorio = true, modelos = [CABO_PADRAO, AVISO_MODELO] } = {}) {
+  const servidor = {
+    chamadas: [], modelos: modelos.map(modelo => ({ ...modelo })), respostaEmail: null, respostaConfiguracao: null,
+    falharPut: false, recusarCampo: null, contatos: null,
+    segurarConfiguracao: null, segurarPut: null, segurarEmail: null, segurarContatos: {},
+    de(metodo, caminho) { return this.chamadas.filter(chamada => chamada.metodo === metodo && chamada.caminho === caminho); },
+    puts(id = "cabo") { return this.de("PUT", `/email/modelos/${id}`).map(({ corpo }) => corpo); },
+  };
+  await page.route("**/api/outlook/**", async route => {
+    const pedido = route.request();
+    const url = new URL(pedido.url());
+    const metodo = pedido.method();
+    const caminho = url.pathname.replace("/api/outlook", "");
+    const corpo = pedido.postData() ? pedido.postDataJSON() : null;
+    servidor.chamadas.push({ metodo, caminho, busca: url.search, corpo });
+    const modelo = servidor.modelos.find(item => caminho.startsWith(`/email/modelos/${item.id}`));
+    if (metodo === "GET" && caminho === "/email/configuracao") {
+      if (servidor.segurarConfiguracao) await servidor.segurarConfiguracao.espera;
+      return route.fulfill(servidor.respostaConfiguracao || {
+        json: { contas: CONTAS, modelos: servidor.modelos, diretorio: { disponivel: diretorio } },
+      });
+    }
+    if (metodo === "POST" && caminho === "/email/modelos") {
+      const origem = servidor.modelos.find(item => item.id === corpo.copiar_de);
+      const novo = origem
+        ? { ...origem, id: `copia-${servidor.modelos.length}`, nome: `${origem.nome} (cópia)` }
+        : { id: `novo-${servidor.modelos.length}`, nome: "Novo modelo", conta: "sebrae", para: "", cc: "", assunto: "", corpo: "" };
+      servidor.modelos.push(novo);
+      return route.fulfill({ json: novo });
+    }
+    if (metodo === "PUT" && modelo) {
+      if (servidor.segurarPut) await servidor.segurarPut.espera;
+      if (servidor.falharPut) return route.fulfill({ status: 500, json: { detail: "Falha de teste ao salvar." } });
+      if (servidor.recusarCampo && servidor.recusarCampo in corpo) {
+        return route.fulfill({ status: 422, json: { detail: "Campo recusado pelo servidor." } });
+      }
+      Object.assign(modelo, corpo);
+      return route.fulfill({ json: modelo });
+    }
+    if (metodo === "DELETE" && modelo) return route.fulfill({ json: { ok: true } });
+    if (metodo === "GET" && caminho === "/contatos") {
+      const termo = url.searchParams.get("q") || "";
+      if (servidor.segurarContatos[termo]) await servidor.segurarContatos[termo].espera;
+      const contatos = servidor.contatos ? servidor.contatos(termo) : (termo.startsWith("an") ? [ANA, ANA_TESTE] : []);
+      return route.fulfill({ json: { contatos } });
+    }
+    if (metodo === "POST" && caminho === "/contatos/resolver") {
+      return route.fulfill({ json: { resultados: corpo.tokens.map(resolverContato) } });
+    }
+    if (metodo === "POST" && caminho === "/email") {
+      if (servidor.segurarEmail) await servidor.segurarEmail.espera;
+      return route.fulfill(servidor.respostaEmail || { json: { status: corpo.modo === "enviar" ? "enviado" : "aberto" } });
+    }
+    return route.fulfill({ status: 404, json: { detail: "Rota não simulada." } });
+  });
+  return servidor;
+}
+
+// Servidor falso e equipamento selecionado, com o modal ainda fechado.
+async function prepararOutlook(page, opcoes) {
+  const servidor = await servidorOutlook(page, opcoes);
+  await page.route("**/api/equipamento/*", route => route.fulfill({ json: EQUIPAMENTO }));
+  await page.goto("/");
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  return servidor;
+}
+
+async function abrirModalOutlook(page, opcoes) {
+  const servidor = await prepararOutlook(page, opcoes);
+  await page.locator("#btn-enviar-email").click();
+  await expect(page.locator("#modal-email-outlook")).toBeVisible();
+  await expect(page.locator("#email-modelo")).toBeEnabled(); // modelos carregados
+  return servidor;
+}
+
+const statusOutlook = page => page.locator("#email-status");
+const autosaveOutlook = page => page.locator("#email-autosave-status");
+
+test.describe("Outlook em React: casos do módulo antigo (1366 px)", () => {
+  test.skip(({ viewport }) => viewport.width < 1366, "comportamento não depende da largura: roda só no desktop");
+
+  test.beforeEach(async ({ page }) => {
+    await prepararPagina(page);
+  });
+
+  test("Digitar grava só o campo editado depois de 800 ms; Enter, sair do campo e trocar a conta gravam na hora", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    await page.locator("#email-corpo").fill("Corpo novo para {nome}");
+    await expect(autosaveOutlook(page)).toHaveText("Alteração ainda não salva…");
+    expect(servidor.puts()).toEqual([]);
+    await expect(autosaveOutlook(page)).toHaveText("Salva.");
+    expect(servidor.puts()).toEqual([{ corpo: "Corpo novo para {nome}" }]);
+
+    await page.locator("#email-assunto").fill("Assunto na hora");
+    await page.locator("#email-assunto").press("Enter");
+    await expect.poll(() => servidor.puts().length).toBe(2);
+    expect(servidor.puts()[1]).toEqual({ assunto: "Assunto na hora" });
+
+    await page.locator("#email-modelo-nome").fill("Nome ao sair");
+    await page.locator("#email-modelo-nome").blur();
+    await expect.poll(() => servidor.puts().length).toBe(3);
+    expect(servidor.puts()[2]).toEqual({ nome: "Nome ao sair" });
+
+    await page.locator("#email-conta").selectOption("simpress");
+    await expect.poll(() => servidor.puts().length).toBe(4);
+    expect(servidor.puts()[3]).toEqual({ conta: "simpress" });
+
+    await page.waitForTimeout(1000); // o timer de 800 ms foi cancelado a cada gravação: nada é gravado de novo
+    expect(servidor.puts()).toHaveLength(4);
+  });
+
+  test("Trocar de modelo com o salvamento falhando fica no modelo antigo e mostra o erro", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    servidor.falharPut = true;
+    await page.locator("#email-assunto").fill("Edição que não salva");
+    await page.locator("#email-modelo").selectOption("aviso");
+    await expect(autosaveOutlook(page)).toHaveText("Não foi possível salvar: Falha de teste ao salvar.");
+    await expect(autosaveOutlook(page)).toHaveAttribute("data-estado", "erro");
+    await expect(page.locator("#email-modelo")).toHaveValue("cabo");
+    await expect(page.locator("#email-assunto")).toHaveValue("Edição que não salva");
+    expect(servidor.de("PUT", "/email/modelos/aviso")).toHaveLength(0);
+
+    servidor.falharPut = false; // a edição continua pendente: a nova tentativa grava e só então troca
+    await page.locator("#email-modelo").selectOption("aviso");
+    await expect(page.locator("#email-modelo")).toHaveValue("aviso");
+    await expect(page.locator("#email-assunto")).toHaveValue(AVISO_MODELO.assunto);
+    expect(servidor.modelos[0].assunto).toBe("Edição que não salva");
+  });
+
+  test("Fechar grava o que está pendente, e uma falha nesse salvamento aparece em toast", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    await page.locator("#email-assunto").fill("Gravado ao fechar");
+    await page.locator("#email-cancelar").click();
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+    await expect.poll(() => servidor.puts()).toEqual([{ assunto: "Gravado ao fechar" }]);
+
+    await page.locator("#btn-enviar-email").click();
+    await expect(page.locator("#email-assunto")).toHaveValue("Gravado ao fechar");
+    servidor.falharPut = true;
+    await page.locator("#email-assunto").fill("Não grava");
+    await page.locator("#email-cancelar").click();
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+    await expect(page.locator("#toast-container")).toContainText("Não foi possível salvar: Falha de teste ao salvar.");
+  });
+
+  test("Um campo que o servidor recusa não faz perder os outros, e o próximo salvamento tenta de novo", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    servidor.recusarCampo = "assunto";
+    await page.locator("#email-assunto").fill("Assunto recusado");
+    await page.locator("#email-corpo").fill("Corpo aceito");
+    await expect(autosaveOutlook(page)).toHaveText("Não foi possível salvar: Campo recusado pelo servidor.");
+    // Um PUT por campo: sair do Assunto grava na hora (recusado); o salvamento de 800 ms tenta o Assunto de novo e grava o Corpo.
+    await expect.poll(() => servidor.puts().length).toBe(3);
+    expect(servidor.puts().filter(dados => "assunto" in dados)).toEqual([{ assunto: "Assunto recusado" }, { assunto: "Assunto recusado" }]);
+    expect(servidor.puts().filter(dados => "corpo" in dados)).toEqual([{ corpo: "Corpo aceito" }]);
+    expect(servidor.modelos[0].corpo).toBe("Corpo aceito");
+
+    servidor.recusarCampo = null;
+    await page.locator("#email-modelo-nome").fill("Nome novo");
+    await page.locator("#email-modelo-nome").blur();
+    await expect(autosaveOutlook(page)).toHaveText("Salva.");
+    expect(servidor.modelos[0]).toMatchObject({ nome: "Nome novo", assunto: "Assunto recusado", corpo: "Corpo aceito" });
+  });
+
+  test("O navegador pergunta antes de sair com alteração pendente ou salvamento em andamento", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    const pergunta = () => page.evaluate(() => {
+      const evento = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(evento);
+      return evento.defaultPrevented;
+    });
+    expect(await pergunta()).toBe(false);
+    await page.locator("#email-assunto").fill("Pendente");
+    expect(await pergunta()).toBe(true);
+    await expect(autosaveOutlook(page)).toHaveText("Salva.");
+    expect(await pergunta()).toBe(false);
+
+    servidor.segurarPut = portao();
+    await page.locator("#email-assunto").fill("Em andamento");
+    await page.locator("#email-assunto").press("Enter");
+    await expect.poll(() => servidor.puts().length).toBe(2);
+    expect(await pergunta()).toBe(true);
+    servidor.segurarPut.liberar();
+    await expect(autosaveOutlook(page)).toHaveText("Salva.");
+    expect(await pergunta()).toBe(false);
+  });
+
+  test("A configuração que chega depois de fechar o modal é ignorada", async ({ page }) => {
+    const servidor = await prepararOutlook(page);
+    const porta = portao();
+    servidor.segurarConfiguracao = porta;
+    await page.locator("#btn-enviar-email").click();
+    await expect(page.locator("#modal-email-outlook")).toBeVisible();
+    await expect.poll(() => servidor.de("GET", "/email/configuracao").length).toBe(1);
+    servidor.segurarConfiguracao = null; // só o primeiro pedido fica preso
+    await page.locator("#email-cancelar").click();
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+    porta.liberar();
+    await page.waitForTimeout(300);
+    await expect(page.locator("#email-modelo option")).toHaveCount(0); // a resposta atrasada não preencheu nada
+
+    await page.locator("#btn-enviar-email").click();
+    await expect(page.locator("#email-modelo")).toBeEnabled();
+    await expect(page.locator("#email-modelo option")).toHaveCount(2);
+  });
+
+  test("Lembra o último modelo ao reabrir e explica a falha ao carregar a configuração", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    await page.locator("#email-modelo").selectOption("aviso");
+    await expect(page.locator("#email-assunto")).toHaveValue(AVISO_MODELO.assunto);
+    await page.locator("#email-cancelar").click();
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+    await page.locator("#btn-enviar-email").click();
+    await expect(page.locator("#email-modelo")).toHaveValue("aviso");
+    await expect(page.locator("#email-assunto")).toHaveValue(AVISO_MODELO.assunto);
+    await page.locator("#email-cancelar").click();
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+
+    servidor.respostaConfiguracao = { status: 500, json: { detail: "Configuração indisponível no teste." } };
+    await page.locator("#btn-enviar-email").click();
+    await expect(statusOutlook(page)).toHaveText("Configuração indisponível no teste.");
+    await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "erro");
+    await expect(page.locator("#email-modelo")).toBeDisabled();
+    await expect(page.locator("#modal-email-outlook")).toBeVisible();
+  });
+
+  test("Uma ação lenta que termina depois de fechar e reabrir não tira o foco da nova sessão", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    servidor.segurarEmail = portao();
+    await page.locator("#email-abrir").click();
+    await expect.poll(() => servidor.de("POST", "/email").length).toBe(1);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+    await page.locator("#btn-enviar-email").click();
+    await expect(page.locator("#email-corpo")).toBeEnabled(); // configuração da nova sessão carregada
+    await page.locator("#email-corpo").focus();
+    servidor.segurarEmail.liberar();
+    // O resultado da sessão antiga vai só para o toast; a linha de status da nova continua limpa.
+    await expect(page.locator("#toast-container")).toContainText("E-mail aberto no Outlook. Revise e envie por lá.");
+    await expect(page.locator("#email-corpo")).toBeFocused();
+    await expect(statusOutlook(page)).toHaveText("");
+  });
+
+  test("A busca no Entra pede ao menos 2 letras, ignora e-mails e usa só o nome depois do último ponto e vírgula", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    const para = page.locator("#email-para");
+    const buscas = () => servidor.de("GET", "/contatos").map(({ busca }) => busca);
+    await para.fill("a");
+    await page.waitForTimeout(500);
+    expect(buscas()).toEqual([]);
+    await para.fill("ana@exemplo.test");
+    await page.waitForTimeout(500);
+    expect(buscas()).toEqual([]);
+    await para.fill(`${ANA.nome} <${ANA.email}>; an`);
+    await expect.poll(buscas).toEqual(["?q=an"]);
+    await expect(page.getByRole("listbox", { name: "Para" }).getByRole("option")).toHaveCount(2);
+  });
+
+  test("Uma resposta de contatos mais antiga nunca substitui a mais nova", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    servidor.contatos = termo => (termo === "ana" ? [ANA_TESTE] : [ANA]);
+    servidor.segurarContatos.an = portao();
+    const lista = page.getByRole("listbox", { name: "Para" });
+    await page.locator("#email-para").fill("an");
+    await expect.poll(() => servidor.de("GET", "/contatos").length).toBe(1);
+    await page.locator("#email-para").fill("ana");
+    await expect(lista.getByRole("option")).toHaveText([`${ANA_TESTE.nome} <${ANA_TESTE.email}>`]);
+    servidor.segurarContatos.an.liberar(); // a resposta de "an" chega depois da de "ana"
+    await page.waitForTimeout(300);
+    await expect(lista.getByRole("option")).toHaveText([`${ANA_TESTE.nome} <${ANA_TESTE.email}>`]);
+  });
+
+  test("Enter sem opção ativa deixa o campo como está, e o Esc fecha a lista antes de fechar o diálogo", async ({ page }) => {
+    await abrirModalOutlook(page);
+    const para = page.locator("#email-para");
+    const lista = page.getByRole("listbox", { name: "Para" });
+    await para.fill("an");
+    await expect(lista).toBeVisible();
+    await para.press("Enter");
+    await expect(para).toHaveValue("an");
+    await expect(lista).toBeVisible();
+    await para.press("Escape");
+    await expect(lista).toBeHidden();
+    await expect(page.locator("#modal-email-outlook")).toBeVisible();
+    await para.press("Escape");
+    await expect(page.locator("#modal-email-outlook")).toBeHidden();
+  });
+
+  test("A confirmação do envio cita o Cc só quando ele tem conteúdo", async ({ page }) => {
+    await abrirModalOutlook(page);
+    const mensagem = page.locator("#mensagem-confirmar-acao");
+    await page.locator("#email-setor").fill("Setor Teste");
+    await page.locator("#email-enviar").click();
+    await expect(mensagem).toHaveText(
+      "O e-mail será enviado de conta1@exemplo.test para Ana Exemplo <ana@exemplo.test>. Depois de enviado, não há como desfazer.",
+    );
+    await page.locator("#btn-confirmar-acao-cancelar").click();
+    await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+
+    await page.locator("#email-cc").fill("copia@exemplo.test");
+    await page.locator("#email-enviar").click();
+    await expect(mensagem).toHaveText(
+      "O e-mail será enviado de conta1@exemplo.test para Ana Exemplo <ana@exemplo.test>, com cópia para copia@exemplo.test. Depois de enviado, não há como desfazer.",
+    );
+    await page.locator("#btn-confirmar-acao-cancelar").click();
+    await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  });
+
+  test("Enviar confere o Para e os marcadores antes de abrir a confirmação", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    await page.locator("#email-para").fill("");
+    await page.locator("#email-enviar").click();
+    await expect(statusOutlook(page)).toHaveText("Informe o destinatário no campo Para.");
+    await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "erro");
+
+    await page.locator("#email-para").fill("grupo@exemplo.test");
+    await page.locator("#email-enviar").click(); // o Setor está vazio: o marcador [Setor] continua no texto
+    await expect(statusOutlook(page)).toHaveText("Preencha o nome da pessoa e o setor antes de enviar.");
+    await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "erro");
+    await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+    expect(servidor.de("POST", "/email")).toHaveLength(0);
+  });
+
+  test("Excluir com um único modelo avisa na hora, sem pedir confirmação nem chamar o servidor", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page, { modelos: [CABO_PADRAO] });
+    await page.locator("#email-modelo-excluir").click();
+    await expect(statusOutlook(page)).toHaveText("Mantenha ao menos um modelo.");
+    await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "aviso");
+    await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+    expect(servidor.chamadas.filter(({ metodo }) => metodo === "DELETE")).toEqual([]);
+    await expect(page.locator("#email-modelo option")).toHaveCount(1);
+  });
+
+  test("Novo e Duplicar gravam o que está pendente, criam o modelo e o selecionam", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    const escritas = () => servidor.chamadas.filter(({ metodo }) => metodo !== "GET").map(({ metodo, caminho, corpo }) => ({ metodo, caminho, corpo }));
+    await page.locator("#email-assunto").fill("Antes do novo");
+    await page.locator("#email-modelo-novo").click();
+    await expect(page.locator("#email-modelo")).toHaveValue("novo-2");
+    expect(escritas()).toEqual([
+      { metodo: "PUT", caminho: "/email/modelos/cabo", corpo: { assunto: "Antes do novo" } },
+      { metodo: "POST", caminho: "/email/modelos", corpo: {} },
+    ]);
+    await expect(page.locator("#email-modelo-nome")).toHaveValue("Novo modelo");
+    await expect(page.locator("#email-assunto")).toHaveValue("");
+    await expect(page.locator("#email-modelo-restaurar")).toBeHidden(); // só o Modelo 1 tem padrão para restaurar
+
+    await page.locator("#email-modelo").selectOption("cabo");
+    await expect(page.locator("#email-assunto")).toHaveValue("Antes do novo");
+    await page.locator("#email-modelo-duplicar").click();
+    await expect(page.locator("#email-modelo")).toHaveValue("copia-3");
+    expect(servidor.de("POST", "/email/modelos")[1].corpo).toEqual({ copiar_de: "cabo" });
+    await expect(page.locator("#email-modelo-nome")).toHaveValue("Modelo 1 - Cabo (cópia)");
+    await expect(page.locator("#email-assunto")).toHaveValue("Antes do novo");
+  });
+
+  test("Copiar Texto troca {nome} e {setor} e avisa por toast", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await abrirModalOutlook(page);
+    await page.locator("#email-setor").fill("Setor Teste");
+    await page.locator("#email-copiar").click();
+    await expect(page.locator("#toast-container")).toContainText("Texto copiado.");
+    const copiado = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copiado.replace(/\r\n/g, "\n")).toBe( // o Windows devolve a área de transferência com CRLF
+      "Cabo de segurança para Pessoa Teste\n\nOlá, Pessoa Teste do setor Setor Teste. Segue o cabo de segurança.",
+    );
+  });
+
+  test("Abrir no Outlook com aviso do servidor mostra só o aviso", async ({ page }) => {
+    const servidor = await abrirModalOutlook(page);
+    servidor.respostaEmail = { json: { status: "aberto", aviso: "Aviso de teste do servidor." } };
+    await page.locator("#email-abrir").click();
+    await expect(statusOutlook(page)).toHaveText("Aviso de teste do servidor.");
+    await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "aviso");
+  });
+});
