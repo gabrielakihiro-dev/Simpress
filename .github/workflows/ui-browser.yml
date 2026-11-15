@@ -54,7 +54,8 @@ jobs:
   ui-browser-shard:
     name: ui-browser (shard ${{ matrix.shard }}/4)
     runs-on: windows-latest
-    timeout-minutes: 20
+    # Com o shader da marca, cada parte leva 17-20 min no runner Windows; 20 cortava a suíte no meio.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
