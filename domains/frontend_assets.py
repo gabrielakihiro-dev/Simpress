@@ -10,7 +10,7 @@ from pathlib import Path
 # so scripts never need 'unsafe-inline'. Styles come from CSS files only (no style= in the HTML);
 # JS sets layout through the CSSOM (el.style.x), which style-src does not block.
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; "
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
     "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
     "frame-ancestors 'none'; form-action 'self'"
 )

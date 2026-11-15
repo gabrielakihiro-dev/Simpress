@@ -57,3 +57,4 @@ import "./js/ui/ux-enhancements.js";
 import "./js/ui/ck-cockpit-visual.js";
 import "./js/ui/transfer-history.js";
 import "./js/ui/data-panels.js";
+import "./js/ui/cromo-marca.js";

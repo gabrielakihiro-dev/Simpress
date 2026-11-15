@@ -101,10 +101,17 @@ class FrontendAssetTests(unittest.TestCase):
         policy = self.client.get("/").headers["content-security-policy"]
         directives = {part.split()[0]: part.split()[1:] for part in policy.split(";") if part.strip()}
         self.assertEqual(directives["style-src"], ["'self'"])
-        self.assertEqual(directives["img-src"], ["'self'"])
+        self.assertEqual(directives["img-src"], ["'self'", "blob:"])  # blob: só para a máscara da marca em metal
         html = assembled_html(app_config.STATIC_DIR)
         self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
         self.assertNotIn("<style", html.lower())
+
+    def test_logo_metal_imports_a_vendored_file_that_exists(self):
+        static = Path(__file__).resolve().parents[1] / "static"
+        source = (static / "js" / "ui" / "cromo-marca.js").read_text(encoding="utf-8")
+        imported = re.search(r'from "(/static/vendor/paper-shaders-[^"]+)"', source)
+        self.assertIsNotNone(imported)
+        self.assertTrue((static.parent / imported.group(1).lstrip("/")).is_file(), imported.group(1))
 
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
         for name in ("index.html",):

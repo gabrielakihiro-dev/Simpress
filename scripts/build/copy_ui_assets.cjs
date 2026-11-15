@@ -23,6 +23,17 @@ writeLucideSubset(root, versions.lucide);
 fs.rmSync(path.join(vendorDir, `lucide-${versions.lucide}.min.js`), { force: true });
 copyPackageFile("lucide", "LICENSE", "LICENSE-lucide.txt");
 copyPackageFile("tailwindcss", "LICENSE", "LICENSE-tailwindcss.txt");
+
+// Paper shaders (metal liquido da marca): ESM puro sem dependencias, servido como esta.
+const shadersSrc = path.join(root, "node_modules", "@paper-design", "shaders");
+const shadersDest = path.join(vendorDir, `paper-shaders-${versions["@paper-design/shaders"]}`);
+fs.rmSync(shadersDest, { recursive: true, force: true });
+fs.mkdirSync(shadersDest, { recursive: true });
+fs.cpSync(path.join(shadersSrc, "dist"), shadersDest, {
+  recursive: true,
+  filter: (src) => fs.statSync(src).isDirectory() || src.endsWith(".js"),
+});
+fs.copyFileSync(path.join(shadersSrc, "LICENSE"), path.join(vendorDir, "LICENSE-paper-shaders.txt"));
 copyPackageFile(
   "@fontsource-variable/inter",
   "files/inter-latin-ext-wght-normal.woff2",
