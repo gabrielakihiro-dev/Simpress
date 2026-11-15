@@ -52,6 +52,7 @@ import "./js/features/termos.js";
 import "./js/features/lembretes.js";
 import "./js/features/outlook-email.js";
 import "./js/features/equipment-dossier.js";
+import "./js/features/configuracao-local.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";
 import "./js/ui/ck-cockpit-visual.js";

@@ -67,4 +67,5 @@ O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples pri
 - `domains/AGENTS.md` (cada tema com seu doc): Sebrae e Chamados (F5), OS (F6), UX, Assistente (F9), Histórico e cadastro, Cobertura (F10), Backups (F3), Transporte (F2), Outlook.
 - `scripts/AGENTS.md`: Endpoint, Chrome de automação, SharePoint, SoftExpert, rotinas de OS e inventário. `routers/AGENTS.md`: contratos de API. `tests/AGENTS.md`: testes e verificação.
 - `frontend/AGENTS.md`: interface (`frontend/` e `static/`), responsividade, atalhos, Playwright e docs de cada tela.
+- Configuração local pelo site (contas, links, chaves): `docs/cockpit-prompts/19-configuracao-local.md`.
 - Alertas e manual: `docs/operacao/alertas-os-divergencias.md`, `docs/guias/manual_usuario.md`.

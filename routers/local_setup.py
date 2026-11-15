@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from core.async_workers import await_worker_completion
 from core.config import format_size_limit
 from domains.local_setup import (
-    REGIONAL_REPRESENTATIVE_CITIES, effective_regional_representative_defaults, load_client_config, load_origin_contact,
+    REGIONAL_REPRESENTATIVE_CITIES, cnpj_valido, effective_regional_representative_defaults, load_client_config, load_origin_contact,
     load_regional_representatives, regional_representative_defaults, remove_regional_representative, save_client_config,
     save_origin_contact, save_regional_representative, validate_local_model,
 )
@@ -71,6 +71,8 @@ class ClienteConfigPayload(BaseModel):
         value = value.strip()
         if value and not re.fullmatch(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", value):
             raise ValueError("Informe o CNPJ de faturamento no formato 00.000.000/0000-00.")
+        if value and not cnpj_valido(value):
+            raise ValueError("O CNPJ de faturamento não é válido: confira os dois últimos dígitos.")
         return value
 
     @field_validator("series_sebrae_fora")

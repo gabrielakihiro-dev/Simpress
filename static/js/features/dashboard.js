@@ -205,7 +205,7 @@
     return status.reason || faltando;
   }
 
-  function adicionarItemProntidao(list, { id, pendencia, icone, titulo, descricao, detalhe, estado, acao }) {
+  function adicionarItemProntidao(list, { id, pendencia, icone, titulo, descricao, detalhe, secundario, estado, acao }) {
     const item = document.createElement("li");
     item.className = "ck-pront__item";
     item.dataset.status = estado;
@@ -229,11 +229,18 @@
     rotuloEstado.textContent = PRONTIDAO_ESTADOS[estado];
     meta.append(rotuloEstado, ` · ${estado === "invalido" && detalhe ? detalhe : descricao}`);
     textos.append(nome, meta);
+    if (secundario) {
+      const complemento = document.createElement("span");
+      complemento.className = "ck-pront__secundario";
+      complemento.textContent = secundario;
+      textos.appendChild(complemento);
+    }
     item.append(ico, textos);
 
     if (acao) {
       const button = document.createElement("button");
       button.type = "button";
+      if (acao.id) button.id = acao.id;
       // Em dia: ação discreta (Atualizar/Abrir/Editar); pendente: ação em destaque.
       const rotulo = estado === "ok" && acao.labelOk ? acao.labelOk : acao.label;
       button.className = `ck-btn ${estado === "ok" ? "ck-btn--fantasma" : "ck-btn--secundario"} ck-btn--sm ck-pront__acao`;
@@ -336,6 +343,24 @@
           : "Nenhuma regional cadastrada",
         estado: totalRegionais > 0 ? "ok" : "pendente",
         acao: { label: "Cadastrar", labelOk: "Editar", icone: "i-arrow-right", ariaLabel: "Cadastrar regionais", onClick: app.abrirModalGerenciarUnidades },
+      });
+    }
+    // Older servers do not send the key; the card only appears when the report carries it.
+    if (report.configuracao_local && typeof report.configuracao_local === "object") {
+      const config = report.configuracao_local;
+      const estadoConfig = estadoProntidao({ available: config.state === "ready", state: config.state });
+      adicionarItemProntidao(list, {
+        id: "readiness-configuracao-local",
+        pendencia: "configuracao",
+        icone: "i-pencil",
+        titulo: "Configuração local",
+        descricao: estadoConfig === "ok"
+          ? "Contas, links e dados do cliente configurados"
+          : config.reason || "Contas, links e dados do cliente",
+        detalhe: estadoConfig === "invalido" ? config.reason || "" : "",
+        secundario: config.assistente_ia === false ? "Assistente sem IA" : "",
+        estado: estadoConfig,
+        acao: { id: "btn-configuracao-local", label: "Configurar", icone: "i-arrow-right", ariaLabel: "Configurar contas, links e dados do cliente", onClick: () => app.abrirConfiguracaoLocal() },
       });
     }
     details.replaceChildren(list);

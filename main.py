@@ -113,6 +113,7 @@ from routers.backups_regionais import BackupsRegionaisServices, create_backups_r
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
+from routers.configuracao_local import create_configuracao_local_router
 from domains.monthly_report import sebrae_sources_from_state
 from routers.monthly_report import (
     MonthlyReportServices,
@@ -189,6 +190,7 @@ from domains.inventory_state import (
     _unit_identity_key,
     format_cep,
 )
+from domains import configuracao_local as configuracao_local_domain
 from domains import readiness, uploaded_workbooks
 from domains.uploaded_workbooks import (
     DETAILS_COMPLETE_SOURCE_COLUMN_COUNT,
@@ -610,6 +612,11 @@ def _refresh_export_status_for_readiness() -> Dict[str, Any]:
     return status
 
 
+def _configuracao_local_files() -> Tuple[Path, Path, Path]:
+    """Contas, dados do cliente e `.env` (chaves de IA); lidos a cada chamada para valer sem reiniciar."""
+    return core.config.AUTOMATION_ACCOUNTS_FILE, core.config.CLIENT_CONFIG_FILE, BASE_DIR / ".env"
+
+
 def _readiness_signature() -> Tuple[Any, ...]:
     """Everything the readiness report reads, so a cached report is never stale."""
     try:
@@ -628,6 +635,7 @@ def _readiness_signature() -> Tuple[Any, ...]:
         COMPARISON_HISTORY_FILE,
         INPUT_DIR / "_modelos" / "transferencia.xlsx",
         TEMPLATE_FILE,
+        *_configuracao_local_files(),
     )
     details_signature = (
         readiness.file_signature(details_files) if isinstance(details_files, tuple) else details_files
@@ -675,6 +683,7 @@ _readiness_services = readiness.ReadinessServices(
     get_transaction_recovery_block=lambda: get_transaction_recovery_block(),
     logger=logger,
     entra_names_file=lambda: ENTRA_USERS_FILE,
+    configuracao_local=lambda: configuracao_local_domain.status_configuracao(*_configuracao_local_files()),
 )
 
 
@@ -2041,6 +2050,12 @@ local_setup_router, importar_modelo_local = create_local_setup_router(
     after_client_config_saved=lambda: load_database(),
 )
 app.include_router(local_setup_router)
+app.include_router(create_configuracao_local_router(
+    contas_file=lambda: core.config.AUTOMATION_ACCOUNTS_FILE,
+    client_file=lambda: core.config.CLIENT_CONFIG_FILE,
+    env_file=lambda: BASE_DIR / ".env",
+    backups_directory=lambda: STATE_DIR / "config_backups",
+))
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
     manual_aliases_by_serial=_manual_aliases_by_serial,

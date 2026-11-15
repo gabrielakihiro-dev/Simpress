@@ -177,6 +177,18 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 .ckp-vazio-regional { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); text-align: center; color: var(--cor-texto-mudo); font-size: var(--fs-ui); }
 .ckp-vazio-regional .ck-ico { color: var(--cor-texto-sutil); }
 
+/* ---------- Configuração local (cartão da Prontidão e modal) ---------- */
+.ck-pront__secundario { font-size: var(--fs-xs); color: var(--cor-texto-sutil); line-height: 1.35; }
+.ckp-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ckp-campos .ckp-span { grid-column: 1 / -1; }
+.ckp-campos .ck-entrada[readonly] { background: var(--cor-neutro-fundo); color: var(--cor-texto-mudo); }
+.ckp-campo__extra { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ckp-campo__extra .ckp-alternar { height: var(--altura-controle-sm); }
+.ckp-secao__status { flex: 1 1 200px; min-width: 0; font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); text-wrap: pretty; }
+.ckp-secao__status[data-status="ok"] { color: var(--cor-ok-texto); }
+.ckp-secao__status[data-status="erro"] { color: var(--cor-erro-texto); }
+.ckp-secao__status + .ck-btn { margin-left: auto; }
+
 /* ---------- Página de demonstração ---------- */
 .ckp-palco { flex: 1; display: grid; place-items: center; padding: 40px 20px; color: var(--cor-texto-sutil); font-size: var(--fs-ui); text-align: center; }
 
@@ -190,7 +202,7 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
   .ckp-cab { grid-template-columns: 32px minmax(0, 1fr) auto; padding: 12px; }
   .ckp-sistemas { grid-column: 1 / -1; grid-row: 2; border-right: 0; padding: 4px 0 0; }
   .ckp-corpo { padding: 12px; }
-  .ckp-par-fontes, .ckp-importar, .ckp-form, .ckp-versao { grid-template-columns: minmax(0, 1fr); }
+  .ckp-par-fontes, .ckp-importar, .ckp-form, .ckp-versao, .ckp-campos { grid-template-columns: minmax(0, 1fr); }
   .ckp-kpis, .ckp-triagem__nums, .ckp-diff { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ckp-triagem__num:nth-child(3) { border-left: 0; }
   .ckp-triagem__num:nth-child(n+3) { border-top: 1px solid var(--cor-borda-suave); }
