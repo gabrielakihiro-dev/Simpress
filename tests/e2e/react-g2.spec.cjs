@@ -430,6 +430,9 @@ function unidadesFicticias() {
 }
 
 async function abrirUnidades(page, { tema = "light", unidades = unidadesFicticias() } = {}) {
+  // Com rolagem, o cabeçalho fixo entra no topo da captura do painel (falha intermitente na CI, run 43733263939).
+  // Viewport alto deixa o painel inteiro sem rolagem; a largura, que decide o layout, não muda.
+  await page.setViewportSize({ width: page.viewportSize().width, height: 2000 });
   await prepararTema(page, tema);
   await page.route("**/api/unidades", route => route.fulfill({ json: unidades }));
   await abrirApp(page, tema);
