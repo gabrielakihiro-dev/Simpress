@@ -385,6 +385,26 @@ class LoginAbasTests(unittest.TestCase):
         escolher.assert_not_called()
         clicar.assert_not_called()
 
+    def test_endpoint_user_is_read_at_use_time_when_the_constant_is_not_forced(self):
+        page, _, preencher = self._pagina_endpoint(usuario="")
+        with (
+            patch.object(automacao, "ENDPOINT_USUARIO", None),
+            patch.object(automacao, "local_setting", side_effect=["primeiro.usuario", "segundo.usuario"]) as ler,
+        ):
+            self._entrar_endpoint(page, senha=False, dominio=True)
+            self._entrar_endpoint(page, senha=False, dominio=True)
+        ler.assert_called_with("SIMPRESS_ENDPOINT_USUARIO", "endpoint_usuario")
+        self.assertEqual([chamada.args for chamada in preencher.call_args_list], [("primeiro.usuario",), ("segundo.usuario",)])
+
+    def test_endpoint_user_from_the_environment_variable_wins_at_use_time(self):
+        with (
+            patch.object(automacao, "ENDPOINT_USUARIO", None),
+            patch.dict(os.environ, {"SIMPRESS_ENDPOINT_USUARIO": "ambiente.usuario"}),
+        ):
+            self.assertEqual(automacao.usuario_endpoint(), "ambiente.usuario")
+        with patch.object(automacao, "ENDPOINT_USUARIO", "forcado.usuario"):
+            self.assertEqual(automacao.usuario_endpoint(), "forcado.usuario")
+
     def test_microsoft_without_configured_email_neither_clicks_nor_types(self):
         page = MagicMock()
         page.url = "https://login.microsoftonline.com/"

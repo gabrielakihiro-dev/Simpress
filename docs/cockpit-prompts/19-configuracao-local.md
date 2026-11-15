@@ -116,16 +116,18 @@ Erros de validação: 422 com o campo e a mensagem, sem repetir o valor recebido
 
 - Gravação atômica com `core/integrity.py`.
 - Antes de sobrepor, copia o arquivo anterior para `data/state/config_backups/<arquivo>.<AAAAMMDD-HHMMSS>.bak` e mantém os 5 mais recentes. A pasta precisa entrar no `.gitignore`.
+- `Remover chave` não faz backup: a cópia guardaria a chave removida. Cópias feitas por gravações anteriores continuam na pasta e não são apagadas; apague-as à mão se a chave removida vazou.
+- Chave de IA vinda de variável de ambiente não é gravada nem removida pelo site (422, nada muda; a mensagem traz só o rótulo): altere a variável.
+- `Usar também no Outlook` desmarcado remove o espelho `outlook_email_*` quando ele é igual à conta, mesmo com o campo em branco; espelho diferente da conta (escolhido à mão) fica. Caixa ausente no pedido, com o campo em branco, não mexe no espelho.
 - O log registra só `configuracao_local: <seção> gravada`, sem valores.
 
 ## Quando a automação passa a usar o valor novo
 
-Hoje as contas são lidas na importação do módulo (`scripts/automacao_rotinas_chrome.py:76-85`, `domains/outlook_mail.py:41-42`):
+Leitura na hora do uso (função que chama `local_setting`), sem reiniciar o servidor:
 
 - A rotina de automação roda como subprocesso (`domains/chrome_automation.py`) e lê o arquivo novo na próxima execução.
-- `domains/endpoint_lookup.py` e `domains/outlook_mail.py` são importados pelo servidor e guardam o valor antigo até reiniciar.
-
-A implementação troca essas constantes por leitura na hora do uso (função que chama `local_setting`), para não exigir reinício. Se isso não for possível, o modal mostra `Reinicie o Simpress para aplicar`.
+- `domains/endpoint_lookup.py` (e-mail da consulta ao vivo), `domains/outlook_mail.py` (e-mail do Outlook) e o usuário do login do Endpoint (`usuario_endpoint()` em `scripts/automacao_rotinas_chrome.py`, que a consulta ao vivo chama dentro do servidor) leem a cada uso. A constante `ENDPOINT_USUARIO` só serve para os testes forçarem um valor: `None` (padrão) lê na hora, texto (inclusive vazio) vale como está.
+- As demais contas lidas na importação estão em "Limites conhecidos".
 
 O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), sem cache: vale na próxima mensagem ao Assistente.
 
@@ -170,5 +172,6 @@ O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), s
 
 ## Limites conhecidos
 
-- `domains/ux_ticket_browser.py`, `scripts/automacao_rotinas_chrome.py` (rotinas do SoftExpert) e `scripts/sebrae_softexpert.py` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress.
+- `domains/ux_ticket_browser.py`, `scripts/sebrae_softexpert.py` e, em `scripts/automacao_rotinas_chrome.py`, `EMAIL_DASHBOARD`, `EMAIL_SOFTEXPERT` e `DASHBOARD_PASTA_URL` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress. O usuário do Endpoint já não entra aqui.
+- Salvar a seção Links envia também o estado das caixas `Usar também no Outlook`; com a conta em branco, uma caixa desmarcada passa a valer nesse salvamento.
 - Conta em branco no formulário mantém o valor atual; para limpar, edite o arquivo.

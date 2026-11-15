@@ -157,6 +157,48 @@ class RotasContasTests(ConfiguracaoBase):
         sebrae = next(conta for conta in resposta.json()["contas"] if conta["id"] == "conta_sebrae")
         self.assertEqual(sebrae["valor"], "ambiente@exemplo.invalid")
 
+    def test_desmarcar_o_outlook_com_o_campo_em_branco_remove_so_o_espelho_e_marcar_volta_a_gravar(self):
+        self.put_contas(conta_simpress="pessoa@exemplo.invalid", usar_no_outlook_simpress=True)
+        resposta = self.put_contas(conta_simpress="", usar_no_outlook_simpress=False)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(self.contas_gravadas(), {"dashboard_email": "pessoa@exemplo.invalid"})
+        self.assertIs(resposta.json()["contas"][0]["usar_no_outlook"], False)
+
+        resposta = self.put_contas(conta_simpress="", usar_no_outlook_simpress=True)
+        self.assertEqual(
+            self.contas_gravadas(),
+            {"dashboard_email": "pessoa@exemplo.invalid", "outlook_email_simpress": "pessoa@exemplo.invalid"},
+        )
+        self.assertIs(resposta.json()["contas"][0]["usar_no_outlook"], True)
+
+    def test_desmarcar_o_outlook_com_conta_nova_tambem_remove_o_espelho_antigo(self):
+        self.put_contas(conta_sebrae="velha@exemplo.invalid")
+        self.put_contas(conta_sebrae="nova@exemplo.invalid", usar_no_outlook_sebrae=False)
+        self.assertEqual(self.contas_gravadas(), {"softexpert_email": "nova@exemplo.invalid"})
+
+    def test_email_do_outlook_diferente_da_conta_so_muda_com_pedido_explicito_de_marcar(self):
+        self.contas.parent.mkdir(parents=True, exist_ok=True)
+        inicial = {"dashboard_email": "conta@exemplo.invalid", "outlook_email_simpress": "envio@exemplo.invalid"}
+        self.contas.write_text(json.dumps(inicial), encoding="utf-8")
+        for corpo in ({}, {"usar_no_outlook_simpress": False}, {"conta_simpress": "", "usar_no_outlook_sebrae": True}):
+            with self.subTest(corpo=str(corpo)):
+                self.assertEqual(self.put_contas(**corpo).status_code, 200)
+                self.assertEqual(self.contas_gravadas(), inicial)
+        self.assertFalse(self.backups.exists())
+        self.put_contas(usar_no_outlook_simpress=True)
+        self.assertEqual(self.contas_gravadas()["outlook_email_simpress"], "conta@exemplo.invalid")
+
+    def test_caixa_do_outlook_ausente_com_o_campo_em_branco_nao_cria_espelho(self):
+        self.put_contas(conta_simpress="pessoa@exemplo.invalid", usar_no_outlook_simpress=False)
+        self.put_contas(usuario_endpoint="nome.usuario")
+        self.assertEqual(self.contas_gravadas(), {"dashboard_email": "pessoa@exemplo.invalid", "endpoint_usuario": "nome.usuario"})
+
+    def test_outlook_vindo_de_variavel_de_ambiente_nao_e_tocado_ao_desmarcar(self):
+        os.environ["SIMPRESS_OUTLOOK_EMAIL_SIMPRESS"] = "ambiente@exemplo.invalid"
+        self.put_contas(conta_simpress="pessoa@exemplo.invalid", usar_no_outlook_simpress=True)
+        self.put_contas(conta_simpress="", usar_no_outlook_simpress=False)
+        self.assertEqual(self.contas_gravadas(), {"dashboard_email": "pessoa@exemplo.invalid"})
+
     def test_campo_em_branco_mantem_o_valor_e_nao_regrava_nem_faz_backup(self):
         self.put_contas(conta_simpress="pessoa@exemplo.invalid", usuario_endpoint="nome.usuario")
         antes = self.contas.read_bytes()
@@ -238,7 +280,41 @@ class RotasAssistenteTests(ConfiguracaoBase):
         self.assertEqual(resposta.json()["openrouter"], {"configurada": False, "final": "", "fonte": ""})
         self.assertTrue(resposta.json()["deepseek"]["configurada"])
         self.assertEqual(self.env.read_text(encoding="utf-8"), f"# comentário\nOUTRA=1\nDEEPSEEK_API_KEY={CHAVE_DEEPSEEK}\n")
-        self.assertEqual(len(list(self.backups.glob(".env.*.bak"))), 1)
+
+    def test_remover_nao_faz_backup_para_nao_guardar_a_chave_removida(self):
+        self.env.write_text(f"OUTRA=1\nOPENROUTER_API_KEY={CHAVE_OPENROUTER}\n", encoding="utf-8")
+        resposta = self.client.delete("/api/config/local/assistente/openrouter")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertFalse(self.backups.exists())
+
+    def test_gravar_continua_com_backup_e_remover_nao_acrescenta_outro(self):
+        self.env.write_text("OUTRA=1\n", encoding="utf-8")
+        self.put_assistente(deepseek_api_key=CHAVE_DEEPSEEK)
+        (copia,) = self.backups.glob(".env.*.bak")
+        self.assertEqual(self.client.delete("/api/config/local/assistente/deepseek").status_code, 200)
+        self.assertEqual(list(self.backups.glob(".env.*.bak")), [copia])
+        self.assertNotIn("DEEPSEEK", self.env.read_text(encoding="utf-8"))
+
+    def test_chave_vinda_de_variavel_de_ambiente_recusa_gravar_e_remover_sem_alterar_nada(self):
+        os.environ["OPENROUTER_API_KEY"] = CHAVE_OPENROUTER
+        original = "OUTRA=1\nOPENROUTER_API_KEY=chave-ficticia-do-arquivo\n"
+        self.env.write_text(original, encoding="utf-8")
+        gravar = self.put_assistente(openrouter_api_key="chave-ficticia-nova-9999")
+        ambos = self.put_assistente(openrouter_api_key="chave-ficticia-nova-8888", deepseek_api_key=CHAVE_DEEPSEEK)
+        remover = self.client.delete("/api/config/local/assistente/openrouter")
+        for resposta in (gravar, ambos, remover):
+            self.assertEqual(resposta.status_code, 422, resposta.text)
+            self.assertIn("variável de ambiente", resposta.json()["detail"])
+            for segredo in (CHAVE_OPENROUTER, CHAVE_DEEPSEEK, "chave-ficticia-nova"):
+                self.assertNotIn(segredo, resposta.text)
+        self.assertEqual(self.env.read_text(encoding="utf-8"), original, "nem a chave do outro provedor foi gravada")
+        self.assertFalse(self.backups.exists())
+
+    def test_so_a_chave_do_ambiente_e_recusada_a_outra_continua_gravavel_e_removivel(self):
+        os.environ["OPENROUTER_API_KEY"] = CHAVE_OPENROUTER
+        self.assertEqual(self.put_assistente(deepseek_api_key=CHAVE_DEEPSEEK).status_code, 200)
+        self.assertEqual(self.client.delete("/api/config/local/assistente/deepseek").status_code, 200)
+        self.assertNotIn("DEEPSEEK", self.env.read_text(encoding="utf-8"))
 
     def test_remover_chave_desconhecida_da_404_e_sem_arquivo_nada_e_criado(self):
         self.assertEqual(self.client.delete("/api/config/local/assistente/outra").status_code, 404)

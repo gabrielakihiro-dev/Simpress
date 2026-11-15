@@ -249,17 +249,29 @@ def gravar_contas(arquivo: Path, pasta_backups: Path, contas: Mapping[str, str],
     conhecidos = {link["chave"] for link in LINKS}
     if any(chave not in conhecidos for chave in links):
         raise ValueError("Link desconhecido em Links internos.")
+    guardado, _ = _ler_json(arquivo)
     novos: dict[str, str] = {}
+    remover: set[str] = set()
     for conta in CONTAS:
+        chave, variavel = conta["chaves"][0]
         valor = str(contas.get(conta["id"]) or "").strip()
-        if not valor:
-            continue
-        if (erro := validar_valor(conta["tipo"], valor)):
+        if valor and (erro := validar_valor(conta["tipo"], valor)):
             raise ValueError(f'{conta["rotulo"]}: {erro}')
-        pares = list(conta["chaves"])
-        if conta["outlook"] and usar_no_outlook.get(conta["id"], True):
-            pares.append(conta["outlook"])
-        novos.update({chave: valor for chave, variavel in pares if not _ambiente(variavel, env)})
+        atual, _ = _resolver(variavel, chave, guardado, env)
+        if valor and not _ambiente(variavel, env):
+            novos[chave] = valor
+        # Campo em branco só mexe no espelho do Outlook quando a caixa veio no pedido (ausente = deixa como está).
+        if not conta["outlook"] or not (valor or conta["id"] in usar_no_outlook):
+            continue
+        chave_outlook, variavel_outlook = conta["outlook"]
+        if _ambiente(variavel_outlook, env):
+            continue
+        if usar_no_outlook.get(conta["id"], True):
+            if valor or atual:
+                novos[chave_outlook] = valor or atual
+        elif guardado.get(chave_outlook) == atual:
+            # Desmarcar tira só o espelho (igual à conta); e-mail do Outlook diferente da conta foi escolhido à mão e fica.
+            remover.add(chave_outlook)
     for link in LINKS:
         valor = str(links.get(link["chave"]) or "").strip()
         if not valor:
@@ -269,8 +281,7 @@ def gravar_contas(arquivo: Path, pasta_backups: Path, contas: Mapping[str, str],
         if not _ambiente(link["variavel"], env):
             novos[link["chave"]] = valor
 
-    guardado, _ = _ler_json(arquivo)
-    resultado = {**guardado, **novos}
+    resultado = {**{chave: valor for chave, valor in guardado.items() if chave not in remover}, **novos}
     if resultado == guardado:
         return
     arquivo = Path(arquivo)
@@ -280,7 +291,8 @@ def gravar_contas(arquivo: Path, pasta_backups: Path, contas: Mapping[str, str],
     logger.info("configuracao_local: contas gravada")
 
 
-def _aplicar_env(arquivo: Path, pasta_backups: Path, alteracoes: Mapping[str, Optional[str]], agora: datetime) -> bool:
+def _aplicar_env(arquivo: Path, pasta_backups: Path, alteracoes: Mapping[str, Optional[str]], agora: datetime,
+                 com_backup: bool = True) -> bool:
     """Troca só as linhas ``CHAVE=`` afetadas (None remove); comentários e demais linhas ficam como estão."""
     try:
         bruto = arquivo.read_bytes() if arquivo.exists() else b""
@@ -311,16 +323,26 @@ def _aplicar_env(arquivo: Path, pasta_backups: Path, alteracoes: Mapping[str, Op
     novo = "".join(linhas)
     if novo == texto:
         return False
-    _backup(arquivo, pasta_backups, agora)
+    if com_backup:
+        _backup(arquivo, pasta_backups, agora)
     arquivo.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_bytes(arquivo, novo.encode("utf-8"))
     logger.info("configuracao_local: assistente gravada")
     return True
 
 
+def _recusar_ambiente(variavel: str, rotulo: str, env: Mapping[str, str]) -> None:
+    """Variável de ambiente vence o arquivo: gravar ou remover pelo site não teria efeito, então é recusado."""
+    if _ambiente(variavel, env):
+        raise ValueError(f"{rotulo}: definida por variável de ambiente; altere a variável, não o site.")
+
+
 def gravar_assistente(arquivo_env: Path, pasta_backups: Path, chaves: Mapping[str, Optional[str]],
+                      ambiente: Optional[Mapping[str, str]] = None,
                       agora: Callable[[], datetime] = datetime.now) -> None:
-    """Grava as chaves de IA preenchidas no ``.env``. Em branco (ou ausente) mantém a atual."""
+    """Grava as chaves de IA preenchidas no ``.env``. Em branco (ou ausente) mantém a atual; chave que vem de
+    variável de ambiente é recusada e nada é gravado."""
+    env = os.environ if ambiente is None else ambiente
     if any(identificador not in CHAVES_IA for identificador in chaves):
         raise ValueError("Chave de IA desconhecida.")
     alteracoes: dict[str, Optional[str]] = {}
@@ -328,6 +350,7 @@ def gravar_assistente(arquivo_env: Path, pasta_backups: Path, chaves: Mapping[st
         valor = str(chaves.get(identificador) or "").strip()
         if not valor:
             continue
+        _recusar_ambiente(variavel, rotulo, env)
         if (erro := validar_chave_ia(valor)):
             raise ValueError(f"{rotulo}: {erro}")
         alteracoes[variavel] = valor
@@ -336,10 +359,13 @@ def gravar_assistente(arquivo_env: Path, pasta_backups: Path, chaves: Mapping[st
 
 
 def remover_chave_ia(arquivo_env: Path, pasta_backups: Path, identificador: str,
+                     ambiente: Optional[Mapping[str, str]] = None,
                      agora: Callable[[], datetime] = datetime.now) -> None:
-    """Remove a linha da chave do ``.env`` (sem a linha, nada a fazer)."""
+    """Remove a linha da chave do ``.env`` (sem a linha, nada a fazer). Sem backup: a cópia guardaria a chave removida."""
     if identificador not in CHAVES_IA:
         raise ValueError("Chave de IA desconhecida.")
+    variavel, rotulo = CHAVES_IA[identificador]
+    _recusar_ambiente(variavel, rotulo, os.environ if ambiente is None else ambiente)
     arquivo = Path(arquivo_env)
     if arquivo.exists():
-        _aplicar_env(arquivo, Path(pasta_backups), {CHAVES_IA[identificador][0]: None}, agora())
+        _aplicar_env(arquivo, Path(pasta_backups), {variavel: None}, agora(), com_backup=False)

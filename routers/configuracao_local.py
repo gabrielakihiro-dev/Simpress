@@ -17,12 +17,13 @@ ERROS_DE_GRAVACAO = (OSError, FileTransactionError, FileBusyError)
 
 
 class ContasPayload(BaseModel):
-    """Corpo de PUT /api/config/local/contas. Em branco mantém o valor atual."""
+    """Corpo de PUT /api/config/local/contas. Em branco mantém o valor atual. A caixa do Outlook ausente vale
+    "marcada" com conta nova e "deixa como está" com o campo em branco."""
     conta_simpress: str = Field("", max_length=254)
     conta_sebrae: str = Field("", max_length=254)
     usuario_endpoint: str = Field("", max_length=100)
-    usar_no_outlook_simpress: bool = True
-    usar_no_outlook_sebrae: bool = True
+    usar_no_outlook_simpress: Optional[bool] = None
+    usar_no_outlook_sebrae: Optional[bool] = None
     links: dict[str, str] = Field(default_factory=dict, max_length=50)
 
 
@@ -62,7 +63,9 @@ def create_configuracao_local_router(*, contas_file: Callable[[], Path], client_
             },
             links=payload.links,
             usar_no_outlook={
-                "conta_simpress": payload.usar_no_outlook_simpress, "conta_sebrae": payload.usar_no_outlook_sebrae,
+                conta: marcada for conta, marcada in (
+                    ("conta_simpress", payload.usar_no_outlook_simpress), ("conta_sebrae", payload.usar_no_outlook_sebrae),
+                ) if marcada is not None
             },
         ))
         return leitura()
