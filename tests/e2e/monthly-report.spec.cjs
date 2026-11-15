@@ -164,6 +164,14 @@ test("the Cockpit report shows local API errors in its status region", async ({ 
   await expect(page.locator("#cockpit-monthly-export")).toBeEnabled();
 });
 
+// O bento anima a entrada dos cartões (opacity 0→1): o Axe só mede contraste com a animação concluída (mesmo molde de color-contrast.spec.cjs).
+const esperarAnimacoes = page => page.evaluate(() => Promise.race([
+  Promise.all(document.getAnimations()
+    .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
+    .map(item => item.finished.catch(() => undefined))),
+  new Promise(resolve => setTimeout(resolve, 3000)),
+]));
+
 test("the Cockpit report panel fits the screen and passes axe in both themes", async ({ page }) => {
   await page.goto("/");
   const panel = await openMonthlyReport(page);
@@ -174,6 +182,7 @@ test("the Cockpit report panel fits the screen and passes axe in both themes", a
     expect(box.width).toBeGreaterThan(0);
     expect(box.width).toBeLessThanOrEqual(viewport.width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await esperarAnimacoes(page);
     const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
     expect(audit.violations.map(violation => violation.id), theme).toEqual([]);
   }
@@ -215,7 +224,8 @@ test("the Cockpit report detail keeps card rows on phones without horizontal scr
   await openReportTab(page, "base");
   const { width } = page.viewportSize();
   const grid = (await details.locator(".ck-rel__base-grade").evaluate(el => getComputedStyle(el).gridTemplateColumns)).trim().split(/\s+/);
-  expect(grid).toHaveLength(width < 1200 ? 1 : 3);
+  // Base atual (Bloco 2): totais num cartão inteiro e tipos e unidades lado a lado embaixo; uma coluna abaixo de 640px.
+  expect(grid).toHaveLength(width < 640 ? 1 : 2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
@@ -524,6 +534,7 @@ test("every report tab passes axe in both themes", async ({ page }) => {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     for (const [key] of ABAS_RELATORIO) {
       await openReportTab(page, key);
+      await esperarAnimacoes(page);
       const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
       expect(audit.violations.map(violation => violation.id), `${theme}/${key}`).toEqual([]);
     }

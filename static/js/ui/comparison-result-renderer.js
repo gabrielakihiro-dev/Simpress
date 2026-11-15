@@ -6,7 +6,7 @@
   "use strict";
   const { app } = context;
   const { escapeHtml, pluralize, infoTipHtml } = context.dom;
-  const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
+  const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
   const CATEGORIAS_ANOTACOES_SINCRONIZADAS = {
     sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
@@ -430,18 +430,6 @@
     return descricao ? `<div class="info-tip-ancora flex items-center gap-1">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
   }
 
-  // Cards with a count above zero and a matching section become buttons that scroll to it; the rest stay static.
-  function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "", chaveSecao = "") {
-    const classes = classesMetricaHistorico(valor, tom);
-    const numero = Number(valor || 0);
-    const conteudo = `<p class="text-xs uppercase tracking-wide text-fg-subtle">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="text-xl font-bold mt-1 ${classes.numero}">${numero.toLocaleString("pt-BR")}</p>`;
-    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
-    if (!secao || numero <= 0) {
-      return `<div class="rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}">${conteudo}</div>`;
-    }
-    return `<button type="button" class="comparison-metric-link rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${numero.toLocaleString("pt-BR")}. Ir para ${secao.titulo}`)}">${conteudo}</button>`;
-  }
-
   // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.js
   // anima do zero até eles e aplica as larguras de data-bento-largura (CSP: nada de style= no HTML).
   const ICONES_BENTO = {
@@ -488,6 +476,42 @@
       </div>`;
   }
 
+  // Bloco 2 do bento (docs/ui-motion/contrato-bento.md): contadores pequenos e cartões de seção das sub-abas.
+  // O atraso de entrada é a classe ck-bento-dN (N x 80 ms); a cor é o data-tom do Bloco 1 (índigo = padrão).
+  const atrasoBento = n => `ck-bento-d${Math.min(Math.max(Number(n) || 0, 0), 5)}`;
+
+  // Contador pequeno do topo da sub-aba. Com contagem acima de zero e seção correspondente vira botão que rola até ela;
+  // senão fica estático. `bento`: { cor, icone, traco (largura em %), atraso }.
+  function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "", chaveSecao = "", bento = {}) {
+    const { cor = "indigo", icone = "", traco = null, atraso = 0 } = bento;
+    const numero = Number(valor || 0);
+    const texto = numero.toLocaleString("pt-BR");
+    const icon = icone ? `<span class="ck-bento-icone">${svgBento(ICONES_BENTO[icone])}</span>` : "";
+    const barra = traco === null ? "" : `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${Number(traco).toFixed(1)}"></i></div>`;
+    const conteudo = `<p class="text-xs uppercase tracking-wide text-fg-subtle">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>${icon}${barra}`;
+    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
+    const face = !secao || numero <= 0
+      ? `<div class="ck-bento-face" data-metric-tone="${tom || ""}">${conteudo}</div>`
+      : `<button type="button" class="comparison-metric-link ck-bento-face" data-metric-tone="${tom || ""}" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${texto}. Ir para ${secao.titulo}`)}">${conteudo}</button>`;
+    return `<div class="ck-bento-cartao ck-bento-cartao--mini ${atrasoBento(atraso)}" data-tom="${cor}" data-bento-cartao>${face}</div>`;
+  }
+
+  // Cabeçalho de seção: título (alvo do foco), ⓘ e, quando há lista, a contagem em pílula.
+  function cabecalhoSecaoBento(titulo, idSecao = "", descricao = "", contagem = null) {
+    const alvo = idSecao ? ` id="${idSecao}" tabindex="-1"` : "";
+    const h4 = `<h4${alvo} class="ck-bento-h2">${escapeHtml(titulo)}</h4>`;
+    const titulado = descricao ? `<div class="info-tip-ancora ck-bento-ancora">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
+    const pilula = contagem === null ? "" : `<span class="ck-bento-qt">${Number(contagem).toLocaleString("pt-BR")}</span>`;
+    return `<div class="ck-bento-sech">${titulado}${pilula}</div>`;
+  }
+
+  // Cartão de seção. `atributos` carrega os data-* que o controlador e os testes procuram (data-user-change-summary etc.).
+  function cartaoSecaoBento(cor, atraso, cabecalho, corpo, atributos = "") {
+    return `<section class="ck-bento-cartao ck-bento-secao ${atrasoBento(atraso)}" data-tom="${cor}" data-bento-cartao data-history-filter-section${atributos}>
+          <div class="ck-bento-face">${cabecalho}${corpo}</div>
+        </section>`;
+  }
+
   function conteudoAnotacoesSincronizadas(comparison, colunas) {
     const barra = barraFiltrosHistorico(comparison);
     const anotacoesSincronizadasRows = linhasAnotacoesSincronizadas(comparison.anotacoes_sincronizadas || [], colunas);
@@ -519,21 +543,19 @@
   function secaoSemUsuario(semUsuario) {
     const idSecao = SECOES_CARTOES_RESUMO.sem_usuario.id;
     if (semUsuario.estado !== "ok" && semUsuario.estado !== "limite") {
-      return `
-        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="erro">
-          <div>${tituloSecaoComparacao("Sem usuário", "amber", idSecao)}<p class="text-xs text-fg-muted" role="status">Não foi possível consultar os notebooks sem usuário agora. Abra o Resumo de novo para tentar outra vez.</p></div>
-        </section>`;
+      return cartaoSecaoBento("ambar", 3, cabecalhoSecaoBento("Sem usuário", idSecao),
+        '<p class="text-xs text-fg-muted" role="status">Não foi possível consultar os notebooks sem usuário agora. Abra o Resumo de novo para tentar outra vez.</p>',
+        ' data-sem-usuario-section="erro"');
     }
     const items = Array.isArray(semUsuario.items) ? semUsuario.items : [];
     const limite = semUsuario.estado === "limite";
     const aviso = limite
       ? `<p class="text-xs text-fg-muted" role="status">Mostrando os primeiros ${items.length.toLocaleString("pt-BR")}${Number.isSafeInteger(semUsuario.total) ? ` de ${semUsuario.total.toLocaleString("pt-BR")}` : ""} notebooks sem usuário; há mais no cadastro. Use o filtro "Sem usuário" da Home para ver todos.</p>`
       : "";
-    return `
-        <section class="space-y-2" data-history-filter-section data-sem-usuario-section="${limite ? "limite" : "ok"}">
-          <div>${tituloSecaoComparacao("Sem usuário", "amber", idSecao, "Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.")}${aviso}</div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local", "Modelo"], linhasSemUsuario(items), "Todos os notebooks do cadastro têm usuário.", "sem_usuario")}
-        </section>`;
+    return cartaoSecaoBento("ambar", 3,
+      cabecalhoSecaoBento("Sem usuário", idSecao, "Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.", limite ? null : items.length),
+      `${aviso}${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local", "Modelo"], linhasSemUsuario(items), "Todos os notebooks do cadastro têm usuário.", "sem_usuario")}`,
+      ` data-sem-usuario-section="${limite ? "limite" : "ok"}"`);
   }
 
   // Resumo (F3) sub-tabs: one tabpanel per subject. The controller in comparison-result.js owns state, counts and filters;
@@ -677,22 +699,26 @@
     const userChangeRows = linhasMudancasUsuarios(mudancasUsuarios, colunas);
     const contarMudancas = tipo => mudancasUsuarios.filter(item => item.tipo === tipo).length;
     // Results saved before the user summary existed have no list; the section is shown only when it exists.
-    const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? `
-        <section class="space-y-2" data-history-filter-section data-user-change-summary>
-          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id, "Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.")}
-            <p class="text-xs text-fg-subtle" data-user-change-counts>${[
-              ["Novos no Endpoint", contarMudancas("novo_endpoint")],
-              ["Alterados", contarMudancas("alterado_endpoint")],
-              ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
-              ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
-            ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p></div>
-          <details open class="space-y-2" data-user-change-details>
-            <summary class="cursor-pointer select-none text-xs font-semibold text-fg-tertiary hover:text-white">
+    const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? cartaoSecaoBento("fucsia", 2,
+      cabecalhoSecaoBento("Mudanças de usuário logado", SECOES_CARTOES_RESUMO.mudancas_usuarios.id, "Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.", mudancasUsuarios.length),
+      `<p class="ck-bento-nota" data-user-change-counts>${[
+        ["Novos no Endpoint", contarMudancas("novo_endpoint")],
+        ["Alterados", contarMudancas("alterado_endpoint")],
+        ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
+        ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
+      ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p>
+          <details open class="ck-bento-detalhes" data-user-change-details>
+            <summary class="ck-bento-minimizar">
               <span data-user-change-toggle-label>Minimizar lista de usuários alterados</span>
             </summary>
             ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
-          </details>
-        </section>` : "";
+          </details>`,
+      " data-user-change-summary") : "";
+    // Traço dos contadores de Divergências: mesma regra da Visão geral (anel = comparados menos "na Simpress" sobre comparados).
+    const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
+    const maximoDivergencias = Math.max(ausentesEndpoint.length, ausentesDetalhes.length, divergenciasLocal.length, ambiguityRows.length, seriesSemMapa.length, 1);
+    const tracoDivergencia = valor => (valor / maximoDivergencias) * 100;
+    const tracoComparados = comparados > 0 ? Math.min(1, Math.max(0, (comparados - ausentesDetalhes.length) / comparados)) * 100 : 0;
     const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
     return `
         ${barra}
@@ -706,71 +732,66 @@
         })}
         `, true)}
         ${painelResumo("divergencias", `
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber", "", "Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.")}</div>
-          <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
-            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_no_endpoint.id}" tabindex="-1" class="text-xs font-semibold text-fg-tertiary">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
+        ${cartaoSecaoBento("ciano", 2,
+          cabecalhoSecaoBento("Equipamentos sem correspondência por fonte", "", "Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro."),
+          `<div class="history-filter-group ck-bento-grupo" data-history-filter-group="ausentes_no_endpoint">
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_no_endpoint.id}" tabindex="-1" class="ck-bento-h5">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesEndpoint, "ausentes_no_endpoint", colunas), "Todos os equipamentos têm correspondência segura com Endpoint.")}
           </div>
-          <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_em_detalhes">
-            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_em_detalhes.id}" tabindex="-1" class="text-xs font-semibold text-fg-tertiary">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
+          <div class="history-filter-group ck-bento-grupo" data-history-filter-group="ausentes_em_detalhes">
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_em_detalhes.id}" tabindex="-1" class="ck-bento-h5">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesDetalhes, "ausentes_em_detalhes", colunas), "Todos os equipamentos têm correspondência segura com Simpress.")}
-          </div>
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Localidade divergente", "amber", SECOES_CARTOES_RESUMO.divergencias_local.id, "Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.")}</div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id, "Séries ou hostnames repetidos, ou que não identificam um único equipamento.")}</div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id, "Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.")}</div>
-          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
-        </section>
+          </div>`)}
+        ${cartaoSecaoBento("ambar", 3,
+          cabecalhoSecaoBento("Localidade divergente", SECOES_CARTOES_RESUMO.divergencias_local.id, "Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.", divergenciasLocal.length),
+          renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local"))}
+        ${cartaoSecaoBento("esmeralda", 4,
+          cabecalhoSecaoBento("Duplicidades e correspondências ambíguas", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id, "Séries ou hostnames repetidos, ou que não identificam um único equipamento.", ambiguityRows.length),
+          renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas"))}
+        ${cartaoSecaoBento("indigo", 5,
+          cabecalhoSecaoBento("Séries sem local definido", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id, "Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.", seriesSemMapa.length),
+          renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento"))}
         `, false, [
-          cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null),
-          cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint"),
-          cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes"),
-          cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local"),
-          cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas"),
-          cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento"),
+          cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null, "", "", { cor: "indigo", icone: "notebook", traco: tracoComparados, atraso: 0 }),
+          cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint", { cor: "ciano", icone: "link", traco: tracoDivergencia(ausentesEndpoint.length), atraso: 1 }),
+          cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes", { cor: "fucsia", icone: "predio", traco: tracoDivergencia(ausentesDetalhes.length), atraso: 2 }),
+          cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local", { cor: "ambar", icone: "local", traco: tracoDivergencia(divergenciasLocal.length), atraso: 3 }),
+          cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas", { cor: "esmeralda", icone: "copia", traco: tracoDivergencia(ambiguityRows.length), atraso: 4 }),
+          cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento", { cor: "indigo", icone: "etiqueta", traco: tracoDivergencia(seriesSemMapa.length), atraso: 5 }),
         ])}
         ${painelResumo("apelidos", `
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id, `Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}`)}</div>
-          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
-        </section>
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id, "Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.")}</div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
-        </section>
-        <section class="space-y-2" data-history-filter-section data-resumo-informativo>
-          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id, "Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série. Informativo: não entra na contagem da aba.")}</div>
-          ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
-        </section>
+        ${cartaoSecaoBento("indigo", 3,
+          cabecalhoSecaoBento("Linhas mantidas para conferência", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id, `Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}`, apelidosSemAtualizacao.length),
+          renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao"))}
+        ${cartaoSecaoBento("ambar", 4,
+          cabecalhoSecaoBento("Divergências com apelidos alterados manualmente", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id, "Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas."),
+          renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais"))}
+        ${cartaoSecaoBento("ciano", 5,
+          cabecalhoSecaoBento("Apelidos/hostnames atualizados — no endpoint", SECOES_CARTOES_RESUMO.apelidos_atualizados.id, "Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série. Informativo: não entra na contagem da aba."),
+          renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização."),
+          " data-resumo-informativo")}
         `, false, [
-          cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao"),
-          cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais"),
-          cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados"),
+          cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao", { cor: "indigo", atraso: 0 }),
+          cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais", { cor: "ambar", atraso: 1 }),
+          cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados", { cor: "ciano", atraso: 2 }),
         ])}
         ${painelResumo("usuarios", `
         ${secaoMudancasUsuarios || avisoListaAusente}
         ${exibirSemUsuario ? secaoSemUsuario(semUsuario) : ""}
         `, false, [
-          secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : "",
-          exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario") : "",
+          secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios", { cor: "fucsia", atraso: 0 }) : "",
+          exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario", { cor: "ambar", atraso: 1 }) : "",
         ])}
         ${painelResumo("sem-acesso", `
-        <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber", "comparacao-secao-sem-acesso-7", "Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.")}<p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
-        </section>
-        ${semAcesso60 ? `<section class="space-y-2" data-history-filter-section data-sem-acesso-60-secao>
-          <div>${tituloSecaoComparacao(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "rose", "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam.")}<p class="text-xs text-fg-muted">Os hostnames que somem do Endpoint ficam em <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}
-        </section>` : avisoListaAusente}
+        ${cartaoSecaoBento("ambar", 0,
+          cabecalhoSecaoBento("Sem acesso há 7 dias ou mais", "comparacao-secao-sem-acesso-7", "Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.", semAcessoRows.length),
+          `<p class="ck-bento-nota">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="ck-bento-nota">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}`)}
+        ${semAcesso60 ? cartaoSecaoBento("fucsia", 1,
+          cabecalhoSecaoBento(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam."),
+          `<p class="ck-bento-nota">Os hostnames que somem do Endpoint ficam em <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}`,
+          " data-sem-acesso-60-secao") : avisoListaAusente}
         `)}
       `;
   }

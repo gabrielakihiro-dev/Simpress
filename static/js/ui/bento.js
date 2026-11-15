@@ -114,5 +114,5 @@
     doc.addEventListener("pointerdown", mover, { passive: true });
   }
 
-  return Object.freeze({ duracao, curva, contarAte, animarAnel, animarDentro, iniciarBrilho });
+  return Object.freeze({ duracao, curva, contarAte, animarAnel, animarDentro, iniciarBrilho, cancelar });
 });

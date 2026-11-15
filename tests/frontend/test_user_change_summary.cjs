@@ -41,7 +41,8 @@ test("the update result summarizes logged-user changes with counts, labels, (M) 
   assert.match(html, /data-comparison-section-target="comparacao-secao-mudancas-usuarios"/);
   // The card lives in the strip at the top of the Usuários tab, before its empty-state notice.
   const faixa = html.slice(html.indexOf('id="resumo-painel-usuarios"')).split("data-resumo-vazio")[0];
-  assert.match(faixa, /class="resumo-cartoes"[^>]*>\s*<button [^>]*data-comparison-section-target="comparacao-secao-mudancas-usuarios"/);
+  // Since Bloco 2 each counter sits in a .ck-bento-cartao wrapper; the first one is still the Mudanças de usuário button.
+  assert.match(faixa, /class="resumo-cartoes"[^>]*>\s*<div class="ck-bento-cartao[^"]*"[^>]*>\s*<button [^>]*data-comparison-section-target="comparacao-secao-mudancas-usuarios"/);
   for (const rotulo of ["Usuário novo no Endpoint", "Usuário alterado no Endpoint", "Usuário removido do Endpoint", "Manual voltou a valer"]) {
     assert.ok(html.includes(rotulo), rotulo);
   }

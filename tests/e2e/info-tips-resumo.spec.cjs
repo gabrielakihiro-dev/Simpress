@@ -50,7 +50,7 @@ test("Comparação (Resumo): descrição da seção fica no ⓘ ao lado do títu
   await request.get("/__fixture_cockpit?comparacao=1");
   await abrirResumo(page, "sem-acesso");
   const titulo = page.locator("#comparacao-secao-sem-acesso-7");
-  const dica = page.locator(`${CONTEUDO} .flex:has(> #comparacao-secao-sem-acesso-7) .info-tip`);
+  const dica = page.locator(`${CONTEUDO} .ck-bento-ancora:has(> #comparacao-secao-sem-acesso-7) .info-tip`);
   const trigger = dica.locator(".info-tip-trigger");
   const balao = dica.locator(".info-tip-text");
   await expect(titulo).toBeVisible();

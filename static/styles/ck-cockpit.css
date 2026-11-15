@@ -1136,6 +1136,28 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 @media (max-width: 767.98px) { .rel-abas-barra { padding: 8px 12px; } }
 @media (pointer: coarse) { .rel-aba { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .rel-aba, .rel-aba__n { transition: none; } }
+/* Relatório mensal no visual bento (Bloco 2): cartões, barra e sub-abas ficam em ck-bento.css; aqui só tr/.ck-tabela (test_ui_motion.cjs proíbe esses seletores lá). Tabela no desktop, cartões abaixo de 1200px. */
+@media (min-width: 1200px) {
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela { border-collapse: separate; border-spacing: 0; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela th { padding: 10px 12px; border-bottom: 1px solid var(--cor-borda); font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .06em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela td { padding: 12px; border-bottom: 1px solid var(--bento-linha); font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela td:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela td:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela tbody tr:hover { background: transparent; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela tbody tr:hover > td { background: var(--cor-neutro-fundo); }
+}
+@media (max-width: 1199.98px) {
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards tr { grid-template-columns: minmax(0, 1fr); gap: 0; margin-bottom: 10px; padding: 6px 14px; border: 1px solid var(--cor-borda); border-radius: 16px; background: var(--cor-fundo); }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards tbody tr:last-child { margin-bottom: 0; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards td { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr); align-items: start; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--bento-linha); font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards td:last-child { border-bottom: 0; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards td::before { font: 600 11px/1.5 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase; color: var(--cor-texto-sutil); overflow-wrap: anywhere; }
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela--cards td > .ck-badge { justify-self: start; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-cockpit-tool-panel="relatorio"] .ck-tabela td { transition: background-color 300ms var(--curva); }
+}
+@media (prefers-reduced-motion: reduce) { [data-cockpit-tool-panel="relatorio"] :is(.ck-tabela tbody tr, .ck-tabela td) { transition: none; } }
 @media (max-width: 767.98px) { .ck-ferr-filtros { padding: 8px 12px; } }
 
 /* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */
@@ -1359,14 +1381,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-sheets-detail .info-tip-text { max-width: 17rem; }
 }
 /* Resumo, sub-aba Backups (backups-regionais.js): tabela no desktop e cards abaixo de 1200px (.ck-tabela--cards). */
-#resumo-painel-backups .ck-backups__cabeca { display: flex; align-items: center; gap: 4px; }
-#resumo-painel-backups .ck-backups__meta { margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
 /* O ⓘ herda min-height 2.5rem de app.css e não deve aumentar a altura do título (Backups e títulos de seção da Comparação). */
 :is(#resumo-painel-backups, #comparacao-planilhas-conteudo) .info-tip-trigger { min-height: 0; }
 #resumo-painel-backups .ck-backups__estado { margin: 0; padding: 24px 12px; text-align: center; color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
-#resumo-painel-backups .ck-backups__limites { padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); overflow-wrap: anywhere; }
-#resumo-painel-backups .ck-backups__limites-titulo { margin: 0 0 4px; font-size: var(--fs-md); font-weight: var(--peso-medio); }
-#resumo-painel-backups .ck-backups__limites ul { margin: 0; padding-left: 18px; }
 #resumo-painel-backups .ck-backups__lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 #resumo-painel-backups .ck-backups__item { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 #resumo-painel-backups .ck-backups__detalhe { flex: 1 1 100%; font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
@@ -1381,7 +1398,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #resumo-painel-backups .ck-backups__excluidos > summary:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 #resumo-painel-backups .ck-backups__excluidos > .ck-backups__lista { margin-top: 8px; }
 #resumo-painel-backups .ck-backups__item > .ck-backups__lista { flex: 1 1 100%; min-width: 0; }
-#resumo-painel-backups .ck-backups__secao .ck-cartao__corpo { display: grid; gap: 12px; }
 #resumo-painel-backups .ck-backups__grupo { display: grid; gap: 6px; }
 #resumo-painel-backups .ck-tabela th:nth-child(1) { width: 11%; }
 #resumo-painel-backups .ck-tabela th:nth-child(2) { width: 15%; }
@@ -1389,8 +1405,29 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #resumo-painel-backups .ck-tabela th:nth-child(4) { width: 24%; }
 #resumo-painel-backups .ck-tabela th:nth-child(5) { width: 14%; }
 #resumo-painel-backups .ck-tabela th:nth-child(6) { width: 14%; }
+/* Backups no visual bento (Bloco 2): o cartão e as seções ficam em ck-bento.css; aqui só tr/.ck-tabela (test_ui_motion.cjs proíbe esses seletores lá). */
+@media (min-width: 1200px) {
+  #resumo-painel-backups .ck-tabela { border-collapse: separate; border-spacing: 0; }
+  #resumo-painel-backups .ck-tabela th { padding: 10px 12px; border-bottom: 1px solid var(--cor-borda); font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .06em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  #resumo-painel-backups .ck-tabela td { padding: 12px; border-bottom: 1px solid var(--bento-linha); font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  #resumo-painel-backups .ck-tabela td:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+  #resumo-painel-backups .ck-tabela td:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+  #resumo-painel-backups .ck-tabela tbody tr:hover { background: transparent; }
+  #resumo-painel-backups .ck-tabela tbody tr:hover > td { background: var(--cor-neutro-fundo); }
+}
+@media (max-width: 1199.98px) {
+  #resumo-painel-backups .ck-tabela--cards tr { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 14px; border: 1px solid var(--cor-borda); border-radius: 16px; background: var(--cor-fundo); }
+  #resumo-painel-backups .ck-tabela--cards td { gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--bento-linha); font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  #resumo-painel-backups .ck-tabela--cards td:last-child { border-bottom: 0; }
+  #resumo-painel-backups .ck-tabela--cards td::before { font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  #resumo-painel-backups .ck-tabela--cards td.ck-td--sem-rotulo { padding: 10px 0; font: 600 14px/1.3 var(--fonte-corpo); }
+  #resumo-painel-backups .ck-tabela--cards td > .ck-badge { align-self: flex-start; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #resumo-painel-backups .ck-tabela td { transition: background-color 300ms var(--curva); }
+}
 @media (pointer: coarse) { #resumo-painel-backups :is(.ck-btn, .ck-backups__excluidos > summary) { min-height: 44px; } }
-@media (prefers-reduced-motion: reduce) { #resumo-painel-backups :is(.ck-tabela tbody tr, .ck-btn) { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #resumo-painel-backups :is(.ck-tabela tbody tr, .ck-tabela td, .ck-btn) { transition: none; } }
 .sebrae-filtro { display: flex; flex: 0 1 470px; align-items: center; gap: 8px; min-width: 0; }
 .sebrae-busca { display: flex; flex: 1 1 auto; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-mudo); }
 .sebrae-busca:focus-within { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
@@ -2397,25 +2434,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   content: ""; display: block; width: 14px; height: 14px; margin: 0 auto 10px; border: 2px solid var(--cor-borda); border-top-color: var(--cor-destaque); border-radius: 50%; animation: ck-girar 900ms linear infinite;
 }
 
-/* 3.1 Resumo: cada sub-aba abre com uma faixa compacta dos seus contadores; número à esquerda, cor só quando há o que conferir */
-#comparacao-planilhas-conteudo .resumo-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 6px; margin-bottom: 20px; }
-#comparacao-planilhas-conteudo .resumo-cartoes > * {
-  --tom: var(--cor-neutro-texto);
-  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "num lab"; align-items: center; column-gap: 10px;
-  min-height: 38px; padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
-  border-left-width: 3px; transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), box-shadow var(--duracao) var(--curva);
-}
-#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="amber"] { --tom: var(--cor-alerta-texto); }
-#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="rose"] { --tom: var(--cor-erro-texto); }
-#comparacao-planilhas-conteudo .resumo-cartoes > [data-metric-tone="emerald"] { --tom: var(--cor-ok-texto); }
-#comparacao-planilhas-conteudo .resumo-cartoes > * > p:first-child { grid-area: lab; margin: 0; font-size: var(--fs-xs); line-height: 1.3; letter-spacing: 0; text-transform: none; overflow-wrap: anywhere; color: var(--cor-texto-suave); }
-#comparacao-planilhas-conteudo .resumo-cartoes > * > p:last-child { grid-area: num; min-width: 2ch; margin: 0; font-size: var(--fs-xl); font-weight: var(--peso-marca); line-height: 1; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
-/* com itens: botão que leva à seção; o número usa o tom */
-#comparacao-planilhas-conteudo .resumo-cartoes > button[data-comparison-section-target] > p:last-child { color: var(--tom); }
-#comparacao-planilhas-conteudo .resumo-cartoes > button[data-comparison-section-target]:hover:not(:focus-visible) { border-top-color: var(--tom); border-right-color: var(--tom); border-bottom-color: var(--tom); }
-/* sem itens: caixa recuada e número apagado */
-#comparacao-planilhas-conteudo .resumo-cartoes > div[data-metric-tone]:not([data-metric-tone=""]) { background: var(--cor-superficie-funda); box-shadow: none; }
-#comparacao-planilhas-conteudo .resumo-cartoes > div[data-metric-tone]:not([data-metric-tone=""]) > p { color: var(--cor-texto-mudo); }
+/* 3.1 A faixa de contadores das sub-abas (.resumo-cartoes) e os cartões de seção usam o visual bento: ck-bento.css, §10. */
 
 /* 3.2 Filtros: uma linha só, estado ativo visível */
 #comparacao-planilhas-conteudo > .history-filter-bar {
@@ -2445,8 +2464,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   padding: 14px 16px 16px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm);
 }
 #comparacao-planilhas-conteudo > [data-history-filter-section]:not(:has(table)) { padding: 10px 16px 12px; box-shadow: none; background: var(--cor-superficie-funda); }
-/* Nas sub-abas do Resumo as seções ficam dentro de .resumo-painel: o espaço acima do título separa da tabela anterior. */
-#comparacao-planilhas-conteudo .resumo-painel > [data-history-filter-section] + [data-history-filter-section] { margin-top: 24px; }
 #comparacao-planilhas-conteudo h4 { gap: 8px; color: var(--cor-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); line-height: 1.3; }
 #comparacao-planilhas-conteudo [data-history-filter-section] > div:first-child > p { max-width: 80ch; margin-top: 2px; font-size: var(--fs-ui); line-height: 1.5; color: var(--cor-texto-mudo); }
 #comparacao-planilhas-conteudo [data-history-filter-group] + [data-history-filter-group] { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cor-borda-suave); }
@@ -2477,8 +2494,12 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 #comparacao-planilhas-conteudo .comparison-desktop-table th { vertical-align: middle; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); letter-spacing: .01em; color: var(--cor-texto-sutil); }
 #comparacao-planilhas-conteudo .comparison-desktop-table td { padding: 9px 12px; font-size: var(--fs-ui); color: var(--cor-texto-suave); }
 #comparacao-planilhas-conteudo .comparison-desktop-table td.text-white { color: var(--cor-texto); font-weight: var(--peso-medio); }
-#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td { transition: background-color var(--duracao) var(--curva); }
-#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr:hover > td { background: var(--cor-superficie-funda); }
+/* Linhas no visual bento (Bloco 2): sem zebra (a linha divisória já separa) e hover neutro; linha anotada mantém o fundo da anotação. */
+#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr:nth-child(even):not(.history-row-annotated) { background: transparent; }
+#comparacao-planilhas-conteudo .comparison-desktop-table tbody tr:not(.history-row-annotated):hover > td { background: var(--cor-neutro-fundo); background-image: none; }
+@media (prefers-reduced-motion: no-preference) {
+  #comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td { transition: background-color 300ms var(--curva); }
+}
 
 /* Estado da linha, sem JavaScript: faixa à esquerda no tom da seção (âmbar = conferir, vermelho = decidir, verde = aplicado ou resolvido) */
 #comparacao-planilhas-conteudo :is(tr, .comparison-mobile-card)[data-comparison-category] { --tom: var(--cor-alerta-texto); }
@@ -2528,12 +2549,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 }
 @media (max-width: 767.98px) {
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr > .ck-campo { flex: 1 1 100%; }
-  #comparacao-planilhas-conteudo .resumo-cartoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #comparacao-planilhas-conteudo .history-filter-controls { grid-template-columns: minmax(0, 1fr); }
   #comparacao-planilhas-conteudo > [data-history-filter-section] { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #comparacao-planilhas-conteudo .resumo-cartoes > *,
   #comparacao-planilhas-conteudo > .history-filter-bar,
   #comparacao-planilhas-conteudo .comparison-desktop-table tbody tr > td,
   #comparacao-planilhas-conteudo details[data-user-change-details] > summary::before,

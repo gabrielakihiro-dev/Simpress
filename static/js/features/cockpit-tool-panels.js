@@ -1036,7 +1036,11 @@
       const active = type === current;
       tab.setAttribute("aria-selected", String(active));
       tab.tabIndex = active ? 0 : -1;
-      tab.querySelector("[data-alias-tab-count]").textContent = displayCount(type === "todos" ? all.length : counts.get(type) || 0);
+      const total = type === "todos" ? all.length : counts.get(type) || 0;
+      const contador = tab.querySelector("[data-alias-tab-count]");
+      globalThis.SimpressBento?.cancelar?.(contador); // busca no meio da contagem: o valor novo não pode ser sobrescrito pelo quadro seguinte
+      contador.textContent = displayCount(total);
+      contador.dataset.bentoContar = String(total); // alvo da contagem que animarFiltrosAlias() repete
     });
   }
 
@@ -1089,12 +1093,16 @@
     renderKpis(byId("cockpit-alias-kpis"), [
       ["Alterações neste mês", metrics.changesThisMonth], ["Equipamentos afetados", metrics.equipmentAffected],
     ]);
+    globalThis.SimpressBento?.cancelar?.(byId("cockpit-alias-count-all"));
+    globalThis.SimpressBento?.cancelar?.(byId("cockpit-alias-count-7days"));
     byId("cockpit-alias-count-all").textContent = displayCount(aliasEvents.length);
+    byId("cockpit-alias-count-all").dataset.bentoContar = String(aliasEvents.length);
     const sevenDayCount = aliasEvents.filter(event => {
       const timestamp = Date.parse(event.horario || "");
       return Number.isFinite(timestamp) && timestamp >= Date.now() - (7 * 24 * 60 * 60 * 1000);
     }).length;
     byId("cockpit-alias-count-7days").textContent = displayCount(sevenDayCount);
+    byId("cockpit-alias-count-7days").dataset.bentoContar = String(sevenDayCount);
     byId("cockpit-alias-filters").querySelectorAll("[data-alias-period]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.aliasPeriod === selectedAliasPeriod));
     });
@@ -1119,10 +1127,17 @@
     renderAliasDetail(selected);
   }
 
+  // Troca de aba ou de filtro repete a contagem dos números (contrato bento); a busca por texto não repete.
+  function animarFiltrosAlias() {
+    globalThis.SimpressBento?.animarDentro?.(byId("cockpit-alias-tabs"));
+    globalThis.SimpressBento?.animarDentro?.(byId("cockpit-alias-filters"));
+  }
+
   // Abas: o select oculto é a fonte de verdade do filtro de tipo; setar .value não dispara "change", por isso renderAliases() direto.
   function selectAliasType(type) {
     byId("cockpit-alias-type").value = type;
     renderAliases();
+    animarFiltrosAlias();
     byId("cockpit-alias-tabs").querySelector(`[data-alias-type="${type}"]`)?.focus();
   }
 
@@ -1283,6 +1298,27 @@
 
   function monthlyLink(text, label, onClick) { return monthlyButton(text, onClick, { className: "ck-rel__link ck-mono", label }); }
 
+  // Cartão bento (seção 6 do ck-bento.css): o próprio elemento vira o cartão e o conteúdo vai para a face; id, ARIA e data-* ficam no elemento externo.
+  function monthlyCartao(card, tom = "", atraso = 0) {
+    const face = element("div", "ck-bento-face");
+    face.append(...[...card.children]);
+    card.append(face);
+    card.classList.add("ck-bento-cartao", `ck-bento-d${atraso}`);
+    if (tom) card.dataset.tom = tom;
+    return card;
+  }
+
+  // Alvo da contagem animada (SimpressBento.animarDentro); sem número válido, o "—" fica como está.
+  function monthlyContavel(node, value) {
+    if (Number.isFinite(value)) node.dataset.bentoContar = String(value);
+    return node;
+  }
+
+  // Contagem e barras do painel aberto recomeçam a cada troca de sub-aba (contrato bento).
+  function animarPainelRelatorio() {
+    globalThis.SimpressBento?.animarDentro?.(byId(`rel-painel-${monthlyView.aba}`));
+  }
+
   // Sub-abas do F8 (Resumo F3 e OS F6 seguem o mesmo molde): estado em monthlyView.aba, ARIA e painel visível numa só passagem.
   function aplicarAbaRelatorio() {
     REL_ABAS.forEach(nome => {
@@ -1302,6 +1338,7 @@
     if (!REL_ABAS.includes(nome)) return;
     monthlyView.aba = nome;
     aplicarAbaRelatorio();
+    animarPainelRelatorio();
     if (focar) byId(`rel-aba-${nome}`)?.focus();
   }
 
@@ -1333,7 +1370,7 @@
     entries.forEach(([label, value, tone]) => {
       const cell = element("div", "ck-rel__numero");
       if (tone) cell.dataset.status = tone;
-      cell.append(element("dt", "ck-rel__rotulo", label), element("dd", "ck-rel__valor", displayCount(value)));
+      cell.append(element("dt", "ck-rel__rotulo", label), monthlyContavel(element("dd", "ck-rel__valor", displayCount(value)), value));
       grid.append(cell);
     });
     return grid;
@@ -1358,7 +1395,7 @@
   function monthlyOutsideCard(rows) {
     const card = monthlyCard("Fora das contagens", "alerta", infoTip("fora das contagens", "Datas ou vínculo insuficientes: não entram nos números do mês.", "cockpit-monthly-fora-nota"));
     const total = element("p", "ck-rel__total");
-    total.append(element("strong", "ck-rel__valor", displayCount(rows.length)), document.createTextNode(` ${plural(rows.length, "registro", "registros")}`));
+    total.append(monthlyContavel(element("strong", "ck-rel__valor", displayCount(rows.length)), rows.length), document.createTextNode(` ${plural(rows.length, "registro", "registros")}`));
     const list = element("ul", "ck-rel__fora");
     list.id = "cockpit-monthly-fora";
     list.hidden = !monthlyView.foraAberto;
@@ -1392,7 +1429,7 @@
     const counts = element("dl", "ck-rel__contagens");
     Object.entries(comparison.contagens || {}).forEach(([label, value]) => {
       const row = element("div", "ck-rel__contagem");
-      row.append(element("dt", "", label), element("dd", "ck-num", displayCount(value)));
+      row.append(element("dt", "", label), monthlyContavel(element("dd", "ck-num", displayCount(value)), value));
       counts.append(row);
     });
     const inventory = monthlyCard("Comparação de inventário");
@@ -1403,6 +1440,8 @@
     );
     const cards = [pending, inventory];
     if (insufficient.length) cards.push(monthlyOutsideCard(insufficient));
+    const tons = ["ciano", "fucsia", "ambar"];
+    cards.forEach((card, indice) => monthlyCartao(card, tons[indice], indice));
     byId("cockpit-monthly-kpis").replaceChildren(...cards);
   }
 
@@ -1665,11 +1704,13 @@
     list.forEach(([name, count]) => {
       const item = element("li", "ck-rel__tipo");
       const line = element("span", "ck-rel__tipo-linha");
-      line.append(element("span", "", name || "Sem tipo"), element("strong", "ck-num", displayCount(count)));
+      line.append(element("span", "", name || "Sem tipo"), monthlyContavel(element("strong", "ck-num", displayCount(count)), count));
       const track = element("span", "ck-rel__trilho");
       track.setAttribute("aria-hidden", "true");
       const fill = element("span", "ck-rel__trilho-valor");
-      fill.style.width = `${Math.round(((Number(count) || 0) / max) * 100)}%`;
+      const pct = Math.round(((Number(count) || 0) / max) * 100);
+      fill.style.width = `${pct}%`;
+      fill.dataset.bentoLargura = String(pct); // animarDentro() repete o crescimento da barra a cada troca de sub-aba
       track.append(fill);
       item.append(line, track);
       items.append(item);
@@ -1692,7 +1733,7 @@
       const name = element("span", "ck-rel__unidade-nome");
       name.append(element("strong", "", city || "Sem cidade"));
       if (address) name.append(element("span", "ck-mudo", ` · ${address}`));
-      item.append(name, element("strong", "ck-num", displayCount(total)));
+      item.append(name, monthlyContavel(element("strong", "ck-num", displayCount(total)), total));
       items.append(item);
     });
     card.append(items);
@@ -1722,15 +1763,15 @@
     ]));
     numbers.setAttribute("aria-label", "Totais da base atual");
     const grid = element("div", "ck-rel__base-grade");
-    grid.append(numbers, monthlyTypesCard(inventory.por_tipo), monthlyUnitsCard(inventory.por_unidade));
+    grid.append(monthlyCartao(numbers, "", 0), monthlyCartao(monthlyTypesCard(inventory.por_tipo), "", 4), monthlyCartao(monthlyUnitsCard(inventory.por_unidade), "ciano", 5));
     section.append(grid);
     return section;
   }
 
   const monthlySectionBuilders = {
-    os: report => monthlyOsSection(report.os || {}),
-    comp: report => monthlyComparisonSection(report.comparacao || {}),
-    sebrae: report => monthlySebraeSection(report),
+    os: report => monthlyCartao(monthlyOsSection(report.os || {}), "ciano"),
+    comp: report => monthlyCartao(monthlyComparisonSection(report.comparacao || {}), "fucsia"),
+    sebrae: report => monthlyCartao(monthlySebraeSection(report), "ambar"),
     base: report => monthlyBaseSection(report.inventario || {}),
   };
 
@@ -1740,6 +1781,7 @@
     const current = byId("cockpit-monthly-details")?.querySelector(`[data-rel-secao="${key}"]`);
     if (!report || !current) return;
     const next = monthlySectionBuilders[key](report);
+    if (next.dataset) next.dataset.semEntrada = ""; // filtro e "Carregar mais" não refazem a entrada do cartão
     current.replaceWith(next);
     const target = (focusSelector && next.querySelector(focusSelector)) || (focusSelector ? next.querySelector("h3") : null);
     target?.focus();
@@ -1778,7 +1820,7 @@
     dados.replaceChildren(...(items.length
       ? items.map(([label, value]) => {
         const item = element("span", "ck-rel__faixa-item", `${label} `);
-        item.append(element("b", "ck-num", displayCount(value)));
+        item.append(monthlyContavel(element("b", "ck-num", displayCount(value)), value));
         return item;
       })
       : [element("span", "ck-mudo", monthlyView.sebraeErro || "Nenhum Dashboard importado.")]));
@@ -1799,11 +1841,12 @@
     renderMonthlyAttention(report);
     byId("cockpit-monthly-attention").hidden = false;
     byId("cockpit-monthly-estado").replaceChildren();
-    byId("cockpit-monthly-movimento").replaceChildren(monthlyMovementSection(report.os || {}));
+    byId("cockpit-monthly-movimento").replaceChildren(monthlyCartao(monthlyMovementSection(report.os || {}), "", 3));
     renderMonthlyChamados(report);
     Object.entries(monthlySectionBuilders).forEach(([key, build]) => byId(`rel-painel-${key}`).replaceChildren(build(report)));
     renderMonthlyTabCounts(report);
     aplicarAbaRelatorio();
+    animarPainelRelatorio();
     byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report, monthlyView.sebraeErro ? null : monthlyView.sebrae);
     const period = monthlyPeriodLabel(report);
     const badgeNode = byId("cockpit-monthly-period");
@@ -2129,15 +2172,20 @@
       if (!button || button.disabled) return;
       selectedAliasPeriod = button.dataset.aliasPeriod;
       renderAliases();
+      animarFiltrosAlias();
     });
     byId("cockpit-alias-export").addEventListener("click", exportAliasesCsv);
-    byId("cockpit-alias-actions-only").addEventListener("change", renderAliases);
+    byId("cockpit-alias-actions-only").addEventListener("change", () => {
+      renderAliases();
+      animarFiltrosAlias();
+    });
     byId("cockpit-alias-clear").addEventListener("click", () => {
       byId("cockpit-alias-search").value = "";
       byId("cockpit-alias-type").value = "todos";
       byId("cockpit-alias-actions-only").checked = false;
       selectedAliasPeriod = "todos";
       renderAliases();
+      animarFiltrosAlias();
     });
     // Sub-abas do F8: setas, Home e End seguem o molde da F6 (circular, ativa ao focar).
     REL_ABAS.forEach((nome, indice) => {

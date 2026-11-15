@@ -48,6 +48,7 @@ Pedido do usuário (14/11/2026): imitar em todas as abas e sub-abas o layout do 
 - `static/js/ui/bento.js`, importado em `static/app-entry.js`:
   - `iniciarBrilho()`: um único `pointermove`/`pointerdown` delegado no `document`, limitado por `requestAnimationFrame`; grava `--mx`/`--my` com `el.style.setProperty` só no cartão sob o ponteiro (CSSOM, permitido pela CSP); ignora `#assistente-widget`.
   - `contarAte(el, alvo, formatar)`: anima o número e termina com `el.textContent === formatar(alvo)`, exatamente o texto que o renderizador já escrevia (pt-BR); com `prefers-reduced-motion`, escreve o final na hora; cancela a animação anterior do mesmo elemento.
+  - `cancelar(el)`: para a contagem em curso do elemento (Bloco 2: a busca do Histórico de apelidos reescreve o número das abas no meio da contagem).
 
 ## Regras para todas as sessões
 
@@ -95,7 +96,8 @@ Pedido do usuário (14/11/2026): imitar em todas as abas e sub-abas o layout do 
 
 ## Status
 
-- Bloco 1: desenho aprovado (14/11/2026); implementação em andamento.
-- Bloco 2: pendente (desenhar primeiro).
+- Bloco 1: desenho aprovado (14/11/2026); implementado e mesclado em 14/11/2026 (PR #247).
+- Bloco 2: desenho aprovado em 14/11/2026 (opção A, "Seções em cards"); implementado no PR do Bloco 2 (branch `claude/nervous-agnesi-e0c73d`). O card "Séries sem mapeamento" ficou fora.
+- Pausa: depois do Bloco 2 vem a migração TS + React + Vite; o Bloco 3 só começa quando o usuário retomar o visual.
 - Bloco 3: pendente (desenhar primeiro).
 - Bloco 4: pendente (desenhar primeiro).
