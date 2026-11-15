@@ -50,7 +50,7 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
 
 ## Bloco 3 — Piloto em React
 
-- **Pré-requisito:** pelo menos um bloco bento mesclado com um painel pequeno e isolado. A sessão monta a tabela "painel × estado do bento × acoplamento" (a partir de `docs/planos/visual-bento.md` e de `FEATURE_ORDER`) e confirma o painel com o usuário antes de começar.
+- **Pré-requisito:** pelo menos um bloco bento mesclado com um painel pequeno e isolado. A sessão monta a tabela "painel × estado do bento × acoplamento" (a partir de `docs/planos/visual-bento.md` e de `FEATURE_ORDER`) e confirma o painel com o usuário antes de começar. No modo rápido sem o usuário acordado, a sessão escolhe o painel mais isolado e manda a escolha a quem a abriu, por `SendMessage`.
 - **Objetivo:** provar o caminho completo: dados reais, temas, movimento bento, atalhos, celular e desktop.
 - **Arquivos:** `frontend/src/paineis/<painel>/`; o partial do painel (conteúdo vira contêiner); o módulo antigo em `static/js/features/` (removido ou reduzido à ponte); `static/app.js`; testes do painel; doc da tela em `docs/cockpit-prompts/`.
 - **Antes de codar:** baseline `toHaveScreenshot` do painel atual na fixture (390 px e 1366 px, claro e escuro) e inventário nomeado dos testes que tocam o painel, incluindo os que usam `tests/frontend/support/app-sources.cjs`, `test_feature_modules.cjs` e `test_action_registry.cjs`.
@@ -66,17 +66,22 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 
 - **Cronograma:**
   - Dia 1: Bloco 2 e piloto, em sequência.
-  - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo.
-  - Dia 3: grupo final (G7) e Bloco final.
+  - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo. Só começa depois que o Dia 1 terminar, com os PRs do Bloco 2 e do piloto mesclados no `main`.
+  - Fim do Dia 2: revisão de integração (ver abaixo), só depois que todas as sessões de grupo abrirem PR e o Antigravity mesclar os PRs.
+  - Dia 3: grupo final (G7) sozinho, depois o Bloco final.
   - Dia 4: revisão geral e correção (ver "Dia 4").
 - **Pendências:** todo PR da migração tem no corpo a seção "Pendências para o Dia 4" (ou "nenhuma"). Ela lista: falha de CI ou teste que apareceu no caminho, item da revisão ponytail ou do revisor não corrigido, falha que bateu o teto de 3 ciclos e atalho com limite conhecido.
 - **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
 - **Painéis independentes (o piloto cria; nenhum grupo edita depois):** nenhum grupo toca arquivo compartilhado (`frontend/src/main.tsx`, `static/app.js`, `static/app-entry.js`, `static/index.html`, `tailwind.input.css`, `tests/frontend/support/`). O piloto faz:
   - `main.tsx` achar os painéis sozinho (por exemplo, `import.meta.glob` eager em `frontend/src/paineis/*/montar.tsx`, que cabe no bundle único);
   - o código antigo pular a fábrica de um painel migrado por uma marca no arquivo do próprio painel, sem editar `FEATURE_ORDER`;
-  - o estado compartilhado (`appState` de `static/app.js`) ser lido e gravado pelo React por um adaptador em `frontend/src/`, que só o piloto e o Bloco final alteram.
+  - o estado compartilhado (`appState` de `static/app.js`) ser lido e gravado pelo React por um adaptador em `frontend/src/`, que só o piloto e o Bloco final alteram;
+  - os testes compartilhados que hoje listam painéis (`tests/frontend/test_feature_modules.cjs`, `test_action_registry.cjs`, `tests/frontend/support/app-sources.cjs` e outros que o piloto achar) lerem a lista de painéis migrados dos arquivos de cada painel, para nenhum grupo editá-los. O que não couber vai para a lista "Edições compartilhadas", feitas só na revisão de integração.
 
   Se algum desses pontos não couber, a sessão do piloto pergunta a quem escreveu o plano antes de seguir.
+- **Ordem e espera:** cada sessão parte do `main` com as dependências já mescladas. O piloto espera o bento Bloco 2 e o Bloco 2 deste plano; os grupos esperam o piloto. Quem orquestra espera o merge do Antigravity antes de abrir a sessão seguinte.
+- **Dono de cada arquivo (Dia 2):** o brief de cada grupo lista os arquivos dele: os módulos do grupo em `static/js/features/`, os partials deles, `frontend/src/paineis/<painel>/` e `tests/e2e/react-<grupo>.spec.cjs`. Arquivo fora da lista não se edita. Se precisar, a sessão manda por `SendMessage` a quem a abriu, e a edição vai para "Edições compartilhadas".
+- **Revisão de integração (fim do Dia 2):** sessão nova a partir do `main` com G1 a G6 mesclados. Faz as "Edições compartilhadas", roda `npm run verify` e `npm run test:ui:e2e` completos, roda `ponytail:ponytail-review` no diff do Dia 2, usa o `model-super-power:revisor`, abre o app real com dados locais em cada aba migrada e corrige o que falhar. Termina em PR. O Dia 3 só começa com esse PR mesclado.
 - **Grupos:** proposta por arquivo de `static/js/features/`, de cerca de 2 a 3 mil linhas cada. O piloto confere e ajusta. Os arquivos não se repetem entre grupos.
   - G1 Sebrae: `sebrae-dashboard`, `sebrae-historico`, `sebrae-conflitos`, `cockpit-chamados`.
   - G2 Ferramentas: `cockpit-tool-panels`, `inventory-upload`, `units-catalog`.
