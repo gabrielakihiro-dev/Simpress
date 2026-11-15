@@ -95,7 +95,10 @@ const BACKUPS_FIXOS = {
 };
 
 for (const tema of ["light", "dark"]) {
-  test(`baseline: sub-aba Backups com todos os casos, tema ${tema}`, async ({ page }) => {
+  test(`baseline: sub-aba Backups com todos os casos, tema ${tema}`, async ({ page, viewport }) => {
+    // O painel (1226 px) passa dos 900 px do desktop: com rolagem, o cabeçalho fixo entra no meio da captura e os
+    // cartões de baixo nem sempre estão desenhados. Viewport alto deixa a captura sem rolagem e estável.
+    if (viewport.width >= 1366) await page.setViewportSize({ width: viewport.width, height: 2000 });
     await prepararPagina(page, tema);
     await rotaBackups(page, BACKUPS_FIXOS);
     await abrirBackups(page);
