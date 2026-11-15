@@ -134,9 +134,13 @@
             <label class="ckp-alternar" title="Mostra só os registros que podem ser restaurados ou excluídos"><input id="cockpit-alias-actions-only" type="checkbox">Somente com ação disponível</label>
             <button type="button" id="cockpit-alias-clear" class="ck-btn ck-btn--secundario">Limpar filtros</button>
           </div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista" id="cockpit-alias-list" role="group" aria-label="Alterações registradas"></div>
-            <aside class="ck-dividido__detalhe ck-det__corpo" id="cockpit-alias-detail" aria-label="Detalhes da alteração selecionada"><p class="ck-lista__vazio">Selecione uma alteração.</p></aside>
+          <div class="ck-dividido ck-alias-dupla">
+            <div class="ck-bento-cartao ck-bento-d1">
+              <div class="ck-bento-face ck-dividido__lista" id="cockpit-alias-list" role="group" aria-label="Alterações registradas"></div>
+            </div>
+            <div class="ck-bento-cartao ck-alias-detalhe-cartao ck-bento-d2" data-tom="ciano">
+              <aside class="ck-bento-face ck-dividido__detalhe ck-det__corpo" id="cockpit-alias-detail" aria-label="Detalhes da alteração selecionada"><p class="ck-lista__vazio">Selecione uma alteração.</p></aside>
+            </div>
           </div>
         </section>
 

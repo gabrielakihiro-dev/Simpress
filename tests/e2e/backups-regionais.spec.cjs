@@ -227,7 +227,7 @@ test("sem comparação: Visão geral fica habilitada e mostra só Ativos por reg
   await expect(ativos).toBeVisible();
   await expect(page.locator("#resumo-regionais")).toBeVisible();
   await expect(page.locator(CONTEUDO)).toBeHidden();
-  await expect(page.locator(".ck-bento-cartao")).toHaveCount(0);
+  await expect(page.locator(`${CONTEUDO} .ck-bento-cartao`)).toHaveCount(0); // Backups tem os próprios cartões bento (#resumo-painel-backups)
   expect(erros).toEqual([]);
 });
 
@@ -472,10 +472,12 @@ for (const reduzir of [true, false]) {
     resultado = { total: resultado.total + painel.total, estilos: [...resultado.estilos, ...painel.estilos], emCurso: [...resultado.emCurso, ...painel.emCurso] };
     expect(resultado.total).toBeGreaterThan(20); // cartão + aba + painel de fato medidos
     const limite = reduzir ? 0.001 : 0.3;
-    // Contrato bento (docs/ui-motion/contrato-bento.md): o brilho do cartão (::before e ::after) aparece em 500 ms; o resto segue em 300 ms.
-    const limiteDe = item => (!reduzir && item.no.includes("::") ? 0.5 : limite);
+    // Contrato bento (docs/ui-motion/contrato-bento.md): o brilho do cartão (::before e ::after) aparece em 500 ms;
+    // a entrada dos cartões bento do Bloco 2 (.ck-bento-cartao) dura 760 ms; o resto segue em 300 ms.
+    const entradaBento = no => !reduzir && /(^|[\s.])ck-bento-cartao(\s|$)/.test(String(no));
+    const limiteDe = item => (entradaBento(item.no) && !item.no.includes("::") ? 0.76 : !reduzir && item.no.includes("::") ? 0.5 : limite);
     expect(resultado.estilos.filter(item => item.transicao > limiteDe(item) || item.animacao > limiteDe(item))).toEqual([]);
-    expect(resultado.emCurso.filter(item => item.ms > limite * 1000)).toEqual([]);
+    expect(resultado.emCurso.filter(item => item.ms > (entradaBento(item.no) ? 760 : limite * 1000))).toEqual([]);
     if (!reduzir) {
       // Sem a preferência há movimento: o teste não pode passar por não medir nada.
       expect(resultado.estilos.some(item => item.transicao > 0)).toBe(true);

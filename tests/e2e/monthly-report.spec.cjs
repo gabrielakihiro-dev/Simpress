@@ -524,6 +524,13 @@ test("every report tab passes axe in both themes", async ({ page }) => {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     for (const [key] of ABAS_RELATORIO) {
       await openReportTab(page, key);
+      // O bento anima a entrada dos cartões (opacity 0→1): o Axe só mede contraste com a animação concluída (mesmo molde de color-contrast.spec.cjs).
+      await page.evaluate(() => Promise.race([
+        Promise.all(document.getAnimations()
+          .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
+          .map(item => item.finished.catch(() => undefined))),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ]));
       const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
       expect(audit.violations.map(violation => violation.id), `${theme}/${key}`).toEqual([]);
     }

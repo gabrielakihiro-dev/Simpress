@@ -123,17 +123,21 @@
       + "</tr>";
   }
 
-  function secao(titulo, corpo) {
-    return `<section class="ck-cartao ck-backups__secao"><div class="ck-cartao__cab"><h3 class="ck-cartao__titulo">${titulo}</h3></div><div class="ck-cartao__corpo">${corpo}</div></section>`;
-  }
+  const TITULO_TABELA = "Backups por regional prioritária";
+
+  // Cartão do Bloco 2: `tom` e `atraso` (n × 80 ms) seguem o desenho aprovado; `cabecalho` já vem em HTML.
+  const cartaoBento = (tom, atraso, cabecalho, corpo, extra = "") => `<section class="ck-bento-cartao ck-bento-secao${extra} ck-bento-d${atraso}" data-tom="${tom}" data-bento-cartao><div class="ck-bento-face">${cabecalho}${corpo}</div></section>`;
+
+  // O h3 fica byte a byte como antes (os testes e o leitor de tela dependem dele); só o estilo muda.
+  const secao = (titulo, corpo, tom, atraso, modificador) => cartaoBento(tom, atraso, `<div class="ck-bento-sech"><h3 class="ck-cartao__titulo">${titulo}</h3></div>`, `<div class="ck-backups__corpo">${corpo}</div>`, ` ck-backups__secao ck-backups__secao--${modificador}`);
 
   function limitacoes(dados) {
     const textos = (Array.isArray(dados.limitacoes) ? dados.limitacoes : []).map(texto).filter(Boolean);
     if (!textos.length) return "";
-    return `<section class="ck-backups__limites"><h3 class="ck-backups__limites-titulo">Limitações dos dados</h3><ul>${textos.map(item => `<li>${escapar(item)}</li>`).join("")}</ul></section>`;
+    return cartaoBento("ambar", 3, `<div class="ck-bento-sech"><h3 class="ck-cartao__titulo">Limitações dos dados</h3></div>`, `<ul class="ck-backups__limites">${textos.map(item => `<li>${escapar(item)}</li>`).join("")}</ul>`, " ck-backups__secao ck-backups__secao--limitacoes");
   }
 
-  const tabela = (regionais, abertos) => `<table class="ck-tabela ck-tabela--cards"><caption class="ui-sr-only">Backups por regional prioritária</caption>`
+  const tabela = (regionais, abertos) => `<table class="ck-tabela ck-tabela--cards"><caption class="ui-sr-only">${TITULO_TABELA}</caption>`
     + "<thead><tr><th scope=\"col\">Regional</th><th scope=\"col\">Situação</th><th scope=\"col\">Backups</th><th scope=\"col\">Candidatos</th><th scope=\"col\">Conferência</th><th scope=\"col\">Excluídos</th></tr></thead>"
     + `<tbody>${regionais.map(regional => linhaRegional(regional, abertos)).join("")}</tbody></table>`;
 
@@ -158,7 +162,7 @@
       const motivo = sobra.prioritaria ? "além do mínimo" : "em regional fora das prioritárias";
       return `<strong class="ck-backups__cidade">${escapar(cidade)}</strong> <span class="ck-backups__detalhe">${n} ${plural(n, "backup", "backups")} ${motivo}</span> ${series}`;
     });
-    return secao("Sobras", itens(linhas));
+    return secao("Sobras", itens(linhas), "ciano", 1, "sobras");
   }
 
   function secaoOutrasCandidatos(outras) {
@@ -168,18 +172,20 @@
       const cidade = texto(grupo.cidade);
       return `<div class="ck-backups__grupo"><strong class="ck-backups__cidade">${escapar(cidade)}</strong>${itens(lista(grupo.candidatos).map(candidato => itemCandidato(candidato, cidade)))}</div>`;
     });
-    return secao("Candidatos nas demais regionais", blocos.join(""));
+    return secao("Candidatos nas demais regionais", blocos.join(""), "indigo", 2, "candidatos");
   }
 
   /**
-   * `{ meta, dica, corpo }`: `meta` é o texto puro da linha "Atualizado em…" (muda a cada leitura); `dica`, o ⓘ com o mínimo
-   * por regional (id fixo: só muda quando o mínimo muda); `corpo`, o resto em HTML.
+   * `{ meta, dica, miolo, abaixo }`: `meta` é o texto puro da linha "Atualizado em…" (muda a cada leitura); `dica`, o ⓘ com o
+   * mínimo por regional (id fixo: só muda quando o mínimo muda); `miolo`, o corpo do cartão da tabela; `abaixo`, os três
+   * cartões seguintes (Sobras, Candidatos nas demais regionais, Limitações dos dados).
    */
   function partes(dados, { abertos = new Set() } = {}) {
     const estado = mensagem => `<p class="ck-backups__estado">${mensagem}</p>`;
-    if (dados === undefined) return { meta: null, dica: "", corpo: estado("Aguardando os dados do painel local…") };
-    if (dados === null || typeof dados !== "object") return { meta: null, dica: "", corpo: estado("O cálculo de backups regionais está desligado neste servidor.") };
-    if (dados.indisponivel) return { meta: null, dica: "", corpo: estado("Não foi possível calcular os backups regionais agora.") + limitacoes(dados) };
+    const trio = (...cartoes) => (cartoes.some(Boolean) ? `<div class="ck-bento-tres">${cartoes.join("")}</div>` : "");
+    if (dados === undefined) return { meta: null, dica: "", miolo: estado("Aguardando os dados do painel local…"), abaixo: "" };
+    if (dados === null || typeof dados !== "object") return { meta: null, dica: "", miolo: estado("O cálculo de backups regionais está desligado neste servidor."), abaixo: "" };
+    if (dados.indisponivel) return { meta: null, dica: "", miolo: estado("Não foi possível calcular os backups regionais agora."), abaixo: trio(limitacoes(dados)) };
     const regionais = lista(dados.prioritarias);
     const minimo = inteiro(dados.minimo);
     const meta = dados.gerado_em ? `Atualizado em ${data(dados.gerado_em)}.` : "";
@@ -187,18 +193,18 @@
     return {
       meta,
       dica,
-      corpo: limitacoes(dados)
-        + (regionais.length ? tabela(regionais, abertos) : estado("Os dados recebidos não trazem regionais prioritárias."))
-        + secaoSobras(lista(dados.sobras)) + secaoOutrasCandidatos(lista(dados.outras_candidatos)),
+      miolo: regionais.length ? tabela(regionais, abertos) : estado("Os dados recebidos não trazem regionais prioritárias."),
+      abaixo: trio(secaoSobras(lista(dados.sobras)), secaoOutrasCandidatos(lista(dados.outras_candidatos)), limitacoes(dados)),
     };
   }
 
-  const linhaMeta = (meta, dica) => (meta === null ? "" : `<div class="ck-backups__cabeca"><p class="ck-backups__meta">${escapar(meta)}</p>${dica}</div>`);
+  // Cartão esmeralda da tabela: título, ⓘ e "Atualizado em" na mesma linha (a ordem no DOM é meta, ⓘ; o CSS põe o meta à direita).
+  const linhaTitulo = (meta, dica) => `<div class="ck-bento-sech"><h2 class="ck-bento-h2">${TITULO_TABELA}</h2>${meta === null ? "" : `<p class="ck-backups__meta">${escapar(meta)}</p>${dica}`}</div>`;
+  const montar = ({ meta, dica, miolo, abaixo }) => cartaoBento("esmeralda", 0, linhaTitulo(meta, dica), miolo, " ck-backups__tabela") + abaixo;
 
   /** HTML do painel Backups. `dados`: undefined (sem painel ainda), null (serviço desligado) ou o `backups_regionais`. */
   function renderizarBackupsRegionais(dados, opcoes) {
-    const { meta, dica, corpo } = partes(dados, opcoes);
-    return linhaMeta(meta, dica) + corpo;
+    return montar(partes(dados, opcoes));
   }
 
   // ---- DOM ----
@@ -233,8 +239,9 @@
     if (!alvo) return;
     atualizarAba();
     const abertos = new Set([...(alvo.querySelectorAll?.("details[open][data-cidade]") || [])].map(item => item.dataset.cidade));
-    const { meta, dica, corpo } = partes(dados, { abertos });
-    const fixo = dica + corpo;
+    const lido = partes(dados, { abertos });
+    const { meta, dica } = lido;
+    const fixo = dica + lido.miolo + lido.abaixo;
     // Depois de uma ação (repetida ou sem efeito) o botão ficou ocupado: redesenha sempre, para soltá-lo e devolver o foco.
     if (!focoDaAcao && fixo === corpoAtual && (meta === null) === (metaAtual === null)) {
       if (meta === metaAtual) return;
@@ -246,13 +253,16 @@
         return;
       }
     }
-    const html = linhaMeta(meta, dica) + corpo;
+    const html = montar(lido);
     const foco = document.activeElement;
     const semFoco = !foco || foco === document.body;
     const marca = foco && alvo.contains?.(foco) ? { ...foco.dataset, lista: foco.closest?.("details[data-cidade]")?.dataset.cidade }
       : semFoco ? focoDaAcao : null;
     focoDaAcao = null;
+    // Redesenho com o painel à vista (ação ou dado novo) não refaz a entrada dos cartões; a troca de sub-aba refaz.
+    const redesenho = alvo.childElementCount > 0 && !alvo.closest("[hidden]");
     alvo.innerHTML = html;
+    if (redesenho) alvo.querySelectorAll(".ck-bento-cartao").forEach(cartao => { cartao.dataset.semEntrada = ""; });
     corpoAtual = fixo;
     metaAtual = meta;
     if (!marca) return;

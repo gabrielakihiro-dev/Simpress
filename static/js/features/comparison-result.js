@@ -7,7 +7,7 @@
   const { app, appState, motion } = context;
   const { escapeHtml } = context.dom;
   const renderer = context.comparisonResultRenderer(context);
-  const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
+  const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
   let comparisonAnnotationSyncObservers = [];
 
@@ -361,11 +361,13 @@
     aplicarAbaResumo();
     atualizarResumo?.();
     if (foco) elementoAbaResumo(chave)?.focus();
-    // Clique na sub-aba repete contagem, anel e barras (contrato bento).
-    if (chave === "visao") {
-      globalThis.SimpressBento?.animarDentro(document.getElementById("resumo-painel-visao"));
-      document.dispatchEvent(new CustomEvent("simpress:bento-repetir"));
+    // Clique na sub-aba repete contagem, anel e barras do painel aberto (contrato bento), Backups incluído.
+    const painelAberto = document.getElementById(`resumo-painel-${chave}`);
+    if (painelAberto) {
+      painelAberto.querySelectorAll("[data-sem-entrada]").forEach(cartao => { delete cartao.dataset.semEntrada; });
+      globalThis.SimpressBento?.animarDentro?.(painelAberto);
     }
+    if (chave === "visao") document.dispatchEvent(new CustomEvent("simpress:bento-repetir"));
     // Pede dados novos só na chegada à aba (openPanel seleciona duas vezes e não pode gerar dois refresh).
     if (mudou && chave === "backups") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
   }
@@ -514,7 +516,8 @@
         setHidden(group, filtersActive && (groupRows.length === 0 || groupRows.every(row => row.hidden)));
       });
       content.querySelectorAll("[data-history-filter-section]").forEach(section => {
-        const groups = [...section.querySelectorAll(":scope > [data-history-filter-group]")];
+        // Nos cartões do Bloco 2 os grupos ficam dentro de .ck-bento-face.
+        const groups = [...section.querySelectorAll(":scope > [data-history-filter-group], :scope > .ck-bento-face > [data-history-filter-group]")];
         setHidden(section, filtersActive && (!groups.length || groups.every(group => group.hidden)));
       });
 
@@ -532,6 +535,14 @@
       });
 
       if (filterBar) {
+        // A barra acompanha a sub-aba aberta: logo depois dos contadores dela (ou no topo, se não houver). Na Visão geral fica onde está.
+        if (painelAtivo && chaveAba !== "visao") {
+          const faixa = painelAtivo.querySelector(":scope > .resumo-cartoes");
+          if (faixa ? faixa.nextElementSibling !== filterBar : painelAtivo.firstElementChild !== filterBar) {
+            if (faixa) faixa.after(filterBar);
+            else painelAtivo.prepend(filterBar);
+          }
+        }
         // "Visão geral" has no rows to search, so its filter bar stays out of the way.
         setHidden(filterBar, chaveAba === "visao");
         const visiveis = painelAtivo
@@ -709,11 +720,10 @@
         const pendentes = (comparison.divergencias_apelidos_manuais || []).filter(
           divergence => !divergence.resolucao || divergence.resolucao === "pendente"
         ).length;
-        const classes = classesMetricaHistorico(pendentes, "rose");
+        // O contador é .ck-bento-num: só o número muda; a cor do cartão é o data-tom, fixo.
+        globalThis.SimpressBento?.cancelar?.(pendingCounter); // ação no meio da contagem: o quadro seguinte não pode regravar o número antigo
         pendingCounter.textContent = pendentes;
-        pendingCounter.className = `text-xl font-bold mt-1 ${classes.numero}`;
-        const card = pendingCounter.closest("[data-metric-tone]");
-        if (card) card.className = `${card.classList.contains("comparison-metric-link") ? "comparison-metric-link " : ""}rounded-xl p-3 ${classes.cartao}`;
+        pendingCounter.dataset.bentoContar = String(pendentes);
       }
       matchingRows.forEach(candidate => {
         const status = candidate.querySelector("[data-manual-alias-status]");

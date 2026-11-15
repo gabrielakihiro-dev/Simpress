@@ -69,3 +69,14 @@ O painel F7 foi reorganizado por pedido do usuário em 11/11/2026 ("Sim, aplicar
 **IDs novos ou alterados:** `cockpit-alias-tabs` e `cockpit-alias-tab-todos|apelido|usuario|endereco|aviso_endpoint`; `cockpit-alias-kpis` (agora só com 2 KPIs); `cockpit-alias-filters` (agora `.ck-segmentado`); `cockpit-alias-type` (oculto, sincronizado). **Removido:** `cockpit-alias-data-note`. Os demais IDs (`cockpit-alias-search`, `-count-all`, `-count-7days`, `-actions-only`, `-clear`, `-export`, `-list`, `-detail`, `-heading`) seguem iguais.
 
 **O que não mudou:** as regras e confirmações das ações (`Restaurar anterior`, `Restaurar e excluir`, `Excluir aviso`); o CSV dos registros filtrados, com escape de fórmulas; o recarregamento ao abrir a aba; a ocultação das séries `VMWARE` e `GOOGLECLOUD`; o atalho F7; o DOM seguro (sem `innerHTML`); a API `/api/historico-alteracoes`.
+
+## Visual bento (Bloco 2, 14/11/2026)
+
+Só a aparência mudou, a pedido do usuário, seguindo o canvas "Simpress Bento" (opção A, tela `hist`). Texto, ordem, IDs, ARIA, `data-*`, filtros, ações (`Restaurar anterior`, `Restaurar e excluir`, `Excluir aviso`, `Exportar CSV`) e regras de negócio ficam como estavam.
+
+- A lista de registros e o detalhe viram dois cartões bento lado a lado (`frontend/partials/cockpit-tool-panels.html`, `.ck-dividido.ck-alias-dupla`). Abaixo de 1024px ficam um embaixo do outro; a face do cartão usa 20px de respiro em telas de até 640px.
+- Barra de busca, botões (40px de altura, cantos de 12px; o principal usa a cor de destaque), abas por tipo e período em pílulas (38px; a aba escolhida ganha borda ciano). O ponto colorido do tipo (`.ck-alias-ponto`) fica oculto, porque o rótulo em texto já diz o tipo.
+- Todo o CSS novo está em `static/styles/ck-bento.css`, seção 11.1, preso a `[data-cockpit-tool-panel="apelidos"]`; nada vaza para o Resumo (F3). Não precisou de Tailwind nem de `npm run build:ui`; `static/index.html` não precisa ser refeito, porque os partials são montados quando a página é servida.
+- Movimento (só com `prefers-reduced-motion: no-preference`, contrato em `docs/ui-motion/contrato-bento.md`): entrada dos blocos em 700 ms, passos de 80 ms; botão sobe 3px e aba sobe 2px ao passar o mouse (300 ms). Os números das abas e da lista contam até o valor em 900 ms (`data-bento-contar`) e a entrada se repete ao trocar de aba ou de filtro (`animarFiltrosAlias` em `static/js/features/cockpit-tool-panels.js`, via `SimpressBento.animarDentro`).
+- Desvio do desenho: o detalhe fica grudado a 16px do topo (o desenho usa 84px, que aqui sobraria sob o cabeçalho). Se o usuário clicar numa aba e digitar na busca em menos de 900 ms, a contagem final pode mostrar por instantes o número da aba anterior.
+- Não verificado: comparação pixel a pixel com o desenho e capturas de 320px a 2560px.

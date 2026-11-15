@@ -127,6 +127,8 @@
   background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac), var(--bento-brilho)), transparent 70%);
 }
 .ck-bento-cartao:hover::before { opacity: 1; }
+/* Cartão sob o ponteiro ou com foco sobe: o balão ⓘ aberto fica por cima do cartão vizinho (Resumo, F7, F8). */
+.ck-bento-cartao:not(#assistente-widget *):is(:hover, :focus-within) { z-index: 1; }
 .ck-bento-face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; height: 100%; padding: 24px; border-radius: 23px; background: var(--cor-superficie); }
 .ck-bento-face::before, .ck-bento-face::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
 .ck-bento-face::before { background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--ac), var(--bento-holo)), transparent 65%); }
@@ -138,6 +140,8 @@
 }
 .ck-bento-cartao:hover .ck-bento-face::before, .ck-bento-cartao:hover .ck-bento-face::after { opacity: 1; }
 .ck-bento-face > * { position: relative; z-index: 1; }
+/* Filho do cartão com balão ⓘ aberto passa por cima dos irmãos (todos z 1) e do cabeçalho (z 2). */
+.ck-bento-face > :has(.info-tip:is(:hover, :focus-within)) { z-index: 3; }
 .ck-bento-cab { display: flex; align-items: flex-start; gap: 12px; }
 .ck-bento-icone { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: var(--tom); background: rgba(var(--ac), .12); border: 1px solid rgba(var(--ac), .28); }
 .ck-bento-svg { width: 20px; height: 20px; }
@@ -209,6 +213,7 @@
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .ck-barra-ferr { animation: ck-bento-entra 700ms var(--bento-curva) 80ms backwards; }
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .resumo-abas-barra { animation: ck-bento-entra 700ms var(--bento-curva) 140ms backwards; }
   .ck-bento-cartao { animation: ck-bento-entra 760ms var(--bento-curva) backwards; }
+  .ck-bento-cartao[data-sem-entrada] { animation: none; }
   .ck-bento-cartao:nth-child(2) { animation-delay: 80ms; }
   .ck-bento-cartao:nth-child(3) { animation-delay: 160ms; }
   .ck-bento-cartao:nth-child(4) { animation-delay: 240ms; }
@@ -230,4 +235,487 @@
   .ck-bento-abrir { transition: color 300ms var(--bento-curva), transform 300ms var(--bento-curva); }
   .ck-bento-abrir:hover { transform: translate(3px, -3px); }
   #cockpit-automation-shell-status[data-state="idle"][data-confirmado] .ck-chip__ponto::after { animation: ck-bento-pulsa 1.6s cubic-bezier(.4, 0, .6, 1) infinite; }
+}
+
+/* ---------- 10. Bloco 2: sub-abas Divergências, Apelidos, Usuários, Sem acesso e Backups ---------- */
+/* Escopo: painéis do Resumo fora da Visão geral + painel de Backups. :is() assume a especificidade do maior argumento
+   (1,2,0), que vence as regras antigas `#comparacao-planilhas-conteudo …` de ck-cockpit.css. Linhas de tabela (tr) e
+   .ck-tabela ficam em ck-cockpit.css (test_ui_motion.cjs proíbe esses seletores aqui). Tom, brilho e entrada vêm da §6/§9. */
+:root { --bento-perigo: #b91c1c; }
+:root[data-theme="dark"] { --bento-perigo: #fca5a5; }
+
+:is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"]), #resumo-painel-backups) {
+  &:not([hidden]) { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  &[data-resumo-painel="divergencias"] { --ck-faixa: 6; }
+  &[data-resumo-painel="apelidos"] { --ck-faixa: 3; }
+  &[data-resumo-painel="usuarios"] { --ck-faixa: 2; }
+
+  /* Faixa de contadores */
+  & .resumo-cartoes { display: grid; grid-template-columns: repeat(var(--ck-faixa, 3), minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; }
+  & .ck-bento-cartao--mini > .ck-bento-face {
+    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "rot" "num"; align-items: start; gap: 10px;
+    box-sizing: border-box; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 16px; border: 0; border-radius: 23px;
+    background: var(--cor-superficie); box-shadow: none; color: var(--cor-texto); font: inherit; text-align: left; appearance: none;
+  }
+  & .ck-bento-cartao--mini > .ck-bento-face:has(> .ck-bento-icone) { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ic rot" "num num"; column-gap: 10px; }
+  & .ck-bento-cartao--mini > .ck-bento-face:has(> .ck-bento-traco) { grid-template-rows: auto 1fr auto; grid-template-areas: "rot" "num" "tr"; }
+  & .ck-bento-cartao--mini > .ck-bento-face:has(> .ck-bento-icone):has(> .ck-bento-traco) { grid-template-areas: "ic rot" "num num" "tr tr"; }
+  & .ck-bento-cartao--mini > button.ck-bento-face { cursor: pointer; }
+  & .ck-bento-cartao--mini > .ck-bento-face:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+  & .ck-bento-cartao--mini > .ck-bento-face > p:not(.ck-bento-num) { grid-area: rot; align-self: center; margin: 0; font: 500 13px/1.35 var(--fonte-corpo); letter-spacing: normal; text-transform: none; color: var(--cor-texto-forte); overflow-wrap: anywhere; }
+  & .ck-bento-cartao--mini .ck-bento-num { grid-area: num; align-self: end; margin: 0; font-size: 30px; }
+  & .ck-bento-cartao--mini .ck-bento-icone { grid-area: ic; width: 32px; height: 32px; border-radius: 10px; }
+  & .ck-bento-cartao--mini .ck-bento-svg { width: 16px; height: 16px; }
+  & .ck-bento-cartao--mini .ck-bento-traco { grid-area: tr; }
+
+  /* Cartão de seção: cabeçalho (título, ⓘ, contagem) e corpo */
+  & .ck-bento-secao > .ck-bento-face { min-width: 0; }
+  & .ck-bento-sech { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+  & .ck-bento-ancora { position: static; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  & .ck-bento-h2 { margin: 0; font: 600 18px/1.25 var(--fonte-corpo); letter-spacing: -.01em; color: var(--cor-texto); }
+  & .ck-bento-h5 { margin: 0; font: 600 14px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-bento-qt { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid rgba(var(--ac), .28); border-radius: 999px; background: rgba(var(--ac), .12); color: var(--tom); font: 600 12px/1 var(--fonte-corpo); font-variant-numeric: tabular-nums; }
+  & .ck-bento-sech .info-tip-trigger { width: 28px; height: 28px; min-width: 0; min-height: 0; padding: 0; border: 1px solid var(--cor-borda); border-radius: 50%; background: var(--cor-superficie); color: var(--cor-texto-suave); font-size: 12px; }
+  & .ck-bento-sech .info-tip-trigger:hover { border-color: rgba(129, 140, 248, .6); color: var(--cor-texto); }
+  & .ck-bento-grupo { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+  & .ck-bento-grupo + .ck-bento-grupo { margin-top: 0; padding-top: 0; border-top: 0; }
+  & .ck-bento-nota { max-width: none; margin: 0; font: 400 12px/1.45 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-bento-detalhes { display: grid; gap: 10px; min-width: 0; }
+  & .ck-bento-minimizar { position: relative; display: flex; align-items: center; gap: 8px; min-height: 40px; list-style: none; cursor: pointer; font: 500 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-bento-minimizar::-webkit-details-marker { display: none; }
+  & .ck-bento-minimizar::before { content: ""; flex: none; box-sizing: border-box; width: 18px; height: 18px; border: 1px solid var(--cor-borda); border-radius: 5px; background: var(--cor-fundo); }
+  & .ck-bento-minimizar::after { content: ""; position: absolute; left: 6px; top: calc(50% - 6px); width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; opacity: 0; transform: rotate(45deg); }
+  & .ck-bento-detalhes[open] > .ck-bento-minimizar::before { border-color: #818cf8; background: #818cf8; }
+  & .ck-bento-detalhes[open] > .ck-bento-minimizar::after { opacity: 1; }
+  & .ck-bento-minimizar:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 6px; }
+
+  /* Barra de filtros (o controlador a move para o painel aberto) */
+  & .history-filter-bar:not([hidden]) { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; position: static; z-index: auto; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  & .history-filter-controls, & .history-filter-footer { display: contents; }
+  & .history-filter-search-label, & .history-filter-category-label { display: flex; flex-direction: column; gap: 6px; margin: 0; font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .history-filter-search-label input, & .history-filter-category-label select {
+    box-sizing: border-box; width: 280px; min-width: 220px; max-width: 100%; height: 40px; min-height: 40px; padding-block: 0; padding-inline-start: 12px;
+    border: 1px solid var(--cor-borda); border-radius: 12px; background-color: var(--cor-fundo); color: var(--cor-texto); font: 400 13px/1.3 var(--fonte-corpo);
+  }
+  & .history-filter-search-label input { padding-inline-end: 12px; }
+  & .history-filter-search-label input:focus, & .history-filter-category-label select:focus,
+  & .history-filter-search-label input:focus-visible, & .history-filter-category-label select:focus-visible {
+    outline: 2px solid transparent; border-color: rgba(129, 140, 248, .6); box-shadow: 0 0 0 4px rgba(129, 140, 248, .15);
+  }
+  & .history-filter-annotated { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; font: 500 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); white-space: normal; cursor: pointer; }
+  & .history-filter-annotated input { width: 18px; height: 18px; min-width: 0; min-height: 0; margin: 0; accent-color: #818cf8; }
+  & [data-history-filter-count] { display: flex; align-items: center; min-height: 40px; margin: 0; font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-bento-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+  & .ck-bento-tres:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+
+  /* Botões pequenos das tabelas, dos cards e do Backups */
+  & :is(td, .comparison-mobile-card-field) button, & .ck-btn {
+    box-sizing: border-box; min-height: 32px; padding: 4px 10px; border: 1px solid var(--cor-borda); border-radius: 10px; background: transparent;
+    color: var(--cor-texto); font: 600 12px/1.3 var(--fonte-corpo); cursor: pointer;
+  }
+  & :is(td, .comparison-mobile-card-field) button:disabled, & .ck-btn:disabled { cursor: not-allowed; opacity: .55; }
+  & :is(td, .comparison-mobile-card-field) :is([data-hostname-remove], [data-manual-alias-action="excluir"]) { border-color: rgba(248, 113, 113, .45); color: var(--bento-perigo); }
+
+  /* Backups: título + "Atualizado em" à direita, chips das sobras, lista de limitações sem caixa de alerta */
+  & .ck-backups__tabela .ck-bento-sech > .info-tip { order: 1; }
+  & .ck-backups__meta { order: 2; margin: 0 0 0 auto; font: 500 12px/1.35 var(--fonte-corpo); color: var(--cor-texto-sutil); overflow-wrap: anywhere; }
+  & .ck-backups__corpo { display: grid; gap: 12px; min-width: 0; }
+  & .ck-backups__grupo { display: grid; gap: 8px; }
+  & .ck-backups__secao--sobras .ck-backups__serie { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid rgba(var(--ac), .28); border-radius: 999px; background: rgba(var(--ac), .12); color: var(--tom); font-size: 12px; }
+  & .ck-backups__limites { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; list-style: none; color: var(--cor-texto-suave); font: 400 13px/1.45 var(--fonte-corpo); overflow-wrap: anywhere; }
+  & .ck-badge { height: auto; min-height: 0; padding: 4px 8px; border-radius: 999px; font: 600 11px/1 var(--fonte-corpo); white-space: normal; }
+}
+
+/* O painel Backups é irmão do conteúdo da Comparação e herdava o respiro de .ck-comparacao-resultado (16/20/24 e 12 em telas estreitas): zera para alinhar com as outras sub-abas. */
+#resumo-painel-backups.ck-comparacao-resultado { padding: 0; }
+
+/* Tabelas e cards de linha das sub-abas da Comparação (th/td só aqui; tr e hover em ck-cockpit.css) */
+:is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"])) {
+  & .accessible-table-wrap { max-width: 100%; border: 0; border-radius: 0; background: transparent; overflow-x: auto; }
+  & table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  & thead { background: transparent; }
+  & th { padding: 10px 12px; border-bottom: 1px solid var(--cor-borda); background: transparent; font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .06em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  & td { padding: 12px; border-bottom: 1px solid var(--bento-linha); vertical-align: top; font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  & td:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+  & td:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+  & .comparison-mobile-card { padding: 6px 14px; border: 1px solid var(--cor-borda); border-radius: 16px; background: var(--cor-fundo); box-shadow: none; }
+  & .comparison-mobile-card.history-row-annotated { border-color: var(--annotated-card-border); background: var(--annotated-card-bg); }
+  & .comparison-mobile-card-title { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--bento-linha); font: 600 14px/1.3 var(--fonte-corpo); color: var(--cor-texto); }
+  & .comparison-mobile-card-field { display: grid; grid-template-columns: 40% minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--bento-linha); }
+  & .comparison-mobile-card-field:last-child { border-bottom: 0; }
+  & .comparison-mobile-card-field--annotation { grid-template-columns: minmax(0, 1fr); }
+  & .comparison-mobile-card-field dt { margin: 0; font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .04em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  & .comparison-mobile-card-field dd { margin: 0; min-width: 0; font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); overflow-wrap: anywhere; }
+}
+
+@media (max-width: 1023.98px) {
+  :is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"]), #resumo-painel-backups) {
+    &[data-resumo-painel="divergencias"] { --ck-faixa: 3; }
+    & .ck-bento-tres { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+}
+@media (max-width: 639.98px) {
+  :is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"]), #resumo-painel-backups) {
+    &[data-resumo-painel="divergencias"], &[data-resumo-painel="apelidos"] { --ck-faixa: 1; }
+    & .ck-bento-tres { grid-template-columns: minmax(0, 1fr); }
+    & .history-filter-bar:not([hidden]) { flex-direction: column; align-items: stretch; }
+    & .history-filter-search-label input, & .history-filter-category-label select { width: 100%; min-width: 0; min-height: 44px; }
+    & .ck-bento-minimizar { min-height: 44px; }
+  }
+}
+@media (max-width: 639.98px), (pointer: coarse) {
+  :is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"]), #resumo-painel-backups) {
+    & :is(td, .comparison-mobile-card-field) button, & .ck-btn { min-height: 44px; }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(#comparacao-planilhas-conteudo [data-resumo-painel]:not([data-resumo-painel="visao"]), #resumo-painel-backups) {
+    & .ck-bento-cartao.ck-bento-d0 { animation-delay: 0ms; }
+    & .ck-bento-cartao.ck-bento-d1 { animation-delay: 80ms; }
+    & .ck-bento-cartao.ck-bento-d2 { animation-delay: 160ms; }
+    & .ck-bento-cartao.ck-bento-d3 { animation-delay: 240ms; }
+    & .ck-bento-cartao.ck-bento-d4 { animation-delay: 320ms; }
+    & .ck-bento-cartao.ck-bento-d5 { animation-delay: 400ms; }
+    & :is(td, .comparison-mobile-card-field) button, & .ck-btn { transition: transform 300ms var(--bento-curva), border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), background-color 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+    & :is(td, .comparison-mobile-card-field) button:not(:disabled):hover, & .ck-btn:not(:disabled):hover { transform: translateY(-3px); border-color: rgba(129, 140, 248, .5); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+    & .ck-bento-sech .info-tip-trigger { transition: border-color 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+    & .history-filter-search-label input, & .history-filter-category-label select { transition: border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva); }
+    & .ck-bento-minimizar::before, & .ck-bento-minimizar::after { transition: background-color 300ms var(--bento-curva), border-color 300ms var(--bento-curva), opacity 300ms var(--bento-curva); }
+  }
+}
+
+/* ---------- 11. Bloco 2 (F7 e F8): Histórico de apelidos e Relatório mensal ---------- */
+/* Mesma regra da seção 10: os nomes do desenho (sb-*, a-*) não entram em produção; usamos os cartões da seção 6 e as classes que já existem no HTML e no JS.
+   Linhas de tabela (tr) e .ck-tabela do Relatório ficam em ck-cockpit.css (test_ui_motion.cjs proíbe esses seletores aqui). Toda animação e transição
+   fica em (prefers-reduced-motion: no-preference); nenhum cartão usa overflow oculto. */
+
+/* 11.1 Histórico de apelidos (F7). Escopo: .ck-ferr-painel[data-cockpit-tool-panel="apelidos"], nunca o Resumo. */
+.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] { --pri-fundo: #4f46e5; --pri-texto: #ffffff; }
+:root[data-theme="dark"] .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] { --pri-fundo: #818cf8; --pri-texto: #07080d; }
+
+.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+  gap: 16px; padding: 16px 20px 24px; min-width: 0;
+
+  /* Cabeçalho: contadores em cartões pequenos e Exportar CSV */
+  & .ck-alias-cab { align-items: center; justify-content: space-between; gap: 12px 16px; padding: 0; border: 0; }
+  & .ck-alias-kpis { gap: 12px; border: 0; }
+  & .ck-alias-kpis .ck-kpi { flex: 0 1 auto; min-width: 140px; gap: 6px; padding: 12px 16px; border: 1px solid var(--cor-borda); border-radius: 16px; background: var(--cor-superficie); }
+  & .ck-alias-kpis .ck-kpi__rotulo { font: 500 13px/1.35 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-alias-kpis .ck-kpi__valor { font: 600 30px/1 var(--fonte-corpo); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--cor-texto); }
+
+  /* Botões: 40px nos controles do painel, 32px nas ações do detalhe */
+  & .ck-btn { box-sizing: border-box; height: 40px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 12px; font: 600 13px/1.3 var(--fonte-corpo); }
+  & .ck-btn--secundario { background: var(--cor-superficie); color: var(--cor-texto); }
+  & .ck-btn--primario, & .ck-btn--primario:hover, & .ck-btn--primario:active { border-color: var(--pri-fundo); background: var(--pri-fundo); color: var(--pri-texto); }
+  & .ck-btn--perigo { border-color: rgba(248, 113, 113, .45); background: transparent; color: var(--bento-perigo); }
+  & .ck-btn--perigo:hover { background: transparent; }
+  & .ck-btn--sm { height: 32px; padding: 0 12px; border-radius: 10px; font-size: 12px; }
+  & .ck-btn:not(:disabled):hover { border-color: rgba(129, 140, 248, .5); }
+  & .ck-btn--perigo:not(:disabled):hover { border-color: rgba(248, 113, 113, .45); }
+
+  /* Abas por tipo em pílula; a faixa rola sozinha quando não cabe */
+  & .ck-alias-abas { gap: 6px; padding: 2px; border-bottom: 0; scrollbar-width: none; }
+  & .ck-alias-abas::-webkit-scrollbar { display: none; }
+  & .ck-alias-aba { box-sizing: border-box; gap: 8px; height: 38px; min-height: 38px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 999px; background: transparent; color: var(--cor-texto-mudo); font: 500 13px/1 var(--fonte-corpo); }
+  & .ck-alias-aba:hover { color: var(--cor-texto); }
+  & .ck-alias-aba[aria-selected="true"] { border-color: rgba(34, 211, 238, .55); background: var(--cor-superficie); color: var(--cor-texto); box-shadow: 0 8px 24px -14px rgba(34, 211, 238, .8); font-weight: 500; }
+  & .ck-alias-ponto { display: none; }
+  & .ck-alias-aba__n { padding: 2px 7px; background: var(--cor-neutro-fundo); color: var(--cor-texto); font: 600 12px/1.2 var(--fonte-corpo); font-variant-numeric: tabular-nums; }
+  & .ck-alias-aba[aria-selected="true"] .ck-alias-aba__n { background: rgba(34, 211, 238, .14); color: var(--cor-texto); }
+
+  /* Barra de filtros: busca, período segmentado, somente com ação, limpar */
+  & .ck-alias-barra { gap: 12px; padding: 0; border: 0; align-items: flex-end; }
+  & .ck-alias-barra > .ck-campo:first-child { flex: 1 1 280px; max-width: 420px; }
+  & .ck-alias-barra .ck-campo { gap: 6px; }
+  & .ck-alias-barra .ck-campo__rotulo { font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-alias-barra .ck-entrada { box-sizing: border-box; height: 40px; min-height: 40px; padding-block: 0; padding-inline: 12px; border: 1px solid var(--cor-borda); border-radius: 12px; background-color: var(--cor-fundo); color: var(--cor-texto); font: 400 13px/1.3 var(--fonte-corpo); }
+  & .ck-alias-barra .ck-entrada:focus, & .ck-alias-barra .ck-entrada:focus-visible { outline: 2px solid transparent; border-color: rgba(129, 140, 248, .6); box-shadow: 0 0 0 4px rgba(129, 140, 248, .15); }
+  & .ck-alias-periodo { gap: 4px; padding: 4px; border-color: var(--cor-borda); border-radius: 12px; background: var(--cor-fundo); }
+  & .ck-alias-periodo .ck-segmentado__op { min-height: 32px; height: 32px; padding: 0 12px; border-radius: 9px; color: var(--cor-texto-mudo); font: 500 13px/1 var(--fonte-corpo); }
+  & .ck-alias-periodo .ck-segmentado__op:hover { color: var(--cor-texto); }
+  & .ck-alias-periodo .ck-segmentado__op[aria-pressed="true"] { background: var(--cor-superficie); color: var(--cor-texto); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .55); }
+  & .ck-alias-periodo .ck-segmentado__op span { margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: var(--cor-neutro-fundo); color: var(--cor-texto); font-weight: 600; font-variant-numeric: tabular-nums; }
+  & .ckp-alternar, & .ckp-alternar:has(input:checked) { gap: 8px; height: auto; min-height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--cor-texto-forte); font: 500 13px/1.3 var(--fonte-corpo); white-space: normal; }
+  & .ckp-alternar input { width: 18px; height: 18px; accent-color: #818cf8; }
+
+  /* Lista e detalhe lado a lado: 2fr + coluna de pelo menos 320px */
+  & .ck-alias-dupla { grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); align-items: start; gap: 16px; min-height: 0; }
+  & .ck-alias-dupla > .ck-bento-cartao { min-width: 0; }
+  & #cockpit-alias-list { align-self: stretch; gap: 18px; padding: 24px; overflow: visible; }
+  & #cockpit-alias-list > .ck-lista__vazio { padding: 32px 16px; border: 1px dashed var(--cor-borda); border-radius: 14px; background: transparent; text-align: center; }
+  & #cockpit-alias-detail { position: relative; top: auto; align-self: auto; height: auto; max-height: none; min-height: 0; gap: 14px; padding: 24px; border: 0; background: var(--cor-superficie); overflow: visible; }
+  & .ck-alias-detalhe-cartao { display: flex; flex-direction: column; }
+  & .ck-alias-detalhe-cartao > .ck-bento-face { flex: 1 1 auto; }
+
+  /* Lista agrupada por dia */
+  & .ck-alias-grupo { gap: 10px; }
+  & .ck-alias-grupo__cab { align-items: baseline; gap: 12px; padding: 4px 4px 0; font: 600 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-alias-grupo__cab > :last-child { font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-alias-grupo__lista { gap: 8px; }
+  & .ck-alias-linha { gap: 6px; padding: 12px 14px; border: 1px solid var(--bento-linha); border-radius: 14px; background: var(--cor-fundo); color: var(--cor-texto); font: 400 13px/1.4 var(--fonte-corpo); box-shadow: none; }
+  & .ck-alias-linha:hover { border-color: var(--cor-borda); }
+  & .ck-alias-linha[aria-pressed="true"] { border-color: rgba(34, 211, 238, .55); background: rgba(34, 211, 238, .06); box-shadow: none; }
+  & .ck-alias-linha__serie { font: 600 13px/1.3 var(--fonte-corpo); }
+  & .ck-alias-linha__hora { font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-alias-linha__mudanca { font: 400 13px/1.4 var(--fonte-corpo); }
+  & .ck-alias-linha__rodape { font: 400 12px/1.4 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-alteracao { font: 400 13px/1.4 var(--fonte-corpo); }
+
+  /* Etiquetas: tipo da alteração (um tom por tipo) e "Ação disponível" */
+  & .ck-alias-chip, & .ck-alias-selo { --ac: 129, 140, 248; --tom: #4338ca; box-sizing: border-box; padding: 4px 8px; border: 1px solid rgba(var(--ac), .28); background: rgba(var(--ac), .12); color: var(--tom); font: 600 11px/1 var(--fonte-corpo); }
+  & .ck-alias-chip[data-alias-tipo="apelido"], & .ck-alias-selo--atual { --ac: 34, 211, 238; --tom: #0e7490; }
+  & .ck-alias-chip[data-alias-tipo="usuario"] { --ac: 232, 121, 249; --tom: #a21caf; }
+  & .ck-alias-chip[data-alias-tipo="endereco"], & .ck-alias-selo:not(.ck-alias-selo--atual) { --ac: 52, 211, 153; --tom: #047857; }
+  & .ck-alias-chip[data-alias-tipo="aviso_endpoint"] { --ac: 251, 191, 36; --tom: #b45309; }
+
+  /* Detalhe: blocos separados por fio, título do equipamento, antes/depois e dados do registro */
+  & .ck-alias-det__bloco { gap: 10px; padding: 0; border: 0; }
+  & .ck-alias-det__bloco + .ck-alias-det__bloco { padding-top: 14px; border-top: 1px solid var(--bento-linha); }
+  & .ck-alias-det__bloco h3 { font: 600 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-alias-det__bloco h3.ck-alias-det__serie { font: 600 22px/1.25 var(--fonte-corpo); letter-spacing: -.01em; color: var(--cor-texto); }
+  & .ck-alias-det__data { font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-alias-det__bloco .ck-nota { padding: 0; border: 0; background: transparent; font: 400 12px/1.45 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-alias-compara { gap: 10px; }
+  & .ck-alias-caixa { gap: 6px; padding: 12px; border: 1px solid var(--cor-borda); border-radius: 14px; background: var(--cor-fundo); }
+  & .ck-alias-caixa__rotulo { font: 600 11px/1.3 var(--fonte-corpo); letter-spacing: .06em; text-transform: uppercase; color: var(--cor-texto-sutil); }
+  & .ck-alias-caixa__valor { font: 500 13px/1.4 var(--fonte-corpo); color: var(--cor-texto); }
+  & .ck-alias-caixa__sub { font: 400 12px/1.4 var(--fonte-corpo); }
+  & .ck-alias-caixa--depois { border-color: rgba(34, 211, 238, .55); background: rgba(34, 211, 238, .06); }
+  & .ck-alias-caixa--depois .ck-alias-caixa__valor { font-weight: 600; }
+  & .ck-alias-caixa--aviso { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); }
+  & .ck-alias-caixa--aviso .ck-alias-caixa__valor { font-family: var(--fonte-corpo); }
+  & .ck-alias-det__bloco .ck-det-campos { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 8px 16px; font: 400 13px/1.4 var(--fonte-corpo); }
+  & .ck-alias-det__bloco .ck-det-campos dt { font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto-sutil); overflow-wrap: anywhere; }
+  & .ck-alias-det__bloco .ck-det-campos dd { color: var(--cor-texto); }
+  & .ck-alias-tempo__titulo { gap: 8px; }
+}
+
+/* Tons das etiquetas no tema escuro (a seção 6 define o mesmo mapa para os cartões) */
+:root[data-theme="dark"] .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+  & .ck-alias-chip, & .ck-alias-selo { --tom: #a5b4fc; }
+  & .ck-alias-chip[data-alias-tipo="apelido"], & .ck-alias-selo--atual { --tom: #67e8f9; }
+  & .ck-alias-chip[data-alias-tipo="usuario"] { --tom: #f0abfc; }
+  & .ck-alias-chip[data-alias-tipo="endereco"], & .ck-alias-selo:not(.ck-alias-selo--atual) { --tom: #6ee7b7; }
+  & .ck-alias-chip[data-alias-tipo="aviso_endpoint"] { --tom: #fcd34d; }
+}
+
+@media (min-width: 1024px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+    & .ck-alias-detalhe-cartao { position: sticky; top: 16px; max-height: calc(100dvh - var(--ck-topbar-h, 48px) - 32px); }
+    & #cockpit-alias-detail { min-height: 0; overflow-y: auto; }
+  }
+}
+@media (max-width: 1023.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] .ck-alias-dupla { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] { padding-inline: 12px; }
+}
+@media (max-width: 639.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+    & #cockpit-alias-export { flex: 1 1 100%; min-height: 44px; }
+    & .ck-alias-kpis { flex: 1 1 100%; }
+    & .ck-alias-kpis .ck-kpi { flex: 1 1 calc(50% - 6px); min-width: 0; }
+    & .ck-alias-barra { flex-direction: column; align-items: stretch; }
+    & .ck-alias-barra > .ck-campo:first-child { flex: none; max-width: none; }
+    & .ck-alias-barra .ck-entrada { width: 100%; min-height: 44px; }
+    & .ck-alias-periodo { width: 100%; }
+    & .ck-alias-periodo .ck-segmentado__op { flex: 1; min-height: 40px; height: 40px; }
+    & .ck-alias-barra .ck-btn { min-height: 44px; }
+    & #cockpit-alias-list, & #cockpit-alias-detail { padding: 20px; }
+    & .ck-alias-compara { grid-template-columns: minmax(0, 1fr); }
+    & .ck-alias-det__acoes .ck-btn { min-height: 44px; }
+  }
+}
+@media (pointer: coarse) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] :is(.ck-btn, .ckp-alternar) { min-height: 44px; }
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] .ck-alias-aba { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+    & .ck-alias-cab { animation: ck-bento-entra 700ms var(--bento-curva) backwards; }
+    & .ck-alias-abas { animation: ck-bento-entra 700ms var(--bento-curva) 80ms backwards; }
+    & .ck-alias-barra { animation: ck-bento-entra 700ms var(--bento-curva) 140ms backwards; }
+    & .ck-alias-dupla > .ck-bento-d1 { animation-delay: 200ms; }
+    & .ck-alias-dupla > .ck-bento-d2 { animation-delay: 280ms; }
+    & .ck-alias-aba { transition: color 300ms var(--bento-curva), background-color 300ms var(--bento-curva), border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), transform 300ms var(--bento-curva); }
+    & .ck-alias-aba:hover { transform: translateY(-2px); }
+    & .ck-alias-aba__n, & .ck-alias-periodo .ck-segmentado__op { transition: color 300ms var(--bento-curva), background-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva); }
+    & .ck-btn { transition: transform 300ms var(--bento-curva), border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), background-color 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+    & .ck-btn:not(:disabled):hover { transform: translateY(-3px); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+    & .ck-alias-linha { transition: border-color 300ms var(--bento-curva), background-color 300ms var(--bento-curva); }
+    & .ck-alias-barra .ck-entrada { transition: border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva); }
+  }
+}
+
+/* 11.2 Relatório mensal (F8). Escopo: .ck-ferr-painel[data-cockpit-tool-panel="relatorio"], nunca o Resumo nem o Histórico.
+   Os cartões (.ck-bento-cartao) são montados pelo JS (monthlyCartao); aqui só se desfaz o visual antigo dos blocos .ck-rel__* e se aplica o do desenho.
+   Tabelas (td, th, tr) ficam em ck-cockpit.css. As sub-abas (.rel-aba) ganham cor nova só aqui, porque o teste de ck-cockpit.css não aceita cor nova nelas. */
+.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] { --pri-fundo: #4f46e5; --pri-texto: #ffffff; min-width: 0; }
+:root[data-theme="dark"] .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] { --pri-fundo: #818cf8; --pri-texto: #07080d; }
+
+.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+  /* Barra: meses em pílula, campo do mês, Copiar resumo e Exportar planilha */
+  & .ck-rel__barra { gap: 12px 16px; padding: 16px 20px 12px; border-bottom: 0; }
+  & .ck-rel__barra .ck-barra-ferr__nota { font: 400 12px/1.45 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-rel__barra .ck-pilulas { gap: 6px; }
+  & .ck-rel__barra .ck-pilula { box-sizing: border-box; height: 38px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 999px; background: transparent; color: var(--cor-texto-mudo); font: 500 13px/1 var(--fonte-corpo); }
+  & .ck-rel__barra .ck-pilula:hover { color: var(--cor-texto); }
+  & .ck-rel__barra .ck-pilula[aria-pressed="true"] { border-color: rgba(34, 211, 238, .55); background: var(--cor-superficie); color: var(--cor-texto); box-shadow: 0 8px 24px -14px rgba(34, 211, 238, .8); }
+  & .ck-rel__barra .ck-campo { gap: 6px; }
+  & .ck-rel__barra .ck-campo__rotulo { font: 500 12px/1.3 var(--fonte-corpo); color: var(--cor-texto-sutil); }
+  & .ck-rel__barra .ck-entrada { box-sizing: border-box; height: 40px; min-height: 40px; padding-block: 0; padding-inline: 12px; border: 1px solid var(--cor-borda); border-radius: 12px; background-color: var(--cor-fundo); color: var(--cor-texto); font: 400 13px/1.3 var(--fonte-corpo); }
+  & .ck-rel__barra .ck-entrada:focus, & .ck-rel__barra .ck-entrada:focus-visible { outline: 2px solid transparent; border-color: rgba(129, 140, 248, .6); box-shadow: 0 0 0 4px rgba(129, 140, 248, .15); }
+  & .ck-rel__barra .ck-btn { box-sizing: border-box; height: 40px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 12px; font: 600 13px/1.3 var(--fonte-corpo); }
+  & .ck-rel__barra .ck-btn--secundario { background: var(--cor-superficie); color: var(--cor-texto); }
+  & .ck-rel__barra .ck-btn--primario, & .ck-rel__barra .ck-btn--primario:hover, & .ck-rel__barra .ck-btn--primario:active { border-color: var(--pri-fundo); background: var(--pri-fundo); color: var(--pri-texto); }
+  & .ck-rel__barra .ck-btn--secundario:not(:disabled):hover { border-color: rgba(129, 140, 248, .5); }
+
+  /* Sub-abas em pílula; a faixa rola sozinha quando não cabe (o overflow-x continua em ck-cockpit.css) */
+  & .rel-abas-barra { padding: 4px 20px 8px; border-bottom: 0; }
+  & .rel-abas { gap: 6px; padding: 3px 2px; scrollbar-width: none; }
+  & .rel-abas::-webkit-scrollbar { display: none; }
+  & .rel-aba { box-sizing: border-box; gap: 8px; height: 38px; padding: 0 16px; border: 1px solid var(--cor-borda); border-radius: 999px; background: transparent; color: var(--cor-texto-mudo); font: 500 13px/1 var(--fonte-corpo); }
+  & .rel-aba:hover { background: transparent; color: var(--cor-texto); }
+  & .rel-aba[aria-selected="true"] { border-color: rgba(34, 211, 238, .55); background: var(--cor-superficie); color: var(--cor-texto); box-shadow: 0 8px 24px -14px rgba(34, 211, 238, .8); }
+  & .rel-aba[aria-selected="true"] .rel-aba__n:not([data-status]) { background: rgba(34, 211, 238, .14); color: var(--cor-texto); }
+  & .ck-badge { padding: 0 9px; border-radius: 999px; font: 600 11px/1 var(--fonte-corpo); }
+
+  /* Corpo e painéis */
+  & .ck-rel__corpo { gap: 16px; padding: 16px 20px 24px; }
+  & .ck-rel__painel { gap: 16px; }
+  & .ck-rel__atencao-bloco { gap: 14px; }
+  & .ck-rel__titulo, & .ck-rel__secao-cab .ck-det__titulo { font: 600 22px/1.25 var(--fonte-corpo); letter-spacing: -.01em; color: var(--cor-texto); }
+  & .ck-rel__atencao-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  & .ck-rel__secao-cab { gap: 8px 12px; }
+  /* Base atual como no desenho: totais num cartão inteiro (4 colunas), tipos e unidades lado a lado embaixo */
+  & .ck-rel__base-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+  & .ck-rel__base-grade > :first-child { grid-column: 1 / -1; }
+  & .ck-rel__base-grade > :first-child .ck-rel__numeros { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  & .ck-rel__secao:not(.ck-bento-cartao) { gap: 16px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+
+  /* Cartões: o visual antigo (borda, fundo, alerta, tracejado da base) sai; o cartão bento da seção 6 assume */
+  & .ck-bento-cartao:is(.ck-rel__cartao, .ck-rel__secao) { display: block; gap: 0; padding: 1px; border: 0; border-radius: 24px; background: var(--cor-borda); color: var(--cor-texto); }
+  & .ck-bento-face { min-width: 0; }
+  & .ck-bento-face > :is(.ck-btn, .ck-rel__link) { align-self: flex-start; }
+  & .ck-rel__cartao-titulo { font: 600 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-rel__cartao-cab { gap: 6px; }
+  & .ck-rel__nota { font: 400 12px/1.45 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-rel__nota .ck-mudo { color: var(--cor-texto-sutil); }
+  & .ck-bento-face > .ck-lista__vazio { padding: 24px 16px; border: 1px dashed var(--cor-borda); border-radius: 14px; text-align: center; }
+  & .ck-bento-face > .ck-nota { border-radius: 14px; }
+
+  /* Números: caixinhas com valor grande e rótulo pequeno */
+  & .ck-rel__numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  & .ck-rel__numero { gap: 4px; padding: 12px 14px; border: 1px solid var(--bento-linha); border-radius: 14px; background: var(--cor-fundo); }
+  & .ck-rel__valor { font: 600 32px/1.1 var(--fonte-corpo); letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  & .ck-rel__rotulo { font: 500 12px/1.3 var(--fonte-corpo); }
+  & .ck-rel__sebrae-totais { gap: 12px; align-items: flex-start; }
+  & .ck-rel__sebrae-totais .ck-rel__numeros { flex: 1 1 260px; }
+
+  /* Comparação de inventário: lista de contagens */
+  & .ck-rel__contagem { align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--bento-linha); font: 400 13px/1.4 var(--fonte-corpo); }
+  & .ck-rel__contagem:last-child { border-bottom: 0; }
+  & .ck-rel__contagem dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Fora das contagens: número grande no tom do cartão */
+  & .ck-rel__total { display: flex; flex-direction: column; gap: 4px; font: 500 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-rel__atencao[data-status="alerta"] .ck-rel__total .ck-rel__valor { font-size: 44px; line-height: 1; letter-spacing: -.03em; color: var(--tom); }
+  & .ck-rel__fora { padding-left: 18px; font: 400 12px/1.45 var(--fonte-corpo); color: var(--cor-texto-suave); }
+
+  /* Botões dos cartões: 32px */
+  & .ck-rel__corpo .ck-btn { box-sizing: border-box; height: 32px; padding: 0 12px; border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); color: var(--cor-texto); font: 600 12px/1.3 var(--fonte-corpo); }
+  & .ck-rel__corpo .ck-btn:not(:disabled):hover { border-color: rgba(var(--ac), .5); }
+  & .ck-rel__filtros { gap: 6px; }
+  & .ck-rel__filtros .ck-btn { height: 32px; border-radius: 999px; background: transparent; color: var(--cor-texto-mudo); font-weight: 500; }
+  & .ck-rel__filtros .ck-btn:hover { color: var(--cor-texto); }
+  & .ck-rel__filtros .ck-btn[aria-pressed="true"] { border-color: rgba(var(--ac), .55); background: var(--cor-superficie); color: var(--cor-texto); box-shadow: 0 8px 24px -14px rgba(var(--ac), .8); }
+
+  /* Links: cor do tom, seta que anda 3px */
+  & .ck-rel__link { color: var(--tom, var(--cor-destaque)); font-weight: 600; font-size: 13px; line-height: 1.3; text-decoration: none; }
+  & .ck-rel__link:hover { color: var(--tom, var(--cor-destaque)); text-decoration: underline; }
+  & :is(.ck-bento-face, .ck-rel__faixa) > .ck-rel__link { display: inline-flex; align-items: center; min-height: 32px; }
+  & .ck-rel__tabela .ck-rel__link { text-decoration: underline; text-underline-offset: 2px; }
+
+  /* Chamados (F5) da Visão geral: faixa com a mesma superfície dos cartões */
+  & .ck-rel__faixa { gap: 8px 20px; padding: 16px 20px; border: 1px solid var(--cor-borda); border-radius: 20px; background: var(--cor-superficie); }
+  & .ck-rel__faixa-titulo { font: 600 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-rel__faixa-dados { gap: 4px 20px; font: 400 13px/1.4 var(--fonte-corpo); color: var(--cor-texto-suave); }
+  & .ck-rel__faixa-item b { font-weight: 600; }
+
+  /* Prévia para a gestão: seta que gira ao abrir */
+  & .ck-rel__painel > .ck-rel__previa { display: block; gap: 0; padding: 0; border: 1px solid var(--cor-borda); border-radius: 20px; background: var(--cor-superficie); }
+  & .ck-rel__previa > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 0 20px; border-radius: 20px; list-style: none; font: 600 13px/1.3 var(--fonte-corpo); color: var(--cor-texto-forte); }
+  & .ck-rel__previa > summary::-webkit-details-marker { display: none; }
+  & .ck-rel__previa > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin-top: -3px; border-right: 2px solid var(--cor-texto-sutil); border-bottom: 2px solid var(--cor-texto-sutil); transform: rotate(45deg); }
+  & .ck-rel__previa[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+  & .ck-rel__previa > summary:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; }
+  & .ck-rel__texto { margin: 0; padding: 0 20px 20px; font: 400 12px/1.5 var(--fonte-mono); color: var(--cor-texto-suave); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  /* Base atual: tipos com barra, unidades em lista */
+  & .ck-rel__tipos { gap: 14px; }
+  & .ck-rel__tipo { gap: 6px; }
+  & .ck-rel__tipo-linha, & .ck-rel__unidade { font: 400 13px/1.4 var(--fonte-corpo); }
+  & .ck-rel__trilho { height: 6px; border-radius: 999px; background: var(--bento-trilho); }
+  & .ck-rel__trilho-valor { border-radius: 999px; background: var(--tom); transform-origin: left center; }
+  & .ck-rel__unidade { padding: 9px 0; border-bottom: 1px solid var(--bento-linha); }
+  & .ck-rel__unidade:last-child { border-bottom: 0; }
+  & :is(.ck-rel__tipo-linha, .ck-rel__unidade) .ck-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+  & .ck-rel__rodape { gap: 8px 12px; }
+}
+
+@media (max-width: 1023.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] .ck-rel__atencao-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] .ck-rel__base-grade > :first-child .ck-rel__numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+    & .ck-rel__barra, & .rel-abas-barra { padding-inline: 12px; }
+    & .ck-rel__corpo { padding-inline: 12px; }
+  }
+}
+@media (max-width: 639.98px) {
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+    & .ck-rel__atencao-grade { grid-template-columns: minmax(0, 1fr); }
+    & .ck-rel__base-grade, & .ck-rel__base-grade > :first-child .ck-rel__numeros { grid-template-columns: minmax(0, 1fr); }
+    & .ck-rel__barra .ck-pilulas, & .ck-rel__barra .ck-campo { flex: 1 1 100%; }
+    & .ck-rel__barra .ck-btn { flex: 1 1 calc(50% - 8px); min-height: 44px; }
+    & .ck-rel__barra .ck-entrada { width: 100%; min-height: 44px; }
+    & .ck-rel__valor { font-size: 28px; }
+    & .ck-rel__atencao[data-status="alerta"] .ck-rel__total .ck-rel__valor { font-size: 40px; }
+    & .ck-rel__numero { padding: 10px 12px; }
+    & .ck-rel__faixa { padding: 14px 16px; }
+  }
+}
+@media (pointer: coarse) {
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] :is(.ck-rel__barra .ck-btn, .ck-rel__barra .ck-pilula, .rel-aba, .ck-rel__previa > summary) { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+    & .ck-rel__barra { animation: ck-bento-entra 700ms var(--bento-curva) backwards; }
+    & .rel-abas-barra { animation: ck-bento-entra 700ms var(--bento-curva) 80ms backwards; }
+    & .ck-bento-cartao.ck-bento-d0 { animation-delay: 0ms; }
+    & .ck-bento-cartao.ck-bento-d1 { animation-delay: 80ms; }
+    & .ck-bento-cartao.ck-bento-d2 { animation-delay: 160ms; }
+    & .ck-bento-cartao.ck-bento-d3 { animation-delay: 240ms; }
+    & .ck-bento-cartao.ck-bento-d4 { animation-delay: 320ms; }
+    & .ck-bento-cartao.ck-bento-d5 { animation-delay: 400ms; }
+    & .ck-bento-cartao[data-sem-entrada] { animation: none; }
+    & .ck-rel__faixa { animation: ck-bento-entra 760ms var(--bento-curva) 320ms backwards; }
+    & .rel-aba, & .ck-rel__barra .ck-pilula { transition: color 300ms var(--bento-curva), background-color 300ms var(--bento-curva), border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), transform 300ms var(--bento-curva); }
+    & .rel-aba:hover, & .ck-rel__barra .ck-pilula:hover { transform: translateY(-2px); }
+    & .rel-aba__n { transition: color 300ms var(--bento-curva), background-color 300ms var(--bento-curva); }
+    & .ck-btn { transition: transform 300ms var(--bento-curva), border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva), background-color 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+    & .ck-btn:not(:disabled):hover { transform: translateY(-3px); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+    & .ck-rel__filtros .ck-btn:hover { transform: translateY(-2px); }
+    & :is(.ck-btn, .ck-rel__link) .ck-rel__seta { display: inline-block; transition: transform 300ms var(--bento-curva); }
+    & :is(.ck-btn, .ck-rel__link):hover .ck-rel__seta { transform: translateY(3px); }
+    & :is(.ck-bento-face, .ck-rel__faixa) > .ck-rel__link:not(:has(.ck-rel__seta)) { transition: transform 300ms var(--bento-curva), color 300ms var(--bento-curva); }
+    & :is(.ck-bento-face, .ck-rel__faixa) > .ck-rel__link:not(:has(.ck-rel__seta)):hover { transform: translateX(3px); }
+    & .ck-rel__previa > summary::after { transition: transform 300ms var(--bento-curva), margin-top 300ms var(--bento-curva); }
+    & .ck-rel__barra .ck-entrada { transition: border-color 300ms var(--bento-curva), box-shadow 300ms var(--bento-curva); }
+  }
 }
