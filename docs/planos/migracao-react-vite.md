@@ -103,7 +103,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   2. Uma lista única: achados "Corrigir antes" e "Deveria corrigir", pendências dos PRs e falhas de CI que voltaram.
   3. Corrigir todos. "Opcional" só se for pequeno; o resto vai para o relatório.
   4. Nova revisão ponytail no diff das correções, até o veredito "pode enviar".
-- **Nível:** a sessão abre em Opus 5.5 alto. Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos: a sessão não muda o próprio nível, então pede ao usuário (`AskUserQuestion`) para trocar o seletor e confere a troca com `get_session`. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
+- **Nível:** alto (ver "Nível de cada sessão"). Falha que resistir a 3 ciclos sobe para extra high e ganha mais 3 ciclos. Se ainda falhar, a sessão para e devolve o que tentou e o que falha. Se ainda falhar, a sessão para e devolve o que tentou e o que falha.
 - **Critérios de aceite:** lista única zerada, ou cada item restante com o motivo; `npm run verify` e `npm run test:ui:e2e` verdes; veredito ponytail "pode enviar"; `model-super-power:revisor` no conjunto; invariantes do `AGENTS.md` intactos (Endpoint sem Enter, envio real só com `confirmado: true`, SharePoint, Outlook, UX).
 - **Verificar:** as linhas `AC: <critério> — PROVEN BY <evidência>`; app real com dados locais em cada aba.
 - **Proibido:** mudar o visual bento aprovado, ligar auto-merge, fazer merge.
@@ -124,6 +124,10 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 ## Execução
 
 - Cada bloco roda numa sessão nova, com este plano como brief, e termina em PR próprio (push da branch da sessão; o merge fica com o Antigravity, ver "Modo rápido").
+- **Nível de cada sessão (decisão do usuário, 15/11/2026):** quem abre a sessão escolhe o nível pela complexidade e o define na abertura (`effort` no `start_session`; acima do próprio nível, `set_session_effort`). A sessão já nasce no nível certo e não pede troca ao usuário. Para subir no meio do trabalho (falha que resiste a 3 ciclos), a sessão avisa quem a abriu por `SendMessage`, e quem a abriu sobe o nível. Escolha inicial, revista na abertura de cada sessão:
+  - Grupo G2 (sem invariante de envio): médio.
+  - Bloco 2 (CSP, bundle e `verify`), piloto, grupos com invariante (G1, G3, G4, G5 e G6), Bloco final e Dia 4: alto.
+  - G7 (envio real e Assistente): alto; extra high se o piloto achar acoplamento difícil.
 - Dentro da sessão: `model-super-power:batedor` para leitura, `executor` para o código, `revisor` antes do PR.
 - **Não erre, mesmo com PR grande (exigência do usuário):** PR grande não desculpa erro. Revise o diff inteiro, arquivo por arquivo, sem amostragem; cada achado com o trecho e o caso que falha. Antes do PR, confira cada arquivo alterado contra o original (mesma regra, mesmo texto aprovado, mesmo invariante). Na dúvida, pare e pergunte.
 - Relatório final de cada bloco: uma linha `AC: <critério> — PROVEN BY <evidência>` por critério; sem evidência, não verificado.
