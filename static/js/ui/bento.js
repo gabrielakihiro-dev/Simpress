@@ -45,6 +45,7 @@
   }
 
   // Termina com el.textContent === formatar(alvo). Região viva fica aria-busy durante a contagem.
+  /** @param {number} [ms] */
   function contarAte(el, alvo, formatar = formatoPadrao, ms = duracao.contagem) {
     if (!el) return;
     const total = Number(alvo) || 0;
