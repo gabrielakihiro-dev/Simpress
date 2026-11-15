@@ -51,6 +51,9 @@ concurrency:
 
 jobs:
   # A suíte inteira levava ~30 min num job só; dividida em 8 partes que rodam em paralelo.
+  # Cada parte roda uma lista fixa de specs (matrix.specs), não `--shard`: com fullyParallel desligado o
+  # Playwright reparte por arquivo e sai desigual (de 3 a 16 min por parte). O teste
+  # tests/frontend/test_ui_browser_shards.cjs falha se um spec novo ficar fora das listas ou repetido.
   ui-browser-shard:
     name: ui-browser (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: windows-latest
@@ -59,8 +62,40 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 8 shards: regra do usuário, shard acima de 15 min ganha mais shards (com 5, de 14 a 27 min de teste)
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        # 8 partes de ~11,5 min de teste (~13 min de job, com ~1,5 min de preparo); limite do usuário: 15 min.
+        # Soma por arquivo (desktop + mobile) medida em 4 execuções verdes de 15/11/2026: pior parte, 12 min.
+        # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
+        include:
+          - shard: 1
+            specs: >-
+              monthly-report.spec.cjs backups-regionais.spec.cjs react-piloto.spec.cjs
+              react-g1.spec.cjs react-g3.spec.cjs endpoint-lookup.spec.cjs
+          - shard: 2
+            specs: >-
+              lembretes.spec.cjs cobertura.spec.cjs chamados-os.spec.cjs
+              info-tips-ferramentas.spec.cjs react-infra.spec.cjs
+          - shard: 3
+            specs: >-
+              cockpit-layout.spec.cjs react-g2.spec.cjs dossie-equipamento.spec.cjs
+              outlook-email.spec.cjs first-access.spec.cjs ticket-requests.spec.cjs
+          - shard: 4
+            specs: >-
+              info-tips-todos.spec.cjs react-g6.spec.cjs chrome-automation.spec.cjs
+              theme-toggle.spec.cjs asset-updates.spec.cjs
+          - shard: 5
+            specs: >-
+              cockpit-tools.spec.cjs termos.spec.cjs ux-ticket.spec.cjs
+              regional-representative.spec.cjs configuracao-local.spec.cjs origin-contact.spec.cjs
+          - shard: 6
+            specs: >-
+              assistente.spec.cjs react-g5.spec.cjs os-subabas.spec.cjs
+          - shard: 7
+            specs: >-
+              ui.spec.cjs react-g4.spec.cjs resumo-os.spec.cjs alias-history.spec.cjs
+              ux-chamados.spec.cjs
+          - shard: 8
+            specs: >-
+              sebrae-dashboard.spec.cjs color-contrast.spec.cjs info-tips-resumo.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -95,7 +130,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Test real interface in desktop and mobile viewports
-        run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npx playwright test ${{ matrix.specs }}
 
   # Mantém um check único chamado ui-browser, que só passa se todas as partes passarem.
   ui-browser:
