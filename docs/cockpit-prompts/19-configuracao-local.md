@@ -162,8 +162,13 @@ O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), s
 - Front (node): `tests/frontend/test_configuracao_local.cjs` (campos gerados da API, chave vazia e nunca exibida, payloads, 422 sem toast, foco ao fechar, duplo clique, `Remover chave` com confirmação).
 - E2E: `tests/e2e/configuracao-local.spec.cjs` com a API simulada e com estado: Pendente lista o que falta, preencher e salvar deixa Em dia, a chave some do campo, validação do cliente, `Remover chave` com confirmação, auditoria axe do modal e ausência de rolagem horizontal de 320 a 2560 px nos dois temas. As capturas (painel e modal, claro e escuro) saem só com `SIMPRESS_CAPTURAS_DIR=<pasta fora de static/>` definida; o teste que as salva é pulado sem ela.
 
-## Pendente para depois do merge da `dados-reais-config`
+## Documentos alinhados
 
-- Linha deste doc no Índice do `AGENTS.md`.
-- README e `docs/guias/PRIMEIRO_ACESSO.md`: a instalação passa a dizer "configure em Prontidão da base".
-- `docs/arquitetura/CONTRATOS_API_BACKEND.md`: os endpoints acima.
+- Índice do `AGENTS.md`, `README.md` e `docs/guias/PRIMEIRO_ACESSO.md` apontam para **Prontidão da base > Configuração local**.
+- `docs/arquitetura/CONTRATOS_API_BACKEND.md` descreve as rotas acima.
+- `MSG_SEM_CHAVE` e o aviso de assistente desligado no front (`static/js/features/assistant-chat.js`) dizem "Configure a chave em Prontidão da base > Configuração local.".
+
+## Limites conhecidos
+
+- `domains/ux_ticket_browser.py`, `scripts/automacao_rotinas_chrome.py` (rotinas do SoftExpert) e `scripts/sebrae_softexpert.py` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress.
+- Conta em branco no formulário mantém o valor atual; para limpar, edite o arquivo.

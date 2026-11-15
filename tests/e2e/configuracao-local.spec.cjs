@@ -29,19 +29,20 @@ function criarServidor() {
     requisicoes: [],
   };
   const rotulos = { conta_simpress: "Conta Simpress (e-mail)", conta_sebrae: "Conta Sebrae (e-mail)" };
+  const usos = { conta_simpress: "Dashboard, UX Simpress, Oracle", conta_sebrae: "SoftExpert" };
   const final = chave => (chave ? `…${chave.slice(-4)}` : "");
   const assistente = () => Object.fromEntries(Object.entries(estado.chaves).map(([id, chave]) => [id,
     { configurada: Boolean(chave), final: final(chave), fonte: chave ? "arquivo" : "" }]));
   const status = () => {
     const faltando = [...Object.keys(rotulos).filter(id => !estado.contas[id]).map(id => rotulos[id]),
-      ...(estado.dashboard ? [] : ["Pasta do Dashboard"])];
+      ...(estado.dashboard ? [] : ["Link da pasta do Dashboard (SharePoint)"])];
     return {
       state: faltando.length ? "pending" : "ready", faltando, reason: faltando.length ? `Falta: ${faltando.join(", ")}` : "",
       assistente_ia: Object.values(estado.chaves).some(Boolean),
     };
   };
   const conta = (id, extra) => ({
-    id, rotulo: rotulos[id], placeholder: "nome@exemplo.invalid", usado_para: "Dashboard", ajuda: "Usada para: Dashboard",
+    id, rotulo: rotulos[id], placeholder: "nome@exemplo.invalid", usado_para: usos[id], ajuda: `Usada para: ${usos[id]}`,
     tipo: "email", valor: estado.contas[id], fonte: estado.contas[id] ? "arquivo" : "", somente_leitura: false,
     usar_no_outlook: estado.outlook[id], valido: true, ...extra,
   });
@@ -50,13 +51,13 @@ function criarServidor() {
     contas: [
       conta("conta_simpress"), conta("conta_sebrae"),
       {
-        id: "usuario_endpoint", rotulo: "Usuário do Endpoint", placeholder: "nome.usuario", usado_para: "Endpoint Central",
+        id: "usuario_endpoint", rotulo: "Usuário do Endpoint Central (login, sem domínio)", placeholder: "nome.usuario", usado_para: "Endpoint Central",
         ajuda: "Usada para: Endpoint Central", tipo: "usuario", valor: estado.contas.usuario_endpoint, fonte: "ambiente",
         somente_leitura: true, usar_no_outlook: null, valido: true,
       },
     ],
     links: [{
-      chave: "dashboard_pasta_url", rotulo: "Pasta do Dashboard", placeholder: "https://exemplo.invalid/pasta", usado_para: "Dashboard",
+      chave: "dashboard_pasta_url", rotulo: "Link da pasta do Dashboard (SharePoint)", placeholder: "https://exemplo.invalid/sites/pasta-do-dashboard", usado_para: "Dashboard",
       ajuda: "Usado para: Dashboard", obrigatorio: true, valor: estado.dashboard, fonte: estado.dashboard ? "arquivo" : "",
       somente_leitura: false, valido: true,
     }],
@@ -138,7 +139,7 @@ test("Configuração local: pendente lista o que falta, salvar deixa Em dia e a 
   const modal = page.getByRole("dialog", { name: "Configuração local" });
   await expect(modal).toBeVisible();
   await expect(page.locator("#cfg-local-conta-conta_sebrae")).toHaveAttribute("placeholder", "nome@exemplo.invalid");
-  await expect(page.locator("#cfg-local-conta-conta_simpress-ajuda")).toHaveText("Usada para: Dashboard");
+  await expect(page.locator("#cfg-local-conta-conta_simpress-ajuda")).toHaveText("Usada para: Dashboard, UX Simpress, Oracle");
   await expect(page.locator("#cfg-local-outlook-conta_simpress")).toBeChecked();
   await expect(page.locator("#cfg-local-outlook-conta_sebrae")).not.toBeChecked();
   await expect(page.locator("#cfg-local-conta-usuario_endpoint")).toHaveJSProperty("readOnly", true);
