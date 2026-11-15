@@ -25,6 +25,7 @@
   }
 
   // No geometry reads, forced reflow, per-frame JS, or permanent compositor hints.
+  /** @param {number} [time] */
   function animate(element, keyframes, time = duration.normal, complete = () => {}, delay = 0) {
     if (!element) { complete(); return; }
     cancel(element);

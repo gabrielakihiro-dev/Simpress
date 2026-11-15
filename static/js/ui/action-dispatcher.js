@@ -11,7 +11,7 @@
 // Closed list: static/app.js registers the feature actions through allow(); any other name
 // (alert, constructor...) only logs a warning. The function itself is still read from the scope
 // at event time, so actions replaced on window (tests, enhancements) keep working.
-(function (root, factory) {
+(function (/** @type {any} */ root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SimpressActionDispatcher = api;
