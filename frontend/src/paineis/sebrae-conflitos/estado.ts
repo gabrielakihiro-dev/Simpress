@@ -127,9 +127,10 @@ let acompanhamento = 0;
 let relogio: ReturnType<typeof setTimeout> | undefined;
 
 async function terminarEnvio(ultima: { status?: string } | null | undefined) {
+  // ocupado até a lista nova chegar: com a lista velha na tela, um clique mandaria o POST de novo.
+  await carregarConflitosSebrae();
   mudar({ ocupado: false });
   recontar();
-  await carregarConflitosSebrae();
   app.carregarNovosSebrae?.(); // atualiza o aviso do SharePoint e a lista de chamados
   if (estado.conflitos.length) {
     mudar({ status: "O envio parou de novo e ainda há conflitos. Confira a lista e escolha outra vez." });

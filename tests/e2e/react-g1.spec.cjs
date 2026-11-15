@@ -1,7 +1,8 @@
-// Migração React, grupo G1 (Sebrae): conflitos de edição do Dashboard (Chamados, F5).
+// Migração React, grupo G1 (Sebrae): conflitos de edição do Dashboard (Chamados, F5) e resumo do histórico (Automação).
 // O baseline de screenshots e os testes do invariante de envio foram gravados com o código antigo (JS puro),
 // antes da troca para React: a seção em React tem de sair igual (390 e 1366 px, claro e escuro) e mandar o
-// mesmo POST, só no clique. Comportamento portado de tests/frontend/test_sebrae_conflitos_ui.cjs (DOM falso).
+// mesmo POST, só no clique. Comportamento portado de tests/frontend/test_sebrae_conflitos_ui.cjs e
+// test_sebrae_historico_ui.cjs (DOM falso e funções puras).
 const { test, expect } = require("@playwright/test");
 
 const TOAST = "#toast-container .ck-toast";
@@ -178,7 +179,7 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(page.locator(TOAST)).toHaveCount(0);
   });
 
-  test("envio em andamento continua esperando; se parar com conflitos de novo, avisa e mantém a lista", async ({ page, request }) => {
+  test("envio em andamento continua esperando; se parar com conflitos de novo, mantém a lista e libera o botão", async ({ page, request }) => {
     test.setTimeout(30_000);
     let estado = "em_andamento";
     await rotaConflitos(page, {
@@ -225,7 +226,8 @@ test.describe("conflitos de edição: comportamento", () => {
     });
     let consultas = 0;
     await page.route("**/api/automacao/estado*", route => {
-      consultas += 1;
+      // Só a consulta da seção (sem query string); o painel de Automação antigo tem o próprio poll, com ?offset=.
+      if (!new URL(route.request().url()).search) consultas += 1;
       return route.fulfill({ json: { estado: "livre", rotina: "enviar", ultima: { status: "erro" } } });
     });
     const secao = await abrirPainel(page, request);
@@ -352,7 +354,22 @@ test.describe("resumo do histórico: comportamento", () => {
     await expect(linhas.nth(0).locator("> *")).toHaveCount(3);
   });
 
-  test("tipo desconhecido vira rótulo com inicial maiúscula e texto com < > fica texto", async ({ page, request }) => {
+  test("plural, busca sem contagens, repetição só na importação e tipo desconhecido com inicial maiúscula", async ({ page, request }) => {
+    await rotaHistorico(page, { itens: [
+      { tipo: "busca", em: "2026-11-10T09:00:00-03:00", repeticoes: 4 },
+      { tipo: "importacao", em: "2026-11-09T09:00:00-03:00", inicial: true, total: 120, repeticoes: 3 },
+      { tipo: "outro", em: "2026-11-08T09:00:00-03:00", n_alterados: 1 },
+    ] });
+    const linhas = (await abrirResumoHistorico(page, request)).locator("ul.sebrae-historico-mini > li");
+    await expect(linhas.locator(".sebrae-historico-mini__texto")).toHaveText([
+      "Nenhum chamado novo",
+      "Primeira importação: 120 chamados · Reimportado 3 vezes",
+      "1 com status alterado",
+    ]);
+    await expect(linhas.nth(2).locator(".ck-badge")).toHaveText("Outro");
+  });
+
+  test("tipo com < > fica texto, sem virar HTML", async ({ page, request }) => {
     await rotaHistorico(page, { itens: [{ tipo: "<b>x</b>", em: "2026-11-10T09:00:00-03:00" }] });
     const resumo = await abrirResumoHistorico(page, request);
     await expect(resumo.locator(".ck-badge")).toHaveText("<b>x</b>");
