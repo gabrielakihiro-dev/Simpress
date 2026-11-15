@@ -50,9 +50,8 @@ test("groups secondary actions under cockpit tools dropdown", () => {
   assert.doesNotMatch(appHtml, /id="btn-relatorio-mensal"[^>]*data-on-click="abrirRelatorioMensal"/);
   // 31/10/2026: o modal "Gerenciar unidades" e o "Fluxo completo" saíram; o painel do catálogo traz o formulário.
   assert.doesNotMatch(appHtml, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit/);
-  assert.match(appHtml, /id="cockpit-units-new"[^>]*data-on-click="toggleFormNovaUnidade"/);
-  assert.equal((appHtml.match(/id="form-unidade-titulo"/g) || []).length, 1);
-  assert.equal((appHtml.match(/id="btn-salvar-unidade"/g) || []).length, 1);
+  // 15/11/2026: o conteúdo do painel é React (frontend/src/paineis/unidades/corpo.tsx, checado em test_cockpit_tool_panels.cjs).
+  assert.match(appHtml, /data-cockpit-tool-panel="unidades"[^>]*data-react-painel="unidades"/);
   assert.doesNotMatch(appHtml, /id="badge-total-historico-comparacoes"/);
   assert.match(appHtml, /id="total-historico-comparacoes"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);

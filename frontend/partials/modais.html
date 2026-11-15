@@ -533,77 +533,7 @@
         <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharConfiguracaoLocal" aria-label="Fechar configuração local (Esc)"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
       </header>
 
-      <div class="ckp-corpo" id="cfg-local-corpo">
-        <p id="cfg-local-carga" class="ckp-secao__desc" role="status" aria-live="polite" aria-atomic="true">Carregando a configuração…</p>
-
-        <form id="cfg-local-secao-contas" class="ckp-secao hidden" data-on-submit="salvarContasConfiguracaoLocal" aria-labelledby="cfg-local-titulo-contas" novalidate>
-          <div class="ckp-secao__cab"><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="cfg-local-titulo-contas">Contas das automações</h3><p class="ckp-secao__desc">Cada conta é pedida uma vez e vale para todas as automações que a usam.</p></div></div>
-          <div class="ckp-secao__corpo">
-            <div id="cfg-local-contas" class="ckp-campos"></div>
-            <div class="ckp-linha">
-              <p id="cfg-local-status-contas" class="ckp-secao__status" role="status" aria-live="polite" aria-atomic="true"></p>
-              <button type="submit" id="cfg-local-salvar-contas" class="ck-btn ck-btn--primario ck-btn--sm" aria-label="Salvar contas das automações">Salvar</button>
-            </div>
-          </div>
-        </form>
-
-        <form id="cfg-local-secao-links" class="ckp-secao hidden" data-on-submit="salvarLinksConfiguracaoLocal" aria-labelledby="cfg-local-titulo-links" novalidate>
-          <div class="ckp-secao__cab"><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="cfg-local-titulo-links">Links internos</h3><p class="ckp-secao__desc">Endereços que as automações abrem. Precisam começar com https://.</p></div></div>
-          <div class="ckp-secao__corpo">
-            <div id="cfg-local-links" class="ckp-campos"></div>
-            <div class="ckp-linha">
-              <p id="cfg-local-status-links" class="ckp-secao__status" role="status" aria-live="polite" aria-atomic="true"></p>
-              <button type="submit" id="cfg-local-salvar-links" class="ck-btn ck-btn--primario ck-btn--sm" aria-label="Salvar links internos">Salvar</button>
-            </div>
-          </div>
-        </form>
-
-        <form id="cfg-local-secao-cliente" class="ckp-secao hidden" data-on-submit="salvarClienteConfiguracaoLocal" aria-labelledby="cfg-local-titulo-cliente" novalidate>
-          <div class="ckp-secao__cab"><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="cfg-local-titulo-cliente">Dados do cliente</h3><p class="ckp-secao__desc">Contrato e CNPJ de faturamento usados nas transferências, nos chamados do UX e nas rotinas do Chrome.</p></div></div>
-          <div class="ckp-secao__corpo">
-            <div class="ckp-campos">
-              <div class="ck-campo">
-                <label class="ck-campo__rotulo" for="cfg-local-contrato">Contrato</label>
-                <input type="text" id="cfg-local-contrato" class="ck-entrada" maxlength="12" inputmode="numeric" autocomplete="off" placeholder="Somente números">
-              </div>
-              <div class="ck-campo">
-                <label class="ck-campo__rotulo" for="cfg-local-cnpj">CNPJ de faturamento</label>
-                <input type="text" id="cfg-local-cnpj" class="ck-entrada" maxlength="18" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00">
-              </div>
-              <div class="ck-campo ckp-span">
-                <label class="ck-campo__rotulo" for="cfg-local-series">Séries dos notebooks do próprio cliente (uma por linha, opcional)</label>
-                <textarea id="cfg-local-series" class="ck-entrada" rows="3" autocomplete="off" spellcheck="false" aria-describedby="cfg-local-series-ajuda"></textarea>
-                <span id="cfg-local-series-ajuda" class="ckp-meta">Ficam fora das comparações de inventário. Só letras e números, até 32 caracteres cada.</span>
-              </div>
-            </div>
-            <p id="cfg-local-cliente-ambiente" class="ckp-meta" hidden>Campos bloqueados: definidos por variável de ambiente.</p>
-            <div class="ckp-linha">
-              <p id="cfg-local-status-cliente" class="ckp-secao__status" role="status" aria-live="polite" aria-atomic="true"></p>
-              <button type="submit" id="cfg-local-salvar-cliente" class="ck-btn ck-btn--primario ck-btn--sm" aria-label="Salvar dados do cliente">Salvar</button>
-            </div>
-          </div>
-        </form>
-
-        <form id="cfg-local-secao-assistente" class="ckp-secao hidden" data-on-submit="salvarAssistenteConfiguracaoLocal" aria-labelledby="cfg-local-titulo-assistente" novalidate>
-          <div class="ckp-secao__cab"><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="cfg-local-titulo-assistente">Assistente com IA <span class="ckp-opcional">· opcional</span></h3><p class="ckp-secao__desc">A chave nunca volta para a tela: só o final aparece. Deixar o campo vazio mantém a chave atual.</p></div></div>
-          <div class="ckp-secao__corpo">
-            <div id="cfg-local-chaves" class="ckp-campos"></div>
-            <div class="ckp-linha">
-              <p id="cfg-local-status-assistente" class="ckp-secao__status" role="status" aria-live="polite" aria-atomic="true"></p>
-              <button type="submit" id="cfg-local-salvar-assistente" class="ck-btn ck-btn--primario ck-btn--sm" aria-label="Salvar chaves do assistente com IA">Salvar</button>
-            </div>
-          </div>
-        </form>
-
-        <section id="cfg-local-secao-atalhos" class="ckp-secao hidden" aria-labelledby="cfg-local-titulo-atalhos">
-          <div class="ckp-secao__cab"><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="cfg-local-titulo-atalhos">Outros formulários</h3><p class="ckp-secao__desc">Já têm formulário próprio. O atalho abre o formulário por cima desta janela.</p></div></div>
-          <div class="ckp-secao__corpo">
-            <div class="ckp-linha">
-              <button type="button" id="cfg-local-abrir-contato" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="abrirConfiguracaoContatoOrigem"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-external"></use></svg>Contato de origem da transferência</button>
-            </div>
-          </div>
-        </section>
-      </div>
+      <div class="ckp-corpo" id="cfg-local-corpo" data-react-painel="configuracao-local"></div>
 
       <footer class="ckp-rodape">
         <span class="ck-espaco"></span>
