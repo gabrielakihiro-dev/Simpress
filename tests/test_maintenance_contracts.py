@@ -738,9 +738,11 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("limparSelecaoEquipamento()", invalidation)
         self.assertIn("fecharAutocomplete()", invalidation)
 
-        restore_start = script.index("async function restaurarHistoricoComparacao")
-        restore_end = script.index("async function consultarHistoricoComparacao", restore_start)
-        restore = script[restore_start:restore_end]
+        # A restauração vive no store React do histórico de planilhas (frontend/src/paineis/historico-comparacoes/).
+        store = (app_config.BASE_DIR / "frontend/src/paineis/historico-comparacoes/estado.ts").read_text(encoding="utf-8")
+        restore_start = store.index("export async function restaurarHistoricoComparacao")
+        restore_end = store.index("// `indicar` liga e desliga", restore_start)
+        restore = store[restore_start:restore_end]
         for refresh in (
             "invalidarDadosEquipamentoAposRestauracao()",
             "carregarEstatisticas()",
