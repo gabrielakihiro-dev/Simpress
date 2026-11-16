@@ -379,6 +379,12 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
     await page.route("**/api/historico-comparacoes/review-comparison", route => route.fulfill({ json: { evento: toolComparison } }));
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
+    // CI run 43735853268: a lost module fetch left the app unbooted and the first click opened nothing; reload once.
+    await expect(page.locator("#home-filter-total")).toHaveText("1", { timeout: 10_000 }).catch(async () => {
+      test.info().annotations.push({ type: "boot-reload", description: "#home-filter-total ausente; página recarregada" });
+      await page.reload();
+      await expect(page.locator("#home-filter-total")).toHaveText("1");
+    });
     for (const [barra, item, tool, key, titulo] of toolButtons) {
       const naBarra = barra === "#btn-resumo-aba" || (barra !== item && width >= 1200);
       if (naBarra) {
