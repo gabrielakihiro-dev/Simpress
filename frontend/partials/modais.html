@@ -102,70 +102,8 @@
     <div class="ck-dialogo dossie-equip" data-react-painel="dossie-equipamento"></div>
   </div>
 
-  <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook">
-    <div class="ck-dialogo email-outlook">
-      <h3 class="text-base font-bold"><span id="titulo-email-outlook">E-mail pelo Outlook</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre E-mail pelo Outlook" aria-describedby="email-ajuda-autosave"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="email-ajuda-autosave" role="tooltip" class="info-tip-text">As alterações no modelo são salvas automaticamente.</span></span></h3>
-      <p id="email-aviso-diretorio" class="email-outlook__aviso" role="status" hidden>A base do Microsoft Entra não foi importada; digite o e-mail completo.</p>
-      <div class="email-outlook__modelo">
-        <div class="ck-campo">
-          <label class="ck-campo__rotulo" for="email-modelo">Modelo</label>
-          <select id="email-modelo" class="ck-entrada" data-on-change="trocarModeloEmail" data-args='["$value"]' disabled></select>
-        </div>
-        <div class="ck-campo">
-          <label class="ck-campo__rotulo" for="email-modelo-nome">Nome do modelo</label>
-          <input type="text" id="email-modelo-nome" class="ck-entrada" maxlength="80" autocomplete="off" disabled>
-        </div>
-      </div>
-      <div class="ck-grupo-botoes">
-        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-novo" data-on-click="novoModeloEmail" disabled>Novo modelo</button>
-        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-duplicar" data-on-click="duplicarModeloEmail" disabled>Duplicar modelo</button>
-        <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="email-modelo-excluir" data-on-click="excluirModeloEmail" disabled>Excluir modelo</button>
-        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="email-modelo-restaurar" data-on-click="restaurarModeloEmail" hidden>Restaurar padrão</button>
-      </div>
-      <div class="ck-campo">
-        <label class="ck-campo__rotulo" for="email-conta">Enviar de</label>
-        <select id="email-conta" class="ck-entrada" disabled></select>
-      </div>
-      <div class="ck-campo email-outlook__combo">
-        <label class="ck-campo__rotulo" id="email-para-rotulo" for="email-para">Para</label>
-        <input type="text" id="email-para" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-para-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
-        <ul id="email-para-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-para-rotulo" hidden></ul>
-        <div id="email-para-opcoes" class="email-outlook__opcoes" hidden></div>
-      </div>
-      <div class="ck-campo email-outlook__combo">
-        <label class="ck-campo__rotulo" id="email-cc-rotulo" for="email-cc">Cc</label>
-        <input type="text" id="email-cc" class="ck-entrada" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="email-cc-lista" autocomplete="off" spellcheck="false" maxlength="1000" disabled>
-        <ul id="email-cc-lista" class="email-outlook__lista" role="listbox" aria-labelledby="email-cc-rotulo" hidden></ul>
-        <div id="email-cc-opcoes" class="email-outlook__opcoes" hidden></div>
-      </div>
-      <div class="ck-campo">
-        <label class="ck-campo__rotulo" for="email-assunto">Assunto</label>
-        <input type="text" id="email-assunto" class="ck-entrada" maxlength="200" autocomplete="off" aria-describedby="email-ajuda-marcadores" disabled>
-      </div>
-      <div class="ck-campo">
-        <span class="ck-rotulo-info"><label class="ck-campo__rotulo" for="email-corpo">Mensagem</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os marcadores" aria-describedby="email-ajuda-marcadores"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="email-ajuda-marcadores" role="tooltip" class="info-tip-text">Use {nome} e {setor} no assunto ou na mensagem para preencher com os campos Nome da pessoa e Setor.</span></span></span>
-        <textarea id="email-corpo" class="ck-entrada email-outlook__corpo" rows="6" maxlength="4000" aria-describedby="email-ajuda-marcadores" disabled></textarea>
-      </div>
-      <div class="email-outlook__envio">
-        <div class="ck-campo">
-          <label class="ck-campo__rotulo" for="email-nome-pessoa">Nome da pessoa</label>
-          <input type="text" id="email-nome-pessoa" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
-        </div>
-        <div class="ck-campo">
-          <label class="ck-campo__rotulo" for="email-setor">Setor</label>
-          <input type="text" id="email-setor" class="ck-entrada" maxlength="200" autocomplete="off" disabled>
-        </div>
-      </div>
-      <p id="email-autosave-status" class="email-outlook__autosave" role="status" aria-live="polite"></p>
-      <p id="email-status" class="email-outlook__status" role="status" aria-live="polite" hidden></p>
-      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
-        <button type="button" class="ck-btn ck-btn--secundario" id="email-cancelar" data-on-click="fecharEmailOutlook">Cancelar</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="email-copiar" data-on-click="copiarTextoEmail" disabled>Copiar Texto</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="email-abrir" data-on-click="abrirEmailNoOutlook" disabled>Abrir no Outlook</button>
-        <button type="button" class="ck-btn ck-btn--primario" id="email-enviar" data-on-click="enviarEmailPeloOutlook" disabled>Enviar pelo Outlook</button>
-      </div>
-    </div>
-  </div>
+  <!-- Modal "E-mail pelo Outlook" em React: frontend/src/paineis/outlook-email/dialogo.tsx (mesmos IDs, classes e ARIA). -->
+  <div id="modal-email-outlook" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-email-outlook" data-react-painel="outlook-email"></div>
 
   <div id="modal-confirmar-acao" class="modal-overlay ck-veu hidden">
     <div class="ck-dialogo">
@@ -231,55 +169,8 @@
   <!-- ========================================== -->
   <!-- MODAL DE TICKET NO UX (TRANSPORTE)          -->
   <!-- ========================================== -->
-  <div id="modal-ticket-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-ticket-ux">
-    <div class="ck-dialogo">
-      <h3 id="titulo-ticket-ux" class="text-base font-bold">Gerar ticket no UX</h3>
-      <p id="ux-ticket-status" role="status" aria-live="polite"><strong id="ux-ticket-estado"></strong><span id="ux-ticket-status-detalhe"></span></p>
-      <p id="ux-ticket-erro" class="ux-ticket-erro" role="alert" hidden></p>
-      <p id="ux-ticket-ultimo-envio" class="ux-ticket-aviso" hidden></p>
-      <dl class="ux-ticket-resumo">
-        <dt>Série</dt><dd id="ux-ticket-serie">—</dd>
-        <dt>Modelo</dt><dd id="ux-ticket-modelo">—</dd>
-        <dt>Endereço escolhido</dt><dd id="ux-ticket-endereco">—</dd>
-        <dt>CNPJ de Instalação</dt><dd id="ux-ticket-cnpj-instalacao">—</dd>
-        <dt>CNPJ de Faturamento</dt><dd id="ux-ticket-cnpj-faturamento">—</dd>
-        <dt>Anexo</dt><dd id="ux-ticket-anexo">—</dd>
-      </dl>
-      <fieldset id="ux-ticket-enderecos" class="ux-ticket-enderecos" data-on-change="atualizarTicketUX" hidden disabled>
-        <legend class="font-bold">Escolha o endereço</legend>
-        <div id="ux-ticket-enderecos-lista" class="ux-ticket-enderecos__lista"></div>
-        <p id="ux-ticket-enderecos-vazio" hidden>O UX não listou nenhum endereço para este CEP. Cadastre o endereço em Meus Endereços no UX e use Preparar novamente.</p>
-        <div class="flex justify-end">
-          <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-confirmar-endereco" data-on-click="confirmarEnderecoTicketUX" disabled>Confirmar endereço</button>
-        </div>
-      </fieldset>
-      <fieldset id="ux-ticket-formulario" class="ux-ticket-formulario" disabled>
-        <legend class="sr-only">Dados do ticket</legend>
-        <label for="ux-ticket-registro" class="font-bold">Registro</label>
-        <textarea id="ux-ticket-registro" class="ck-input ux-ticket-registro" rows="10" maxlength="2500" aria-describedby="ux-ticket-registro-contador" data-on-input="atualizarTicketUX"></textarea>
-        <p id="ux-ticket-registro-contador" class="ux-ticket-contador">0/2500</p>
-        <div id="ux-ticket-solicitante" class="ux-chamado-solicitante" role="group" aria-labelledby="ux-ticket-solicitante-titulo">
-          <p id="ux-ticket-solicitante-titulo" class="font-bold ux-chamado-solicitante__titulo">Solicitante</p>
-          <label for="ux-ticket-nome">Nome</label>
-          <input type="text" id="ux-ticket-nome" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
-          <label for="ux-ticket-email">E-mail</label>
-          <input type="email" id="ux-ticket-email" class="ck-input" maxlength="100" autocomplete="off" data-on-input="atualizarTicketUX">
-          <label for="ux-ticket-telefone">Contato</label>
-          <input type="tel" id="ux-ticket-telefone" class="ck-input" maxlength="40" autocomplete="off" data-on-input="atualizarTicketUX">
-          <label for="ux-ticket-chamado-interno">Nº de chamado interno</label>
-          <input type="text" id="ux-ticket-chamado-interno" class="ck-input" maxlength="10" autocomplete="off" placeholder="Opcional" data-on-input="atualizarTicketUX">
-        </div>
-      </fieldset>
-      <p id="ux-ticket-motivo" class="ux-ticket-aviso" hidden></p>
-      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-cancelar" data-on-click="fecharTicketUX">Cancelar</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-preparar" data-on-click="prepararNovamenteTicketUX" hidden>Preparar novamente</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-conferido" data-on-click="conferirTicketUX" hidden>Conferi no UX; preparar de novo</button>
-        <button type="button" class="ck-btn ck-btn--secundario" id="ux-ticket-simular" data-on-click="executarTicketUX" data-args='[false]' aria-describedby="ux-ticket-motivo" disabled>Simular preenchimento</button>
-        <button type="button" class="ck-btn ck-btn--primario" id="ux-ticket-finalizar" data-on-click="executarTicketUX" data-args='[true]' aria-describedby="ux-ticket-motivo" disabled>Revisar e finalizar</button>
-      </div>
-    </div>
-  </div>
+  <!-- Modal "Gerar ticket no UX" em React: frontend/src/paineis/ux-ticket/dialogo.tsx. -->
+  <div id="modal-ticket-ux" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-ticket-ux" data-react-painel="ux-ticket"></div>
 
   <!-- ==================================================== -->
   <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->

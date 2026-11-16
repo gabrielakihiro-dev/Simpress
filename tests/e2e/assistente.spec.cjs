@@ -723,7 +723,9 @@ test("Instruções permanentes: abre, carrega, conta, salva e limpa", async ({ p
   expect(chamadas.filter(c => c.nome === "instrucoes" && c.metodo === "GET")).toHaveLength(1);
 });
 
-test("Instruções permanentes: erro ao salvar mostra o motivo e mantém o texto; erro ao carregar bloqueia a edição", async ({ page }) => {
+// Os dois erros ficam em testes separados: abrir uma segunda página carregava o app inteiro duas vezes
+// dentro do mesmo limite de 20 s, e no celular da CI o teste chegava a 16–22 s.
+test("Instruções permanentes: erro ao salvar mostra o motivo e mantém o texto", async ({ page }) => {
   const chamadas = await mockAssistente(page, {
     estado: PRONTO,
     instrucoes: corpo => (corpo ? { status: 422, detail: "As instruções passam de 4000 caracteres." } : { texto: "antigo", limite: 4000 }),
@@ -736,16 +738,17 @@ test("Instruções permanentes: erro ao salvar mostra o motivo e mantém o texto
   await expect(page.locator("#assistente-instrucoes-status")).toHaveText("As instruções passam de 4000 caracteres.");
   await expect(page.locator("#assistente-instrucoes-texto")).toHaveValue("novo texto");
   expect(chamadas.filter(c => c.nome === "instrucoes" && c.metodo === "PUT")).toHaveLength(1);
+});
 
-  const falha = await page.context().newPage();
-  await mockAssistente(falha, { estado: PRONTO, instrucoes: { status: 500, detail: "Falha interna." } });
-  await falha.goto("/");
-  await abrirAssistente(falha);
-  await falha.locator("#assistente-instrucoes-botao").click();
-  await expect(falha.locator("#assistente-instrucoes-status")).toContainText("Falha interna.");
-  await expect(falha.locator("#assistente-instrucoes-texto")).toBeDisabled();
-  await expect(falha.locator("#assistente-instrucoes-salvar")).toBeDisabled();
-  await expect(falha.locator("#assistente-instrucoes-limpar")).toBeDisabled();
+test("Instruções permanentes: erro ao carregar bloqueia a edição", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO, instrucoes: { status: 500, detail: "Falha interna." } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-instrucoes-botao").click();
+  await expect(page.locator("#assistente-instrucoes-status")).toContainText("Falha interna.");
+  await expect(page.locator("#assistente-instrucoes-texto")).toBeDisabled();
+  await expect(page.locator("#assistente-instrucoes-salvar")).toBeDisabled();
+  await expect(page.locator("#assistente-instrucoes-limpar")).toBeDisabled();
 });
 
 test("Instruções permanentes: tela estreita cabe sem rolagem, devolve o Enviar ao fechar e passa no axe nos dois temas", async ({ page }) => {

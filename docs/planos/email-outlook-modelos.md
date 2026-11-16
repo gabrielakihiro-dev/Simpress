@@ -76,7 +76,7 @@ Escritas novas (autorizadas pelo usuário em 09/11/2026):
 ### Front
 
 - Botão `Enviar e-mail` em `.ck-eq-cab__acoes` (`static/index.html:291-311`), ao lado de Consultar no Endpoint, Controle remoto, Transporte e Editar; habilitado só com equipamento selecionado (`appState.currentEquipamento`); sem atalho de teclado.
-- `static/js/features/outlook-email.js` (novo), registrado em `FEATURE_ORDER` (`static/app-entry.js`/`static/app.js`) e no `SimpressActionDispatcher.allow` (`static/js/ui/action-dispatcher.js`).
+- `static/js/features/outlook-email.js` (novo), registrado em `FEATURE_ORDER` (`static/app-entry.js`/`static/app.js`) e no `SimpressActionDispatcher.allow` (`static/js/ui/action-dispatcher.js`). Desde o Dia 3 da migração React (G7) o modal e a lógica vivem em `frontend/src/paineis/outlook-email/` (`#modal-email-outlook` é só o ponto de montagem); `outlook-email.js` ficou como ponte, com as mesmas 11 ações publicadas.
 - Modal `[data-accessible-modal]` com `abrirModalAcessivel`/`fecharModalAcessivel` (Esc fecha, foco no primeiro campo):
   - Linha de modelo: select `Modelo` + `Nome do modelo` + ações `Novo modelo`, `Duplicar modelo`, `Excluir modelo`, `Restaurar padrão` (este só aparece no `cabo`).
   - Campos do modelo (autosave): `Enviar de` (select das contas), `Para`, `Cc`, `Assunto`, `Mensagem`.
@@ -160,7 +160,7 @@ Por regra do usuário, a execução roda numa sessão nova (`start_session`) com
 
 ### Passo 2: front e testes
 - **Objetivo:** botão `Enviar e-mail` e modal na Home usando só as rotas do Passo 1.
-- **Arquivos:** `static/index.html`, `static/js/features/outlook-email.js`, `static/app-entry.js`, `static/app.js`, `static/js/ui/action-dispatcher.js`, `static/styles/ck-cockpit.css`, `tests/frontend/test_outlook_email_ui.cjs`, `tests/e2e/outlook-email.spec.cjs`, `tests/test_maintenance_contracts.py` (estender a checagem de privacidade ao JS novo).
+- **Arquivos:** `static/index.html`, `static/js/features/outlook-email.js`, `static/app-entry.js`, `static/app.js`, `static/js/ui/action-dispatcher.js`, `static/styles/ck-cockpit.css`, `tests/frontend/test_outlook_email_ui.cjs`, `tests/e2e/outlook-email.spec.cjs`, `tests/test_maintenance_contracts.py` (estender a checagem de privacidade ao JS novo). Depois do Dia 3 (G7), a checagem de privacidade cobre também `frontend/src/paineis/outlook-email/`, e `tests/frontend/test_outlook_email_ui.cjs` testa as regras puras, a ponte e o TSX (o comportamento de tela está em `tests/e2e/outlook-email.spec.cjs` e `tests/e2e/react-g7.spec.cjs`).
 - **Critérios:** botão desabilitado sem equipamento; trocar `Modelo` carrega o modelo inteiro; autosave (debounce, change/blur, pendente gravado antes de trocar); Nome pré-preenchido; autocompletar com teclado e ARIA; nome único vira `Nome <email>`; ambíguo bloqueia o enviar; confirmação só no enviar e `confirmado: true` só após o Sim; confirmações de excluir e restaurar; textos exatos; nenhum `@simpress.com.br`/`@pr.sebrae.com.br` no HTML/JS; 320 px sem rolagem horizontal; temas claro e escuro.
 - **Verificar:** `npm run verify` + `npm run test:ui:e2e`.
 - **Proibidos:** `domains/entra_users.py` e os arquivos de backend do Passo 1 (`domains/outlook_mail.py`, `domains/outlook_mail.ps1`, `routers/outlook_mail.py`); se o front precisar de mudança neles, parar e devolver o problema.
