@@ -14,6 +14,10 @@ const LISTA = "#lista-historico-comparacoes";
 const TOTAL = "#total-historico-comparacoes";
 const SELECT_DATA = "#data-exportar-historico-comparacoes";
 const BOTAO_EXPORTAR = "#btn-exportar-historico-comparacoes";
+// Medido no módulo antigo: quantos GET /api/painel o observador de data-panels.js força por abertura e por exclusão.
+// Mais que isso no React deixaria o Resumo mais lento (o brief proíbe piorar).
+const PAINEL_POR_ABERTURA = 2;
+const PAINEL_POR_EXCLUSAO = 1;
 
 const EVENTOS = [
   {
@@ -82,8 +86,9 @@ async function prepararPagina(page, tema = "dark") {
 }
 
 // Servidor falso do histórico: lista, detalhe, prévia, restauração, exclusão e exportação. O resto vai para a fixture.
-async function rotaHistorico(page, { eventos = EVENTOS, falharLista = false } = {}) {
-  const estado = { eventos: [...eventos], falharLista, chamadas: [] };
+// restaurar(route, n): resposta do POST n (1, 2, ...); o padrão restaura 1.234 equipamentos. Cada prévia traz um token novo.
+async function rotaHistorico(page, { eventos = EVENTOS, falharLista = false, restaurar = null } = {}) {
+  const estado = { eventos: [...eventos], falharLista, chamadas: [], previas: 0, restauracoes: 0 };
   await page.route("**/api/historico-comparacoes**", async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -107,8 +112,14 @@ async function rotaHistorico(page, { eventos = EVENTOS, falharLista = false } = 
     const [, id, acao] = /^\/api\/historico-comparacoes\/([^/]+)(?:\/(.+))?$/.exec(caminho) || [];
     const evento = estado.eventos.find(item => item.id === id);
     if (!evento) return route.fallback();
-    if (acao === "restauracao") return route.fulfill({ json: PREVIA_RESTAURACAO });
+    if (acao === "restauracao") {
+      estado.previas += 1;
+      const preview_token = estado.previas === 1 ? PREVIA_RESTAURACAO.preview_token : String(estado.previas).repeat(64);
+      return route.fulfill({ json: { ...PREVIA_RESTAURACAO, preview_token } });
+    }
     if (acao === "restaurar" && metodo === "POST") {
+      estado.restauracoes += 1;
+      if (restaurar) return restaurar(route, estado.restauracoes);
       return route.fulfill({ json: { evento: { total_equipamentos_carregados: 1234, desfazer_disponivel: true } } });
     }
     if (!acao && metodo === "DELETE") {
@@ -129,6 +140,34 @@ async function abrirHistorico(page) {
   await expect(page.getByRole("dialog", { name: "Histórico de atualizações de planilhas" })).toBeVisible();
   await expect(page.locator(LISTA)).not.toHaveAttribute("aria-busy", "true");
   await page.mouse.move(0, 0);
+}
+
+// Escolhe um equipamento na Home (a fixture responde por qualquer série) para provar o que a restauração limpa ou mantém.
+async function selecionarEquipamento(page) {
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+}
+
+const equipamentoAtual = page => page.evaluate(() => window.SimpressApp.state.currentEquipamento?.serial ?? null);
+const caminhos = (page, filtro) => {
+  const lista = [];
+  page.on("request", request => { const caminho = new URL(request.url()).pathname; if (filtro(caminho)) lista.push(caminho); });
+  return lista;
+};
+const BOTAO_RESTAURAR = "Restaurar versões anteriores à atualização de 25/10/2026, 10:00:00";
+
+async function restaurarPrimeiro(page) {
+  await page.getByRole("button", { name: BOTAO_RESTAURAR }).click();
+  const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+  await confirmacao.getByRole("button", { name: "Restaurar" }).click();
+  await expect(confirmacao).toBeHidden();
+}
+
+async function abrirHistoricoSemNavegar(page) {
+  await page.locator("#btn-resumo-aba").click();
+  await page.locator("#cockpit-comparison-legacy").click();
+  await expect(page.locator(`${LISTA} article`)).toHaveCount(4);
 }
 
 const grupo = (page, rotulo) => page.locator(`${LISTA} section[aria-label="Atualizações de ${rotulo}"]`);
@@ -252,6 +291,87 @@ test.describe("Histórico de planilhas", () => {
     expect(servidor.chamadas.some(chamada => chamada.metodo === "POST")).toBe(false);
     await expect(botao).toHaveText("Desfazer restauração");
     await expect(botao).toBeEnabled();
+  });
+
+  test("restauração com sucesso limpa o equipamento escolhido e recarrega estatísticas, unidades e lista", async ({ page }) => {
+    await prepararPagina(page);
+    const servidor = await rotaHistorico(page);
+    await page.goto("/");
+    await selecionarEquipamento(page);
+    expect(await equipamentoAtual(page)).toBe("LENTO");
+    await abrirHistoricoSemNavegar(page);
+    const recargas = caminhos(page, caminho => ["/api/stats", "/api/unidades", "/api/historico-comparacoes"].includes(caminho));
+
+    await restaurarPrimeiro(page);
+    await expect(page.getByRole("status").filter({ hasText: "Inventários restaurados." })).toBeVisible();
+    expect(await equipamentoAtual(page)).toBeNull();
+    await expect(page.locator("#input-serial")).toHaveValue("");
+    expect([...recargas].sort()).toEqual(["/api/historico-comparacoes", "/api/stats", "/api/unidades"]);
+    expect(servidor.restauracoes).toBe(1);
+  });
+
+  test("restauração recusada mantém o equipamento escolhido e mostra o erro", async ({ page }) => {
+    await prepararPagina(page);
+    await rotaHistorico(page, { restaurar: route => route.fulfill({ status: 409, json: { detail: "Backup fictício indisponível" } }) });
+    await page.goto("/");
+    await selecionarEquipamento(page);
+    await abrirHistoricoSemNavegar(page);
+
+    await restaurarPrimeiro(page);
+    await expect(page.locator("#toast-container")).toContainText("Backup fictício indisponível");
+    expect(await equipamentoAtual(page)).toBe("LENTO");
+    await expect(page.locator("#input-serial")).toHaveValue("LENTO");
+    const botao = page.getByRole("button", { name: BOTAO_RESTAURAR });
+    await expect(botao).toHaveText("Restaurar versão anterior");
+    await expect(botao).toBeEnabled();
+  });
+
+  test("retentativa após resposta perdida reusa a mesma chave e a mesma prévia; depois do sucesso, chave nova", async ({ page }) => {
+    await prepararPagina(page);
+    const servidor = await rotaHistorico(page, {
+      restaurar: (route, n) => n === 1
+        ? route.abort("connectionreset")
+        : route.fulfill({ json: { evento: { total_equipamentos_carregados: 1, desfazer_disponivel: true } } }),
+    });
+    await abrirHistorico(page);
+    const posts = () => servidor.chamadas.filter(chamada => chamada.metodo === "POST");
+    const botao = page.getByRole("button", { name: BOTAO_RESTAURAR });
+
+    await restaurarPrimeiro(page);
+    await expect.poll(() => posts().length).toBe(1);
+    await expect(botao).toBeEnabled();
+    await restaurarPrimeiro(page);
+    await expect(page.getByRole("status").filter({ hasText: "Inventários restaurados. 1 equipamento carregado." })).toBeVisible();
+    await expect(botao).toBeEnabled();
+    await restaurarPrimeiro(page);
+    await expect.poll(() => posts().length).toBe(3);
+
+    const [primeiro, segundo, terceiro] = posts();
+    expect(segundo.headers["idempotency-key"]).toBe(primeiro.headers["idempotency-key"]);
+    expect(segundo.corpo).toBe(primeiro.corpo);
+    expect(JSON.parse(primeiro.corpo)).toEqual({ preview_token: PREVIA_RESTAURACAO.preview_token });
+    expect(terceiro.headers["idempotency-key"]).not.toBe(segundo.headers["idempotency-key"]);
+    expect(terceiro.corpo).not.toBe(segundo.corpo);
+  });
+
+  test("abrir e excluir não forçam mais GET /api/painel que o módulo antigo", async ({ page }) => {
+    await prepararPagina(page);
+    await rotaHistorico(page);
+    await page.goto("/");
+    await expect(page.locator(TOTAL)).toHaveText("4 registros");
+    await page.waitForLoadState("networkidle");
+    const painel = caminhos(page, caminho => caminho === "/api/painel");
+
+    await abrirHistoricoSemNavegar(page);
+    await page.waitForLoadState("networkidle");
+    expect(painel.length).toBe(PAINEL_POR_ABERTURA);
+
+    painel.length = 0;
+    await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
+    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await expect(page.locator(TOTAL)).toHaveText("3 registros");
+    await page.waitForLoadState("networkidle");
+    expect(painel.length).toBe(PAINEL_POR_EXCLUSAO);
   });
 
   test("excluir confirma, apaga, recarrega a lista e atualiza o contador", async ({ page }) => {
