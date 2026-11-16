@@ -11,7 +11,7 @@ import openpyxl
 
 class LowAuditFindingTests(unittest.TestCase):
     def test_mobile_does_not_autofocus_serial_input(self):
-        script = (app_config.STATIC_DIR / "js/features/equipment-search.js").read_text(encoding="utf-8")
+        script = (app_config.BASE_DIR / "frontend/src/paineis/pesquisa-equipamento/estado.ts").read_text(encoding="utf-8")
 
         self.assertIn('window.matchMedia("(hover: hover) and (pointer: fine)").matches', script)
         self.assertNotIn("// Focus serial input immediately", script)

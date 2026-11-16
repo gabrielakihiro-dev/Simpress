@@ -4,11 +4,16 @@ const path = require("node:path");
 const { assembledHtml } = require("./assembled-html.cjs");
 const vm = require("node:vm");
 const transferUtils = require("../../../static/js/shared/transfer-utils.js");
+const { apiFetch: requestApi } = require("../../../static/js/shared/api-fetch.js");
 const catalogSearch = require("../../../static/js/shared/catalog-search-utils.js");
 const formDraftGuard = require("../../../static/js/shared/form-draft-guard.js");
 const annotationAutosave = require("../../../static/js/shared/history-annotation-autosave.js");
 const accessibleDialogs = require("../../../static/js/ui/accessible-dialogs.js");
 const notifications = require("../../../static/js/ui/ui-notifications.js");
+const { criarPesquisaEquipamento } = require("../../../frontend/src/paineis/pesquisa-equipamento/estado.ts");
+const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/transporte/estado.ts");
+const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
+const { criarAcoesCartaoEquipamento } = require("../../../frontend/src/paineis/cartao-equipamento/estado.ts");
 
 const { appScripts, appSource } = require("./app-sources.cjs");
 
@@ -195,12 +200,29 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     `, context);
   }
 
+  mountReactPanels(context, document, window, effects, fetchApi);
+
+  function syncAppToWindow() {
+    for (const name of Object.keys(context)) {
+      if (name !== "window") window[name] = context[name];
+    }
+    window.apiFetch = requestApi;
+    globalThis.document = document;
+    globalThis.window = window;
+    globalThis.HTMLElement = FakeElement;
+    globalThis.CSS = context.CSS || { escape: value => String(value) };
+  }
+
   return {
     context,
     effects,
     localStorage,
     element: id => document.getElementById(id),
-    run: source => vm.runInContext(source, context),
+    run(source) {
+      const result = vm.runInContext(source, context);
+      syncAppToWindow();
+      return result;
+    },
     selectEquipment(equipment) {
       context.workflowEquipment = equipment;
       vm.runInContext(`
@@ -216,6 +238,76 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
 
 function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } = {}) {
   return { ok, status, json: async () => body };
+}
+
+function mountReactPanels(context, document, window, effects, fetchApi) {
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.lucide = context.lucide;
+  globalThis.HTMLElement = FakeElement;
+  if (typeof fetchApi === "function") globalThis.fetch = (...args) => fetchApi(...args);
+  Object.assign(window, context);
+  window.showToast = (message, type) => effects.toasts.push({ message, type });
+  window.apiFetch = requestApi;
+  window.SimpressApp = context.SimpressApp;
+  window.SimpressReact = {};
+
+  const sideEffectsOutsideBf1 = new Set([
+    "atualizarEmailOutlook", "atualizarDossieEquipamento", "atualizarChamadosAbertosHome",
+    "atualizarPreviaTransporteCockpit", "recolherVisualizacoesModelosChamado", "termosPreencherDoEquipamento",
+  ]);
+  const app = new Proxy(context, {
+    get(target, name) {
+      if (sideEffectsOutsideBf1.has(name)) return () => {};
+      return Reflect.get(target, name);
+    },
+  });
+  const appReact = new Proxy(window, {
+    get(target, name) {
+      if (sideEffectsOutsideBf1.has(name)) return () => {};
+      return Reflect.get(target, name);
+    },
+  });
+  const appState = context.SimpressApp.state;
+
+  window.SimpressReact.transporte = criarFormularioTransferencia({
+    app: appReact,
+    appState,
+    motion: null,
+    transferUtils,
+    apiFetch: requestApi,
+    draftTracker: formDraftGuard.createDraftTracker(),
+  });
+  window.SimpressReact["contatos-regionais"] = criarContatosRegionais({
+    app: appReact,
+    transferUtils,
+    apiFetch: requestApi,
+  });
+
+  const actions = criarPesquisaEquipamento({
+    app,
+    appState,
+    motion: null,
+    transferUtils,
+    recentEquipment: null,
+    dom: window.SimpressDomUtils(document),
+    equipmentSearchRenderer: window.SimpressEquipmentSearchRenderers,
+    apiFetch: requestApi,
+  });
+  window.SimpressReact["pesquisa-equipamento"] = actions;
+  const loggedUserMarkers = window.SimpressLoggedUserMarkers?.({ app: appReact, appState, dom: window.SimpressDomUtils(document) });
+  window.SimpressReact["cartao-equipamento"] = criarAcoesCartaoEquipamento({
+    app: appReact,
+    appState,
+    ponteReact(painel, nomes) {
+      return Object.fromEntries(nomes.map(nome => [nome, (...argumentos) => {
+        const acao = window.SimpressReact?.[painel]?.[nome];
+        if (typeof acao !== "function") return Promise.reject(new Error(`O painel React "${painel}" não carregou.`));
+        return Promise.resolve(acao(...argumentos));
+      }]));
+    },
+    loggedUserMarkers,
+  });
 }
 
 function setButton(harness, button, label) {

@@ -5,7 +5,7 @@ const historyFormat = require("../../static/js/shared/history-format.js");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
 const createEquipmentSearchRenderers = require("../../static/js/ui/equipment-search-renderers.js");
 const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
-const createEquipmentEditor = require("../../static/js/features/equipment-editor.js");
+const { criarAcoesCartaoEquipamento } = require("../../frontend/src/paineis/cartao-equipamento/estado.ts");
 
 const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
 // nome_pessoa vem de um CSV externo: precisa chegar escapado em todo innerHTML.
@@ -119,7 +119,7 @@ function elementoFalso() {
   };
 }
 
-// A parte React do editor (diálogos de equipamento e apelido, G10) não roda aqui: a ponte só precisa existir.
+// As ações de cartão estão no React; os diálogos continuam como pontes para outros painéis.
 const PONTE_FALSA = (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, async () => null]));
 
 function instalarDocumento() {
@@ -143,10 +143,13 @@ async function salvarNome({ apiFetch, atual }) {
   const app = {
     apiFetch,
     showToast: (mensagem, tipo) => toasts.push([mensagem, tipo]),
-    definirEquipamentoAtual: equipamento => aplicados.push(equipamento),
+    definirEquipamentoAtual: equipamento => {
+      aplicados.push(equipamento);
+      appState.currentEquipamento = equipamento;
+    },
   };
   document.getElementById("input-nome-pessoa").value = "  Ana Lima ";
-  const editor = createEquipmentEditor({ app, appState, ponteReact: PONTE_FALSA });
+  const editor = criarAcoesCartaoEquipamento({ app, appState, ponteReact: PONTE_FALSA });
   const botao = document.getElementById("btn-salvar-nome-pessoa");
   const chamada = editor.salvarNomePessoa();
   const ocupado = botao.disabled;
@@ -161,7 +164,7 @@ test("o campo de nome fica oculto quando já existe nome e pode ser aberto para 
       serial: "AAA111", usuarios_logados: "ana.lima", nome_pessoa: "Ana Lima",
       nome_pessoa_origem: "manual", nome_pessoa_editavel: true,
     };
-    const editor = createEquipmentEditor({ app: {}, appState: { currentEquipamento: equipamento }, ponteReact: PONTE_FALSA });
+    const editor = criarAcoesCartaoEquipamento({ app: {}, appState: { currentEquipamento: equipamento }, ponteReact: PONTE_FALSA });
     const formulario = document.getElementById("form-nome-pessoa");
     const editar = document.getElementById("btn-editar-nome-pessoa");
     const campo = document.getElementById("input-nome-pessoa");

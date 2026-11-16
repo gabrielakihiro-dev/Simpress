@@ -4,11 +4,14 @@ const test = require("node:test");
 
 const transferUtils = require("../../static/js/shared/transfer-utils.js");
 const history = require("../../static/js/ui/transfer-history.js");
+const { criarFormularioTransferencia } = require("../../frontend/src/paineis/transporte/estado.ts");
 
 function fakeElement() {
   return {
-    value: "", textContent: "", innerHTML: "", dataset: {}, style: {}, disabled: false,
-    setAttribute() {}, removeAttribute() {}, focus() {}, click() {}, remove() {}, addEventListener() {},
+    value: "", textContent: "", innerHTML: "", dataset: {}, style: {}, disabled: false, hidden: false,
+    classList: { add() {}, remove() {}, toggle() {} },
+    setAttribute() {}, removeAttribute() {}, focus() {}, select() {}, click() {}, remove() {}, addEventListener() {},
+    checkValidity() { return true; },
   };
 }
 
@@ -18,7 +21,7 @@ function fakeDocument() {
   const events = [];
   return {
     events,
-    body: { appendChild() {} },
+    body: { classList: { toggle() {} }, appendChild() {} },
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, fakeElement());
       return elements.get(id);
@@ -59,20 +62,21 @@ function bootTransferForm() {
   const app = {
     showToast: (message, type) => toasts.push([message, type]),
     selecionarItemAutocomplete: async item => { calls.push(["selecionar", item.serial]); appState.currentEquipamento = { serial: item.serial }; },
-    abrirAbaTransporteDoEquipamento: () => calls.push(["aba"]),
-    selecionarUnidadePorCidade: cidade => {
-      calls.push(["cidade", cidade]);
-      document.getElementById("select-unidade-destino").value = "7";
-      document.getElementById("entrega-cnpj").value = "00.000.000/0001-91";
-      document.getElementById("entrega-endereco").value = "Rua Sintética, 1";
-    },
-    adicionarObsChamado: texto => calls.push(["obs", texto]),
-    gerarPlanilhaExcel: () => { throw new Error("prepararTransporte não pode gerar planilha"); },
-    validarCamposObrigatoriosPlanilha: () => true,
+    preencherRepresentanteRegional: (tipo, cidade) => calls.push(["representante", tipo, cidade]),
+    atualizarObrigatoriedadeDuracaoPausaEntrega() {},
+    entregaAlmocoNaoFecha: () => false,
     formatarTelefoneBrasileiro: value => value,
     apiFetch: async () => ({ headers: { get: () => null }, blob: async () => ({}) }),
+    copiarTextoParaAreaTransferencia: async () => {},
+    fecharPainelCockpit() {},
+    abrirModalAcessivel() {}, fecharModalAcessivel() {},
+    confirmarAcao: async () => true,
+    invalidarBuscasEquipamento() {}, limparSelecaoEquipamento() {},
   };
-  const form = require("../../static/js/features/transfer-form.js")({ app, appState, motion: null, transferUtils });
+  const form = criarFormularioTransferencia({
+    app, appState, motion: null, transferUtils, apiFetch: app.apiFetch,
+    draftTracker: window.SimpressFormDraftGuard.createDraftTracker(),
+  });
   return { form, app, appState, document, calls, toasts };
 }
 
@@ -80,6 +84,16 @@ async function gerar(env, serial, cidadeUnidade) {
   env.appState.currentEquipamento = { serial };
   env.document.getElementById("input-serial").value = serial;
   env.document.getElementById("entrega-contato").value = "Destinatário Sintético";
+  env.document.getElementById("entrega-email").value = "destinatario@example.test";
+  env.document.getElementById("entrega-telefone").value = "(41) 90000-0000";
+  env.document.getElementById("entrega-horario").value = "09:00 às 18:00";
+  env.document.getElementById("entrega-almoco").value = "12:00";
+  env.document.getElementById("entrega-pausa-duracao").value = "1h";
+  env.document.getElementById("entrega-obs").value = "Observação sintética";
+  env.document.getElementById("retirada-contato").value = "Contato sintético";
+  env.document.getElementById("retirada-email").value = "retirada@example.test";
+  env.document.getElementById("retirada-telefone").value = "(41) 90000-0001";
+  env.document.getElementById("retirada-obs").value = "Observação sintética";
   env.document.getElementById("entrega-cnpj").value = "00.000.000/0001-91";
   env.document.getElementById("entrega-endereco").value = "Rua Sintética, 1";
   env.appState.unidadesList[0].cidade = cidadeUnidade;
@@ -91,7 +105,10 @@ async function gerar(env, serial, cidadeUnidade) {
 test("prepararTransporte preenche o formulário e guarda a pendência sem gerar planilha", async () => {
   const env = bootTransferForm();
   await env.form.prepararTransporte({ serial: "SINT-001", cidade: "Maringá", obs: "Cobertura SINT", movimentacao: MOV });
-  assert.deepEqual(env.calls, [["selecionar", "SINT-001"], ["aba"], ["cidade", "Maringá"], ["obs", "Cobertura SINT"]]);
+  assert.deepEqual(env.calls, [["selecionar", "SINT-001"], ["representante", "entrega", "Maringá"]]);
+  assert.equal(env.document.getElementById("select-unidade-destino").value, "7");
+  assert.equal(env.document.getElementById("entrega-endereco").value, "Rua Sintética, 1");
+  assert.equal(env.document.getElementById("entrega-obs").value, "Cobertura SINT");
   assert.deepEqual(env.appState.movimentacaoPendente,
     { id: "mov-1", rev: 2, chave: "chave-sint-001", serie: "SINT-001", destino_cidade: "Maringá" });
   assert.equal(env.document.events.some(event => event.type === "simpress:transfer-generated"), false);
@@ -127,19 +144,19 @@ test("dados mudados: evento sem movimentação, aviso exato e pendência descart
 test("selecionarUnidadePorCidade compara a cidade inteira, sem acento e sem caixa", () => {
   const env = bootTransferForm();
   const escolhidas = [];
-  env.app.handleUnidadeDestinoChange = id => escolhidas.push(id);
+  env.app.preencherRepresentanteRegional = (tipo, cidade) => escolhidas.push([tipo, cidade]);
   const select = env.document.getElementById("select-unidade-destino");
   env.appState.unidadesList = [{ id: 1, cidade: "Campo Grande" }, { id: 2, cidade: "Campo" }, { id: 3, cidade: "São Paulo" }];
   env.form.selecionarUnidadePorCidade("Campo");
   env.form.selecionarUnidadePorCidade("  sao  PAULO ");
-  assert.deepEqual(escolhidas, [2, 3]);
+  assert.deepEqual(escolhidas, [["entrega", "Campo"], ["entrega", "São Paulo"]]);
 
   env.appState.unidadesList = [{ id: 1, cidade: "Campo Grande" }, { id: 4, cidade: "" }];
   select.value = "";
   env.form.selecionarUnidadePorCidade("Campo");
   env.form.selecionarUnidadePorCidade("   ");
   assert.equal(select.value, "");
-  assert.deepEqual(escolhidas, [2, 3]);
+  assert.deepEqual(escolhidas, [["entrega", "Campo"], ["entrega", "São Paulo"]]);
 });
 
 // ------------------------------------------------------------------ transfer-history: vínculo com a cobertura

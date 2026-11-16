@@ -24,7 +24,12 @@ function criarPonteFalsa(respostas = {}) {
     if (respostas[nome] instanceof Error) throw respostas[nome];
     return respostas[nome] ?? null;
   }]));
-  return { chamadas, ponteReact };
+  const ponteReactSincrona = (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, (...argumentos) => {
+    chamadas.push({ painel, nome, argumentos });
+    if (respostas[nome] instanceof Error) throw respostas[nome];
+    return respostas[nome] ?? null;
+  }]));
+  return { chamadas, ponteReact, ponteReactSincrona };
 }
 
 test("pesquisa completa: cada ação do window vai ao painel React, e a abertura leva a linha antiga", async () => {
@@ -43,10 +48,10 @@ test("pesquisa completa: cada ação do window vai ao painel React, e a abertura
 });
 
 test("editor: abrir, fechar e cadastrar série vão aos painéis certos; a série pesquisada segue ao cadastro", async () => {
-  const { chamadas, ponteReact } = criarPonteFalsa();
+  const { chamadas, ponteReact, ponteReactSincrona } = criarPonteFalsa();
   globalThis.document = { getElementById: id => (id === "input-serial" ? { value: "XYZ-9" } : null) };
   try {
-    const editor = criarEditor({ app: {}, appState: {}, ponteReact });
+    const editor = criarEditor({ app: {}, appState: {}, ponteReact, ponteReactSincrona });
     await editor.abrirModalEditarEquipamento();
     await editor.cadastrarNovoSerialPesquisado();
     await editor.fecharModalEditarEquipamento();
@@ -56,22 +61,22 @@ test("editor: abrir, fechar e cadastrar série vão aos painéis certos; a séri
     delete globalThis.document;
   }
   assert.deepEqual(chamadas.map(({ painel, nome, argumentos }) => [painel, nome, argumentos]), [
-    ["editar-equipamento", "abrirModalEditarEquipamento", []],
-    ["editar-equipamento", "cadastrarNovoSerial", ["XYZ-9"]],
-    ["editar-equipamento", "fecharModalEditarEquipamento", []],
-    ["editar-apelido", "abrirModalEditarApelido", []],
-    ["editar-apelido", "fecharModalEditarApelido", []],
+    ["cartao-equipamento", "abrirModalEditarEquipamento", []],
+    ["cartao-equipamento", "cadastrarNovoSerialPesquisado", []],
+    ["cartao-equipamento", "fecharModalEditarEquipamento", []],
+    ["cartao-equipamento", "abrirModalEditarApelido", []],
+    ["cartao-equipamento", "fecharModalEditarApelido", []],
   ]);
 });
 
 test("painel que não carregou: a ponte registra o erro no console e nunca rejeita", async () => {
-  const falha = new Error('O painel React "editar-apelido" não carregou.');
-  const { ponteReact } = criarPonteFalsa({ abrirModalEditarApelido: falha, abrirPesquisaCompleta: falha, salvarApelido: falha });
+  const falha = new Error('O painel React "cartao-equipamento" não carregou.');
+  const { ponteReact, ponteReactSincrona } = criarPonteFalsa({ abrirModalEditarApelido: falha, abrirPesquisaCompleta: falha, salvarApelido: falha });
   const registrados = [];
   const original = console.error;
   console.error = (...argumentos) => registrados.push(argumentos);
   try {
-    const editor = criarEditor({ app: {}, appState: {}, ponteReact });
+    const editor = criarEditor({ app: {}, appState: {}, ponteReact, ponteReactSincrona });
     const pesquisa = criarPesquisaCompleta({ ponteReact, equipmentSearchRenderer: () => ({ criarLinhaPesquisaCompleta() {} }) });
     assert.equal(await editor.abrirModalEditarApelido(), undefined);
     assert.equal(await pesquisa.abrirPesquisaCompleta(), undefined);
@@ -84,10 +89,10 @@ test("painel que não carregou: a ponte registra o erro no console e nunca rejei
 });
 
 test("salvar: resultado vazio do React (falha ou seleção trocada) não mexe no cartão", async () => {
-  const { ponteReact } = criarPonteFalsa();
+  const { ponteReact, ponteReactSincrona } = criarPonteFalsa();
   const chamadasApp = [];
   const app = new Proxy({}, { get: (_alvo, nome) => (...argumentos) => chamadasApp.push([nome, argumentos]) });
-  const editor = criarEditor({ app, appState: {}, ponteReact });
+  const editor = criarEditor({ app, appState: {}, ponteReact, ponteReactSincrona });
   await editor.salvarApelido();
   await editor.salvarDadosEquipamento();
   assert.deepEqual(chamadasApp, []);
@@ -115,15 +120,28 @@ test("contêineres: o HTML só tem os três pontos de montagem vazios, e os ids 
 });
 
 test("todo data-on-click e data-on-change dos diálogos tem função na ponte correspondente", () => {
-  const { ponteReact } = criarPonteFalsa();
+  const { ponteReact, ponteReactSincrona } = criarPonteFalsa();
   const pesquisa = criarPesquisaCompleta({ ponteReact, equipmentSearchRenderer: () => ({ criarLinhaPesquisaCompleta() {} }) });
-  const editor = criarEditor({ app: {}, appState: {}, ponteReact });
+  const editor = criarEditor({ app: {}, appState: {}, ponteReact, ponteReactSincrona });
   const ponteDe = { "pesquisa-completa": pesquisa, "editar-equipamento": editor, "editar-apelido": editor };
   for (const [painel, arquivo] of Object.entries(DIALOGOS)) {
     const nomes = [...ler(arquivo).matchAll(/data-on-(?:click|change)="([A-Za-z]+)"/g)].map(achado => achado[1]);
     assert.ok(nomes.length > 0, `${painel}: sem ações ligadas`);
     for (const nome of nomes) assert.equal(typeof ponteDe[painel][nome], "function", `${painel}: ${nome} sem ponte`);
   }
+});
+
+test("editor: ações imediatas do cartão usam a ponte React síncrona", () => {
+  const { chamadas, ponteReact, ponteReactSincrona } = criarPonteFalsa();
+  const editor = criarEditor({ app: {}, appState: {}, ponteReact, ponteReactSincrona });
+
+  editor.editarDadosCadastrais();
+  editor.cancelarDadosCadastrais();
+
+  assert.deepEqual(chamadas.map(({ painel, nome }) => [painel, nome]), [
+    ["cartao-equipamento", "editarDadosCadastrais"],
+    ["cartao-equipamento", "cancelarDadosCadastrais"],
+  ]);
 });
 
 test("os diálogos não ligam onClick; todo onChange só grava o rascunho (editar, escolher), sem pedido nem ação", () => {

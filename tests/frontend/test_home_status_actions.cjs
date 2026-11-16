@@ -75,6 +75,7 @@ test("Home late selection of A preserves actions for active B and clicking an op
   const { harness, list, press, actions } = await createStatusHarness(() => new Promise(resolve => { finish = resolve; }));
   harness.run('exibirEquipamento = eq => highlightHomeListItem(eq.serial)');
   const pending = harness.run('selecionarItemAutocomplete({ serial: "S2" })');
+  await new Promise(resolve => setImmediate(resolve));
   press("Home");
   const activeId = list.attributes.get("aria-activedescendant");
   finish(apiResponse({ serial: "S2" }));
@@ -100,6 +101,7 @@ for (const stage of ["loading", "failed"]) {
     assert.equal(list.children[1].attributes.get("aria-selected"), "true");
 
     list.children[0].dispatchEvent("click");
+    await new Promise(resolve => setImmediate(resolve));
     if (stage === "failed") {
       fail(new Error("Falha ao consultar B"));
       await new Promise(resolve => setImmediate(resolve));
@@ -125,7 +127,10 @@ for (const completion of ["pagination", "late selection"]) {
     };
     harness.run('exibirEquipamento = eq => highlightHomeListItem(eq.serial)');
     let pending;
-    if (completion === "late selection") pending = harness.run('selecionarItemAutocomplete({ serial: "S2" })');
+    if (completion === "late selection") {
+      pending = harness.run('selecionarItemAutocomplete({ serial: "S2" })');
+      await new Promise(resolve => setImmediate(resolve));
+    }
     else {
       harness.selectEquipment({ serial: "S2" });
       harness.run('highlightHomeListItem("S2")');

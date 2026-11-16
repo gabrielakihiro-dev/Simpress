@@ -118,6 +118,23 @@ test("replacing inventories clears a removed selection and blocks transfer valid
   assert.equal(serialForTransfer(state.equipment, state.serialInput), "");
 });
 
+test("a 404 error from apiFetch still marks a removed inventory selection as missing", async () => {
+  const requestGate = createRequestGate();
+  let clearedSerial = null;
+  const error = Object.assign(new Error("Equipment not found"), { status: 404 });
+
+  const result = await refreshSelectionAfterInventoryReplacement({
+    requestGate,
+    serial: "SERIE-REMOVIDA",
+    clearSelection: clearSerial => { if (clearSerial) clearedSerial = "SERIE-REMOVIDA"; },
+    fetchEquipment: async () => { throw error; },
+    applyEquipment: () => assert.fail("a 404 must not apply equipment"),
+  });
+
+  assert.equal(result, "missing");
+  assert.equal(clearedSerial, "SERIE-REMOVIDA");
+});
+
 test("inventory replacement refreshes a still-existing selection with current equipment", async () => {
   const requestGate = createRequestGate();
   const state = { equipment: { serial: "SERIE-ATUALIZADA", modelo: "Modelo antigo" }, origin: "Origem antiga" };

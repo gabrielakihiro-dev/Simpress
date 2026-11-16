@@ -85,6 +85,7 @@
     } catch (error) {
       if (!requestGate.isCurrent(request.id)) return "stale";
       clearUnverifiedSelection();
+      if (error?.status === 404) return "missing";
       return error?.name === "AbortError" ? "stale" : "unavailable";
     }
   }

@@ -11,6 +11,7 @@ for (const update of ['handleSerialInput("L")', 'carregarListaHome({ query: "L" 
       return new Promise(resolve => { finish = resolve; });
     });
     const pending = harness.run('carregarListaHome({ query: "LE" })');
+    await new Promise(resolve => setImmediate(resolve));
     await harness.run(update);
     finish(apiResponse({ items: [], total: 7, has_more: true }));
     await pending;

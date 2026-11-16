@@ -95,6 +95,8 @@ TODOS os IDs dentro dos modais permanecem iguais. Só muda o CSS.
 
 ## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
 
+Migração React BF1 (16/11/2026): os modais `#modal-editar-equipamento` e `#modal-editar-apelido` seguem nos painéis React do G10. Ações do cartão — edição em linha, usuário manual, nome e dados cadastrais — ficam em `frontend/src/paineis/cartao-equipamento/`; o HTML e os IDs do cartão permanecem em `frontend/partials/card-equipamento.html`, com `static/js/features/equipment-editor.js` como ponte.
+
 Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4): texto que só explica sai do modal e fica num ⓘ (`.info-tip`) ao lado do título ou do rótulo; o texto de cada balão não mudou. Componente, `info-tip--end`, `info-tip--bloco` e o E2E genérico: `docs/cockpit-prompts/14-cockpit-v2.md`.
 
 - `#modal-importar-modelo` (`Importar arquivos`): `ul.ckp-fatos` (cópia anterior nos backups locais; modelo de transferência preservado) foi apagada junto com o CSS; as duas frases entraram no balão `#descricao-importar-modelo` (`static/js/features/inventory-upload.js` as acrescenta ao texto do tipo escolhido). O ⓘ usa `info-tip--bloco`, ancorado no cabeçalho (`.ckp-dialogo--estreito .ckp-cab`), porque o diálogo corta o que passa da borda. `#upload-impacto-aviso` continua visível (a substituição do modelo é irreversível; regra E, desvio do texto do plano).

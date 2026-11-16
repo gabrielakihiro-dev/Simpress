@@ -19,7 +19,8 @@ function field(value, { type = "text", required = true, valid = true } = {}) {
 }
 
 test("required-field list mirrors the generation gate in the transfer form", () => {
-  const gate = appScript.match(/function validarCamposObrigatoriosPlanilha\(\)\s*\{([\s\S]*?)\n\s*return true;/)?.[1] || "";
+  const transfer = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "transporte", "estado.ts"), "utf8");
+  const gate = transfer.match(/function validarCamposObrigatoriosPlanilha\(\)\s*\{([\s\S]*?)\n\s*return true;/)?.[1] || "";
   const gateIds = [...gate.matchAll(/id: "([^"]+)"/g)].map(match => match[1]);
   assert.ok(gateIds.length >= 9, "the generation gate should still list its required fields");
   assert.deepEqual([...ux.REQUIRED_FIELDS.map(item => item.id)].sort(), [...new Set(gateIds)].sort());
@@ -204,12 +205,12 @@ test("every info tip trigger points to a tooltip with text", () => {
 test("bottom-bar status follows the pending chip in every place that writes the default text", () => {
   const sources = {
     "index.html": appHtml,
-    "transfer-form.js": fs.readFileSync(path.join(staticDir, "js", "features", "transfer-form.js"), "utf8"),
-    "equipment-search.js": fs.readFileSync(path.join(staticDir, "js", "features", "equipment-search.js"), "utf8"),
+    "transfer-form.ts": fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "transporte", "estado.ts"), "utf8"),
+    "equipment-search.ts": fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "pesquisa-equipamento", "estado.ts"), "utf8"),
   };
   assert.match(sources["index.html"], /data-ux-ready-status>Pronto para emissão\./);
-  assert.match(sources["transfer-form.js"], /data-ux-ready-status>Pronto para emissão\./);
-  assert.match(sources["equipment-search.js"], /firstElementChild\?\.setAttribute\("data-ux-ready-status"/);
+  assert.match(sources["transfer-form.ts"], /data-ux-ready-status>Pronto para emissão\./);
+  assert.match(sources["equipment-search.ts"], /firstElementChild\?\.setAttribute\("data-ux-ready-status"/);
 });
 
 test("light theme keeps secondary text and the search count badge above 4.5:1 on tinted backgrounds", () => {

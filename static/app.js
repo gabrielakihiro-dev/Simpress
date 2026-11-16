@@ -106,6 +106,18 @@
     name,
     (...args) => waitForReactPanel(panel).then(actions => actions[name](...args)),
   ]));
+  // Ações chamadas no mesmo turno pelo código legado não podem esperar pelo boot do React.
+  context.ponteReactSincrona = (panel, names) => Object.fromEntries(names.map(name => [
+    name,
+    (...args) => {
+      const action = window.SimpressReact?.[panel]?.[name];
+      if (typeof action !== "function") {
+        console.error(new Error(`O painel React "${panel}" não carregou.`));
+        return;
+      }
+      return action(...args);
+    },
+  ]));
 
   const publishedBy = new Map();
   function publish(actions, source) {
@@ -137,21 +149,9 @@
   app.SimpressApp = Object.freeze({ state: appState });
 
   function inicializarAplicacao() {
-    document.getElementById("input-serial")?.addEventListener("input", () => {
-      appState.equipamentoSelectionRevision += 1;
-    });
     lucide.createIcons();
-    app.carregarConfiguracaoTransferencia();
-    app.popularSeletoresRepresentantesRegionais();
-    app.carregarRepresentantesRegionais();
     app.associarRotulosAcessiveis();
-    app.inicializarMascarasTelefone();
     app.inicializarExportacaoAutomaticaHistorico();
-    app.inicializarListaHome();
-    const almocoEntrega = document.getElementById("entrega-almoco");
-    almocoEntrega?.addEventListener("input", app.atualizarObrigatoriedadeDuracaoPausaEntrega);
-    almocoEntrega?.addEventListener("change", app.atualizarObrigatoriedadeDuracaoPausaEntrega);
-    app.atualizarObrigatoriedadeDuracaoPausaEntrega();
     app.carregarProntidao();
     app.carregarEstatisticas();
     app.carregarUnidades();
