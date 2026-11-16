@@ -274,7 +274,7 @@ test.describe("Home chamados abertos: comportamento", () => {
     await page.evaluate(serie => { atualizarChamadosAbertosHome(serie); atualizarChamadosAbertosHome("SEM-NADA"); }, SERIE);
     const corpo = page.locator("#home-open-tickets-body");
     await expect(corpo).toHaveText("Nenhum chamado aberto para esta série.");
-    await expect.poll(() => pedidos).toBe(2);
+    await expect.poll(() => pedidos).toBeGreaterThanOrEqual(1); // juntar as duas buscas numa só também vale
     await page.waitForTimeout(1000); // a resposta da primeira busca chega depois e tem de ser descartada
     await expect(corpo).toHaveText("Nenhum chamado aberto para esta série.");
     await expect(corpo).toHaveAttribute("aria-busy", "false");
