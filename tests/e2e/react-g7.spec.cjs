@@ -1223,3 +1223,165 @@ test.describe("Outlook em React: casos do módulo antigo (1366 px)", () => {
     await expect(statusOutlook(page)).toHaveAttribute("data-tipo", "aviso");
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Automação do Chrome em React: casos que os testes Node do módulo antigo cobriam (test_chrome_automation_*.cjs e
+// test_automation_tab_structure.cjs rodavam o JS antigo com um DOM falso; agora a tela real roda no navegador).
+// /api/automacao/executar (e /estado, nos casos que mudam o estado) são simulados aqui; o resto vem da fixture.
+// ---------------------------------------------------------------------------------------------------------------
+
+const emAndamento = (rotina, extra = {}) => ({ estado: "em_andamento", rotina, inicio: "2026-11-10T11:59:00-03:00", log: { linhas: [], offset: 0 }, ...extra });
+const terminou = (rotina, status) => ({ estado: "livre", ultima: { id: `${rotina}-${status}`, rotina, status }, log: { linhas: [], offset: 0 } });
+
+async function abrirAutomacao(page, request, executar = () => ({ status: 202, json: emAndamento("os") })) {
+  await request.get("/__fixture_automacao?quantidade=0&sebrae=padrao&run=");
+  const servidor = { chamadas: [], estado: null, executar };
+  await page.route(url => url.pathname === "/api/automacao/executar", async route => {
+    servidor.chamadas.push(route.request().postDataJSON());
+    const resposta = await servidor.executar(servidor.chamadas.at(-1));
+    return route.fulfill({ status: resposta.status ?? 202, json: resposta.json });
+  });
+  await page.route(url => url.pathname === "/api/automacao/estado", route => (servidor.estado ? route.fulfill({ json: servidor.estado }) : route.fallback()));
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  const painel = page.locator("#tab-panel-automacao");
+  await expect(painel).toBeVisible();
+  await expect(painel.locator("#automacao-estado-detalhe")).toContainText("Última execução"); // a fixture traz um histórico: o primeiro estado real chegou
+  await expect(painel.locator("#automacao-estado")).toContainText("Livre");
+  return { painel, servidor };
+}
+
+// Chama a ação do painel React como o data-on-* e a ponte do código antigo chamam.
+const acaoAutomacao = (page, nome, ...args) => page.evaluate(([acao, valores]) => window.SimpressReact["chrome-automation"][acao](...valores), [nome, args]);
+
+test.describe("Automação em React: casos do módulo antigo (1366 px)", () => {
+  test.skip(({ viewport }) => viewport.width < 1366, "comportamento não depende da largura: roda só no desktop");
+
+  test.beforeEach(async ({ page }) => {
+    await prepararPagina(page);
+  });
+
+  test("404 em /api/automacao mostra um único aviso de servidor desatualizado, nunca 'Not Found'", async ({ page, request }) => {
+    const { painel, servidor } = await abrirAutomacao(page, request, () => ({ status: 404, json: { detail: "Not Found" } }));
+    const botao = painel.locator("#btn-automacao-os");
+    const avisos = page.locator("#toast-container .ck-toast");
+    await botao.click();
+    await expect(avisos).toHaveCount(1);
+    await expect(avisos.first()).toHaveAttribute("role", "alert");
+    await expect(avisos.first()).toContainText("Servidor desatualizado: reinicie o Simpress");
+    await expect(botao).not.toHaveAttribute("aria-busy", "true");
+    await botao.click();
+    await expect.poll(() => servidor.chamadas.length).toBe(2);
+    await expect(botao).not.toHaveAttribute("aria-busy", "true");
+    await expect(avisos).toHaveCount(1); // o segundo 404 fica em silêncio
+    await expect(page.locator("#toast-container")).not.toContainText("Not Found");
+    await expect(painel.locator("#automacao-estado")).toContainText("Livre");
+  });
+
+  test("outros erros continuam exibindo a mensagem original a cada tentativa", async ({ page, request }) => {
+    const { painel, servidor } = await abrirAutomacao(page, request, () => ({ status: 409, json: { detail: "Rotina ocupada." } }));
+    const botao = painel.locator("#btn-automacao-os");
+    const avisos = page.locator("#toast-container .ck-toast", { hasText: "Rotina ocupada." });
+    await botao.click();
+    await expect(avisos).toHaveCount(1);
+    await expect(botao).not.toHaveAttribute("aria-busy", "true");
+    await botao.click();
+    await expect(avisos).toHaveCount(2);
+    expect(servidor.chamadas).toEqual([{ rotina: "os" }, { rotina: "os" }]);
+    await expect(avisos.first()).toHaveAttribute("role", "alert");
+  });
+
+  test("Verificar usuários envia só { rotina: \"usuarios\" } e avisa que foi iniciada", async ({ page, request }) => {
+    const { painel, servidor } = await abrirAutomacao(page, request, () => ({ status: 202, json: emAndamento("usuarios") }));
+    servidor.estado = emAndamento("usuarios");
+    await expect(painel.locator("#btn-automacao-usuarios")).toContainText("Executar");
+    await painel.locator("#btn-automacao-usuarios").click();
+    await expect(page.locator("#toast-container .ck-toast", { hasText: "Verificar usuários iniciada." })).toHaveAttribute("role", "status");
+    expect(servidor.chamadas).toEqual([{ rotina: "usuarios" }]);
+    await expect(painel.locator("#automacao-estado")).toContainText("Ocupado");
+    await expect(painel.locator("#automacao-estado-detalhe")).toContainText("Verificar usuários em andamento");
+    await expect(painel.locator("#btn-automacao-usuarios")).toContainText("Acompanhar");
+  });
+
+  test("clique duplo e chamadas seguidas não iniciam uma segunda rotina; abrir a aba nunca inicia nenhuma", async ({ page, request }) => {
+    const porta = portao();
+    const { painel, servidor } = await abrirAutomacao(page, request, async () => {
+      await porta.espera;
+      return { status: 202, json: emAndamento("os") };
+    });
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(300);
+    expect(servidor.chamadas).toEqual([]); // sem clique, nada começa
+
+    servidor.estado = emAndamento("os");
+    await painel.locator("#btn-automacao-os").dblclick();
+    await expect.poll(() => servidor.chamadas.length).toBe(1);
+    await expect(painel.locator("#btn-automacao-os")).toHaveAttribute("aria-busy", "true");
+    // Com o primeiro pedido em voo, a ação do painel recusa até outra rotina (a guarda não depende do botão desabilitado).
+    await acaoAutomacao(page, "iniciarRotinaAutomacao", "os");
+    await acaoAutomacao(page, "iniciarRotinaAutomacao", "inventarios");
+    await page.waitForTimeout(300);
+    expect(servidor.chamadas).toEqual([{ rotina: "os" }]);
+
+    porta.liberar();
+    await expect(page.locator("#toast-container .ck-toast", { hasText: "Rotina de OS iniciada." })).toBeVisible();
+    await expect(painel.locator("#btn-automacao-os")).toContainText("Acompanhar");
+    // Com a rotina em andamento, "Executar" de outra rotina também não envia nada: só a própria rotina vira Acompanhar.
+    await acaoAutomacao(page, "iniciarRotinaAutomacao", "inventarios");
+    await acaoAutomacao(page, "iniciarRotinaAutomacao", "os");
+    await page.waitForTimeout(300);
+    expect(servidor.chamadas).toEqual([{ rotina: "os" }]);
+  });
+
+  test("o atalho 'Ver backups no Resumo' aparece ao concluir inventários ou a rotina completa e some ao iniciar outra rotina", async ({ page, request }) => {
+    const { painel, servidor } = await abrirAutomacao(page, request);
+    const atalho = painel.locator("#automacao-ver-backups");
+    const passo = async estado => {
+      servidor.estado = estado;
+      await acaoAutomacao(page, "atualizarEstadoAutomacao");
+    };
+
+    await expect(atalho).toBeHidden();
+    await passo(terminou("os", "concluido"));
+    await expect(atalho).toBeHidden(); // sem execução observada, continua escondido
+
+    await passo(emAndamento("os"));
+    await passo(terminou("os", "concluido"));
+    await expect(atalho).toBeHidden(); // rotina de OS não mostra
+
+    await passo(emAndamento("inventarios"));
+    await expect(atalho).toBeHidden();
+    await passo(terminou("inventarios", "falha"));
+    await expect(atalho).toBeHidden(); // falha não mostra
+
+    await passo(emAndamento("inventarios"));
+    await passo(terminou("inventarios", "concluido"));
+    await expect(atalho).toBeVisible();
+    await expect(atalho).toHaveText("Ver backups no Resumo");
+    await expect(atalho).toHaveAttribute("data-on-click", "abrirPainelCockpit");
+    await expect(atalho).toHaveAttribute("data-args", '["comparacao","backups"]');
+
+    await passo(emAndamento("os"));
+    await expect(atalho).toBeHidden(); // nova rotina esconde
+
+    await passo(emAndamento("ambas"));
+    await passo(terminou("ambas", "concluido"));
+    await expect(atalho).toBeVisible(); // a rotina completa também mostra
+    await passo(emAndamento("usuarios"));
+    await expect(atalho).toBeHidden();
+  });
+
+  test("polling e visibilitychange não vazam: montar de novo não duplica o pedido de estado", async ({ page, request }) => {
+    const { painel } = await abrirAutomacao(page, request);
+    let pedidos = 0;
+    await page.route(url => url.pathname === "/api/automacao/estado", route => { pedidos += 1; return route.fallback(); });
+    // Cada inicializarAutomacao desfaz o observador, o ouvinte e o timer do anterior: três chamadas seguidas = um só ciclo.
+    for (let i = 0; i < 3; i += 1) await acaoAutomacao(page, "inicializarAutomacao");
+    await expect(painel.locator("#automacao-estado")).toContainText("Livre");
+    await page.waitForTimeout(300);
+    const antes = pedidos;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(300);
+    expect(pedidos - antes).toBe(1); // um único ouvinte de visibilitychange (três vazados dariam 3)
+  });
+});
