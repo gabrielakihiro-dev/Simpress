@@ -1,4 +1,5 @@
 import { apiFetch } from "../../api";
+import { criarRegrasChamados } from "../regras-chamados/regras";
 import { criarDashboardSebrae } from "./estado";
 import type { AppSebrae, Registro } from "./tipos";
 
@@ -16,13 +17,16 @@ export function montar(_container: HTMLElement) {
     atualizarEstadoAutomacao: () => janela.atualizarEstadoAutomacao?.(),
     carregarResumoHistoricoSebrae: () => janela.carregarResumoHistoricoSebrae?.(),
     carregarConflitosSebrae: () => janela.carregarConflitosSebrae?.(),
-    // Precisam continuar `undefined` quando ausentes: abrirJanelaChamadoOs é chamada com `?.` e a regra de ticket cai num texto padrão.
+    // Precisa continuar `undefined` quando ausente: abrirJanelaChamadoOs é chamada com `?.`.
     get abrirJanelaChamadoOs() { return janela.abrirJanelaChamadoOs; },
     get normalizarFiltroChamados() { return janela.normalizarFiltroChamados; },
   };
+  const dom = window.SimpressDomUtils(document);
   return criarDashboardSebrae({
     app,
-    dom: window.SimpressDomUtils(document),
+    dom,
+    // Regras direto do módulo (como cockpit-chamados): o filtro da F5 não depende da ponte de ticket-rules.js.
+    ticketRules: criarRegrasChamados(dom),
     sebraeDashboardModel: window.SimpressSebraeDashboardModel,
   });
 }
