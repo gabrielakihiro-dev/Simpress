@@ -3,11 +3,11 @@ const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
-const createTicketRules = require("../../static/js/features/ticket-rules.js");
+const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
 
-// Regras de chamado (antes cobertas pelo modal de acompanhamento): vivem em ticket-rules e no Andamento da aba Chamados.
-const rules = createTicketRules(createDomUtils(createFakeDocument()));
+// Regras de chamado (antes cobertas pelo modal de acompanhamento): vivem em regras-chamados/regras.ts e no Andamento da aba Chamados.
+const rules = criarRegrasChamados(createDomUtils(createFakeDocument()));
 
 function dataLocal(diasAtras) {
   const valor = new Date();

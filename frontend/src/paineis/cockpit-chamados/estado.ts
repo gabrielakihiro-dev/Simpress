@@ -3,6 +3,7 @@
 // cada carga com sincronizarGestaoChamadosCockpit. Respostas atrasadas são descartadas por um portão de
 // requisição por consulta (versões e Home); a regra pura mora em cockpit-chamados-puro.ts.
 import { apiFetch, type ApiFetchOptions } from "../../api";
+import { criarRegrasChamados } from "../regras-chamados/regras";
 import {
   chamadosAbertosDaSerie, chamadosSebraeDaSerie, chaveEvolucao, idAnterior, montarEvolucao, nomeArquivoExportado,
   pedidoExportacao, rotuloImportacoesAntigas, rotuloImportacoesRemovidas, textoSemComparacao, versaoAposCarga,
@@ -18,16 +19,16 @@ const app = window as unknown as {
   abrirChamadoDaOs?: (fontes: unknown[], serie: string, os: string | number) => unknown;
   abrirChamadoSebraeNoF5?: (chave: string) => unknown;
   formatarHorarioHistorico: (valor?: string) => string;
-  normalizarFiltroChamados: RegrasChamados["normalizarFiltroChamados"];
-  idadeAtualizacaoChamado: RegrasChamados["idadeAtualizacaoChamado"];
-  compararOrdensServicoDecrescente: RegrasChamados["compararOrdensServicoDecrescente"];
+  SimpressDomUtils: (documento: Document) => Parameters<typeof criarRegrasChamados>[0];
 };
 
-const regras = (): RegrasChamados => ({
-  normalizarFiltroChamados: valor => app.normalizarFiltroChamados(valor),
-  idadeAtualizacaoChamado: ticket => app.idadeAtualizacaoChamado(ticket),
-  compararOrdensServicoDecrescente: (esquerda, direita) => app.compararOrdensServicoDecrescente(esquerda, direita),
-});
+// As regras vêm direto de ../regras-chamados/regras.ts: durante os montar() a ponte do código antigo
+// (window.SimpressReact["regras-chamados"]) ainda não existe. Instância criada na primeira consulta.
+let regrasCriadas: ReturnType<typeof criarRegrasChamados> | undefined;
+const regras = (): RegrasChamados => {
+  regrasCriadas ??= criarRegrasChamados(app.SimpressDomUtils(document));
+  return regrasCriadas;
+};
 
 export const formatarHorario = (valor?: string) => app.formatarHorarioHistorico(valor);
 
@@ -265,7 +266,7 @@ export async function atualizarChamadosAbertosHome(serie: string) {
     if (!atual() || !chamadosRecentesHome) return;
     const sebrae = chamadosSebraeDaSerie(resultadoSebrae.dados, serie, regras());
     const { abertos, serie: serieDoRegistro } = chamadosAbertosDaSerie(chamadosRecentesHome, serie, regras());
-    const comIdade = abertos.map(ticket => ({ ...ticket, idade: app.idadeAtualizacaoChamado(ticket).rotulo }));
+    const comIdade = abertos.map(ticket => ({ ...ticket, idade: regras().idadeAtualizacaoChamado(ticket).rotulo }));
     mudar({ home: { tipo: "lista", abertos: comIdade, sebrae, serie: serieDoRegistro, falhaSebrae: resultadoSebrae.falhou } });
   } catch (erro) {
     if (atual()) mudar({ home: { tipo: "erro", mensagem: mensagemDe(erro, "Não foi possível carregar os chamados.") } });
