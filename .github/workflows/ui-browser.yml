@@ -65,7 +65,8 @@ jobs:
         # 10 partes de ~11 min de teste (~12,4 min de job, com ~1,4 min de preparo); limite do usuário: 15 min.
         # Com 8 partes a soma (~110 min) dava ~15 por parte: o run 43809541042 de 16/11/2026 teve job 6 com 17,5 min.
         # Divisão pelo tempo de relógio de cada spec nesse run (desktop + mobile; react-g10 estimado em ~2 min):
-        # previsão de job 1 ~12,4 · 2 ~12,3 · 3 ~12,5 · 4 ~12,7 · 5 ~12,3 · 6 ~12,2 · 7 ~12,4 · 8 ~12,3 · 9 ~12,6 · 10 ~12,4.
+        # previsão de job 1 ~12,4 · 2 ~12,3 · 3 ~12,5 · 4 ~12,7 · 5 ~12,3 · 6 ~13,5 · 7 ~12,4 · 8 ~12,3 · 9 ~12,6 · 10 ~12,4.
+        # react-g7b.spec.cjs (G7b, ~1,3 min local) entrou no 6, o menor (~12,2 antes dele).
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         include:
           - shard: 1
@@ -89,7 +90,7 @@ jobs:
           - shard: 6
             specs: >-
               lembretes.spec.cjs chrome-automation.spec.cjs react-g1.spec.cjs origin-contact.spec.cjs
-              react-infra.spec.cjs
+              react-infra.spec.cjs react-g7b.spec.cjs
           - shard: 7
             specs: >-
               monthly-report.spec.cjs cobertura.spec.cjs react-g10.spec.cjs chamados-os.spec.cjs

@@ -49,6 +49,15 @@ O Assistente deixou de ser aba/painel de página inteira (F9, dentro de `#cockpi
 - Abaixo de 600 px o compacto ocupa a tela inteira (minimizado continua só a barra de título no pé, com 8 px de margem); cartões em 2 colunas e controles com pelo menos 40 px; sem rolagem horizontal da página de 320 px a 2560 px.
 - Animação de abertura de ~200 ms (escala de .96 a 1 e opacidade) e transições de 200 ms em cartões e pílula (borda, sombra e, no expandido, subida de 1 px no hover), só quando `prefers-reduced-motion: no-preference`; com movimento reduzido nada se move.
 
+## Widget em React (Migração React, Dia 3, G7b, 15/11/2026)
+
+O conteúdo de `#assistente-widget` é desenhado pelo React em `frontend/src/paineis/assistant-chat/`; `static/js/features/assistant-chat.js` virou só uma ponte com os mesmos 35 nomes de ação (`alternarAssistente`, `enviarMensagemAssistente`, `confirmarPendenteAssistente`, `teclaAssistente` e os demais) e `static/index.html` guarda apenas a seção vazia `<section id="assistente-widget" ... data-react-painel="assistant-chat" hidden>`. Todos os ids, classes, ARIA, textos, rotas e regras acima valem como antes; o visual é o mesmo (baseline de pixels em `tests/e2e/react-g7.spec.cjs`).
+
+- Invariantes que o código novo preserva. No navegador (`tests/e2e/react-g7b.spec.cjs` e o bloco do Assistente em `tests/e2e/react-g7.spec.cjs`): ação pendente só vai à API com `confirmado: true` pelo botão `Confirmar` (clique duplo envia um só POST; `Cancelar` e `Esc` enviam `confirmado: false`; os dois botões ficam desabilitados com o pedido em voo); `Copiar texto` só aparece com `montar_rascunho`; máscara e HTML da resposta aparecem como texto literal. No Node (`tests/frontend/test_assistant_chat_ui.cjs`): prazo de 600000 ms por envio (constante `PRAZO_ENVIO_MS`) com `clearTimeout` no `finally`; mensagens de aborto e de erro iguais às do módulo antigo; `Copiar texto` usa `navigator.clipboard.writeText`, com `textarea` e `execCommand("copy")` de reserva; links de busca na web só com `http` ou `https`.
+- Onde mexer: regras puras (prazo, textos de erro, limites de anexo, contexto UX, WAV) em `assistente-puro.ts`, testáveis pelo Node; estado, ações e chamadas à API em `estado.ts`; marcação em `painel.tsx`, `areas.tsx`, `mensagens.tsx`, `formulario.tsx` e `comuns.tsx`. Não volte a escrever DOM em `static/js/features/assistant-chat.js`.
+- Mantido imperativo: `hidden` e `data-modo` do contêiner, `aria-expanded` de `#btn-assistente` e o `keydown` nativo do widget (`teclaAssistente`).
+- Verificação: `node --test tests/frontend/test_assistant_chat_ui.cjs` (substitui `test_assistant_endpoint_timeout.cjs`, que dependia do DOM antigo; o prazo e o `clearTimeout` agora são conferidos pelo código-fonte e pelas regras puras); Playwright em `tests/e2e/assistente.spec.cjs` (paridade, não alterado), `tests/e2e/react-g7b.spec.cjs` e `tests/e2e/info-tips-todos.spec.cjs`. O contrato de privacidade em `tests/test_maintenance_contracts.py` passou a varrer também `frontend/src/paineis/assistant-chat/`.
+
 ## Provedor, chaves e privacidade
 
 Texto movido da seção "Assistente (OpenRouter)" do `AGENTS.md`, que mantém só as regras de segurança.
