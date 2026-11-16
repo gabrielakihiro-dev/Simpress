@@ -51,6 +51,9 @@ function instalarDocumento() {
   return { campos };
 }
 
+// A parte React do editor (diálogos de equipamento e apelido, G10) não roda aqui: a ponte só precisa existir.
+const PONTE_FALSA = (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, async () => null]));
+
 function criarEditor(equipamento, { apiFetch } = {}) {
   const { campos } = instalarDocumento();
   const chamadas = [];
@@ -65,7 +68,7 @@ function criarEditor(equipamento, { apiFetch } = {}) {
     definirEquipamentoAtual: eq => { appState.currentEquipamento = eq; appState.equipamentoSelectionRevision += 1; },
     atualizarIndicadoresPosSalvamento() {},
   };
-  const editor = createEquipmentEditor({ app, appState });
+  const editor = createEquipmentEditor({ app, appState, ponteReact: PONTE_FALSA });
   const entrada = nome => campos[nome].children.find(filho => filho.dataset?.campoEdicao === nome);
   return { editor, chamadas, toasts, entrada };
 }

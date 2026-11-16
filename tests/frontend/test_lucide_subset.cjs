@@ -44,7 +44,7 @@ test("createIcons swaps placeholders for SVG and keeps classes and accessibility
   const lucide = loadSubset();
   const container = fakeNode("div");
   const decorative = fakeNode("i", container);
-  decorative.setAttribute("data-lucide", "search");
+  decorative.setAttribute("data-lucide", "info");
   decorative.setAttribute("class", "w-4 h-4");
   const labelled = fakeNode("i", container);
   labelled.setAttribute("data-lucide", "x");
@@ -54,12 +54,12 @@ test("createIcons swaps placeholders for SVG and keeps classes and accessibility
 
   lucide.createIcons({ root: container });
 
-  const [searchSvg, closeSvg] = container.children;
-  assert.equal(searchSvg.tagName, "svg");
-  assert.equal(searchSvg.attrs.class, "lucide lucide-search w-4 h-4");
-  assert.equal(searchSvg.attrs["aria-hidden"], "true");
-  assert.equal(searchSvg.attrs.stroke, "currentColor");
-  assert.ok(searchSvg.children.length > 0);
+  const [infoSvg, closeSvg] = container.children;
+  assert.equal(infoSvg.tagName, "svg");
+  assert.equal(infoSvg.attrs.class, "lucide lucide-info w-4 h-4");
+  assert.equal(infoSvg.attrs["aria-hidden"], "true");
+  assert.equal(infoSvg.attrs.stroke, "currentColor");
+  assert.ok(infoSvg.children.length > 0);
   assert.equal(closeSvg.attrs["aria-label"], "Fechar");
   assert.equal(closeSvg.attrs["aria-hidden"], undefined);
 });

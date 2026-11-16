@@ -369,58 +369,112 @@ test("late post-upload equipment response cannot replace a newer search", async 
   assert.equal(harness.effects.toasts.some(item => item.message.includes("Não foi possível confirmar")), false);
 });
 
-test("late alias save confirms success without taking over a newer selection", async () => {
-  let resolveSave;
-  const harness = createAppHarness(async url => {
-    assert.equal(url, "/api/equipamento/atualizar-apelido");
-    return new Promise(resolve => { resolveSave = resolve; });
-  });
+// Desde a migração React (Dia 2, G10) o salvamento do apelido e do equipamento vive em frontend/src/paineis/editar-*/:
+// o React valida, grava e devolve o equipamento salvo (ou null quando a seleção mudou no caminho). Aqui só a ponte do
+// código antigo é exercitada, com painéis React falsos; a resposta tardia fica coberta nos testes puros
+// (test_editar_apelido_puro.cjs, test_editar_equipamento_puro.cjs) e no navegador (tests/e2e/react-g10.spec.cjs).
+function instalarPaineisFalsos(harness, { apelido = async () => null, equipamento = async () => null } = {}) {
+  const chamadas = [];
+  harness.context.paineisFalsos = {
+    "editar-apelido": {
+      abrirModalEditarApelido: () => chamadas.push("abrirModalEditarApelido"),
+      fecharModalEditarApelido: () => chamadas.push("fecharModalEditarApelido"),
+      salvarApelido: () => { chamadas.push("salvarApelido"); return apelido(); },
+    },
+    "editar-equipamento": {
+      abrirModalEditarEquipamento: () => chamadas.push("abrirModalEditarEquipamento"),
+      cadastrarNovoSerial: serial => chamadas.push(["cadastrarNovoSerial", serial]),
+      fecharModalEditarEquipamento: () => chamadas.push("fecharModalEditarEquipamento"),
+      salvarDadosEquipamento: () => { chamadas.push("salvarDadosEquipamento"); return equipamento(); },
+    },
+  };
+  harness.run("window.SimpressReact = paineisFalsos");
+  return chamadas;
+}
+
+const esperar = () => new Promise(resolve => setImmediate(resolve));
+
+test("ponte do apelido: aplica o equipamento devolvido pelo React, atualiza o selo e fecha o diálogo", async () => {
+  const harness = createAppHarness(async url => { throw new Error(`Chamada API inesperada: ${url}`); });
   const original = { ...priorEquipment, serial: "SERIE-ANTIGA", apelido: "HOST-ANTIGO" };
-  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", apelido: "HOST-NOVO" };
+  const chamadas = instalarPaineisFalsos(harness, {
+    apelido: async () => ({ equipamento: { ...original, apelido: "HOST-ATUALIZADO" } }),
+  });
   harness.selectEquipment(original);
-  harness.element("edit-apelido-isolado").value = "HOST-ATUALIZADO";
+  harness.run("carregarEstatisticas = async () => workflowEffects.refreshes.push('estatisticas')");
 
-  const saving = harness.run("salvarApelido()");
-  for (let attempt = 0; attempt < 20 && !resolveSave; attempt += 1) {
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  assert.equal(typeof resolveSave, "function");
-  harness.selectEquipment(newer);
-  resolveSave(apiResponse({ equipamento: { ...original, apelido: "HOST-ATUALIZADO" } }));
-  await saving;
+  await harness.run("salvarApelido()");
+  await esperar();
 
-  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
-  assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
-  assert.equal(harness.effects.toasts.at(-1).type, "success");
-  assert.equal(harness.element("modal-editar-apelido").classList.contains("hidden"), false);
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.apelido"), "HOST-ATUALIZADO");
+  assert.equal(harness.element("badge-apelido").textContent, "HOST-ATUALIZADO");
+  assert.deepEqual(harness.effects.refreshes, ["estatisticas"]);
+  assert.deepEqual(chamadas, ["salvarApelido", "fecharModalEditarApelido"]);
 });
 
-test("late equipment save leaves a newer selection and search intact", async () => {
-  let resolveSave;
-  const harness = createAppHarness(async url => {
-    assert.equal(url, "/api/equipamento/salvar");
-    return new Promise(resolve => { resolveSave = resolve; });
-  });
-  const original = { ...priorEquipment, serial: "SERIE-ANTIGA", revisao: "a".repeat(64) };
-  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", retirada_endereco: "Rua nova, 20" };
-  harness.selectEquipment(original);
-  harness.element("edit-serial").value = original.serial;
-  harness.element("edit-serial").readOnly = true;
-  harness.element("edit-modelo").value = "Modelo atualizado";
-  harness.element("edit-tipo").value = "Notebook";
-  harness.element("edit-id-cliente").value = "CLIENTE-2";
-
-  const saving = harness.run("salvarDadosEquipamento()");
-  for (let attempt = 0; attempt < 20 && !resolveSave; attempt += 1) {
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  assert.equal(typeof resolveSave, "function");
+test("ponte do apelido: React devolve null (seleção mudou ou erro) e o cartão e o diálogo ficam como estão", async () => {
+  const harness = createAppHarness(async url => { throw new Error(`Chamada API inesperada: ${url}`); });
+  const chamadas = instalarPaineisFalsos(harness, { apelido: async () => null });
+  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", apelido: "HOST-NOVO" };
   harness.selectEquipment(newer);
-  resolveSave(apiResponse({ equipamento: { ...original, modelo: "Modelo atualizado" }, mensagem: "Salvo" }));
-  await saving;
+
+  await harness.run("salvarApelido()");
+  await esperar();
+
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.apelido"), "HOST-NOVO");
+  assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
+  assert.deepEqual(harness.effects.refreshes, []);
+  assert.deepEqual(chamadas, ["salvarApelido"], "sem fechar o diálogo");
+});
+
+test("ponte do equipamento: aplica o salvo, mantém os campos de entrega e fecha o diálogo", async () => {
+  const harness = createAppHarness(async url => { throw new Error(`Chamada API inesperada: ${url}`); });
+  const original = { ...priorEquipment, serial: "SERIE-ANTIGA", revisao: "a".repeat(64) };
+  const salvo = { ...original, modelo: "Modelo atualizado", retirada_endereco: "Rua salva, 30" };
+  const chamadas = instalarPaineisFalsos(harness, { equipamento: async () => ({ equipamento: salvo }) });
+  harness.selectEquipment(original);
+  harness.element("entrega-cnpj").value = "00.000.000/0001-00";
+  harness.element("entrega-obs").value = "digitado antes de editar";
+  harness.run("atualizarObrigatoriedadeDuracaoPausaEntrega = () => workflowEffects.refreshes.push('pausa')");
+
+  await harness.run("salvarDadosEquipamento()");
+  await esperar();
+
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.modelo"), "Modelo atualizado");
+  assert.equal(harness.effects.displays.at(-1), salvo);
+  assert.equal(harness.element("retirada-endereco").value, "Rua salva, 30");
+  assert.equal(harness.element("input-serial").value, "SERIE-ANTIGA");
+  assert.equal(harness.element("btn-clear-serial").classList.contains("hidden"), false);
+  assert.equal(harness.element("entrega-cnpj").value, "00.000.000/0001-00", "campos de entrega preenchidos antes continuam");
+  assert.equal(harness.element("entrega-obs").value, "digitado antes de editar");
+  assert.ok(harness.effects.refreshes.includes("pausa"), "a obrigatoriedade da pausa é reavaliada");
+  assert.deepEqual(chamadas, ["salvarDadosEquipamento", "fecharModalEditarEquipamento"]);
+});
+
+test("ponte do equipamento: React devolve null (resposta tardia) e a seleção e a busca nova ficam intactas", async () => {
+  const harness = createAppHarness(async url => { throw new Error(`Chamada API inesperada: ${url}`); });
+  const chamadas = instalarPaineisFalsos(harness, { equipamento: async () => null });
+  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", retirada_endereco: "Rua nova, 20" };
+  harness.selectEquipment(newer);
+
+  await harness.run("salvarDadosEquipamento()");
+  await esperar();
 
   assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
   assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
   assert.equal(harness.element("retirada-endereco").value, "Rua nova, 20");
-  assert.equal(harness.effects.toasts.at(-1).type, "success");
+  assert.deepEqual(harness.effects.displays, []);
+  assert.deepEqual(chamadas, ["salvarDadosEquipamento"], "sem fechar o diálogo");
+});
+
+test("ponte do equipamento: cadastrar série pesquisada entrega o texto da Home em maiúsculas ao React", async () => {
+  const harness = createAppHarness(async url => { throw new Error(`Chamada API inesperada: ${url}`); });
+  const chamadas = instalarPaineisFalsos(harness);
+  harness.element("input-serial").value = "abc123";
+
+  await harness.run("cadastrarNovoSerialPesquisado()");
+  await esperar();
+
+  assert.deepEqual(chamadas, [["cadastrarNovoSerial", "abc123"]], "a maiúscula é regra do React (camposDeNovoSerial)");
 });
