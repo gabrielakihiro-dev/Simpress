@@ -285,111 +285,12 @@
   <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
   <!-- ==================================================== -->
   <div id="modal-editar-equipamento" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <!-- Modal Header -->
-      <div class="flex items-center justify-between pb-4 border-b border-line-quiet shrink-0">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
-            <i data-lucide="edit" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="text-base font-bold text-white flex items-center gap-2">
-              <span id="modal-edit-titulo">Atualizar Dados do Equipamento</span>
-              <span id="modal-edit-serial-badge" class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30"></span>
-              <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar Dados do Equipamento" aria-describedby="tip-editar-equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-equipamento" role="tooltip" class="info-tip-text">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel. Grava no arquivo Excel físico e atualiza a tela na hora. Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.</span></span>
-            </h3>
-          </div>
-        </div>
-        <button type="button" data-on-click="fecharModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar edição do equipamento">
-          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
-        </button>
-      </div>
-
-      <!-- Modal Body (Form) -->
-      <div class="py-4 overflow-y-auto flex-1 space-y-4 pr-1">
-
-        <!-- Bloco 1: Identificação do Hardware -->
-        <div class="bg-surface/60 p-4 rounded-xl border border-line-quiet/80 space-y-3">
-          <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5">
-            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
-            <span>Identificação do Equipamento</span>
-          </h4>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label class="block text-fg-tertiary font-semibold mb-1">Número de Série:</label>
-              <input type="text" id="edit-serial" class="w-full px-3 py-2 rounded-lg glass-input text-white font-mono uppercase font-bold focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-fg-tertiary font-semibold mb-1">Tipo de Equipamento:</label>
-              <select id="edit-tipo" class="w-full px-3 py-2 rounded-lg glass-input text-white focus:outline-none">
-                <option value="Notebook">Notebook</option>
-                <option value="Micro Computador">Micro Computador</option>
-                <option value="Headsets">Headsets</option>
-                <option value="Monitor">Monitor</option>
-                <option value="Impressora">Impressora</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-fg-tertiary font-semibold mb-1">Modelo do Hardware:</label>
-              <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
-            </div>
-            <div id="edit-apelido-field">
-              <div class="flex items-center gap-1 mb-1"><label class="block text-fg-tertiary font-semibold">Apelido / Hostname:</label><span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Apelido / Hostname" aria-describedby="tip-editar-apelido-campo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido-campo" role="tooltip" class="info-tip-text">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</span></span></div>
-              <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
-            </div>
-            <div class="sm:col-span-2">
-              <label class="block text-fg-tertiary font-semibold mb-1">Id Cliente / Observação de Uso:</label>
-              <input type="text" id="edit-id-cliente" placeholder="Ex: Note diretoria Tipo 2" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Modal Footer -->
-      <div class="pt-4 border-t border-line-quiet flex justify-end items-center shrink-0">
-        <div class="flex space-x-2">
-          <button
-            type="button"
-            data-on-click="fecharModalEditarEquipamento"
-            class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            id="btn-salvar-equipamento"
-            data-on-click="salvarDadosEquipamento"
-            class="px-5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
-          >
-            <i data-lucide="check" class="w-4 h-4"></i>
-            <span>Salvar no Site e na Planilha</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <div class="ck-dialogo" data-react-painel="editar-equipamento"></div>
   </div>
 
   <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
   <div id="modal-editar-apelido" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <div class="flex items-start justify-between gap-4 mb-5">
-        <div>
-          <h3 class="text-base font-bold text-white">Editar apelido <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Editar apelido" aria-describedby="tip-editar-apelido"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido" role="tooltip" class="info-tip-text">O apelido manual prevalece nas próximas exportações do Excel.</span></span></h3>
-        </div>
-        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <label for="edit-apelido-isolado" class="block text-xs text-fg-tertiary font-semibold mb-1">Novo apelido / hostname</label>
-      <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
-      <p id="apelido-serial-contexto" class="text-xs text-fg-muted font-mono mt-2"></p>
-      <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-line-quiet">
-        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--secundario">Cancelar</button>
-        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="ck-btn ck-btn--primario">Salvar apelido</button>
-      </div>
-    </div>
+    <div class="ck-dialogo" data-react-painel="editar-apelido"></div>
   </div>
 
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
@@ -688,59 +589,5 @@
 
   <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
   <div id="modal-pesquisa-completa" class="modal-overlay ck-veu hidden" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
-    <div class="modal-panel ck-dialogo">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
-        <div class="min-w-0">
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i data-lucide="search" class="w-5 h-5 text-cyan-400" aria-hidden="true"></i>
-            Resultados da pesquisa
-          </h3>
-          <p class="text-xs text-fg-subtle mt-1">Termo: <span id="pesquisa-completa-termo" class="font-mono text-cyan-300 break-all"></span></p>
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <span id="pesquisa-completa-contagem" class="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/25 text-xs font-semibold" role="status" aria-live="polite">0 resultados</span>
-          <button type="button" id="btn-fechar-pesquisa-completa" data-on-click="fecharModalPesquisaCompleta" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resultados da pesquisa">
-            <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
-          </button>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 border-b border-line-quiet shrink-0">
-        <label for="filtro-pesquisa-categoria" class="text-xs text-fg-tertiary">
-          Categoria
-          <select id="filtro-pesquisa-categoria" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
-            <option value="">Todas as categorias</option>
-            <option value="notebook">Notebooks</option>
-            <option value="macbook">MacBooks</option>
-            <option value="monitor">Monitores</option>
-            <option value="fone">Fones</option>
-          </select>
-        </label>
-        <label for="filtro-pesquisa-cidade" class="text-xs text-fg-tertiary">
-          Cidade
-          <select id="filtro-pesquisa-cidade" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
-            <option value="">Todas as cidades</option>
-          </select>
-        </label>
-        <label for="filtro-pesquisa-usuario" class="text-xs text-fg-tertiary">
-          Usuário
-          <select id="filtro-pesquisa-usuario" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-surface px-3 py-2 text-sm text-white focus:outline-none">
-            <option value="">Todos os usuários</option>
-            <option value="sem">Sem usuário</option>
-            <option value="com">Com usuário</option>
-          </select>
-        </label>
-        <button type="button" id="btn-limpar-filtros-pesquisa" data-on-click="limparFiltrosPesquisaCompleta" class="hidden full-search-clear justify-self-end text-xs text-cyan-300 hover:text-white transition">
-          Limpar filtros
-        </button>
-      </div>
-      <p id="pesquisa-completa-status" class="text-xs text-fg-subtle py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
-      <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
-      <div class="pt-3 border-t border-line-quiet flex items-center justify-between gap-3 shrink-0">
-        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden disabled:opacity-50 disabled:cursor-wait ck-btn ck-btn--primario">
-          <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
-          <span>Carregar mais</span>
-        </button>
-        <button type="button" data-on-click="fecharModalPesquisaCompleta" class="ml-auto ck-btn ck-btn--secundario">Fechar</button>
-      </div>
-    </div>
+    <div class="modal-panel ck-dialogo" data-react-painel="pesquisa-completa"></div>
   </div>

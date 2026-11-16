@@ -215,7 +215,9 @@ test("bottom-bar status follows the pending chip in every place that writes the 
 test("light theme keeps secondary text and the search count badge above 4.5:1 on tinted backgrounds", () => {
   const light = tokensCss.slice(tokensCss.indexOf('[data-theme="light"]'));
   assert.match(light, /--text-subtle: #5b6b80;/);
-  assert.match(appHtml, /id="pesquisa-completa-contagem" class="[^"]*\btext-cyan-200\b/);
+  // Desde a migração React (Dia 2, G10) o selo da contagem é desenhado pelo painel, não pelo HTML montado.
+  const dialogo = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "pesquisa-completa", "dialogo.tsx"), "utf8");
+  assert.match(dialogo, /id="pesquisa-completa-contagem" className="[^"]*\btext-cyan-200\b/);
 });
 
 

@@ -1,4 +1,4 @@
-/** Equipment records: edit or register equipment and edit the alias of the selected equipment. */
+/** Equipment records: bridge to the React edit/alias dialogs (G10) plus the logged-user, person-name and cadastral-data blocks. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).equipmentEditor = factory;
@@ -6,105 +6,57 @@
   "use strict";
   const { app, appState } = context;
 
+  // Since the React migration (Dia 2, G10) the equipment and alias dialogs live in frontend/src/paineis/editar-equipamento/
+  // and editar-apelido/: React does the validation, the POST and the button/toast texts, and hands the saved equipment back.
+  // This module stays the bridge (data-on-click names, the accessible dialog's Esc) and applies the saved equipment to
+  // the card, which it still owns (definirEquipamentoAtual, exibirEquipamento, the delivery fields).
+  const ponteEquipamento = context.ponteReact("editar-equipamento", [
+    "abrirModalEditarEquipamento", "cadastrarNovoSerial", "fecharModalEditarEquipamento", "salvarDadosEquipamento",
+  ]);
+  const ponteApelido = context.ponteReact("editar-apelido", [
+    "abrirModalEditarApelido", "fecharModalEditarApelido", "salvarApelido",
+  ]);
+  // Callers ignore the promise: a React panel that did not load is logged, never an unhandled rejection.
+  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+
   function abrirModalEditarEquipamento() {
-    if (!appState.currentEquipamento) {
-      app.showToast("Pesquise um equipamento antes de editar.", "warning");
-      return;
-    }
-
-    document.getElementById("modal-edit-titulo").textContent = "Atualizar Cadastro do Equipamento";
-    document.getElementById("modal-edit-serial-badge").textContent = appState.currentEquipamento.serial;
-
-    document.getElementById("edit-serial").value = appState.currentEquipamento.serial || "";
-    document.getElementById("edit-serial").readOnly = true;
-    document.getElementById("edit-modelo").value = appState.currentEquipamento.modelo || "";
-    document.getElementById("edit-tipo").value = appState.currentEquipamento.tipo || "Notebook";
-    document.getElementById("edit-apelido").value = appState.currentEquipamento.apelido || "";
-    document.getElementById("edit-apelido-field").classList.add("hidden");
-    document.getElementById("edit-id-cliente").value = appState.currentEquipamento.idCliente || "";
-
-    app.abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
+    return registrar(ponteEquipamento.abrirModalEditarEquipamento());
   }
 
   function cadastrarNovoSerialPesquisado() {
-    cadastrarNovoSerial(document.getElementById("input-serial")?.value || "");
-  }
-
-  function cadastrarNovoSerial(serial) {
-    app.fecharAutocomplete();
-    document.getElementById("modal-edit-titulo").textContent = "Cadastrar Novo Equipamento";
-    document.getElementById("modal-edit-serial-badge").textContent = serial ? serial.toUpperCase() : "NOVO";
-
-    document.getElementById("edit-serial").value = (serial || "").toUpperCase();
-    document.getElementById("edit-serial").readOnly = false;
-    document.getElementById("edit-modelo").value = "";
-    document.getElementById("edit-tipo").value = "Notebook";
-    document.getElementById("edit-apelido").value = "";
-    document.getElementById("edit-apelido-field").classList.remove("hidden");
-    document.getElementById("edit-id-cliente").value = "";
-    app.abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
+    return registrar(ponteEquipamento.cadastrarNovoSerial(document.getElementById("input-serial")?.value || ""));
   }
 
   function fecharModalEditarEquipamento() {
-    app.fecharModalAcessivel("modal-editar-equipamento");
+    return registrar(ponteEquipamento.fecharModalEditarEquipamento());
   }
 
   function abrirModalEditarApelido() {
-    if (!appState.currentEquipamento) {
-      app.showToast("Pesquise um equipamento antes de editar o apelido.", "warning");
-      return;
-    }
-
-    document.getElementById("edit-apelido-isolado").value = appState.currentEquipamento.apelido || "";
-    document.getElementById("apelido-serial-contexto").textContent = `Série: ${appState.currentEquipamento.serial}`;
-    app.abrirModalAcessivel("modal-editar-apelido", "#edit-apelido-isolado", "fecharModalEditarApelido");
-    document.getElementById("edit-apelido-isolado").select();
+    return registrar(ponteApelido.abrirModalEditarApelido());
   }
 
   function fecharModalEditarApelido() {
-    app.fecharModalAcessivel("modal-editar-apelido");
+    return registrar(ponteApelido.fecharModalEditarApelido());
   }
 
+  // React returns { equipamento } when the save succeeded and the selection did not change meanwhile, otherwise null.
   async function salvarApelido() {
-    if (!appState.currentEquipamento) {
-      app.showToast("Pesquise um equipamento antes de editar o apelido.", "warning");
-      app.fecharModalEditarApelido();
+    let resultado;
+    try {
+      resultado = await ponteApelido.salvarApelido();
+    } catch (erro) {
+      console.error(erro);
       return;
     }
-
-    const serial = appState.currentEquipamento.serial;
-    const selectionRevisionAtSave = appState.equipamentoSelectionRevision;
-    const apelido = document.getElementById("edit-apelido-isolado").value.trim();
-    const btn = document.getElementById("btn-salvar-apelido");
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.setAttribute("aria-busy", "true");
-    btn.textContent = "Salvando...";
-
+    if (!resultado) return;
     try {
-      const data = await app.apiFetch("/api/equipamento/atualizar-apelido", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serial, apelido }),
-        errorMessage: "Falha ao salvar o apelido.",
-      });
-
-      const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave
-        && String(appState.currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
-      if (stillSelected) {
-        app.definirEquipamentoAtual(data.equipamento);
-        document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";
-        app.atualizarIndicadoresPosSalvamento();
-        app.fecharModalEditarApelido();
-      }
-      app.showToast("Apelido salvo para pesquisas e exportações do Excel.", "success");
+      app.definirEquipamentoAtual(resultado.equipamento);
+      document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";
+      app.atualizarIndicadoresPosSalvamento();
+      app.fecharModalEditarApelido();
     } catch (err) {
       console.error("Erro ao salvar apelido:", err);
       app.showToast(err.message || "Falha ao salvar o apelido.", "error");
-    } finally {
-      btn.disabled = false;
-      btn.removeAttribute("aria-busy");
-      btn.textContent = originalText;
     }
   }
 
@@ -434,62 +386,29 @@
     app.atualizarObrigatoriedadeDuracaoPausaEntrega();
   }
 
+  // Same contract as salvarApelido: the card keeps the delivery fields the person already filled in.
   async function salvarDadosEquipamento() {
-    const serial = document.getElementById("edit-serial").value.trim().toUpperCase();
-    if (!serial) {
-      app.showToast("O número de série é obrigatório.", "warning");
-      document.getElementById("edit-serial").focus();
+    let resultado;
+    try {
+      resultado = await ponteEquipamento.salvarDadosEquipamento();
+    } catch (erro) {
+      console.error(erro);
       return;
     }
-
-    const payload = {
-      serial: serial,
-      novo: !document.getElementById("edit-serial").readOnly,
-      modelo: document.getElementById("edit-modelo").value.trim(),
-      tipo: document.getElementById("edit-tipo").value,
-      apelido: appState.currentEquipamento && appState.currentEquipamento.serial === serial
-        ? (appState.currentEquipamento.apelido || "")
-        : document.getElementById("edit-apelido").value.trim(),
-      idCliente: document.getElementById("edit-id-cliente").value.trim(),
-    };
-    const selectionRevisionAtSave = appState.equipamentoSelectionRevision;
-
-    const btn = document.getElementById("btn-salvar-equipamento");
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.setAttribute("aria-busy", "true");
-    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando no Excel...</span>`;
-    lucide.createIcons({ root: btn });
-
+    if (!resultado) return;
     try {
-      const data = await app.apiFetch("/api/equipamento/salvar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        errorMessage: "Falha ao salvar equipamento.",
-      });
-      const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave;
-      if (stillSelected) {
-        const dadosEntrega = capturarDadosEntrega();
-        app.definirEquipamentoAtual(data.equipamento);
-        app.exibirEquipamento(data.equipamento);
-        restaurarDadosEntrega(dadosEntrega);
-        document.getElementById("input-serial").value = data.equipamento.serial;
-        document.getElementById("btn-clear-serial").classList.remove("hidden");
+      const dadosEntrega = capturarDadosEntrega();
+      app.definirEquipamentoAtual(resultado.equipamento);
+      app.exibirEquipamento(resultado.equipamento);
+      restaurarDadosEntrega(dadosEntrega);
+      document.getElementById("input-serial").value = resultado.equipamento.serial;
+      document.getElementById("btn-clear-serial").classList.remove("hidden");
 
-        app.atualizarIndicadoresPosSalvamento();
-        app.fecharModalEditarEquipamento();
-      }
-      app.showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
-
+      app.atualizarIndicadoresPosSalvamento();
+      app.fecharModalEditarEquipamento();
     } catch (err) {
       console.error("Erro ao salvar:", err);
       app.showToast(err.message, "error");
-    } finally {
-      btn.disabled = false;
-      btn.removeAttribute("aria-busy");
-      btn.innerHTML = originalText;
-      lucide.createIcons({ root: btn });
     }
   }
 
