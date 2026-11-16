@@ -8,7 +8,7 @@
 const { test, expect } = require("@playwright/test");
 
 // As datas das importações e a idade dos chamados viram texto: fuso e relógio fixos deixam o screenshot estável.
-test.use({ timezoneId: "America/Sao_Paulo" });
+test.use({ locale: "pt-BR", timezoneId: "America/Sao_Paulo" });
 const AGORA = new Date("2026-10-12T15:00:00Z");
 const TOAST = "#toast-container .ck-toast";
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -170,10 +170,10 @@ const SEBRAE_HOME = {
   novos: { formulario: [{ numero: "N-1", linha: { G: "Chamado novo", K: SERIE } }] },
 };
 
-async function abrirHome(page, { tema = "light", sebrae = SEBRAE_HOME } = {}) {
+async function abrirHome(page, { tema = "light", sebrae = SEBRAE_HOME, relatorio = RELATORIO_HOME } = {}) {
   await prepararTema(page, tema);
   await page.route("**/api/equipamento/*", route => route.fulfill({ json: { serial: SERIE, modelo: "Notebook de teste", tipo: "Notebook", apelido: "TESTE-G8" } }));
-  await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: RELATORIO_HOME }));
+  await page.route("**/api/operacoes/chamados", route => (relatorio ? route.fulfill({ json: relatorio }) : route.fulfill({ status: 503, json: { detail: "Servidor indisponível" } })));
   await page.route("**/api/sebrae/novos", route => (sebrae ? route.fulfill({ json: sebrae }) : route.fulfill({ status: 500, json: { detail: "falha" } })));
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", tema);
@@ -241,6 +241,43 @@ test.describe("Home chamados abertos: comportamento", () => {
     await expect(cartao.locator("li.ck-aberto")).toHaveCount(3);
     await expect(cartao.getByRole("alert")).toHaveText("Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
     await expect(cartao.locator(".ck-abertos__sebrae")).toHaveCount(0);
+  });
+
+  test("falha só no F5 e série sem OS: avisa consulta parcial em vez de dizer que não há chamados", async ({ page }) => {
+    const cartao = await abrirHome(page, { sebrae: null });
+    await page.route("**/api/equipamento/*", route => route.fulfill({ json: { serial: "SEM-OS", modelo: "Notebook", tipo: "Notebook" } }));
+    await page.locator("#input-serial").fill("SEM-OS");
+    await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+    await expect(page.locator("#card-serial")).toHaveText("SEM-OS");
+    await expect(cartao.locator("#home-open-tickets-count")).toHaveText("Consulta parcial");
+    await expect(cartao.getByRole("alert")).toHaveText("Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
+    await expect(cartao.locator("li.ck-aberto")).toHaveCount(0);
+  });
+
+  test("falha ao carregar os chamados vira alerta com o motivo", async ({ page }) => {
+    const cartao = await abrirHome(page, { relatorio: null });
+    await expect(cartao.locator("#home-open-tickets-body").getByRole("alert")).toHaveText("Servidor indisponível");
+    await expect(cartao.locator("li.ck-aberto")).toHaveCount(0);
+  });
+
+  test("resposta atrasada de uma busca anterior não sobrescreve a série atual", async ({ page }) => {
+    let pedidos = 0;
+    await page.route("**/api/operacoes/chamados", async route => {
+      pedidos += 1;
+      if (pedidos === 1) await new Promise(resolve => setTimeout(resolve, 800));
+      await route.fulfill({ json: RELATORIO_HOME });
+    });
+    await prepararTema(page, "light");
+    await page.route("**/api/sebrae/novos", route => route.fulfill({ json: { importado: { abertos: [], finalizados: [] }, novos: { formulario: [] } } }));
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.evaluate(serie => { atualizarChamadosAbertosHome(serie); atualizarChamadosAbertosHome("SEM-NADA"); }, SERIE);
+    const corpo = page.locator("#home-open-tickets-body");
+    await expect(corpo).toHaveText("Nenhum chamado aberto para esta série.");
+    await expect.poll(() => pedidos).toBe(2);
+    await page.waitForTimeout(1000); // a resposta da primeira busca chega depois e tem de ser descartada
+    await expect(corpo).toHaveText("Nenhum chamado aberto para esta série.");
+    await expect(corpo).toHaveAttribute("aria-busy", "false");
   });
 
   test("série sem chamados mostra o texto vazio", async ({ page }) => {
