@@ -63,24 +63,26 @@ jobs:
       fail-fast: false
       matrix:
         # 8 partes de ~12 min de teste (~13,3 min de job, com ~1,3 min de preparo); limite do usuário: 15 min.
-        # Soma por arquivo (desktop + mobile) medida no run 43771709978 de 15/11/2026: pior parte, 11,9 min.
+        # Soma por arquivo (desktop + mobile) medida no run 43798193070 de 16/11/2026 (job 6 com 15m45, 14,4 min de teste):
+        # termos.spec.cjs (~2,9 min) saiu do grupo 6 para o grupo 8 (8,6 min de teste); os dois ficam em ~11,5 min.
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         include:
           - shard: 1
             specs: >-
               sebrae-dashboard.spec.cjs react-g4.spec.cjs theme-toggle.spec.cjs
-              regional-representative.spec.cjs
+              regional-representative.spec.cjs configuracao-local.spec.cjs
           - shard: 2
             specs: >-
               assistente.spec.cjs color-contrast.spec.cjs info-tips-ferramentas.spec.cjs
+              ux-ticket.spec.cjs
           - shard: 3
             specs: >-
-              info-tips-todos.spec.cjs termos.spec.cjs ticket-requests.spec.cjs
-              alias-history.spec.cjs resumo-os.spec.cjs
+              info-tips-todos.spec.cjs ticket-requests.spec.cjs alias-history.spec.cjs
+              resumo-os.spec.cjs
           - shard: 4
             specs: >-
               backups-regionais.spec.cjs monthly-report.spec.cjs os-subabas.spec.cjs
-              first-access.spec.cjs chamados-os.spec.cjs
+              first-access.spec.cjs chamados-os.spec.cjs react-g7.spec.cjs
           - shard: 5
             specs: >-
               lembretes.spec.cjs react-piloto.spec.cjs chrome-automation.spec.cjs
@@ -95,8 +97,7 @@ jobs:
               react-g3.spec.cjs react-infra.spec.cjs
           - shard: 8
             specs: >-
-              cockpit-tools.spec.cjs cobertura.spec.cjs dossie-equipamento.spec.cjs
-              configuracao-local.spec.cjs ux-ticket.spec.cjs
+              cockpit-tools.spec.cjs cobertura.spec.cjs dossie-equipamento.spec.cjs termos.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

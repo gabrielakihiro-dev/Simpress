@@ -1,124 +1,84 @@
+// Verificar usuários e atalho "Ver backups no Resumo": desde o Dia 3 (G7) os cartões e o atalho são desenhados pelo
+// React (frontend/src/paineis/chrome-automation/). Aqui: o HTML do botão e do filtro pelo TSX, a rotina na lista, e a
+// regra do atalho (regras-puro.ts, carregado direto pelo Node). O envio de {rotina: "usuarios"} e o aviso
+// "Verificar usuários iniciada" rodam no navegador, no bloco "Automação em React: casos do módulo antigo" de
+// tests/e2e/react-g7.spec.cjs; o atalho visível na tela, no mesmo bloco.
 const assert = require("node:assert/strict");
-const { assembledHtml } = require("./support/assembled-html.cjs");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
-const createChromeAutomation = require("../../static/js/features/chrome-automation.js");
+const { assembledHtml } = require("./support/assembled-html.cjs");
 
+const pasta = path.resolve(__dirname, "../../frontend/src/paineis/chrome-automation");
+const { ROTINAS, ROTINAS_DOS_CARTOES, verBackupsDepois } = require(path.join(pasta, "regras-puro.ts"));
+const componentes = fs.readFileSync(path.join(pasta, "componentes.tsx"), "utf8");
+const acoes = fs.readFileSync(path.join(pasta, "acoes.ts"), "utf8");
 const indexHtml = assembledHtml();
 
-test("o botão de verificar usuários está presente na interface com atributos corretos", () => {
-  assert.match(indexHtml, /id="btn-automacao-usuarios"/, "deve ter id btn-automacao-usuarios");
-  assert.match(indexHtml, /data-automacao-rotina="usuarios"/, "deve ter data-automacao-rotina='usuarios'");
-  assert.match(indexHtml, /data-on-click="iniciarRotinaAutomacao"/, "deve ter data-on-click='iniciarRotinaAutomacao'");
-  assert.match(indexHtml, /data-args='\["usuarios"\]'/, "deve passar ['usuarios'] nos args");
-  assert.match(indexHtml, /<use href="#i-users">/, "deve usar o ícone users");
-  assert.match(indexHtml, /<h3 class="[^"]*" id="ck-verificacao-titulo">Verificar usuários<\/h3>/, "deve exibir o rótulo Verificar usuários");
-  assert.match(indexHtml, /<option value="usuarios">Verificar usuários<\/option>/, "deve ter opção no filtro de histórico");
+test("o cartão de verificar usuários é desenhado pelo React com os atributos do HTML antigo", () => {
+  const cartao = componentes.match(/\{ id: "usuarios"[^\n]*\}/)?.[0];
+  assert.ok(cartao, "cartão usuarios na lista de cartões");
+  assert.match(cartao, /icone: "i-users"/, "deve usar o ícone users");
+  assert.match(cartao, /nome: "Verificar usuários"/, "deve exibir o rótulo Verificar usuários");
+  assert.match(cartao, /idTitulo: "ck-verificacao-titulo"/);
+  assert.match(cartao, /idDica: "tip-verificar-usuarios"/);
+  // O botão sai do mesmo molde das outras rotinas: id, data-automacao-rotina, data-on-click e data-args.
+  assert.match(componentes, /id=\{`btn-automacao-\$\{cartao\.id\}`\} data-automacao-rotina=\{cartao\.id\}/);
+  assert.match(componentes, /data-on-click="iniciarRotinaAutomacao" data-args=\{args\(cartao\.id\)\}/);
+  // O HTML montado só traz o ponto de montagem: nada do cartão fica duplicado no HTML estático.
+  assert.doesNotMatch(indexHtml, /id="btn-automacao-usuarios"/);
+  assert.doesNotMatch(indexHtml, /ck-verificacao-titulo/);
 });
 
-test("iniciarRotinaAutomacao('usuarios') envia a rotina usuarios para o endpoint de execução", async t => {
-  t.after(() => {
-    delete global.document;
-    delete global.window;
-  });
-
-  const chamadas = [];
-  const toasts = [];
-  const elemento = {
-    setAttribute() {},
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    classList: { toggle() {} },
-    removeAttribute() {},
-    hidden: false,
-    textContent: "",
-    replaceChildren() {},
-    append() {},
-    appendChild() {},
-    disabled: false,
-    dataset: {},
-  };
-
-  global.document = {
-    getElementById: () => elemento,
-    querySelector: () => elemento,
-    querySelectorAll: () => [],
-    visibilityState: "visible",
-  };
-  global.window = {
-    clearTimeout() {},
-    setTimeout: () => 0,
-  };
-
-  const app = {
-    apiFetch: async (url, opcoes) => {
-      chamadas.push({ url, opcoes });
-      if (url === "/api/automacao/executar") {
-        return { estado: "em_andamento", rotina: "usuarios", inicio: new Date().toISOString() };
-      }
-      return { estado: "em_andamento", rotina: "usuarios", inicio: new Date().toISOString(), log: { linhas: [], offset: 0 } };
-    },
-    showToast: (mensagem, tipo) => toasts.push([mensagem, tipo]),
-  };
-  const dom = { createTextElement: () => elemento };
-
-  const feature = createChromeAutomation({ app, dom });
-  await feature.iniciarRotinaAutomacao("usuarios");
-
-  const execucao = chamadas.find(c => c.url === "/api/automacao/executar");
-  assert.ok(execucao, "deve ter chamado /api/automacao/executar");
-  assert.equal(execucao.opcoes.method, "POST");
-  assert.deepEqual(JSON.parse(execucao.opcoes.body), { rotina: "usuarios" });
-  assert.ok(toasts.some(([msg, tipo]) => msg.includes("Verificar usuários iniciada") && tipo === "success"));
+test("a lista de rotinas e o filtro do histórico incluem Verificar usuários", () => {
+  assert.equal(ROTINAS.usuarios, "Verificar usuários");
+  assert.ok(ROTINAS_DOS_CARTOES.includes("usuarios"));
+  assert.match(componentes, /const ROTINAS_DO_FILTRO = \[[^\]]*"usuarios"[^\]]*\] as const;/);
+  assert.match(componentes, /ROTINAS_DO_FILTRO\.map\(rotina => <option key=\{rotina\} value=\{rotina\}>\{ROTINAS\[rotina\]\}<\/option>\)/);
 });
 
-test("atalho 'Ver backups no Resumo': aparece ao concluir inventários ou rotina completa e some ao iniciar outra rotina", async t => {
-  t.after(() => {
-    delete global.document;
-    delete global.window;
-  });
-  const generico = () => ({
-    setAttribute() {}, querySelector: () => null, querySelectorAll: () => [], classList: { toggle() {} }, removeAttribute() {},
-    hidden: false, textContent: "", replaceChildren() {}, append() {}, appendChild() {}, disabled: false, dataset: {},
-  });
-  const botao = { ...generico(), hidden: true };
-  const outros = generico();
-  global.document = {
-    getElementById: id => (id === "automacao-ver-backups" ? botao : (id === "automacao-log" ? null : outros)),
-    querySelector: () => outros, querySelectorAll: () => [], visibilityState: "visible",
+test("iniciar usuarios envia só { rotina } por POST e avisa 'Verificar usuários iniciada'", () => {
+  const iniciar = acoes.slice(acoes.indexOf("export async function iniciarRotinaAutomacao"), acoes.indexOf("export async function cancelarRotinaAutomacao"));
+  assert.match(iniciar, /"\/api\/automacao\/executar"/);
+  assert.match(iniciar, /method: "POST"/);
+  assert.match(iniciar, /body: JSON\.stringify\(\{ rotina \}\)/);
+  assert.match(iniciar, /showToast\?\.\(`\$\{ROTINAS\[rotina\]\} iniciada\.`, "success"\)/);
+});
+
+test("atalho 'Ver backups no Resumo': aparece ao concluir inventários ou rotina completa e some ao iniciar outra rotina", () => {
+  assert.match(componentes, /id="automacao-ver-backups" className="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="abrirPainelCockpit" data-args=\{args\("comparacao", "backups"\)\} hidden=\{!e\.verBackups\}>Ver backups no Resumo<\/button>/);
+  assert.doesNotMatch(indexHtml, /id="automacao-ver-backups"/);
+  assert.match(acoes, /const verBackups = verBackupsDepois\(\{ emAndamento, estavaAtivo, rotinaAnterior, statusUltima: dados\.ultima\?\.status \}\);\s*if \(verBackups !== null\) mudar\(\{ verBackups \}\);/);
+
+  let visivel = false; // o botão nasce escondido (verBackups: false em estado.ts)
+  let ativa = false;
+  let rotina = "";
+  const passo = (emAndamento, rotinaDoPasso, status) => {
+    const novo = verBackupsDepois({ emAndamento, estavaAtivo: ativa, rotinaAnterior: rotina, statusUltima: status });
+    if (novo !== null) visivel = novo;
+    ativa = emAndamento;
+    rotina = emAndamento ? rotinaDoPasso : rotina;
   };
-  global.window = { clearTimeout() {}, setTimeout: () => 0 };
-  let proximo = {};
-  const app = {
-    apiFetch: async url => (url.startsWith("/api/automacao/estado") ? proximo : {}),
-    showToast() {},
-  };
-  const feature = createChromeAutomation({ app, dom: { createTextElement: () => outros } });
-  const passo = async dados => { proximo = { log: { linhas: [], offset: 0 }, ...dados }; await feature.atualizarEstadoAutomacao(); };
-  const andamento = rotina => ({ estado: "em_andamento", rotina, inicio: "2026-11-12T09:00:00-03:00" });
-  const fim = (rotina, status) => ({ estado: "livre", ultima: { id: `${rotina}-${status}`, rotina, status } });
+  const andamento = nome => passo(true, nome, undefined);
+  const fim = (nome, status) => passo(false, nome, status);
 
-  await passo(fim("os", "concluido"));
-  assert.equal(botao.hidden, true, "sem execução observada, continua escondido");
-
-  await passo(andamento("os"));
-  await passo(fim("os", "concluido"));
-  assert.equal(botao.hidden, true, "rotina de OS não mostra o atalho");
-
-  await passo(andamento("inventarios"));
-  assert.equal(botao.hidden, true, "em andamento não mostra");
-  await passo(fim("inventarios", "falha"));
-  assert.equal(botao.hidden, true, "inventários com falha não mostra");
-
-  await passo(andamento("inventarios"));
-  await passo(fim("inventarios", "concluido"));
-  assert.equal(botao.hidden, false, "inventários concluídos mostram o atalho");
-
-  await passo(andamento("os"));
-  assert.equal(botao.hidden, true, "nova rotina esconde o atalho");
-
-  await passo(andamento("ambas"));
-  await passo(fim("ambas", "concluido"));
-  assert.equal(botao.hidden, false, "rotina completa concluída mostra o atalho");
-  await passo(andamento("usuarios"));
-  assert.equal(botao.hidden, true);
+  fim("os", "concluido");
+  assert.equal(visivel, false, "sem execução observada, continua escondido");
+  andamento("os");
+  fim("os", "concluido");
+  assert.equal(visivel, false, "rotina de OS não mostra o atalho");
+  andamento("inventarios");
+  assert.equal(visivel, false, "em andamento não mostra");
+  fim("inventarios", "falha");
+  assert.equal(visivel, false, "inventários com falha não mostra");
+  andamento("inventarios");
+  fim("inventarios", "concluido");
+  assert.equal(visivel, true, "inventários concluídos mostram o atalho");
+  andamento("os");
+  assert.equal(visivel, false, "nova rotina esconde o atalho");
+  andamento("ambas");
+  fim("ambas", "concluido");
+  assert.equal(visivel, true, "rotina completa concluída mostra o atalho");
+  andamento("usuarios");
+  assert.equal(visivel, false, "verificar usuários em andamento esconde o atalho");
 });
