@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const createUpload = require('../../static/js/features/inventory-upload.js');
+const { criarImportacaoPlanilhas } = require('../../frontend/src/paineis/importacao-planilhas/estado.ts');
 
 test('F7 mantém o download e envia o mesmo Blob e nome; erro UX não invalida exportação', async () => {
   const blob = new Blob(['bytes da exportação']);
@@ -14,7 +14,7 @@ test('F7 mantém o download e envia o mesmo Blob e nome; erro UX não invalida e
     if (url === '/api/exportar-equipamentos') return { headers: { get: () => 'attachment; filename="nome-gerado.xlsx"' }, blob: async () => blob };
     throw new Error('Chrome ocupado');
   } };
-  await createUpload({ app, appState: {} }).exportarEquipamentosAtualizados();
+  await criarImportacaoPlanilhas({ app, appState: {}, apiFetch: app.apiFetch }).exportarEquipamentosAtualizados();
   assert.deepEqual(downloads, ['nome-gerado.xlsx']);
   assert.equal(chamadas[1][0], '/api/automacao/ux-apelidos');
   const arquivo = chamadas[1][1].body.get('file');
@@ -35,7 +35,7 @@ test('F7 identifica respostas HTTP que comprovam que o envio não foi iniciado',
     if (url === '/api/exportar-equipamentos') return { headers: { get: () => '' }, blob: async () => new Blob(['xlsx']) };
     throw Object.assign(new Error('Chrome ocupado'), { status: 409 });
   } };
-  await createUpload({ app, appState: {} }).exportarEquipamentosAtualizados();
+  await criarImportacaoPlanilhas({ app, appState: {}, apiFetch: app.apiFetch }).exportarEquipamentosAtualizados();
   assert.match(toasts.at(-1)[0], /não iniciada/i);
   assert.doesNotMatch(toasts.at(-1)[0], /resultado incerto|F4/i);
 });
@@ -45,6 +45,6 @@ test('F7 entrega a execução aceita ao acompanhamento existente', async () => {
   let acompanhado;
   const app = { showToast() {}, acompanharExecucaoAutomacao: dados => { acompanhado = dados; }, apiFetch: async url =>
     url === '/api/exportar-equipamentos' ? { headers: { get: () => '' }, blob: async () => new Blob(['xlsx']) } : aceito };
-  await createUpload({ app, appState: {} }).exportarEquipamentosAtualizados();
+  await criarImportacaoPlanilhas({ app, appState: {}, apiFetch: app.apiFetch }).exportarEquipamentosAtualizados();
   assert.equal(acompanhado, aceito);
 });

@@ -14,6 +14,8 @@ const { criarPesquisaEquipamento } = require("../../../frontend/src/paineis/pesq
 const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/transporte/estado.ts");
 const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
 const { criarAcoesCartaoEquipamento } = require("../../../frontend/src/paineis/cartao-equipamento/estado.ts");
+const { criarRegrasChamados } = require("../../../frontend/src/paineis/regras-chamados/regras.ts");
+const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/importacao-planilhas/estado.ts");
 
 const { appScripts, appSource } = require("./app-sources.cjs");
 
@@ -201,6 +203,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
   }
 
   mountReactPanels(context, document, window, effects, fetchApi);
+  mountReactPanelsBf2(context, window);
 
   function syncAppToWindow() {
     for (const name of Object.keys(context)) {
@@ -307,6 +310,19 @@ function mountReactPanels(context, document, window, effects, fetchApi) {
       }]));
     },
     loggedUserMarkers,
+  });
+}
+
+// Painéis do BF2 (regras-chamados e importacao-planilhas): o main.tsx real publica o retorno de cada montar(); aqui
+// o harness chama as mesmas fábricas de regras.ts e estado.ts, sem o JSX.
+function mountReactPanelsBf2(context, window) {
+  // O código React roda no global do Node, não no vm: o FormData falso precisa estar aqui para os testes lerem os campos.
+  globalThis.FormData = FakeFormData;
+  window.SimpressReact["regras-chamados"] = criarRegrasChamados(window.SimpressDomUtils(window.document));
+  window.SimpressReact["importacao-planilhas"] = criarImportacaoPlanilhas({
+    app: window,
+    appState: context.SimpressApp.state,
+    apiFetch: requestApi,
   });
 }
 

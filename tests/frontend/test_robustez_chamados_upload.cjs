@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const createInventoryUpload = require("../../static/js/features/inventory-upload.js");
+const { criarImportacaoPlanilhas } = require("../../frontend/src/paineis/importacao-planilhas/estado.ts");
 
 function criarElementoFalso() {
   return {
@@ -8,6 +8,7 @@ function criarElementoFalso() {
     setAttribute(nome, valor) { this.attributes[nome] = String(valor); },
     removeAttribute(nome) { delete this.attributes[nome]; },
     replaceChildren(...filhos) { this.children = filhos; },
+    classList: { add() {}, remove() {}, toggle() {} },
     addEventListener() {}, querySelector: () => null, querySelectorAll: () => [],
   };
 }
@@ -34,11 +35,8 @@ test("botão de envio monta ícone e mensagem como nós, sem innerHTML", async (
   globalThis.lucide = { createIcons: opcoes => chamadasIcones.push(opcoes) };
   globalThis.FormData = class { append() {} };
   let falhar;
-  const app = {
-    apiFetch: () => new Promise((_, rejeitar) => { falhar = rejeitar; }),
-    limparPreviaUploadPlanilhas() {},
-  };
-  const upload = createInventoryUpload({ app, appState: {}, inventoryOperationKey: () => "k" });
+  const apiFetch = () => new Promise((_, rejeitar) => { falhar = rejeitar; });
+  const upload = criarImportacaoPlanilhas({ app: {}, appState: {}, apiFetch, inventoryOperationKey: () => "k" });
   const emAndamento = upload.previsualizarPlanilhas();
 
   const [icone, texto] = botao.children;
