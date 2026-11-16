@@ -2,10 +2,8 @@ const test = require("node:test");
 const {
   assert,
   appHtml,
-  FakeElement,
   createAppHarness,
   apiResponse,
-  setButton,
   priorEquipment,
 } = require("./support/inventory-harness.cjs");
 
@@ -23,98 +21,22 @@ async function createHarnessWithClientData() {
   return harness;
 }
 
-const restorePreview = {
-  tipo_evento: "atualizacao",
-  evento_horario: "2026-10-03T10:00:00-03:00",
-  preview_token: "a".repeat(64),
-  arquivos_backup: {
-    endpoint: { nome: "endpoint-anterior.xlsx", registros: 10 },
-    detalhes: { nome: "detalhes-anterior.xlsx", registros: 12 },
-  },
-  arquivos_atuais: {
-    endpoint: { presente: true, nome: "endpoint-atual.xlsx" },
-    detalhes: { presente: true, nome: "detalhes-atual.xlsx" },
-  },
-};
-
-test("successful restoration clears old transfer data and refreshes inventory views", async () => {
-  const calls = [];
-  const harness = createAppHarness(async (url, options = {}) => {
-    calls.push({ url, options });
-    if (url.endsWith("/restauracao")) return apiResponse(restorePreview);
-    if (url.endsWith("/restaurar")) {
-      assert.equal(JSON.parse(options.body).preview_token, restorePreview.preview_token);
-      return apiResponse({ evento: { total_equipamentos_carregados: 12, desfazer_disponivel: true } });
-    }
-    throw new Error(`Chamada API inesperada: ${url}`);
-  });
+// A restauração em si (prévia, confirmação, retentativa com a mesma chave, recusa) vive no React
+// (frontend/src/paineis/historico-comparacoes/) e é testada no navegador: tests/e2e/react-g9.spec.cjs.
+// Aqui fica só o que ela chama do código antigo: invalidar a seleção e os textos de transporte.
+test("restoration invalidation clears old transfer data and the selected equipment", async () => {
+  const harness = createAppHarness(async (url) => { throw new Error(`Chamada API inesperada: ${url}`); });
   harness.selectEquipment(priorEquipment);
   harness.element("textarea-resumo-preview").value = "Resumo antigo";
   harness.element("textarea-texto-transporte").value = "Transporte antigo";
-  const button = new FakeElement("restore-button");
-  setButton(harness, button, "Restaurar versão anterior");
 
-  await harness.run(`restaurarHistoricoComparacao({ id: "evento-ficticio", horario: "2026-10-03T10:00:00-03:00" }, restoreButton)`);
+  await harness.run("invalidarDadosEquipamentoAposRestauracao()");
 
-  assert.deepEqual(calls.map(call => call.options.method || "GET"), ["GET", "POST"]);
-  assert.equal(harness.effects.confirmations.length, 1);
-  assert.match(harness.effects.confirmations[0], /endpoint-anterior\.xlsx/);
   assert.equal(harness.run("SimpressApp.state.currentEquipamento"), null);
   assert.equal(harness.element("input-serial").value, "");
   assert.equal(harness.element("retirada-endereco").value, "");
   assert.equal(harness.element("textarea-resumo-preview").value, "");
   assert.equal(harness.element("textarea-texto-transporte").value, "");
-  assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "historico"]);
-  assert.equal(harness.effects.toasts.at(-1).type, "success");
-  assert.match(harness.effects.toasts.at(-1).message, /12 equipamentos carregados/);
-  assert.equal(button.disabled, false);
-  assert.equal(button.textContent, "Restaurar versão anterior");
-});
-
-test("failed restoration leaves the current selection intact and presents the error", async () => {
-  const harness = createAppHarness(async (url, options = {}) => {
-    if (url.endsWith("/restauracao")) return apiResponse(restorePreview);
-    if (url.endsWith("/restaurar")) {
-      return apiResponse({ detail: "Backup fictício indisponível" }, { status: 409, ok: false });
-    }
-    throw new Error(`Chamada API inesperada: ${url}`);
-  });
-  harness.selectEquipment(priorEquipment);
-  const button = new FakeElement("restore-button");
-  setButton(harness, button, "Restaurar versão anterior");
-
-  await harness.run(`restaurarHistoricoComparacao({ id: "evento-ficticio", horario: "2026-10-03T10:00:00-03:00" }, restoreButton)`);
-
-  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-ANTIGA");
-  assert.equal(harness.element("retirada-endereco").value, "Rua antiga, 10");
-  assert.equal(harness.effects.refreshes.length, 0);
-  assert.equal(harness.effects.toasts.at(-1).message, "Backup fictício indisponível");
-  assert.equal(harness.effects.toasts.at(-1).type, "error");
-  assert.equal(button.disabled, false);
-  assert.equal(button.textContent, "Restaurar versão anterior");
-});
-
-test("restoration retry retains the original key and preview after a lost response", async () => {
-  const requests = [];
-  let previews = 0;
-  const harness = createAppHarness(async (url, options = {}) => {
-    if (url.endsWith("/restauracao")) {
-      previews += 1;
-      return apiResponse({ ...restorePreview, preview_token: String(previews).repeat(64) });
-    }
-    requests.push(options);
-    if (requests.length === 1) throw new Error("Resposta perdida");
-    return apiResponse({ evento: { total_equipamentos_carregados: 1, desfazer_disponivel: true } });
-  });
-  setButton(harness, new FakeElement(), "Restaurar versão anterior");
-  const restore = 'restaurarHistoricoComparacao({ id: "retry-fixture" }, restoreButton)';
-  await harness.run(restore);
-  await harness.run(restore);
-  assert.equal(requests[1].headers["Idempotency-Key"], requests[0].headers["Idempotency-Key"]);
-  assert.equal(requests[1].body, requests[0].body);
-  await harness.run(restore);
-  assert.notEqual(requests[2].headers["Idempotency-Key"], requests[1].headers["Idempotency-Key"]);
-  assert.notEqual(requests[2].body, requests[1].body);
 });
 
 test("copies the selected location postal code and installation CNPJ with the fixed billing CNPJ", async () => {

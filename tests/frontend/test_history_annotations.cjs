@@ -17,8 +17,10 @@ test("explains that history annotations belong to one row in one update", () => 
 });
 
 test("shows synchronized annotations on a clone without local comparison history", () => {
+  // O cartão do histórico de planilhas (botão "Consultar anotações") vive no React.
+  const listaReact = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "historico-comparacoes", "lista.tsx"), "utf8");
   assert.match(appScript, /somente_anotacoes_sincronizadas/);
-  assert.match(appScript, /Consultar anotações/);
+  assert.match(listaReact, /Consultar anotações/);
   assert.match(appScript, /Este clone contém as anotações sincronizadas/);
 });
 

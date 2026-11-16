@@ -426,7 +426,8 @@
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
-      <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal">
+      <!-- O React (frontend/src/paineis/relatorio-mensal) redesenha o conteúdo deste <form> ao montar; o HTML abaixo é a cópia estática que mantém os IDs lidos por cockpit-tool-panels.js (test_dom_id_coverage). -->
+      <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal" data-react-painel="relatorio-mensal">
         <div>
           <label for="relatorio-mensal-mes" class="block text-xs text-fg-subtle mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
           <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="tip-relatorio-mensal" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
@@ -451,7 +452,8 @@
           </h3>
           <p id="total-historico-comparacoes" class="text-xs text-fg-subtle mt-1">0 registros</p>
         </div>
-        <div class="flex flex-wrap items-end justify-end gap-2 shrink-0">
+        <!-- React (frontend/src/paineis/historico-comparacoes) troca o conteúdo deste bloco ao montar; o HTML abaixo é a cópia estática de antes do React. -->
+        <div class="flex flex-wrap items-end justify-end gap-2 shrink-0" data-react-painel="historico-comparacoes">
           <div class="flex flex-col gap-1 shrink-0">
             <label for="data-exportar-historico-comparacoes" class="text-xs text-fg-tertiary">
               Data para exportar

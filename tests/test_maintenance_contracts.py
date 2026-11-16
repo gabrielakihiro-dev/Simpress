@@ -124,6 +124,12 @@ def _frontend_script() -> str:
     return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
+def _react_panels_source() -> str:
+    """Código TS/TSX dos painéis já migrados para React."""
+    root = PROJECT_ROOT / "frontend" / "src" / "paineis"
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(root.rglob("*.ts*")))
+
+
 class MaintenanceContractTests(unittest.TestCase):
     def test_both_inventory_upload_routes_share_the_request_size_limit(self):
         for path in main.INVENTORY_UPLOAD_PATHS:
@@ -272,8 +278,9 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertGreater(_css_layer("#toast-container"), _css_layer(".modal-overlay"))
 
     def test_excel_exports_show_only_success_confirmation(self):
-        script = _frontend_script()
-        # A sétima exportação (Chamados, Exportar Excel) é do painel React desde o G8; o texto aprovado não muda.
+        # Painéis migrados para React (frontend/src/paineis) também emitem o texto aprovado.
+        script = _frontend_script() + "\n" + _react_panels_source()
+        # A exportação de Chamados (G8) usa showToast?.(...) e é contada à parte abaixo; o texto aprovado não muda.
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
             6,
@@ -751,9 +758,11 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("limparSelecaoEquipamento()", invalidation)
         self.assertIn("fecharAutocomplete()", invalidation)
 
-        restore_start = script.index("async function restaurarHistoricoComparacao")
-        restore_end = script.index("async function consultarHistoricoComparacao", restore_start)
-        restore = script[restore_start:restore_end]
+        # A restauração vive no store React do histórico de planilhas (frontend/src/paineis/historico-comparacoes/).
+        store = (app_config.BASE_DIR / "frontend/src/paineis/historico-comparacoes/estado.ts").read_text(encoding="utf-8")
+        restore_start = store.index("export async function restaurarHistoricoComparacao")
+        restore_end = store.index("// `indicar` liga e desliga", restore_start)
+        restore = store[restore_start:restore_end]
         for refresh in (
             "invalidarDadosEquipamentoAposRestauracao()",
             "carregarEstatisticas()",

@@ -67,11 +67,12 @@ jobs:
         # Divisão pelo tempo de relógio de cada spec nesse run (desktop + mobile; react-g10 estimado em ~2 min):
         # previsão de job 1 ~12,4 · 2 ~12,3 · 3 ~12,5 · 4 ~12,7 · 5 ~12,3 · 6 ~13,5 · 7 ~12,4 · 8 ~12,3 · 9 ~12,6 · 10 ~12,4.
         # react-g7b.spec.cjs (G7b, ~1,3 min local) entrou no 6, o menor (~12,2 antes dele).
+        # react-g9.spec.cjs (G9, ~1 min local) entrou no 1, o menor no run 43819394801 do G10 (8,4 min).
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         include:
           - shard: 1
             specs: >-
-              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs
+              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs react-g9.spec.cjs
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs
