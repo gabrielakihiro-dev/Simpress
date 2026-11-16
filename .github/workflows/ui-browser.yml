@@ -73,6 +73,7 @@ jobs:
           - shard: 2
             specs: >-
               assistente.spec.cjs color-contrast.spec.cjs info-tips-ferramentas.spec.cjs
+              react-g10.spec.cjs
           - shard: 3
             specs: >-
               info-tips-todos.spec.cjs termos.spec.cjs ticket-requests.spec.cjs
