@@ -360,6 +360,13 @@ class MaintenanceContractTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotRegex(text, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)", path.name)
             self.assertNotRegex(text, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;", path.name)
+        # Desde o Dia 3 (G7b) o Assistente também vive em React: o painel segue as mesmas duas regras.
+        painel_assistente = sorted((app_config.BASE_DIR / "frontend" / "src" / "paineis" / "assistant-chat").glob("*.ts*"))
+        self.assertTrue(painel_assistente)
+        for path in painel_assistente:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)", path.name)
+            self.assertNotRegex(text, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;", path.name)
 
         # O código React (fonte e bundle gerado) segue as mesmas regras de privacidade do JS antigo.
         react_sources = sorted((app_config.BASE_DIR / "frontend" / "src").rglob("*.ts*"))
