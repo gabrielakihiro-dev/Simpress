@@ -89,7 +89,8 @@ Pedido do usuário (14/11/2026): migrar o site para TypeScript + React. Escolha 
   | G4 | `transfer-form` 893, `regional-contacts` 708, `ux-chamados` 202, `entra-users` 89 (1892) | `currentEquipamento`, `equipamentoSelectionRevision`, `retiradaCidadeSelecionada`, `unidadesList` | sim |
   | G5 | `comparison-result` 850, `dashboard` 674, `comparison-history` 563, `backups-regionais` 349, `monthly-report` 87 (2523) | `currentEquipamento` | sim |
   | G6 | `lembretes` 990, `coverage` 569, `termos` 451 (2010) | nenhum | sim |
-  | G7 | `assistant-chat` 1446, `chrome-automation` 837, `outlook-email` 720, `ux-ticket` 421, `ticket-rules` 234 (3658) | `currentEquipamento`, `unidadesList` | sim |
+  | G7 | `chrome-automation` 837, `outlook-email` 720, `ux-ticket` 421, `ticket-rules` 234 (2212) | `currentEquipamento`, `unidadesList` | sim |
+  | G7b | `assistant-chat` 1446 (widget global e cartão de confirmação; saiu do G7 por tamanho) | nenhum | sim |
   | Bloco final | `app-shell` 140, `cockpit-tool-panels` 2426 (revisão de integração, 15/11/2026) | nenhum | não |
   | Piloto (já migrado, Bloco 3) | `resumo-ativos` (ponte de 19 linhas; cartão em `frontend/src/paineis/resumo-ativos/`) | nenhum | não |
 
@@ -111,7 +112,7 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - Dia 1: Bloco 2 e piloto, em sequência.
   - Dia 2: grupos G1 a G6, uma sessão por grupo, em paralelo. Só começa depois que o Dia 1 terminar, com os PRs do Bloco 2 e do piloto mesclados no `main`.
   - Fim do Dia 2: revisão de integração (ver abaixo), só depois que todas as sessões de grupo abrirem PR e o Antigravity mesclar os PRs.
-  - Dia 3: grupo final (G7) sozinho; depois G8, G9 e G10 (módulos adiados do Dia 2, ver "Adiados do Dia 2"), um de cada vez; depois o Bloco final.
+  - Dia 3: grupo final (G7) sozinho; depois o G7b (Assistente); depois G8, G9 e G10 (módulos adiados do Dia 2, ver "Adiados do Dia 2"), um de cada vez; depois o Bloco final.
   - Dia 4: revisão geral e correção (ver "Dia 4").
 - **Pendências:** todo PR da migração tem no corpo a seção "Pendências para o Dia 4" (ou "nenhuma"). Ela lista: falha de CI ou teste que apareceu no caminho, item da revisão ponytail ou do revisor não corrigido, falha que bateu o teto de 3 ciclos e atalho com limite conhecido.
 - **Merge:** feito pelo **Antigravity**, não pelas sessões do Claude. As sessões nunca fazem merge nem ligam auto-merge. Cada PR deixa no corpo `Depende de: #N` (ou "nenhum") e só é marcado pronto (fora de rascunho) com a CI verde. O Antigravity mescla só PR verde, sem conflito, depois das dependências.
@@ -132,7 +133,8 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
   - G4 Transporte e contatos: `transfer-form`, `regional-contacts`, `ux-chamados`, `entra-users`.
   - G5 Resumo e comparação: `dashboard`, `backups-regionais`, `comparison-result`, `comparison-history`, `monthly-report` (`resumo-ativos` saiu: migrou no piloto).
   - G6 Cobertura e agenda: `coverage`, `termos`, `lembretes`.
-  - G7 final (envio real e Assistente): `assistant-chat`, `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
+  - G7 final (envio real): `outlook-email`, `ux-ticket`, `ticket-rules`, `chrome-automation`.
+  - G7b Assistente: `assistant-chat` (saiu do G7 por tamanho; vem depois do G7 e antes do G8, sozinho, porque trata o cartão de confirmação de envio).
   - `app-shell` vai para o Bloco final (decisão do piloto: é a casca da página, que o React só assume no fim).
   - `cockpit-tool-panels` também vai para o Bloco final (revisão de integração, 15/11/2026): é o roteador das ferramentas e chama ações de quase todos os grupos; o G2 só tirou dele o bloco de Unidades.
   - **Adiados do Dia 2** (decisão da revisão de integração, 15/11/2026; motivos nas "Pendências para o Dia 4" de cada PR). Os grupos do Dia 2 deixaram estes módulos no código antigo porque outros módulos antigos leem IDs deles ou chamam funções síncronas deles. Vão para o Dia 3, depois do G7, em três grupos, **um de cada vez** (cada um parte do `main` com o anterior mesclado), porque os IDs e as funções cruzam os grupos e o G7 usa `currentEquipamento` e `unidadesList`:
