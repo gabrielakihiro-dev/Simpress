@@ -1,6 +1,14 @@
+// Chamados (aba Chamados, "Importação e versões", e chamados abertos da Home). Desde o G8 o painel vive em
+// frontend/src/paineis/cockpit-chamados/ e o comportamento (versões, comparação, importar, excluir antigas, exportar,
+// Home com corrida de respostas e consulta parcial) é testado no navegador: tests/e2e/react-g8.spec.cjs. As regras
+// puras têm teste próprio: test_cockpit_chamados_puro.cjs. Aqui ficam a triagem (ticket-rules.js), o registro, a ponte
+// do código antigo, abrirGestaoChamadosCockpit (DOM puro, síncrona) e o HTML montado.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
+const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
 const createTicketRules = require("../../static/js/features/ticket-rules.js");
 const createCockpitChamados = require("../../static/js/features/cockpit-chamados.js");
 
@@ -27,300 +35,127 @@ test("grupoTriagemChamado separa ativos em 3+ dias, sem data e atualizados, e ig
   assert.equal(rules.correspondeTriagemChamado({ oracle: [] }, ""), true);
 });
 
-function criarAmbiente({ respostas = {}, confirmar = true } = {}) {
-  const doc = createFakeDocument();
-  global.document = doc;
-  global.window = { matchMedia: () => ({ matches: true }), URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} }, setTimeout: () => 0 };
-  const el = {};
-  for (const [id, tag] of [
-    ["cockpit-tickets-version", "select"], ["cockpit-tickets-delete-old", "button"], ["cockpit-tickets-export", "button"],
-    ["cockpit-tickets-manage-version", "span"], ["cockpit-tickets-sources", "p"], ["cockpit-tickets-evolution", "div"],
-    ["cockpit-tickets-form", "form"], ["cockpit-tickets-import", "button"], ["cockpit-tickets-import-status", "p"],
-    ["cockpit-tickets-file-simpress", "input"], ["cockpit-tickets-file-oracle", "input"], ["cockpit-tickets-manage-panel", "details"],
-    ["cockpit-tickets-search", "input"], ["cockpit-tickets-attention", "input"],
-  ]) {
-    el[id] = doc.createElement(tag);
-    el[id].setAttribute("id", id);
-    doc.body.append(el[id]);
-  }
-  el["cockpit-tickets-delete-old"].textContent = "Excluir importações antigas";
-  el["cockpit-tickets-export"].textContent = "Exportar Excel";
-  el["cockpit-tickets-search"].value = "";
-  el["cockpit-tickets-attention"].checked = false;
+const root = path.resolve(__dirname, "../..");
+const painelReact = path.join(root, "frontend/src/paineis/cockpit-chamados");
+const lido = arquivo => fs.readFileSync(path.join(staticDir, arquivo), "utf8");
+
+const ACOES_REACT = [
+  "sincronizarGestaoChamadosCockpit", "selecionarVersaoChamadosCockpit", "excluirImportacoesAntigasChamadosCockpit",
+  "exportarChamadosCockpit", "atualizarChamadosAbertosHome",
+];
+
+// Ponte falsa: guarda o que o módulo pediu e devolve, para cada ação, o que o teste mandar.
+function ponteFalsa(acao) {
   const chamadas = [];
-  const toasts = [];
-  const eventos = [];
-  doc.defaultView = { CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } } };
-  doc.dispatchEvent = evento => { eventos.push(evento); return true; };
-  const app = {
-    apiFetch: async (url, options = {}) => {
-      chamadas.push([options.method || "GET", url]);
-      const chave = Object.keys(respostas).find(prefixo => url.startsWith(prefixo));
-      return chave ? respostas[chave] : {};
-    },
-    showToast: (mensagem, tipo) => toasts.push([mensagem, tipo]),
-    confirmarAcao: async () => confirmar,
-    carregarProntidao: async () => {},
-  };
-  const gate = { createRequestGate: () => { let atual = 0; return { begin: () => ({ id: ++atual }), isCurrent: id => id === atual }; } };
   const context = {
-    app, transferUtils: gate, ticketRules: createTicketRules(dom),
-    dom: { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } },
-    historyFormat: { formatarHorarioHistorico: valor => `fmt(${valor})` },
+    app: {},
+    ponteReact(painel, nomes) {
+      chamadas.push([painel, nomes]);
+      return Object.fromEntries(nomes.map(nome => [nome, (...argumentos) => acao(nome, ...argumentos)]));
+    },
   };
-  const api = createCockpitChamados(context);
-  Object.assign(app, api);
-  return { api, app, el, chamadas, toasts, eventos };
+  return { chamadas, feature: createCockpitChamados(context) };
 }
 
-const historico = [{ id: "s2", atualizado_em: "2026-10-30", fontes: { simpress: "a.xlsx", oracle: "b.xlsx" } }, { id: "s1", atualizado_em: "2026-10-29" }];
-
-test("sincronizar monta versões, fontes e botões a partir do relatório da tabela", async () => {
-  const { api, el } = criarAmbiente({ respostas: { "/api/operacoes/chamados/evolucao": { contagens: { novos: 1, alterados: 2, iguais: 3, ausentes_arquivo: 0 }, mudancas: { novos: ["SN-1"] } } } });
-  try {
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", atualizado_em: "2026-10-30", historico, fontes: { simpress: { arquivo: "a.xlsx" } } });
-    const opcoes = el["cockpit-tickets-version"].children;
-    assert.deepEqual(opcoes.map(opcao => opcao.value), ["", "s2", "s1"]);
-    assert.equal(el["cockpit-tickets-version"].value, "s2");
-    assert.equal(el["cockpit-tickets-manage-version"].textContent, "Atualizado fmt(2026-10-30)");
-    assert.equal(el["cockpit-tickets-sources"].textContent, "Simpress: a.xlsx · Oracle: aguardando importação");
-    assert.equal(el["cockpit-tickets-delete-old"].disabled, false, "com 2 versões dá para excluir as antigas");
-    assert.equal(el["cockpit-tickets-export"].disabled, false);
-    await new Promise(resolve => setImmediate(resolve));
-    assert.match(el["cockpit-tickets-evolution"].textContent, /1 novas · 2 alteradas · 3 sem mudança/);
-
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s1", atualizado_em: "2026-10-29", historico: [historico[1]] });
-    assert.equal(el["cockpit-tickets-delete-old"].disabled, true, "uma versão só: nada a excluir");
-    api.sincronizarGestaoChamadosCockpit({ historico: [] });
-    assert.equal(el["cockpit-tickets-manage-version"].textContent, "Nenhuma importação");
-    assert.equal(el["cockpit-tickets-export"].disabled, true);
-  } finally { delete global.document; delete global.window; }
+test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e com o painel React ao lado", () => {
+  assert.match(lido("app-entry.js"), /^import "\.\/js\/features\/cockpit-chamados\.js";$/m);
+  assert.match(lido("app.js"), /"cockpitChamados",/);
+  assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
+  assert.ok(fs.existsSync(path.join(painelReact, "cockpit-chamados-puro.ts")));
 });
 
-test("exportar envia versão, busca e atenção; sem versão avisa e não chama a API", async () => {
-  const { api, el, chamadas, toasts } = criarAmbiente();
-  try {
-    await api.exportarChamadosCockpit();
-    assert.deepEqual(toasts.at(-1), ["Selecione e aguarde o carregamento de uma versão válida antes de exportar.", "error"]);
-    assert.equal(chamadas.length, 0);
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", historico });
-    el["cockpit-tickets-search"].value = " SN-9 ";
-    el["cockpit-tickets-attention"].checked = true;
-    await api.exportarChamadosCockpit().catch(() => {});
-    const url = chamadas.map(([, endereco]) => endereco).find(endereco => endereco.includes("/exportar"));
-    assert.match(url, /snapshot_id=s2/);
-    assert.match(url, /search=SN-9/);
-    assert.match(url, /attention_only=true/);
-    assert.match(url, /stale_days=3/);
-  } finally { delete global.document; delete global.window; }
+test("ponte: o módulo continua publicando as 7 ações e pede ao React só as 5 que ele passou a ter", () => {
+  const { chamadas, feature } = ponteFalsa(async () => {});
+  assert.deepEqual(chamadas, [["cockpit-chamados", ACOES_REACT]]);
+  assert.deepEqual(Object.keys(feature).sort(), [...ACOES_REACT, "abrirGestaoChamadosCockpit", "abrirChamadoSebraeNoF5"].sort());
 });
 
-test("exportar manda por POST as séries da tela; sem lista ou com versão diferente da tela usa o GET", async () => {
-  const { api, app, el } = criarAmbiente();
-  const enviados = [];
-  const apiFetch = app.apiFetch;
-  app.apiFetch = (url, options = {}) => { enviados.push({ url, options }); return apiFetch(url, options); };
-  const relacao = document.createElement("select");
-  relacao.setAttribute("id", "cockpit-tickets-relation");
-  document.body.append(relacao);
-  let series = ["SN-1", "SN-2"];
-  const filtros = [];
-  globalThis.SimpressDataPanels = { seriesFiltradasOs: () => series, filtrarTabelaOs: filtro => filtros.push(filtro) };
-  try {
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", historico });
-    el["cockpit-tickets-search"].value = " Maria ";
-    el["cockpit-tickets-attention"].checked = true;
-    relacao.value = "conferida";
-    await api.exportarChamadosCockpit().catch(() => {});
-    assert.deepEqual(filtros.at(-1), { busca: " Maria " }, "busca ainda na espera de 150 ms é aplicada antes de ler as séries");
-    let envio = enviados.at(-1);
-    assert.equal(envio.url, "/api/operacoes/chamados/exportar");
-    assert.equal(envio.options.method, "POST");
-    assert.equal(envio.options.headers["Content-Type"], "application/json");
-    assert.deepEqual(JSON.parse(envio.options.body), {
-      snapshot_id: "s2", series: ["SN-1", "SN-2"], search: "Maria", relation: "conferida", attention_only: true,
-    });
-    assert.equal(envio.options.responseType, "response");
-
-    relacao.value = "todos";
-    series = [];
-    await api.exportarChamadosCockpit().catch(() => {});
-    assert.deepEqual(JSON.parse(enviados.at(-1).options.body).series, [], "lista vazia segue vazia");
-    assert.equal(JSON.parse(enviados.at(-1).options.body).relation, "");
-
-    series = null;
-    await api.exportarChamadosCockpit().catch(() => {});
-    envio = enviados.at(-1);
-    assert.equal(envio.options.method, undefined, "tabela não carregada: GET antigo");
-    assert.match(envio.url, /exportar\?snapshot_id=s2&stale_days=3&search=Maria&attention_only=true$/);
-
-    series = ["SN-1"];
-    el["cockpit-tickets-version"].value = "s1";
-    api.selecionarVersaoChamadosCockpit();
-    await api.exportarChamadosCockpit().catch(() => {});
-    envio = enviados.at(-1);
-    assert.equal(envio.options.method, undefined, "versão antiga não é a da tela: GET antigo");
-    assert.match(envio.url, /snapshot_id=s1/);
-  } finally { delete globalThis.SimpressDataPanels; delete global.document; delete global.window; }
+test("ponte: cada ação repassa os argumentos ao painel React; criar o módulo não chama o React", async () => {
+  const recebido = [];
+  const { feature } = ponteFalsa(async (nome, ...argumentos) => { recebido.push([nome, ...argumentos]); });
+  assert.deepEqual(recebido, []);
+  const relatorio = { snapshot_id: "s1" };
+  await feature.sincronizarGestaoChamadosCockpit(relatorio);
+  await feature.selecionarVersaoChamadosCockpit("s2");
+  await feature.excluirImportacoesAntigasChamadosCockpit();
+  await feature.exportarChamadosCockpit();
+  await feature.atualizarChamadosAbertosHome("5CG6051BVN");
+  assert.deepEqual(recebido, [
+    ["sincronizarGestaoChamadosCockpit", relatorio],
+    ["selecionarVersaoChamadosCockpit", "s2"],
+    ["excluirImportacoesAntigasChamadosCockpit"],
+    ["exportarChamadosCockpit"],
+    ["atualizarChamadosAbertosHome", "5CG6051BVN"],
+  ]);
 });
 
-test("logo depois de importar, enquanto a tabela recarrega, exportar usa o GET da versão nova", async () => {
-  const relatorio = { snapshot_id: "novo", historico: [{ id: "novo", atualizado_em: "2026-10-31" }] };
-  const { api, el, chamadas } = criarAmbiente({ respostas: { "/api/operacoes/chamados/importar": relatorio } });
-  globalThis.SimpressDataPanels = { seriesFiltradasOs: () => ["SN-ANTIGA"], filtrarTabelaOs() {} };
-  try {
-    el["cockpit-tickets-file-simpress"].files = [{ name: "pedidos.xlsx" }];
-    el["cockpit-tickets-file-oracle"].files = [{ name: "solicitacoes.xlsx" }];
-    enviarFormulario(api, el);
-    await new Promise(resolve => setTimeout(resolve, 5));
-    await api.exportarChamadosCockpit().catch(() => {});
-    assert.deepEqual(chamadas.at(-1), ["GET", "/api/operacoes/chamados/exportar?snapshot_id=novo&stale_days=3"],
-      "as linhas na tela ainda são da versão anterior: não manda as séries delas com a versão nova");
-    api.sincronizarGestaoChamadosCockpit(relatorio);
-    await api.exportarChamadosCockpit().catch(() => {});
-    assert.deepEqual(chamadas.at(-1), ["POST", "/api/operacoes/chamados/exportar"], "tabela recarregada: volta ao POST");
-  } finally { delete globalThis.SimpressDataPanels; delete global.document; delete global.window; }
+test("ponte: selecionarVersaoChamadosCockpit só leva texto; evento do clique ou nada vira undefined (o painel lê o seletor)", async () => {
+  const recebido = [];
+  const { feature } = ponteFalsa(async (nome, ...argumentos) => { recebido.push(argumentos); });
+  await feature.selecionarVersaoChamadosCockpit();
+  await feature.selecionarVersaoChamadosCockpit({ type: "change" });
+  await feature.selecionarVersaoChamadosCockpit("s1");
+  assert.deepEqual(recebido, [[undefined], [undefined], ["s1"]]);
 });
 
-test("excluir importações antigas confirma, chama DELETE e pede recarga da tabela", async () => {
-  const { api, chamadas, toasts, eventos } = criarAmbiente({ respostas: { "/api/operacoes/chamados/historico/antigas": { removidas: 1 } } });
+test("ponte: se o React não carregou, as 5 ações registram o erro e não rejeitam (quem chama não trata erro)", async () => {
+  const erros = [];
+  const original = console.error;
+  console.error = erro => erros.push(erro.message);
   try {
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", historico });
-    await api.excluirImportacoesAntigasChamadosCockpit();
-    assert.deepEqual(chamadas.find(([metodo]) => metodo === "DELETE"), ["DELETE", "/api/operacoes/chamados/historico/antigas"]);
-    assert.equal(toasts.at(-1)[0], "1 importação antiga removida. A importação mais recente foi mantida.");
-    assert.equal(eventos.at(-1).type, "simpress:chamados-atualizados");
-  } finally { delete global.document; delete global.window; }
+    const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "cockpit-chamados" não carregou.')));
+    for (const nome of ACOES_REACT) assert.equal(await feature[nome](), undefined, nome);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(erros.length, ACOES_REACT.length);
+  assert.ok(erros.every(mensagem => mensagem === 'O painel React "cockpit-chamados" não carregou.'));
 });
 
-test("excluir importações antigas não chama a API quando o usuário cancela", async () => {
-  const { api, chamadas } = criarAmbiente({ confirmar: false });
+test("Importar e gerenciar abre o bloco e leva o foco ao primeiro arquivo (DOM puro, síncrona)", () => {
+  const doc = createFakeDocument();
+  global.document = doc;
+  global.window = { matchMedia: () => ({ matches: true }) };
   try {
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s2", historico });
-    await api.excluirImportacoesAntigasChamadosCockpit();
-    assert.equal(chamadas.some(([metodo]) => metodo === "DELETE"), false);
-  } finally { delete global.document; delete global.window; }
-});
-
-test("Importar e gerenciar abre o bloco e leva o foco ao primeiro arquivo", () => {
-  const { api, el } = criarAmbiente();
-  let foco = null;
-  el["cockpit-tickets-file-simpress"].focus = opcoes => { foco = opcoes; };
-  el["cockpit-tickets-manage-panel"].scrollIntoView = () => {};
-  try {
-    api.abrirGestaoChamadosCockpit();
-    assert.equal(el["cockpit-tickets-manage-panel"].open, true);
+    const painel = doc.createElement("details");
+    painel.setAttribute("id", "cockpit-tickets-manage-panel");
+    const arquivo = doc.createElement("input");
+    arquivo.setAttribute("id", "cockpit-tickets-file-simpress");
+    doc.body.append(painel, arquivo);
+    let rolagem = null;
+    let foco = null;
+    painel.scrollIntoView = opcoes => { rolagem = opcoes; };
+    arquivo.focus = opcoes => { foco = opcoes; };
+    const { feature } = ponteFalsa(async () => {});
+    assert.equal(feature.abrirGestaoChamadosCockpit(), undefined, "síncrona: não devolve promessa");
+    assert.equal(painel.open, true);
+    assert.deepEqual(rolagem, { block: "start", behavior: "auto" }, "movimento reduzido: sem rolagem suave");
     assert.deepEqual(foco, { preventScroll: true });
   } finally { delete global.document; delete global.window; }
 });
 
-function enviarFormulario(api, el) {
-  api.sincronizarGestaoChamadosCockpit({ historico: [] });
-  const evento = { type: "submit", prevented: false, preventDefault() { this.prevented = true; } };
-  el["cockpit-tickets-form"].dispatchEvent(evento);
-  return evento;
-}
-
-test("importar sem as duas planilhas avisa no formulário e não chama a API", async () => {
-  const { api, el, chamadas, toasts } = criarAmbiente();
-  try {
-    el["cockpit-tickets-file-simpress"].files = [{ name: "pedidos.xlsx" }];
-    el["cockpit-tickets-file-oracle"].files = [];
-    const evento = enviarFormulario(api, el);
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(evento.prevented, true);
-    assert.equal(el["cockpit-tickets-import-status"].textContent, "Selecione as duas planilhas para importar.");
-    assert.equal(chamadas.some(([metodo]) => metodo === "POST"), false);
-    assert.equal(toasts.length, 0);
-  } finally { delete global.document; delete global.window; }
+test("index.html: o React é dono do corpo da seção, sem IDs duplicados e com os alvos dos portais uma vez cada", () => {
+  const html = assembledHtml();
+  const corpo = html.match(/<div class="ckp-recolher__corpo" data-react-painel="cockpit-chamados"><\/div>/);
+  assert.ok(corpo, "o corpo da seção fica vazio no HTML: o React desenha tudo dentro dele");
+  assert.equal(html.split('data-react-painel="cockpit-chamados"').length - 1, 1);
+  // O que o React não desenha dentro do corpo: botões da barra (com data-on-click) e os três alvos dos portais.
+  assert.match(html.match(/<button[^>]*id="cockpit-tickets-manage"[^>]*>/)[0], /data-on-click="abrirGestaoChamadosCockpit"/);
+  assert.match(html.match(/<button[^>]*id="cockpit-tickets-export"[^>]*>/)[0], /data-on-click="exportarChamadosCockpit"/);
+  for (const id of ["cockpit-tickets-manage-version", "home-open-tickets-body", "home-open-tickets-count"]) {
+    assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  }
+  assert.match(html.match(/<[^>]*id="home-open-tickets-count"[^>]*>/)[0], /role="status"/, "o React só troca o texto: o papel vem do HTML");
+  // Os campos e botões passaram para o React: não podem sobrar no HTML estático.
+  for (const id of ["cockpit-tickets-form", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution", "cockpit-tickets-import"]) {
+    assert.ok(!html.includes(`id="${id}"`), `${id} agora é desenhado pelo painel React`);
+  }
+  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), []);
 });
 
-test("importar envia as duas planilhas, fecha o bloco, atualiza a tabela, a prontidão e a Home", async () => {
-  const relatorio = { snapshot_id: "novo", atualizado_em: "2026-10-31", historico: [{ id: "novo", atualizado_em: "2026-10-31" }], fontes: { simpress: { arquivo: "pedidos.xlsx" }, oracle: { arquivo: "solicitacoes.xlsx" } } };
-  const { api, el, chamadas, toasts, eventos, app } = criarAmbiente({ respostas: { "/api/operacoes/chamados/importar": relatorio } });
-  let prontidao = 0;
-  app.carregarProntidao = async () => { prontidao += 1; };
-  try {
-    el["cockpit-tickets-file-simpress"].files = [{ name: "pedidos.xlsx" }];
-    el["cockpit-tickets-file-oracle"].files = [{ name: "solicitacoes.xlsx" }];
-    el["cockpit-tickets-manage-panel"].open = true;
-    enviarFormulario(api, el);
-    await new Promise(resolve => setTimeout(resolve, 5));
-    assert.deepEqual(chamadas.find(([metodo]) => metodo === "POST"), ["POST", "/api/operacoes/chamados/importar"]);
-    assert.equal(el["cockpit-tickets-version"].value, "novo");
-    assert.equal(el["cockpit-tickets-sources"].textContent, "Simpress: pedidos.xlsx · Oracle: solicitacoes.xlsx");
-    assert.equal(el["cockpit-tickets-import-status"].textContent, "Planilhas importadas. As OS foram relacionadas pela série.");
-    assert.equal(el["cockpit-tickets-manage-panel"].open, false);
-    assert.equal(el["cockpit-tickets-file-simpress"].value, "");
-    assert.equal(eventos.at(-1).type, "simpress:chamados-atualizados");
-    assert.equal(prontidao, 1);
-    assert.deepEqual(toasts.at(-1), ["Acompanhamento de chamados atualizado.", "success"]);
-    assert.equal(el["cockpit-tickets-import"].disabled, false);
-    assert.equal(el["cockpit-tickets-form"].getAttribute("aria-busy"), null);
-  } finally { delete global.document; delete global.window; }
-});
-
-test("importar mostra o erro da API no formulário e libera o botão", async () => {
-  const { api, el, app } = criarAmbiente();
-  app.apiFetch = async () => { throw new Error("Planilha inválida."); };
-  try {
-    el["cockpit-tickets-file-simpress"].files = [{ name: "a.xlsx" }];
-    el["cockpit-tickets-file-oracle"].files = [{ name: "b.xlsx" }];
-    enviarFormulario(api, el);
-    await new Promise(resolve => setTimeout(resolve, 5));
-    assert.equal(el["cockpit-tickets-import-status"].textContent, "Planilha inválida.");
-    assert.equal(el["cockpit-tickets-import"].disabled, false);
-  } finally { delete global.document; delete global.window; }
-});
-
-test("evolução ignora o erro tardio de uma comparação antiga depois que outra deu certo", async () => {
-  const { api, app, el } = criarAmbiente();
-  try {
-    const tres = [{ id: "s3", atualizado_em: "2026-10-31" }, ...historico];
-    let falharAntiga;
-    const sinais = [];
-    app.apiFetch = (url, options = {}) => {
-      sinais.push(options.signal);
-      if (url.includes("atual=s3")) return new Promise((_, rejeitar) => { falharAntiga = rejeitar; });
-      return Promise.resolve({ contagens: { novos: 4, alterados: 0, iguais: 0, ausentes_arquivo: 0 }, mudancas: {} });
-    };
-    api.sincronizarGestaoChamadosCockpit({ snapshot_id: "s3", atualizado_em: "2026-10-31", historico: tres });
-    el["cockpit-tickets-version"].value = "s2";
-    api.selecionarVersaoChamadosCockpit();
-    await new Promise(resolve => setImmediate(resolve));
-    falharAntiga(new Error("falha antiga"));
-    await new Promise(resolve => setImmediate(resolve));
-    assert.match(el["cockpit-tickets-evolution"].textContent, /4 novas/);
-    assert.doesNotMatch(el["cockpit-tickets-evolution"].textContent, /falha antiga/);
-  } finally { delete global.document; delete global.window; }
-});
-
-test("Home ignora a resposta tardia de uma série trocada e mostra só os chamados abertos da atual", async () => {
-  const doc = createFakeDocument();
-  global.document = doc;
-  try {
-    const corpo = doc.createElement("div"); corpo.setAttribute("id", "home-open-tickets-body");
-    const contagem = doc.createElement("span"); contagem.setAttribute("id", "home-open-tickets-count");
-    doc.body.append(corpo, contagem);
-    const pendentes = [];
-    const app = { apiFetch: () => new Promise(resolve => pendentes.push(resolve)) };
-    const api = createCockpitChamados({
-      app, transferUtils: { createRequestGate: () => { let atual = 0; return { begin: () => ({ id: ++atual }), isCurrent: id => id === atual }; } },
-      ticketRules: createTicketRules(dom),
-      dom: { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } },
-      historyFormat: { formatarHorarioHistorico: valor => valor },
-    });
-    const antiga = api.atualizarChamadosAbertosHome("SN-A");
-    const atual = api.atualizarChamadosAbertosHome("SN-B");
-    const relatorio = { snapshot_id: "s1", chamados: [
-      { serie: "SN-A", oracle: [{ solicitacao: "R-A", ordem_servico: "1", status: "Aberto" }] },
-      { serie: "SN-B", oracle: [{ solicitacao: "R-B", ordem_servico: "2", status: "Aberto" }] },
-    ] };
-    // cada chamada pede /api/sebrae/novos (0 e 2) e depois /api/operacoes/chamados (1 e 3)
-    pendentes[2]({}); pendentes[3](relatorio); await atual;
-    pendentes[0]({}); pendentes[1](relatorio); await antiga;
-    assert.match(corpo.textContent, /^2Aberto/);
-    assert.doesNotMatch(corpo.textContent, /1Aberto/);
-    assert.equal(contagem.textContent, "1 aberto");
-  } finally { delete global.document; }
+test("painel React: texto vindo das planilhas entra só como texto (sem dangerouslySetInnerHTML nem innerHTML)", () => {
+  for (const arquivo of fs.readdirSync(painelReact)) {
+    assert.doesNotMatch(fs.readFileSync(path.join(painelReact, arquivo), "utf8"), /dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML|outerHTML/, arquivo);
+  }
 });

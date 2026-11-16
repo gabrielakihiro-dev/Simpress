@@ -280,9 +280,15 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_excel_exports_show_only_success_confirmation(self):
         # Painéis migrados para React (frontend/src/paineis) também emitem o texto aprovado.
         script = _frontend_script() + "\n" + _react_panels_source()
+        # A exportação de Chamados (G8) usa showToast?.(...) e é contada à parte abaixo; o texto aprovado não muda.
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
-            7,
+            6,
+        )
+        painel_chamados = (PROJECT_ROOT / "frontend/src/paineis/cockpit-chamados/estado.ts").read_text(encoding="utf-8")
+        self.assertEqual(
+            painel_chamados.count('showToast?.("Planilha Exportada com Sucesso!", "success");'),
+            1,
         )
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
@@ -360,6 +366,13 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
         # Nenhum destinatário "Nome Sobrenome;" no front: o texto padrão do Modelo 1 vem do servidor.
         self.assertNotRegex(modal_email + outlook, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;")
+        # Desde o Dia 3 (G7) o modal vive em React: o painel segue as mesmas duas regras que o JS antigo.
+        painel_email = sorted((app_config.BASE_DIR / "frontend" / "src" / "paineis" / "outlook-email").glob("*.ts*"))
+        self.assertTrue(painel_email)
+        for path in painel_email:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)", path.name)
+            self.assertNotRegex(text, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;", path.name)
 
         # O código React (fonte e bundle gerado) segue as mesmas regras de privacidade do JS antigo.
         react_sources = sorted((app_config.BASE_DIR / "frontend" / "src").rglob("*.ts*"))

@@ -140,7 +140,7 @@ Mesmos `data-on-click="adicionarObsChamado"` e `data-args` atuais.
 #### Rodapé
 
 - Botão **Texto para Transporte** — `gerarTextoSolicitacaoTransporte`, texto com os endereços de retirada e entrega em `#modal-texto-transporte` (removido em 07/11/2026 e restaurado em 08/11/2026)
-- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Transporte** (antigo **Gerar planilha**) abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em `static/js/features/ux-ticket.js`)
+- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Transporte** (antigo **Gerar planilha**) abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em React: `frontend/src/paineis/ux-ticket/`; `static/js/features/ux-ticket.js` é só a ponte)
 - Botão **Transporte** (antigo **Gerar planilha**, renomeado em 11/11/2026) — mesmo `#btn-gerar-planilha` e handler (`gerarPlanilhaExcel`); primeiro da barra
 - Botão **Alterar Endereço** (`#btn-alterar-endereco`, `alterarEnderecoTicketUX`, 11/11/2026) — segundo da barra; acende só com a série e os dois endereços e abre o modal com Incidente `Transporte` / Motivo `Transferência Fisica de Equipamentos`, sem planilha
 
@@ -173,7 +173,7 @@ O `#transfer-equipment-banner` continua no topo, acima das 3 colunas, mostrando 
 - Rode `npx playwright test tests/e2e/ui.spec.cjs` — formulário de transferência deve funcionar.
 - Confirme que selecionar uma unidade preenche os campos de destino.
 - Confirme que a pré-visualização atualiza ao digitar.
-- Confirme que "Transporte" baixa a planilha e abre "Gerar ticket no UX", e que "Alterar Endereço" abre "Alterar Endereço no UX" sem chamar `/api/gerar-planilha` (`tests/e2e/ux-ticket.spec.cjs`, com `/api/ux/gerar-ticket/*` simulado).
+- Confirme que "Transporte" baixa a planilha e abre "Gerar ticket no UX", e que "Alterar Endereço" abre "Alterar Endereço no UX" sem chamar `/api/gerar-planilha` (`tests/e2e/ux-ticket.spec.cjs` e `tests/e2e/react-g7.spec.cjs`, com `/api/ux/gerar-ticket/*` simulado).
 - Confirme que os chips de observação rápida adicionam texto.
 
 **Commit:** `style(cockpit): Transporte em 3 colunas com pré-visualização ao vivo`
