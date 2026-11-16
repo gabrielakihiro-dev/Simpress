@@ -25,41 +25,7 @@
           </div>
           <details id="cockpit-tickets-manage-panel" class="ckp-recolher ck-chamados-bloco">
             <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Importação e versões<span id="cockpit-tickets-manage-version" class="ckp-recolher__meta">Nenhuma importação</span></summary>
-            <div class="ckp-recolher__corpo">
-              <nav class="ckp-sistemas" aria-label="Abrir sistemas">
-                <a class="ckp-sistema" href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Oracle AgentWeb"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Oracle</a>
-                <a class="ckp-sistema" href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" aria-label="Abrir acompanhamento de chamados Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
-              </nav>
-              <form id="cockpit-tickets-form" class="ckp-importar">
-                <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre arquivos de chamados" aria-describedby="cockpit-tickets-files-tip"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-tickets-files-tip" role="tooltip" class="info-tip-text">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</span></span></span>
-                  <label class="ckp-arquivo" data-estado="vazio">
-                    <input id="cockpit-tickets-file-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="cockpit-tickets-files-tip" data-obrigatorio>
-                    <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                    <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="cockpit-tickets-file-simpress-name" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma planilha">.xlsx ou ZIP com uma planilha</span></span>
-                    <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-                  </label>
-                </div>
-                <div class="ckp-campo"><span class="ckp-rotulo">Oracle · Gestão de Solicitações</span>
-                  <label class="ckp-arquivo" data-estado="vazio">
-                    <input id="cockpit-tickets-file-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
-                    <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                    <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="cockpit-tickets-file-oracle-name" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx">.xlsx</span></span>
-                    <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-                  </label>
-                </div>
-                <button id="cockpit-tickets-import" type="submit" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar planilhas</button>
-                <p id="cockpit-tickets-import-status" class="ckp-secao__desc ckp-importar__status" role="status" aria-live="polite"></p>
-              </form>
-              <p id="cockpit-tickets-sources" class="ckp-secao__desc"></p>
-              <div class="ckp-versao">
-                <div class="ckp-campo"><span class="ckp-rotulo"><label for="cockpit-tickets-version">Versão em uso</label> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a versão" aria-describedby="cockpit-tickets-version-hint"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-tickets-version-hint" role="tooltip" class="info-tip-text">A versão escolhida vale para Exportar Excel e para a comparação. A tabela mostra sempre a importação mais recente.</span></span></span><select id="cockpit-tickets-version" class="ck-entrada" data-on-change="selecionarVersaoChamadosCockpit" aria-describedby="cockpit-tickets-version-hint"><option value="">Nenhuma importação</option></select></div>
-                <button type="button" id="cockpit-tickets-delete-old" class="ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamadosCockpit" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-trash"></use></svg>Excluir importações antigas</button>
-              </div>
-              <details class="ckp-recolher ckp-recolher--interno">
-                <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Comparação com a importação anterior</summary>
-                <div class="ckp-recolher__corpo"><div id="cockpit-tickets-evolution" class="ckp-secao__desc" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div></div>
-              </details>
-            </div>
+            <div class="ckp-recolher__corpo" data-react-painel="cockpit-chamados"></div>
           </details>
           <div class="os-abas-barra">
             <div class="os-abas" role="tablist" aria-label="OS por situação">

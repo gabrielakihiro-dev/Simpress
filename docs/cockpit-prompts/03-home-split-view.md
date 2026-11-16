@@ -187,6 +187,8 @@ Substitui os 4 textareas de "Textos prontos para chamados manuais".
 
 #### "Chamados abertos" (coluna lateral direita do detalhe, 340px, abaixo do painel `Ações`)
 
+Código (React desde 15/11/2026, migração Dia 3, G8): a lista e a contagem são desenhadas por portais do painel `frontend/src/paineis/cockpit-chamados/` dentro de `#home-open-tickets-body` e `#home-open-tickets-count` (o HTML do cartão em `card-equipamento.html` não mudou); `atualizarChamadosAbertosHome` continua publicada em `window` por `static/js/features/cockpit-chamados.js`, que só repassa a série ao React. Detalhes em `docs/cockpit-prompts/07-chamados-operacional.md`.
+
 Lista compacta com:
 
 - Tipo · Unidade
