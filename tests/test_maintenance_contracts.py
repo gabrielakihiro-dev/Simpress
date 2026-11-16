@@ -359,6 +359,13 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
         # Nenhum destinatário "Nome Sobrenome;" no front: o texto padrão do Modelo 1 vem do servidor.
         self.assertNotRegex(modal_email + outlook, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;")
+        # Desde o Dia 3 (G7) o modal vive em React: o painel segue as mesmas duas regras que o JS antigo.
+        painel_email = sorted((app_config.BASE_DIR / "frontend" / "src" / "paineis" / "outlook-email").glob("*.ts*"))
+        self.assertTrue(painel_email)
+        for path in painel_email:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)", path.name)
+            self.assertNotRegex(text, r"[A-ZÀ-Ý][a-zà-ÿ]+ [A-ZÀ-Ý][a-zà-ÿ]+;", path.name)
 
         # O código React (fonte e bundle gerado) segue as mesmas regras de privacidade do JS antigo.
         react_sources = sorted((app_config.BASE_DIR / "frontend" / "src").rglob("*.ts*"))

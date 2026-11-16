@@ -133,6 +133,14 @@ Os subtítulos de "Verificar usuários" e "Sincronizar chamados Sebrae" viraram 
 
 Barra do Chrome numa linha e as quatro rotinas em blocos pequenos numa só grade `.ck-rotinas` (`auto-fill`, `minmax(200px, 1fr)`), na ordem `Rotina de OS`, `Inventários`, `Verificar usuários`, `Rotina Completa`; `Verificar usuários` saiu da linha separada (`ck-linha-acao`, removida). O botão de cada rotina é só o ícone ▶ com `aria-label` (`Executar <rotina>`) e `title`; abaixo de 768px o bloco tem 56px, o botão 44x44 e o detalhe do Chrome some. Documento completo: `docs/operacao/automacao-chrome.md`.
 
+## Aba em React (Migração React, Dia 3, G7, 15/11/2026)
+
+O conteúdo de `#tab-panel-automacao` é desenhado pelo React em `frontend/src/paineis/chrome-automation/`; `static/js/features/chrome-automation.js` é só uma ponte com os mesmos 17 nomes. Todos os ids, classes, ARIA, `data-*` e textos das etapas acima valem como antes; as regras de atalho, rotina e polling não mudaram (clique duplo não inicia duas rotinas; rotina só por clique; polling de 1,5 s e 5 s só com a aba visível).
+
+- A aba tem seis raízes React (uma por `<section data-automacao-regiao>`: `aviso`, `chrome`, `rotinas`, `historico`, `console`, `dialogo`), porque o cartão `Chamados novos do SoftExpert` é HTML estático entre elas e o console precisa ficar como filho direto de `#automacao-cards`. Chip de estado, botões `[data-automacao-rotina]` do cartão Sebrae e diálogo de captura ficam imperativos (`fora.ts`).
+- Uma ação nova ou um texto novo vai em `frontend/src/paineis/chrome-automation/` (regras puras em `regras-puro.ts`, testáveis pelo Node); não volte a escrever DOM em `static/js/features/chrome-automation.js`.
+- Verificação: `node --test` em `tests/frontend/test_automation_tab_structure.cjs`, `test_chrome_automation_servidor_antigo.cjs` e `test_chrome_automation_usuarios.cjs`; Playwright em `tests/e2e/chrome-automation.spec.cjs` (paridade, não alterado) e `tests/e2e/react-g7.spec.cjs` (baselines `automacao-*` e o bloco `Automação em React: casos do módulo antigo`). Divergências, mapa de testes e detalhes: `docs/operacao/automacao-chrome.md`, seção "Tela em React".
+
 ## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
 
 Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4). Componente, modificadores e E2E genérico: `docs/cockpit-prompts/14-cockpit-v2.md`.

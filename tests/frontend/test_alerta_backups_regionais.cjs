@@ -1,5 +1,7 @@
 // Cartão do sino #alerta-backups-regionais (Resumo F3, Backups): só apresentação de `backups_regionais` do /api/painel.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
@@ -115,11 +117,17 @@ test("index: cartão no sino com ids, aria e botão que abre o Resumo na sub-aba
   assert.match(cartao, /<button type="button" id="btn-alerta-backups-regionais" data-on-click="abrirPainelCockpit" data-args='\["comparacao","backups"\]'[^>]*>Ver backups no Resumo<\/button>/);
 });
 
+// Desde o Dia 3 (G7) o botão da aba Automação é desenhado pelo React: o HTML montado não o traz mais e o TSX o escreve.
 test("Automação: botão escondido por padrão que abre o Resumo na sub-aba Backups", () => {
-  const botao = html.match(/<button[^>]*id="automacao-ver-backups"[^>]*>[^<]*<\/button>/)?.[0];
+  const pastaAutomacao = path.join(__dirname, "../../frontend/src/paineis/chrome-automation");
+  const tsx = fs.readFileSync(path.join(pastaAutomacao, "componentes.tsx"), "utf8");
+  const estado = fs.readFileSync(path.join(pastaAutomacao, "estado.ts"), "utf8");
+  assert.doesNotMatch(html, /id="automacao-ver-backups"/);
+  const botao = tsx.match(/<button[^>]*id="automacao-ver-backups"[^>]*>[^<]*<\/button>/)?.[0];
   assert.ok(botao);
-  assert.match(botao, /data-on-click="abrirPainelCockpit" data-args='\["comparacao","backups"\]'/);
-  assert.match(botao, / hidden>Ver backups no Resumo<\/button>$/);
+  assert.match(botao, /data-on-click="abrirPainelCockpit" data-args=\{args\("comparacao", "backups"\)\}/);
+  assert.match(botao, / hidden=\{!e\.verBackups\}>Ver backups no Resumo<\/button>$/);
+  assert.match(estado, /verBackups: false,/, "nasce escondido");
 });
 
 // install() é de módulo único: este processo instala uma vez e muda só a resposta do /api/painel.
