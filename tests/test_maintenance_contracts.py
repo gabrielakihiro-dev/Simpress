@@ -124,6 +124,12 @@ def _frontend_script() -> str:
     return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
+def _react_panels_source() -> str:
+    """Código TS/TSX dos painéis já migrados para React."""
+    root = PROJECT_ROOT / "frontend" / "src" / "paineis"
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(root.rglob("*.ts*")))
+
+
 class MaintenanceContractTests(unittest.TestCase):
     def test_both_inventory_upload_routes_share_the_request_size_limit(self):
         for path in main.INVENTORY_UPLOAD_PATHS:
@@ -272,7 +278,8 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertGreater(_css_layer("#toast-container"), _css_layer(".modal-overlay"))
 
     def test_excel_exports_show_only_success_confirmation(self):
-        script = _frontend_script()
+        # Painéis migrados para React (frontend/src/paineis) também emitem o texto aprovado.
+        script = _frontend_script() + "\n" + _react_panels_source()
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
             7,
