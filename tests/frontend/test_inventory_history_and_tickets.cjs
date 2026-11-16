@@ -1,9 +1,16 @@
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const {
   assert,
   appScript,
   appHtml,
 } = require("./support/inventory-harness.cjs");
+
+// "Importação e versões" é desenhada pelo React desde o G8: atalhos, IDs e a rota da comparação ficam no painel.
+const pastaChamados = path.resolve(__dirname, "../../frontend/src/paineis/cockpit-chamados");
+const painelChamados = fs.readFileSync(path.join(pastaChamados, "painel.tsx"), "utf8");
+const estadoChamados = fs.readFileSync(path.join(pastaChamados, "estado.ts"), "utf8");
 
 test("filters comparison history while preserving row-level annotation autosave", () => {
   assert.doesNotMatch(appHtml, /id="modal-central-pendencias"/);
@@ -16,14 +23,16 @@ test("filters comparison history while preserving row-level annotation autosave"
 
 test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tracking modal", () => {
   assert.doesNotMatch(appHtml, /modal-acompanhamento-chamados|lista-acompanhamento-chamados|abrirAcompanhamentoChamados/);
-  assert.match(appHtml, /href="https:\/\/simpress\.custhelp\.com\/AgentWeb\/" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir portal Oracle AgentWeb"/);
-  assert.match(appHtml, /href="https:\/\/ux\.simpress\.com\.br\/equipamentos\/acompanhamento" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir acompanhamento de chamados Simpress"/);
+  assert.match(painelChamados, /href="https:\/\/simpress\.custhelp\.com\/AgentWeb\/" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Oracle AgentWeb"/);
+  assert.match(painelChamados, /href="https:\/\/ux\.simpress\.com\.br\/equipamentos\/acompanhamento" target="_blank" rel="noopener noreferrer" aria-label="Abrir acompanhamento de chamados Simpress"/);
   // Os dois atalhos existem só no bloco "Importação e versões" do painel Chamados.
-  assert.equal((appHtml.match(/class="ckp-sistema"[^>]*aria-label="Abrir (portal Oracle|acompanhamento de chamados)/g) || []).length, 2);
+  assert.equal((painelChamados.match(/className="ckp-sistema"[^>]*aria-label="Abrir (portal Oracle|acompanhamento de chamados)/g) || []).length, 2);
+  assert.doesNotMatch(appHtml, /aria-label="Abrir (portal Oracle AgentWeb|acompanhamento de chamados Simpress)"/);
+  assert.match(painelChamados, /<nav className="ckp-sistemas" aria-label="Abrir sistemas">/);
   assert.match(appHtml, /id="cockpit-tickets-os"/);
-  assert.match(appHtml, /id="cockpit-tickets-evolution"/);
-  assert.match(appHtml, /id="cockpit-tickets-version"/);
-  assert.match(appScript, /\/api\/operacoes\/chamados\/evolucao\?/);
+  assert.match(painelChamados, /id="cockpit-tickets-evolution"/);
+  assert.match(painelChamados, /id="cockpit-tickets-version"/);
+  assert.match(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/);
 });
 
 test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {

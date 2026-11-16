@@ -1,297 +1,51 @@
-/** Cockpit Chamados: importação das planilhas, versões, comparação, exclusão de importações antigas e exportação (bloco "Importação e versões"), mais os chamados abertos da Home. */
+/**
+ * Cockpit Chamados: importação das planilhas, versões, comparação, exclusão de importações antigas e exportação
+ * (bloco "Importação e versões"), mais os chamados abertos da Home.
+ * Migrado para React no G8: o painel vive em frontend/src/paineis/cockpit-chamados/. Este módulo é a ponte que mantém
+ * as ações publicadas para o código antigo e guarda as duas que mexem só no DOM e precisam ser síncronas:
+ * abrirGestaoChamadosCockpit e abrirChamadoSebraeNoF5.
+ */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).cockpitChamados = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitChamados(context) {
   "use strict";
-  const { app, transferUtils } = context;
-  const { createTextElement } = context.dom;
-  const { formatarHorarioHistorico } = context.historyFormat;
-  const { compararOrdensServicoDecrescente, idadeAtualizacaoChamado, normalizarFiltroChamados } = context.ticketRules;
+  const { app } = context;
+  const ponte = context.ponteReact("cockpit-chamados", [
+    "sincronizarGestaoChamadosCockpit", "selecionarVersaoChamadosCockpit", "excluirImportacoesAntigasChamadosCockpit",
+    "exportarChamadosCockpit", "atualizarChamadosAbertosHome",
+  ]);
+  const registrarErro = erro => { console.error(erro); };
 
-  const homeTicketsRequestGate = transferUtils.createRequestGate();
-  // shortcut: atualizado só por importação feita nesta aba ou ao abrir a aba Chamados; importação pela pasta pede recarregar a página.
-  let chamadosRecentesHome = null;
-  const evolutionGate = transferUtils.createRequestGate();
-  let history = [];
-  let selectedVersion = "";
-  // Versão que a tabela de OS mostra (ela sempre carrega a mais recente); o Excel só sai igual à tela nessa versão.
-  let tableVersion = "";
-  let evolutionKey = "";
-  let bound = false;
-
-  const byId = id => document.getElementById(id);
-
-  function formatImportLabel(event) {
-    const sources = event.fontes || {};
-    const simpressName = typeof sources.simpress === "string" ? sources.simpress : sources.simpress?.arquivo;
-    const oracleName = typeof sources.oracle === "string" ? sources.oracle : sources.oracle?.arquivo;
-    const files = [simpressName, oracleName].filter(Boolean).join(" + ");
-    return `${formatarHorarioHistorico(event.atualizado_em)}${files ? ` · ${files}` : ""}`;
+  // Quem chama (tabela de OS, busca de equipamento, data-on-click) não espera nem trata erro: como no módulo antigo, nunca rejeita.
+  function sincronizarGestaoChamadosCockpit(relatorio) {
+    return ponte.sincronizarGestaoChamadosCockpit(relatorio).catch(registrarErro);
   }
 
-  function renderVersions() {
-    const selector = byId("cockpit-tickets-version");
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = "Nenhuma importação";
-    const options = history.map(event => {
-      const option = document.createElement("option");
-      option.value = event.id || "";
-      option.textContent = formatImportLabel(event);
-      return option;
-    });
-    selector.replaceChildren(empty, ...options);
-    selector.value = selectedVersion;
-    selector.disabled = history.length === 0;
+  // Sem argumento o painel lê o valor do seletor; só texto vale como valor.
+  function selecionarVersaoChamadosCockpit(valor) {
+    return ponte.selecionarVersaoChamadosCockpit(typeof valor === "string" ? valor : undefined).catch(registrarErro);
   }
 
-  function renderButtons() {
-    byId("cockpit-tickets-delete-old").disabled = history.length <= 1;
-    byId("cockpit-tickets-export").disabled = !selectedVersion;
+  function excluirImportacoesAntigasChamadosCockpit() {
+    return ponte.excluirImportacoesAntigasChamadosCockpit().catch(registrarErro);
   }
 
-  function renderEvolution(data) {
-    const target = byId("cockpit-tickets-evolution");
-    const counts = data.contagens || {};
-    const changes = data.mudancas || {};
-    const changed = Array.isArray(changes.alterados) ? changes.alterados : [];
-    const added = Array.isArray(changes.novos) ? changes.novos : [];
-    const absent = Array.isArray(changes.ausentes_arquivo) ? changes.ausentes_arquivo : [];
-    const rows = [
-      ...added.slice(0, 5).map(serial => ["Nova série:", serial]),
-      ...changed.slice(0, 8).map(row => [`${row.serie}:`, (row.campos || []).map(field => field.campo).join(", ")]),
-      ...absent.slice(0, 5).map(serial => ["Não consta na planilha atual:", serial]),
-    ];
-    const summary = createTextElement("p", "ck-chamados-evolucao__resumo",
-      `Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes`);
-    const warning = createTextElement("p", "", data.aviso_ausentes || "Ausência na planilha não confirma resolução.");
-    const nodes = [summary, warning];
-    if (rows.length) {
-      const list = document.createElement("ul");
-      list.className = "ck-chamados-evolucao__lista";
-      rows.forEach(([label, value]) => {
-        const item = document.createElement("li");
-        item.append(createTextElement("strong", "", label), ` ${value}`);
-        list.append(item);
-      });
-      nodes.push(list);
-    }
-    target.replaceChildren(...nodes);
+  function exportarChamadosCockpit() {
+    return ponte.exportarChamadosCockpit().catch(registrarErro);
   }
 
-  async function loadEvolution(snapshotId) {
-    const request = evolutionGate.begin();
-    const target = byId("cockpit-tickets-evolution");
-    if (!snapshotId) {
-      target.textContent = "Nenhuma importação selecionada.";
-      return;
-    }
-    const index = history.findIndex(event => event.id === snapshotId);
-    const older = index >= 0 ? history[index + 1] : null;
-    if (!older) {
-      target.textContent = history.length > 1
-        ? "Esta é a importação mais antiga disponível. Selecione uma versão mais recente para comparar."
-        : "A primeira importação ficará registrada aqui para comparação com as próximas planilhas.";
-      return;
-    }
-    target.textContent = "Comparando esta versão com a anterior…";
-    try {
-      const query = new URLSearchParams({ anterior: older.id, atual: snapshotId });
-      const data = await app.apiFetch(`/api/operacoes/chamados/evolucao?${query.toString()}`, { signal: request.signal, errorMessage: "Não foi possível comparar as versões dos chamados." });
-      if (evolutionGate.isCurrent(request.id)) renderEvolution(data);
-    } catch (error) {
-      if (evolutionGate.isCurrent(request.id)) target.textContent = error.message || "Não foi possível comparar as versões dos chamados.";
-    }
+  function atualizarChamadosAbertosHome(serial) {
+    return ponte.atualizarChamadosAbertosHome(serial).catch(registrarErro);
   }
 
-  // Chamado pela tabela de OS a cada carga de /api/operacoes/chamados (e logo após importar): mantém versões, fontes e Home em dia.
-  function sincronizarGestaoChamadosCockpit(report) {
-    if (!byId("cockpit-tickets-version")) return;
-    ligarGestao();
-    history = Array.isArray(report?.historico) ? report.historico : [];
-    tableVersion = report?.snapshot_id || "";
-    if (!history.some(event => event.id === selectedVersion)) selectedVersion = report?.snapshot_id || history[0]?.id || "";
-    renderVersions();
-    renderButtons();
-    byId("cockpit-tickets-manage-version").textContent = report?.atualizado_em
-      ? `Atualizado ${formatarHorarioHistorico(report.atualizado_em)}` : "Nenhuma importação";
-    const sources = report?.fontes || {};
-    byId("cockpit-tickets-sources").textContent =
-      `Simpress: ${sources.simpress?.arquivo || "aguardando importação"} · Oracle: ${sources.oracle?.arquivo || "aguardando importação"}`;
-    if (report?.snapshot_id) chamadosRecentesHome = report;
-    const key = `${selectedVersion}|${history[0]?.id || ""}|${history.length}`;
-    if (key !== evolutionKey) {
-      evolutionKey = key;
-      loadEvolution(selectedVersion);
-    }
-  }
-
-  function selecionarVersaoChamadosCockpit() {
-    selectedVersion = byId("cockpit-tickets-version").value;
-    evolutionKey = "";
-    renderButtons();
-    loadEvolution(selectedVersion);
-  }
-
-  // A tabela e os indicadores escutam este evento e recarregam a importação mais recente.
-  function atualizarTabelaChamados() {
-    const EventConstructor = document.defaultView?.CustomEvent;
-    if (EventConstructor) document.dispatchEvent(new EventConstructor("simpress:chamados-atualizados", { detail: { snapshot_id: selectedVersion } }));
-  }
-
-  async function importarPlanilhas(event) {
-    event.preventDefault();
-    const form = byId("cockpit-tickets-form");
-    const simpressInput = byId("cockpit-tickets-file-simpress");
-    const oracleInput = byId("cockpit-tickets-file-oracle");
-    const button = byId("cockpit-tickets-import");
-    const status = byId("cockpit-tickets-import-status");
-    if (!simpressInput.files?.[0] || !oracleInput.files?.[0]) {
-      status.textContent = "Selecione as duas planilhas para importar.";
-      return;
-    }
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = "Importando…";
-    form.setAttribute("aria-busy", "true");
-    status.textContent = "Lendo as planilhas e relacionando as séries…";
-    try {
-      const payload = new FormData();
-      payload.append("simpress_file", simpressInput.files[0]);
-      payload.append("oracle_file", oracleInput.files[0]);
-      const data = await app.apiFetch("/api/operacoes/chamados/importar", { method: "POST", body: payload, errorMessage: "Não foi possível importar as planilhas." });
-      selectedVersion = "";
-      evolutionKey = "";
-      sincronizarGestaoChamadosCockpit(data);
-      // Até a tabela recarregar ela ainda mostra a versão anterior; o aoCarregar da tabela volta a definir tableVersion.
-      tableVersion = "";
-      [simpressInput, oracleInput].forEach(input => {
-        input.value = "";
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
-      byId("cockpit-tickets-manage-panel").open = false;
-      atualizarTabelaChamados();
-      await app.carregarProntidao?.();
-      app.showToast("Acompanhamento de chamados atualizado.", "success");
-    } catch (error) {
-      status.textContent = error.message || "Não foi possível importar as planilhas.";
-    } finally {
-      button.disabled = false;
-      button.textContent = originalText;
-      form.removeAttribute("aria-busy");
-    }
-  }
-
-  async function excluirImportacoesAntigasChamadosCockpit() {
-    const button = byId("cockpit-tickets-delete-old");
-    const olderCount = Math.max(0, history.length - 1);
-    const olderLabel = olderCount === 1 ? "1 importação antiga" : `${olderCount} importações antigas`;
-    if (!olderCount || !(await app.confirmarAcao({
-      titulo: "Excluir importações antigas?",
-      mensagem: `Excluir ${olderLabel} e manter somente a mais recente? Esta ação não poderá ser desfeita.`,
-      confirmar: "Excluir",
-    }))) return;
-    button.disabled = true;
-    button.textContent = "Excluindo…";
-    try {
-      const data = await app.apiFetch("/api/operacoes/chamados/historico/antigas", { method: "DELETE", errorMessage: "Não foi possível excluir as importações antigas." });
-      selectedVersion = "";
-      atualizarTabelaChamados();
-      const removedCount = Number(data.removidas) || 0;
-      const removedLabel = removedCount === 1 ? "1 importação antiga removida" : `${removedCount} importações antigas removidas`;
-      app.showToast(`${removedLabel}. A importação mais recente foi mantida.`, "success");
-    } catch (error) {
-      app.showToast(error.message || "Não foi possível excluir as importações antigas.", "error");
-    } finally {
-      button.textContent = "Excluir importações antigas";
-      button.disabled = history.length <= 1;
-    }
-  }
-
-  async function exportarChamadosCockpit() {
-    const button = byId("cockpit-tickets-export");
-    if (!selectedVersion) {
-      app.showToast("Selecione e aguarde o carregamento de uma versão válida antes de exportar.", "error");
-      return;
-    }
-    const originalText = button.textContent;
-    const search = byId("cockpit-tickets-search").value.trim();
-    const attentionOnly = byId("cockpit-tickets-attention").checked;
-    // Séries que passam no filtro da tela (todas as páginas); null = tabela não carregada ou versão diferente da tela: GET antigo.
-    // Aplica antes a busca ainda na espera de 150 ms, para as séries e o rótulo "Busca" do Resumo virem do mesmo texto.
-    const panels = globalThis.SimpressDataPanels;
-    if (selectedVersion === tableVersion) panels?.filtrarTabelaOs?.({ busca: byId("cockpit-tickets-search").value });
-    const series = selectedVersion === tableVersion ? panels?.seriesFiltradasOs?.() ?? null : null;
-    let endpoint = "/api/operacoes/chamados/exportar";
-    const options = { responseType: "response", errorMessage: "Não foi possível exportar os chamados filtrados." };
-    if (Array.isArray(series)) {
-      const relation = byId("cockpit-tickets-relation")?.value || "";
-      Object.assign(options, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          snapshot_id: selectedVersion, series, search,
-          relation: relation === "todos" ? "" : relation, attention_only: attentionOnly,
-        }),
-      });
-    } else {
-      const params = new URLSearchParams({ snapshot_id: selectedVersion, stale_days: "3" });
-      if (search) params.set("search", search);
-      if (attentionOnly) params.set("attention_only", "true");
-      endpoint += `?${params.toString()}`;
-    }
-    button.disabled = true;
-    button.textContent = "Preparando Excel…";
-    try {
-      const response = await app.apiFetch(endpoint, options);
-      const disposition = response.headers?.get("Content-Disposition") || "";
-      const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-      const filename = match?.[1]?.replace(/["']/g, "") || "Acompanhamento_de_Chamados.xlsx";
-      const url = window.URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-      app.showToast("Planilha Exportada com Sucesso!", "success");
-    } catch (error) {
-      app.showToast(error.message || "Não foi possível exportar os chamados filtrados.", "error");
-    } finally {
-      button.textContent = originalText;
-      renderButtons();
-    }
-  }
-
-  function ligarGestao() {
-    if (bound) return;
-    bound = true;
-    byId("cockpit-tickets-form").addEventListener("submit", importarPlanilhas);
-  }
-
+  // Síncrona de propósito: o painel React já está montado (flushSync) e os campos de arquivo existem na hora do foco.
   function abrirGestaoChamadosCockpit() {
-    ligarGestao();
-    const panel = byId("cockpit-tickets-manage-panel");
+    const panel = document.getElementById("cockpit-tickets-manage-panel");
     panel.open = true;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     panel.scrollIntoView?.({ block: "start", behavior: reduced ? "auto" : "smooth" });
-    byId("cockpit-tickets-file-simpress").focus({ preventScroll: true });
-  }
-
-  // Chamados da aba Chamados (F5) ainda não finalizados cuja série (coluna K, já preenchida ou sugerida) é a da Home.
-  function chamadosSebraeDaSerie(dados, serial) {
-    const alvo = normalizarFiltroChamados(serial);
-    const finalizados = new Set((dados?.importado?.finalizados || []).map(item => item.numero));
-    const antigos = (dados?.importado?.abertos || []).map(item => ({
-      chave: item.numero, numero: item.numero, titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K, chamado: item.chamado,
-    }));
-    const novos = (dados?.novos?.formulario || []).map(item => ({ chave: item.numero, numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }));
-    return [...antigos, ...novos]
-      .filter(item => !finalizados.has(item.numero) && item.serie && normalizarFiltroChamados(item.serie) === alvo)
-      .map(item => ({ ...item, numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero }));
+    document.getElementById("cockpit-tickets-file-simpress")?.focus({ preventScroll: true });
   }
 
   // Abre a aba Chamados (F5) na sub-aba do chamado (tira o filtro que o esconde, amplia "Carregar mais"), expande a linha e a destaca.
@@ -316,102 +70,6 @@
     await new Promise(resolve => requestAnimationFrame(() => resolve()));
     alvo?.scrollIntoView?.({ block: "center", behavior: "auto" });
     app.destacarLinhaCockpit?.(alvo);
-  }
-
-  function botaoLinkHome(classe, texto, rotuloAria, aoClicar) {
-    const botao = createTextElement("button", `${classe} ck-aberto__link`, texto);
-    botao.type = "button";
-    botao.setAttribute("aria-label", rotuloAria);
-    botao.addEventListener("click", aoClicar);
-    return botao;
-  }
-
-  function renderizarChamadosSebraeHome(chamados) {
-    const section = document.createElement("div");
-    section.className = "ck-abertos__sebrae";
-    const abrir = document.createElement("button");
-    abrir.type = "button";
-    abrir.className = "ck-abertos__ver";
-    abrir.textContent = "Ver na aba Chamados (F5)";
-    abrir.addEventListener("click", () => document.getElementById("btn-sebrae-chamados-aba")?.click());
-    section.append(
-      createTextElement("p", "ck-abertos__rotulo", `${chamados.length} ${chamados.length === 1 ? "chamado" : "chamados"} na aba Chamados (F5)`),
-      ...chamados.map(item => {
-        const texto = [item.numero, item.titulo].filter(Boolean).join(" · ");
-        return botaoLinkHome("ck-aberto__meta", texto, `Abrir na aba Chamados (F5): ${texto}`, () => abrirChamadoSebraeNoF5(item.chave));
-      }),
-      abrir,
-    );
-    return section;
-  }
-
-  function renderizarChamadosAbertosHome(abertos, sebrae = [], serie = "", falhaSebrae = false) {
-    const body = document.getElementById("home-open-tickets-body");
-    const count = document.getElementById("home-open-tickets-count");
-    const total = abertos.length + sebrae.length;
-    body.setAttribute("aria-busy", "false");
-    count.textContent = total ? `${total} ${total === 1 ? "aberto" : "abertos"}` : "";
-    if (falhaSebrae) count.textContent = total ? `${count.textContent} · consulta parcial` : "Consulta parcial";
-    if (!total && !falhaSebrae) {
-      body.replaceChildren(createTextElement("p", "ck-abertos__vazio", "Nenhum chamado aberto para esta série."));
-      return;
-    }
-    const list = document.createElement("ul");
-    list.className = "ck-abertos";
-    abertos.forEach(ticket => {
-      const item = document.createElement("li");
-      item.className = "ck-aberto";
-      item.append(
-        ticket.ordem_servico
-          ? botaoLinkHome("ck-aberto__numero", String(ticket.ordem_servico), `Abrir a OS ${ticket.ordem_servico} da série ${serie} em Chamados`, () => app.abrirChamadoDaOs?.([], serie, ticket.ordem_servico))
-          : createTextElement("strong", "ck-aberto__numero", "Sem OS"),
-        createTextElement("span", "ck-badge", [ticket.status, ticket.sub_status].filter(Boolean).join(" · ") || "Status não informado"),
-        createTextElement("p", "ck-aberto__titulo", ticket.fila || "Fila não informada"),
-        createTextElement("p", "ck-aberto__meta", ticket.nome_filial || ticket.cidade || "Unidade não informada"),
-        createTextElement("p", "ck-aberto__meta", idadeAtualizacaoChamado(ticket).rotulo),
-      );
-      list.append(item);
-    });
-    body.replaceChildren(...(abertos.length ? [list] : []), ...(sebrae.length ? [renderizarChamadosSebraeHome(sebrae)] : []));
-    if (falhaSebrae) {
-      const warning = createTextElement("p", "ck-abertos__vazio", "Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
-      warning.setAttribute("role", "alert");
-      body.append(warning);
-    }
-  }
-
-  // Home: chamados Oracle ainda abertos da série selecionada, sempre da importação mais recente (mesma API da aba Chamados).
-  async function atualizarChamadosAbertosHome(serial) {
-    const body = document.getElementById("home-open-tickets-body");
-    if (!body) return;
-    const request = homeTicketsRequestGate.begin();
-    body.setAttribute("aria-busy", "true");
-    body.replaceChildren(createTextElement("p", "ck-abertos__vazio", "Carregando chamados…"));
-    document.getElementById("home-open-tickets-count").textContent = "";
-    try {
-      // Os chamados do F5 são um complemento: se a consulta falhar, a lista de OS continua aparecendo.
-      const sebraePedido = app.apiFetch("/api/sebrae/novos", { signal: request.signal, errorMessage: "Não foi possível consultar os chamados do Sebrae." })
-        .then(dados => ({ dados, falhou: false }), () => ({ dados: null, falhou: true }));
-      if (!chamadosRecentesHome) {
-        const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar os chamados." });
-        if (!homeTicketsRequestGate.isCurrent(request.id)) return;
-        chamadosRecentesHome = data;
-      }
-      const resultadoSebrae = await sebraePedido;
-      const sebrae = chamadosSebraeDaSerie(resultadoSebrae.dados, serial);
-      if (!homeTicketsRequestGate.isCurrent(request.id)) return;
-      const chamados = Array.isArray(chamadosRecentesHome.chamados) ? chamadosRecentesHome.chamados : [];
-      const record = chamados.find(item => normalizarFiltroChamados(item.serie) === normalizarFiltroChamados(serial));
-      const abertos = (record?.oracle || []).filter(ticket => !idadeAtualizacaoChamado(ticket).encerrado)
-        .sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
-      renderizarChamadosAbertosHome(abertos, sebrae, record?.serie || serial, resultadoSebrae.falhou);
-    } catch (error) {
-      if (!homeTicketsRequestGate.isCurrent(request.id)) return;
-      body.setAttribute("aria-busy", "false");
-      const message = createTextElement("p", "ck-abertos__vazio", error.message || "Não foi possível carregar os chamados.");
-      message.setAttribute("role", "alert");
-      body.replaceChildren(message);
-    }
   }
 
   return {
