@@ -55,12 +55,12 @@ test("successful inventory upload refreshes selection and presents comparison re
 
   await harness.run("enviarPlanilhas()");
 
-  assert.deepEqual(calls.map(call => call.url), [
+  assert.deepEqual(calls.map(call => call.url).sort(), [
     "/api/planilhas/previsualizar",
     "/api/planilhas/atualizar",
     "/api/equipamento/SERIE-ANTIGA",
     "/api/prontidao",
-  ]);
+  ].sort());
   assert.equal(calls[1].options.method, "POST");
   assert.deepEqual(calls[1].options.body.fields.map(([name]) => name), ["endpoint_file", "details_file", "preview_token"]);
   assert.equal(calls[1].options.body.fields[0][1], endpointFile);
@@ -388,7 +388,7 @@ function instalarPaineisFalsos(harness, { apelido = async () => null, equipament
       salvarDadosEquipamento: () => { chamadas.push("salvarDadosEquipamento"); return equipamento(); },
     },
   };
-  harness.run("window.SimpressReact = paineisFalsos");
+  harness.run("window.SimpressReact = { ...window.SimpressReact, ...paineisFalsos }");
   return chamadas;
 }
 

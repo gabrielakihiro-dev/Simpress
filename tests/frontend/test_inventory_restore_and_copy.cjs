@@ -177,14 +177,14 @@ test("rejects malformed transfer emails and clears invalid state after correctio
   assert.equal(email.attributes.has("aria-invalid"), false);
 });
 
-test("keeps a transfer search when the user cancels the discard confirmation", () => {
+test("keeps a transfer search when the user cancels the discard confirmation", async () => {
   const harness = createAppHarness(
     async () => { throw new Error("Nenhuma chamada de API esperada"); },
     { confirmResult: false },
   );
   harness.element("input-serial").value = "SERIE-EM-PESQUISA";
 
-  harness.run("resetarFormulario()");
+  await harness.run("resetarFormulario()");
 
   assert.equal(harness.element("input-serial").value, "SERIE-EM-PESQUISA");
   assert.equal(harness.effects.confirmations.length, 1);

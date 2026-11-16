@@ -1,8 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const apiErrors = require("../../static/js/shared/api-errors.js");
 const transferUtils = require("../../static/js/shared/transfer-utils.js");
-const createRegionalContacts = require("../../static/js/features/regional-contacts.js");
+const { apiFetch } = require("../../static/js/shared/api-fetch.js");
+const { criarContatosRegionais: createRegionalContacts } = require("../../frontend/src/paineis/contatos-regionais/estado.ts");
 
 function fakeElement() {
   const attrs = {};
@@ -33,9 +33,6 @@ function setup({ saved = {}, fetchImpl, manualTimers = false } = {}) {
   const toasts = [];
   const calls = [];
   const app = {
-    createApiError: apiErrors.create,
-    formatarTelefoneBrasileiro: transferUtils.formatBrazilPhone,
-    atualizarObrigatoriedadeDuracaoPausaEntrega() {},
     abrirModalAcessivel() {}, fecharModalAcessivel() {},
     showToast: (message, kind) => toasts.push([message, kind]),
     confirmarAcao: async () => true,
@@ -45,7 +42,7 @@ function setup({ saved = {}, fetchImpl, manualTimers = false } = {}) {
   global.setTimeout = (fn, ms) => { timers.push({ fn, ms }); if (!manualTimers) queueMicrotask(() => timers.shift().fn()); };
   global.document = { getElementById: get, createElement: fakeElement };
   global.fetch = fetchImpl || (async () => ({ ok: true, json: async () => ({ alteracoes: saved, padroes: PADROES, arquivo_invalido: false }) }));
-  const feature = createRegionalContacts({ app, transferUtils });
+  const feature = createRegionalContacts({ app, transferUtils, apiFetch });
   Object.assign(app, feature);
   const restore = () => { global.document = previous.document; global.fetch = previous.fetch; global.setTimeout = previous.setTimeout; };
   return { feature, get, toasts, calls, timers, restore };

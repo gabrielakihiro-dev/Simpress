@@ -45,6 +45,7 @@ test("Home discards an old result even when the same serial is selected again", 
   const h = createAppHarness(() => new Promise(resolve => { finish = resolve; }));
   h.selectEquipment({ serial: "ABC" });
   const pending = h.run("consultarEndpoint()");
+  await Promise.resolve();
   assert.equal(h.element("btn-consultar-endpoint").disabled, true);
   h.selectEquipment({ serial: "OTHER" });
   h.selectEquipment({ serial: "ABC" });
@@ -83,10 +84,12 @@ test("Espera do Endpoint mostra a dica de login nos dois estados", async () => {
   const h = createAppHarness(() => new Promise(resolve => { finish = resolve; }));
   h.selectEquipment({ serial: "ABC" });
   const consulta = h.run("consultarEndpoint()");
+  await Promise.resolve();
   assert.equal(h.element("endpoint-lookup-result").textContent, `Consultando no Endpoint… ${dica}`);
   finish(apiResponse({ status: "not_found", serial: "ABC" }));
   await consulta;
   const remoto = h.run("controleRemotoEndpoint()");
+  await Promise.resolve();
   assert.equal(h.element("endpoint-lookup-result").textContent, `Abrindo o controle remoto no Endpoint… ${dica}`);
   finish(apiResponse({ status: "not_found", serial: "ABC" }));
   await remoto;
@@ -101,6 +104,7 @@ test("Trocar de equipamento durante o controle remoto avisa o servidor para canc
   });
   h.selectEquipment({ serial: "ABC" });
   const pendente = h.run("controleRemotoEndpoint()");
+  await Promise.resolve();
   h.selectEquipment({ serial: "OTHER" });
   finish(apiResponse({ status: "connected", serial: "ABC", hostname: "PC1" }));
   await pendente;

@@ -2,6 +2,8 @@
 
 Cole este prompt no agente de código com o repositório Simpress aberto.
 
+Migração React BF1 (16/11/2026): as regras e ações do histórico estão em `frontend/src/paineis/historico-apelidos/`; `static/js/features/alias-history.js` mantém os nomes antigos como ponte. A tela F7 e seu HTML continuam legados até o BF4.
+
 > **Desvio aprovado pelo usuário (31/10/2026):** o modal `#modal-historico-apelidos` e o handler `abrirModalHistoricoApelidos` foram removidos. O painel F8 absorveu filtros, **Somente com ação disponível**, **Limpar filtros** e as ações **Restaurar anterior**, **Excluir aviso** e **Restaurar e excluir**; o botão da Home abre o painel. A regra 6 abaixo deixou de valer; a paginação do modal também saiu (a lista rola).
 
 ## Objetivo

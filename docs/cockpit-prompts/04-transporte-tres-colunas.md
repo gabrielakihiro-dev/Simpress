@@ -184,7 +184,7 @@ Os chips de cidade (`button.ck-unidade`) foram removidos. A seção "Chips de un
 
 ## Transporte preparado pela Cobertura (F10, 07/11/2026)
 
-`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Nunca clica em `Transporte` (antigo `Gerar planilha`); quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.
+`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Desde a migração React BF1 (16/11/2026), as ações e regras do formulário ficam em `frontend/src/paineis/transporte/` e `static/js/features/transfer-form.js` é a ponte; contatos e representantes regionais ficam em `frontend/src/paineis/contatos-regionais/`, com a ponte em `static/js/features/regional-contacts.js`. Os campos e IDs visíveis permanecem no HTML parcial. Nunca clica em `Transporte` (antigo `Gerar planilha`); quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.
 
 ## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
 

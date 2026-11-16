@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const createEquipmentEditor = require("../../static/js/features/equipment-editor.js");
+const { criarAcoesCartaoEquipamento } = require("../../frontend/src/paineis/cartao-equipamento/estado.ts");
 
 const root = path.resolve(__dirname, "../..");
 
@@ -33,7 +33,7 @@ function instalarDocumento() {
   for (const nome of ["apelido", "usuario", "login"]) {
     const dd = elementoFalso();
     const dado = elementoFalso();
-    dado.querySelector = () => ({ textContent: nome });
+    dado.querySelector = seletor => seletor === "dt" ? { textContent: nome } : null;
     dd.closest = () => dado;
     campos[nome] = dd;
   }
@@ -51,7 +51,7 @@ function instalarDocumento() {
   return { campos };
 }
 
-// A parte React do editor (diálogos de equipamento e apelido, G10) não roda aqui: a ponte só precisa existir.
+// Os diálogos continuam como pontes; a edição em linha é coberta pela fábrica React real.
 const PONTE_FALSA = (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, async () => null]));
 
 function criarEditor(equipamento, { apiFetch } = {}) {
@@ -68,7 +68,7 @@ function criarEditor(equipamento, { apiFetch } = {}) {
     definirEquipamentoAtual: eq => { appState.currentEquipamento = eq; appState.equipamentoSelectionRevision += 1; },
     atualizarIndicadoresPosSalvamento() {},
   };
-  const editor = createEquipmentEditor({ app, appState, ponteReact: PONTE_FALSA });
+  const editor = criarAcoesCartaoEquipamento({ app, appState, ponteReact: PONTE_FALSA });
   const entrada = nome => campos[nome].children.find(filho => filho.dataset?.campoEdicao === nome);
   return { editor, chamadas, toasts, entrada };
 }
@@ -135,8 +135,8 @@ test("o nome da pessoa só é editável com nome_pessoa_editavel", () => {
 });
 
 test("Local, CEP e CNPJ continuam somente leitura na edição em linha", () => {
-  const source = fs.readFileSync(path.join(root, "static/js/features/equipment-editor.js"), "utf8");
-  const bloco = source.match(/const CAMPOS_CADASTRAIS = \{([\s\S]*?)\n  \};/)?.[1] || "";
+  const source = fs.readFileSync(path.join(root, "frontend/src/paineis/cartao-equipamento/estado.ts"), "utf8");
+  const bloco = source.match(/const CAMPOS_CADASTRAIS(?::\s*Record<string, CampoCadastral>)? = \{([\s\S]*?)\n  \};/)?.[1] || "";
   assert.deepEqual([...bloco.matchAll(/^\s{4}(\w+):/gm)].map(m => m[1]), ["apelido", "usuario", "login"]);
 });
 

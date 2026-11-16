@@ -30,7 +30,7 @@ test("cartão da Home: título, contagem em região de status e corpo livre para
 });
 
 test("busca de equipamento: a Home pede a atualização uma vez por equipamento, pela ação publicada", () => {
-  const busca = lido("js/features/equipment-search.js");
+  const busca = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "pesquisa-equipamento", "estado.ts"), "utf8");
   assert.equal(busca.split("app.atualizarChamadosAbertosHome(eq.serial)").length - 1, 1);
 });
 

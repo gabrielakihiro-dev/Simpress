@@ -357,7 +357,7 @@ class MaintenanceContractTests(unittest.TestCase):
         config_source = (app_config.BASE_DIR / "core" / "config.py").read_text(encoding="utf-8")
         self.assertNotIn("simpress.com.br", config_source)
         html = assembled_html(app_config.STATIC_DIR)
-        script = _frontend_script()
+        script = _frontend_script() + "\n" + _react_panels_source()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
         outlook = (app_config.STATIC_DIR / "js" / "features" / "outlook-email.js").read_text(encoding="utf-8")
@@ -749,7 +749,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(mounts[0].path, "/static")
 
     def test_restore_invalidates_stale_equipment_and_refreshes_inventory_views(self):
-        script = _frontend_script()
+        script = _frontend_script() + "\n" + _react_panels_source()
         invalidation_start = script.index("function invalidarDadosEquipamentoAposRestauracao()")
         invalidation_end = script.index("const inputSerialInicial", invalidation_start)
         invalidation = script[invalidation_start:invalidation_end]

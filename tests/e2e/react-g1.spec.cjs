@@ -28,16 +28,20 @@ async function rotaConflitos(page, { get, post }) {
 }
 
 // Abre o painel Chamados (F5) da fixture (mesmo caminho do sebrae-dashboard.spec.cjs); `extra` entra em run=.
-async function abrirPainel(page, request, { tema = "light", extra = "" } = {}) {
+async function abrirPainel(page, request, { tema = "light", extra = "", semBundle = false } = {}) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(valor => { try { localStorage.setItem("simpress:theme", valor); } catch (erro) { /* sem armazenamento */ } }, tema);
   await request.get(`/__fixture_automacao?quantidade=0&sebrae=padrao&run=${extra}&antigos=`);
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", tema);
   await page.locator("#tab-automacao").click();
-  const cartao = page.locator("#sebrae-novos-painel");
-  await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-  await cartao.locator("#btn-sebrae-abrir-chamados").click();
+  if (semBundle) {
+    await page.locator("#btn-sebrae-chamados-aba").click();
+  } else {
+    const cartao = page.locator("#sebrae-novos-painel");
+    await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
+    await cartao.locator("#btn-sebrae-abrir-chamados").click();
+  }
   const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
   await expect(painel).toBeVisible();
   return painel.locator("#sebrae-conflitos");
@@ -287,10 +291,13 @@ test.describe("conflitos de edição: comportamento", () => {
   // Só faz sentido depois da migração (no JS puro a seção não depende do bundle e aparece).
   test("sem o bundle React a página abre, a seção fica escondida e nenhum erro sai solto", async ({ page, request }) => {
     const erros = [];
+    const errosConsole = [];
     page.on("pageerror", erro => erros.push(erro.message));
+    page.on("console", mensagem => { if (mensagem.type() === "error") errosConsole.push(mensagem.text()); });
     await page.route("**/static/dist/react-entry.js*", route => route.abort());
-    const secao = await abrirPainel(page, request, { extra: "&conflitos=1" });
+    const secao = await abrirPainel(page, request, { extra: "&conflitos=1", semBundle: true });
     await expect(secao).toBeHidden();
+    await expect.poll(() => errosConsole.some(texto => texto.includes('O painel React "transporte" não carregou.'))).toBe(true);
     await page.waitForTimeout(500);
     expect(erros).toEqual([]);
   });

@@ -69,6 +69,7 @@ jobs:
         # react-g7b.spec.cjs (G7b, ~1,3 min local) entrou no 6, o menor (~12,2 antes dele).
         # react-g9.spec.cjs (G9, ~1 min local) entrou no 1, o menor no run 43819394801 do G10 (8,4 min).
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
+        # react-bf1.spec.cjs foi adicionado ao shard 2, um dos menores pela última medição de relógio.
         include:
           - shard: 1
             specs: >-
@@ -76,7 +77,7 @@ jobs:
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs
-              theme-toggle.spec.cjs
+              theme-toggle.spec.cjs react-bf1.spec.cjs
           - shard: 3
             specs: >-
               cockpit-layout.spec.cjs dossie-equipamento.spec.cjs info-tips-ferramentas.spec.cjs
