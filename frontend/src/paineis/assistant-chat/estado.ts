@@ -40,6 +40,10 @@ export interface Estado {
   status: string;
   tentarOculto: boolean;
   anuncio: string;
+  // Contadores dos avisos: o painel recria o nó de texto a cada aviso, e o leitor de tela repete até texto igual (como o textContent antigo).
+  statusSeq: number;
+  anuncioSeq: number;
+  anexosStatusSeq: number;
   globo: EstadoGlobo;
   textoDesabilitado: boolean;
   enviarDesabilitado: boolean;
@@ -99,7 +103,7 @@ const app = () => window as unknown as AppAntigo;
 
 // Os valores iniciais são os do HTML antigo (nada desabilitado, tudo fechado).
 let estado: Estado = {
-  aberto: false, modo: "", status: "Verificando o Assistente…", tentarOculto: true, anuncio: "", globo: "parado",
+  aberto: false, modo: "", status: "Verificando o Assistente…", tentarOculto: true, anuncio: "", statusSeq: 0, anuncioSeq: 0, anexosStatusSeq: 0, globo: "parado",
   textoDesabilitado: false, enviarDesabilitado: false, anexarDesabilitado: false, gravarDesabilitado: false, novaDesabilitada: false,
   decidirDesabilitado: false, anexosBotoesDesabilitados: false, mensagensOcupadas: false, cancelarEnvioOculto: true,
   gravando: false, rotuloGravar: "Gravar áudio", vozPressionada: false, vozDesabilitada: false, contador: contador(0),
@@ -185,10 +189,10 @@ const painelVisivel = () => estado.aberto;
 // ---------------------------------------------------------------- status
 
 function mostrarStatus(texto: string, oferecerNovaTentativa = false) {
-  mudar({ status: texto, tentarOculto: !oferecerNovaTentativa });
+  mudar({ status: texto, tentarOculto: !oferecerNovaTentativa, statusSeq: estado.statusSeq + 1 });
 }
 const statusPronto = () => mostrarStatus(textoStatusPronto(modelo));
-const mostrarStatusAnexos = (texto: string) => mudar({ anexosStatus: texto });
+const mostrarStatusAnexos = (texto: string) => mudar({ anexosStatus: texto, anexosStatusSeq: estado.anexosStatusSeq + 1 });
 const mostrarStatusInstrucoes = (texto: string) => mudar({ instrucoesStatus: texto });
 const mostrarStatusBuscaWeb = (texto: string) => mudar({ buscaWebStatus: texto });
 const mostrarStatusLembretes = (texto: string) => mudar({ lembretesStatus: texto });
@@ -411,7 +415,7 @@ function mostrarResposta(dados: RespostaMensagem | null) {
   const brutoBuscas = dados?.busca_web;
   const buscas: DadosBusca[] = Array.isArray(brutoBuscas) ? brutoBuscas : [];
   if (texto || ferramentas.length || arquivos.length || buscas.length) adicionarMensagem("assistente", texto, ferramentas, arquivos, buscas);
-  mudar({ anuncio: texto });
+  mudar({ anuncio: texto, anuncioSeq: estado.anuncioSeq + 1 });
   if (estado.lembretesAberta && ferramentas.some(nome => nome.includes("lembrete"))) void carregarLembretes();
   if (ferramentas.some(nome => nome.endsWith("_representante_regional"))) void app().carregarRepresentantesRegionais?.(true);
   mostrarPendente(dados?.pendente ? String(dados.pendente.descricao ?? "") || PENDENTE_SEM_DESCRICAO : null);

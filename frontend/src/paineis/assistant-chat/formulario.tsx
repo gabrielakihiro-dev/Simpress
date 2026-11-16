@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { metaAnexo } from "./assistente-puro";
 import { Icone } from "./comuns";
 import { acoes, type Estado } from "./estado";
@@ -29,7 +30,7 @@ export function Formulario({ e }: { e: Estado }) {
       <p id="assistente-anexos-aviso" className="ck-assist__aviso" hidden={e.anexosAvisoOculto}>
         Atenção: imagens vão ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Anexe só o que pode sair deste computador.
       </p>
-      <p id="assistente-anexos-status" className="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite">{e.anexosStatus}</p>
+      <p id="assistente-anexos-status" className="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"><Fragment key={e.anexosStatusSeq}>{e.anexosStatus}</Fragment></p>
       <div className="ck-assist__pilula">
         <button
           type="button" id="assistente-anexar" className="ck-btn ck-btn--fantasma ck-assist__icone" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)"

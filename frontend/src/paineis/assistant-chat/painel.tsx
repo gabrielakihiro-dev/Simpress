@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { Fragment, useSyncExternalStore } from "react";
 import { AreaHistorico, AreaInstrucoes, AreaLembretes } from "./areas";
 import { Icone } from "./comuns";
 import { assinar, acoes, ler, type Estado } from "./estado";
@@ -51,7 +51,7 @@ function Cabecalho({ e }: { e: Estado }) {
 function Barra({ e }: { e: Estado }) {
   return (
     <div className="ck-barra-ferr ck-assist__barra">
-      <p id="assistente-status" className="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">{e.status}</p>
+      <p id="assistente-status" className="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite"><Fragment key={e.statusSeq}>{e.status}</Fragment></p>
       <button
         type="button" id="assistente-cancelar-envio" className="ck-btn ck-btn--secundario ck-btn--sm ck-assist__cancelar-envio"
         aria-label="Cancelar envio" hidden={e.cancelarEnvioOculto} onClick={() => acoes.cancelarEnvioAssistente()}
@@ -117,7 +117,7 @@ export function Painel() {
       <AreaHistorico e={e} />
       <Mensagens e={e} />
       <BoasVindas />
-      <p id="assistente-anuncio" className="ck-sr" aria-live="polite" aria-atomic="true">{e.anuncio}</p>
+      <p id="assistente-anuncio" className="ck-sr" aria-live="polite" aria-atomic="true"><Fragment key={e.anuncioSeq}>{e.anuncio}</Fragment></p>
       <Pendente e={e} />
       <Formulario e={e} />
     </>

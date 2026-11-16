@@ -243,6 +243,11 @@ test("rascunho: 'Copiar texto' só aparece com montar_rascunho e avisa 'Texto co
   await copiar.click();
   await expect(page.locator("#assistente-status")).toHaveText("Texto copiado.");
   expect(await page.evaluate(() => window.__copiado)).toBe(rascunho);
+  // Aviso repetido troca o nó de texto (como o textContent antigo), senão o leitor de tela não repete o aviso.
+  await page.evaluate(() => { window.__noStatus = document.querySelector("#assistente-status").firstChild; });
+  await copiar.click();
+  await expect.poll(() => page.evaluate(() => document.querySelector("#assistente-status").firstChild !== window.__noStatus)).toBe(true);
+  await expect(page.locator("#assistente-status")).toHaveText("Texto copiado.");
 });
 
 test("confirmação de envio: o cartão mostra a descrição e Esc cancela (confirmado false) sem fechar o widget", async ({ page }) => {
