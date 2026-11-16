@@ -23,7 +23,7 @@ function listSourceFiles(staticDir) {
       const fullPath = path.join(directory, entry.name);
       if (entry.isDirectory()) {
         if (entry.name !== "vendor" && entry.name !== "dist") walk(fullPath);
-      } else if (/\.(html|js)$/.test(entry.name)) {
+      } else if (/\.(html|js|tsx?)$/.test(entry.name)) {
         files.push(fullPath);
       }
     }
@@ -32,7 +32,8 @@ function listSourceFiles(staticDir) {
   return files.sort();
 }
 
-// Icons come from static/ and from the index.html partials in frontend/partials/.
+// Icons come from static/, the index.html partials in frontend/partials/ and the React panels in
+// frontend/src/ that set data-lucide for the global subset.
 function collectIconNames(...sourceDirs) {
   const names = new Set(DYNAMIC_ICON_NAMES);
   for (const file of sourceDirs.filter(dir => fs.existsSync(dir)).flatMap(listSourceFiles)) {
@@ -128,7 +129,7 @@ function buildSubsetSource(names, lucide, version) {
 function writeLucideSubset(root, version) {
   const staticDir = path.join(root, "static");
   const lucide = require(path.join(root, "node_modules", "lucide"));
-  const names = collectIconNames(staticDir, path.join(root, "frontend", "partials"));
+  const names = collectIconNames(staticDir, path.join(root, "frontend", "partials"), path.join(root, "frontend", "src"));
   const destination = path.join(staticDir, "vendor", `lucide-${version}-subset.js`);
   fs.writeFileSync(destination, buildSubsetSource(names, lucide, version));
   return { destination, names };
