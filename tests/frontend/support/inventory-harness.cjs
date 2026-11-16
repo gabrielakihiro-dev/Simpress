@@ -14,6 +14,8 @@ const { criarPesquisaEquipamento } = require("../../../frontend/src/paineis/pesq
 const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/transporte/estado.ts");
 const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
 const { criarAcoesCartaoEquipamento } = require("../../../frontend/src/paineis/cartao-equipamento/estado.ts");
+const { criarIndicadoresHome } = require("../../../frontend/src/paineis/indicadores-home/estado.ts");
+const { criarResultadoComparacao } = require("../../../frontend/src/paineis/resultado-comparacao/estado.ts");
 
 const { appScripts, appSource } = require("./app-sources.cjs");
 
@@ -281,6 +283,27 @@ function mountReactPanels(context, document, window, effects, fetchApi) {
   window.SimpressReact["contatos-regionais"] = criarContatosRegionais({
     app: appReact,
     transferUtils,
+    apiFetch: requestApi,
+  });
+
+  window.SimpressReact["indicadores-home"] = criarIndicadoresHome({
+    app: appReact,
+    transferUtils,
+    motion: null,
+    dom: window.SimpressDomUtils(document),
+    apiFetch: requestApi,
+  });
+
+  // BF3: resultado da comparação (o mesmo contexto que frontend/src/paineis/resultado-comparacao/montar.tsx monta no navegador).
+  window.SimpressReact["resultado-comparacao"] = criarResultadoComparacao({
+    app: appReact,
+    appState,
+    motion: null,
+    dom: window.SimpressDomUtils(document),
+    comparisonResultRenderer: window.SimpressComparisonResultRenderer,
+    historyFormat: window.SimpressHistoryFormat,
+    loggedUserMarkers: window.SimpressLoggedUserMarkers({ app: appReact, appState, dom: window.SimpressDomUtils(document) }),
+    annotationAutosave,
     apiFetch: requestApi,
   });
 

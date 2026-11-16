@@ -4,7 +4,7 @@ const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
 const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
-const createComparisonResult = require("../../static/js/features/comparison-result.js");
+const { criarResultadoComparacao: createComparisonResult } = require("../../frontend/src/paineis/resultado-comparacao/estado.ts");
 
 const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
 const rendererContext = { app: { atributosVersaoAnotacao: () => "" }, dom, historyFormat, loggedUserMarkers: createLoggedUserMarkers({ dom }) };
@@ -139,8 +139,8 @@ test("carregarSemUsuarioResumo pages the notebooks without user and reports erro
   ];
   globalThis.document = {};
   const criar = apiFetch => createComparisonResult({
-    app: { apiFetch }, appState: {}, motion: null, dom, historyFormat,
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+    app: {}, appState: {}, motion: null, dom, historyFormat,
+    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
   });
   const ok = await criar(async url => { urls.push(url); return paginas[urls.length - 1]; }).carregarSemUsuarioResumo();
   assert.equal(ok.estado, "ok");
@@ -157,8 +157,8 @@ test("carregarSemUsuarioResumo reutiliza o resultado bem-sucedido e só relê de
   let chamadas = 0;
   globalThis.document = {};
   const criar = apiFetch => createComparisonResult({
-    app: { apiFetch }, appState: {}, motion: null, dom, historyFormat,
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+    app: {}, appState: {}, motion: null, dom, historyFormat,
+    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
   });
   const api = criar(async () => { chamadas += 1; return { items: [{ serial: "A" }], has_more: false, total: 1 }; });
   const primeira = await api.carregarSemUsuarioResumo();
@@ -192,8 +192,8 @@ test("carregarSemUsuarioResumo ao bater o limite de páginas devolve estado limi
   let chamadas = 0;
   globalThis.document = {};
   const api = createComparisonResult({
-    app: { apiFetch: async () => { chamadas += 1; return { items: Array.from({ length: 100 }, (_, i) => ({ serial: `P${chamadas}-${i}` })), has_more: true, total: 2500 }; } },
-    appState: {}, motion: null, dom, historyFormat,
+    app: {}, appState: {}, motion: null, dom, historyFormat,
+    apiFetch: async () => { chamadas += 1; return { items: Array.from({ length: 100 }, (_, i) => ({ serial: `P${chamadas}-${i}` })), has_more: true, total: 2500 }; },
     comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
   });
   const resultado = await api.carregarSemUsuarioResumo();

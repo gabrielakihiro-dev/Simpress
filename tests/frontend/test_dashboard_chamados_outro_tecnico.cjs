@@ -1,7 +1,7 @@
 // Aviso do sino "Chamados finalizados por outro técnico": só apresentação do total que /api/painel já traz.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const createDashboard = require("../../static/js/features/dashboard.js");
+const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const transferUtils = require("../../static/js/shared/transfer-utils.js");
 

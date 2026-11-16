@@ -5,6 +5,9 @@
 // Bibliotecas externas (static/vendor).
 declare var lucide: any;
 
+// Autosave das anotações (static/js/shared/history-annotation-autosave.js); lido pelo painel resultado-comparacao.
+declare var HistoryAnnotationAutosave: any;
+
 // Módulos Simpress* (cada arquivo publica o seu em window).
 declare var SimpressAccessibleDialogs: any;
 declare var SimpressActionDispatcher: any;

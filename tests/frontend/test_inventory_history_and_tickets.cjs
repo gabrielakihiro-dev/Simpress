@@ -11,14 +11,16 @@ const {
 const pastaChamados = path.resolve(__dirname, "../../frontend/src/paineis/cockpit-chamados");
 const painelChamados = fs.readFileSync(path.join(pastaChamados, "painel.tsx"), "utf8");
 const estadoChamados = fs.readFileSync(path.join(pastaChamados, "estado.ts"), "utf8");
+// O resultado da Comparação (filtros do Histórico e autosave das anotações) vive no painel React desde o BF3.
+const estadoComparacao = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/paineis/resultado-comparacao/estado.ts"), "utf8");
 
 test("filters comparison history while preserving row-level annotation autosave", () => {
   assert.doesNotMatch(appHtml, /id="modal-central-pendencias"/);
   assert.match(appScript, /data-history-filter-search/);
   assert.match(appScript, /data-history-filter-category/);
   assert.match(appScript, /data-history-filter-annotated/);
-  assert.match(appScript, /history-row-annotated/);
-  assert.match(appScript, /\/anotacoes\/\$\{encodeURIComponent\(targetItemId\)\}/);
+  assert.match(estadoComparacao, /history-row-annotated/);
+  assert.match(estadoComparacao, /\/anotacoes\/\$\{encodeURIComponent\(itemId\)\}/);
 });
 
 test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tracking modal", () => {

@@ -73,7 +73,7 @@ Os números vêm dos dados reais de `#resumo-cards` e da comparação de planilh
 #### IDs preservados
 
 - `#resumo-cards` (pode ser reestruturado internamente)
-- Os dados vêm do `dashboard.js` e da comparação de planilhas
+- Os dados vêm do `dashboard.js` (ponte; desde o BF3, 16/11/2026, a lógica está em `frontend/src/paineis/indicadores-home/`) e da comparação de planilhas
 
 ---
 
