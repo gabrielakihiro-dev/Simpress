@@ -63,8 +63,8 @@ jobs:
       fail-fast: false
       matrix:
         # 8 partes de ~12 min de teste (~13,3 min de job, com ~1,3 min de preparo); limite do usuário: 15 min.
-        # Soma por arquivo (desktop + mobile) medida no run 43773890590 de 15/11/2026 (jobs 3 e 8 com 15m52 e 15m42):
-        # pior parte, 12,2 min; react-g7.spec.cjs (novo, ~2,5 min estimados) entrou no grupo 4.
+        # Soma por arquivo (desktop + mobile) medida no run 43798193070 de 16/11/2026 (job 6 com 15m45, 14,4 min de teste):
+        # termos.spec.cjs (~2,9 min) saiu do grupo 6 para o grupo 8 (8,6 min de teste); os dois ficam em ~11,5 min.
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         include:
           - shard: 1
@@ -90,14 +90,14 @@ jobs:
           - shard: 6
             specs: >-
               cockpit-layout.spec.cjs react-g2.spec.cjs react-g1.spec.cjs info-tips-resumo.spec.cjs
-              origin-contact.spec.cjs asset-updates.spec.cjs termos.spec.cjs
+              origin-contact.spec.cjs asset-updates.spec.cjs
           - shard: 7
             specs: >-
               ui.spec.cjs react-g5.spec.cjs react-g6.spec.cjs outlook-email.spec.cjs
               react-g3.spec.cjs react-infra.spec.cjs
           - shard: 8
             specs: >-
-              cockpit-tools.spec.cjs cobertura.spec.cjs dossie-equipamento.spec.cjs
+              cockpit-tools.spec.cjs cobertura.spec.cjs dossie-equipamento.spec.cjs termos.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
