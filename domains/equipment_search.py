@@ -29,6 +29,8 @@ def normalize_search_term(value: Any) -> str:
 
 
 USER_WORD_SPLIT = re.compile(r"[\s,;/\\]+")
+# The cadastro abbreviates HP lines ("HP ZB PWR G11", "HP EB 6 G1I"); the full name must still find them.
+MODEL_ABBREVIATIONS = {"ZB": "ZBOOK", "EB": "ELITEBOOK"}
 # Below this similarity a typo is not corrected: "joao" must not become "joana" blindly, but "bpinheirp" -> "bpinheiro".
 SUGGESTION_CUTOFF = 0.75
 
@@ -64,9 +66,11 @@ def build_search_index(
             (entry["label"] for entry in CATEGORIES if entry["value"] == category),
             "",
         )
+        model_search = normalize(model)
+        model_search = " ".join([model_search, *(MODEL_ABBREVIATIONS[word] for word in model_search.split() if word in MODEL_ABBREVIATIONS)])
         searchable_values = (
             normalize(serial_key or serial),
-            normalize(model),
+            model_search,
             normalize(kind),
             normalize(alias),
             normalize(city),
