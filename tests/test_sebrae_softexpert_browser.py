@@ -294,8 +294,20 @@ const painel = (qual) => {
   $('p-anexo').classList.toggle('oculto', qual !== 'anexo');
 };
 $('m-atendimento').addEventListener('click', () => painel('atendimento'));
-$('m-anexo').addEventListener('click', () => painel('anexo'));
-$('btnInsertAttach').addEventListener('click', () => $('modal-anexo').classList.remove('oculto'));
+const criarBotaoIncluir = () => {
+  if ($('btnInsertAttach')) return;
+  const botao = document.createElement('button');
+  botao.type = 'button'; botao.id = 'btnInsertAttach';
+  botao.innerHTML = '<span class="seicon-plus"></span>';
+  botao.addEventListener('click', () => $('modal-anexo').classList.remove('oculto'));
+  $('p-anexo').prepend(botao);
+};
+if (D.anexo_atrasado || D.anexo_ausente) $('btnInsertAttach').remove();
+$('m-anexo').addEventListener('click', () => {
+  painel('anexo');
+  if (D.anexo_atrasado) setTimeout(criarBotaoIncluir, 1000);
+});
+if (!D.anexo_atrasado && !D.anexo_ausente) $('btnInsertAttach').addEventListener('click', () => $('modal-anexo').classList.remove('oculto'));
 $('arquivo-grade').addEventListener('change', () => {  // sobe sem Enviar: o teste exige que nunca aconteça
   const arquivo = $('arquivo-grade').files[0];
   if (arquivo) fetch('/api/anexo?numero=' + D.numero + '&nome=grade:' + encodeURIComponent(arquivo.name), {method: 'POST'});
@@ -446,6 +458,8 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                     dados.update(
                         abertura=bancada.abertura, email_marcado_inicial=c["email_marcado_inicial"],
                         confirmacao_final=c["confirmacao_final"], finalizar_falha=c["finalizar_falha"],
+                        anexo_atrasado=c.get("anexo_atrasado", False),
+                        anexo_ausente=c.get("anexo_ausente", False),
                         titulo_cabecalho=c.get("titulo_cabecalho", c["titulo"]), solicitante_cabecalho=c.get("solicitante_cabecalho", c["solicitante"]),
                     )
                     return self.responder(PAGINA_FINALIZACAO % {"estilo": ESTILO, "dados": json.dumps(dados)})
@@ -1254,6 +1268,27 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf", "finalizar:UTIC-2026-0001"])
         # Os campos continuam preenchidos depois de ir ao Anexo e voltar.
         self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=False)
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_finaliza_com_pdf_quando_botao_incluir_aparece_depois_da_aba(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="API SEBRAE", anexo_atrasado=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf())
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf", "finalizar:UTIC-2026-0001"])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_erro_sem_botao_incluir_fecha_a_janela_sem_enviar_ou_finalizar(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="API SEBRAE", anexo_ausente=True)]
+        page = self.abrir_lista()
+        with patch.object(se, "ESPERA_BOTAO_MS", 100):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf())
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertIn("encontrados 0", resultado["detalhes"]["mensagem"])
+        self.assertEqual(resultado["detalhes"]["escritas"], [])
+        self.assertEqual(self.bancada.eventos, [])
         self.assertEqual(self.abas_do_registro(), [])
         self.assertSemEscrita()
 

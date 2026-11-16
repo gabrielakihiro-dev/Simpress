@@ -1509,18 +1509,26 @@ def _ler_atendimento(page: "Page", descricao: str, enviar_email: bool) -> Dict[s
     return lidos
 
 
-def _botao_unico(page: "Page", montar: Callable[["Frame"], "Locator"], descricao: str) -> "Locator":
+def _botao_unico(
+    page: "Page", montar: Callable[["Frame"], "Locator"], descricao: str, *, espera_ms: int = 0,
+) -> "Locator":
     """O único botão visível que ``montar`` acha em todos os frames; zero ou mais de um é falha."""
-    achados = []
-    for frame in _frames(page):
-        try:
-            candidato = montar(frame).filter(visible=True)
-            achados.extend(candidato.nth(i) for i in range(candidato.count()))
-        except Exception:
-            continue
-    if len(achados) != 1:
-        raise SoftExpertErro(f"{descricao}: esperado exatamente 1 botão, encontrados {len(achados)}; nada foi clicado.")
-    return achados[0]
+    def procurar() -> Any:
+        achados = []
+        for frame in _frames(page):
+            try:
+                candidato = montar(frame).filter(visible=True)
+                achados.extend(candidato.nth(i) for i in range(candidato.count()))
+            except Exception:
+                continue
+        if len(achados) > 1:
+            raise SoftExpertErro(f"{descricao}: esperado exatamente 1 botão, encontrados {len(achados)}; nada foi clicado.")
+        return achados[0] if achados else None
+
+    botao = _esperar(page, procurar, espera_ms) if espera_ms else procurar()
+    if botao is None:
+        raise SoftExpertErro(f"{descricao}: esperado exatamente 1 botão, encontrados 0; nada foi clicado.")
+    return botao
 
 
 def _conteiner_do_upload(frame: "Frame", nome_pdf: str) -> "Locator":
@@ -1545,6 +1553,7 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
         page,
         lambda f: f.locator(SEL_INCLUIR).or_(f.get_by_role("button", name=re.compile(r"^\s*\+\s*$"))),
         "Incluir anexo",
+        espera_ms=ESPERA_BOTAO_MS,
     )
     def _etapa() -> None:
         escolhidos: List[Any] = []
