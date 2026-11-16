@@ -39,27 +39,27 @@ export function Dialogo() {
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="block text-fg-tertiary font-semibold mb-1">Número de Série:</label>
+              <label htmlFor="edit-serial" className="block text-fg-tertiary font-semibold mb-1">Número de Série:</label>
               <input type="text" id="edit-serial" value={serial} readOnly={somenteLeitura}
                 onChange={evento => editar("serial", evento.currentTarget.value)}
                 className="w-full px-3 py-2 rounded-lg glass-input text-white font-mono uppercase font-bold focus:outline-none" />
             </div>
             <div>
-              <label className="block text-fg-tertiary font-semibold mb-1">Tipo de Equipamento:</label>
+              <label htmlFor="edit-tipo" className="block text-fg-tertiary font-semibold mb-1">Tipo de Equipamento:</label>
               <select id="edit-tipo" value={tipo} onChange={evento => editar("tipo", evento.currentTarget.value)}
                 className="w-full px-3 py-2 rounded-lg glass-input text-white focus:outline-none">
                 {TIPOS.map(opcao => <option key={opcao} value={opcao}>{opcao}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-fg-tertiary font-semibold mb-1">Modelo do Hardware:</label>
+              <label htmlFor="edit-modelo" className="block text-fg-tertiary font-semibold mb-1">Modelo do Hardware:</label>
               <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" value={modelo}
                 onChange={evento => editar("modelo", evento.currentTarget.value)}
                 className="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
             </div>
             <div id="edit-apelido-field" className={apelidoOculto ? "hidden" : undefined}>
               <div className="flex items-center gap-1 mb-1">
-                <label className="block text-fg-tertiary font-semibold">Apelido / Hostname:</label>
+                <label htmlFor="edit-apelido" className="block text-fg-tertiary font-semibold">Apelido / Hostname:</label>
                 <InfoTip rotulo="Sobre Apelido / Hostname" idDica="tip-editar-apelido-campo" fim>
                   Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.
                 </InfoTip>
@@ -69,7 +69,7 @@ export function Dialogo() {
                 className="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-fg-tertiary font-semibold mb-1">Id Cliente / Observação de Uso:</label>
+              <label htmlFor="edit-id-cliente" className="block text-fg-tertiary font-semibold mb-1">Id Cliente / Observação de Uso:</label>
               <input type="text" id="edit-id-cliente" placeholder="Ex: Note diretoria Tipo 2" value={idCliente}
                 onChange={evento => editar("idCliente", evento.currentTarget.value)}
                 className="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />

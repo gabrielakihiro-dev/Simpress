@@ -217,6 +217,7 @@ test.describe("estrutura e comportamento (1366 px)", () => {
     await expect(modal.locator("#pesquisa-completa-contagem")).toHaveText("70 resultados");
     await expect(modal.locator("#pesquisa-completa-contagem")).toHaveAttribute("role", "status");
     await expect(modal.locator("#pesquisa-completa-contagem")).toHaveAttribute("aria-live", "polite");
+    await expect(modal.locator("#pesquisa-completa-contagem")).toHaveClass(/(^|\s)text-cyan-200(\s|$)/);
     await expect(modal.locator("#pesquisa-completa-status")).toHaveText("Exibindo 50 de 70 resultados.");
     await expect(modal.locator("#pesquisa-completa-status")).toHaveAttribute("role", "status");
     await expect(modal.locator("#pesquisa-completa-status")).toHaveAttribute("aria-live", "polite");
@@ -337,6 +338,22 @@ test.describe("estrutura e comportamento (1366 px)", () => {
     await expect(modal.getByRole("button", { name: "Cancelar" })).toHaveAttribute("data-on-click", "fecharModalEditarEquipamento");
     await expect(modal.getByRole("button", { name: "Fechar edição do equipamento" })).toHaveAttribute("data-on-click", "fecharModalEditarEquipamento");
     await expect(modal.locator("#tip-editar-equipamento")).toHaveAttribute("role", "tooltip");
+    for (const [id, rotulo] of [
+      ["edit-serial", "Número de Série:"], ["edit-tipo", "Tipo de Equipamento:"], ["edit-modelo", "Modelo do Hardware:"],
+      ["edit-apelido", "Apelido / Hostname:"], ["edit-id-cliente", "Id Cliente / Observação de Uso:"],
+    ]) await expect(modal.locator(`label[for="${id}"]`)).toHaveText(rotulo);
+    await expect(modal.getByLabel("Número de Série:")).toHaveAttribute("id", "edit-serial");
+    await expect(modal.getByLabel("Tipo de Equipamento:")).toHaveAttribute("id", "edit-tipo");
+    await expect(modal.getByLabel("Modelo do Hardware:")).toHaveAttribute("id", "edit-modelo");
+    await expect(modal.getByLabel("Id Cliente / Observação de Uso:")).toHaveAttribute("id", "edit-id-cliente");
+    for (const [id, rotulo, trecho] of [
+      ["tip-editar-equipamento", "Sobre Atualizar Dados do Equipamento", "gravadas diretamente na planilha oficial Excel"],
+      ["tip-editar-apelido-campo", "Sobre Apelido / Hostname", "altere o apelido pelo botão próprio no cartão"],
+    ]) {
+      await expect(modal.locator(`#${id}`)).toHaveAttribute("role", "tooltip");
+      await expect(modal.locator(`#${id}`)).toContainText(trecho);
+      await expect(modal.locator(`button.info-tip-trigger[aria-describedby="${id}"]`)).toHaveAttribute("aria-label", rotulo);
+    }
     expect(await idsRepetidos(page)).toEqual([]);
     await page.keyboard.press("Escape");
     await expect(modal).toBeHidden();
@@ -396,6 +413,8 @@ test.describe("estrutura e comportamento (1366 px)", () => {
     await expect(modal.getByRole("button", { name: "Cancelar" })).toHaveAttribute("data-on-click", "fecharModalEditarApelido");
     await expect(modal.getByRole("button", { name: "Fechar", exact: true })).toHaveAttribute("data-on-click", "fecharModalEditarApelido");
     await expect(modal.locator("#tip-editar-apelido")).toHaveAttribute("role", "tooltip");
+    await expect(modal.locator("#tip-editar-apelido")).toContainText("O apelido manual prevalece nas próximas exportações do Excel.");
+    await expect(modal.locator('button.info-tip-trigger[aria-describedby="tip-editar-apelido"]')).toHaveAttribute("aria-label", "Sobre Editar apelido");
     expect(await idsRepetidos(page)).toEqual([]);
     await page.keyboard.press("Escape");
     await expect(modal).toBeHidden();
