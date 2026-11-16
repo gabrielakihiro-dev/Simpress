@@ -273,9 +273,15 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_excel_exports_show_only_success_confirmation(self):
         script = _frontend_script()
+        # A sétima exportação (Chamados, Exportar Excel) é do painel React desde o G8; o texto aprovado não muda.
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
-            7,
+            6,
+        )
+        painel_chamados = (PROJECT_ROOT / "frontend/src/paineis/cockpit-chamados/estado.ts").read_text(encoding="utf-8")
+        self.assertEqual(
+            painel_chamados.count('showToast?.("Planilha Exportada com Sucesso!", "success");'),
+            1,
         )
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):

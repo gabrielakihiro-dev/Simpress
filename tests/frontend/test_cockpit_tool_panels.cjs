@@ -9,6 +9,8 @@ const root = path.resolve(__dirname, "../..");
 const html = assembledHtml();
 const css = fs.readFileSync(path.join(root, "static/styles/ck-cockpit.css"), "utf8");
 const source = fs.readFileSync(path.join(root, "static/js/features/cockpit-tool-panels.js"), "utf8");
+// "Importação e versões" do painel Chamados é desenhada pelo React desde o G8: os IDs e o ARIA dela estão no JSX.
+const painelChamados = fs.readFileSync(path.join(root, "frontend/src/paineis/cockpit-chamados/painel.tsx"), "utf8");
 const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
 const panels = createCockpitToolPanels({ app: {}, appState: {} });
 
@@ -350,15 +352,25 @@ test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e man
     "cockpit-tickets-kpis", "cockpit-tickets-triage", "cockpit-tickets-contagem", "os-aba-abertas", "os-aba-finalizadas", "os-abertas-contagem", "os-finalizadas-contagem",
     "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-attention",
     "cockpit-tickets-export", "cockpit-tickets-clear", "cockpit-tickets-manage", "cockpit-tickets-manage-panel",
+  ];
+  for (const id of idsChamados) assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  // O bloco "Importação e versões" é do React: o HTML só traz o contêiner e os IDs dele ficam no JSX, uma vez cada.
+  assert.match(html, /<div class="ckp-recolher__corpo" data-react-painel="cockpit-chamados"><\/div>/);
+  const idsReact = [
     "cockpit-tickets-form", "cockpit-tickets-file-simpress", "cockpit-tickets-file-oracle", "cockpit-tickets-import", "cockpit-tickets-import-status",
     "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution",
   ];
-  for (const id of idsChamados) assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  for (const id of idsReact) {
+    assert.ok(!html.includes(`id="${id}"`), `${id} não fica mais no HTML estático`);
+    // Os dois campos de arquivo recebem o ID pela propriedade idEntrada (o CampoArquivo escreve o id no input).
+    const marca = id.startsWith("cockpit-tickets-file-") ? `idEntrada="${id}"` : `id="${id}"`;
+    assert.equal(painelChamados.split(marca).length - 1, 1, id);
+  }
   // Textos explicativos no ⓘ: o seletor de versão segue descrito pelo balão, sem texto visível fora dele.
-  assert.match(html, /<button type="button" class="info-tip-trigger" aria-label="Sobre a versão" aria-describedby="cockpit-tickets-version-hint">/);
-  assert.match(html, /<span id="cockpit-tickets-version-hint" role="tooltip" class="info-tip-text">A versão escolhida vale para Exportar Excel e para a comparação\. A tabela mostra sempre a importação mais recente\.<\/span>/);
-  assert.match(html, /<select id="cockpit-tickets-version"[^>]*aria-describedby="cockpit-tickets-version-hint"/);
-  assert.doesNotMatch(html, /ckp-secao__desc"[^>]*>A versão escolhida/);
+  assert.match(painelChamados, /<InfoTip rotulo="Sobre a versão" idDica="cockpit-tickets-version-hint">A versão escolhida vale para Exportar Excel e para a comparação\. A tabela mostra sempre a importação mais recente\.<\/InfoTip>/);
+  assert.match(painelChamados, /<span id=\{idDica\} role="tooltip" className="info-tip-text">/);
+  assert.match(painelChamados, /<select id="cockpit-tickets-version"[^>]*aria-describedby="cockpit-tickets-version-hint"/);
+  assert.doesNotMatch(painelChamados, /ckp-secao__desc"[^>]*>A versão escolhida/);
   // Subtítulo do cabeçalho: balão do ⓘ ao lado do título (fora do h1, que tem textContent trocado), sem aria-live.
   assert.match(html, /<\/h1>\s*<span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a ferramenta" aria-describedby="cockpit-tool-subtitle">/);
   assert.match(html, /<span id="cockpit-tool-subtitle" role="tooltip" class="info-tip-text">[^<]+<\/span>/);
