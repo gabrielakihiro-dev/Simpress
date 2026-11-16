@@ -1,74 +1,39 @@
+// Pesquisa completa (Home F1): o filtro por usuário é enviado ao servidor só quando escolhido e some ao limpar.
+// Desde a migração React (Dia 2, G10) essa regra vive em frontend/src/paineis/pesquisa-completa/pesquisa-completa-puro.ts
+// (carregado direto pelo require do Node); o diálogo inteiro é testado no navegador (tests/e2e/react-g10.spec.cjs).
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const test = require("node:test");
 
-const createFullEquipmentSearch = require("../../static/js/features/full-equipment-search.js");
+const {
+  decidirFiltros, filtrosAtivos, montarParametros, usuarioAoLimpar,
+} = require(path.join(__dirname, "../../frontend/src/paineis/pesquisa-completa/pesquisa-completa-puro.ts"));
 
-function fakeElement(id) {
-  const classes = new Set();
-  return {
-    id, value: "", textContent: "", disabled: false, scrollTop: 0, options: [],
-    classList: {
-      add: name => classes.add(name),
-      remove: name => classes.delete(name),
-      toggle: (name, force) => (force ?? !classes.has(name)) ? classes.add(name) : classes.delete(name),
-      contains: name => classes.has(name),
-    },
-    setAttribute() {}, removeAttribute() {},
-    replaceChildren(...children) { this.options = children; this.children = children; },
-    add(option) { this.options.push(option); },
-    appendChild(child) { (this.children = this.children || []).push(child); return child; },
-  };
-}
+const parametros = (busca, offset = 0) => new URLSearchParams(montarParametros(busca, offset));
+const vazia = { query: "BRJ", categoria: "", cidade: "", usuario: "" };
 
-function setup(page) {
-  const elements = new Map();
-  globalThis.document = {
-    getElementById(id) {
-      if (!elements.has(id)) elements.set(id, fakeElement(id));
-      return elements.get(id);
-    },
-  };
-  globalThis.Option = function Option(text, value) { return { text, value }; };
-  globalThis.lucide = { createIcons() {} };
-  const requests = [];
-  const toasts = [];
-  const app = {
-    apiFetch: async url => { requests.push(url); return page(url); },
-    showToast: (message, type) => toasts.push({ message, type }),
-    abrirModalAcessivel() {}, fecharAutocomplete() {}, fecharModalAcessivel() {},
-  };
-  const feature = createFullEquipmentSearch({
-    app,
-    motion: null,
-    dom: { pluralize: (count, word) => (count === 1 ? word : `${word}s`) },
-    equipmentSearchRenderer: () => ({ criarLinhaPesquisaCompleta: item => ({ item }) }),
-  });
-  app.alterarFiltrosPesquisaCompleta = feature.alterarFiltrosPesquisaCompleta;
-  return { feature, requests, toasts, el: id => globalThis.document.getElementById(id) };
-}
+test("a search with a term sends the chosen user filter and can clear it", () => {
+  assert.equal(parametros(vazia).get("usuario"), null);
 
-const flush = () => new Promise(resolve => setImmediate(resolve));
-const pageWith = (items, users = { sem: items.length, com: 3 }) => () => ({
-  items, total: items.length, has_more: false, filters: { categories: [], cities: [], users },
+  const escolha = { categoria: "", cidade: "", usuario: "sem" };
+  assert.equal(decidirFiltros(vazia, escolha), "aplicar");
+  const filtrada = { ...vazia, usuario: escolha.usuario };
+  const enviados = parametros(filtrada);
+  assert.equal(enviados.get("q"), "BRJ");
+  assert.equal(enviados.get("usuario"), "sem");
+  assert.equal(filtrosAtivos(filtrada), true, "o botão Limpar filtros aparece");
+
+  const aoLimpar = { ...filtrada, usuario: usuarioAoLimpar(filtrada.query) };
+  assert.equal(parametros(aoLimpar).get("usuario"), null);
+  assert.equal(filtrosAtivos(aoLimpar), false, "o botão Limpar filtros some");
 });
 
-test("a search with a term sends the chosen user filter and can clear it", async () => {
-  const { feature, requests, el } = setup(pageWith([{ serial: "BRJ001" }]));
-  el("input-serial").value = "BRJ";
-  feature.abrirPesquisaCompleta();
-  await flush();
-  assert.equal(new URL(requests[0], "http://local").searchParams.get("usuario"), null);
-
-  el("filtro-pesquisa-usuario").value = "sem";
-  feature.alterarFiltrosPesquisaCompleta();
-  await flush();
-  const params = new URL(requests[1], "http://local").searchParams;
-  assert.equal(params.get("q"), "BRJ");
-  assert.equal(params.get("usuario"), "sem");
-  assert.equal(el("btn-limpar-filtros-pesquisa").classList.contains("hidden"), false);
-
-  feature.limparFiltrosPesquisaCompleta();
-  await flush();
-  assert.equal(new URL(requests[2], "http://local").searchParams.get("usuario"), null);
-  assert.equal(el("btn-limpar-filtros-pesquisa").classList.contains("hidden"), true);
+test("sem termo, só Sem usuário vale: é a própria listagem e Limpar volta para ele", () => {
+  const listagem = { query: "", categoria: "", cidade: "", usuario: "sem" };
+  assert.equal(parametros(listagem).get("usuario"), "sem");
+  assert.equal(filtrosAtivos(listagem), false, "Sem usuário sozinho não é filtro a limpar");
+  assert.equal(usuarioAoLimpar(""), "sem");
+  assert.equal(decidirFiltros(listagem, { categoria: "", cidade: "", usuario: "com" }), "reverter", "Com usuário sem termo volta atrás");
+  assert.equal(decidirFiltros(listagem, { categoria: "notebook", cidade: "", usuario: "sem" }), "aplicar");
+  assert.equal(decidirFiltros(listagem, { categoria: "", cidade: "", usuario: "sem" }), "ignorar");
 });

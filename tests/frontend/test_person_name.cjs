@@ -119,6 +119,9 @@ function elementoFalso() {
   };
 }
 
+// A parte React do editor (diálogos de equipamento e apelido, G10) não roda aqui: a ponte só precisa existir.
+const PONTE_FALSA = (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, async () => null]));
+
 function instalarDocumento() {
   const elementos = new Map();
   const eventos = [];
@@ -143,7 +146,7 @@ async function salvarNome({ apiFetch, atual }) {
     definirEquipamentoAtual: equipamento => aplicados.push(equipamento),
   };
   document.getElementById("input-nome-pessoa").value = "  Ana Lima ";
-  const editor = createEquipmentEditor({ app, appState });
+  const editor = createEquipmentEditor({ app, appState, ponteReact: PONTE_FALSA });
   const botao = document.getElementById("btn-salvar-nome-pessoa");
   const chamada = editor.salvarNomePessoa();
   const ocupado = botao.disabled;
@@ -158,7 +161,7 @@ test("o campo de nome fica oculto quando já existe nome e pode ser aberto para 
       serial: "AAA111", usuarios_logados: "ana.lima", nome_pessoa: "Ana Lima",
       nome_pessoa_origem: "manual", nome_pessoa_editavel: true,
     };
-    const editor = createEquipmentEditor({ app: {}, appState: { currentEquipamento: equipamento } });
+    const editor = createEquipmentEditor({ app: {}, appState: { currentEquipamento: equipamento }, ponteReact: PONTE_FALSA });
     const formulario = document.getElementById("form-nome-pessoa");
     const editar = document.getElementById("btn-editar-nome-pessoa");
     const campo = document.getElementById("input-nome-pessoa");
