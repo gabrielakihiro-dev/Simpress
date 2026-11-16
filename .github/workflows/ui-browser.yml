@@ -63,24 +63,26 @@ jobs:
       fail-fast: false
       matrix:
         # 8 partes de ~12 min de teste (~13,3 min de job, com ~1,3 min de preparo); limite do usuário: 15 min.
-        # Soma por arquivo (desktop + mobile) medida no run 43771709978 de 15/11/2026: pior parte, 11,9 min.
+        # Soma por arquivo (desktop + mobile) medida no run 43773890590 de 15/11/2026 (jobs 3 e 8 com 15m52 e 15m42):
+        # pior parte, 12,2 min; react-g7.spec.cjs (novo, ~2,5 min estimados) entrou no grupo 4.
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         include:
           - shard: 1
             specs: >-
               sebrae-dashboard.spec.cjs react-g4.spec.cjs theme-toggle.spec.cjs
-              regional-representative.spec.cjs
+              regional-representative.spec.cjs configuracao-local.spec.cjs
           - shard: 2
             specs: >-
               assistente.spec.cjs color-contrast.spec.cjs info-tips-ferramentas.spec.cjs
+              ux-ticket.spec.cjs
           - shard: 3
             specs: >-
-              info-tips-todos.spec.cjs termos.spec.cjs ticket-requests.spec.cjs
-              alias-history.spec.cjs resumo-os.spec.cjs
+              info-tips-todos.spec.cjs ticket-requests.spec.cjs alias-history.spec.cjs
+              resumo-os.spec.cjs
           - shard: 4
             specs: >-
               backups-regionais.spec.cjs monthly-report.spec.cjs os-subabas.spec.cjs
-              first-access.spec.cjs chamados-os.spec.cjs
+              first-access.spec.cjs chamados-os.spec.cjs react-g7.spec.cjs
           - shard: 5
             specs: >-
               lembretes.spec.cjs react-piloto.spec.cjs chrome-automation.spec.cjs
@@ -88,7 +90,7 @@ jobs:
           - shard: 6
             specs: >-
               cockpit-layout.spec.cjs react-g2.spec.cjs react-g1.spec.cjs info-tips-resumo.spec.cjs
-              origin-contact.spec.cjs asset-updates.spec.cjs
+              origin-contact.spec.cjs asset-updates.spec.cjs termos.spec.cjs
           - shard: 7
             specs: >-
               ui.spec.cjs react-g5.spec.cjs react-g6.spec.cjs outlook-email.spec.cjs
@@ -96,7 +98,6 @@ jobs:
           - shard: 8
             specs: >-
               cockpit-tools.spec.cjs cobertura.spec.cjs dossie-equipamento.spec.cjs
-              configuracao-local.spec.cjs ux-ticket.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
