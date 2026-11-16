@@ -1,6 +1,7 @@
 import json
 import unittest
 from typing import Any, Dict, List, Optional, Tuple
+from unittest import mock
 
 from domains.assistant_api import SimpressApi
 from domains.assistant_chat import MAX_CARACTERES_RESPOSTA, SYSTEM_PROMPT, AssistantConversation
@@ -12,6 +13,17 @@ from tests.test_assistant import CPF, FakeModel, abrir, call, calls, temp_json, 
 
 SEBRAE_SERIES = ("BRT100XA01", "BRT100XA02", "BRT200XB0R", "BRT200XB0F", "BRT300XC01")
 EMAIL = "maria.souza@exemplo.com"
+
+# With the route down the chat mask reads the local defaults file: every test here points it at a missing temp path, never the real data/state one.
+_defaults_patch = mock.patch("core.config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE", temp_json())
+
+
+def setUpModule() -> None:
+    _defaults_patch.start()
+
+
+def tearDownModule() -> None:
+    _defaults_patch.stop()
 
 
 def comparacao_padrao() -> Dict[str, Any]:
