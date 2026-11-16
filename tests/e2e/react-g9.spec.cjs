@@ -354,6 +354,55 @@ test.describe("Histórico de planilhas", () => {
     expect(terceiro.corpo).not.toBe(segundo.corpo);
   });
 
+  test("prévia expirada (409) descarta a tentativa: a próxima usa chave e prévia novas", async ({ page }) => {
+    await prepararPagina(page);
+    const servidor = await rotaHistorico(page, {
+      restaurar: (route, n) => n === 1
+        ? route.fulfill({ status: 409, json: { detail: "A prévia expirou." } })
+        : route.fulfill({ json: { evento: { total_equipamentos_carregados: 1, desfazer_disponivel: true } } }),
+    });
+    await abrirHistorico(page);
+    const posts = () => servidor.chamadas.filter(chamada => chamada.metodo === "POST");
+
+    await restaurarPrimeiro(page);
+    await expect(page.locator("#toast-container")).toContainText("A prévia expirou.");
+    await expect(page.getByRole("button", { name: BOTAO_RESTAURAR })).toBeEnabled();
+    await restaurarPrimeiro(page);
+    await expect(page.getByRole("status").filter({ hasText: "Inventários restaurados. 1 equipamento carregado." })).toBeVisible();
+
+    const [primeiro, segundo] = posts();
+    expect(posts()).toHaveLength(2);
+    expect(segundo.headers["idempotency-key"]).not.toBe(primeiro.headers["idempotency-key"]);
+    expect(JSON.parse(segundo.corpo)).toEqual({ preview_token: "2".repeat(64) });
+  });
+
+  test("contagem da partida que chega atrasada não sobrescreve o contador de uma carga mais nova", async ({ page }) => {
+    await prepararPagina(page);
+    await rotaHistorico(page);
+    // Segura só o primeiro GET da lista (a contagem da partida); os seguintes seguem para a rota do histórico.
+    let soltarContagem;
+    const contagemSegura = new Promise(resolve => { soltarContagem = resolve; });
+    let primeiro = true;
+    await page.route("**/api/historico-comparacoes", async route => {
+      if (!primeiro || route.request().method() !== "GET") return route.fallback();
+      primeiro = false;
+      await contagemSegura;
+      return route.fulfill({ json: { eventos: EVENTOS, total: EVENTOS.length } });
+    });
+    await page.goto("/");
+    await abrirHistoricoSemNavegar(page);
+    await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
+    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await expect(page.locator(TOTAL)).toHaveText("3 registros");
+
+    const respostaAtrasada = page.waitForResponse(response => new URL(response.url()).pathname === "/api/historico-comparacoes");
+    soltarContagem();
+    await respostaAtrasada;
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 200)));
+    await expect(page.locator(TOTAL)).toHaveText("3 registros");
+    await expect(page.locator(`${SELECT_DATA} option`)).toHaveText(["25/10/2026"]);
+  });
+
   test("abrir e excluir não forçam mais GET /api/painel que o módulo antigo", async ({ page }) => {
     await prepararPagina(page);
     await rotaHistorico(page);

@@ -87,15 +87,20 @@ export function escolherData(data: string) {
   mudar({ dataEscolhida: data });
 }
 
+// Contador e datas vêm da contagem da partida e de cada carga da lista: só a busca mais nova escreve neles.
+let geracaoTotal = 0;
+
 // Chamado na partida do app (sem await): só atualiza o contador e as datas do seletor. Nunca rejeita.
 export async function carregarContagemHistoricoComparacoes(): Promise<void> {
+  const minha = ++geracaoTotal;
   try {
     const dados = await apiFetch<RespostaLista>("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar as datas do histórico." });
+    if (minha !== geracaoTotal) return;
     definirTotal(dados.total);
     mudar(estadoDasDatas(dados.eventos));
   } catch (erro) {
     console.warn("Não foi possível carregar a contagem do histórico de planilhas:", erro);
-    mudar(semDatas());
+    if (minha === geracaoTotal) mudar(semDatas());
   }
 }
 
@@ -105,8 +110,10 @@ let relogio: ReturnType<typeof setTimeout> | undefined;
 // Só a resposta do pedido mais novo vale, se dois se cruzarem. Nunca rejeita.
 export async function carregarHistoricoComparacoes(): Promise<void> {
   const meu = ++pedido;
+  ++geracaoTotal;
   clearTimeout(relogio);
-  mudar({ fase: "carregando", esqueleto: false, ocupados: {} });
+  // `ocupados` fica: cada ação limpa a própria chave no finally, e um POST em andamento segue bloqueando o botão.
+  mudar({ fase: "carregando", esqueleto: false });
   // Indicador de carregamento (ux-enhancements.js) entra antes da busca.
   document.dispatchEvent(new CustomEvent("simpress:carregando-exibido"));
   relogio = setTimeout(() => { if (meu === pedido) mudar({ esqueleto: true }); }, 150);
