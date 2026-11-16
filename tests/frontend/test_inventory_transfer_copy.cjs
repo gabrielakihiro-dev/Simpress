@@ -53,9 +53,10 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   harness.context.workflowSearchItem = equipment;
 
   await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
-  // Home also reads the PowerShell ready-made codes (always-visible form, first selection only),
-  // the open tickets of the selected series (Chamados abertos) and the Sebrae tickets (F5).
-  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/endpoint/powershell/codigos", "/api/sebrae/novos", "/api/operacoes/chamados"]);
+  // Home also reads the PowerShell ready-made codes (always-visible form, first selection only).
+  // Desde o G8 os chamados abertos (Oracle e F5) são buscados pelo painel React, que este harness não carrega:
+  // a ponte só repassa a série e essas duas leituras são testadas em tests/e2e/react-g8.spec.cjs.
+  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/endpoint/powershell/codigos"]);
   assert.equal(
     harness.element("retirada-cnpj").value,
     equipment.retirada_cnpj,

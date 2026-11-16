@@ -1,122 +1,53 @@
+// Home: cartão "Chamados abertos" do equipamento. Desde o G8 a lista (OS abertas do Oracle, chamados do F5, consulta
+// parcial, resposta atrasada, texto vazio, alerta de falha) é desenhada pelo painel React
+// frontend/src/paineis/cockpit-chamados/ e testada no navegador (tests/e2e/react-g8.spec.cjs); a regra de quais
+// chamados entram e como se contam está em test_cockpit_chamados_puro.cjs. Aqui ficam o HTML do cartão, quem chama a
+// atualização e a ponte do código antigo.
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
-const { assert, createAppHarness, apiResponse } = require("./support/inventory-harness.cjs");
+const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
+const createCockpitChamados = require("../../static/js/features/cockpit-chamados.js");
 
-const texts = element => element.children.flatMap(child => [child.textContent, ...texts(child)]).filter(Boolean);
+const lido = arquivo => fs.readFileSync(path.join(staticDir, arquivo), "utf8");
 
-test("Home lists only open Oracle tickets of the selected series, newest order first", async () => {
-  const calls = [];
-  const harness = createAppHarness(url => {
-    calls.push(url);
-    return Promise.resolve(apiResponse({
-      chamados: [
-        { serie: "OUTRA", oracle: [{ solicitacao: "SR-OUTRA", ordem_servico: "9", status: "Em atendimento" }] },
-        { serie: "5cg6051bvn", oracle: [
-          { solicitacao: "SR-1", ordem_servico: "100", status: "Em atendimento", fila: "Deslocamento", cidade: "Curitiba" },
-          { solicitacao: "SR-2", ordem_servico: "200", status: "Aguardando", sub_status: "Laudo pendente" },
-          { solicitacao: "SR-3", ordem_servico: "300", status: "Concluído" },
-        ] },
-      ],
-    }));
-  });
+function featureComPonte(acao) {
+  const context = {
+    app: {},
+    ponteReact: (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, (...argumentos) => acao(nome, ...argumentos)])),
+  };
+  return createCockpitChamados(context);
+}
 
-  await harness.run('atualizarChamadosAbertosHome("5CG6051BVN")');
-  await harness.run('atualizarChamadosAbertosHome("5CG6051BVN")');
-
-  const body = harness.element("home-open-tickets-body");
-  const shown = texts(body);
-  assert.equal(calls.filter(url => url === "/api/operacoes/chamados").length, 1, "the latest import is read once and reused");
-  assert.ok(shown.indexOf("200") < shown.indexOf("100"), "higher service order comes first");
-  assert.ok(!shown.includes("300"), "closed tickets stay out");
-  assert.ok(!shown.includes("9"), "other series stay out");
-  assert.ok(!shown.includes("SR-1"), "the request number is replaced by the service order number");
-  assert.ok(shown.includes("Aguardando · Laudo pendente"));
-  assert.equal(harness.element("home-open-tickets-count").textContent, "2 abertos");
-  assert.equal(body.attributes.get("aria-busy"), "false");
+test("cartão da Home: título, contagem em região de status e corpo livre para o painel React", () => {
+  const html = assembledHtml();
+  const cartao = html.match(/<aside class="ck-cartao" aria-labelledby="home-open-tickets-title">[\s\S]*?<\/aside>/)?.[0];
+  assert.ok(cartao, "cartão de Chamados abertos");
+  assert.match(cartao, /<h2 id="home-open-tickets-title"[^>]*>Chamados abertos<\/h2>/);
+  assert.match(cartao, /<span id="home-open-tickets-count"[^>]*role="status"[^>]*aria-live="polite"><\/span>/, "contagem nasce vazia; o React troca só o texto");
+  assert.match(cartao, /<div id="home-open-tickets-body" aria-busy="false"><\/div>/, "corpo nasce vazio e sem espera; o React escreve o aria-busy");
 });
 
-test("Home also lists the series' unfinished tickets from the Chamados tab (F5)", async () => {
-  const harness = createAppHarness(url => Promise.resolve(apiResponse(url === "/api/sebrae/novos" ? {
-    importado: {
-      finalizados: [{ numero: "UTIC-2026-3" }],
-      abertos: [
-        { numero: "UTIC-2026-1", titulo: "Notebook lento", automaticos: { K: "5cg6051bvn" } },
-        { numero: "UTIC-2026-3", titulo: "Já finalizado", automaticos: { K: "5CG6051BVN" } },
-        { numero: "linha:7", chamado: "", titulo: "Sem número", automaticos_sugeridos: { K: "5CG6051BVN" } },
-        { numero: "UTIC-2026-9", titulo: "Outra série", automaticos: { K: "OUTRA" } },
-      ],
-    },
-    novos: { formulario: [{ numero: "UTIC-2026-2", linha: { G: "Novo chamado", K: "5CG6051BVN" } }] },
-  } : { chamados: [] })));
-
-  await harness.run('atualizarChamadosAbertosHome("5CG6051BVN")');
-
-  const shown = texts(harness.element("home-open-tickets-body"));
-  assert.ok(shown.includes("3 chamados na aba Chamados (F5)"));
-  assert.ok(shown.includes("UTIC-2026-1 · Notebook lento"));
-  assert.ok(shown.includes("UTIC-2026-2 · Novo chamado"));
-  assert.ok(shown.includes("Sem UTIC · Sem número"));
-  assert.ok(!shown.some(text => text.includes("Já finalizado") || text.includes("Outra série")));
-  assert.equal(harness.element("home-open-tickets-count").textContent, "3 abertos");
+test("busca de equipamento: a Home pede a atualização uma vez por equipamento, pela ação publicada", () => {
+  const busca = lido("js/features/equipment-search.js");
+  assert.equal(busca.split("app.atualizarChamadosAbertosHome(eq.serial)").length - 1, 1);
 });
 
-test("Home service order number opens that order in the Chamados tab for the record's series", async () => {
-  const harness = createAppHarness(() => Promise.resolve(apiResponse({
-    chamados: [{ serie: "5CG6051BVN", oracle: [{ solicitacao: "SR-1", ordem_servico: "100", status: "Em atendimento" }] }],
-  })));
-  await harness.run('atualizarChamadosAbertosHome("5cg6051bvn")');
-  const button = harness.element("home-open-tickets-body").children[0].children[0].children[0];
-  assert.equal(button.textContent, "100");
-  harness.run("abrirChamadoDaOs = (fontes, serie, os) => { workflowEffects.opened = [serie, os]; }");
-  button.dispatchEvent("click");
-  assert.deepEqual([...harness.effects.opened], ["5CG6051BVN", "100"]);
-});
+test("ponte: a Home repassa a série ao painel React e nunca rejeita, mesmo sem o React carregado", async () => {
+  const recebido = [];
+  const feature = featureComPonte(async (nome, ...argumentos) => { recebido.push([nome, ...argumentos]); });
+  await feature.atualizarChamadosAbertosHome("5CG6051BVN");
+  assert.deepEqual(recebido, [["atualizarChamadosAbertosHome", "5CG6051BVN"]]);
 
-test("Home F5 ticket line opens the Chamados tab (F5)", async () => {
-  const harness = createAppHarness(url => Promise.resolve(apiResponse(url === "/api/sebrae/novos"
-    ? { importado: { finalizados: [], abertos: [{ numero: "UTIC-2026-1", titulo: "Notebook lento", automaticos: { K: "S1" } }] } }
-    : { chamados: [] })));
-  await harness.run('atualizarChamadosAbertosHome("S1")');
-  harness.run("abrirPainelCockpit = async tool => { workflowEffects.painel = tool; }");
-  const [rotulo, linha] = harness.element("home-open-tickets-body").children[0].children;
-  assert.equal(linha.textContent, "UTIC-2026-1 · Notebook lento");
-  linha.dispatchEvent("click");
-  await Promise.resolve();
-  assert.equal(harness.effects.painel, "sebrae-chamados");
-});
-
-test("Home keeps the Oracle list when the Chamados tab query fails", async () => {
-  const harness = createAppHarness(url => url === "/api/sebrae/novos"
-    ? Promise.reject(new Error("falha"))
-    : Promise.resolve(apiResponse({ chamados: [{ serie: "S1", oracle: [{ solicitacao: "SR-1", ordem_servico: "1", status: "Em atendimento" }] }] })));
-  await harness.run('atualizarChamadosAbertosHome("S1")');
-  assert.ok(texts(harness.element("home-open-tickets-body")).includes("1"));
-  const warning = harness.element("home-open-tickets-body").children.find(child => child.attributes.get("role") === "alert");
-  assert.equal(warning?.textContent, "Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados.");
-  assert.equal(harness.element("home-open-tickets-count").textContent, "1 aberto · consulta parcial");
-});
-
-test("Home does not announce an empty result when only the Sebrae query fails", async () => {
-  const harness = createAppHarness(url => url === "/api/sebrae/novos"
-    ? Promise.reject(new Error("falha"))
-    : Promise.resolve(apiResponse({ chamados: [] })));
-  await harness.run('atualizarChamadosAbertosHome("S1")');
-  const body = harness.element("home-open-tickets-body");
-  assert.deepEqual(texts(body), ["Não foi possível consultar os chamados do Sebrae. Os resultados do Oracle foram preservados."]);
-  assert.equal(body.children[0].attributes.get("role"), "alert");
-  assert.equal(harness.element("home-open-tickets-count").textContent, "Consulta parcial");
-});
-
-test("Home shows the empty message for a series without open tickets", async () => {
-  const harness = createAppHarness(() => Promise.resolve(apiResponse({ chamados: [] })));
-  await harness.run('atualizarChamadosAbertosHome("SEM-CHAMADO")');
-  assert.deepEqual(texts(harness.element("home-open-tickets-body")), ["Nenhum chamado aberto para esta série."]);
-  assert.equal(harness.element("home-open-tickets-count").textContent, "");
-});
-
-test("Home reports a ticket load failure as an alert", async () => {
-  const harness = createAppHarness(() => Promise.reject(new Error("Servidor indisponível")));
-  await harness.run('atualizarChamadosAbertosHome("5CG6051BVN")');
-  const [message] = harness.element("home-open-tickets-body").children;
-  assert.equal(message.textContent, "Servidor indisponível");
-  assert.equal(message.attributes.get("role"), "alert");
+  const erros = [];
+  const original = console.error;
+  console.error = erro => erros.push(erro.message);
+  try {
+    const semReact = featureComPonte(() => Promise.reject(new Error('O painel React "cockpit-chamados" não carregou.')));
+    assert.equal(await semReact.atualizarChamadosAbertosHome("S1"), undefined);
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(erros, ['O painel React "cockpit-chamados" não carregou.']);
 });
