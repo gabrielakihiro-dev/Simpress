@@ -137,6 +137,141 @@ test.describe("chamados: comportamento", () => {
     expect(apagados).toEqual(["DELETE"]);
     await expect(painel.locator("#cockpit-tickets-delete-old")).toHaveText("Excluir importações antigas");
   });
+
+  test("exportar logo depois de importar, com a tabela ainda recarregando, usa o GET da versão nova", async ({ page }) => {
+    const NOVA = "20261016_100000";
+    const relatorioNovo = {
+      snapshot_id: NOVA, atualizado_em: "2026-10-16T10:00:00Z",
+      historico: [
+        { id: NOVA, atualizado_em: "2026-10-16T10:00:00Z", fontes: {} },
+        { id: "20261009_120000", atualizado_em: "2026-10-09T12:00:00Z", fontes: {} },
+      ],
+      fontes: {}, resumo: {},
+      chamados: [{ serie: "DEMO-SN-NOVA", relacao: "conferida", simpress: {}, oracle: [{ solicitacao: "261016-000001", ordem_servico: "7300001", status: "Em atendimento", ultima_atualizacao: "2026-10-15" }] }],
+    };
+    let importado = false;
+    let liberarTabela;
+    const tabelaLiberada = new Promise(resolve => { liberarTabela = resolve; });
+    // Antes do clique em Importar a tabela vem da fixture; depois, a recarga fica presa até o teste soltá-la.
+    await page.route("**/api/operacoes/chamados", async route => {
+      if (!importado) return route.fallback();
+      await tabelaLiberada;
+      return route.fulfill({ json: relatorioNovo }).catch(() => {});
+    });
+    await page.route("**/api/operacoes/chamados/importar", route => {
+      importado = true;
+      return route.fulfill({ json: relatorioNovo });
+    });
+    const exportacoes = [];
+    await page.route("**/api/operacoes/chamados/exportar**", route => {
+      const pedido = route.request();
+      exportacoes.push({ metodo: pedido.method(), url: new URL(pedido.url()), corpo: pedido.postDataJSON() });
+      return route.fulfill({ body: "synthetic xlsx", headers: { "content-type": "application/octet-stream", "content-disposition": "attachment; filename=chamados.xlsx" } });
+    });
+    try {
+      const painel = await abrirGestaoChamados(page);
+      await expect(page.locator('tbody tr[data-serial="DEMO-SN-001"]').first()).toBeAttached();
+      await painel.locator("#cockpit-tickets-file-simpress").setInputFiles(arquivo("Acompanhamento_de_Pedidos.xlsx"));
+      await painel.locator("#cockpit-tickets-file-oracle").setInputFiles(arquivo("Gestao_de_Solicitacoes.xlsx"));
+      await painel.getByRole("button", { name: "Importar planilhas", exact: true }).click();
+      await expect(page.locator(TOAST).filter({ hasText: "Acompanhamento de chamados atualizado." })).toBeVisible();
+      await expect(painel.locator("#cockpit-tickets-version")).toHaveValue(NOVA);
+      // A tabela ainda não recarregou: as séries que ela mostra são da importação anterior e não vão com a versão nova.
+      await page.locator("#cockpit-tickets-export").click();
+      await expect.poll(() => exportacoes.length).toBe(1);
+      expect(exportacoes[0].metodo).toBe("GET");
+      expect(exportacoes[0].url.pathname).toBe("/api/operacoes/chamados/exportar");
+      expect(exportacoes[0].url.searchParams.get("snapshot_id")).toBe(NOVA);
+      expect(exportacoes[0].corpo).toBeNull();
+      liberarTabela();
+      await expect(page.locator('tbody tr[data-serial="DEMO-SN-NOVA"]').first()).toBeAttached();
+      await expect(page.locator("#cockpit-tickets-export")).toBeEnabled();
+      await page.locator("#cockpit-tickets-export").click();
+      await expect.poll(() => exportacoes.length).toBe(2);
+      expect(exportacoes[1].metodo).toBe("POST"); // tabela recarregada: volta a mandar as séries da tela
+      expect(exportacoes[1].corpo).toMatchObject({ snapshot_id: NOVA, series: ["DEMO-SN-NOVA"] });
+    } finally {
+      liberarTabela();
+    }
+  });
+
+  test("importar: erro da API aparece no status, libera o botão e tira o aria-busy do formulário", async ({ page }) => {
+    let liberar;
+    const respostaLiberada = new Promise(resolve => { liberar = resolve; });
+    await page.route("**/api/operacoes/chamados/importar", async route => {
+      await respostaLiberada;
+      return route.fulfill({ status: 422, json: { detail: "Planilha inválida." } });
+    });
+    try {
+      const painel = await abrirGestaoChamados(page);
+      await page.evaluate(() => {
+        window.__eventosChamados = [];
+        document.addEventListener("simpress:chamados-atualizados", evento => window.__eventosChamados.push(evento.detail));
+      });
+      const botao = painel.locator("#cockpit-tickets-import");
+      const formulario = painel.locator("#cockpit-tickets-form");
+      await painel.locator("#cockpit-tickets-file-simpress").setInputFiles(arquivo("Acompanhamento_de_Pedidos.xlsx"));
+      await painel.locator("#cockpit-tickets-file-oracle").setInputFiles(arquivo("Gestao_de_Solicitacoes.xlsx"));
+      await painel.getByRole("button", { name: "Importar planilhas", exact: true }).click();
+      await expect(botao).toBeDisabled(); // enquanto a API não responde o formulário está ocupado
+      await expect(formulario).toHaveAttribute("aria-busy", "true");
+      liberar();
+      await expect(painel.locator("#cockpit-tickets-import-status")).toHaveText("Planilha inválida.");
+      await expect(botao).toBeEnabled();
+      await expect(formulario).not.toHaveAttribute("aria-busy", /.*/);
+      await expect(painel).toHaveAttribute("open", ""); // falha não fecha o bloco nem anuncia sucesso
+      await expect(page.locator(TOAST).filter({ hasText: "Acompanhamento de chamados atualizado." })).toHaveCount(0);
+      expect(await page.evaluate(() => window.__eventosChamados)).toEqual([]);
+    } finally {
+      liberar();
+    }
+  });
+
+  test("comparação: o erro atrasado de uma versão antiga não sobrescreve a comparação atual", async ({ page }) => {
+    const versoes = ["s3", "s2", "s1"];
+    await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
+      snapshot_id: "s3", atualizado_em: "2026-10-12T12:00:00Z",
+      historico: versoes.map((id, indice) => ({ id, atualizado_em: `2026-10-1${2 - indice}T12:00:00Z` })),
+      chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
+    } }));
+    let segurarAtual = false;
+    let liberarVelha;
+    let liberarAtual;
+    const velhaLiberada = new Promise(resolve => { liberarVelha = resolve; });
+    const atualLiberada = new Promise(resolve => { liberarAtual = resolve; });
+    await page.route("**/api/operacoes/chamados/evolucao**", async route => {
+      const atual = new URL(route.request().url()).searchParams.get("atual");
+      if (atual === "s2") {
+        await velhaLiberada;
+        return route.fulfill({ status: 500, json: { detail: "falha antiga" } }).catch(() => {});
+      }
+      if (segurarAtual) await atualLiberada;
+      return route.fulfill({ json: { contagens: { novos: 4, alterados: 0, iguais: 0, ausentes_arquivo: 0 }, mudancas: {} } }).catch(() => {});
+    });
+    try {
+      await page.goto("/");
+      await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
+      const versao = page.locator("#cockpit-tickets-version");
+      const evolucao = page.locator("#cockpit-tickets-evolution");
+      await expect(versao).toHaveValue("s3");
+      await expect(evolucao).toContainText("4 novas");
+      await versao.selectOption("s2"); // pedido da versão antiga: fica preso na rota
+      await expect(evolucao).toHaveText("Comparando esta versão com a anterior…");
+      segurarAtual = true;
+      const abortado = page.waitForEvent("requestfailed", pedido => pedido.url().includes("atual=s2"));
+      await versao.selectOption("s3"); // volta à atual: cancela o pedido antigo (ele falha na página) e prende o novo
+      await abortado;
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); // deixa o catch do pedido antigo rodar
+      await expect(evolucao).toHaveText("Comparando esta versão com a anterior…"); // o erro da versão antiga não vira o texto da comparação atual
+      liberarVelha();
+      liberarAtual();
+      await expect(evolucao).toContainText("4 novas");
+      await expect(evolucao).not.toContainText("falha antiga");
+    } finally {
+      liberarVelha();
+      liberarAtual();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -170,7 +305,7 @@ const SEBRAE_HOME = {
   novos: { formulario: [{ numero: "N-1", linha: { G: "Chamado novo", K: SERIE } }] },
 };
 
-async function abrirHome(page, { tema = "light", sebrae = SEBRAE_HOME, relatorio = RELATORIO_HOME } = {}) {
+async function abrirHome(page, { tema = "light", sebrae = SEBRAE_HOME, relatorio = RELATORIO_HOME, antesDeBuscar } = {}) {
   await prepararTema(page, tema);
   await page.route("**/api/equipamento/*", route => route.fulfill({ json: { serial: SERIE, modelo: "Notebook de teste", tipo: "Notebook", apelido: "TESTE-G8" } }));
   await page.route("**/api/operacoes/chamados", route => (relatorio ? route.fulfill({ json: relatorio }) : route.fulfill({ status: 503, json: { detail: "Servidor indisponível" } })));
@@ -178,6 +313,7 @@ async function abrirHome(page, { tema = "light", sebrae = SEBRAE_HOME, relatorio
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", tema);
   await page.locator("#input-serial").fill(SERIE);
+  await antesDeBuscar?.();
   await page.getByRole("button", { name: "Buscar Equipamento" }).click();
   await expect(page.locator("#card-serial")).toHaveText(SERIE);
   const cartao = page.locator('aside[aria-labelledby="home-open-tickets-title"]');
@@ -287,6 +423,38 @@ test.describe("Home chamados abertos: comportamento", () => {
     await page.getByRole("button", { name: "Buscar Equipamento" }).click();
     await expect(cartao.locator("#home-open-tickets-body")).toHaveText("Nenhum chamado aberto para esta série.");
     await expect(cartao.locator("#home-open-tickets-count")).toHaveText("");
+  });
+
+  test("clicar num chamado do F5 da lista abre o F5 com a chave do chamado, não com o número que aparece", async ({ page }) => {
+    const cartao = await abrirHome(page);
+    await page.evaluate(() => {
+      window.__chavesF5 = [];
+      window.abrirChamadoSebraeNoF5 = chave => { window.__chavesF5.push(chave); };
+    });
+    const sebrae = cartao.locator(".ck-abertos__sebrae");
+    // O item "linha:5" aparece como "UTIC-2026-8": o número na tela não serve para achar o chamado no F5.
+    await sebrae.getByRole("button", { name: "Abrir na aba Chamados (F5): UTIC-2026-8 · Mouse" }).click();
+    await sebrae.getByRole("button", { name: "Abrir na aba Chamados (F5): UTIC-2026-9 · Teclado sem resposta" }).click();
+    await sebrae.getByRole("button", { name: "Abrir na aba Chamados (F5): N-1 · Chamado novo" }).click();
+    expect(await page.evaluate(() => window.__chavesF5)).toEqual(["linha:5", "UTIC-2026-9", "N-1"]);
+  });
+
+  test("pede o F5 antes dos chamados e reaproveita os chamados recentes numa segunda busca", async ({ page }) => {
+    const ordem = [];
+    let contando = false; // a página também lê o F5 ao abrir: só conta o que a busca da Home pede
+    page.on("request", pedido => {
+      const caminho = new URL(pedido.url()).pathname;
+      if (contando && (caminho === "/api/sebrae/novos" || caminho === "/api/operacoes/chamados")) ordem.push(caminho);
+    });
+    const cartao = await abrirHome(page, { antesDeBuscar: () => { contando = true; } });
+    // Os dois pedidos saem juntos, o do F5 primeiro: a lista de OS não espera o F5 para começar a carregar.
+    expect(ordem).toEqual(["/api/sebrae/novos", "/api/operacoes/chamados"]);
+    await expect(cartao.locator("li.ck-aberto")).toHaveCount(3);
+    await page.evaluate(serie => atualizarChamadosAbertosHome(serie), SERIE);
+    await expect(cartao.locator("#home-open-tickets-body")).toHaveAttribute("aria-busy", "false");
+    await expect(cartao.locator("li.ck-aberto")).toHaveCount(3); // vem do relatório guardado na primeira busca
+    // Segunda busca: o F5 é consultado de novo (muda a toda hora), os chamados recentes não.
+    expect(ordem).toEqual(["/api/sebrae/novos", "/api/operacoes/chamados", "/api/sebrae/novos"]);
   });
 });
 
