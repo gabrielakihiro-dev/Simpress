@@ -13,6 +13,21 @@
   // Without the panel the Comparação tab keeps opening, only without the result: the error goes to the console.
   return {
     ...ponte,
+    // Without the panel the result never renders: show the error instead of leaving "Carregando comparação…" on screen.
+    renderizarResultadoComparacao: (...argumentos) => {
+      const resultado = ponte.renderizarResultadoComparacao(...argumentos);
+      const semPainel = !globalThis.SimpressReact?.["resultado-comparacao"] && typeof document !== "undefined";
+      const conteudo = semPainel ? document.getElementById("comparacao-planilhas-conteudo") : null;
+      if (conteudo) {
+        // Same markup as renderError in cockpit-tool-panels.js.
+        const nota = document.createElement("p");
+        nota.className = "ck-nota ck-nota--erro";
+        nota.textContent = "Não foi possível abrir a comparação.";
+        conteudo.replaceChildren(nota);
+        conteudo.dataset.estado = "erro";
+      }
+      return resultado;
+    },
     atributosVersaoAnotacao: (...argumentos) => ponte.atributosVersaoAnotacao(...argumentos) ?? "",
     irParaSecaoComparacao: (...argumentos) => ponte.irParaSecaoComparacao(...argumentos) ?? false,
     navegarParaLinhaComparacao: (...argumentos) => ponte.navegarParaLinhaComparacao(...argumentos) ?? false,

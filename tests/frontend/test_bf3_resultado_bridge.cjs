@@ -70,3 +70,36 @@ test("com o painel, valores falsos legítimos do painel não são trocados pelo 
   assert.equal(acoes.navegarParaLinhaComparacao({}), false);
   assert.deepEqual(await acoes.carregarSemUsuarioResumo(), { estado: "ok", items: [] });
 });
+
+function comDocumento(corpo) {
+  const conteudo = { filhos: ["Carregando comparação…"], dataset: { estado: "carregando" }, replaceChildren(...nos) { this.filhos = nos; } };
+  const anteriores = { document: globalThis.document, react: globalThis.SimpressReact };
+  globalThis.document = {
+    getElementById: id => (id === "comparacao-planilhas-conteudo" ? conteudo : null),
+    createElement: tag => ({ tag, className: "", textContent: "" }),
+  };
+  try {
+    corpo(conteudo);
+  } finally {
+    globalThis.document = anteriores.document;
+    globalThis.SimpressReact = anteriores.react;
+  }
+}
+const pontesQueNaoDevolvem = () => ({
+  ponteReact: () => ({}),
+  ponteReactSincrona: (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, () => undefined])),
+});
+
+test("sem o painel React o resultado da Comparação sai de Carregando para o estado de erro", () => comDocumento(conteudo => {
+  delete globalThis.SimpressReact;
+  criarComparisonResult(pontesQueNaoDevolvem()).renderizarResultadoComparacao({ evento_id: "evento-1" });
+  assert.equal(conteudo.dataset.estado, "erro");
+  assert.deepEqual(conteudo.filhos, [{ tag: "p", className: "ck-nota ck-nota--erro", textContent: "Não foi possível abrir a comparação." }]);
+}));
+
+test("com o painel montado, o render que não devolve nada não troca o conteúdo", () => comDocumento(conteudo => {
+  globalThis.SimpressReact = { "resultado-comparacao": {} };
+  criarComparisonResult(pontesQueNaoDevolvem()).renderizarResultadoComparacao({ evento_id: "evento-1" });
+  assert.equal(conteudo.dataset.estado, "carregando");
+  assert.deepEqual(conteudo.filhos, ["Carregando comparação…"]);
+}));
