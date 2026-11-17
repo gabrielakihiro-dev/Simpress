@@ -8,11 +8,11 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
 const html = assembledHtml();
 const css = fs.readFileSync(path.join(root, "static/styles/ck-cockpit.css"), "utf8");
-const source = fs.readFileSync(path.join(root, "static/js/features/cockpit-tool-panels.js"), "utf8");
+const source = fs.readFileSync(path.join(root, "frontend/src/paineis/ferramentas-cockpit/estado.ts"), "utf8");
 // "Importação e versões" do painel Chamados é desenhada pelo React desde o G8: os IDs e o ARIA dela estão no JSX.
 const painelChamados = fs.readFileSync(path.join(root, "frontend/src/paineis/cockpit-chamados/painel.tsx"), "utf8");
-const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
-const panels = createCockpitToolPanels({ app: {}, appState: {} });
+const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
+const panels = criarFerramentasCockpit({ app: {}, appState: {} });
 
 test("the four Cockpit tools open dedicated panels from the nine-dot menu", () => {
   const expected = [
@@ -221,7 +221,7 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, cont
   };
   // recarregarUnidadesCockpit vem da ponte React (units-catalog.js), sempre publicada no app real.
   const app = { apiFetch, showToast() {}, async recarregarUnidadesCockpit() {}, ...appExtra };
-  const api = createCockpitToolPanels({ app, appState: {}, apiFetch, ...contextExtra });
+  const api = criarFerramentasCockpit({ app, appState: {}, apiFetch, ...contextExtra });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
   // dispara(id, tipo, evento): chama os ouvintes que o painel registrou naquele elemento (cliques e teclas das sub-abas da F6).
@@ -1148,7 +1148,7 @@ function criarAmbienteRelatorio() {
     }
     return servidor.relatorio(new URL(url, "http://local").searchParams.get("mes"));
   };
-  const api = createCockpitToolPanels({ app: { apiFetch, showToast() {} }, appState: {}, apiFetch });
+  const api = criarFerramentasCockpit({ app: { apiFetch, showToast() {} }, appState: {}, apiFetch });
   const el = id => global.document.getElementById(id);
   const aba = nome => reais.get(`rel-aba-${nome}`);
   const painel = nome => reais.get(`rel-painel-${nome}`);

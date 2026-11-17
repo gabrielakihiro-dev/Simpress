@@ -74,10 +74,12 @@ jobs:
         # BF3 (run 43940572955 da main): o shard 6 passou de 15 min (15m17), então react-g7b.spec.cjs foi
         # para o 8 (8m58); react-bf3.spec.cjs (~2,3 min local, desktop + mobile) entrou no 9, um dos menores
         # no run 43962071291 (9,7 min), para não somar com o react-bf2 no 5.
+        # react-bf4.spec.cjs (BF4, desktop + mobile) entrou no 1, o menor no run 44006280253 da main (7m57; o 10 teve 8m08).
         include:
           - shard: 1
             specs: >-
               assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs react-g9.spec.cjs
+              react-bf4.spec.cjs
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs

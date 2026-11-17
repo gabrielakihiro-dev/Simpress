@@ -141,6 +141,9 @@ test("Local, CEP e CNPJ continuam somente leitura na edição em linha", () => {
 });
 
 test("os loaders das telas do Cockpit não montam HTML com dados de planilha", () => {
-  const source = fs.readFileSync(path.join(root, "static/js/features/cockpit-tool-panels.js"), "utf8");
-  assert.doesNotMatch(source, /\.innerHTML\s*[+]?=|insertAdjacentHTML|outerHTML|document\.write/);
+  // The panel and the bridge's fallback without the bundle both build DOM.
+  for (const arquivo of ["frontend/src/paineis/ferramentas-cockpit/estado.ts", "static/js/features/cockpit-tool-panels.js"]) {
+    const source = fs.readFileSync(path.join(root, arquivo), "utf8");
+    assert.doesNotMatch(source, /\.innerHTML\s*[+]?=|insertAdjacentHTML|outerHTML|document\.write/, arquivo);
+  }
 });
