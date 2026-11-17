@@ -174,7 +174,8 @@ def manutencao_de(relatorio: Optional[Mapping[str, Any]], abertos: Sequence[Mapp
         oracle = chamado.get("oracle")
         if any(isinstance(item, dict) and not _is_closed(item) for item in (oracle if isinstance(oracle, list) else [])):
             series.add(coverage.chave_serie(chamado.get("serie")))
-    ligadas = {coverage.chave_serie(v.get("serie")) for v in vinculos_derivados(abertos, relatorio)}
+    # chave_forte=False: a Cobertura só quer saber que série tem chamado aberto; E fora da série com OS única continua bloqueando.
+    ligadas = {coverage.chave_serie(v.get("serie")) for v in vinculos_derivados(abertos, relatorio, chave_forte=False)}
     series |= ligadas
     sinais = {coverage.chave_serie((a.get("automaticos") or {}).get("K")) for a in abertos if isinstance(a, dict)}
     series.discard("")

@@ -745,6 +745,7 @@ def atualizar(
     novas: Sequence[Mapping[str, str]] = (),
     edicoes: Optional[Mapping[str, Mapping[str, str]]] = None,
     automaticos: Optional[Mapping[str, Mapping[str, str]]] = None,
+    trocas_e: Optional[Mapping[str, str]] = None,
 ) -> Resultado:
     """Copy of the Dashboard with ``novas`` in the first free rows of Tabela3 and ``edicoes`` in existing rows.
 
@@ -754,10 +755,15 @@ def atualizar(
     ``automaticos``: ``{key: {E, G, I, K, L or N: value}}``, written only into cells that are empty in the sheet; ``H`` comes
     only with ``G`` and replaces H only when G is empty and H is exactly that title (``_titulo_em_h``), else it is ignored.
     A column in ``edicoes`` (typed on the site) wins: ``automaticos`` never overrides it.
+    ``trocas_e``: ``{key: OS}``, the only way to replace an E that is already filled (a newer OS of the serial that cites the
+    ticket, or the OS of a manual link): writes only column E, only on old open tickets, only when the value differs; an empty
+    value is ignored and it wins over ``automaticos``.
     Raises ``GravacaoInvalida`` (message for the user) when it cannot.
     """
     edicoes = edicoes or {}
     automaticos = automaticos or {}
+    trocas_e = {c: " ".join(str(os_ or "").split()) for c, os_ in (trocas_e or {}).items()}
+    trocas_e = {c: os_ for c, os_ in trocas_e.items() if os_}
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
     pacote = _ler_pacote(conteudo)
     texto = pacote.texto(pacote.aba)
@@ -785,10 +791,12 @@ def atualizar(
         substituicoes[numero_linha] = _reescrever_linha(linhas[numero_linha], letras, estilos, formula_q, False)
         gravadas.append(LinhaGravada(str(valores.get("C", "")), numero_linha, "novo", tuple(sorted(l for l, v in letras.items() if v != ""))))
 
-    if edicoes or automaticos:
+    if edicoes or automaticos or trocas_e:
         abertos = {c.numero: c for c in _abertos(linhas, compartilhadas)}
-        for chamado in [*edicoes, *(c for c in automaticos if c not in edicoes)]:
+        for chamado in dict.fromkeys([*edicoes, *automaticos, *trocas_e]):
             aberto = abertos.get(chamado)
+            if aberto is None and chamado not in edicoes and chamado not in automaticos:
+                continue  # a swap for a ticket that is no longer open is dropped, never an error
             if aberto is None:
                 raise GravacaoInvalida(f"{chamado}: não está entre os chamados antigos em aberto do Dashboard.")
             linha = linhas[aberto.linha]
@@ -811,6 +819,9 @@ def atualizar(
                     raise GravacaoInvalida(f"{chamado}: a coluna {letra} não pode ser preenchida pelo site.")
                 if novo and _valor_celula(linha.celulas.get(letra, ""), compartilhadas) is None:  # never over an existing value
                     alteradas[letra] = " ".join(str(novo).split())
+            troca = trocas_e.get(chamado)
+            if troca and troca != _valor_legivel("E", linha.celulas.get("E", ""), compartilhadas):  # the one overwrite of a filled E
+                alteradas["E"] = troca
             if alteradas:
                 substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
                 gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))

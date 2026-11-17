@@ -214,6 +214,39 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         with self.assertRaises(G.GravacaoInvalida):
             G.atualizar(conteudo, automaticos={"linha:2": {"Q": "x"}})
 
+    def test_trocas_e_sobrescrevem_so_a_coluna_e_de_chamado_aberto_e_o_resto_fica_intacto(self):
+        base = montar(("UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"), status=("EM ABERTO", "EM ABERTO", "FINALIZADO"))
+        conteudo = _antes_da_coluna_p(base, 2, texto("E2", "100") + texto("F2", "feito") + texto("K2", "SER1"))
+        conteudo = _antes_da_coluna_p(conteudo, 3, texto("E3", "500") + texto("K3", "SER2"))
+        antes = G.valores_dos_chamados(conteudo)
+        resultado = G.atualizar(conteudo, trocas_e={"UTIC-2026-0001": "  200 ", "UTIC-2026-0002": "500"})
+        self.assertEqual([(g.numero, g.tipo, g.celulas) for g in resultado.linhas], [("UTIC-2026-0001", "alterado", ("E",))])
+        depois = G.valores_dos_chamados(resultado.conteudo)
+        coluna_e = G.COLUNAS_DE_DADO.index("E")
+        self.assertEqual(depois[2][coluna_e], "200")
+        self.assertEqual([c for c in range(len(depois[2])) if depois[2][c] != antes[2][c]], [coluna_e])  # só a coluna E mudou
+        self.assertEqual(depois[3], antes[3])  # mesma OS que já estava: nada
+        self.assertEqual(depois[4], antes[4])  # finalizado nunca é tocado
+        self.assertIn("SER1", linha_xml(resultado.conteudo, 2))
+        self.assertIn("feito", linha_xml(resultado.conteudo, 2))
+
+    def test_trocas_e_vazias_ou_de_chamado_fora_dos_abertos_sao_ignoradas_sem_erro(self):
+        conteudo = _antes_da_coluna_p(montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO")), 2, texto("E2", "100"))
+        resultado = G.atualizar(conteudo, trocas_e={"UTIC-2026-0001": "   ", "UTIC-2026-0002": "9", "UTIC-2026-0777": "9"})
+        self.assertEqual(resultado.linhas, ())
+        self.assertEqual(G.valores_dos_chamados(resultado.conteudo), G.valores_dos_chamados(conteudo))
+
+    def test_troca_vale_mais_que_o_automatico_e_e_vazia_continua_so_pelo_automatico(self):
+        conteudo = _antes_da_coluna_p(montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO")), 2, texto("E2", "100"))
+        resultado = G.atualizar(
+            conteudo, automaticos={"UTIC-2026-0001": {"E": "300", "K": "SER1"}, "UTIC-2026-0002": {"E": "400"}},
+            trocas_e={"UTIC-2026-0001": "200"},
+        )
+        valores = G.valores_dos_chamados(resultado.conteudo)
+        coluna_e, coluna_k = G.COLUNAS_DE_DADO.index("E"), G.COLUNAS_DE_DADO.index("K")
+        self.assertEqual((valores[2][coluna_e], valores[2][coluna_k], valores[3][coluna_e]), ("200", "SER1", "400"))
+        self.assertEqual({g.numero: g.celulas for g in resultado.linhas}, {"UTIC-2026-0001": ("E", "K"), "UTIC-2026-0002": ("E",)})
+
     def test_g_e_i_da_leitura_so_em_vazias_e_h_so_quando_e_o_titulo(self):
         base = montar(("UTIC-2026-0833", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO"))
         sem_g = _trocar_na_folha(base, texto("G2", "titulo UTIC-2026-0833"), "")

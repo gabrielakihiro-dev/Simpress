@@ -28,7 +28,7 @@ from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, REGIONAL_REPRESEN
 from core.integrity import atomic_write_json, lock_paths
 from domains import (
     local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
-    sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_vinculos,
+    sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_os_nova, sebrae_os_recusadas, sebrae_vinculos,
 )
 from domains.assistant_lgpd import e_solicitante_sistema
 from domains.chrome_automation import ChromeAutomationRunner
@@ -110,6 +110,12 @@ class ObservacaoPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     observacao: str = Field("", max_length=4000)
+
+
+class OsRecusadaPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    os: str = Field(max_length=64)  # letras, números e hífen até 32 (sem espaços, em maiúsculas); a mensagem exata vem do domínio
 
 
 class DestaquePayload(BaseModel):
@@ -209,13 +215,46 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         lidos = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or [])
         return {str(n) for n in lidos} - set(antigos)
 
-    def _automaticos_dos_abertos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, str]]:
+    def _automaticos_dos_abertos(
+        abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
+        relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Dict[str, str]]:
         """What "Atualizar Dashboard" fills in the old open rows: G, H and I from the SoftExpert read, then E, K, L and N
-        from the name cross-reference fed by that same read (screen and write use this one function)."""
+        from the name cross-reference fed by that same read (screen and write use this one function).
+
+        ``relatorio`` and ``indice`` are read once by the caller and shared with ``_os_novas_dos_abertos``."""
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
-        cruzados = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os(), _indice_endpoint())
+        cruzados = sebrae_novos.preenchimentos(efetivos, registros, relatorio, services.vinculos_os(), indice)
         lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
         return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
+
+    def _os_novas_dos_abertos(
+        abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
+        automaticos: Mapping[str, Mapping[str, str]], relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Dict[str, Any]]:
+        """``{numero: sugestão de OS nova}`` dos antigos em aberto (``sebrae_os_nova``); a tela e a gravação usam esta função.
+
+        A série (K) é a da planilha ou a que o cruzamento por nome acabou de achar; a E é só a da planilha (mais o vínculo
+        manual, dentro do domínio). Registro de recusas ilegível: nenhuma sugestão, nunca uma troca às cegas. Falha de
+        cálculo não derruba o F5; o log leva só o tipo do erro (sem nome, OS nem texto)."""
+        if not abertos:
+            return {}
+        efetivos = [
+            {**e, "automaticos": {
+                **(e.get("automaticos") or {}),
+                "K": str((e.get("automaticos") or {}).get("K") or "").strip() or str(automaticos.get(str(e.get("numero")), {}).get("K") or "").strip(),
+            }}
+            for e in sebrae_novos.complementar_antigos(abertos, antigos)
+        ]
+        try:
+            return sebrae_os_nova.os_novas(
+                efetivos, relatorio, list(services.vinculos_os()), sebrae_os_recusadas.ler(_pasta_estado()), registros, indice,
+            )
+        except DomainBusyError as erro:
+            logger.warning("OS nova sugerida indisponível (%s).", type(erro).__name__)
+        except Exception as erro:  # noqa: BLE001 - a sugestão é só auxílio; o F5 segue sem ela
+            logger.warning("Falha ao calcular a OS nova sugerida (%s).", type(erro).__name__)
+        return {}
 
     def _sugestoes_antigo(aberto: Mapping[str, Any], efetivo: Mapping[str, Any], lido: Optional[Mapping[str, str]], opcoes_a: Sequence[str]) -> Dict[str, Optional[str]]:
         """Sugestão de A e J de um chamado antigo em aberto, só para exibir (nada é gravado); campo já preenchido não é sugerido.
@@ -244,7 +283,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         nao_encontrados = _nao_encontrados(antigos) if abertos else set()
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
-        sugestoes = _automaticos_dos_abertos(abertos, antigos, registros) if abertos else {}
+        relatorio, indice = (_relatorio(), _indice_endpoint()) if abertos else (None, None)
+        sugestoes = _automaticos_dos_abertos(abertos, antigos, registros, relatorio, indice) if abertos else {}
+        os_novas = _os_novas_dos_abertos(abertos, antigos, registros, sugestoes, relatorio, indice)
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
         apelidos = services.apelidos() if abertos else {}
@@ -256,7 +297,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
              "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
-             "destaque": _destacado(obs_map, a.get("numero")),  # ``softexpert`` is the finalization state; this is the read data
+             "destaque": _destacado(obs_map, a.get("numero")),
+             "os_nova": os_novas.get(str(a.get("numero"))),  # ``softexpert`` is the finalization state; this is the read data
              **_sugestoes_antigo(a, e, antigos.get(str(a.get("numero"))), opcoes_a)}
             for a, e in zip(abertos, efetivos)
         ]
@@ -539,10 +581,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _resolvedor_os(abertos: Sequence[Mapping[str, Any]]) -> marcas.Resolvedor:
         """Link UTIC -> OS for the mark of the OS tab: manual wins over the one derived from ``abertos``; several OS give the highest."""
-        return marcas.resolvedor(
-            list(services.vinculos_os()),
-            lambda: sebrae_vinculos.vinculos_derivados(abertos, _relatorio(), _indice_endpoint()),
-        )
+        def derivados() -> List[Dict[str, Any]]:
+            # These callers WRITE (marks, frozen OS): an unreadable refusal file must not let a strong-key swap through.
+            recusadas = sebrae_os_recusadas.ler_ou_none(_pasta_estado())
+            return sebrae_vinculos.vinculos_derivados(
+                abertos, _relatorio(), _indice_endpoint(), recusadas, chave_forte=recusadas is not None,
+                manuais=list(services.vinculos_os()),
+            )
+
+        return marcas.resolvedor(list(services.vinculos_os()), derivados)
 
     def _registrar_marcas(arquivo, mapa: Mapping[str, Mapping[str, str]], anteriores: Optional[Mapping[str, Any]]) -> None:
         """Source c of the marks: a UTIC open in the previous import, gone from the new one and not finalized by this site.
@@ -735,14 +782,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"], exigir_encerramento)
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
-            automaticos = _automaticos_dos_abertos(abertos, _leitura_antigos() if abertos else {}, services.registros()) if abertos else {}
+            antigos = _leitura_antigos() if abertos else {}
+            registros = services.registros() if abertos else []
+            relatorio, indice = (_relatorio(), _indice_endpoint()) if abertos else (None, None)
+            automaticos = _automaticos_dos_abertos(abertos, antigos, registros, relatorio, indice) if abertos else {}
+            trocas = sebrae_os_nova.trocas_e(
+                _os_novas_dos_abertos(abertos, antigos, registros, automaticos, relatorio, indice), abertos, list(services.vinculos_os()),
+            )
             descricoes = _descricoes_editadas_dos_antigos(abertos)
-            if not linhas and not edicoes and not automaticos and not descricoes:
+            if not linhas and not edicoes and not automaticos and not descricoes and not trocas:
                 if aceita_vazio:
                     return None
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
             gravar = {**edicoes, **{n: {**edicoes.get(n, {}), "H": h} for n, h in descricoes.items()}}
-            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, gravar, automaticos)
+            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, gravar, automaticos, trocas)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         conteudo = _reaplicar_encerramentos(resultado.conteudo)
@@ -933,6 +986,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Anotação interna do chamado (salva automaticamente em disco, sem tocar SoftExpert nem Dashboard)."""
         resultado = obs.salvar_observacao(_pasta_estado(), numero, payload.observacao)
         return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/os-recusada")
+    def recusar_os(numero: str, payload: OsRecusadaPayload):
+        """Recusa (ou mantém) a OS sugerida: o par chamado + OS nunca mais é sugerido nem trocado sozinho (só local)."""
+        sebrae_os_recusadas.recusar(_pasta_estado(), numero, payload.os)
+        return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/destaque")
     def definir_destaque(numero: str, payload: DestaquePayload):

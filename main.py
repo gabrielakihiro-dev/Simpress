@@ -14,7 +14,7 @@ from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Any, Set, Tuple
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -235,7 +235,7 @@ from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
-from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, os_marcas_finalizacao
+from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, sebrae_os_recusadas, os_marcas_finalizacao
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains.dashboard_agendamento import AgendadorDashboard
@@ -1976,6 +1976,18 @@ def _dashboard_ticket_report() -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
+def _marcas_derivados(importado: Optional[Dict[str, Any]], abertos: List[str]) -> Callable[[], List[Dict[str, Any]]]:
+    """Derived links for the OS marks, which WRITE: an unreadable refusal file never lets a strong-key swap through."""
+    def derivados() -> List[Dict[str, Any]]:
+        recusadas = sebrae_os_recusadas.ler_ou_none(STATE_DIR)
+        return sebrae_vinculos.vinculos_derivados(
+            importado["abertos"] if importado else [], _dashboard_ticket_report(),
+            _dashboard_endpoint_index() if abertos else None, recusadas, chave_forte=recusadas is not None,
+            manuais=_dashboard_manual_os_links(),
+        )
+    return derivados
+
+
 def _marcas_fontes() -> os_marcas_finalizacao.FontesMarcas:
     """What the server knows now for the OS finalizada marks: finalizations, last read of the old tickets, links."""
     caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
@@ -1989,13 +2001,7 @@ def _marcas_fontes() -> os_marcas_finalizacao.FontesMarcas:
         nao_encontrados=[n for n in (resultado.get("nao_encontrados") or []) if str(n) not in lidos],
         nao_encontrados_em=str(resultado.get("em") or ""),
         abertos=abertos,
-        vinculo_atual=os_marcas_finalizacao.resolvedor(
-            _dashboard_manual_os_links(),
-            lambda: sebrae_vinculos.vinculos_derivados(
-                importado["abertos"] if importado else [], _dashboard_ticket_report(),
-                _dashboard_endpoint_index() if abertos else None,
-            ),
-        ),
+        vinculo_atual=os_marcas_finalizacao.resolvedor(_dashboard_manual_os_links(), _marcas_derivados(importado, abertos)),
     )
 
 
@@ -2135,7 +2141,10 @@ def _dashboard_endpoint_index() -> Optional[Dict[str, Any]]:
 def _dashboard_derived_os_links(report: Dict[str, Any]) -> List[Dict[str, Any]]:
     importado = sebrae_novos.ler_existentes(sebrae_novos.caminhos_padrao(STATE_DIR).existentes)
     abertos = importado["abertos"] if importado else []
-    return sebrae_vinculos.vinculos_derivados(abertos, report, _dashboard_endpoint_index() if abertos else None)
+    return sebrae_vinculos.vinculos_derivados(
+        abertos, report, _dashboard_endpoint_index() if abertos else None, sebrae_os_recusadas.ler_ou_vazio(STATE_DIR) if abertos else None,
+        manuais=_dashboard_manual_os_links() if abertos else (),
+    )
 
 
 def _dashboard_manual_os_links() -> List[Dict[str, Any]]:
