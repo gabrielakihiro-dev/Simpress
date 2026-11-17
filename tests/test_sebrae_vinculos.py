@@ -206,6 +206,13 @@ class DaFinalizacaoTest(unittest.TestCase):
 
 
 class OsDoChamadoTest(unittest.TestCase):
+    def test_vinculo_salvo_por_ultimo_vence_mesmo_com_os_menor_ou_nao_numerica(self):
+        antigo = {"chamado": "UTIC-2026-0094", "os": "7400000", "salvo_em": "2026-11-17T10:00:00.000000Z"}
+        novo = {"chamado": "UTIC-2026-0094", "os": "UX-12", "salvo_em": "2026-11-17T10:05:00.000000Z"}
+        sem_data = {"chamado": "UTIC-2026-0094", "os": "9999999"}  # vínculo gravado antes do ``salvo_em``
+        self.assertEqual(os_do_chamado([antigo, novo, sem_data], "UTIC-2026-0094"), "UX-12")
+        self.assertEqual(os_do_chamado([sem_data, {"chamado": "UTIC-2026-0094", "os": "100"}], "UTIC-2026-0094"), "9999999")
+
     def test_maior_os_do_chamado_ignorando_caixa(self):
         vinculos = [{"chamado": "UTIC-2026-0094", "os": "9"}, {"chamado": "utic-2026-0094", "os": "100"}, {"chamado": "UTIC-2026-1", "os": "500"}]
         self.assertEqual(os_do_chamado(vinculos, "UTIC-2026-0094"), "100")

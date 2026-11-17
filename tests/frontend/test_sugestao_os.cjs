@@ -2,7 +2,7 @@
 // 1) regras puras de sugestao-os-modelo.ts (textos aprovados, chips, corpos dos PUT);
 // 2) estado.ts com um provedor falso no lugar da caixa React: campo OS, selo "OS nova?", host `data-sugestao-os`, limpeza de raízes;
 // 3) leitura do sugestao-os.tsx (o Node não lê JSX): endpoints e corpos dos PUT, sem repetição automática. O comportamento desenhado
-//    no navegador (Aceitar, Recusar, troca) é provado em tests/e2e/sebrae-dashboard.spec.cjs. Só dados sintéticos.
+//    no navegador (Aceitar, Recusar, troca) é provado em tests/e2e/chamados-os.spec.cjs. Só dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -14,10 +14,10 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const textos = (os, extra = {}) => ({ os, assunto: `Assunto ${os}`, descricao: `Descrição ${os}`, data: "15/11/2026", ...extra });
 const sinais = (extra = {}) => ({ mesma_serie: true, nome: false, assunto: true, numero_chamado: false, ...extra });
-const aceitar = (os, chamado = "UTIC-2026-1200", serie = "BRJ0001") => ({ fonte: "sebrae", serie, os, ano: "2026", numero: chamado.split("-").pop() });
-const sugestao = () => ({ tipo: "sugestao", atual: textos("7303022", { data: "03/11/2026" }), nova: { ...textos("7400000"), serie: "BRJ0001", fonte: "sebrae" }, sinais: sinais(), aceitar: aceitar("7400000") });
-const semOs = () => ({ tipo: "sem_os", atual: null, nova: { ...textos("7400001"), serie: "BRJ0002", fonte: "sebrae" }, sinais: sinais({ nome: true, mesma_serie: false }), aceitar: aceitar("7400001", "UTIC-2026-1201", "BRJ0002") });
-const troca = () => ({ tipo: "troca", atual: textos("7303000"), nova: { ...textos("7400002"), serie: "BRJ0003", fonte: "sebrae" }, sinais: sinais({ numero_chamado: true }), aceitar: aceitar("7400002", "UTIC-2026-1202", "BRJ0003") });
+const aceitar = (os, chamado = "UTIC-2026-1200", serie = "BRJ0001") => ({ fonte: "oracle", serie, os, ano: 2026, numero: chamado.split("-").pop() });
+const sugestao = () => ({ tipo: "sugestao", atual: textos("7303022", { data: "03/11/2026" }), nova: { ...textos("7400000"), serie: "BRJ0001", fonte: "oracle" }, sinais: sinais(), aceitar: aceitar("7400000") });
+const semOs = () => ({ tipo: "sem_os", atual: null, nova: { ...textos("7400001"), serie: "BRJ0002", fonte: "oracle" }, sinais: sinais({ nome: true, mesma_serie: false }), aceitar: aceitar("7400001", "UTIC-2026-1201", "BRJ0002") });
+const troca = () => ({ tipo: "troca", atual: textos("7303000"), nova: { ...textos("7400002"), serie: "BRJ0003", fonte: "oracle" }, sinais: sinais({ numero_chamado: true }), aceitar: aceitar("7400002", "UTIC-2026-1202", "BRJ0003") });
 
 // ---- 1) regras puras ----
 

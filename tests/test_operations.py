@@ -141,9 +141,47 @@ class TicketOsLinkRouteTests(unittest.TestCase):
             save_link(TicketOsLinkPayload(
                 fonte="simpress", serie="SN-1", os="7285070", ano=2027, numero="",
             ))
-            self.assertEqual(route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"], [
+            restante = route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"]
+            self.assertRegex(restante[0].pop("salvo_em"), r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
+            self.assertEqual(restante, [
                 {"fonte": "oracle", "serie": "SN-1", "os": "7285070", "ano": 2026, "numero": "1117", "chamado": "UTIC-2026-1117"},
             ])
+
+    def test_aceitar_os_nova_so_da_ux_vence_o_vinculo_manual_anterior_do_chamado(self):
+        """Revisão do PR #284: o corpo ``aceitar`` de uma OS só da UX (``fonte: simpress``, número menor ou não numérico)
+        vira o vínculo que vale em ``preenchimentos``, ``os_novas``/``trocas_e`` e ``donos_da_e``, mesmo com um vínculo
+        manual Oracle mais antigo no mesmo chamado. Dados sintéticos."""
+        from domains import sebrae_novos
+        from domains.sebrae_os_nova import os_novas, trocas_e
+        from domains.sebrae_vinculos import donos_da_e, os_do_chamado
+
+        relatorio = {"chamados": [
+            {"serie": "SN-1", "oracle": [{"ordem_servico": "7400000", "assunto": "", "descricao": ""}], "simpress": {}},
+            {"serie": "SN-1", "simpress": {"ordens_servico": ["UX-12"], "chamados_cliente": []}},
+        ]}
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
+            root = Path(directory)
+            link_path = root / "os_chamados_vinculos.json"
+            router = create_operations_router(
+                load_comparison_history=lambda: [], comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: root / "tickets.json", transaction_root=lambda: root,
+                ticket_os_links_file=lambda: link_path,
+            )
+            save_link = route_handler(router, "/api/operacoes/chamados/vinculos-os", "PUT")
+            # relógio fixo: o Windows pode dar o mesmo instante para dois PUT seguidos
+            with patch("routers.operations.datetime") as relogio:
+                relogio.now.return_value.strftime.side_effect = ["2026-11-17T10:00:00.000000Z", "2026-11-17T10:05:00.000000Z"]
+                save_link(TicketOsLinkPayload(fonte="oracle", serie="SN-1", os="7400000", ano=2026, numero="0094"))
+                aceitar = {"fonte": "simpress", "serie": "SN-1", "os": "UX-12", "ano": 2026, "numero": "0094"}
+                save_link(TicketOsLinkPayload(**aceitar))
+            manuais = list(json.loads(link_path.read_text(encoding="utf-8"))["vinculos"].values())
+
+        self.assertEqual(os_do_chamado(manuais, "UTIC-2026-0094"), "UX-12")
+        vazio = [{"numero": "UTIC-2026-0094", "automaticos": {"K": "SN-1", "E": ""}}]
+        self.assertEqual(sebrae_novos.preenchimentos(vazio, [], relatorio, manuais)["UTIC-2026-0094"]["E"], "UX-12")
+        self.assertEqual(donos_da_e(vazio, manuais), {"UX-12": {"UTIC-2026-0094"}})
+        gravado = [{"numero": "UTIC-2026-0094", "titulo": "", "descricao": "", "usuario": "", "automaticos": {"K": "SN-1", "E": "7400000"}}]
+        self.assertEqual(trocas_e(os_novas(gravado, relatorio, manuais, {}, []), gravado, manuais), {"UTIC-2026-0094": "UX-12"})
 
 
 class DashboardDerivedOsLinkTests(unittest.TestCase):

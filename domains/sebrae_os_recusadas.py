@@ -20,6 +20,7 @@ from domains.sebrae_vinculos import _os_chave
 
 logger = logging.getLogger(__name__)
 MAX_OS = 32
+OCUPADO = "O registro de OS recusadas está ocupado no momento (aberto em outro programa ou travado). Tente novamente em instantes."
 _PADRAO_OS = re.compile(rf"^[A-Z0-9-]{{1,{MAX_OS}}}$")
 
 
@@ -43,7 +44,9 @@ def _carregar(state_dir: Path) -> Dict[str, Any]:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except (OSError, ValueError, FileBusyError) as error:
+    except (PermissionError, FileBusyError) as error:  # Windows: arquivo travado ou aberto em outro programa
+        raise DomainBusyError(OCUPADO) from error
+    except (OSError, ValueError) as error:
         raise DomainBusyError(
             "O registro de OS recusadas está ilegível e foi preservado. Restaure uma cópia válida antes de continuar."
         ) from error
@@ -73,7 +76,7 @@ def ler_ou_none(state_dir: Path) -> Optional[Dict[str, List[str]]]:
     try:
         return ler(state_dir)
     except DomainBusyError as erro:
-        logger.warning("Registro de OS recusadas indisponível (%s).", type(erro).__name__)
+        logger.warning("Registro de OS recusadas indisponível (%s).", type(erro.__cause__ or erro).__name__)
         return None
 
 
@@ -94,6 +97,6 @@ def recusar(state_dir: Path, numero: str, os_: Any) -> Dict[str, str]:
                 recusadas[chave] = [*lista, ordem]
                 arquivo.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write_json(arquivo, {"version": 1, "recusadas": recusadas})
-    except FileBusyError as error:
-        raise DomainBusyError("O registro de OS recusadas está ocupado no momento. Tente novamente em instantes.") from error
+    except (PermissionError, FileBusyError) as error:
+        raise DomainBusyError(OCUPADO) from error
     return {"numero": chave, "os": ordem}

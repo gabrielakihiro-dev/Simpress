@@ -2,7 +2,7 @@
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -301,6 +301,8 @@ def create_operations_router(
                         "ano": payload.ano,
                         "numero": payload.numero,
                         "chamado": f"UTIC-{payload.ano}-{payload.numero}",
+                        # the newest manual link of a UTIC wins (``sebrae_vinculos.vinculo_do_chamado``); fixed width keeps text order = time order
+                        "salvo_em": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                     }
                     links[key] = saved
                 else:
