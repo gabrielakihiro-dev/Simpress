@@ -15,26 +15,26 @@
     "carregarMaisResultadosPesquisa", "fecharModalPesquisaCompleta",
   ]);
   // Callers ignore the promise: a React panel that did not load is logged, never an unhandled rejection.
-  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+  const registrar = (nome, promessa) => promessa.catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   function abrirPesquisaCompleta() {
-    return registrar(ponte.abrirPesquisaCompleta(renderers.criarLinhaPesquisaCompleta));
+    return registrar("abrirPesquisaCompleta", ponte.abrirPesquisaCompleta(renderers.criarLinhaPesquisaCompleta));
   }
 
   function alterarFiltrosPesquisaCompleta() {
-    return registrar(ponte.alterarFiltrosPesquisaCompleta());
+    return registrar("alterarFiltrosPesquisaCompleta", ponte.alterarFiltrosPesquisaCompleta());
   }
 
   function limparFiltrosPesquisaCompleta() {
-    return registrar(ponte.limparFiltrosPesquisaCompleta());
+    return registrar("limparFiltrosPesquisaCompleta", ponte.limparFiltrosPesquisaCompleta());
   }
 
   function carregarMaisResultadosPesquisa() {
-    return registrar(ponte.carregarMaisResultadosPesquisa());
+    return registrar("carregarMaisResultadosPesquisa", ponte.carregarMaisResultadosPesquisa());
   }
 
   function fecharModalPesquisaCompleta() {
-    return registrar(ponte.fecharModalPesquisaCompleta());
+    return registrar("fecharModalPesquisaCompleta", ponte.fecharModalPesquisaCompleta());
   }
 
   return {

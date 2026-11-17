@@ -320,7 +320,8 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
   function limparArquivosAtualizacaoPlanilhas() {
     ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(inputId => {
-      const input = porId<HTMLInputElement>(inputId);
+      const input = document.getElementById(inputId) as HTMLInputElement | null;
+      if (!input) return; // #entra-csv-file só existe se o painel entra-users montou; faltar não pode quebrar a conclusão
       input.value = "";
       redesenharSeletorArquivo(input);
     });

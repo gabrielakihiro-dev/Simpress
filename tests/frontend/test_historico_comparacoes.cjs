@@ -215,7 +215,7 @@ test("ponte: publica as 9 ações de sempre e repassa as 7 do React ao painel hi
 test("ponte: se o React não carregou, as ações do histórico registram o erro e não rejeitam", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const feature = createComparisonHistory({
       app: {},
@@ -226,7 +226,7 @@ test("ponte: se o React não carregou, as ações do histórico registram o erro
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, ["sem historico-comparacoes", "sem historico-comparacoes"]);
+  assert.deepEqual(erros, ["abrirModalHistoricoComparacoes: sem historico-comparacoes", "abrirResultadoHistoricoComparacao: sem historico-comparacoes"]);
 });
 
 test("registro: o painel tem montar.tsx e o modal marca o contêiner React no HTML montado", () => {

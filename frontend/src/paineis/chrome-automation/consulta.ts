@@ -36,7 +36,7 @@ export function avisarErro(erro: unknown) {
     if (interno.avisouServidorAntigo) return;
     interno.avisouServidorAntigo = true;
   }
-  appAntigo().showToast?.(falha.message, "error");
+  appAntigo().showToast?.(falha?.message ?? String(falha), "error");
 }
 
 export const valor = (id: string): string => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null)?.value || "";

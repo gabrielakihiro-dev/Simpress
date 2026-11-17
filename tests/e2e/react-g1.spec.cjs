@@ -205,9 +205,9 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect.poll(() => consultas - antes, { timeout: 8000 }).toBeGreaterThanOrEqual(2); // segue consultando a automação
     await expect(botao).toBeDisabled();
     estado = "livre";
-    // A mensagem "O envio parou de novo…" é logo apagada: carregarNovosSebrae recarrega os conflitos e refaz a
-    // contagem (já era assim no JS puro; pendência para o Dia 4). Aqui vale o que fica: lista e botão de volta.
+    // carregarNovosSebrae recarrega os conflitos, mas isso não apaga o aviso de que o envio parou.
     await expect(botao).toBeEnabled({ timeout: 8000 });
+    await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("O envio parou de novo e ainda há conflitos. Confira a lista e escolha outra vez.");
     await expect(secao).toBeVisible();
     await expect(secao.getByRole("group")).toHaveCount(1);
     expect((await contagem()).carregarNovosSebrae).toBeGreaterThanOrEqual(1); // atualiza o aviso e a lista de chamados

@@ -15,28 +15,28 @@
     "sincronizarGestaoChamadosCockpit", "selecionarVersaoChamadosCockpit", "excluirImportacoesAntigasChamadosCockpit",
     "exportarChamadosCockpit", "atualizarChamadosAbertosHome",
   ]);
-  const registrarErro = erro => { console.error(erro); };
+  const registrarErro = nome => erro => { console.error(`${nome}: ${erro?.message}`); };
 
   // Quem chama (tabela de OS, busca de equipamento, data-on-click) não espera nem trata erro: como no módulo antigo, nunca rejeita.
   function sincronizarGestaoChamadosCockpit(relatorio) {
-    return ponte.sincronizarGestaoChamadosCockpit(relatorio).catch(registrarErro);
+    return ponte.sincronizarGestaoChamadosCockpit(relatorio).catch(registrarErro("sincronizarGestaoChamadosCockpit"));
   }
 
   // Sem argumento o painel lê o valor do seletor; só texto vale como valor.
   function selecionarVersaoChamadosCockpit(valor) {
-    return ponte.selecionarVersaoChamadosCockpit(typeof valor === "string" ? valor : undefined).catch(registrarErro);
+    return ponte.selecionarVersaoChamadosCockpit(typeof valor === "string" ? valor : undefined).catch(registrarErro("selecionarVersaoChamadosCockpit"));
   }
 
   function excluirImportacoesAntigasChamadosCockpit() {
-    return ponte.excluirImportacoesAntigasChamadosCockpit().catch(registrarErro);
+    return ponte.excluirImportacoesAntigasChamadosCockpit().catch(registrarErro("excluirImportacoesAntigasChamadosCockpit"));
   }
 
   function exportarChamadosCockpit() {
-    return ponte.exportarChamadosCockpit().catch(registrarErro);
+    return ponte.exportarChamadosCockpit().catch(registrarErro("exportarChamadosCockpit"));
   }
 
   function atualizarChamadosAbertosHome(serial) {
-    return ponte.atualizarChamadosAbertosHome(serial).catch(registrarErro);
+    return ponte.atualizarChamadosAbertosHome(serial).catch(registrarErro("atualizarChamadosAbertosHome"));
   }
 
   // Síncrona de propósito: o painel React já está montado (flushSync) e os campos de arquivo existem na hora do foco.

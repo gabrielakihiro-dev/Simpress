@@ -32,7 +32,7 @@ test("consultarAutomacao troca o 404 pelo aviso e repassa qualquer outro erro se
 
 test("o aviso aparece uma só vez e as outras falhas mostram a mensagem original como erro", () => {
   assert.match(consulta, /if \(falha\?\.servidorDesatualizado\) \{\s*if \(interno\.avisouServidorAntigo\) return;\s*interno\.avisouServidorAntigo = true;\s*\}/);
-  assert.match(consulta, /appAntigo\(\)\.showToast\?\.\(falha\.message, "error"\);/);
+  assert.match(consulta, /appAntigo\(\)\.showToast\?\.\(falha\?\.message \?\? String\(falha\), "error"\);/);
   assert.equal((consulta.match(/showToast/g) || []).length, 2, "um único ponto de aviso na consulta (o tipo e a chamada)");
 });
 

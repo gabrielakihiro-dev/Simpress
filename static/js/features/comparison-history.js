@@ -17,7 +17,7 @@
   ]);
 
   // Quem chama (data-on-*, app.js, inventory-upload.js) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(erro); });
+  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   async function baixarHistoricoComparacoesExcel(data) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || ""))) {
@@ -64,7 +64,7 @@
       await app.baixarHistoricoComparacoesExcel(data);
       app.showToast("Planilha Exportada com Sucesso!", "success");
     } catch (err) {
-      console.error("Erro ao exportar resultado da atualização das planilhas:", err);
+      console.error(`Erro ao exportar resultado da atualização das planilhas: ${err?.message}`);
       app.showToast(err.message || "Não foi possível exportar o resultado.", "error");
     } finally {
       button.disabled = !button.dataset.historyDate;
@@ -76,7 +76,7 @@
 
   // Home dashboard shortcut: opens the saved result and scrolls to the section named by `secao`.
   function abrirResultadoHistoricoComparacao(eventoId, secao, botao) {
-    return ponte.consultarHistoricoComparacao(eventoId, botao, { section: secao }).catch(erro => { console.error(erro); });
+    return ponte.consultarHistoricoComparacao(eventoId, botao, { section: secao }).catch(erro => { console.error(`abrirResultadoHistoricoComparacao: ${erro?.message}`); });
   }
 
   return {

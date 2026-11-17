@@ -12,9 +12,9 @@
     "abrirModalEditarApelido", "fecharModalEditarApelido", "salvarApelido", "salvarDadosEquipamento",
     "salvarUsuarioLogado", "limparUsuarioLogado", "salvarNomePessoa", "salvarDadosCadastrais",
   ]);
-  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+  const registrar = (nome, promessa) => promessa.catch(erro => { console.error(`${nome}: ${erro?.message}`); });
   const assincronaRegistrada = Object.fromEntries(Object.entries(assincrona).map(([nome, acao]) => [
-    nome, (...argumentos) => registrar(acao(...argumentos)),
+    nome, (...argumentos) => registrar(nome, acao(...argumentos)),
   ]));
   return {
     ...sincrona,

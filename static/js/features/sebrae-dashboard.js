@@ -12,9 +12,9 @@
     "descartarRascunhoSebrae", "cartaoChamadoSebraeLeitura",
   ]);
 
-  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+  const registrar = (nome, promessa) => promessa.catch(erro => { console.error(`${nome}: ${erro?.message}`); });
   const ponteRegistrada = Object.fromEntries(Object.entries(ponte).map(([nome, acao]) => [
-    nome, (...argumentos) => registrar(acao(...argumentos)),
+    nome, (...argumentos) => registrar(nome, acao(...argumentos)),
   ]));
   return { ...ponteSincrona, ...ponteRegistrada };
 });

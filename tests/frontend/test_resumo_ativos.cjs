@@ -43,14 +43,14 @@ test("ponte: carregarResumoAtivos repassa ao painel React resumo-ativos", async 
 test("ponte: se o React não carregou, carregarResumoAtivos registra o erro e não rejeita (o Resumo abre)", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "resumo-ativos" não carregou.')));
     assert.equal(await feature.carregarResumoAtivos(), undefined);
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, ['O painel React "resumo-ativos" não carregou.']);
+  assert.deepEqual(erros, ['carregarResumoAtivos: O painel React "resumo-ativos" não carregou.']);
 });
 
 test("index.html: seção do cartão React no painel comparacao, sem a tabela Total de ativos e sem IDs duplicados", () => {

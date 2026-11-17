@@ -44,14 +44,14 @@ test("ponte: carregarResumoHistoricoSebrae repassa ao painel React sebrae-histor
 test("ponte: se o React não carregou, carregarResumoHistoricoSebrae registra o erro e não rejeita (o Dashboard segue)", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "sebrae-historico" não carregou.')));
     assert.equal(await feature.carregarResumoHistoricoSebrae(), undefined);
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, ['O painel React "sebrae-historico" não carregou.']);
+  assert.deepEqual(erros, ['carregarResumoHistoricoSebrae: O painel React "sebrae-historico" não carregou.']);
 });
 
 test("index.html: contêiner vazio do resumo no cartão de chamados novos, sem IDs duplicados", () => {

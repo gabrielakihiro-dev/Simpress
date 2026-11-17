@@ -70,7 +70,7 @@ test("ponte: atualizarDossieEquipamento liga e desliga o botão Ver dossiê na h
 test("ponte: se o React não carregou, cada ação registra o erro e não rejeita", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "dossie-equipamento" não carregou.')));
     assert.equal(await feature.abrirDossieEquipamento(), undefined);
@@ -80,7 +80,7 @@ test("ponte: se o React não carregou, cada ação registra o erro e não rejeit
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, Array(3).fill('O painel React "dossie-equipamento" não carregou.'));
+  assert.deepEqual(erros, ["abrirDossieEquipamento", "fecharDossieEquipamento", "atualizarDossieEquipamento"].map(nome => `${nome}: O painel React "dossie-equipamento" não carregou.`));
 });
 
 test("estado: a seleção é lida só por lerEstado (estado-app.ts), na hora de cada conferência, nunca copiada nem gravada", () => {

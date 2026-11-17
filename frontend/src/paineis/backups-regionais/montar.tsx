@@ -4,9 +4,10 @@ import { apiFetch } from "../../api";
 import { PainelBackups } from "./painel";
 
 // Chamado por frontend/src/main.tsx com o painel #resumo-painel-backups (data-react-painel="backups-regionais").
-// Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho.
-// Nenhuma ação vai pela ponte: ninguém de fora chama este painel. O pedido do painel a cada 5 min fica no módulo
-// antigo (static/js/features/backups-regionais.js), para os alertas do sino não dependerem do bundle React.
+// Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho. Se o evento
+// passou antes do bundle (data-panels.js lê o painel no import), a ponte repete o último com `repetirPainel`.
+// O pedido do painel a cada 5 min fica no módulo antigo (static/js/features/backups-regionais.js), para os alertas do
+// sino não dependerem do bundle React.
 
 type Marca = Record<string, string | undefined>;
 const mostrarToast = (mensagem: string, tipo: string) => (window as unknown as { showToast?: (m: string, t: string) => void }).showToast?.(mensagem, tipo);
@@ -137,20 +138,27 @@ async function aoClicar(evento: MouseEvent) {
 export function montar(container: HTMLElement) {
   alvo = container;
   raiz = createRoot(container);
-  document.addEventListener("simpress:painel-atualizado", evento => {
-    const painelLido = (evento as CustomEvent).detail;
+  const aoAtualizar = (painelLido: unknown) => {
     if (!painelLido || typeof painelLido !== "object") return;
-    dados = "backups_regionais" in painelLido ? painelLido.backups_regionais : null;
+    dados = "backups_regionais" in painelLido ? (painelLido as Record<string, unknown>).backups_regionais : null;
     desenhar();
-  });
+  };
   // Leitura do painel falhou antes de qualquer resposta: "aguardando" vira "indisponível" (selo e rótulo da aba também).
-  document.addEventListener("simpress:painel-indisponivel", () => {
+  const aoFalhar = () => {
     if (dados !== undefined) return;
     dados = { indisponivel: true, limitacoes: [] };
     desenhar();
-  });
+  };
+  document.addEventListener("simpress:painel-atualizado", evento => aoAtualizar((evento as CustomEvent).detail));
+  document.addEventListener("simpress:painel-indisponivel", aoFalhar);
   container.addEventListener("click", evento => { void aoClicar(evento); });
   // flushSync: o painel já existe no DOMContentLoaded, como no HTML antigo.
   desenhar();
-  return {};
+  return {
+    // O evento pode ter passado antes de este bundle carregar: a ponte (backups-regionais.js) guardou o último e o repete.
+    repetirPainel(ultimo: { painel?: unknown; indisponivel?: boolean }) {
+      if (ultimo.painel !== undefined) aoAtualizar(ultimo.painel);
+      else if (ultimo.indisponivel) aoFalhar();
+    },
+  };
 }

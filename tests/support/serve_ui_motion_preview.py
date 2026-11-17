@@ -905,6 +905,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"conflitos": conflitos_state["conflitos"], "escolhas": conflitos_state["escolhas"], "criado_em": "", "versao_importacao": VERSAO_CONFLITOS})
         elif path == "/__fixture_conflitos":
             self.send({"post": conflitos_state["post"]})
+        elif path == "/api/usuarios-entra/estado":
+            # Synthetic "nothing imported" state: the Entra section and the Home load it on open.
+            self.send({"updated_at": "", "users": 0})
+        elif path == "/api/sebrae/observacoes":
+            # Synthetic "no notes saved" state: the Sebrae dashboard reads the highlights from it.
+            self.send({"observacoes": {}})
         elif path == "/api/sebrae/antigos/ler":
             self.send(antigos_consulta())
         elif path == "/api/sebrae/historico":

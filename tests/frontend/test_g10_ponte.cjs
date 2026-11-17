@@ -84,8 +84,7 @@ test("painel que não carregou: a ponte registra o erro no console e nunca rejei
   } finally {
     console.error = original;
   }
-  assert.equal(registrados.length, 3);
-  assert.ok(registrados.every(([erro]) => erro === falha));
+  assert.deepEqual(registrados, ["abrirModalEditarApelido", "abrirPesquisaCompleta", "salvarApelido"].map(nome => [`${nome}: ${falha.message}`]));
 });
 
 test("salvar: resultado vazio do React (falha ou seleção trocada) não mexe no cartão", async () => {

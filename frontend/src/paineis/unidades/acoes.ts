@@ -145,7 +145,10 @@ export function editarUnidade(id: unknown, focoId = "form-unidade-endereco"): vo
   el<HTMLElement>(focoId)?.focus();
 }
 
+let salvandoUnidade = false; // duplo clique ou Enter repetido não envia a mesma gravação duas vezes
+
 export async function salvarUnidadeForm(): Promise<void> {
+  if (salvandoUnidade) return;
   const valor = (id: string) => (el(id)?.value || "").trim();
   const cidade = valor("form-unidade-cidade");
   const endereco = valor("form-unidade-endereco");
@@ -156,6 +159,7 @@ export async function salvarUnidadeForm(): Promise<void> {
     app().showToast("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
     return;
   }
+  salvandoUnidade = true;
   try {
     const dados = await apiFetch<{ mensagem?: string }>("/api/unidade/salvar", {
       method: "POST",
@@ -170,5 +174,7 @@ export async function salvarUnidadeForm(): Promise<void> {
   } catch (erro) {
     console.error("Erro ao salvar unidade:", erro);
     app().showToast((erro as Error).message, "error");
+  } finally {
+    salvandoUnidade = false;
   }
 }

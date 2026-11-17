@@ -9,6 +9,7 @@ const URL_ESTADO_AUTOMACAO = "/api/automacao/estado";
 const INTERVALO_MS = 3000;
 const TENTATIVAS_MAX = 300; // ~15 min: a rotina enviar espera o SharePoint
 const LIMITE_VALOR = 300;
+const PRAZO_CONSULTA_MS = 15000; // sem prazo, um GET pendurado deixaria o painel "ocupado" até recarregar a página
 
 export const OPCOES = [
   { valor: "sharepoint", rotulo: "Manter o do SharePoint" },
@@ -82,22 +83,31 @@ export const ler = () => estado;
 
 export const faltam = (atual: Estado) => atual.conflitos.length - Object.keys(escolhasParaEnviar(atual.conflitos, atual.escolhas)).length;
 
+// O aviso "O envio parou de novo…" não pode ser apagado pela releitura da lista que o próprio fim do envio
+// dispara (carregarNovosSebrae → carregarConflitosSebrae); sai na próxima escolha, no próximo envio ou com a lista vazia.
+let avisoFixo = false;
+
 // Como o atualizarBotao antigo: fora de um envio, o status mostra quantas células faltam escolher.
 function recontar() {
-  if (estado.ocupado) return;
+  if (estado.ocupado || avisoFixo) return;
   const n = faltam(estado);
   mudar({ status: n > 0 ? `Escolha uma opção em cada célula (faltam ${n}).` : "" });
 }
 
 export function escolher(id: string, valor: string) {
+  avisoFixo = false;
   mudar({ escolhas: { ...estado.escolhas, [id]: valor } });
   recontar();
 }
 
+function listaDe(corpo: unknown): Conflito[] {
+  const lista = (corpo as { conflitos?: unknown } | null)?.conflitos;
+  return (Array.isArray(lista) ? lista : []).filter((item): item is Conflito => Boolean(item) && typeof item.id === "string");
+}
+
 function aplicar(corpo: unknown) {
-  const dados = (corpo && typeof corpo === "object" ? corpo : {}) as { conflitos?: unknown; escolhas?: unknown; versao_importacao?: unknown };
-  const conflitos = (Array.isArray(dados.conflitos) ? dados.conflitos : [])
-    .filter((item): item is Conflito => Boolean(item) && typeof item.id === "string");
+  const dados = (corpo && typeof corpo === "object" ? corpo : {}) as { escolhas?: unknown; versao_importacao?: unknown };
+  const conflitos = listaDe(corpo);
   const ids = new Set(conflitos.map(item => item.id));
   const doServidor = dados.escolhas && typeof dados.escolhas === "object" ? (dados.escolhas as Escolhas) : {};
   const locais = Object.fromEntries(Object.entries(estado.escolhas).filter(([id]) => ids.has(id)));
@@ -106,21 +116,37 @@ function aplicar(corpo: unknown) {
     versao: typeof dados.versao_importacao === "string" ? dados.versao_importacao : "",
     escolhas: { ...doServidor, ...locais }, // a escolha ainda não salva de quem está na tela vale mais que a gravada
   });
+  if (!conflitos.length) avisoFixo = false;
   recontar();
 }
 
 let consulta = 0;
 
+// Só a consulta mais recente atualiza a tela, mas todas devolvem a lista que leram (null sem resposta ou com prazo
+// vencido): quem decide por ela (terminarEnvio) não pode ler a lista velha da tela quando outra consulta tomou a vez.
+async function consultarConflitos(): Promise<Conflito[] | null> {
+  const minha = ++consulta;
+  // AbortController e não AbortSignal.timeout: o prazo vira AbortError, que o apiFetch não trata como servidor offline.
+  const controle = new AbortController();
+  const prazo = setTimeout(() => controle.abort(), PRAZO_CONSULTA_MS);
+  try {
+    const corpo = await apiFetch(URL_CONFLITOS, {
+      errorMessage: "Não foi possível consultar os conflitos do Dashboard.",
+      signal: controle.signal,
+    });
+    if (minha === consulta) aplicar(corpo);
+    return listaDe(corpo);
+  } catch {
+    return null; // sem lista nova: mantém a anterior
+  } finally {
+    clearTimeout(prazo);
+  }
+}
+
 // Chamado pelo código antigo (ponte) e depois de cada envio. Nunca rejeita: sem a lista, a tela fica como
 // estava; o aviso do SharePoint e o painel de Automação seguem valendo.
 export async function carregarConflitosSebrae(): Promise<void> {
-  const minha = ++consulta;
-  try {
-    const corpo = await apiFetch(URL_CONFLITOS, { errorMessage: "Não foi possível consultar os conflitos do Dashboard." });
-    if (minha === consulta) aplicar(corpo);
-  } catch {
-    // sem lista nova: mantém a anterior
-  }
+  await consultarConflitos();
 }
 
 let acompanhamento = 0;
@@ -128,11 +154,12 @@ let relogio: ReturnType<typeof setTimeout> | undefined;
 
 async function terminarEnvio(ultima: { status?: string } | null | undefined) {
   // ocupado até a lista nova chegar: com a lista velha na tela, um clique mandaria o POST de novo.
-  await carregarConflitosSebrae();
+  const restam = ((await consultarConflitos()) ?? estado.conflitos).length > 0; // sem resposta: a lista da tela
+  avisoFixo = restam;
   mudar({ ocupado: false });
   recontar();
   app.carregarNovosSebrae?.(); // atualiza o aviso do SharePoint e a lista de chamados
-  if (estado.conflitos.length) {
+  if (restam) {
     mudar({ status: "O envio parou de novo e ainda há conflitos. Confira a lista e escolha outra vez." });
     return;
   }
@@ -168,6 +195,7 @@ function acompanharEnvio() {
 export async function salvarEReenviar() {
   const escolhas = escolhasParaEnviar(estado.conflitos, estado.escolhas);
   if (estado.ocupado || !Object.keys(escolhas).length) return;
+  avisoFixo = false;
   mudar({ ocupado: true, status: "Salvando as escolhas…" });
   try {
     const corpo = await apiFetch<{ enviar?: { iniciado?: boolean; motivo?: string } }>(URL_CONFLITOS, {

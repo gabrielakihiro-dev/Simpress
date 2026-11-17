@@ -340,7 +340,8 @@ test("abrir Chamados (sebrae-chamados) mostra o painel sem recarregar a lista", 
     assert.equal(el("cockpit-tool-kbd").textContent, "F5");
     assert.equal(el("cockpit-tool-kbd").hidden, false);
   } finally { delete global.document; }
-  const openPanel = source.match(/async function openPanel\(tool\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const openPanel = source.match(/async function openPanel\([^)]*\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.ok(openPanel, "openPanel encontrado em estado.ts");
   assert.doesNotMatch(openPanel, /sebrae-chamados|carregarNovosSebrae/);
 });
 

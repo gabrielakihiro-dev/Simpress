@@ -100,6 +100,22 @@ test("regras: limites, textos aprovados e formatos", () => {
   assert.equal(estadoDoGlobo({ gravando: false, ocupado: false, transcrevendo: false, falando: false }), "parado");
 });
 
+test("gravação: se MediaRecorder ou start() lançar, solta o microfone, volta o estado e usa o aviso de microfone", () => {
+  const estado = lerPasta("estado.ts");
+  const iniciar = estado.slice(estado.indexOf("async function iniciarGravacao"), estado.indexOf("function alternarGravacaoAssistente"));
+  const bloco = iniciar.match(/try \{\s*gravador = new MediaRecorder\(fluxo\);([\s\S]*?)\} catch \{([\s\S]*?)\}\s*temporizador = setInterval/);
+  assert.ok(bloco, "new MediaRecorder e start() ficam dentro do mesmo try");
+  assert.match(bloco[1], /gravador\.start\(\);/);
+  // encerrarGravacao para as trilhas do fluxo, zera gravador e volta gravando para false; depois avisa, religa os botões e sai.
+  assert.match(bloco[2], /encerrarGravacao\(\);[\s\S]*mostrarStatus\(MSG_MICROFONE\);\s*atualizarControles\(\);\s*return;/);
+  const encerrar = estado.slice(estado.indexOf("function encerrarGravacao"), estado.indexOf("function aoParar"));
+  assert.match(encerrar, /fluxo\?\.getTracks\(\)\.forEach\(faixa => faixa\.stop\(\)\);/);
+  assert.match(encerrar, /gravando = false;/);
+  // O aviso é o mesmo texto da recusa de permissão, definido uma só vez.
+  assert.equal((estado.match(/Não consegui usar o microfone\. Libere o acesso nas permissões do navegador\./g) || []).length, 1);
+  assert.equal((iniciar.match(/mostrarStatus\(MSG_MICROFONE\)/g) || []).length, 2);
+});
+
 test("regras: tamanhos, datas e rótulos de anexo, lembrete e conversa", () => {
   assert.equal(tamanhoLegivel(1), "1 KB");
   assert.equal(tamanhoLegivel(2048), "2 KB");

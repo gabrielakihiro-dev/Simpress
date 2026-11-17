@@ -14,5 +14,5 @@
   ];
   const ponte = context.ponteReact("configuracao-local", NOMES);
   // Os data-on-* chamam sem esperar: a falha do bundle vira console.error, nunca rejeição solta.
-  return Object.fromEntries(NOMES.map(nome => [nome, (...args) => ponte[nome](...args).catch(erro => { console.error(erro); })]));
+  return Object.fromEntries(NOMES.map(nome => [nome, (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); })]));
 });

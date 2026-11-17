@@ -530,8 +530,9 @@ test.describe("comportamento (1366 px)", () => {
     expect(await page.evaluate(() => window.__pedidosG5)).toBe(1);
   });
 
-  // Ninguém chama uma ponte deste painel (o módulo antigo só tem o intervalo), então não há "O painel React ... não
-  // carregou.": o que se garante é que o resto do app segue de pé, a sub-aba fica vazia e o sino segue pedindo o painel.
+  // A ponte só repete o último painel (repetirPainel): sem o bundle, ela deixa no console uma linha "repetirPainel: O
+  // painel React ... não carregou.". O que se garante é que o resto do app segue de pé, a sub-aba fica vazia e o sino
+  // segue pedindo o painel.
   // Desde o BF3 a troca das sub-abas do Resumo mora no painel React resultado-comparacao: sem o bundle, o clique em
   // Backups não troca a sub-aba (mesmo contrato do react-piloto: painel migrado fica vazio).
   test("sem o bundle React: o Resumo abre, a sub-aba Backups fica vazia, o pedido de 5 min segue e a página não quebra", async ({ page }) => {

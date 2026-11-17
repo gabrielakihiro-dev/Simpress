@@ -1094,6 +1094,8 @@ function tiqueGravacao() {
   else atualizarControles();
 }
 
+const MSG_MICROFONE = "Não consegui usar o microfone. Libere o acesso nas permissões do navegador.";
+
 async function iniciarGravacao() {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
     mostrarStatus("Este navegador não permite gravar áudio.");
@@ -1108,7 +1110,7 @@ async function iniciarGravacao() {
     fluxo = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
     gravando = false;
-    mostrarStatus("Não consegui usar o microfone. Libere o acesso nas permissões do navegador.");
+    mostrarStatus(MSG_MICROFONE);
     atualizarControles();
     return;
   }
@@ -1129,11 +1131,18 @@ async function iniciarGravacao() {
     analisador = null; // sem medidor o globo só respira; a gravação segue
   }
   pedacos = [];
-  gravador = new MediaRecorder(fluxo);
-  gravador.ondataavailable = evento => { if (evento.data.size) pedacos.push(evento.data); };
-  gravador.onstop = aoParar;
-  inicioGravacao = Date.now();
-  gravador.start();
+  try {
+    gravador = new MediaRecorder(fluxo);
+    gravador.ondataavailable = evento => { if (evento.data.size) pedacos.push(evento.data); };
+    gravador.onstop = aoParar;
+    inicioGravacao = Date.now();
+    gravador.start();
+  } catch {
+    encerrarGravacao(); // solta o microfone e volta gravando para false: sem isso Enviar e Anexar ficam travados
+    mostrarStatus(MSG_MICROFONE);
+    atualizarControles();
+    return;
+  }
   temporizador = setInterval(tiqueGravacao, 250);
   mostrarStatus(`Gravando… fale e clique em Parar (máximo ${LIMITE_SEGUNDOS} s). Esc cancela.`);
   atualizarControles();

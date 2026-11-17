@@ -13,7 +13,7 @@
   const ponte = context.ponteReact("relatorio-mensal", ["abrirRelatorioMensal", "fecharRelatorioMensal", "exportarRelatorioMensal"]);
 
   // Quem chama (data-on-*, cockpit-tool-panels.js) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(erro); });
+  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   return {
     abrirRelatorioMensal: semRejeitar("abrirRelatorioMensal"),

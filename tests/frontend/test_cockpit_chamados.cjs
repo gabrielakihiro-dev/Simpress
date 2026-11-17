@@ -101,15 +101,14 @@ test("ponte: selecionarVersaoChamadosCockpit só leva texto; evento do clique ou
 test("ponte: se o React não carregou, as 5 ações registram o erro e não rejeitam (quem chama não trata erro)", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "cockpit-chamados" não carregou.')));
     for (const nome of ACOES_REACT) assert.equal(await feature[nome](), undefined, nome);
   } finally {
     console.error = original;
   }
-  assert.equal(erros.length, ACOES_REACT.length);
-  assert.ok(erros.every(mensagem => mensagem === 'O painel React "cockpit-chamados" não carregou.'));
+  assert.deepEqual(erros, ACOES_REACT.map(nome => `${nome}: O painel React "cockpit-chamados" não carregou.`));
 });
 
 test("Importar e gerenciar abre o bloco e leva o foco ao primeiro arquivo (DOM puro, síncrona)", () => {

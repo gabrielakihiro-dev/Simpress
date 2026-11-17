@@ -16,9 +16,9 @@
     "renderizarAlertaBackupsRegionais",
   ]);
   // Without the panel the Home keeps working, only without live indicators: the error goes to the console.
-  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+  const registrar = (nome, promessa) => promessa.catch(erro => { console.error(`${nome}: ${erro?.message}`); });
   const ponteRegistrada = Object.fromEntries(Object.entries(ponte).map(([nome, acao]) => [
-    nome, (...argumentos) => registrar(acao(...argumentos)),
+    nome, (...argumentos) => registrar(nome, acao(...argumentos)),
   ]));
   // data-panels fires painel-atualizado on import; if react-entry.js loads later, the panel replays the last detail on init.
   let ultimoPainel;

@@ -250,6 +250,42 @@ test("fecharPainelCockpit sem o painel desfaz a casca e devolve o foco ao botão
   }
 });
 
+test("sem o painel, o Esc fecha a ferramenta aberta pela casca (mesma regra de estado.ts); com o painel a ponte não escuta nada", async () => {
+  const casca = montarCasca();
+  const ouvintes = [];
+  casca.doc.addEventListener = (tipo, fn) => ouvintes.push([tipo, fn]);
+  const acoes = await abrirSemBundle(casca, "chamados");
+  await comJanela({ SimpressReact: {} }, () => { globalThis.document = casca.doc; return acoes.abrirPainelCockpit("planilhas"); });
+  assert.equal(ouvintes.length, 1, "um keydown só, mesmo com duas aberturas");
+  const esc = (extra = {}) => {
+    const evento = { key: "Escape", defaultPrevented: false, preventDefault() { evento.defaultPrevented = true; }, ...extra };
+    comJanela({ SimpressReact: {} }, () => { globalThis.document = casca.doc; ouvintes.forEach(([, fn]) => fn(evento)); });
+    return evento;
+  };
+  esc({ key: "Enter" });
+  esc({ defaultPrevented: true });
+  assert.equal(casca.raiz.hidden, false, "outra tecla e Esc já tratado não fecham");
+  const modal = casca.doc.createElement("div");
+  modal.setAttribute("data-accessible-modal", "true");
+  casca.doc.body.append(modal);
+  esc();
+  assert.equal(casca.raiz.hidden, false, "com modal acessível aberto o Esc é do modal");
+  modal.className = "hidden";
+  assert.equal(esc().defaultPrevented, true);
+  assert.equal(casca.raiz.hidden, true);
+  assert.equal(casca.principal.hidden, false);
+  assert.equal(esc().defaultPrevented, false, "fechado, o Esc passa adiante");
+
+  const comPainel = montarCasca();
+  const ouvintesComPainel = [];
+  comPainel.doc.addEventListener = (tipo, fn) => ouvintesComPainel.push([tipo, fn]);
+  comJanela({ SimpressReact: { "ferramentas-cockpit": { abrirPainelCockpit: () => Promise.resolve() } } }, () => {
+    globalThis.document = comPainel.doc;
+    criarPonteCockpit({ ponteReactSincrona: ponteDoApp([]) }).abrirPainelCockpit("chamados");
+  });
+  assert.equal(ouvintesComPainel.length, 0, "o Esc do painel React é o de estado.ts");
+});
+
 test("fecharPainelCockpit sem o painel esconde o painel e devolve a tela principal; com o painel não confunde undefined com painel ausente", () => {
   const semPainel = montarCasca();
   semPainel.raiz.hidden = false;
