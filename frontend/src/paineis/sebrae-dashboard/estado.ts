@@ -2,7 +2,8 @@
 // Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel de frontend/src/aplicacao/pontes.ts:
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
 // montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID.
-import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, Registro, VisaoSebrae } from "./tipos";
+import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA } from "./sugestao-os-modelo.ts";
+import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
 export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   "use strict";
@@ -376,6 +377,20 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     return dd;
   }
 
+  /**
+   * Campo OS do cartão aberto de um antigo. Com sugestão a decidir, o botão da OS atual ganha "mais nova: 7400000?" ao lado;
+   * sem OS na linha, o campo diz "sem OS sugerida: 7400000?". É só texto: Aceitar e Recusar ficam na caixa da sugestão.
+   */
+  function campoOs(valor: string, serie: unknown, sufixo: string, chamado: string, osNova: OsNova | null) {
+    const dd = valor ? valorOs(valor, serie, sufixo, chamado) : document.createElement("dd");
+    if (!osNova) return dd;
+    const { semOs, legenda, sugerida } = legendaCampoOs(osNova);
+    if (semOs && !valor) dd.append(dom.createTextElement("span", "sebrae-osnova-campo__sem", "sem OS"));
+    dd.append(" ", dom.createTextElement("span", "sebrae-osnova-campo__legenda", legenda), " ", dom.createTextElement("strong", "sebrae-osnova-campo__os", sugerida));
+    dd.className = "sebrae-osnova-campo";
+    return dd;
+  }
+
   /** `leitura`: a OS vira texto (cartão da própria janela Chamado × OS). */
   function listaFatos(pares: unknown[][], serie = "", chamado = "", leitura = false) {
     const fatos = document.createElement("dl");
@@ -716,6 +731,35 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     return selo;
   }
 
+  /** Selo `OS nova?` da linha recolhida: só enquanto a sugestão espera decisão (a troca automática já foi feita e não ganha selo). */
+  function seloOsNova(item: Registro) {
+    if (!pedeDecisao(item.os_nova) || context.sugestaoOs?.temDecisao(item.numero)) return null;
+    const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-selo-os-nova", SELO_OS_NOVA);
+    selo.dataset.status = "info";
+    selo.title = `OS ${item.os_nova.nova.os}`;
+    return selo;
+  }
+
+  /**
+   * Host da caixa React "OS nova sugerida" (`sugestao-os.tsx`). Este arquivo só cria o `<div data-sugestao-os>` e o entrega;
+   * nunca escreve dentro dele. Sem sugestão nem decisão guardada, não há host.
+   */
+  function hostSugestaoOs(item: Registro) {
+    const painel = context.sugestaoOs;
+    if (!painel || (!item.os_nova && !painel.temDecisao(item.numero))) return null;
+    const host = document.createElement("div");
+    host.setAttribute("data-sugestao-os", "");
+    painel.montar(host, { numero: item.numero, osNova: item.os_nova || null, recarregar: () => recarregarOsNova(item.numero) });
+    return host;
+  }
+
+  /** Depois de Aceitar, Recusar ou Manter: recarrega o F5, reabre o cartão (a linha é refeita recolhida) e leva o foco à nota. */
+  async function recarregarOsNova(numero: string) {
+    await carregarNovosSebrae();
+    const artigo = mostrarChamadoSebrae(numero);
+    artigo?.querySelector("[data-sugestao-os] [data-nota-os]")?.focus();
+  }
+
   /** Selos automáticos do resumo: ficam escondidos e o CSS mostra o que vale agora (D FINALIZADO, pronto, andamento, atenção, erro). */
   function selosAutomaticos() {
     return [
@@ -742,12 +786,14 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       })];
     const fatos = document.createElement("dl");
     fatos.className = "ck-fatos sebrae-chamado__auto";
+    const osNova: OsNova | null = pedeDecisao(item.os_nova) ? item.os_nova : null; // troca já feita pelo servidor não muda o campo
     pares.forEach(([letra, rotulo, atual]) => {
       const sugerido = letra ? item.automaticos_sugeridos?.[letra] : "";
-      if (!atual && !sugerido) return;
+      const comOsNova = letra === "E" && osNova; // chamado sem OS: a linha OS aparece só para mostrar a sugerida
+      if (!atual && !sugerido && !comOsNova) return;
       const linha = document.createElement("div");
       const serie = item.automaticos?.K || item.automaticos_sugeridos?.K || "";
-      linha.append(dom.createTextElement("dt", "", rotulo), letra === "E" ? valorOs(atual || sugerido, serie, atual ? "" : " (será preenchido)", item.numero) : dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
+      linha.append(dom.createTextElement("dt", "", rotulo), letra === "E" ? campoOs(atual || sugerido, serie, atual ? "" : " (será preenchido)", item.numero, osNova) : dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
       fatos.appendChild(linha);
     });
     const manuais = document.createElement("div");
@@ -764,6 +810,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const notas = [];
     const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
     if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
+    const sugestao = hostSugestaoOs(item);
+    if (sugestao) notas.push(sugestao);
     const detalhes = [];
     // O lápis vale para todo antigo com UTIC (lido ou não): o texto editado vai à coluna H da cópia do Dashboard; chave "linha:<n>" não tem lápis.
     if (NUMERO_UTIC.test(item.numero)) {
@@ -786,7 +834,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
     return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,
-      [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
+      [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloOsNova(item), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
   }
 
   /** Linha recolhida dos novos e antigos: `details` cujo resumo mostra número, assunto, pessoa e selos; o cartão fica dentro. */
@@ -2266,6 +2314,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     ]);
     const lista = el("sebrae-novos-lista");
     lista?.replaceChildren(...linhasNovos);
+    context.sugestaoOs?.limparOrfas(); // as caixas das linhas antigas saíram do DOM: desmonta as raízes React delas
     lista?.removeAttribute("aria-busy"); // a lista já está pronta (também vale para a importação, que chama renderizar direto)
     renderizarAvisos(novos);
     if (!importado) definirTexto("sebrae-novos-resumo", "Importe o Dashboard primeiro.");

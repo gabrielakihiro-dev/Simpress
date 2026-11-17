@@ -1,6 +1,7 @@
 import { apiFetch } from "../../api";
 import { criarRegrasChamados } from "../regras-chamados/regras";
 import { criarDashboardSebrae } from "./estado";
+import { sugestaoOsPainel } from "./sugestao-os";
 import type { AppSebrae, Registro } from "./tipos";
 
 // Chamado por frontend/src/main.tsx com o contêiner [data-react-painel="sebrae-dashboard"] (fica depois de #sebrae-novos-avisos).
@@ -28,5 +29,7 @@ export function montar(_container: HTMLElement) {
     // Regras direto do módulo (como cockpit-chamados): o filtro da F5 não depende da ponte de ticket-rules.js.
     ticketRules: criarRegrasChamados(dom),
     sebraeDashboardModel: window.SimpressSebraeDashboardModel,
+    // A caixa "OS nova sugerida" é React (sugestao-os.tsx); estado.ts não a importa porque os testes em node o leem sem JSX.
+    sugestaoOs: sugestaoOsPainel,
   });
 }

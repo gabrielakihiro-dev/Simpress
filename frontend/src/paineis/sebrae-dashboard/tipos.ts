@@ -87,11 +87,39 @@ export interface DomSebrae {
   createTextElement(tag: string, classe: string, texto: unknown): ElementoSebrae;
 }
 
+/** Textos de uma OS como o servidor os devolve em `os_nova`: strings vazias quando a OS não tem texto. */
+export interface TextosOs { os: string; assunto: string; descricao: string; data: string }
+
+/** `abertos[].os_nova` (GET /api/sebrae/novos): troca já feita, sugestão com OS em E, ou OS achada para chamado sem OS. */
+export interface OsNova {
+  tipo: "troca" | "sugestao" | "sem_os";
+  atual: TextosOs | null;
+  nova: TextosOs & { serie: string; fonte: string };
+  sinais: { mesma_serie: boolean; nome: boolean; assunto: boolean; numero_chamado: boolean };
+  /** Corpo pronto de PUT /api/operacoes/chamados/vinculos-os. */
+  aceitar: { fonte: string; serie: string; os: string; ano: number; numero: string };
+}
+
+/** Resultado de uma decisão já gravada: a nota fica no cartão mesmo depois que o recarregamento tira `os_nova`. */
+export interface DecisaoOs { acao: "aceita" | "recusada"; os: string }
+
+/** Ponte do componente React `sugestao-os.tsx` (injetada por montar.tsx): estado.ts não importa JSX porque os testes o carregam sem transformação. */
+export interface SugestaoOsPainel {
+  /** Desenha (ou redesenha) a caixa no host; desmonta a raiz anterior do mesmo chamado. `recarregar` roda depois de uma decisão gravada. */
+  montar(host: HTMLElement, chamado: { numero: string; osNova: OsNova | null; recarregar: () => unknown }): void;
+  /** Há decisão guardada para o chamado: o host precisa existir mesmo sem `os_nova`. */
+  temDecisao(numero: string): boolean;
+  /** Desmonta as raízes cujo host saiu do DOM (lista redesenhada, chamado finalizado). */
+  limparOrfas(): void;
+}
+
 export interface ContextoSebraeDashboard {
   app: AppSebrae;
   dom: DomSebrae;
   sebraeDashboardModel: ModeloSebrae;
   ticketRules?: { normalizarFiltroChamados?: (valor: unknown) => string };
+  /** Opcional: sem ele a sugestão de OS não é desenhada (testes sem React). */
+  sugestaoOs?: SugestaoOsPainel;
 }
 
 export interface EstadoSebrae {

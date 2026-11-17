@@ -1581,6 +1581,49 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-sugestao { animation: none; }
 }
 
+/* OS nova sugerida (F5, chamado antigo): caixa React de sugestao-os.tsx e marcas feitas por estado.ts; desenho aprovado em 17/11/2026.
+   Cores só por token (claro e escuro); a tinta roxa clara da caixa vem de color-mix sobre a superfície do tema. */
+.sebrae-osnova-campo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.sebrae-osnova-campo__legenda { color: var(--cor-texto-mudo); font-size: var(--fs-base); }
+.sebrae-osnova-campo__os { padding: 1px 6px; border-radius: var(--raio-sm); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-weight: var(--peso-marca); }
+.sebrae-selo-os-nova { border: 1px solid color-mix(in srgb, var(--cor-destaque) 45%, transparent); font-weight: var(--peso-marca); }
+.sebrae-osnova { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--cor-destaque) 35%, var(--cor-superficie)); border-radius: var(--raio-lg); background: color-mix(in srgb, var(--cor-destaque-fundo) 45%, var(--cor-superficie)); }
+.sebrae-osnova__texto { display: flex; flex-direction: column; gap: 2px; }
+.sebrae-osnova__titulo { margin: 0; color: var(--cor-destaque-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); overflow-wrap: anywhere; }
+.sebrae-osnova__explica { margin: 0; color: var(--cor-texto-suave); font-size: var(--fs-base); }
+.sebrae-osnova__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sebrae-osnova__chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); font-size: var(--fs-ui); }
+.sebrae-osnova__chip[data-ok="sim"] { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
+.sebrae-osnova__cartoes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.sebrae-osnova__cartoes[data-cartoes="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sebrae-osnova__os { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-lg); background: var(--cor-superficie); }
+.sebrae-osnova__os--nova { border-color: color-mix(in srgb, var(--cor-destaque) 35%, var(--cor-superficie)); }
+.sebrae-osnova__os-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; }
+.sebrae-osnova__os-num { font-size: var(--fs-lg); font-weight: var(--peso-marca); font-variant-numeric: tabular-nums; }
+.sebrae-osnova__os--nova .sebrae-osnova__os-num { color: var(--cor-destaque-texto); }
+.sebrae-osnova__os-selo { padding: 2px 8px; border-radius: 999px; background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); font-size: var(--fs-ui); }
+.sebrae-osnova__os--nova .sebrae-osnova__os-selo { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+.sebrae-osnova__os-dados { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.sebrae-osnova__os-dados dt { color: var(--cor-texto-sutil); font-size: var(--fs-ui); }
+.sebrae-osnova__os-dados dd { margin: 0; font-size: var(--fs-base); line-height: 1.45; overflow-wrap: anywhere; }
+.sebrae-osnova__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.sebrae-osnova__acoes .ck-btn { height: 44px; min-height: 44px; padding: 0 16px; font-size: 14px; font-weight: var(--peso-marca); }
+.sebrae-osnova__erro { margin: 0; color: var(--cor-erro-texto); font-size: var(--fs-base); }
+.sebrae-osnova__nota { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px; border-radius: var(--raio-md); background: var(--cor-neutro-fundo); color: var(--cor-neutro-texto); font-size: var(--fs-base); line-height: 1.4; }
+.sebrae-osnova__nota[data-tipo="ok"] { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
+.sebrae-osnova__nota > svg { flex: none; margin-top: 1px; }
+@media (max-width: 767.98px) {
+  .sebrae-osnova { padding: 12px; }
+  .sebrae-osnova__cartoes[data-cartoes="2"] { grid-template-columns: minmax(0, 1fr); } /* celular: a OS atual e a mais nova empilham */
+  .sebrae-osnova__acoes .ck-btn { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sebrae-osnova, .sebrae-osnova__nota { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sebrae-osnova, .sebrae-osnova__nota { animation: none; }
+}
+
 /* Zona 3 · Finalização no SoftExpert (irreversível) */
 .sebrae-zona--finalizacao { gap: 0; padding: 0; }
 .sebrae-zona__cab--aviso { gap: 4px 10px; padding: 8px 14px; background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }

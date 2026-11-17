@@ -1710,12 +1710,19 @@ class OsDosAntigosTests(unittest.TestCase):
                 if path == "/api/sebrae/novos":
                     return 200, {"importado": {"arquivo": "d.xlsx", "total": 2, "abertos": [
                         {"numero": "UTIC-2026-0094", "automaticos": {"K": "SCXC9F072K1", "E": ""}, "automaticos_sugeridos": {"E": "77"}},
-                        {"numero": "UTIC-2026-0095", "automaticos": {"K": "ABC123", "E": "5"}, "automaticos_sugeridos": {}, "nao_encontrado_softexpert": True},
+                        {"numero": "UTIC-2026-0095", "automaticos": {"K": "ABC123", "E": "5"}, "automaticos_sugeridos": {}, "nao_encontrado_softexpert": True, "os_nova": {
+                            "tipo": "sugestao", "atual": {"os": "5", "assunto": "Texto sintetico", "descricao": "Descricao sintetica", "data": "01/11/2026"},
+                            "nova": {"os": "9", "serie": "ABC123", "fonte": "oracle", "assunto": "Assunto sintetico", "descricao": "Descricao nova", "data": "10/11/2026"},
+                            "sinais": {"mesma_serie": True, "nome": False, "assunto": False, "numero_chamado": False},
+                            "aceitar": {"fonte": "oracle", "serie": "ABC123", "os": "9", "ano": 2026, "numero": "0095"}}},
                     ]}}
                 return super().__call__(method, path, params, body)
 
         itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
         self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
+        # os_nova: only number and kind, never the OS text or the accept body
+        self.assertEqual([i["os_nova"] for i in itens], [None, {"os": "9", "tipo": "sugestao"}])
+        self.assertNotIn("sintetic", json.dumps(itens))
         self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True])
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
         conversation, _ = make_conversation(model, Simpress())

@@ -987,3 +987,184 @@ test("Conflitos de edição: sem rolagem horizontal de 320px a 2560px e sem falh
     expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   }
 });
+
+// ---- OS nova sugerida no cartão aberto do antigo (F5, 17/11/2026) ----
+// O servidor de teste não devolve `os_nova`: a rota troca GET /api/sebrae/novos por três antigos sintéticos (sugestão, chamado sem OS e
+// troca já feita) e imita as duas gravações (vinculos-os e os-recusada). Nada vai ao SoftExpert, ao SharePoint nem aos dados reais.
+const CHAMADOS_OS = { sugestao: "UTIC-2026-1200", sem_os: "UTIC-2026-1300", troca: "UTIC-2026-1301" };
+
+function osNovaDe(tipo, chamado, os, atual) {
+  const [, ano, numero] = chamado.split("-");
+  return {
+    tipo, atual,
+    nova: { os, serie: "DEMO0001", fonte: "sebrae", assunto: `Teclado sem resposta (OS ${os})`, descricao: `Descrição sintética da OS ${os}.`, data: "15/11/2026" },
+    sinais: { mesma_serie: tipo !== "sem_os", nome: tipo === "sem_os", assunto: true, numero_chamado: tipo === "troca" },
+    aceitar: { fonte: "sebrae", serie: "DEMO0001", os, ano, numero },
+  };
+}
+
+async function simularOsNova(page) {
+  const estado = { vinculos: [], recusas: [], leituras: 0, tentativas: 0, falhar: false, decididos: new Set() };
+  await page.route("**/api/sebrae/novos", async rota => {
+    const resposta = await rota.fetch();
+    const corpo = await resposta.json();
+    estado.leituras += 1;
+    const base = corpo.importado.abertos.find(item => item.numero === CHAMADOS_OS.sugestao);
+    const decidido = numero => estado.decididos.has(numero);
+    const antigo = (numero, titulo, extra) => ({ ...structuredClone(base), numero, chamado: numero, titulo, ...extra });
+    corpo.importado.abertos = [
+      antigo(CHAMADOS_OS.sugestao, "Teclado sem resposta", {
+        automaticos: { E: "7303022", K: "DEMO0001" }, automaticos_sugeridos: {},
+        os_nova: decidido(CHAMADOS_OS.sugestao) ? null : osNovaDe("sugestao", CHAMADOS_OS.sugestao, "7400000", { os: "7303022", assunto: "Teclado sem resposta (OS antiga)", descricao: "", data: "03/11/2026" }),
+      }),
+      antigo(CHAMADOS_OS.sem_os, "Monitor sem imagem", {
+        automaticos: {}, automaticos_sugeridos: { K: "DEMO0002" },
+        os_nova: decidido(CHAMADOS_OS.sem_os) ? null : osNovaDe("sem_os", CHAMADOS_OS.sem_os, "7400001", null),
+      }),
+      antigo(CHAMADOS_OS.troca, "Notebook não liga", {
+        automaticos: { E: "7400002", K: "DEMO0003" }, automaticos_sugeridos: {},
+        os_nova: osNovaDe("troca", CHAMADOS_OS.troca, "7400002", { os: "7303000", assunto: "Notebook não liga (OS antiga)", descricao: "Sem descrição.", data: "02/11/2026" }),
+      }),
+    ];
+    await rota.fulfill({ response: resposta, json: corpo });
+  });
+  await page.route("**/api/operacoes/chamados/vinculos-os", async rota => {
+    if (rota.request().method() !== "PUT") return rota.fallback();
+    estado.tentativas += 1;
+    if (estado.falhar) return rota.fulfill({ status: 500, json: { detail: "Falha sintética ao gravar." } });
+    const corpo = rota.request().postDataJSON();
+    estado.vinculos.push(corpo);
+    estado.decididos.add(`UTIC-${corpo.ano}-${corpo.numero}`);
+    return rota.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/sebrae/chamados/*/os-recusada", async rota => {
+    if (rota.request().method() !== "PUT") return rota.fallback();
+    estado.tentativas += 1;
+    if (estado.falhar) return rota.fulfill({ status: 500, json: { detail: "Falha sintética ao gravar." } });
+    const numero = decodeURIComponent(new URL(rota.request().url()).pathname.split("/")[4]);
+    estado.recusas.push({ numero, corpo: rota.request().postDataJSON() });
+    estado.decididos.add(numero);
+    return rota.fulfill({ json: { ok: true } });
+  });
+  return estado;
+}
+
+async function abrirChamadoOs(page, request, numero) {
+  const simulacao = await simularOsNova(page);
+  const { painel } = await abrirPainel(page, request);
+  await abrirSecaoAntigos(painel);
+  const lista = painel.locator("#sebrae-antigos-lista");
+  const linha = lista.locator(`details.sebrae-antigo:has(.sebrae-chamado[data-numero="${numero}"])`);
+  const cartao = lista.locator(`.sebrae-chamado[data-numero="${numero}"]`);
+  return { simulacao, painel, linha, cartao, seloNovo: linha.locator("> summary .sebrae-selo-os-nova"), campoOs: cartao.locator(".ck-fatos > div").filter({ has: page.locator("dt", { hasText: /^OS$/ }) }).locator("dd"), caixa: cartao.locator("[data-sugestao-os] .sebrae-osnova"), nota: cartao.locator("[data-sugestao-os] [data-nota-os]") };
+}
+
+test("OS nova sugerida: mostra selo, campo e caixa; Aceitar grava o vínculo pronto do servidor, recarrega e deixa a nota com o foco", async ({ page, request }) => {
+  const { simulacao, linha, cartao, seloNovo, campoOs, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sugestao);
+  await expect(seloNovo).toHaveText("OS nova?");
+  await abrirItemAntigo(cartao);
+  await expect(campoOs).toHaveText("7303022 mais nova: 7400000?");
+  await expect(caixa.getByRole("heading", { name: "OS mais nova na mesma série: 7400000" })).toBeVisible();
+  await expect(caixa).toContainText("O número do chamado não está na OS, então a troca espera a sua decisão.");
+  await expect(caixa.locator(".sebrae-osnova__chip")).toHaveText(["Mesma série", "Assunto parecido"]);
+  const cartoes = caixa.locator(".sebrae-osnova__os");
+  await expect(cartoes).toHaveCount(2);
+  await expect(cartoes.first()).toContainText("atual · 03/11/2026");
+  await expect(cartoes.first()).toContainText("Descrição não disponível"); // a OS atual veio sem descrição
+  await expect(cartoes.nth(1)).toContainText("mais nova · 15/11/2026");
+  await expect(cartoes.nth(1)).toContainText("Descrição sintética da OS 7400000.");
+  await expect(caixa.getByRole("button", { name: "Manter 7303022" })).toBeVisible();
+  const leiturasAntes = simulacao.leituras;
+  await caixa.getByRole("button", { name: "Aceitar 7400000" }).click();
+  await expect(nota).toHaveText("OS 7400000 aceita. A aba OS já mostra o vínculo.");
+  await expect(nota).toHaveAttribute("data-tipo", "ok");
+  await expect(nota).toBeFocused();
+  expect(simulacao.vinculos).toEqual([osNovaDe("sugestao", CHAMADOS_OS.sugestao, "7400000", null).aceitar]);
+  expect(simulacao.recusas).toEqual([]);
+  expect(simulacao.leituras).toBeGreaterThan(leiturasAntes); // o F5 recarregou depois da gravação
+  await expect(cartao).toBeVisible(); // a linha refeita volta aberta, no mesmo chamado
+  await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
+  await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+});
+
+test("OS nova sugerida: chamado sem OS mostra 'sem OS sugerida' e Recusar grava só o par chamado + OS", async ({ page, request }) => {
+  const { simulacao, cartao, seloNovo, campoOs, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_os);
+  await expect(seloNovo).toHaveText("OS nova?");
+  await abrirItemAntigo(cartao);
+  await expect(campoOs).toHaveText("sem OS sugerida: 7400001?");
+  await expect(caixa.getByRole("heading", { name: "OS encontrada para este chamado: 7400001" })).toBeVisible();
+  await expect(caixa.locator(".sebrae-osnova__os")).toHaveCount(1);
+  await expect(caixa.locator(".sebrae-osnova__os")).toContainText("encontrada · 15/11/2026");
+  await expect(caixa.getByRole("button", { name: "Aceitar 7400001" })).toBeVisible();
+  await caixa.getByRole("button", { name: "Recusar", exact: true }).click();
+  await expect(nota).toHaveText("OS 7400001 recusada. Ela não volta a ser sugerida para este chamado.");
+  await expect(nota).toHaveAttribute("data-tipo", "neutro");
+  await expect(nota).toBeFocused();
+  expect(simulacao.recusas).toEqual([{ numero: CHAMADOS_OS.sem_os, corpo: { os: "7400001" } }]);
+  expect(simulacao.vinculos).toEqual([]);
+  await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+});
+
+test("OS nova sugerida: Manter a OS atual grava a recusa da OS nova", async ({ page, request }) => {
+  const { simulacao, caixa, cartao, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sugestao);
+  await abrirItemAntigo(cartao);
+  await caixa.getByRole("button", { name: "Manter 7303022" }).click();
+  await expect(nota).toHaveText("OS 7400000 recusada. Ela não volta a ser sugerida para este chamado.");
+  expect(simulacao.recusas).toEqual([{ numero: CHAMADOS_OS.sugestao, corpo: { os: "7400000" } }]);
+  expect(simulacao.vinculos).toEqual([]);
+});
+
+test("OS nova sugerida: troca automática só mostra a nota verde, sem selo, sem marca no campo e sem botões", async ({ page, request }) => {
+  const { simulacao, cartao, seloNovo, campoOs, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.troca);
+  await expect(seloNovo).toHaveCount(0);
+  await abrirItemAntigo(cartao);
+  await expect(campoOs).toHaveText("7400002");
+  await expect(nota).toHaveText("OS trocada sozinha: o número do chamado está no assunto da OS 7400002.");
+  await expect(nota).toHaveAttribute("data-tipo", "ok");
+  await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+  await expect(cartao.locator(".sebrae-osnova")).toHaveCount(0);
+  expect(simulacao.tentativas).toBe(0);
+});
+
+test("OS nova sugerida: erro ao gravar mostra aviso curto, devolve os botões e não repete sozinho", async ({ page, request }) => {
+  const { simulacao, cartao, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sugestao);
+  await abrirItemAntigo(cartao);
+  simulacao.falhar = true;
+  await caixa.getByRole("button", { name: "Aceitar 7400000" }).click();
+  await expect(caixa.getByRole("alert")).toContainText("Falha sintética ao gravar.");
+  await expect(caixa.getByRole("button", { name: "Aceitar 7400000" })).toBeEnabled();
+  await expect(caixa.getByRole("button", { name: "Manter 7303022" })).toBeEnabled();
+  await page.waitForTimeout(700);
+  expect(simulacao.tentativas).toBe(1); // sem repetição automática
+  expect(simulacao.vinculos).toEqual([]);
+  simulacao.falhar = false;
+  await caixa.getByRole("button", { name: "Aceitar 7400000" }).click();
+  await expect(nota).toHaveText("OS 7400000 aceita. A aba OS já mostra o vínculo.");
+  expect(simulacao.tentativas).toBe(2);
+});
+
+test("OS nova sugerida: as duas OS empilham no celular e lado a lado no desktop, sem rolagem horizontal; movimento reduzido e axe nos dois temas", async ({ page, request }) => {
+  const { cartao, caixa } = await abrirChamadoOs(page, request, CHAMADOS_OS.sugestao);
+  await abrirItemAntigo(cartao);
+  const cartoes = caixa.locator(".sebrae-osnova__os");
+  for (const [largura, empilha] of [[390, true], [320, true], [1280, false]]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await expect(cartoes.nth(1)).toBeVisible();
+    const [a, b] = [await cartoes.first().boundingBox(), await cartoes.nth(1).boundingBox()];
+    if (empilha) expect(b.y, `${largura}px`).toBeGreaterThanOrEqual(a.y + a.height - 1);
+    else expect(b.x, `${largura}px`).toBeGreaterThan(a.x + a.width - 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `página a ${largura}px`).toBe(true);
+    expect(await caixa.evaluate(no => no.scrollWidth <= no.clientWidth), `caixa a ${largura}px`).toBe(true);
+    for (const botao of await caixa.locator(".sebrae-osnova__acoes .ck-btn").all()) expect((await botao.boundingBox()).height, `botão a ${largura}px`).toBeGreaterThanOrEqual(44);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await caixa.evaluate(no => getComputedStyle(no).animationName)).toBe("none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(await caixa.evaluate(no => getComputedStyle(no).animationName)).not.toBe("none");
+  expect(await caixa.evaluate(no => Number.parseFloat(getComputedStyle(no).animationDuration) * 1000)).toBeLessThanOrEqual(300);
+  for (const tema of ["light", "dark"]) {
+    await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
+    const resultado = await new AxeBuilder({ page }).include("#sebrae-antigos-lista [data-sugestao-os]").analyze();
+    expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`), tema).toEqual([]);
+  }
+});
