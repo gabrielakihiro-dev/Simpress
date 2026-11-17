@@ -131,7 +131,7 @@ jobs:
       - name: Install browser test dependencies
         run: npm ci
       - name: Audit JavaScript dependencies
-        run: npm audit --audit-level=moderate
+        run: node scripts/npm_audit.cjs
       - name: Rebuild local interface assets
         run: npm run build:ui
       - name: Verify rebuilt interface assets match the commit
