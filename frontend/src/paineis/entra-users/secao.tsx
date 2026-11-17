@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { assinar, exportarNomesEntra, ler } from "./estado";
 
 // Mesmo HTML do corpo da seção antiga (IDs, classes e ARIA), desenhado dentro do <form> de frontend/partials/modais.html,
-// que guarda também o cabeçalho. O seletor de arquivo (label.ckp-arquivo) continua com static/js/ui/file-picker.js, que troca nome, meta e data-estado direto no DOM: aqui eles ficam fixos.
+// que guarda também o cabeçalho. O seletor de arquivo (label.ckp-arquivo) continua com frontend/src/legado/ui/file-picker.js, que troca nome, meta e data-estado direto no DOM: aqui eles ficam fixos.
 export function SecaoEntra() {
   const { status, exportar, ocupado } = useSyncExternalStore(assinar, ler);
   return (

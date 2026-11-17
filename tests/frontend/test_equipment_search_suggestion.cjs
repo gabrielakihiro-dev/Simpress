@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { criarPesquisaEquipamento: createEquipmentSearch } = require("../../frontend/src/paineis/pesquisa-equipamento/estado.ts");
-const transferUtils = require("../../static/js/shared/transfer-utils.js");
+const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
 
 function fakeElement(id) {
   const classes = new Set();

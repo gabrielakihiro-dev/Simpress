@@ -1,5 +1,5 @@
 // Estado da aba Automação (F5), fora dos componentes: as ações vivem em acoes.ts e o código antigo as chama pela ponte
-// (static/js/features/chrome-automation.js) antes ou depois de o React desenhar a aba. Cada região da aba é uma raiz
+// (frontend/src/legado/features/chrome-automation.js) antes ou depois de o React desenhar a aba. Cada região da aba é uma raiz
 // React própria e todas assinam este mesmo store.
 import type { DescricaoEstado, Execucao, LogHistorico } from "./regras-puro";
 

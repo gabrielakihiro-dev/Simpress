@@ -1,5 +1,5 @@
 // Estado da pesquisa completa (Home F1, "Ver todos os resultados"), fora do componente: o código antigo chama as ações
-// pela ponte (static/js/features/full-equipment-search.js). Só leitura: GET /api/buscar-expandida.
+// pela ponte (frontend/src/legado/features/full-equipment-search.js). Só leitura: GET /api/buscar-expandida.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import {
@@ -13,7 +13,7 @@ const MODAL = "modal-pesquisa-completa";
 // shortcut: linhas vêm do renderer antigo (equipment-search-renderers.js), migram com equipment-search no Bloco final
 export type CriarLinha = (item: unknown, indice: number, termo: string, aoSelecionar: () => void) => HTMLElement;
 
-// Funções do código antigo publicadas em window (static/app.js, publish) e globais carregados antes do bundle.
+// Funções do código antigo publicadas em window (frontend/src/legado/app.js, publish) e globais carregados antes do bundle.
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

@@ -3,13 +3,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./assembled-html.cjs");
 const vm = require("node:vm");
-const transferUtils = require("../../../static/js/shared/transfer-utils.js");
-const { apiFetch: requestApi } = require("../../../static/js/shared/api-fetch.js");
-const catalogSearch = require("../../../static/js/shared/catalog-search-utils.js");
-const formDraftGuard = require("../../../static/js/shared/form-draft-guard.js");
-const annotationAutosave = require("../../../static/js/shared/history-annotation-autosave.js");
-const accessibleDialogs = require("../../../static/js/ui/accessible-dialogs.js");
-const notifications = require("../../../static/js/ui/ui-notifications.js");
+const transferUtils = require("../../../frontend/src/legado/shared/transfer-utils.js");
+const { apiFetch: requestApi } = require("../../../frontend/src/legado/shared/api-fetch.js");
+const catalogSearch = require("../../../frontend/src/legado/shared/catalog-search-utils.js");
+const formDraftGuard = require("../../../frontend/src/legado/shared/form-draft-guard.js");
+const annotationAutosave = require("../../../frontend/src/legado/shared/history-annotation-autosave.js");
+const accessibleDialogs = require("../../../frontend/src/legado/ui/accessible-dialogs.js");
+const notifications = require("../../../frontend/src/legado/ui/ui-notifications.js");
 const { criarPesquisaEquipamento } = require("../../../frontend/src/paineis/pesquisa-equipamento/estado.ts");
 const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/transporte/estado.ts");
 const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
@@ -147,7 +147,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
   };
   const window = {
     document,
-    SimpressDomUtils: require("../../../static/js/shared/dom-utils.js"),
+    SimpressDomUtils: require("../../../frontend/src/legado/shared/dom-utils.js"),
     SimpressTransferUtils: transferUtils,
     SimpressCatalogSearch: catalogSearch,
     SimpressFormDraftGuard: formDraftGuard,

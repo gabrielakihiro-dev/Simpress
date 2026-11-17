@@ -1407,7 +1407,7 @@ test("Relatório mensal (F8): carregando e erro vão para #cockpit-monthly-estad
 
 // ---------- Links de lembrete: abrirReferenciaLembrete abre a mesma janela, só com GETs existentes ----------
 
-const modeloChamadosOs = require("../../static/js/shared/chamados-os-model.js");
+const modeloChamadosOs = require("../../frontend/src/legado/shared/chamados-os-model.js");
 
 // Ambiente da janela com respostas falsas: cartoes = { "UTIC-...": { os, serie } } (o que o F5 devolve); vinculos/sebrae = respostas dos GETs.
 function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVinculos = false, falhaSebrae = false } = {}) {

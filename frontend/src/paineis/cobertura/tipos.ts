@@ -23,7 +23,7 @@ interface OpcoesConfirmacao {
   destrutiva?: boolean;
 }
 
-// Funções que static/app.js publica em window (diálogo de confirmação, Transporte, toast).
+// Funções que frontend/src/legado/app.js publica em window (diálogo de confirmação, Transporte, toast).
 interface AppAntigo {
   confirmarAcao?: (opcoes: OpcoesConfirmacao) => Promise<boolean>;
   prepararTransporte?: (dados: Registro) => Promise<unknown>;

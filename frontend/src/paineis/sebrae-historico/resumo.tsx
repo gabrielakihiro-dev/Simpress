@@ -1,5 +1,5 @@
 // Mini-lista do histórico no cartão "Chamados novos do SoftExpert". Mesmas classes e textos da versão antiga
-// em JS puro (static/js/features/sebrae-historico.js até a migração do G1); o React desenha só os filhos do host.
+// em JS puro (frontend/src/legado/features/sebrae-historico.js até a migração do G1); o React desenha só os filhos do host.
 import { useSyncExternalStore } from "react";
 import { assinar, dataHora, ler, resumoEntrada, rotuloTipo, textoRepeticoes } from "./estado";
 

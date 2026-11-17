@@ -57,7 +57,7 @@ export interface Estado {
   combos: Record<CampoCombo, ComboEstado>;
 }
 
-// Ações do código antigo publicadas em window por static/app.js (fora de frontend/types/globais.d.ts).
+// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   showToast(mensagem: string, tipo: string): void;
   confirmarAcao(opcoes: { titulo: string; mensagem: string; confirmar: string; cancelar: string; destrutiva?: boolean }): Promise<boolean>;

@@ -1,4 +1,4 @@
-// G10 (pesquisa completa, editar equipamento, editar apelido): a ponte que sobrou em static/js/features/ e os
+// G10 (pesquisa completa, editar equipamento, editar apelido): a ponte que sobrou em frontend/src/legado/features/ e os
 // contêineres do HTML. A tela e o comportamento dos diálogos ficam em tests/e2e/react-g10.spec.cjs.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,8 +6,8 @@ const path = require("node:path");
 const test = require("node:test");
 
 const raiz = path.join(__dirname, "../..");
-const criarPesquisaCompleta = require(path.join(raiz, "static/js/features/full-equipment-search.js"));
-const criarEditor = require(path.join(raiz, "static/js/features/equipment-editor.js"));
+const criarPesquisaCompleta = require(path.join(raiz, "frontend/src/legado/features/full-equipment-search.js"));
+const criarEditor = require(path.join(raiz, "frontend/src/legado/features/equipment-editor.js"));
 
 const ler = relativo => fs.readFileSync(path.join(raiz, relativo), "utf8");
 const DIALOGOS = {

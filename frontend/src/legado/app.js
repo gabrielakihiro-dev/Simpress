@@ -1,10 +1,10 @@
 /**
- * Bootstrap: builds the shared context, creates the feature modules in static/js/features/,
+ * Bootstrap: builds the shared context, creates the feature modules in frontend/src/legado/features/,
  * publishes their actions on the page scope and starts the page once the DOM is ready.
  *
- * Actions live on window because data-on-* attributes (static/js/ui/action-dispatcher.js, which
+ * Actions live on window because data-on-* attributes (frontend/src/legado/ui/action-dispatcher.js, which
  * runs only the feature actions registered below), modal close handlers
- * (static/js/ui/accessible-dialogs.js) and the enhancement scripts
+ * (frontend/src/legado/ui/accessible-dialogs.js) and the enhancement scripts
  * resolve them there. Features call each other through `app` as well, so an action that is
  * replaced on window (tests, enhancements) takes effect everywhere.
  */

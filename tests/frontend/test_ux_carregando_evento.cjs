@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const ux = require("../../static/js/ui/ux-enhancements.js");
+const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const doc = createFakeDocument();
@@ -77,7 +77,7 @@ test("tabela que alarga dentro do wrap atualiza a dica de rolagem", () => {
 
 test("produtores do indicador disparam o evento antes da busca", () => {
   const raiz = path.join(__dirname, "..", "..");
-  const ler = arquivo => fs.readFileSync(path.join(raiz, "static", "js", arquivo), "utf8");
+  const ler = arquivo => fs.readFileSync(path.join(raiz, "frontend", "src", "legado", arquivo), "utf8");
   // O histórico de planilhas agora é React: o evento sai do store, não mais de features/comparison-history.js.
   const store = fs.readFileSync(path.join(raiz, "frontend", "src", "paineis", "historico-comparacoes", "estado.ts"), "utf8");
   assert.match(store, /dispatchEvent\(new CustomEvent\("simpress:carregando-exibido"\)\)/);

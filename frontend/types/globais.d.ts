@@ -1,11 +1,11 @@
-// Globais que os scripts de static/js/shared e static/js/ui publicam ou leem em window.
+// Globais que os scripts de frontend/src/legado/shared e frontend/src/legado/ui publicam ou leem em window.
 // Só para o `tsc --project tsconfig.ui.json` (checkJs, sem emitir). Script global: sem import/export.
 // Tipadas como `any` por enquanto; ganham forma quando o módulo dono migrar para TypeScript.
 
 // Bibliotecas externas (static/vendor).
 declare var lucide: any;
 
-// Autosave das anotações (static/js/shared/history-annotation-autosave.js); lido pelo painel resultado-comparacao.
+// Autosave das anotações (frontend/src/legado/shared/history-annotation-autosave.js); lido pelo painel resultado-comparacao.
 declare var HistoryAnnotationAutosave: any;
 
 // Módulos Simpress* (cada arquivo publica o seu em window).
@@ -36,5 +36,5 @@ declare var SimpressTransferHistory: any;
 declare var SimpressTransferUtils: any;
 declare var SimpressUxEnhancements: any;
 
-// Funções de static/js/features lidas pelos scripts de ui.
+// Funções de frontend/src/legado/features lidas pelos scripts de ui.
 declare var cancelarDadosCadastrais: any;

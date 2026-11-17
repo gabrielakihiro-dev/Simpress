@@ -6,7 +6,6 @@
 @config "../../config/tailwind.config.cjs";
 @source "../index.html";
 @source "../../frontend/partials";
-@source "../app.js";
 @source "../js";
 @source "../../frontend/src";
 

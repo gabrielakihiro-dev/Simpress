@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const m = require("../../static/js/shared/coverage-model.js");
+const m = require("../../frontend/src/legado/shared/coverage-model.js");
 
 const dados = {
   hoje: "2026-11-06",

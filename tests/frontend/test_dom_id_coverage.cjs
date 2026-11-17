@@ -5,6 +5,7 @@ const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const staticDir = path.resolve(__dirname, "../../static");
+const legadoDir = path.resolve(__dirname, "../../frontend/src/legado");
 const html = assembledHtml();
 
 // IDs que o JS procura mas que não estão no index.html. Cada uma precisa de motivo.
@@ -39,12 +40,12 @@ test("every literal element id used by the JS exists in index.html", () => {
     /querySelector(?:All)?\(\s*["'`]#([\w-]+)[\s"'`.:\[>,]/g,
   ];
   const missing = new Map();
-  for (const file of jsFiles(staticDir)) {
+  for (const file of [...jsFiles(staticDir), ...jsFiles(legadoDir)]) {
     const source = fs.readFileSync(file, "utf8");
     for (const pattern of patterns) {
       for (const [, id] of source.matchAll(pattern)) {
         if (!htmlIds.has(id) && !ALLOWED_MISSING.has(id)) {
-          missing.set(id, path.relative(staticDir, file));
+          missing.set(id, path.relative(path.dirname(staticDir), file));
         }
       }
     }

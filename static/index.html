@@ -597,9 +597,7 @@
   <!-- Folha do PDF dos Termos: montada por termos.js, oculta na tela. -->
   <div id="termos-impressao" hidden></div>
 
-  <!-- Browser entry; app-entry.js owns the ordered import graph. -->
-  <script type="module" src="/static/app-entry.js"></script>
-  <!-- React (bundle gerado de frontend/src por npm run build:react); roda depois de app-entry.js. -->
+  <!-- Bundle único gerado de frontend/src por npm run build:react: o código antigo (frontend/src/legado/) roda primeiro, depois os painéis React. -->
   <script type="module" src="/static/dist/react-entry.js"></script>
 </body>
 </html>

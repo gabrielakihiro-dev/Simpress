@@ -1,7 +1,7 @@
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
 
 // Ferramentas do Cockpit (OS, Resumo, Histórico de apelidos, Relatório mensal, Planilhas e janela Chamado × OS):
-// porta fiel de static/js/features/cockpit-tool-panels.js (BF4). Os dados do servidor são lidos por nome, como no
+// porta fiel de frontend/src/legado/features/cockpit-tool-panels.js (BF4). Os dados do servidor são lidos por nome, como no
 // código antigo, e ficam como Registro. Só sintaxe apagável (sem enum/namespace): os testes carregam este .ts direto
 // no Node. O estado (painel ativo, filtros, pedidos em andamento) vive só dentro da fábrica.
 export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {

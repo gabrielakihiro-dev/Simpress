@@ -7,7 +7,7 @@ const {
   getErrorMessage,
   isRetryableError,
   requestWithRetries,
-} = require("../../static/js/shared/history-annotation-autosave.js");
+} = require("../../frontend/src/legado/shared/history-annotation-autosave.js");
 
 const successResponse = { ok: true, status: 200, json: async () => ({ sucesso: true }) };
 const errorResponse = status => ({

@@ -1,5 +1,5 @@
 // Cartão "Ativos por regional" do Resumo (F3, Visão geral). Mesmos IDs, ARIA, classes e textos do
-// cartão antigo em JS puro (static/js/features/resumo-ativos.js até o Bloco 3); o visual vem do bento.
+// cartão antigo em JS puro (frontend/src/legado/features/resumo-ativos.js até o Bloco 3); o visual vem do bento.
 import { useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import {
   TEXTO_CARREGANDO, VISIVEIS, alternarExpandido, assinar, categorias, escolherFiltro, ler, opcoes, regionais,
@@ -21,7 +21,7 @@ function Valor({ total }: { total: number }) {
   return <span ref={ref} className="ck-barra__valor" />;
 }
 
-// Mesmo esqueleto de SimpressMotion.startLoading (static/js/ui/ui-motion.js), que só aparece após 150 ms.
+// Mesmo esqueleto de SimpressMotion.startLoading (frontend/src/legado/ui/ui-motion.js), que só aparece após 150 ms.
 function Esqueleto() {
   return (
     <div className="ui-skeleton-list">

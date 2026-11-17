@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const panels = require("../../static/js/ui/data-panels.js");
+const panels = require("../../frontend/src/legado/ui/data-panels.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const doc = createFakeDocument();
@@ -148,7 +148,7 @@ test("título com ícone de ajuda (h4 dentro de um div) também recebe os botõe
 });
 
 test("os renderizadores de .comparison-desktop-table disparam o evento", () => {
-  const ler = arquivo => fs.readFileSync(path.join(__dirname, "..", "..", "static", "js", arquivo), "utf8");
+  const ler = arquivo => fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "legado", arquivo), "utf8");
   const dataPanels = ler("ui/data-panels.js");
   assert.doesNotMatch(dataPanels, /observe\(doc\.body/);
   assert.match(dataPanels, /addEventListener\("simpress:tabelas-renderizadas", scanTables\)/);

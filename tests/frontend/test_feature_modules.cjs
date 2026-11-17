@@ -4,16 +4,16 @@ const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const vm = require("node:vm");
-const { appScriptFiles, staticDir } = require("./support/app-sources.cjs");
+const { appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
 const indexHtml = assembledHtml();
-const bootstrapSource = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
-const featureFiles = appScriptFiles().filter(file => file.startsWith("js/features/"));
+const bootstrapSource = fs.readFileSync(path.join(legadoDir, "app.js"), "utf8");
+const featureFiles = appScriptFiles().filter(file => file.startsWith("features/"));
 
 // Actions the dispatcher resolves: data-on-* in the page and in markup the features render.
 function declaredActions() {
-  const sources = [indexHtml, ...featureFiles.map(file => fs.readFileSync(path.join(staticDir, file), "utf8"))];
+  const sources = [indexHtml, ...featureFiles.map(file => fs.readFileSync(path.join(legadoDir, file), "utf8"))];
   const names = new Set();
   for (const source of sources) {
     for (const match of source.matchAll(/data-on-[a-z]+=\\?["']([A-Za-z_$][\w$]*)/g)) names.add(match[1]);
@@ -25,7 +25,7 @@ function declaredActions() {
 function modalCloseHandlers() {
   const names = new Set();
   for (const file of featureFiles) {
-    const source = fs.readFileSync(path.join(staticDir, file), "utf8");
+    const source = fs.readFileSync(path.join(legadoDir, file), "utf8");
     for (const match of source.matchAll(/abrirModalAcessivel\(\s*[^,]+,\s*(?:'[^']*'|"[^"]*"),\s*"([A-Za-z_$][\w$]*)"/g)) names.add(match[1]);
   }
   return names;
@@ -34,7 +34,7 @@ function modalCloseHandlers() {
 // Scripts loaded after app.js install a few actions of their own (e.g. transfer history).
 function actionsInstalledByUiScripts() {
   const names = new Set();
-  const uiDir = path.join(staticDir, "js", "ui");
+  const uiDir = path.join(legadoDir, "ui");
   for (const file of fs.readdirSync(uiDir)) {
     const source = fs.readFileSync(path.join(uiDir, file), "utf8");
     for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
@@ -72,7 +72,7 @@ test("feature scripts only register a factory and declare no page globals", () =
   for (const file of featureFiles) {
     const window = {};
     const context = vm.createContext({ window });
-    vm.runInContext(fs.readFileSync(path.join(staticDir, file), "utf8"), context, { filename: file });
+    vm.runInContext(fs.readFileSync(path.join(legadoDir, file), "utf8"), context, { filename: file });
     assert.deepEqual(Object.keys(context), ["window"], `${file} leaked globals`);
     const registered = [...Object.values(window.SimpressFeatures || {}), window.SimpressTicketRules].filter(Boolean);
     assert.equal(registered.length, 1, `${file} should register exactly one factory`);
@@ -82,8 +82,8 @@ test("feature scripts only register a factory and declare no page globals", () =
 
 test("feature factories are also exported for Node", () => {
   for (const file of featureFiles) {
-    assert.equal(typeof require(path.join(staticDir, file)), "function", file);
+    assert.equal(typeof require(path.join(legadoDir, file)), "function", file);
   }
-  const historyFormat = require("../../static/js/shared/history-format.js");
+  const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
   assert.equal(historyFormat.formatarNomeFonteHistorico("InvAll e EquipamentosDetalhes"), "no endpoint e na Simpress");
 });

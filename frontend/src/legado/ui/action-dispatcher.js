@@ -8,7 +8,7 @@
 //   data-click-target="element-id"         forwards the click to another element (e.g. a hidden file input)
 //
 // Handlers run from the innermost element outwards, like bubbling inline handlers.
-// Closed list: static/app.js registers the feature actions through allow(); any other name
+// Closed list: frontend/src/legado/app.js registers the feature actions through allow(); any other name
 // (alert, constructor...) only logs a warning. The function itself is still read from the scope
 // at event time, so actions replaced on window (tests, enhancements) keep working.
 (function (/** @type {any} */ root, factory) {

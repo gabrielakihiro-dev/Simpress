@@ -50,7 +50,7 @@ class HistoryDisplayLabelTests(unittest.TestCase):
             ("Dados DA SIMPRESS e PELO ENDPOINT", "Dados DA Simpress e PELO Endpoint"),
         ]
         frontend = subprocess.run(
-            ["node", "-e", "const fs=require('node:fs');const f=require('./static/js/shared/history-format.js');const values=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(values.map(f.formatarNomeFonteHistorico)));"],
+            ["node", "-e", "const fs=require('node:fs');const f=require('./frontend/src/legado/shared/history-format.js');const values=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(values.map(f.formatarNomeFonteHistorico)));"],
             input=json.dumps([raw for raw, _ in cases]),
             cwd=Path(__file__).resolve().parents[1], capture_output=True,
             text=True, encoding="utf-8", check=True,
@@ -86,8 +86,8 @@ class HistoryDisplayLabelTests(unittest.TestCase):
         script = r"""
 const fs = require('node:fs');
 const vm = require('node:vm');
-const format = require('./static/js/shared/history-format.js');
-const source = fs.readFileSync('static/js/ui/comparison-result-renderer.js', 'utf8');
+const format = require('./frontend/src/legado/shared/history-format.js');
+const source = fs.readFileSync('frontend/src/legado/ui/comparison-result-renderer.js', 'utf8');
 const functions = source.slice(source.indexOf('  const formatarMotivoRevisao'), source.indexOf('  const atributosLinhaComparacao'));
 const labels = JSON.parse(fs.readFileSync(0, 'utf8'));
 const headers = source.match(/aliasReviewHeaders: (\[[^\n]+\])/)[1];

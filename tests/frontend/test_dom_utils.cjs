@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const createDomUtils = require("../../static/js/shared/dom-utils.js");
+const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
 
 function fakeDocument() {
   return {

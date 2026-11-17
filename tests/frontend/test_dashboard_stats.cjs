@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
-const transferUtils = require("../../static/js/shared/transfer-utils.js");
+const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
 
 for (const oldFails of [false, true]) test(`estatísticas: ${oldFails ? "erro" : "resposta"} antigo não substitui atualização recente`, async () => {
   const elements = Object.fromEntries(["stat-equipamentos", "stat-base-dot", "stat-equipamentos-rotulo", "stat-unidades", "btn-exportar-equipamentos"].map(id => [id, {

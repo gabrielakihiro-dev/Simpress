@@ -3,7 +3,7 @@ import { criarResultadoComparacao, type ContextoResultadoComparacao } from "./es
 
 // Resultado da aba Comparação: o HTML continua em static/index.html (ids, ARIA e data-* intactos); este painel
 // liga renderização, filtros, abas do Resumo e anotações, e devolve as ações que
-// static/js/features/comparison-result.js encaminha pela ponte.
+// frontend/src/legado/features/comparison-result.js encaminha pela ponte.
 export function montar(_container: HTMLElement) {
   const app = window as unknown as ContextoResultadoComparacao["app"];
   const appState = window.SimpressApp.state as ContextoResultadoComparacao["appState"];

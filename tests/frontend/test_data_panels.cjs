@@ -3,14 +3,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const panels = require("../../static/js/ui/data-panels.js");
-const ux = require("../../static/js/ui/ux-enhancements.js");
-const history = require("../../static/js/ui/transfer-history.js");
+const panels = require("../../frontend/src/legado/ui/data-panels.js");
+const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
+const history = require("../../frontend/src/legado/ui/transfer-history.js");
 
-const staticDir = path.join(__dirname, "..", "..", "static");
 const appHtml = assembledHtml();
-const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
-const { appSource } = require("./support/app-sources.cjs");
+const { appSource, legadoDir } = require("./support/app-sources.cjs");
+const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
 const appScript = appSource();
 
 test("sorting compares numbers, dates and text naturally and keeps empties last", () => {
@@ -51,8 +50,8 @@ test("bar widths scale to the largest city", () => {
 });
 
 test("dashboard module is loaded, offline and touches only the allowed endpoint", () => {
-  assert.match(appEntry, /import "\.\/js\/ui\/data-panels\.js";/);
-  const source = fs.readFileSync(path.join(staticDir, "js", "ui", "data-panels.js"), "utf8");
+  assert.match(appEntry, /import "\.\/ui\/data-panels\.js";/);
+  const source = fs.readFileSync(path.join(legadoDir, "ui", "data-panels.js"), "utf8");
   assert.doesNotMatch(source, /https?:\/\/(?!www\.w3\.org\/2000\/svg)/); // namespace SVG não é requisição
   assert.doesNotMatch(source, /innerHTML/);
   assert.equal(panels.ENDPOINT, "/api/painel");

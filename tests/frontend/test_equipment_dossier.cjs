@@ -9,9 +9,9 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "../..");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
-const createEquipmentDossier = require("../../static/js/features/equipment-dossier.js");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
+const createEquipmentDossier = require("../../frontend/src/legado/features/equipment-dossier.js");
 const NOMES = ["abrirDossieEquipamento", "fecharDossieEquipamento", "atualizarDossieEquipamento"];
 
 function ponteFalsa(acao) {
@@ -38,7 +38,7 @@ function comBotao(fn) {
 }
 
 test("registro: módulo importado no app-entry e publicado no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/equipment-dossier\.js";/);
+  assert.match(entrySource, /import "\.\/features\/equipment-dossier\.js";/);
   assert.match(appSource, /"equipmentDossier",/);
   assert.ok(fs.existsSync(path.join(root, "frontend/src/paineis/dossie-equipamento/montar.tsx")));
 });

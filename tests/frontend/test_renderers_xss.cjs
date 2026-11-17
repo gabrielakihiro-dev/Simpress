@@ -1,12 +1,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const createDomUtils = require("../../static/js/shared/dom-utils.js");
-const historyFormat = require("../../static/js/shared/history-format.js");
+const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
+const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
-const createEquipmentSearchRenderers = require("../../static/js/ui/equipment-search-renderers.js");
-const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
-const panels = require("../../static/js/ui/data-panels.js");
+const createComparisonResultRenderer = require("../../frontend/src/legado/ui/comparison-result-renderer.js");
+const createEquipmentSearchRenderers = require("../../frontend/src/legado/ui/equipment-search-renderers.js");
+const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
+const panels = require("../../frontend/src/legado/ui/data-panels.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 // Every text field gets its own tagged payload, so a failure names the field that leaked or was never rendered.

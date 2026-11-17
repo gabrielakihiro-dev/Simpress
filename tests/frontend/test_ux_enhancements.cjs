@@ -3,14 +3,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const ux = require("../../static/js/ui/ux-enhancements.js");
-const createNotifications = require("../../static/js/ui/ui-notifications.js");
+const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
+const createNotifications = require("../../frontend/src/legado/ui/ui-notifications.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
-const { appSource } = require("./support/app-sources.cjs");
+const { appSource, legadoDir } = require("./support/app-sources.cjs");
 const appScript = appSource();
 const appHtml = assembledHtml();
-const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
+const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
 
@@ -152,7 +152,7 @@ test("index loads the refinement layer last and links every transfer label", () 
   const refinements = appHtml.indexOf("/static/styles/ux-refinements.css");
   assert.ok(theme > 0 && refinements > theme, "ux-refinements.css must load after theme.css");
   const app = appEntry.indexOf('./app.js');
-  const enhancements = appEntry.indexOf('./js/ui/ux-enhancements.js');
+  const enhancements = appEntry.indexOf('./ui/ux-enhancements.js');
   assert.ok(app > 0 && enhancements > app, "ux-enhancements.js must load after app.js");
 
   const start = appHtml.indexOf('id="tab-panel-retirada-entrega"');

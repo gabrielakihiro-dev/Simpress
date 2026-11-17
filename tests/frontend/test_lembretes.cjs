@@ -12,8 +12,8 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/lembretes");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
 const { montarDescricaoTermo } = require(path.join(pasta, "termos-puro.ts"));
 const {
   hojeEm, agruparLembretes, montarVista, camposEditados, rotuloAgenda, tituloGrupoDia, tituloSemana,
@@ -285,9 +285,9 @@ test("textoTermo: corta no limite por caractere, troca controle por espaço e ma
   assert.equal(textoTermo(null, 10), "");
 });
 
-// ---- Ponte do código antigo (static/js/features/lembretes.js) ----
+// ---- Ponte do código antigo (frontend/src/legado/features/lembretes.js) ----
 
-const criarLembretes = require(path.join(root, "static/js/features/lembretes.js"));
+const criarLembretes = require(path.join(root, "frontend/src/legado/features/lembretes.js"));
 const NOMES_PONTE_LEMBRETES = [
   "carregarLembretes", "lembretesAdicionar", "lembretesAoDigitar", "lembretesAlternar", "lembretesEditar",
   "lembretesCancelarEdicao", "lembretesTeclaEdicao", "lembretesSalvarEdicao", "lembretesAlternarConcluidos",
@@ -310,7 +310,7 @@ function ponteFalsa(acao) {
 }
 
 test("registro: lembretes.js é a ponte do painel React lembretes e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/lembretes\.js";/);
+  assert.match(entrySource, /import "\.\/features\/lembretes\.js";/);
   assert.match(appSource, /"lembretes",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
 });
@@ -370,7 +370,7 @@ test("referência a Chamado/OS na lista: botão com data-args e abrirReferenciaL
 
 test("lembretes: sem console, innerHTML nem storage em nenhum arquivo do painel nem na ponte (a descrição tem dado pessoal)", () => {
   const arquivos = fs.readdirSync(pasta).filter((nome) => /\.tsx?$/.test(nome)).map((nome) => path.join(pasta, nome));
-  arquivos.push(path.join(root, "static/js/features/lembretes.js"));
+  arquivos.push(path.join(root, "frontend/src/legado/features/lembretes.js"));
   assert.ok(arquivos.length >= 10);
   for (const arquivo of arquivos) {
     const codigo = fs.readFileSync(arquivo, "utf8");

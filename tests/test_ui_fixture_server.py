@@ -22,7 +22,7 @@ class UIFixtureServerTests(unittest.TestCase):
             for _ in range(32):
                 connection = clients.enter_context(socket.create_connection(server.server_address, timeout=1))
                 connection.settimeout(10)
-                connection.sendall(b"GET /static/app-entry.js HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                connection.sendall(b"GET /static/dist/react-entry.js HTTP/1.0\r\nHost: localhost\r\n\r\n")
                 connections.append(connection)
 
             worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -33,7 +33,7 @@ class UIFixtureServerTests(unittest.TestCase):
                     while chunk := connection.recv(8192):
                         response.extend(chunk)
                     self.assertTrue(response.startswith(b"HTTP/1.0 200"))
-                    self.assertIn(b'import "./app.js";', response)
+                    self.assertIn(b"SimpressApp", response)
             finally:
                 server.shutdown()
                 worker.join(timeout=10)

@@ -1,20 +1,20 @@
 // Home (F1): modal "E-mail pelo Outlook". Desde o Dia 3 (G7, React) o modal vive em frontend/src/paineis/outlook-email/ e o
 // comportamento de tela é testado no navegador (tests/e2e/outlook-email.spec.cjs e tests/e2e/react-g7.spec.cjs, todas as
 // rotas /api/outlook/* simuladas). Aqui ficam as regras puras (regras-puro.ts, carregado direto pelo require do Node), a ponte
-// do código antigo (static/js/features/outlook-email.js), o registro, o HTML montado, os invariantes do envio real e a
+// do código antigo (frontend/src/legado/features/outlook-email.js), o registro, o HTML montado, os invariantes do envio real e a
 // privacidade (nenhum e-mail corporativo, nome completo nem fetch cru no JS e no TSX). Dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const createOutlookEmail = require("../../static/js/features/outlook-email.js");
+const createOutlookEmail = require("../../frontend/src/legado/features/outlook-email.js");
 
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/outlook-email");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
 const lerPasta = nome => fs.readFileSync(path.join(pasta, nome), "utf8");
 const regras = require(path.join(pasta, "regras-puro.ts"));
 const {
@@ -214,7 +214,7 @@ async function semConsole(fn) {
 }
 
 test("registro: outlook-email.js é a ponte do painel React outlook-email e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/outlook-email\.js";/);
+  assert.match(entrySource, /import "\.\/features\/outlook-email\.js";/);
   assert.match(appSource, /"outlookEmail",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
   for (const nome of NOMES_PONTE) assert.match(lerPasta("montar.tsx"), new RegExp(`\\b${nome}\\b`), `${nome} falta no retorno de montar()`);
@@ -257,7 +257,7 @@ test("o Esc do modal (data-close-function) aponta para uma ação publicada pela
 
 // ---- Privacidade ----
 test("nenhum arquivo do painel nem a ponte traz e-mail corporativo, nome completo seguido de ';', fetch cru ou console com dados", () => {
-  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "static/js/features/outlook-email.js")];
+  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/legado/features/outlook-email.js")];
   assert.ok(arquivos.length >= 5);
   for (const arquivo of arquivos) {
     const codigo = fs.readFileSync(arquivo, "utf8");

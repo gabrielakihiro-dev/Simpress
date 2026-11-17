@@ -9,10 +9,11 @@ test("verification discovers recent-equipment tests and all five previously omit
   const testStep = steps.find(step => step.args?.includes("--test"));
   assert.ok(testStep.args.includes("tests/frontend/test_recent_equipment.cjs"));
   const checked = javascriptFilesToCheck();
+  assert.ok(checked.includes("static/js/shared/theme-preference.js"));
   for (const file of [
-    "shared/recent-equipment.js", "shared/theme-preference.js",
-    "ui/data-panels.js", "ui/transfer-history.js", "ui/ux-enhancements.js",
-  ]) assert.ok(checked.includes(`static/js/${file}`), file);
+    "shared/recent-equipment.js", "ui/data-panels.js", "ui/transfer-history.js", "ui/ux-enhancements.js",
+    "app-entry.js", "app.js",
+  ]) assert.ok(checked.includes(`frontend/src/legado/${file}`), file);
 });
 
 test("compileall and gradual mypy cover every Python application module", () => {

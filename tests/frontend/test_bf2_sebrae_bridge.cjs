@@ -1,4 +1,4 @@
-// BF2: a ponte static/js/features/sebrae-dashboard.js só encaminha para window.SimpressReact["sebrae-dashboard"]
+// BF2: a ponte frontend/src/legado/features/sebrae-dashboard.js só encaminha para window.SimpressReact["sebrae-dashboard"]
 // (frontend/src/paineis/sebrae-dashboard/). Dados sintéticos; os fluxos da tela (cartões, filtro, finalizar, envio ao
 // SharePoint) são testados em test_sebrae_dashboard_ui.cjs com a mesma fábrica criarDashboardSebrae.
 const assert = require("node:assert/strict");
@@ -6,9 +6,9 @@ const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { createAppHarness } = require("./support/inventory-harness.cjs");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const sebraeDashboardModel = require("../../static/js/shared/sebrae-dashboard-model.js");
+const sebraeDashboardModel = require("../../frontend/src/legado/shared/sebrae-dashboard-model.js");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
-const criarPonte = require("../../static/js/features/sebrae-dashboard.js");
+const criarPonte = require("../../frontend/src/legado/features/sebrae-dashboard.js");
 
 const PAINEL = "sebrae-dashboard";
 const MENSAGEM = `O painel React "${PAINEL}" não carregou.`;
@@ -103,7 +103,7 @@ test("a ação síncrona não mascara o erro do painel: o que o painel lança so
   SINCRONAS.forEach(nome => assert.throws(() => acoes[nome](), erro => erro === falha, nome));
 });
 
-// Pontes reais de static/app.js, com um painel falso no lugar do React.
+// Pontes reais de frontend/src/legado/app.js, com um painel falso no lugar do React.
 test("no app real as ações da ponte chegam ao painel React e devolvem o retorno dele", async () => {
   const harness = createAppHarness(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   const chamadas = [];

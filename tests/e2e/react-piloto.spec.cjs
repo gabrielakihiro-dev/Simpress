@@ -86,7 +86,7 @@ const painelBase = () => ({
 const barras = page => page.locator("#resumo-regionais .ck-barra");
 const nomes = page => page.locator("#resumo-regionais .ck-barra__nome");
 const pilula = (page, categoria) => page.locator(`#resumo-regionais-filtros button[data-categoria="${categoria}"]`);
-// Ação publicada pela ponte (static/js/features/resumo-ativos.js), a mesma que o painel chama ao abrir.
+// Ação publicada pela ponte (frontend/src/legado/features/resumo-ativos.js), a mesma que o painel chama ao abrir.
 const recarregar = page => page.evaluate(() => window.carregarResumoAtivos());
 
 test.describe("comportamento (1366 px)", () => {
@@ -296,18 +296,6 @@ test.describe("comportamento (1366 px)", () => {
     // React troca a key das barras (geracao + 1): o elemento marcado sai e entra um novo com o mesmo valor.
     await expect(page.locator("#resumo-regionais [data-marca-teste]")).toHaveCount(0);
     await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText(["10", "5", "1"]);
-  });
-
-  test("sem o bundle React: o Resumo abre, o cartão fica vazio e o erro vai para o console", async ({ page }) => {
-    const erros = [];
-    page.on("console", mensagem => { if (mensagem.type() === "error") erros.push(mensagem.text()); });
-    await page.route("**/static/dist/react-entry.js*", route => route.abort());
-    await page.goto("/");
-    await page.locator("#btn-resumo-aba").click();
-    await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
-    await expect(page.locator("html")).not.toHaveAttribute("data-react-pronto", /.*/);
-    await expect(page.locator("#resumo-ativos-secao")).toBeEmpty();
-    await expect.poll(() => erros.some(texto => texto.includes('O painel React "resumo-ativos" não carregou.'))).toBe(true);
   });
 });
 

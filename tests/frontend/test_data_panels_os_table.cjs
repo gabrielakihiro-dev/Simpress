@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const panels = require("../../static/js/ui/data-panels.js");
+const panels = require("../../frontend/src/legado/ui/data-panels.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const report = {
@@ -94,7 +94,7 @@ async function montar(opcoes) {
 const visiveis = section => section.querySelectorAll("tbody tr[data-serial]").filter(row => !row.hidden).map(row => row.dataset.serial).sort();
 
 test("antes do install a API pública é inerte", async () => {
-  const modulePath = require.resolve("../../static/js/ui/data-panels.js");
+  const modulePath = require.resolve("../../frontend/src/legado/ui/data-panels.js");
   delete require.cache[modulePath];
   const fresh = require(modulePath);
   assert.equal(fresh.montarTabelaOs({}, {}), null);

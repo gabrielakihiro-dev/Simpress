@@ -28,7 +28,7 @@ export interface Conflito {
 }
 type Escolhas = Record<string, unknown>;
 
-// Ações do código antigo publicadas em window (static/app.js publica cada ação de static/js/features ali).
+// Ações do código antigo publicadas em window (frontend/src/legado/app.js publica cada ação de frontend/src/legado/features ali).
 const app = window as unknown as {
   showToast?: (mensagem: string, tipo: string) => void;
   atualizarEstadoAutomacao?: () => void;

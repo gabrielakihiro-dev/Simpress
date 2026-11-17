@@ -1,5 +1,5 @@
 // Regras puras do diálogo "Histórico de atualizações de planilhas" (sem DOM nem API), testáveis no Node
-// (tests/frontend/test_historico_comparacoes.cjs). Os formatadores de static/js/shared/history-format.js entram por
+// (tests/frontend/test_historico_comparacoes.cjs). Os formatadores de frontend/src/legado/shared/history-format.js entram por
 // parâmetro, para o teste usar o módulo real e este arquivo não copiar a regra.
 
 export interface Formatadores {

@@ -1,5 +1,5 @@
 // Ações da aba Automação (F5). Cada função é a que o HTML chama por data-on-* (pela ponte em
-// static/js/features/chrome-automation.js). Elas só mexem no store (estado.ts); quem desenha são os componentes.
+// frontend/src/legado/features/chrome-automation.js). Elas só mexem no store (estado.ts); quem desenha são os componentes.
 import { carregarAgendamentoDashboard } from "./agendamento";
 import { appAntigo, avisarErro, consultarAutomacao, valor } from "./consulta";
 import { interno, ler, mudar } from "./estado";
