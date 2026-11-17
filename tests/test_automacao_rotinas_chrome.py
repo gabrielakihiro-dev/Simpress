@@ -5,6 +5,7 @@ import itertools
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import time
@@ -12,6 +13,7 @@ import unittest
 import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from scripts import automacao_rotinas_chrome as automacao
@@ -2070,6 +2072,142 @@ class RotinaInventariosEtapasFinaisTests(unittest.TestCase):
         self.assertEqual(codigo, 1)
         usuarios.assert_not_called()
         staged.assert_not_called()
+
+
+
+class VigiaCancelamentoTests(unittest.TestCase):
+    """Cancelar encerra a rotina presa numa chamada do Playwright: o vigia da trava encerra o driver registrado."""
+
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-vigia-test-")
+        self.addCleanup(self.temp_context.cleanup)
+        pasta = Path(self.temp_context.name)
+        self.sinal = pasta / "automacao_chrome.cancelar"
+        for nome, valor in (("TRAVA_PATH", pasta / "automacao_chrome.lock"), ("CANCELAR_ARQUIVO", self.sinal),
+                            ("CANCELAMENTO_FORCADO_S", 0.3)):
+            patcher = patch.object(automacao, nome, valor)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.driver = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        self.addCleanup(self._encerrar_driver)
+
+    def _encerrar_driver(self):
+        if self.driver.poll() is None:
+            self.driver.kill()
+        self.driver.wait(timeout=10)
+
+    def _pw_falso(self):
+        proc = self.driver  # Popen: pid and returncode, like asyncio's Process
+        return SimpleNamespace(_impl_obj=SimpleNamespace(_connection=SimpleNamespace(_transport=SimpleNamespace(_proc=proc))))
+
+    def _driver_encerrado_em(self, segundos: float) -> bool:
+        try:
+            self.driver.wait(timeout=segundos)
+        except subprocess.TimeoutExpired:
+            return False
+        return True
+
+    def test_fresh_cancel_ends_the_driver_and_the_block_ends_as_cancelled(self):
+        with self.assertRaises(automacao.RotinaEncerrada) as ctx:
+            with automacao.trava_execucao("consulta_endpoint"):
+                automacao.registrar_driver(self._pw_falso())
+                self.sinal.write_text("agora", encoding="utf-8")
+                self.assertTrue(self._driver_encerrado_em(5))
+                raise RuntimeError("Connection closed while reading from the driver")
+        self.assertEqual(str(ctx.exception), automacao.ENCERRADA_PELO_CANCELAMENTO)
+        self.assertIsNone(automacao.ler_trava())
+
+    def test_after_an_irreversible_click_the_driver_is_never_killed(self):
+        with automacao.trava_execucao("fechar"), patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)):
+            automacao.registrar_driver(self._pw_falso())
+            automacao.aguardar_estabilidade_pre_clique(lambda: True, "Finalizar", espera_s=0)
+            self.sinal.write_text("agora", encoding="utf-8")
+            self.assertFalse(self._driver_encerrado_em(2))
+
+    def test_click_mark_after_the_forced_end_refuses_the_click(self):
+        with self.assertRaises(automacao.RotinaEncerrada):
+            with automacao.trava_execucao("fechar"):
+                automacao.registrar_driver(self._pw_falso())
+                self.sinal.write_text("agora", encoding="utf-8")
+                self.assertTrue(self._driver_encerrado_em(5))
+                automacao.marcar_clique_irreversivel()
+
+    def test_cooperative_cancel_also_ends_as_cancelled_for_the_server(self):
+        with self.assertRaises(automacao.RotinaEncerrada) as ctx:
+            with automacao.trava_execucao("consulta_endpoint"):
+                raise automacao.RotinaCancelada("Lote 2 não importado.")
+        self.assertEqual(str(ctx.exception), "Rotina cancelada pelo usuário. Lote 2 não importado.")
+        self.assertIsNone(self.driver.poll())
+
+    def test_signal_gone_before_the_grace_ends_keeps_the_driver(self):
+        with automacao.trava_execucao("os"):
+            automacao.registrar_driver(self._pw_falso())
+            self.sinal.write_text("agora", encoding="utf-8")
+            time.sleep(1.2)  # the watcher saw it
+            self.sinal.unlink()
+            self.assertFalse(self._driver_encerrado_em(1))
+
+    def test_normal_return_after_the_kill_is_kept(self):
+        with automacao.trava_execucao("ux_chamado"):
+            automacao.registrar_driver(self._pw_falso())
+            self.sinal.write_text("agora", encoding="utf-8")
+            self.assertTrue(self._driver_encerrado_em(5))
+            time.sleep(0.2)
+
+    def test_cancel_signal_older_than_the_run_is_ignored(self):
+        self.sinal.write_text("antigo", encoding="utf-8")
+        antigo = time.time() - 60
+        os.utime(self.sinal, (antigo, antigo))
+        with automacao.trava_execucao("os"):
+            automacao.registrar_driver(self._pw_falso())
+            self.assertFalse(self._driver_encerrado_em(2.5))
+
+    def test_routine_that_stops_within_the_grace_keeps_its_driver(self):
+        with patch.object(automacao, "CANCELAMENTO_FORCADO_S", 30):
+            with automacao.trava_execucao("os"):
+                automacao.registrar_driver(self._pw_falso())
+                self.sinal.write_text("agora", encoding="utf-8")
+                time.sleep(1.5)
+        self.assertFalse(self._driver_encerrado_em(2))
+
+    def test_registering_outside_the_lock_does_nothing(self):
+        automacao.registrar_driver(self._pw_falso())
+        self.assertIsNone(automacao._trava_ativa)
+
+    def test_real_playwright_exposes_the_driver_pid(self):
+        # Fixa o atributo privado usado por registrar_driver; se a atualização do Playwright o mudar, este teste avisa.
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            self.skipTest("playwright ausente")
+        with automacao.trava_execucao("os") as _, sync_playwright() as pw:
+            trava = automacao._trava_ativa
+            automacao.registrar_driver(pw)
+            self.assertEqual(len(trava.drivers), 1)
+            self.assertGreater(trava.drivers[0].pid, 0)
+            self.assertIsNone(trava.drivers[0].returncode)
+
+    def test_real_playwright_call_stuck_forever_ends_after_cancel(self):
+        # Porta local que aceita a conexão e nunca responde: connect_over_cdp sem prazo fica preso, como a aba congelada.
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            self.skipTest("playwright ausente")
+        import socket
+        import threading
+
+        servidor = socket.socket()
+        servidor.bind(("127.0.0.1", 0))
+        servidor.listen()
+        self.addCleanup(servidor.close)
+        porta = servidor.getsockname()[1]
+        threading.Timer(0.5, lambda: self.sinal.write_text("agora", encoding="utf-8")).start()
+        inicio = time.monotonic()
+        with self.assertRaises(automacao.RotinaEncerrada):
+            with automacao.trava_execucao("consulta_endpoint"), sync_playwright() as pw:
+                automacao.registrar_driver(pw)
+                pw.chromium.connect_over_cdp(f"http://127.0.0.1:{porta}", timeout=0)
+        self.assertLess(time.monotonic() - inicio, 15)
 
 
 if __name__ == "__main__":

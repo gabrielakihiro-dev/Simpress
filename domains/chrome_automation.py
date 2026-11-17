@@ -522,7 +522,7 @@ class ChromeAutomationRunner:
             if result.returncode != 0:
                 raise DomainBusyError("O script recusou o pedido de cancelamento.")
             method = "sinal"
-            message = "Cancelamento pedido. A rotina para no próximo ponto de espera; o Chrome continua aberto."
+            message = "Cancelamento pedido. A rotina é encerrada em alguns segundos; o Chrome continua aberto."
         elif run is not None and run.process is not None:
             # Only the Python child: Chrome on port 9333 was started detached and keeps the logins.
             run.process.terminate()

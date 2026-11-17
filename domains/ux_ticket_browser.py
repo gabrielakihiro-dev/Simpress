@@ -449,6 +449,7 @@ class PortalTicketUXChrome:
             page, aba, lambda: self._fluxo(page, serial, aba, cep, modelo, formulario.endereco, formulario),
             lambda: self._conferir_tudo(page, serial, modelo, cep, formulario),
         )
+        automation.marcar_clique_irreversivel()  # Cancelar no longer kills the driver; before "incerto" is recorded
         antes_do_clique()  # the service records "incerto" here, before the click
         # NUNCA repetir daqui em diante: depois do clique em Finalizar não há contingência, recarga nem volta à
         # consulta (risco de ticket duplicado). Timeout ou qualquer anomalia vira "incerto" com conferência manual.

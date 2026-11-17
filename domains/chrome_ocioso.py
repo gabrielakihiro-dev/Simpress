@@ -81,6 +81,7 @@ def fechar_chrome_de_automacao(sessao_viva: Callable[[], bool]) -> None:
                 from playwright.sync_api import sync_playwright
 
                 with sync_playwright() as pw:
+                    automation.registrar_driver(pw)
                     browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10_000)
                     # browser.close() on a CDP connection only disconnects; Browser.close quits and keeps the logins.
                     browser.new_browser_cdp_session().send("Browser.close")

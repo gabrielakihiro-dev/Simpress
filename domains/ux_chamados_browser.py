@@ -75,6 +75,7 @@ def contexto_chrome_ux() -> Iterator[Any]:
             except Exception:
                 raise ErroUX(503, MSG_CHROME, codigo="chrome_indisponivel") from None
             with sync_playwright() as pw:
+                automation.registrar_driver(pw)  # Cancelar ends this driver if the page hangs
                 try:
                     browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10_000)
                 except Exception:
@@ -84,6 +85,8 @@ def contexto_chrome_ux() -> Iterator[Any]:
                 yield browser.contexts[0]
     except automation.TravaOcupada:
         raise ErroUX(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
+    except automation.RotinaEncerrada as erro:
+        raise ErroUX(409, str(erro)) from None
 
 
 

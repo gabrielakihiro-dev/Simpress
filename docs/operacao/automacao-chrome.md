@@ -189,7 +189,7 @@ O servidor depende do script somente pela linha de comando e por arquivos; não 
 | Janela | `CREATE_NO_WINDOW`, stdin nulo | Sem console; o script não lê o teclado. |
 | Trava | `data/state/automacao_chrome.lock` (JSON `pid`, `rotina`, `inicio`) | Execução iniciada fora do site (`.bat`) aparece como "em andamento" quando o PID está vivo. |
 | Código "ocupada" | `2` | O script recusou porque já havia outra execução. |
-| Cancelamento | `--cancelar` (sinal `data/state/automacao_chrome.cancelar`), código `130` | Usado quando o `--help` do script lista `--cancelar`. |
+| Cancelamento | `--cancelar` (sinal `data/state/automacao_chrome.cancelar`), código `130` | Usado quando o `--help` do script lista `--cancelar`. A rotina para no próximo ponto de espera; se continuar presa 10 s depois do pedido (`CANCELAMENTO_FORCADO_S`), o vigia da trava encerra o driver do Playwright registrado por `registrar_driver`, e a rotina termina como cancelada (`RotinaEncerrada`: código `130` no script, 409 na consulta do Endpoint e no chamado UX). Vale para as rotinas do script e para as do servidor (consulta do Endpoint, PowerShell, chamado UX, fechamento por ociosidade). O Chrome e os logins continuam; nunca encerra pelo PID da trava. Depois de um clique irreversível (`marcar_clique_irreversivel`, chamado pela guarda pré-clique e antes do `Finalizar` do ticket UX), o vigia não encerra mais o driver: a espera pós-clique tem prazo e termina em `incerto`, sem reenvio. |
 | Log do script | `data/logs/automacao_chrome/<AAAAMMDD_HHMMSS>_<rotina>.log` + `.json` irmão (`rotina`, `inicio`, `fim`, `status`, `codigo`, `mensagem`, `lotes`, `capturas`) | Entra no histórico; o `.log` mais recente é lido quando a execução veio de fora do site. |
 | Capturas de erro | `data/logs/automacao_chrome/*.png` | Linha `Captura da tela no erro: <caminho>` no log. |
 | Espera de login | Linha `AÇÃO NECESSÁRIA: faça o login…`; termina com `Login detectado` ou `Sessão ativa` | Mostra o aviso para ir ao Chrome. |
@@ -255,7 +255,7 @@ O conteúdo da aba `Automação` agora é desenhado pelo React (`frontend/src/pa
 2. Com processo vivo ou trava com PID vivo, `executar` responde 409 com a mensagem clara.
 3. O processo é iniciado com lista de argumentos, sem shell, com o Python da `.venv`, `PYTHONUTF8`/`PYTHONIOENCODING`, `CREATE_NO_WINDOW` e stdin nulo.
 4. `estado` com `offset` devolve só as linhas novas; o aviso de login aparece com a linha `AÇÃO NECESSÁRIA` e some com `Login detectado`.
-5. `cancelar` usa `--cancelar` quando o script o oferece; senão encerra só o processo filho.
+5. `cancelar` usa `--cancelar` quando o script o oferece; senão encerra só o processo filho. Rotina presa numa chamada do Playwright termina em até ~13 s (10 s de espera + encerramento do driver).
 6. Pedidos com `Origin` ou `Sec-Fetch-Site` de outro site recebem 403 nas rotas novas.
 7. `npm run verify` e `npm run test:ui:e2e` passam; nenhuma rotina real de OS ou inventários é executada nos testes.
 
