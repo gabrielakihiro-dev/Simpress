@@ -166,6 +166,8 @@
     app.inicializarProntidao();
     app.inicializarAutomacao();
     app.carregarNovosSebrae();
+    // Nova importação de OS (F6 ou rotina de OS): o F5 recalcula a OS sugerida dos chamados com o relatório novo.
+    document.addEventListener("simpress:chamados-atualizados", () => app.carregarNovosSebrae());
   }
 
   if (document.readyState === "interactive" || document.readyState === "complete") {
