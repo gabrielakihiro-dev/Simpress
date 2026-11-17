@@ -718,8 +718,8 @@ class MaintenanceContractTests(unittest.TestCase):
         bundle = (app_config.STATIC_DIR / "dist" / "react-entry.js").read_text(encoding="utf-8")
         for global_name in ("SimpressTransferUtils", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
             self.assertIn(global_name, bundle)
-        # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis: sem global antigo.
-        for global_name in ("SimpressCoverageModel", "SimpressCoberturaVinculo", "SimpressTransferHistory"):
+        # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis, como os painéis de dados e o modelo Chamado × OS: sem global antigo.
+        for global_name in ("SimpressCoverageModel", "SimpressCoberturaVinculo", "SimpressTransferHistory", "SimpressDataPanels", "SimpressChamadosOsModel"):
             self.assertNotIn(global_name, bundle)
         # Globais que só o código antigo publica: provam que o legado entrou no bundle e roda antes dos painéis.
         self.assertIn(".SimpressActionDispatcher=", bundle)
