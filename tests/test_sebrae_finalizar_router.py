@@ -1059,6 +1059,32 @@ class OsVinculadaCongeladaTest(FinalizarBase):
         self.assertEqual(self.runner.iniciadas, ["fechar"])
         self.assertEqual(self.job()["numeros"], [A])
 
+    def espiar_derivados(self):
+        chamadas = []
+
+        def derivados(abertos, relatorio, indice=None, recusadas=None, *, chave_forte=True, manuais=()):
+            chamadas.append((recusadas, chave_forte))
+            return [{"fonte": "oracle", "serie": "BRX2", "os": "20", "chamado": A, "origem": "dashboard"}]
+
+        return chamadas, derivados
+
+    def test_recusas_legiveis_congelam_com_a_troca_por_chave_forte_ligada(self):
+        chamadas, derivados = self.espiar_derivados()
+        with patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=derivados):
+            self.finalizar_um()
+        self.assertEqual(chamadas, [({}, True)])
+
+    def test_registro_de_recusas_ilegivel_congela_sem_troca_por_chave_forte_e_a_finalizacao_segue(self):
+        arquivo = self.dir / "sebrae_os_recusadas.json"
+        arquivo.write_text("{ nao e json", encoding="utf-8")
+        chamadas, derivados = self.espiar_derivados()
+        with patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=derivados):
+            self.finalizar_um()
+        self.assertEqual(chamadas, [(None, False)])  # estrito: sem recusas lidas, a troca por chave forte fica desligada
+        self.assertEqual(self.congelada()["os"], "20")
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.assertEqual(arquivo.read_text(encoding="utf-8"), "{ nao e json")  # o registro ilegível é preservado
+
     def test_falha_no_congelamento_deixa_o_job_gravado_e_sem_foto(self):
         with patch.object(fin, "congelar_os_vinculada", side_effect=RuntimeError("falha simulada")):
             self.finalizar_um()
@@ -1130,7 +1156,7 @@ class MarcaSaiuDoDashboardTest(FinalizarBase):
     def test_vinculo_derivado_e_calculado_com_os_abertos_antigos(self):
         vistos = []
 
-        def derivados(abertos, relatorio, indice=None):
+        def derivados(abertos, relatorio, indice=None, recusadas=None, *, chave_forte=True, manuais=()):
             vistos.append(sorted(a["numero"] for a in abertos))
             return [{"fonte": "oracle", "serie": "BRX3", "os": "30", "chamado": A, "origem": "dashboard"}]
 
@@ -1139,6 +1165,20 @@ class MarcaSaiuDoDashboardTest(FinalizarBase):
             self.importar_so(B)
         self.assertEqual(vistos, [[A, B]])  # os abertos ANTIGOS: a linha de A já saiu do novo Dashboard
         self.assertEqual([(r["serie"], r["os"]) for r in self.registros().values()], [("BRX3", "30")])
+
+    def test_registro_de_recusas_ilegivel_registra_a_marca_sem_troca_por_chave_forte_e_a_importacao_segue(self):
+        (self.dir / "sebrae_os_recusadas.json").write_text("{ nao e json", encoding="utf-8")
+        chamadas = []
+
+        def derivados(abertos, relatorio, indice=None, recusadas=None, *, chave_forte=True, manuais=()):
+            chamadas.append((recusadas, chave_forte))
+            return [{"fonte": "oracle", "serie": "BRX3", "os": "30", "chamado": A, "origem": "dashboard"}]
+
+        self.vinculos = []  # sem vínculo manual, o derivado é consultado
+        with patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=derivados):
+            self.importar_so(B)  # ``importar`` exige 200: o registro ilegível não derruba a importação
+        self.assertEqual(chamadas, [(None, False)])  # estrito: sem recusas lidas, a troca por chave forte fica desligada
+        self.assertEqual([r["os"] for r in self.registros().values()], ["30"])
 
     def test_marcas_ilegiveis_param_a_importacao_antes_de_gravar_e_preservam_o_arquivo(self):
         self.arquivo.write_text("{quebrado", encoding="utf-8")
@@ -1167,6 +1207,30 @@ class MarcaSaiuDoDashboardTest(FinalizarBase):
             self.importar(montar((C,), ultima=9, status=("FINALIZADO",)))  # ``importar`` exige 200; A e B saíram
         self.assertTrue(any("erro=DomainValidationError" in r.getMessage() and A not in r.getMessage() for r in log.records))
         self.assertEqual([(r["chamado"], r["serie"]) for r in self.registros().values()], [(B, "BRX2")])
+
+
+class MarcasDerivadosDoServidorTest(unittest.TestCase):
+    """``main._marcas_derivados`` (marcas de OS lidas pelo servidor) também grava: recusas ilegíveis desligam a troca por chave forte."""
+
+    def chamar(self, conteudo=None):
+        import main
+
+        chamadas = []
+
+        def derivados(abertos, relatorio, indice=None, recusadas=None, *, chave_forte=True, manuais=()):
+            chamadas.append((recusadas, chave_forte))
+            return []
+
+        with tempfile.TemporaryDirectory() as pasta:
+            if conteudo is not None:
+                (Path(pasta) / "sebrae_os_recusadas.json").write_text(conteudo, encoding="utf-8")
+            with patch.object(main, "STATE_DIR", Path(pasta)), patch.object(main, "_dashboard_ticket_report", return_value=None),                     patch.object(sebrae_vinculos, "vinculos_derivados", side_effect=derivados):
+                self.assertEqual(main._marcas_derivados({"abertos": []}, [])(), [])
+        return chamadas
+
+    def test_registro_legivel_liga_a_chave_forte_e_ilegivel_desliga(self):
+        self.assertEqual(self.chamar(), [({}, True)])
+        self.assertEqual(self.chamar("{ nao e json"), [(None, False)])
 
 
 class ConflitosRotasTest(FinalizarBase):

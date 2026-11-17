@@ -13,6 +13,7 @@ from pathlib import Path
 from domains import coverage as cov
 from domains.coverage import CoberturaErro, Contexto, Manutencao
 from domains.coverage_store import CoberturaStore, EstadoIlegivel, manutencao_de, manutencao_dos_chamados
+from domains.sebrae_vinculos import vinculos_derivados
 
 HOJE = date(2026, 11, 6)
 AGORA = "2026-11-06T09:00:00-03:00"
@@ -212,6 +213,12 @@ class CoberturaRegrasTests(unittest.TestCase):
         self.assertEqual(resultado["vagas"][0]["serie"], "SINT-005")
         self.assertEqual(resultado["disponiveis"][0]["sinal"], "Chamado possivelmente relacionado")
         aplicar(estado, cov.reservar, demanda_id=demanda["id"], serie="SINT-005", contexto=ctx(manutencao=manutencao))
+
+    def test_e_fora_da_serie_com_os_unica_continua_bloqueando_na_cobertura_mas_nao_vincula_no_f5_f6(self):
+        relatorio = {"chamados": [{"serie": "SINT-006", "oracle": [], "simpress": {"ordens_servico": ["OS-7"]}}]}
+        abertos = [{"numero": "UTIC-2026-11", "automaticos": {"K": "SINT-006", "E": "OS-99"}}]  # E fora da série, sem chave forte
+        self.assertEqual(manutencao_de(relatorio, abertos).series, frozenset({"SINT006"}))  # Cobertura: regra antiga
+        self.assertEqual(vinculos_derivados(abertos, relatorio), [])  # F5/F6: regra nova (só com a chave forte)
 
     def test_fonte_de_manutencao_ilegivel(self):
         with tempfile.TemporaryDirectory() as pasta:

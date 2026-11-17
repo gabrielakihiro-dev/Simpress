@@ -90,6 +90,121 @@ class OsDeMacbookPelaSerieTest(unittest.TestCase):
             self.assertEqual(estado["abertos"][0]["automaticos_sugeridos"], {"K": "SCXC9F072K1", "L": "MacBook", "N": "Curitiba"})
 
 
+class OsNovaSugeridaRotasTest(unittest.TestCase):
+    """Campo ``os_nova`` dos antigos em aberto, recusa da OS e a troca de E na gravação (dados sintéticos)."""
+
+    def oracle(self, os_, assunto=""):
+        return {"ordem_servico": os_, "assunto": assunto, "descricao": "", "data_criacao": "2026-11-05T09:30:00"}
+
+    def montar_cliente(self, oracle, vinculos=()):
+        self.caminhos = sebrae_novos.caminhos_padrao(Path(tempfile.mkdtemp()))
+        self.leituras = {"relatorio": 0, "indice": 0}
+
+        def relatorio():
+            self.leituras["relatorio"] += 1
+            return {"chamados": [{"serie": "SER1", "simpress": {"ordens_servico": []}, "oracle": oracle}]}
+
+        def indice():
+            self.leituras["indice"] += 1
+            return None
+
+        app = FastAPI()
+
+        @app.exception_handler(DomainError)
+        async def erro(_request, error):
+            return JSONResponse({"detail": error.detail}, status_code=error.status_code)
+
+        app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: self.caminhos, max_upload_bytes=lambda: 10 * 1024 * 1024, registros=lambda: [],
+            relatorio_chamados=relatorio, indice_endpoint=indice, vinculos_os=lambda: list(vinculos),
+        )))
+        self.cliente = TestClient(app)
+        base = _antes_da_coluna_p(montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO")), 2, texto("E2", "100") + texto("K2", "SER1"))
+        resposta = self.cliente.post("/api/sebrae/dashboard", files={"file": ("Dashboard.xlsx", base, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        return resposta.json()["importado"]
+
+    def os_nova(self):
+        return self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"][0]["os_nova"]
+
+    def atualizar(self, estado):
+        return self.cliente.post("/api/sebrae/dashboard/atualizar", json={"versao_importacao": estado["versao"]})
+
+    def test_os_mais_nova_sem_chave_forte_aparece_como_sugestao_no_contrato_fixo_e_nao_grava_nada(self):
+        estado = self.montar_cliente([self.oracle("100"), self.oracle("200", "Tela piscando")])
+        os_nova = estado["abertos"][0]["os_nova"]
+        self.assertEqual(os_nova, self.os_nova())
+        self.assertEqual(set(os_nova), {"tipo", "atual", "nova", "sinais", "aceitar"})
+        self.assertEqual(os_nova["tipo"], "sugestao")
+        self.assertEqual(os_nova["nova"], {"os": "200", "serie": "SER1", "fonte": "oracle", "assunto": "Tela piscando", "descricao": "", "data": "05/11/2026"})
+        self.assertEqual(os_nova["aceitar"], {"fonte": "oracle", "serie": "SER1", "os": "200", "ano": 2026, "numero": "0001"})
+        self.assertEqual(self.atualizar(estado).status_code, 422)  # sugestão sozinha nunca muda a E
+
+    def test_relatorio_e_indice_do_endpoint_sao_lidos_uma_vez_por_tela_e_uma_vez_por_gravacao(self):
+        estado = self.montar_cliente([self.oracle("100"), self.oracle("200", "Chamado UTIC-2026-0001 aberto")])
+        self.leituras.update(relatorio=0, indice=0)
+        self.assertEqual(self.cliente.get("/api/sebrae/novos").status_code, 200)
+        self.assertEqual(self.leituras, {"relatorio": 1, "indice": 1})  # o F5 calcula E e a OS nova com a mesma leitura
+        self.leituras.update(relatorio=0, indice=0)
+        self.assertEqual(self.atualizar(estado).status_code, 200)
+        self.assertEqual(self.leituras, {"relatorio": 1, "indice": 1})
+
+    def test_chamado_sem_os_nova_traz_none(self):
+        estado = self.montar_cliente([self.oracle("100")])
+        self.assertIsNone(estado["abertos"][0]["os_nova"])
+
+    def test_recusar_grava_so_localmente_responde_ok_e_a_sugestao_some_para_sempre(self):
+        estado = self.montar_cliente([self.oracle("100"), self.oracle("200")])
+        resposta = self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-recusada", json={"os": "200"})
+        self.assertEqual((resposta.status_code, resposta.json()), (200, {"ok": True}))
+        self.assertEqual(resposta.headers["cache-control"], "no-store")
+        gravado = json.loads((fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json").read_text(encoding="utf-8"))
+        self.assertEqual(gravado, {"version": 1, "recusadas": {"UTIC-2026-0001": ["200"]}})
+        self.assertIsNone(self.os_nova())
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-recusada", json={"os": "200"}).status_code, 200)
+        self.assertEqual(self.atualizar(estado).status_code, 422)
+
+    def test_recusar_com_os_ou_numero_invalidos_ou_campo_extra_da_422_e_nao_grava(self):
+        self.montar_cliente([self.oracle("100"), self.oracle("200")])
+        arquivo = fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json"
+        for numero, corpo in (
+            ("UTIC-2026-0001", {"os": "7400000;rm"}), ("UTIC-2026-0001", {"os": ""}), ("UTIC-2026-0001", {"os": "a" * 33}),
+            ("UTIC-2026-0001", {"os": "200", "extra": 1}), ("UTIC-2026-0001", {}), ("chamado-x", {"os": "200"}),
+        ):
+            resposta = self.cliente.put(f"/api/sebrae/chamados/{numero}/os-recusada", json=corpo)
+            self.assertEqual(resposta.status_code, 422, (numero, corpo, resposta.text))
+        self.assertFalse(arquivo.exists())
+
+    def test_registro_de_recusas_ilegivel_tira_a_sugestao_sem_derrubar_a_tela(self):
+        self.montar_cliente([self.oracle("100"), self.oracle("200")])
+        arquivo = fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json"
+        arquivo.write_text("{ nao e json", encoding="utf-8")
+        self.assertIsNone(self.os_nova())
+        self.assertEqual(self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-recusada", json={"os": "200"}).status_code, 503)
+        self.assertEqual(arquivo.read_text(encoding="utf-8"), "{ nao e json")
+
+    def test_chave_forte_troca_sozinha_e_a_gravacao_escreve_so_a_coluna_e_mesmo_preenchida(self):
+        estado = self.montar_cliente([self.oracle("100"), self.oracle("200", "Chamado UTIC-2026-0001 aberto")])
+        self.assertEqual(estado["abertos"][0]["os_nova"]["tipo"], "troca")
+        resposta = self.atualizar(estado)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["E"])])
+        saida = G.valores_dos_chamados(base64.b64decode(resposta.json()["conteudo_base64"]))
+        entrada = G.valores_dos_chamados(sebrae_novos.caminho_planilha(self.caminhos).read_bytes())
+        coluna_e = G.COLUNAS_DE_DADO.index("E")
+        self.assertEqual((saida[2][coluna_e], entrada[2][coluna_e]), ("200", "100"))
+        self.assertEqual([c for c in range(len(saida[2])) if saida[2][c] != entrada[2][c]], [coluna_e])
+
+    def test_vinculo_manual_diferente_da_e_da_planilha_tambem_e_gravado_na_e(self):
+        vinculo = {"fonte": "oracle", "serie": "SER1", "os": "150", "ano": 2026, "numero": "0001", "chamado": "UTIC-2026-0001", "origem": "manual"}
+        estado = self.montar_cliente([self.oracle("100"), self.oracle("200")], vinculos=[vinculo])
+        resposta = self.atualizar(estado)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", ["E"])])
+        saida = G.valores_dos_chamados(base64.b64decode(resposta.json()["conteudo_base64"]))
+        self.assertEqual(saida[2][G.COLUNAS_DE_DADO.index("E")], "150")
+
+
 class RotasSebraeTest(RotasBase):
     def test_estado_vazio_antes_de_importar(self):
         self.assertEqual(self.cliente.get("/api/sebrae/novos").json(), {"importado": None, "novos": None})
