@@ -20,7 +20,7 @@
   const ponteRegistrada = Object.fromEntries(Object.entries(ponte).map(([nome, acao]) => [
     nome, (...argumentos) => registrar(nome, acao(...argumentos)),
   ]));
-  // data-panels fires painel-atualizado on import; if react-entry.js loads later, the panel replays the last detail on init.
+  // paineis-dados fires painel-atualizado on import; if react-entry.js loads later, the panel replays the last detail on init.
   let ultimoPainel;
   if (typeof document !== "undefined") document.addEventListener("simpress:painel-atualizado", evento => { ultimoPainel = evento.detail; });
   const lerUltimoPainel = () => ultimoPainel;

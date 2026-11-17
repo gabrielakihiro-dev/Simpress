@@ -3,6 +3,7 @@
 // cada carga com sincronizarGestaoChamadosCockpit. Respostas atrasadas são descartadas por um portão de
 // requisição por consulta (versões e Home); a regra pura mora em cockpit-chamados-puro.ts.
 import { apiFetch, type ApiFetchOptions } from "../../api";
+import { paineisDados } from "../paineis-dados/paineis.ts";
 import { criarRegrasChamados } from "../regras-chamados/regras";
 import {
   chamadosAbertosDaSerie, chamadosSebraeDaSerie, chaveEvolucao, idAnterior, montarEvolucao, nomeArquivoExportado,
@@ -216,7 +217,7 @@ export async function exportarChamadosCockpit() {
   const somenteAtencao = Boolean(campo<HTMLInputElement>("cockpit-tickets-attention")?.checked);
   // Séries que passam no filtro da tela (todas as páginas); null = tabela não carregada ou versão diferente da tela: GET antigo.
   // Aplica antes a busca ainda na espera de 150 ms, para as séries e o rótulo "Busca" do Resumo virem do mesmo texto.
-  const painelDados = window.SimpressDataPanels;
+  const painelDados = paineisDados;
   const mesmaVersao = versao === versaoDaTabela;
   if (mesmaVersao) painelDados?.filtrarTabelaOs?.({ busca: buscaBruta });
   const series = mesmaVersao ? painelDados?.seriesFiltradasOs?.() ?? null : null;
