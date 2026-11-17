@@ -23,14 +23,6 @@ O arquivo `package-lock.json` registra a árvore corrigida. Não foram usados
 avisos. O override deve ser revisto quando a CLI adotar uma versão segura do
 monitor de arquivos diretamente.
 
-**Atualização (17/11/2026, autorizada pelo usuário):** o aviso
-[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) passou a
-cobrir `picomatch <= 4.0.7`, sem versão corrigida, e reprovava toda a CI. O passo
-de auditoria dos workflows agora roda `node scripts/npm_audit.cjs`, que equivale a
-`npm audit --audit-level=moderate` e ignora só esse aviso: o `picomatch` roda
-apenas no build (Vite e CLI do Tailwind), com padrões de arquivo do próprio
-projeto. Remova o item de `IGNORADOS` quando sair a versão corrigida.
-
 O build usa a CLI nova e gera `static/vendor/tailwind-4.3.3.css`; o HTML e o
 contrato de assets apontam para esse arquivo. O CSS gerado pela versão antiga
 foi removido.
@@ -44,6 +36,17 @@ tipografia do campo de série, o peso do botão de busca e o espaçamento da Hom
 O CI agora executa `npm audit --audit-level=moderate` em etapas próprias, nos
 jobs `verify` e `ui-browser`. O job de navegador também recompila os assets
 antes dos testes. Avisos moderados ou superiores passam a interromper o job.
+
+### Exceção de 17/11/2026: alerta ignorado
+
+A pedido do usuário (17/11/2026), os dois jobs rodam `node scripts/npm-audit.cjs`
+no lugar de `npm audit --audit-level=moderate`. O script faz a mesma auditoria,
+mas ignora só os alertas da lista `IGNORADOS`; qualquer outro alerta moderado ou
+acima continua interrompendo o job. Na lista está apenas o
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
+(ReDoS no `picomatch`, que chega pelo `vite` e só roda no build local), que não
+tinha versão corrigida nessa data. Quando sair a correção, rode `npm audit fix`,
+tire o alerta da lista e confirme que `node scripts/npm-audit.cjs` passa.
 
 ## Validação local
 
