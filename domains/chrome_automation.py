@@ -307,6 +307,16 @@ class ChromeAutomationRunner:
         # A run adopted after a restart has no handle, so its exit code is unknown.
         self._finish_run_locked(run, run.process.poll() if run.process is not None else None)
 
+    def _cancel_requested_since(self, inicio: Any) -> bool:
+        """Same rule as the script's cancelamento_pedido: a signal older than the run start does not count."""
+        try:
+            mtime = self.contract.cancel_signal_file.stat().st_mtime
+        except OSError:
+            return False
+        started = _parse_time(inicio)
+        # 2 s slack: the Windows file clock is coarser than time.time().
+        return started is None or mtime >= started.timestamp() - 2
+
     def _active_locked(self) -> Optional[Dict[str, Any]]:
         self._refresh_locked()
         run = self._current
@@ -317,7 +327,7 @@ class ChromeAutomationRunner:
         if owner is not None:
             return {"rotina": str(owner.get("rotina") or ""), "inicio": str(owner.get("inicio") or ""),
                     "pid": int(owner.get("pid") or 0), "origem": "externo",
-                    "cancelamento_pedido": self.contract.cancel_signal_file.exists()}
+                    "cancelamento_pedido": self._cancel_requested_since(owner.get("inicio"))}
         return None
 
     @staticmethod

@@ -572,3 +572,16 @@ class RouteTests(unittest.TestCase):
         self.assertFalse(antes_p2(False))
         self.assertEqual(client.post("/api/endpoint/controle-remoto/cancelar", json={"pedido": ""}).status_code, 422)
         self.assertEqual(client.post("/api/endpoint/controle-remoto", json={"serial": "ABC", "pedido": "a b"}).status_code, 422)
+
+
+class AbaDaConsultaTests(unittest.TestCase):
+    def test_tab_of_another_site_is_never_asked_its_name(self):
+        # evaluate has no timeout: a frozen Microsoft login tab hung the lookup forever (17/11/2026).
+        travada = MagicMock(url="https://login.microsoftonline.com/x/oauth2/authorize")
+        travada.evaluate.side_effect = AssertionError("evaluate em aba de outro site")
+        self.assertFalse(endpoint_lookup._e_aba_da_consulta(travada))
+        for url in ("https://centralendpoint.pr.sebrae.com.br/webclient", "https://centralendpoint.pr.sebrae.com.br:8443/webclient"):
+            with self.subTest(url=url):
+                aba = MagicMock(url=url)
+                aba.evaluate.return_value = endpoint_lookup.NOME_ABA_CONSULTA
+                self.assertTrue(endpoint_lookup._e_aba_da_consulta(aba))

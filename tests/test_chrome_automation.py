@@ -180,6 +180,19 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertEqual(len(harness.popen_calls), 1)
         harness.finish(0)
 
+    def test_external_run_ignores_a_cancel_signal_older_than_its_start(self):
+        harness = self.harness(alive_pids={999})
+        harness.contract.lock_file.parent.mkdir(parents=True)
+        inicio = datetime(2026, 11, 17, 17, 13, 58).astimezone()
+        harness.contract.lock_file.write_text(
+            json.dumps({"pid": 999, "rotina": "consulta_endpoint", "inicio": inicio.isoformat()}), encoding="utf-8")
+        harness.contract.cancel_signal_file.write_text("x", encoding="utf-8")
+        for atraso, esperado in ((-71, False), (5, True)):
+            with self.subTest(atraso=atraso):
+                instante = inicio.timestamp() + atraso
+                os.utime(harness.contract.cancel_signal_file, (instante, instante))
+                self.assertIs(harness.runner.state()["cancelamento_pedido"], esperado)
+
     def test_live_lock_from_outside_the_site_blocks_start(self):
         harness = self.harness(alive_pids={999})
         harness.contract.lock_file.parent.mkdir(parents=True)
