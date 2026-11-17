@@ -6,7 +6,7 @@ import {
 } from "./estado";
 
 // Chamado por frontend/src/main.tsx com o overlay #modal-email-outlook (data-react-painel="outlook-email").
-// O código antigo chama as ações pela ponte (frontend/src/legado/features/outlook-email.js).
+// A aplicação chama as ações pela ponte (frontend/src/aplicacao/pontes.ts).
 export function montar(container: HTMLElement) {
   createRoot(container).render(<DialogoEmailOutlook />);
   return {

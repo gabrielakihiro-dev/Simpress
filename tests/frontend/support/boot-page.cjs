@@ -1,7 +1,7 @@
-// Boots frontend/src/legado/app.js inside a VM with a fake DOM, the way the feature-module tests need it.
-const vm = require("node:vm");
-const { appScripts } = require("./app-sources.cjs");
+// Boots the bootstrap (frontend/src/aplicacao/app.ts, iniciar()) on a fake window with a fake DOM, the way the feature-module tests need it.
 const apiFetchTs = require("../../../frontend/src/api.ts");
+const { iniciar } = require("../../../frontend/src/aplicacao/app.ts");
+const { instalarGlobaisNode } = require("./globais-node.cjs");
 
 function fakeElement() {
   return {
@@ -47,15 +47,22 @@ function bootPage(extraWindow = {}) {
     addEventListener() {},
     ...extraWindow,
   };
-  const context = vm.createContext({
+  const sandbox = {
     document, window, console, setTimeout, clearTimeout, URLSearchParams,
     requestAnimationFrame: () => 0,
     MutationObserver: class { observe() {} disconnect() {} },
     HTMLElement: function HTMLElement() {},
     lucide: { createIcons() {} },
+  };
+  // iniciar() e as features rodam no realm do Node: os mesmos falsos precisam existir como globais.
+  instalarGlobaisNode({
+    document, window, lucide: sandbox.lucide, HTMLElement: sandbox.HTMLElement,
+    MutationObserver: sandbox.MutationObserver, requestAnimationFrame: sandbox.requestAnimationFrame,
   });
+  // iniciar() publica as ações das features em `context`, como o antigo app.js as publicava no global da VM.
+  const context = sandbox;
   const before = new Set(Object.keys(context));
-  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
+  iniciar(context);
   const published = Object.keys(context).filter(name => !before.has(name));
   return { context, window, published };
 }

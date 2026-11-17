@@ -80,7 +80,7 @@ interface Estado extends Derivados {
   chamadoInterno: string;
 }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js e transfer-form.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts e pelo painel transporte (fora de frontend/types/globais.d.ts).
 interface TextoRegistro { texto?: string; aviso?: string }
 interface AppAntigo {
   showToast(mensagem: string, tipo: string): void;

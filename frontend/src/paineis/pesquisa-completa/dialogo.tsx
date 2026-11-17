@@ -4,7 +4,7 @@ import { TEXTO, type Opcao } from "./pesquisa-completa-puro";
 import { assinar, desenharIcones, escolher, iniciarEsqueleto, ler } from "./estado";
 
 // Conteúdo de .ck-dialogo do #modal-pesquisa-completa (frontend/partials/modais.html). Mesmos IDs, classes e ARIA do
-// diálogo antigo. Botões e selects mantêm só data-on-click e data-on-change: o despachante do código antigo chama as
+// diálogo antigo. Botões e selects mantêm só data-on-click e data-on-change: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama as
 // ações pela ponte (window.limparFiltrosPesquisaCompleta etc.), como no dossiê.
 function Filtro({ id, rotulo, todos, opcoes, valor, desabilitado, aoEscolher }: {
   id: string;

@@ -1,4 +1,4 @@
-// Formas mínimas do que o painel Lembretes e Termos lê do código antigo em window.
+// Formas mínimas do que o painel Lembretes e Termos lê da aplicação em window.
 // O texto de um lembrete tem dado pessoal: nada aqui vai para log nem para storage.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -12,14 +12,14 @@ interface OpcoesConfirmacao {
   destrutiva?: boolean;
 }
 
-// O mínimo de um evento de teclado: o código antigo (ponte) e o React passam objetos diferentes para as mesmas ações.
+// O mínimo de um evento de teclado: a aplicação (ponte) e o React passam objetos diferentes para as mesmas ações.
 export interface EventoTecla {
   key: string;
   target: EventTarget | null;
   preventDefault: () => void;
 }
 
-// Funções que frontend/src/legado/app.js e frontend/src/legado/features publicam em window (confirmação, diálogos, toast, referências).
+// Funções que as features de frontend/src/aplicacao publicam em window (por app.ts) (confirmação, diálogos, toast, referências).
 export interface AppAntigo {
   confirmarAcao?: (opcoes: OpcoesConfirmacao) => Promise<boolean>;
   showToast?: (texto: string, tipo?: string) => void;
@@ -28,6 +28,6 @@ export interface AppAntigo {
   abrirReferenciaLembrete?: (referencia: { tipo: string; numero: string }, gatilho?: Element) => void;
 }
 
-// Lidos na hora do uso, nunca no topo do módulo: o código antigo publica depois de o bundle carregar.
+// Lidos na hora do uso, nunca no topo do módulo: uma ação trocada em window (testes) vale em todo lugar (frontend/src/aplicacao/app.ts).
 export const appAntigo = () => window as unknown as AppAntigo;
 export { referenciasNoTexto } from "../paineis-dados/chamados-os.ts";

@@ -9,7 +9,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": { "/static/vendor/*": ["./frontend/types/vendor/*"] }
   },
   "include": [
     "frontend/types/globais.d.ts",

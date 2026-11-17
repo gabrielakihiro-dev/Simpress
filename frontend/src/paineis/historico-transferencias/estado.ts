@@ -1,4 +1,4 @@
-// Estado do diálogo "Transferências geradas", fora do componente: o código antigo chama as ações pela janela
+// Estado do diálogo "Transferências geradas", fora do componente: a aplicação chama as ações pela janela
 // (data-on-click e a aba Transporte), às vezes antes de o React desenhar o diálogo. Toda mudança de estado vai por
 // flushSync: o DOM já está final quando o evento simpress:tabelas-renderizadas sai (data-panels.js lê a tabela nele).
 import { flushSync } from "react-dom";
@@ -21,7 +21,7 @@ export interface Estado {
   itens: ItemHistorico[];
 }
 
-// Funções do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Funções da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

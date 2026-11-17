@@ -29,7 +29,7 @@ EXCLUDED_STEMS = (
     "nao reconhece chip", "bloqueio na conta ou aparelho", "falha na temperatura do fusor",
 )
 EXCLUDED_PREFIXES = ("hardware", "celular", "tablet")
-# Same pattern as the check in frontend/src/legado/features/ux-chamados.js (abrirChamadoUX): keep both in sync.
+# Same pattern as the check in frontend/src/paineis/ux-chamados/estado.ts (abrirChamadoUX): keep both in sync.
 PLACEHOLDER = re.compile(r"\[[^\]\n]*\]|:[ \t]*$", re.MULTILINE)
 SERIES_SEM_ENVIO_REAL = frozenset({"BRM551RN1Y"})
 VAR_SEM_ENVIO = "SIMPRESS_UX_SEM_ENVIO"

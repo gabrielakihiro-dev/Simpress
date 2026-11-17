@@ -68,5 +68,5 @@ export function createDomUtils(document: Document) {
   return { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize, infoTipHtml };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e pelos montar.tsx de frontend/src/paineis.
 if (typeof window !== "undefined") window.SimpressDomUtils = createDomUtils;

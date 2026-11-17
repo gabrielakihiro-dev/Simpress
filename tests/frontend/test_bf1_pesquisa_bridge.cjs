@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const criarPesquisa = require("../../frontend/src/legado/features/equipment-search.js");
+const criarPesquisa = require("../../frontend/src/aplicacao/registro.ts").fabricas.equipmentSearch;
 
 test("a busca encaminha as ações imediatas e assíncronas ao painel React", async () => {
   const chamadas = [];

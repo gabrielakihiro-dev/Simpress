@@ -1,4 +1,4 @@
-// BF2: a ponte frontend/src/legado/features/ticket-rules.js só encaminha para window.SimpressReact["regras-chamados"].
+// BF2: a ponte frontend/src/aplicacao/ticket-rules.ts só encaminha para window.SimpressReact["regras-chamados"].
 // Dados sintéticos; a lógica das regras é testada em test_cockpit_andamento, test_cockpit_chamados e test_renderers_xss.
 const assert = require("node:assert/strict");
 const test = require("node:test");
@@ -6,7 +6,7 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
 const historyFormat = require("../../frontend/src/comum/history-format.ts");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createTicketRules = require("../../frontend/src/legado/features/ticket-rules.js");
+const createTicketRules = require("../../frontend/src/aplicacao/ticket-rules.ts").createTicketRules;
 const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
 const MENSAGEM = 'O painel React "regras-chamados" não carregou.';

@@ -7,7 +7,7 @@ import {
 } from "./estado";
 
 // Chamado por frontend/src/main.tsx com o .ck-dialogo do #modal-pesquisa-completa (data-react-painel="pesquisa-completa").
-// As cinco ações são chamadas pelo código antigo pela ponte (frontend/src/legado/features/full-equipment-search.js).
+// As cinco ações são chamadas pela aplicação pela ponte (frontend/src/aplicacao/full-equipment-search.ts).
 export function montar(container: HTMLElement) {
   const raiz = createRoot(container);
   // Desenha já: o diálogo acessível procura o título (aria-labelledby) e o botão Fechar no DOM.

@@ -1,4 +1,4 @@
-// Único auxiliar de requisição JSON (painéis React e código antigo): aceita corpo vazio, transforma o `detail`
+// Único auxiliar de requisição JSON (painéis React e aplicação em frontend/src/aplicacao): aceita corpo vazio, transforma o `detail`
 // do FastAPI (texto ou lista 422 do Pydantic) em Error legível, mantém o evento simpress:servidor-offline,
 // o detail do 422 e error.status (409 de versao_importacao). Nunca usar fetch cru nos painéis React.
 import { format as formatarDetalhe } from "./comum/api-errors.ts";
@@ -79,5 +79,5 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
   return responseType === "response" ? response : readJson(response, false, errorMessage);
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts (context.apiFetch).
 if (typeof window !== "undefined") window.SimpressApiFetch = { apiFetch, isAbortError };

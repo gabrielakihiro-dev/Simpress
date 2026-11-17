@@ -13,7 +13,7 @@ import { avisarTermo, ehTermo, gerarPdfDoLembrete, lerValidado, preencherDoLembr
 import { limparTexto, montarDescricaoTermo } from "./termos-puro";
 import { appAntigo, type EventoTecla } from "./tipos";
 
-// O mínimo de um campo de formulário: o React e a ponte do código antigo passam objetos diferentes para as mesmas ações.
+// O mínimo de um campo de formulário: o React e a ponte da aplicação passam objetos diferentes para as mesmas ações.
 export interface CampoMinimo {
   id?: string;
   value: string;
@@ -56,7 +56,7 @@ export function aoDigitar(campo: CampoMinimo): void {
 }
 
 // Hora só existe com data: sem data o campo de hora fica desligado e vazio. Vale para o formulário novo e para a edição.
-// O campo de hora também passa por aqui (é o mesmo "change" do código antigo): só guarda o valor.
+// O campo de hora também passa por aqui (é o mesmo "change" de antes da migração): só guarda o valor.
 export function aoMudarData(campo: CampoMinimo): void {
   const id = campo.id ?? "";
   const edicao = id.startsWith("lembretes-edicao");

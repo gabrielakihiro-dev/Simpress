@@ -1,4 +1,4 @@
-// Estado do cartão "Ativos por regional" (Resumo, F3), fora do componente: o código antigo chama
+// Estado do cartão "Ativos por regional" (Resumo, F3), fora do componente: a aplicação chama
 // carregarResumoAtivos pela ponte antes ou depois de o React desenhar o cartão.
 import { apiFetch } from "../../api";
 

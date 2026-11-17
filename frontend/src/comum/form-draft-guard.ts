@@ -28,5 +28,5 @@ export function createDraftTracker() {
   };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por paineis/transporte/montar.tsx.
 if (typeof window !== "undefined") window.SimpressFormDraftGuard = { createDraftTracker };

@@ -35,7 +35,7 @@ export function atualizarTodos(raiz: Qualquer = document): void {
   raiz.querySelectorAll(".ckp-arquivo").forEach(atualizar);
 }
 
-// Efeitos no carregamento, como no arquivo antigo: ouvintes delegados no document e a ponte window.SimpressFilePicker.
+// Efeitos no carregamento (frontend/src/arranque/entrada.ts importa este módulo): ouvintes delegados no document e o desenho inicial dos seletores.
 if (typeof window !== "undefined") {
   document.addEventListener("change", (event: Qualquer) => {
     const rotulo = event.target.closest?.(".ckp-arquivo");
@@ -71,7 +71,5 @@ if (typeof window !== "undefined") {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
-  // Ponte temporária: sai na react-final-3, quando app.js virar TS.
-  window.SimpressFilePicker = { atualizar, atualizarTodos };
   atualizarTodos();
 }

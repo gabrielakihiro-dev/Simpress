@@ -1,5 +1,5 @@
 // Rede de segurança da migração React do Grupo 6: painéis Cobertura (F10), Termos e Lembretes (Ferramentas).
-// Gravado com o JS puro de frontend/src/legado/features/coverage.js, termos.js e lembretes.js, ANTES da troca para React:
+// Gravado com o JS puro de frontend/src/aplicacao/pontes.ts, termos.js e lembretes.js, ANTES da troca para React:
 // o painel em React tem de sair igual nos dois tamanhos (390 e 1366 px) e nos dois temas, e os invariantes
 // (confirmações antes de gravar, Preparar Transporte sem gerar planilha) têm de continuar valendo.
 // Dados só sintéticos (fixtures de tests/support/serve_ui_motion_preview.py).

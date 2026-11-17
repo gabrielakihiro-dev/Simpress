@@ -74,7 +74,7 @@ export function classesMetricaHistorico(valor: unknown, tom: string): { cartao: 
   };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e pelos painéis de frontend/src/paineis.
 if (typeof window !== "undefined") {
   window.SimpressHistoryFormat = { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico };
 }

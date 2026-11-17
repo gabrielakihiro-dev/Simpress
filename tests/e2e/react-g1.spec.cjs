@@ -287,7 +287,7 @@ test.describe("conflitos de edição: comportamento", () => {
 });
 
 // ---- Resumo do histórico do Dashboard Sebrae (Automação, cartão "Chamados novos do SoftExpert") ----
-// Baseline e comportamento gravados com o código antigo (frontend/src/legado/features/sebrae-historico.js), antes do React.
+// Baseline e comportamento gravados com o código antigo (frontend/src/aplicacao/pontes.ts), antes do React.
 
 async function abrirResumoHistorico(page, request, { tema = "light" } = {}) {
   await page.emulateMedia({ reducedMotion: "reduce" });

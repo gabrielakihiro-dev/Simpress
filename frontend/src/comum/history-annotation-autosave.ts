@@ -449,7 +449,7 @@ export function attachAnnotationAutosave({
   };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e pelos painéis resultado-comparacao e ferramentas-cockpit.
 if (typeof window !== "undefined") {
   window.HistoryAnnotationAutosave = {
     DEFAULT_RETRY_DELAYS_MS,

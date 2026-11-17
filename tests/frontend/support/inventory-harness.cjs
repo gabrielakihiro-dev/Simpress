@@ -22,7 +22,9 @@ const { criarRegrasChamados } = require("../../../frontend/src/paineis/regras-ch
 const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/importacao-planilhas/estado.ts");
 const { criarFerramentasCockpit } = require("../../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
-const { appScripts, appSource } = require("./app-sources.cjs");
+const { appSource } = require("./app-sources.cjs");
+const { iniciar } = require("../../../frontend/src/aplicacao/app.ts");
+const { instalarGlobaisNode } = require("./globais-node.cjs");
 
 const appScript = appSource();
 const appHtml = assembledHtml();
@@ -178,8 +180,6 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     document,
     window,
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
-    fetch: (...args) => fetchApi(...args),
-    navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     Event: class { constructor(type) { this.type = type; } },
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
@@ -194,7 +194,15 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     workflowEffects: effects,
   });
 
-  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
+  // iniciar() e as features rodam no realm do Node: os mesmos falsos precisam existir como globais.
+  instalarGlobaisNode({
+    document, window, console: context.console, lucide: context.lucide, HTMLElement: FakeElement, navigator: context.navigator,
+    MutationObserver: context.MutationObserver, requestAnimationFrame: context.requestAnimationFrame,
+    Event: context.Event, CustomEvent: context.CustomEvent, FormData: FakeFormData,
+    fetch: typeof fetchApi === "function" ? (...args) => fetchApi(...args) : undefined,
+  });
+  // iniciar() publica as ações das features no global da VM (`context`), como o antigo app.js as publicava lá dentro.
+  iniciar(context);
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
     showToast = (message, type) => workflowEffects.toasts.push({ message, type });
@@ -403,6 +411,5 @@ module.exports = {
   FakeFormData,
   createAppHarness,
   apiResponse,
-  appScripts,
   appSource,
 };

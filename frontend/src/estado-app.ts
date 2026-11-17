@@ -1,6 +1,6 @@
-// Estado compartilhado com o código antigo: o objeto appState de frontend/src/legado/app.js, publicado em
+// Estado compartilhado com a aplicação (frontend/src/aplicacao): o objeto appState de frontend/src/aplicacao/app.ts, publicado em
 // window.SimpressApp.state. Painel React que precisar dele lê e grava só por aqui, nunca guarda cópia própria
-// (o código antigo continua dono do valor). O piloto (resumo-ativos) não usa estado compartilhado.
+// (a aplicação continua dona do valor). O piloto (resumo-ativos) não usa estado compartilhado.
 export interface EstadoApp {
   currentEquipamento: unknown;
   equipamentoSelectionRevision: number;
@@ -11,7 +11,7 @@ export interface EstadoApp {
 
 function estado(): EstadoApp {
   const atual = window.SimpressApp?.state as EstadoApp | undefined;
-  if (!atual) throw new Error("window.SimpressApp.state não existe: frontend/src/legado/app-entry.js não carregou.");
+  if (!atual) throw new Error("window.SimpressApp.state não existe: frontend/src/arranque/entrada.ts não carregou.");
   return atual;
 }
 

@@ -519,7 +519,7 @@ Esses diagnósticos carregam o runtime local do Codex; não iniciam agentes nem 
 
 ### Reconstruir os arquivos da interface
 
-Os arquivos distribuídos em `static/vendor` e `static/dist` são servidos localmente. A interface tem duas partes: o JavaScript antigo, em `static/js` e `static/app-entry.js`, e o React em migração, escrito em TypeScript em `frontend/src/` e empacotado pelo Vite em `static/dist/react-entry.js` (plano: `docs/planos/migracao-react-vite.md`). Depois de alterar fontes, ícones, estilos utilitários ou `frontend/src/`, reconstrua-os com Node.js e npm e commite o resultado:
+Os arquivos distribuídos em `static/vendor` e `static/dist` são servidos localmente. A interface é toda escrita em TypeScript e React, em `frontend/src/`, e empacotada pelo Vite em `static/dist/react-entry.js` (migração concluída na react-final-3; plano: `docs/planos/migracao-react-vite.md`). Fora do bundle só ficam `static/js/shared/theme-preference.js` e os ícones em `static/vendor`. Depois de alterar fontes, ícones, estilos utilitários ou `frontend/src/`, reconstrua-os com Node.js e npm e commite o resultado:
 
 ```powershell
 npm ci
@@ -628,8 +628,8 @@ routers/outlook_mail.py              E-mails por modelo pelo Outlook
 routers/ux_chamados.py / ux_ticket.py  Chamado e ticket UX
 frontend/partials/                   Partes do static/index.html, montadas pelo servidor
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
-frontend/src/                        React + TypeScript em migração (fonte de static/dist/, gerado pelo Vite)
-static/js/features/                  Módulos da interface por funcionalidade
+frontend/src/                        React + TypeScript (fonte de static/dist/, gerado pelo Vite)
+frontend/src/aplicacao/              Funcionalidades da interface (app.ts monta o contexto e publica as ações)
 motor_ia/                            Pipeline experimental isolado, com testes próprios fora do npm run verify
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/build/lucide-subset.cjs            Recorte dos ícones Lucide usados pela interface
@@ -704,7 +704,7 @@ GLOSSARY.md                           Termos usados no projeto
 - [Auditoria técnica de 17/10/2026](docs/arquitetura/auditoria_tecnica_2026-10-17.md)
 - [Auditoria do backend de 13/11/2026](docs/arquitetura/auditoria_backend/auditoria_backend_2026-11-13.md)
 
-As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, JavaScript em `static/js/{shared,ui,features}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
+As entradas `static/index.html` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, o código da interface em `frontend/src/` (TypeScript, gerado em `static/dist/`), testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
 
 ## Dados e privacidade
 
