@@ -1,0 +1,8 @@
+import { criarRegrasChamados } from "./regras";
+
+// Chamado por frontend/src/main.tsx com o contêiner oculto [data-react-painel="regras-chamados"]. Não desenha nada:
+// só publica as 20 regras de chamado em window.SimpressReact["regras-chamados"]. O código antigo
+// (static/js/features/ticket-rules.js) chama cada uma pela ponte síncrona, sempre depois de simpress:react-pronto.
+export function montar(_container: HTMLElement) {
+  return criarRegrasChamados(window.SimpressDomUtils(document));
+}

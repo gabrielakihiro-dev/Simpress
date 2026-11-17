@@ -76,10 +76,10 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.equal(harness.effects.toasts.length, 0);
 });
 
-test("automatic history export preference is restored and saved in this browser", () => {
+test("automatic history export preference is restored and saved in this browser", async () => {
   const localStorage = new Map();
   const firstHarness = createAppHarness(async () => apiResponse({}), { localStorage });
-  firstHarness.run("inicializarExportacaoAutomaticaHistorico()");
+  await firstHarness.run("inicializarExportacaoAutomaticaHistorico()");
   const firstInput = firstHarness.element("auto-export-history-after-update");
   assert.equal(firstInput.checked, false);
   firstInput.checked = true;
@@ -87,7 +87,7 @@ test("automatic history export preference is restored and saved in this browser"
   assert.equal(localStorage.get("simpress:auto-export-history-after-update"), "true");
 
   const nextHarness = createAppHarness(async () => apiResponse({}), { localStorage });
-  nextHarness.run("inicializarExportacaoAutomaticaHistorico()");
+  await nextHarness.run("inicializarExportacaoAutomaticaHistorico()");
   assert.equal(nextHarness.element("auto-export-history-after-update").checked, true);
 });
 

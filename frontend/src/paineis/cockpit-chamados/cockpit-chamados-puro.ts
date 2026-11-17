@@ -1,7 +1,7 @@
 // Regras puras do painel Chamados (importação, versões, comparação, exportação e chamados abertos da Home).
 // Sem DOM, sem fetch e sem import, só com sintaxe apagável, para os testes de tests/frontend carregarem este
-// arquivo com require() direto do Node, sem build. As três regras de ticket-rules.js entram por parâmetro
-// (RegrasChamados): a fonte única delas continua no código antigo.
+// arquivo com require() direto do Node, sem build. As três regras de chamado entram por parâmetro
+// (RegrasChamados); a fonte única delas é ../regras-chamados/regras.ts.
 
 export interface RegrasChamados {
   normalizarFiltroChamados(valor: unknown): string;
