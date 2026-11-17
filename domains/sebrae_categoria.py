@@ -257,7 +257,9 @@ def regra_categoria(texto: str, opcoes: Sequence[str]) -> Optional[str]:
 
 
 def regra_tipo(texto: str) -> Optional[Tuple[str, str]]:
-    """``(etapa, tipo)`` da primeira regra de J que casa (``explicito`` ou ``incidente``), ou ``None``."""
+    """``(etapa, tipo)`` da primeira regra de J que casa (``cabo``, ``explicito`` ou ``incidente``), ou ``None``."""
+    if e_cabo_do_cliente(texto):  # "Solicitação de cabo HDMI" também é INCIDENTE
+        return "cabo", INCIDENTE
     if _SOL_EXPLICITO.search(texto):
         return "explicito", SOLICITACAO
     if _INC.search(texto):
@@ -315,6 +317,17 @@ _A_HARDWARE = re.compile(
     r"\b(teclad\w*|mouses?|monitor(es)?|fones?|headsets?|headphones?|webcam\w*|perifer\w*|caixa de som|auricular\w*|"
     r"hardware|carregador\w*)\b"
 )
+# Pedido do usuário (17/11/2026): cabo HDMI e cabo de força do monitor são do CLIENTE e INCIDENTE (pedido ou defeito, tanto faz);
+# o resto do hardware segue SIMPRESS.
+_A_CABO = re.compile(r"\bcabos?\b")
+_A_HDMI = re.compile(r"\bhdmi\b")
+_A_CABO_FORCA = re.compile(r"\bcabos? (de )?(forca|energia|alimentacao)\b")
+_A_MONITOR = re.compile(r"\bmonitor(es)?\b")
+
+
+def e_cabo_do_cliente(texto: str) -> bool:
+    """Cabo HDMI, ou cabo de força do monitor, no texto já normalizado; porta HDMI quebrada sem cabo segue hardware."""
+    return bool((_A_CABO.search(texto) and _A_HDMI.search(texto)) or (_A_CABO_FORCA.search(texto) and _A_MONITOR.search(texto)))
 # Notebook ou computador só é SIMPRESS com defeito físico explícito; lentidão e erro de programa ficam com o CLIENTE.
 _A_EQUIPAMENTO = re.compile(r"\b(notebooks?|computador\w*|desktops?|bateria\w*|telas?|carcaca|dobradic\w*)\b")
 _A_DEFEITO = re.compile(r"\b(quebrad\w*|danificad\w*|defeito\w*|queimad\w*|trincad\w*|avaria\w*|nao liga|tela azul|estufad\w*)\b")
@@ -328,13 +341,13 @@ _A_SOFTWARE = re.compile(
 def sugerir_responsavel(titulo: Any, descricao: Any, atendimento: Any, solicitante: Any, opcoes: Sequence[str] = ()) -> Optional[str]:
     """``CLIENTE`` ou ``SIMPRESS`` para A, na grafia de ``opcoes`` quando ela traz o rótulo; ``None`` sem indício.
 
-    Ordem: entrada, saída ou liberação de usuário é do CLIENTE mesmo com periférico no texto (kit do colaborador);
+    Ordem: entrada, saída ou liberação de usuário, cabo HDMI e cabo de força do monitor são do CLIENTE mesmo com periférico no texto;
     depois defeito de hardware (periférico, ou notebook com defeito físico) é da SIMPRESS; por fim software, e-mail, arquivo, acesso e impressora são do CLIENTE.
     """
     if e_solicitante_sistema(solicitante):
         return None
     texto = texto_normalizado(titulo, descricao, atendimento)
-    if _A_PESSOAS.search(texto):
+    if _A_PESSOAS.search(texto) or e_cabo_do_cliente(texto):
         rotulo = CLIENTE
     elif _A_HARDWARE.search(texto) or (_A_EQUIPAMENTO.search(texto) and _A_DEFEITO.search(texto)):
         rotulo = SIMPRESS

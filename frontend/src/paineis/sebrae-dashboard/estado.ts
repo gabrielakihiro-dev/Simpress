@@ -753,7 +753,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const manuais = document.createElement("div");
     manuais.className = "sebrae-chamado__manuais";
     manuais.appendChild(campoTitulo(item.numero, "antigo"));
-    ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS], controleManual(item.numero, letra, "antigo"))));
+    ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualComSugestao(item, letra, "antigo")));
     if (dados.naoEncontrado) {
       // Não encontrado no SoftExpert: finalizar à mão (D) exige a data de encerramento (R), que nenhuma leitura trará.
       const ajuda = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__encerramento-ajuda", AJUDA_ENCERRAMENTO);
@@ -817,24 +817,24 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       [novo, seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
   }
 
-  /** Sugestão do servidor para A (Responsável), B (Categoria) ou J (Tipo) de chamado novo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
-  function sugestaoManual(item: Registro, letra: string) {
-    if (ehApiSebrae(item.linha?.I)) return "";
-    const valor = { A: item.sugestao_responsavel, B: item.sugestao_categoria, J: item.sugestao_tipo }[letra];
+  /** Sugestão do servidor para A (Responsável), B (Categoria) ou J (Tipo) de chamado novo, ou só A e J de antigo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
+  function sugestaoManual(item: Registro, letra: string, alvo = "novo") {
+    if (ehApiSebrae(item.linha?.I ?? item.usuario)) return "";
+    const valor = { A: item.sugestao_responsavel, B: alvo === "novo" ? item.sugestao_categoria : undefined, J: item.sugestao_tipo }[letra];
     return typeof valor === "string" ? valor.trim() : "";
   }
 
   /**
-   * Campo manual de chamado novo. Em A, B e J, com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
+   * Campo manual de chamado novo ou antigo em aberto (`alvo`). Em A, B e J (nos antigos, só A e J), com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
    * `Sugestão: <valor>` + `Usar` abaixo do campo. Nada é preenchido nem salvo sem o clique em `Usar`.
    * Escolher à mão qualquer valor esconde o chip; voltar a vazio o mostra de novo.
    * shortcut: a sugestão de J vem do servidor já calculada com a sugestão de B; mudar B na tela não a recalcula, só ao recarregar a lista.
    */
-  function campoManualNovo(item: Registro, letra: string) {
-    const controle = controleManual(item.numero, letra);
+  function campoManualComSugestao(item: Registro, letra: string, alvo = "novo") {
+    const controle = controleManual(item.numero, letra, alvo);
     const rotulo = campo(ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS], controle);
-    const sugestao = sugestaoManual(item, letra);
-    if (!sugestao || String(controle.value || "").trim() || String(estado.valores[item.numero]?.[letra] || "").trim()) return rotulo;
+    const sugestao = sugestaoManual(item, letra, alvo);
+    if (!sugestao || controle.disabled || String(controle.value || "").trim() || String(valoresDe(alvo)[item.numero]?.[letra] || "").trim()) return rotulo;
     const nomeCampo = ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS].replace(/\s*\*$/, "");
     const chip = document.createElement("div");
     chip.className = "sebrae-sugestao";
@@ -884,7 +884,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const manuais = document.createElement("div");
     manuais.className = "sebrae-chamado__manuais";
     manuais.appendChild(campoTitulo(item.numero));
-    ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualNovo(item, letra)));
+    ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualComSugestao(item, letra)));
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
     return artigo;
