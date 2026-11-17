@@ -82,7 +82,7 @@ export function createStore(getStorage: () => Qualquer, key: string = STORAGE_KE
   };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e por paineis/pesquisa-equipamento/montar.tsx.
 if (typeof window !== "undefined") {
   window.SimpressRecentEquipment = Object.freeze({
     STORAGE_KEY, LIMIT, normalizeEntry, sanitizeList, pushRecentEquipment, describeEntry, createStore,

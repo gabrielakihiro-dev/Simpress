@@ -207,5 +207,5 @@ export function createAccessibleDialogs(options: Qualquer) {
   return Object.freeze({ open, close, associateLabels });
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app-shell.ts.
 if (typeof window !== "undefined") window.SimpressAccessibleDialogs = createAccessibleDialogs;

@@ -1,10 +1,10 @@
-// Ações do modal Configuração local, chamadas pela ponte (frontend/src/legado/features/configuracao-local.js) e pelos
+// Ações do modal Configuração local, chamadas pela ponte (frontend/src/aplicacao/pontes.ts) e pelos
 // data-on-* do corpo. Os valores digitados são lidos do DOM na hora de salvar, como no código antigo.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { ler, mudar, mudarStatus, novaRevisao, type Cliente, type EstadoChave, type Leitura, type Secao } from "./estado";
 
-// Funções do código antigo publicadas em window por frontend/src/legado/app.js.
+// Funções da aplicação publicadas em window por frontend/src/aplicacao/app.ts.
 interface AppLegado {
   abrirModalAcessivel(id: string, foco: string, fechar: string): void;
   fecharModalAcessivel(id: string): void;

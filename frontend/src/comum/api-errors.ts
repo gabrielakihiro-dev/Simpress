@@ -22,5 +22,5 @@ export function create(detail: unknown, fallback: string): Error {
   return new Error(format(detail, fallback));
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts (context.apiErrors).
 if (typeof window !== "undefined") window.SimpressApiErrors = { create, format };

@@ -1,5 +1,5 @@
 // Automação -> "Chamados novos do SoftExpert": importa o Dashboard, lista os novos e baixa uma cópia atualizada do
-// Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel de frontend/src/legado/features/sebrae-dashboard.js:
+// Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel de frontend/src/aplicacao/pontes.ts:
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
 // montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID.
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA } from "./sugestao-os-modelo.ts";

@@ -5,7 +5,7 @@ import { TEXTO } from "./editar-apelido-puro";
 import { assinar, editar, ler } from "./estado";
 
 // Conteúdo de .ck-dialogo do #modal-editar-apelido (frontend/partials/modais.html). Mesmos IDs, classes e ARIA do
-// diálogo antigo. Botões mantêm só data-on-click: o despachante do código antigo chama as ações pela ponte
+// diálogo antigo. Botões mantêm só data-on-click: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama as ações pela ponte
 // (window.salvarApelido etc.), como no dossiê.
 export function Dialogo() {
   const { apelido, contexto, salvando } = useSyncExternalStore(assinar, ler);

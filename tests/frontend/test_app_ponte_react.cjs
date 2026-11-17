@@ -1,12 +1,15 @@
-// frontend/src/legado/app.js: a ponte assíncrona rejeita também quando o script do bundle dispara "error" (404), sem esperar o "load" da janela.
-// O bootstrap é um IIFE grande: o teste recorta só o trecho da espera pelo painel e roda com window/document falsos.
+// frontend/src/aplicacao/app.ts: a ponte assíncrona rejeita também quando o script do bundle dispara "error" (404), sem esperar o "load" da janela.
+// iniciar() é uma função grande: o teste recorta só o trecho da espera pelo painel, tira os tipos do TypeScript e roda com window/document falsos.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { stripTypeScriptTypes } = require("node:module");
 
-const fonte = fs.readFileSync(path.join(__dirname, "../../frontend/src/legado/app.js"), "utf8");
+const fonte = fs.readFileSync(path.join(__dirname, "../../frontend/src/aplicacao/app.ts"), "utf8");
 const trecho = fonte.slice(fonte.indexOf("const scriptReact"), fonte.indexOf("context.ponteReact = "));
+const trechoPonte = fonte.slice(fonte.indexOf("context.ponteReact = "), fonte.indexOf("// Ações chamadas no mesmo turno"));
+const codigo = stripTypeScriptTypes(`${trecho}\n${trechoPonte}`);
 
 function criarEmissor() {
   const ouvintes = {};
@@ -21,7 +24,7 @@ function montar({ comScript = true } = {}) {
   const documento = { ...criarEmissor(), readyState: "interactive", querySelector: seletor => (seletor === 'script[src*="/static/dist/react-entry.js"]' ? script : null) };
   const janela = { ...criarEmissor() };
   const contexto = {};
-  new Function("window", "document", "context", `${trecho}\n${fonte.slice(fonte.indexOf("context.ponteReact = "), fonte.indexOf("// Ações chamadas no mesmo turno"))}`)(janela, documento, contexto);
+  new Function("window", "document", "context", codigo)(janela, documento, contexto);
   return { script, janela, documento, ponte: contexto.ponteReact("painel", ["acao"]) };
 }
 

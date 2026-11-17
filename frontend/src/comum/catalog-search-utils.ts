@@ -14,5 +14,5 @@ export function matchesCatalogSearch(unit: Record<string, unknown> | null | unde
   );
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e por paineis/paineis-dados/chamados-os.ts.
 if (typeof window !== "undefined") window.SimpressCatalogSearch = { matchesCatalogSearch, normalizeSearchText };

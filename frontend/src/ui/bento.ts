@@ -111,7 +111,7 @@ export function createBento(env: Qualquer) {
   return Object.freeze({ duracao, curva, contarAte, animarAnel, animarDentro, iniciarBrilho, cancelar });
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por painéis de frontend/src/paineis (resumo-ativos, ferramentas-cockpit, resultado-comparacao).
 if (typeof window !== "undefined") {
   window.SimpressBento = createBento(window);
   window.SimpressBento.iniciarBrilho();

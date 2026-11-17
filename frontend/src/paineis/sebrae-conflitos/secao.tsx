@@ -1,5 +1,5 @@
 // Conflitos de edição do Dashboard (Chamados, F5). Mesmos IDs, ARIA, classes e textos da seção antiga em JS
-// puro (frontend/src/legado/features/sebrae-conflitos.js até a migração do G1); o React desenha só os filhos da seção.
+// puro (frontend/src/aplicacao/pontes.ts até a migração do G1); o React desenha só os filhos da seção.
 import { useSyncExternalStore } from "react";
 import { AVISO_SO_SHAREPOINT, OPCOES, aceitaSite, assinar, escolher, faltam, ler, salvarEReenviar, textoDoConflito } from "./estado";
 

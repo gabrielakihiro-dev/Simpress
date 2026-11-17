@@ -1,5 +1,5 @@
 // Regiões da aba Automação (F5). Cada uma é a raiz React de uma <section> do index.html (atributo data-automacao-regiao)
-// e lê o mesmo store (estado.ts). Os nós mantêm data-on-*/data-args: o despachante de eventos do app.js chama as ações
+// e lê o mesmo store (estado.ts). Os nós mantêm data-on-*/data-args: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama as ações
 // pela ponte; só a miniatura da captura (que não existia como data-on-*) usa onClick do React.
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { abrirCapturaAutomacao } from "./captura";

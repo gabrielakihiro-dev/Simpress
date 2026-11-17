@@ -94,7 +94,7 @@ export interface Estado {
   exportarOculto: boolean;
 }
 
-// Funções de outros módulos do código antigo, publicadas em window (fora de frontend/types/globais.d.ts).
+// Funções de outros módulos da aplicação, publicadas em window (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   contextoChamadoUX?: () => { serial?: unknown; descricao?: string } | null | undefined;
   carregarRepresentantesRegionais?: (refazerFormularios: boolean) => unknown;

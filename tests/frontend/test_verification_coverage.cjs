@@ -12,10 +12,12 @@ test("verification discovers recent-equipment tests and all five previously omit
   assert.ok(testStep.args.includes("tests/frontend/test_recent_equipment.cjs"));
   const checked = javascriptFilesToCheck();
   assert.ok(checked.includes("static/js/shared/theme-preference.js"));
+  // frontend/src/legado/ foi portado para TypeScript: nenhum .js dele resta para o node --check e o tsc estrito (abaixo) cobre os .ts.
+  assert.ok(!checked.some(file => file.startsWith("frontend/src/legado")));
   for (const file of [
-    "ui/ux-enhancements.js",
-    "app-entry.js", "app.js",
-  ]) assert.ok(checked.includes(`frontend/src/legado/${file}`), file);
+    "ui/ux-enhancements.ts", "ui/action-dispatcher.ts", "ui/ck-cockpit-visual.ts", "ui/cromo-marca.ts",
+    "arranque/entrada.ts", "aplicacao/app.ts",
+  ]) assert.ok(fs.existsSync(path.join(__dirname, "..", "..", "frontend", "src", file)), file);
   // recent-equipment virou TypeScript: o tsc estrito (tsconfig.json inclui frontend/src) o cobre no lugar do node --check.
   assert.ok(fs.existsSync(path.join(__dirname, "..", "..", "frontend", "src", "comum", "recent-equipment.ts")));
   assert.ok(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "tsconfig.json"), "utf8")).include.includes("frontend/src"));

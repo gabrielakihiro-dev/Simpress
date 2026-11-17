@@ -36,7 +36,7 @@ interface Estado {
   motivo: string; // por que os dois botões estão desabilitados
 }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   showToast(mensagem: string, tipo: string): void;
   confirmarAcao(opcoes: { titulo: string; mensagem: string; confirmar: string }): Promise<boolean>;

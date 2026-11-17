@@ -1,15 +1,16 @@
 /// <reference types="vite/client" />
-// O código antigo (frontend/src/legado/) entra primeiro: o ESM avalia as importações na ordem, então ele roda
-// antes dos painéis, como quando era o módulo /static/app-entry.js carregado antes deste bundle.
-import "./legado/app-entry.js";
+// O arranque (frontend/src/arranque/entrada.ts: utilitários, features de frontend/src/aplicacao, app.ts e melhorias de
+// interface) entra primeiro: o ESM avalia as importações na ordem, então ele roda antes dos painéis (antes da react-final-3 era
+// o módulo /static/app-entry.js, carregado antes deste bundle).
+import "./arranque/entrada.ts";
 import { modulos, type Acoes } from "./paineis";
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 
 // Roda antes do DOMContentLoaded (módulo diferido). Painel migrado = pasta frontend/src/paineis/<painel>/ com
 // montar.tsx; nenhum painel edita este arquivo. Cada montar(container) desenha o painel no elemento
-// [data-react-painel="<painel>"] do partial e devolve as ações que o código antigo chama pela ponte
-// (context.ponteReact em frontend/src/legado/app.js).
+// [data-react-painel="<painel>"] do partial e devolve as ações que a aplicação chama pela ponte
+// (context.ponteReact em frontend/src/aplicacao/app.ts).
 const registro: Record<string, Acoes> = {};
 for (const [caminho, modulo] of Object.entries(modulos)) {
   const painel = caminho.split("/")[2];

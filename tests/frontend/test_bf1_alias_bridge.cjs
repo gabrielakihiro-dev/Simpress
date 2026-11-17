@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const criarHistorico = require("../../frontend/src/legado/features/alias-history.js");
+const criarHistorico = require("../../frontend/src/aplicacao/registro.ts").fabricas.aliasHistory;
 
 function criarPontes() {
   const chamadas = [];

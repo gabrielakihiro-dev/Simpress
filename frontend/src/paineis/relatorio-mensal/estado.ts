@@ -1,5 +1,5 @@
-// Estado do diálogo Relatório mensal (docs/operacao/relatorio-mensal.md), fora do componente: o código antigo chama
-// as ações pela ponte (frontend/src/legado/features/monthly-report.js) e cockpit-tool-panels.js lê #status-relatorio-mensal logo
+// Estado do diálogo Relatório mensal (docs/operacao/relatorio-mensal.md), fora do componente: a aplicação chama
+// as ações pela ponte (frontend/src/aplicacao/pontes.ts) e cockpit-tool-panels.js lê #status-relatorio-mensal logo
 // depois de await exportarRelatorioMensal(). Por isso toda mudança de estado vai por flushSync: o DOM já está final
 // quando a ação devolve a promessa.
 import { flushSync } from "react-dom";
@@ -12,7 +12,7 @@ interface Estado {
   ocupado: boolean; // exportação em andamento: bloqueia fechar e um segundo envio
 }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string, botaoSidebar: string): void;
   fecharModalAcessivel(modalId: string): void;

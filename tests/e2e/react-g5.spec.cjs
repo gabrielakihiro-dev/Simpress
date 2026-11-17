@@ -512,7 +512,7 @@ test.describe("comportamento (1366 px)", () => {
   });
 
   test("backups: a cada 5 min pede o painel, só com a aba visível", async ({ page }) => {
-    // Sem isto, a marca em WebGL (cromo-marca.js) anima a cada quadro do relógio falso e o runFor passa dos 20 s.
+    // Sem isto, a marca em WebGL (frontend/src/ui/cromo-marca.ts) anima a cada quadro do relógio falso e o runFor passa dos 20 s.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.clock.install();
     await page.goto("/");

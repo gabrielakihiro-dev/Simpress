@@ -14,7 +14,7 @@ export type Qualquer = any;
 export type Funcao = (...argumentos: any[]) => any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Contexto da fábrica: o mesmo objeto que frontend/src/legado/app.js passava ao módulo antigo, lido de window no montar. */
+/** Contexto da fábrica: o mesmo objeto de contexto que frontend/src/aplicacao/app.ts monta para as features, lido de window no montar. */
 export interface ContextoFerramentasCockpit {
   /** Ações publicadas em window pelos módulos antigos e pelos outros painéis (selecionarAbaResumo, showToast...). */
   app: Registro;

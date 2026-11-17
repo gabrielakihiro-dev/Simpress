@@ -1,4 +1,4 @@
-// Estado da seção "Nomes do Microsoft Entra" (modal Atualizar planilhas), fora do componente: o código antigo
+// Estado da seção "Nomes do Microsoft Entra" (modal Atualizar planilhas), fora do componente: a aplicação
 // chama carregarEstadoEntra pela ponte na inicialização, antes ou depois de o React desenhar a seção.
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";
@@ -12,7 +12,7 @@ interface Estado {
 interface ResumoEntra { updated_at?: string; users?: number; logins_ignorados?: number }
 interface Equipamento { serial?: string }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   showToast(mensagem: string, tipo: string): void;
   definirEquipamentoAtual(equipamento: Equipamento): void;

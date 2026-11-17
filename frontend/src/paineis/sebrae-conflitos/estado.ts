@@ -1,4 +1,4 @@
-// Estado dos conflitos de edição do Dashboard (Chamados, F5), fora do componente: o código antigo chama
+// Estado dos conflitos de edição do Dashboard (Chamados, F5), fora do componente: a aplicação chama
 // carregarConflitosSebrae pela ponte (sebrae-dashboard.js, depois de carregar os novos chamados).
 // Invariante de envio: o POST só sai no clique em "Salvar escolhas e reenviar", com enviar: true e a
 // versao_importacao da lista na tela; nunca manda "site" onde o servidor não aceita (aceita_site false).
@@ -28,7 +28,7 @@ export interface Conflito {
 }
 type Escolhas = Record<string, unknown>;
 
-// Ações do código antigo publicadas em window (frontend/src/legado/app.js publica cada ação de frontend/src/legado/features ali).
+// Ações das features de frontend/src/aplicacao, que app.ts publica em window.
 const app = window as unknown as {
   showToast?: (mensagem: string, tipo: string) => void;
   atualizarEstadoAutomacao?: () => void;
@@ -143,7 +143,7 @@ async function consultarConflitos(): Promise<Conflito[] | null> {
   }
 }
 
-// Chamado pelo código antigo (ponte) e depois de cada envio. Nunca rejeita: sem a lista, a tela fica como
+// Chamado pela aplicação (ponte) e depois de cada envio. Nunca rejeita: sem a lista, a tela fica como
 // estava; o aviso do SharePoint e o painel de Automação seguem valendo.
 export async function carregarConflitosSebrae(): Promise<void> {
   await consultarConflitos();

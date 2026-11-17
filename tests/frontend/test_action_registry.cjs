@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const dispatcher = require("../../frontend/src/legado/ui/action-dispatcher.js");
-const { legadoDir, staticDir } = require("./support/app-sources.cjs");
+const dispatcher = require("../../frontend/src/ui/action-dispatcher.ts");
+const { aplicacaoDir, arranqueDir, srcDir, staticDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
 function element(attrs) {
@@ -31,8 +31,8 @@ function jsFiles(dir, pattern = /\.js$/) {
 // React panels count too: the OS table (paineis-dados/tabela-os.ts) renders data-on-* buttons.
 function declaredActions() {
   const paineisDir = path.resolve(__dirname, "../../frontend/src/paineis");
-  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js")), ...jsFiles(legadoDir), ...jsFiles(paineisDir, /\.tsx?$/)]
-    .filter(file => !file.endsWith("action-dispatcher.js"));
+  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js")), ...jsFiles(path.join(srcDir, "ui"), /\.ts$/), ...jsFiles(arranqueDir, /\.ts$/), ...jsFiles(aplicacaoDir, /\.ts$/), ...jsFiles(paineisDir, /\.tsx?$/)]
+    .filter(file => !file.endsWith("action-dispatcher.ts"));
   const names = new Set();
   for (const file of files) {
     const source = path.basename(file) === "index.html" ? assembledHtml() : fs.readFileSync(file, "utf8");

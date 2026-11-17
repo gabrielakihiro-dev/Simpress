@@ -8,14 +8,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const createBackupsRegionais = require("../../frontend/src/legado/features/backups-regionais.js");
+const createBackupsRegionais = require("../../frontend/src/aplicacao/registro.ts").fabricas.backupsRegionais;
 
 const root = path.resolve(__dirname, "../..");
-const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/aplicacao/app.ts"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/arranque/entrada.ts"), "utf8");
 
-test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e painel React presente", () => {
-  assert.match(entrySource, /import "\.\/features\/backups-regionais\.js";/);
+test("registro: módulo importado no arranque, publicado no FEATURE_ORDER e painel React presente", () => {
+  assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.backupsRegionais, "function");
   assert.match(appSource, /"backupsRegionais",/);
   assert.ok(fs.existsSync(path.join(root, "frontend/src/paineis/backups-regionais/montar.tsx")));
 });

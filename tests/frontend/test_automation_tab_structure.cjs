@@ -1,21 +1,23 @@
 // Automação (F5): desde o Dia 3 (G7, React) a aba vive em frontend/src/paineis/chrome-automation/ e o comportamento de
 // tela é testado no navegador (tests/e2e/chrome-automation.spec.cjs e tests/e2e/react-g7.spec.cjs, rotas /api/automacao/*
 // simuladas). Aqui ficam as regras puras (regras-puro.ts, carregado direto pelo require do Node), a ponte do código antigo
-// (frontend/src/legado/features/chrome-automation.js), o registro, o HTML montado (seis pontos de montagem), o TSX dos cartões e o
+// (frontend/src/aplicacao/pontes.ts), o registro, o HTML montado (seis pontos de montagem), o TSX dos cartões e o
 // CSS da barra de ações. Dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const createChromeAutomation = require("../../frontend/src/legado/features/chrome-automation.js");
+const createChromeAutomation = require("../../frontend/src/aplicacao/registro.ts").fabricas.chromeAutomation;
 
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/chrome-automation");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
-const ponteSource = fs.readFileSync(path.join(root, "frontend/src/legado/features/chrome-automation.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/aplicacao/app.ts"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/arranque/entrada.ts"), "utf8");
+// A ponte é a entrada chromeAutomation da tabela de pontes.ts (da chave até a próxima entrada).
+const pontesSource = fs.readFileSync(path.join(root, "frontend/src/aplicacao/pontes.ts"), "utf8");
+const ponteSource = pontesSource.slice(pontesSource.indexOf("  chromeAutomation: {"), pontesSource.indexOf("  assistantChat: {"));
 const styles = fs.readFileSync(path.join(root, "static/styles/ux-refinements.css"), "utf8");
 const cockpitCss = fs.readFileSync(path.join(root, "static/styles/ck-cockpit.css"), "utf8");
 const lerPasta = nome => fs.readFileSync(path.join(pasta, nome), "utf8");
@@ -234,8 +236,9 @@ async function semConsole(fn) {
   }
 }
 
-test("registro: chrome-automation.js é a ponte do painel React chrome-automation e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/features\/chrome-automation\.js";/);
+test("registro: a entrada chromeAutomation de pontes.ts é a ponte do painel React chrome-automation e continua no arranque e no FEATURE_ORDER", () => {
+  assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.chromeAutomation, "function");
   assert.match(appSource, /"chromeAutomation",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
   for (const nome of NOMES_PONTE) assert.match(lerPasta("montar.tsx"), new RegExp(`\\b${nome}\\b`), `${nome} falta no retorno de montar()`);
@@ -301,7 +304,7 @@ test("a rotina só começa por clique e um segundo clique não inicia outra", ()
 
 // ---- Privacidade ----
 test("o painel só fala com a API por apiFetch e nenhum arquivo traz e-mail corporativo, CPF ou senha", () => {
-  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/legado/features/chrome-automation.js")];
+  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/aplicacao/pontes.ts")];
   assert.ok(arquivos.length >= 8);
   for (const arquivo of arquivos) {
     const codigo = fs.readFileSync(arquivo, "utf8");

@@ -1,4 +1,4 @@
-// A tela F7 continua no código antigo até o BF4. Este painel assume só as regras e ações dos registros.
+// A tela F7 vive em frontend/src/paineis/ferramentas-cockpit/ (BF4). Este painel assume só as regras e ações dos registros.
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";
 import { acoesEventoHistorico, type EventoHistorico } from "./historico-apelidos-puro";

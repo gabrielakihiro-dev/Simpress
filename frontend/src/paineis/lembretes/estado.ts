@@ -1,4 +1,4 @@
-// Estado do painel Lembretes e Termos, fora do componente: o código antigo chama as ações da ponte (por exemplo
+// Estado do painel Lembretes e Termos, fora do componente: a aplicação chama as ações da ponte (por exemplo
 // termosPreencherDoEquipamento, que a Home dispara para todo equipamento exibido) antes ou depois de o React
 // desenhar o painel, e com o painel fechado. A descrição de um lembrete e os campos de um termo têm dado pessoal:
 // nada daqui vai para log nem para storage.

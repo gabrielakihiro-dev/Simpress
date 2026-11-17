@@ -1,4 +1,4 @@
-// Estado da Cobertura (F10), fora do componente: o código antigo chama carregarCobertura pela ponte
+// Estado da Cobertura (F10), fora do componente: a aplicação chama carregarCobertura pela ponte
 // antes ou depois de o React desenhar o painel. Toda leitura e escrita passa por apiFetch.
 import { apiFetch, type ApiFetchError } from "../../api";
 import { pendenciaSemVinculo } from "../historico-transferencias/vinculo";

@@ -1,5 +1,5 @@
 // Estado do painel Chamados (Cockpit, "Importação e versões") e dos chamados abertos da Home, fora do componente:
-// o código antigo chama as ações pela ponte (frontend/src/legado/features/cockpit-chamados.js) e a tabela de OS avisa
+// a aplicação chama as ações pela ponte (frontend/src/aplicacao/cockpit-chamados.ts) e a tabela de OS avisa
 // cada carga com sincronizarGestaoChamadosCockpit. Respostas atrasadas são descartadas por um portão de
 // requisição por consulta (versões e Home); a regra pura mora em cockpit-chamados-puro.ts.
 import { apiFetch, type ApiFetchOptions } from "../../api";
@@ -12,7 +12,7 @@ import {
   type EvolucaoMontada, type RegrasChamados, type RelatorioChamados,
 } from "./cockpit-chamados-puro";
 
-// Helpers do código antigo publicados em window (frontend/src/legado/app.js), lidos só na hora do uso.
+// Helpers da aplicação publicados em window (frontend/src/aplicacao/app.ts), lidos só na hora do uso.
 const app = window as unknown as {
   showToast?: (mensagem: string, tipo: string) => void;
   confirmarAcao?: (opcoes: { titulo: string; mensagem: string; confirmar: string }) => Promise<boolean>;
@@ -23,7 +23,7 @@ const app = window as unknown as {
   SimpressDomUtils: (documento: Document) => Parameters<typeof criarRegrasChamados>[0];
 };
 
-// As regras vêm direto de ../regras-chamados/regras.ts: durante os montar() a ponte do código antigo
+// As regras vêm direto de ../regras-chamados/regras.ts: durante os montar() a ponte (frontend/src/aplicacao/ticket-rules.ts)
 // (window.SimpressReact["regras-chamados"]) ainda não existe. Instância criada na primeira consulta.
 let regrasCriadas: ReturnType<typeof criarRegrasChamados> | undefined;
 const regras = (): RegrasChamados => {
@@ -140,7 +140,7 @@ export function sincronizarGestaoChamadosCockpit(relatorio?: RelatorioChamados |
   aplicarRelatorio(relatorio, estado.versao);
 }
 
-// Sem argumento (ponte do código antigo) lê o valor do seletor no HTML.
+// Sem argumento (ponte da aplicação) lê o valor do seletor no HTML.
 export function selecionarVersaoChamadosCockpit(valor?: string) {
   const escolhida = valor ?? (document.getElementById("cockpit-tickets-version") as HTMLSelectElement | null)?.value ?? "";
   chaveEvolucaoAtual = "";
@@ -274,7 +274,7 @@ export async function atualizarChamadosAbertosHome(serie: string) {
   }
 }
 
-// Cliques da lista da Home: as ações abaixo continuam no código antigo, resolvidas na hora do clique.
+// Cliques da lista da Home: as ações abaixo continuam na aplicação, resolvidas na hora do clique.
 export const abrirOsEmChamados = (serie: string, os: string | number) => app.abrirChamadoDaOs?.([], serie, os);
 export const abrirChamadoNoF5 = (chave: string) => app.abrirChamadoSebraeNoF5?.(chave);
 export const verNaAbaChamados = () => document.getElementById("btn-sebrae-chamados-aba")?.click();

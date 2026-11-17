@@ -4,14 +4,14 @@ const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
-const { appSource, legadoDir } = require("./support/app-sources.cjs");
+const { appSource, arranqueDir } = require("./support/app-sources.cjs");
 
 // Os textos e colunas das anotações são desenhados pelo renderizador TS (react-final-b); o resto segue no JS antigo.
 const renderizador = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "resultado-comparacao", "renderizador.ts"), "utf8");
 const appScript = `${appSource()}
 ${renderizador}`;
 const indexHtml = assembledHtml();
-const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
+const appEntry = fs.readFileSync(path.join(arranqueDir, "entrada.ts"), "utf8");
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
 
 test("explains that history annotations belong to one row in one update", () => {
@@ -46,7 +46,7 @@ test("loads the bounded autosave retry helper before the application", () => {
   const catalogScript = appEntry.indexOf('../comum/catalog-search-utils.ts');
   const draftGuardScript = appEntry.indexOf('../comum/form-draft-guard.ts');
   const retryScript = appEntry.indexOf('../comum/history-annotation-autosave.ts');
-  const appScriptTag = appEntry.indexOf('./app.js');
+  const appScriptTag = appEntry.indexOf('./iniciar-aplicacao.ts');
   assert.notEqual(catalogScript, -1);
   assert.notEqual(draftGuardScript, -1);
   assert.notEqual(retryScript, -1);

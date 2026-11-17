@@ -2,7 +2,7 @@ import { apiFetch } from "../../api";
 import { criarIndicadoresHome, type ContextoIndicadoresHome } from "./estado";
 
 // Indicadores da Home: o HTML continua em static/index.html (ids, ARIA e data-* intactos); este painel só
-// liga os comportamentos e devolve as ações que frontend/src/legado/features/dashboard.js encaminha pela ponte.
+// liga os comportamentos e devolve as ações que frontend/src/aplicacao/dashboard.ts encaminha pela ponte.
 export function montar(_container: HTMLElement) {
   return criarIndicadoresHome({
     app: window as unknown as ContextoIndicadoresHome["app"],

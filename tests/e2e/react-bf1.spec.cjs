@@ -1,5 +1,5 @@
 // Bloco final 1 (BF1): pesquisa de equipamento, formulário de transferência, contatos regionais, edição do equipamento
-// e histórico de apelidos (frontend/src/legado/features/{equipment-search,transfer-form,regional-contacts,equipment-editor,alias-history}.js).
+// e histórico de apelidos (frontend/src/aplicacao/{pontes,alias-history}.ts).
 // Baselines gravados com o código antigo. Todo /api/* é simulado aqui, com dados sintéticos: nenhum teste chega ao
 // backend real. A versão em React tem de passar este arquivo sem mudanças; por isso só vale o que o usuário vê e as
 // chamadas de rede, nunca detalhes internos do código.

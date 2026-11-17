@@ -1,5 +1,5 @@
-// Estado do diálogo "Histórico de atualizações de planilhas", fora dos componentes: o código antigo chama as ações
-// pela ponte (frontend/src/legado/features/comparison-history.js), às vezes antes de o React desenhar o diálogo. Toda mudança
+// Estado do diálogo "Histórico de atualizações de planilhas", fora dos componentes: a aplicação chama as ações
+// pela ponte (frontend/src/aplicacao/comparison-history.ts), às vezes antes de o React desenhar o diálogo. Toda mudança
 // de estado vai por flushSync: o DOM já está final quando a ação devolve a promessa (os testes e o MutationObserver
 // de paineis-dados dependem disso).
 import { flushSync } from "react-dom";
@@ -23,7 +23,7 @@ export interface Estado {
   ocupados: Record<string, string>; // texto do botão em andamento, por chaveAcao()
 }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;
@@ -238,7 +238,7 @@ export function consultarDoCartao(eventoId: string) {
   return abrirResultado(eventoId, null, ativo => marcarOcupado(chave, ativo ? "Carregando..." : null));
 }
 
-// Atalho da Home (frontend/src/legado/features/comparison-history.js): abre o resultado salvo e rola até a seção de `destino`;
+// Atalho da Home (frontend/src/aplicacao/comparison-history.ts): abre o resultado salvo e rola até a seção de `destino`;
 // `botao` é o botão da Home que pediu, e ganha o mesmo aviso "Carregando...".
 export function consultarHistoricoComparacao(eventoId: string, botao?: unknown, destino: unknown = null) {
   if (!(botao instanceof HTMLButtonElement)) return abrirResultado(eventoId, destino, () => {});
