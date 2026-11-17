@@ -35,15 +35,17 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, Page
@@ -88,8 +90,11 @@ DOWNLOAD_MS = 5 * 60_000
 COPIA_CHROME_S = 60
 # Menor área (CSS px) em que os sites mantêm o layout de desktop usado pela rotina.
 TELA_MINIMA = (1440, 720)
-# Sinal de cancelamento: o painel local (ou ``--cancelar``) cria o arquivo e a rotina para no próximo ponto de espera.
+# Sinal de cancelamento: o painel local (ou ``--cancelar``) cria o arquivo e a rotina para no próximo ponto de espera;
+# se ela não parar em CANCELAMENTO_FORCADO_S, o vigia da trava encerra o driver do Playwright (chamada travada).
 CANCELAR_ARQUIVO = ROOT / "data" / "state" / "automacao_chrome.cancelar"
+# Maior que uma fatia de espera (1 s) e uma janela de estabilidade (0,6 s): a parada normal vem antes.
+CANCELAMENTO_FORCADO_S = 10.0
 _inicio_execucao = 0.0
 
 
@@ -132,6 +137,14 @@ class DashboardEmConflito(RotinaErro):
 
 class RotinaCancelada(BaseException):
     """Pedido de cancelamento; deriva de BaseException para não ser engolido por ``except Exception``."""
+
+
+class RotinaEncerrada(RotinaErro):
+    """O vigia do cancelamento encerrou o driver do Playwright: a rotina terminou à força, não falhou."""
+
+
+ENCERRADA_PELO_CANCELAMENTO = "Rotina encerrada pelo cancelamento; o Chrome continua aberto."
+CANCELADA_PELO_USUARIO = "Rotina cancelada pelo usuário."
 
 
 def pedir_cancelamento() -> None:
@@ -252,6 +265,7 @@ def aguardar_estabilidade_pre_clique(
         verificar_cancelamento()
         cursor_instavel = cursor_mudou(baseline)
         if not cursor_instavel and verificar():
+            marcar_clique_irreversivel()
             return
         if tentativa == janelas:
             motivo = "o cursor do sistema se moveu" if cursor_instavel else "o estado mudou"
@@ -1876,17 +1890,106 @@ def liberar_trava() -> None:
         marcar_uso()
 
 
+_trava_ativa: "trava_execucao | None" = None
+
+
+def registrar_driver(pw) -> None:
+    """Chame logo depois de ``with sync_playwright() as pw`` dentro da trava: o vigia do cancelamento encerra esse driver."""
+    trava = _trava_ativa
+    if trava is None:
+        return
+    try:
+        # shortcut: atributo privado do Playwright (conferido na 1.64); se mudar, o teste que o fixa falha e o
+        # cancelamento volta a esperar o próximo ponto de espera.
+        proc = pw._impl_obj._connection._transport._proc
+        pid = proc.pid
+    except AttributeError:
+        log("Cancelamento", "PID do driver do Playwright não encontrado; o cancelamento espera o próximo ponto de espera.")
+        return
+    if isinstance(pid, int) and pid > 0:
+        trava.drivers.append(proc)
+
+
+def marcar_clique_irreversivel() -> None:
+    """Chame logo antes de um clique irreversível: daqui até o fim da trava o vigia não encerra mais o driver.
+
+    Morto depois do clique, o Playwright falharia com erro genérico, que o fluxo poderia tratar como falha comum
+    e liberar um reenvio; as esperas pós-clique já têm prazo e terminam em ``incerto``.
+    """
+    trava = _trava_ativa
+    if trava is None:
+        return
+    with trava._guarda:
+        if trava.encerrada:  # o vigia ganhou a corrida: o driver já morreu e o clique não pode acontecer
+            raise RotinaCancelada()
+        trava.clique_irreversivel = True
+
+
 class trava_execucao:
-    """Mantém a trava durante o bloco e a libera em erro ou Ctrl+C."""
+    """Mantém a trava durante o bloco e a libera em erro ou Ctrl+C.
+
+    Enquanto o bloco roda, um vigia confere o sinal de cancelamento; pedido depois do início e a rotina ainda viva
+    ``CANCELAMENTO_FORCADO_S`` depois, ele encerra os drivers do Playwright registrados (``registrar_driver``). A
+    chamada travada falha na hora, e a saída do bloco vira ``RotinaEncerrada``. Nunca encerra pelo PID da trava (no
+    servidor é o próprio servidor) nem o Chrome, que foi aberto destacado e mantém os logins.
+    """
 
     def __init__(self, rotina: str) -> None:
         self.rotina = rotina
+        self.drivers: list[Any] = []  # asyncio.subprocess.Process de cada driver
+        self.clique_irreversivel = False
+        self.encerrada = False
+        self._inicio = 0.0
+        self._fim = threading.Event()
+        self._guarda = threading.Lock()
 
     def __enter__(self) -> None:
+        global _trava_ativa
         adquirir_trava(self.rotina)
+        self._inicio = time.time()
+        _trava_ativa = self
+        threading.Thread(target=self._vigiar, name=f"vigia-cancelamento-{self.rotina}", daemon=True).start()
 
-    def __exit__(self, *_exc) -> None:
+    def _cancelamento_pedido(self) -> bool:
+        try:
+            # Mesma folga de cancelamento_pedido; o início é desta trava, não o global do script.
+            return CANCELAR_ARQUIVO.stat().st_mtime >= self._inicio - 2
+        except OSError:
+            return False
+
+    def _vigiar(self) -> None:
+        while not self._fim.wait(1):
+            if not self._cancelamento_pedido():
+                continue
+            if self._fim.wait(CANCELAMENTO_FORCADO_S):
+                return  # parou sozinha no ponto de espera
+            with self._guarda:
+                if self._fim.is_set() or self.clique_irreversivel or not self._cancelamento_pedido():
+                    return  # depois de um clique irreversível, só o cancelamento cooperativo
+                self.encerrada = True
+                for proc in self.drivers:
+                    if proc.returncode is not None:
+                        continue  # driver já saiu: o pid pode ser de outro processo
+                    try:
+                        os.kill(proc.pid, signal.SIGTERM)  # no Windows é TerminateProcess
+                    except OSError:
+                        pass
+            log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; driver do Playwright encerrado.")
+            return
+
+    def __exit__(self, _tipo, erro, _tb) -> None:
+        global _trava_ativa
+        with self._guarda:
+            self._fim.set()
+        if _trava_ativa is self:
+            _trava_ativa = None
         liberar_trava()
+        # O cancelamento cooperativo sai como BaseException, que o servidor não trata, e a chamada que o vigia
+        # interrompeu como erro comum do Playwright: para quem chamou, ambos viram RotinaEncerrada. Retorno normal fica.
+        if isinstance(erro, RotinaCancelada):
+            raise RotinaEncerrada(" ".join(filter(None, [CANCELADA_PELO_USUARIO, str(erro)]))) from erro
+        if self.encerrada and isinstance(erro, Exception):
+            raise RotinaEncerrada(ENCERRADA_PELO_CANCELAMENTO) from erro
 
 
 # --------------------------------------------------------------------------
@@ -1902,7 +2005,8 @@ def com_aviso(nome: str, rotina: Callable[["BrowserContext"], int], context: "Br
     try:
         codigo = rotina(context)
     except Exception as erro:
-        avisar(f"Simpress: rotina de {nome} falhou", descrever_erro(erro))
+        if not cancelamento_pedido():  # parada pelo cancelamento não é falha
+            avisar(f"Simpress: rotina de {nome} falhou", descrever_erro(erro))
         raise
     if codigo == 0:
         avisar(f"Simpress: rotina de {nome} concluída", "Lotes confirmados: " + (", ".join(LOTES_CONFIRMADOS) or "nenhum"))
@@ -2700,6 +2804,7 @@ def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None 
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
+            registrar_driver(p)
             # Só depois da trava: uma execução bloqueada não pode apagar o pedido feito para a que está rodando.
             iniciar_controle_cancelamento()
             browser, context = conectar(p)
@@ -2792,10 +2897,14 @@ def main() -> int:
     except TravaOcupada as erro:
         print(f"\n[BLOQUEADO] {erro}", flush=True)
         return 2
+    except RotinaEncerrada as encerrada:
+        apagar_sinal_cancelamento()
+        print(f"\n[CANCELADO] {encerrada}", flush=True)
+        return 130
     except RotinaCancelada as cancelamento:
         apagar_sinal_cancelamento()
         detalhe = str(cancelamento)
-        print("\n[CANCELADO] Rotina cancelada pelo usuário." + (f" {detalhe}" if detalhe else ""), flush=True)
+        print("\n[CANCELADO] " + CANCELADA_PELO_USUARIO + (f" {detalhe}" if detalhe else ""), flush=True)
         return 130
     except KeyboardInterrupt:
         print("\n[CANCELADO] Rotina interrompida pelo usuário; nenhum lote foi importado depois disso.", flush=True)

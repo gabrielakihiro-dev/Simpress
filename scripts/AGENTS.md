@@ -8,7 +8,7 @@ Rotinas e automação do Chrome. Valem junto com o `AGENTS.md` da raiz; o texto 
 - Login, senha e MFA são do usuário; a rotina espera o login. A rotina `login` nunca digita senha nem o código do autenticador. Doc: o mesmo, seção "Rotina `login`".
 - Clique acidental: se a página sair do lugar, volte ao mesmo link com `goto`, nunca `reload` no Oracle e no UX, e retome até 3 vezes. Doc: o mesmo, seção "Clique acidental".
 - Cliques irreversíveis (`Salvar edições`, `Enviar` do chamado UX, `Finalizar` e `Enviar` do anexo, `Replace`, `Conectar`, `Duplicata`) nunca se repetem e só rodam depois de `aguardar_estabilidade_pre_clique`. Doc: o mesmo.
-- "pare" ou "cancelar" interrompe a rotina. Download bloqueado não se contorna: só arquivo manual que o usuário identificar. Doc: o mesmo.
+- "pare" ou "cancelar" interrompe a rotina; presa 10 s depois do pedido, o vigia da trava encerra o driver do Playwright: todo `sync_playwright` sob a trava chama `registrar_driver`; depois de clique irreversível, só o cancelamento cooperativo. Download bloqueado não se contorna: só arquivo manual que o usuário identificar. Doc: o mesmo.
 
 ## Endpoint
 

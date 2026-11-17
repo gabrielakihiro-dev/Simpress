@@ -5,6 +5,7 @@ import threading
 import unicodedata
 import urllib.request
 from typing import Any, Collection
+from urllib.parse import urlparse
 from importlib import import_module
 
 from core.config import local_setting
@@ -101,6 +102,9 @@ NOME_ABA_CONSULTA = "simpress-consulta-endpoint"
 
 
 def _e_aba_da_consulta(aba: Any) -> bool:
+    # evaluate has no timeout: a frozen tab of another site (e.g. Microsoft login) would hang the lookup forever.
+    if urlparse(str(aba.url)).hostname != urlparse(automation.ENDPOINT_URL).hostname:
+        return False
     try:
         return aba.evaluate("window.name") == NOME_ABA_CONSULTA
     except Exception:
@@ -109,6 +113,7 @@ def _e_aba_da_consulta(aba: Any) -> bool:
 
 def _preparar_aba(pw: Any) -> Any:
     """Abre (ou reaproveita) a aba do Endpoint, sempre no Chrome de automação (SIMPRESS_CHROME_PORT, padrão 9333), com a grade completa pronta."""
+    automation.registrar_driver(pw)  # Cancelar ends this driver if the lookup hangs
     automation.garantir_chrome()  # reopens the automation Chrome after the idle close
     browser = pw.chromium.connect_over_cdp(automation.CDP_URL, timeout=10000)  # same port garantir_chrome opened
     if not browser.contexts:

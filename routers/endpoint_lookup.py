@@ -110,6 +110,8 @@ def create_endpoint_lookup_router(
             return result
         except endpoint_lookup.automation.TravaOcupada:
             raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
+        except endpoint_lookup.automation.RotinaEncerrada as erro:
+            raise HTTPException(409, str(erro)) from None
         except Exception:
             raise HTTPException(503, "Não foi possível consultar o Endpoint. Confira o Chrome de automação, o login e a coluna Usuário do último logon.") from None
 
@@ -146,6 +148,8 @@ def create_endpoint_lookup_router(
             return result
         except endpoint_lookup.automation.TravaOcupada:
             raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
+        except endpoint_lookup.automation.RotinaEncerrada as erro:
+            raise HTTPException(409, str(erro)) from None
         except Exception:
             raise HTTPException(503, "Não foi possível abrir o controle remoto. Confira o Chrome de automação (porta 9333) e o login no Endpoint.") from None
 
@@ -161,6 +165,8 @@ def create_endpoint_lookup_router(
             return powershell(payload.hostname, payload.modo, payload.comando, payload.usuario)
         except endpoint_lookup.automation.TravaOcupada:
             raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
+        except endpoint_lookup.automation.RotinaEncerrada as erro:
+            raise HTTPException(409, str(erro)) from None
         except Exception:
             raise HTTPException(503, "Não foi possível abrir o PowerShell. Confira o Chrome de automação (porta 9333) e o login no Endpoint.") from None
 
