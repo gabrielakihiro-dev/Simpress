@@ -19,7 +19,7 @@
       const semPainel = !globalThis.SimpressReact?.["resultado-comparacao"] && typeof document !== "undefined";
       const conteudo = semPainel ? document.getElementById("comparacao-planilhas-conteudo") : null;
       if (conteudo) {
-        // Same markup as renderError in cockpit-tool-panels.js.
+        // Same markup as renderError in frontend/src/paineis/ferramentas-cockpit/estado.ts.
         const nota = document.createElement("p");
         nota.className = "ck-nota ck-nota--erro";
         nota.textContent = "Não foi possível abrir a comparação.";

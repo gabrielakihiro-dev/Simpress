@@ -249,6 +249,14 @@ test.describe("sem o bundle React", () => {
       await expect(page.locator(`[data-cockpit-tool-panel="${tool}"] [role="status"]`).filter({ hasText: "Carregando" })).toHaveCount(0);
       await expect(page.locator(`[data-cockpit-tool-panel="${tool}"] [aria-busy="true"]`)).toHaveCount(0);
       expect(vistos.pagina).toEqual([]);
+      if (tool !== "comparacao") return;
+      // Resumo é aba (role="tab"): a aba Home fica suspensa enquanto ele está aberto e volta a ser a selecionada no Voltar.
+      await expect(page.locator("#btn-resumo-aba")).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator("#tab-home")).toHaveAttribute("aria-selected", "false");
+      await page.getByRole("button", { name: "Voltar para a tela principal" }).click();
+      await expect(page.locator(RAIZ)).toBeHidden();
+      await expect(page.locator("#btn-resumo-aba")).toHaveAttribute("aria-selected", "false");
+      await expect(page.locator("#tab-home")).toHaveAttribute("aria-selected", "true");
     });
   }
 
