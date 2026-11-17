@@ -80,7 +80,7 @@ test("as ações síncronas não mascaram o erro do painel: o que o painel lanç
   SINCRONAS.forEach(nome => assert.throws(() => acoes[nome](), erro => erro === falha, nome));
 });
 
-// Pontes reais de frontend/src/legado/app.js, com o painel real montado pelo harness (mountReactPanelsBf2).
+// Pontes reais de frontend/src/aplicacao/app.ts, com o painel real montado pelo harness (mountReactPanelsBf2).
 test("no app real as ações da ponte chegam ao painel React e devolvem o retorno dele", async () => {
   const harness = createAppHarness(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   const painel = harness.context.window.SimpressReact[PAINEL];

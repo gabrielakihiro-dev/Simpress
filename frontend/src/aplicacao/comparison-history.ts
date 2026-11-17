@@ -1,7 +1,7 @@
 /**
  * Histórico de Planilhas (diálogo com as atualizações salvas, exportação por data, restauração e exclusão).
  * Migrado para React no Dia 3 (G9): o diálogo vive em frontend/src/paineis/historico-comparacoes/.
- * Este módulo é a ponte que mantém as ações publicadas para o código antigo, e guarda o download do Excel e o botão
+ * Este módulo é a ponte que mantém as ações publicadas em window (frontend/src/aplicacao/app.ts), e guarda o download do Excel e o botão
  * "Exportar" da aba Comparação, que seguem fora do React.
  */
 import { registrar, registrarRejeicoes } from "./pontes.ts";

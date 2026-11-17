@@ -22,9 +22,8 @@ const { criarRegrasChamados } = require("../../../frontend/src/paineis/regras-ch
 const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/importacao-planilhas/estado.ts");
 const { criarFerramentasCockpit } = require("../../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
-const { appScripts, appSource } = require("./app-sources.cjs");
-const { fabricas } = require("../../../frontend/src/aplicacao/registro.ts");
-const { createTicketRules } = require("../../../frontend/src/aplicacao/ticket-rules.ts");
+const { appSource } = require("./app-sources.cjs");
+const { iniciar } = require("../../../frontend/src/aplicacao/app.ts");
 const { instalarGlobaisNode } = require("./globais-node.cjs");
 
 const appScript = appSource();
@@ -166,9 +165,6 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     SimpressSebraeDashboardModel: require("../../../frontend/src/comum/sebrae-dashboard-model.ts"),
     SimpressEquipmentSearchRenderers: require("../../../frontend/src/ui/equipment-search-renderers.ts").createEquipmentSearchRenderers,
     SimpressLoggedUserMarkers: require("../../../frontend/src/ui/logged-user-markers.ts").createLoggedUserMarkers,
-    // As fábricas das features agora são TypeScript: app.js (VM) lê as duas daqui, como lia do bundle.
-    SimpressFeatures: fabricas,
-    SimpressTicketRules: createTicketRules,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
     localStorage: {
       getItem: key => localStorage.get(key) ?? null,
@@ -198,14 +194,15 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     workflowEffects: effects,
   });
 
-  // As features rodam no realm do Node durante a avaliação de app.js: os mesmos falsos precisam existir como globais.
+  // iniciar() e as features rodam no realm do Node: os mesmos falsos precisam existir como globais.
   instalarGlobaisNode({
     document, window, console: context.console, lucide: context.lucide, HTMLElement: FakeElement, navigator: context.navigator,
     MutationObserver: context.MutationObserver, requestAnimationFrame: context.requestAnimationFrame,
     Event: context.Event, CustomEvent: context.CustomEvent, FormData: FakeFormData,
     fetch: typeof fetchApi === "function" ? (...args) => fetchApi(...args) : undefined,
   });
-  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
+  // iniciar() publica as ações das features no global da VM (`context`), como o antigo app.js as publicava lá dentro.
+  iniciar(context);
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
     showToast = (message, type) => workflowEffects.toasts.push({ message, type });
@@ -414,6 +411,5 @@ module.exports = {
   FakeFormData,
   createAppHarness,
   apiResponse,
-  appScripts,
   appSource,
 };

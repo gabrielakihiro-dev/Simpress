@@ -27,7 +27,7 @@ function Referencia({ tipo, numero, texto }: { tipo: string; numero: string; tex
       className="ck-link-btn ck-mono lembretes__ref"
       aria-haspopup="dialog"
       aria-label={`${tipo === "chamado" ? "Abrir o chamado" : "Abrir a OS"} ${numero} na janela Chamado × OS`}
-      // Mesmo valor do código antigo: ao fechar a janela, o foco volta ao botão equivalente pelo data-args (cockpit-tool-panels.js).
+      // Mesmo valor de antes: ao fechar a janela, o foco volta ao botão equivalente pelo data-args (ferramentas-cockpit/estado.ts).
       data-args={JSON.stringify([{ tipo, numero }, "$this"])}
       onClick={(e) => appAntigo().abrirReferenciaLembrete?.({ tipo, numero }, e.currentTarget)}
     >

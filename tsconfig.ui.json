@@ -9,11 +9,11 @@
     "checkJs": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "strict": false
+    "strict": false,
+    "paths": { "/static/vendor/*": ["./frontend/types/vendor/*"] }
   },
   "include": [
     "frontend/types/globais.d.ts",
-    "static/js/shared/*.js",
-    "frontend/src/legado/ui/*.js"
+    "static/js/shared/*.js"
   ]
 }

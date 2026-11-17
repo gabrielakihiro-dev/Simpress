@@ -188,7 +188,7 @@ O texto é o mesmo para um ou vários chamados. O cartão é `#alerta-chamados-o
 }
 ```
 
-Com falha ao ler as marcas: `{"total": 0, "itens": [], "indisponivel": true}`. Sem a fonte configurada: `{"total": 0, "itens": []}`. Implementação do cartão: `renderizarAlertaChamadosOutroTecnico` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `static/js/features/dashboard.js`).
+Com falha ao ler as marcas: `{"total": 0, "itens": [], "indisponivel": true}`. Sem a fonte configurada: `{"total": 0, "itens": []}`. Implementação do cartão: `renderizarAlertaChamadosOutroTecnico` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `frontend/src/aplicacao/dashboard.ts`).
 
 ## 5. Backups regionais
 
@@ -215,7 +215,7 @@ Avisar quando uma regional prioritária está sem notebook de backup disponível
 | Sem backup disponível | há cidade em `pendencias.sem_backup` | Ver backups no Resumo |
 | Conferir possível backup | só há cidade em `pendencias.conferir` | Ver backups no Resumo |
 
-O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`, `vazio` ou `indisponivel`; lista `#alerta-backups-regionais-lista` com uma linha por cidade e situação, por exemplo `Cascavel — sem backup disponível`). O botão `#btn-alerta-backups-regionais` abre a sub-aba Backups do Resumo (`abrirPainelCockpit` com `["comparacao","backups"]`). O cartão nunca traz apelido nem série. Implementação: `renderizarAlertaBackupsRegionais` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `static/js/features/dashboard.js`).
+O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`, `vazio` ou `indisponivel`; lista `#alerta-backups-regionais-lista` com uma linha por cidade e situação, por exemplo `Cascavel — sem backup disponível`). O botão `#btn-alerta-backups-regionais` abre a sub-aba Backups do Resumo (`abrirPainelCockpit` com `["comparacao","backups"]`). O cartão nunca traz apelido nem série. Implementação: `renderizarAlertaBackupsRegionais` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `frontend/src/aplicacao/dashboard.ts`).
 
 ## Interface
 

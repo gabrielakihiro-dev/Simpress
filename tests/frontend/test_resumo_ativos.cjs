@@ -10,8 +10,8 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "../..");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/aplicacao/app.ts"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/arranque/entrada.ts"), "utf8");
 const createResumoAtivos = require("../../frontend/src/aplicacao/registro.ts").fabricas.resumoAtivos;
 
 function ponteFalsa(acao) {
@@ -25,7 +25,7 @@ function ponteFalsa(acao) {
   return { chamadas, feature: createResumoAtivos(context) };
 }
 
-test("registro: módulo importado no app-entry e publicado no FEATURE_ORDER", () => {
+test("registro: módulo importado no arranque e publicado no FEATURE_ORDER", () => {
   assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
   assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.resumoAtivos, "function");
   assert.match(appSource, /"resumoAtivos",/);

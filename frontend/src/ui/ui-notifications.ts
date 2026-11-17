@@ -46,5 +46,5 @@ export function createNotifications(options: Qualquer) {
   return Object.freeze({ show });
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app-shell.ts.
 if (typeof window !== "undefined") window.SimpressNotifications = createNotifications;

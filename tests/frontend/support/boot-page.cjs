@@ -1,9 +1,6 @@
-// Boots frontend/src/legado/app.js inside a VM with a fake DOM, the way the feature-module tests need it.
-const vm = require("node:vm");
-const { appScripts } = require("./app-sources.cjs");
+// Boots the bootstrap (frontend/src/aplicacao/app.ts, iniciar()) on a fake window with a fake DOM, the way the feature-module tests need it.
 const apiFetchTs = require("../../../frontend/src/api.ts");
-const { fabricas } = require("../../../frontend/src/aplicacao/registro.ts");
-const { createTicketRules } = require("../../../frontend/src/aplicacao/ticket-rules.ts");
+const { iniciar } = require("../../../frontend/src/aplicacao/app.ts");
 const { instalarGlobaisNode } = require("./globais-node.cjs");
 
 function fakeElement() {
@@ -46,9 +43,6 @@ function bootPage(extraWindow = {}) {
     SimpressSebraeDashboardModel: require("../../../frontend/src/comum/sebrae-dashboard-model.ts"),
     SimpressEquipmentSearchRenderers: require("../../../frontend/src/ui/equipment-search-renderers.ts").createEquipmentSearchRenderers,
     SimpressLoggedUserMarkers: require("../../../frontend/src/ui/logged-user-markers.ts").createLoggedUserMarkers,
-    // As fábricas das features agora são TypeScript: app.js (VM) lê as duas daqui, como lia do bundle.
-    SimpressFeatures: fabricas,
-    SimpressTicketRules: createTicketRules,
     matchMedia: () => ({ matches: false }),
     addEventListener() {},
     ...extraWindow,
@@ -60,14 +54,15 @@ function bootPage(extraWindow = {}) {
     HTMLElement: function HTMLElement() {},
     lucide: { createIcons() {} },
   };
-  // As features rodam no realm do Node durante a avaliação de app.js: os mesmos falsos precisam existir como globais.
+  // iniciar() e as features rodam no realm do Node: os mesmos falsos precisam existir como globais.
   instalarGlobaisNode({
     document, window, lucide: sandbox.lucide, HTMLElement: sandbox.HTMLElement,
     MutationObserver: sandbox.MutationObserver, requestAnimationFrame: sandbox.requestAnimationFrame,
   });
-  const context = vm.createContext(sandbox);
+  // iniciar() publica as ações das features em `context`, como o antigo app.js as publicava no global da VM.
+  const context = sandbox;
   const before = new Set(Object.keys(context));
-  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
+  iniciar(context);
   const published = Object.keys(context).filter(name => !before.has(name));
   return { context, window, published };
 }

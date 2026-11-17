@@ -1,4 +1,4 @@
-// Estado do diálogo "Histórico de atualizações de planilhas", fora dos componentes: o código antigo chama as ações
+// Estado do diálogo "Histórico de atualizações de planilhas", fora dos componentes: a aplicação chama as ações
 // pela ponte (frontend/src/aplicacao/comparison-history.ts), às vezes antes de o React desenhar o diálogo. Toda mudança
 // de estado vai por flushSync: o DOM já está final quando a ação devolve a promessa (os testes e o MutationObserver
 // de paineis-dados dependem disso).
@@ -23,7 +23,7 @@ export interface Estado {
   ocupados: Record<string, string>; // texto do botão em andamento, por chaveAcao()
 }
 
-// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
+// Ações da aplicação publicadas em window por frontend/src/aplicacao/app.ts (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

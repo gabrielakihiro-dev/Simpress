@@ -150,5 +150,5 @@ export function createMotion(env: Qualquer) {
   return Object.freeze({ duration, reveal, stagger, openOverlay, closeOverlay, dismiss, startLoading, installFeedback });
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts (context.motion) e pelos montar.tsx de frontend/src/paineis.
 if (typeof window !== "undefined") window.SimpressMotion = createMotion(window);

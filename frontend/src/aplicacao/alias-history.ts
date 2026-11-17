@@ -1,4 +1,4 @@
-/** The F7 history screen remains legacy; all record rules and actions are owned by the React panel. */
+/** The F7 history screen lives in frontend/src/paineis/ferramentas-cockpit/; all record rules and actions are owned by the historico-apelidos React panel. */
 import { registrarRejeicoes } from "./pontes.ts";
 import type { Acoes, ContextoApp } from "./tipos.ts";
 

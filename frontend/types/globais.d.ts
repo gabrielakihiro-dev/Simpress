@@ -1,6 +1,6 @@
-// Globais que os scripts de frontend/src/legado e as pontes de frontend/src/comum e frontend/src/ui publicam ou leem em window.
-// Só para o `tsc --project tsconfig.ui.json` (checkJs, sem emitir) e para o tsconfig.json. Script global: sem import/export.
-// Tipadas como `any` por enquanto; as pontes de comum/ e ui/ saem na react-final-3, quando app.js virar TS.
+// Globais que frontend/src/aplicacao/app.ts, frontend/src/arranque e as publicações de frontend/src/comum e frontend/src/ui
+// escrevem ou leem em window. Para o `tsc --project tsconfig.ui.json` (checkJs, sem emitir) e para o tsconfig.json.
+// Script global: sem import/export. Tipadas como `any`: quem lê cada uma está no comentário "Publicação em window" do módulo.
 
 // Bibliotecas externas (static/vendor).
 declare var lucide: any;
@@ -18,7 +18,6 @@ declare var SimpressBento: any;
 declare var SimpressCatalogSearch: any;
 declare var SimpressDomUtils: any;
 declare var SimpressEquipmentSearchRenderers: any;
-declare var SimpressFilePicker: any;
 declare var SimpressFormDraftGuard: any;
 declare var SimpressHistoryFormat: any;
 declare var SimpressLoggedUserMarkers: any;
@@ -28,7 +27,6 @@ declare var SimpressReact: any; // ações dos painéis React, publicadas por fr
 declare var SimpressRecentEquipment: any;
 declare var SimpressSebraeDashboardModel: any;
 declare var SimpressTransferUtils: any;
-declare var SimpressUxEnhancements: any;
 
 // Funções de frontend/src/aplicacao lidas pelos scripts de ui.
 declare var cancelarDadosCadastrais: any;

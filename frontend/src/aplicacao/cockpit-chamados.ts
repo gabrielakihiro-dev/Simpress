@@ -2,7 +2,7 @@
  * Cockpit Chamados: importação das planilhas, versões, comparação, exclusão de importações antigas e exportação
  * (bloco "Importação e versões"), mais os chamados abertos da Home.
  * Migrado para React no G8: o painel vive em frontend/src/paineis/cockpit-chamados/. Este módulo é a ponte que mantém
- * as ações publicadas para o código antigo e guarda as duas que mexem só no DOM e precisam ser síncronas:
+ * as ações publicadas em window (frontend/src/aplicacao/app.ts) e guarda as duas que mexem só no DOM e precisam ser síncronas:
  * abrirGestaoChamadosCockpit e abrirChamadoSebraeNoF5.
  */
 import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";

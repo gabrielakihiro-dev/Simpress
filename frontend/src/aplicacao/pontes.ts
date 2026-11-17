@@ -1,14 +1,14 @@
 /**
- * Pontes entre o código antigo (app.js, data-on-*, ações chamadas por outras features) e os painéis React.
+ * Pontes entre a aplicação (app.ts, data-on-*, ações chamadas por outras features) e os painéis React.
  * Cada entrada da tabela só encaminha: não tem regra, não lê DOM, não chama a API. A regra mora no painel
- * (frontend/src/paineis/<painel>/) e `app.js` publica o que `criarPonte` devolve no `window`.
+ * (frontend/src/paineis/<painel>/) e `app.ts` publica o que `criarPonte` devolve no `window`.
  *
  * - `sincronas`: devolvem no mesmo turno (ponteReactSincrona); sem o painel, o erro sobe para quem chamou.
  * - `assincronas`: esperam o painel React carregar (ponteReact); sem o painel, a rejeição vai ao console como "nome: mensagem"
  *   (LGPD: nunca o objeto de erro inteiro) e a ação resolve com undefined.
  * - `silenciosa`: igual às assíncronas, mas sem console, porque o que passa por elas pode ter dado pessoal.
  * - `semArgumentos`: a ação é chamada sem repassar os argumentos do chamador.
- * A ordem das chaves devolvidas é a das listas (sincronas primeiro): é a ordem em que o app.js publica no `window`.
+ * A ordem das chaves devolvidas é a das listas (sincronas primeiro): é a ordem em que o app.ts publica no `window`.
  */
 import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";
 
@@ -243,7 +243,7 @@ const TABELA = {
   },
   // Lembretes (Ferramentas): lista local de tarefas em /api/lembretes. A descrição tem dado pessoal: nunca vai para log nem para storage.
   // Migrado para React no Grupo 6: junto com os Termos, o painel vive em frontend/src/paineis/lembretes/ (regras puras em
-  // lembretes-puro.ts, ações em lembretes-acoes.ts). Esta entrada é só a ponte que mantém as ações publicadas para o código antigo
+  // lembretes-puro.ts, ações em lembretes-acoes.ts). Esta entrada é só a ponte que mantém as ações publicadas em window
   // (carregarLembretes ao abrir o painel e as funções que os diálogos acessíveis chamam em data-close-function).
   // Os chamadores antigos não tratam erro: a ponte nunca rejeita. Sem console aqui: o que passa por estas ações pode ter dado pessoal.
   lembretes: {
@@ -261,7 +261,7 @@ const TABELA = {
   },
   // Termos de entrega e devolução (Ferramentas): formulários na tela, folha de PDF montada na hora; nada é guardado.
   // Migrado para React no Grupo 6: junto com os Lembretes, o painel vive em frontend/src/paineis/lembretes/ (regras puras em
-  // termos-puro.ts, ações em termos-acoes.ts). Esta entrada é só a ponte que mantém as ações publicadas para o código antigo
+  // termos-puro.ts, ações em termos-acoes.ts). Esta entrada é só a ponte que mantém as ações publicadas em window
   // (cockpit-tool-panels abre a aba; equipment-search preenche o termo com o equipamento buscado).
   // Os chamadores antigos (Home, abas das ferramentas) não tratam erro: a ponte nunca rejeita.
   // Sem console aqui: nome, unidade e série do termo podem estar na mensagem do erro.

@@ -4,11 +4,11 @@ const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
-const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
+const ux = require("../../frontend/src/ui/ux-enhancements.ts");
 
 const appHtml = assembledHtml();
-const { legadoDir } = require("./support/app-sources.cjs");
-const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
+const { arranqueDir } = require("./support/app-sources.cjs");
+const appEntry = fs.readFileSync(path.join(arranqueDir, "entrada.ts"), "utf8");
 
 test("sorting compares numbers, dates and text naturally and keeps empties last", () => {
   assert.ok(panels.compareValues("2", "10") < 0);
@@ -48,7 +48,7 @@ test("bar widths scale to the largest city", () => {
 });
 
 test("dashboard module is loaded, offline and touches only the allowed endpoint", () => {
-  // Instalado pelo montar() do painel React (não mais por import no app-entry): o container oculto precisa estar no index.html.
+  // Instalado pelo montar() do painel React (não mais por import no arranque): o container oculto precisa estar no index.html.
   assert.doesNotMatch(appEntry, /data-panels\.js/);
   const pastaPainel = path.resolve(__dirname, "../../frontend/src/paineis/paineis-dados");
   assert.match(fs.readFileSync(path.join(pastaPainel, "montar.tsx"), "utf8"), /paineisDados\.install\(window\)/);

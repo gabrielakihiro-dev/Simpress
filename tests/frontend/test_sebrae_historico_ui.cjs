@@ -8,11 +8,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const createSebraeHistorico = require("../../frontend/src/aplicacao/registro.ts").fabricas.sebraeHistorico;
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const { legadoDir } = require("./support/app-sources.cjs");
+const { aplicacaoDir, arranqueDir } = require("./support/app-sources.cjs");
 
 const root = path.resolve(__dirname, "../..");
 const painelReact = path.join(root, "frontend/src/paineis/sebrae-historico");
-const lido = arquivo => fs.readFileSync(path.join(legadoDir, arquivo), "utf8");
+const lido = arquivo => fs.readFileSync(path.join(arranqueDir, arquivo), "utf8");
 
 function ponteFalsa(acao) {
   const chamadas = [];
@@ -25,10 +25,10 @@ function ponteFalsa(acao) {
   return { chamadas, feature: createSebraeHistorico(context) };
 }
 
-test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e um gancho no Dashboard", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
+test("registro: módulo importado em arranque/entrada.ts, publicado no FEATURE_ORDER e um gancho no Dashboard", () => {
+  assert.match(lido("entrada.ts"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
   assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.sebraeHistorico, "function");
-  assert.match(lido("app.js"), /"sebraeHistorico",/);
+  assert.match(fs.readFileSync(path.join(aplicacaoDir, "app.ts"), "utf8"), /"sebraeHistorico",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   const dashboard = fs.readFileSync(path.join(root, "frontend/src/paineis/sebrae-dashboard/estado.ts"), "utf8");
   assert.equal(dashboard.split("app.carregarResumoHistoricoSebrae").length - 1, 1, "um só gancho no Dashboard");

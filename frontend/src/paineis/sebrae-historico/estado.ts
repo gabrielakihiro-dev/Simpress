@@ -1,5 +1,5 @@
 // Resumo do histórico do Dashboard Sebrae (Automação, cartão "Chamados novos do SoftExpert"), fora do
-// componente: o código antigo chama carregarResumoHistoricoSebrae pela ponte (sebrae-dashboard.js).
+// componente: a aplicação chama carregarResumoHistoricoSebrae pela ponte (sebrae-dashboard.js).
 import { apiFetch, type ApiFetchError } from "../../api";
 
 const ENTRADAS_NO_CARTAO = 3;
@@ -73,7 +73,7 @@ function mudar(novo: Estado) {
 
 let consulta = 0;
 
-// Chamado pelo código antigo a cada carga dos chamados novos. Nunca rejeita: a falha vira o texto do cartão.
+// Chamado pela aplicação a cada carga dos chamados novos. Nunca rejeita: a falha vira o texto do cartão.
 export async function carregarResumoHistoricoSebrae(): Promise<void> {
   const minha = ++consulta;
   try {

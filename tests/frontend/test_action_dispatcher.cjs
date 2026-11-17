@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const { allow, dispatch } = require("../../frontend/src/legado/ui/action-dispatcher.js");
-const { aplicacaoFiles, appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
+const { allow, dispatch } = require("../../frontend/src/ui/action-dispatcher.ts");
+const { BOOTSTRAP, aplicacaoFiles, appScriptFiles, arranqueDir } = require("./support/app-sources.cjs");
 
 allow(["ativarAba", "filtrar", "teclas", "carregar", "buscar", "fechar", "salvar", "inner", "outer"]);
 
@@ -89,10 +89,19 @@ test("click targets forward to another element and unknown actions only warn", (
 });
 
 test("pages no longer use inline event handler attributes", () => {
-  // registro.ts vale pelos módulos de frontend/src/aplicacao/ (as features).
-  const arquivos = appScriptFiles().flatMap(file => (file === "../aplicacao/registro.ts" ? aplicacaoFiles() : [file]));
+  // registro.ts vale pelos módulos de frontend/src/aplicacao/ (as features); os módulos finos de arranque/ valem também
+  // pelo módulo que ligam (o app.ts, o despachante e as melhorias de interface), que antes entravam direto na entrada antiga.
+  const ligados = {
+    "iniciar-aplicacao.ts": BOOTSTRAP,
+    "instalar-action-dispatcher.ts": "../ui/action-dispatcher.ts",
+    "instalar-ux-enhancements.ts": "../ui/ux-enhancements.ts",
+  };
+  const arquivos = appScriptFiles().flatMap(file => {
+    if (file === "../aplicacao/registro.ts") return aplicacaoFiles();
+    return ligados[file] ? [file, ligados[file]] : [file];
+  });
   for (const file of ["index.html", ...arquivos]) {
-    const source = file === "index.html" ? assembledHtml() : fs.readFileSync(path.join(legadoDir, file), "utf8");
+    const source = file === "index.html" ? assembledHtml() : fs.readFileSync(path.join(arranqueDir, file), "utf8");
     assert.doesNotMatch(source, /\son[a-z]+\s*=\s*["']/, file);
   }
 });

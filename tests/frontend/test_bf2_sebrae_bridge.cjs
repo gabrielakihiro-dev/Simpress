@@ -103,7 +103,7 @@ test("a ação síncrona não mascara o erro do painel: o que o painel lança so
   SINCRONAS.forEach(nome => assert.throws(() => acoes[nome](), erro => erro === falha, nome));
 });
 
-// Pontes reais de frontend/src/legado/app.js, com um painel falso no lugar do React.
+// Pontes reais de frontend/src/aplicacao/app.ts, com um painel falso no lugar do React.
 test("no app real as ações da ponte chegam ao painel React e devolvem o retorno dele", async () => {
   const harness = createAppHarness(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   const chamadas = [];

@@ -35,7 +35,7 @@ function criarPontes() {
   return { chamadas, ponteReact, ponteReactSincrona };
 }
 
-// Ponte real do app.js: lê window.SimpressReact a cada chamada e registra o erro quando o painel não existe.
+// Ponte real de aplicacao/app.ts: lê window.SimpressReact a cada chamada e registra o erro quando o painel não existe.
 function ponteDoApp(erros) {
   return (painel, nomes) => Object.fromEntries(nomes.map(nome => [nome, (...argumentos) => {
     const acao = globalThis.window?.SimpressReact?.[painel]?.[nome];

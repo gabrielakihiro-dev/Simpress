@@ -6,7 +6,7 @@ import {
 } from "./estado";
 
 // Chamado por frontend/src/main.tsx com o overlay #modal-ticket-ux (data-react-painel="ux-ticket").
-// O código antigo chama as ações pela ponte (frontend/src/aplicacao/ux-ticket.ts).
+// A aplicação chama as ações pela ponte (frontend/src/aplicacao/ux-ticket.ts).
 export function montar(container: HTMLElement) {
   createRoot(container).render(<DialogoTicketUX />);
   return {

@@ -84,7 +84,7 @@ test("atalho 'Ver backups no Resumo': aparece ao concluir inventários ou rotina
 });
 
 test("fim da rotina de OS (os ou ambas) avisa a tela, e o F5 recarrega com o relatório novo", () => {
-  const app = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/legado/app.js"), "utf8");
+  const app = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/aplicacao/app.ts"), "utf8");
   assert.match(acoes, /if \(osImportadaAoTerminar\(\{ emAndamento, estavaAtivo, rotinaAnterior \}\)\) document\.dispatchEvent\(new CustomEvent\("simpress:chamados-atualizados"\)\);/);
   assert.match(app, /document\.addEventListener\("simpress:chamados-atualizados", \(\) => app\.carregarNovosSebrae\(\)\);/);
   const fim = (rotinaAnterior, emAndamento = false, estavaAtivo = true) => osImportadaAoTerminar({ emAndamento, estavaAtivo, rotinaAnterior });

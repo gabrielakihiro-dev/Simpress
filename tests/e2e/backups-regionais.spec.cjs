@@ -289,7 +289,7 @@ test("confirmar e desfazer atualizam a linha, o cartão do sino e o selo da aba"
   await expect(selo).toHaveText("2");
 });
 
-// Regressão: app.js entrega a fábrica do renderer; sem instanciá-la, o aria-label ficava em "Backups: aguardando dados".
+// Regressão: aplicacao/app.ts entrega a fábrica do renderer; sem instanciá-la, o aria-label ficava em "Backups: aguardando dados".
 test("o rótulo acessível da aba Backups acompanha o selo", async ({ page }) => {
   await abrirResumo(page);
   await expect(aba(page, "backups")).toHaveAttribute("aria-label", "Backups: 2 regionais pendentes");

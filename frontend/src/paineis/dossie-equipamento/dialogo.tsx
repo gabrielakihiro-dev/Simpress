@@ -70,7 +70,7 @@ export function Dialogo() {
         </div>
       </section>
       <div className="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
-        {/* data-on-click como antes: o despachante do código antigo chama window.fecharDossieEquipamento (a ponte) */}
+        {/* data-on-click como antes: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama window.fecharDossieEquipamento (a ponte) */}
         <button type="button" id="dossie-fechar" data-on-click="fecharDossieEquipamento" className="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </>

@@ -148,7 +148,6 @@ test("título com ícone de ajuda (h4 dentro de um div) também recebe os botõe
 });
 
 test("os renderizadores de .comparison-desktop-table disparam o evento", () => {
-  const ler = arquivo => fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "legado", arquivo), "utf8");
   const dataPanels = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "paineis-dados", "paineis.ts"), "utf8");
   assert.doesNotMatch(dataPanels, /observe\(doc\.body/);
   assert.match(dataPanels, /addEventListener\("simpress:tabelas-renderizadas", scanTables\)/);

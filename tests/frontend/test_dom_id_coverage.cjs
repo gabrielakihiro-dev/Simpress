@@ -5,7 +5,8 @@ const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 
 const staticDir = path.resolve(__dirname, "../../static");
-const legadoDir = path.resolve(__dirname, "../../frontend/src/legado");
+const uiDir = path.resolve(__dirname, "../../frontend/src/ui");
+const arranqueDir = path.resolve(__dirname, "../../frontend/src/arranque");
 const aplicacaoDir = path.resolve(__dirname, "../../frontend/src/aplicacao");
 const html = assembledHtml();
 
@@ -20,7 +21,7 @@ const ALLOWED_MISSING = new Map([
   ["btn-sidebar-open", "botão da sidebar legada, removida no Cockpit v2; accessible-dialogs.ts ignora o null"],
   ["ux-sort-status", "região aria-live criada sob demanda por frontend/src/paineis/paineis-dados"],
   ["badge-divergencias-ux", "criado sob demanda por frontend/src/paineis/paineis-dados"],
-  ["ux-pending-chip", "criado sob demanda por ux-enhancements.js"],
+  ["ux-pending-chip", "criado sob demanda por frontend/src/ui/ux-enhancements.ts"],
   ["cockpit-tickets-file-simpress", "campo de arquivo desenhado pelo painel React (frontend/src/paineis/cockpit-chamados); abrirGestaoChamadosCockpit só o procura ao abrir o bloco"],
   ["resumo-painel-visao", "painel da Visão geral renderizado pelo JS dentro do resultado da comparação (frontend/src/paineis/resultado-comparacao)"],
 ]);
@@ -41,7 +42,7 @@ test("every literal element id used by the JS exists in index.html", () => {
     /querySelector(?:All)?\(\s*["'`]#([\w-]+)[\s"'`.:\[>,]/g,
   ];
   const missing = new Map();
-  for (const file of [...jsFiles(staticDir), ...jsFiles(legadoDir), ...jsFiles(aplicacaoDir, ".ts")]) {
+  for (const file of [...jsFiles(staticDir), ...jsFiles(uiDir, ".ts"), ...jsFiles(arranqueDir, ".ts"), ...jsFiles(aplicacaoDir, ".ts")]) {
     const source = fs.readFileSync(file, "utf8");
     for (const pattern of patterns) {
       for (const [, id] of source.matchAll(pattern)) {

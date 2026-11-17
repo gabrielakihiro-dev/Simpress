@@ -3,13 +3,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const { aplicacaoDir, legadoDir } = require("./support/app-sources.cjs");
+const { aplicacaoDir, appScriptFiles, srcDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
 const indexHtml = assembledHtml();
-const bootstrapSource = fs.readFileSync(path.join(legadoDir, "app.js"), "utf8");
-const featureFiles = fs.readdirSync(aplicacaoDir).filter(file => file.endsWith(".ts")).sort().map(file => path.join(aplicacaoDir, file));
+const bootstrapSource = fs.readFileSync(path.join(aplicacaoDir, "app.ts"), "utf8");
+// app.ts é o arranque (iniciar), não uma feature.
+const featureFiles = fs.readdirSync(aplicacaoDir).filter(file => file.endsWith(".ts") && file !== "app.ts").sort().map(file => path.join(aplicacaoDir, file));
 const { fabricas } = require("../../frontend/src/aplicacao/registro.ts");
+const { createTicketRules } = require("../../frontend/src/aplicacao/ticket-rules.ts");
 
 // Actions the dispatcher resolves: data-on-* in the page and in markup the features render.
 function declaredActions() {
@@ -31,17 +33,16 @@ function modalCloseHandlers() {
   return names;
 }
 
-// Scripts loaded after app.js install a few actions of their own; React panels publish theirs with
+// Scripts loaded after the bootstrap (aplicacao/app.ts) install a few actions of their own; React panels publish theirs with
 // Object.assign(window, { ... }) in paineis/<painel>/montar.tsx (e.g. transfer history).
 function actionsInstalledByUiScripts() {
   const names = new Set();
-  for (const uiDir of [path.join(legadoDir, "ui"), path.join(legadoDir, "..", "ui")]) {
-    for (const file of fs.readdirSync(uiDir)) {
-      const source = fs.readFileSync(path.join(uiDir, file), "utf8");
-      for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
-    }
+  const uiDir = path.join(srcDir, "ui");
+  for (const file of fs.readdirSync(uiDir)) {
+    const source = fs.readFileSync(path.join(uiDir, file), "utf8");
+    for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
   }
-  const paineisDir = path.join(legadoDir, "..", "paineis");
+  const paineisDir = path.join(srcDir, "paineis");
   for (const painel of fs.readdirSync(paineisDir)) {
     const montar = path.join(paineisDir, painel, "montar.tsx");
     if (!fs.existsSync(montar)) continue;
@@ -64,8 +65,13 @@ test("every data-on-* action and modal close handler is published on window", ()
 test("the bootstrap creates every feature module the page loads, in a declared order", () => {
   const { window } = bootPage();
   const order = [...bootstrapSource.matchAll(/^\s+"([A-Za-z]+)",$/gm)].map(match => match[1]);
-  assert.deepEqual(Object.keys(window.SimpressFeatures).sort(), [...order].sort());
-  assert.equal(typeof window.SimpressTicketRules, "function");
+  // app.ts creates the features from the registry (the old window.SimpressFeatures) and the ticket rules from ticket-rules.ts.
+  assert.deepEqual(Object.keys(fabricas).sort(), [...order].sort());
+  assert.match(bootstrapSource, /import \{ fabricas \} from "\.\/registro\.ts";/);
+  assert.match(bootstrapSource, /import \{ createTicketRules \} from "\.\/ticket-rules\.ts";/);
+  assert.equal(typeof createTicketRules, "function");
+  // arranque/entrada.ts loads the registry before the bootstrap and the page enhancements after it (appScriptFiles throws otherwise).
+  assert.ok(appScriptFiles().length > 0);
   assert.equal(typeof window.SimpressHistoryFormat.formatarNomeFonteHistorico, "function");
 });
 
@@ -83,8 +89,8 @@ test("feature modules only export factories and publish no page globals", () => 
   for (const file of featureFiles) {
     const source = fs.readFileSync(file, "utf8");
     const nome = path.basename(file);
-    // Só o registro publica no window (as duas pontes temporárias de app.js); nenhum outro módulo toca em window.Simpress*.
-    if (nome !== "registro.ts") assert.doesNotMatch(source, /window\.Simpress\w+\s*=[^=]|globalThis\.\w+\s*=[^=]/, `${nome} leaked a page global`);
+    // Nenhum módulo de aplicacao/ (nem o registro) toca em window.Simpress*: as ações saem por iniciar() em app.ts.
+    assert.doesNotMatch(source, /window\.Simpress\w+\s*=[^=]|globalThis\.\w+\s*=[^=]/, `${nome} leaked a page global`);
     if (nome === "tipos.ts") continue;
     const exportados = Object.entries(require(file));
     assert.ok(exportados.length > 0, `${nome} should export something`);

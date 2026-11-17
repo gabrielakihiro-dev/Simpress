@@ -13,8 +13,8 @@ const createAssistantChat = require("../../frontend/src/aplicacao/registro.ts").
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/assistant-chat");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/aplicacao/app.ts"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/arranque/entrada.ts"), "utf8");
 const lerPasta = nome => fs.readFileSync(path.join(pasta, nome), "utf8");
 const regras = require(path.join(pasta, "assistente-puro.ts"));
 const {
@@ -245,7 +245,7 @@ async function semConsole(fn) {
   }
 }
 
-test("registro: a ponte do painel React assistant-chat (aplicacao/registro.ts) continua no app-entry e no FEATURE_ORDER", () => {
+test("registro: a ponte do painel React assistant-chat (aplicacao/registro.ts) continua no arranque e no FEATURE_ORDER", () => {
   assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
   assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.assistantChat, "function");
   assert.match(appSource, /"assistantChat",/);

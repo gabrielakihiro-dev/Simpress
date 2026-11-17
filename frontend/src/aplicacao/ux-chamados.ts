@@ -1,7 +1,7 @@
 /**
  * Modal "Abrir chamado no UX" (Home): prepara uma sessão, depois simula ou envia com confirmação.
  * Migrado para React no Dia 2 (G4): o modal vive em frontend/src/paineis/ux-chamados/.
- * Este módulo é só a ponte que mantém as ações publicadas para o código antigo.
+ * Este módulo é só a ponte que mantém as ações publicadas em window (frontend/src/aplicacao/app.ts).
  */
 import { registrarRejeicoes } from "./pontes.ts";
 import type { Acoes, ContextoApp } from "./tipos.ts";

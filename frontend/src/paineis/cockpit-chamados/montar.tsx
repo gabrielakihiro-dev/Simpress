@@ -13,7 +13,7 @@ function elemento(id: string): HTMLElement {
 }
 
 // Chamado por frontend/src/main.tsx com a div.ckp-recolher__corpo de "Importação e versões" (data-react-painel="cockpit-chamados").
-// O código antigo (frontend/src/aplicacao/cockpit-chamados.ts) chama as ações pela ponte; abrirGestaoChamadosCockpit e
+// A aplicação (frontend/src/aplicacao/cockpit-chamados.ts) chama as ações pela ponte; abrirGestaoChamadosCockpit e
 // abrirChamadoSebraeNoF5 ficam lá, em DOM puro e síncronas.
 export function montar(container: HTMLElement) {
   const alvos: Alvos = {

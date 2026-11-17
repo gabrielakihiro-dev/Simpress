@@ -5,7 +5,7 @@ import { apiFetch } from "../../api";
 import { gravarEstado, lerEstado } from "../../estado-app";
 import { chaveSelecionada, filtrarUnidades, ler, mudar, mudarForm, type Estado, type Unidade } from "./estado";
 
-// Funções do código antigo publicadas em window por frontend/src/legado/app.js.
+// Funções da aplicação publicadas em window por frontend/src/aplicacao/app.ts.
 interface AppLegado {
   showToast(mensagem: string, tipo: string): void;
   abrirPainelCockpit(painel: string): Promise<void>;
@@ -18,11 +18,11 @@ interface AppLegado {
 }
 const app = () => window as unknown as AppLegado;
 const el = <T extends HTMLElement = HTMLInputElement>(id: string) => document.getElementById(id) as T | null;
-// appState.unidadesList é do código antigo: lido na hora, nunca copiado.
+// appState.unidadesList é da aplicação: lido na hora, nunca copiado.
 const catalogo = () => lerEstado("unidadesList") as Unidade[];
 
 // Catálogo do Transporte: grava appState.unidadesList e atualiza o seletor de filial e o contador da Home.
-// Escreve no DOM do Transporte (transfer-form.js) porque aquele formulário ainda não migrou.
+// Escreve por id no DOM do Transporte (frontend/src/paineis/transporte/), que é outro painel.
 export async function carregarUnidades(): Promise<void> {
   try {
     const unidades = await apiFetch<Unidade[]>("/api/unidades", { errorMessage: "Falha ao consultar o catálogo de unidades." });

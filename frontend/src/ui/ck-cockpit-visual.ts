@@ -110,7 +110,7 @@ doc.addEventListener("keydown", function (e: Qualquer) {
   if ($(".ck-dados--editando")) { cancelarDados(); return; }
   const ed = $(".ck-dado--editando"); if (ed) fecharEdicao(ed, true);
 });
-// A barra compacta quebra em linhas; os paineis legados descontam a altura real dela.
+// A barra compacta quebra em linhas; os painéis descontam a altura real dela.
 const barra = $("#ck-topbar");
 if (barra && window.ResizeObserver) {
   new ResizeObserver(function () { doc.documentElement.style.setProperty("--ck-topbar-h", barra.offsetHeight + "px"); }).observe(barra);

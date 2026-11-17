@@ -19,7 +19,7 @@ const REGIOES: Record<string, (host: HTMLElement) => ReactNode> = {
 
 // Chamado por frontend/src/main.tsx com o primeiro host (#automacao-aviso-login, data-react-painel="chrome-automation").
 // A aba tem seis raízes, uma por <section> com data-automacao-regiao, porque o cartão Sebrae entre elas é HTML estático.
-// O código antigo chama as ações pela ponte (frontend/src/aplicacao/pontes.ts).
+// A aplicação chama as ações pela ponte (frontend/src/aplicacao/pontes.ts).
 export function montar(_container: HTMLElement) {
   document.querySelectorAll<HTMLElement>("[data-automacao-regiao]").forEach(host => {
     const desenhar = REGIOES[host.dataset.automacaoRegiao || ""];

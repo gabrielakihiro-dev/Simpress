@@ -154,5 +154,5 @@ export function createLoggedUserMarkers(context: Qualquer) {
   return { marcador, conectar, tituloManual, textoAmbiguo, TITULO_AMBIGUO };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e pelos montar.tsx de cartao-equipamento e resultado-comparacao.
 if (typeof window !== "undefined") window.SimpressLoggedUserMarkers = createLoggedUserMarkers;

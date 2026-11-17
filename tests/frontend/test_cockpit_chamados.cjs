@@ -9,7 +9,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const { legadoDir } = require("./support/app-sources.cjs");
+const { aplicacaoDir, arranqueDir } = require("./support/app-sources.cjs");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const createCockpitChamados = require("../../frontend/src/aplicacao/registro.ts").fabricas.cockpitChamados;
 
@@ -38,7 +38,7 @@ test("grupoTriagemChamado separa ativos em 3+ dias, sem data e atualizados, e ig
 
 const root = path.resolve(__dirname, "../..");
 const painelReact = path.join(root, "frontend/src/paineis/cockpit-chamados");
-const lido = arquivo => fs.readFileSync(path.join(legadoDir, arquivo), "utf8");
+const lido = arquivo => fs.readFileSync(path.join(arranqueDir, arquivo), "utf8");
 
 const ACOES_REACT = [
   "sincronizarGestaoChamadosCockpit", "selecionarVersaoChamadosCockpit", "excluirImportacoesAntigasChamadosCockpit",
@@ -58,10 +58,10 @@ function ponteFalsa(acao) {
   return { chamadas, feature: createCockpitChamados(context) };
 }
 
-test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e com o painel React ao lado", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
+test("registro: módulo importado em arranque/entrada.ts, publicado no FEATURE_ORDER e com o painel React ao lado", () => {
+  assert.match(lido("entrada.ts"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
   assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.cockpitChamados, "function");
-  assert.match(lido("app.js"), /"cockpitChamados",/);
+  assert.match(fs.readFileSync(path.join(aplicacaoDir, "app.ts"), "utf8"), /"cockpitChamados",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   assert.ok(fs.existsSync(path.join(painelReact, "cockpit-chamados-puro.ts")));
 });

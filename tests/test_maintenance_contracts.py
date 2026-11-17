@@ -33,7 +33,8 @@ with patch(
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-LEGADO_DIR = PROJECT_ROOT / "frontend" / "src" / "legado"
+SRC_DIR = PROJECT_ROOT / "frontend" / "src"
+ARRANQUE_DIR = SRC_DIR / "arranque"
 
 
 def _css_layer(selector: str) -> int:
@@ -119,16 +120,26 @@ def _run_local_safety_middleware(
 
 
 def _frontend_script() -> str:
-    """Application modules in the explicit browser entry order."""
-    entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
-    files = re.findall(r'^\s*import\s+["\'](?:\./)?([^"\']+\.(?:js|ts))["\'];?\s*$', entry, re.MULTILINE)
+    """Application modules in the explicit browser entry order (frontend/src/arranque/entrada.ts)."""
+    entry = (ARRANQUE_DIR / "entrada.ts").read_text(encoding="utf-8")
+    files = re.findall(r'^\s*import\s+["\'](?:\./)?([^"\']+\.ts)["\'];?\s*$', entry, re.MULTILINE)
+    # Os módulos finos de arranque/ valem pelo módulo que eles ligam.
+    delegated = {
+        "instalar-action-dispatcher.ts": "../ui/action-dispatcher.ts",
+        "iniciar-aplicacao.ts": "../aplicacao/app.ts",
+        "instalar-ux-enhancements.ts": "../ui/ux-enhancements.ts",
+    }
     sources = []
     for name in files:
-        # O registro das features (aplicacao/registro.ts) vale por todos os módulos de frontend/src/aplicacao/.
+        # O registro das features (aplicacao/registro.ts) vale por todos os módulos de frontend/src/aplicacao/, menos o arranque app.ts.
         if name == "../aplicacao/registro.ts":
-            sources.extend(arquivo.read_text(encoding="utf-8") for arquivo in sorted((LEGADO_DIR.parent / "aplicacao").glob("*.ts")))
+            sources.extend(
+                arquivo.read_text(encoding="utf-8")
+                for arquivo in sorted((SRC_DIR / "aplicacao").glob("*.ts"))
+                if arquivo.name != "app.ts"
+            )
         else:
-            sources.append((LEGADO_DIR / name).read_text(encoding="utf-8"))
+            sources.append((ARRANQUE_DIR / delegated.get(name, name)).read_text(encoding="utf-8"))
     return "\n".join(sources)
 
 
@@ -301,7 +312,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../frontend/src/aplicacao/**/*.ts", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"]', configuration)
+        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/aplicacao/**/*.ts", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
@@ -368,7 +379,7 @@ class MaintenanceContractTests(unittest.TestCase):
         script = _frontend_script() + "\n" + _react_panels_source()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
-        outlook = (LEGADO_DIR.parent / "aplicacao" / "pontes.ts").read_text(encoding="utf-8")
+        outlook = (SRC_DIR / "aplicacao" / "pontes.ts").read_text(encoding="utf-8")
         # O resto do HTML já traz o exemplo "nome@pr.sebrae.com.br" do termo; o e-mail pelo Outlook não pode ter domínio real.
         modal_email = html.split('id="modal-email-outlook"', 1)[1].split('id="modal-confirmar-acao"', 1)[0]
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
@@ -734,24 +745,24 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("simpress:table-density", bundle)
         self.assertIn("Abrir históricos e análises", bundle)
         self.assertLess(bundle.index(".SimpressActionDispatcher="), bundle.index("data-react-painel"))
-        entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
+        entry = (ARRANQUE_DIR / "entrada.ts").read_text(encoding="utf-8")
         self.assertIn('import "../comum/transfer-utils.ts";', entry)
         for name in ("coverage-model.js", "transfer-history.js", "chamados-os-model.js", "data-panels.js"):
             self.assertNotIn(name, entry)
         self.assertIn('import "../comum/sebrae-dashboard-model.ts";', entry)
         self.assertIn('import "../aplicacao/registro.ts";', entry)
-        self.assertIn('import "./app.js";', entry)
+        self.assertIn('import "./iniciar-aplicacao.ts";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
-        self.assertTrue((LEGADO_DIR / "app.js").is_file())
-        self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
-        self.assertTrue((LEGADO_DIR.parent / "comum/transfer-utils.ts").is_file())
+        self.assertTrue((SRC_DIR / "aplicacao" / "app.ts").is_file())
+        self.assertTrue((ARRANQUE_DIR / "entrada.ts").is_file())
+        self.assertTrue((SRC_DIR / "comum/transfer-utils.ts").is_file())
         self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
         for name in ("../comum/sebrae-dashboard-model.ts", "../aplicacao/registro.ts"):
-            self.assertTrue((LEGADO_DIR / name).is_file(), name)
+            self.assertTrue((ARRANQUE_DIR / name).is_file(), name)
         for name in ("shared/coverage-model.js", "ui/transfer-history.js", "shared/chamados-os-model.js", "ui/data-panels.js"):
-            self.assertFalse((LEGADO_DIR / name).exists(), name)
-        paineis = LEGADO_DIR.parent / "paineis"
+            self.assertFalse((SRC_DIR / "legado" / name).exists(), name)
+        paineis = SRC_DIR / "paineis"
         for name in ("cobertura/modelo.ts", "historico-transferencias/montar.tsx", "historico-transferencias/vinculo.ts",
                      "paineis-dados/chamados-os.ts", "paineis-dados/paineis.ts", "paineis-dados/tabela-os.ts",
                      "paineis-dados/utilitarios.ts", "paineis-dados/montar.tsx"):
@@ -803,7 +814,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = assembled_html(app_config.STATIC_DIR)
-        dialog_script = (LEGADO_DIR.parent / "ui/accessible-dialogs.ts").read_text(encoding="utf-8")
+        dialog_script = (SRC_DIR / "ui/accessible-dialogs.ts").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
         self.assertGreater(len(dialogs), 0)

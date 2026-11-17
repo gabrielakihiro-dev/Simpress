@@ -4,7 +4,7 @@ type Qualquer = any;
 
 export function createEquipmentSearchRenderers(context: Qualquer) {
   const { escapeHtml, highlightMatch } = context.dom;
-  // Read when rendering: app.js sets context.loggedUserMarkers after this module loads.
+  // Read when rendering: app.ts sets context.loggedUserMarkers after this module loads.
   const tituloManual = (informadoEm: Qualquer): string => context.loggedUserMarkers?.tituloManual?.(informadoEm) || "Usuário logado informado manualmente";
   const textoAmbiguo = (candidatos: Qualquer): string => context.loggedUserMarkers?.textoAmbiguo?.(candidatos) || "";
 
@@ -132,5 +132,5 @@ export function createEquipmentSearchRenderers(context: Qualquer) {
   return { criarLinhaAutocomplete, criarLinhaPesquisaCompleta };
 }
 
-// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+// Publicação em window, lida por frontend/src/aplicacao/app.ts e por paineis/pesquisa-equipamento/montar.tsx.
 if (typeof window !== "undefined") window.SimpressEquipmentSearchRenderers = createEquipmentSearchRenderers;

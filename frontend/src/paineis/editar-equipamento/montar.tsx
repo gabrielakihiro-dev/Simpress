@@ -4,7 +4,7 @@ import { Dialogo } from "./dialogo";
 import { abrirModalEditarEquipamento, cadastrarNovoSerial, fecharModalEditarEquipamento, salvarDadosEquipamento } from "./estado";
 
 // Chamado por frontend/src/main.tsx com o .ck-dialogo do #modal-editar-equipamento (data-react-painel="editar-equipamento").
-// As ações são chamadas pelo código antigo pela ponte (frontend/src/aplicacao/pontes.ts); cadastrarNovoSerial
+// As ações são chamadas pela aplicação pela ponte (frontend/src/aplicacao/pontes.ts); cadastrarNovoSerial
 // só a ponte usa (cadastrarNovoSerialPesquisado) e não vira função global.
 export function montar(container: HTMLElement) {
   const raiz = createRoot(container);

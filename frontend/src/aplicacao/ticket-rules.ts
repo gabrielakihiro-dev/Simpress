@@ -11,7 +11,7 @@ const nomes = [
 
 // Todas síncronas: os chamadores (renderizadores, ordenação, filtros) usam o retorno na hora e só rodam depois do
 // evento simpress:react-pronto. Antes disso o painel ainda não existe: registra o erro e devolve undefined.
-// context.ponteReactSincrona ainda não existe quando esta fábrica roda (ela entra no literal de context em app.js),
+// context.ponteReactSincrona ainda não existe quando esta fábrica roda (ela entra no literal de context em app.ts),
 // por isso o encaminhamento lê window.SimpressReact direto, a cada chamada.
 export function createTicketRules(): Record<string, (...argumentos: Qualquer[]) => Qualquer> {
   return Object.fromEntries(nomes.map(nome => [nome, (...argumentos: Qualquer[]) => {

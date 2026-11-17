@@ -62,7 +62,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 10 partes de ~11 min de teste (~12,4 min de job, com ~1,4 min de preparo); limite do usuário: 15 min.
+        # 11 partes desde a react-final-3 (17/11/2026): o shard 1 passou de 15 min na #282. Pela soma de testes do
+        # run 44160983306, o 11 recebeu react-g9 e react-bf4 (do 1), react-g7b e ticket-requests (do 8) e react-g2
+        # (do 10): previsão de teste 1 ~6,9 · 8 ~11,0 · 10 ~9,9 · 11 ~5,3 min, mais ~1,4 min de preparo.
+        # Antes: 10 partes de ~11 min de teste (~12,4 min de job, com ~1,4 min de preparo); limite do usuário: 15 min.
         # Com 8 partes a soma (~110 min) dava ~15 por parte: o run 43809541042 de 16/11/2026 teve job 6 com 17,5 min.
         # Divisão pelo tempo de relógio de cada spec nesse run (desktop + mobile; react-g10 estimado em ~2 min):
         # previsão de job 1 ~12,4 · 2 ~12,3 · 3 ~12,5 · 4 ~12,7 · 5 ~12,3 · 6 ~13,5 · 7 ~12,4 · 8 ~12,3 · 9 ~12,6 · 10 ~12,4.
@@ -79,8 +82,7 @@ jobs:
         include:
           - shard: 1
             specs: >-
-              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs react-g9.spec.cjs
-              react-bf4.spec.cjs
+              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs
@@ -107,13 +109,15 @@ jobs:
           - shard: 8
             specs: >-
               react-g7.spec.cjs termos.spec.cjs os-subabas.spec.cjs react-g8.spec.cjs
-              ticket-requests.spec.cjs react-g7b.spec.cjs
           - shard: 9
             specs: >-
               sebrae-dashboard.spec.cjs info-tips-resumo.spec.cjs react-bf3.spec.cjs
           - shard: 10
             specs: >-
-              ui.spec.cjs react-g2.spec.cjs ux-ticket.spec.cjs first-access.spec.cjs react-final-c.spec.cjs
+              ui.spec.cjs ux-ticket.spec.cjs first-access.spec.cjs react-final-c.spec.cjs
+          - shard: 11
+            specs: >-
+              react-g9.spec.cjs react-bf4.spec.cjs react-g7b.spec.cjs ticket-requests.spec.cjs react-g2.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

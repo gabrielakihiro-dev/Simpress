@@ -1,50 +1,56 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Bootstrap: builds the shared context, creates the feature modules in frontend/src/aplicacao/ (registro.ts),
- * publishes their actions on the page scope and starts the page once the DOM is ready.
+ * Arranque: monta o contexto compartilhado, cria os módulos de feature de frontend/src/aplicacao/registro.ts,
+ * publica as ações no escopo da página e inicia a página quando o DOM estiver pronto.
  *
- * Actions live on window because data-on-* attributes (frontend/src/legado/ui/action-dispatcher.js, which
- * runs only the feature actions registered below), modal close handlers
- * (frontend/src/ui/accessible-dialogs.ts) and the enhancement scripts
- * resolve them there. Features call each other through `app` as well, so an action that is
- * replaced on window (tests, enhancements) takes effect everywhere.
+ * As ações ficam em window porque os atributos data-on-* (frontend/src/ui/action-dispatcher.ts, que roda só as
+ * ações das features registradas abaixo), os fechamentos de diálogo (frontend/src/ui/accessible-dialogs.ts) e
+ * os scripts de melhoria as resolvem ali. As features chamam umas às outras por `app` também, então uma ação
+ * substituída em window (testes, melhorias) vale em todo lugar.
+ *
+ * `iniciar(app)` roda uma vez por carga da página (frontend/src/arranque/iniciar-aplicacao.ts); não há estado no topo do módulo,
+ * para os testes poderem iniciar de novo com outro `window` falso sem recarregar o arquivo.
  */
-(function bootstrap(app) {
-  "use strict";
+import { fabricas } from "./registro.ts";
+import { createTicketRules } from "./ticket-rules.ts";
 
-  const FEATURE_ORDER = Object.freeze([
-    "shell",
-    "dashboard",
-    "resumoAtivos",
-    "backupsRegionais",
-    "cockpitToolPanels",
-    "regionalContacts",
-    "transferForm",
-    "equipmentSearch",
-    "uxChamados",
-    "uxTicket",
-    "fullEquipmentSearch",
-    "unitsCatalog",
-    "inventoryUpload",
-    "entraUsers",
-    "comparisonResult",
-    "comparisonHistory",
-    "cockpitChamados",
-    "equipmentEditor",
-    "aliasHistory",
-    "monthlyReport",
-    "sebraeDashboard",
-    "sebraeHistorico",
-    "sebraeConflitos",
-    "chromeAutomation",
-    "assistantChat",
-    "coverage",
-    "termos",
-    "lembretes",
-    "outlookEmail",
-    "equipmentDossier",
-    "configuracaoLocal",
-  ]);
+type Qualquer = any;
 
+const FEATURE_ORDER = Object.freeze([
+  "shell",
+  "dashboard",
+  "resumoAtivos",
+  "backupsRegionais",
+  "cockpitToolPanels",
+  "regionalContacts",
+  "transferForm",
+  "equipmentSearch",
+  "uxChamados",
+  "uxTicket",
+  "fullEquipmentSearch",
+  "unitsCatalog",
+  "inventoryUpload",
+  "entraUsers",
+  "comparisonResult",
+  "comparisonHistory",
+  "cockpitChamados",
+  "equipmentEditor",
+  "aliasHistory",
+  "monthlyReport",
+  "sebraeDashboard",
+  "sebraeHistorico",
+  "sebraeConflitos",
+  "chromeAutomation",
+  "assistantChat",
+  "coverage",
+  "termos",
+  "lembretes",
+  "outlookEmail",
+  "equipmentDossier",
+  "configuracaoLocal",
+]);
+
+export function iniciar(app: Qualquer = globalThis): void {
   // State shared by more than one feature. Each feature keeps the rest of its state private.
   const appState = {
     // Equipment selected on Home; the transfer form and the equipment dialogs read it.
@@ -57,7 +63,7 @@
   };
 
   const domUtils = window.SimpressDomUtils(document);
-  const context = {
+  const context: Qualquer = {
     app,
     appState,
     dom: domUtils,
@@ -66,7 +72,7 @@
     equipmentSearchRenderer: window.SimpressEquipmentSearchRenderers,
     historyFormat: window.SimpressHistoryFormat,
     sebraeDashboardModel: window.SimpressSebraeDashboardModel,
-    ticketRules: window.SimpressTicketRules(domUtils),
+    ticketRules: createTicketRules(),
     transferUtils: window.SimpressTransferUtils,
     catalogSearch: window.SimpressCatalogSearch,
     recentEquipment: window.SimpressRecentEquipment,
@@ -78,15 +84,15 @@
   context.loggedUserMarkers = window.SimpressLoggedUserMarkers(context);
 
   // Panels migrated to React (frontend/src/paineis/<panel>/, plan docs/planos/migracao-react-vite.md).
-  // react-entry.js runs after this file and publishes each panel's actions in window.SimpressReact, so the
+  // react-entry.js runs this file first and then publishes each panel's actions in window.SimpressReact, so the
   // panel's old feature module stays in FEATURE_ORDER as a bridge: ponteReact(panel, names) returns async
   // forwarders that wait for that registry. Nothing waits until the first call; if react-entry.js never
   // loads (its script fires "error", or window "load" with no registry) or the panel failed to mount, every call rejects.
   const scriptReact = document.querySelector('script[src*="/static/dist/react-entry.js"]');
   let bundleFalhou = false;
   scriptReact?.addEventListener("error", () => { bundleFalhou = true; }, { once: true });
-  const reactPanels = new Map();
-  function waitForReactPanel(panel) {
+  const reactPanels = new Map<string, Promise<Qualquer>>();
+  function waitForReactPanel(panel: string): Promise<Qualquer> {
     if (!reactPanels.has(panel)) {
       reactPanels.set(panel, new Promise((resolve, reject) => {
         const settle = () => {
@@ -102,16 +108,16 @@
         scriptReact?.addEventListener("error", settle, { once: true });
       }));
     }
-    return reactPanels.get(panel);
+    return reactPanels.get(panel) as Promise<Qualquer>;
   }
-  context.ponteReact = (panel, names) => Object.fromEntries(names.map(name => [
+  context.ponteReact = (panel: string, names: string[]) => Object.fromEntries(names.map(name => [
     name,
-    (...args) => waitForReactPanel(panel).then(actions => actions[name](...args)),
+    (...args: Qualquer[]) => waitForReactPanel(panel).then(actions => actions[name](...args)),
   ]));
   // Ações chamadas no mesmo turno pelo código legado não podem esperar pelo boot do React.
-  context.ponteReactSincrona = (panel, names) => Object.fromEntries(names.map(name => [
+  context.ponteReactSincrona = (panel: string, names: string[]) => Object.fromEntries(names.map(name => [
     name,
-    (...args) => {
+    (...args: Qualquer[]) => {
       const action = window.SimpressReact?.[panel]?.[name];
       if (typeof action !== "function") {
         console.error(new Error(`O painel React "${panel}" não carregou.`));
@@ -121,8 +127,8 @@
     },
   ]));
 
-  const publishedBy = new Map();
-  function publish(actions, source) {
+  const publishedBy = new Map<string, string>();
+  function publish(actions: Record<string, Qualquer>, source: string): void {
     Object.entries(actions).forEach(([name, action]) => {
       if (publishedBy.has(name)) throw new Error(`A ação "${name}" foi publicada por ${publishedBy.get(name)} e por ${source}.`);
       publishedBy.set(name, source);
@@ -137,7 +143,7 @@
   publish(context.historyFormat, "historyFormat");
   publish(context.ticketRules, "ticketRules");
   FEATURE_ORDER.forEach(name => {
-    const createFeature = window.SimpressFeatures?.[name];
+    const createFeature = fabricas[name];
     if (typeof createFeature !== "function") throw new Error(`O módulo "${name}" não foi carregado.`);
     const actions = createFeature(context);
     publish(actions, name);
@@ -150,7 +156,7 @@
   });
   app.SimpressApp = Object.freeze({ state: appState });
 
-  function inicializarAplicacao() {
+  function inicializarAplicacao(): void {
     lucide.createIcons();
     app.associarRotulosAcessiveis();
     app.inicializarExportacaoAutomaticaHistorico();
@@ -174,4 +180,4 @@
   } else {
     document.addEventListener("DOMContentLoaded", inicializarAplicacao, { once: true });
   }
-})(globalThis);
+}
