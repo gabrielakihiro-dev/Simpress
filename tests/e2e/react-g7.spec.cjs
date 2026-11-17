@@ -680,7 +680,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
       await registro.fill("Prezados,\nColaborador(a) Novo(a):");
       await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeDisabled();
       await modal.getByLabel("E-mail", { exact: true }).fill("outra@exemplo.com");
-      // O ui-motion.js tira aria-invalid do campo digitado; a atualização seguinte da tela (aqui, o e-mail) o repõe, como no módulo antigo.
+      // O ui-motion.ts tira aria-invalid do campo digitado; a atualização seguinte da tela (aqui, o e-mail) o repõe, como no módulo antigo.
       await expect(registro).toHaveAttribute("aria-invalid", "true");
       retido.liberar();
       await expect(modal.getByRole("alert")).toHaveText(FALHA_CHROME.json.detail);

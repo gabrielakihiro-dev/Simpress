@@ -6,7 +6,7 @@ const test = require("node:test");
 // estado.ts importa "./renderizador" sem extensão: o hook completa ".ts" antes do require.
 require("./support/resolver-ts-sem-extensao.cjs");
 const { criarResultadoComparacao } = require("../../frontend/src/paineis/resultado-comparacao/estado.ts");
-const { requestWithRetries } = require("../../frontend/src/legado/shared/history-annotation-autosave.js");
+const { requestWithRetries } = require("../../frontend/src/comum/history-annotation-autosave.ts");
 
 const erroApi = (status, data = {}) => Object.assign(new Error(`HTTP ${status}`), { status, data });
 const respostaOk = corpo => ({ ok: true, status: 200, json: async () => corpo });

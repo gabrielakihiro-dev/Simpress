@@ -4,7 +4,7 @@ const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
-const createNotifications = require("../../frontend/src/legado/ui/ui-notifications.js");
+const { createNotifications } = require("../../frontend/src/ui/ui-notifications.ts");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
 const { appSource, legadoDir } = require("./support/app-sources.cjs");

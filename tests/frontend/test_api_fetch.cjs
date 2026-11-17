@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { apiFetch } = require("../../frontend/src/legado/shared/api-fetch.js");
+const { apiFetch } = require("../../frontend/src/api.ts");
 
 function jsonResponse(body, status = 200) {
   return new Response(body === undefined ? null : JSON.stringify(body), {

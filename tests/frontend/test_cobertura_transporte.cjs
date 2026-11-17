@@ -5,7 +5,7 @@ const path = require("node:path");
 const Module = require("node:module");
 const { pathToFileURL } = require("node:url");
 
-const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
+const transferUtils = require("../../frontend/src/comum/transfer-utils.ts");
 const { criarFormularioTransferencia } = require("../../frontend/src/paineis/transporte/estado.ts");
 
 function fakeElement() {
@@ -51,7 +51,7 @@ function bootTransferForm() {
   global.document = document;
   global.window = {
     CustomEvent: FakeCustomEvent,
-    SimpressFormDraftGuard: require("../../frontend/src/legado/shared/form-draft-guard.js"),
+    SimpressFormDraftGuard: require("../../frontend/src/comum/form-draft-guard.ts"),
     URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
   };
   global.lucide = { createIcons() {} };

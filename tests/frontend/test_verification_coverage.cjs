@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const { buildSteps, javascriptFilesToCheck, listFiles, resolveVite } = require("../../scripts/verify.cjs");
 
@@ -11,9 +13,12 @@ test("verification discovers recent-equipment tests and all five previously omit
   const checked = javascriptFilesToCheck();
   assert.ok(checked.includes("static/js/shared/theme-preference.js"));
   for (const file of [
-    "shared/recent-equipment.js", "ui/ux-enhancements.js",
+    "ui/ux-enhancements.js",
     "app-entry.js", "app.js",
   ]) assert.ok(checked.includes(`frontend/src/legado/${file}`), file);
+  // recent-equipment virou TypeScript: o tsc estrito (tsconfig.json inclui frontend/src) o cobre no lugar do node --check.
+  assert.ok(fs.existsSync(path.join(__dirname, "..", "..", "frontend", "src", "comum", "recent-equipment.ts")));
+  assert.ok(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "tsconfig.json"), "utf8")).include.includes("frontend/src"));
 });
 
 test("compileall and gradual mypy cover every Python application module", () => {

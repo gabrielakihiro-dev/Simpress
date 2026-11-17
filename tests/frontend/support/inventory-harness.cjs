@@ -3,13 +3,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./assembled-html.cjs");
 const vm = require("node:vm");
-const transferUtils = require("../../../frontend/src/legado/shared/transfer-utils.js");
-const { apiFetch: requestApi } = require("../../../frontend/src/legado/shared/api-fetch.js");
-const catalogSearch = require("../../../frontend/src/legado/shared/catalog-search-utils.js");
-const formDraftGuard = require("../../../frontend/src/legado/shared/form-draft-guard.js");
-const annotationAutosave = require("../../../frontend/src/legado/shared/history-annotation-autosave.js");
-const accessibleDialogs = require("../../../frontend/src/legado/ui/accessible-dialogs.js");
-const notifications = require("../../../frontend/src/legado/ui/ui-notifications.js");
+const transferUtils = require("../../../frontend/src/comum/transfer-utils.ts");
+const { apiFetch: requestApi, isAbortError } = require("../../../frontend/src/api.ts");
+const catalogSearch = require("../../../frontend/src/comum/catalog-search-utils.ts");
+const formDraftGuard = require("../../../frontend/src/comum/form-draft-guard.ts");
+const annotationAutosave = require("../../../frontend/src/comum/history-annotation-autosave.ts");
+const { createAccessibleDialogs: accessibleDialogs } = require("../../../frontend/src/ui/accessible-dialogs.ts");
+const { createNotifications: notifications } = require("../../../frontend/src/ui/ui-notifications.ts");
 const { criarPesquisaEquipamento } = require("../../../frontend/src/paineis/pesquisa-equipamento/estado.ts");
 const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/transporte/estado.ts");
 const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
@@ -149,13 +149,20 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
   };
   const window = {
     document,
-    SimpressDomUtils: require("../../../frontend/src/legado/shared/dom-utils.js"),
+    SimpressDomUtils: require("../../../frontend/src/comum/dom-utils.ts").createDomUtils,
     SimpressTransferUtils: transferUtils,
     SimpressCatalogSearch: catalogSearch,
     SimpressFormDraftGuard: formDraftGuard,
     HistoryAnnotationAutosave: annotationAutosave,
     SimpressAccessibleDialogs: accessibleDialogs,
     SimpressNotifications: notifications,
+    // Antes rodavam na VM e se publicavam em window; agora são TypeScript e entram por require().
+    SimpressApiErrors: require("../../../frontend/src/comum/api-errors.ts"),
+    SimpressApiFetch: { apiFetch: requestApi, isAbortError },
+    SimpressHistoryFormat: require("../../../frontend/src/comum/history-format.ts"),
+    SimpressSebraeDashboardModel: require("../../../frontend/src/comum/sebrae-dashboard-model.ts"),
+    SimpressEquipmentSearchRenderers: require("../../../frontend/src/ui/equipment-search-renderers.ts").createEquipmentSearchRenderers,
+    SimpressLoggedUserMarkers: require("../../../frontend/src/ui/logged-user-markers.ts").createLoggedUserMarkers,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
     localStorage: {
       getItem: key => localStorage.get(key) ?? null,

@@ -596,7 +596,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     return descricao ? `<div class="info-tip-ancora flex items-center gap-1">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
   }
 
-  // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.js
+  // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.ts
   // anima do zero até eles e aplica as larguras de data-bento-largura (CSP: nada de style= no HTML).
   const ICONES_BENTO: Record<string, string> = {
     notebook: '<rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M2 20h20"></path>',

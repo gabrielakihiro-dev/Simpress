@@ -1,5 +1,5 @@
 module.exports = {
-  content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../static/js/**/*.js"],
+  content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"],
   darkMode: "class",
   theme: {
     extend: {

@@ -6,7 +6,7 @@ const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { createAppHarness } = require("./support/inventory-harness.cjs");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const sebraeDashboardModel = require("../../frontend/src/legado/shared/sebrae-dashboard-model.js");
+const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const criarPonte = require("../../frontend/src/legado/features/sebrae-dashboard.js");
 

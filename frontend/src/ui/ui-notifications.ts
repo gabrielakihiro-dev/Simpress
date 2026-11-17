@@ -1,16 +1,14 @@
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.SimpressNotifications = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createNotifications(options) {
-  "use strict";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Qualquer = any;
 
+export function createNotifications(options: Qualquer) {
   const { document, window, lucide, motion, createIcon } = options;
 
-  const statuses = Object.freeze({ success: "ok", error: "erro", warning: "alerta", info: "info" });
-  const icons = Object.freeze({ success: "check-circle", error: "alert-circle", warning: "alert-triangle", info: "info" });
+  const statuses: Readonly<Record<string, string>> = Object.freeze({ success: "ok", error: "erro", warning: "alerta", info: "info" });
+  const icons: Readonly<Record<string, string>> = Object.freeze({ success: "check-circle", error: "alert-circle", warning: "alert-triangle", info: "info" });
 
   // Lets progressive enhancements (e.g. "Copiado!" on the clicked button) react to the outcome.
-  function announce(message, type) {
+  function announce(message: unknown, type: string): void {
     try {
       if (typeof document.dispatchEvent !== "function" || typeof window.CustomEvent !== "function") return;
       document.dispatchEvent(new window.CustomEvent("simpress:notify", {
@@ -21,7 +19,7 @@
     }
   }
 
-  function show(message, type = "success") {
+  function show(message: unknown, type: string = "success"): void {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.setAttribute("role", type === "error" ? "alert" : "status");
@@ -46,4 +44,7 @@
   }
 
   return Object.freeze({ show });
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") window.SimpressNotifications = createNotifications;

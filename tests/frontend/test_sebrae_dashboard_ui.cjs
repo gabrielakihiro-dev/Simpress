@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarDashboardSebrae: createSebraeDashboard } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
-const sebraeDashboardModel = require("../../frontend/src/legado/shared/sebrae-dashboard-model.js");
+const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,

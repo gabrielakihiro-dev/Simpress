@@ -1,24 +1,23 @@
 /** Logged user shown next to a series (Histórico de Planilhas rows, ticket cards), with the Home rule. */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.SimpressLoggedUserMarkers = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createLoggedUserMarkers(context) {
-  "use strict";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Qualquer = any;
+
+export function createLoggedUserMarkers(context: Qualquer) {
   const { app, appState } = context;
   const { escapeHtml } = context.dom;
 
   // "2026-10-20T09:15:00-03:00" -> "20/10/2026", read as written so the time zone never shifts the day.
-  const dataInformada = valor => {
+  const dataInformada = (valor: Qualquer): string => {
     const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(valor || "").trim());
     return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : "";
   };
   // Manual users saved before the date was recorded have none.
-  const tituloManual = informadoEm => {
+  const tituloManual = (informadoEm: Qualquer): string => {
     const data = dataInformada(informadoEm);
     return data ? `Informado manualmente em ${data}` : "Informado manualmente (data não registrada)";
   };
   // A series repeated in the Endpoint: its users are shown, none is chosen as the logged user.
-  const textoAmbiguo = candidatos => {
+  const textoAmbiguo = (candidatos: Qualquer): string => {
     const lista = (Array.isArray(candidatos) ? candidatos : []).map(item => String(item || "").trim()).filter(Boolean);
     return lista.length ? `Endpoint ambíguo: ${lista.join(" / ")}` : "";
   };
@@ -26,7 +25,7 @@
 
   // Empty placeholder filled by conectar(); a row without a series gets none. `sugestao` is a manual user
   // archived when the Endpoint informed one: it only pre-fills the field, and nothing is saved until confirmed.
-  const marcador = (serie, { sugestao = "" } = {}) => String(serie || "").trim()
+  const marcador = (serie: Qualquer, { sugestao = "" }: { sugestao?: Qualquer } = {}): string => String(serie || "").trim()
     ? `<span class="logged-user" data-logged-user data-logged-user-serie="${escapeHtml(String(serie).trim())}"${String(sugestao || "").trim()
       ? ` data-logged-user-sugestao="${escapeHtml(String(sugestao).trim())}"`
       : ""}></span>`
@@ -34,14 +33,14 @@
 
   // The Endpoint user wins and a manual user (M) fills the gap. Equipment in the Simpress base without a
   // user gets a field; the value saved here is the same one the Home search uses.
-  function conectar(container) {
+  function conectar(container: Qualquer): void {
     if (typeof container?.querySelectorAll !== "function") return;
-    const marcadores = () => Array.from(container.querySelectorAll("[data-logged-user]"));
+    const marcadores = (): Qualquer[] => Array.from(container.querySelectorAll("[data-logged-user]"));
     const series = [...new Set(marcadores().map(item => item.dataset.loggedUserSerie).filter(Boolean))];
     if (!series.length) return;
-    const usuarios = {};
+    const usuarios: Record<string, Qualquer> = {};
 
-    const mostrar = serie => {
+    const mostrar = (serie: Qualquer): void => {
       const info = usuarios[serie] || {};
       marcadores().filter(item => item.dataset.loggedUserSerie === serie).forEach(item => {
         const usuario = String(info.usuario || "").trim();
@@ -80,16 +79,16 @@
       });
     };
 
-    const formularioUsuario = (serie, valor, rotuloBotao = "Salvar usuário") => `
+    const formularioUsuario = (serie: Qualquer, valor: Qualquer, rotuloBotao: string = "Salvar usuário"): string => `
       <form class="logged-user-form" data-logged-user-form autocomplete="off">
         <input type="text" maxlength="160" class="equipment-user-input" value="${escapeHtml(valor)}" placeholder="Digite o usuário" aria-label="${escapeHtml(`Usuário logado da série ${serie}`)}">
         <button type="submit" class="btn btn-secondary equipment-user-button">${escapeHtml(rotuloBotao)}</button>
       </form>`;
 
-    const conectarFormulario = (item, serie) => {
+    const conectarFormulario = (item: Qualquer, serie: Qualquer): void => {
       const form = item.querySelector("[data-logged-user-form]");
       if (!form) return;
-      form.addEventListener("submit", async event => {
+      form.addEventListener("submit", async (event: Qualquer) => {
         event.preventDefault();
         const campo = form.querySelector("input");
         const botao = form.querySelector("button");
@@ -130,7 +129,7 @@
           app.showToast("Usuário salvo e registrado no histórico de alterações.", "success");
           const EventConstructor = document.defaultView?.CustomEvent;
           if (EventConstructor) document.dispatchEvent(new EventConstructor("simpress:usuarios-equipamento-atualizados"));
-        } catch (error) {
+        } catch (error: Qualquer) {
           console.error("Erro ao salvar usuário logado:", error);
           app.showToast(error.message || "Falha ao salvar o usuário.", "error");
           botao.disabled = false;
@@ -145,12 +144,15 @@
       body: JSON.stringify({ series }),
       errorMessage: "Não foi possível consultar os usuários logados.",
     })
-      .then(data => {
+      .then((data: Qualquer) => {
         Object.assign(usuarios, data?.usuarios || {});
         series.forEach(mostrar);
       })
-      .catch(error => console.error("Erro ao consultar usuários logados:", error));
+      .catch((error: Qualquer) => console.error("Erro ao consultar usuários logados:", error));
   }
 
   return { marcador, conectar, tituloManual, textoAmbiguo, TITULO_AMBIGUO };
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") window.SimpressLoggedUserMarkers = createLoggedUserMarkers;

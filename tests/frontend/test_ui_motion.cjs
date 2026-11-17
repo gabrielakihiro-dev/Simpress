@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const createMotion = require("../../frontend/src/legado/ui/ui-motion.js");
+const { createMotion } = require("../../frontend/src/ui/ui-motion.ts");
 
 class Element {
   constructor() {

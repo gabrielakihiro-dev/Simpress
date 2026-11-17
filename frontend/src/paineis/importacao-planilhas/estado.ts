@@ -87,7 +87,7 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
   const ARQUIVOS_ATUALIZACAO_PLANILHAS = ["upload-endpoint-file", "upload-details-file", "entra-csv-file"];
 
-  // O nome e o estado do arquivo são desenhados por ui/file-picker.js a partir do evento change.
+  // O nome e o estado do arquivo são desenhados por ui/file-picker.ts a partir do evento change.
   function redesenharSeletorArquivo(input: HTMLElement) {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }

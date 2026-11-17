@@ -92,7 +92,7 @@ interface Portao {
   isCurrent(id: number): boolean;
 }
 const portoes: Partial<Record<"evolucao" | "home", Portao>> = {};
-// Criado na primeira consulta: o shared/transfer-utils.js já está carregado, mas o módulo nasce antes.
+// Criado na primeira consulta: o comum/transfer-utils.ts já está carregado, mas o módulo nasce antes.
 const portao = (nome: "evolucao" | "home"): Portao => (portoes[nome] ??= window.SimpressTransferUtils.createRequestGate());
 
 const mensagemDe = (erro: unknown, padrao: string) => (erro as Error | undefined)?.message || padrao;
