@@ -1,6 +1,6 @@
 /**
  * Cobertura de equipamentos (F10): necessidades, disponíveis, reservas, movimentações e devoluções por cidade.
- * Migrado para React no Grupo 6: o painel vive em frontend/src/paineis/cobertura/ (regras de tela em shared/coverage-model.js).
+ * Migrado para React no Grupo 6: o painel vive em frontend/src/paineis/cobertura/ (regras de tela em paineis/cobertura/modelo.ts).
  * Este módulo é só a ponte que mantém a ação carregarCobertura publicada para o código antigo.
  */
 (function (root, factory) {

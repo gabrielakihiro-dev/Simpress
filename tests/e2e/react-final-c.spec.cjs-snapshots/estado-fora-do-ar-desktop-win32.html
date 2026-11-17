@@ -1,0 +1,36 @@
+<div class="border-b border-line-quiet flex items-center justify-between pb-4">
+<div class="flex items-center space-x-2.5">
+<svg class="h-5 lucide lucide-history text-brand-400 w-5"/>
+<h3 class="font-bold text-base text-white" id="modal-historico-transferencias-titulo">
+Transferências geradas
+<span class="info-tip">
+<button aria-describedby="tip-transferencias-geradas" aria-label="Sobre Transferências geradas" class="info-tip-trigger" type="button">
+<svg class="ck-ico ck-ico--sm"/>
+</button>
+<span class="info-tip-text" id="tip-transferencias-geradas" role="tooltip">
+Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.
+</span>
+</span>
+</h3>
+</div>
+<button aria-label="Fechar transferências geradas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-on-click="fecharModalHistoricoTransferencias" type="button">
+<svg class="h-5 lucide lucide-x w-5"/>
+</button>
+</div>
+<div class="pt-4 shrink-0">
+<label class="block font-semibold mb-1 text-fg-tertiary text-xs" for="filtro-historico-transferencias">
+Buscar por série, cidade, destinatário ou observação
+</label>
+<input autocomplete="off" class="focus:outline-none glass-input px-3.5 py-2.5 rounded-lg text-fg-emphasis text-sm w-full" id="filtro-historico-transferencias" placeholder="Ex.: BRJ5512FGD ou Londrina" type="search"></input>
+<p aria-live="polite" class="mt-2 text-fg-subtle text-xs" id="historico-transferencias-status" role="status"></p>
+</div>
+<div aria-label="Transferências geradas" class="flex-1 min-h-0 overflow-y-auto py-3" id="lista-historico-transferencias">
+<p class="py-8 text-center text-rose-300 text-sm" role="alert">
+Não foi possível carregar o histórico de transferências.
+</p>
+</div>
+<div class="border-line-quiet border-t flex gap-3 items-center justify-end pt-3 shrink-0">
+<button class="ck-btn ck-btn--secundario" data-on-click="fecharModalHistoricoTransferencias" type="button">
+Fechar
+</button>
+</div>

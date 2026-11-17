@@ -716,15 +716,19 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(re.findall(r'<script type="module" src="([^"]+)"></script>', html), ["/static/dist/react-entry.js"])
         self.assertTrue((app_config.STATIC_DIR / "dist" / "react-entry.js").is_file())
         bundle = (app_config.STATIC_DIR / "dist" / "react-entry.js").read_text(encoding="utf-8")
-        for global_name in ("SimpressTransferUtils", "SimpressCoverageModel", "SimpressChamadosOsModel", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
+        for global_name in ("SimpressTransferUtils", "SimpressChamadosOsModel", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
             self.assertIn(global_name, bundle)
+        # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis: sem global antigo.
+        for global_name in ("SimpressCoverageModel", "SimpressCoberturaVinculo", "SimpressTransferHistory"):
+            self.assertNotIn(global_name, bundle)
         # Globais que só o código antigo publica: provam que o legado entrou no bundle e roda antes dos painéis.
         self.assertIn(".SimpressActionDispatcher=", bundle)
         self.assertIn(".SimpressDataPanels=", bundle)
         self.assertLess(bundle.index(".SimpressActionDispatcher="), bundle.index("data-react-painel"))
         entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
         self.assertIn('import "./shared/transfer-utils.js";', entry)
-        self.assertIn('import "./shared/coverage-model.js";', entry)
+        self.assertNotIn("coverage-model.js", entry)
+        self.assertNotIn("transfer-history.js", entry)
         self.assertIn('import "./shared/chamados-os-model.js";', entry)
         self.assertIn('import "./shared/sebrae-dashboard-model.js";', entry)
         self.assertIn('import "./features/coverage.js";', entry)
@@ -735,8 +739,13 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
         self.assertTrue((LEGADO_DIR / "shared/transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
-        for name in ("shared/coverage-model.js", "shared/chamados-os-model.js", "shared/sebrae-dashboard-model.js", "features/coverage.js"):
+        for name in ("shared/chamados-os-model.js", "shared/sebrae-dashboard-model.js", "features/coverage.js"):
             self.assertTrue((LEGADO_DIR / name).is_file(), name)
+        for name in ("shared/coverage-model.js", "ui/transfer-history.js"):
+            self.assertFalse((LEGADO_DIR / name).exists(), name)
+        paineis = LEGADO_DIR.parent / "paineis"
+        for name in ("cobertura/modelo.ts", "historico-transferencias/montar.tsx", "historico-transferencias/vinculo.ts"):
+            self.assertTrue((paineis / name).is_file(), name)
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0-subset.js").is_file())

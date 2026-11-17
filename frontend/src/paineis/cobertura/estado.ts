@@ -1,7 +1,9 @@
 // Estado da Cobertura (F10), fora do componente: o código antigo chama carregarCobertura pela ponte
 // antes ou depois de o React desenhar o painel. Toda leitura e escrita passa por apiFetch.
 import { apiFetch, type ApiFetchError } from "../../api";
-import { appAntigo, modelo, type Aba, type Dados, type Registro } from "./tipos";
+import { pendenciaSemVinculo } from "../historico-transferencias/vinculo";
+import * as modelo from "./modelo";
+import { appAntigo, type Aba, type Dados, type Registro } from "./tipos";
 
 export interface Estado {
   dados: Dados | null;
@@ -80,7 +82,7 @@ export async function escrever(url: string, corpo: unknown, sucesso?: string): P
     return r.corpo || {};
   }
   if (r.status === 404 || r.status === 409 || r.status === 503) await carregarCobertura();
-  avisar(modelo().mensagemErro(r.corpo, r.status), "error");
+  avisar(modelo.mensagemErro(r.corpo, r.status), "error");
   return null;
 }
 
@@ -114,18 +116,18 @@ async function lerCobertura(): Promise<boolean> {
     if (!r.ok || !r.corpo) {
       mudar({
         dados: null, alertas: [], contagens: {}, bloqueado: true,
-        status: { texto: modelo().mensagemErro(r.corpo, r.status), tipo: "erro" },
+        status: { texto: modelo.mensagemErro(r.corpo, r.status), tipo: "erro" },
       });
       return false;
     }
     const dados = r.corpo;
-    const pendencias = window.SimpressCoberturaVinculo?.pendenciaSemVinculo?.() || [];
+    const pendencias = pendenciaSemVinculo();
     mudar({
       dados, bloqueado: false,
-      alertas: modelo().alertas(dados, pendencias),
-      contagens: modelo().contagensAbas(dados),
+      alertas: modelo.alertas(dados, pendencias),
+      contagens: modelo.contagensAbas(dados),
       versao: estado.versao + 1,
-      status: { texto: `Cobertura atualizada em ${modelo().formatarData(dados.hoje)}.`, tipo: "info" },
+      status: { texto: `Cobertura atualizada em ${modelo.formatarData(dados.hoje)}.`, tipo: "info" },
     });
     return true;
   } finally {
@@ -133,7 +135,7 @@ async function lerCobertura(): Promise<boolean> {
   }
 }
 
-// transfer-history.js avisa quando uma planilha de Transporte é vinculada; só relê se a tela já foi aberta.
+// ../historico-transferencias/vinculo.ts avisa (simpress:cobertura-atualizada) quando uma planilha de Transporte é vinculada; só relê se a tela já foi aberta.
 export function aoAtualizar() {
   if (carregouAlgumaVez) void carregarCobertura();
 }

@@ -1,9 +1,11 @@
 // Cobertura → Transporte: o Simpress só preenche o formulário e liga a planilha que o operador baixou.
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const path = require("node:path");
+const Module = require("node:module");
+const { pathToFileURL } = require("node:url");
 
 const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
-const history = require("../../frontend/src/legado/ui/transfer-history.js");
 const { criarFormularioTransferencia } = require("../../frontend/src/paineis/transporte/estado.ts");
 
 function fakeElement() {
@@ -159,7 +161,7 @@ test("selecionarUnidadePorCidade compara a cidade inteira, sem acento e sem caix
   assert.deepEqual(escolhidas, [["entrega", "Campo"], ["entrega", "São Paulo"]]);
 });
 
-// ------------------------------------------------------------------ transfer-history: vínculo com a cobertura
+// ------------------------------------------------------------------ historico-transferencias/vinculo.ts: vínculo com a cobertura
 
 function fakeStorage({ throws = false } = {}) {
   const data = new Map();
@@ -172,23 +174,46 @@ function fakeStorage({ throws = false } = {}) {
   };
 }
 
-function installHistory({ responses, storage = fakeStorage() }) {
+// vinculo.ts guarda estado no módulo (pendências em memória e o ouvinte já registrado): cada teste importa uma
+// instância nova (query diferente) e o apiFetch vira o fake publicado em globalThis.
+const VINCULO = path.resolve(__dirname, "../../frontend/src/paineis/historico-transferencias/vinculo.ts");
+Module.registerHooks({
+  resolve(especificador, contexto, proximo) {
+    const doVinculo = /historico-transferencias[\/]vinculo\.ts(\?.*)?$/.test(contexto.parentURL || "");
+    if (doVinculo && especificador === "../../api") return { url: "simpress-teste:api", format: "module", shortCircuit: true };
+    if (doVinculo && especificador === "./historico-transferencias-puro") return proximo(`${especificador}.ts`, contexto);
+    return proximo(especificador, contexto);
+  },
+  load(url, contexto, proximo) {
+    if (url === "simpress-teste:api") {
+      return { format: "module", shortCircuit: true, source: "export const apiFetch = (...argumentos) => globalThis.__apiFetchFalso(...argumentos);" };
+    }
+    return proximo(url, contexto);
+  },
+});
+const { ENDPOINT } = require("../../frontend/src/paineis/historico-transferencias/historico-transferencias-puro.ts");
+
+let instancias = 0;
+async function installHistory({ responses, storage = fakeStorage() }) {
   const document = fakeDocument();
   const requests = [];
   const toasts = [];
-  const win = {
-    document, CustomEvent: FakeCustomEvent, localStorage: storage, console: { warn() {} },
-    setTimeout, clearTimeout,
-    showToast: (message, type) => toasts.push([message, type]),
-    fetch: async (url, init) => {
-      requests.push({ url, body: init?.body ? JSON.parse(init.body) : null });
-      const next = responses.shift();
-      if (next instanceof Error) throw next;
-      return { ok: next.status < 400, status: next.status, json: async () => next.body };
-    },
+  const warns = [];
+  Object.defineProperty(globalThis, "CustomEvent", { value: FakeCustomEvent, configurable: true, writable: true });
+  global.document = document;
+  global.window = { localStorage: storage, showToast: (message, type) => toasts.push([message, type]) };
+  console.warn = (...argumentos) => warns.push(argumentos);
+  // Resposta 2xx vira uma Response falsa; 4xx e 5xx viram o erro do apiFetch (status e data); Error puro é queda de rede.
+  globalThis.__apiFetchFalso = async (url, opcoes = {}) => {
+    requests.push({ url, body: opcoes.body ? JSON.parse(opcoes.body) : null });
+    const next = responses.shift();
+    if (next instanceof Error) throw next;
+    if (next.status >= 400) throw Object.assign(new Error("erro"), { status: next.status, data: next.body });
+    return { ok: true, status: next.status, text: async () => JSON.stringify(next.body) };
   };
-  history.install(win);
-  return { win, document, requests, toasts, storage };
+  const vinculo = await import(`${pathToFileURL(VINCULO).href}?instancia=${instancias += 1}`);
+  vinculo.registrarOuvinteTransferencia();
+  return { vinculo, document, requests, toasts, warns, storage };
 }
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -200,57 +225,57 @@ function emitir(env, detail) {
 }
 
 test("sem movimentação o histórico genérico continua igual", async () => {
-  const env = installHistory({ responses: [{ status: 201, body: {} }] });
+  const env = await installHistory({ responses: [{ status: 201, body: {} }] });
   emitir(env, { payload: PAYLOAD });
   await tick();
-  assert.deepEqual(env.requests.map(r => r.url), [history.ENDPOINT]);
+  assert.deepEqual(env.requests.map(r => r.url), [ENDPOINT]);
   assert.deepEqual(env.requests[0].body, PAYLOAD);
 });
 
 test("com movimentação só a rota da cobertura é chamada e o sucesso avisa a tela", async () => {
-  const env = installHistory({ responses: [{ status: 200, body: { repetido: false } }] });
+  const env = await installHistory({ responses: [{ status: 200, body: { repetido: false } }] });
   emitir(env, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
   assert.deepEqual(env.requests.map(r => r.url), [ROTA]);
   assert.deepEqual(env.requests[0].body, { payload: PAYLOAD, chave: "chave-sint-001", rev: 2 });
   assert.ok(env.document.events.some(event => event.type === "simpress:cobertura-atualizada"));
-  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
 });
 
 test("falha de rede guarda a pendência e a nova tentativa usa a MESMA chave", async () => {
-  const env = installHistory({ responses: [new Error("offline"), { status: 503, body: {} }, { status: 200, body: {} }] });
+  const env = await installHistory({ responses: [new Error("offline"), { status: 503, body: {} }, { status: 200, body: {} }] });
   emitir(env, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
   assert.ok(env.toasts.some(([message]) => message === "Planilha baixada sem vínculo — Tentar de novo"));
-  const [pendente] = env.win.SimpressCoberturaVinculo.pendenciaSemVinculo();
+  const [pendente] = env.vinculo.pendenciaSemVinculo();
   assert.equal(pendente.chave, "chave-sint-001");
   assert.ok(env.storage.data.get("simpress:cobertura:sem-vinculo").includes("chave-sint-001"));
 
-  const [falha] = await env.win.SimpressCoberturaVinculo.tentarVincularDeNovo("mov-1");
+  const [falha] = await env.vinculo.tentarVincularDeNovo("mov-1");
   assert.equal(falha.pendente, true);
-  const [ok] = await env.win.SimpressCoberturaVinculo.tentarVincularDeNovo();
+  const [ok] = await env.vinculo.tentarVincularDeNovo();
   assert.equal(ok.ok, true);
   assert.deepEqual(env.requests.map(r => r.body.chave), ["chave-sint-001", "chave-sint-001", "chave-sint-001"]);
   assert.equal(env.requests.every(r => r.url === ROTA), true);
-  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
   assert.equal(env.storage.data.has("simpress:cobertura:sem-vinculo"), false);
 });
 
 test("repetido (200) de movimentação já cancelada limpa a pendência, avisa a tela e não grava no histórico genérico", async () => {
-  const env = installHistory({ responses: [new Error("offline"), { status: 200, body: { repetido: true } }] });
+  const env = await installHistory({ responses: [new Error("offline"), { status: 200, body: { repetido: true } }] });
   emitir(env, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
-  assert.equal(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo().length, 1);
+  assert.equal(env.vinculo.pendenciaSemVinculo().length, 1);
   assert.ok(env.storage.data.has("simpress:cobertura:sem-vinculo"));
 
-  const [ok] = await env.win.SimpressCoberturaVinculo.tentarVincularDeNovo("mov-1");
+  const [ok] = await env.vinculo.tentarVincularDeNovo("mov-1");
   assert.equal(ok.ok, true);
-  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
   assert.equal(env.storage.data.has("simpress:cobertura:sem-vinculo"), false);
   const avisos = env.document.events.filter(event => event.type === "simpress:cobertura-atualizada");
   assert.equal(avisos.length, 1);
   assert.equal(avisos[0].detail.repetido, true);
-  assert.equal(env.requests.some(r => r.url === history.ENDPOINT), false);
+  assert.equal(env.requests.some(r => r.url === ENDPOINT), false);
 });
 
 for (const recusa of [
@@ -259,39 +284,39 @@ for (const recusa of [
   { status: 404, body: { detail: { codigo: "nao_encontrado", mensagem: "Movimentação não encontrada." } } },
 ]) {
   test(`recusa definitiva ${recusa.status}: a planilha vai ao histórico genérico, o operador é avisado e a pendência some`, async () => {
-    const env = installHistory({ responses: [recusa, { status: 201, body: {} }] });
+    const env = await installHistory({ responses: [recusa, { status: 201, body: {} }] });
     emitir(env, { payload: PAYLOAD, movimentacao: MOV });
     for (let i = 0; i < 5; i += 1) await tick();
-    assert.deepEqual(env.requests.map(r => r.url), [ROTA, history.ENDPOINT]);
+    assert.deepEqual(env.requests.map(r => r.url), [ROTA, ENDPOINT]);
     assert.deepEqual(env.requests[1].body, PAYLOAD);
     const aviso = env.toasts.find(([, type]) => type === "error");
     assert.ok(aviso[0].startsWith(recusa.body.detail.mensagem), aviso[0]);
     assert.ok(aviso[0].includes("Vincular transferência já gerada"), aviso[0]);
-    assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+    assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
   });
 }
 
 test("arquivo ocupado (409) guarda a pendência com a mesma chave e não grava no histórico genérico", async () => {
-  const env = installHistory({ responses: [{ status: 409, body: { detail: { codigo: "arquivo_ocupado", mensagem: "Ocupado." } } }] });
+  const env = await installHistory({ responses: [{ status: 409, body: { detail: { codigo: "arquivo_ocupado", mensagem: "Ocupado." } } }] });
   emitir(env, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
   assert.deepEqual(env.requests.map(r => r.url), [ROTA]);
-  const [pendente] = env.win.SimpressCoberturaVinculo.pendenciaSemVinculo();
+  const [pendente] = env.vinculo.pendenciaSemVinculo();
   assert.equal(pendente.chave, "chave-sint-001");
 });
 
 test("localStorage que lança erro ou guarda lixo não quebra o vínculo", async () => {
-  const quebrado = installHistory({ storage: fakeStorage({ throws: true }), responses: [new Error("offline"), { status: 200, body: {} }] });
+  const quebrado = await installHistory({ storage: fakeStorage({ throws: true }), responses: [new Error("offline"), { status: 200, body: {} }] });
   emitir(quebrado, { payload: PAYLOAD, movimentacao: MOV });
   await tick(); await tick();
-  assert.equal(quebrado.win.SimpressCoberturaVinculo.pendenciaSemVinculo().length, 1);
-  const [ok] = await quebrado.win.SimpressCoberturaVinculo.tentarVincularDeNovo("mov-1");
+  assert.equal(quebrado.vinculo.pendenciaSemVinculo().length, 1);
+  const [ok] = await quebrado.vinculo.tentarVincularDeNovo("mov-1");
   assert.equal(ok.ok, true);
 
   const lixo = fakeStorage();
   lixo.data.set("simpress:cobertura:sem-vinculo", "{não é json");
-  const env = installHistory({ storage: lixo, responses: [] });
-  assert.deepEqual(env.win.SimpressCoberturaVinculo.pendenciaSemVinculo(), []);
+  const env = await installHistory({ storage: lixo, responses: [] });
+  assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
 });
 
 test("Alterar Endereço: texto com os endereços reais e botão aceso só com série e os dois endereços", () => {

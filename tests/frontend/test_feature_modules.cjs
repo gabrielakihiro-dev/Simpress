@@ -31,13 +31,22 @@ function modalCloseHandlers() {
   return names;
 }
 
-// Scripts loaded after app.js install a few actions of their own (e.g. transfer history).
+// Scripts loaded after app.js install a few actions of their own; React panels publish theirs with
+// Object.assign(window, { ... }) in paineis/<painel>/montar.tsx (e.g. transfer history).
 function actionsInstalledByUiScripts() {
   const names = new Set();
   const uiDir = path.join(legadoDir, "ui");
   for (const file of fs.readdirSync(uiDir)) {
     const source = fs.readFileSync(path.join(uiDir, file), "utf8");
     for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
+  }
+  const paineisDir = path.join(legadoDir, "..", "paineis");
+  for (const painel of fs.readdirSync(paineisDir)) {
+    const montar = path.join(paineisDir, painel, "montar.tsx");
+    if (!fs.existsSync(montar)) continue;
+    for (const match of fs.readFileSync(montar, "utf8").matchAll(/Object\.assign\(window,\s*\{([^}]*)\}\)/g)) {
+      match[1].split(",").map(name => name.trim()).filter(Boolean).forEach(name => names.add(name));
+    }
   }
   return names;
 }

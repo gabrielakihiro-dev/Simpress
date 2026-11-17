@@ -1,0 +1,241 @@
+<div class="border-b border-line-quiet flex items-center justify-between pb-4">
+<div class="flex items-center space-x-2.5">
+<svg class="h-5 lucide lucide-history text-brand-400 w-5"/>
+<h3 class="font-bold text-base text-white" id="modal-historico-transferencias-titulo">
+Transferências geradas
+<span class="info-tip">
+<button aria-describedby="tip-transferencias-geradas" aria-label="Sobre Transferências geradas" class="info-tip-trigger" type="button">
+<svg class="ck-ico ck-ico--sm"/>
+</button>
+<span class="info-tip-text" id="tip-transferencias-geradas" role="tooltip">
+Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.
+</span>
+</span>
+</h3>
+</div>
+<button aria-label="Fechar transferências geradas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-on-click="fecharModalHistoricoTransferencias" type="button">
+<svg class="h-5 lucide lucide-x w-5"/>
+</button>
+</div>
+<div class="pt-4 shrink-0">
+<label class="block font-semibold mb-1 text-fg-tertiary text-xs" for="filtro-historico-transferencias">
+Buscar por série, cidade, destinatário ou observação
+</label>
+<input autocomplete="off" class="focus:outline-none glass-input px-3.5 py-2.5 rounded-lg text-fg-emphasis text-sm w-full" id="filtro-historico-transferencias" placeholder="Ex.: BRJ5512FGD ou Londrina" type="search"></input>
+<p aria-live="polite" class="mt-2 text-fg-subtle text-xs" id="historico-transferencias-status" role="status">
+Mostrando as 2 mais recentes de 7.
+</p>
+</div>
+<div aria-label="Transferências geradas" class="flex-1 min-h-0 overflow-y-auto py-3" id="lista-historico-transferencias">
+<div class="ux-table-tools">
+<button class="ux-table-tool" type="button">
+Copiar tabela
+</button>
+<button aria-pressed="false" class="ux-table-tool" data-ux-density-toggle="" type="button">
+Modo compacto
+</button>
+</div>
+<div aria-label="Tabela de transferências geradas" class="accessible-table-wrap border border-line-quiet comparison-desktop-table rounded-lg" role="region" tabindex="0">
+<table aria-label="Transferências geradas" class="min-w-full text-left text-sm" data-ux-table="ready">
+<thead class="bg-surface text-fg-tertiary">
+<tr>
+<th aria-sort="none" class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+<button aria-label="Ordenar por Data e hora" class="ux-sort-button" type="button">
+<span>
+Data e hora
+</span>
+<span aria-hidden="true" class="ux-sort-icon"></span>
+</button>
+</th>
+<th aria-sort="none" class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+<button aria-label="Ordenar por Série" class="ux-sort-button" type="button">
+<span>
+Série
+</span>
+<span aria-hidden="true" class="ux-sort-icon"></span>
+</button>
+</th>
+<th aria-sort="none" class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+<button aria-label="Ordenar por Origem → Destino" class="ux-sort-button" type="button">
+<span>
+Origem → Destino
+</span>
+<span aria-hidden="true" class="ux-sort-icon"></span>
+</button>
+</th>
+<th aria-sort="none" class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+<button aria-label="Ordenar por Destinatário" class="ux-sort-button" type="button">
+<span>
+Destinatário
+</span>
+<span aria-hidden="true" class="ux-sort-icon"></span>
+</button>
+</th>
+<th aria-sort="none" class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+<button aria-label="Ordenar por Observações" class="ux-sort-button" type="button">
+<span>
+Observações
+</span>
+<span aria-hidden="true" class="ux-sort-icon"></span>
+</button>
+</th>
+<th class="font-semibold px-3 py-2.5 whitespace-nowrap" scope="col">
+Ações
+</th>
+</tr>
+</thead>
+<tbody class="divide-line-quiet divide-y">
+<tr>
+<td class="px-3 py-2">
+10/11/2026, 14:30
+</td>
+<td class="font-mono px-3 py-2 whitespace-nowrap">
+BRJ0001
+<span class="block font-sans text-fg-subtle text-xs">
+Pessoa de Teste Um
+</span>
+</td>
+<td class="px-3 py-2">
+Curitiba → Londrina
+</td>
+<td class="px-3 py-2">
+Contato de Teste
+</td>
+<td class="px-3 py-2">
+Obs de teste
+</td>
+<td class="px-3 py-2">
+<div class="flex flex-wrap gap-2">
+<button class="ticket-template-view" data-copy-field="serie" type="button">
+Copiar série
+</button>
+<button class="ticket-template-view" type="button">
+Duplicar destino
+</button>
+</div>
+</td>
+</tr>
+<tr>
+<td class="px-3 py-2">
+09/11/2026, 09:05
+</td>
+<td class="font-mono px-3 py-2 whitespace-nowrap">
+BRJ0002
+</td>
+<td class="px-3 py-2">
+Origem não informada → Destino não informado
+</td>
+<td class="px-3 py-2">
+—
+</td>
+<td class="px-3 py-2">
+—
+</td>
+<td class="px-3 py-2">
+<div class="flex flex-wrap gap-2">
+<button class="ticket-template-view" data-copy-field="serie" type="button">
+Copiar série
+</button>
+<button class="ticket-template-view" type="button">
+Duplicar destino
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div aria-label="Transferências geradas em cartões" class="comparison-mobile-list" role="list">
+<article class="comparison-mobile-card" role="listitem">
+<h5 class="comparison-mobile-card-title">
+BRJ0001 · 10/11/2026, 14:30
+</h5>
+<dl class="comparison-mobile-card-fields">
+<div class="comparison-mobile-card-field">
+<dt>
+Origem → Destino
+</dt>
+<dd>
+Curitiba → Londrina
+</dd>
+</div>
+<div class="comparison-mobile-card-field">
+<dt>
+Destinatário
+</dt>
+<dd>
+Contato de Teste
+</dd>
+</div>
+<div class="comparison-mobile-card-field">
+<dt>
+Observações
+</dt>
+<dd>
+Obs de teste
+</dd>
+</div>
+<div class="comparison-mobile-card-field">
+<dt>
+Pessoa
+</dt>
+<dd>
+Pessoa de Teste Um
+</dd>
+</div>
+</dl>
+<div class="flex flex-wrap gap-2 mt-3">
+<button class="ticket-template-view" data-copy-field="serie" type="button">
+Copiar série
+</button>
+<button class="ticket-template-view" type="button">
+Duplicar destino
+</button>
+</div>
+</article>
+<article class="comparison-mobile-card" role="listitem">
+<h5 class="comparison-mobile-card-title">
+BRJ0002 · 09/11/2026, 09:05
+</h5>
+<dl class="comparison-mobile-card-fields">
+<div class="comparison-mobile-card-field">
+<dt>
+Origem → Destino
+</dt>
+<dd>
+Origem não informada → Destino não informado
+</dd>
+</div>
+<div class="comparison-mobile-card-field">
+<dt>
+Destinatário
+</dt>
+<dd>
+—
+</dd>
+</div>
+<div class="comparison-mobile-card-field">
+<dt>
+Observações
+</dt>
+<dd>
+—
+</dd>
+</div>
+</dl>
+<div class="flex flex-wrap gap-2 mt-3">
+<button class="ticket-template-view" data-copy-field="serie" type="button">
+Copiar série
+</button>
+<button class="ticket-template-view" type="button">
+Duplicar destino
+</button>
+</div>
+</article>
+</div>
+</div>
+<div class="border-line-quiet border-t flex gap-3 items-center justify-end pt-3 shrink-0">
+<button class="ck-btn ck-btn--secundario" data-on-click="fecharModalHistoricoTransferencias" type="button">
+Fechar
+</button>
+</div>
