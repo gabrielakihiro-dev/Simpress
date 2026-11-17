@@ -114,6 +114,15 @@ Pedido do usuário em 13/11/2026: os chamados novos trazidos pela busca do SoftE
 - **Contrato:** `GET /api/sebrae/novos` traz `sugestao_responsavel` (`CLIENTE`, `SIMPRESS` ou `null`) em cada item de `novos.formulario`. O Assistente lê o campo (regra 36) e nunca diz que o salvou.
 - **O que não escreve:** nada no SoftExpert, no SharePoint, no Excel Online nem em `data/state`.
 
+### Cabo HDMI e cabo de força do monitor: CLIENTE e INCIDENTE (17/11/2026)
+
+Pedido do usuário em 17/11/2026: chamado de cabo HDMI ou de cabo de força do monitor sugere Responsável (A) `CLIENTE` e Tipo (J) `INCIDENTE`, seja pedido ("Solicitação de cabo HDMI") ou defeito ("problema no cabo"). O resto do hardware continua `SIMPRESS`.
+
+- **Regra (`e_cabo_do_cliente` em `domains/sebrae_categoria.py`):** `cabo` e `HDMI` no texto (porta HDMI quebrada sem cabo segue `SIMPRESS`), ou `cabo de força`/`cabo de energia`/`cabo de alimentação` junto com `monitor`. Vem antes do hardware em A e antes de "solicitação explícita" em J. Cabo de força do notebook e carregador seguem `SIMPRESS`.
+- **Onde vale:** nos chamados novos da busca e nos chamados antigos em aberto (o mesmo chip `Sugestão: <valor>` com `Usar` em A e J, só com o campo vazio). Nos antigos só entram as regras locais de A e J, sem IA e sem sugestão de B.
+- **Contrato nos antigos:** `GET /api/sebrae/novos` traz `sugestao_responsavel` e `sugestao_tipo` (string ou `null`) em cada item de `importado.abertos`, só com A ou J vazio na planilha (`_sugestoes_antigo` em `routers/sebrae_dashboard.py`); erro na sugestão vira `null` e só a classe do erro vai ao log.
+- **O que não escreve:** continua só sugestão; nada é gravado sem o clique.
+
 ### Sugestão de Categoria (B) e Tipo (J) nos chamados novos (09/11/2026)
 
 Pedido e autorização do usuário em 09/11/2026.

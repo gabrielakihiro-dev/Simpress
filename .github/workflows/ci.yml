@@ -50,7 +50,7 @@ jobs:
           PYTHON: python
           SIMPRESS_TEST_SHARD: ${{ matrix.shard }}/4
       - name: Audit JavaScript dependencies
-        run: npm audit --audit-level=moderate
+        run: node scripts/npm-audit.cjs
       - name: Rebuild local interface assets
         run: npm run build:ui
       - name: Verify rebuilt interface assets match the commit

@@ -129,6 +129,18 @@ class ResponsavelTest(unittest.TestCase):
             with self.subTest(titulo=titulo):
                 self.assertEqual(self.sugerir(titulo), "CLIENTE")
 
+    def test_cabo_hdmi_e_cabo_de_forca_do_monitor_sao_cliente_e_incidente(self):
+        for titulo in ("Solicitação de cabo HDMI", "Problema no cabo HDMI do monitor", "Cabo de força do monitor",
+                       "Solicitação de cabo de energia para o monitor"):
+            with self.subTest(titulo=titulo):
+                self.assertEqual(self.sugerir(titulo), "CLIENTE")
+                self.assertEqual(C.sugerir_tipo(titulo, "", "", "Fulana Souza", None), "INCIDENTE")
+
+    def test_resto_do_hardware_segue_simpress(self):
+        for titulo in ("Monitor não liga", "Carregador do notebook", "Cabo de força do notebook queimado", "Porta HDMI do notebook quebrada"):
+            with self.subTest(titulo=titulo):
+                self.assertEqual(self.sugerir(titulo), "SIMPRESS")
+
     def test_entrada_ou_saida_de_usuario_vence_o_periferico(self):
         self.assertEqual(self.sugerir("Desligamento: devolução do mouse e do teclado"), "CLIENTE")
 
