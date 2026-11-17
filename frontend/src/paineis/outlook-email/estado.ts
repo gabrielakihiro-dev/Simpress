@@ -418,7 +418,7 @@ export function escolherModelo(id: string) {
 
 // ---------------------------------------------------------------- ações
 
-// O navegador pergunta antes de sair com trabalho não salvo ou em andamento (mesmo padrão de history-annotation-autosave.js).
+// O navegador pergunta antes de sair com trabalho não salvo ou em andamento (mesmo padrão de history-annotation-autosave.ts).
 // Sem checar "aberto": um envio ou o salvamento do fechamento continua depois do Esc, e recarregar poderia perder o resultado.
 function ligarEventos() {
   if (ligado) return;

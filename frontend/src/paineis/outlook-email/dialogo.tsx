@@ -59,7 +59,7 @@ function CampoContato({ campo, rotulo }: { campo: CampoCombo; rotulo: string }) 
 }
 
 // Mesmo HTML do modal antigo (IDs, classes e ARIA). .ck-dialogo é o primeiro filho do overlay #modal-email-outlook:
-// accessible-dialogs.js põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
+// accessible-dialogs.ts põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
 export function DialogoEmailOutlook() {
   const s = useSyncExternalStore(assinar, ler);
   const livre = !s.pronto; // campos livres seguem editáveis durante uma ação; os controles de ação não

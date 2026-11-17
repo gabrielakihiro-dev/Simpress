@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarDashboardSebrae: createSebraeDashboard } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
-const sebraeDashboardModel = require("../../frontend/src/legado/shared/sebrae-dashboard-model.js");
+const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
@@ -2231,7 +2231,7 @@ test("sugestão aparece em B e J do chamado novo, com texto e rótulo exatos, se
   for (const letra of ["A", "D", "R", "S"]) assert.equal(campoNovo(el, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
 });
 
-test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascunho) e chamado antigo", async () => {
+test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascunho) e B do chamado antigo", async () => {
   for (const sugestoes of [{ sugestao_categoria: null, sugestao_tipo: null }, { sugestao_categoria: "  ", sugestao_tipo: "" }, {}]) {
     const { el } = await renderizarCartoes(cargaSugestao(sugestoes));
     assert.equal(chipsDe(el).length, 0, JSON.stringify(sugestoes));
@@ -2253,10 +2253,11 @@ test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascu
   assert.equal(chips.length, 1, "só J continua vazio");
   assert.equal(chips[0].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: INCIDENTE");
 
-  // antigo (mesmo com campo sugestao_* no item) e finalizado não têm chip
+  // antigo nunca tem chip de B (mesmo com sugestao_categoria no item), e finalizado não tem chip
   const carga = cargaSugestao();
   carga.importado.abertos[0].sugestao_categoria = "IMPRESSORA";
-  carga.importado.abertos[1].sugestao_tipo = "INCIDENTE";
+  carga.importado.abertos[1].sugestao_categoria = "IMPRESSORA";
+  carga.importado.finalizados[0].sugestao_tipo = "INCIDENTE";
   const antigos = await renderizarCartoes(carga);
   assert.equal(antigos.el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
   assert.equal(antigos.el["sebrae-finalizados-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
@@ -2361,6 +2362,88 @@ test("Usar em J põe INCIDENTE no select (a pendência J some só por CSS :has; 
   const select = campoNovo(el, "J");
   chipsDe(el)[1].querySelector("button").click();
   assert.equal(select.value, "INCIDENTE");
+});
+
+// ---- Sugestão de Responsável (A) e Tipo (J) em chamado antigo em aberto (regras locais do servidor; B nunca) ----
+
+const ANTIGO_SUGESTAO = "linha:27"; // A e J vazios na carga de teste
+function cargaSugestaoAntigo(sugestoes = { sugestao_responsavel: "CLIENTE", sugestao_tipo: "INCIDENTE" }, numero = 1) {
+  const carga = structuredClone(CARGA_CARTOES);
+  Object.assign(carga.importado.abertos[numero], sugestoes);
+  return carga;
+}
+const campoAntigo = (el, numero, letra) => el["sebrae-antigos-lista"].querySelectorAll(`[data-sebrae-campo="${letra}"]`).find(c => c.dataset.sebraeNumero === numero);
+const chipsAntigos = el => el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao");
+
+test("antigo com A e J vazios mostra o mesmo chip de A e J, com texto e rótulo exatos, sem preencher nada", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestaoAntigo(), disco);
+  const chips = chipsAntigos(el);
+  assert.equal(chips.length, 2);
+  assert.deepEqual(chips.map(chip => chip.className), ["sebrae-sugestao", "sebrae-sugestao"]);
+  assert.equal(chips[0].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: CLIENTE");
+  assert.equal(chips[1].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: INCIDENTE");
+  const botoes = chips.map(chip => chip.querySelector("button"));
+  assert.deepEqual(botoes.map(b => b.textContent), ["Usar", "Usar"]);
+  assert.equal(botoes[0].getAttribute("aria-label"), "Usar sugestão CLIENTE em Responsável (A)");
+  assert.equal(botoes[1].getAttribute("aria-label"), "Usar sugestão INCIDENTE em Tipo do chamado (J)");
+  assert.equal(botoes[0].type, "button");
+  assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, "A").value, "");
+  assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, "J").value, "");
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).edicoes[ANTIGO_SUGESTAO] || {}, {}, "sem o clique, nada vai ao rascunho");
+  for (const letra of ["B", "D", "R", "S"]) assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
+});
+
+test("Usar no antigo preenche o campo, grava em edicoes pelo caminho da edição do antigo e remove o chip", async () => {
+  const disco = armazenamentoFalso();
+  const { doc, el } = await renderizarCartoes(cargaSugestaoAntigo(), disco);
+  const selectA = campoAntigo(el, ANTIGO_SUGESTAO, "A");
+  const selectJ = campoAntigo(el, ANTIGO_SUGESTAO, "J");
+  const [chipA, chipJ] = chipsAntigos(el);
+  chipA.querySelector("button").click();
+  assert.equal(selectA.value, "CLIENTE");
+  assert.equal(chipsAntigos(el).length, 1, "só o chip de A saiu");
+  assert.equal(selectJ.value, "", "J continua vazio");
+  assert.ok(doc.focado === selectA, "foco volta ao campo preenchido (o painel de antigos nasce escondido no DOM falso, então `activeElement` seria o body)");
+  assert.equal(lerRascunho(disco, IMPORTADO_EM).edicoes[ANTIGO_SUGESTAO].A, "CLIENTE");
+  chipJ.querySelector("button").click();
+  assert.equal(selectJ.value, "INCIDENTE");
+  assert.equal(chipsAntigos(el).length, 0);
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).edicoes[ANTIGO_SUGESTAO], { A: "CLIENTE", J: "INCIDENTE" });
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"] || {}, {}, "o rascunho dos novos não é tocado");
+});
+
+test("sem chip no antigo: sugestão nula, campo já preenchido na planilha, rascunho existente e API SEBRAE", async () => {
+  for (const sugestoes of [{ sugestao_responsavel: null, sugestao_tipo: null }, { sugestao_responsavel: "  ", sugestao_tipo: "" }, {}]) {
+    const { el } = await renderizarCartoes(cargaSugestaoAntigo(sugestoes));
+    assert.equal(chipsAntigos(el).length, 0, JSON.stringify(sugestoes));
+  }
+  // A e J já preenchidos na planilha (UTIC-2026-1200): o servidor não sugere, e o campo desabilitado nunca ganha chip
+  const preenchido = await renderizarCartoes(cargaSugestaoAntigo(undefined, 0));
+  assert.equal(chipsAntigos(preenchido.el).length, 0);
+  const api = structuredClone(CARGA_CARTOES);
+  Object.assign(api.importado.abertos[1], { usuario: "API SEBRAE", sugestao_responsavel: "CLIENTE", sugestao_tipo: "INCIDENTE" });
+  assert.equal(chipsAntigos((await renderizarCartoes(api)).el).length, 0, "API SEBRAE já vem preenchido pelo programa");
+
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, IMPORTADO_EM, ANTIGO_SUGESTAO, "A", "SIMPRESS", "antigo");
+  const parcial = await renderizarCartoes(cargaSugestaoAntigo(), disco);
+  const chips = chipsAntigos(parcial.el);
+  assert.equal(chips.length, 1, "A do rascunho esconde o chip; só J continua vazio");
+  assert.equal(chips[0].querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: INCIDENTE");
+  assert.equal(campoAntigo(parcial.el, ANTIGO_SUGESTAO, "A").value, "SIMPRESS");
+});
+
+test("escolher um valor à mão no antigo esconde o chip; esvaziar o campo o mostra de novo", async () => {
+  const { el } = await renderizarCartoes(cargaSugestaoAntigo());
+  const select = campoAntigo(el, ANTIGO_SUGESTAO, "A");
+  const chip = chipsAntigos(el)[0];
+  select.value = "SIMPRESS";
+  select.dispatchEvent({ type: "change", currentTarget: select });
+  assert.equal(chip.hidden, true);
+  select.value = "";
+  select.dispatchEvent({ type: "change", currentTarget: select });
+  assert.equal(chip.hidden, false);
 });
 
 const { AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;

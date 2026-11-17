@@ -227,7 +227,7 @@ function SecaoOutrasCandidatos({ outras }: { outras: Item[] }) {
   );
 }
 
-// Mesmo markup de dom.infoTipHtml (frontend/src/legado/shared/dom-utils.js), com o id fixo de antes.
+// Mesmo markup de dom.infoTipHtml (frontend/src/comum/dom-utils.ts), com o id fixo de antes.
 function DicaMinimo({ minimo }: { minimo: number }) {
   return (
     <span className="info-tip">

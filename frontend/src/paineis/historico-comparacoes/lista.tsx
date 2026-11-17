@@ -9,7 +9,7 @@ import {
   seloDoEvento, type EventoHistorico, type Metrica,
 } from "./historico-puro";
 
-// Mesmo esqueleto de SimpressMotion.startLoading (frontend/src/legado/ui/ui-motion.js), que só aparece após 150 ms.
+// Mesmo esqueleto de SimpressMotion.startLoading (frontend/src/ui/ui-motion.ts), que só aparece após 150 ms.
 function Esqueleto() {
   return (
     <div className="ui-skeleton-list">

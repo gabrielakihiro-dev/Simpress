@@ -934,7 +934,7 @@ test("Chamados × OS: sem botões no topo do F5/F6 nem painel antigo; a janela #
   assert.doesNotMatch(source, /"chamados-os"|loadChamadosOs|cockpit-chamados-os-/);
   assert.doesNotMatch(css, /\.ck-chos|#cockpit-chamados-os-/);
   const janela = html.match(/<div[^>]*id="modal-chamado-os"[\s\S]*?id="chamado-os-janela-f6"[\s\S]*?<\/button>/)?.[0] || "";
-  // Como os outros .modal-overlay, role="dialog" e aria-modal vêm de accessible-dialogs.js ao abrir.
+  // Como os outros .modal-overlay, role="dialog" e aria-modal vêm de accessible-dialogs.ts ao abrir.
   assert.match(janela, /<div id="modal-chamado-os" class="modal-overlay ck-veu hidden" aria-labelledby="titulo-chamado-os">/);
   assert.match(janela, /<h3 id="titulo-chamado-os"[^>]*>Chamado × OS<\/h3>/);
   assert.match(janela, /Abrir na aba OS \(F6\)/);

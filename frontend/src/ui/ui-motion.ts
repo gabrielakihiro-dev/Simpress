@@ -1,15 +1,13 @@
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.SimpressMotion = factory(root);
-})(typeof window !== "undefined" ? window : globalThis, function createMotion(env) {
-  "use strict";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Qualquer = any;
 
+export function createMotion(env: Qualquer) {
   const duration = Object.freeze({ fast: 160, normal: 220, exit: 180 });
   const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
   const preference = env.matchMedia?.("(prefers-reduced-motion: reduce)");
-  const running = new Map();
-  const loaders = new WeakMap();
-  const frames = {
+  const running = new Map<Qualquer, { animation: Qualquer; finish: () => void }>();
+  const loaders = new WeakMap<object, () => void>();
+  const frames: Record<string, Qualquer[]> = {
     content: [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }],
     page: [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "translateY(0)" }],
     modal: [{ transform: "translateY(10px) scale(0.985)" }, { transform: "translateY(0) scale(1)" }],
@@ -17,7 +15,7 @@
     fade: [{ opacity: 0 }, { opacity: 1 }],
   };
 
-  function cancel(element) {
+  function cancel(element: Qualquer): void {
     const entry = running.get(element);
     if (!entry) return;
     running.delete(element);
@@ -25,8 +23,7 @@
   }
 
   // No geometry reads, forced reflow, per-frame JS, or permanent compositor hints.
-  /** @param {number} [time] */
-  function animate(element, keyframes, time = duration.normal, complete = () => {}, delay = 0) {
+  function animate(element: Qualquer, keyframes: Qualquer[], time: number = duration.normal, complete: () => void = () => {}, delay: number = 0): void {
     if (!element) { complete(); return; }
     cancel(element);
     if (preference?.matches || typeof element.animate !== "function") { complete(); return; }
@@ -52,18 +49,18 @@
     if (preference.matches) [...running.values()].forEach(entry => entry.finish());
   });
 
-  function reveal(element, preset = "content") {
+  function reveal(element: Qualquer, preset: string = "content"): void {
     animate(element, frames[preset] || frames.content);
   }
 
   // Short cascade for a freshly rendered group; items past the cap appear with the last one.
-  function stagger(elements, preset = "content", { step = 30, max = 6 } = {}) {
+  function stagger(elements: Qualquer, preset: string = "content", { step = 30, max = 6 }: { step?: number; max?: number } = {}): void {
     Array.from(elements || []).forEach((element, index) => {
       animate(element, frames[preset] || frames.content, duration.normal, undefined, Math.min(index, max - 1) * step);
     });
   }
 
-  function openOverlay(overlay) {
+  function openOverlay(overlay: Qualquer): void {
     cancel(overlay);
     cancel(overlay.firstElementChild);
     delete overlay.dataset.motionClosing;
@@ -74,7 +71,7 @@
     reveal(overlay.firstElementChild, overlay.dataset.motion === "drawer" ? "drawer" : "modal");
   }
 
-  function closeOverlay(overlay, complete) {
+  function closeOverlay(overlay: Qualquer, complete: () => void): void {
     if (overlay.dataset.motionClosing === "true") return;
     overlay.dataset.motionClosing = "true";
     overlay.inert = true;
@@ -89,18 +86,18 @@
     });
   }
 
-  function dismiss(element, complete) {
+  function dismiss(element: Qualquer, complete: () => void): void {
     animate(element, [...frames.content].reverse(), duration.exit, complete);
   }
 
   // One cancellable loader per container. Fast responses never flash a skeleton.
   // Removing only our own node preserves results and appended pagination rows.
-  function startLoading(container, label = "Carregando dados…", { rows = 3, delay = 150 } = {}) {
+  function startLoading(container: Qualquer, label: string = "Carregando dados…", { rows = 3, delay = 150 }: { rows?: number; delay?: number } = {}): () => void {
     if (!container) return () => {};
     loaders.get(container)?.();
     const previousBusy = container.getAttribute("aria-busy");
     container.setAttribute("aria-busy", "true");
-    let skeleton;
+    let skeleton: Qualquer;
     const timer = env.setTimeout(() => {
       skeleton = env.document.createElement("div");
       skeleton.className = "ui-skeleton-list";
@@ -135,14 +132,14 @@
   }
 
   // Delegation covers dynamically created fields without observers or per-field handlers.
-  function installFeedback(document = env.document) {
-    document.addEventListener("invalid", event => {
+  function installFeedback(document: Qualquer = env.document): void {
+    document.addEventListener("invalid", (event: Qualquer) => {
       const field = event.target;
       if (!field.matches?.("input, select, textarea")) return;
       field.setAttribute("aria-invalid", "true");
       animate(field, [{ opacity: 0.65 }, { opacity: 1 }], duration.fast);
     }, true);
-    document.addEventListener("input", event => {
+    document.addEventListener("input", (event: Qualquer) => {
       const field = event.target;
       if (field.getAttribute?.("aria-invalid") === "true" && field.validity?.valid) {
         field.removeAttribute("aria-invalid");
@@ -151,4 +148,7 @@
   }
 
   return Object.freeze({ duration, reveal, stagger, openOverlay, closeOverlay, dismiss, startLoading, installFeedback });
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") window.SimpressMotion = createMotion(window);

@@ -1,13 +1,6 @@
-// @ts-check
 /** Safe text and DOM helpers. The document is injected for isolated tests. */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  if (root) root.SimpressDomUtils = factory;
-})(typeof window === "undefined" ? globalThis : window, /** @param {Document} document */
-function createDomUtils(document) {
-  "use strict";
-  /** @param {unknown} str @returns {string} */
-  function escapeHtml(str) {
+export function createDomUtils(document: Document) {
+  function escapeHtml(str: unknown): string {
     if (str === null || str === undefined) return "";
     return String(str)
       .replace(/&/g, "&amp;")
@@ -17,16 +10,14 @@ function createDomUtils(document) {
       .replace(/'/g, "&#039;");
   }
 
-  /** @param {string} tagName @param {string | undefined} className @param {unknown} value @returns {HTMLElement} */
-  function createTextElement(tagName, className, value) {
+  function createTextElement(tagName: string, className: string | undefined, value: unknown): HTMLElement {
     const element = document.createElement(tagName);
     if (className) element.className = className;
     element.textContent = String(value ?? "");
     return element;
   }
 
-  /** @param {string} name @param {string} className @returns {HTMLElement} */
-  function createIcon(name, className) {
+  function createIcon(name: string, className: string): HTMLElement {
     const icon = document.createElement("i");
     icon.setAttribute("data-lucide", name);
     icon.className = className;
@@ -34,13 +25,11 @@ function createDomUtils(document) {
   }
 
   // Portuguese counts: only exactly one is singular ("1 dia", "0 dias", "2 dias").
-  /** @param {unknown} count @param {string} singular @param {string} [plural] @returns {string} */
-  function pluralize(count, singular, plural = `${singular}s`) {
+  function pluralize(count: unknown, singular: string, plural = `${singular}s`): string {
     return Number(count) === 1 ? singular : plural;
   }
 
-  /** @param {unknown} text @param {string} [query] @returns {string} */
-  function highlightMatch(text, query) {
+  function highlightMatch(text: unknown, query?: string): string {
     if (!text) return "";
     if (!query) return escapeHtml(text);
     const q = query.trim();
@@ -52,7 +41,7 @@ function createDomUtils(document) {
     const regex = new RegExp(pattern, "gi");
     let result = "";
     let cursor = 0;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = regex.exec(value)) !== null) {
       result += escapeHtml(value.slice(cursor, match.index));
       result += '<span class="serial-match">' + escapeHtml(match[0]) + "</span>";
@@ -65,8 +54,11 @@ function createDomUtils(document) {
   // Markup do ⓘ (.info-tip de ux-refinements.css) com id único por documento; rótulo e texto escapados.
   // `id` fixo (constante do código) só para o ⓘ redesenhado várias vezes, que não pode mudar de id a cada redesenho.
   // `bloco`: o balão ancora no pai com .info-tip-ancora e não passa da largura dele (ux-refinements.css).
-  /** @param {unknown} rotulo @param {unknown} texto @param {{ fim?: boolean, bloco?: boolean, id?: string }} [opcoes] @returns {string} */
-  function infoTipHtml(rotulo, texto, { fim = false, bloco = false, id: idFixo = "" } = {}) {
+  function infoTipHtml(
+    rotulo: unknown,
+    texto: unknown,
+    { fim = false, bloco = false, id: idFixo = "" }: { fim?: boolean; bloco?: boolean; id?: string } = {},
+  ): string {
     const id = idFixo || `tip-auto-${++infoTipCount}`;
     return `<span class="info-tip${fim ? " info-tip--end" : ""}${bloco ? " info-tip--bloco" : ""}"><button type="button" class="info-tip-trigger" aria-label="Sobre ${escapeHtml(rotulo)}" aria-describedby="${id}">`
       + '<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg>'
@@ -74,4 +66,7 @@ function createDomUtils(document) {
   }
 
   return { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize, infoTipHtml };
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") window.SimpressDomUtils = createDomUtils;

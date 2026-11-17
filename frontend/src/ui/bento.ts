@@ -1,38 +1,33 @@
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else {
-    root.SimpressBento = factory(root);
-    root.SimpressBento.iniciarBrilho();
-  }
-})(typeof window !== "undefined" ? window : globalThis, function createBento(env) {
-  "use strict";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Qualquer = any;
 
+export function createBento(env: Qualquer) {
   // Valores do contrato bento (docs/ui-motion/contrato-bento.md): contagem 900 ms, anel 1200 ms, curva 1-(1-t)^3.
   const duracao = Object.freeze({ contagem: 900, anel: 1200 });
   const ARCO = 326.73; // 2πr do anel (r = 52)
   const CARTOES = ".ck-cartao, .ck-kpi, .ck-bento-cartao";
-  const emAndamento = new Map();
-  const contando = new Map(); // região viva -> contadores ainda contando; aria-busy sai só quando todos terminam
-  const curva = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
-  const formatoPadrao = valor => Math.round(valor).toLocaleString("pt-BR");
-  const movimentoReduzido = () => Boolean(env.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  const agora = () => (env.performance?.now ? env.performance.now() : Date.now());
+  const emAndamento = new Map<Qualquer, Qualquer>();
+  const contando = new Map<Qualquer, Set<Qualquer>>(); // região viva -> contadores ainda contando; aria-busy sai só quando todos terminam
+  const curva = (t: number): number => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+  const formatoPadrao = (valor: number): string => Math.round(valor).toLocaleString("pt-BR");
+  const movimentoReduzido = (): boolean => Boolean(env.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const agora = (): number => (env.performance?.now ? env.performance.now() : Date.now());
 
-  function cancelar(el) {
+  function cancelar(el: Qualquer): void {
     const id = emAndamento.get(el);
     if (id !== undefined) env.cancelAnimationFrame?.(id);
     emAndamento.delete(el);
   }
 
   // Anima de 0 até `alvo` chamando `pintar(k)` com k de 0 a 1; termina sempre em k = 1.
-  function animar(el, ms, pintar) {
+  function animar(el: Qualquer, ms: number, pintar: (k: number) => void): void {
     cancelar(el);
     if (movimentoReduzido() || typeof env.requestAnimationFrame !== "function") {
       pintar(1);
       return;
     }
     let inicio = agora();
-    const passo = instante => {
+    const passo = (instante: number): void => {
       // Carimbo do quadro abaixo do início (relógio trocou de base, ex.: page.clock do Playwright): conta a partir daqui, senão o laço nunca termina.
       if (instante < inicio) inicio = instante;
       const k = curva((instante - inicio) / ms);
@@ -45,15 +40,14 @@
   }
 
   // Termina com el.textContent === formatar(alvo). Região viva fica aria-busy durante a contagem.
-  /** @param {number} [ms] */
-  function contarAte(el, alvo, formatar = formatoPadrao, ms = duracao.contagem) {
+  function contarAte(el: Qualquer, alvo: unknown, formatar: (valor: number) => string = formatoPadrao, ms: number = duracao.contagem): void {
     if (!el) return;
     const total = Number(alvo) || 0;
     const viva = el.closest?.("[role=status], [aria-live]");
     if (viva) {
       viva.setAttribute("aria-busy", "true");
       if (!contando.has(viva)) contando.set(viva, new Set());
-      contando.get(viva).add(el);
+      contando.get(viva)!.add(el);
     }
     animar(el, ms, k => {
       el.textContent = formatar(k >= 1 ? total : total * k);
@@ -67,44 +61,44 @@
     });
   }
 
-  function animarAnel(circulo, fracao, ms = duracao.anel) {
+  function animarAnel(circulo: Qualquer, fracao: unknown, ms: number = duracao.anel): void {
     if (!circulo) return;
     const f = Math.min(1, Math.max(0, Number(fracao) || 0));
     animar(circulo, ms, k => circulo.style.setProperty("stroke-dashoffset", (ARCO * (1 - f * k)).toFixed(2)));
   }
 
   // Larguras vêm de data-bento-largura (CSP: nada de style= no HTML); números e anéis partem do zero.
-  function animarDentro(raiz) {
+  function animarDentro(raiz: Qualquer): void {
     if (!raiz?.querySelectorAll) return;
-    raiz.querySelectorAll("[data-bento-largura]").forEach(el => {
+    raiz.querySelectorAll("[data-bento-largura]").forEach((el: Qualquer) => {
       el.style.setProperty("width", `${el.dataset.bentoLargura}%`);
       // Barras: 700 ms, 200 ms depois, só transform; repetem a cada chamada (clique de sub-aba).
       if (!movimentoReduzido()) el.animate?.([{ transform: "scaleX(0)" }, { transform: "none" }], { duration: 700, delay: 200, easing: "cubic-bezier(.33, 1, .68, 1)", fill: "backwards" });
     });
-    raiz.querySelectorAll("[data-bento-contar]").forEach(el => {
+    raiz.querySelectorAll("[data-bento-contar]").forEach((el: Qualquer) => {
       const sufixo = el.dataset.bentoSufixo || "";
       contarAte(el, Number(el.dataset.bentoContar), v => `${formatoPadrao(v)}${sufixo}`,
         sufixo ? duracao.anel : duracao.contagem);
     });
-    raiz.querySelectorAll("[data-bento-anel]").forEach(el => animarAnel(el, Number(el.dataset.bentoAnel)));
+    raiz.querySelectorAll("[data-bento-anel]").forEach((el: Qualquer) => animarAnel(el, Number(el.dataset.bentoAnel)));
   }
 
   // Um ouvinte delegado: --mx/--my só no cartão sob o ponteiro, uma vez por quadro. O Assistente fica fora.
   let ligado = false;
-  function iniciarBrilho() {
+  function iniciarBrilho(): void {
     const doc = env.document;
     if (ligado || !doc?.addEventListener) return;
     ligado = true;
-    let pendente = null;
-    let quadro = 0;
-    const aplicar = () => {
+    let pendente: Qualquer = null;
+    let quadro: Qualquer = 0;
+    const aplicar = (): void => {
       quadro = 0;
       const { alvo, x, y } = pendente;
       const r = alvo.getBoundingClientRect();
       alvo.style.setProperty("--mx", `${x - r.left}px`);
       alvo.style.setProperty("--my", `${y - r.top}px`);
     };
-    const mover = evento => {
+    const mover = (evento: Qualquer): void => {
       const alvo = evento.target?.closest?.(CARTOES);
       if (!alvo || alvo.closest("#assistente-widget") || alvo.closest("tr")) return;
       pendente = { alvo, x: evento.clientX, y: evento.clientY };
@@ -115,4 +109,10 @@
   }
 
   return Object.freeze({ duracao, curva, contarAte, animarAnel, animarDentro, iniciarBrilho, cancelar });
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") {
+  window.SimpressBento = createBento(window);
+  window.SimpressBento.iniciarBrilho();
+}

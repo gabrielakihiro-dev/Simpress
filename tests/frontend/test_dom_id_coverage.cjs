@@ -16,7 +16,7 @@ const ALLOWED_MISSING = new Map([
   ["automacao-captura-mensagem", "criado pelo JS junto com o diálogo de captura"],
   ["automacao-captura-fechar", "criado pelo JS junto com o diálogo de captura"],
   ["comparacao-divergencias-manuais-pendentes", "contador renderizado pelo JS dentro do resultado da comparação"],
-  ["btn-sidebar-open", "botão da sidebar legada, removida no Cockpit v2; accessible-dialogs.js ignora o null"],
+  ["btn-sidebar-open", "botão da sidebar legada, removida no Cockpit v2; accessible-dialogs.ts ignora o null"],
   ["ux-sort-status", "região aria-live criada sob demanda por frontend/src/paineis/paineis-dados"],
   ["badge-divergencias-ux", "criado sob demanda por frontend/src/paineis/paineis-dados"],
   ["ux-pending-chip", "criado sob demanda por ux-enhancements.js"],

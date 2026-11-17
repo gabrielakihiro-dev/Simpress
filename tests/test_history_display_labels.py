@@ -50,7 +50,7 @@ class HistoryDisplayLabelTests(unittest.TestCase):
             ("Dados DA SIMPRESS e PELO ENDPOINT", "Dados DA Simpress e PELO Endpoint"),
         ]
         frontend = subprocess.run(
-            ["node", "-e", "const fs=require('node:fs');const f=require('./frontend/src/legado/shared/history-format.js');const values=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(values.map(f.formatarNomeFonteHistorico)));"],
+            ["node", "-e", "const fs=require('node:fs');const f=require('./frontend/src/comum/history-format.ts');const values=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(values.map(f.formatarNomeFonteHistorico)));"],
             input=json.dumps([raw for raw, _ in cases]),
             cwd=Path(__file__).resolve().parents[1], capture_output=True,
             text=True, encoding="utf-8", check=True,
@@ -87,7 +87,7 @@ class HistoryDisplayLabelTests(unittest.TestCase):
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { stripTypeScriptTypes } = require('node:module');
-const format = require('./frontend/src/legado/shared/history-format.js');
+const format = require('./frontend/src/comum/history-format.ts');
 const source = fs.readFileSync('frontend/src/paineis/resultado-comparacao/renderizador.ts', 'utf8');
 // A fatia é TypeScript: apaga os tipos para o vm executar JS puro.
 const functions = stripTypeScriptTypes(source.slice(source.indexOf('  const formatarMotivoRevisao'), source.indexOf('  const atributosLinhaComparacao')));

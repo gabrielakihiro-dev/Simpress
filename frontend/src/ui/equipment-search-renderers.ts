@@ -1,16 +1,14 @@
 /** Shared HTML and row builders for autocomplete and full equipment search. */
-(function (root, factory) {
-  const api = factory;
-  if (typeof module === "object" && module.exports) module.exports = api;
-  else root.SimpressEquipmentSearchRenderers = api;
-})(typeof window !== "undefined" ? window : globalThis, function createEquipmentSearchRenderers(context) {
-  "use strict";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Qualquer = any;
+
+export function createEquipmentSearchRenderers(context: Qualquer) {
   const { escapeHtml, highlightMatch } = context.dom;
   // Read when rendering: app.js sets context.loggedUserMarkers after this module loads.
-  const tituloManual = informadoEm => context.loggedUserMarkers?.tituloManual?.(informadoEm) || "Usuário logado informado manualmente";
-  const textoAmbiguo = candidatos => context.loggedUserMarkers?.textoAmbiguo?.(candidatos) || "";
+  const tituloManual = (informadoEm: Qualquer): string => context.loggedUserMarkers?.tituloManual?.(informadoEm) || "Usuário logado informado manualmente";
+  const textoAmbiguo = (candidatos: Qualquer): string => context.loggedUserMarkers?.textoAmbiguo?.(candidatos) || "";
 
-  function conteudoLinhaResultado(item, currentQuery) {
+  function conteudoLinhaResultado(item: Qualquer, currentQuery: Qualquer): string {
     let tipoIcon = "laptop";
     let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
 
@@ -81,7 +79,7 @@
       `;
   }
 
-  function conteudoLinhaAutocomplete(item, currentQuery) {
+  function conteudoLinhaAutocomplete(item: Qualquer, currentQuery: Qualquer): string {
     const serial = String(item.serial || "").trim();
     const usuario = String(item.usuarios_logados || "").trim();
     const usuarioTexto = usuario
@@ -98,7 +96,7 @@
       `;
   }
 
-  function criarLinhaAutocomplete(item, index, currentQuery, { onSelect, onHighlight }) {
+  function criarLinhaAutocomplete(item: Qualquer, index: number, currentQuery: Qualquer, { onSelect, onHighlight }: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
     const row = document.createElement("div");
     row.id = `autocomplete-option-${index}`;
     row.setAttribute("role", "option");
@@ -110,7 +108,7 @@
     return row;
   }
 
-  function criarLinhaPesquisaCompleta(item, index, currentQuery, onSelect) {
+  function criarLinhaPesquisaCompleta(item: Qualquer, index: number, currentQuery: Qualquer, onSelect: Qualquer): HTMLElement {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "autocomplete-row group w-full text-left px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3 rounded-lg";
@@ -132,4 +130,7 @@
   }
 
   return { criarLinhaAutocomplete, criarLinhaPesquisaCompleta };
-});
+}
+
+// Ponte temporária: sai na react-final-3, quando app.js virar TS.
+if (typeof window !== "undefined") window.SimpressEquipmentSearchRenderers = createEquipmentSearchRenderers;

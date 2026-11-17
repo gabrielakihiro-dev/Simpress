@@ -33,7 +33,7 @@ export function Dialogo() {
     limparVisivel, lista, busca } = useSyncExternalStore(assinar, ler);
   const listaRef = useRef<HTMLDivElement>(null);
 
-  // shortcut: linhas vêm do renderer antigo (equipment-search-renderers.js), migram com equipment-search no Bloco final
+  // shortcut: linhas vêm do renderer antigo (equipment-search-renderers.ts), migram com equipment-search no Bloco final
   // O React não desenha filhos em #pesquisa-completa-lista: só esvazia e acrescenta as linhas que a ação trouxe.
   useLayoutEffect(() => {
     const elemento = listaRef.current;

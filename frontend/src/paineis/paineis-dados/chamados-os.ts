@@ -4,7 +4,7 @@ import { orderKey, serialKey } from "./utilitarios.ts";
 // Pareamento chamado × OS (regra espelhada por chamados_com_os_sebrae do Assistente; o painel "Chamados × OS" saiu em 08/11/2026), sem DOM nem rede: junta os chamados em aberto do F5 (GET /api/sebrae/novos) que têm OS
 // com a OS no relatório do F6 (GET /api/operacoes/chamados). Só leitura; nada é gravado.
 
-// Lido na hora do uso: o código antigo publica SimpressCatalogSearch (shared/catalog-search-utils.js) antes de o bundle montar.
+// Lido na hora do uso: o código antigo publica SimpressCatalogSearch (comum/catalog-search-utils.ts) antes de o bundle montar.
 const normalizarBusca = (valor: Qualquer): string => (globalThis as Registro).SimpressCatalogSearch.normalizeSearchText(valor);
 
 const lista = (valor: Qualquer): Qualquer[] => (Array.isArray(valor) ? valor : []);

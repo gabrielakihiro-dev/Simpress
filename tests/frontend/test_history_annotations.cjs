@@ -43,9 +43,9 @@ test("renders an annotation column in every requested comparison section", () =>
 });
 
 test("loads the bounded autosave retry helper before the application", () => {
-  const catalogScript = appEntry.indexOf('./shared/catalog-search-utils.js');
-  const draftGuardScript = appEntry.indexOf('./shared/form-draft-guard.js');
-  const retryScript = appEntry.indexOf('./shared/history-annotation-autosave.js');
+  const catalogScript = appEntry.indexOf('../comum/catalog-search-utils.ts');
+  const draftGuardScript = appEntry.indexOf('../comum/form-draft-guard.ts');
+  const retryScript = appEntry.indexOf('../comum/history-annotation-autosave.ts');
   const appScriptTag = appEntry.indexOf('./app.js');
   assert.notEqual(catalogScript, -1);
   assert.notEqual(draftGuardScript, -1);

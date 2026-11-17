@@ -1,10 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
-const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
+const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
+const historyFormat = require("../../frontend/src/comum/history-format.ts");
 const { criarRenderizadorResultado } = require("../../frontend/src/paineis/resultado-comparacao/renderizador.ts");
-const createEquipmentSearchRenderers = require("../../frontend/src/legado/ui/equipment-search-renderers.js");
-const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
+const { createEquipmentSearchRenderers } = require("../../frontend/src/ui/equipment-search-renderers.ts");
+const { createLoggedUserMarkers } = require("../../frontend/src/ui/logged-user-markers.ts");
 const { criarAcoesCartaoEquipamento } = require("../../frontend/src/paineis/cartao-equipamento/estado.ts");
 
 const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });

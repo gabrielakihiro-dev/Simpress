@@ -37,7 +37,7 @@ interface AppAntigo {
 }
 const app = () => window as unknown as AppAntigo;
 
-// frontend/src/legado/shared/history-format.js, lido na hora do uso (o script antigo já carregou quando o React desenha).
+// frontend/src/comum/history-format.ts, lido na hora do uso (o script antigo já carregou quando o React desenha).
 export const formatadores = (): Formatadores => window.SimpressHistoryFormat;
 
 let estado: Estado = {

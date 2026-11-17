@@ -10,7 +10,7 @@ import {
 
 const MODAL = "modal-pesquisa-completa";
 
-// shortcut: linhas vêm do renderer antigo (equipment-search-renderers.js), migram com equipment-search no Bloco final
+// shortcut: linhas vêm do renderer antigo (equipment-search-renderers.ts), migram com equipment-search no Bloco final
 export type CriarLinha = (item: unknown, indice: number, termo: string, aoSelecionar: () => void) => HTMLElement;
 
 // Funções do código antigo publicadas em window (frontend/src/legado/app.js, publish) e globais carregados antes do bundle.

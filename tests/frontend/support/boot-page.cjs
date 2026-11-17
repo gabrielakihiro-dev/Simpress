@@ -1,6 +1,7 @@
 // Boots frontend/src/legado/app.js inside a VM with a fake DOM, the way the feature-module tests need it.
 const vm = require("node:vm");
 const { appScripts } = require("./app-sources.cjs");
+const apiFetchTs = require("../../../frontend/src/api.ts");
 
 function fakeElement() {
   return {
@@ -28,13 +29,20 @@ function bootPage(extraWindow = {}) {
   };
   const window = {
     document,
-    SimpressDomUtils: require("../../../frontend/src/legado/shared/dom-utils.js"),
-    SimpressTransferUtils: require("../../../frontend/src/legado/shared/transfer-utils.js"),
-    SimpressCatalogSearch: require("../../../frontend/src/legado/shared/catalog-search-utils.js"),
-    SimpressFormDraftGuard: require("../../../frontend/src/legado/shared/form-draft-guard.js"),
-    HistoryAnnotationAutosave: require("../../../frontend/src/legado/shared/history-annotation-autosave.js"),
-    SimpressAccessibleDialogs: require("../../../frontend/src/legado/ui/accessible-dialogs.js"),
-    SimpressNotifications: require("../../../frontend/src/legado/ui/ui-notifications.js"),
+    SimpressDomUtils: require("../../../frontend/src/comum/dom-utils.ts").createDomUtils,
+    SimpressTransferUtils: require("../../../frontend/src/comum/transfer-utils.ts"),
+    SimpressCatalogSearch: require("../../../frontend/src/comum/catalog-search-utils.ts"),
+    SimpressFormDraftGuard: require("../../../frontend/src/comum/form-draft-guard.ts"),
+    HistoryAnnotationAutosave: require("../../../frontend/src/comum/history-annotation-autosave.ts"),
+    SimpressAccessibleDialogs: require("../../../frontend/src/ui/accessible-dialogs.ts").createAccessibleDialogs,
+    SimpressNotifications: require("../../../frontend/src/ui/ui-notifications.ts").createNotifications,
+    // Antes rodavam na VM e se publicavam em window; agora são TypeScript e entram por require().
+    SimpressApiErrors: require("../../../frontend/src/comum/api-errors.ts"),
+    SimpressApiFetch: { apiFetch: apiFetchTs.apiFetch, isAbortError: apiFetchTs.isAbortError },
+    SimpressHistoryFormat: require("../../../frontend/src/comum/history-format.ts"),
+    SimpressSebraeDashboardModel: require("../../../frontend/src/comum/sebrae-dashboard-model.ts"),
+    SimpressEquipmentSearchRenderers: require("../../../frontend/src/ui/equipment-search-renderers.ts").createEquipmentSearchRenderers,
+    SimpressLoggedUserMarkers: require("../../../frontend/src/ui/logged-user-markers.ts").createLoggedUserMarkers,
     matchMedia: () => ({ matches: false }),
     addEventListener() {},
     ...extraWindow,

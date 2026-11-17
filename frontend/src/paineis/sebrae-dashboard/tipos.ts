@@ -11,7 +11,7 @@ export type ElementoSebrae = HTMLElement & Record<string, any>;
 
 type Par = readonly [string, string];
 
-/** Modelo puro de frontend/src/legado/shared/sebrae-dashboard-model.js: constantes com tipo e funções com a assinatura frouxa do JS. */
+/** Modelo puro de frontend/src/comum/sebrae-dashboard-model.ts: constantes com tipo e funções com a assinatura frouxa do JS. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Funcao = (...argumentos: any[]) => any;
 export interface ModeloSebrae {

@@ -1,11 +1,11 @@
-// Globais que os scripts de frontend/src/legado/shared e frontend/src/legado/ui publicam ou leem em window.
-// Só para o `tsc --project tsconfig.ui.json` (checkJs, sem emitir). Script global: sem import/export.
-// Tipadas como `any` por enquanto; ganham forma quando o módulo dono migrar para TypeScript.
+// Globais que os scripts de frontend/src/legado e as pontes de frontend/src/comum e frontend/src/ui publicam ou leem em window.
+// Só para o `tsc --project tsconfig.ui.json` (checkJs, sem emitir) e para o tsconfig.json. Script global: sem import/export.
+// Tipadas como `any` por enquanto; as pontes de comum/ e ui/ saem na react-final-3, quando app.js virar TS.
 
 // Bibliotecas externas (static/vendor).
 declare var lucide: any;
 
-// Autosave das anotações (frontend/src/legado/shared/history-annotation-autosave.js); lido pelo painel resultado-comparacao.
+// Autosave das anotações (frontend/src/comum/history-annotation-autosave.ts); lido pelo painel resultado-comparacao.
 declare var HistoryAnnotationAutosave: any;
 
 // Módulos Simpress* (cada arquivo publica o seu em window).

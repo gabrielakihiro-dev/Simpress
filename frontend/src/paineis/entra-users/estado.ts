@@ -70,7 +70,7 @@ export async function importarNomesEntra(evento?: { preventDefault?(): void }) {
     });
     mudar({ status: resumoNomesEntra(result), exportar: true });
     input.value = "";
-    input.dispatchEvent(new Event("change", { bubbles: true })); // redesenha o seletor (frontend/src/legado/ui/file-picker.js)
+    input.dispatchEvent(new Event("change", { bubbles: true })); // redesenha o seletor (frontend/src/ui/file-picker.ts)
     let refreshError: unknown = null;
     const serial = (lerEstado("currentEquipamento") as Equipamento | null)?.serial;
     if (serial) {

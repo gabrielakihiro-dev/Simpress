@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { attachAnnotationAutosave } = require("../../frontend/src/legado/shared/history-annotation-autosave.js");
+const { attachAnnotationAutosave } = require("../../frontend/src/comum/history-annotation-autosave.ts");
 
 class Element extends EventTarget {
   constructor() {

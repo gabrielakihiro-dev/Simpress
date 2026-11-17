@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
+const historyFormat = require("../../frontend/src/comum/history-format.ts");
 
 const PREPOSITIONS = ["de", "da", "do", "das", "dos", "na", "no", "pela", "pelo", "em"];
 const SOURCE_CASES = PREPOSITIONS.flatMap(preposition => [

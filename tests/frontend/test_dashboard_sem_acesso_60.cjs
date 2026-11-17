@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
-const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
-const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
+const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
+const transferUtils = require("../../frontend/src/comum/transfer-utils.ts");
 
 function render(info) {
   const make = () => ({

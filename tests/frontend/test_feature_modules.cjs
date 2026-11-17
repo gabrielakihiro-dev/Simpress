@@ -21,7 +21,7 @@ function declaredActions() {
   return names;
 }
 
-// Close handlers that accessible-dialogs.js looks up on window by name.
+// Close handlers that accessible-dialogs.ts looks up on window by name.
 function modalCloseHandlers() {
   const names = new Set();
   for (const file of featureFiles) {
@@ -35,10 +35,11 @@ function modalCloseHandlers() {
 // Object.assign(window, { ... }) in paineis/<painel>/montar.tsx (e.g. transfer history).
 function actionsInstalledByUiScripts() {
   const names = new Set();
-  const uiDir = path.join(legadoDir, "ui");
-  for (const file of fs.readdirSync(uiDir)) {
-    const source = fs.readFileSync(path.join(uiDir, file), "utf8");
-    for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
+  for (const uiDir of [path.join(legadoDir, "ui"), path.join(legadoDir, "..", "ui")]) {
+    for (const file of fs.readdirSync(uiDir)) {
+      const source = fs.readFileSync(path.join(uiDir, file), "utf8");
+      for (const match of source.matchAll(/\bwin\.([A-Za-z_$][\w$]*)\s*=\s*function/g)) names.add(match[1]);
+    }
   }
   const paineisDir = path.join(legadoDir, "..", "paineis");
   for (const painel of fs.readdirSync(paineisDir)) {
@@ -93,6 +94,6 @@ test("feature factories are also exported for Node", () => {
   for (const file of featureFiles) {
     assert.equal(typeof require(path.join(legadoDir, file)), "function", file);
   }
-  const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
+  const historyFormat = require("../../frontend/src/comum/history-format.ts");
   assert.equal(historyFormat.formatarNomeFonteHistorico("InvAll e EquipamentosDetalhes"), "no endpoint e na Simpress");
 });
