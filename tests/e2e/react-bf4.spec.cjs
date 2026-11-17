@@ -6,8 +6,10 @@
 // simulado aqui. O que se prova é o que o usuário vê (botão, atalho, título, <kbd>, ARIA, foco, Escape) e o contrato com
 // a página: window.abrirPainelCockpit / fecharPainelCockpit e window.SimpressReact["ferramentas-cockpit"].
 //
-// Sem o bundle (react-entry.js bloqueado, mesmo mecanismo do react-g5 e do react-piloto): a ponte mostra o erro onde o
-// resultado apareceria (.ck-nota--erro) e o botão Voltar fecha o painel; nada fica em "Carregando" para sempre.
+// Sem o bundle (react-entry.js bloqueado, mesmo mecanismo do react-g5 e do react-piloto): a ponte abre a casca das 9
+// ferramentas (título, atalho, subtítulo, foco, menu fechado); as 5 com texto próprio mostram o erro onde o resultado
+// apareceria (.ck-nota--erro; no Resumo também data-estado="erro") e o botão Voltar fecha o painel; nada fica em
+// "Carregando" para sempre. O Escape só existe com o bundle.
 const { test, expect } = require("@playwright/test");
 
 test.use({ timezoneId: "America/Sao_Paulo", locale: "pt-BR" });
@@ -38,6 +40,20 @@ const ERROS_SEM_PAINEL = [
   ["relatorio", "#cockpit-monthly-estado", "Falha ao carregar o relatório."],
   ["planilhas", "#cockpit-sheets-kpis", "Não foi possível carregar as planilhas."],
 ];
+
+// As 4 ferramentas conhecidas sem texto de erro próprio: abrem só a casca, sem inventar mensagem.
+const SEM_TEXTO_SEM_PAINEL = [
+  { tool: "sebrae-chamados", titulo: "Chamados", tecla: "F5" },
+  { tool: "cobertura", titulo: "Cobertura", tecla: "F10" },
+  { tool: "lembretes", titulo: "Lembretes", tecla: "" },
+  { tool: "unidades", titulo: "Catálogo de unidades", tecla: "" },
+];
+
+// Título e atalho de cada ferramenta com erro (a casca vem da cópia de toolInfo/toolKeys na ponte).
+const CASCA_DOS_ERROS = {
+  chamados: ["OS", "F6"], comparacao: ["Resumo", "F3"], apelidos: ["Histórico de apelidos", "F7"],
+  relatorio: ["Relatório mensal", "F8"], planilhas: ["Atualizar planilhas", ""],
+};
 
 // Erros de página e mensagens de console de erro; o teste confere que a lista tem só o que ele espera.
 function vigiar(page) {
@@ -203,17 +219,77 @@ test.describe("sem o bundle React", () => {
     await expect(page.locator("#main-content")).toBeVisible();
   });
 
+  // Casca de openPanel sem o bundle: só a seção da ferramenta à vista, título (h1 focável), <kbd>, menu fechado, skip-link.
+  async function conferirCascaSemBundle(page, tool, titulo, tecla) {
+    await expect(page.locator(RAIZ)).toBeVisible();
+    await expect(page.locator(`[data-cockpit-tool-panel="${tool}"]`)).toBeVisible();
+    await expect(page.locator("[data-cockpit-tool-panel]:visible")).toHaveCount(1);
+    await expect(page.locator("#main-content")).toBeHidden();
+    await expect(page.locator(TITULO)).toHaveText(titulo);
+    await expect(page.locator(TITULO)).toBeFocused();
+    if (tecla) await expect(page.locator("#cockpit-tool-kbd")).toHaveText(tecla);
+    else await expect(page.locator("#cockpit-tool-kbd")).toBeHidden();
+    await expect(page.locator("#cockpit-tool-subtitle")).not.toHaveText("");
+    await expect(page.locator("#cockpit-tools-dropdown")).toHaveAttribute("data-active-tool", tool);
+    await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveJSProperty("open", true);
+    await expect(page.locator(".skip-link")).toHaveAttribute("href", "#cockpit-tool-title");
+  }
+
   for (const [tool, alvo, mensagem] of ERROS_SEM_PAINEL) {
-    test(`ferramenta ${tool}: mostra o erro aprovado e o status não fica em "Carregando"`, async ({ page }) => {
+    test(`ferramenta ${tool}: abre a casca, mostra o erro aprovado e o status não fica em "Carregando"`, async ({ page }) => {
       const vistos = vigiar(page);
       await abrirPagina(page, { semBundle: true });
       await page.evaluate(nome => window.abrirPainelCockpit(nome), tool);
 
-      await expect(page.locator(`[data-cockpit-tool-panel="${tool}"]`)).toBeVisible();
+      await conferirCascaSemBundle(page, tool, ...CASCA_DOS_ERROS[tool]);
       await expect(page.locator(`${alvo} .ck-nota--erro`)).toHaveText(mensagem);
+      // O cartão do Resumo (comparison-result.js) espera data-estado; sem ele ficaria em "Carregando" para sempre.
+      if (tool === "comparacao") await expect(page.locator(alvo)).toHaveAttribute("data-estado", "erro");
+      else await expect(page.locator(alvo)).not.toHaveAttribute("data-estado", /.*/);
       await expect(page.locator(`[data-cockpit-tool-panel="${tool}"] [role="status"]`).filter({ hasText: "Carregando" })).toHaveCount(0);
       await expect(page.locator(`[data-cockpit-tool-panel="${tool}"] [aria-busy="true"]`)).toHaveCount(0);
       expect(vistos.pagina).toEqual([]);
     });
   }
+
+  for (const { tool, titulo, tecla } of SEM_TEXTO_SEM_PAINEL) {
+    test(`ferramenta ${tool} (sem texto de erro próprio): abre a casca vazia e o Voltar fecha`, async ({ page }) => {
+      const vistos = vigiar(page);
+      await abrirPagina(page, { semBundle: true });
+      await page.evaluate(nome => window.abrirPainelCockpit(nome), tool);
+
+      await conferirCascaSemBundle(page, tool, titulo, tecla);
+      await expect(page.locator(`[data-cockpit-tool-panel="${tool}"] .ck-nota--erro`)).toHaveCount(0);
+      expect(vistos.console.some(texto => texto.includes('O painel React "ferramentas-cockpit" não carregou.'))).toBe(true);
+      expect(vistos.pagina).toEqual([]);
+
+      await page.getByRole("button", { name: "Voltar para a tela principal" }).click();
+      await expect(page.locator(RAIZ)).toBeHidden();
+      await expect(page.locator("#main-content")).toBeVisible();
+      await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("data-active-tool", /.*/);
+      await expect(page.locator(".skip-link")).toHaveAttribute("href", "#main-content");
+    });
+  }
+
+  test("pelo botão real: abre a casca e o Voltar devolve o foco a quem abriu", async ({ page }) => {
+    const vistos = vigiar(page);
+    await abrirPagina(page, { semBundle: true });
+    const origem = await abrirPelaInterface(page, FERRAMENTAS[0]);
+    await conferirCascaSemBundle(page, "chamados", "OS", "F6");
+    // Com o botão da barra à vista (desktop) ele acompanha o painel; no mobile o clique veio do menu Ferramentas.
+    if (origem === FERRAMENTAS[0].barra) await expect(page.locator(origem)).toHaveAttribute("aria-pressed", "true");
+    expect(vistos.pagina).toEqual([]);
+
+    await page.getByRole("button", { name: "Voltar para a tela principal" }).click();
+    await expect(page.locator(RAIZ)).toBeHidden();
+    await expect(page.locator("#main-content")).toBeVisible();
+    await expect(page.locator(origem)).toBeFocused();
+  });
+
+  test("ferramenta desconhecida não abre nada", async ({ page }) => {
+    await abrirPagina(page, { semBundle: true });
+    await page.evaluate(() => window.abrirPainelCockpit("nao-existe"));
+    await expect(page.locator(RAIZ)).toBeHidden();
+    await expect(page.locator("#main-content")).toBeVisible();
+  });
 });

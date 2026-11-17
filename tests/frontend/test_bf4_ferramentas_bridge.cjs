@@ -54,32 +54,52 @@ function comJanela(janela, executar) {
   }
 }
 
-// Casca mínima do index.html: o painel fechado, a tela principal e cada seção da ferramenta com o alvo do erro.
+// toolInfo e toolKeys de estado.ts, lidos do código-fonte: a cópia da ponte tem de bater com o painel.
+const avaliar = texto => new Function(`return (${texto});`)();
+const toolKeysTs = avaliar(estadoTs.match(/const toolKeys[^=]*= (\{.*\});/)[1]);
+const toolInfoTs = avaliar(estadoTs.match(/const toolInfo[^=]*= (\{[\s\S]*?\n  \});/)[1]);
+
+// Casca mínima do index.html: skip-link, menu Ferramentas, botão da barra, tela principal e o painel fechado com título,
+// atalho, subtítulo e uma seção por ferramenta (as que têm texto de erro com o alvo dele).
 function montarCasca() {
   const doc = createFakeDocument();
-  const filho = (pai, id, hidden = false) => {
-    const no = doc.createElement("div");
+  const filho = (pai, id, { hidden = false, tag = "div" } = {}) => {
+    const no = doc.createElement(tag);
     if (id) no.setAttribute("id", id);
     no.hidden = hidden;
     pai.append(no);
     return no;
   };
+  const skipLink = filho(doc.body, "", { tag: "a" });
+  skipLink.className = "skip-link";
+  skipLink.setAttribute("href", "#main-content");
+  const gatilho = filho(doc.body, "cockpit-tools-trigger", { tag: "button" });
+  const menu = filho(doc.body, "cockpit-tools-dropdown", { tag: "details" });
+  menu.open = true;
+  const botao = filho(doc.body, "", { tag: "button" });
+  botao.className = "ck-aba ck-aba--painel";
+  botao.setAttribute("data-cockpit-tool", "chamados");
+  botao.dataset.cockpitTool = "chamados";
+  botao.setAttribute("aria-pressed", "false");
   const principal = filho(doc.body, "main-content");
-  const raiz = filho(doc.body, "cockpit-tool-panels", true);
+  const raiz = filho(doc.body, "cockpit-tool-panels", { hidden: true });
+  const titulo = filho(raiz, "cockpit-tool-title", { tag: "h1" });
+  const tecla = filho(raiz, "cockpit-tool-kbd", { tag: "kbd" });
+  const subtitulo = filho(raiz, "cockpit-tool-subtitle");
   const secoes = {};
   const alvos = {};
-  for (const [ferramenta, [alvoId]] of Object.entries(ERROS)) {
-    const secao = filho(raiz, "", true);
+  for (const ferramenta of [...Object.keys(ERROS), ...SEM_TEXTO]) {
+    const secao = filho(raiz, "", { hidden: true });
     secao.setAttribute("data-cockpit-tool-panel", ferramenta);
     secao.dataset.cockpitToolPanel = ferramenta;
     secoes[ferramenta] = secao;
-    alvos[ferramenta] = filho(secao, alvoId);
+    if (ERROS[ferramenta]) alvos[ferramenta] = filho(secao, ERROS[ferramenta][0]);
   }
   const status = filho(secoes.planilhas, "cockpit-sheets-status");
   status.textContent = "Carregando…";
   const statusComparacao = filho(secoes.comparacao, "cockpit-comparison-status");
   statusComparacao.textContent = "Carregando histórico…";
-  return { doc, principal, raiz, secoes, alvos, status, statusComparacao };
+  return { doc, principal, raiz, secoes, alvos, status, statusComparacao, skipLink, gatilho, menu, botao, titulo, tecla, subtitulo };
 }
 
 test("a ponte expõe as 11 ações e encaminha todas ao painel ferramentas-cockpit", () => {
@@ -138,18 +158,43 @@ test("sem o painel, cada ação registra o erro, não lança e devolve o valor d
   });
 });
 
-test("sem o painel, abrir uma ferramenta mostra o erro no lugar do resultado, com a mesma marcação de renderError", async () => {
+// A casca que openPanel (estado.ts) monta: título, atalho, subtítulo, foco, menu fechado, botão da barra e skip-link.
+function conferirCasca(casca, ferramenta) {
+  const [titulo, subtitulo] = toolInfoTs[ferramenta];
+  const tecla = toolKeysTs[ferramenta] || "";
+  assert.equal(casca.raiz.hidden, false, `${ferramenta}: o painel abre`);
+  assert.equal(casca.principal.hidden, true, `${ferramenta}: a tela principal sai`);
+  Object.entries(casca.secoes).forEach(([nome, secao]) => assert.equal(secao.hidden, nome !== ferramenta, `${ferramenta}: só a seção dela aparece (${nome})`));
+  assert.equal(casca.titulo.textContent, titulo, `${ferramenta}: título`);
+  assert.equal(casca.subtitulo.textContent, subtitulo, `${ferramenta}: subtítulo`);
+  assert.equal(casca.tecla.textContent, tecla, `${ferramenta}: atalho`);
+  assert.equal(casca.tecla.hidden, !tecla, `${ferramenta}: atalho escondido quando não há`);
+  assert.equal(casca.doc.activeElement, casca.titulo, `${ferramenta}: o foco vai para o título`);
+  assert.equal(casca.menu.open, false, `${ferramenta}: o menu Ferramentas fecha`);
+  assert.equal(casca.menu.dataset.activeTool, ferramenta, `${ferramenta}: data-active-tool`);
+  assert.equal(casca.skipLink.getAttribute("href"), "#cockpit-tool-title", `${ferramenta}: o skip-link aponta para o título`);
+  assert.equal(casca.botao.getAttribute("aria-pressed"), String(ferramenta === "chamados"), `${ferramenta}: aria-pressed do botão da barra`);
+}
+
+// `app` é o objeto do app antigo (context.app): o cartão do Resumo publica carregarResumoAtivos nele.
+async function abrirSemBundle(casca, ferramenta, erros = [], app = {}) {
+  const acoes = comJanela({ SimpressReact: {} }, () => criarPonteCockpit({ app, ponteReactSincrona: ponteDoApp(erros) }));
+  await comJanela({ SimpressReact: {} }, () => {
+    globalThis.document = casca.doc;
+    return acoes.abrirPainelCockpit(ferramenta);
+  });
+  return acoes;
+}
+
+test("sem o painel, abrir uma ferramenta mostra a casca e o erro no lugar do resultado, com a mesma marcação de renderError", async () => {
   for (const [ferramenta, [alvoId, mensagem]] of Object.entries(ERROS)) {
     const casca = montarCasca();
     const erros = [];
-    const acoes = comJanela({ SimpressReact: {} }, () => criarPonteCockpit({ ponteReactSincrona: ponteDoApp(erros) }));
-    await comJanela({ SimpressReact: {} }, () => {
-      globalThis.document = casca.doc;
-      return acoes.abrirPainelCockpit(ferramenta);
-    });
-    assert.equal(casca.raiz.hidden, false, `${ferramenta}: o painel abre`);
-    assert.equal(casca.principal.hidden, true, `${ferramenta}: a tela principal sai`);
-    Object.entries(casca.secoes).forEach(([nome, secao]) => assert.equal(secao.hidden, nome !== ferramenta, `${ferramenta}: só a seção dela aparece (${nome})`));
+    const resumo = [];
+    await abrirSemBundle(casca, ferramenta, erros, { carregarResumoAtivos: () => { resumo.push(ferramenta); } });
+    conferirCasca(casca, ferramenta);
+    // O cartão do Resumo tem ponte própria e é ela que registra a falha dele (react-piloto.spec.cjs confere no console).
+    assert.deepEqual(resumo, ferramenta === "comparacao" ? ["comparacao"] : [], `${ferramenta}: só o Resumo aciona o cartão de ativos`);
     const alvo = casca.doc.getElementById(alvoId);
     assert.equal(alvo.children.length, 1, ferramenta);
     const nota = alvo.children[0];
@@ -157,6 +202,8 @@ test("sem o painel, abrir uma ferramenta mostra o erro no lugar do resultado, co
     assert.equal(nota.className, "ck-nota ck-nota--erro");
     assert.equal(nota.textContent, mensagem);
     assert.ok(estadoTs.includes(`"${mensagem}"`), `o texto "${mensagem}" já existe em estado.ts`);
+    // O cartão do Resumo espera data-estado (comparison-result.js grava o mesmo valor).
+    assert.equal(alvo.dataset.estado, ferramenta === "comparacao" ? "erro" : undefined, ferramenta);
     if (ferramenta === "planilhas") assert.equal(casca.status.textContent, "", "o 'Carregando…' da faixa de status sai");
     if (ferramenta === "comparacao") assert.equal(casca.statusComparacao.textContent, "", "o 'Carregando histórico…' do Resumo sai");
     assert.equal(erros.length, 1, `${ferramenta}: o erro também vai para o console`);
@@ -164,18 +211,42 @@ test("sem o painel, abrir uma ferramenta mostra o erro no lugar do resultado, co
   }
 });
 
-test("sem o painel, ferramenta sem texto de erro próprio só registra no console e não abre o painel vazio", async () => {
-  for (const ferramenta of [...SEM_TEXTO, "inexistente"]) {
+test("sem o painel, ferramenta sem texto de erro próprio abre a casca vazia e registra no console; ferramenta desconhecida não abre nada", async () => {
+  assert.deepEqual([...Object.keys(ERROS), ...SEM_TEXTO].sort(), Object.keys(toolInfoTs).sort(), "as 9 ferramentas de toolInfo");
+  for (const ferramenta of SEM_TEXTO) {
     const casca = montarCasca();
     const erros = [];
-    const acoes = comJanela({ SimpressReact: {} }, () => criarPonteCockpit({ ponteReactSincrona: ponteDoApp(erros) }));
-    await comJanela({ SimpressReact: {} }, () => {
-      globalThis.document = casca.doc;
-      return acoes.abrirPainelCockpit(ferramenta);
-    });
-    assert.equal(casca.raiz.hidden, true, ferramenta);
-    assert.equal(casca.principal.hidden, false, ferramenta);
+    await abrirSemBundle(casca, ferramenta, erros);
+    conferirCasca(casca, ferramenta);
+    assert.equal(casca.raiz.querySelectorAll(".ck-nota--erro").length, 0, `${ferramenta}: sem texto de erro inventado`);
     assert.equal(erros.length, 1, ferramenta);
+  }
+  const casca = montarCasca();
+  const erros = [];
+  await abrirSemBundle(casca, "inexistente", erros);
+  assert.equal(casca.raiz.hidden, true);
+  assert.equal(casca.principal.hidden, false);
+  assert.equal(casca.menu.open, true, "o menu fica como estava");
+  assert.equal(erros.length, 1);
+});
+
+test("fecharPainelCockpit sem o painel desfaz a casca e devolve o foco ao botão que abriu; com false não mexe no foco", async () => {
+  for (const restaurar of [true, false]) {
+    const casca = montarCasca();
+    casca.botao.focus();
+    const acoes = await abrirSemBundle(casca, "chamados");
+    conferirCasca(casca, "chamados");
+    comJanela({ SimpressReact: {} }, () => {
+      globalThis.document = casca.doc;
+      acoes.fecharPainelCockpit(...(restaurar ? [] : [false]));
+    });
+    assert.equal(casca.raiz.hidden, true);
+    assert.equal(casca.principal.hidden, false);
+    assert.equal(casca.menu.open, false);
+    assert.equal(casca.menu.dataset.activeTool, undefined, "data-active-tool sai");
+    assert.equal(casca.skipLink.getAttribute("href"), "#main-content", "o skip-link volta ao href de antes");
+    assert.equal(casca.botao.getAttribute("aria-pressed"), "false");
+    assert.equal(casca.doc.activeElement === casca.botao, restaurar, restaurar ? "o foco volta ao botão" : "com false o foco fica onde estava");
   }
 });
 
