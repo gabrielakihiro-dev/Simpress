@@ -2,13 +2,13 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
 const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
-const createComparisonResultRenderer = require("../../frontend/src/legado/ui/comparison-result-renderer.js");
+const { criarRenderizadorResultado } = require("../../frontend/src/paineis/resultado-comparacao/renderizador.ts");
 const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
 
 const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
 
 function renderizar(comparison) {
-  const renderer = createComparisonResultRenderer({
+  const renderer = criarRenderizadorResultado({
     app: { atributosVersaoAnotacao: () => "" },
     dom,
     historyFormat,

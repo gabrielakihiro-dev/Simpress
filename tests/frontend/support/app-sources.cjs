@@ -29,7 +29,6 @@ function appScripts() {
     || file === "shared/api-fetch.js"
     || file === "shared/history-format.js"
     || file === "shared/sebrae-dashboard-model.js"
-    || file === "ui/comparison-result-renderer.js"
     || file === "ui/equipment-search-renderers.js"
     || file === "ui/logged-user-markers.js"
     || file === "app.js";

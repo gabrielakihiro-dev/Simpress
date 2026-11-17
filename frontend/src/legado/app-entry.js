@@ -34,7 +34,6 @@ import "./features/units-catalog.js";
 import "./features/inventory-upload.js";
 import "./features/entra-users.js";
 import "./ui/logged-user-markers.js";
-import "./ui/comparison-result-renderer.js";
 import "./features/comparison-result.js";
 import "./features/comparison-history.js";
 import "./features/cockpit-chamados.js";

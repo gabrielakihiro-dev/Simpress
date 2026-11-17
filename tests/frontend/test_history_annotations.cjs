@@ -6,7 +6,10 @@ const test = require("node:test");
 
 const { appSource, legadoDir } = require("./support/app-sources.cjs");
 
-const appScript = appSource();
+// Os textos e colunas das anotações são desenhados pelo renderizador TS (react-final-b); o resto segue no JS antigo.
+const renderizador = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "resultado-comparacao", "renderizador.ts"), "utf8");
+const appScript = `${appSource()}
+${renderizador}`;
 const indexHtml = assembledHtml();
 const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
@@ -30,7 +33,7 @@ test("distinguishes annotations with an empty serial by hostname", () => {
 });
 
 test("renders an annotation column in every requested comparison section", () => {
-  assert.match(appScript, /const renderizarCampoAnotacao = \(item, contexto\)/);
+  assert.match(appScript, /const renderizarCampoAnotacao = \(item: ItemBase, contexto: string\)/);
   assert.match(appScript, /"Linha no endpoint", \.\.\.annotationHeaders/);
   assert.match(appScript, /"Sem correspondência em", \.\.\.annotationHeaders/);
   assert.match(appScript, /"Local na Simpress", \.\.\.annotationHeaders/);
