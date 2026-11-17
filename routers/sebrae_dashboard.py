@@ -217,7 +217,24 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
         return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
 
-    def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None) -> List[Dict[str, Any]]:
+    def _sugestoes_antigo(aberto: Mapping[str, Any], efetivo: Mapping[str, Any], lido: Optional[Mapping[str, str]], opcoes_a: Sequence[str]) -> Dict[str, Optional[str]]:
+        """Sugestão de A e J de um chamado antigo em aberto, só para exibir (nada é gravado); campo já preenchido não é sugerido.
+
+        Só as regras locais (``sugerir_responsavel`` e ``sugerir_tipo`` sem índice): sem IA e sem sugestão de B."""
+        valores = aberto.get("valores") or {}
+        textos = (efetivo.get("titulo") or (lido or {}).get("titulo"), efetivo.get("descricao"), (lido or {}).get("atendimento"), efetivo.get("usuario"))
+        try:
+            return {
+                "sugestao_responsavel": None if str(valores.get("A") or "").strip() else sebrae_categoria.sugerir_responsavel(*textos, opcoes_a),
+                "sugestao_tipo": None if str(valores.get("J") or "").strip() else sebrae_categoria.sugerir_tipo(*textos, None),
+            }
+        except Exception as erro:  # noqa: BLE001 - uma sugestão nunca derruba a lista; log só o tipo, nunca o texto do chamado
+            logger.warning("Sugestão de A e J do chamado antigo indisponível (erro=%s).", type(erro).__name__)
+            return {"sugestao_responsavel": None, "sugestao_tipo": None}
+
+    def _abertos_com_sugestoes(
+        abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None, opcoes_a: Sequence[str] = (),
+    ) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
 
         An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
@@ -239,7 +256,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
              "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
-             "destaque": _destacado(obs_map, a.get("numero"))}  # ``softexpert`` is the finalization state; this is the read data
+             "destaque": _destacado(obs_map, a.get("numero")),  # ``softexpert`` is the finalization state; this is the read data
+             **_sugestoes_antigo(a, e, antigos.get(str(a.get("numero"))), opcoes_a)}
             for a, e in zip(abertos, efetivos)
         ]
 
@@ -358,7 +376,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {
             "importado": None if importado is None else {
                 "versao": importado["versao"], "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
-                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes),
+                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes, opcoes_a),
                 "finalizados": finalizados,
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
                 "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),

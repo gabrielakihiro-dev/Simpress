@@ -37,6 +37,17 @@ O CI agora executa `npm audit --audit-level=moderate` em etapas próprias, nos
 jobs `verify` e `ui-browser`. O job de navegador também recompila os assets
 antes dos testes. Avisos moderados ou superiores passam a interromper o job.
 
+### Exceção de 17/11/2026: alerta ignorado
+
+A pedido do usuário (17/11/2026), os dois jobs rodam `node scripts/npm-audit.cjs`
+no lugar de `npm audit --audit-level=moderate`. O script faz a mesma auditoria,
+mas ignora só os alertas da lista `IGNORADOS`; qualquer outro alerta moderado ou
+acima continua interrompendo o job. Na lista está apenas o
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
+(ReDoS no `picomatch`, que chega pelo `vite` e só roda no build local), que não
+tinha versão corrigida nessa data. Quando sair a correção, rode `npm audit fix`,
+tire o alerta da lista e confirme que `node scripts/npm-audit.cjs` passa.
+
 ## Validação local
 
 - `npm ci`: instalação limpa concluída; zero vulnerabilidades.

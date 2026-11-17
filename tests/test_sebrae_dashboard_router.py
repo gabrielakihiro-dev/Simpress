@@ -462,6 +462,42 @@ class RotasSebraeTest(RotasBase):
         self.assertIn("não está entre os chamados novos", resposta.json()["detail"])
 
 
+class SugestaoDeChamadoAntigoTest(RotasBase):
+    """Cabo HDMI e cabo de força do monitor também são sugeridos (A=CLIENTE, J=INCIDENTE) nos antigos em aberto: só as regras locais."""
+
+    def abertos(self, *itens):
+        abertos = [G.ChamadoAberto(numero, 2 + i, titulo, valores, chamado=numero, descricao=descricao).como_dict()
+                   for i, (numero, titulo, descricao, valores) in enumerate(itens)]
+        sebrae_novos.salvar_existentes(
+            self.caminhos.existentes, [i[0] for i in itens], "Dashboard.xlsx", listas={"A": ["CLIENTE", "SIMPRESS"]}, abertos=abertos)
+        return {a["numero"]: a for a in self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"]}
+
+    def test_antigo_com_a_e_j_vazios_recebe_cliente_e_incidente(self):
+        antigos = self.abertos(
+            ("UTIC-2026-0001", "Solicitação de cabo HDMI", "", {}),
+            ("UTIC-2026-0004", "Monitor sem imagem", "trocar o cabo de força do monitor", {"A": "", "J": ""}),
+        )
+        for numero in ("UTIC-2026-0001", "UTIC-2026-0004"):
+            self.assertEqual((antigos[numero]["sugestao_responsavel"], antigos[numero]["sugestao_tipo"]), ("CLIENTE", "INCIDENTE"), numero)
+            self.assertNotIn("sugestao_categoria", antigos[numero])  # B nunca é sugerido nos antigos
+
+    def test_campo_ja_preenchido_nao_recebe_sugestao(self):
+        antigos = self.abertos(
+            ("UTIC-2026-0002", "Solicitação de cabo HDMI", "", {"A": "SIMPRESS"}),
+            ("UTIC-2026-0003", "Solicitação de cabo HDMI", "", {"A": "SIMPRESS", "J": "SOLICITAÇÃO"}),
+            ("UTIC-2026-0005", "Solicitação de cabo HDMI", "", {"J": "SOLICITAÇÃO"}),
+        )
+        self.assertEqual((antigos["UTIC-2026-0002"]["sugestao_responsavel"], antigos["UTIC-2026-0002"]["sugestao_tipo"]), (None, "INCIDENTE"))
+        self.assertEqual((antigos["UTIC-2026-0003"]["sugestao_responsavel"], antigos["UTIC-2026-0003"]["sugestao_tipo"]), (None, None))
+        self.assertEqual((antigos["UTIC-2026-0005"]["sugestao_responsavel"], antigos["UTIC-2026-0005"]["sugestao_tipo"]), ("CLIENTE", None))
+
+    def test_falha_na_sugestao_nunca_derruba_a_lista(self):
+        with patch.object(rota_sebrae.sebrae_categoria, "sugerir_responsavel", side_effect=ValueError("texto do chamado")),                 self.assertLogs(rota_sebrae.logger, "WARNING") as registro:
+            antigos = self.abertos(("UTIC-2026-0001", "Solicitação de cabo HDMI", "", {}))
+        self.assertEqual((antigos["UTIC-2026-0001"]["sugestao_responsavel"], antigos["UTIC-2026-0001"]["sugestao_tipo"]), (None, None))
+        self.assertNotIn("HDMI", "".join(registro.output))
+
+
 class OrdemDaColunaCTest(RotasBase):
     """The F5 lists and the Assistant show the tickets in the order of the Tabela3 sorted by column C ascending."""
 
