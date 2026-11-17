@@ -86,9 +86,11 @@ class HistoryDisplayLabelTests(unittest.TestCase):
         script = r"""
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { stripTypeScriptTypes } = require('node:module');
 const format = require('./frontend/src/legado/shared/history-format.js');
-const source = fs.readFileSync('frontend/src/legado/ui/comparison-result-renderer.js', 'utf8');
-const functions = source.slice(source.indexOf('  const formatarMotivoRevisao'), source.indexOf('  const atributosLinhaComparacao'));
+const source = fs.readFileSync('frontend/src/paineis/resultado-comparacao/renderizador.ts', 'utf8');
+// A fatia é TypeScript: apaga os tipos para o vm executar JS puro.
+const functions = stripTypeScriptTypes(source.slice(source.indexOf('  const formatarMotivoRevisao'), source.indexOf('  const atributosLinhaComparacao')));
 const labels = JSON.parse(fs.readFileSync(0, 'utf8'));
 const headers = source.match(/aliasReviewHeaders: (\[[^\n]+\])/)[1];
 const result = vm.runInNewContext(functions + `;({

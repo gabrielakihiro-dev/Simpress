@@ -3,7 +3,7 @@ const test = require("node:test");
 const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
 const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createComparisonResultRenderer = require("../../frontend/src/legado/ui/comparison-result-renderer.js");
+const { criarRenderizadorResultado } = require("../../frontend/src/paineis/resultado-comparacao/renderizador.ts");
 const createEquipmentSearchRenderers = require("../../frontend/src/legado/ui/equipment-search-renderers.js");
 const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
 const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
@@ -47,7 +47,7 @@ function afirmarCamposEscapados(html, campos, contexto) {
 }
 
 test("comparison result renderer escapes every text field", () => {
-  const renderer = createComparisonResultRenderer({
+  const renderer = criarRenderizadorResultado({
     app: { atributosVersaoAnotacao: () => "" }, dom, historyFormat, loggedUserMarkers,
   });
   const anotacao = { anotacao: carga("anotacao"), anotacao_id: carga("anotacao_id") };

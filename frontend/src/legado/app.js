@@ -64,7 +64,6 @@
     apiErrors: window.SimpressApiErrors,
     apiFetch: window.SimpressApiFetch.apiFetch,
     equipmentSearchRenderer: window.SimpressEquipmentSearchRenderers,
-    comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
     sebraeDashboardModel: window.SimpressSebraeDashboardModel,
     ticketRules: window.SimpressTicketRules(domUtils),

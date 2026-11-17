@@ -4,7 +4,7 @@ from pathlib import Path
 from domains.regras_negocio import series_sebrae
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RENDERER = PROJECT_ROOT / "frontend" / "src" / "legado" / "ui" / "comparison-result-renderer.js"
+RENDERER = PROJECT_ROOT / "frontend" / "src" / "paineis" / "resultado-comparacao" / "renderizador.ts"
 
 
 class SebraeSeriesSingleSourceTests(unittest.TestCase):

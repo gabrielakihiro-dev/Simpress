@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
+// estado.ts importa "./renderizador" sem extensão: o hook completa ".ts" antes do require.
+require("./support/resolver-ts-sem-extensao.cjs");
 const { criarResultadoComparacao } = require("../../frontend/src/paineis/resultado-comparacao/estado.ts");
 const { requestWithRetries } = require("../../frontend/src/legado/shared/history-annotation-autosave.js");
 
@@ -11,11 +13,10 @@ const respostaOk = corpo => ({ ok: true, status: 200, json: async () => corpo })
 
 function criar({ apiFetch, attach = () => {} }) {
   return criarResultadoComparacao({
-    app: {}, appState: {}, motion: null,
-    dom: { escapeHtml: valor => String(valor) },
-    comparisonResultRenderer: () => ({ RESUMO_ABAS: [] }),
+    app: { atributosVersaoAnotacao: () => "" }, appState: {}, motion: null,
+    dom: { escapeHtml: valor => String(valor), pluralize: () => "", infoTipHtml: () => "" },
     historyFormat: { formatarNomeFonteHistorico: valor => valor, formatarHorarioHistorico: valor => valor },
-    loggedUserMarkers: { conectar() {} },
+    loggedUserMarkers: { conectar() {}, marcador: () => "" },
     annotationAutosave: { attachAnnotationAutosave: attach },
     apiFetch,
   });

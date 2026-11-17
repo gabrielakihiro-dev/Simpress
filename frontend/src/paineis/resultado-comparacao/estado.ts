@@ -1,4 +1,5 @@
 import type { ApiFetchError, ApiFetchOptions } from "../../api";
+import { criarRenderizadorResultado, type ContextoRenderizador } from "./renderizador";
 
 // Resultado da aba Comparação: renderização, anotações com autosave, filtros, abas do Resumo e decisões
 // de apelido manual, hostname duplicado e pendência de usuário. Só sintaxe apagável (sem enum/namespace):
@@ -39,24 +40,6 @@ interface TipoResumo {
   valor: string;
   rotulo: string;
 }
-interface RendererResultado {
-  listasComparacao(comparacao: Comparacao): { divergenciasApelidosManuais: DivergenciaApelidoManual[] };
-  criarColunasAnotacao(comparacao: Comparacao): unknown;
-  conteudoAnotacoesSincronizadas(comparacao: Comparacao, colunas: unknown): string;
-  conteudoResultadoComparacao(comparacao: Comparacao, listas: unknown, colunas: unknown): string;
-  avisoHistoricoComparacao(comparacao: Comparacao): string;
-  secaoSemUsuario(semUsuario: SemUsuario | null): string;
-  RESUMO_ABAS: { chave: string }[];
-  rotuloContagemAba(chave: string, total: number | null, filtrando: boolean): string;
-  canonicalizarCategoriaResumo(categoria: string | undefined): string;
-  ROTULOS_CATEGORIA_RESUMO: Record<string, string | undefined>;
-  tiposDaAba(chave: string, presentes: string[]): TipoResumo[];
-  categoriasDoTipo(chave: string, tipo: string): string[] | null;
-  textoContadorResumo(visiveis: number, filtrando: boolean): string;
-  textoSemResultado(busca: string): string;
-  TEXTO_VAZIO_ABA: Record<string, string | undefined>;
-  abaDaCategoria(categoria: string | undefined): string | undefined;
-}
 interface AppResultado {
   confirmarAcao(opcoes: { titulo: string; mensagem: string; confirmar: string; destrutiva?: boolean }): Promise<boolean>;
   showToast(mensagem: string, tipo: string): unknown;
@@ -81,16 +64,12 @@ interface OpcoesAutosave {
   send(pedido: PedidoAnotacao): Promise<unknown>;
 }
 export interface ContextoResultadoComparacao {
-  app: AppResultado;
+  app: AppResultado & ContextoRenderizador["app"];
   appState: { currentEquipamento?: { serial?: unknown } | null };
   motion: { reveal(elemento: Element): void } | null | undefined;
-  dom: { escapeHtml(valor: unknown): string };
-  comparisonResultRenderer(contexto: ContextoResultadoComparacao): RendererResultado;
-  historyFormat: {
-    formatarNomeFonteHistorico(valor: unknown): string;
-    formatarHorarioHistorico(valor: unknown): string;
-  };
-  loggedUserMarkers: { conectar(raiz: HTMLElement): void };
+  dom: ContextoRenderizador["dom"];
+  historyFormat: ContextoRenderizador["historyFormat"];
+  loggedUserMarkers: ContextoRenderizador["loggedUserMarkers"] & { conectar(raiz: HTMLElement): void };
   annotationAutosave: { attachAnnotationAutosave(opcoes: OpcoesAutosave): unknown };
   apiFetch<T = unknown>(url: string, options?: ApiFetchOptions): Promise<T>;
 }
@@ -116,7 +95,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   "use strict";
   const { app, appState, motion } = context;
   const { escapeHtml } = context.dom;
-  const renderer = context.comparisonResultRenderer(context);
+  const renderer = criarRenderizadorResultado(context);
   const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
   let comparisonAnnotationSyncObservers: MutationObserver[] = [];
@@ -195,7 +174,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   }
 
   // No saved comparison: the empty message is already in the content area; adds only the "Sem usuário" section below it.
-  function renderizarSemUsuarioSemComparacao(semUsuario: SemUsuario | null, navigationTarget: AlvoNavegacao | null = null): void {
+  function renderizarSemUsuarioSemComparacao(semUsuario: SemUsuario, navigationTarget: AlvoNavegacao | null = null): void {
     const content = document.getElementById("comparacao-planilhas-conteudo")!;
     content.insertAdjacentHTML("beforeend", renderer.secaoSemUsuario(semUsuario));
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));

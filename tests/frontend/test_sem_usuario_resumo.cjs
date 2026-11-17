@@ -2,13 +2,15 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
 const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
-const createComparisonResultRenderer = require("../../frontend/src/legado/ui/comparison-result-renderer.js");
+const { criarRenderizadorResultado } = require("../../frontend/src/paineis/resultado-comparacao/renderizador.ts");
 const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
+// estado.ts importa "./renderizador" sem extensão: o hook completa ".ts" antes do require.
+require("./support/resolver-ts-sem-extensao.cjs");
 const { criarResultadoComparacao: createComparisonResult } = require("../../frontend/src/paineis/resultado-comparacao/estado.ts");
 
 const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
 const rendererContext = { app: { atributosVersaoAnotacao: () => "" }, dom, historyFormat, loggedUserMarkers: createLoggedUserMarkers({ dom }) };
-const renderer = createComparisonResultRenderer(rendererContext);
+const renderer = criarRenderizadorResultado(rendererContext);
 
 // The table renderer derives mobile cards through <template>; the markup checks only need the desktop rows.
 globalThis.document = { createElement: () => ({ content: { querySelector: () => null } }) };
@@ -61,8 +63,8 @@ test("renderizarSemUsuarioSemComparacao acrescenta só a seção Sem usuário ao
     const content = { html: "", insertAdjacentHTML(_posicao, html) { this.html += html; } };
     globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), createElement: () => ({ content: { querySelector: () => null } }), dispatchEvent: () => true };
     const api = createComparisonResult({
-      app: {}, appState: {}, motion: null, dom, historyFormat,
-      comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+      app: rendererContext.app, appState: {}, motion: null, dom, historyFormat,
+      loggedUserMarkers: createLoggedUserMarkers({ dom }),
     });
     return { api, content };
   };
@@ -101,8 +103,8 @@ function criarNavegacao(linhas) {
   globalThis.document = { getElementById: id => (id === "comparacao-planilhas-conteudo" ? content : null), querySelectorAll: () => [], dispatchEvent: () => true };
   globalThis.window = { matchMedia: () => ({ matches: true }) };
   const api = createComparisonResult({
-    app: {}, appState: {}, motion: { reveal: row => revealed.push(row) }, dom, historyFormat,
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+    app: rendererContext.app, appState: {}, motion: { reveal: row => revealed.push(row) }, dom, historyFormat,
+    loggedUserMarkers: createLoggedUserMarkers({ dom }),
   });
   return { api, revealed };
 }
@@ -139,8 +141,8 @@ test("carregarSemUsuarioResumo pages the notebooks without user and reports erro
   ];
   globalThis.document = {};
   const criar = apiFetch => createComparisonResult({
-    app: {}, appState: {}, motion: null, dom, historyFormat,
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
+    app: rendererContext.app, appState: {}, motion: null, dom, historyFormat,
+    loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
   });
   const ok = await criar(async url => { urls.push(url); return paginas[urls.length - 1]; }).carregarSemUsuarioResumo();
   assert.equal(ok.estado, "ok");
@@ -157,8 +159,8 @@ test("carregarSemUsuarioResumo reutiliza o resultado bem-sucedido e só relê de
   let chamadas = 0;
   globalThis.document = {};
   const criar = apiFetch => createComparisonResult({
-    app: {}, appState: {}, motion: null, dom, historyFormat,
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
+    app: rendererContext.app, appState: {}, motion: null, dom, historyFormat,
+    loggedUserMarkers: createLoggedUserMarkers({ dom }), apiFetch,
   });
   const api = criar(async () => { chamadas += 1; return { items: [{ serial: "A" }], has_more: false, total: 1 }; });
   const primeira = await api.carregarSemUsuarioResumo();
@@ -192,9 +194,9 @@ test("carregarSemUsuarioResumo ao bater o limite de páginas devolve estado limi
   let chamadas = 0;
   globalThis.document = {};
   const api = createComparisonResult({
-    app: {}, appState: {}, motion: null, dom, historyFormat,
+    app: rendererContext.app, appState: {}, motion: null, dom, historyFormat,
     apiFetch: async () => { chamadas += 1; return { items: Array.from({ length: 100 }, (_, i) => ({ serial: `P${chamadas}-${i}` })), has_more: true, total: 2500 }; },
-    comparisonResultRenderer: () => renderer, loggedUserMarkers: createLoggedUserMarkers({ dom }),
+    loggedUserMarkers: createLoggedUserMarkers({ dom }),
   });
   const resultado = await api.carregarSemUsuarioResumo();
   assert.equal(chamadas, 20);
