@@ -1,14 +1,16 @@
 // Ações de escrita da Cobertura. Os diálogos são sempre os do app antigo (window.confirmarAcao, #modal-confirmar-acao):
 // este painel não desenha diálogo próprio e nunca gera planilha (prepararTransporte só preenche o Transporte).
+import { tentarVincularDeNovo } from "../historico-transferencias/vinculo";
 import { carregarCobertura, escrever, ler } from "./estado";
-import { appAntigo, modelo, type Registro } from "./tipos";
+import * as modelo from "./modelo";
+import { appAntigo, type Registro } from "./tipos";
 
 const id = (valor: unknown) => encodeURIComponent(String(valor));
 
 export async function reservar(acao: Registro) {
   const corpo = { ...acao.corpo, manutencao_conferida: false };
   const { dados } = ler();
-  if (modelo().exigeConferenciaManutencao(dados)) {
+  if (modelo.exigeConferenciaManutencao(dados)) {
     const confirmado = await appAntigo().confirmarAcao?.({
       titulo: "Manutenção não verificada",
       mensagem: `${dados?.manutencao?.aviso || "A fonte de manutenção não pôde ser lida."} Confirme que a máquina não está em manutenção antes de reservar.`,
@@ -24,7 +26,7 @@ export async function reservar(acao: Registro) {
 export async function cancelarNecessidade(demanda: Registro) {
   const ok = await appAntigo().confirmarAcao?.({
     titulo: "Cancelar necessidade",
-    mensagem: `A necessidade de ${demanda.cidade} (${modelo().formatarData(demanda.data)}) será cancelada.`,
+    mensagem: `A necessidade de ${demanda.cidade} (${modelo.formatarData(demanda.data)}) será cancelada.`,
     confirmar: "Cancelar necessidade",
     cancelar: "Voltar",
   });
@@ -111,10 +113,8 @@ export async function cancelarDevolucao(dev: Registro) {
   if (ok) await acaoDevolucao(dev, "cancelar", {}, "Devolução cancelada.");
 }
 
-// Reavalia o vínculo da planilha de Transporte (código antigo) e relê a cobertura.
+// Reavalia o vínculo da planilha de Transporte (../historico-transferencias/vinculo.ts) e relê a cobertura.
 export async function tentarDeNovo(movimentacaoId: unknown) {
-  const api = window.SimpressCoberturaVinculo;
-  if (!api) return;
-  await api.tentarVincularDeNovo(movimentacaoId);
+  await tentarVincularDeNovo(movimentacaoId);
   await carregarCobertura();
 }

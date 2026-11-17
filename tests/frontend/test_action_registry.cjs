@@ -48,8 +48,8 @@ test("every data-on-* action in the page and in templates is on the closed list"
   const calls = new Set();
   const scope = new Proxy({}, { get: (_target, name) => () => calls.add(name) });
   for (const name of declared) dispatcher.dispatch(click({ "data-on-click": name }), scope);
-  // Registered by transfer-history.js, which loads after app.js and is not a feature.
-  const history = fs.readFileSync(path.join(legadoDir, "ui/transfer-history.js"), "utf8");
+  // Registered by the React panel historico-transferencias (montar.tsx), which is not a feature.
+  const history = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/paineis/historico-transferencias/montar.tsx"), "utf8");
   const fromHistory = [...history.match(/\.allow\(\[([^\]]*)\]\)/)[1].matchAll(/"([^"]+)"/g)].map(match => match[1]);
   const unregistered = [...declared].filter(name => !calls.has(name) && !fromHistory.includes(name));
   assert.deepEqual(unregistered, []);

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { Check, Cpu, LoaderCircle, Plus, Search, SquarePen, X, type IconNode } from "lucide";
+import { Check, Cpu, History, LoaderCircle, Plus, Search, SquarePen, X, type IconNode } from "lucide";
 
 // Ícone lucide desenhado pelo React: o mesmo <svg> que lucide.createIcons() gera no lugar de <i data-lucide="...">.
 // Sem data-lucide de propósito: o createIcons({ root: modal }) de abrirModalAcessivel trocaria este <svg> por outro.
@@ -12,6 +12,7 @@ const NOS = {
   check: Check,
   edit: SquarePen,
   cpu: Cpu,
+  history: History,
   "loader-2": LoaderCircle,
 } satisfies Record<string, IconNode>;
 

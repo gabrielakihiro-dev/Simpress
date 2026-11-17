@@ -46,26 +46,7 @@
   <!-- MODAL: HISTÓRICO DE TRANSFERÊNCIAS GERADAS -->
   <!-- ========================================== -->
   <div id="modal-historico-transferencias" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
-        <div class="flex items-center space-x-2.5">
-          <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
-          <h3 class="text-base font-bold text-white">Transferências geradas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Transferências geradas" aria-describedby="tip-transferencias-geradas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-transferencias-geradas" role="tooltip" class="info-tip-text">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span></span></h3>
-        </div>
-        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar transferências geradas">
-          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
-        </button>
-      </div>
-      <div class="pt-4 shrink-0">
-        <label for="filtro-historico-transferencias" class="block text-xs font-semibold text-fg-tertiary mb-1">Buscar por série, cidade, destinatário ou observação</label>
-        <input type="search" id="filtro-historico-transferencias" autocomplete="off" class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none" placeholder="Ex.: BRJ5512FGD ou Londrina" />
-        <p id="historico-transferencias-status" class="text-xs text-fg-subtle mt-2" role="status" aria-live="polite"></p>
-      </div>
-      <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
-      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
-        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--secundario">Fechar</button>
-      </div>
-    </div>
+    <div class="ck-dialogo" data-react-painel="historico-transferencias"></div>
   </div>
 
   <!-- ========================================== -->

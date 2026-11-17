@@ -1,17 +1,18 @@
 // As cinco listas da Cobertura (necessidades, disponíveis, reservas, em movimento, devoluções).
-// Regra de vaga, kit e ações vem de window.SimpressCoverageModel; aqui só desenho.
+// Regra de vaga, kit e ações vem de ./modelo; aqui só desenho.
 import { useRef, useState } from "react";
 import {
   acaoDevolucao, alterarKit, cancelarDevolucao, cancelarEReabrirVaga, cancelarMovimentacao, cancelarNecessidade, cancelarReserva,
   disponibilidade, entregarSemTransporte, mudarEstado, prepararTransporte, renovarReserva, reservar, resolverDivergencia, vincularHistorico,
 } from "./acoes";
 import { Botao, Campo, Grupo, Selo, Tabela } from "./componentes";
-import { casos, modelo, type Dados, type Registro } from "./tipos";
+import * as modelo from "./modelo";
+import { casos, type Dados, type Registro } from "./tipos";
 
 interface Props { dados: Dados }
 
 export function Necessidades({ dados }: Props) {
-  const m = modelo();
+  const m = modelo;
   const demandas = casos(dados, "demandas");
   const linhas = (dados.vagas || []).map(vaga => {
     const demanda = demandas[vaga.demanda_id] || {};
@@ -38,7 +39,7 @@ export function Necessidades({ dados }: Props) {
 }
 
 export function Disponiveis({ dados }: Props) {
-  const m = modelo();
+  const m = modelo;
   const bloqueios = new Map<string, string>((dados.bloqueios || []).map(b => [m.chaveSerie(b.serie), b.motivo]));
   const sinais = new Map<string, string>((dados.sinais || []).map(s => [m.chaveSerie(s.serie), s.sinal]));
   const registros = Object.values(casos(dados, "disponibilidade")).sort((a, b) => String(a.serie).localeCompare(String(b.serie)));
@@ -69,7 +70,7 @@ function Kit({ reserva }: { reserva: Registro }) {
   return (
     <fieldset className="cob__kit" disabled={ocupado}>
       <legend className="sr-only">{`Kit da série ${reserva.serie}`}</legend>
-      {modelo().itensKit(reserva).map(({ item, rotulo, marcado }: { item: string; rotulo: string; marcado: boolean }) => (
+      {modelo.itensKit(reserva).map(({ item, rotulo, marcado }: { item: string; rotulo: string; marcado: boolean }) => (
         <label key={item} className="cob__check">
           <input
             className="ck-entrada"
@@ -91,7 +92,7 @@ function Kit({ reserva }: { reserva: Registro }) {
 }
 
 export function Reservas({ dados }: Props) {
-  const m = modelo();
+  const m = modelo;
   const demandas = casos(dados, "demandas");
   const disponibilidades = casos(dados, "disponibilidade");
   const linhas = m.reservasAbertas(dados).map((reserva: Registro) => {
@@ -158,7 +159,7 @@ function Recebimento({ mov, hoje }: { mov: Registro; hoje?: string }) {
       <Botao rotulo="Confirmar recebimento" variante="primario" aoClicar={() => mudarEstado(mov, "recebida", recebimento(), "Recebimento registrado.")} rotuloAcessivel={`Confirmar recebimento — ${mov.serie}`} />
       <Campo rotulo="Tipo da divergência">
         <select className="ck-entrada" name="tipo">
-          {modelo().TIPOS_DIVERGENCIA.map(([valor, rotulo]: [string, string]) => <option key={valor} value={valor}>{rotulo}</option>)}
+          {modelo.TIPOS_DIVERGENCIA.map(([valor, rotulo]: [string, string]) => <option key={valor} value={valor}>{rotulo}</option>)}
         </select>
       </Campo>
       <Campo rotulo="Descrição"><input className="ck-entrada" type="text" name="descricao" maxLength={500} autoComplete="off" /></Campo>
@@ -196,7 +197,7 @@ function Resolver({ mov }: { mov: Registro }) {
 }
 
 function AcoesMovimentacao({ mov, hoje }: { mov: Registro; hoje?: string }) {
-  const acoes: string[] = modelo().acoesDaMovimentacao(mov);
+  const acoes: string[] = modelo.acoesDaMovimentacao(mov);
   return (
     <Grupo classe="cob__acoes">
       {acoes.map(acao => {
@@ -213,11 +214,11 @@ function AcoesMovimentacao({ mov, hoje }: { mov: Registro; hoje?: string }) {
 }
 
 export function Movimento({ dados }: Props) {
-  const m = modelo();
+  const m = modelo;
   const movs: Registro[] = m.movimentacoesAbertas(dados).sort((a: Registro, b: Registro) => String(a.criada_em).localeCompare(String(b.criada_em)));
   const linhas = movs.map(mov => {
     const tipoDivergencia = mov.divergencia
-      ? (m.TIPOS_DIVERGENCIA.find(([v]: [string]) => v === mov.divergencia.tipo) || [])[1] || mov.divergencia.tipo
+      ? (m.TIPOS_DIVERGENCIA.find(([v]) => v === mov.divergencia.tipo) || [])[1] || mov.divergencia.tipo
       : "";
     return [
       mov.serie,
@@ -250,7 +251,7 @@ function AcoesDevolucao({ dev }: { dev: Registro }) {
 }
 
 export function Devolucoes({ dados }: Props) {
-  const m = modelo();
+  const m = modelo;
   const linhas = m.devolucoesAbertas(dados).map((dev: Registro) => {
     const situacao = dev.situacao || dev.estado;
     return [
