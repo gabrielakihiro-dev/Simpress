@@ -1,6 +1,6 @@
 // Bloco final 3 (BF3): resultado da Comparação (Resumo F3), salvamento automático de anotações, indicadores da Home
 // (estatísticas, prontidão, alertas do sino e base desatualizada) e corridas de resposta atrasada
-// (frontend/src/legado/features/{comparison-result,cockpit-tool-panels,dashboard}.js, frontend/src/legado/shared/history-annotation-autosave.js).
+// (frontend/src/legado/features/{comparison-result,cockpit-tool-panels,dashboard}.js, frontend/src/comum/history-annotation-autosave.ts).
 // Baselines gravados com o código antigo (commit d9b046d2). Todo /api/* relevante é simulado aqui, com dados
 // sintéticos; o que não é simulado cai no servidor de fixture (tests/support/serve_ui_motion_preview.py). A versão em
 // React tem de passar este arquivo sem mudanças; por isso só vale o que o usuário vê e as chamadas de rede.

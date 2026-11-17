@@ -4,7 +4,7 @@
  *
  * Actions live on window because data-on-* attributes (frontend/src/legado/ui/action-dispatcher.js, which
  * runs only the feature actions registered below), modal close handlers
- * (frontend/src/legado/ui/accessible-dialogs.js) and the enhancement scripts
+ * (frontend/src/ui/accessible-dialogs.ts) and the enhancement scripts
  * resolve them there. Features call each other through `app` as well, so an action that is
  * replaced on window (tests, enhancements) takes effect everywhere.
  */

@@ -14,7 +14,6 @@
   "include": [
     "frontend/types/globais.d.ts",
     "static/js/shared/*.js",
-    "frontend/src/legado/shared/*.js",
     "frontend/src/legado/ui/*.js"
   ]
 }

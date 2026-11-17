@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createDraftTracker } = require("../../frontend/src/legado/shared/form-draft-guard.js");
+const { createDraftTracker } = require("../../frontend/src/comum/form-draft-guard.ts");
 
 test("does not mark default values as edits", () => {
   const tracker = createDraftTracker();

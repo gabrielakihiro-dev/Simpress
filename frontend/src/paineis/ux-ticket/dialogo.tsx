@@ -12,7 +12,7 @@ const CAMPOS: { campo: CampoSolicitante; id: string; rotulo: string; tipo: strin
 ];
 
 // Mesmo HTML do modal antigo (IDs, classes e ARIA). .ck-dialogo é o primeiro filho do overlay
-// #modal-ticket-ux: accessible-dialogs.js põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
+// #modal-ticket-ux: accessible-dialogs.ts põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
 export function DialogoTicketUX() {
   const s = useSyncExternalStore(assinar, ler);
   const endereco = s.tipo === ENDERECO;
@@ -20,7 +20,7 @@ export function DialogoTicketUX() {
   const titulo = s.pronto ? "" : s.motivo;
   const registro = useRef<HTMLTextAreaElement>(null);
   const invalido = s.existe && PLACEHOLDER.test(s.registro);
-  // Sem lista de dependências de propósito: o ui-motion.js tira aria-invalid a cada digitação e, como no módulo antigo, toda atualização o repõe.
+  // Sem lista de dependências de propósito: o ui-motion.ts tira aria-invalid a cada digitação e, como no módulo antigo, toda atualização o repõe.
   useLayoutEffect(() => { registro.current?.setAttribute("aria-invalid", String(invalido)); });
   return (
     <div className="ck-dialogo">

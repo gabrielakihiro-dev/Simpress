@@ -121,7 +121,7 @@ def _run_local_safety_middleware(
 def _frontend_script() -> str:
     """Application modules in the explicit browser entry order."""
     entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
-    files = re.findall(r'^\s*import\s+["\']\./([^"\']+\.js)["\'];?\s*$', entry, re.MULTILINE)
+    files = re.findall(r'^\s*import\s+["\'](?:\./)?([^"\']+\.(?:js|ts))["\'];?\s*$', entry, re.MULTILINE)
     return "\n".join((LEGADO_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
@@ -294,7 +294,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../static/js/**/*.js"]', configuration)
+        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
@@ -728,19 +728,19 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("Abrir históricos e análises", bundle)
         self.assertLess(bundle.index(".SimpressActionDispatcher="), bundle.index("data-react-painel"))
         entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
-        self.assertIn('import "./shared/transfer-utils.js";', entry)
+        self.assertIn('import "../comum/transfer-utils.ts";', entry)
         for name in ("coverage-model.js", "transfer-history.js", "chamados-os-model.js", "data-panels.js"):
             self.assertNotIn(name, entry)
-        self.assertIn('import "./shared/sebrae-dashboard-model.js";', entry)
+        self.assertIn('import "../comum/sebrae-dashboard-model.ts";', entry)
         self.assertIn('import "./features/coverage.js";', entry)
         self.assertIn('import "./app.js";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
         self.assertTrue((LEGADO_DIR / "app.js").is_file())
         self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
-        self.assertTrue((LEGADO_DIR / "shared/transfer-utils.js").is_file())
+        self.assertTrue((LEGADO_DIR.parent / "comum/transfer-utils.ts").is_file())
         self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
-        for name in ("shared/sebrae-dashboard-model.js", "features/coverage.js"):
+        for name in ("../comum/sebrae-dashboard-model.ts", "features/coverage.js"):
             self.assertTrue((LEGADO_DIR / name).is_file(), name)
         for name in ("shared/coverage-model.js", "ui/transfer-history.js", "shared/chamados-os-model.js", "ui/data-panels.js"):
             self.assertFalse((LEGADO_DIR / name).exists(), name)
@@ -796,14 +796,14 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = assembled_html(app_config.STATIC_DIR)
-        dialog_script = (LEGADO_DIR / "ui/accessible-dialogs.js").read_text(encoding="utf-8")
+        dialog_script = (LEGADO_DIR.parent / "ui/accessible-dialogs.ts").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
         self.assertGreater(len(dialogs), 0)
         for dialog_id, class_names in dialogs:
             with self.subTest(dialog=dialog_id):
                 self.assertIn("modal-overlay", class_names)
-                # .modal-overlay owns the layer; open order (accessible-dialogs.js) stacks dialogs.
+                # .modal-overlay owns the layer; open order (accessible-dialogs.ts) stacks dialogs.
                 self.assertNotRegex(class_names, r"(?:^|\s)z-")
 
         self.assertGreater(_css_layer(".modal-overlay"), _css_layer(".site-header"))

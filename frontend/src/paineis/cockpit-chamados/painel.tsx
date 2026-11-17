@@ -42,7 +42,7 @@ interface CampoArquivoProps {
   textoVazio: string;
 }
 
-// Só props primitivas e estáticas: o file-picker.js troca estado, nome, tamanho e "Escolher/Trocar" direto no DOM,
+// Só props primitivas e estáticas: o file-picker.ts troca estado, nome, tamanho e "Escolher/Trocar" direto no DOM,
 // e este componente nunca é redesenhado, então o React não desfaz o que ele fez.
 const CampoArquivo = memo(function CampoArquivo({ entrada, idEntrada, idNome, nome, aceita, descritoPor, textoVazio }: CampoArquivoProps) {
   return (

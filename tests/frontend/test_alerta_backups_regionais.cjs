@@ -6,8 +6,8 @@ const test = require("node:test");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
-const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
-const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
+const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
+const transferUtils = require("../../frontend/src/comum/transfer-utils.ts");
 const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
 
 const html = assembledHtml();

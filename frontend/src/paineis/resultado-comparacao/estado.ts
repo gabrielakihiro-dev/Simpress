@@ -166,7 +166,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
-    // Números, anel e traços dos cartões bento partem do zero (bento.js).
+    // Números, anel e traços dos cartões bento partem do zero (bento.ts).
     globalThis.SimpressBento?.animarDentro(content);
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
     // Ordenação e "Copiar tabela" (data-panels.js) entram nas tabelas recém-montadas.

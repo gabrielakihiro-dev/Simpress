@@ -11,7 +11,7 @@ const CAMPOS: { campo: keyof Solicitante; id: string; rotulo: string; tipo: stri
 ];
 
 // Mesmo HTML do modal antigo (IDs, classes e ARIA). .ck-dialogo é o primeiro filho do overlay
-// #modal-chamado-ux: accessible-dialogs.js põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
+// #modal-chamado-ux: accessible-dialogs.ts põe role=dialog e a classe modal-panel nele, por isso o className é fixo.
 export function DialogoChamadoUX() {
   const s = useSyncExternalStore(assinar, ler);
   const bloqueado = s.ocupado || !s.preparado;
