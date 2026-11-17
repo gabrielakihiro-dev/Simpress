@@ -12,7 +12,7 @@
 
   // Chamado ao abrir o painel (cockpit-tool-panels.js espera por ele sem tratar erro): nunca rejeita.
   function carregarCobertura() {
-    return ponte.carregarCobertura().catch(erro => { console.error(erro); });
+    return ponte.carregarCobertura().catch(erro => { console.error(`carregarCobertura: ${erro?.message}`); });
   }
 
   return { carregarCobertura };

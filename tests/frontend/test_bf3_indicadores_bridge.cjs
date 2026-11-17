@@ -67,7 +67,7 @@ test("sem o painel React os carregadores devolvem promessa resolvida e só o con
   } finally {
     console.error = original;
   }
-  assert.deepEqual(registrados, ASSINCRONAS.map(() => falha));
+  assert.deepEqual(registrados, ASSINCRONAS.map(nome => `${nome}: ${falha.message}`));
 });
 
 test("um painel-atualizado disparado antes do React montar chega ao painel pelo leitor do último detalhe", async () => {

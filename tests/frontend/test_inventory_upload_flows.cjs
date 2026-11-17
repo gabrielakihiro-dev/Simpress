@@ -329,6 +329,33 @@ test("successful upload clears a selection removed from the replacement inventor
   assert.match(harness.effects.toasts.at(-1).message, /não está no inventário atualizado/);
 });
 
+test("successful upload concludes even when the Entra file input is not mounted", async () => {
+  const harness = createAppHarness(async url => {
+    if (url === "/api/planilhas/previsualizar") return apiResponse(uploadPreviewResult());
+    if (url === "/api/planilhas/atualizar") return apiResponse({ comparacao: { resumo: "comparação fictícia" } });
+    throw new Error(`Chamada API inesperada: ${url}`);
+  });
+  chooseUploadFiles(harness);
+  await harness.run("previsualizarPlanilhas()");
+
+  // #entra-csv-file pertence ao painel entra-users: sem ele montado, getElementById devolve null.
+  const documento = harness.context.document;
+  const original = documento.getElementById;
+  documento.getElementById = id => (id === "entra-csv-file" ? null : original.call(documento, id));
+  try {
+    await harness.run("enviarPlanilhas()");
+  } finally {
+    documento.getElementById = original;
+  }
+
+  assert.deepEqual(harness.effects.comparisons, [{ resumo: "comparação fictícia" }]);
+  assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "contagem-historico"]);
+  assert.equal(harness.element("upload-endpoint-file").value, "");
+  assert.equal(harness.element("upload-details-file").value, "");
+  assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
+  assert.equal(harness.effects.toasts.length, 0);
+});
+
 test("late post-upload equipment response cannot replace a newer search", async () => {
   let resolveRefresh;
   let refreshSignal;

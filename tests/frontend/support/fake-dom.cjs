@@ -62,7 +62,7 @@ class FakeNode {
 function compound(node, selector) {
   const tag = selector.match(/^[a-z][\w-]*/i)?.[0];
   if (tag && node.tagName !== tag.toUpperCase()) return false;
-  for (const [, name] of selector.matchAll(/\.([\w-]+)/g)) if (!node.className.split(/\s+/).includes(name)) return false;
+  for (const [, name] of selector.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)) if (!node.className.split(/\s+/).includes(name)) return false;
   for (const [, interno] of selector.matchAll(/:not\(([^)]*)\)/g)) if (compound(node, interno)) return false;
   for (const [, name, value] of selector.replace(/:not\([^)]*\)/g, "").matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)) {
     const actual = name === "id" ? node.id || undefined

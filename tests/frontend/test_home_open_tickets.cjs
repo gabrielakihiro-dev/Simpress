@@ -42,12 +42,12 @@ test("ponte: a Home repassa a série ao painel React e nunca rejeita, mesmo sem 
 
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const semReact = featureComPonte(() => Promise.reject(new Error('O painel React "cockpit-chamados" não carregou.')));
     assert.equal(await semReact.atualizarChamadosAbertosHome("S1"), undefined);
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, ['O painel React "cockpit-chamados" não carregou.']);
+  assert.deepEqual(erros, ['atualizarChamadosAbertosHome: O painel React "cockpit-chamados" não carregou.']);
 });

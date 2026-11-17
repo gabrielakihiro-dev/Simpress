@@ -12,21 +12,21 @@
     "abrirDossieEquipamento", "fecharDossieEquipamento", "atualizarDossieEquipamento",
   ]);
   // Callers ignore the promise: a React panel that did not load is logged, never an unhandled rejection.
-  const registrar = promessa => promessa.catch(erro => { console.error(erro); });
+  const registrar = (nome, promessa) => promessa.catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   // Called by definirEquipamentoAtual. The "Ver dossiê" button is outside the dialog and stays in sync right away.
   function atualizarDossieEquipamento(equipamento) {
     const botao = document.getElementById("btn-ver-dossie");
     if (botao) botao.disabled = !String(equipamento?.serial ?? "").trim();
-    void registrar(ponte.atualizarDossieEquipamento(equipamento));
+    void registrar("atualizarDossieEquipamento", ponte.atualizarDossieEquipamento(equipamento));
   }
 
   function abrirDossieEquipamento() {
-    return registrar(ponte.abrirDossieEquipamento());
+    return registrar("abrirDossieEquipamento", ponte.abrirDossieEquipamento());
   }
 
   function fecharDossieEquipamento() {
-    return registrar(ponte.fecharDossieEquipamento());
+    return registrar("fecharDossieEquipamento", ponte.fecharDossieEquipamento());
   }
 
   return { abrirDossieEquipamento, fecharDossieEquipamento, atualizarDossieEquipamento };

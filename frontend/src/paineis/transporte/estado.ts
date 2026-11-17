@@ -166,7 +166,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
 
   function campoRastreavelTransferencia(alvo: EventTarget | null): ElementoTransferencia | null {
     const target = alvo as ElementoTransferencia | null;
-    if (!target || target.id === "input-serial" || !target.matches("input, select, textarea")) return null;
+    if (!target || target.id === "input-serial" || !target.matches?.("input, select, textarea")) return null;
     const panel = elemento("tab-panel-retirada-entrega");
     return panel?.contains(target) ? target : null;
   }

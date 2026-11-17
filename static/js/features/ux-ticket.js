@@ -15,7 +15,7 @@
   ]);
 
   // Quem chama (data-on-*, fechar do modal) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(erro); });
+  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   // O listener fica aqui, síncrono, e engole tudo: o download e os outros ouvintes nunca dependem do ticket.
   // O React só abre o modal quando o bundle estiver pronto (a ponte espera); o evento não se perde.
@@ -23,7 +23,7 @@
     try {
       semRejeitar("prepararTicketUX")(event?.detail?.payload);
     } catch (erro) {
-      console.error("Erro ao preparar o ticket no UX:", erro);
+      console.error(`Erro ao preparar o ticket no UX: ${erro?.message}`);
     }
   });
 

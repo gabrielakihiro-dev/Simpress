@@ -9,7 +9,7 @@
 // Sem o bundle (react-entry.js bloqueado, mesmo mecanismo do react-g5 e do react-piloto): a ponte abre a casca das 9
 // ferramentas (título, atalho, subtítulo, foco, menu fechado); as 5 com texto próprio mostram o erro onde o resultado
 // apareceria (.ck-nota--erro; no Resumo também data-estado="erro") e o botão Voltar fecha o painel; nada fica em
-// "Carregando" para sempre. O Escape só existe com o bundle.
+// "Carregando" para sempre. Sem o bundle, o Escape vem da ponte e fecha a casca como o Voltar.
 const { test, expect } = require("@playwright/test");
 
 test.use({ timezoneId: "America/Sao_Paulo", locale: "pt-BR" });
@@ -213,8 +213,8 @@ test.describe("sem o bundle React", () => {
     expect(vistos.console.some(texto => texto.includes('O painel React "ferramentas-cockpit" não carregou.'))).toBe(true);
     expect(vistos.pagina).toEqual([]);
 
-    // Sem o painel o Escape não está ligado, mas o Voltar (botão) continua saindo da ferramenta.
-    await page.getByRole("button", { name: "Voltar para a tela principal" }).click();
+    // Sem o painel, a ponte liga o próprio Escape (cockpit-tool-panels.js); o Voltar é conferido nos testes abaixo.
+    await page.keyboard.press("Escape");
     await expect(page.locator(RAIZ)).toBeHidden();
     await expect(page.locator("#main-content")).toBeVisible();
   });

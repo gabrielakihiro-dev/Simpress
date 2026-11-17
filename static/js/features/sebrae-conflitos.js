@@ -12,7 +12,7 @@
 
   // sebrae-dashboard.js chama sem esperar nem tratar erro: como na seção antiga, nunca rejeita.
   function carregarConflitosSebrae() {
-    return ponte.carregarConflitosSebrae().catch(erro => { console.error(erro); });
+    return ponte.carregarConflitosSebrae().catch(erro => { console.error(`carregarConflitosSebrae: ${erro?.message}`); });
   }
 
   return { carregarConflitosSebrae };

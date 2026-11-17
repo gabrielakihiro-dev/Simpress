@@ -44,14 +44,14 @@ test("ponte: carregarConflitosSebrae repassa ao painel React sebrae-conflitos", 
 test("ponte: se o React não carregou, carregarConflitosSebrae registra o erro e não rejeita (o Dashboard segue)", async () => {
   const erros = [];
   const original = console.error;
-  console.error = erro => erros.push(erro.message);
+  console.error = erro => erros.push(erro);
   try {
     const { feature } = ponteFalsa(() => Promise.reject(new Error('O painel React "sebrae-conflitos" não carregou.')));
     assert.equal(await feature.carregarConflitosSebrae(), undefined);
   } finally {
     console.error = original;
   }
-  assert.deepEqual(erros, ['O painel React "sebrae-conflitos" não carregou.']);
+  assert.deepEqual(erros, ['carregarConflitosSebrae: O painel React "sebrae-conflitos" não carregou.']);
 });
 
 test("index.html: seção vazia e escondida logo depois do aviso do SharePoint, sem IDs duplicados", () => {

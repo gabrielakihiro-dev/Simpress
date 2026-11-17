@@ -42,16 +42,24 @@ export function avisar(texto: string, tipo?: string) {
 
 interface Resposta { ok: boolean; status: number; corpo: Registro | null }
 
-// Falha de rede ou corpo ilegível vira status 0 ("Sem resposta do servidor local"); corpo vazio vale como sem corpo.
+// Falha de rede vira status 0 ("Sem resposta do servidor local"). Resposta 2xx vale como sucesso mesmo com corpo
+// vazio ou ilegível (a escrita pode ter sido gravada): vem sem corpo e a lista é relida, como no código antigo.
 async function requisitar(metodo: "GET" | "POST", url: string, corpo?: unknown): Promise<Resposta> {
   try {
-    const lido = await apiFetch<Registro>(url, {
+    const resposta = await apiFetch(url, {
       method: metodo,
       headers: corpo ? { "Content-Type": "application/json" } : undefined,
       body: corpo ? JSON.stringify(corpo) : undefined,
+      responseType: "response",
     });
+    let lido: Registro | null = null;
+    try {
+      lido = JSON.parse(await resposta.text());
+    } catch {
+      // corpo vazio ou ilegível: segue sem corpo
+    }
     const vazio = !lido || typeof lido !== "object" || Object.keys(lido).length === 0;
-    return { ok: true, status: 200, corpo: vazio ? null : lido };
+    return { ok: true, status: resposta.status, corpo: vazio ? null : lido };
   } catch (erro) {
     const { status, data } = erro as Partial<ApiFetchError>;
     if (typeof status !== "number") return { ok: false, status: 0, corpo: null };
@@ -74,6 +82,18 @@ export async function escrever(url: string, corpo: unknown, sucesso?: string): P
   if (r.status === 404 || r.status === 409 || r.status === 503) await carregarCobertura();
   avisar(modelo().mensagemErro(r.corpo, r.status), "error");
   return null;
+}
+
+// Duplo clique ou Enter repetido: o segundo envio do mesmo formulário é ignorado até o primeiro POST terminar.
+const emVoo = new WeakSet<object>();
+export async function semRepetir(form: object, acao: () => Promise<unknown>): Promise<void> {
+  if (emVoo.has(form)) return;
+  emVoo.add(form);
+  try {
+    await acao();
+  } finally {
+    emVoo.delete(form);
+  }
 }
 
 let fila: Promise<unknown> = Promise.resolve();

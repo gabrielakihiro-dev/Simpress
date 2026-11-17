@@ -68,7 +68,7 @@ test("rejeição do painel nas ações assíncronas vai só ao console e a ponte
   try {
     for (const nome of ASSINCRONAS) assert.equal(await acoes[nome](), undefined, nome);
   } finally { captura.restaurar(); }
-  assert.deepEqual(captura.erros, ASSINCRONAS.map(() => falha));
+  assert.deepEqual(captura.erros, ASSINCRONAS.map(nome => `${nome}: ${MENSAGEM}`));
 });
 
 test("as ações síncronas não mascaram o erro do painel: o que o painel lança sobe ao chamador", () => {

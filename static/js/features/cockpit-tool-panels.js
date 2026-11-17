@@ -39,6 +39,7 @@
   let focoDeRetorno = null;
   let hrefDoSkipLink = null;
   let abaSuspensa = null;
+  let escutandoEsc = false;
 
   function marcarAba(aba, selecionada) {
     aba.setAttribute("aria-selected", String(selecionada));
@@ -69,6 +70,15 @@
     const [titulo, subtitulo, tecla] = FERRAMENTAS[tool];
     const menu = porId("cockpit-tools-dropdown");
     const skipLink = document.querySelector(".skip-link");
+    if (!escutandoEsc) {
+      // Same rule as the keydown in ensureEvents (estado.ts): the label "Esc" on the Voltar button must work without the bundle too.
+      document.addEventListener("keydown", evento => {
+        if (evento.key !== "Escape" || evento.defaultPrevented || !ativa || document.querySelector('[data-accessible-modal="true"]:not(.hidden)')) return;
+        evento.preventDefault();
+        fecharSemPainel();
+      });
+      escutandoEsc = true;
+    }
     if (!ativa) focoDeRetorno = document.activeElement?.closest?.(".ck-aba--painel, [data-cockpit-tool]") || porId("cockpit-tools-trigger") || document.activeElement;
     ativa = tool;
     menu.dataset.activeTool = tool;

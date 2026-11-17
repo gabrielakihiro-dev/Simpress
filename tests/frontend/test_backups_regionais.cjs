@@ -20,7 +20,7 @@ test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e pai
   assert.ok(fs.existsSync(path.join(root, "frontend/src/paineis/backups-regionais/montar.tsx")));
 });
 
-test("módulo antigo: não desenha nem ouve eventos; só pede o painel a cada 5 min com a aba visível", () => {
+test("módulo antigo: não desenha; guarda o último painel para o React e pede o painel a cada 5 min com a aba visível", async () => {
   const ouvintes = [];
   const intervalos = [];
   const pedidos = [];
@@ -32,8 +32,16 @@ test("módulo antigo: não desenha nem ouve eventos; só pede o painel a cada 5 
     dispatchEvent: evento => pedidos.push(evento.type),
   };
   try {
-    assert.deepEqual(createBackupsRegionais({}), {});
-    assert.deepEqual(ouvintes, []);
+    const repetidos = [];
+    const contexto = { ponteReact: (painel, nomes) => ({ repetirPainel: ultimo => { repetidos.push([painel, nomes, ultimo]); return Promise.resolve(); } }) };
+    assert.deepEqual(createBackupsRegionais(contexto), {});
+    assert.deepEqual(ouvintes.map(([tipo]) => tipo), ["simpress:painel-atualizado", "simpress:painel-indisponivel"]);
+    assert.equal(repetidos.length, 1);
+    const [painel, nomes, ultimo] = repetidos[0];
+    assert.deepEqual([painel, nomes], ["backups-regionais", ["repetirPainel"]]);
+    ouvintes[0][1]({ detail: { backups_regionais: null } });
+    ouvintes[1][1]();
+    assert.deepEqual(ultimo, { painel: { backups_regionais: null }, indisponivel: true }, "a ponte entrega o mesmo objeto, sempre com o último evento");
     assert.equal(intervalos.length, 1);
     assert.equal(intervalos[0][1], 5 * 60 * 1000);
     globalThis.document.hidden = true;

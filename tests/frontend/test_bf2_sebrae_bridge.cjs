@@ -91,7 +91,7 @@ test("rejeição do painel nas ações assíncronas vai só ao console e a ponte
   try {
     for (const nome of ASSINCRONAS) assert.equal(await acoes[nome](), undefined, nome);
   } finally { captura.restaurar(); }
-  assert.deepEqual(captura.erros, ASSINCRONAS.map(() => falha));
+  assert.deepEqual(captura.erros, ASSINCRONAS.map(nome => `${nome}: ${MENSAGEM}`));
 });
 
 test("a ação síncrona não mascara o erro do painel: o que o painel lança sobe ao chamador", () => {
@@ -136,8 +136,7 @@ test("no app real, sem o painel, as ações assíncronas resolvem undefined, reg
   const erros = [];
   harness.context.console.error = erro => erros.push(erro);
   for (const nome of ASSINCRONAS) assert.equal(await harness.context[nome](), undefined, nome);
-  assert.equal(erros.length, ASSINCRONAS.length);
-  erros.forEach(erro => assert.equal(erro.message, MENSAGEM));
+  assert.deepEqual(erros, ASSINCRONAS.map(nome => `${nome}: ${MENSAGEM}`));
 });
 
 // index.html: o contêiner do painel fica depois de #sebrae-novos-avisos e nunca dentro de #sebrae-historico-resumo.

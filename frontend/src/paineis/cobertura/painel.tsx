@@ -2,7 +2,7 @@
 import { useSyncExternalStore, type FormEvent, type InputHTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { disponibilidade, tentarDeNovo } from "./acoes";
 import { Botao } from "./componentes";
-import { assinar, escrever, ler, mudar } from "./estado";
+import { assinar, escrever, ler, mudar, semRepetir } from "./estado";
 import { Devolucoes, Disponiveis, Movimento, Necessidades, Reservas } from "./listas";
 import { ABAS, casos, modelo, type Aba, type Registro } from "./tipos";
 
@@ -40,30 +40,36 @@ function PainelAba({ nome, aba, ocupado, children }: { nome: Aba; aba: Aba; ocup
 async function registrarNecessidade(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   const form = event.currentTarget;
-  const ok = await escrever("/api/cobertura/demandas", {
-    data: valor(form, "data"), cidade: valor(form, "cidade"), quantidade: Number(valor(form, "quantidade")) || 1,
-    perfil: valor(form, "perfil"), monitor: Boolean((form.elements.namedItem("monitor") as HTMLInputElement | null)?.checked), observacao: valor(form, "observacao"),
-  }, "Necessidade registrada.");
-  if (ok) form.reset();
+  await semRepetir(form, async () => {
+    const ok = await escrever("/api/cobertura/demandas", {
+      data: valor(form, "data"), cidade: valor(form, "cidade"), quantidade: Number(valor(form, "quantidade")) || 1,
+      perfil: valor(form, "perfil"), monitor: Boolean((form.elements.namedItem("monitor") as HTMLInputElement | null)?.checked), observacao: valor(form, "observacao"),
+    }, "Necessidade registrada.");
+    if (ok) form.reset();
+  });
 }
 
 async function registrarDisponibilidade(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   const form = event.currentTarget;
   const botao = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-  const serie = valor(form, "serie");
-  const atual: Registro | undefined = casos(ler().dados, "disponibilidade")[modelo().chaveSerie(serie)];
-  const ok = await disponibilidade(serie, botao?.value || "disponivel", atual?.rev, valor(form, "cidade"));
-  if (ok) form.reset();
+  await semRepetir(form, async () => {
+    const serie = valor(form, "serie");
+    const atual: Registro | undefined = casos(ler().dados, "disponibilidade")[modelo().chaveSerie(serie)];
+    const ok = await disponibilidade(serie, botao?.value || "disponivel", atual?.rev, valor(form, "cidade"));
+    if (ok) form.reset();
+  });
 }
 
 async function registrarDevolucao(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   const form = event.currentTarget;
-  const corpo: Registro = { serie: valor(form, "serie"), data_prevista: valor(form, "data_prevista"), observacao: valor(form, "observacao") };
-  if (valor(form, "cidade")) corpo.cidade = valor(form, "cidade");
-  const ok = await escrever("/api/cobertura/devolucoes", corpo, "Devolução registrada.");
-  if (ok) form.reset();
+  await semRepetir(form, async () => {
+    const corpo: Registro = { serie: valor(form, "serie"), data_prevista: valor(form, "data_prevista"), observacao: valor(form, "observacao") };
+    if (valor(form, "cidade")) corpo.cidade = valor(form, "cidade");
+    const ok = await escrever("/api/cobertura/devolucoes", corpo, "Devolução registrada.");
+    if (ok) form.reset();
+  });
 }
 
 function teclarNaAba(event: KeyboardEvent<HTMLButtonElement>, nome: Aba) {
@@ -84,8 +90,8 @@ export function PainelCobertura() {
         <p id="cobertura-status" className="ck-barra-ferr__nota" role="status" aria-live="polite" data-tipo={status.tipo}>{status.texto}</p>
       </div>
       <div id="cobertura-alertas" className="cob__alertas" aria-busy={ocupado ? "true" : undefined}>
-        {alertas.map((alerta, n) => (
-          <div key={n} className="ck-aviso" data-gravidade={alerta.gravidade} data-cobertura-alerta={alerta.tipo}>
+        {alertas.map(alerta => (
+          <div key={`${alerta.tipo}-${alerta.movimentacaoId ?? ""}`} className="ck-aviso" data-gravidade={alerta.gravidade} data-cobertura-alerta={alerta.tipo}>
             <span className="ck-aviso__icone">
               <svg className="ck-ico" aria-hidden="true" focusable="false"><use href={alerta.tipo === "sem_vinculo" ? "#i-link" : "#i-alerta"} /></svg>
             </span>

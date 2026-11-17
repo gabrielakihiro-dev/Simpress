@@ -61,5 +61,5 @@ test("sem o painel React a F7 lista sem ações e a rejeição assíncrona só v
   } finally {
     console.error = original;
   }
-  assert.deepEqual(registrados, [falha]);
+  assert.deepEqual(registrados, [`desfazerEventoHistoricoApelidos: ${falha.message}`]);
 });

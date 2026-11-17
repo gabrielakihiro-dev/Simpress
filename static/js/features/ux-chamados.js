@@ -13,7 +13,7 @@
   ]);
 
   // Quem chama (data-on-*, fechar do modal, troca de equipamento) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(erro); });
+  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   // O Assistente lê o contexto sem await (assistant-chat.js): continua síncrono; antes de o React montar, undefined.
   const contextoChamadoUX = () => window.SimpressReact?.["ux-chamados"]?.contextoChamadoUX();

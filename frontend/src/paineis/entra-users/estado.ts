@@ -54,6 +54,7 @@ export async function carregarEstadoEntra() {
 
 export async function importarNomesEntra(evento?: { preventDefault?(): void }) {
   evento?.preventDefault?.();
+  if (estado.ocupado) return;
   const input = document.getElementById("entra-csv-file") as HTMLInputElement | null;
   const file = input?.files?.[0];
   if (!input || !file) {

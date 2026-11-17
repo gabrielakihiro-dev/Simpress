@@ -11,7 +11,7 @@
   const ponte = context.ponteReact("entra-users", ["carregarEstadoEntra", "importarNomesEntra", "exportarNomesEntra"]);
 
   // Quem chama (inicialização em static/app.js, data-on-*) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(erro); });
+  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
 
   return {
     carregarEstadoEntra: semRejeitar("carregarEstadoEntra"),

@@ -12,7 +12,7 @@
 
   // sebrae-dashboard.js chama sem esperar nem tratar erro: como no resumo antigo, nunca rejeita.
   function carregarResumoHistoricoSebrae() {
-    return ponte.carregarResumoHistoricoSebrae().catch(erro => { console.error(erro); });
+    return ponte.carregarResumoHistoricoSebrae().catch(erro => { console.error(`carregarResumoHistoricoSebrae: ${erro?.message}`); });
   }
 
   return { carregarResumoHistoricoSebrae };

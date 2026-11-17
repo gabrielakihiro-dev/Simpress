@@ -1419,7 +1419,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       list.removeAttribute("aria-activedescendant");
       homeListItems = new Map();
     }
-    items.forEach((item, index) => {
+    (Array.isArray(items) ? items : []).forEach((item, index) => {
       const serial = String(item?.serial || "").trim().toUpperCase();
       if (serial && list.querySelector(`[data-serial="${CSS.escape(serial)}"]`)) return;
       if (serial) homeListItems.set(serial, item);

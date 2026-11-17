@@ -12,7 +12,7 @@
 
   // Chamado ao abrir o painel (cockpit-tool-panels.js espera por ele): como no cartão antigo, nunca rejeita.
   function carregarResumoAtivos() {
-    return ponte.carregarResumoAtivos().catch(erro => { console.error(erro); });
+    return ponte.carregarResumoAtivos().catch(erro => { console.error(`carregarResumoAtivos: ${erro?.message}`); });
   }
 
   return { carregarResumoAtivos };
