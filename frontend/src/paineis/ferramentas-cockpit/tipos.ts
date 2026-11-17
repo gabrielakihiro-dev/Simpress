@@ -22,5 +22,6 @@ export interface ContextoFerramentasCockpit {
   /** Método (não propriedade) para aceitar o apiFetch com sobrecarga de frontend/src/api.ts. */
   apiFetch<T = any>(url: string, options?: ApiFetchOptions): Promise<T>; // eslint-disable-line @typescript-eslint/no-explicit-any
   historyFormat?: Registro;
-  chamadosOsModel?: Registro;
+  /** Painéis de dados no lugar da instância real (só os testes injetam). */
+  dataPanels?: Registro;
 }

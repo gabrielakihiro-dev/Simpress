@@ -716,20 +716,21 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(re.findall(r'<script type="module" src="([^"]+)"></script>', html), ["/static/dist/react-entry.js"])
         self.assertTrue((app_config.STATIC_DIR / "dist" / "react-entry.js").is_file())
         bundle = (app_config.STATIC_DIR / "dist" / "react-entry.js").read_text(encoding="utf-8")
-        for global_name in ("SimpressTransferUtils", "SimpressChamadosOsModel", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
+        for global_name in ("SimpressTransferUtils", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
             self.assertIn(global_name, bundle)
-        # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis: sem global antigo.
-        for global_name in ("SimpressCoverageModel", "SimpressCoberturaVinculo", "SimpressTransferHistory"):
+        # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis, como os painéis de dados e o modelo Chamado × OS: sem global antigo.
+        for global_name in ("SimpressCoverageModel", "SimpressCoberturaVinculo", "SimpressTransferHistory", "SimpressDataPanels", "SimpressChamadosOsModel"):
             self.assertNotIn(global_name, bundle)
         # Globais que só o código antigo publica: provam que o legado entrou no bundle e roda antes dos painéis.
         self.assertIn(".SimpressActionDispatcher=", bundle)
-        self.assertIn(".SimpressDataPanels=", bundle)
+        # Painéis de dados (antes SimpressDataPanels) agora são TypeScript instalado pelo montar() do painel paineis-dados.
+        self.assertIn("simpress:table-density", bundle)
+        self.assertIn("Abrir históricos e análises", bundle)
         self.assertLess(bundle.index(".SimpressActionDispatcher="), bundle.index("data-react-painel"))
         entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
         self.assertIn('import "./shared/transfer-utils.js";', entry)
-        self.assertNotIn("coverage-model.js", entry)
-        self.assertNotIn("transfer-history.js", entry)
-        self.assertIn('import "./shared/chamados-os-model.js";', entry)
+        for name in ("coverage-model.js", "transfer-history.js", "chamados-os-model.js", "data-panels.js"):
+            self.assertNotIn(name, entry)
         self.assertIn('import "./shared/sebrae-dashboard-model.js";', entry)
         self.assertIn('import "./features/coverage.js";', entry)
         self.assertIn('import "./app.js";', entry)
@@ -739,12 +740,14 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
         self.assertTrue((LEGADO_DIR / "shared/transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
-        for name in ("shared/chamados-os-model.js", "shared/sebrae-dashboard-model.js", "features/coverage.js"):
+        for name in ("shared/sebrae-dashboard-model.js", "features/coverage.js"):
             self.assertTrue((LEGADO_DIR / name).is_file(), name)
-        for name in ("shared/coverage-model.js", "ui/transfer-history.js"):
+        for name in ("shared/coverage-model.js", "ui/transfer-history.js", "shared/chamados-os-model.js", "ui/data-panels.js"):
             self.assertFalse((LEGADO_DIR / name).exists(), name)
         paineis = LEGADO_DIR.parent / "paineis"
-        for name in ("cobertura/modelo.ts", "historico-transferencias/montar.tsx", "historico-transferencias/vinculo.ts"):
+        for name in ("cobertura/modelo.ts", "historico-transferencias/montar.tsx", "historico-transferencias/vinculo.ts",
+                     "paineis-dados/chamados-os.ts", "paineis-dados/paineis.ts", "paineis-dados/tabela-os.ts",
+                     "paineis-dados/utilitarios.ts", "paineis-dados/montar.tsx"):
             self.assertTrue((paineis / name).is_file(), name)
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())

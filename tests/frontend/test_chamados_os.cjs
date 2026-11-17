@@ -2,7 +2,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const m = require("../../frontend/src/legado/shared/chamados-os-model.js");
+// O modelo lê SimpressCatalogSearch na hora da chamada (no app vem de legado/shared/catalog-search-utils.js).
+globalThis.SimpressCatalogSearch = require("../../frontend/src/legado/shared/catalog-search-utils.js");
+const m = require("../../frontend/src/paineis/paineis-dados/chamados-os.ts");
 
 const sebrae = {
   importado: {
