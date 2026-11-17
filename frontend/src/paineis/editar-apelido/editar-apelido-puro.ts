@@ -1,6 +1,6 @@
 // Regras puras do modal "Editar apelido" (Home F1). Sem import e só com sintaxe apagável, para os testes de
 // tests/frontend carregarem este arquivo com require() direto do Node, sem build.
-// Vieram de static/js/features/equipment-editor.js; os textos são os aprovados em docs/cockpit-prompts/11-modais-ajustes-finais.md.
+// Vieram de frontend/src/legado/features/equipment-editor.js; os textos são os aprovados em docs/cockpit-prompts/11-modais-ajustes-finais.md.
 
 export const TEXTO = {
   semEquipamento: "Pesquise um equipamento antes de editar o apelido.",

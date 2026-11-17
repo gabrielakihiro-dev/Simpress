@@ -1,8 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
-const createDomUtils = require("../../static/js/shared/dom-utils.js");
-const historyFormat = require("../../static/js/shared/history-format.js");
+const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
+const historyFormat = require("../../frontend/src/legado/shared/history-format.js");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 

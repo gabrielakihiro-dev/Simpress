@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { criarIndicadoresHome } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
-const transferUtils = require("../../static/js/shared/transfer-utils.js");
+const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 function montarPagina() {

@@ -1,20 +1,20 @@
 // Transporte (F2): modal "Gerar ticket no UX". Desde o Dia 3 (G7, React) o modal vive em frontend/src/paineis/ux-ticket/
 // e o comportamento de tela é testado no navegador (tests/e2e/ux-ticket.spec.cjs e tests/e2e/react-g7.spec.cjs, todas as
 // rotas /api/ux/gerar-ticket/* simuladas). Aqui ficam as regras puras (regras-puro.ts, carregado direto pelo require do
-// Node), a ponte do código antigo (static/js/features/ux-ticket.js), o registro, o HTML montado, a barra do Transporte e a
+// Node), a ponte do código antigo (frontend/src/legado/features/ux-ticket.js), o registro, o HTML montado, a barra do Transporte e a
 // privacidade (nenhum e-mail corporativo no JS nem no TSX). Dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const createUxTicket = require("../../static/js/features/ux-ticket.js");
+const createUxTicket = require("../../frontend/src/legado/features/ux-ticket.js");
 
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/ux-ticket");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
 const lerPasta = nome => fs.readFileSync(path.join(pasta, nome), "utf8");
 const regras = require(path.join(pasta, "regras-puro.ts"));
 const {
@@ -188,7 +188,7 @@ async function semConsole(fn) {
 }
 
 test("registro: ux-ticket.js é a ponte do painel React ux-ticket e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/ux-ticket\.js";/);
+  assert.match(entrySource, /import "\.\/features\/ux-ticket\.js";/);
   assert.match(appSource, /"uxTicket",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
   for (const nome of NOMES_PONTE) assert.match(lerPasta("montar.tsx"), new RegExp(`\\b${nome}\\b`), `${nome} falta no retorno de montar()`);
@@ -247,7 +247,7 @@ test("o Esc do modal (data-close-function) aponta para uma ação publicada pela
 
 // ---- Privacidade ----
 test("o front-end nunca embute o solicitante padrão: lê GET /solicitante e nenhum arquivo traz e-mail corporativo", () => {
-  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "static/js/features/ux-ticket.js")];
+  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/legado/features/ux-ticket.js")];
   assert.ok(arquivos.length >= 5);
   for (const arquivo of arquivos) {
     const codigo = fs.readFileSync(arquivo, "utf8");

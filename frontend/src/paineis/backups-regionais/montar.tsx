@@ -6,7 +6,7 @@ import { PainelBackups } from "./painel";
 // Chamado por frontend/src/main.tsx com o painel #resumo-painel-backups (data-react-painel="backups-regionais").
 // Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho. Se o evento
 // passou antes do bundle (data-panels.js lê o painel no import), a ponte repete o último com `repetirPainel`.
-// O pedido do painel a cada 5 min fica no módulo antigo (static/js/features/backups-regionais.js), para os alertas do
+// O pedido do painel a cada 5 min fica no módulo antigo (frontend/src/legado/features/backups-regionais.js), para os alertas do
 // sino não dependerem do bundle React.
 
 type Marca = Record<string, string | undefined>;
@@ -23,7 +23,7 @@ let focoDaAcao: Marca | null = null;
 // O React reaproveita o botão (Confirmar vira Desfazer): o timer de um clique não pode soltar o clique seguinte.
 let reabrir: number | undefined;
 
-// Cópia de rotuloContagemAba("backups", total) de static/js/ui/comparison-result-renderer.js (só o ramo Backups).
+// Cópia de rotuloContagemAba("backups", total) de frontend/src/legado/ui/comparison-result-renderer.js (só o ramo Backups).
 function rotuloAba(total: number | null | undefined) {
   if (total === undefined) return "Backups: aguardando dados";
   if (total === null) return "Backups: dados indisponíveis";

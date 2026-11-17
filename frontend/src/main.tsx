@@ -1,17 +1,15 @@
 /// <reference types="vite/client" />
+// O código antigo (frontend/src/legado/) entra primeiro: o ESM avalia as importações na ordem, então ele roda
+// antes dos painéis, como quando era o módulo /static/app-entry.js carregado antes deste bundle.
+import "./legado/app-entry.js";
+import { modulos, type Acoes } from "./paineis";
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 
-// Roda depois de /static/app-entry.js (os dois são módulos diferidos, nessa ordem no HTML) e antes do
-// DOMContentLoaded. Painel migrado = pasta frontend/src/paineis/<painel>/ com montar.tsx; nenhum painel
-// edita este arquivo. Cada montar(container) desenha o painel no elemento [data-react-painel="<painel>"]
-// do partial e devolve as ações que o código antigo chama pela ponte (context.ponteReact em static/app.js).
-type Acoes = Record<string, (...args: never[]) => unknown>;
-interface ModuloPainel {
-  montar(container: HTMLElement): Acoes;
-}
-
-const modulos = import.meta.glob<ModuloPainel>("./paineis/*/montar.tsx", { eager: true });
+// Roda antes do DOMContentLoaded (módulo diferido). Painel migrado = pasta frontend/src/paineis/<painel>/ com
+// montar.tsx; nenhum painel edita este arquivo. Cada montar(container) desenha o painel no elemento
+// [data-react-painel="<painel>"] do partial e devolve as ações que o código antigo chama pela ponte
+// (context.ponteReact em frontend/src/legado/app.js).
 const registro: Record<string, Acoes> = {};
 for (const [caminho, modulo] of Object.entries(modulos)) {
   const painel = caminho.split("/")[2];

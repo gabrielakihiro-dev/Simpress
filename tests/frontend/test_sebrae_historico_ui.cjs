@@ -6,12 +6,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const createSebraeHistorico = require("../../static/js/features/sebrae-historico.js");
-const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
+const createSebraeHistorico = require("../../frontend/src/legado/features/sebrae-historico.js");
+const { assembledHtml } = require("./support/assembled-html.cjs");
+const { legadoDir } = require("./support/app-sources.cjs");
 
 const root = path.resolve(__dirname, "../..");
 const painelReact = path.join(root, "frontend/src/paineis/sebrae-historico");
-const lido = arquivo => fs.readFileSync(path.join(staticDir, arquivo), "utf8");
+const lido = arquivo => fs.readFileSync(path.join(legadoDir, arquivo), "utf8");
 
 function ponteFalsa(acao) {
   const chamadas = [];
@@ -25,7 +26,7 @@ function ponteFalsa(acao) {
 }
 
 test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e um gancho no Dashboard", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\/js\/features\/sebrae-historico\.js";$/m);
+  assert.match(lido("app-entry.js"), /^import "\.\/features\/sebrae-historico\.js";$/m);
   assert.match(lido("app.js"), /"sebraeHistorico",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   const dashboard = fs.readFileSync(path.join(root, "frontend/src/paineis/sebrae-dashboard/estado.ts"), "utf8");

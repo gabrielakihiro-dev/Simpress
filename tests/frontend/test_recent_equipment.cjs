@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const recent = require("../../static/js/shared/recent-equipment.js");
+const recent = require("../../frontend/src/legado/shared/recent-equipment.js");
 
 function memoryStorage(initial = {}) {
   const data = new Map(Object.entries(initial));

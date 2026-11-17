@@ -1,4 +1,4 @@
-// Resumo (F3), sub-aba Backups: o mesmo HTML do módulo antigo (static/js/features/backups-regionais.js, até o Dia 2).
+// Resumo (F3), sub-aba Backups: o mesmo HTML do módulo antigo (frontend/src/legado/features/backups-regionais.js, até o Dia 2).
 // Só o campo `backups_regionais` do /api/painel. O apelido pode ser nome de pessoa: aparece só nesta tela local,
 // nunca em toast, console ou aria-live. O React escapa todo texto; nada aqui usa dangerouslySetInnerHTML.
 import { Fragment, type ReactNode } from "react";
@@ -227,7 +227,7 @@ function SecaoOutrasCandidatos({ outras }: { outras: Item[] }) {
   );
 }
 
-// Mesmo markup de dom.infoTipHtml (static/js/shared/dom-utils.js), com o id fixo de antes.
+// Mesmo markup de dom.infoTipHtml (frontend/src/legado/shared/dom-utils.js), com o id fixo de antes.
 function DicaMinimo({ minimo }: { minimo: number }) {
   return (
     <span className="info-tip">

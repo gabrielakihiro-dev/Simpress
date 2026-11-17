@@ -33,6 +33,7 @@ with patch(
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LEGADO_DIR = PROJECT_ROOT / "frontend" / "src" / "legado"
 
 
 def _css_layer(selector: str) -> int:
@@ -119,9 +120,9 @@ def _run_local_safety_middleware(
 
 def _frontend_script() -> str:
     """Application modules in the explicit browser entry order."""
-    entry = (app_config.STATIC_DIR / "app-entry.js").read_text(encoding="utf-8")
+    entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
     files = re.findall(r'^\s*import\s+["\']\./([^"\']+\.js)["\'];?\s*$', entry, re.MULTILINE)
-    return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
+    return "\n".join((LEGADO_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
 def _react_panels_source() -> str:
@@ -293,7 +294,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../static/app.js", "../static/js/**/*.js"]', configuration)
+        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../static/js/**/*.js"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
@@ -360,7 +361,7 @@ class MaintenanceContractTests(unittest.TestCase):
         script = _frontend_script() + "\n" + _react_panels_source()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
-        outlook = (app_config.STATIC_DIR / "js" / "features" / "outlook-email.js").read_text(encoding="utf-8")
+        outlook = (LEGADO_DIR / "features" / "outlook-email.js").read_text(encoding="utf-8")
         # O resto do HTML já traz o exemplo "nome@pr.sebrae.com.br" do termo; o e-mail pelo Outlook não pode ter domínio real.
         modal_email = html.split('id="modal-email-outlook"', 1)[1].split('id="modal-confirmar-acao"', 1)[0]
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
@@ -710,26 +711,32 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0-subset.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
-        self.assertIn('<script type="module" src="/static/app-entry.js"></script>', html)
-        react_tag = '<script type="module" src="/static/dist/react-entry.js"></script>'
-        self.assertIn(react_tag, html)
-        # React roda depois do código antigo, que define window.SimpressApiFetch.
-        self.assertLess(html.index('src="/static/app-entry.js"'), html.index(react_tag))
+        # A página carrega um único módulo: o bundle, que traz o código antigo antes dos painéis React.
+        self.assertNotIn("app-entry.js", html)
+        self.assertEqual(re.findall(r'<script type="module" src="([^"]+)"></script>', html), ["/static/dist/react-entry.js"])
         self.assertTrue((app_config.STATIC_DIR / "dist" / "react-entry.js").is_file())
-        entry = (app_config.STATIC_DIR / "app-entry.js").read_text(encoding="utf-8")
-        self.assertIn('import "./js/shared/transfer-utils.js";', entry)
-        self.assertIn('import "./js/shared/coverage-model.js";', entry)
-        self.assertIn('import "./js/shared/chamados-os-model.js";', entry)
-        self.assertIn('import "./js/shared/sebrae-dashboard-model.js";', entry)
-        self.assertIn('import "./js/features/coverage.js";', entry)
+        bundle = (app_config.STATIC_DIR / "dist" / "react-entry.js").read_text(encoding="utf-8")
+        for global_name in ("SimpressTransferUtils", "SimpressCoverageModel", "SimpressChamadosOsModel", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
+            self.assertIn(global_name, bundle)
+        # Globais que só o código antigo publica: provam que o legado entrou no bundle e roda antes dos painéis.
+        self.assertIn(".SimpressActionDispatcher=", bundle)
+        self.assertIn(".SimpressDataPanels=", bundle)
+        self.assertLess(bundle.index(".SimpressActionDispatcher="), bundle.index("data-react-painel"))
+        entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
+        self.assertIn('import "./shared/transfer-utils.js";', entry)
+        self.assertIn('import "./shared/coverage-model.js";', entry)
+        self.assertIn('import "./shared/chamados-os-model.js";', entry)
+        self.assertIn('import "./shared/sebrae-dashboard-model.js";', entry)
+        self.assertIn('import "./features/coverage.js";', entry)
         self.assertIn('import "./app.js";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "app-entry.js").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "js/shared/transfer-utils.js").is_file())
-        for name in ("styles/ck-cobertura.css", "js/shared/coverage-model.js", "js/shared/chamados-os-model.js", "js/shared/sebrae-dashboard-model.js", "js/features/coverage.js"):
-            self.assertTrue((app_config.STATIC_DIR / name).is_file(), name)
+        self.assertTrue((LEGADO_DIR / "app.js").is_file())
+        self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
+        self.assertTrue((LEGADO_DIR / "shared/transfer-utils.js").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
+        for name in ("shared/coverage-model.js", "shared/chamados-os-model.js", "shared/sebrae-dashboard-model.js", "features/coverage.js"):
+            self.assertTrue((LEGADO_DIR / name).is_file(), name)
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0-subset.js").is_file())
@@ -777,7 +784,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = assembled_html(app_config.STATIC_DIR)
-        dialog_script = (app_config.STATIC_DIR / "js/ui/accessible-dialogs.js").read_text(encoding="utf-8")
+        dialog_script = (LEGADO_DIR / "ui/accessible-dialogs.js").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
         self.assertGreater(len(dialogs), 0)

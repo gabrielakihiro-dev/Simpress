@@ -1,4 +1,4 @@
-// Chamadas à API pelo mesmo apiFetch do código antigo (static/js/shared/api-fetch.js), que mantém
+// Chamadas à API pelo mesmo apiFetch do código antigo (frontend/src/legado/shared/api-fetch.js), que mantém
 // o evento simpress:servidor-offline, o detail do 422 e error.status (409 de versao_importacao).
 // Nunca usar fetch cru nos painéis React.
 

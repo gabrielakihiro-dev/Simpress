@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const criarContatosRegionais = require("../../static/js/features/regional-contacts.js");
+const criarContatosRegionais = require("../../frontend/src/legado/features/regional-contacts.js");
 
 test("encaminha ações síncronas e assíncronas do legado para o painel React", async () => {
   const chamadas = [];

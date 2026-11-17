@@ -129,6 +129,7 @@ const MYPY_STRICT_TARGETS = ["core", "domains", "security"];
 function javascriptFilesToCheck() {
   return [
     ...listFiles("static", ".js", { recursive: true, exclude: ["static/vendor", "static/dist"] }),
+    ...listFiles("frontend/src/legado", ".js", { recursive: true }),
     "playwright.config.cjs",
     ...listFiles("tests/e2e", ".cjs"),
     ...listFiles("config", ".cjs"),

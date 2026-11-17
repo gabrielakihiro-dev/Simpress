@@ -31,7 +31,7 @@ CAMPOS = (
     "id", "descricao", "criado_em", "alterado_em", "concluido", "concluido_em", "origem", "termo",
     "data_agendada", "hora_agendada",
 )
-# Cópia dos dados do termo (12/11/2026): chaves do formulário por origem, como em static/js/features/termos.js.
+# Cópia dos dados do termo (12/11/2026): chaves do formulário por origem, como em frontend/src/legado/features/termos.js.
 CAMPOS_TERMO = {
     "entrega": ("nome", "unidade", "data", "modelo_anterior", "modelo_entregue", "serie_anterior", "serie_entregue"),
     "devolucao": ("nome", "unidade", "data", "modelo", "serie"),

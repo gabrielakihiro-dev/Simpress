@@ -6,7 +6,7 @@ import stat
 import zlib
 from pathlib import Path
 
-# Pages wire events through data-on-* attributes (static/js/ui/action-dispatcher.js),
+# Pages wire events through data-on-* attributes (frontend/src/legado/ui/action-dispatcher.js),
 # so scripts never need 'unsafe-inline'. Styles come from CSS files only (no style= in the HTML);
 # JS sets layout through the CSSOM (el.style.x), which style-src does not block.
 CONTENT_SECURITY_POLICY = (

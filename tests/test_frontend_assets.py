@@ -126,7 +126,7 @@ class FrontendAssetTests(unittest.TestCase):
 
     def test_logo_metal_imports_a_vendored_file_that_exists(self):
         static = Path(__file__).resolve().parents[1] / "static"
-        source = (static / "js" / "ui" / "cromo-marca.js").read_text(encoding="utf-8")
+        source = (static.parent / "frontend" / "src" / "legado" / "ui" / "cromo-marca.js").read_text(encoding="utf-8")
         imported = re.search(r'from "(/static/vendor/paper-shaders-[^"]+)"', source)
         self.assertIsNotNone(imported)
         self.assertTrue((static.parent / imported.group(1).lstrip("/")).is_file(), imported.group(1))

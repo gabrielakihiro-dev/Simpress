@@ -529,29 +529,4 @@ test.describe("comportamento (1366 px)", () => {
     await page.clock.runFor(5 * 60 * 1000);
     expect(await page.evaluate(() => window.__pedidosG5)).toBe(1);
   });
-
-  // A ponte só repete o último painel (repetirPainel): sem o bundle, ela deixa no console uma linha "repetirPainel: O
-  // painel React ... não carregou.". O que se garante é que o resto do app segue de pé, a sub-aba fica vazia e o sino
-  // segue pedindo o painel.
-  // Desde o BF3 a troca das sub-abas do Resumo mora no painel React resultado-comparacao: sem o bundle, o clique em
-  // Backups não troca a sub-aba (mesmo contrato do react-piloto: painel migrado fica vazio).
-  test("sem o bundle React: o Resumo abre, a sub-aba Backups fica vazia, o pedido de 5 min segue e a página não quebra", async ({ page }) => {
-    const errosDePagina = [];
-    page.on("pageerror", erro => errosDePagina.push(erro.message));
-    await page.route("**/static/dist/react-entry.js*", route => route.abort());
-    await page.clock.install();
-    await page.goto("/");
-    await page.evaluate(() => {
-      window.__pedidosG5 = 0;
-      document.addEventListener("simpress:atualizar-notificacoes", () => { window.__pedidosG5 += 1; });
-    });
-    await page.clock.runFor(5 * 60 * 1000);
-    expect(await page.evaluate(() => window.__pedidosG5)).toBeGreaterThanOrEqual(1);
-    await page.locator("#btn-resumo-aba").click();
-    await expect(page.locator(CONTEUDO)).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
-    await expect(page.locator("html")).not.toHaveAttribute("data-react-pronto", /.*/);
-    await page.locator("#resumo-aba-backups").click();
-    await expect(page.locator(PAINEL)).toBeEmpty();
-    expect(errosDePagina).toEqual([]);
-  });
 });

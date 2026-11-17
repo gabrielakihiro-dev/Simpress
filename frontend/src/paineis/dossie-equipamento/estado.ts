@@ -1,5 +1,5 @@
 // Estado do diálogo "Dossiê do equipamento" (Home F1), fora do componente: o código antigo chama as ações pela
-// ponte (static/js/features/equipment-dossier.js). Só leitura: GET /api/equipamento/{série}/dossie.
+// ponte (frontend/src/legado/features/equipment-dossier.js). Só leitura: GET /api/equipamento/{série}/dossie.
 // A seleção (currentEquipamento, equipamentoSelectionRevision) é do código antigo: lida por lerEstado na hora de cada
 // conferência, nunca copiada.
 import { flushSync } from "react-dom";
@@ -25,7 +25,7 @@ const MENSAGEM_ESTADO: Record<string, string> = {
 const FONTES: Record<string, string> = { simpress: "Simpress", oracle: "Oracle" };
 export const COLUNAS = ["OS", "Fonte", "Status", "Fila", "Dias aberta", "UTIC"];
 
-// Funções do código antigo publicadas em window (static/app.js, publish).
+// Funções do código antigo publicadas em window (frontend/src/legado/app.js, publish).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

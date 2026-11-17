@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const criarComparisonResult = require("../../static/js/features/comparison-result.js");
+const criarComparisonResult = require("../../frontend/src/legado/features/comparison-result.js");
 
 const ACOES = [
   "renderizarResultadoComparacao", "renderizarSemUsuarioSemComparacao", "carregarSemUsuarioResumo",

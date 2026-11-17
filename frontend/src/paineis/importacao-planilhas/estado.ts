@@ -27,7 +27,7 @@ export interface ContextoImportacaoPlanilhas {
   app: AppImportacao;
   appState: EstadoImportacao;
   apiFetch: typeof ApiFetch;
-  /** Uma chave de idempotência por tentativa; o padrão é a mesma que static/app.js sempre gerou. */
+  /** Uma chave de idempotência por tentativa; o padrão é a mesma que frontend/src/legado/app.js sempre gerou. */
   inventoryOperationKey?: () => string;
 }
 type ErroApi = Error & { status?: number };

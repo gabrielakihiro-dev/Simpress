@@ -10,7 +10,7 @@
 
   const lista = valor => (Array.isArray(valor) ? valor : []);
   const texto = valor => String(valor ?? "").trim();
-  // Mesmas normalizações de serialKey/orderKey em static/js/ui/data-panels.js.
+  // Mesmas normalizações de serialKey/orderKey em frontend/src/legado/ui/data-panels.js.
   const serialKey = valor => String(valor || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const orderKey = valor => String(valor || "").replace(/\s+/g, "").toUpperCase();
   // Mesmo critério do selo `OS` do cartão do F5 (seloOs em sebrae-dashboard.js).

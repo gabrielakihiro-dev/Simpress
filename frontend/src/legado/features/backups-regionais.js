@@ -4,7 +4,7 @@
  * 5 min: ele atualiza todos os alertas do sino, não só Backups, e não pode depender do bundle React carregar.
  * Também guarda o último painel lido: data-panels.js lê o painel no import, às vezes antes de o bundle montar o painel,
  * e a ponte o repete (repetirPainel) quando o bundle carrega. Ninguém de fora chama este módulo; ele continua em
- * FEATURE_ORDER (static/app.js).
+ * FEATURE_ORDER (frontend/src/legado/app.js).
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;

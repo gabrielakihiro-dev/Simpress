@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const dispatcher = require("../../static/js/ui/action-dispatcher.js");
-const { staticDir } = require("./support/app-sources.cjs");
+const dispatcher = require("../../frontend/src/legado/ui/action-dispatcher.js");
+const { legadoDir, staticDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
 function element(attrs) {
@@ -29,7 +29,7 @@ function jsFiles(dir) {
 
 // Every action name the page can ask for: index.html, rendered templates and setAttribute calls.
 function declaredActions() {
-  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js"))]
+  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js")), ...jsFiles(legadoDir)]
     .filter(file => !file.endsWith("action-dispatcher.js"));
   const names = new Set();
   for (const file of files) {
@@ -49,7 +49,7 @@ test("every data-on-* action in the page and in templates is on the closed list"
   const scope = new Proxy({}, { get: (_target, name) => () => calls.add(name) });
   for (const name of declared) dispatcher.dispatch(click({ "data-on-click": name }), scope);
   // Registered by transfer-history.js, which loads after app.js and is not a feature.
-  const history = fs.readFileSync(path.join(staticDir, "js/ui/transfer-history.js"), "utf8");
+  const history = fs.readFileSync(path.join(legadoDir, "ui/transfer-history.js"), "utf8");
   const fromHistory = [...history.match(/\.allow\(\[([^\]]*)\]\)/)[1].matchAll(/"([^"]+)"/g)].map(match => match[1]);
   const unregistered = [...declared].filter(name => !calls.has(name) && !fromHistory.includes(name));
   assert.deepEqual(unregistered, []);

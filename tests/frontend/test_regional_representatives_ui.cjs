@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const transferUtils = require("../../static/js/shared/transfer-utils.js");
-const { apiFetch } = require("../../static/js/shared/api-fetch.js");
+const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
+const { apiFetch } = require("../../frontend/src/legado/shared/api-fetch.js");
 const { criarContatosRegionais: createRegionalContacts } = require("../../frontend/src/paineis/contatos-regionais/estado.ts");
 
 function fakeElement() {

@@ -8,9 +8,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
-const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
+const { assembledHtml } = require("./support/assembled-html.cjs");
+const { legadoDir } = require("./support/app-sources.cjs");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createCockpitChamados = require("../../static/js/features/cockpit-chamados.js");
+const createCockpitChamados = require("../../frontend/src/legado/features/cockpit-chamados.js");
 
 const dom = { escapeHtml: value => String(value), pluralize: (count, one, many) => (count === 1 ? one : many), createTextElement: null };
 
@@ -37,7 +38,7 @@ test("grupoTriagemChamado separa ativos em 3+ dias, sem data e atualizados, e ig
 
 const root = path.resolve(__dirname, "../..");
 const painelReact = path.join(root, "frontend/src/paineis/cockpit-chamados");
-const lido = arquivo => fs.readFileSync(path.join(staticDir, arquivo), "utf8");
+const lido = arquivo => fs.readFileSync(path.join(legadoDir, arquivo), "utf8");
 
 const ACOES_REACT = [
   "sincronizarGestaoChamadosCockpit", "selecionarVersaoChamadosCockpit", "excluirImportacoesAntigasChamadosCockpit",
@@ -58,7 +59,7 @@ function ponteFalsa(acao) {
 }
 
 test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e com o painel React ao lado", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\/js\/features\/cockpit-chamados\.js";$/m);
+  assert.match(lido("app-entry.js"), /^import "\.\/features\/cockpit-chamados\.js";$/m);
   assert.match(lido("app.js"), /"cockpitChamados",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   assert.ok(fs.existsSync(path.join(painelReact, "cockpit-chamados-puro.ts")));

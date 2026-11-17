@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
-const createCockpitChamados = require("../../static/js/features/cockpit-chamados.js");
+const createCockpitChamados = require("../../frontend/src/legado/features/cockpit-chamados.js");
 
 const lido = arquivo => fs.readFileSync(path.join(staticDir, arquivo), "utf8");
 

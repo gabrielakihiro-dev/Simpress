@@ -7,7 +7,7 @@ const {
   isCurrentQuery,
   refreshSelectionAfterInventoryReplacement,
   serialForTransfer,
-} = require("../../static/js/shared/transfer-utils.js");
+} = require("../../frontend/src/legado/shared/transfer-utils.js");
 
 test("formats fixed and mobile Brazilian phone numbers with country prefixes", () => {
   for (const [phone, expected] of phoneFormatCases) {

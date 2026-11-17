@@ -1,11 +1,11 @@
-// static/app.js: a ponte assíncrona rejeita também quando o script do bundle dispara "error" (404), sem esperar o "load" da janela.
+// frontend/src/legado/app.js: a ponte assíncrona rejeita também quando o script do bundle dispara "error" (404), sem esperar o "load" da janela.
 // O bootstrap é um IIFE grande: o teste recorta só o trecho da espera pelo painel e roda com window/document falsos.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-const fonte = fs.readFileSync(path.join(__dirname, "../../static/app.js"), "utf8");
+const fonte = fs.readFileSync(path.join(__dirname, "../../frontend/src/legado/app.js"), "utf8");
 const trecho = fonte.slice(fonte.indexOf("const scriptReact"), fonte.indexOf("context.ponteReact = "));
 
 function criarEmissor() {

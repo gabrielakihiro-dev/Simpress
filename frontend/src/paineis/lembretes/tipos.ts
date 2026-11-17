@@ -25,7 +25,7 @@ export interface EventoTecla {
   preventDefault: () => void;
 }
 
-// Funções que static/app.js e static/js/features publicam em window (confirmação, diálogos, toast, referências).
+// Funções que frontend/src/legado/app.js e frontend/src/legado/features publicam em window (confirmação, diálogos, toast, referências).
 export interface AppAntigo {
   confirmarAcao?: (opcoes: OpcoesConfirmacao) => Promise<boolean>;
   showToast?: (texto: string, tipo?: string) => void;

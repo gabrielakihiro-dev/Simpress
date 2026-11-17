@@ -14,10 +14,11 @@
   "include": [
     "frontend/types/globais.d.ts",
     "static/js/shared/*.js",
-    "static/js/ui/*.js"
+    "frontend/src/legado/shared/*.js",
+    "frontend/src/legado/ui/*.js"
   ],
   // Fora até o bento Bloco 2 ser mesclado: ele está alterando este arquivo.
   "exclude": [
-    "static/js/ui/comparison-result-renderer.js"
+    "frontend/src/legado/ui/comparison-result-renderer.js"
   ]
 }

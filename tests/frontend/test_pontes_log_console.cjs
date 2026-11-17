@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const PASTA = path.join(__dirname, "..", "..", "static", "js", "features");
+const PASTA = path.join(__dirname, "..", "..", "frontend", "src", "legado", "features");
 // console.error com o erro como argumento solto (sozinho ou depois de um texto) ou .catch(console.error).
 const PROIBIDO = /console\.error\(\s*(?:[^()]*?,\s*)?(?:erro|err|error|e)\s*\)|\.catch\(\s*console\.error\s*\)/;
 

@@ -8,14 +8,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const createBackupsRegionais = require("../../static/js/features/backups-regionais.js");
+const createBackupsRegionais = require("../../frontend/src/legado/features/backups-regionais.js");
 
 const root = path.resolve(__dirname, "../..");
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
 
 test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e painel React presente", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/backups-regionais\.js";/);
+  assert.match(entrySource, /import "\.\/features\/backups-regionais\.js";/);
   assert.match(appSource, /"backupsRegionais",/);
   assert.ok(fs.existsSync(path.join(root, "frontend/src/paineis/backups-regionais/montar.tsx")));
 });

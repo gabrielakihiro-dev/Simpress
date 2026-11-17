@@ -1,5 +1,5 @@
 // Estado do modal "Editar apelido", fora do componente: o código antigo chama as ações pela ponte
-// (static/js/features/equipment-editor.js). Única escrita: POST /api/equipamento/atualizar-apelido.
+// (frontend/src/legado/features/equipment-editor.js). Única escrita: POST /api/equipamento/atualizar-apelido.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";
@@ -7,7 +7,7 @@ import { TEXTO, camposDoApelido, lerEquipamento, montarPayload, seguiuSelecionad
 
 const MODAL = "modal-editar-apelido";
 
-// Funções do código antigo publicadas em window (static/app.js, publish).
+// Funções do código antigo publicadas em window (frontend/src/legado/app.js, publish).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

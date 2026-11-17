@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const { allow, dispatch } = require("../../static/js/ui/action-dispatcher.js");
-const { appScriptFiles } = require("./support/app-sources.cjs");
+const { allow, dispatch } = require("../../frontend/src/legado/ui/action-dispatcher.js");
+const { appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
 
 allow(["ativarAba", "filtrar", "teclas", "carregar", "buscar", "fechar", "salvar", "inner", "outer"]);
 
@@ -89,9 +89,8 @@ test("click targets forward to another element and unknown actions only warn", (
 });
 
 test("pages no longer use inline event handler attributes", () => {
-  const root = path.resolve(__dirname, "..", "..", "static");
   for (const file of ["index.html", ...appScriptFiles()]) {
-    const source = file === "index.html" ? assembledHtml() : fs.readFileSync(path.join(root, file), "utf8");
+    const source = file === "index.html" ? assembledHtml() : fs.readFileSync(path.join(legadoDir, file), "utf8");
     assert.doesNotMatch(source, /\son[a-z]+\s*=\s*["']/, file);
   }
 });

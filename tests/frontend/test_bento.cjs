@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const createBento = require("../../static/js/ui/bento.js");
+const createBento = require("../../frontend/src/legado/ui/bento.js");
 
 // Ambiente falso: rAF guarda callbacks, o relógio é manual e matchMedia diz se há movimento reduzido.
 function harness({ reduzido = false } = {}) {

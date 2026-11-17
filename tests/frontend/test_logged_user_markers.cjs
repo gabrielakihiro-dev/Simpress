@@ -2,8 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const createDomUtils = require("../../static/js/shared/dom-utils.js");
-const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
+const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
+const createLoggedUserMarkers = require("../../frontend/src/legado/ui/logged-user-markers.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
 const markers = createLoggedUserMarkers({ dom: createDomUtils({ createElement: () => ({ setAttribute() {} }) }) });
@@ -23,7 +23,7 @@ test("the Histórico de Planilhas rows use the shared logged user lookup", () =>
 });
 
 test("search results show the logged user to the right of the hostname, with (M) for a manual one", () => {
-  const renderers = require("../../static/js/ui/equipment-search-renderers.js")({
+  const renderers = require("../../frontend/src/legado/ui/equipment-search-renderers.js")({
     dom: createDomUtils({ createElement: () => ({ setAttribute() {} }) }),
   });
   const rows = [];
@@ -101,7 +101,7 @@ test("history rows and ticket cards show the manual date and the ambiguous Endpo
 
 test("search results carry the manual date in the title and an ambiguous chip with the candidates", () => {
   const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
-  const renderers = require("../../static/js/ui/equipment-search-renderers.js")({ dom, loggedUserMarkers: markers });
+  const renderers = require("../../frontend/src/legado/ui/equipment-search-renderers.js")({ dom, loggedUserMarkers: markers });
   globalThis.document = { createElement: () => ({ attributes: {}, dataset: {}, addEventListener() {}, setAttribute(name, value) { this.attributes[name] = value; } }) };
   try {
     const base = { serial: "SN1", tipo: "Notebook", modelo: "X", apelido: "HOST-1" };

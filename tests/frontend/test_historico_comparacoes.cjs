@@ -9,8 +9,8 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
 // O Node carrega .ts direto (só sintaxe apagável), por isso historico-puro.ts não importa nada.
 const puro = require(path.join(root, "frontend/src/paineis/historico-comparacoes/historico-puro.ts"));
-const f = require(path.join(root, "static/js/shared/history-format.js"));
-const createComparisonHistory = require(path.join(root, "static/js/features/comparison-history.js"));
+const f = require(path.join(root, "frontend/src/legado/shared/history-format.js"));
+const createComparisonHistory = require(path.join(root, "frontend/src/legado/features/comparison-history.js"));
 
 const HOJE = new Date(2026, 9, 15, 10, 0, 0); // 15/10/2026, hora local
 

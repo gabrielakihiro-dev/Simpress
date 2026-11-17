@@ -117,21 +117,4 @@ test.describe("estrutura (1366 px)", () => {
     await expect(page.locator("#dossie-fechar")).toBeVisible();
     await expect(page.locator("#dossie-status")).toBeHidden();
   });
-
-  test("sem o bundle React: a busca permanece indisponível, a falha vai para o console e o dossiê não abre", async ({ page }) => {
-    const erros = [];
-    const errosPagina = [];
-    page.on("console", mensagem => { if (mensagem.type() === "error") erros.push(mensagem.text()); });
-    page.on("pageerror", erro => errosPagina.push(erro.message));
-    await page.route("**/static/dist/react-entry.js*", route => route.abort());
-    await page.goto("/");
-    await page.locator("#input-serial").fill("LENTO");
-    await page.getByRole("button", { name: "Buscar Equipamento" }).click();
-    await expect.poll(() => erros.some(texto => texto.includes('O painel React "pesquisa-equipamento" não carregou.'))).toBe(true);
-    await expect(page.locator("#card-serial")).toHaveText("—");
-    await expect(page.locator("#btn-ver-dossie")).toBeDisabled();
-    await expect(page.locator("#modal-dossie-equipamento")).toBeHidden();
-    await expect(page.locator("#modal-dossie-equipamento > .ck-dialogo")).toBeEmpty();
-    expect(errosPagina).toEqual([]);
-  });
 });

@@ -1,4 +1,4 @@
-// Boots static/app.js inside a VM with a fake DOM, the way the feature-module tests need it.
+// Boots frontend/src/legado/app.js inside a VM with a fake DOM, the way the feature-module tests need it.
 const vm = require("node:vm");
 const { appScripts } = require("./app-sources.cjs");
 
@@ -28,13 +28,13 @@ function bootPage(extraWindow = {}) {
   };
   const window = {
     document,
-    SimpressDomUtils: require("../../../static/js/shared/dom-utils.js"),
-    SimpressTransferUtils: require("../../../static/js/shared/transfer-utils.js"),
-    SimpressCatalogSearch: require("../../../static/js/shared/catalog-search-utils.js"),
-    SimpressFormDraftGuard: require("../../../static/js/shared/form-draft-guard.js"),
-    HistoryAnnotationAutosave: require("../../../static/js/shared/history-annotation-autosave.js"),
-    SimpressAccessibleDialogs: require("../../../static/js/ui/accessible-dialogs.js"),
-    SimpressNotifications: require("../../../static/js/ui/ui-notifications.js"),
+    SimpressDomUtils: require("../../../frontend/src/legado/shared/dom-utils.js"),
+    SimpressTransferUtils: require("../../../frontend/src/legado/shared/transfer-utils.js"),
+    SimpressCatalogSearch: require("../../../frontend/src/legado/shared/catalog-search-utils.js"),
+    SimpressFormDraftGuard: require("../../../frontend/src/legado/shared/form-draft-guard.js"),
+    HistoryAnnotationAutosave: require("../../../frontend/src/legado/shared/history-annotation-autosave.js"),
+    SimpressAccessibleDialogs: require("../../../frontend/src/legado/ui/accessible-dialogs.js"),
+    SimpressNotifications: require("../../../frontend/src/legado/ui/ui-notifications.js"),
     matchMedia: () => ({ matches: false }),
     addEventListener() {},
     ...extraWindow,

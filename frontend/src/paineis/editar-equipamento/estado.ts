@@ -1,5 +1,5 @@
 // Estado do modal "Atualizar / Cadastrar equipamento", fora do componente: o código antigo chama as ações pela ponte
-// (static/js/features/equipment-editor.js). Única escrita: POST /api/equipamento/salvar.
+// (frontend/src/legado/features/equipment-editor.js). Única escrita: POST /api/equipamento/salvar.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";
@@ -10,7 +10,7 @@ import {
 
 const MODAL = "modal-editar-equipamento";
 
-// Funções do código antigo publicadas em window (static/app.js, publish).
+// Funções do código antigo publicadas em window (frontend/src/legado/app.js, publish).
 interface AppAntigo {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;

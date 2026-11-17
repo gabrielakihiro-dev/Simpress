@@ -1,11 +1,11 @@
-// Ações do Catálogo de unidades, chamadas pela ponte (static/js/features/units-catalog.js), pelo roteador
+// Ações do Catálogo de unidades, chamadas pela ponte (frontend/src/legado/features/units-catalog.js), pelo roteador
 // do Cockpit (recarregarUnidadesCockpit) e pelos data-on-* do corpo.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { gravarEstado, lerEstado } from "../../estado-app";
 import { chaveSelecionada, filtrarUnidades, ler, mudar, mudarForm, type Estado, type Unidade } from "./estado";
 
-// Funções do código antigo publicadas em window por static/app.js.
+// Funções do código antigo publicadas em window por frontend/src/legado/app.js.
 interface AppLegado {
   showToast(mensagem: string, tipo: string): void;
   abrirPainelCockpit(painel: string): Promise<void>;

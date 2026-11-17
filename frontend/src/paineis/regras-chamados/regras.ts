@@ -1,5 +1,5 @@
 // Regras de acompanhamento de chamados: ordem das OS, etapas do pedido, atraso de atualização e os textos de cada
-// cartão. Porte fiel de static/js/features/ticket-rules.js; a ponte desse arquivo repassa para estas funções.
+// cartão. Porte fiel de frontend/src/legado/features/ticket-rules.js; a ponte desse arquivo repassa para estas funções.
 // Sem DOM, sem fetch e sem import, só com sintaxe apagável, para os testes de tests/frontend carregarem este
 // arquivo com require() direto do Node, sem build. Os helpers de texto (escapeHtml, pluralize) entram por parâmetro.
 

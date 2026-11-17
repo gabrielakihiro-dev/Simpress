@@ -12,7 +12,7 @@ interface Estado {
 interface ResumoEntra { updated_at?: string; users?: number; logins_ignorados?: number }
 interface Equipamento { serial?: string }
 
-// Ações do código antigo publicadas em window por static/app.js (fora de frontend/types/globais.d.ts).
+// Ações do código antigo publicadas em window por frontend/src/legado/app.js (fora de frontend/types/globais.d.ts).
 interface AppAntigo {
   showToast(mensagem: string, tipo: string): void;
   definirEquipamentoAtual(equipamento: Equipamento): void;
@@ -70,7 +70,7 @@ export async function importarNomesEntra(evento?: { preventDefault?(): void }) {
     });
     mudar({ status: resumoNomesEntra(result), exportar: true });
     input.value = "";
-    input.dispatchEvent(new Event("change", { bubbles: true })); // redesenha o seletor (static/js/ui/file-picker.js)
+    input.dispatchEvent(new Event("change", { bubbles: true })); // redesenha o seletor (frontend/src/legado/ui/file-picker.js)
     let refreshError: unknown = null;
     const serial = (lerEstado("currentEquipamento") as Equipamento | null)?.serial;
     if (serial) {

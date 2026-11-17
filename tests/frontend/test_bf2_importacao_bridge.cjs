@@ -1,9 +1,9 @@
-// BF2: a ponte static/js/features/inventory-upload.js só encaminha para window.SimpressReact["importacao-planilhas"].
+// BF2: a ponte frontend/src/legado/features/inventory-upload.js só encaminha para window.SimpressReact["importacao-planilhas"].
 // Dados sintéticos; os fluxos reais (prévia, envio, exportação) são testados em test_inventory_upload_flows e afins.
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createAppHarness } = require("./support/inventory-harness.cjs");
-const criarUpload = require("../../static/js/features/inventory-upload.js");
+const criarUpload = require("../../frontend/src/legado/features/inventory-upload.js");
 
 const PAINEL = "importacao-planilhas";
 const MENSAGEM = `O painel React "${PAINEL}" não carregou.`;
@@ -80,7 +80,7 @@ test("as ações síncronas não mascaram o erro do painel: o que o painel lanç
   SINCRONAS.forEach(nome => assert.throws(() => acoes[nome](), erro => erro === falha, nome));
 });
 
-// Pontes reais de static/app.js, com o painel real montado pelo harness (mountReactPanelsBf2).
+// Pontes reais de frontend/src/legado/app.js, com o painel real montado pelo harness (mountReactPanelsBf2).
 test("no app real as ações da ponte chegam ao painel React e devolvem o retorno dele", async () => {
   const harness = createAppHarness(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   const painel = harness.context.window.SimpressReact[PAINEL];

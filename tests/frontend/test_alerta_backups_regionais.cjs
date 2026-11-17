@@ -6,9 +6,9 @@ const test = require("node:test");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
-const createDomUtils = require("../../static/js/shared/dom-utils.js");
-const transferUtils = require("../../static/js/shared/transfer-utils.js");
-const panels = require("../../static/js/ui/data-panels.js");
+const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
+const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
+const panels = require("../../frontend/src/legado/ui/data-panels.js");
 
 const html = assembledHtml();
 const APELIDO = "Maria Teste";

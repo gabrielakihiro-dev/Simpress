@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { matchesCatalogSearch, normalizeSearchText } = require("../../static/js/shared/catalog-search-utils.js");
+const { matchesCatalogSearch, normalizeSearchText } = require("../../frontend/src/legado/shared/catalog-search-utils.js");
 
 test("normalizes accents and case for unit catalog search", () => {
   assert.equal(normalizeSearchText("Maringá"), "maringa");

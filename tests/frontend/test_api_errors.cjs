@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const apiErrors = require("../../static/js/shared/api-errors.js");
-const { apiFetch } = require("../../static/js/shared/api-fetch.js");
+const apiErrors = require("../../frontend/src/legado/shared/api-errors.js");
+const { apiFetch } = require("../../frontend/src/legado/shared/api-fetch.js");
 
 test("API error formatter extracts readable Pydantic validation messages", () => {
   const error = apiErrors.create([

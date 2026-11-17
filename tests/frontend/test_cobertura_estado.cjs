@@ -30,7 +30,7 @@ const toasts = [];
 const chamadas = [];
 let respostas = [];
 global.window = {
-  SimpressCoverageModel: require("../../static/js/shared/coverage-model.js"),
+  SimpressCoverageModel: require("../../frontend/src/legado/shared/coverage-model.js"),
   showToast: (texto, tipo) => toasts.push({ texto, tipo }),
 };
 // Fila de respostas: cada item vira uma Response falsa (2xx), um erro de API (status) ou uma queda de rede.

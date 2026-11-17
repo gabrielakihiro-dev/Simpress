@@ -11,17 +11,17 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/lembretes");
 const html = assembledHtml();
-const appSource = fs.readFileSync(path.join(root, "static/app.js"), "utf8");
-const entrySource = fs.readFileSync(path.join(root, "static/app-entry.js"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "frontend/src/legado/app.js"), "utf8");
+const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-entry.js"), "utf8");
 const {
   termosFormatarData, termosLimparParte, termosNomeArquivo, termosDadosDoLembrete, termosSecoesLembrete,
 } = require(path.join(pasta, "termos-puro.ts"));
-const criarTermos = require(path.join(root, "static/js/features/termos.js"));
+const criarTermos = require(path.join(root, "frontend/src/legado/features/termos.js"));
 
 // Todo código do painel (TypeScript e TSX) mais as duas pontes: é onde a privacidade dos termos precisa valer.
 const arquivosDoPainel = fs.readdirSync(pasta).filter((nome) => /.tsx?$/.test(nome)).map((nome) => path.join(pasta, nome));
 const fonteDoPainel = arquivosDoPainel.map((arquivo) => fs.readFileSync(arquivo, "utf8"));
-const pontes = ["termos.js", "lembretes.js"].map((nome) => fs.readFileSync(path.join(root, "static/js/features", nome), "utf8"));
+const pontes = ["termos.js", "lembretes.js"].map((nome) => fs.readFileSync(path.join(root, "frontend/src/legado/features", nome), "utf8"));
 const codigos = [...fonteDoPainel, ...pontes];
 
 test("termosFormatarData fatia aaaa-mm-dd sem passar por Date", () => {
@@ -85,7 +85,7 @@ function ponteFalsa(acao) {
 }
 
 test("registro: termos.js é a ponte do painel React lembretes e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/js\/features\/termos\.js";/);
+  assert.match(entrySource, /import "\.\/features\/termos\.js";/);
   assert.match(appSource, /"termos",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
 });

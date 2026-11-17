@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const m = require("../../static/js/shared/chamados-os-model.js");
+const m = require("../../frontend/src/legado/shared/chamados-os-model.js");
 
 const sebrae = {
   importado: {

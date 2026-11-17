@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { criarResultadoComparacao } = require("../../frontend/src/paineis/resultado-comparacao/estado.ts");
-const { requestWithRetries } = require("../../static/js/shared/history-annotation-autosave.js");
+const { requestWithRetries } = require("../../frontend/src/legado/shared/history-annotation-autosave.js");
 
 const erroApi = (status, data = {}) => Object.assign(new Error(`HTTP ${status}`), { status, data });
 const respostaOk = corpo => ({ ok: true, status: 200, json: async () => corpo });
