@@ -10,7 +10,7 @@ const test = require("node:test");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 
 const pasta = path.resolve(__dirname, "../../frontend/src/paineis/chrome-automation");
-const { ROTINAS, ROTINAS_DOS_CARTOES, verBackupsDepois } = require(path.join(pasta, "regras-puro.ts"));
+const { ROTINAS, ROTINAS_DOS_CARTOES, verBackupsDepois, osImportadaAoTerminar } = require(path.join(pasta, "regras-puro.ts"));
 const componentes = fs.readFileSync(path.join(pasta, "componentes.tsx"), "utf8");
 const acoes = fs.readFileSync(path.join(pasta, "acoes.ts"), "utf8");
 const indexHtml = assembledHtml();
@@ -81,4 +81,17 @@ test("atalho 'Ver backups no Resumo': aparece ao concluir inventários ou rotina
   assert.equal(visivel, true, "rotina completa concluída mostra o atalho");
   andamento("usuarios");
   assert.equal(visivel, false, "verificar usuários em andamento esconde o atalho");
+});
+
+test("fim da rotina de OS (os ou ambas) avisa a tela, e o F5 recarrega com o relatório novo", () => {
+  const app = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/legado/app.js"), "utf8");
+  assert.match(acoes, /if \(osImportadaAoTerminar\(\{ emAndamento, estavaAtivo, rotinaAnterior \}\)\) document\.dispatchEvent\(new CustomEvent\("simpress:chamados-atualizados"\)\);/);
+  assert.match(app, /document\.addEventListener\("simpress:chamados-atualizados", \(\) => app\.carregarNovosSebrae\(\)\);/);
+  const fim = (rotinaAnterior, emAndamento = false, estavaAtivo = true) => osImportadaAoTerminar({ emAndamento, estavaAtivo, rotinaAnterior });
+  assert.equal(fim("os"), true);
+  assert.equal(fim("ambas"), true);
+  assert.equal(fim("inventarios"), false, "inventários não importa OS");
+  assert.equal(fim("sebrae"), false, "a busca do Sebrae já recarrega o F5 por conta própria");
+  assert.equal(fim("os", true), false, "ainda em andamento");
+  assert.equal(fim("os", false, false), false, "sem execução observada");
 });

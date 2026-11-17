@@ -6,7 +6,7 @@ import { interno, ler, mudar } from "./estado";
 import { atualizarBotoesExternos, botaoExterno, mostrarChip, semEstadoReal } from "./fora";
 import {
   dataLocalIso, descreverEstado, limitarPagina, MAX_LINHAS, POLL_ATIVO_MS, POLL_LIVRE_MS, resumoDoHistorico, ROTINAS,
-  ROTINAS_DOS_CARTOES, textoResultado, verBackupsDepois, type DadosEstado, type Execucao, type LogHistorico,
+  ROTINAS_DOS_CARTOES, textoResultado, verBackupsDepois, osImportadaAoTerminar, type DadosEstado, type Execucao, type LogHistorico,
 } from "./regras-puro";
 
 interface RespostaHistorico { execucoes?: Execucao[]; pagina?: number; paginas?: number; total?: number }
@@ -56,6 +56,7 @@ function aplicarEstado(dados: DadosEstado) {
   const verBackups = verBackupsDepois({ emAndamento, estavaAtivo, rotinaAnterior, statusUltima: dados.ultima?.status });
   if (verBackups !== null) mudar({ verBackups });
   if (estavaAtivo && !emAndamento && ["sebrae", "dashboard"].includes(rotinaAnterior)) appAntigo().carregarNovosSebrae?.();
+  if (osImportadaAoTerminar({ emAndamento, estavaAtivo, rotinaAnterior })) document.dispatchEvent(new CustomEvent("simpress:chamados-atualizados"));
   const ultimaId = dados.ultima?.id || "";
   if (ultimaId !== interno.ultimaExecucaoId || estavaAtivo !== emAndamento) {
     interno.ultimaExecucaoId = ultimaId;

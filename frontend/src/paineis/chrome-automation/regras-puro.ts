@@ -324,3 +324,9 @@ export function verBackupsDepois(
   if (e.estavaAtivo && ["inventarios", "ambas"].includes(e.rotinaAnterior) && e.statusUltima === "concluido") return true;
   return null;
 }
+
+// Rotinas que importam o relatório de OS (os ou ambas) acabaram: a tela recarrega OS, Relatório e F5 (simpress:chamados-atualizados).
+// Vale também para falha ou cancelamento: um lote já em pendentes pode ter sido importado, e recarregar não grava nada.
+export function osImportadaAoTerminar(e: { emAndamento: boolean; estavaAtivo: boolean; rotinaAnterior: string }): boolean {
+  return e.estavaAtivo && !e.emAndamento && ["os", "ambas"].includes(e.rotinaAnterior);
+}
