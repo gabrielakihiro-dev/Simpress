@@ -19,6 +19,7 @@
     relatorio: ["cockpit-monthly-estado", "Falha ao carregar o relatório."],
     planilhas: ["cockpit-sheets-kpis", "Não foi possível carregar as planilhas."],
   };
+  const STATUS_SEM_PAINEL = { comparacao: "cockpit-comparison-status", planilhas: "cockpit-sheets-status" };
   const semPainel = () => !(typeof window !== "undefined" ? window : globalThis).SimpressReact?.["ferramentas-cockpit"];
 
   function abrirSemPainel(tool) {
@@ -36,8 +37,9 @@
     nota.className = "ck-nota ck-nota--erro";
     nota.textContent = mensagem;
     alvo.replaceChildren(nota);
-    // The sheets status line still says "Carregando…"; the error replaces it.
-    if (tool === "planilhas") document.getElementById("cockpit-sheets-status").textContent = "";
+    // The status line of Resumo and Planilhas still says "Carregando…"; the error replaces it.
+    const status = document.getElementById(STATUS_SEM_PAINEL[tool] ?? "");
+    if (status) status.textContent = "";
     return Promise.resolve();
   }
 

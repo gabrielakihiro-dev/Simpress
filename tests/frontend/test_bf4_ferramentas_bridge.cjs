@@ -77,7 +77,9 @@ function montarCasca() {
   }
   const status = filho(secoes.planilhas, "cockpit-sheets-status");
   status.textContent = "Carregando…";
-  return { doc, principal, raiz, secoes, alvos, status };
+  const statusComparacao = filho(secoes.comparacao, "cockpit-comparison-status");
+  statusComparacao.textContent = "Carregando histórico…";
+  return { doc, principal, raiz, secoes, alvos, status, statusComparacao };
 }
 
 test("a ponte expõe as 11 ações e encaminha todas ao painel ferramentas-cockpit", () => {
@@ -156,6 +158,7 @@ test("sem o painel, abrir uma ferramenta mostra o erro no lugar do resultado, co
     assert.equal(nota.textContent, mensagem);
     assert.ok(estadoTs.includes(`"${mensagem}"`), `o texto "${mensagem}" já existe em estado.ts`);
     if (ferramenta === "planilhas") assert.equal(casca.status.textContent, "", "o 'Carregando…' da faixa de status sai");
+    if (ferramenta === "comparacao") assert.equal(casca.statusComparacao.textContent, "", "o 'Carregando histórico…' do Resumo sai");
     assert.equal(erros.length, 1, `${ferramenta}: o erro também vai para o console`);
     assert.equal(erros[0].message, MENSAGEM);
   }
