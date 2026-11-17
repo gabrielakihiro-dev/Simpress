@@ -2,6 +2,8 @@
 
 Especificação da ferramenta **Lembretes**, que substitui a ferramenta **Termos**. Os termos de entrega e devolução continuam existindo, agora como sub-abas dentro de Lembretes.
 
+Migração React BF4 (17/11/2026): as ferramentas do Cockpit (Chamados, Comparação, Histórico de apelidos, Relatório mensal, Planilhas, Unidades, Cobertura, Lembretes e Chamados Sebrae) abrem pelo painel React `ferramentas-cockpit`, em `frontend/src/paineis/ferramentas-cockpit/` (`estado.ts`, `montar.tsx` e `tipos.ts`). `static/js/features/cockpit-tool-panels.js` virou ponte e mantém os nomes (`abrirPainelCockpit`, `fecharPainelCockpit` e os demais). Ids, textos, eventos e atalhos não mudaram; onde este doc cita `cockpit-tool-panels.js`, a regra agora está em `ferramentas-cockpit/estado.ts`. Sem o bundle React, Chamados, Comparação, Histórico, Relatório e Planilhas mostram o texto de erro que já existia; as outras ferramentas só registram o erro no console. Teste da ponte: `tests/frontend/test_bf4_ferramentas_bridge.cjs`. Para esta ferramenta, só a abertura e a troca de aba passam pelo painel `ferramentas-cockpit`; o conteúdo continua desenhado pelo painel React `lembretes`.
+
 Referência visual aprovada (11/11/2026): canvas https://claude.ai/artifact/14zj369oGQoYmw5inWncGh, artboards "Lembretes — 5 estados" e "Termo → Lembrete".
 
 Visual da aba Lembretes (12/11/2026): modelo estilo Todoist, artefato https://claude.ai/code/artifact/008ece32-67be-464b-bb80-7566cbb2e4b2 (artboard `Main.dc.html`). Só a camada visual mudou; textos, IDs, ARIA e regras seguem os desta especificação.

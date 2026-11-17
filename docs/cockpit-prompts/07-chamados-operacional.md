@@ -1,5 +1,7 @@
 # Especificação atual: tela Chamados com importação e gestão (30/10/2026)
 
+Migração React BF4 (17/11/2026): as ferramentas do Cockpit (Chamados, Comparação, Histórico de apelidos, Relatório mensal, Planilhas, Unidades, Cobertura, Lembretes e Chamados Sebrae) abrem pelo painel React `ferramentas-cockpit`, em `frontend/src/paineis/ferramentas-cockpit/` (`estado.ts`, `montar.tsx` e `tipos.ts`). `static/js/features/cockpit-tool-panels.js` virou ponte e mantém os nomes (`abrirPainelCockpit`, `fecharPainelCockpit` e os demais). Ids, textos, eventos e atalhos não mudaram; onde este doc cita `cockpit-tool-panels.js`, a regra agora está em `ferramentas-cockpit/estado.ts`. Sem o bundle React, Chamados, Comparação, Histórico, Relatório e Planilhas mostram o texto de erro que já existia; as outras ferramentas só registram o erro no console. Teste da ponte: `tests/frontend/test_bf4_ferramentas_bridge.cjs`.
+
 Esta seção vale no lugar do layout "lista + detalhe" descrito mais abaixo. O painel `Chamados` (`section[data-cockpit-tool-panel="chamados"]`, `F5`) passa a concentrar o fluxo que antes vivia no modal `Acompanhamento de chamados`. Mantêm-se os KPIs, a busca, a `Relação` e a tabela de OS por série (cards no mobile) com a linha expansível `Andamento`.
 
 ## Composição (de cima para baixo)

@@ -173,6 +173,15 @@ Meta: de 2 a 4 dias em vez de semanas. Substitui "um painel por bloco" pelos gru
 - JSDoc em `static/js/features/` acompanha: o módulo de um painel que ainda não migrou ganha JSDoc no bloco anterior ao dele.
 - Bloco do Assistente e dos cartões de confirmação: testes Playwright das recusas e dos envios reais primeiro; revisão obrigatória do `model-super-power:revisor`.
 
+### Resultado do BF4 (17/11/2026)
+
+- **Painel:** `ferramentas-cockpit`, em `frontend/src/paineis/ferramentas-cockpit/` (`estado.ts` com `criarFerramentasCockpit(contexto)`, `montar.tsx` e `tipos.ts`). Porta fiel de `static/js/features/cockpit-tool-panels.js` (2426 linhas): mesmos ids, textos, eventos e atalhos. A seção `#cockpit-tool-panels` do partial ganhou o contêiner `<div data-react-painel="ferramentas-cockpit" hidden></div>`; `static/index.html` não mudou, porque inclui o partial.
+- **Ponte:** `static/js/features/cockpit-tool-panels.js` ficou só com `context.ponteReactSincrona("ferramentas-cockpit", [...])` para as 11 ações (`abrirPainelCockpit`, `fecharPainelCockpit`, `abrirComparacaoDaSerie`, `abrirChamadosDoEquipamento`, `abrirChamadoDaOs`, `abrirJanelaChamadoOs`, `abrirReferenciaLembrete`, `fecharJanelaChamadoOs`, `destacarLinhaCockpit`, `filterTicketRecords`, `mostrarResultadoNaAbaComparacao`). `FEATURE_ORDER`, a lista do dispatcher e `test_feature_modules` seguem iguais. Ela só sai no Bloco final.
+- **Sem o bundle:** `abrirPainelCockpit` mostra o texto de erro que já existia em Chamados, Comparação, Histórico de apelidos, Relatório mensal e Planilhas. Cobertura, Lembretes, Unidades e Chamados Sebrae não tinham texto de erro próprio, então só registram o erro no console.
+- **Mudança de comportamento:** o envio automático da anotação de chamado (`PUT` da linha do tempo) usa `apiFetch` em vez de `fetch` direto. Mesmo endpoint, mesmo corpo e sem `keepalive` (como antes). O erro HTTP volta ao autosave no mesmo formato (`ok`, `status`, `json`, então 409 não repete e 5xx repete); a falha de rede passa intacta e agora também dispara o evento `simpress:servidor-offline`. Coberto em `test_bf4_ferramentas_bridge.cjs`.
+- **Testes:** os testes que liam ou importavam o módulo antigo (`test_cockpit_tool_panels`, `test_inline_equipment_edit`, `test_cockpit_andamento`, `test_bf2_regras_bridge`) passaram a usar `estado.ts`, sem asserção removida nem afrouxada. Novo: `tests/frontend/test_bf4_ferramentas_bridge.cjs`; o harness ganhou `mountReactPanelsBf4`.
+- **Fica para o Dia 4:** `data-panels.js`, `app-shell.js` e as teclas F de `ux-enhancements` continuam legados.
+
 ## Bloco final — remoção do código antigo
 
 - **Objetivo:** o React assume a página inteira.

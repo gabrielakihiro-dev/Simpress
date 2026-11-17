@@ -7,7 +7,7 @@ const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const createTicketRules = require("../../static/js/features/ticket-rules.js");
-const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
+const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
 const MENSAGEM = 'O painel React "regras-chamados" não carregou.';
 const NOMES = [
@@ -117,7 +117,7 @@ async function abrirAndamentoSemBundle(chamado) {
   global.document = doc;
   try {
     const app = { showToast() {}, ...createTicketRules(dom) };
-    const api = createCockpitToolPanels({ app, appState: {}, apiFetch: async () => ({ eventos: [] }), historyFormat });
+    const api = criarFerramentasCockpit({ app, appState: {}, apiFetch: async () => ({ eventos: [] }), historyFormat });
     let opcoes;
     global.SimpressDataPanels = {
       montarTabelaOs: (_host, opts) => { opcoes = opts; return {}; },

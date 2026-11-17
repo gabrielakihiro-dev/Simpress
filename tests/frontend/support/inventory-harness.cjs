@@ -18,6 +18,7 @@ const { criarIndicadoresHome } = require("../../../frontend/src/paineis/indicado
 const { criarResultadoComparacao } = require("../../../frontend/src/paineis/resultado-comparacao/estado.ts");
 const { criarRegrasChamados } = require("../../../frontend/src/paineis/regras-chamados/regras.ts");
 const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/importacao-planilhas/estado.ts");
+const { criarFerramentasCockpit } = require("../../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
 const { appScripts, appSource } = require("./app-sources.cjs");
 
@@ -206,6 +207,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
 
   mountReactPanels(context, document, window, effects, fetchApi);
   mountReactPanelsBf2(context, window);
+  mountReactPanelsBf4(context, window);
 
   function syncAppToWindow() {
     for (const name of Object.keys(context)) {
@@ -346,6 +348,17 @@ function mountReactPanelsBf2(context, window) {
     app: window,
     appState: context.SimpressApp.state,
     apiFetch: requestApi,
+  });
+}
+
+// Painel do BF4 (ferramentas-cockpit): o main.tsx real publica o retorno de montar(); aqui o harness chama a mesma fábrica de estado.ts, sem o JSX.
+function mountReactPanelsBf4(context, window) {
+  window.SimpressReact["ferramentas-cockpit"] = criarFerramentasCockpit({
+    app: window,
+    appState: context.SimpressApp.state,
+    apiFetch: requestApi,
+    historyFormat: window.SimpressHistoryFormat,
+    chamadosOsModel: window.SimpressChamadosOsModel,
   });
 }
 

@@ -1,5 +1,7 @@
 # 14 · Cockpit v2 (redesign visual com o pacote de design)
 
+Migração React BF4 (17/11/2026): as ferramentas do Cockpit (Chamados, Comparação, Histórico de apelidos, Relatório mensal, Planilhas, Unidades, Cobertura, Lembretes e Chamados Sebrae) abrem pelo painel React `ferramentas-cockpit`, em `frontend/src/paineis/ferramentas-cockpit/` (`estado.ts`, `montar.tsx` e `tipos.ts`). `static/js/features/cockpit-tool-panels.js` virou ponte e mantém os nomes (`abrirPainelCockpit`, `fecharPainelCockpit` e os demais). Ids, textos, eventos e atalhos não mudaram; onde este doc cita `cockpit-tool-panels.js`, a regra agora está em `ferramentas-cockpit/estado.ts`. Sem o bundle React, Chamados, Comparação, Histórico, Relatório e Planilhas mostram o texto de erro que já existia; as outras ferramentas só registram o erro no console. Teste da ponte: `tests/frontend/test_bf4_ferramentas_bridge.cjs`.
+
 Especificação escrita antes da implementação (AGENTS.md › Interface). Plano de origem: `C:\Users\Gabriel\.claude\plans\pasted-content-id-f0e4-aten-o-mandato-serialized-neumann.md`.
 
 ## Contexto

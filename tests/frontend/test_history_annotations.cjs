@@ -50,7 +50,9 @@ test("loads the bounded autosave retry helper before the application", () => {
   assert.ok(catalogScript < appScriptTag);
   assert.ok(draftGuardScript < appScriptTag);
   assert.ok(retryScript < appScriptTag);
-  assert.match(appScript, /attachAnnotationAutosave/);
+  // O Andamento da aba Chamados (que liga o autosave) vive no painel React ferramentas-cockpit desde o BF4.
+  const ferramentasReact = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "ferramentas-cockpit", "estado.ts"), "utf8");
+  assert.match(ferramentasReact, /attachAnnotationAutosave/);
   assert.match(appScript, /Tentar sincronizar novamente/);
   assert.match(appScript, /data-annotation-retry hidden/);
   assert.doesNotMatch(appScript, /class="hidden[^\"]*"[^>]*data-annotation-retry/);

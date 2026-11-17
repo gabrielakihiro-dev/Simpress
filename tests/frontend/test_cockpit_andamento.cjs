@@ -4,7 +4,7 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
+const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
 // Regras de chamado (antes cobertas pelo modal de acompanhamento): vivem em regras-chamados/regras.ts e no Andamento da aba Chamados.
 const rules = criarRegrasChamados(createDomUtils(createFakeDocument()));
@@ -48,7 +48,7 @@ async function abrirAndamento(chamados, respostaTempo = { eventos: [] }) {
   doc.activeElement = null;
   global.document = doc;
   const app = { showToast() {}, ...rules };
-  const api = createCockpitToolPanels({
+  const api = criarFerramentasCockpit({
     app, appState: {}, apiFetch: async () => respostaTempo, historyFormat,
   });
   let opcoes;

@@ -2,6 +2,8 @@
 
 Cole este prompt no agente de código com o repositório Simpress aberto.
 
+Migração React BF4 (17/11/2026): as ferramentas do Cockpit (Chamados, Comparação, Histórico de apelidos, Relatório mensal, Planilhas, Unidades, Cobertura, Lembretes e Chamados Sebrae) abrem pelo painel React `ferramentas-cockpit`, em `frontend/src/paineis/ferramentas-cockpit/` (`estado.ts`, `montar.tsx` e `tipos.ts`). `static/js/features/cockpit-tool-panels.js` virou ponte e mantém os nomes (`abrirPainelCockpit`, `fecharPainelCockpit` e os demais). Ids, textos, eventos e atalhos não mudaram; onde este doc cita `cockpit-tool-panels.js`, a regra agora está em `ferramentas-cockpit/estado.ts`. Sem o bundle React, Chamados, Comparação, Histórico, Relatório e Planilhas mostram o texto de erro que já existia; as outras ferramentas só registram o erro no console. Teste da ponte: `tests/frontend/test_bf4_ferramentas_bridge.cjs`.
+
 ## Objetivo
 
 Adaptar `Relatório mensal` para o painel da captura e acessá-lo pelo menu Ferramentas dos nove pontos como `F8`. O painel reúne indicadores do mês, gráficos/tabelas de dados disponíveis e uma prévia em texto com ações de copiar e exportar.
