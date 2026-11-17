@@ -5,12 +5,10 @@ const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
 const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
-const history = require("../../frontend/src/legado/ui/transfer-history.js");
 
 const appHtml = assembledHtml();
-const { appSource, legadoDir } = require("./support/app-sources.cjs");
+const { legadoDir } = require("./support/app-sources.cjs");
 const appEntry = fs.readFileSync(path.join(legadoDir, "app-entry.js"), "utf8");
-const appScript = appSource();
 
 test("sorting compares numbers, dates and text naturally and keeps empties last", () => {
   assert.ok(panels.compareValues("2", "10") < 0);
@@ -88,18 +86,9 @@ test("recent lists keep the newest first, deduplicated and bounded", () => {
   assert.equal(ux.pushRecent(["1", "2", "3", "4", "5", "6"], "7").length, 5);
 });
 
-test("transfer history exposes the duplicate fields and the dedicated endpoint", () => {
-  assert.equal(history.ENDPOINT, "/api/historico-transferencias");
-  const values = Object.fromEntries(history.duplicateValues({ entrega_contato: "Ana", entrega_obs: "Obs" }));
-  assert.equal(values["entrega-contato"], "Ana");
-  assert.equal(values["entrega-obs"], "Obs");
-  assert.equal(values["entrega-email"], "");
-  assert.doesNotMatch(appScript, /\/api\/transferencias/);
-});
-
 test("history button, history modal and confirmation modal exist with accessible hooks", () => {
-  for (const id of ["btn-historico-transferencias", "modal-historico-transferencias", "filtro-historico-transferencias",
-    "lista-historico-transferencias", "modal-confirmar-acao", "btn-confirmar-acao-ok", "btn-confirmar-acao-cancelar"]) {
+  for (const id of ["btn-historico-transferencias", "modal-historico-transferencias", "modal-confirmar-acao",
+    "btn-confirmar-acao-ok", "btn-confirmar-acao-cancelar"]) {
     assert.match(appHtml, new RegExp(`id="${id}"`), id);
   }
 });
