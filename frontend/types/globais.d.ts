@@ -16,8 +16,6 @@ declare var SimpressApiFetch: any;
 declare var SimpressApp: any;
 declare var SimpressBento: any;
 declare var SimpressCatalogSearch: any;
-declare var SimpressChamadosOsModel: any;
-declare var SimpressDataPanels: any;
 declare var SimpressDomUtils: any;
 declare var SimpressEquipmentSearchRenderers: any;
 declare var SimpressFilePicker: any;

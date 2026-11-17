@@ -13,6 +13,5 @@ export function montar(_container: HTMLElement) {
     appState: window.SimpressApp?.state,
     apiFetch,
     historyFormat: window.SimpressHistoryFormat,
-    chamadosOsModel: window.SimpressChamadosOsModel,
   });
 }

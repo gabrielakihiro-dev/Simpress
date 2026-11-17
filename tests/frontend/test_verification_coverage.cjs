@@ -11,7 +11,7 @@ test("verification discovers recent-equipment tests and all five previously omit
   const checked = javascriptFilesToCheck();
   assert.ok(checked.includes("static/js/shared/theme-preference.js"));
   for (const file of [
-    "shared/recent-equipment.js", "ui/data-panels.js", "ui/ux-enhancements.js",
+    "shared/recent-equipment.js", "ui/ux-enhancements.js",
     "app-entry.js", "app.js",
   ]) assert.ok(checked.includes(`frontend/src/legado/${file}`), file);
 });

@@ -1786,7 +1786,7 @@ class SimpressApi:
         })
 
     def chamados_com_os_sebrae(self) -> Dict[str, Any]:
-        """Same pairing rules as montarParesChamadoOs in frontend/src/legado/shared/chamados-os-model.js, plus the F6 note. Read only (the screen shows one pair at a time in the "Chamado × OS" window)."""
+        """Same pairing rules as montarParesChamadoOs in frontend/src/paineis/paineis-dados/chamados-os.ts, plus the F6 note. Read only (the screen shows one pair at a time in the "Chamado × OS" window)."""
         ok, sebrae = self._chamar("GET", "/api/sebrae/novos")
         if not ok:
             return {"erro": sebrae}

@@ -14,7 +14,7 @@ const LISTA = "#lista-historico-comparacoes";
 const TOTAL = "#total-historico-comparacoes";
 const SELECT_DATA = "#data-exportar-historico-comparacoes";
 const BOTAO_EXPORTAR = "#btn-exportar-historico-comparacoes";
-// Medido no módulo antigo: quantos GET /api/painel o observador de data-panels.js força por abertura e por exclusão.
+// Medido no módulo antigo: quantos GET /api/painel o observador de data-panels.js (hoje paineis-dados/paineis.ts) força por abertura e por exclusão.
 // Mais que isso no React deixaria o Resumo mais lento (o brief proíbe piorar).
 const PAINEL_POR_ABERTURA = 2;
 const PAINEL_POR_EXCLUSAO = 1;
@@ -182,7 +182,7 @@ test.describe("Histórico de planilhas", () => {
     // A contagem da partida já preencheu o contador; o nó ganha uma marca para provar que não é recriado.
     await expect(total).toHaveText("4 registros");
     await total.evaluate(no => { no.dataset.g9Marca = "1"; window.__g9No = no; });
-    // O MutationObserver de data-panels.js força um GET /api/painel quando o contador muda.
+    // O MutationObserver de paineis-dados força um GET /api/painel quando o contador muda.
     const painelAtualizado = page.waitForRequest(request => new URL(request.url()).pathname === "/api/painel");
     await page.locator("#btn-resumo-aba").click();
     await page.locator("#cockpit-comparison-legacy").click();

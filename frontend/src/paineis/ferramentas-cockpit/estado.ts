@@ -1,3 +1,5 @@
+import { chamadoDaOs, osDoChamado } from "../paineis-dados/chamados-os.ts";
+import { paineisDados } from "../paineis-dados/paineis.ts";
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
 
 // Ferramentas do Cockpit (OS, Resumo, Histórico de apelidos, Relatório mensal, Planilhas e janela Chamado × OS):
@@ -34,12 +36,12 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   let returnTarget: ElementoCockpit | null = null;
   let ticketData: Registro | null = null;
   let ticketTriage = "";
-  // Sub-abas da F6 (OS por situação): a tabela é uma só; a sub-aba é só mais um filtro (data-panels, filtrarTabelaOs({ situacao })).
+  // Sub-abas da F6 (OS por situação): a tabela é uma só; a sub-aba é só mais um filtro (tabela-os.ts, filtrarTabelaOs({ situacao })).
   const OS_ABAS = ["abertas", "finalizadas"];
   const OS_ABA_ROTULOS: Record<string, string> = { abertas: "Abertas", finalizadas: "Finalizadas" };
   let ticketSituacao = "abertas";
   let ticketAbasN: Record<string, number> = { abertas: 0, finalizadas: 0 };
-  // KPIs e triagem contam só a sub-aba Abertas e não mudam ao trocar de sub-aba: data-panels avisa (aoContarSituacao) as OS abertas
+  // KPIs e triagem contam só a sub-aba Abertas e não mudam ao trocar de sub-aba: tabela-os.ts avisa (aoContarSituacao) as OS abertas
   // e, dos chamados do relatório, só as séries com pelo menos uma OS aberta.
   let ticketAbertas: { os: number; chamados: Registro[] } = { os: 0, chamados: [] };
   let comparisonEvents: Registro[] = [];
@@ -466,7 +468,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     host.hidden = false;
   }
 
-  // Busca, Relação, Atenção e Triagem só filtram as linhas já montadas pela tabela de OS (data-panels).
+  // Busca, Relação, Atenção e Triagem só filtram as linhas já montadas pela tabela de OS (tabela-os.ts).
   function filterTicketTable() {
     const relation = byId("cockpit-tickets-relation").value;
     dataPanels()?.filtrarTabelaOs({
@@ -487,7 +489,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     byId("cockpit-tickets-os")?.setAttribute("aria-labelledby", `os-aba-${situacao}`);
   }
 
-  // Números das abas: linhas que passam nos filtros em cada sub-aba, sem o limite da página (aviso de data-panels).
+  // Números das abas: linhas que passam nos filtros em cada sub-aba, sem o limite da página (aviso de tabela-os.ts).
   function renderAbasOs() {
     OS_ABAS.forEach(nome => {
       const n = ticketAbasN[nome];
@@ -535,7 +537,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     filterTicketTable();
   }
 
-  const dataPanels = () => globalThis.SimpressDataPanels;
+  // O contexto só injeta painéis de dados nos testes; no app vale a instância de paineis-dados/paineis.ts.
+  const dataPanels = () => context.dataPanels ?? paineisDados;
 
   // A tabela já busca /api/operacoes/chamados: reaproveita a resposta (KPIs e snapshot_id) em vez de pedir de novo.
   async function loadTickets() {
@@ -2389,13 +2392,12 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   const lerSemFalhar = (url: Qualquer, mensagem: Qualquer) => apiFetch(url, { errorMessage: mensagem }).catch(() => null);
   const lerVinculosOs = () => lerSemFalhar("/api/operacoes/chamados/vinculos-os", "Não foi possível consultar os vínculos de OS.").then(dados => dados?.vinculos || []);
   function abrirReferenciaLembrete({ tipo, numero }: Registro = {}, gatilho: ElementoCockpit | null = null) {
-    const modelo = context.chamadosOsModel;
     const alvo = String(numero || "");
-    if (!modelo || !alvo) return undefined;
+    if (!alvo) return undefined;
     if (tipo === "chamado") {
       // A OS do cartão do F5 vence (a janela a usa); sem ela, o vínculo salvo pelo chamado exato.
       const reservaOs = async (chamado: Qualquer) => {
-        const achado = modelo.osDoChamado(chamado, { vinculos: await lerVinculosOs() });
+        const achado = osDoChamado(chamado, { vinculos: await lerVinculosOs() });
         if (achado?.ambiguo) return { aviso: `Mais de uma OS ligada a este chamado (${achado.ambiguo.join(", ")}). Abra pela aba OS (F6).` };
         return achado ? { os: achado.os, serie: achado.serie } : null;
       };
@@ -2404,7 +2406,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     if (tipo !== "os") return undefined;
     const resolver = async () => {
       const [vinculos, sebrae] = await Promise.all([lerVinculosOs(), lerSemFalhar("/api/sebrae/novos", "Não foi possível consultar os chamados do Sebrae.")]);
-      const achado = modelo.chamadoDaOs(alvo, { vinculos, sebrae });
+      const achado = chamadoDaOs(alvo, { vinculos, sebrae });
       if (achado?.ambiguo) return { avisoChamado: `OS ligada a mais de um chamado (${achado.ambiguo.join(", ")}).` };
       return achado ? { chamado: achado.chamado, serie: achado.serie } : null;
     };

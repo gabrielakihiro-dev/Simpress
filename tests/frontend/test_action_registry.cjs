@@ -19,17 +19,19 @@ function click(attrs) {
   return { type: "click", target: element(attrs), cancelBubble: false, preventDefault() {} };
 }
 
-function jsFiles(dir) {
+function jsFiles(dir, pattern = /\.js$/) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return jsFiles(full);
-    return entry.name.endsWith(".js") ? [full] : [];
+    if (entry.isDirectory()) return jsFiles(full, pattern);
+    return pattern.test(entry.name) ? [full] : [];
   });
 }
 
 // Every action name the page can ask for: index.html, rendered templates and setAttribute calls.
+// React panels count too: the OS table (paineis-dados/tabela-os.ts) renders data-on-* buttons.
 function declaredActions() {
-  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js")), ...jsFiles(legadoDir)]
+  const paineisDir = path.resolve(__dirname, "../../frontend/src/paineis");
+  const files = [path.join(staticDir, "index.html"), ...jsFiles(path.join(staticDir, "js")), ...jsFiles(legadoDir), ...jsFiles(paineisDir, /\.tsx?$/)]
     .filter(file => !file.endsWith("action-dispatcher.js"));
   const names = new Set();
   for (const file of files) {
