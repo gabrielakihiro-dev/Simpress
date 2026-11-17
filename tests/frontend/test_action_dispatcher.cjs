@@ -4,7 +4,7 @@ const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
 const { allow, dispatch } = require("../../frontend/src/legado/ui/action-dispatcher.js");
-const { appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
+const { aplicacaoFiles, appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
 
 allow(["ativarAba", "filtrar", "teclas", "carregar", "buscar", "fechar", "salvar", "inner", "outer"]);
 
@@ -89,7 +89,9 @@ test("click targets forward to another element and unknown actions only warn", (
 });
 
 test("pages no longer use inline event handler attributes", () => {
-  for (const file of ["index.html", ...appScriptFiles()]) {
+  // registro.ts vale pelos módulos de frontend/src/aplicacao/ (as features).
+  const arquivos = appScriptFiles().flatMap(file => (file === "../aplicacao/registro.ts" ? aplicacaoFiles() : [file]));
+  for (const file of ["index.html", ...arquivos]) {
     const source = file === "index.html" ? assembledHtml() : fs.readFileSync(path.join(legadoDir, file), "utf8");
     assert.doesNotMatch(source, /\son[a-z]+\s*=\s*["']/, file);
   }

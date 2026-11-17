@@ -1,14 +1,14 @@
 // Assistente (F9): chat flutuante. Desde o Dia 3 (G7b, React) o painel vive em frontend/src/paineis/assistant-chat/ e o
 // comportamento de tela é testado no navegador (tests/e2e/assistente.spec.cjs, tests/e2e/react-g7b.spec.cjs e
 // tests/e2e/react-g7.spec.cjs, todas as rotas /api/assistente/* simuladas). Aqui ficam as regras puras (assistente-puro.ts,
-// carregado direto pelo require do Node), a ponte do código antigo (frontend/src/legado/features/assistant-chat.js), o registro, o HTML
+// carregado direto pelo require do Node), a ponte do código antigo (frontend/src/aplicacao/pontes.ts), o registro, o HTML
 // montado, o prazo e o cancelamento do envio (herdados de test_assistant_endpoint_timeout.cjs) e a privacidade. Dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
-const createAssistantChat = require("../../frontend/src/legado/features/assistant-chat.js");
+const createAssistantChat = require("../../frontend/src/aplicacao/registro.ts").fabricas.assistantChat;
 
 const root = path.resolve(__dirname, "../..");
 const pasta = path.join(root, "frontend/src/paineis/assistant-chat");
@@ -245,8 +245,9 @@ async function semConsole(fn) {
   }
 }
 
-test("registro: assistant-chat.js é a ponte do painel React assistant-chat e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/features\/assistant-chat\.js";/);
+test("registro: a ponte do painel React assistant-chat (aplicacao/registro.ts) continua no app-entry e no FEATURE_ORDER", () => {
+  assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.assistantChat, "function");
   assert.match(appSource, /"assistantChat",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
   assert.match(lerPasta("montar.tsx"), /return \{ \.\.\.acoes \};/);
@@ -350,7 +351,7 @@ test("o envio de ação pendente só sai pelos botões do cartão, que travam en
 
 // ---- Privacidade ----
 test("nenhum arquivo do painel nem a ponte traz e-mail corporativo, nome completo seguido de ';' ou fetch cru", () => {
-  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/legado/features/assistant-chat.js")];
+  const arquivos = [...fs.readdirSync(pasta).map(nome => path.join(pasta, nome)), path.join(root, "frontend/src/aplicacao/pontes.ts")];
   assert.ok(arquivos.length >= 8);
   for (const arquivo of arquivos) {
     const codigo = fs.readFileSync(arquivo, "utf8");

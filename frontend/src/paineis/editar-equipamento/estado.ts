@@ -1,5 +1,5 @@
 // Estado do modal "Atualizar / Cadastrar equipamento", fora do componente: o código antigo chama as ações pela ponte
-// (frontend/src/legado/features/equipment-editor.js). Única escrita: POST /api/equipamento/salvar.
+// (frontend/src/aplicacao/pontes.ts). Única escrita: POST /api/equipamento/salvar.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";

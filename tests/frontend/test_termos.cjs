@@ -16,12 +16,12 @@ const entrySource = fs.readFileSync(path.join(root, "frontend/src/legado/app-ent
 const {
   termosFormatarData, termosLimparParte, termosNomeArquivo, termosDadosDoLembrete, termosSecoesLembrete,
 } = require(path.join(pasta, "termos-puro.ts"));
-const criarTermos = require(path.join(root, "frontend/src/legado/features/termos.js"));
+const criarTermos = require(path.join(root, "frontend/src/aplicacao/registro.ts")).fabricas.termos;
 
-// Todo código do painel (TypeScript e TSX) mais as duas pontes: é onde a privacidade dos termos precisa valer.
+// Todo código do painel (TypeScript e TSX) mais a tabela de pontes (aplicacao/pontes.ts): é onde a privacidade dos termos precisa valer.
 const arquivosDoPainel = fs.readdirSync(pasta).filter((nome) => /.tsx?$/.test(nome)).map((nome) => path.join(pasta, nome));
 const fonteDoPainel = arquivosDoPainel.map((arquivo) => fs.readFileSync(arquivo, "utf8"));
-const pontes = ["termos.js", "lembretes.js"].map((nome) => fs.readFileSync(path.join(root, "frontend/src/legado/features", nome), "utf8"));
+const pontes = [fs.readFileSync(path.join(root, "frontend/src/aplicacao/pontes.ts"), "utf8")];
 const codigos = [...fonteDoPainel, ...pontes];
 
 test("termosFormatarData fatia aaaa-mm-dd sem passar por Date", () => {
@@ -84,8 +84,9 @@ function ponteFalsa(acao) {
   return { chamadas, feature: criarTermos(context) };
 }
 
-test("registro: termos.js é a ponte do painel React lembretes e continua no app-entry e no FEATURE_ORDER", () => {
-  assert.match(entrySource, /import "\.\/features\/termos\.js";/);
+test("registro: a ponte do painel React lembretes (aplicacao/registro.ts) continua no app-entry e no FEATURE_ORDER", () => {
+  assert.match(entrySource, /import "\.\.\/aplicacao\/registro\.ts";/);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.termos, "function");
   assert.match(appSource, /"termos",/);
   assert.ok(fs.existsSync(path.join(pasta, "montar.tsx")));
 });

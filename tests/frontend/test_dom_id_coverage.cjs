@@ -6,11 +6,12 @@ const test = require("node:test");
 
 const staticDir = path.resolve(__dirname, "../../static");
 const legadoDir = path.resolve(__dirname, "../../frontend/src/legado");
+const aplicacaoDir = path.resolve(__dirname, "../../frontend/src/aplicacao");
 const html = assembledHtml();
 
 // IDs que o JS procura mas que não estão no index.html. Cada uma precisa de motivo.
 const ALLOWED_MISSING = new Map([
-  ["automacao-captura-dialogo", "criado pelo JS (chrome-automation.js) ao abrir a captura"],
+  ["automacao-captura-dialogo", "criado pelo JS (frontend/src/paineis/chrome-automation) ao abrir a captura"],
   ["automacao-captura-titulo", "criado pelo JS junto com o diálogo de captura"],
   ["automacao-captura-imagem", "criado pelo JS junto com o diálogo de captura"],
   ["automacao-captura-mensagem", "criado pelo JS junto com o diálogo de captura"],
@@ -24,11 +25,11 @@ const ALLOWED_MISSING = new Map([
   ["resumo-painel-visao", "painel da Visão geral renderizado pelo JS dentro do resultado da comparação (frontend/src/paineis/resultado-comparacao)"],
 ]);
 
-function jsFiles(dir) {
+function jsFiles(dir, extensao = ".js") {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return ["vendor", "dist"].includes(entry.name) ? [] : jsFiles(full);
-    return entry.name.endsWith(".js") ? [full] : [];
+    if (entry.isDirectory()) return ["vendor", "dist"].includes(entry.name) ? [] : jsFiles(full, extensao);
+    return entry.name.endsWith(extensao) ? [full] : [];
   });
 }
 
@@ -40,7 +41,7 @@ test("every literal element id used by the JS exists in index.html", () => {
     /querySelector(?:All)?\(\s*["'`]#([\w-]+)[\s"'`.:\[>,]/g,
   ];
   const missing = new Map();
-  for (const file of [...jsFiles(staticDir), ...jsFiles(legadoDir)]) {
+  for (const file of [...jsFiles(staticDir), ...jsFiles(legadoDir), ...jsFiles(aplicacaoDir, ".ts")]) {
     const source = fs.readFileSync(file, "utf8");
     for (const pattern of patterns) {
       for (const [, id] of source.matchAll(pattern)) {

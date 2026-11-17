@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const criarDashboard = require("../../frontend/src/legado/features/dashboard.js");
+const criarDashboard = require("../../frontend/src/aplicacao/registro.ts").fabricas.dashboard;
 
 const ASSINCRONAS = [
   "carregarEstatisticas", "carregarProntidao", "inicializarProntidao",

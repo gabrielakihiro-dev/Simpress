@@ -6,7 +6,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const createSebraeHistorico = require("../../frontend/src/legado/features/sebrae-historico.js");
+const createSebraeHistorico = require("../../frontend/src/aplicacao/registro.ts").fabricas.sebraeHistorico;
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const { legadoDir } = require("./support/app-sources.cjs");
 
@@ -26,7 +26,8 @@ function ponteFalsa(acao) {
 }
 
 test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e um gancho no Dashboard", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\/features\/sebrae-historico\.js";$/m);
+  assert.match(lido("app-entry.js"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.sebraeHistorico, "function");
   assert.match(lido("app.js"), /"sebraeHistorico",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   const dashboard = fs.readFileSync(path.join(root, "frontend/src/paineis/sebrae-dashboard/estado.ts"), "utf8");

@@ -1,5 +1,5 @@
 /**
- * Bootstrap: builds the shared context, creates the feature modules in frontend/src/legado/features/,
+ * Bootstrap: builds the shared context, creates the feature modules in frontend/src/aplicacao/ (registro.ts),
  * publishes their actions on the page scope and starts the page once the DOM is ready.
  *
  * Actions live on window because data-on-* attributes (frontend/src/legado/ui/action-dispatcher.js, which

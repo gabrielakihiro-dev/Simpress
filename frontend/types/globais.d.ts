@@ -30,5 +30,5 @@ declare var SimpressSebraeDashboardModel: any;
 declare var SimpressTransferUtils: any;
 declare var SimpressUxEnhancements: any;
 
-// Funções de frontend/src/legado/features lidas pelos scripts de ui.
+// Funções de frontend/src/aplicacao lidas pelos scripts de ui.
 declare var cancelarDadosCadastrais: any;

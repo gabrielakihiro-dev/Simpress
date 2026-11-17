@@ -1,5 +1,5 @@
 // Estado da pesquisa completa (Home F1, "Ver todos os resultados"), fora do componente: o código antigo chama as ações
-// pela ponte (frontend/src/legado/features/full-equipment-search.js). Só leitura: GET /api/buscar-expandida.
+// pela ponte (frontend/src/aplicacao/full-equipment-search.ts). Só leitura: GET /api/buscar-expandida.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import {

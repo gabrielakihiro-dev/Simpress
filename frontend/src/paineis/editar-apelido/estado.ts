@@ -1,5 +1,5 @@
 // Estado do modal "Editar apelido", fora do componente: o código antigo chama as ações pela ponte
-// (frontend/src/legado/features/equipment-editor.js). Única escrita: POST /api/equipamento/atualizar-apelido.
+// (frontend/src/aplicacao/pontes.ts). Única escrita: POST /api/equipamento/atualizar-apelido.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { lerEstado } from "../../estado-app";

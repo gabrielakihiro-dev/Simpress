@@ -1,6 +1,6 @@
 // Bloco final 4 (BF4): ferramentas do Cockpit (OS F6, Resumo F3, Histórico de apelidos F7, Relatório mensal F8,
 // Planilhas e a janela Chamado x OS) migradas para o painel React ferramentas-cockpit
-// (frontend/src/paineis/ferramentas-cockpit/). frontend/src/legado/features/cockpit-tool-panels.js virou só a ponte.
+// (frontend/src/paineis/ferramentas-cockpit/). frontend/src/aplicacao/cockpit-tool-panels.ts virou só a ponte.
 //
 // Só dados sintéticos: o servidor de fixture (tests/support/serve_ui_motion_preview.py) responde a todo /api/*; nada é
 // simulado aqui. O que se prova é o que o usuário vê (botão, atalho, título, <kbd>, ARIA, foco, Escape) e o contrato com

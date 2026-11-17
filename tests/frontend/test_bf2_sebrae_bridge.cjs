@@ -1,4 +1,4 @@
-// BF2: a ponte frontend/src/legado/features/sebrae-dashboard.js só encaminha para window.SimpressReact["sebrae-dashboard"]
+// BF2: a ponte frontend/src/aplicacao/pontes.ts só encaminha para window.SimpressReact["sebrae-dashboard"]
 // (frontend/src/paineis/sebrae-dashboard/). Dados sintéticos; os fluxos da tela (cartões, filtro, finalizar, envio ao
 // SharePoint) são testados em test_sebrae_dashboard_ui.cjs com a mesma fábrica criarDashboardSebrae.
 const assert = require("node:assert/strict");
@@ -8,7 +8,7 @@ const { createAppHarness } = require("./support/inventory-harness.cjs");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
-const criarPonte = require("../../frontend/src/legado/features/sebrae-dashboard.js");
+const criarPonte = require("../../frontend/src/aplicacao/registro.ts").fabricas.sebraeDashboard;
 
 const PAINEL = "sebrae-dashboard";
 const MENSAGEM = `O painel React "${PAINEL}" não carregou.`;

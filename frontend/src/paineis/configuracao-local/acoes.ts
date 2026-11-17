@@ -1,4 +1,4 @@
-// Ações do modal Configuração local, chamadas pela ponte (frontend/src/legado/features/configuracao-local.js) e pelos
+// Ações do modal Configuração local, chamadas pela ponte (frontend/src/aplicacao/pontes.ts) e pelos
 // data-on-* do corpo. Os valores digitados são lidos do DOM na hora de salvar, como no código antigo.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
