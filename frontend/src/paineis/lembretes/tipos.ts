@@ -12,12 +12,6 @@ interface OpcoesConfirmacao {
   destrutiva?: boolean;
 }
 
-export interface ReferenciaTexto {
-  texto: string;
-  tipo?: string;
-  numero?: string;
-}
-
 // O mínimo de um evento de teclado: o código antigo (ponte) e o React passam objetos diferentes para as mesmas ações.
 export interface EventoTecla {
   key: string;
@@ -36,5 +30,4 @@ export interface AppAntigo {
 
 // Lidos na hora do uso, nunca no topo do módulo: o código antigo publica depois de o bundle carregar.
 export const appAntigo = () => window as unknown as AppAntigo;
-export const referenciasNoTexto = (texto: string): ReferenciaTexto[] =>
-  window.SimpressChamadosOsModel?.referenciasNoTexto?.(texto) ?? [{ texto }];
+export { referenciasNoTexto } from "../paineis-dados/chamados-os.ts";

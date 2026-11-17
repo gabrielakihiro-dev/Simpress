@@ -117,12 +117,12 @@ async function abrirAndamentoSemBundle(chamado) {
   global.document = doc;
   try {
     const app = { showToast() {}, ...createTicketRules(dom) };
-    const api = criarFerramentasCockpit({ app, appState: {}, apiFetch: async () => ({ eventos: [] }), historyFormat });
     let opcoes;
-    global.SimpressDataPanels = {
+    const dataPanels = {
       montarTabelaOs: (_host, opts) => { opcoes = opts; return {}; },
       filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
     };
+    const api = criarFerramentasCockpit({ app, appState: {}, apiFetch: async () => ({ eventos: [] }), historyFormat, dataPanels });
     await api.abrirPainelCockpit("chamados");
     opcoes.aoCarregar({ snapshot_id: "s1", resumo: { series_total: 1 }, chamados: [chamado] });
     const celula = doc.createElement("td");
@@ -130,7 +130,7 @@ async function abrirAndamentoSemBundle(chamado) {
     opcoes.aoExpandirSerie(chamado.serie, celula);
     await new Promise(resolve => setImmediate(resolve));
     return celula;
-  } finally { global.document = antigoDocumento; delete global.SimpressDataPanels; }
+  } finally { global.document = antigoDocumento; }
 }
 
 test("Andamento com a ponte e sem o bundle não lança e registra o erro em cada consulta", async () => {

@@ -48,14 +48,14 @@ async function abrirAndamento(chamados, respostaTempo = { eventos: [] }) {
   doc.activeElement = null;
   global.document = doc;
   const app = { showToast() {}, ...rules };
-  const api = criarFerramentasCockpit({
-    app, appState: {}, apiFetch: async () => respostaTempo, historyFormat,
-  });
   let opcoes;
-  global.SimpressDataPanels = {
+  const dataPanels = {
     montarTabelaOs: (_host, opts) => { opcoes = opts; return {}; },
     filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
   };
+  const api = criarFerramentasCockpit({
+    app, appState: {}, apiFetch: async () => respostaTempo, historyFormat, dataPanels,
+  });
   await api.abrirPainelCockpit("chamados");
   opcoes.aoCarregar({ snapshot_id: "s1", resumo: { series_total: chamados.length }, chamados });
   const celulas = {};
@@ -66,7 +66,7 @@ async function abrirAndamento(chamados, respostaTempo = { eventos: [] }) {
     celulas[chamado.serie] = celula;
   });
   await new Promise(resolve => setImmediate(resolve));
-  return { celulas, doc, restaurar() { global.document = antigoDocumento; delete global.SimpressDataPanels; } };
+  return { celulas, doc, restaurar() { global.document = antigoDocumento; } };
 }
 
 test("Andamento mostra cidade, fila, atendimento e endereço de entrega só com pedido em andamento", async () => {

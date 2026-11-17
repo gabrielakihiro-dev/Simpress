@@ -336,9 +336,9 @@ async function capturarEnvioAnotacao(apiFetch) {
   global.document = doc;
   let send;
   global.HistoryAnnotationAutosave = { attachAnnotationAutosave: opcoes => { send = opcoes.send; } };
-  global.SimpressDataPanels = { montarTabelaOs: (_host, opts) => { global.__opcoes = opts; return {}; }, filtrarTabelaOs() {}, atualizarTabelaOs: async () => {} };
+  const dataPanels = { montarTabelaOs: (_host, opts) => { global.__opcoes = opts; return {}; }, filtrarTabelaOs() {}, atualizarTabelaOs: async () => {} };
   try {
-    const api = criarFerramentasCockpit({ app: { showToast() {} }, appState: {}, apiFetch, historyFormat: {} });
+    const api = criarFerramentasCockpit({ app: { showToast() {} }, appState: {}, apiFetch, historyFormat: {}, dataPanels });
     await api.abrirPainelCockpit("chamados");
     global.__opcoes.aoCarregar({ snapshot_id: "s1", resumo: { series_total: 1 }, chamados: [{ serie: "SN-1", oracle: [], simpress: {} }] });
     const celula = doc.createElement("td");
@@ -348,7 +348,7 @@ async function capturarEnvioAnotacao(apiFetch) {
     return send;
   } finally {
     global.document = antigoDocumento;
-    delete global.HistoryAnnotationAutosave; delete global.SimpressDataPanels; delete global.__opcoes;
+    delete global.HistoryAnnotationAutosave; delete global.__opcoes;
   }
 }
 

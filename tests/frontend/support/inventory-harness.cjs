@@ -359,7 +359,6 @@ function mountReactPanelsBf4(context, window) {
     appState: context.SimpressApp.state,
     apiFetch: requestApi,
     historyFormat: window.SimpressHistoryFormat,
-    chamadosOsModel: window.SimpressChamadosOsModel,
   });
 }
 

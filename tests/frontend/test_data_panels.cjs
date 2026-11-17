@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const panels = require("../../frontend/src/legado/ui/data-panels.js");
+const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
 const ux = require("../../frontend/src/legado/ui/ux-enhancements.js");
 
 const appHtml = assembledHtml();
@@ -48,8 +48,12 @@ test("bar widths scale to the largest city", () => {
 });
 
 test("dashboard module is loaded, offline and touches only the allowed endpoint", () => {
-  assert.match(appEntry, /import "\.\/ui\/data-panels\.js";/);
-  const source = fs.readFileSync(path.join(legadoDir, "ui", "data-panels.js"), "utf8");
+  // Instalado pelo montar() do painel React (não mais por import no app-entry): o container oculto precisa estar no index.html.
+  assert.doesNotMatch(appEntry, /data-panels\.js/);
+  const pastaPainel = path.resolve(__dirname, "../../frontend/src/paineis/paineis-dados");
+  assert.match(fs.readFileSync(path.join(pastaPainel, "montar.tsx"), "utf8"), /paineisDados\.install\(window\)/);
+  assert.match(appHtml, /<div data-react-painel="paineis-dados" hidden><\/div>/);
+  const source = ["paineis.ts", "tabela-os.ts", "utilitarios.ts", "chamados-os.ts"].map(arquivo => fs.readFileSync(path.join(pastaPainel, arquivo), "utf8")).join("\n");
   assert.doesNotMatch(source, /https?:\/\/(?!www\.w3\.org\/2000\/svg)/); // namespace SVG não é requisição
   assert.doesNotMatch(source, /innerHTML/);
   assert.equal(panels.ENDPOINT, "/api/painel");

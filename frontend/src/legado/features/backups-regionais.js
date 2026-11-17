@@ -2,7 +2,7 @@
  * Resumo (F3), sub-aba Backups: migrada para React em frontend/src/paineis/backups-regionais/
  * (painel #resumo-painel-backups, data-react-painel="backups-regionais"). Aqui só fica o pedido do painel a cada
  * 5 min: ele atualiza todos os alertas do sino, não só Backups, e não pode depender do bundle React carregar.
- * Também guarda o último painel lido: data-panels.js lê o painel no import, às vezes antes de o bundle montar o painel,
+ * Também guarda o último painel lido: paineis-dados (paineis.ts) lê o painel no import, às vezes antes de o bundle montar o painel,
  * e a ponte o repete (repetirPainel) quando o bundle carrega. Ninguém de fora chama este módulo; ele continua em
  * FEATURE_ORDER (frontend/src/legado/app.js).
  */

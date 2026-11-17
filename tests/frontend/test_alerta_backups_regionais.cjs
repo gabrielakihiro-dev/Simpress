@@ -8,7 +8,7 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/paineis/indicadores-home/estado.ts");
 const createDomUtils = require("../../frontend/src/legado/shared/dom-utils.js");
 const transferUtils = require("../../frontend/src/legado/shared/transfer-utils.js");
-const panels = require("../../frontend/src/legado/ui/data-panels.js");
+const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
 
 const html = assembledHtml();
 const APELIDO = "Maria Teste";

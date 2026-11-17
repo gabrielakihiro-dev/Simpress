@@ -190,6 +190,9 @@ test("a month row links to the F5 only with the F5 key and fills the series of n
   assert.deepEqual(panels.sebraeMonthMatch({ chave: "UTIC-2026-1", chamado: "UTIC-2026-1", serie: "" }, null), { chaveF5: "", serie: "" });
 });
 
+// Painéis de dados falsos de cada teste; o contexto os lê na hora do uso (context.dataPanels), sem global. Sem falso, vale o real (inerte antes do install).
+let paineisDadosFalso;
+
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.
 function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, contextExtra = {} } = {}) {
   const elementos = new Map();
@@ -221,7 +224,7 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, cont
   };
   // recarregarUnidadesCockpit vem da ponte React (units-catalog.js), sempre publicada no app real.
   const app = { apiFetch, showToast() {}, async recarregarUnidadesCockpit() {}, ...appExtra };
-  const api = criarFerramentasCockpit({ app, appState: {}, apiFetch, ...contextExtra });
+  const api = criarFerramentasCockpit({ app, appState: {}, apiFetch, get dataPanels() { return paineisDadosFalso; }, ...contextExtra });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
   // dispara(id, tipo, evento): chama os ouvintes que o painel registrou naquele elemento (cliques e teclas das sub-abas da F6).
@@ -394,7 +397,7 @@ test("#ck-link-os é um botão que abre OS filtrada pela série do equipamento",
 test("abrir OS monta a tabela uma vez, com as opções de OS, e depois só atualiza", async () => {
   const { api, el } = criarAmbientePaineis();
   const calls = { montar: [], filtrar: [], atualizar: [] };
-  global.SimpressDataPanels = {
+  paineisDadosFalso = {
     montarTabelaOs: (host, opcoes) => { calls.montar.push([host, opcoes]); return {}; },
     filtrarTabelaOs: filtro => calls.filtrar.push(filtro),
     atualizarTabelaOs: async force => { calls.atualizar.push(force); },
@@ -437,7 +440,7 @@ test("abrir OS monta a tabela uma vez, com as opções de OS, e depois só atual
     await api.abrirPainelCockpit("chamados");
     assert.equal(calls.montar.length, 1);
     assert.deepEqual(calls.atualizar, [true]);
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 // Nós simples no lugar do DOM permissivo: guardam filhos e texto para conferir KPIs, triagem e ARIA das sub-abas.
@@ -468,7 +471,7 @@ function notaDaTriagem(resumo) {
 async function abrirOsComTabelaFalsa(ambiente) {
   const filtros = [];
   const dados = { opcoes: null };
-  global.SimpressDataPanels = {
+  paineisDadosFalso = {
     montarTabelaOs: (_host, opcoes) => { dados.opcoes = opcoes; return {}; },
     filtrarTabelaOs: filtro => filtros.push(filtro),
     atualizarTabelaOs: async () => {},
@@ -522,7 +525,7 @@ test("KPIs e triagem contam só as OS abertas e não mudam ao trocar de sub-aba"
     assert.equal(triagem.at(-1).numeros[0][1], "3");
     assert.doesNotMatch(html, /id="cockpit-tickets-kpis-nota"/, "a nota dos KPIs saiu da tela e vive no ⓘ da triagem");
     assert.ok(el("cockpit-tickets-triage").hidden === false);
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("sem OS aberta a triagem some e os KPIs zeram", async () => {
@@ -533,7 +536,7 @@ test("sem OS aberta a triagem some e os KPIs zeram", async () => {
     assert.deepEqual(kpis.at(-1).slice(0, 2), [["OS abertas", "0"], ["Séries", "0"]]);
     assert.equal(triagem.length, 0);
     assert.equal(ambiente.el("cockpit-tickets-triage").hidden, true);
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("sub-abas da OS: números, aria-label, selecionada e painel único rotulado pela aba ativa", async () => {
@@ -568,7 +571,7 @@ test("sub-abas da OS: números, aria-label, selecionada e painel único rotulado
     // Depois de Desfazer/Conferido a linha some da vista: o foco volta para a aba ativa.
     opcoes.aoFocarAba();
     assert.equal(global.document.activeElement, el("os-aba-abertas"));
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("sub-abas da OS: setas, Home e End movem seleção e foco (tabindex rolante)", async () => {
@@ -592,7 +595,7 @@ test("sub-abas da OS: setas, Home e End movem seleção e foco (tabindex rolante
     assert.equal(filtros.at(-1).situacao, "finalizadas");
     assert.equal(tecla("os-aba-finalizadas", "Tab"), false, "outras teclas seguem o comportamento normal");
     assert.equal(tecla("os-aba-finalizadas", "a"), false);
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("busca, Relação, Atenção e Triagem seguem valendo na sub-aba ativa; Limpar filtros não muda de sub-aba", async () => {
@@ -608,7 +611,7 @@ test("busca, Relação, Atenção e Triagem seguem valendo na sub-aba ativa; Lim
     assert.deepEqual(filtros.at(-1), { busca: "", relacao: "divergente", triagem: "", atencao: true, situacao: "finalizadas" });
     dispara("cockpit-tickets-clear", "click");
     assert.deepEqual(filtros.at(-1), { busca: "", relacao: "", triagem: "", atencao: false, situacao: "finalizadas" });
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("sub-abas da OS no HTML: tablist rotulado, abas ligadas ao painel único e contador na barra", () => {
@@ -641,7 +644,7 @@ test("linha do tempo da série descarta a resposta tardia quando a linha de Anda
   const apiFetch = () => new Promise(resolve => { responder = resolve; });
   const { api, el } = criarAmbientePaineis({ apiFetch });
   let opcoes;
-  global.SimpressDataPanels = {
+  paineisDadosFalso = {
     montarTabelaOs: (_host, opts) => { opcoes = opts; return {}; },
     filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
   };
@@ -660,13 +663,13 @@ test("linha do tempo da série descarta a resposta tardia quando a linha de Anda
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(criados.length > 0);
     assert.equal(renders, 0, "resposta tardia não redesenha uma linha que já saiu da tabela");
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela", async () => {
   const { api, el } = criarAmbientePaineis();
   const filtros = [];
-  global.SimpressDataPanels = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
+  paineisDadosFalso = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
   try {
     el("transfer-serial").textContent = "  sn-9 ";
     el("cockpit-tickets-relation").value = "somente_oracle";
@@ -680,7 +683,7 @@ test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela
     assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados");
     assert.deepEqual(eventos, ["input"]);
     assert.deepEqual(filtros.at(0), { busca: "SN-9", relacao: "somente_oracle", triagem: "", atencao: false, situacao: "abertas" });
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 test("resultado novo aparece na aba Comparação na hora e é trocado pelo evento salvo (com evento_id)", async () => {
@@ -906,7 +909,7 @@ test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada
   const { api, el } = criarAmbientePaineis();
   const filtros = [];
   const ouvintesBusca = {};
-  global.SimpressDataPanels = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
+  paineisDadosFalso = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
   try {
     el("cockpit-tickets-search").addEventListener = (tipo, fn) => { ouvintesBusca[tipo] = fn; };
     await api.abrirPainelCockpit("chamados");
@@ -920,7 +923,7 @@ test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada
     await new Promise(resolve => setTimeout(resolve, 200));
     assert.equal(filtros.length, 1, "várias teclas viram um só filtro");
     assert.equal(filtros[0].busca, "sn-1");
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 // ---------- Chamados × OS: só a janela (o painel e os botões do topo foram removidos) ----------
@@ -948,7 +951,7 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
   } });
   const montadas = [];
   const linhaJanela = { dataset: { serial: "SN-1-REL", os: "77" } };
-  global.SimpressDataPanels = {
+  paineisDadosFalso = {
     montarTabelaOs: (host, opcoes) => { montadas.push([host, opcoes]); return { querySelector: () => linhaJanela }; },
     filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
   };
@@ -982,7 +985,7 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
     await api.abrirJanelaChamadoOs({ chamado: "UTIC-X", serie: "SN-2", os: "88" });
     assert.equal(noChamado.at(-1)[0].textContent, "Chamado não encontrado na aba Chamados (F5).");
     assert.deepEqual(montadas.at(-1)[1].soOs, { serie: "SN-2", os: "88", chamado: "UTIC-X" });
-  } finally { delete global.document; delete global.SimpressDataPanels; }
+  } finally { delete global.document; paineisDadosFalso = undefined; }
 });
 
 // ---- Relatório mensal (F8): cinco sub-abas ----
@@ -1407,8 +1410,6 @@ test("Relatório mensal (F8): carregando e erro vão para #cockpit-monthly-estad
 
 // ---------- Links de lembrete: abrirReferenciaLembrete abre a mesma janela, só com GETs existentes ----------
 
-const modeloChamadosOs = require("../../frontend/src/legado/shared/chamados-os-model.js");
-
 // Ambiente da janela com respostas falsas: cartoes = { "UTIC-...": { os, serie } } (o que o F5 devolve); vinculos/sebrae = respostas dos GETs.
 function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVinculos = false, falhaSebrae = false } = {}) {
   const chamadasApi = [];
@@ -1422,7 +1423,6 @@ function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVin
   const cartaoDe = chave => (cartoes[chave] ? { dataset: { os: cartoes[chave].os || "", serie: cartoes[chave].serie || "" } } : null);
   const ambiente = criarAmbientePaineis({
     apiFetch,
-    contextExtra: { chamadosOsModel: modeloChamadosOs },
     appExtra: {
       abrirModalAcessivel() {},
       fecharModalAcessivel() {},
@@ -1430,7 +1430,7 @@ function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVin
     },
   });
   const montadas = [];
-  global.SimpressDataPanels = {
+  paineisDadosFalso = {
     montarTabelaOs: (host, opcoes) => { montadas.push(opcoes); return { querySelector: () => null }; },
     filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
   };
@@ -1438,7 +1438,7 @@ function ambienteReferencia({ cartoes = {}, vinculos = [], sebrae = {}, falhaVin
   const noChamado = conteudo("chamado-os-janela-chamado");
   const noOs = conteudo("chamado-os-janela-os");
   const textos = lista => lista.at(-1).map(no => no.textContent);
-  const limpar = () => { delete global.document; delete global.SimpressDataPanels; };
+  const limpar = () => { delete global.document; paineisDadosFalso = undefined; };
   return { ...ambiente, chamadasApi, pedidosCartao, montadas, noChamado, noOs, textos, limpar };
 }
 

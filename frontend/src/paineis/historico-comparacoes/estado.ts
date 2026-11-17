@@ -1,7 +1,7 @@
 // Estado do diálogo "Histórico de atualizações de planilhas", fora dos componentes: o código antigo chama as ações
 // pela ponte (frontend/src/legado/features/comparison-history.js), às vezes antes de o React desenhar o diálogo. Toda mudança
 // de estado vai por flushSync: o DOM já está final quando a ação devolve a promessa (os testes e o MutationObserver
-// de data-panels.js dependem disso).
+// de paineis-dados dependem disso).
 import { flushSync } from "react-dom";
 import { apiFetch, type ApiFetchError } from "../../api";
 import {
@@ -66,7 +66,7 @@ function marcarOcupado(chave: string, texto: string | null) {
 
 const mensagemDe = (erro: unknown, padrao: string) => (erro instanceof Error && erro.message) || padrao;
 
-// O contador do cabeçalho fica fora do React e é escrito uma vez por carga: data-panels.js observa o nó e pede
+// O contador do cabeçalho fica fora do React e é escrito uma vez por carga: paineis-dados observa o nó e pede
 // GET /api/painel a cada mudança, então ele não pode ser recriado nem reescrito a mais.
 function definirTotal(total: unknown) {
   const contador = document.getElementById("total-historico-comparacoes");
