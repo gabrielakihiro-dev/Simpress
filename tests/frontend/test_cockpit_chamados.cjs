@@ -1,7 +1,7 @@
 // Chamados (aba Chamados, "Importação e versões", e chamados abertos da Home). Desde o G8 o painel vive em
 // frontend/src/paineis/cockpit-chamados/ e o comportamento (versões, comparação, importar, excluir antigas, exportar,
 // Home com corrida de respostas e consulta parcial) é testado no navegador: tests/e2e/react-g8.spec.cjs. As regras
-// puras têm teste próprio: test_cockpit_chamados_puro.cjs. Aqui ficam a triagem (ticket-rules.js), o registro, a ponte
+// puras têm teste próprio: test_cockpit_chamados_puro.cjs. Aqui ficam a triagem (regras-chamados/regras.ts), o registro, a ponte
 // do código antigo, abrirGestaoChamadosCockpit (DOM puro, síncrona) e o HTML montado.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +9,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { assembledHtml, staticDir } = require("./support/assembled-html.cjs");
-const createTicketRules = require("../../static/js/features/ticket-rules.js");
+const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const createCockpitChamados = require("../../static/js/features/cockpit-chamados.js");
 
 const dom = { escapeHtml: value => String(value), pluralize: (count, one, many) => (count === 1 ? one : many), createTextElement: null };
@@ -21,7 +21,7 @@ function diasAtras(dias) {
 }
 
 test("grupoTriagemChamado separa ativos em 3+ dias, sem data e atualizados, e ignora encerrados", () => {
-  const rules = createTicketRules(dom);
+  const rules = criarRegrasChamados(dom);
   const aberto = ultima => ({ oracle: [{ status: "Em execução", ultima_atualizacao: ultima }] });
   assert.equal(rules.grupoTriagemChamado(aberto(diasAtras(1))), "em_dia");
   assert.equal(rules.grupoTriagemChamado(aberto(diasAtras(5))), "atrasados");

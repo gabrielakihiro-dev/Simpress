@@ -28,7 +28,8 @@ test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e um 
   assert.match(lido("app-entry.js"), /^import "\.\/js\/features\/sebrae-historico\.js";$/m);
   assert.match(lido("app.js"), /"sebraeHistorico",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
-  assert.equal(lido("js/features/sebrae-dashboard.js").split("app.carregarResumoHistoricoSebrae").length - 1, 1, "um só gancho no Dashboard");
+  const dashboard = fs.readFileSync(path.join(root, "frontend/src/paineis/sebrae-dashboard/estado.ts"), "utf8");
+  assert.equal(dashboard.split("app.carregarResumoHistoricoSebrae").length - 1, 1, "um só gancho no Dashboard");
 });
 
 test("ponte: carregarResumoHistoricoSebrae repassa ao painel React sebrae-historico", async () => {

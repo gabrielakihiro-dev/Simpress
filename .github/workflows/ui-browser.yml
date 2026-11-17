@@ -70,8 +70,10 @@ jobs:
         # react-g9.spec.cjs (G9, ~1 min local) entrou no 1, o menor no run 43819394801 do G10 (8,4 min).
         # Spec novo: some-o ao grupo de menor soma e reconfira os tempos na CI; o teste avisa se faltar.
         # react-bf1.spec.cjs foi adicionado ao shard 2, um dos menores pela última medição de relógio.
+        # react-bf2.spec.cjs (BF2, ~0,8 min local) foi adicionado ao shard 5, um dos menores (~12,3) sem spec novo recente.
         # BF3 (run 43940572955 da main): o shard 6 passou de 15 min (15m17), então react-g7b.spec.cjs foi
-        # para o 8 (8m58); react-bf3.spec.cjs (~2,3 min local, desktop + mobile) entrou no 5 (8m41).
+        # para o 8 (8m58); react-bf3.spec.cjs (~2,3 min local, desktop + mobile) entrou no 9, um dos menores
+        # no run 43962071291 (9,7 min), para não somar com o react-bf2 no 5.
         include:
           - shard: 1
             specs: >-
@@ -90,7 +92,7 @@ jobs:
           - shard: 5
             specs: >-
               info-tips-todos.spec.cjs react-piloto.spec.cjs color-contrast.spec.cjs
-              endpoint-lookup.spec.cjs asset-updates.spec.cjs react-bf3.spec.cjs
+              endpoint-lookup.spec.cjs asset-updates.spec.cjs react-bf2.spec.cjs
           - shard: 6
             specs: >-
               lembretes.spec.cjs chrome-automation.spec.cjs react-g1.spec.cjs origin-contact.spec.cjs
@@ -105,7 +107,7 @@ jobs:
               ticket-requests.spec.cjs react-g7b.spec.cjs
           - shard: 9
             specs: >-
-              sebrae-dashboard.spec.cjs info-tips-resumo.spec.cjs
+              sebrae-dashboard.spec.cjs info-tips-resumo.spec.cjs react-bf3.spec.cjs
           - shard: 10
             specs: >-
               ui.spec.cjs react-g2.spec.cjs ux-ticket.spec.cjs first-access.spec.cjs

@@ -1,16 +1,16 @@
 // Chamados: regras puras do painel React (frontend/src/paineis/cockpit-chamados/cockpit-chamados-puro.ts, carregado
-// direto pelo require do Node, sem build). As três regras de ticket-rules.js entram por parâmetro: aqui vão as reais.
+// direto pelo require do Node, sem build). As três regras de chamado (regras-chamados/regras.ts) entram por parâmetro: aqui vão as reais.
 // O que aparece na tela (cliques, portais, requisições, corrida de respostas) é testado no navegador:
 // tests/e2e/react-g8.spec.cjs.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
-const createTicketRules = require("../../static/js/features/ticket-rules.js");
+const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 
 const puro = require(path.resolve(__dirname, "../../frontend/src/paineis/cockpit-chamados/cockpit-chamados-puro.ts"));
 
 const dom = { escapeHtml: value => String(value), pluralize: (count, one, many) => (count === 1 ? one : many) };
-const regras = createTicketRules(dom);
+const regras = criarRegrasChamados(dom);
 const formatar = valor => `fmt(${valor})`;
 
 const historico = [

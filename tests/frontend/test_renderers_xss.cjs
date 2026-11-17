@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
-const createTicketRules = require("../../static/js/features/ticket-rules.js");
+const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
 const createEquipmentSearchRenderers = require("../../static/js/ui/equipment-search-renderers.js");
 const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
@@ -194,4 +194,21 @@ test("equipment search rows escape every field, with and without highlighting", 
       if (!query) afirmarCamposEscapados(linha.innerHTML, camposDaLinha, contexto);
     }
   }
+});
+
+test("ticket rules escape the stage labels, dates and lists they render", () => {
+  const regras = criarRegrasChamados(dom);
+  const simpress = {
+    pedido_em_andamento: true,
+    etapas_pedido: [
+      { chave: "data_pedido", rotulo: carga("etapa_pedido"), data: carga("data_pedido"), coluna_na_planilha: true },
+      { chave: "a_caminho", rotulo: carga("etapa_proxima"), data: "", coluna_na_planilha: true },
+      { chave: "previsao_entrega", rotulo: carga("etapa_previsao"), data: carga("data_previsao"), coluna_na_planilha: true },
+    ],
+  };
+  const resumo = regras.renderizarResumoProcessoPedido(simpress);
+  afirmarCamposEscapados(resumo, ["etapa_pedido", "data_pedido", "etapa_proxima", "data_previsao", "etapa_previsao"], "renderizarResumoProcessoPedido");
+  afirmarCamposEscapados(regras.renderizarLinhaProcessoPedido(simpress), ["etapa_pedido", "etapa_proxima", "etapa_previsao"], "renderizarLinhaProcessoPedido");
+  afirmarCamposEscapados(regras.formatarListaChamados([carga("os_a"), carga("os_b")]), ["os_a", "os_b"], "formatarListaChamados");
+  afirmarCamposEscapados(regras.formatarOrdensServico([carga("os_c")]), ["os_c"], "formatarOrdensServico");
 });
