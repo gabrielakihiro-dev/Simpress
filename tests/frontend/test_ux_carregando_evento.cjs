@@ -81,5 +81,6 @@ test("produtores do indicador disparam o evento antes da busca", () => {
   // O histórico de planilhas agora é React: o evento sai do store, não mais de features/comparison-history.js.
   const store = fs.readFileSync(path.join(raiz, "frontend", "src", "paineis", "historico-comparacoes", "estado.ts"), "utf8");
   assert.match(store, /dispatchEvent\(new CustomEvent\("simpress:carregando-exibido"\)\)/);
-  assert.match(ler("ui/transfer-history.js"), /dispatchEvent\(new win\.CustomEvent\("simpress:carregando-exibido"\)\)/);
+  const transferencias = fs.readFileSync(path.join(raiz, "frontend", "src", "paineis", "historico-transferencias", "estado.ts"), "utf8");
+  assert.match(transferencias, /dispatchEvent\(new CustomEvent\("simpress:carregando-exibido"\)\)/);
 });

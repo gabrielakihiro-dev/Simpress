@@ -1,5 +1,5 @@
 // Formas mínimas do que a API de Cobertura devolve e do que o código antigo publica em window.
-// O servidor e window.SimpressCoverageModel continuam sendo a fonte da verdade (regras de vaga, kit, ações).
+// O servidor e ./modelo continuam sendo a fonte da verdade (regras de vaga, kit, ações).
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type Registro = Record<string, any>;
@@ -31,6 +31,5 @@ interface AppAntigo {
 }
 
 // Lidos na hora do uso, nunca no topo do módulo: o código antigo publica depois de o bundle carregar.
-export const modelo = () => window.SimpressCoverageModel;
 export const appAntigo = () => window as unknown as AppAntigo;
 export const casos = (dados: Dados | null, secao: string): Record<string, Registro> => dados?.casos?.[secao] || {};

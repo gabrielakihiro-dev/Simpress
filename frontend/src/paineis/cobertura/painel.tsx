@@ -4,7 +4,8 @@ import { disponibilidade, tentarDeNovo } from "./acoes";
 import { Botao } from "./componentes";
 import { assinar, escrever, ler, mudar, semRepetir } from "./estado";
 import { Devolucoes, Disponiveis, Movimento, Necessidades, Reservas } from "./listas";
-import { ABAS, casos, modelo, type Aba, type Registro } from "./tipos";
+import * as modelo from "./modelo";
+import { ABAS, casos, type Aba, type Registro } from "./tipos";
 
 const ROTULOS: Record<Aba, string> = {
   necessidades: "Necessidades", disponiveis: "Disponíveis", reservas: "Reservas", movimento: "Em movimento", devolucoes: "Devoluções",
@@ -55,7 +56,7 @@ async function registrarDisponibilidade(event: FormEvent<HTMLFormElement>) {
   const botao = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
   await semRepetir(form, async () => {
     const serie = valor(form, "serie");
-    const atual: Registro | undefined = casos(ler().dados, "disponibilidade")[modelo().chaveSerie(serie)];
+    const atual: Registro | undefined = casos(ler().dados, "disponibilidade")[modelo.chaveSerie(serie)];
     const ok = await disponibilidade(serie, botao?.value || "disponivel", atual?.rev, valor(form, "cidade"));
     if (ok) form.reset();
   });

@@ -33,7 +33,7 @@ Todos os modais mantêm a mesma estrutura e os mesmos IDs. Ajustes visuais:
 #### Modais afetados
 
 - `#modal-preview` (pré-visualização do resumo)
-- `#modal-historico-transferencias`
+- `#modal-historico-transferencias` ("Transferências geradas"; desde 17/11/2026, react-final-c, o conteúdo do `.ck-dialogo` é React em `frontend/src/paineis/historico-transferencias/`, com `data-react-painel="historico-transferencias"` no partial `frontend/partials/modais.html`; mesmo HTML, IDs e textos, conferidos por `tests/e2e/react-final-c.spec.cjs`)
 - `#modal-confirmar-acao`
 - `#modal-texto-transporte` (restaurado em 08/11/2026; `#modal-ticket-ux`, "Gerar ticket no UX", convive com ele)
 - `#modal-editar-equipamento`

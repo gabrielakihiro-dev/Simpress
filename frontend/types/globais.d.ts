@@ -17,8 +17,6 @@ declare var SimpressApp: any;
 declare var SimpressBento: any;
 declare var SimpressCatalogSearch: any;
 declare var SimpressChamadosOsModel: any;
-declare var SimpressCoberturaVinculo: any;
-declare var SimpressCoverageModel: any;
 declare var SimpressDataPanels: any;
 declare var SimpressDomUtils: any;
 declare var SimpressEquipmentSearchRenderers: any;
@@ -31,7 +29,6 @@ declare var SimpressNotifications: any;
 declare var SimpressReact: any; // ações dos painéis React, publicadas por frontend/src/main.tsx
 declare var SimpressRecentEquipment: any;
 declare var SimpressSebraeDashboardModel: any;
-declare var SimpressTransferHistory: any;
 declare var SimpressTransferUtils: any;
 declare var SimpressUxEnhancements: any;
 

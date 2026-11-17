@@ -4,7 +4,7 @@ Migração React BF4 (17/11/2026): a ponte `cockpit-tool-panels.js` e o painel R
 
 Painel de ferramenta `cobertura` (`data-cockpit-tool-panel="cobertura"`), aberto pelo item `Cobertura` do menu Ferramentas (`#btn-cobertura`) ou pela tecla `F10`. Responde a uma pergunta: as necessidades de equipamento cadastradas vão ser atendidas, e com qual série?
 
-Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_store.py`, rotas em `routers/coverage.py` (contratos 173–190 em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos"), tela em `frontend/src/paineis/cobertura/` (React, desde 15/11/2026) e regras de vaga, kit e ações em `static/js/shared/coverage-model.js`.
+Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_store.py`, rotas em `routers/coverage.py` (contratos 173–190 em `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Cobertura de equipamentos"), tela em `frontend/src/paineis/cobertura/` (React, desde 15/11/2026) e regras de vaga, kit e ações em `frontend/src/paineis/cobertura/modelo.ts` (TS puro, sem DOM nem rede; desde 17/11/2026, react-final-c, substitui o antigo `coverage-model.js` e o global `SimpressCoverageModel`).
 
 ## Código da tela (React, Grupo 6)
 
@@ -53,7 +53,7 @@ Regras de negócio em `domains/coverage.py`, gravação em `domains/coverage_sto
 
 Backlog, não regra: itens conferidos no código (07/11/2026) e ainda sem decisão ou correção.
 
-1. O `localStorage` `simpress:cobertura:sem-vinculo` (`static/js/ui/transfer-history.js`) guarda o pedido da planilha, com nome, e-mail e telefone do destinatário, até a nova tentativa dar certo. É dado pessoal guardado no navegador (LGPD): a decidir se fica, se expira ou se guarda só o mínimo.
+1. O `localStorage` `simpress:cobertura:sem-vinculo` (`frontend/src/paineis/historico-transferencias/vinculo.ts`, que a Cobertura importa direto desde 17/11/2026 no lugar do global `SimpressCoberturaVinculo`) guarda o pedido da planilha, com nome, e-mail e telefone do destinatário, até a nova tentativa dar certo. É dado pessoal guardado no navegador (LGPD): a decidir se fica, se expira ou se guarda só o mínimo.
 2. (Corrigido em 08/11/2026) `selecionarUnidadePorCidade` (`static/js/features/transfer-form.js`) comparava com `includes` sensível a acento. Agora compara a cidade inteira, sem acento, sem caixa e com espaços aparados (`dobrarCidadeTransporte`): "Sao Jose" acha "São José", e "Campo" não escolhe "Campo Grande"; sem unidade igual, o destino não é escolhido e o que já estava no campo continua lá. O operador continua conferindo o destino antes de gerar a planilha.
 3. (Resolvido em 08/11/2026) Rótulos aprovados pelo usuário: `Vincular esta planilha`, `Marcar coletada`, `Marcar em trânsito`, `Confirmar recebimento`, `Registrar divergência`, `Tentar vincular de novo` (alerta sem vínculo) e `Nova data prevista`; o `aria-label` repete o texto (por exemplo `Marcar coletada — SINT-001`). Os selos e situações (`Entregue`, `Coletada`, `Em trânsito`, `Recebida`, `Recebida com divergência`) e os rótulos `Recebido por`, `Data do recebimento` e `Cancelar movimentação` não mudam. A mensagem do erro 500 (`codigo` `falha_gravacao`, inalterado) passou a `Não foi possível salvar na Cobertura. Tente de novo; se o erro continuar, avise o suporte.`
 4. (Corrigido em 07/11/2026) A transição `recebida` → `encerrada` foi removida: `recebida` já fecha o caso. O estado `encerrada` continua sendo lido (legado) como entregue e fechado, caso exista em dados antigos.

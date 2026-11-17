@@ -6,16 +6,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 
-// estado.ts importa o apiFetch em tempo de execução: redireciona "../../api" para o fake publicado em globalThis.
+// estado.ts e vinculo.ts importam o apiFetch em tempo de execução: redireciona "../../api" para o fake publicado em globalThis.
+const PAINEIS = /paineis[\/](cobertura|historico-transferencias)[\/][^\/]+\.ts$/;
 Module.registerHooks({
   resolve(especificador, contexto, proximo) {
-    if (especificador === "../../api" && /cobertura[\/]estado\.ts$/.test(contexto.parentURL || "")) {
+    const daqui = PAINEIS.test(contexto.parentURL || "");
+    if (especificador === "../../api" && daqui) {
       return { url: "simpress-teste:api", format: "module", shortCircuit: true };
     }
     // import relativo sem extensão: o Node não completa ".ts" sozinho
-    if (especificador === "./tipos" && /cobertura[\/]estado\.ts$/.test(contexto.parentURL || "")) {
-      return proximo("./tipos.ts", contexto);
-    }
+    if (daqui && /^\.\.?\/[\w\-\/]+$/.test(especificador)) return proximo(`${especificador}.ts`, contexto);
     return proximo(especificador, contexto);
   },
   load(url, contexto, proximo) {
@@ -30,7 +30,6 @@ const toasts = [];
 const chamadas = [];
 let respostas = [];
 global.window = {
-  SimpressCoverageModel: require("../../frontend/src/legado/shared/coverage-model.js"),
   showToast: (texto, tipo) => toasts.push({ texto, tipo }),
 };
 // Fila de respostas: cada item vira uma Response falsa (2xx), um erro de API (status) ou uma queda de rede.
