@@ -20,7 +20,7 @@ const ALLOWED_MISSING = new Map([
   ["badge-divergencias-ux", "criado sob demanda por data-panels.js"],
   ["ux-pending-chip", "criado sob demanda por ux-enhancements.js"],
   ["cockpit-tickets-file-simpress", "campo de arquivo desenhado pelo painel React (frontend/src/paineis/cockpit-chamados); abrirGestaoChamadosCockpit só o procura ao abrir o bloco"],
-  ["resumo-painel-visao", "painel da Visão geral renderizado pelo JS dentro do resultado da comparação (comparison-result.js)"],
+  ["resumo-painel-visao", "painel da Visão geral renderizado pelo JS dentro do resultado da comparação (frontend/src/paineis/resultado-comparacao)"],
 ]);
 
 function jsFiles(dir) {

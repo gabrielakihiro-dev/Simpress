@@ -19,7 +19,7 @@ class LowAuditFindingTests(unittest.TestCase):
 
     def test_statistics_start_unconfirmed_and_reject_missing_or_invalid_counts(self):
         html = assembled_html(app_config.STATIC_DIR)
-        script = (app_config.STATIC_DIR / "js/features/dashboard.js").read_text(encoding="utf-8")
+        script = (app_config.BASE_DIR / "frontend/src/paineis/indicadores-home/estado.ts").read_text(encoding="utf-8")
 
         self.assertIn('id="stat-equipamentos">Carregando…</strong>', html)
         self.assertIn('id="stat-unidades">Carregando…</strong>', html)

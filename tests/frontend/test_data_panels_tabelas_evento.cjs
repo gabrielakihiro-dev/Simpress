@@ -152,7 +152,7 @@ test("os renderizadores de .comparison-desktop-table disparam o evento", () => {
   const dataPanels = ler("ui/data-panels.js");
   assert.doesNotMatch(dataPanels, /observe\(doc\.body/);
   assert.match(dataPanels, /addEventListener\("simpress:tabelas-renderizadas", scanTables\)/);
-  const comparacao = ler("features/comparison-result.js");
+  const comparacao = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "resultado-comparacao", "estado.ts"), "utf8");
   assert.equal(comparacao.match(/dispatchEvent\(new CustomEvent\("simpress:tabelas-renderizadas"\)\)/g)?.length, 2);
   assert.match(ler("ui/transfer-history.js"), /dispatchEvent\(new win\.CustomEvent\("simpress:tabelas-renderizadas"\)\)/);
 });

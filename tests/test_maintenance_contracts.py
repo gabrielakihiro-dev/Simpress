@@ -513,7 +513,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_readiness_panel_has_one_disclosure_and_renders_text_safely(self):
         html = assembled_html(app_config.STATIC_DIR)
-        script = _frontend_script()
+        script = _react_panels_source()
         panel_start = script.index("async function carregarProntidao()")
         panel_end = script.index("function definirResumoCurto", panel_start)
         panel_script = script[panel_start:panel_end]
@@ -523,7 +523,9 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('role="status" aria-live="polite"', html)
         self.assertNotIn('id="readiness-refresh"', html)
         self.assertNotIn("Ver detalhes de arquivos e funções", html)
-        self.assertIn('fetch("/api/prontidao"', panel_script)
+        self.assertIn('"/api/prontidao"', panel_script)
+        self.assertIn('cache: "no-store"', panel_script)
+        self.assertIn("signal: request.signal", panel_script)
         self.assertIn("carregarProntidao();", script)
         self.assertIn("renderizarItensProntidao();", panel_script)
         self.assertIn("panel.setAttribute(\"aria-busy\", \"false\")", panel_script)

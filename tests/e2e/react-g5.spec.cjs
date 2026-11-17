@@ -531,7 +531,9 @@ test.describe("comportamento (1366 px)", () => {
   });
 
   // Ninguém chama uma ponte deste painel (o módulo antigo só tem o intervalo), então não há "O painel React ... não
-  // carregou.": o que se garante é que o resto do app segue de pé, a sub-aba abre vazia e o sino segue pedindo o painel.
+  // carregou.": o que se garante é que o resto do app segue de pé, a sub-aba fica vazia e o sino segue pedindo o painel.
+  // Desde o BF3 a troca das sub-abas do Resumo mora no painel React resultado-comparacao: sem o bundle, o clique em
+  // Backups não troca a sub-aba (mesmo contrato do react-piloto: painel migrado fica vazio).
   test("sem o bundle React: o Resumo abre, a sub-aba Backups fica vazia, o pedido de 5 min segue e a página não quebra", async ({ page }) => {
     const errosDePagina = [];
     page.on("pageerror", erro => errosDePagina.push(erro.message));
@@ -548,7 +550,6 @@ test.describe("comportamento (1366 px)", () => {
     await expect(page.locator(CONTEUDO)).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
     await expect(page.locator("html")).not.toHaveAttribute("data-react-pronto", /.*/);
     await page.locator("#resumo-aba-backups").click();
-    await expect(page.locator(PAINEL)).not.toHaveAttribute("hidden", /.*/);
     await expect(page.locator(PAINEL)).toBeEmpty();
     expect(errosDePagina).toEqual([]);
   });

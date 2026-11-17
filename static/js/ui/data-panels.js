@@ -1275,7 +1275,7 @@
         || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
       const outroTecnico = data?.chamados_outro_tecnico;
       const outroTecnicoAtivo = !outroTecnico?.indisponivel && Number(outroTecnico?.total) > 0;
-      // Mesma regra do cartão #alerta-backups-regionais (dashboard.js): serviço ligado, sem falha e com regional pendente.
+      // Mesma regra do cartão #alerta-backups-regionais (frontend/src/paineis/indicadores-home/estado.ts): serviço ligado, sem falha e com regional pendente.
       const backups = data?.backups_regionais;
       const temRegional = lista => Array.isArray(lista) && lista.some(cidade => String(cidade ?? "").trim());
       const backupsAtivo = Boolean(backups) && typeof backups === "object" && !backups.indisponivel

@@ -18,7 +18,7 @@ test("the logged user marker carries the trimmed, escaped series and is skipped 
 });
 
 test("the Histórico de Planilhas rows use the shared logged user lookup", () => {
-  const comparison = fs.readFileSync(path.join(staticDir, "js", "features", "comparison-result.js"), "utf8");
+  const comparison = fs.readFileSync(path.join(staticDir, "..", "frontend", "src", "paineis", "resultado-comparacao", "estado.ts"), "utf8");
   assert.match(comparison, /loggedUserMarkers\.conectar\(content\)/);
 });
 
