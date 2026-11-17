@@ -19,7 +19,7 @@ function PainelHistorico({ lista }: { lista: HTMLElement | null }) {
 
 // Chamado por frontend/src/main.tsx com o bloco de controles (data-react-painel="historico-comparacoes") do cabeçalho do
 // modal Histórico de atualizações de planilhas; a lista de cartões é desenhada por portal em #lista-historico-comparacoes.
-// As ações são chamadas pelo código antigo pela ponte (frontend/src/legado/features/comparison-history.js).
+// As ações são chamadas pelo código antigo pela ponte (frontend/src/aplicacao/comparison-history.ts).
 export function montar(container: HTMLElement) {
   const lista = document.getElementById("lista-historico-comparacoes");
   // flushSync: o código antigo chama a contagem na partida (sem esperar) e o seletor de datas precisa existir já.

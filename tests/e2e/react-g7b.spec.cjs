@@ -1,4 +1,4 @@
-// Migração React, Dia 3, grupo G7b: Assistente (widget global #assistente-widget, frontend/src/legado/features/assistant-chat.js).
+// Migração React, Dia 3, grupo G7b: Assistente (widget global #assistente-widget, frontend/src/aplicacao/pontes.ts).
 // Invariantes gravados com o código antigo (JS puro), antes da troca para React: o widget em React tem de abrir, fechar,
 // listar o histórico, copiar rascunho, pedir confirmação e mostrar texto exatamente como o antigo. O baseline de
 // screenshots do widget e os testes de clique duplo em confirmar e de cancelar com confirmado false ficam em

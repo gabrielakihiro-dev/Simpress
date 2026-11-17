@@ -1,5 +1,5 @@
 // Estado do diálogo "Dossiê do equipamento" (Home F1), fora do componente: o código antigo chama as ações pela
-// ponte (frontend/src/legado/features/equipment-dossier.js). Só leitura: GET /api/equipamento/{série}/dossie.
+// ponte (frontend/src/aplicacao/equipment-dossier.ts). Só leitura: GET /api/equipamento/{série}/dossie.
 // A seleção (currentEquipamento, equipamentoSelectionRevision) é do código antigo: lida por lerEstado na hora de cada
 // conferência, nunca copiada.
 import { flushSync } from "react-dom";

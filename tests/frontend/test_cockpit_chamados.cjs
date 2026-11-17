@@ -11,7 +11,7 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const { legadoDir } = require("./support/app-sources.cjs");
 const { criarRegrasChamados } = require("../../frontend/src/paineis/regras-chamados/regras.ts");
-const createCockpitChamados = require("../../frontend/src/legado/features/cockpit-chamados.js");
+const createCockpitChamados = require("../../frontend/src/aplicacao/registro.ts").fabricas.cockpitChamados;
 
 const dom = { escapeHtml: value => String(value), pluralize: (count, one, many) => (count === 1 ? one : many), createTextElement: null };
 
@@ -59,7 +59,8 @@ function ponteFalsa(acao) {
 }
 
 test("registro: módulo importado no app-entry, publicado no FEATURE_ORDER e com o painel React ao lado", () => {
-  assert.match(lido("app-entry.js"), /^import "\.\/features\/cockpit-chamados\.js";$/m);
+  assert.match(lido("app-entry.js"), /^import "\.\.\/aplicacao\/registro\.ts";$/m);
+  assert.equal(typeof require("../../frontend/src/aplicacao/registro.ts").fabricas.cockpitChamados, "function");
   assert.match(lido("app.js"), /"cockpitChamados",/);
   assert.ok(fs.existsSync(path.join(painelReact, "montar.tsx")));
   assert.ok(fs.existsSync(path.join(painelReact, "cockpit-chamados-puro.ts")));

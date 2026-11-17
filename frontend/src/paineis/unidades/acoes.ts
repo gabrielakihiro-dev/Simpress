@@ -1,4 +1,4 @@
-// Ações do Catálogo de unidades, chamadas pela ponte (frontend/src/legado/features/units-catalog.js), pelo roteador
+// Ações do Catálogo de unidades, chamadas pela ponte (frontend/src/aplicacao/pontes.ts), pelo roteador
 // do Cockpit (recarregarUnidadesCockpit) e pelos data-on-* do corpo.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";

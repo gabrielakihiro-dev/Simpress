@@ -1,5 +1,5 @@
 // Estado do painel Chamados (Cockpit, "Importação e versões") e dos chamados abertos da Home, fora do componente:
-// o código antigo chama as ações pela ponte (frontend/src/legado/features/cockpit-chamados.js) e a tabela de OS avisa
+// o código antigo chama as ações pela ponte (frontend/src/aplicacao/cockpit-chamados.ts) e a tabela de OS avisa
 // cada carga com sincronizarGestaoChamadosCockpit. Respostas atrasadas são descartadas por um portão de
 // requisição por consulta (versões e Home); a regra pura mora em cockpit-chamados-puro.ts.
 import { apiFetch, type ApiFetchOptions } from "../../api";

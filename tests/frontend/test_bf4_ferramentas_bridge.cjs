@@ -1,4 +1,4 @@
-// BF4: a ponte frontend/src/legado/features/cockpit-tool-panels.js só encaminha para window.SimpressReact["ferramentas-cockpit"].
+// BF4: a ponte frontend/src/aplicacao/cockpit-tool-panels.ts só encaminha para window.SimpressReact["ferramentas-cockpit"].
 // Dados sintéticos; a lógica dos painéis é testada em test_cockpit_tool_panels, test_cockpit_andamento e test_inline_equipment_edit.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const { criarFerramentasCockpit } = require("../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
-const criarPonteCockpit = require("../../frontend/src/legado/features/cockpit-tool-panels.js");
+const criarPonteCockpit = require("../../frontend/src/aplicacao/registro.ts").fabricas.cockpitToolPanels;
 
 const estadoTs = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/paineis/ferramentas-cockpit/estado.ts"), "utf8");
 const MENSAGEM = 'O painel React "ferramentas-cockpit" não carregou.';

@@ -1,4 +1,4 @@
-// Resumo (F3), sub-aba Backups: o mesmo HTML do módulo antigo (frontend/src/legado/features/backups-regionais.js, até o Dia 2).
+// Resumo (F3), sub-aba Backups: o mesmo HTML do módulo antigo (frontend/src/aplicacao/backups-regionais.ts, até o Dia 2).
 // Só o campo `backups_regionais` do /api/painel. O apelido pode ser nome de pessoa: aparece só nesta tela local,
 // nunca em toast, console ou aria-live. O React escapa todo texto; nada aqui usa dangerouslySetInnerHTML.
 import { Fragment, type ReactNode } from "react";

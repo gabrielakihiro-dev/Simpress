@@ -23,6 +23,9 @@ const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/impo
 const { criarFerramentasCockpit } = require("../../../frontend/src/paineis/ferramentas-cockpit/estado.ts");
 
 const { appScripts, appSource } = require("./app-sources.cjs");
+const { fabricas } = require("../../../frontend/src/aplicacao/registro.ts");
+const { createTicketRules } = require("../../../frontend/src/aplicacao/ticket-rules.ts");
+const { instalarGlobaisNode } = require("./globais-node.cjs");
 
 const appScript = appSource();
 const appHtml = assembledHtml();
@@ -163,6 +166,9 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     SimpressSebraeDashboardModel: require("../../../frontend/src/comum/sebrae-dashboard-model.ts"),
     SimpressEquipmentSearchRenderers: require("../../../frontend/src/ui/equipment-search-renderers.ts").createEquipmentSearchRenderers,
     SimpressLoggedUserMarkers: require("../../../frontend/src/ui/logged-user-markers.ts").createLoggedUserMarkers,
+    // As fábricas das features agora são TypeScript: app.js (VM) lê as duas daqui, como lia do bundle.
+    SimpressFeatures: fabricas,
+    SimpressTicketRules: createTicketRules,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
     localStorage: {
       getItem: key => localStorage.get(key) ?? null,
@@ -178,8 +184,6 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     document,
     window,
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
-    fetch: (...args) => fetchApi(...args),
-    navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     Event: class { constructor(type) { this.type = type; } },
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
@@ -194,6 +198,13 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     workflowEffects: effects,
   });
 
+  // As features rodam no realm do Node durante a avaliação de app.js: os mesmos falsos precisam existir como globais.
+  instalarGlobaisNode({
+    document, window, console: context.console, lucide: context.lucide, HTMLElement: FakeElement, navigator: context.navigator,
+    MutationObserver: context.MutationObserver, requestAnimationFrame: context.requestAnimationFrame,
+    Event: context.Event, CustomEvent: context.CustomEvent, FormData: FakeFormData,
+    fetch: typeof fetchApi === "function" ? (...args) => fetchApi(...args) : undefined,
+  });
   for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};

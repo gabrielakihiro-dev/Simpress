@@ -1,5 +1,5 @@
 // Bloco final 2 (BF2): regras de chamado, importação de planilhas e Chamados novos do SoftExpert (F5)
-// (frontend/src/legado/features/{ticket-rules,inventory-upload,sebrae-dashboard}.js, agora pontes finas para os painéis React
+// (frontend/src/aplicacao/{ticket-rules,pontes}.ts, agora pontes finas para os painéis React
 // regras-chamados, importacao-planilhas e sebrae-dashboard). Só dados sintéticos: nenhum teste chega ao backend real.
 // Todo POST/PUT/DELETE passa por uma rota de guarda que recusa o que o teste não simulou de propósito; a lista do que
 // ela recusou tem de ficar vazia.

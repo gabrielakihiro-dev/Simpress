@@ -6,7 +6,7 @@ import { PainelBackups } from "./painel";
 // Chamado por frontend/src/main.tsx com o painel #resumo-painel-backups (data-react-painel="backups-regionais").
 // Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho. Se o evento
 // passou antes do bundle (paineis-dados lê o painel ao instalar), a ponte repete o último com `repetirPainel`.
-// O pedido do painel a cada 5 min fica no módulo antigo (frontend/src/legado/features/backups-regionais.js), para os alertas do
+// O pedido do painel a cada 5 min fica no módulo antigo (frontend/src/aplicacao/backups-regionais.ts), para os alertas do
 // sino não dependerem do bundle React.
 
 type Marca = Record<string, string | undefined>;

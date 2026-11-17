@@ -8,7 +8,7 @@ import {
 import { Painel } from "./painel";
 import { gerarPdf, gerarPdfDoLembrete, limpar, preencherDoEquipamento, preencherDoLembrete, selecionarAba, teclaAba } from "./termos-acoes";
 
-// Os nomes são os que o código antigo (e as pontes de frontend/src/legado/features/termos.js e lembretes.js) já usava em window.
+// Os nomes são os que o código antigo (e as pontes de frontend/src/aplicacao/pontes.ts e lembretes.js) já usava em window.
 export function montar(container: HTMLElement) {
   createRoot(container).render(<Painel />);
   return {

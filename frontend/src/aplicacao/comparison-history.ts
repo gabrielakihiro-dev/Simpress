@@ -4,11 +4,10 @@
  * Este módulo é a ponte que mantém as ações publicadas para o código antigo, e guarda o download do Excel e o botão
  * "Exportar" da aba Comparação, que seguem fora do React.
  */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else (root.SimpressFeatures = root.SimpressFeatures || {}).comparisonHistory = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createComparisonHistory(context) {
-  "use strict";
+import { registrar, registrarRejeicoes } from "./pontes.ts";
+import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";
+
+export function createComparisonHistory(context: ContextoApp): Acoes {
   const { app } = context;
   const ponte = context.ponteReact("historico-comparacoes", [
     "carregarContagemHistoricoComparacoes", "abrirModalHistoricoComparacoes", "fecharModalHistoricoComparacoes",
@@ -16,10 +15,10 @@
     "consultarHistoricoComparacao",
   ]);
 
-  // Quem chama (data-on-*, app.js, inventory-upload.js) não trata erro: como no módulo antigo, nunca rejeita.
-  const semRejeitar = nome => (...args) => ponte[nome](...args).catch(erro => { console.error(`${nome}: ${erro?.message}`); });
+  // Quem chama (data-on-*, app.ts, inventory-upload) não trata erro: como no módulo antigo, nunca rejeita.
+  const registrada = registrarRejeicoes(ponte);
 
-  async function baixarHistoricoComparacoesExcel(data) {
+  async function baixarHistoricoComparacoesExcel(data: Qualquer) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || ""))) {
       throw new Error("A data do histórico da atualização não está disponível.");
     }
@@ -47,9 +46,9 @@
   }
 
   async function exportarResultadoComparacaoPlanilhas() {
-    const button = document.getElementById("btn-exportar-resultado-comparacao");
+    const button = document.getElementById("btn-exportar-resultado-comparacao") as HTMLButtonElement | null;
     const data = button?.dataset.historyDate || "";
-    if (!data) {
+    if (!button || !data) {
       app.showToast("Este resultado não tem uma data de histórico para exportar.", "warning");
       return;
     }
@@ -63,7 +62,7 @@
     try {
       await app.baixarHistoricoComparacoesExcel(data);
       app.showToast("Planilha Exportada com Sucesso!", "success");
-    } catch (err) {
+    } catch (err: Qualquer) {
       console.error(`Erro ao exportar resultado da atualização das planilhas: ${err?.message}`);
       app.showToast(err.message || "Não foi possível exportar o resultado.", "error");
     } finally {
@@ -75,19 +74,19 @@
   }
 
   // Home dashboard shortcut: opens the saved result and scrolls to the section named by `secao`.
-  function abrirResultadoHistoricoComparacao(eventoId, secao, botao) {
-    return ponte.consultarHistoricoComparacao(eventoId, botao, { section: secao }).catch(erro => { console.error(`abrirResultadoHistoricoComparacao: ${erro?.message}`); });
+  function abrirResultadoHistoricoComparacao(eventoId: Qualquer, secao: Qualquer, botao: Qualquer) {
+    return registrar("abrirResultadoHistoricoComparacao", ponte.consultarHistoricoComparacao(eventoId, botao, { section: secao }));
   }
 
   return {
-    carregarContagemHistoricoComparacoes: semRejeitar("carregarContagemHistoricoComparacoes"),
-    abrirModalHistoricoComparacoes: semRejeitar("abrirModalHistoricoComparacoes"),
-    fecharModalHistoricoComparacoes: semRejeitar("fecharModalHistoricoComparacoes"),
-    carregarHistoricoComparacoes: semRejeitar("carregarHistoricoComparacoes"),
+    carregarContagemHistoricoComparacoes: registrada.carregarContagemHistoricoComparacoes,
+    abrirModalHistoricoComparacoes: registrada.abrirModalHistoricoComparacoes,
+    fecharModalHistoricoComparacoes: registrada.fecharModalHistoricoComparacoes,
+    carregarHistoricoComparacoes: registrada.carregarHistoricoComparacoes,
     baixarHistoricoComparacoesExcel,
-    exportarHistoricoComparacoesExcel: semRejeitar("exportarHistoricoComparacoesExcel"),
+    exportarHistoricoComparacoesExcel: registrada.exportarHistoricoComparacoesExcel,
     exportarResultadoComparacaoPlanilhas,
-    restaurarHistoricoComparacao: semRejeitar("restaurarHistoricoComparacao"),
+    restaurarHistoricoComparacao: registrada.restaurarHistoricoComparacao,
     abrirResultadoHistoricoComparacao,
   };
-});
+}

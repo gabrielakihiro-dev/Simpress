@@ -3,17 +3,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assembledHtml } = require("./support/assembled-html.cjs");
 const test = require("node:test");
-const vm = require("node:vm");
-const { appScriptFiles, legadoDir } = require("./support/app-sources.cjs");
+const { aplicacaoDir, legadoDir } = require("./support/app-sources.cjs");
 const { bootPage } = require("./support/boot-page.cjs");
 
 const indexHtml = assembledHtml();
 const bootstrapSource = fs.readFileSync(path.join(legadoDir, "app.js"), "utf8");
-const featureFiles = appScriptFiles().filter(file => file.startsWith("features/"));
+const featureFiles = fs.readdirSync(aplicacaoDir).filter(file => file.endsWith(".ts")).sort().map(file => path.join(aplicacaoDir, file));
+const { fabricas } = require("../../frontend/src/aplicacao/registro.ts");
 
 // Actions the dispatcher resolves: data-on-* in the page and in markup the features render.
 function declaredActions() {
-  const sources = [indexHtml, ...featureFiles.map(file => fs.readFileSync(path.join(legadoDir, file), "utf8"))];
+  const sources = [indexHtml, ...featureFiles.map(file => fs.readFileSync(file, "utf8"))];
   const names = new Set();
   for (const source of sources) {
     for (const match of source.matchAll(/data-on-[a-z]+=\\?["']([A-Za-z_$][\w$]*)/g)) names.add(match[1]);
@@ -25,7 +25,7 @@ function declaredActions() {
 function modalCloseHandlers() {
   const names = new Set();
   for (const file of featureFiles) {
-    const source = fs.readFileSync(path.join(legadoDir, file), "utf8");
+    const source = fs.readFileSync(file, "utf8");
     for (const match of source.matchAll(/abrirModalAcessivel\(\s*[^,]+,\s*(?:'[^']*'|"[^"]*"),\s*"([A-Za-z_$][\w$]*)"/g)) names.add(match[1]);
   }
   return names;
@@ -78,22 +78,26 @@ test("shared state is exposed once and features publish no duplicate actions", (
   assert.ok(!published.includes("app") && !published.includes("appState"), "the bootstrap keeps its locals private");
 });
 
-test("feature scripts only register a factory and declare no page globals", () => {
+test("feature modules only export factories and publish no page globals", () => {
+  assert.ok(featureFiles.length >= 16, "frontend/src/aplicacao/ still holds the feature modules");
   for (const file of featureFiles) {
-    const window = {};
-    const context = vm.createContext({ window });
-    vm.runInContext(fs.readFileSync(path.join(legadoDir, file), "utf8"), context, { filename: file });
-    assert.deepEqual(Object.keys(context), ["window"], `${file} leaked globals`);
-    const registered = [...Object.values(window.SimpressFeatures || {}), window.SimpressTicketRules].filter(Boolean);
-    assert.equal(registered.length, 1, `${file} should register exactly one factory`);
-    assert.equal(typeof registered[0], "function");
+    const source = fs.readFileSync(file, "utf8");
+    const nome = path.basename(file);
+    // Só o registro publica no window (as duas pontes temporárias de app.js); nenhum outro módulo toca em window.Simpress*.
+    if (nome !== "registro.ts") assert.doesNotMatch(source, /window\.Simpress\w+\s*=[^=]|globalThis\.\w+\s*=[^=]/, `${nome} leaked a page global`);
+    if (nome === "tipos.ts") continue;
+    const exportados = Object.entries(require(file));
+    assert.ok(exportados.length > 0, `${nome} should export something`);
+    for (const [chave, valor] of exportados) {
+      if (chave === "fabricas" || chave === "NOMES_PONTES") continue;
+      assert.equal(typeof valor, "function", `${nome}: ${chave} should be a function`);
+    }
   }
 });
 
 test("feature factories are also exported for Node", () => {
-  for (const file of featureFiles) {
-    assert.equal(typeof require(path.join(legadoDir, file)), "function", file);
-  }
+  for (const [nome, fabrica] of Object.entries(fabricas)) assert.equal(typeof fabrica, "function", nome);
+  assert.equal(typeof require("../../frontend/src/aplicacao/ticket-rules.ts").createTicketRules, "function");
   const historyFormat = require("../../frontend/src/comum/history-format.ts");
   assert.equal(historyFormat.formatarNomeFonteHistorico("InvAll e EquipamentosDetalhes"), "no endpoint e na Simpress");
 });

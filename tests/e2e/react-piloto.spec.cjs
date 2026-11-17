@@ -86,7 +86,7 @@ const painelBase = () => ({
 const barras = page => page.locator("#resumo-regionais .ck-barra");
 const nomes = page => page.locator("#resumo-regionais .ck-barra__nome");
 const pilula = (page, categoria) => page.locator(`#resumo-regionais-filtros button[data-categoria="${categoria}"]`);
-// Ação publicada pela ponte (frontend/src/legado/features/resumo-ativos.js), a mesma que o painel chama ao abrir.
+// Ação publicada pela ponte (frontend/src/aplicacao/pontes.ts), a mesma que o painel chama ao abrir.
 const recarregar = page => page.evaluate(() => window.carregarResumoAtivos());
 
 test.describe("comportamento (1366 px)", () => {

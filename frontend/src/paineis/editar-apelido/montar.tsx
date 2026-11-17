@@ -4,7 +4,7 @@ import { Dialogo } from "./dialogo";
 import { abrirModalEditarApelido, fecharModalEditarApelido, salvarApelido } from "./estado";
 
 // Chamado por frontend/src/main.tsx com o .ck-dialogo do #modal-editar-apelido (data-react-painel="editar-apelido").
-// As ações são chamadas pelo código antigo pela ponte (frontend/src/legado/features/equipment-editor.js).
+// As ações são chamadas pelo código antigo pela ponte (frontend/src/aplicacao/pontes.ts).
 export function montar(container: HTMLElement) {
   const raiz = createRoot(container);
   // Desenha já: o diálogo acessível procura o título (aria-labelledby) e o campo inicial no DOM.

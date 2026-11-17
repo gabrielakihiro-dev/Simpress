@@ -1,6 +1,6 @@
 // Regras puras da pesquisa completa (Home F1, "Ver todos os resultados"). Sem import e só com sintaxe apagável, para os
 // testes de tests/frontend carregarem este arquivo com require() direto do Node, sem build.
-// Vieram de frontend/src/legado/features/full-equipment-search.js; os textos são os aprovados em docs/cockpit-prompts/03-home-split-view.md.
+// Vieram de frontend/src/aplicacao/full-equipment-search.ts; os textos são os aprovados em docs/cockpit-prompts/03-home-split-view.md.
 
 export const PESQUISA_COMPLETA_PAGINA = 50;
 export const MINIMO_CARACTERES = 2;

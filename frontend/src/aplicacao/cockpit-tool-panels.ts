@@ -1,9 +1,7 @@
 /** Dedicated Cockpit workspaces for the tools in the nine-dot menu: the panels live in frontend/src/paineis/ferramentas-cockpit/; this module only forwards the calls. */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else (root.SimpressFeatures = root.SimpressFeatures || {}).cockpitToolPanels = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
-  "use strict";
+import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";
+
+export function createCockpitToolPanels(context: ContextoApp): Acoes {
   // Chamados, buttons and shortcuts call these in the same turn, so the bridge is synchronous (the panel is mounted before the first user action).
   const ponte = context.ponteReactSincrona("ferramentas-cockpit", [
     "abrirPainelCockpit", "fecharPainelCockpit", "abrirComparacaoDaSerie", "abrirChamadosDoEquipamento", "abrirChamadoDaOs",
@@ -12,16 +10,16 @@
   ]);
   // Without the panel the tools that load data would stay empty: show the error where the result would be. Cobertura, Lembretes,
   // Unidades and Chamados (F5) have no error text of their own: the shell opens empty and the bridge logs the error to the console.
-  const ERRO_SEM_PAINEL = {
+  const ERRO_SEM_PAINEL: Record<string, [string, string]> = {
     chamados: ["cockpit-tickets-os", "A tabela de ordens de serviço não está disponível."],
     comparacao: ["comparacao-planilhas-conteudo", "Não foi possível abrir a comparação."],
     apelidos: ["cockpit-alias-list", "Falha ao carregar o histórico."],
     relatorio: ["cockpit-monthly-estado", "Falha ao carregar o relatório."],
     planilhas: ["cockpit-sheets-kpis", "Não foi possível carregar as planilhas."],
   };
-  const STATUS_SEM_PAINEL = { comparacao: "cockpit-comparison-status", planilhas: "cockpit-sheets-status" };
+  const STATUS_SEM_PAINEL: Record<string, string> = { comparacao: "cockpit-comparison-status", planilhas: "cockpit-sheets-status" };
   // Copy of toolInfo and toolKeys (estado.ts) for the path without the bundle: [title, subtitle, key] of the shell.
-  const FERRAMENTAS = {
+  const FERRAMENTAS: Record<string, [string, string, string]> = {
     chamados: ["OS", "Acompanhamento local de ordens relacionadas por série.", "F6"],
     comparacao: ["Resumo", "Ativos por regional (com filtro por categoria) e resultados salvos da comparação entre as bases locais.", "F3"],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários.", "F7"],
@@ -32,25 +30,28 @@
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada.", ""],
     "sebrae-chamados": ["Chamados", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard.", "F5"],
   };
-  const semPainel = () => !(typeof window !== "undefined" ? window : globalThis).SimpressReact?.["ferramentas-cockpit"];
-  const porId = id => document.getElementById(id);
+  const semPainel = () => {
+    const raiz: Qualquer = typeof window !== "undefined" ? window : globalThis;
+    return !raiz.SimpressReact?.["ferramentas-cockpit"];
+  };
+  const porId = (id: string) => document.getElementById(id) as HTMLElement;
   // Shell state of the path without the bundle (the panel keeps its own in estado.ts).
   let ativa = "";
-  let focoDeRetorno = null;
-  let hrefDoSkipLink = null;
-  let abaSuspensa = null;
+  let focoDeRetorno: Qualquer = null;
+  let hrefDoSkipLink: string | null = null;
+  let abaSuspensa: Qualquer = null;
   let escutandoEsc = false;
 
-  function marcarAba(aba, selecionada) {
+  function marcarAba(aba: HTMLElement, selecionada: boolean) {
     aba.setAttribute("aria-selected", String(selecionada));
     aba.tabIndex = selecionada ? 0 : -1;
     aba.classList.toggle("is-active", selecionada);
   }
 
   // Same as syncPanelButtons in estado.ts: the buttons of the bar follow the open tool; the tab that was active waits until the panel closes.
-  function sincronizarBotoes(tool) {
-    document.querySelectorAll(".ck-aba--painel[data-cockpit-tool]").forEach(botao => botao.setAttribute("aria-pressed", String(botao.dataset.cockpitTool === tool)));
-    const abas = [...document.querySelectorAll('[role="tab"][data-cockpit-tool]')];
+  function sincronizarBotoes(tool: string) {
+    document.querySelectorAll<HTMLElement>(".ck-aba--painel[data-cockpit-tool]").forEach(botao => botao.setAttribute("aria-pressed", String(botao.dataset.cockpitTool === tool)));
+    const abas = [...document.querySelectorAll<HTMLElement>('[role="tab"][data-cockpit-tool]')];
     const aberta = abas.find(aba => aba.dataset.cockpitTool === tool);
     if (!aberta && abaSuspensa) {
       marcarAba(abaSuspensa, true);
@@ -63,12 +64,12 @@
   }
 
   // Only the shell of openPanel in estado.ts (title, key, subtitle, focus, buttons, skip link) and no loader of this panel; the one call out is to the Resumo card's own bridge below.
-  function abrirSemPainel(tool) {
+  function abrirSemPainel(tool: string): Promise<void> {
     if (typeof document === "undefined" || !Object.hasOwn(FERRAMENTAS, tool)) return Promise.resolve();
     const raiz = porId("cockpit-tool-panels");
     if (!raiz) return Promise.resolve();
     const [titulo, subtitulo, tecla] = FERRAMENTAS[tool];
-    const menu = porId("cockpit-tools-dropdown");
+    const menu = porId("cockpit-tools-dropdown") as HTMLDetailsElement;
     const skipLink = document.querySelector(".skip-link");
     if (!escutandoEsc) {
       // Same rule as the keydown in ensureEvents (estado.ts): the label "Esc" on the Voltar button must work without the bundle too.
@@ -95,7 +96,7 @@
     porId("cockpit-tool-kbd").textContent = tecla;
     porId("cockpit-tool-kbd").hidden = !tecla;
     porId("cockpit-tool-subtitle").textContent = subtitulo;
-    document.querySelectorAll("[data-cockpit-tool-panel]").forEach(painel => { painel.hidden = painel.dataset.cockpitToolPanel !== tool; });
+    document.querySelectorAll<HTMLElement>("[data-cockpit-tool-panel]").forEach(painel => { painel.hidden = painel.dataset.cockpitToolPanel !== tool; });
     porId("cockpit-tool-title").focus();
     const alvo = Object.hasOwn(ERRO_SEM_PAINEL, tool) ? porId(ERRO_SEM_PAINEL[tool][0]) : null;
     if (alvo) {
@@ -122,7 +123,7 @@
     const raiz = porId("cockpit-tool-panels");
     if (!raiz || raiz.hidden) return;
     const principal = porId("main-content");
-    const menu = porId("cockpit-tools-dropdown");
+    const menu = porId("cockpit-tools-dropdown") as HTMLDetailsElement;
     const skipLink = document.querySelector(".skip-link");
     raiz.hidden = true;
     principal.hidden = false;
@@ -139,13 +140,13 @@
   return {
     ...ponte,
     // abrirPainelCockpit always returns a Promise in the panel; undefined means the panel did not mount.
-    abrirPainelCockpit: (...argumentos) => ponte.abrirPainelCockpit(...argumentos) ?? abrirSemPainel(argumentos[0]),
+    abrirPainelCockpit: (...argumentos: Qualquer[]) => ponte.abrirPainelCockpit(...argumentos) ?? abrirSemPainel(argumentos[0]),
     // fecharPainelCockpit may return undefined with the panel mounted, so the missing panel is read from SimpressReact.
-    fecharPainelCockpit: (...argumentos) => {
+    fecharPainelCockpit: (...argumentos: Qualquer[]) => {
       const retorno = ponte.fecharPainelCockpit(...argumentos);
       if (semPainel()) fecharSemPainel(argumentos[0] !== false);
       return retorno;
     },
-    filterTicketRecords: (...argumentos) => ponte.filterTicketRecords(...argumentos) ?? [],
+    filterTicketRecords: (...argumentos: Qualquer[]) => ponte.filterTicketRecords(...argumentos) ?? [],
   };
-});
+}

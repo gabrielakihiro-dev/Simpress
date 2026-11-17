@@ -732,7 +732,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     { chave: "apelidos", rotulo: "Apelidos" },
     { chave: "usuarios", rotulo: "Usuários" },
     { chave: "sem-acesso", rotulo: "Sem acesso" },
-    // Fica fora de CATEGORIAS_POR_ABA e TEXTO_VAZIO_ABA: não é lista de linhas da comparação; quem o desenha é o painel React (frontend/src/paineis/backups-regionais/); frontend/src/legado/features/backups-regionais.js só pede o painel a cada 5 min.
+    // Fica fora de CATEGORIAS_POR_ABA e TEXTO_VAZIO_ABA: não é lista de linhas da comparação; quem o desenha é o painel React (frontend/src/paineis/backups-regionais/); frontend/src/aplicacao/backups-regionais.ts só pede o painel a cada 5 min.
     { chave: "backups", rotulo: "Backups" },
   ];
   const ROTULOS_CATEGORIA_RESUMO: Record<string, string | undefined> = {

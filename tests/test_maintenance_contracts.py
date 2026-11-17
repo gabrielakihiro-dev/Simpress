@@ -122,7 +122,14 @@ def _frontend_script() -> str:
     """Application modules in the explicit browser entry order."""
     entry = (LEGADO_DIR / "app-entry.js").read_text(encoding="utf-8")
     files = re.findall(r'^\s*import\s+["\'](?:\./)?([^"\']+\.(?:js|ts))["\'];?\s*$', entry, re.MULTILINE)
-    return "\n".join((LEGADO_DIR / name).read_text(encoding="utf-8") for name in files)
+    sources = []
+    for name in files:
+        # O registro das features (aplicacao/registro.ts) vale por todos os módulos de frontend/src/aplicacao/.
+        if name == "../aplicacao/registro.ts":
+            sources.extend(arquivo.read_text(encoding="utf-8") for arquivo in sorted((LEGADO_DIR.parent / "aplicacao").glob("*.ts")))
+        else:
+            sources.append((LEGADO_DIR / name).read_text(encoding="utf-8"))
+    return "\n".join(sources)
 
 
 def _react_panels_source() -> str:
@@ -294,7 +301,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"]', configuration)
+        self.assertIn('content: ["../static/index.html", "../frontend/partials/**/*.html", "../frontend/src/legado/**/*.js", "../frontend/src/aplicacao/**/*.ts", "../frontend/src/comum/**/*.ts", "../frontend/src/ui/**/*.ts", "../static/js/**/*.js"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
@@ -361,7 +368,7 @@ class MaintenanceContractTests(unittest.TestCase):
         script = _frontend_script() + "\n" + _react_panels_source()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
-        outlook = (LEGADO_DIR / "features" / "outlook-email.js").read_text(encoding="utf-8")
+        outlook = (LEGADO_DIR.parent / "aplicacao" / "pontes.ts").read_text(encoding="utf-8")
         # O resto do HTML já traz o exemplo "nome@pr.sebrae.com.br" do termo; o e-mail pelo Outlook não pode ter domínio real.
         modal_email = html.split('id="modal-email-outlook"', 1)[1].split('id="modal-confirmar-acao"', 1)[0]
         self.assertNotRegex(modal_email + outlook, r"@(?:simpress\.com\.br|pr\.sebrae\.com\.br)")
@@ -732,7 +739,7 @@ class MaintenanceContractTests(unittest.TestCase):
         for name in ("coverage-model.js", "transfer-history.js", "chamados-os-model.js", "data-panels.js"):
             self.assertNotIn(name, entry)
         self.assertIn('import "../comum/sebrae-dashboard-model.ts";', entry)
-        self.assertIn('import "./features/coverage.js";', entry)
+        self.assertIn('import "../aplicacao/registro.ts";', entry)
         self.assertIn('import "./app.js";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
@@ -740,7 +747,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((LEGADO_DIR / "app-entry.js").is_file())
         self.assertTrue((LEGADO_DIR.parent / "comum/transfer-utils.ts").is_file())
         self.assertTrue((app_config.STATIC_DIR / "styles/ck-cobertura.css").is_file())
-        for name in ("../comum/sebrae-dashboard-model.ts", "features/coverage.js"):
+        for name in ("../comum/sebrae-dashboard-model.ts", "../aplicacao/registro.ts"):
             self.assertTrue((LEGADO_DIR / name).is_file(), name)
         for name in ("shared/coverage-model.js", "ui/transfer-history.js", "shared/chamados-os-model.js", "ui/data-panels.js"):
             self.assertFalse((LEGADO_DIR / name).exists(), name)

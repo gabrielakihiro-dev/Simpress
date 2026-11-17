@@ -4,21 +4,19 @@
  * 5 min: ele atualiza todos os alertas do sino, não só Backups, e não pode depender do bundle React carregar.
  * Também guarda o último painel lido: paineis-dados (paineis.ts) lê o painel no import, às vezes antes de o bundle montar o painel,
  * e a ponte o repete (repetirPainel) quando o bundle carrega. Ninguém de fora chama este módulo; ele continua em
- * FEATURE_ORDER (frontend/src/legado/app.js).
+ * FEATURE_ORDER (frontend/src/aplicacao/app.ts).
  */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else (root.SimpressFeatures = root.SimpressFeatures || {}).backupsRegionais = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createBackupsRegionais(context) {
-  "use strict";
+import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";
+
+export function createBackupsRegionais(context: ContextoApp): Acoes {
   const INTERVALO_ATUALIZACAO_MS = 5 * 60 * 1000;
 
   if (typeof document !== "undefined") {
-    const ultimo = {};
-    document.addEventListener("simpress:painel-atualizado", evento => { ultimo.painel = evento.detail; });
+    const ultimo: Qualquer = {};
+    document.addEventListener("simpress:painel-atualizado", (evento: Qualquer) => { ultimo.painel = evento.detail; });
     document.addEventListener("simpress:painel-indisponivel", () => { ultimo.indisponivel = true; });
     context.ponteReact("backups-regionais", ["repetirPainel"]).repetirPainel(ultimo)
-      .catch(erro => { console.error(`repetirPainel: ${erro?.message}`); });
+      .catch((erro: Qualquer) => { console.error(`repetirPainel: ${erro?.message}`); });
   }
 
   // Cartão do sino e sub-aba ficam em dia sem ação do usuário: pede o painel a cada 5 min, só com a aba visível
@@ -30,4 +28,4 @@
   }
 
   return {};
-});
+}

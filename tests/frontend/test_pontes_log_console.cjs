@@ -4,13 +4,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const PASTA = path.join(__dirname, "..", "..", "frontend", "src", "legado", "features");
+const PASTA = path.join(__dirname, "..", "..", "frontend", "src", "aplicacao");
 // console.error com o erro como argumento solto (sozinho ou depois de um texto) ou .catch(console.error).
 const PROIBIDO = /console\.error\(\s*(?:[^()]*?,\s*)?(?:erro|err|error|e)\s*\)|\.catch\(\s*console\.error\s*\)/;
 
 test("nenhuma ponte manda o objeto de erro inteiro ao console", () => {
   const culpados = fs.readdirSync(PASTA)
-    .filter(nome => nome.endsWith(".js"))
+    .filter(nome => nome.endsWith(".ts"))
     .filter(nome => PROIBIDO.test(fs.readFileSync(path.join(PASTA, nome), "utf8")));
   assert.deepEqual(culpados, []);
 });
