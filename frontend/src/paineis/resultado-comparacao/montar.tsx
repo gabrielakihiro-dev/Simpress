@@ -14,7 +14,6 @@ export function montar(_container: HTMLElement) {
     appState,
     motion: window.SimpressMotion,
     dom,
-    comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
     loggedUserMarkers: window.SimpressLoggedUserMarkers(contexto),
     // O autosave é lido no momento do uso, como no módulo antigo.

@@ -23,7 +23,7 @@ let focoDaAcao: Marca | null = null;
 // O React reaproveita o botão (Confirmar vira Desfazer): o timer de um clique não pode soltar o clique seguinte.
 let reabrir: number | undefined;
 
-// Cópia de rotuloContagemAba("backups", total) de frontend/src/legado/ui/comparison-result-renderer.js (só o ramo Backups).
+// Cópia de rotuloContagemAba("backups", total) de frontend/src/paineis/resultado-comparacao/renderizador.ts (só o ramo Backups).
 function rotuloAba(total: number | null | undefined) {
   if (total === undefined) return "Backups: aguardando dados";
   if (total === null) return "Backups: dados indisponíveis";

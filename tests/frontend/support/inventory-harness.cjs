@@ -15,6 +15,8 @@ const { criarFormularioTransferencia } = require("../../../frontend/src/paineis/
 const { criarContatosRegionais } = require("../../../frontend/src/paineis/contatos-regionais/estado.ts");
 const { criarAcoesCartaoEquipamento } = require("../../../frontend/src/paineis/cartao-equipamento/estado.ts");
 const { criarIndicadoresHome } = require("../../../frontend/src/paineis/indicadores-home/estado.ts");
+// estado.ts importa "./renderizador" sem extensão: o hook completa ".ts" antes do require.
+require("./resolver-ts-sem-extensao.cjs");
 const { criarResultadoComparacao } = require("../../../frontend/src/paineis/resultado-comparacao/estado.ts");
 const { criarRegrasChamados } = require("../../../frontend/src/paineis/regras-chamados/regras.ts");
 const { criarImportacaoPlanilhas } = require("../../../frontend/src/paineis/importacao-planilhas/estado.ts");
@@ -305,7 +307,6 @@ function mountReactPanels(context, document, window, effects, fetchApi) {
     appState,
     motion: null,
     dom: window.SimpressDomUtils(document),
-    comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
     loggedUserMarkers: window.SimpressLoggedUserMarkers({ app: appReact, appState, dom: window.SimpressDomUtils(document) }),
     annotationAutosave,

@@ -1,14 +1,180 @@
 /** Builds comparison data lists and the detailed history result markup. */
-(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.SimpressComparisonResultRenderer = factory;
-})(typeof window !== "undefined" ? window : globalThis, function createComparisonResultRenderer(context) {
+// Port 1:1 do antigo comparison-result-renderer.js (global SimpressComparisonResultRenderer, removido): mesmo HTML, texto e ordem. Os tipos abaixo só documentam
+// o formato que a fábrica lê (campos opcionais, sem validar nada em tempo de execução). Só sintaxe apagável
+// (sem enum/namespace): os testes carregam este .ts direto no Node.
+interface Anotacao {
+  anotacao_id?: string;
+  anotacao?: string;
+  anotacao_conflito?: unknown;
+}
+interface ItemBase extends Anotacao {
+  anotacoes_associadas?: Anotacao[];
+  serie?: string;
+  computador?: string;
+  hostname?: string;
+  apelido?: string;
+}
+interface ItemAusente extends ItemBase {
+  local_previsto?: string;
+  ausente_em?: string[] | string;
+  fonte_ausente?: string;
+}
+interface ItemLocalidade extends ItemBase {
+  local_previsto?: string;
+  local_detalhes?: string;
+}
+interface ItemSemAcesso extends ItemBase {
+  dias_sem_verificacao?: number | string;
+  hostname_sumiu_endpoint?: boolean;
+  hostname_origem?: string;
+  ultima_verificacao?: string;
+  linha_endpoint?: unknown;
+}
+interface ItemSemAcesso60 extends ItemBase {
+  situacao?: string;
+  dias?: number | string;
+}
+interface ItemApelidoAtualizado {
+  serie?: string;
+  apelido_anterior?: string;
+  apelido_novo?: string;
+  horario?: string;
+  arquivos_origem?: Record<string, string>;
+}
+interface ItemApelidoConferencia extends ItemBase {
+  motivo?: string;
+}
+interface ItemApelidoManual extends ItemBase {
+  resolucao?: string;
+  apelido_manual?: string;
+  apelido_equipamentos_detalhes?: string;
+  detalhes_encontrado?: boolean;
+  apelido_invall?: string;
+  invall_encontrado?: boolean;
+}
+interface ItemMudancaUsuario extends ItemBase {
+  tipo?: string;
+  usuario_anterior?: string;
+  usuario_novo?: string;
+  origem_anterior?: string;
+  origem_nova?: string;
+  nome_pessoa_anterior?: string;
+  nome_pessoa_novo?: string;
+  usuario_manual_arquivado?: string;
+  motivo?: string;
+  pendencia_tipo?: string;
+  pendencia_id?: string;
+}
+interface ItemSerieSemMapa extends ItemBase {
+  quantidade?: number;
+  exemplos?: string[];
+}
+interface RegistroEndpoint {
+  serie?: string;
+  computador?: string;
+  ultima_verificacao?: string;
+  mais_antigo?: boolean;
+}
+interface ItemAmbiguidade extends ItemBase {
+  tipo?: string;
+  chave?: string;
+  fontes?: { fonte?: string; quantidade?: number; serie?: string }[];
+  mensagem?: string;
+  registros_endpoint?: RegistroEndpoint[];
+  ultima_verificacao?: string;
+}
+interface ItemRegistroAmbiguo extends ItemBase {
+  fontes?: Record<string, string>;
+  motivo?: string;
+  registros_endpoint?: RegistroEndpoint[];
+  ultima_verificacao?: string;
+}
+interface ItemSincronizado extends ItemBase {
+  categoria?: string;
+  motivo?: string;
+}
+interface ItemSemUsuario {
+  apelido?: string;
+  computador?: string;
+  serial?: string;
+  retirada_cidade?: string;
+  modelo?: string;
+}
+// `items` fica unknown[] como em SemUsuario do estado.ts do painel; o renderizador lê cada linha como ItemSemUsuario.
+export interface SemUsuarioRenderizador {
+  estado: string;
+  items: unknown[];
+  total?: number;
+}
+export interface ComparacaoRenderizada {
+  evento_id?: string | number;
+  contexto_historico?: boolean;
+  historico_salvo?: boolean;
+  somente_anotacoes_sincronizadas?: boolean;
+  aviso_historico?: string;
+  horario_comparacao?: string;
+  total_endpoint?: number;
+  anotacoes_herdadas_enfileiradas?: number;
+  ausentes_no_endpoint?: ItemAusente[];
+  ausentes_em_detalhes?: ItemAusente[];
+  divergencias_local?: ItemLocalidade[];
+  series_sem_mapeamento?: ItemSerieSemMapa[];
+  sem_acesso_7_dias?: ItemSemAcesso[];
+  sem_acesso_60_dias?: ItemSemAcesso60[];
+  correspondencias_ambiguas?: ItemAmbiguidade[];
+  registros_ambiguos?: ItemRegistroAmbiguo[];
+  apelidos_atualizados?: ItemApelidoAtualizado[];
+  apelidos_sem_atualizacao?: ItemApelidoConferencia[];
+  divergencias_apelidos_manuais?: ItemApelidoManual[];
+  mudancas_usuarios?: ItemMudancaUsuario[];
+  anotacoes_sincronizadas?: ItemSincronizado[];
+}
+export interface ListasComparacao {
+  ausentesEndpoint: ItemAusente[];
+  ausentesDetalhes: ItemAusente[];
+  divergenciasLocal: ItemLocalidade[];
+  seriesSemMapa: ItemSerieSemMapa[];
+  semAcesso7DiasOrdenados: ItemSemAcesso[];
+  ambiguidades: ItemAmbiguidade[];
+  registrosAmbiguos: ItemRegistroAmbiguo[];
+  apelidosAtualizados: ItemApelidoAtualizado[];
+  apelidosSemAtualizacao: ItemApelidoConferencia[];
+  divergenciasApelidosManuais: ItemApelidoManual[];
+  mudancasUsuarios: ItemMudancaUsuario[];
+  // Só vem do controlador, que lê o cadastro atual; sem ele a seção "Sem usuário" fica de fora.
+  semUsuario?: SemUsuarioRenderizador | null;
+}
+interface SecaoResumo {
+  id: string;
+  titulo: string;
+}
+export interface ColunasAnotacao {
+  permitirAnotacoes: boolean;
+  renderizarCampoAnotacao(item: ItemBase, contexto: string): string;
+  annotationHeaders: string[];
+  aliasReviewHeaders: string[];
+}
+export interface ContextoRenderizador {
+  app: { atributosVersaoAnotacao(anotacao: Anotacao): string };
+  dom: {
+    escapeHtml(valor: unknown): string;
+    pluralize(quantidade: number, singular: string, plural?: string): string;
+    infoTipHtml(rotulo: string, texto: string, opcoes?: { fim?: boolean; bloco?: boolean; id?: string }): string;
+  };
+  historyFormat: {
+    formatarNomeFonteHistorico(valor: unknown): string;
+    formatarHorarioHistorico(valor: unknown): string;
+  };
+  loggedUserMarkers: { marcador(serie: unknown, opcoes?: { sugestao?: unknown }): string };
+}
+
+export function criarRenderizadorResultado(context: ContextoRenderizador) {
   "use strict";
   const { app } = context;
   const { escapeHtml, pluralize, infoTipHtml } = context.dom;
   const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
-  const CATEGORIAS_ANOTACOES_SINCRONIZADAS = {
+  const CATEGORIAS_ANOTACOES_SINCRONIZADAS: Record<string, string | undefined> = {
     sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
     sem_acesso_60_dias: "Passou de 60 dias sem acesso",
     ausentes_no_endpoint: "Sem correspondência — Endpoint",
@@ -22,7 +188,7 @@
     mudancas_usuarios: "Mudanças de usuário logado",
   };
   // Kind of logged-user change in the update summary -> visible label and text color.
-  const TIPOS_MUDANCA_USUARIO = {
+  const TIPOS_MUDANCA_USUARIO: Record<string, { rotulo: string; classe: string } | undefined> = {
     substituicao_pendente: { rotulo: "Substituição do usuário manual — aguardando decisão", classe: "text-amber-300" },
     ausente_pendente: { rotulo: "Usuário sumiu do Endpoint — aguardando confirmação", classe: "text-amber-300" },
     novo_endpoint: { rotulo: "Usuário novo no Endpoint", classe: "text-emerald-300" },
@@ -30,20 +196,20 @@
     removido_endpoint: { rotulo: "Usuário removido do Endpoint", classe: "text-amber-300" },
     manual_voltou: { rotulo: "Manual voltou a valer", classe: "text-rose-300" },
   };
-  const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.")
+  const formatarMotivoRevisao = (motivo: unknown) => formatarNomeFonteHistorico(motivo || "Conferir associação.")
     .replace(/\bno endpoint\b/gi, "no Endpoint");
-  const formatarFonteAusencia = fonte => formatarNomeFonteHistorico(fonte)
+  const formatarFonteAusencia = (fonte: unknown) => formatarNomeFonteHistorico(fonte)
     .replace(/\bno endpoint\b/gi, "Endpoint")
     .replace(/\bna Simpress\b/gi, "Simpress");
-  const formatarFonteAmbigua = fonte => formatarNomeFonteHistorico(fonte)
+  const formatarFonteAmbigua = (fonte: unknown) => formatarNomeFonteHistorico(fonte)
     .replace(/\bno endpoint\b/gi, "Endpoint");
-  const atributosLinhaComparacao = (categoria, item) => `data-comparison-category="${escapeHtml(categoria)}" data-comparison-item-id="${escapeHtml(item?.anotacao_id || "")}" data-comparison-serial="${escapeHtml(item?.serie || "")}" data-comparison-hostname="${escapeHtml(item?.computador || item?.hostname || item?.apelido || "")}"`;
+  const atributosLinhaComparacao = (categoria: string | undefined, item: ItemBase | undefined) => `data-comparison-category="${escapeHtml(categoria)}" data-comparison-item-id="${escapeHtml(item?.anotacao_id || "")}" data-comparison-serial="${escapeHtml(item?.serie || "")}" data-comparison-hostname="${escapeHtml(item?.computador || item?.hostname || item?.apelido || "")}"`;
 
   // Placeholder filled after rendering with the logged user of the serial (Endpoint, or manual when empty).
   const marcadorUsuarioLogado = context.loggedUserMarkers.marcador;
 
-  function renderizarTabelaComparacao(headers, rows, emptyMessage, filterCategory = "") {
-    const wrapFilterGroup = markup => filterCategory
+  function renderizarTabelaComparacao(headers: string[], rows: string[], emptyMessage: string, filterCategory = "") {
+    const wrapFilterGroup = (markup: string) => filterCategory
       ? `<div class="history-filter-group space-y-2" data-history-filter-group="${escapeHtml(filterCategory)}">${markup}</div>`
       : markup;
     if (!rows.length) {
@@ -60,8 +226,8 @@
       const titleLabel = headers[0] || "Registro";
       const titleText = cells[0].textContent.trim() || `Registro ${index + 1}`;
       const titleContent = cells[0].innerHTML || escapeHtml(titleText);
-      const manualAliasRow = sourceRow.hasAttribute("data-manual-alias-row")
-        ? ` data-manual-alias-row="${escapeHtml(sourceRow.dataset.manualAliasRow)}"`
+      const manualAliasRow = sourceRow!.hasAttribute("data-manual-alias-row")
+        ? ` data-manual-alias-row="${escapeHtml(sourceRow!.dataset.manualAliasRow)}"`
         : "";
       const comparisonTargetAttributes = [
         "data-comparison-category",
@@ -69,7 +235,7 @@
         "data-comparison-serial",
         "data-comparison-hostname",
       ].map(attribute => {
-        const value = sourceRow.getAttribute(attribute);
+        const value = sourceRow!.getAttribute(attribute);
         return value === null ? "" : ` ${attribute}="${escapeHtml(value)}"`;
       }).join("");
       const fields = cells.slice(1).map((cell, cellIndex) => {
@@ -104,8 +270,8 @@
   }
 
   // The backend (comparison_history_for_display) already removed SEBRAE's own series from the missing lists.
-  function listasComparacao(comparison) {
-    const diasSemVerificacao = item => {
+  function listasComparacao(comparison: ComparacaoRenderizada) {
+    const diasSemVerificacao = (item: ItemSemAcesso | undefined) => {
       const dias = Number(item?.dias_sem_verificacao);
       return Number.isFinite(dias) ? dias : 0;
     };
@@ -128,10 +294,10 @@
   }
 
   // Annotation columns exist only for results saved in the history, where every row keeps its own annotation id.
-  function criarColunasAnotacao(comparison) {
+  function criarColunasAnotacao(comparison: ComparacaoRenderizada) {
     const permitirAnotacoes = Boolean(comparison.evento_id)
       && (comparison.contexto_historico === true || comparison.historico_salvo === true);
-    const renderizarCampoAnotacao = (item, contexto) => {
+    const renderizarCampoAnotacao = (item: ItemBase, contexto: string) => {
       if (!permitirAnotacoes) return "";
       const anotacoes = [
         item,
@@ -160,7 +326,7 @@
     };
   }
 
-  function barraFiltrosHistorico(comparison) {
+  function barraFiltrosHistorico(comparison: ComparacaoRenderizada) {
     const mostrarFiltrosHistorico = comparison.historico_salvo === true
       || comparison.contexto_historico === true
       || comparison.somente_anotacoes_sincronizadas === true;
@@ -184,7 +350,7 @@
   }
 
   // Row builders: one <tr> per item; renderizarTabelaComparacao derives the mobile cards from them.
-  function linhasAusentes(items, categoria, { renderizarCampoAnotacao }) {
+  function linhasAusentes(items: ItemAusente[], categoria: string, { renderizarCampoAnotacao }: ColunasAnotacao) {
     return items.map(item => `
         <tr class="text-fg-tertiary" ${atributosLinhaComparacao(categoria, item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
@@ -195,7 +361,7 @@
         </tr>`);
   }
 
-  function linhasLocalidadeDivergente(divergenciasLocal, { renderizarCampoAnotacao }) {
+  function linhasLocalidadeDivergente(divergenciasLocal: ItemLocalidade[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return divergenciasLocal.map(item => `
         <tr class="text-fg-tertiary" ${atributosLinhaComparacao("divergencias_local", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
@@ -206,7 +372,7 @@
         </tr>`);
   }
 
-  function linhasSemAcesso(semAcesso7DiasOrdenados, { renderizarCampoAnotacao }) {
+  function linhasSemAcesso(semAcesso7DiasOrdenados: ItemSemAcesso[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return semAcesso7DiasOrdenados.map(item => `
         <tr class="text-fg-tertiary" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}${item.hostname_sumiu_endpoint ? `
@@ -220,7 +386,7 @@
   }
 
   // Built by the server from older updates; "saiu_endpoint" days are an estimate (shown with "~").
-  function linhasSemAcesso60(itens, { renderizarCampoAnotacao }) {
+  function linhasSemAcesso60(itens: ItemSemAcesso60[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return itens.map(item => {
       const estimado = item.situacao === "saiu_endpoint";
       return `
@@ -234,7 +400,7 @@
     });
   }
 
-  function linhasApelidosAtualizados(apelidosAtualizados) {
+  function linhasApelidosAtualizados(apelidosAtualizados: ItemApelidoAtualizado[]) {
     return apelidosAtualizados.map(item => `
         <tr class="text-fg-tertiary">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
@@ -245,7 +411,7 @@
         </tr>`);
   }
 
-  function linhasApelidosConferencia(apelidosSemAtualizacao, { renderizarCampoAnotacao }) {
+  function linhasApelidosConferencia(apelidosSemAtualizacao: ItemApelidoConferencia[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return apelidosSemAtualizacao.map(item => `
         <tr class="text-fg-tertiary" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
@@ -255,7 +421,7 @@
         </tr>`);
   }
 
-  function linhasApelidosManuais(divergenciasApelidosManuais, comparison) {
+  function linhasApelidosManuais(divergenciasApelidosManuais: ItemApelidoManual[], comparison: ComparacaoRenderizada) {
     return divergenciasApelidosManuais.map((item, index) => {
       const resolvida = item.resolucao && item.resolucao !== "pendente";
       const status = item.resolucao === "manter"
@@ -284,7 +450,7 @@
   }
 
   // Decisions that leave the current user in place until the person answers; the labels follow the hold type.
-  const ACOES_PENDENCIA_USUARIO = {
+  const ACOES_PENDENCIA_USUARIO: Record<string, { decisao: string; rotulo: string; classe: string }[] | undefined> = {
     substituicao_manual: [
       { decisao: "permitir", rotulo: "Permitir substituição", classe: "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-200" },
       { decisao: "recusar", rotulo: "Manter usuário manual", classe: "bg-fg-weak/10 hover:bg-fg-weak/20 border-fg-weak/25 text-fg-secondary" },
@@ -295,8 +461,8 @@
     ],
   };
 
-  function acoesPendenciaUsuario(item) {
-    const acoes = ACOES_PENDENCIA_USUARIO[item.pendencia_tipo];
+  function acoesPendenciaUsuario(item: ItemMudancaUsuario) {
+    const acoes = ACOES_PENDENCIA_USUARIO[item.pendencia_tipo!];
     if (!acoes || !item.pendencia_id) return "";
     const classeBotao = "px-2 py-1 rounded-md border text-xs font-semibold";
     return `<div class="mt-2 flex flex-wrap items-center gap-1.5" data-user-hold="${escapeHtml(item.pendencia_id)}">
@@ -305,12 +471,12 @@
           </div>`;
   }
 
-  function linhasMudancasUsuarios(mudancasUsuarios, { renderizarCampoAnotacao }) {
-    const usuario = (nome, origem, pessoa) => nome
+  function linhasMudancasUsuarios(mudancasUsuarios: ItemMudancaUsuario[], { renderizarCampoAnotacao }: ColunasAnotacao) {
+    const usuario = (nome: string | undefined, origem: string | undefined, pessoa: string | undefined) => nome
       ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}${pessoa ? `<span class="block text-xs text-fg-subtle" data-person-name>${escapeHtml(pessoa)}</span>` : ""}`
       : '<span class="text-fg-muted">(vazio)</span>';
     return mudancasUsuarios.map(item => {
-      const tipo = TIPOS_MUDANCA_USUARIO[item.tipo] || { rotulo: "Mudança de usuário", classe: "text-fg-tertiary" };
+      const tipo = TIPOS_MUDANCA_USUARIO[item.tipo!] || { rotulo: "Mudança de usuário", classe: "text-fg-tertiary" };
       return `
         <tr class="text-fg-tertiary" data-user-change="${escapeHtml(item.tipo || "")}" ${atributosLinhaComparacao("mudancas_usuarios", item)}>
           <td class="px-3 py-2 font-semibold ${tipo.classe}">${escapeHtml(tipo.rotulo)}</td>
@@ -324,7 +490,7 @@
     });
   }
 
-  function linhasSeriesSemMapa(seriesSemMapa, { renderizarCampoAnotacao }) {
+  function linhasSeriesSemMapa(seriesSemMapa: ItemSerieSemMapa[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return seriesSemMapa.map(item => `
         <tr class="text-fg-tertiary" ${atributosLinhaComparacao("series_sem_mapeamento", item)}>
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
@@ -336,7 +502,7 @@
 
   // With several Endpoint rows for one serial, lists each hostname with its last successful check.
   // The oldest one gets a button that discards it so the remaining hostname is the one exported.
-  function celulaVerificacaoAmbigua(item, permitirRemocao) {
+  function celulaVerificacaoAmbigua(item: { registros_endpoint?: RegistroEndpoint[]; ultima_verificacao?: string }, permitirRemocao: boolean) {
     const registros = Array.isArray(item.registros_endpoint) ? item.registros_endpoint : [];
     if (registros.length < 2) {
       return escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—");
@@ -360,7 +526,7 @@
     }).join("")}</ul>`;
   }
 
-  function linhasAmbiguidades(ambiguidades, registrosAmbiguos, { renderizarCampoAnotacao, permitirAnotacoes }) {
+  function linhasAmbiguidades(ambiguidades: ItemAmbiguidade[], registrosAmbiguos: ItemRegistroAmbiguo[], { renderizarCampoAnotacao, permitirAnotacoes }: ColunasAnotacao) {
     return [
       ...ambiguidades.map(item => ({
         ...item,
@@ -391,7 +557,7 @@
         </tr>`);
   }
 
-  function linhasAnotacoesSincronizadas(items, { renderizarCampoAnotacao }) {
+  function linhasAnotacoesSincronizadas(items: ItemSincronizado[], { renderizarCampoAnotacao }: ColunasAnotacao) {
     return items.map(item => {
       const motivo = item.motivo ? formatarNomeFonteHistorico(item.motivo) : "";
       const identificador = [item.computador, item.serie && `série ${item.serie}`, motivo]
@@ -399,14 +565,14 @@
         .join(" · ") || "Linha sem identificador";
       return `
           <tr class="text-fg-tertiary" ${atributosLinhaComparacao(item.categoria, item)}>
-            <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "Histórico de planilhas")}</td>
+            <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria!] || "Histórico de planilhas")}</td>
             <td class="px-3 py-2">${escapeHtml(identificador)}</td>
-            ${renderizarCampoAnotacao(item, `${CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "a linha"}, ${identificador}`)}
+            ${renderizarCampoAnotacao(item, `${CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria!] || "a linha"}, ${identificador}`)}
           </tr>`;
     });
   }
 
-  const PONTOS_SECAO = { amber: "bg-amber-400", rose: "bg-rose-400", emerald: "bg-emerald-400", neutro: "bg-fg-weak" };
+  const PONTOS_SECAO: Record<string, string> = { amber: "bg-amber-400", rose: "bg-rose-400", emerald: "bg-emerald-400", neutro: "bg-fg-weak" };
 
   // Summary card -> section title it jumps to. The title id is stable because only one result is open at a time.
   const SECOES_CARTOES_RESUMO = {
@@ -423,7 +589,7 @@
   };
 
   // `descricao` (texto puro) vai para o ⓘ ao lado do título; o id e o tabindex ficam no h4, que é o alvo do foco.
-  function tituloSecaoComparacao(titulo, tom, idSecao = "", descricao = "") {
+  function tituloSecaoComparacao(titulo: string, tom: string, idSecao = "", descricao = "") {
     const alvo = idSecao ? ` id="${idSecao}" tabindex="-1"` : "";
     const h4 = `<h4${alvo} class="flex items-center gap-2 text-sm font-bold text-white"><span class="h-2 w-2 shrink-0 rounded-full ${PONTOS_SECAO[tom]}" aria-hidden="true"></span>${escapeHtml(titulo)}</h4>`;
     // Balão preso à linha do título: escondido, ele não pode alargar o painel (rolagem horizontal a 641-700px).
@@ -432,7 +598,7 @@
 
   // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.js
   // anima do zero até eles e aplica as larguras de data-bento-largura (CSP: nada de style= no HTML).
-  const ICONES_BENTO = {
+  const ICONES_BENTO: Record<string, string> = {
     notebook: '<rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M2 20h20"></path>',
     link: '<path d="M9 17H7a5 5 0 0 1 0-10h2M15 7h2a5 5 0 0 1 4 8M8 12h4M3 3l18 18"></path>',
     predio: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M8 7h4M8 11h4M8 15h4M2 21h20"></path>',
@@ -440,12 +606,12 @@
     copia: '<rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>',
     etiqueta: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"></path><path d="M7.5 7.5h.01"></path>',
   };
-  const svgBento = corpo => `<svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${corpo}</svg>`;
+  const svgBento = (corpo: string) => `<svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${corpo}</svg>`;
 
-  function cartaoBento({ rotulo, valor, tom, icone, chaveSecao = "", extra = "", grande = false }) {
+  function cartaoBento({ rotulo, valor, tom, icone, chaveSecao = "", extra = "", grande = false }: { rotulo: string; valor: unknown; tom: string; icone: string; chaveSecao?: string; extra?: string; grande?: boolean }) {
     const numero = Number(valor || 0);
     const texto = numero.toLocaleString("pt-BR");
-    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
+    const secao = (SECOES_CARTOES_RESUMO as Record<string, SecaoResumo | undefined>)[chaveSecao];
     const abrir = secao && numero > 0
       ? `<button type="button" class="ck-bento-abrir" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${texto}. Ir para ${secao.titulo}`)}">${svgBento('<path d="M7 17 17 7M9 7h8v8"></path>')}</button>`
       : "";
@@ -457,11 +623,11 @@
         </article>`;
   }
 
-  function cartoesBentoVisao(comparison, contagens) {
+  function cartoesBentoVisao(comparison: ComparacaoRenderizada, contagens: { endpoint: number; simpress: number; local: number; duplicidades: number; series: number }) {
     const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
     const { endpoint, simpress, local, duplicidades, series } = contagens;
     const maximo = Math.max(endpoint, simpress, local, duplicidades, series, 1);
-    const traco = valor => `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${((valor / maximo) * 100).toFixed(1)}"></i></div>`;
+    const traco = (valor: number) => `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${((valor / maximo) * 100).toFixed(1)}"></i></div>`;
     // Decisão de 14/11/2026: anel = (total_endpoint − "Sem correspondência — na Simpress") / total_endpoint.
     const fracao = comparados > 0 ? Math.min(1, Math.max(0, (comparados - simpress) / comparados)) : 0;
     const pct = Math.floor(fracao * 100); // floor: 998 de 1000 não vira "100%"
@@ -478,18 +644,18 @@
 
   // Bloco 2 do bento (docs/ui-motion/contrato-bento.md): contadores pequenos e cartões de seção das sub-abas.
   // O atraso de entrada é a classe ck-bento-dN (N x 80 ms); a cor é o data-tom do Bloco 1 (índigo = padrão).
-  const atrasoBento = n => `ck-bento-d${Math.min(Math.max(Number(n) || 0, 0), 5)}`;
+  const atrasoBento = (n: unknown) => `ck-bento-d${Math.min(Math.max(Number(n) || 0, 0), 5)}`;
 
   // Contador pequeno do topo da sub-aba. Com contagem acima de zero e seção correspondente vira botão que rola até ela;
   // senão fica estático. `bento`: { cor, icone, traco (largura em %), atraso }.
-  function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "", chaveSecao = "", bento = {}) {
+  function cartaoMetricaComparacao(rotulo: string, valor: unknown, tom: string | null, idNumero = "", chaveSecao = "", bento: { cor?: string; icone?: string; traco?: number | null; atraso?: number } = {}) {
     const { cor = "indigo", icone = "", traco = null, atraso = 0 } = bento;
     const numero = Number(valor || 0);
     const texto = numero.toLocaleString("pt-BR");
     const icon = icone ? `<span class="ck-bento-icone">${svgBento(ICONES_BENTO[icone])}</span>` : "";
     const barra = traco === null ? "" : `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${Number(traco).toFixed(1)}"></i></div>`;
     const conteudo = `<p class="text-xs uppercase tracking-wide text-fg-subtle">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>${icon}${barra}`;
-    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
+    const secao = (SECOES_CARTOES_RESUMO as Record<string, SecaoResumo | undefined>)[chaveSecao];
     const face = !secao || numero <= 0
       ? `<div class="ck-bento-face" data-metric-tone="${tom || ""}">${conteudo}</div>`
       : `<button type="button" class="comparison-metric-link ck-bento-face" data-metric-tone="${tom || ""}" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${texto}. Ir para ${secao.titulo}`)}">${conteudo}</button>`;
@@ -497,7 +663,7 @@
   }
 
   // Cabeçalho de seção: título (alvo do foco), ⓘ e, quando há lista, a contagem em pílula.
-  function cabecalhoSecaoBento(titulo, idSecao = "", descricao = "", contagem = null) {
+  function cabecalhoSecaoBento(titulo: string, idSecao = "", descricao = "", contagem: number | null = null) {
     const alvo = idSecao ? ` id="${idSecao}" tabindex="-1"` : "";
     const h4 = `<h4${alvo} class="ck-bento-h2">${escapeHtml(titulo)}</h4>`;
     const titulado = descricao ? `<div class="info-tip-ancora ck-bento-ancora">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
@@ -506,13 +672,13 @@
   }
 
   // Cartão de seção. `atributos` carrega os data-* que o controlador e os testes procuram (data-user-change-summary etc.).
-  function cartaoSecaoBento(cor, atraso, cabecalho, corpo, atributos = "") {
+  function cartaoSecaoBento(cor: string, atraso: number, cabecalho: string, corpo: string, atributos = "") {
     return `<section class="ck-bento-cartao ck-bento-secao ${atrasoBento(atraso)}" data-tom="${cor}" data-bento-cartao data-history-filter-section${atributos}>
           <div class="ck-bento-face">${cabecalho}${corpo}</div>
         </section>`;
   }
 
-  function conteudoAnotacoesSincronizadas(comparison, colunas) {
+  function conteudoAnotacoesSincronizadas(comparison: ComparacaoRenderizada, colunas: ColunasAnotacao) {
     const barra = barraFiltrosHistorico(comparison);
     const anotacoesSincronizadasRows = linhasAnotacoesSincronizadas(comparison.anotacoes_sincronizadas || [], colunas);
     return `
@@ -527,7 +693,7 @@
   // "Sem usuário" is not saved in the history events: the controller reads it from the current inventory
   // (same rule as the Home chip), so the same rows appear whichever event is open. There is no per-event row id,
   // hence no annotation column.
-  function linhasSemUsuario(items) {
+  function linhasSemUsuario(items: ItemSemUsuario[]) {
     return [...items]
       .sort((a, b) => String(a.apelido || a.computador || "").localeCompare(String(b.apelido || b.computador || ""), "pt-BR")
         || String(a.serial || "").localeCompare(String(b.serial || ""), "pt-BR"))
@@ -540,17 +706,17 @@
         </tr>`);
   }
 
-  function secaoSemUsuario(semUsuario) {
+  function secaoSemUsuario(semUsuario: SemUsuarioRenderizador) {
     const idSecao = SECOES_CARTOES_RESUMO.sem_usuario.id;
     if (semUsuario.estado !== "ok" && semUsuario.estado !== "limite") {
       return cartaoSecaoBento("ambar", 3, cabecalhoSecaoBento("Sem usuário", idSecao),
         '<p class="text-xs text-fg-muted" role="status">Não foi possível consultar os notebooks sem usuário agora. Abra o Resumo de novo para tentar outra vez.</p>',
         ' data-sem-usuario-section="erro"');
     }
-    const items = Array.isArray(semUsuario.items) ? semUsuario.items : [];
+    const items = (Array.isArray(semUsuario.items) ? semUsuario.items : []) as ItemSemUsuario[];
     const limite = semUsuario.estado === "limite";
     const aviso = limite
-      ? `<p class="text-xs text-fg-muted" role="status">Mostrando os primeiros ${items.length.toLocaleString("pt-BR")}${Number.isSafeInteger(semUsuario.total) ? ` de ${semUsuario.total.toLocaleString("pt-BR")}` : ""} notebooks sem usuário; há mais no cadastro. Use o filtro "Sem usuário" da Home para ver todos.</p>`
+      ? `<p class="text-xs text-fg-muted" role="status">Mostrando os primeiros ${items.length.toLocaleString("pt-BR")}${Number.isSafeInteger(semUsuario.total) ? ` de ${semUsuario.total!.toLocaleString("pt-BR")}` : ""} notebooks sem usuário; há mais no cadastro. Use o filtro "Sem usuário" da Home para ver todos.</p>`
       : "";
     return cartaoSecaoBento("ambar", 3,
       cabecalhoSecaoBento("Sem usuário", idSecao, "Notebooks do cadastro atual sem usuário logado, do Endpoint ou manual. A lista vem do cadastro de agora, não do arquivo desta atualização; por isso é a mesma em qualquer resultado aberto.", limite ? null : items.length),
@@ -569,7 +735,7 @@
     // Fica fora de CATEGORIAS_POR_ABA e TEXTO_VAZIO_ABA: não é lista de linhas da comparação; quem o desenha é o painel React (frontend/src/paineis/backups-regionais/); frontend/src/legado/features/backups-regionais.js só pede o painel a cada 5 min.
     { chave: "backups", rotulo: "Backups" },
   ];
-  const ROTULOS_CATEGORIA_RESUMO = {
+  const ROTULOS_CATEGORIA_RESUMO: Record<string, string | undefined> = {
     apelidos_sem_atualizacao: "Linhas mantidas para conferência",
     sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
     sem_acesso_60_dias: "Passou de 60 dias sem acesso",
@@ -595,7 +761,7 @@
     { valor: "correspondencias_ambiguas", rotulo: "Duplicidade ou ambiguidade", categorias: ["correspondencias_ambiguas"] },
     { valor: "series_sem_mapeamento", rotulo: "Série sem local definido", categorias: ["series_sem_mapeamento"] },
   ];
-  const TEXTO_VAZIO_ABA = {
+  const TEXTO_VAZIO_ABA: Record<string, string | undefined> = {
     divergencias: "Nenhuma divergência neste resultado.",
     apelidos: "Nenhum apelido pendente neste resultado.",
     usuarios: "Nenhuma mudança de usuário neste resultado.",
@@ -603,22 +769,22 @@
   };
   const TEXTO_LISTA_AUSENTE = "Este resultado não traz esta lista. Escolha uma comparação mais recente no campo Comparação.";
 
-  function canonicalizarCategoriaResumo(categoria) {
+  function canonicalizarCategoriaResumo(categoria: string | undefined) {
     return categoria === "registros_ambiguos" ? "correspondencias_ambiguas" : String(categoria || "");
   }
-  function abaDaCategoria(categoria) {
+  function abaDaCategoria(categoria: string | undefined) {
     const canonica = canonicalizarCategoriaResumo(categoria);
-    return Object.keys(CATEGORIAS_POR_ABA).find(chave => CATEGORIAS_POR_ABA[chave].includes(canonica)) || "";
+    return Object.keys(CATEGORIAS_POR_ABA).find(chave => (CATEGORIAS_POR_ABA as Record<string, string[]>)[chave].includes(canonica)) || "";
   }
-  function rotuloAba(chave) {
+  function rotuloAba(chave: string) {
     return RESUMO_ABAS.find(aba => aba.chave === chave)?.rotulo || chave;
   }
-  function textoLinhas(total, encontradas = false) {
+  function textoLinhas(total: unknown, encontradas = false) {
     const n = Number(total) || 0;
     return `${n.toLocaleString("pt-BR")} ${n === 1 ? "linha" : "linhas"}${encontradas ? (n === 1 ? " encontrada" : " encontradas") : ""}`;
   }
   // aria-label of a tab badge; total null = the list does not exist in this result (Usuários).
-  function rotuloContagemAba(chave, total, filtrando = false) {
+  function rotuloContagemAba(chave: string, total: number | null | undefined, filtrando = false) {
     const rotulo = rotuloAba(chave);
     if (chave === "visao") return rotulo;
     if (chave === "backups") {
@@ -630,36 +796,36 @@
     if (total === null) return `${rotulo}: lista indisponível neste resultado`;
     return `${rotulo}: ${textoLinhas(total, filtrando)}`;
   }
-  function textoContadorResumo(total, filtrando = false) {
+  function textoContadorResumo(total: unknown, filtrando = false) {
     const n = Number(total) || 0;
     return filtrando
       ? `${textoLinhas(n, true)} neste resultado.`
       : `${textoLinhas(n)} para conferência neste resultado.`;
   }
-  function textoSemResultado(termo) {
+  function textoSemResultado(termo: unknown) {
     const t = String(termo || "").trim();
     return t ? `Nenhuma linha encontrada para “${t}”.` : "Nenhuma linha encontrada com os filtros atuais.";
   }
   // Options of the "Tipo de divergência" select; categoriasPresentes feeds every tab except Divergências.
-  function tiposDaAba(chave, categoriasPresentes = []) {
+  function tiposDaAba(chave: string, categoriasPresentes: string[] = []) {
     if (chave === "divergencias") return TIPOS_DIVERGENCIAS.map(({ valor, rotulo }) => ({ valor, rotulo }));
-    const permitidas = CATEGORIAS_POR_ABA[chave] || [];
+    const permitidas = (CATEGORIAS_POR_ABA as Record<string, string[] | undefined>)[chave] || [];
     return [...new Set(categoriasPresentes.map(canonicalizarCategoriaResumo))]
       .filter(categoria => permitidas.includes(categoria))
       .map(valor => ({ valor, rotulo: ROTULOS_CATEGORIA_RESUMO[valor] || valor }))
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }
   // A type chosen on one tab falls back to "Todos" when the new tab does not offer it.
-  function resolverTipo(chave, tipo, categoriasPresentes = []) {
+  function resolverTipo(chave: string, tipo: string, categoriasPresentes: string[] = []) {
     return tiposDaAba(chave, categoriasPresentes).some(opcao => opcao.valor === tipo) ? tipo : "";
   }
-  function categoriasDoTipo(chave, tipo) {
+  function categoriasDoTipo(chave: string, tipo: string) {
     if (!tipo) return null;
     if (chave === "divergencias") return TIPOS_DIVERGENCIAS.find(opcao => opcao.valor === tipo)?.categorias || [];
     return [tipo];
   }
   // Banner above the tabs (#comparacao-planilhas-avisos); a failed history save is an alert.
-  function avisoHistoricoComparacao(comparison) {
+  function avisoHistoricoComparacao(comparison: ComparacaoRenderizada) {
     if (comparison.historico_salvo === false) {
       return `<p class="notice notice-warn" role="alert">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`;
     }
@@ -668,17 +834,17 @@
 
   // One tabpanel per Resumo tab; only the selected one is visible. The controller shows data-resumo-vazio when the tab has no rows.
   // `cartoes` (the tab's compact counters) stays above the empty-state notice.
-  function painelResumo(chave, conteudo, selecionado = false, cartoes = []) {
+  function painelResumo(chave: string, conteudo: string, selecionado = false, cartoes: string[] = []) {
     const vazio = TEXTO_VAZIO_ABA[chave];
     const faixa = cartoes.filter(Boolean).join("");
     return `<div role="tabpanel" id="resumo-painel-${chave}" aria-labelledby="resumo-aba-${chave}" class="resumo-painel" data-resumo-painel="${chave}"${selecionado ? "" : " hidden"}>
-        ${faixa ? `<div class="resumo-cartoes" role="group" aria-label="Contadores de ${RESUMO_ABAS.find(aba => aba.chave === chave).rotulo}">${faixa}</div>` : ""}
+        ${faixa ? `<div class="resumo-cartoes" role="group" aria-label="Contadores de ${RESUMO_ABAS.find(aba => aba.chave === chave)!.rotulo}">${faixa}</div>` : ""}
         ${vazio ? `<p class="text-xs text-fg-muted" data-resumo-vazio role="status" hidden>${vazio}</p>` : ""}
         ${conteudo}
       </div>`;
   }
 
-  function conteudoResultadoComparacao(comparison, listas, colunas) {
+  function conteudoResultadoComparacao(comparison: ComparacaoRenderizada, listas: ListasComparacao, colunas: ColunasAnotacao) {
     const {
       ausentesEndpoint, ausentesDetalhes, divergenciasLocal, seriesSemMapa, semAcesso7DiasOrdenados, ambiguidades,
       registrosAmbiguos, apelidosAtualizados, apelidosSemAtualizacao, divergenciasApelidosManuais, mudancasUsuarios,
@@ -697,7 +863,7 @@
     const ambiguityRows = linhasAmbiguidades(ambiguidades, registrosAmbiguos, colunas);
     const unmappedRows = linhasSeriesSemMapa(seriesSemMapa, colunas);
     const userChangeRows = linhasMudancasUsuarios(mudancasUsuarios, colunas);
-    const contarMudancas = tipo => mudancasUsuarios.filter(item => item.tipo === tipo).length;
+    const contarMudancas = (tipo: string) => mudancasUsuarios.filter(item => item.tipo === tipo).length;
     // Results saved before the user summary existed have no list; the section is shown only when it exists.
     const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? cartaoSecaoBento("fucsia", 2,
       cabecalhoSecaoBento("Mudanças de usuário logado", SECOES_CARTOES_RESUMO.mudancas_usuarios.id, "Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.", mudancasUsuarios.length),
@@ -706,7 +872,7 @@
         ["Alterados", contarMudancas("alterado_endpoint")],
         ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
         ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
-      ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p>
+      ].map(([rotulo, total]) => `${rotulo}: ${(total as number).toLocaleString("pt-BR")}`).join(" · ")}</p>
           <details open class="ck-bento-detalhes" data-user-change-details>
             <summary class="ck-bento-minimizar">
               <span data-user-change-toggle-label>Minimizar lista de usuários alterados</span>
@@ -717,7 +883,7 @@
     // Traço dos contadores de Divergências: mesma regra da Visão geral (anel = comparados menos "na Simpress" sobre comparados).
     const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
     const maximoDivergencias = Math.max(ausentesEndpoint.length, ausentesDetalhes.length, divergenciasLocal.length, ambiguityRows.length, seriesSemMapa.length, 1);
-    const tracoDivergencia = valor => (valor / maximoDivergencias) * 100;
+    const tracoDivergencia = (valor: number) => (valor / maximoDivergencias) * 100;
     const tracoComparados = comparados > 0 ? Math.min(1, Math.max(0, (comparados - ausentesDetalhes.length) / comparados)) * 100 : 0;
     const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
     return `
@@ -777,10 +943,10 @@
         ])}
         ${painelResumo("usuarios", `
         ${secaoMudancasUsuarios || avisoListaAusente}
-        ${exibirSemUsuario ? secaoSemUsuario(semUsuario) : ""}
+        ${exibirSemUsuario ? secaoSemUsuario(semUsuario!) : ""}
         `, false, [
           secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios", { cor: "fucsia", atraso: 0 }) : "",
-          exibirSemUsuario && semUsuario.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario.items || []).length, "amber", "", "sem_usuario", { cor: "ambar", atraso: 1 }) : "",
+          exibirSemUsuario && semUsuario!.estado === "ok" ? cartaoMetricaComparacao("Sem usuário", (semUsuario!.items || []).length, "amber", "", "sem_usuario", { cor: "ambar", atraso: 1 }) : "",
         ])}
         ${painelResumo("sem-acesso", `
         ${cartaoSecaoBento("ambar", 0,
@@ -804,4 +970,6 @@
     canonicalizarCategoriaResumo, abaDaCategoria, rotuloAba, textoLinhas, rotuloContagemAba, textoContadorResumo, textoSemResultado,
     tiposDaAba, resolverTipo, categoriasDoTipo, avisoHistoricoComparacao,
   };
-});
+}
+
+export type RendererResultado = ReturnType<typeof criarRenderizadorResultado>;
