@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { criarDashboardSebrae: createSebraeDashboard } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const modelo = require("../../frontend/src/paineis/sebrae-dashboard/sugestao-os-modelo.ts");
-const sebraeDashboardModel = require("../../frontend/src/legado/shared/sebrae-dashboard-model.js");
+const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 const textos = (os, extra = {}) => ({ os, assunto: `Assunto ${os}`, descricao: `Descrição ${os}`, data: "15/11/2026", ...extra });
