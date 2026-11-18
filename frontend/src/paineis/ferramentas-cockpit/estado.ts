@@ -1,5 +1,9 @@
 import { chamadoDaOs, osDoChamado } from "../paineis-dados/chamados-os.ts";
 import { paineisDados } from "../paineis-dados/paineis.ts";
+import { blocoCarregarMais, cabecalhoBloco, campoHistorico, gradeCampos, seloContagem } from "../historico-apelidos/elementos-historico.ts";
+import { chaveFiltroHistorico, fatiaHistorico, TAMANHO_PAGINA_HISTORICO } from "../historico-apelidos/paginacao-historico.ts";
+import { montarMovimento } from "../relatorio-mensal/grafico-semanal.ts";
+import { capitalizar, mesPorExtenso, nomeDoMes } from "../relatorio-mensal/mes-extenso.ts";
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
 
 // Ferramentas do Cockpit (OS, Resumo, Histórico de apelidos, Relatório mensal, Planilhas e janela Chamado × OS):
@@ -53,6 +57,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   let aliasLatest = new Map<string, Registro>();
   const aliasEquipmentCache = new Map<string, Qualquer>();
   let aliasEquipmentRequest = 0;
+  let aliasPaginas = 1;
+  let aliasChaveFiltro = "";
   let monthlyRequest = 0;
   let comparisonRequest = 0;
   let comparisonDetailRequest = 0;
@@ -865,13 +871,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       section.append(element("p", "ck-nota", "Esta série não foi encontrada na base atual."));
       return;
     }
-    renderDetailsInto(section, [
-      ["Apelido atual", equipment.apelido || "Sem apelido"],
-      ["Modelo", equipment.modelo || equipment.tipo || "Não informado"],
-      ["Local", equipment.retirada_cidade || "Não informado"],
-    ]);
+    // Novo layout: o botão pequeno de copiar fica na linha do rótulo "Apelido atual"; Modelo e Local ficam lado a lado.
+    let copy: Qualquer = null;
     if (equipment.apelido) {
-      const copy = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Copiar apelido atual");
+      copy = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Copiar apelido atual");
       copy.type = "button";
       copy.addEventListener("click", async () => {
         copy.disabled = true;
@@ -882,8 +885,12 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
           app.showToast(error.message || "Não foi possível copiar o apelido.", "error");
         } finally { copy.disabled = false; }
       });
-      head.append(copy);
     }
+    section.append(gradeCampos([
+      campoHistorico("Apelido atual", equipment.apelido || "Sem apelido", { mono: Boolean(equipment.apelido), acao: copy, inteiro: true }),
+      campoHistorico("Modelo", equipment.modelo || equipment.tipo || "Não informado"),
+      campoHistorico("Local", equipment.retirada_cidade || "Não informado"),
+    ]));
   }
 
   async function loadAliasCurrentEquipment(event: Qualquer, section: Qualquer, request: Qualquer) {
@@ -907,9 +914,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }
   }
 
-  function aliasBlock(title?: Qualquer) {
+  // `selo`: contagem ao lado do título (fora do texto do h3).
+  function aliasBlock(title?: Qualquer, selo?: Qualquer) {
     const section = element("section", "ck-det-bloco ck-alias-det__bloco");
-    if (title) section.append(element("h3", "", title));
+    if (title) section.append(selo ? cabecalhoBloco(title, selo) : element("h3", "", title));
     return section;
   }
 
@@ -925,10 +933,11 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     mark.dataset.aliasTipo = item.tipo || "apelido";
     if (item === selected) mark.dataset.selecionado = "true";
     const body = element("div", "ck-tempo__corpo");
+    // Novo layout: horário em mono e selo do tipo na mesma linha, depois "antes (riscado) → depois".
     const title = element("span", "ck-alias-tempo__titulo");
-    title.append(element("strong", "ck-tempo__titulo", aliasTypeLabel(item.tipo)));
+    title.append(Object.assign(element("time", "ck-tempo__meta", aliasDate(item.horario)), { dateTime: item.horario || "" }), aliasChip(item));
     if (item === selected) title.append(element("span", "ck-alias-selo ck-alias-selo--atual", "Selecionado"));
-    body.append(title, Object.assign(element("time", "ck-tempo__meta", aliasDate(item.horario)), { dateTime: item.horario || "" }), aliasChange(item, "ck-alteracao"));
+    body.append(title, aliasChange(item, "ck-alteracao"));
     const origin = aliasOriginAuthor(item);
     if (origin.length) body.append(element("span", "ck-tempo__meta", origin.join(" · ")));
     entry.append(mark, body);
@@ -948,7 +957,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     meta.append(aliasChip(event), element("span", "ck-alias-det__data", aliasDate(event.horario)));
     const actions = element("div", "ck-alias-det__acoes");
     if (event.serial) {
-      const openHome = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Abrir na Home");
+      const openHome = element("button", "ck-btn ck-btn--secundario", "Abrir na Home");
       openHome.type = "button";
       openHome.addEventListener("click", () => { void openSerialInHome(event.serial); });
       actions.append(openHome);
@@ -960,18 +969,21 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       if (done && activeTool === "apelidos") await loadAliases();
       else actions.querySelectorAll("button").forEach(item => { item.disabled = false; });
     };
+    // Novo layout: "Restaurar anterior" e "Restaurar e excluir" dividem uma linha de duas colunas.
+    const pair = element("div", "ck-alias-det__par");
     if (allowed.desfazer) {
-      const undo = element("button", "ck-btn ck-btn--primario ck-btn--sm", "Restaurar anterior");
+      const undo = element("button", "ck-btn ck-btn--primario", "Restaurar anterior");
       undo.type = "button";
       undo.addEventListener("click", runAction(undo, app.desfazerEventoHistoricoApelidos));
-      actions.append(undo);
+      pair.append(undo);
     }
     if (allowed.excluir) {
-      const remove = element("button", "ck-btn ck-btn--perigo ck-btn--sm", allowed.rotuloExcluir);
+      const remove = element("button", "ck-btn ck-btn--perigo", allowed.rotuloExcluir);
       remove.type = "button";
       remove.addEventListener("click", runAction(remove, app.excluirRegistroHistorico));
-      actions.append(remove);
+      pair.append(remove);
     }
+    if (pair.children.length) actions.append(pair);
     if (!allowed.desfazer && !allowed.excluir) {
       const reason = event.tipo === "endereco"
         ? "Endereços são atualizados pela planilha Simpress e não podem ser restaurados manualmente."
@@ -1001,12 +1013,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       ["Campo", event.acao], ["Origem", event.origem], ["Autor", event.autor],
       ["Usuário relacionado", event.usuario_endpoint], ["Motivo", aliasReason(event) || event.motivo],
     ];
-    const details = fields.some(([, value]) => value) ? aliasBlock("Detalhes do registro") : null;
-    if (details) renderDetailsInto(details, fields);
+    const filled = fields.filter(([, value]) => value);
+    const details = filled.length ? aliasBlock("Detalhes do registro") : null;
+    if (details) details.append(gradeCampos(filled.map(([label, value]) => campoHistorico(label, String(value)))));
 
-    // 5. Histórico deste equipamento, do mais recente ao mais antigo.
+    // 5. Histórico deste equipamento, do mais recente ao mais antigo; a contagem fica num selo ao lado do título.
     const events = aliasTimeline(event).slice().reverse();
-    const timeline = aliasBlock(`Histórico deste equipamento (${events.length})`);
+    const timeline = aliasBlock("Histórico deste equipamento", seloContagem(events.length, plural(events.length, "registro", "registros")));
     if (!events.length) timeline.append(element("p", "ck-lista__vazio", "Não há outros eventos para esta série."));
     else {
       const list = element("ol", "ck-tempo");
@@ -1080,25 +1093,20 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const serial = event.serial || "Série indisponível";
     top.append(aliasChip(event), Object.assign(element("strong", "ck-alias-linha__serie", serial), { title: serial }), element("span", "ck-alias-linha__hora", aliasTime(event.horario)));
     button.append(top, aliasChange(event, "ck-alias-linha__mudanca"));
+    // Novo layout: origem e autor saem da linha (continuam no detalhe e na linha do tempo); o selo entra direto na grade da linha.
     const allowed = aliasActions(event);
-    const origin = aliasOriginAuthor(event);
-    const hasAction = allowed.desfazer || allowed.excluir;
-    if (origin.length || hasAction) {
-      const foot = element("span", "ck-alias-linha__rodape");
-      origin.forEach(text => foot.append(element("span", "", text)));
-      if (hasAction) foot.append(element("span", "ck-alias-selo", "Ação disponível"));
-      button.append(foot);
-    }
+    if (allowed.desfazer || allowed.excluir) button.append(element("span", "ck-alias-selo", "Ação disponível"));
     button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
     const item = element("li", "ck-ferr-item");
     item.append(button);
     return item;
   }
 
-  function aliasGroup(label: Qualquer, events: Qualquer, selected: Qualquer) {
+  // `total`: alterações do dia no filtro atual, mesmo quando "Carregar mais" ainda não mostrou todas.
+  function aliasGroup(label: Qualquer, events: Qualquer, selected: Qualquer, total = events.length) {
     const group = element("section", "ck-alias-grupo");
     const heading = element("h3", "ck-alias-grupo__cab");
-    heading.append(element("span", "", label), element("span", "", `${events.length} ${plural(events.length, "alteração", "alterações")}`));
+    heading.append(element("span", "", label), seloContagem(total, plural(total, "alteração", "alterações")));
     const list = element("ul", "ck-alias-grupo__lista");
     list.append(...events.map((event: Qualquer) => aliasRow(event, selected)));
     group.append(heading, list);
@@ -1133,15 +1141,34 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }
     const selected = filtered.find((event: Qualquer) => String(event.id || "") === selectedAliasId) || filtered[0];
     selectedAliasId = String(selected?.id || "");
+    // Paginação local (50 por vez): mudou busca, tipo, período, filtro de ação ou total, volta à primeira página;
+    // o registro selecionado nunca fica fora da fatia exibida.
+    const filterKey = chaveFiltroHistorico([byId("cockpit-alias-search").value, byId("cockpit-alias-type").value, byId("cockpit-alias-actions-only").checked, selectedAliasPeriod, aliasEvents.length]);
+    if (filterKey !== aliasChaveFiltro) { aliasChaveFiltro = filterKey; aliasPaginas = 1; }
+    const { visiveis, restantes } = fatiaHistorico(filtered, aliasPaginas, filtered.indexOf(selected));
     const groups = new Map();
-    filtered.forEach((event: Qualquer) => {
+    filtered.forEach((event: Qualquer, index: number) => {
       const stamp = Date.parse(event.horario || "");
       const key = Number.isFinite(stamp) ? new Date(stamp).toDateString() : "";
-      if (!groups.has(key)) groups.set(key, { label: aliasDayLabel(event.horario), events: [] });
-      groups.get(key).events.push(event);
+      if (!groups.has(key)) groups.set(key, { label: aliasDayLabel(event.horario), events: [], total: 0 });
+      const group = groups.get(key);
+      group.total += 1;
+      if (index < visiveis.length) group.events.push(event);
     });
-    target.replaceChildren(...[...groups.values()].map(group => aliasGroup(group.label, group.events, selected)));
+    target.replaceChildren(
+      ...[...groups.values()].filter(group => group.events.length).map(group => aliasGroup(group.label, group.events, selected, group.total)),
+      ...(restantes ? [blocoCarregarMais(loadMoreAliases)] : []),
+    );
     renderAliasDetail(selected);
+  }
+
+  // "Carregar mais": mostra a próxima página e leva o foco à primeira linha nova.
+  function loadMoreAliases() {
+    const list = byId("cockpit-alias-list");
+    const shown = list.querySelectorAll(".ck-alias-linha").length;
+    aliasPaginas = Math.floor(shown / TAMANHO_PAGINA_HISTORICO) + 1; // a fatia pode ter crescido até o selecionado
+    renderAliases();
+    list.querySelectorAll<HTMLElement>(".ck-alias-linha")[shown]?.focus();
   }
 
   // Troca de aba ou de filtro repete a contagem dos números (contrato bento); a busca por texto não repete.
@@ -1241,11 +1268,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       const button = element("button", "ck-pilula");
       button.type = "button";
       button.setAttribute("aria-pressed", String(key === selectedMonth));
-      const label = element("strong", "", monthLabel(key));
-      const status = element("small", "", key === current
-        ? `Parcial · até ${new Intl.DateTimeFormat("pt-BR").format(new Date())}`
-        : "Mês encerrado");
-      button.append(label, status);
+      const status = key === current
+        ? `Parcial até ${new Intl.DateTimeFormat("pt-BR").format(new Date())}`
+        : "Mês encerrado";
+      // Visível só o mês (Novembro); o ano e a situação vão no nome acessível e na dica.
+      button.textContent = capitalizar(nomeDoMes(key) || monthLabel(key));
+      button.setAttribute("aria-label", `${monthLabel(key)} · ${status}`);
+      button.title = `${monthLabel(key)} · ${status}`;
       button.addEventListener("click", () => {
         const input = byId("cockpit-monthly-month");
         input.value = key;
@@ -1256,18 +1285,17 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }));
   }
 
-  // ---- Relatório mensal (F8): layout operacional (07/11/2026), em cinco sub-abas ----
-  // Visão geral (Precisa de atenção → Movimento do mês → faixa Chamados (F5) → Prévia), OS e pedidos do mês, Pendências da comparação,
-  // Chamados (F5: situação atual e contagem do mês, report.sebrae) e Base atual. Cada número aparece uma vez; os links só navegam
+  // ---- Relatório mensal (F8): Novo layout (18/11/2026), em quatro sub-abas ----
+  // Visão geral (Precisa de atenção: OS pendentes e Chamados (F5) → Movimento do mês → Prévia), OS e pedidos do mês,
+  // Chamados (F5: situação atual e contagem do mês, report.sebrae) e Base atual. A comparação de inventário saiu da tela. Cada número aparece uma vez; os links só navegam
   // (Home, OS, Resumo, Chamados), nada é gravado. A estrutura das abas e dos painéis é estática no partial; o JS só preenche e alterna.
-  const MONTHLY_PAGE = 25;
+  const MONTHLY_PAGE = 20;
   const MONTHLY_TOP_UNITS = 8;
-  const REL_ABAS = ["visao", "os", "comp", "sebrae", "base"];
+  const REL_ABAS = ["visao", "os", "sebrae", "base"];
   // `aba` só nasce aqui: o reset de loadMonthlyReport não a toca, então a aba escolhida sobrevive à troca de mês e à recarga quieta.
-  const monthlyView: Registro = { aba: "visao", report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false };
+  const monthlyView: Registro = { aba: "visao", report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false, fonteGrafico: "ambas" };
   const monthlySituationTone: Record<string, string> = { "Aberta no mês": "info", "Concluída no mês": "success", "Pendente no fim do mês": "warning" };
   const monthlyFilters = [["todas", "Todas", ""], ["abertas", "Abertas", "Aberta no mês"], ["concluidas", "Concluídas", "Concluída no mês"], ["pendentes", "Pendentes", "Pendente no fim do mês"]];
-  const monthlySectionTone: Record<string, string> = { "Sem correspondência — no endpoint": "error", "Sem correspondência — na Simpress": "warning" };
   const monthlyBadgeStatus: Record<string, string> = { ...badgeStatus, info: "info" };
 
   function monthlyBadge(text: Qualquer, tone?: Qualquer) {
@@ -1306,7 +1334,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   function monthlyButton(text: Qualquer, onClick: Qualquer, { className = "ck-btn ck-btn--secundario ck-btn--sm", label = "", arrow = false } = {}) {
     const button = element("button", className, text);
     button.type = "button";
-    if (arrow) button.append(element("span", "ck-rel__seta", " ↓"));
+    if (arrow) button.append(element("span", "ck-rel__seta", " →"));
     if (arrow) (button.lastChild as ElementoCockpit).setAttribute("aria-hidden", "true");
     if (label) button.setAttribute("aria-label", label);
     button.addEventListener("click", onClick);
@@ -1429,9 +1457,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     return card;
   }
 
+  // Os cartões de "Precisa de atenção": OS pendentes (antes), o cartão estático Chamados (F5), que nunca é recriado, e, só com
+  // registros sem data ou vínculo, "Fora das contagens" (depois).
   function renderMonthlyAttention(report: Qualquer) {
     const tickets = report.os || {};
-    const comparison = report.comparacao || {};
     const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
     const pending = monthlyCard("OS pendentes no fim do período", "", infoTip("as OS pendentes", "Criados até o corte e ainda sem conclusão ou entrega.", "cockpit-monthly-pendentes-nota"));
     pending.append(
@@ -1443,23 +1472,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
         monthlyJump("cockpit-monthly-os-title", "os");
       }, { className: "ck-rel__link", label: "Ver lista de OS e pedidos pendentes", arrow: true }),
     );
-    const counts = element("dl", "ck-rel__contagens");
-    Object.entries(comparison.contagens || {}).forEach(([label, value]) => {
-      const row = element("div", "ck-rel__contagem");
-      row.append(element("dt", "", label), monthlyContavel(element("dd", "ck-num", displayCount(value)), value));
-      counts.append(row);
-    });
-    const inventory = monthlyCard("Comparação de inventário");
-    inventory.append(
-      counts,
-      element("p", "ck-rel__nota", `${comparisonUsedText(comparison)}.`),
-      monthlyButton("Ver lista", () => monthlyJump("cockpit-monthly-comp-title", "comp"), { className: "ck-rel__link", label: "Ver lista de pendências da comparação", arrow: true }),
-    );
-    const cards = [pending, inventory];
-    if (insufficient.length) cards.push(monthlyOutsideCard(insufficient));
-    const tons = ["ciano", "fucsia", "ambar"];
-    cards.forEach((card, indice) => monthlyCartao(card, tons[indice], indice));
-    byId("cockpit-monthly-kpis").replaceChildren(...cards);
+    monthlyCartao(pending, "ciano", 0);
+    // O cartão "Chamados (F5)" é estático no partial e fica entre os cartões de OS: a grade é refeita em volta dele.
+    byId("cockpit-monthly-kpis").replaceChildren(pending, byId("cockpit-monthly-chamados"), ...(insufficient.length ? [monthlyCartao(monthlyOutsideCard(insufficient), "ambar", 2)] : []));
   }
 
   function monthlySection(key: Qualquer, title: Qualquer, actions: Qualquer[] = []) {
@@ -1517,11 +1532,23 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     return foot;
   }
 
-  function monthlyMovementSection(tickets: Qualquer) {
-    const section = monthlySection("movimento", "Movimento do mês");
-    const rows = [["OS Oracle", tickets.oracle || {}], ["Pedidos Simpress", tickets.simpress || {}]]
+  // Selo da fonte na tabela de movimento: Oracle ciano, Simpress índigo (data-tom do Novo layout).
+  function monthlySourceBadge(text: Qualquer, tone: Qualquer) {
+    const node = element("span", "nf8-selo", text);
+    node.dataset.nlTom = tone;
+    return node;
+  }
+
+  // Gráfico por semana (seletor de fonte no cabeçalho) e a tabela Fonte x Abertas, Concluídas, Encerradas; os totais vêm do servidor.
+  function monthlyMovementSection(report: Qualquer) {
+    const tickets = report.os || {};
+    const { seletor, grafico } = montarMovimento(tickets, report.mes || {}, monthlyView.fonteGrafico, (fonte: Qualquer) => { monthlyView.fonteGrafico = fonte; });
+    const section = monthlySection("movimento", "Movimento do mês", [seletor]);
+    const rows = [[monthlySourceBadge("Oracle", "ciano"), tickets.oracle || {}], [monthlySourceBadge("Simpress", "indigo"), tickets.simpress || {}]]
       .map(([label, counts]) => [label, displayCount(counts.abertas), displayCount(counts.concluidas), displayCount(counts.encerradas_sem_data)]);
-    section.append(monthlyTable(["Fonte", "Abertas", "Concluídas", "Encerradas sem data"], rows, [1, 2, 3]));
+    const table = monthlyTable(["Fonte", "Abertas", "Concluídas", "Encerradas"], rows, [1, 2, 3]);
+    table.querySelectorAll("th")[3].title = "Encerradas sem data de conclusão";
+    section.append(grafico, table);
     return section;
   }
 
@@ -1537,6 +1564,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const group = element("div", "ck-rel__filtros");
     group.setAttribute("role", "group");
     group.setAttribute("aria-label", "Filtrar por situação");
+    const rotuloFiltro = element("span", "nf8-rotulo", "Filtrar por situação");
+    rotuloFiltro.setAttribute("aria-hidden", "true");
     monthlyFilters.forEach(([key, label]) => {
       const button = monthlyButton(label, () => {
         monthlyView.filtro = key;
@@ -1547,7 +1576,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       button.setAttribute("aria-pressed", String(key === filter[0]));
       group.append(button);
     });
-    const section = monthlySection("os", "OS e pedidos do mês", [group, monthlyButton("Ver na aba OS (F6)", () => openPanel("chamados"))]);
+    const filtro = element("div", "nf8-filtro");
+    filtro.append(rotuloFiltro, group);
+    const section = monthlySection("os", "OS e pedidos do mês", [filtro, monthlyButton("Ver na aba OS (F6)", () => openPanel("chamados"), { className: "ck-rel__link", arrow: true })]);
     if (!rows.length) {
       section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return section;
@@ -1571,32 +1602,6 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     })), monthlyMore(shown.length, rows.length, () => {
       monthlyView.limiteOs += MONTHLY_PAGE;
       refreshMonthlySection("os", "[data-rel-mais]");
-    }));
-    return section;
-  }
-
-  function monthlyComparisonSection(comparison: Qualquer) {
-    const rows = monthlyRows(comparison);
-    const eventId = String(comparison.evento_id || "");
-    const actions = eventId ? [monthlyButton("Abrir no Resumo (F3)", () => mostrarResultadoNaAbaComparacao({ evento_id: eventId }))] : [];
-    const section = monthlySection("comp", "Pendências da comparação", actions);
-    if (!rows.length) {
-      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
-      return section;
-    }
-    const shown = rows.slice(0, monthlyView.limiteComp);
-    section.append(monthlyTable(["Seção", "Hostname", "Série", "Local previsto", "Local na Simpress"], shown.map((row: Qualquer) => {
-      const serial = singleSerial(row.serie);
-      return [
-        monthlyBadge(row.secao || "Seção indisponível", monthlySectionTone[row.secao]),
-        element("span", "ck-mono", row.hostname || "—"),
-        serial ? monthlyLink(serial, `Abrir ${serial} na Home`, () => openSerialInHome(serial)) : "—",
-        row.local_previsto || "—",
-        row.local_simpress || "—",
-      ];
-    })), monthlyMore(shown.length, rows.length, () => {
-      monthlyView.limiteComp += MONTHLY_PAGE;
-      refreshMonthlySection("comp", "[data-rel-mais]");
     }));
     return section;
   }
@@ -1637,6 +1642,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     return data && !data.erro && Number.isFinite(data.abertos) ? data : null;
   }
 
+  // "Situação atual" (GET /api/sebrae/novos): dois cartões, Chamados novos (âmbar) e Antigos em aberto (fúcsia), cada um com o link
+  // que abre a sub-aba do F5.
   function monthlySebraeCurrent(section: Qualquer) {
     if (monthlyView.sebraeErro) {
       section.append(element("p", "ck-nota ck-nota--erro", monthlyView.sebraeErro));
@@ -1645,49 +1652,46 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const data = monthlyView.sebrae;
     if (!data?.importado && !data?.novos) return false;
     const lists = sebraeOpenLists(data);
-    const totals = element("div", "ck-rel__sebrae-totais");
-    totals.append(
-      monthlyNumbers([["Chamados novos", lists.novos.length], ["Antigos em aberto", lists.antigos.length]]),
-      monthlyButton("Ver novos", () => openSebraeTab("novos")),
-      monthlyButton("Ver antigos", () => openSebraeTab("antigos")),
-    );
-    section.append(totals);
+    const grade = element("div", "nf8-cham-grade");
+    [["Chamados novos", lists.novos.length, "Ver novos", "novos", "ambar"], ["Antigos em aberto", lists.antigos.length, "Ver antigos", "antigos", "fucsia"]]
+      .forEach(([title, total, link, tab, tone]: Qualquer, index) => {
+        const card = element("article", "nf8-cham-cartao");
+        card.append(
+          element("h4", "ck-rel__cartao-titulo", title),
+          monthlyContavel(element("strong", "ck-rel__valor nf8-cham-num", displayCount(total)), total),
+          monthlyButton(link, () => openSebraeTab(tab), { className: "ck-rel__link", arrow: true }),
+        );
+        grade.append(monthlyCartao(card, tone, index));
+      });
+    section.append(grade);
     return true;
   }
 
-  // Duas partes independentes: "Situação atual" (GET /api/sebrae/novos) e a contagem do mês (report.sebrae, do servidor).
-  function monthlySebraeSection(report: Qualquer) {
-    const section = monthlySection("sebrae", "Chamados (F5)", [monthlyBadge("Situação atual")]);
-    section.classList.add("ck-rel__atual");
-    const empty = "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).";
+  // Contagem do mês (report.sebrae): números Abertos e Finalizados, chip "N sem data" no cabeçalho e a tabela de chamados.
+  function monthlySebraeMonth(card: Qualquer, cab: Qualquer, report: Qualquer, empty: Qualquer) {
     const month = report?.sebrae;
-    const hasCurrent = monthlySebraeCurrent(section);
-    if (!hasCurrent) section.append(element("p", "ck-lista__vazio", empty));
-    if (!hasCurrent && !month) return section;
-    section.append(monthlyCardTitle(`Com data em ${report?.mes?.label || "mês selecionado"}`,
-      infoTip("a contagem do mês", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.", "cockpit-monthly-sebrae-nota")));
     if (!month) {
-      section.append(element("p", "ck-lista__vazio", empty));
-      return section;
+      card.append(element("p", "ck-lista__vazio", empty));
+      return;
     }
     const counts = sebraeMonthCounts(report);
     if (!counts) {
-      section.append(element("p", "ck-nota ck-nota--erro", month.erro || "Não foi possível contar os chamados do mês."));
-      return section;
+      card.append(element("p", "ck-nota ck-nota--erro", month.erro || "Não foi possível contar os chamados do mês."));
+      return;
     }
-    const noDate = element("p", "ck-rel__nota", `Sem data de abertura ou de encerramento: ${displayCount(counts.sem_data)} `);
-    noDate.append(element("span", "ck-mudo", "(fora da contagem)"));
-    section.append(
-      monthlyNumbers([["Abertos no mês", counts.abertos], ["Finalizados no mês", counts.finalizados]]),
-      noDate,
-    );
+    if (Number.isFinite(counts.sem_data)) {
+      const chip = element("span", "nf8-chip", `${displayCount(counts.sem_data)} sem data`);
+      chip.title = "Sem data de abertura ou de encerramento: fora da contagem do mês";
+      cab.append(chip);
+    }
+    card.append(monthlyNumbers([["Abertos", counts.abertos], ["Finalizados", counts.finalizados]]));
     const rows = monthlyRows(counts);
     if (!rows.length) {
-      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
-      return section;
+      card.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return;
     }
     const shown = rows.slice(0, monthlyView.limiteSebrae);
-    section.append(monthlyTable(["Chamado", "Título", "Série", "Abertura", "Finalização", "Situação no mês"], shown.map((row: Qualquer) => {
+    card.append(monthlyTable(["Chamado", "Título", "Série", "Abertura", "Finalização", "Situação no mês"], shown.map((row: Qualquer) => {
       const { chaveF5, serie } = sebraeMonthMatch(row, monthlyView.sebrae);
       const serial = singleSerial(serie);
       const number = String(row.chamado || "").trim() || "Sem UTIC";
@@ -1705,6 +1709,23 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       monthlyView.limiteSebrae += MONTHLY_PAGE;
       refreshMonthlySection("sebrae", "[data-rel-mais]");
     }));
+  }
+
+  // Título e selo "Situação atual" ficam fora dos cartões; embaixo, o cartão "Com data em <mês por extenso>" (nunca AAAA-MM).
+  function monthlySebraeSection(report: Qualquer) {
+    const section = monthlySection("sebrae", "Chamados (F5)", [monthlyBadge("Situação atual")]);
+    section.classList.add("ck-rel__atual");
+    const empty = "Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).";
+    const hasCurrent = monthlySebraeCurrent(section);
+    if (!hasCurrent) section.append(element("p", "ck-lista__vazio", empty));
+    if (!hasCurrent && !report?.sebrae) return section;
+    const card = element("article", "nf8-cham-info");
+    const cab = element("div", "ck-rel__cartao-cab nf8-cham-info__cab");
+    cab.append(element("h4", "ck-rel__cartao-titulo", `Com data em ${mesPorExtenso(report?.mes?.key, report?.mes?.label)}`),
+      infoTip("a contagem do mês", "Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.", "cockpit-monthly-sebrae-nota"));
+    card.append(cab);
+    monthlySebraeMonth(card, cab, report, empty);
+    section.append(monthlyCartao(card, "", 2));
     return section;
   }
 
@@ -1716,20 +1737,12 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       card.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return card;
     }
-    const max = Math.max(1, ...list.map(([, count]) => Number(count) || 0));
     const items = element("ul", "ck-rel__tipos");
     list.forEach(([name, count]) => {
       const item = element("li", "ck-rel__tipo");
       const line = element("span", "ck-rel__tipo-linha");
       line.append(element("span", "", name || "Sem tipo"), monthlyContavel(element("strong", "ck-num", displayCount(count)), count));
-      const track = element("span", "ck-rel__trilho");
-      track.setAttribute("aria-hidden", "true");
-      const fill = element("span", "ck-rel__trilho-valor");
-      const pct = Math.round(((Number(count) || 0) / max) * 100);
-      fill.style.width = `${pct}%`;
-      fill.dataset.bentoLargura = String(pct); // animarDentro() repete o crescimento da barra a cada troca de sub-aba
-      track.append(fill);
-      item.append(line, track);
+      item.append(line);
       items.append(item);
     });
     card.append(items);
@@ -1758,7 +1771,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       const toggle = monthlyButton(monthlyView.unidadesTodas ? "Ver menos" : `Ver todas as ${displayCount(list.length)} unidades`, () => {
         monthlyView.unidadesTodas = !monthlyView.unidadesTodas;
         refreshMonthlySection("base", "[data-rel-unidades]");
-      });
+      }, { className: "ck-rel__link", arrow: !monthlyView.unidadesTodas });
       toggle.dataset.relUnidades = "";
       toggle.setAttribute("aria-expanded", String(monthlyView.unidadesTodas));
       card.append(toggle);
@@ -1769,8 +1782,6 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   function monthlyBaseSection(inventory: Qualquer) {
     const section = monthlySection("base", "Base atual", [monthlyBadge("Não muda com o mês")]);
     section.classList.add("ck-rel__atual");
-    const origin = [inventory.arquivo_origem, inventory.carregada_em ? `carregada em ${inventory.carregada_em}` : ""].filter(Boolean).join(" · ");
-    if (origin) section.append(element("p", "ck-rel__nota", origin));
     const duplicates = Array.isArray(inventory.series_duplicadas) ? inventory.series_duplicadas.length : undefined;
     const numbers = element("section", "ck-rel__cartao");
     numbers.append(monthlyNumbers([
@@ -1787,8 +1798,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
 
   const monthlySectionBuilders: Record<string, Funcao> = {
     os: (report: Qualquer) => monthlyCartao(monthlyOsSection(report.os || {}), "ciano"),
-    comp: (report: Qualquer) => monthlyCartao(monthlyComparisonSection(report.comparacao || {}), "fucsia"),
-    sebrae: (report: Qualquer) => monthlyCartao(monthlySebraeSection(report), "ambar"),
+    sebrae: (report: Qualquer) => monthlySebraeSection(report),
     base: (report: Qualquer) => monthlyBaseSection(report.inventario || {}),
   };
 
@@ -1798,7 +1808,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const current = byId("cockpit-monthly-details")?.querySelector(`[data-rel-secao="${key}"]`);
     if (!report || !current) return;
     const next = monthlySectionBuilders[key](report);
-    if (next.dataset) next.dataset.semEntrada = ""; // filtro e "Carregar mais" não refazem a entrada do cartão
+    // filtro e "Carregar mais" não refazem a entrada dos cartões (o da seção e os de dentro dela)
+    if (next.dataset) next.dataset.semEntrada = "";
+    next.querySelectorAll(".ck-bento-cartao").forEach((cartao: ElementoCockpit) => { cartao.dataset.semEntrada = ""; });
     current.replaceWith(next);
     const target = (focusSelector && next.querySelector(focusSelector)) || (focusSelector ? next.querySelector("h3") : null);
     target?.focus();
@@ -1806,13 +1818,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
 
   // Total de cada aba com contador, igual ao da lista dela; null (contador oculto) quando a fonte não veio.
   function monthlyTabTotal(report: Qualquer, nome: Qualquer) {
-    const source = nome === "os" ? report?.os : nome === "comp" ? report?.comparacao : sebraeMonthCounts(report);
+    const source = nome === "os" ? report?.os : sebraeMonthCounts(report);
     return Array.isArray(source?.linhas) ? source.linhas.length : null;
   }
 
-  // OS e Comparação pedem atenção quando há linhas (tom de alerta); Chamados só informa (neutro).
+  // OS pede atenção quando há linhas (tom de alerta); Chamados só informa (neutro).
   function renderMonthlyTabCounts(report: Qualquer) {
-    ["os", "comp", "sebrae"].forEach(nome => {
+    ["os", "sebrae"].forEach(nome => {
       const node = byId(`rel-${nome}-contagem`);
       if (!node) return;
       const total = monthlyTabTotal(report, nome);
@@ -1823,23 +1835,26 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     });
   }
 
-  // Faixa "Chamados (F5)" da Visão geral: só os números que existem (sem Dashboard ou com erro, nada de zeros inventados).
+  // Cartão "Chamados (F5)" da Visão geral (estático no partial, dentro de #cockpit-monthly-kpis): só os números que existem (sem
+  // Dashboard ou com erro, nada de zeros inventados). Abertos no mês e Finalizados; chips "N novos" (âmbar) e "N antigos" (fúcsia).
   function renderMonthlyChamados(report: Qualquer) {
-    const items = [];
     const month = sebraeMonthCounts(report);
-    if (month) items.push(["Abertos no mês", month.abertos], ["Finalizados no mês", month.finalizados]);
     const data = monthlyView.sebrae;
+    const nodes: ElementoCockpit[] = [];
+    if (month) nodes.push(monthlyNumbers([["Abertos no mês", month.abertos], ["Finalizados", month.finalizados]]));
     if (!monthlyView.sebraeErro && (data?.importado || data?.novos)) {
       const lists = sebraeOpenLists(data);
-      items.push(["Chamados novos", lists.novos.length], ["Antigos em aberto", lists.antigos.length]);
+      const chips = element("div", "nf8-chamados__chips");
+      [["novos", lists.novos.length, "ambar"], ["antigos", lists.antigos.length, "fucsia"]].forEach(([label, value, tone]: Qualquer) => {
+        const chip = element("span", "nf8-chip", "");
+        chip.dataset.nlTom = tone;
+        chip.append(monthlyContavel(element("b", "ck-num", displayCount(value)), value), document.createTextNode(` ${label}`));
+        chips.append(chip);
+      });
+      nodes.push(chips);
     }
-    const dados = byId("cockpit-monthly-chamados-dados");
-    dados.replaceChildren(...(items.length
-      ? items.map(([label, value]) => {
-        const item = element("span", "ck-rel__faixa-item", `${label} `);
-        item.append(monthlyContavel(element("b", "ck-num", displayCount(value)), value));
-        return item;
-      })
+    byId("cockpit-monthly-chamados-dados").replaceChildren(...(nodes.length
+      ? nodes
       : [element("span", "ck-mudo", monthlyView.sebraeErro || "Nenhum Dashboard importado.")]));
     byId("cockpit-monthly-chamados").hidden = false;
   }
@@ -1858,7 +1873,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     renderMonthlyAttention(report);
     byId("cockpit-monthly-attention").hidden = false;
     byId("cockpit-monthly-estado").replaceChildren();
-    byId("cockpit-monthly-movimento").replaceChildren(monthlyCartao(monthlyMovementSection(report.os || {}), "", 3));
+    byId("cockpit-monthly-movimento").replaceChildren(monthlyCartao(monthlyMovementSection(report), "", 3));
     renderMonthlyChamados(report);
     Object.entries(monthlySectionBuilders).forEach(([key, build]) => byId(`rel-painel-${key}`).replaceChildren(build(report)));
     renderMonthlyTabCounts(report);
@@ -1879,9 +1894,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     // Carregando e erro vão para #cockpit-monthly-estado: o invólucro dos painéis nunca é esvaziado.
     const target = byId("cockpit-monthly-estado");
     if (!quiet) {
-      Object.assign(monthlyView, { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false });
+      Object.assign(monthlyView, { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false });
       byId("cockpit-monthly-preview").textContent = "";
-      byId("cockpit-monthly-kpis").replaceChildren();
+      byId("cockpit-monthly-kpis").replaceChildren(byId("cockpit-monthly-chamados"));
       clearMonthlyPanels();
       byId("cockpit-monthly-attention").hidden = true;
       byId("cockpit-monthly-period").hidden = true;
@@ -1909,6 +1924,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     } catch (error: Qualquer) {
       if (current !== monthlyRequest || activeTool !== "relatorio") return;
       byId("cockpit-monthly-status").textContent = error.message || "Falha ao carregar o relatório.";
+      app.showToast(error.message || "Falha ao carregar o relatório.", "error");
       if (quiet && monthlyView.report) return;
       renderError(target, error, "Falha ao carregar o relatório.");
       byId("cockpit-monthly-preview").textContent = "";

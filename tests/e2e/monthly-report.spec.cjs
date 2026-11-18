@@ -10,8 +10,8 @@ async function openMonthlyReport(page) {
   return panel;
 }
 
-// Sub-abas do F8 (12/11/2026): [chave, rótulo exato]. A ordem é a da tablist.
-const ABAS_RELATORIO = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["comp", "Pendências da comparação"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"]];
+// Sub-abas do F8 (Novo layout, 18/11/2026: a comparação saiu): [chave, rótulo exato]. A ordem é a da tablist.
+const ABAS_RELATORIO = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"]];
 
 // Só um painel fica visível; trocar de aba é clicar nela. As seções das outras abas existem, mas escondidas.
 async function openReportTab(page, key) {
@@ -106,15 +106,21 @@ test("the Cockpit report loads the selected month and keeps the existing XLSX do
   const month = page.locator("#cockpit-monthly-month");
   await expect(month).toHaveValue(currentMonth());
   await expect(month).toHaveAttribute("max", currentMonth());
+  await expect(page.locator("#cockpit-monthly-period")).toHaveText("Parcial até 25/10/2026");
+  // O status vira texto só para leitor de tela (aria-live): a linha visível saiu do desenho.
+  await expect(page.locator("#cockpit-monthly-status")).toHaveClass(/sr-only/);
+  await expect(page.locator("#cockpit-monthly-status")).toHaveAttribute("aria-live", "polite");
   await expect(page.locator(".ck-rel__previa")).not.toHaveAttribute("open", "");
   await expect(page.locator("#cockpit-monthly-preview")).toBeHidden();
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("OS Oracle pendentes no fim do período: 1");
   await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("indisponível");
 
   const attention = page.locator("#cockpit-monthly-kpis");
-  await expect(attention.locator(".ck-rel__atencao")).toHaveCount(3);
+  // Cartões de atenção: OS pendentes, Chamados (F5, fixo no partial) e Fora das contagens; a comparação saiu da tela.
+  await expect(attention.locator(".ck-rel__atencao")).toHaveCount(2);
   await expect(attention.locator(".ck-rel__atencao").first()).toContainText("OS pendentes no fim do período");
-  await expect(attention).toContainText("Comparação usada: 20/10/2026 às 09:00 · 2 atualizações de inventário no mês");
+  await expect(attention.locator("#cockpit-monthly-chamados")).toBeVisible();
+  await expect(attention).not.toContainText("Comparação");
   const outside = attention.locator('.ck-rel__atencao[data-status="alerta"]');
   await expect(outside).toContainText("Fora das contagens");
   await expect(outside.locator("#cockpit-monthly-fora")).toBeHidden();
@@ -123,7 +129,7 @@ test("the Cockpit report loads the selected month and keeps the existing XLSX do
   await expect(outside.getByRole("button", { name: "Ocultar registros" })).toHaveAttribute("aria-expanded", "true");
 
   const details = page.locator("#cockpit-monthly-details");
-  await expect(details.locator('[data-rel-secao="movimento"] td[data-label="Encerradas sem data"]').nth(1)).toHaveText("1");
+  await expect(details.locator('[data-rel-secao="movimento"] td[data-label="Encerradas"]').nth(1)).toHaveText("1");
   await openReportTab(page, "os");
   await expect(details.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(2);
   await details.getByRole("button", { name: "Pendentes" }).click();
@@ -142,6 +148,7 @@ test("the Cockpit report loads the selected month and keeps the existing XLSX do
   await expect(page.locator("#cockpit-monthly-preview")).toBeVisible();
 
   await month.fill("2026-09");
+  await expect(page.locator("#cockpit-monthly-period")).toHaveText("Mês encerrado");
   await expect(page.locator("#cockpit-monthly-status")).toContainText("Mês encerrado");
   const download = page.waitForEvent("download");
   await page.locator("#cockpit-monthly-export").click();
@@ -151,13 +158,14 @@ test("the Cockpit report loads the selected month and keeps the existing XLSX do
   await expect(page.locator("#toast-container")).toContainText("Planilha Exportada com Sucesso!");
 });
 
-test("the Cockpit report shows local API errors in its status region", async ({ page }) => {
+test("the Cockpit report shows local API errors in its status region and in a toast", async ({ page }) => {
   await page.route("**/api/relatorio-mensal/dados**", route => route.fulfill({
     status: 503, json: { detail: "A base oficial EquipamentosDetalhes não está carregada." },
   }));
   await page.goto("/");
   await openMonthlyReport(page);
   await expect(page.locator("#cockpit-monthly-status")).toHaveText("A base oficial EquipamentosDetalhes não está carregada.");
+  await expect(page.locator("#toast-container")).toContainText("A base oficial EquipamentosDetalhes não está carregada.");
   // O erro vai para #cockpit-monthly-estado, fora dos painéis: as abas continuam na tela.
   await expect(page.locator("#cockpit-monthly-estado .ck-nota--erro")).toHaveText("A base oficial EquipamentosDetalhes não está carregada.");
   await expect(page.getByRole("tablist", { name: "Assuntos do relatório" })).toBeVisible();
@@ -217,8 +225,6 @@ test("the Cockpit report detail keeps card rows on phones without horizontal scr
   const details = page.locator("#cockpit-monthly-details");
   await openReportTab(page, "os");
   await expect(details.locator('[data-rel-secao="os"] td[data-label="Série"]').first()).toHaveText("SN-OS-1");
-  await openReportTab(page, "comp");
-  await expect(details.locator('[data-rel-secao="comp"] td[data-label="Local na Simpress"]').first()).toHaveText("Maringá");
   await openReportTab(page, "sebrae");
   await expect(details.locator('[data-rel-secao="sebrae"] td[data-label="Situação no mês"]').first()).toHaveText("Finalizado no mês");
   await openReportTab(page, "base");
@@ -244,16 +250,28 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
 
   await openReportTab(page, "sebrae");
   const sebrae = details.locator('[data-rel-secao="sebrae"]');
-  await expect(sebrae).toContainText("Situação atual");
-  await expect(sebrae.locator(".ck-rel__numero").first()).toContainText("1");
-  await expect(sebrae.locator(".ck-rel__numero").nth(1)).toContainText("2");
-  // Contagem do mês (report.sebrae), depois da situação atual.
-  await expect(sebrae.locator("h4")).toHaveText("Com data em outubro de 2026");
-  await expect(sebrae.locator(".ck-rel__numero").nth(2)).toHaveText(/Abertos no mês\s*3/);
-  await expect(sebrae.locator(".ck-rel__numero").nth(3)).toHaveText(/Finalizados no mês\s*2/);
-  await expect(sebrae).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
-  await expect(sebrae).toContainText("Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.");
+  // Título e selo "Situação atual" ficam fora dos cartões; dois cartões (novos âmbar, antigos fúcsia) e o cartão da contagem do mês.
+  await expect(sebrae.locator(".ck-rel__secao-cab")).toContainText("Situação atual");
+  const cartoes = sebrae.locator(".nf8-cham-cartao");
+  await expect(cartoes).toHaveCount(2);
+  await expect(cartoes.first()).toContainText("Chamados novos");
+  await expect(cartoes.first()).toContainText("1");
+  await expect(cartoes.first()).toHaveAttribute("data-tom", "ambar");
+  // A seta é aria-hidden: o nome acessível é "Ver novos"; o texto visível leva a seta.
+  await expect(cartoes.first().getByRole("button", { name: "Ver novos" })).toContainText("Ver novos →");
+  await expect(cartoes.nth(1)).toContainText("Antigos em aberto");
+  await expect(cartoes.nth(1)).toContainText("2");
+  await expect(cartoes.nth(1)).toHaveAttribute("data-tom", "fucsia");
+  await expect(cartoes.nth(1).getByRole("button", { name: "Ver antigos" })).toContainText("Ver antigos →");
+  // Contagem do mês (report.sebrae), depois da situação atual; o "sem data" é um chip no cabeçalho do cartão.
+  const mes = sebrae.locator(".nf8-cham-info");
+  await expect(mes.locator("h4")).toHaveText("Com data em outubro de 2026");
+  await expect(mes.locator(".nf8-chip")).toHaveText("4 sem data");
+  await expect(mes.locator(".ck-rel__numero")).toHaveCount(2);
+  await expect(mes.locator(".ck-rel__numero").first()).toHaveText(/Abertos\s*3/);
+  await expect(mes.locator(".ck-rel__numero").nth(1)).toHaveText(/Finalizados\s*2/);
   await expect(sebrae).not.toContainText("Só entram chamados com data conhecida");
+  await expect(sebrae).not.toContainText("fora da contagem");
   await expect(sebrae.locator("tbody tr")).toHaveCount(4);
   const old = sebrae.locator("tbody tr").first();
   await expect(old).toContainText("27206");
@@ -269,11 +287,6 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), situação atual: 1 novo · 2 antigos em aberto");
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), com data em outubro de 2026: Abertos no mês 3 · Finalizados no mês 2 · Sem data de abertura ou de encerramento: 4 (fora da contagem)");
 
-  await openReportTab(page, "comp");
-  await details.getByRole("button", { name: "Abrir no Resumo (F3)" }).click();
-  await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
-
-  await openMonthlyReport(page);
   await openReportTab(page, "os");
   await details.getByRole("button", { name: "Ver OS-FIC-1 na aba OS (F6), pela série SN-OS-1" }).click();
   await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
@@ -288,10 +301,10 @@ test("the report links each row to Home, OS (F6), Resumo (F3) and Chamados (F5) 
   await expect(page.locator("#sebrae-antigos-contagem")).toHaveText("2");
 
   await openMonthlyReport(page);
-  await openReportTab(page, "comp");
-  await details.locator('[data-rel-secao="comp"]').getByRole("button", { name: "Abrir SN-COMP-1 na Home" }).click();
+  await openReportTab(page, "os");
+  await details.getByRole("button", { name: "Abrir SN-OS-1 na Home" }).click();
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
-  await expect(page.locator("#input-serial")).toHaveValue("SN-COMP-1");
+  await expect(page.locator("#input-serial")).toHaveValue("SN-OS-1");
   expect(writes).toEqual([]);
 });
 
@@ -328,8 +341,8 @@ test("a Sebrae failure keeps the monthly report and explains it in the Chamados 
   await expect(page.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(2);
   await expect(page.locator("#cockpit-monthly-copy")).toBeEnabled();
   await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("Chamados (F5), situação atual");
-  // A contagem do mês vem do relatório, não do F5: continua na tela e na prévia, sem link para o F5.
-  await expect(page.locator('[data-rel-secao="sebrae"]')).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
+  // A contagem do mês vem do relatório, não do F5: continua na tela (chip "4 sem data") e na prévia, sem link para o F5.
+  await expect(page.locator('[data-rel-secao="sebrae"] .nf8-chip')).toHaveText("4 sem data");
   await expect(page.locator('[data-rel-secao="sebrae"]').getByRole("button", { name: /na aba Chamados \(F5\)/ })).toHaveCount(0);
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), com data em outubro de 2026: Abertos no mês 3");
 });
@@ -343,7 +356,8 @@ test("a failed or missing month count keeps the current situation and the rest o
   await openReportTab(page, "sebrae");
   const block = page.locator('[data-rel-secao="sebrae"]');
   await expect(block.locator(".ck-nota--erro")).toHaveText("Não foi possível ler o Dashboard importado.");
-  await expect(block.locator(".ck-rel__numero")).toHaveCount(2);
+  await expect(block.locator(".nf8-cham-cartao")).toHaveCount(2);
+  await expect(block.locator(".ck-rel__numero")).toHaveCount(0);
   await expect(block).toContainText("Chamados novos");
   await expect(page.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(2);
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Chamados (F5), situação atual");
@@ -351,13 +365,13 @@ test("a failed or missing month count keeps the current situation and the rest o
 
   sebrae = null;
   await page.locator("#cockpit-monthly-month").fill("2026-09");
-  await expect(block.locator("h4")).toHaveText("Com data em setembro de 2026");
+  await expect(block.locator(".nf8-cham-info h4")).toHaveText("Com data em setembro de 2026");
   await expect(block.locator(".ck-lista__vazio")).toHaveText("Nenhum Dashboard importado. A importação e a busca ficam na aba Automação (F4).");
   await expect(block.locator(".ck-nota--erro")).toHaveCount(0);
   await expect(page.locator("#cockpit-monthly-preview")).not.toContainText("com data em");
 });
 
-// Estado completo das cinco abas numa só leitura da página: aria-selected, tabindex rotativo (só a ativa entra na ordem do Tab) e um único painel visível.
+// Estado completo das quatro abas numa só leitura da página: aria-selected, tabindex rotativo (só a ativa entra na ordem do Tab) e um único painel visível.
 async function expectReportTab(page, key, { focused = false } = {}) {
   const names = ABAS_RELATORIO.map(([name]) => name);
   const expected = Object.fromEntries(names.map(name => [name, { selected: String(name === key), tabindex: name === key ? "0" : "-1", visible: name === key }]));
@@ -369,12 +383,12 @@ async function expectReportTab(page, key, { focused = false } = {}) {
   if (focused) await expect(page.locator(`#rel-aba-${key}`)).toBeFocused();
 }
 
-test("the report has five tabs, opens on Visão geral and shows the counters and the Chamados strip", async ({ page }) => {
+test("the report has four tabs, opens on Visão geral and shows the counters and the Chamados card", async ({ page }) => {
   await routeMonthly(page);
   await page.goto("/");
   await openMonthlyReport(page);
   const tabs = page.getByRole("tablist", { name: "Assuntos do relatório" }).getByRole("tab");
-  await expect(tabs).toHaveCount(5);
+  await expect(tabs).toHaveCount(4);
   for (const [index, [key, label]] of ABAS_RELATORIO.entries()) {
     await expect(tabs.nth(index).locator(".rel-aba__rotulo")).toHaveText(label);
     await expect(tabs.nth(index)).toHaveAttribute("id", `rel-aba-${key}`);
@@ -386,25 +400,24 @@ test("the report has five tabs, opens on Visão geral and shows the counters and
   await expectReportTab(page, "visao");
   await expect(page.locator("#cockpit-monthly-estado")).toBeEmpty();
 
-  // Contadores: OS e comparação = linhas das listas (alerta com mais de zero); Chamados = linhas da contagem do mês (neutro).
+  // Contadores: OS = linhas da lista (alerta com mais de zero); Chamados = linhas da contagem do mês (neutro). A comparação saiu.
   await expect(page.locator("#rel-os-contagem")).toHaveText("2");
   await expect(page.locator("#rel-os-contagem")).toHaveAttribute("data-status", "alerta");
-  await expect(page.locator("#rel-comp-contagem")).toHaveText("1");
-  await expect(page.locator("#rel-comp-contagem")).toHaveAttribute("data-status", "alerta");
+  await expect(page.locator("#rel-comp-contagem")).toHaveCount(0);
   await expect(page.locator("#rel-sebrae-contagem")).toHaveText("4");
   await expect(page.locator("#rel-sebrae-contagem")).not.toHaveAttribute("data-status", /.+/);
   await expect(page.locator("#rel-aba-visao .rel-aba__n, #rel-aba-base .rel-aba__n")).toHaveCount(0);
 
-  // Visão geral: atenção, movimento, faixa Chamados (F5) e prévia; as listas ficam nas outras abas.
+  // Visão geral: atenção (com o cartão Chamados (F5)), movimento e prévia; as listas ficam nas outras abas.
   const overview = page.locator("#rel-painel-visao");
   await expect(overview.locator("#cockpit-monthly-attention")).toBeVisible();
   await expect(overview.locator('[data-rel-secao="movimento"]')).toBeVisible();
   const strip = overview.locator("#cockpit-monthly-chamados");
   await expect(strip).toBeVisible();
-  await expect(strip).toContainText("Abertos no mês 3");
-  await expect(strip).toContainText("Finalizados no mês 2");
-  await expect(strip).toContainText("Chamados novos 1");
-  await expect(strip).toContainText("Antigos em aberto 2");
+  await expect(strip).toContainText(/Abertos no mês\s*3/);
+  await expect(strip).toContainText(/Finalizados\s*2/);
+  await expect(strip.locator('.nf8-chip[data-nl-tom="ambar"]')).toHaveText(/1\s*novos/);
+  await expect(strip.locator('.nf8-chip[data-nl-tom="fucsia"]')).toHaveText(/2\s*antigos/);
   await expect(strip.getByRole("button", { name: "Ver chamados →" })).toBeVisible();
   await expect(overview.locator(".ck-rel__previa")).toBeVisible();
   await expect(page.locator("#rel-painel-os tbody tr")).toHaveCount(2);
@@ -425,7 +438,7 @@ test("clicking, arrow keys, Home and End switch tabs with a roving tabindex", as
   await page.keyboard.press("ArrowRight");
   await expectReportTab(page, "os", { focused: true });
   await page.keyboard.press("ArrowRight");
-  await expectReportTab(page, "comp", { focused: true });
+  await expectReportTab(page, "sebrae", { focused: true });
   await page.keyboard.press("ArrowLeft");
   await expectReportTab(page, "os", { focused: true });
   await page.keyboard.press("End");
@@ -438,7 +451,7 @@ test("clicking, arrow keys, Home and End switch tabs with a roving tabindex", as
   await page.keyboard.press("Home");
   await expectReportTab(page, "visao", { focused: true });
 
-  // Só a aba ativa está na ordem do Tab: Tab sai da tablist em vez de percorrer as outras quatro.
+  // Só a aba ativa está na ordem do Tab: Tab sai da tablist em vez de percorrer as outras três.
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.getAttribute("role"))).not.toBe("tab");
 });
@@ -485,14 +498,7 @@ test("Ver lista and Ver chamados switch to the right tab and focus its title", a
   await expect(details.getByRole("button", { name: "Pendentes" })).toHaveAttribute("aria-pressed", "true");
   await expect(details.locator('[data-rel-secao="os"] tbody tr')).toHaveCount(1);
 
-  // Comparação.
-  await openReportTab(page, "visao");
-  await page.getByRole("button", { name: "Ver lista de pendências da comparação" }).click();
-  await expectReportTab(page, "comp");
-  await expect(page.locator("#cockpit-monthly-comp-title")).toBeFocused();
-  await expect(details.locator('[data-rel-secao="comp"] tbody tr')).toHaveCount(1);
-
-  // Faixa Chamados (F5).
+  // Cartão Chamados (F5).
   await openReportTab(page, "visao");
   await page.getByRole("button", { name: "Ver chamados →" }).click();
   await expectReportTab(page, "sebrae");
@@ -511,7 +517,7 @@ test("the tablist scrolls on its own at 320px and the page never scrolls horizon
   const box = await tablist.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(320);
-  // As cinco abas não cabem em 320px: quem rola é a própria barra, nunca a página.
+  // As abas não cabem em 320px: quem rola é a própria barra, nunca a página.
   expect(await tablist.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
   expect(await tablist.evaluate(el => getComputedStyle(el).overflowX)).toBe("auto");
   for (const [key] of ABAS_RELATORIO) {
@@ -526,7 +532,7 @@ test("the tablist scrolls on its own at 320px and the page never scrolls horizon
 });
 
 test("every report tab passes axe in both themes", async ({ page }) => {
-  test.setTimeout(60_000); // dez análises axe (cinco abas, dois temas) passam de 20 s em máquina carregada
+  test.setTimeout(60_000); // oito análises axe (quatro abas, dois temas) passam de 20 s em máquina carregada
   await routeMonthly(page);
   await page.goto("/");
   await openMonthlyReport(page);
@@ -580,8 +586,58 @@ test("the report keeps the card notes in an ⓘ that opens on hover, tap or focu
   await openReportTab(page, "sebrae");
   const note = page.locator("#cockpit-monthly-sebrae-nota");
   await expect(note).toHaveText("Contagem pelo Dashboard importado (abertura em P, encerramento em R), pelos chamados novos da busca e pelos finalizados pelo site.");
-  await expect(page.locator("#rel-painel-sebrae h4")).toHaveText("Com data em outubro de 2026");
+  await expect(page.locator("#rel-painel-sebrae .nf8-cham-info h4")).toHaveText("Com data em outubro de 2026");
   // O que é número ou aviso de dado segue na tela, fora do ⓘ.
-  await expect(page.locator("#rel-painel-sebrae")).toContainText("Sem data de abertura ou de encerramento: 4 (fora da contagem)");
+  await expect(page.locator("#rel-painel-sebrae .nf8-chip")).toHaveText("4 sem data");
   await abrir(page.locator('#rel-painel-sebrae .info-tip-trigger[aria-describedby="cockpit-monthly-sebrae-nota"]'), note);
+});
+
+// Novo layout (18/11/2026): rótulo do filtro, paginação de 20 e gráfico do movimento (segmentado Fonte, barras por semana, entrada escalonada).
+test("the OS tab labels its filter and paginates by 20, and the movement chart groups bars by week", async ({ page }) => {
+  await routeMonthly(page);
+  // Mais específico que o de routeMonthly (o último registrado vale primeiro): 45 linhas de OS, todas dentro do mês pedido.
+  await page.route(/\/api\/relatorio-mensal\/dados(?:\?|$)/, route => {
+    const mes = new URL(route.request().url()).searchParams.get("mes");
+    const report = monthlyReport(mes);
+    report.mes = { key: mes, label: "mês de teste", parcial: false, data_corte: `${mes}-28` };
+    report.os.linhas = Array.from({ length: 45 }, (_, index) => ({
+      fonte: index % 2 ? "Simpress" : "Oracle", identificador: `OS-P-${index + 1}`, serie: `SN-P-${index + 1}`, status: "Em atendimento",
+      criacao: `${mes}-${String((index % 20) + 1).padStart(2, "0")}`, conclusao: null, situacao: ["Aberta no mês", "Pendente no fim do mês"],
+    }));
+    return route.fulfill({ json: report });
+  });
+  await page.goto("/");
+  await openMonthlyReport(page);
+
+  // Gráfico: segmentado "Fonte", área com role="img", uma barra por série e semana, cada uma com title, entrada de 40 ms em 40 ms.
+  const movimento = page.locator("#cockpit-monthly-movimento");
+  const fonte = movimento.getByRole("group", { name: "Fonte" });
+  await expect(fonte.getByRole("button")).toHaveText(["Ambas", "Oracle", "Simpress"]);
+  await expect(fonte.getByRole("button", { name: "Ambas" })).toHaveAttribute("aria-pressed", "true");
+  const plot = movimento.locator('.nf8-plot[role="img"]');
+  await expect(plot).toBeVisible();
+  await expect(plot).toHaveAttribute("aria-label", /^Movimento do mês por semana, Oracle e Simpress: /);
+  const grupos = await movimento.locator(".nf8-gr").count();
+  expect(grupos).toBeGreaterThanOrEqual(4);
+  await expect(movimento.locator(".nf8-b")).toHaveCount(grupos * 3);
+  expect(await movimento.locator(".nf8-b").evaluateAll(barras => barras.every(barra => barra.title.length > 0))).toBe(true);
+  await expect(movimento.locator(".nf8-b").nth(0)).toHaveAttribute("style", /animation-delay: 0ms/);
+  await expect(movimento.locator(".nf8-b").nth(1)).toHaveAttribute("style", /animation-delay: 40ms/);
+  await expect(movimento.locator(".nf8-leg")).toContainText("Abertas");
+  await fonte.getByRole("button", { name: "Oracle" }).click();
+  await expect(fonte.getByRole("button", { name: "Oracle" })).toHaveAttribute("aria-pressed", "true");
+  await expect(movimento.locator('.nf8-plot[role="img"]')).toHaveAttribute("aria-label", /^Movimento do mês por semana, Oracle: /);
+
+  // OS: rótulo acima do segmentado e páginas de 20.
+  await openReportTab(page, "os");
+  const painel = page.locator("#rel-painel-os");
+  await expect(painel.locator(".nf8-rotulo")).toHaveText("Filtrar por situação");
+  await expect(painel.locator("tbody tr")).toHaveCount(20);
+  await expect(painel.locator(".ck-rel__nota", { hasText: "Mostrando" })).toHaveText("Mostrando 20 de 45");
+  await painel.getByRole("button", { name: "Carregar mais" }).click();
+  await expect(painel.locator("tbody tr")).toHaveCount(40);
+  await expect(painel.locator(".ck-rel__nota", { hasText: "Mostrando" })).toHaveText("Mostrando 40 de 45");
+  await painel.getByRole("button", { name: "Carregar mais" }).click();
+  await expect(painel.locator("tbody tr")).toHaveCount(45);
+  await expect(painel.getByRole("button", { name: "Carregar mais" })).toHaveCount(0);
 });

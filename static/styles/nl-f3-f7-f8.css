@@ -1,0 +1,326 @@
+/* Novo layout, parte 2: abas F3 (Resumo), F7 (Histórico de apelidos) e F8 (Relatório mensal).
+   Carrega depois de nl-base.css e só reveste o que já existe, com os tokens --nl-* (temas claro e escuro vêm deles).
+   Cada aba tem a própria seção abaixo, escopada ao painel dela; nada aqui mexe no Assistente.
+   Regra de especificidade: o escopo usa "section.ck-ferr-painel[...]" (uma etiqueta a mais que o ck-bento.css), então copiar o
+   mesmo seletor do ck-bento.css aqui faz esta folha vencer o empate sem !important.
+   Movimento: toda transição fica em (prefers-reduced-motion: no-preference); as animações de entrada de 700 ms do ck-bento.css
+   (exceção aprovada) continuam valendo. */
+
+/* ---------- F7 Histórico de apelidos (quadros NL-F7-Historico e NL-F7-Detalhe, com os pares de celular) ---------- */
+section.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+  /* Tom da etiqueta e do ponto: índigo por padrão; cada tipo de alteração troca o tom (Apelido ciano, Usuário índigo, Endereço fúcsia, Avisos âmbar). */
+  --f7-rgb: var(--nl-i);
+  --f7-tx: var(--nl-itx);
+
+  & [data-alias-tipo="apelido"], & [data-alias-type="apelido"] { --f7-rgb: var(--nl-c); --f7-tx: var(--nl-ctx); }
+  & [data-alias-tipo="usuario"], & [data-alias-type="usuario"] { --f7-rgb: var(--nl-i); --f7-tx: var(--nl-itx); }
+  & [data-alias-tipo="endereco"], & [data-alias-type="endereco"] { --f7-rgb: var(--nl-f); --f7-tx: var(--nl-ftx); }
+  & [data-alias-tipo="aviso_endpoint"], & [data-alias-type="aviso_endpoint"] { --f7-rgb: var(--nl-a); --f7-tx: var(--nl-atx); }
+
+  /* Cabeçalho: dois contadores (índigo e ciano) e Exportar CSV como botão secundário */
+  & .ck-alias-kpis .ck-kpi { --f7-rgb: var(--nl-i); flex: 0 1 auto; min-width: 230px; gap: 2px; padding: 14px 20px; border: 1px solid rgba(var(--f7-rgb), .30); border-radius: var(--nl-raio-cartao); background: rgba(var(--f7-rgb), .06); }
+  & .ck-alias-kpis .ck-kpi:nth-child(2) { --f7-rgb: var(--nl-c); }
+  & .ck-alias-kpis .ck-kpi__rotulo { font: 500 11px/1.35 var(--fonte-corpo); letter-spacing: .08em; text-transform: uppercase; color: var(--nl-mut); }
+  & .ck-alias-kpis .ck-kpi__valor { color: var(--nl-tx); }
+
+  /* Abas por tipo: chips de 32 px com ponto colorido e contagem em mono; contagem zero fica apagada */
+  & .ck-alias-abas { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; overflow: visible; }
+  & .ck-alias-aba { box-sizing: border-box; gap: 8px; height: 32px; min-height: 32px; padding: 0 12px; border: 1px solid var(--nl-bd); background: var(--nl-card); color: var(--nl-tx2); box-shadow: none; }
+  & .ck-alias-aba:hover { border-color: var(--nl-bd2); color: var(--nl-tx); }
+  & .ck-alias-aba[aria-selected="true"] { border-color: rgba(var(--f7-rgb), .45); background: rgba(var(--f7-rgb), .14); color: var(--f7-tx); box-shadow: none; }
+  & .ck-alias-ponto { display: block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--f7-rgb)); }
+  & .ck-alias-aba__n { padding: 0; background: transparent; color: inherit; font: 600 12px/1 var(--fonte-mono); }
+  & .ck-alias-aba[aria-selected="true"] .ck-alias-aba__n { background: transparent; color: inherit; }
+  & .ck-alias-aba:not([aria-selected="true"]):has([data-bento-contar="0"]) { color: var(--nl-fraco); }
+  & .ck-alias-aba:not([aria-selected="true"]):has([data-bento-contar="0"]) .ck-alias-ponto { opacity: .4; }
+
+  /* Barra de filtros: busca de 300 px com rótulo só para leitor de tela, período em mono, caixa de seleção própria */
+  & .ck-alias-barra { align-items: center; gap: 12px; }
+  & .ck-alias-barra > .ck-campo:first-child { flex: 0 1 300px; max-width: 300px; }
+  & .ck-alias-busca { position: relative; }
+  & .ck-alias-busca > svg { position: absolute; top: 50%; left: 12px; width: 16px; height: 16px; translate: 0 -50%; color: var(--nl-fraco); pointer-events: none; }
+  & .ck-alias-barra .ck-entrada { border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background-color: var(--nl-card); color: var(--nl-tx); }
+  & .ck-alias-busca .ck-entrada { padding-inline-start: 36px; }
+  & .ck-alias-busca .ck-entrada::placeholder { color: var(--nl-fraco); opacity: 1; }
+  & .ck-alias-periodo { border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .ck-alias-periodo .ck-segmentado__op { color: var(--nl-mut); }
+  & .ck-alias-periodo .ck-segmentado__op:hover { color: var(--nl-tx); }
+  & .ck-alias-periodo .ck-segmentado__op[aria-pressed="true"] { background: rgba(var(--nl-i), .14); color: var(--nl-itx); box-shadow: inset 0 0 0 1px rgba(var(--nl-i), .45); }
+  & .ck-alias-periodo .ck-segmentado__op span { margin-left: 6px; padding: 0; background: transparent; color: inherit; font: 600 12px/1 var(--fonte-mono); }
+  & .ckp-alternar, & .ckp-alternar:has(input:checked) { color: var(--nl-tx2); }
+  & .ckp-alternar input { appearance: none; position: relative; flex: none; box-sizing: border-box; width: 18px; height: 18px; margin: 0; border: 1px solid var(--nl-bd2); border-radius: 6px; background: var(--nl-card2); cursor: pointer; }
+  & .ckp-alternar input::after { content: ""; position: absolute; top: 1px; left: 5px; width: 5px; height: 10px; border: solid #0b0d15; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); }
+  & .ckp-alternar input:checked { border-color: rgb(var(--nl-i)); background: rgb(var(--nl-i)); }
+  & .ckp-alternar input:checked::after { transform: rotate(45deg) scale(1); }
+  & .ckp-alternar input:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+  & #cockpit-alias-clear { margin-left: auto; }
+
+  /* Lista: cartões de linha em grade (tipo, série e hora; antes e depois em mono; selo "Ação disponível") */
+  & #cockpit-alias-list { gap: 20px; padding: 20px; }
+  & .ck-alias-grupo__cab { justify-content: flex-start; align-items: center; gap: 8px; margin-top: 4px; padding: 0 2px; font: 500 11px/1.3 var(--fonte-corpo); letter-spacing: .08em; text-transform: uppercase; color: var(--nl-mut); }
+  & .ck-alias-grupo__cab > :last-child { font: 600 11px/1 var(--fonte-mono); letter-spacing: 0; text-transform: none; color: var(--nl-mut); }
+  & .ck-alias-linha { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; row-gap: 6px; padding: 12px 14px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .ck-alias-linha:hover { border-color: var(--nl-bd2); }
+  & .ck-alias-linha[aria-pressed="true"] { border-color: rgba(var(--nl-c), .55); background: rgba(var(--nl-c), .06); box-shadow: none; }
+  & .ck-alias-linha__topo { display: contents; }
+  & .ck-alias-linha__serie { min-width: 0; font: 600 13px/1.3 var(--fonte-mono); color: var(--nl-tx); overflow-wrap: anywhere; }
+  & .ck-alias-linha__hora { justify-self: end; margin-left: 0; font: 500 11px/1.3 var(--fonte-mono); color: var(--nl-mut); }
+  & .ck-alias-linha__mudanca { grid-column: 1 / 3; align-self: center; min-width: 0; font: 400 12px/1.4 var(--fonte-mono); color: var(--nl-tx); overflow-wrap: anywhere; }
+  & .ck-alias-linha > .ck-alias-selo { grid-column: 3; grid-row: 2; justify-self: end; }
+  & .ck-alias-seta { margin-inline: 2px; color: var(--nl-fraco); }
+  & .ck-alteracao__antes { color: var(--nl-mut); }
+
+  /* Etiquetas no modelo de selo do nl-base: 22 px, borda e fundo no tom, texto no tom escuro */
+  & .ck-alias-chip, & .ck-alias-selo { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border: 1px solid rgba(var(--f7-rgb), .35); border-radius: 999px; background: rgba(var(--f7-rgb), .10); color: var(--f7-tx); font: 600 11px/1 var(--fonte-corpo); letter-spacing: .04em; white-space: nowrap; }
+  & .ck-alias-selo { --f7-rgb: var(--nl-e); --f7-tx: var(--nl-etx); }
+  & .ck-alias-selo--atual { --f7-rgb: var(--nl-c); --f7-tx: var(--nl-ctx); }
+  & .ck-alias-selo-n { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 22px; height: 20px; padding: 0 7px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card2); color: var(--nl-mut); font: 600 11px/1 var(--fonte-mono); }
+  & .ck-alias-mais { display: flex; justify-content: center; }
+
+  /* Detalhe: cartão fixo à direita, blocos sem fio entre eles, série em mono 24 px */
+  & #cockpit-alias-detail { gap: 16px; padding: 20px; }
+  & .ck-alias-det__bloco + .ck-alias-det__bloco { padding-top: 0; border-top: 0; }
+  & .ck-alias-det__bloco h3.ck-alias-det__serie { font: 600 24px/1.2 var(--fonte-mono); letter-spacing: -.01em; color: var(--nl-tx); overflow-wrap: anywhere; }
+  & .ck-alias-det__data { font: 500 12px/1.3 var(--fonte-mono); color: var(--nl-mut); }
+  & .ck-alias-det__acoes { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+  & .ck-alias-det__acoes .ck-btn { width: 100%; justify-content: center; }
+  & .ck-alias-det__par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  & .ck-alias-det__par > :only-child { grid-column: 1 / -1; }
+  & .ck-alias-bloco__cab { display: flex; align-items: center; gap: 8px; }
+  & .ck-alias-bloco__cab h3 { margin: 0; }
+
+  /* O que mudou: Antes (vermelho claro) e Depois (verde claro), sempre lado a lado */
+  & .ck-alias-compara { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  & .ck-alias-caixa { gap: 4px; padding: 12px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .ck-alias-caixa__rotulo { font: 500 11px/1.3 var(--fonte-corpo); letter-spacing: .08em; text-transform: uppercase; color: var(--nl-mut); }
+  & .ck-alias-caixa__valor { font: 500 13px/1.4 var(--fonte-mono); color: var(--nl-tx); overflow-wrap: anywhere; }
+  & .ck-alias-caixa--antes { border-color: rgba(var(--nl-r), .35); background: rgba(var(--nl-r), .06); }
+  & .ck-alias-caixa--antes .ck-alias-caixa__rotulo { color: var(--nl-rtx); }
+  & .ck-alias-caixa--depois { border-color: rgba(var(--nl-e), .35); background: rgba(var(--nl-e), .06); }
+  & .ck-alias-caixa--depois .ck-alias-caixa__rotulo { color: var(--nl-etx); }
+  & .ck-alias-caixa--aviso { border-color: rgba(var(--nl-a), .45); background: rgba(var(--nl-a), .08); }
+  & .ck-alias-caixa--aviso .ck-alias-caixa__valor { color: var(--nl-atx); font-family: var(--fonte-corpo); }
+
+  /* Cadastro atual e Detalhes do registro: campos em duas colunas, rótulo em cima e valor embaixo */
+  & .ck-alias-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  & .ck-alias-campo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  & .ck-alias-campo--inteiro { grid-column: 1 / -1; }
+  & .ck-alias-campo__lin { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  & .ck-alias-campo__rotulo { font: 500 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+  & .ck-alias-campo__valor { font: 400 13px/1.4 var(--fonte-corpo); color: var(--nl-tx); overflow-wrap: anywhere; }
+  & .ck-alias-campo__valor.ck-alias-mono { font-family: var(--fonte-mono); }
+
+  /* Histórico deste equipamento: linha do tempo com fio de 2 px à esquerda; antes riscado, depois em mono */
+  & .ck-tempo { display: flex; flex-direction: column; gap: 14px; margin: 0 0 0 5px; padding: 0 0 0 18px; border-left: 2px solid var(--nl-bd); }
+  & .ck-tempo__item { display: block; padding: 0; }
+  & .ck-tempo__item::before { display: none; }
+  & .ck-tempo__marca { position: absolute; top: 4px; left: -24px; box-sizing: border-box; width: 10px; height: 10px; margin: 0; border: 2px solid rgb(var(--f7-rgb)); background: var(--nl-card); }
+  & .ck-tempo__marca[data-selecionado="true"] { background: rgb(var(--f7-rgb)); }
+  & .ck-tempo__corpo { gap: 6px; }
+  & .ck-alias-tempo__titulo { gap: 8px; }
+  & .ck-tempo__meta { font: 500 11px/1.3 var(--fonte-mono); color: var(--nl-mut); }
+  & .ck-alteracao { font: 400 12px/1.4 var(--fonte-mono); color: var(--nl-tx); }
+  & .ck-tempo .ck-alteracao__antes { text-decoration: line-through; }
+}
+
+/* Grade da tela: lista flexível e detalhe de 460 px; abaixo de 1024 px o ck-bento.css mantém uma coluna só */
+@media (min-width: 1024px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] .ck-alias-dupla { grid-template-columns: minmax(0, 1fr) 460px; }
+}
+
+/* Celular: busca e período em linha inteira; caixa de seleção e Limpar filtros na mesma linha; linha da lista com o selo em cima */
+@media (max-width: 639.98px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+    & .ck-alias-kpis .ck-kpi { min-width: 0; padding: 12px 14px; }
+    & .ck-alias-kpis .ck-kpi__valor { font-size: 26px; }
+    & .ck-alias-barra { flex-flow: row wrap; align-items: center; justify-content: space-between; }
+    & .ck-alias-barra > .ck-campo:first-child { flex: 1 1 100%; max-width: none; }
+    & .ck-alias-periodo { display: flex; flex: 1 1 100%; }
+    & .ckp-alternar { flex: 1 1 auto; }
+    & #cockpit-alias-list, & #cockpit-alias-detail { padding: 16px; }
+    & .ck-alias-linha > .ck-alias-selo { grid-row: 1; }
+    & .ck-alias-linha__hora { grid-column: 3; grid-row: 2; }
+    & .ck-alias-det__par { grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+/* Toque: chips e controles mantêm 44 px de altura mínima */
+@media (pointer: coarse) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] :is(.ck-alias-aba, .ck-btn, .ckp-alternar) { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="apelidos"] {
+    & .ckp-alternar input { transition: background-color 150ms var(--nl-curva), border-color 150ms var(--nl-curva); }
+    & .ckp-alternar input::after { transition: transform 150ms var(--nl-curva); }
+  }
+}
+
+/* ---------- F8 Relatório mensal (quadros NL-F8-Relatorio, NL-F8-Grafico e NL-F8-Meses, com os pares de celular) ----------
+   Reveste o que o ck-bento.css já monta (cartões, barra, sub-abas) com os tokens --nl-*; só o que o desenho muda fica aqui.
+   Peças novas (nf8-*): chip, selo, segmentado de fonte, filtro de situação, cartões de chamados e o gráfico semanal. */
+section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+  /* Barra: rótulo "Mês do relatório" sobre as pílulas dos 3 últimos meses, campo do mês (rótulo só para leitor de tela),
+     chip do período, Copiar resumo e Exportar planilha (primário, com as cores --pri-* do ck-bento). */
+  & .ck-rel__barra { align-items: flex-end; gap: 12px 16px; }
+  & .ck-rel__mes { flex: 0 1 auto; }
+  & .ck-rel__barra .ck-campo__rotulo { font: 500 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+  & .ck-rel__barra label.ck-campo > .ck-campo__rotulo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  & #cockpit-monthly-periods { display: inline-flex; flex-wrap: wrap; gap: 4px; max-width: 100%; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & #cockpit-monthly-periods .ck-pilula { display: inline-flex; justify-content: center; gap: 0; min-width: 0; height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); box-shadow: none; font: 500 13px/1 var(--fonte-corpo); }
+  & #cockpit-monthly-periods .ck-pilula:hover { background: transparent; color: var(--nl-tx); }
+  & #cockpit-monthly-periods .ck-pilula[aria-pressed="true"] { border-color: rgba(var(--nl-i), .45); background: rgba(var(--nl-i), .14); color: var(--nl-itx); box-shadow: none; }
+  & .ck-rel__barra .ck-entrada { border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background-color: var(--nl-card); color: var(--nl-tx); }
+  & .ck-rel__barra .ck-entrada:focus, & .ck-rel__barra .ck-entrada:focus-visible { border-color: rgba(var(--nl-i), .55); box-shadow: 0 0 0 3px rgba(var(--nl-i), .18); }
+  & .ck-rel__barra .ck-btn { border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); }
+  & .ck-rel__barra .ck-btn--secundario { background: var(--nl-card); color: var(--nl-tx); }
+  & .ck-rel__barra .ck-btn--secundario:not(:disabled):hover { border-color: rgba(var(--nl-i), .5); }
+  & .ck-rel__periodo { align-self: flex-end; gap: 8px; height: 28px; margin-bottom: 6px; padding: 0 12px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card2); color: var(--nl-tx2); font: 500 12px/1 var(--fonte-corpo); }
+  & .ck-rel__periodo[data-status="info"] { border-color: rgba(var(--nl-a), .35); background: rgba(var(--nl-a), .12); color: var(--nl-atx); }
+  & .ck-rel__periodo[data-status="info"]::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--nl-a)); }
+
+  /* Sub-abas: faixa segmentada; a contagem é o número em mono (índigo na aba aberta, âmbar quando há pendência) */
+  & .rel-abas-barra { padding: 4px 20px 8px; }
+  & .rel-abas { display: inline-flex; max-width: 100%; gap: 4px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .rel-aba { gap: 8px; height: 34px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); box-shadow: none; font: 500 13px/1 var(--fonte-corpo); }
+  & .rel-aba:hover { background: transparent; color: var(--nl-tx); }
+  & .rel-aba[aria-selected="true"] { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); box-shadow: var(--nl-sombra); }
+  & .rel-aba__n { height: auto; padding: 0; background: transparent; color: var(--nl-mut); font: 600 12px/1 var(--fonte-mono); }
+  & .rel-aba__n[data-status] { background: transparent; color: var(--nl-atx); }
+  & .rel-aba[aria-selected="true"] .rel-aba__n:not([data-status]) { background: transparent; color: var(--nl-itx); }
+
+  /* Corpo, cartões e títulos */
+  & .ck-rel__corpo { gap: 20px; }
+  & .ck-rel__titulo, & .ck-rel__secao-cab .ck-det__titulo { font: 600 20px/1.3 var(--fonte-corpo); color: var(--nl-tx); }
+  & .ck-bento-cartao:is(.ck-rel__cartao, .ck-rel__secao, .nf8-chamados, .nf8-cham-info) { border-radius: var(--nl-raio-cartao); background: var(--nl-bd); }
+  & .ck-bento-face { border-radius: calc(var(--nl-raio-cartao) - 1px); background: var(--nl-card); }
+  & .ck-rel__cartao-titulo { font: 500 14px/1.35 var(--fonte-corpo); color: var(--nl-tx); }
+  & .ck-rel__nota { color: var(--nl-mut); }
+  & .ck-rel__painel > .ck-rel__previa { border-color: var(--nl-bd); background: var(--nl-card); }
+
+  /* Visão geral: "Precisa de atenção" em 2 colunas; um cartão sozinho na última linha ocupa as duas. Números lado a lado, sem caixinha. */
+  & .ck-rel__atencao-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  & .ck-rel__atencao-grade > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  & :is(.ck-rel__atencao, .nf8-chamados, .nf8-cham-info) .ck-rel__numeros { display: flex; flex-wrap: wrap; gap: 8px 40px; }
+  & :is(.ck-rel__atencao, .nf8-chamados, .nf8-cham-info) .ck-rel__numero { padding: 0; border: 0; border-radius: 0; background: transparent; }
+  & .ck-rel__rotulo { color: var(--nl-mut); }
+  & .nf8-chamados__dados { display: flex; flex-direction: column; gap: 12px; }
+  & .nf8-chamados__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Peças novas: chip (âmbar, fúcsia, índigo por padrão), selo da fonte (Oracle ciano, Simpress índigo), rótulo e filtro de situação */
+  & .nf8-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1px solid rgba(var(--nl-ac, var(--nl-i)), .35); border-radius: 999px; background: rgba(var(--nl-ac, var(--nl-i)), .12); color: var(--nl-actx, var(--nl-itx)); font: 500 12px/1 var(--fonte-corpo); white-space: nowrap; }
+  & .nf8-chip b { font: 600 12px/1 var(--fonte-mono); }
+  & .nf8-selo { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(var(--nl-ac, var(--nl-i)), .14); color: var(--nl-actx, var(--nl-itx)); font: 600 12px/1 var(--fonte-corpo); }
+  & .ck-rel__secao-cab > .ck-badge { height: 24px; padding: 0 10px; border: 1px solid rgba(var(--nl-i), .35); background: rgba(var(--nl-i), .12); color: var(--nl-itx); font: 600 12px/1 var(--fonte-corpo); }
+  & .nf8-rotulo { font: 500 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+  & .nf8-filtro { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  & .ck-rel__filtros { display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .ck-rel__filtros .ck-btn { height: 30px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); box-shadow: none; font: 500 13px/1 var(--fonte-corpo); }
+  & .ck-rel__filtros .ck-btn:hover { color: var(--nl-tx); }
+  & .ck-rel__filtros .ck-btn[aria-pressed="true"] { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); box-shadow: var(--nl-sombra); }
+
+  /* Chamados (F5): título e selo fora dos cartões; novos (âmbar) e antigos (fúcsia) com borda no tom; cartão do mês embaixo */
+  & .nf8-cham-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  & .ck-bento-cartao.nf8-cham-cartao { background: rgba(var(--ac), .4); }
+  & .nf8-cham-cartao .ck-rel__cartao-titulo { color: var(--tom); }
+  & .nf8-cham-num { font: 600 40px/1 var(--fonte-corpo); letter-spacing: -.02em; color: var(--nl-tx); }
+  & .nf8-cham-info__cab { gap: 6px; }
+  & .nf8-cham-info__cab .nf8-chip { margin-left: auto; border-color: var(--nl-bd); background: var(--nl-card2); color: var(--nl-tx2); }
+
+  /* Base atual: totais em caixinhas, tipos e unidades em linhas simples, sem barra */
+  & .ck-rel__base-grade .ck-rel__numero { border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .ck-rel__tipos, & .ck-rel__unidades { gap: 0; }
+  & .ck-rel__tipo, & .ck-rel__unidade { padding: 9px 0; border-bottom: 1px solid var(--nl-bd); }
+  & :is(.ck-rel__tipo, .ck-rel__unidade):last-child { border-bottom: 0; }
+
+  /* Links "Ver ... →" na cor do cartão (--tom); a seta anda na horizontal */
+  & .ck-rel__link { color: var(--tom, var(--nl-itx)); }
+
+  /* Segmentado "Fonte" (Ambas, Oracle, Simpress) no cabeçalho do Movimento do mês */
+  & [data-rel-secao="movimento"] .ck-rel__secao-cab > .nf8-seg { margin-left: auto; }
+  & .nf8-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .nf8-seg__op { height: 30px; min-height: 0; padding: 0 12px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); font: 500 13px/1 var(--fonte-corpo); cursor: pointer; }
+  & .nf8-seg__op:hover { color: var(--nl-tx); }
+  & .nf8-seg__op[aria-pressed="true"] { border-color: rgba(var(--nl-i), .45); background: rgba(var(--nl-i), .14); color: var(--nl-itx); }
+  & .nf8-seg__op:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 1px; }
+
+  /* Gráfico semanal: legenda com totais, eixo Y com grade tracejada, grupos de 3 barras por semana, rótulos embaixo */
+  & .nf8-g { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  & .nf8-leg { display: flex; flex-wrap: wrap; gap: 8px 20px; font: 400 13px/1.3 var(--fonte-corpo); color: var(--nl-tx2); }
+  & .nf8-leg > span { display: inline-flex; align-items: center; gap: 8px; }
+  & .nf8-leg b { font: 600 13px/1 var(--fonte-mono); color: var(--nl-tx); }
+  & .nf8-sw { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+  & :is(.nf8-sw, .nf8-b).s1 { background: rgb(var(--nl-i)); }
+  & :is(.nf8-sw, .nf8-b).s2 { background: rgb(var(--nl-e)); }
+  & :is(.nf8-sw, .nf8-b).s3 { background: rgb(var(--nl-a)); }
+  & .nf8-plot { display: grid; grid-template-columns: 32px minmax(0, 1fr); height: var(--h, 180px); margin-top: 8px; }
+  & .nf8-eixo { position: relative; }
+  & .nf8-eixo > span { position: absolute; right: 8px; transform: translateY(50%); font: 400 11px/1 var(--fonte-mono); color: var(--nl-mut); }
+  & .nf8-area { position: relative; display: flex; align-items: flex-end; border-bottom: 1px solid var(--nl-bd2); }
+  & .nf8-lin { position: absolute; inset-inline: 0; height: 0; border-top: 1px dashed var(--nl-bd); }
+  & .nf8-gr { position: relative; z-index: 1; display: flex; flex: 1 1 0; align-items: flex-end; justify-content: center; gap: 4px; min-width: 0; height: 100%; padding: 0 8px; }
+  & .nf8-b { flex: 0 1 18px; min-width: 6px; border-radius: 4px 4px 0 0; transform-origin: bottom; }
+  & .nf8-x { display: grid; grid-template-columns: 32px minmax(0, 1fr); }
+  & .nf8-xs { display: flex; }
+  & .nf8-xs > span { flex: 1 1 0; min-width: 0; font: 400 11px/1.3 var(--fonte-mono); text-align: center; color: var(--nl-mut); overflow-wrap: anywhere; }
+  & .nf8-xs small { display: block; font-size: 10px; color: var(--nl-fraco); }
+
+  /* Tabelas no desktop: borda e cabeçalho do desenho (abaixo de 1200px cada linha já vira cartão, em ck-cockpit.css) */
+  @media (min-width: 1200px) {
+    & .ck-rel__tabela { border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); }
+    & .ck-tabela th { border-bottom-color: var(--nl-bd); background: var(--nl-card2); color: var(--nl-mut); font: 500 12px/1.3 var(--fonte-corpo); letter-spacing: 0; text-transform: none; }
+    & .ck-tabela td { border-bottom-color: var(--nl-bd); color: var(--nl-tx2); }
+    & .ck-tabela tbody tr:last-child > td { border-bottom: 0; }
+    & .ck-tabela tbody tr:hover > td { background: rgba(var(--nl-i), .05); }
+  }
+  @media (max-width: 1199.98px) {
+    & .ck-tabela--cards tr { border-color: var(--nl-bd); background: var(--nl-card); }
+    & .ck-tabela--cards td { border-bottom-color: var(--nl-bd); }
+    & .ck-tabela--cards td::before { font: 500 12px/1.5 var(--fonte-corpo); letter-spacing: 0; text-transform: none; color: var(--nl-mut); }
+  }
+}
+
+/* Janela "Relatório mensal" (partial modais.html): "Mês" com asterisco vermelho, sem dois-pontos */
+label.mr-rotulo .mr-req { margin-left: 2px; color: var(--nl-rtx); }
+
+/* Celular (pares -cel): tudo em uma coluna, pílulas dos meses esticadas, sub-abas rolam na horizontal, botões de 44 px */
+@media (max-width: 639.98px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+    & .ck-rel__espaco { display: none; }
+    & .ck-rel__periodo { align-self: flex-start; order: -1; flex: 0 0 auto; margin-bottom: 0; }
+    & #cockpit-monthly-periods { display: flex; width: 100%; }
+    & #cockpit-monthly-periods .ck-pilula { flex: 1 1 0; min-height: 44px; padding: 0 8px; }
+    & .rel-abas-barra { padding-inline: 12px; }
+    & .rel-abas { display: flex; width: 100%; }
+    & .ck-rel__atencao-grade, & .nf8-cham-grade { grid-template-columns: minmax(0, 1fr); }
+    & :is(.ck-rel__atencao, .nf8-chamados, .nf8-cham-info) .ck-rel__numeros { gap: 8px 32px; }
+    & .nf8-cham-num { font-size: 32px; }
+    & [data-rel-secao="movimento"] .ck-rel__secao-cab > .nf8-seg { display: flex; width: 100%; margin-left: 0; }
+    & .nf8-seg__op { flex: 1 1 0; }
+    & .ck-rel__filtros { display: flex; width: 100%; overflow-x: auto; scrollbar-width: none; }
+    & .ck-rel__filtros .ck-btn { flex: 1 0 auto; }
+    & .nf8-plot, & .nf8-x { grid-template-columns: 24px minmax(0, 1fr); }
+    & .nf8-eixo > span { right: 4px; }
+    & .nf8-gr { gap: 2px; padding: 0 3px; }
+    & .nf8-b { flex-basis: 12px; min-width: 4px; }
+    & .nf8-xs > span { font-size: 10px; }
+  }
+}
+
+/* Toque: controles com 44 px de altura mínima */
+@media (pointer: coarse) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] :is(#cockpit-monthly-periods .ck-pilula, .rel-aba, .nf8-seg__op, .ck-rel__filtros .ck-btn) { min-height: 44px; }
+}
+
+/* Movimento: as barras sobem do eixo (300 ms, uma depois da outra, o atraso de 40 ms por barra vem do JS); transições curtas nos controles */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes nf8-barra { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
+    & .nf8-b { animation: nf8-barra 300ms var(--nl-curva) backwards; transition: filter 150ms var(--nl-curva); }
+    & .nf8-b:hover { filter: brightness(1.12); }
+    & :is(#cockpit-monthly-periods .ck-pilula, .rel-aba, .nf8-seg__op, .ck-rel__filtros .ck-btn) { transition: color 150ms var(--nl-curva), background-color 150ms var(--nl-curva), border-color 150ms var(--nl-curva), box-shadow 150ms var(--nl-curva); }
+    & :is(.rel-aba, #cockpit-monthly-periods .ck-pilula):hover { transform: none; }
+    & .ck-rel__filtros .ck-btn:not(:disabled):hover { transform: none; box-shadow: none; }
+    & :is(.ck-btn, .ck-rel__link):hover .ck-rel__seta { transform: translateX(3px); }
+  }
+}

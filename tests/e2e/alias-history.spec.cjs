@@ -4,9 +4,9 @@ const AxeBuilder = require("@axe-core/playwright").default;
 const PANEL = '[data-cockpit-tool-panel="apelidos"]';
 const ITEMS = "#cockpit-alias-list .ck-ferr-item";
 
-function fixtureHistory() {
+function fixtureHistory(total = 32) {
   const types = ["usuario", "apelido", "aviso_endpoint", "endereco"];
-  return Array.from({ length: 32 }, (_, index) => {
+  return Array.from({ length: total }, (_, index) => {
     const tipo = types[index % types.length];
     const serial = index === 4 ? "SN-001" : `SN-${String(index + 1).padStart(3, "0")}`;
     return {
@@ -34,7 +34,8 @@ async function openHistory(page, eventos) {
   if (!(await menu.evaluate(element => element.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-historico-apelidos").click();
   await expect(page.locator(PANEL)).toBeVisible();
-  await expect(page.locator(ITEMS)).toHaveCount(eventos.length);
+  // "Carregar mais" mostra 50 registros por vez.
+  await expect(page.locator(ITEMS)).toHaveCount(Math.min(eventos.length, 50));
 }
 
 test("the F7 panel is the full history: search, type, action filter and clear", async ({ page }) => {
@@ -65,6 +66,80 @@ test("the F7 panel is the full history: search, type, action filter and clear", 
   await expect(page.getByRole("tab", { name: /^Todos/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#cockpit-alias-actions-only")).not.toBeChecked();
   await expect(page.locator(ITEMS)).toHaveCount(32);
+});
+
+test("the F7 panel follows the Novo layout: chips, search, secondary export and detail blocks", async ({ page }) => {
+  test.setTimeout(60_000);
+  // Cadastro atual sintético, para o detalhe mostrar o botão "Copiar apelido atual".
+  await page.route("**/api/buscar-expandida*", route => route.fulfill({
+    json: { items: [{ serial: "SN-001", apelido: "host-atual-01", modelo: "Notebook de demonstração", retirada_cidade: "Curitiba" }] },
+  }));
+  await openHistory(page, fixtureHistory());
+  const coarse = await page.evaluate(() => matchMedia("(pointer: coarse)").matches);
+
+  // Exportar CSV é secundário; a busca tem rótulo acessível (só para leitor de tela) e nenhum placeholder.
+  // Na tela larga ela tem até 300 px; no celular ocupa a linha toda.
+  await expect(page.locator("#cockpit-alias-export")).toHaveClass(/ck-btn--secundario/);
+  const search = page.getByRole("searchbox", { name: "Buscar no histórico" });
+  await expect(search).not.toHaveAttribute("placeholder", /./);
+  if (page.viewportSize().width >= 640) {
+    expect(await search.evaluate(input => input.closest("label").getBoundingClientRect().width)).toBeLessThanOrEqual(300);
+  }
+
+  // Chips de tipo: 32 px (44 px em toque), contagem em mono dentro do chip.
+  const todos = page.getByRole("tab", { name: /^Todos/ });
+  expect((await todos.boundingBox()).height).toBe(coarse ? 44 : 32);
+  await expect(todos.locator("[data-alias-tab-count]")).toHaveText("32");
+
+  // Cabeçalho do grupo: a contagem fica num selo (número visível, complemento só para leitor de tela).
+  const groupSeal = page.locator(".ck-alias-grupo__cab .ck-alias-selo-n").first();
+  await expect(groupSeal).toHaveText(/^\d+ alterações$/);
+
+  // Detalhe: ações em coluna, par "Restaurar anterior" + "Restaurar e excluir", contagem do histórico em selo.
+  await page.locator("#cockpit-alias-actions-only").check();
+  await page.locator(ITEMS).filter({ hasText: "SN-001" }).first().getByRole("button").click();
+  const detail = page.locator("#cockpit-alias-detail");
+  const home = detail.getByRole("button", { name: "Abrir na Home" });
+  const pair = detail.locator(".ck-alias-det__par");
+  await expect(pair.getByRole("button")).toHaveText(["Restaurar anterior", "Restaurar e excluir"]);
+  const homeBox = await home.boundingBox();
+  const pairBox = await pair.boundingBox();
+  expect(Math.abs(homeBox.width - pairBox.width)).toBeLessThanOrEqual(1);
+  await expect(detail.getByRole("heading", { name: "Histórico deste equipamento", exact: true })).toBeVisible();
+  await expect(detail.locator(".ck-alias-bloco__cab .ck-alias-selo-n")).toHaveText(/^\d+ registros?$/);
+  await expect(detail.getByText("Antes", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Depois", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Copiar apelido atual" })).toBeVisible();
+
+  // Na tela larga, a lista ocupa o espaço que sobra e o detalhe tem 460 px.
+  if (page.viewportSize().width >= 1024) {
+    expect((await page.locator(".ck-alias-detalhe-cartao").boundingBox()).width).toBeCloseTo(460, 0);
+  }
+});
+
+test("Carregar mais shows 50 records at a time, focuses the first new row and resets with the filters", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openHistory(page, fixtureHistory(60));
+  const rows = page.locator("#cockpit-alias-list .ck-alias-linha");
+  const more = page.locator("#cockpit-alias-more");
+  await expect(page.locator(ITEMS)).toHaveCount(50);
+  await expect(more).toHaveText("Carregar mais");
+
+  // O selo do grupo conta o dia inteiro no filtro atual, mesmo com parte ainda escondida.
+  const total = await page.locator(".ck-alias-grupo__cab .ck-alias-selo-n")
+    .evaluateAll(seals => seals.reduce((sum, seal) => sum + Number.parseInt(seal.textContent, 10), 0));
+  expect(total).toBe(60);
+
+  await more.click();
+  await expect(page.locator(ITEMS)).toHaveCount(60);
+  await expect(more).toHaveCount(0);
+  await expect(rows.nth(50)).toBeFocused();
+
+  await page.getByRole("tab", { name: /^Usuário/ }).click();
+  await expect(page.locator(ITEMS)).toHaveCount(15);
+  await page.getByRole("tab", { name: /^Todos/ }).click();
+  await expect(page.locator(ITEMS)).toHaveCount(50);
+  await expect(more).toBeVisible();
 });
 
 test("the type tabs follow the arrow, Home and End keys and wrap around", async ({ page }) => {
