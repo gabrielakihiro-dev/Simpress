@@ -55,7 +55,7 @@ Sem algum desses arquivos o sistema abre normalmente; só as funções que depen
 
 ## 2. Iniciar o sistema
 
-1. Na pasta do projeto, dê dois cliques em **`iniciar_servidor.bat`** (ou, no PowerShell, `.\iniciar_servidor.bat`).
+1. Na pasta do projeto, dê dois cliques em **`iniciar_servidor.bat`** (ou, no PowerShell, `.\iniciar_servidor.bat`). Para abrir mais rápido no dia a dia, use `.\iniciar_servidor.bat rapido`: pula a verificação de atualização e das dependências. Depois de atualizar o projeto, abra sem `rapido`.
 2. Na **primeira vez**, aguarde: o programa cria o ambiente (`.venv`) e baixa as dependências. Pode levar alguns minutos.
 3. Se aparecer **"Há uma versão nova (v1.1.0). Atualizar agora? (S/N)"** (com o número da versão nova), leia logo acima o resumo do que mudou e digite `S` e Enter para atualizar, ou `N` para continuar com a versão atual. Só aparecem versões publicadas e testadas; mudanças ainda em teste não são oferecidas. A atualização é opcional e não mexe nos seus dados (`data/`). Se o sistema não puder atualizar (sem internet, alterações locais, nenhuma versão publicada, etc.), ele mostra o motivo e abre normalmente com a versão atual; se avisar que as dependências mudaram, aguarde a reinstalação. O histórico de versões fica no arquivo `CHANGELOG.md`, na pasta do projeto.
 4. Quando o servidor estiver pronto, o navegador abre o Simpress sozinho (o terminal mostra a linha **`Site: http://127.0.0.1:8000`**). Se a porta 8000 estiver ocupada, o iniciador usa outra (entre 8001 e 8099). Abra o Simpress sempre pelo `iniciar_servidor.bat`: digitar o endereço à mão em outro navegador mostra **"Sessão local ausente ou expirada"**, porque só o navegador aberto pelo iniciador recebe a sessão local (ela muda a cada início do servidor).
