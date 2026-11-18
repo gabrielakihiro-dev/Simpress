@@ -19,10 +19,11 @@ import sys
 import tempfile
 import threading
 import zipfile
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
 from urllib.parse import quote
 
 from core.errors import DomainBusyError, DomainConflictError, DomainError
@@ -151,6 +152,13 @@ def _parse_time(value: Any) -> Optional[datetime]:
     return parsed if parsed.tzinfo else parsed.astimezone()
 
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _micros(moment: datetime) -> int:
+    return (moment - _EPOCH) // timedelta(microseconds=1)
+
+
 def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -243,6 +251,9 @@ class ChromeAutomationRunner:
         self._lock = threading.Lock()
         self._current: Optional[_Run] = None
         self._cancel_support: Optional[tuple[float, bool]] = None
+        self._history_lock = threading.Lock()
+        self._history_cache: Optional[tuple[frozenset, List[Dict[str, Any]]]] = None
+        self._json_cache: Dict[str, tuple[tuple, Optional[Dict[str, Any]]]] = {}
         self._recover_site_records()
 
     # ------------------------------------------------------------------ helpers
@@ -618,31 +629,73 @@ class ChromeAutomationRunner:
                 batches.append({"id": str(value), "status": ""})
         return batches
 
+    def _log_dir_signature(self) -> frozenset:
+        """Name, mtime and size of every file the history depends on (records and captures, not the growing .log)."""
+        try:
+            with os.scandir(self.contract.log_dir) as items:
+                return frozenset((item.name, item.stat().st_mtime_ns, item.stat().st_size)
+                                 for item in items if not item.name.endswith(".log"))
+        except OSError:
+            return frozenset()
+
+    def _cached_json(self, path: Path, stamps: Dict[str, tuple]) -> Optional[Dict[str, Any]]:
+        stamp = stamps.get(path.name)
+        hit = self._json_cache.get(path.name)
+        if stamp is not None and hit is not None and hit[0] == stamp:
+            return hit[1]
+        record = _read_json(path)
+        if stamp is not None:
+            self._json_cache[path.name] = (stamp, record)
+        return record
+
     def history(self, limit: Optional[int] = 15) -> List[Dict[str, Any]]:
         if not self.contract.log_dir.is_dir():
             return []
+        with self._history_lock:
+            signature = self._log_dir_signature()
+            if self._history_cache is None or self._history_cache[0] != signature:
+                self._history_cache = (signature, self._build_history(signature))
+            entries = self._history_cache[1]
+        # Top-level copies: callers may add keys without touching the cache.
+        return [dict(entry) for entry in entries[:limit]]
+
+    def _build_history(self, signature: frozenset) -> List[Dict[str, Any]]:
+        stamps = {name: (mtime, size) for name, mtime, size in signature}
+        self._json_cache = {name: hit for name, hit in self._json_cache.items() if name in stamps}
         site = []
         for path in self._site_records():
-            record = _read_json(path)
+            record = self._cached_json(path, stamps)
             if record:
                 site.append((path.name[: -len(self.contract.site_record_suffix)], record))
         script = []
         for path in sorted(self.contract.log_dir.glob("*.json")):
             if path.name.endswith(self.contract.site_record_suffix):
                 continue
-            record = _read_json(path)
+            record = self._cached_json(path, stamps)
             if record and record.get("rotina") in ROUTINES:
                 script.append((path.stem, record))
 
         entries: List[Dict[str, Any]] = []
         for identifier, record in site:
             entries.append({**record, "id": identifier, "origem": "site"})
+        # Site runs by routine, sorted by start in microseconds: twin lookup by bisect instead of a full scan.
+        by_routine: Dict[str, tuple[List[int], List[int]]] = {}
+        for micros, index in sorted((_micros(moment), index) for index, entry in enumerate(entries)
+                                    if isinstance(entry.get("rotina"), str)
+                                    and (moment := _parse_time(entry.get("inicio"))) is not None):
+            times, indexes = by_routine.setdefault(entries[index]["rotina"], ([], []))
+            times.append(micros)
+            indexes.append(index)
+        window = SAME_RUN_SECONDS * 1_000_000
         for identifier, record in script:
             started = _parse_time(record.get("inicio"))
-            twin = next((entry for entry in entries if entry["origem"] == "site"
-                         and entry.get("rotina") == record.get("rotina")
-                         and started is not None and (other := _parse_time(entry.get("inicio"))) is not None
-                         and abs((other - started).total_seconds()) <= SAME_RUN_SECONDS), None)
+            twin = None
+            if started is not None and record.get("rotina") in by_routine:
+                times, indexes = by_routine[record["rotina"]]
+                micros = _micros(started)
+                low, high = bisect_left(times, micros - window), bisect_right(times, micros + window)
+                if low < high:
+                    twin = entries[min(indexes[low:high])]  # same pick as the old scan: first site record in name order
             if twin is not None:
                 # The script's own summary knows the batches and captures better than the stdout scan.
                 twin["lotes"] = record.get("lotes") or twin.get("lotes")
@@ -662,7 +715,7 @@ class ChromeAutomationRunner:
 
         entries.sort(key=lambda entry: str(entry.get("inicio") or ""), reverse=True)
         result = []
-        for entry in entries[:limit]:
+        for entry in entries:
             result.append({
                 "id": entry["id"],
                 "rotina": str(entry.get("rotina") or ""),
@@ -703,6 +756,11 @@ class ChromeAutomationRunner:
         offset = (page - 1) * limit
         return {"execucoes": entries[offset:offset + limit], "total": len(entries),
                 "pagina": page, "paginas": pages, "limite": limit}
+
+    def latest_by_routine(self, routines: Sequence[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+        """Most recent run of each routine: the same entry as ``history_page(1, routine=r)`` gives, in one read."""
+        entries = self.history(None)
+        return {routine: next((entry for entry in entries if entry["rotina"] == routine), None) for routine in routines}
 
     def execution_log(self, identifier: str, lines: int = 200) -> Dict[str, Any]:
         entry = next((item for item in self.history(None) if item["id"] == identifier), None)
