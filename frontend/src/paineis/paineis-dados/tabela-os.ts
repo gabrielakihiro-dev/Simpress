@@ -910,45 +910,51 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     });
     try {
       const notasSeq = osObsSeq;
-      const [report, linksData, notasData, marcasData] = await Promise.all([
-        osSummaryRequest("/api/operacoes/chamados"),
+      const reportRequest = osSummaryRequest("/api/operacoes/chamados");
+      // O usuário logado depende só do relatório: o pedido sai assim que ele chega, junto das outras cargas.
+      const usersRequest = reportRequest.then(async (report: Qualquer) => {
+        const records = groupTicketOsRows(collectTicketOsRows(report));
+        const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
+          .map((ticket: Qualquer) => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
+        // Registros de cada seção: a da janela Chamado × OS fica só com a OS pedida.
+        const proprios = new Map<Qualquer, Qualquer>(alvos.map((section: Qualquer) => {
+          const st = osExternas.get(section);
+          return [section, st?.soOs ? soEssaOs(records, st.soOs, relacoes) : records];
+        }));
+        // Só janelas na carga: o usuário logado é pedido só para as séries delas.
+        const pedidas = [...new Set([...proprios.values()].flat().map(item => item.serie))];
+        let users = {};
+        let userFailure = false;
+        if (pedidas.length) {
+          try {
+            const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ series: pedidas }),
+            });
+            users = userData.usuarios || {};
+          } catch (_) {
+            userFailure = true;
+          }
+        }
+        return { records, relacoes, proprios, users, userFailure };
+      });
+      const [report, linksData, notasData, marcasData, { records, relacoes, proprios, users, userFailure }] = await Promise.all([
+        reportRequest,
         osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
         // Falha nas observações não derruba a tabela: a caixa fica só leitura.
         osSummaryRequest("/api/operacoes/chamados/observacoes").catch(() => null),
         // Falha nas marcas também não derruba a tabela: o status avisa que elas estão indisponíveis.
         osSummaryRequest(MARCA_ROTA).catch(() => null),
+        usersRequest,
       ]);
       const marcas = Array.isArray(marcasData?.marcas) ? modelo.marcasPorOs(marcasData.marcas) : null;
       const notas = Array.isArray(notasData?.observacoes) ? {
         seq: notasSeq,
         itens: new Map(notasData.observacoes.map((item: Qualquer) => [osObsKey(item.serie, item.os), String(item.observacao || "")])),
       } : null;
-      const records = groupTicketOsRows(collectTicketOsRows(report));
-      const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
-        .map((ticket: Qualquer) => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
       const modelos = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
         .map((ticket: Qualquer) => [serialKey(ticket?.serie), (Array.isArray(ticket?.simpress?.modelos) ? ticket.simpress.modelos : []).join(" ")]));
-      // Registros de cada seção: a da janela Chamado × OS fica só com a OS pedida.
-      const proprios = new Map<Qualquer, Qualquer>(alvos.map((section: Qualquer) => {
-        const st = osExternas.get(section);
-        return [section, st?.soOs ? soEssaOs(records, st.soOs, relacoes) : records];
-      }));
-      // Só janelas na carga: o usuário logado é pedido só para as séries delas.
-      const pedidas = [...new Set([...proprios.values()].flat().map(item => item.serie))];
-      let users = {};
-      let userFailure = false;
-      if (pedidas.length) {
-        try {
-          const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ series: pedidas }),
-          });
-          users = userData.usuarios || {};
-        } catch (_) {
-          userFailure = true;
-        }
-      }
       const linkItems = Array.isArray(linksData.vinculos) ? linksData.vinculos : [];
       const links = new Map(linkItems.map((item: Qualquer) => [ticketOsLinkKey({ fonte: item.fonte, serie: item.serie, os: item.os }), item]));
       vivos().forEach((section: Qualquer) => {
