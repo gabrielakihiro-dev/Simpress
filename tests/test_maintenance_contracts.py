@@ -1036,6 +1036,17 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn('if not exist "%TEMPLATE%" goto', launcher)
         self.assertNotIn(":missing_template", launcher)
 
+    def test_windows_launcher_quick_mode_skips_only_update_and_bootstrap(self):
+        launcher = (PROJECT_ROOT / "iniciar_servidor.bat").read_text(encoding="utf-8")
+
+        self.assertIn('if /i "%~1"=="rapido" if exist "%PYTHON%" goto quick_start', launcher)
+        start = launcher.index("\n:quick_start")
+        quick = launcher[start : launcher.index('"%PYTHON%" "%MAIN%"', start)]
+        self.assertNotIn("%UPDATER%", quick)
+        self.assertNotIn("%BOOTSTRAPPER%", quick)
+        for step in ('"%PYTHON%" "%MIGRATOR%"', '"%PYTHON%" "%CLEANER%" --apply', "call :select_server_port"):
+            self.assertIn(step, quick)
+
 
 if __name__ == "__main__":
     unittest.main()
