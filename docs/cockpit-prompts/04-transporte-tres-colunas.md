@@ -140,7 +140,7 @@ Mesmos `data-on-click="adicionarObsChamado"` e `data-args` atuais.
 #### Rodapé
 
 - Botão **Texto para Transporte** — `gerarTextoSolicitacaoTransporte`, texto com os endereços de retirada e entrega em `#modal-texto-transporte` (removido em 07/11/2026 e restaurado em 08/11/2026)
-- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Transporte** (antigo **Gerar planilha**) abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em React: `frontend/src/paineis/ux-ticket/`; `static/js/features/ux-ticket.js` é só a ponte)
+- ~~Botão **Copiar texto** e link **Abrir chamado**~~ (removidos em 07/11/2026; depois do download, **Transporte** (antigo **Gerar planilha**) abre o modal `#modal-ticket-ux`, "Gerar ticket no UX", em React: `frontend/src/paineis/ux-ticket/`; `frontend/src/aplicacao/ux-ticket.ts` é só a ponte)
 - Botão **Transporte** (antigo **Gerar planilha**, renomeado em 11/11/2026) — mesmo `#btn-gerar-planilha` e handler (`gerarPlanilhaExcel`); primeiro da barra
 - Botão **Alterar Endereço** (`#btn-alterar-endereco`, `alterarEnderecoTicketUX`, 11/11/2026) — segundo da barra; acende só com a série e os dois endereços e abre o modal com Incidente `Transporte` / Motivo `Transferência Fisica de Equipamentos`, sem planilha
 
@@ -184,7 +184,7 @@ Os chips de cidade (`button.ck-unidade`) foram removidos. A seção "Chips de un
 
 ## Transporte preparado pela Cobertura (F10, 07/11/2026)
 
-`Preparar Transporte` na Cobertura chama `prepararTransporte` (`static/js/features/transfer-form.js`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Desde a migração React BF1 (16/11/2026), as ações e regras do formulário ficam em `frontend/src/paineis/transporte/` e `static/js/features/transfer-form.js` é a ponte; contatos e representantes regionais ficam em `frontend/src/paineis/contatos-regionais/`, com a ponte em `static/js/features/regional-contacts.js`. Os campos e IDs visíveis permanecem no HTML parcial. Nunca clica em `Transporte` (antigo `Gerar planilha`); quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.
+`Preparar Transporte` na Cobertura chama `prepararTransporte` (`frontend/src/paineis/transporte/`): seleciona a série, abre o Transporte, escolhe a filial pela cidade (`selecionarUnidadePorCidade`) e acrescenta a observação. Desde a migração React BF1 (16/11/2026), as ações e regras do formulário ficam em `frontend/src/paineis/transporte/` e `frontend/src/aplicacao/pontes.ts` (entrada `transferForm`) é a ponte; contatos e representantes regionais ficam em `frontend/src/paineis/contatos-regionais/`, com a ponte em `frontend/src/aplicacao/pontes.ts` (entrada `regionalContacts`). Os campos e IDs visíveis permanecem no HTML parcial. Nunca clica em `Transporte` (antigo `Gerar planilha`); quem gera é o operador. A planilha só fica ligada à movimentação se a série e o destino ainda forem os preparados; se o registro na Cobertura falhar, aparece `Planilha baixada sem vínculo — Tentar de novo`. Regras e riscos em `16-cobertura.md`.
 
 ## Textos explicativos no ⓘ (Bloco 4, 14/11/2026)
 

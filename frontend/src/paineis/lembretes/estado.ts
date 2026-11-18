@@ -58,8 +58,6 @@ export interface Estado {
   criarEnviando: boolean;
 }
 
-export const NOMES_TERMO = Object.keys(TERMOS) as NomeTermo[];
-
 export const formVazio = (termo: NomeTermo): FormTermo => ({
   campos: Object.fromEntries(TERMOS[termo].campos.map(nome => [nome, ""])),
   itens: TERMOS[termo].itens.map(() => "sim"),

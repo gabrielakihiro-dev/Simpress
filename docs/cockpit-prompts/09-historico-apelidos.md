@@ -2,7 +2,7 @@
 
 Cole este prompt no agente de código com o repositório Simpress aberto.
 
-Migração React BF1 (16/11/2026): as regras e ações do histórico estão em `frontend/src/paineis/historico-apelidos/`; `static/js/features/alias-history.js` mantém os nomes antigos como ponte. A tela F7 passou ao painel `ferramentas-cockpit` no BF4 (parágrafo abaixo); o HTML da seção segue em `frontend/partials/cockpit-tool-panels.html`.
+Migração React BF1 (16/11/2026): as regras e ações do histórico estão em `frontend/src/paineis/historico-apelidos/`; `frontend/src/aplicacao/alias-history.ts` mantém os nomes antigos como ponte. A tela F7 passou ao painel `ferramentas-cockpit` no BF4 (parágrafo abaixo); o HTML da seção segue em `frontend/partials/cockpit-tool-panels.html`.
 
 Migração React BF4 (17/11/2026): a ponte `cockpit-tool-panels.js` e o painel React `ferramentas-cockpit` (ferramentas do Cockpit) estão descritos no primeiro parágrafo de `14-cockpit-v2.md`.
 
@@ -14,7 +14,7 @@ Criar o painel `Histórico de apelidos` no grupo Ferramentas dos nove pontos, co
 
 ## Regras obrigatórias
 
-1. Leia `AGENTS.md`, confira o estado do Git e inspecione `domains/alias_changes.py`, `static/js/features/alias-history.js`, `#modal-historico-apelidos` e `routers/aliases.py` antes de editar.
+1. Leia `AGENTS.md`, confira o estado do Git e inspecione `domains/alias_changes.py`, `frontend/src/aplicacao/alias-history.ts`, `#modal-historico-apelidos` e `routers/aliases.py` antes de editar.
 2. Reaproveite o endpoint local `/api/historico-alteracoes`, os eventos existentes e suas regras. Não crie um cadastro paralelo nem um endpoint novo para duplicar o histórico.
 3. Calcule `Alterações neste mês` e `Equipamentos afetados` por evento/série únicos, usando a data e o tipo reais. `Fora do padrão` e `Apelidos duplicados` saíram do painel em 11/11/2026 (ver "Desvio aprovado (11/11/2026)"); não crie uma regex ou regra de negócio visual para eles.
 4. Preserve os tipos de evento existentes: apelido/hostname, usuário logado, endereço de instalação e aviso do Endpoint. O painel pode priorizar apelidos, mas filtros/timeline não podem ocultar outras categorias que hoje aparecem no histórico.
@@ -81,6 +81,6 @@ Só a aparência mudou, a pedido do usuário, seguindo o canvas "Simpress Bento"
 - A lista de registros e o detalhe viram dois cartões bento lado a lado (`frontend/partials/cockpit-tool-panels.html`, `.ck-dividido.ck-alias-dupla`). Abaixo de 1024px ficam um embaixo do outro; a face do cartão usa 20px de respiro em telas de até 640px.
 - Barra de busca, botões (40px de altura, cantos de 12px; o principal usa a cor de destaque), abas por tipo e período em pílulas (38px; a aba escolhida ganha borda ciano). O ponto colorido do tipo (`.ck-alias-ponto`) fica oculto, porque o rótulo em texto já diz o tipo.
 - Todo o CSS novo está em `static/styles/ck-bento.css`, seção 11.1, preso a `[data-cockpit-tool-panel="apelidos"]`; nada vaza para o Resumo (F3). Não precisou de Tailwind nem de `npm run build:ui`; `static/index.html` não precisa ser refeito, porque os partials são montados quando a página é servida.
-- Movimento (só com `prefers-reduced-motion: no-preference`, contrato em `docs/ui-motion/contrato-bento.md`): entrada dos blocos em 700 ms, passos de 80 ms; botão sobe 3px e aba sobe 2px ao passar o mouse (300 ms). Os números das abas e da lista contam até o valor em 900 ms (`data-bento-contar`) e a entrada se repete ao trocar de aba ou de filtro (`animarFiltrosAlias` em `static/js/features/cockpit-tool-panels.js`, via `SimpressBento.animarDentro`).
+- Movimento (só com `prefers-reduced-motion: no-preference`, contrato em `docs/ui-motion/contrato-bento.md`): entrada dos blocos em 700 ms, passos de 80 ms; botão sobe 3px e aba sobe 2px ao passar o mouse (300 ms). Os números das abas e da lista contam até o valor em 900 ms (`data-bento-contar`) e a entrada se repete ao trocar de aba ou de filtro (`animarFiltrosAlias` em `frontend/src/paineis/ferramentas-cockpit/estado.ts`, via `SimpressBento.animarDentro`).
 - Desvio do desenho: o detalhe fica grudado a 16px do topo (o desenho usa 84px, que aqui sobraria sob o cabeçalho). Se o usuário clicar numa aba e digitar na busca em menos de 900 ms, a contagem final pode mostrar por instantes o número da aba anterior.
 - Não verificado: comparação pixel a pixel com o desenho e capturas de 320px a 2560px.
