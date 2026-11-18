@@ -4,8 +4,9 @@ import { tentarVincularDeNovo } from "../historico-transferencias/vinculo";
 import { carregarCobertura, escrever, ler } from "./estado";
 import * as modelo from "./modelo";
 import { appAntigo, type Registro } from "./tipos";
+import type { Rotas } from "../../api-tipos.gerado";
 
-const id = (valor: unknown) => encodeURIComponent(String(valor));
+type Corpo<R extends keyof Rotas> = Rotas[R]["corpo"];
 
 export async function reservar(acao: Registro) {
   const corpo = { ...acao.corpo, manutencao_conferida: false };
@@ -20,7 +21,7 @@ export async function reservar(acao: Registro) {
     if (!confirmado) return;
     corpo.manutencao_conferida = true;
   }
-  await escrever("/api/cobertura/reservas", corpo, "Reserva registrada.");
+  await escrever("POST /api/cobertura/reservas", { corpo }, "Reserva registrada.");
 }
 
 export async function cancelarNecessidade(demanda: Registro) {
@@ -30,24 +31,26 @@ export async function cancelarNecessidade(demanda: Registro) {
     confirmar: "Cancelar necessidade",
     cancelar: "Voltar",
   });
-  if (ok) await escrever(`/api/cobertura/demandas/${id(demanda.id)}/cancelar`, { rev: demanda.rev }, "Necessidade cancelada.");
+  if (ok) await escrever("POST /api/cobertura/demandas/{demanda_id}/cancelar", { caminho: { demanda_id: demanda.id }, corpo: { rev: demanda.rev } }, "Necessidade cancelada.");
 }
 
-export function disponibilidade(serie: string, estado: string, rev?: number | null, cidade?: string) {
-  const corpo: Registro = { serie, estado };
+export function disponibilidade(serie: string, estado: Corpo<"POST /api/cobertura/disponibilidade">["estado"], rev?: number | null, cidade?: string) {
+  const corpo: Corpo<"POST /api/cobertura/disponibilidade"> = { serie, estado };
   if (cidade) corpo.cidade = cidade;
   if (rev !== undefined && rev !== null) corpo.rev = rev;
-  return escrever("/api/cobertura/disponibilidade", corpo, "Disponibilidade registrada.");
+  return escrever("POST /api/cobertura/disponibilidade", { corpo }, "Disponibilidade registrada.");
 }
 
 export const renovarReserva = (reserva: Registro) =>
-  escrever(`/api/cobertura/reservas/${id(reserva.id)}/renovar`, { rev: reserva.rev }, "Reserva renovada.");
+  escrever("POST /api/cobertura/reservas/{reserva_id}/renovar", { caminho: { reserva_id: reserva.id }, corpo: { rev: reserva.rev } }, "Reserva renovada.");
 
+// item é a chave do kit lida do arquivo; chave desconhecida volta 422 do servidor, como antes.
 export const alterarKit = (reserva: Registro, item: string, marcado: boolean) =>
-  escrever(`/api/cobertura/reservas/${id(reserva.id)}/kit`, { item, marcado, rev: reserva.rev });
+  escrever("POST /api/cobertura/reservas/{reserva_id}/kit",
+    { caminho: { reserva_id: reserva.id }, corpo: { item: item as Corpo<"POST /api/cobertura/reservas/{reserva_id}/kit">["item"], marcado, rev: reserva.rev } });
 
 export const entregarSemTransporte = (reserva: Registro) =>
-  escrever("/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "local" },
+  escrever("POST /api/cobertura/movimentacoes", { corpo: { reserva_id: reserva.id, rev: reserva.rev, tipo: "local" } },
     "Entrega sem Transporte registrada; confirme o recebimento em Em movimento.");
 
 export async function cancelarReserva(reserva: Registro) {
@@ -57,19 +60,20 @@ export async function cancelarReserva(reserva: Registro) {
     confirmar: "Cancelar reserva",
     cancelar: "Voltar",
   });
-  if (ok) await escrever(`/api/cobertura/reservas/${id(reserva.id)}/cancelar`, { rev: reserva.rev }, "Reserva cancelada.");
+  if (ok) await escrever("POST /api/cobertura/reservas/{reserva_id}/cancelar", { caminho: { reserva_id: reserva.id }, corpo: { rev: reserva.rev } }, "Reserva cancelada.");
 }
 
 // Só preenche o Transporte; quem gera a planilha é sempre o operador.
 export async function prepararTransporte(reserva: Registro, demanda: Registro) {
-  const mov = await escrever("/api/cobertura/movimentacoes", { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" },
+  const mov = await escrever("POST /api/cobertura/movimentacoes", { corpo: { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" } },
     "Transporte preparado: confira os dados e gere a planilha no Transporte.");
   if (!mov) return;
   await appAntigo().prepararTransporte?.({ serial: mov.serie, cidade: mov.destino_cidade, obs: demanda?.observacao || "", movimentacao: mov });
 }
 
-export function mudarEstado(mov: Registro, estado: string, extra: Registro, sucesso: string) {
-  return escrever(`/api/cobertura/movimentacoes/${id(mov.id)}/estado`, { estado, rev: mov.rev, ...extra }, sucesso);
+export function mudarEstado(mov: Registro, estado: Corpo<"POST /api/cobertura/movimentacoes/{movimentacao_id}/estado">["estado"], extra: Registro, sucesso: string) {
+  return escrever("POST /api/cobertura/movimentacoes/{movimentacao_id}/estado",
+    { caminho: { movimentacao_id: mov.id }, corpo: { estado, rev: mov.rev, ...extra } }, sucesso);
 }
 
 export async function cancelarMovimentacao(mov: Registro) {
@@ -84,11 +88,13 @@ export async function cancelarMovimentacao(mov: Registro) {
   if (ok) await mudarEstado(mov, "cancelada", {}, "Movimentação cancelada; reserva devolvida.");
 }
 
-export const vincularHistorico = (mov: Registro, historicoId: unknown) =>
-  escrever(`/api/cobertura/movimentacoes/${id(mov.id)}/vincular-historico`, { historico_id: historicoId, rev: mov.rev }, "Transferência vinculada.");
+export const vincularHistorico = (mov: Registro, historicoId: string) =>
+  escrever("POST /api/cobertura/movimentacoes/{movimentacao_id}/vincular-historico",
+    { caminho: { movimentacao_id: mov.id }, corpo: { historico_id: historicoId, rev: mov.rev } }, "Transferência vinculada.");
 
-export const resolverDivergencia = (mov: Registro, corpo: Registro, sucesso: string) =>
-  escrever(`/api/cobertura/movimentacoes/${id(mov.id)}/resolver-divergencia`, { ...corpo, rev: mov.rev }, sucesso);
+export const resolverDivergencia = (mov: Registro, corpo: Omit<Corpo<"POST /api/cobertura/movimentacoes/{movimentacao_id}/resolver-divergencia">, "rev">, sucesso: string) =>
+  escrever("POST /api/cobertura/movimentacoes/{movimentacao_id}/resolver-divergencia",
+    { caminho: { movimentacao_id: mov.id }, corpo: { ...corpo, rev: mov.rev } }, sucesso);
 
 export async function cancelarEReabrirVaga(mov: Registro) {
   const ok = await appAntigo().confirmarAcao?.({
@@ -100,8 +106,8 @@ export async function cancelarEReabrirVaga(mov: Registro) {
   if (ok) await resolverDivergencia(mov, { resolucao: "cancelar" }, "Movimentação cancelada; vaga reaberta.");
 }
 
-export const acaoDevolucao = (dev: Registro, sufixo: string, corpo: Registro, sucesso: string) =>
-  escrever(`/api/cobertura/devolucoes/${id(dev.id)}/${sufixo}`, { rev: dev.rev, ...corpo }, sucesso);
+export const acaoDevolucao = (dev: Registro, sufixo: "reprogramar" | "receber" | "cancelar", corpo: Registro, sucesso: string) =>
+  escrever(`POST /api/cobertura/devolucoes/{devolucao_id}/${sufixo}`, { caminho: { devolucao_id: dev.id }, corpo: { rev: dev.rev, ...corpo } }, sucesso);
 
 export async function cancelarDevolucao(dev: Registro) {
   const ok = await appAntigo().confirmarAcao?.({
