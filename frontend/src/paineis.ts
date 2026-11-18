@@ -6,4 +6,17 @@ export interface ModuloPainel {
   montar(container: HTMLElement): Acoes;
 }
 
-export const modulos = import.meta.glob<ModuloPainel>("./paineis/*/montar.tsx", { eager: true });
+// Painéis sob demanda: cada um vira um arquivo próprio em static/dist, baixado e montado na primeira chamada da ponte
+// (frontend/src/aplicacao/app.ts). Só entra aqui painel cuja ponte é toda assíncrona (nada de ponteReactSincrona nem
+// leitura direta de window.SimpressReact), com o container escondido na partida e sem nada que precise rodar antes de
+// abrir (ouvinte, timer, chamada da aplicação no arranque). A lista se repete nos dois globs: o Vite só aceita literal.
+export const modulos = import.meta.glob<ModuloPainel>(
+  [
+    "./paineis/*/montar.tsx",
+    "!./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos}/montar.tsx",
+  ],
+  { eager: true },
+);
+export const modulosSobDemanda = import.meta.glob<ModuloPainel>(
+  "./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos}/montar.tsx",
+);

@@ -88,17 +88,28 @@ export function iniciar(app: Qualquer = globalThis): void {
   // panel's old feature module stays in FEATURE_ORDER as a bridge: ponteReact(panel, names) returns async
   // forwarders that wait for that registry. Nothing waits until the first call; if react-entry.js never
   // loads (its script fires "error", or window "load" with no registry) or the panel failed to mount, every call rejects.
+  // On-demand panels (frontend/src/paineis.ts) are not in that registry: window.SimpressReactSobDemanda[panel]()
+  // downloads and mounts them on the first call.
   const scriptReact = document.querySelector('script[src*="/static/dist/react-entry.js"]');
   let bundleFalhou = false;
   scriptReact?.addEventListener("error", () => { bundleFalhou = true; }, { once: true });
   const reactPanels = new Map<string, Promise<Qualquer>>();
+  // Painel sob demanda (frontend/src/paineis.ts): o primeiro pedido baixa e monta; main.tsx guarda a montagem e, se o
+  // download falhar, a próxima chamada tenta de novo (por isso não fica em reactPanels).
+  const loadOnDemand = (load: () => Promise<Qualquer>, panel: string) => load().catch(() => {
+    throw new Error(`O painel React "${panel}" não carregou.`);
+  });
   function waitForReactPanel(panel: string): Promise<Qualquer> {
+    const load = window.SimpressReactSobDemanda?.[panel];
+    if (load) return loadOnDemand(load, panel);
     if (!reactPanels.has(panel)) {
       reactPanels.set(panel, new Promise((resolve, reject) => {
         const settle = () => {
           if (!window.SimpressReact && !bundleFalhou && document.readyState !== "complete") return false;
           const actions = window.SimpressReact?.[panel];
+          const loadLater = window.SimpressReactSobDemanda?.[panel];
           if (actions) resolve(actions);
+          else if (loadLater) resolve(loadOnDemand(loadLater, panel));
           else reject(new Error(`O painel React "${panel}" não carregou.`));
           return true;
         };

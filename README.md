@@ -209,6 +209,7 @@ Todas são opcionais. Defina-as no PowerShell antes de iniciar o servidor ou as 
 | `SIMPRESS_DASHBOARD_EMAIL` e `SIMPRESS_SOFTEXPERT_EMAIL` | Contas escolhidas pelas rotinas nos logins Microsoft (Oracle, UX e Dashboard) e no SoftExpert. No arquivo: `dashboard_email` e `softexpert_email`. |
 | `SIMPRESS_ENDPOINT_USUARIO` | Usuário preenchido pela rotina no login local do Endpoint Central (a senha continua com você). No arquivo: `endpoint_usuario`. |
 | `SIMPRESS_DASHBOARD_PASTA_URL` | Endereço da pasta `DASHBOARD SEBRAE` no SharePoint, aberta pelas rotinas do Dashboard. No arquivo: `dashboard_pasta_url`. |
+| `SIMPRESS_ENDPOINT_URL` | Link do Endpoint Central (tela Computadores) usado por todas as rotinas do Endpoint; login e Staged Computers seguem o mesmo host. Opcional: sem ele vale o link padrão. No arquivo: `endpoint_url`. |
 | `SIMPRESS_OUTLOOK_EMAIL_SEBRAE` e `SIMPRESS_OUTLOOK_EMAIL_SIMPRESS` | Contas remetentes do e-mail por modelo pelo Outlook (Home F1). No arquivo: `outlook_email_sebrae` e `outlook_email_simpress`. |
 | `SIMPRESS_CLIENTE_CONTRATO` e `SIMPRESS_CLIENTE_CNPJ_FATURAMENTO` | Contrato do cliente e CNPJ de faturamento do ticket UX. No arquivo `config/cliente.json`: `contrato` e `cnpj_faturamento`. |
 | `SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA` | Séries dos notebooks próprios do Sebrae, separadas por vírgula, deixadas fora das comparações. No arquivo: `series_sebrae_fora` (lista). |

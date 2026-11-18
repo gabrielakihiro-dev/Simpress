@@ -454,6 +454,16 @@ class LoginAbasTests(unittest.TestCase):
         aviso.hover.assert_called_once()
         aviso.locator.return_value.filter.return_value.first.click.assert_called_once()
 
+    def test_endpoint_logado_follows_the_configured_endpoint_host(self):
+        page = MagicMock()
+        page.locator.return_value.filter.return_value.count.return_value = 0
+        novo = "https://endpoint-novo.exemplo.invalid/webclient#/uems/inventory/computers"
+        with patch.object(automacao, "ENDPOINT_URL", novo):
+            page.url = novo
+            self.assertTrue(automacao.endpoint_logado(page))
+            page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+            self.assertFalse(automacao.endpoint_logado(page))
+
     def test_endpoint_ignores_pages_that_are_not_the_login_screen(self):
         page, clicar, _ = self._pagina_endpoint()
         page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"

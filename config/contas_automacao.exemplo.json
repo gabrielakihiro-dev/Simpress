@@ -3,6 +3,7 @@
   "dashboard_email": "pessoa.simpress@exemplo.invalid",
   "softexpert_email": "pessoa.sebrae@exemplo.invalid",
   "dashboard_pasta_url": "https://exemplo.invalid/sites/pasta-do-dashboard",
+  "endpoint_url": "https://exemplo.invalid/webclient#/uems/inventory/computers",
   "outlook_email_sebrae": "pessoa.sebrae@exemplo.invalid",
   "outlook_email_simpress": "pessoa.simpress@exemplo.invalid"
 }
