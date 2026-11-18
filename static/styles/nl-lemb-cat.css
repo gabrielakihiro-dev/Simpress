@@ -95,7 +95,7 @@
 [data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula[aria-selected="true"] {
   border-color: var(--nl-bd2); background: var(--nl-card); box-shadow: none; color: var(--nl-tx);
 }
-/* Celular: as três sub-abas cabem numa linha (no desenho do celular os rótulos são encurtados; aqui os textos aprovados ficam). */
+/* Celular: fonte e folga menores para as três sub-abas caberem numa linha a partir de 375 px (em 320 e 360 px a terceira desce, sem rolagem horizontal); no desenho do celular os rótulos são encurtados, aqui os textos aprovados ficam. */
 @media (max-width: 479px) {
   [data-cockpit-tool-panel="lembretes"] .termos__abas { gap: 2px; }
   [data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula { padding-inline: 8px; font-size: 13px; }

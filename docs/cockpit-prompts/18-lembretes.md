@@ -159,5 +159,5 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 - Item: círculo de concluir (concluído em verde), descrição, chip de data (hoje em destaque, atrasada em vermelho) e `Editar`/`Excluir` com borda. Na edição, `Salvar` e `Cancelar` mostram as teclas em `<kbd>` (`Enter`, `Esc`); a dica em texto continua para leitor de tela (`sr-only`).
 - A navegação de semana (`#lembretes-navegar`, anterior, `Hoje`, próxima) passou para o cabeçalho da `Semana`, ao lado do mês; os ids não mudaram.
 - Tokens `--nl-*` de `nl-base.css`; a estrutura e os alvos de 44 px (abaixo de 480 px) ficam em `ck-lembretes.css`, e cores, bordas e raios na seção "Lembretes" de `nl-lemb-cat.css`. Movimento só com `prefers-reduced-motion: no-preference`, 200 ms nos controles e 250 ms na entrada dos cartões.
-- Celular (abaixo de 480 px): as três sub-abas do topo ficam em uma linha, com fonte de 13 px e menos folga lateral.
+- Celular (abaixo de 480 px): as sub-abas do topo usam fonte de 13 px e menos folga lateral; com os textos aprovados completos cabem numa linha a partir de 375 px, e em 320 e 360 px a terceira desce para a linha de baixo (sem rolagem horizontal). O desenho do celular encurta os rótulos; isso não foi adotado.
 - Fora desta entrega: cabeçalho da página do canvas, rótulos curtos "Entrega"/"Devolução" do celular e marca deslizante na pílula do topo.
