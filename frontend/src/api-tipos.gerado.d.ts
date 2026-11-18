@@ -310,6 +310,28 @@ export type KitPayload = {
   "rev": number;
 };
 
+export type Lembrete = {
+  "id": string;
+  "descricao": string;
+  "criado_em": string;
+  "alterado_em": string | null;
+  "concluido": boolean;
+  "concluido_em": string | null;
+  "origem": string | null;
+  "termo": Record<string, unknown> | null;
+  "data_agendada": string | null;
+  "hora_agendada": string | null;
+};
+
+export type LembretesReagendados = {
+  "lembretes": Lembrete[];
+  "reagendados": number;
+};
+
+export type ListaLembretes = {
+  "lembretes": Lembrete[];
+};
+
 export type ManualAliasConflictResolutionPayload = {
   "acao": string;
 };
@@ -1093,22 +1115,22 @@ export interface Rotas {
   "GET /api/lembretes": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: ListaLembretes;
   };
   "POST /api/lembretes": {
     consulta: never;
     corpo: NovoLembretePayload;
-    resposta: unknown;
+    resposta: Lembrete;
   };
   "POST /api/lembretes/reagendar-atrasados": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: LembretesReagendados;
   };
   "PATCH /api/lembretes/{lembrete_id}": {
     consulta: never;
     corpo: AtualizarLembretePayload;
-    resposta: unknown;
+    resposta: Lembrete;
   };
   "DELETE /api/lembretes/{lembrete_id}": {
     consulta: never;

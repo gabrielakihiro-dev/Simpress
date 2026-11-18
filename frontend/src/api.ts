@@ -2,6 +2,7 @@
 // do FastAPI (texto ou lista 422 do Pydantic) em Error legível, mantém o evento simpress:servidor-offline,
 // o detail do 422 e error.status (409 de versao_importacao). Nunca usar fetch cru nos painéis React.
 import { format as formatarDetalhe } from "./comum/api-errors.ts";
+import type { Rotas } from "./api-tipos.gerado";
 
 export interface ApiFetchOptions extends RequestInit {
   /** Texto usado quando a resposta de erro não traz detail. */
@@ -77,6 +78,23 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
     throw error;
   }
   return responseType === "response" ? response : readJson(response, false, errorMessage);
+}
+
+// "{lembrete_id}" de "PATCH /api/lembretes/{lembrete_id}" vira o parâmetro obrigatório lembrete_id.
+type ParametrosCaminho<R extends string> = R extends `${string}{${infer P}}${infer Resto}` ? P | ParametrosCaminho<Resto> : never;
+
+export type OpcoesRota<R extends keyof Rotas> = Omit<ApiFetchOptions, "method" | "body" | "headers" | "responseType">
+  & ([ParametrosCaminho<R>] extends [never] ? { caminho?: never } : { caminho: Record<ParametrosCaminho<R>, string | number> })
+  & ([Rotas[R]["corpo"]] extends [never] ? { corpo?: never } : { corpo: Rotas[R]["corpo"] });
+
+/** apiFetch tipado pela rota de api-tipos.gerado.d.ts: método e URL saem da chave, o corpo vai como JSON e a resposta
+ * tem o tipo que o servidor declara. Ex.: apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: { concluido: true } }). */
+export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Rotas[R]["resposta"]> {
+  const { caminho, corpo, ...resto } = opcoes as Omit<ApiFetchOptions, "responseType"> & { caminho?: Record<string, string | number>; corpo?: unknown };
+  const [method, molde = ""] = rota.split(" ");
+  const url = molde.replace(/\{(\w+)\}/g, (_trecho, nome: string) => encodeURIComponent(String(caminho?.[nome])));
+  const json = corpo === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) };
+  return apiFetch<Rotas[R]["resposta"]>(url, { ...resto, method, ...json });
 }
 
 // Publicação em window, lida por frontend/src/aplicacao/app.ts (context.apiFetch).

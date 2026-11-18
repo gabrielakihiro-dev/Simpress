@@ -3,7 +3,8 @@
 // desenhar o painel, e com o painel fechado. A descrição de um lembrete e os campos de um termo têm dado pessoal:
 // nada daqui vai para log nem para storage.
 import { flushSync } from "react-dom";
-import { apiFetch, type ApiFetchOptions } from "../../api";
+import { apiRota, type OpcoesRota } from "../../api";
+import type { Rotas } from "../../api-tipos.gerado";
 import type { Lembrete } from "./lembretes-puro";
 import { TERMOS, type DadosTermo, type NomeTermo } from "./termos-puro";
 import { appAntigo } from "./tipos";
@@ -123,13 +124,10 @@ export const mensagemDe = (erro: unknown, padrao: string): string => {
 export const avisar = (texto: string, tipo?: string) => appAntigo().showToast?.(texto, tipo);
 export const avisarErro = (erro: unknown, padrao: string) => avisar(mensagemDe(erro, padrao), "error");
 
-export const JSON_HEADERS = { "Content-Type": "application/json" };
-export const URL_API = "/api/lembretes";
-
 // Toda escrita invalida o GET em andamento.
-export function mutar<T = Lembrete>(url: string, opcoes: ApiFetchOptions & { responseType?: "json" }): Promise<T> {
+export function mutar<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Rotas[R]["resposta"]> {
   interno.pedidoLista += 1;
-  return apiFetch<T>(url, opcoes);
+  return apiRota(rota, opcoes);
 }
 
 export const porId = (id: string) => document.getElementById(id);
