@@ -4,11 +4,11 @@ Implementadas em 08/10/2026. Os módulos da interface usam JavaScript puro; Play
 
 ## Organização
 
-- `static/js/ui/ui-motion.js`: API reutilizável de animação, cancelamento, carregamento e validação.
+- `frontend/src/ui/ui-motion.ts`: API reutilizável de animação, cancelamento, carregamento e validação.
 - `static/styles/ui-motion.css`: tokens de duração/easing, feedback de controles e skeletons.
-- `static/js/ui/accessible-dialogs.js`: rótulos, foco inicial, ciclo de Tab, Escape, fechamento de detalhes e retorno de foco.
-- `static/js/ui/ui-notifications.js`: criação e anúncio das notificações com entrada e saída animadas.
-- `static/app.js`: orquestra os módulos com os fluxos reais do sistema.
+- `frontend/src/ui/accessible-dialogs.ts`: rótulos, foco inicial, ciclo de Tab, Escape, fechamento de detalhes e retorno de foco.
+- `frontend/src/ui/ui-notifications.ts`: criação e anúncio das notificações com entrada e saída animadas.
+- `frontend/src/aplicacao/app.ts`: orquestra os módulos com os fluxos reais do sistema.
 - `tests/e2e/ui.spec.cjs`: testes em Chromium, acessibilidade e perfil de cadência; a fixture usa somente respostas e anotações fictícias.
 
 | Interação | Comportamento |

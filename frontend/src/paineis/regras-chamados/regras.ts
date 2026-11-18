@@ -293,5 +293,3 @@ export function criarRegrasChamados(dom: DependenciasDom) {
     atendimentosDoChamado, idadeAtualizacaoChamado, grupoTriagemChamado, correspondeTriagemChamado,
   };
 }
-
-export type RegrasDeChamados = ReturnType<typeof criarRegrasChamados>;

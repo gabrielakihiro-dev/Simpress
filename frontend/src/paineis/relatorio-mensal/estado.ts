@@ -1,5 +1,5 @@
 // Estado do diálogo Relatório mensal (docs/operacao/relatorio-mensal.md), fora do componente: a aplicação chama
-// as ações pela ponte (frontend/src/aplicacao/pontes.ts) e cockpit-tool-panels.js lê #status-relatorio-mensal logo
+// as ações pela ponte (frontend/src/aplicacao/pontes.ts) e cockpit-tool-panels.ts lê #status-relatorio-mensal logo
 // depois de await exportarRelatorioMensal(). Por isso toda mudança de estado vai por flushSync: o DOM já está final
 // quando a ação devolve a promessa.
 import { flushSync } from "react-dom";
