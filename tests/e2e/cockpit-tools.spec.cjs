@@ -455,10 +455,9 @@ test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antig
   const list = page.locator("#cockpit-units-list-body");
   await expect(list).toContainText("Curitiba Sede");
   await expect(list).toContainText("SEDE");
-  await expect(page.locator("#cockpit-units-detail-badge")).toHaveText("SEDE");
-  await expect(page.locator("#cockpit-units-detail-pares")).toContainText("03209636000100");
-  await expect(page.locator("#cockpit-units-copy-cnpj")).toBeEnabled();
-  await expect(page.locator("#cockpit-units-copy-cep")).toBeEnabled();
+  // Novo layout (18/11/2026): grade de cartões, sem tela de detalhe nem botões de copiar.
+  await expect(list.locator(".nlc-cartao--sede")).toContainText("03209636000100");
+  await expect(page.locator("#cockpit-units-detail, #cockpit-units-copy-cnpj, #cockpit-units-copy-cep")).toHaveCount(0);
   // Sem rolagem horizontal da página.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
@@ -479,7 +478,6 @@ test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antig
   await expect(page.locator("#form-nova-unidade")).toBeHidden();
   expect(saved).toMatchObject({ id: 1, cnpj: "03209636000999" });
   await expect(list).toContainText("03209636000999");
-  await expect(page.locator("#cockpit-units-detail-pares")).toContainText("03209636000999");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   await page.keyboard.press("Escape");

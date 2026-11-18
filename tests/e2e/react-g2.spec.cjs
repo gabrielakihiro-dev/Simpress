@@ -443,9 +443,9 @@ async function abrirUnidades(page, { tema = "light", unidades = unidadesFicticia
 const painelUnidades = page => page.locator('[data-cockpit-tool-panel="unidades"]');
 
 for (const tema of ["light", "dark"]) {
-  test(`baseline: catálogo de unidades com lista e detalhe, tema ${tema}`, async ({ page }) => {
+  test(`baseline: catálogo de unidades em grade de cartões, tema ${tema}`, async ({ page }) => {
     await abrirUnidades(page, { tema });
-    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3 unidades");
+    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3");
     await expect(painelUnidades(page)).toHaveScreenshot(`unidades-lista-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
   });
 
@@ -492,31 +492,42 @@ async function abrirUnidadesComportamento(page, { unidades = unidadesFicticias()
 }
 
 test.describe("Catálogo de unidades em React: comportamento", () => {
-  test("busca filtra lista e detalhe, Enter seleciona a linha e o lápis abre o formulário com o CNPJ", async ({ page }) => {
+  test("busca filtra os cartões, marca o trecho achado, acha CNPJ só por dígitos e o lápis abre o formulário com o CNPJ", async ({ page }) => {
     await abrirUnidadesComportamento(page);
     await page.evaluate(() => window.abrirModalGerenciarUnidades());
     const corpo = page.locator("#cockpit-units-list-body");
-    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3 unidades");
+    const busca = page.locator("#cockpit-units-search");
+    await expect(page.locator("#cockpit-units-status")).toHaveText("3 de 3");
     await expect(page.locator("#cockpit-units-kpis .ck-kpi__valor")).toHaveText(["3", "3", "2"]);
-    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Curitiba Sede");
-    await expect(corpo.locator("tr").first()).toHaveAttribute("aria-selected", "true");
+    await expect(corpo.locator(".nlc-cartao")).toHaveCount(3);
+    await expect(corpo.locator(".nlc-cartao--sede")).toContainText("SEDE");
+    await expect(corpo.locator(".nlc-cartao").nth(2)).toContainText("Maringá/PR");
+    await expect(page.locator("#cockpit-units-detail")).toHaveCount(0);
 
-    await corpo.locator("tr").nth(2).focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Maringá");
-    await expect(page.locator("#cockpit-units-detail-sub")).toHaveText("Maringá/PR");
-    await expect(page.locator("#cockpit-units-detail-pares dd")).toHaveText(["Maringá", "PR", "Rua Teste, 7", "—", /—/]);
-
-    await page.locator("#cockpit-units-search").fill("londrina");
-    await expect(page.locator("#cockpit-units-status")).toHaveText("1 de 3 unidades");
-    await expect(page.locator("#cockpit-units-detail-title")).toHaveText("Londrina");
-    await page.locator("#cockpit-units-search").fill("nada disso");
+    await busca.fill("londrina");
+    await expect(page.locator("#cockpit-units-status")).toHaveText("1 de 3");
+    await expect(page.locator("#cockpit-units-status")).toHaveClass(/nlc-status--filtro/);
+    await expect(corpo.locator(".nlc-cartao")).toHaveCount(1);
+    await expect(corpo.locator("mark")).toHaveText("Londrina");
+    // Sem acento e só com dígitos do CNPJ.
+    await busca.fill("maringa");
+    await expect(corpo.locator("mark")).toHaveText("Maringá");
+    await busca.fill("000272");
+    await expect(corpo.locator(".nlc-cartao")).toHaveCount(1);
+    await expect(corpo).toContainText("Londrina");
+    await busca.fill("nada disso");
     await expect(corpo).toHaveText("Nenhuma unidade corresponde à busca.");
-    await expect(page.locator("#cockpit-units-copy-cnpj")).toBeDisabled();
-    await expect(page.locator("#cockpit-units-detail-sub")).toHaveText("Selecione uma unidade.");
 
-    await page.locator("#cockpit-units-search").fill("");
-    await page.locator("#cockpit-units-detail").getByRole("button", { name: "Editar CNPJ da unidade Curitiba" }).click();
+    // X limpa e devolve o foco; Esc com texto limpa sem fechar o painel.
+    await page.getByRole("button", { name: "Limpar busca" }).click();
+    await expect(busca).toHaveValue("");
+    await expect(busca).toBeFocused();
+    await busca.fill("curitiba");
+    await busca.press("Escape");
+    await expect(busca).toHaveValue("");
+    await expect(painelUnidades(page)).toBeVisible();
+
+    await corpo.getByRole("button", { name: "Editar CNPJ da unidade Curitiba" }).click();
     await expect(page.locator("#form-nova-unidade")).toBeVisible();
     await expect(page.locator("#form-unidade-titulo")).toHaveText("Editar Unidade: Curitiba");
     await expect(page.locator("#form-unidade-cnpj")).toBeFocused();

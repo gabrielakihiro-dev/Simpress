@@ -3,7 +3,7 @@
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
 import { gravarEstado, lerEstado } from "../../estado-app";
-import { chaveSelecionada, filtrarUnidades, ler, mudar, mudarForm, type Estado, type Unidade } from "./estado";
+import { ler, mudar, mudarForm, type Unidade } from "./estado";
 
 // Funções da aplicação publicadas em window por frontend/src/aplicacao/app.ts.
 interface AppLegado {
@@ -69,36 +69,20 @@ export async function recarregarUnidadesCockpit(): Promise<void> {
   try {
     const dados = await apiFetch<unknown>("/api/unidades", { errorMessage: "Não foi possível carregar o catálogo de unidades." });
     if (atual !== pedido) return;
-    mudarComSelecao({ fase: "ok", lista: Array.isArray(dados) ? dados as Unidade[] : [] });
+    mudar({ fase: "ok", lista: Array.isArray(dados) ? dados as Unidade[] : [] });
   } catch (erro) {
     if (atual !== pedido) return;
     mudar({ fase: "erro", erro: (erro as Error).message || "Não foi possível carregar as unidades." });
   }
 }
 
-// Lista ou busca mudou: a seleção que saiu da busca passa para a primeira visível e fica nela (como o renderUnits antigo).
-function mudarComSelecao(parcial: Partial<Estado>): void {
-  const proximo = { ...ler(), ...parcial };
-  mudar({ ...parcial, selecionada: chaveSelecionada(filtrarUnidades(proximo.lista, proximo.busca), proximo.selecionada) });
-}
-
 export function buscarUnidade(busca: string): void {
-  mudarComSelecao({ busca });
-}
-
-export function selecionarUnidade(chave: string): void {
-  mudar({ selecionada: chave });
-}
-
-/** Unidade mostrada no detalhe (a selecionada entre as visíveis). */
-export function unidadeSelecionada(): Unidade | undefined {
-  const { lista, busca, selecionada } = ler();
-  return filtrarUnidades(lista, busca).find(item => item.chave === selecionada)?.unidade;
+  mudar({ busca });
 }
 
 // O catálogo mora no painel "unidades" do Cockpit; a Home e os atalhos antigos continuam chamando este nome.
 export async function abrirModalGerenciarUnidades(): Promise<void> {
-  mudarComSelecao({ busca: "" });
+  mudar({ busca: "" });
   await app().abrirPainelCockpit("unidades");
   // Home pede "Cadastrar" quando não há regional: abre o formulário vazio.
   if (!catalogo().length) toggleFormNovaUnidade(true);

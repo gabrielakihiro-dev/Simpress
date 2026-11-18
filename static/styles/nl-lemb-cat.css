@@ -1,0 +1,83 @@
+/* Novo layout, bloco Lembretes-Catálogo: Lembretes (visual A), Termos (visual C) e Catálogo de unidades (visual B).
+   Usa os tokens --nl-* de nl-base.css (carregado antes). Movimento só dentro de prefers-reduced-motion: no-preference. */
+
+/* ---------- Catálogo de unidades (NL-Catalogo, NL-Catalogo-Filtros) ---------- */
+[data-cockpit-tool-panel="unidades"] .nlc { display: flex; flex-direction: column; gap: 16px; }
+
+[data-cockpit-tool-panel="unidades"] .nlc-resumo {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao);
+  background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-resumo__nums { display: flex; gap: 32px; flex-wrap: wrap; margin-right: auto; }
+[data-cockpit-tool-panel="unidades"] .nlc-kpi {
+  display: flex; flex-direction: column-reverse; gap: 2px; padding: 0; border: 0; background: none; box-shadow: none; min-width: 0;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__rotulo { font-size: 12px; color: var(--nl-mut); }
+[data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__valor {
+  font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--nl-tx); font-variant-numeric: tabular-nums;
+}
+
+[data-cockpit-tool-panel="unidades"] .nlc-barra { display: flex; align-items: center; gap: 12px; }
+[data-cockpit-tool-panel="unidades"] .nlc-busca {
+  display: flex; align-items: center; gap: 8px; width: 300px; max-width: 100%; height: 40px; padding: 0 6px 0 12px;
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-mut);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-busca--cheia { border-color: rgba(var(--nl-i), .55); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca:focus-within { border-color: rgb(var(--nl-i)); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--nl-tx); font: inherit; font-size: 14px;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp::-webkit-search-cancel-button { display: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp::placeholder { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__x { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 8px; flex: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-status {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--nl-bd); border-radius: 999px;
+  font-size: 12px; color: var(--nl-mut); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-status--filtro { color: var(--nl-tx); border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .12); }
+
+[data-cockpit-tool-panel="unidades"] .nlc-grade {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-cartao {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 16px;
+  border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-cartao--sede { border-color: rgba(var(--nl-i), .45); background: rgba(var(--nl-i), .06); }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao__lin { display: flex; align-items: center; gap: 8px; min-width: 0; }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao__nome { font-weight: 700; color: var(--nl-tx); overflow-wrap: anywhere; }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao mark { background: rgba(var(--nl-i), .28); color: var(--nl-tx); border-radius: 4px; padding: 0 1px; }
+[data-cockpit-tool-panel="unidades"] .nlc-sede { margin-left: auto; flex: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-k { font-size: 12px; color: var(--nl-mut); }
+[data-cockpit-tool-panel="unidades"] .nlc-cnpj { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--nl-tx2); }
+[data-cockpit-tool-panel="unidades"] .nlc-fraco { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="unidades"] .nlc-lapis { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 8px; flex: none; }
+
+[data-cockpit-tool-panel="unidades"] .nlc-vazio {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; margin: 0;
+  border: 1px dashed var(--nl-bd2); border-radius: 14px; color: var(--nl-mut); text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-cockpit-tool-panel="unidades"] .nlc-busca,
+  [data-cockpit-tool-panel="unidades"] .nlc-status { transition: border-color .2s ease, color .2s ease, background-color .2s ease; }
+  [data-cockpit-tool-panel="unidades"] .nlc-busca__x { animation: nl-aparece .2s ease both; }
+  [data-cockpit-tool-panel="unidades"] .nlc-cartao { animation: nl-sobe .25s var(--nl-curva) both; }
+}
+
+@media (max-width: 1199px) {
+  [data-cockpit-tool-panel="unidades"] .nlc-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  [data-cockpit-tool-panel="unidades"] .nlc-resumo { padding: 0; border: 0; background: none; box-shadow: none; }
+  [data-cockpit-tool-panel="unidades"] .nlc-resumo__nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; margin: 0; }
+  [data-cockpit-tool-panel="unidades"] .nlc-kpi {
+    padding: 10px 12px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card);
+  }
+  [data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__valor { font-size: 22px; }
+  [data-cockpit-tool-panel="unidades"] #cockpit-units-new { width: 100%; justify-content: center; }
+  [data-cockpit-tool-panel="unidades"] .nlc-barra { flex-wrap: wrap; }
+  [data-cockpit-tool-panel="unidades"] .nlc-busca { width: 100%; flex: 1 1 100%; }
+  [data-cockpit-tool-panel="unidades"] .nlc-grade { grid-template-columns: minmax(0, 1fr); }
+}

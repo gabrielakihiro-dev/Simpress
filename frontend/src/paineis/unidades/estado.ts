@@ -30,7 +30,6 @@ export interface Estado {
   erro: string;
   lista: Unidade[];
   busca: string;
-  selecionada: string;
   form: Formulario;
 }
 
@@ -39,7 +38,6 @@ let estado: Estado = {
   erro: "",
   lista: [],
   busca: "",
-  selecionada: "",
   form: { aberto: false, titulo: "Cadastrar Nova Unidade / Filial", id: "", cidade: "", cep: "", cnpj: "", endereco: "", revisao: 0 },
 };
 const ouvintes = new Set<() => void>();
@@ -70,16 +68,41 @@ export function nomeUnidade(unidade: Unidade | undefined): string {
   return unidade?.label || unidade?.cidade || "Unidade sem nome";
 }
 
-/** Unidades que passam na busca, com a chave de seleção: o id ou, sem id, a posição na lista. */
+/** Unidades que passam na busca, com a chave do cartão: o id ou, sem id, a posição na lista. */
 export function filtrarUnidades(lista: Unidade[], busca: string): { unidade: Unidade; chave: string }[] {
   const termos = normalizar(busca).split(/\s+/).filter(Boolean);
   return lista.map((unidade, indice) => ({ unidade, chave: String(unidade?.id ?? indice) })).filter(({ unidade }) => {
     const texto = normalizar([nomeUnidade(unidade), unidade.cidade, unidade.cnpj, unidade.endereco].join(" "));
-    return termos.every(termo => texto.includes(termo));
+    const digitosCnpj = String(unidade.cnpj ?? "").replace(/\D/g, "");
+    // Só dígitos também acha o CNPJ sem a pontuação ("03209636" acha "03.209.636/0001-00").
+    return termos.every(termo => texto.includes(termo) || (/^\d+$/.test(termo) && digitosCnpj.includes(termo)));
   });
 }
 
-/** Seleção válida entre as visíveis; sem ela, a primeira da busca (como o renderUnits antigo). */
-export function chaveSelecionada(visiveis: { chave: string }[], selecionada: string): string {
-  return visiveis.some(({ chave }) => chave === selecionada) ? selecionada : visiveis[0]?.chave || "";
+const semAcento = (letra: string) => letra.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR");
+
+/** Trechos do texto com o que a busca achou marcado (para o <mark>). Compara sem acento letra a letra, para a
+ * posição achada no texto normalizado apontar para a letra certa do original. */
+export function trechosBusca(texto: string, busca: string): { texto: string; achou: boolean }[] {
+  const letras = [...texto];
+  let plano = "";
+  const origem: number[] = [];
+  letras.forEach((letra, i) => {
+    const base = semAcento(letra);
+    plano += base;
+    for (let k = 0; k < base.length; k++) origem.push(i);
+  });
+  const marcado = letras.map(() => false);
+  for (const termo of normalizar(busca).split(/\s+/).filter(Boolean)) {
+    for (let at = plano.indexOf(termo); at >= 0; at = plano.indexOf(termo, at + termo.length)) {
+      for (let k = at; k < at + termo.length; k++) marcado[origem[k]] = true;
+    }
+  }
+  const trechos: { texto: string; achou: boolean }[] = [];
+  letras.forEach((letra, i) => {
+    const ultimo = trechos[trechos.length - 1];
+    if (ultimo && ultimo.achou === marcado[i]) ultimo.texto += letra;
+    else trechos.push({ texto: letra, achou: marcado[i] });
+  });
+  return trechos;
 }
