@@ -282,3 +282,17 @@ Reorganização autorizada pelo usuário em 31/10/2026; não reverta nem altere 
 - O menu Ferramentas não tem grupo "Planilhas": o modal de atualização abre por **Nova comparação** (aba Comparação), pelo `Importar` da Home e pelo alerta `Atualizar base`; `Exportar Excel` (`#btn-exportar-equipamentos`) fica na barra da aba Comparação, com o rótulo visível `Exportar Excel`.
 
 Detalhes em `docs/cockpit-prompts/14-cockpit-v2.md`, seção "Navegação do Cockpit e atalhos (31/10/2026)".
+
+## Novo layout: base (18/11/2026)
+
+Fonte: canvas "Novo layout" (https://claude.ai/artifact/2txBkhk2PDgyh1cr35zcED, versão v23 `1794977337-d093`), quadros NL-Base-Topo, NL-Base-Formulario, NL-Janelas-Config, NL-Janelas-Cadastro, NL-Janelas-Planilhas, NL-Janelas-Arquivos, NL-Janelas-Dossie, NL-Tabelas e NL-Responsaveis, cada um com o par `-cel`. Os quadros NL-Confirmar-* estão "A CONFIRMAR" e ficaram de fora; janela usada por uma aba só fica para a sessão daquela aba. Em conflito, vale o canvas Simpress Bento.
+
+- `static/styles/nl-base.css`, carregado logo depois do `ck-bento.css`: tokens `--nl-*` (tema claro com contraste 4.5:1, raios, sombras, curvas, véu; escuro em `:root[data-theme="dark"]`) e `[data-nl-tom]` para o acento de uma peça. Não reatribui `--cor-*`.
+- Barra superior (`#ck-topbar`): abas em pílula, busca sem placeholder com `Ctrl K`, chips e botões de ícone de 40px; a partir de 1200px a barra tem 64px (`--altura-barra`). Ordem dos botões: Notificações, Ferramentas, Assistente (F9) e tema. No celular a grade e a busca continuam as atuais (só o visual mudou).
+- Véu e diálogos comuns (`.ck-veu`, `.ck-dialogo`): raio 24px (20px no celular), sombra e desfoque; o movimento continua no `SimpressMotion`.
+- Janelas comuns (`.ckp-veu`, `.ckp-dialogo`: Configuração, Cadastro, Planilhas, Arquivos e Dossiê): cabeçalho em duas colunas sem ícone, kicker em caixa alta, seções separadas por linha (tracejada quando opcional), arquivo em área tracejada (verde quando escolhido, vermelho com erro), rodapé à direita com Cancelar/Fechar com borda; no celular os botões do rodapé dividem a largura. Só aparência: IDs, ARIA e manipuladores ficam.
+- Popovers da barra: Pendências (`.ck-sino`) e Prontidão da base (`.ck-pront`) com 440px no desktop; cada pendência é um cartão com barra de 3px (Atenção âmbar, Urgente fúcsia).
+- Campo de formulário (`.nl-campo`, componente `CampoNl`): 48px, rótulo que flutua com foco ou valor, erro com borda vermelha e mensagem ligada por `aria-describedby`.
+- Alvos de toque de 32px no celular ou ponteiro grosso, por área invisível (`::after`), sem mudar o desenho.
+- Peças em `frontend/src/componentes/`: `CartaoBento`, `PilulaSubaba`, `TabelaNl` (vira cartões no celular; "Anotações" sempre por último; `grupo` opcional separa as linhas em blocos com rótulo e contagem), `Toasts`, `FolhaInferior` (gaveta à direita no desktop, folha de baixo no celular) e `SeloResponsavel` com `SeloLado` (CLIENTE em ciano, SIMPRESS em índigo; dica e nome acessível "Responsável (A)"). Regras puras em `nl-modelo.ts`, testadas em `tests/frontend/test_nl_componentes.cjs`. Ainda não estão montadas em nenhuma aba: cada aba as adota na própria sessão.
+- O Assistente fica fora de tudo isso e mantém a paleta antiga.
