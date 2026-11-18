@@ -128,6 +128,8 @@ export interface EstadoSebrae {
   formulario: Registro[];
   valores: Registro;
   consulta: number;
+  /** `Date.now()` do pedido de GET /api/sebrae/novos que está na tela (sem lista: ausente). */
+  novosPedidoEm?: number;
   listas: Registro;
   abertos: Registro[];
   edicoes: Registro;

@@ -271,8 +271,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             logger.warning("Sugestão de A e J do chamado antigo indisponível (erro=%s).", type(erro).__name__)
             return {"sugestao_responsavel": None, "sugestao_tipo": None}
 
+    def _uma_vez(leituras: Optional[Dict[str, Any]], chave: str, ler: Callable[[], Any]) -> Any:
+        """Each source read at most once per response (``leituras`` lives only for that response, so nothing goes stale)."""
+        if leituras is None:
+            return ler()
+        if chave not in leituras:
+            leituras[chave] = ler()
+        return leituras[chave]
+
     def _abertos_com_sugestoes(
         abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None, opcoes_a: Sequence[str] = (),
+        leituras: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
 
@@ -282,13 +291,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         # Not in SoftExpert's task center on the last read (e.g. closed by another technician): the F5 card is tinted to check later.
         nao_encontrados = _nao_encontrados(antigos) if abertos else set()
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
-        registros = services.registros() if abertos else []
-        relatorio, indice = (_relatorio(), _indice_endpoint()) if abertos else (None, None)
+        registros = _uma_vez(leituras, "registros", services.registros) if abertos else []
+        relatorio, indice = (_uma_vez(leituras, "relatorio", _relatorio), _indice_endpoint()) if abertos else (None, None)
         sugestoes = _automaticos_dos_abertos(abertos, antigos, registros, relatorio, indice) if abertos else {}
         os_novas = _os_novas_dos_abertos(abertos, antigos, registros, sugestoes, relatorio, indice)
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
-        apelidos = services.apelidos() if abertos else {}
+        apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
              "apelido": _apelido(apelidos, (a.get("automaticos") or {}).get("K") or sugestoes.get(str(a.get("numero")), {}).get("K")),
@@ -403,7 +412,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         pasta = _pasta_estado()
         finalizacao = fin.ler_estado(pasta) if (novos or importado) else {}
         observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
-        apelidos = services.apelidos() if novos else {}
+        leituras: Dict[str, Any] = {}
+        apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if novos else {}
         indice_categoria = sebrae_categoria.carregar_indice(_pasta_estado() / sebrae_categoria.ARQUIVO_INDICE) if novos else None  # uma leitura por resposta
         lista_b = importado["listas"].get("B", []) if importado else []
         vistas = {sebrae_categoria.normalizar(opcao) for opcao in lista_b}
@@ -418,7 +428,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {
             "importado": None if importado is None else {
                 "versao": importado["versao"], "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
-                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes, opcoes_a),
+                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes, opcoes_a, leituras),
                 "finalizados": finalizados,
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
                 "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),
@@ -432,7 +442,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                      "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
                      "destaque": _destacado(observacoes, item["numero"]),
                      **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor, opcoes_a)}
-                    for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
+                    for item in sebrae_novos.formulario(
+                        novos["chamados"], _uma_vez(leituras, "registros", services.registros), _uma_vez(leituras, "relatorio", _relatorio),
+                        services.vinculos_os())
                 ],
             },
         }
