@@ -152,3 +152,16 @@ test("network failures propagate unchanged without an HTTP status", async t => {
     return true;
   });
 });
+
+test("apiRota takes method and URL from the route key, fills path params and sends the body as JSON", async t => {
+  const { apiRota } = require("../../frontend/src/api.ts");
+  const calls = mockFetch(t, async () => jsonResponse({ id: "a/1" }));
+  const data = await apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: "a/1" }, corpo: { concluido: true }, errorMessage: "Falhou." });
+  assert.deepEqual(data, { id: "a/1" });
+  assert.equal(calls[0][0], "/api/lembretes/a%2F1");
+  assert.deepEqual(calls[0][1], { method: "PATCH", headers: { "Content-Type": "application/json" }, body: '{"concluido":true}' });
+
+  await apiRota("GET /api/lembretes", {});
+  assert.equal(calls[1][0], "/api/lembretes");
+  assert.deepEqual(calls[1][1], { method: "GET" });
+});

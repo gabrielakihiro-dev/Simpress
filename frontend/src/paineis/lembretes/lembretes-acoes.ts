@@ -1,8 +1,9 @@
 // Ações dos lembretes: lista em /api/lembretes, edição, exclusão, vistas e criação a partir de um termo.
 // A descrição tem dado pessoal: nunca vai para log nem para storage.
-import { apiFetch } from "../../api";
+import { apiRota } from "../../api";
+import type { AtualizarLembretePayload } from "../../api-tipos.gerado";
 import {
-  achar, avisar, avisarErro, focarCampoNovo, focarItem, interno, JSON_HEADERS, ler, mudar, mudarAgora, mutar, porId, URL_API,
+  achar, avisar, avisarErro, focarCampoNovo, focarItem, interno, ler, mudar, mudarAgora, mutar, porId,
   type Agenda, type Estado, type IdLembrete, type Vista,
 } from "./estado";
 import {
@@ -40,7 +41,7 @@ function avisarSeFora(l: Lembrete | undefined) {
 export async function carregarLembretes(): Promise<void> {
   const pedido = ++interno.pedidoLista;
   try {
-    const dados = await apiFetch<{ lembretes?: Lembrete[] }>(URL_API, { errorMessage: "Não foi possível carregar os lembretes." });
+    const dados = await apiRota("GET /api/lembretes", { errorMessage: "Não foi possível carregar os lembretes." });
     if (pedido !== interno.pedidoLista) return;
     mudar(comLista(Array.isArray(dados?.lembretes) ? dados.lembretes : [], { editandoId: null }));
   } catch (erro) {
@@ -128,8 +129,8 @@ export async function adicionar(): Promise<void> {
   interno.ocupado = true;
   mudarAgora({ adicionando: true });
   try {
-    const criado = await mutar(URL_API, {
-      method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, ...agenda }),
+    const criado = await mutar("POST /api/lembretes", {
+      corpo: { descricao, ...agenda },
       errorMessage: "Não foi possível adicionar o lembrete.",
     });
     mudar(comLista([...ler().lembretes, criado], { novo: NOVO_VAZIO }));
@@ -143,10 +144,8 @@ export async function adicionar(): Promise<void> {
   }
 }
 
-async function atualizar(id: IdLembrete, campos: Record<string, unknown>, mensagem: string): Promise<Lembrete> {
-  return mutar(`${URL_API}/${encodeURIComponent(String(id))}`, {
-    method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(campos), errorMessage: mensagem,
-  });
+async function atualizar(id: IdLembrete, campos: AtualizarLembretePayload, mensagem: string): Promise<Lembrete> {
+  return mutar("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: campos, errorMessage: mensagem });
 }
 
 export async function alternar(id: IdLembrete): Promise<void> {
@@ -255,7 +254,7 @@ export async function confirmarExclusao(): Promise<void> {
   const indice = itensDaLista().findIndex(li => li.dataset.lembreteId === String(id));
   let removido = false;
   try {
-    await mutar(`${URL_API}/${encodeURIComponent(String(id))}`, { method: "DELETE", errorMessage: "Não foi possível excluir o lembrete." });
+    await mutar("DELETE /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, errorMessage: "Não foi possível excluir o lembrete." });
     removido = true;
   } catch (erro) {
     avisarErro(erro, "Não foi possível excluir o lembrete.");
@@ -310,8 +309,8 @@ export async function confirmarCriar(): Promise<void> {
   mudarAgora({ criarEnviando: true });
   let criado: Lembrete | null = null;
   try {
-    criado = await mutar(URL_API, {
-      method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ descricao, origem: termo, termo: interno.copiaTermo }),
+    criado = await mutar("POST /api/lembretes", {
+      corpo: { descricao, origem: termo, termo: interno.copiaTermo },
       errorMessage: "Não foi possível criar o lembrete.",
     });
   } catch (erro) {
@@ -381,8 +380,8 @@ export async function reagendarAtrasados(): Promise<void> {
   interno.ocupado = true;
   let movidos = 0;
   try {
-    const dados = await mutar<{ lembretes?: Lembrete[]; reagendados?: number }>(`${URL_API}/reagendar-atrasados`, {
-      method: "POST", errorMessage: "Não foi possível reagendar os lembretes.",
+    const dados = await mutar("POST /api/lembretes/reagendar-atrasados", {
+      errorMessage: "Não foi possível reagendar os lembretes.",
     });
     movidos = Number(dados?.reagendados) || 0;
     mudarAgora(comLista(Array.isArray(dados?.lembretes) ? dados.lembretes : ler().lembretes));
