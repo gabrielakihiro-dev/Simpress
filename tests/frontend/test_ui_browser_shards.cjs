@@ -32,8 +32,8 @@ const onDisk = fs.readdirSync(E2E_DIR, { recursive: true }).filter((name) => nam
 const groups = groupsFromWorkflow();
 const listed = groups.flat();
 
-test("ui-browser tem 11 grupos de specs", () => {
-  assert.equal(groups.length, 11);
+test("ui-browser tem 12 grupos de specs", () => {
+  assert.equal(groups.length, 12);
   groups.forEach((names, index) => assert.ok(names.length > 0, `grupo ${index + 1} está vazio`));
 });
 

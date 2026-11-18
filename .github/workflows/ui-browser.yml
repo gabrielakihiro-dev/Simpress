@@ -50,7 +50,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A suíte inteira levava ~30 min num job só; dividida em 10 partes que rodam em paralelo.
+  # A suíte inteira levava ~30 min num job só; dividida em 12 partes que rodam em paralelo.
   # Cada parte roda uma lista fixa de specs (matrix.specs), não `--shard`: com fullyParallel desligado o
   # Playwright reparte por arquivo e sai desigual (de 3 a 16 min por parte). O teste
   # tests/frontend/test_ui_browser_shards.cjs falha se um spec novo ficar fora das listas ou repetido.
@@ -79,6 +79,9 @@ jobs:
         # no run 43962071291 (9,7 min), para não somar com o react-bf2 no 5.
         # react-bf4.spec.cjs (BF4, desktop + mobile) entrou no 1, o menor no run 44006280253 da main (7m57; o 10 teve 8m08).
         # react-final-c.spec.cjs (React final C, desktop + mobile, 10 testes) entrou no 10, o segundo menor nesse run; reconfira na CI.
+        # 12 partes (17/11/2026, revisão do PR #284): os 6 testes "OS nova sugerida" saíram do sebrae-dashboard (9) para o
+        # chamados-os (7). O 12 leva chamados-os e ux-chamados (do 7), react-bf2 (do 5) e react-infra (do 6).
+        # Divisão sem medição nova: reconfira na CI.
         include:
           - shard: 1
             specs: >-
@@ -97,15 +100,13 @@ jobs:
           - shard: 5
             specs: >-
               info-tips-todos.spec.cjs react-piloto.spec.cjs color-contrast.spec.cjs
-              endpoint-lookup.spec.cjs asset-updates.spec.cjs react-bf2.spec.cjs
+              endpoint-lookup.spec.cjs asset-updates.spec.cjs
           - shard: 6
             specs: >-
               lembretes.spec.cjs chrome-automation.spec.cjs react-g1.spec.cjs origin-contact.spec.cjs
-              react-infra.spec.cjs
           - shard: 7
             specs: >-
-              monthly-report.spec.cjs cobertura.spec.cjs react-g10.spec.cjs chamados-os.spec.cjs
-              ux-chamados.spec.cjs
+              monthly-report.spec.cjs cobertura.spec.cjs react-g10.spec.cjs
           - shard: 8
             specs: >-
               react-g7.spec.cjs termos.spec.cjs os-subabas.spec.cjs react-g8.spec.cjs
@@ -118,6 +119,9 @@ jobs:
           - shard: 11
             specs: >-
               react-g9.spec.cjs react-bf4.spec.cjs react-g7b.spec.cjs ticket-requests.spec.cjs react-g2.spec.cjs
+          - shard: 12
+            specs: >-
+              chamados-os.spec.cjs ux-chamados.spec.cjs react-bf2.spec.cjs react-infra.spec.cjs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

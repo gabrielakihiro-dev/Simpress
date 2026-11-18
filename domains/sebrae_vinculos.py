@@ -241,16 +241,20 @@ def vinculos_da_finalizacao(
 
 
 def vinculo_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> Optional[Mapping[str, Any]]:
-    """Link whose ``chamado`` is ``numero``; with several, the one with the highest OS (as ``os_da_serie``); ``None`` if none."""
+    """Link whose ``chamado`` is ``numero``; ``None`` if none.
+
+    With several, the most recently saved one wins (``salvo_em``, written by ``PUT vinculos-os``), so an OS just accepted
+    in the F5 beats an older manual link even with a lower or non-numeric number (UX). Ties and links saved before
+    ``salvo_em`` existed fall back to the highest OS (as ``os_da_serie``)."""
     alvo = str(numero or "").strip().upper()
     achados = [
         v for v in vinculos
         if alvo and str(v.get("chamado") or "").strip().upper() == alvo and str(v.get("os") or "").strip()
     ]
-    return max(achados, key=lambda v: _numero_da_os(str(v.get("os")).strip())) if achados else None
+    return max(achados, key=lambda v: (str(v.get("salvo_em") or ""), _numero_da_os(str(v.get("os")).strip()))) if achados else None
 
 
 def os_do_chamado(vinculos: Sequence[Mapping[str, Any]], numero: str) -> str:
-    """OS of the links whose ``chamado`` is ``numero``; with several, the highest one (as ``os_da_serie``); empty if none."""
+    """OS of the link ``vinculo_do_chamado`` picks for ``numero`` (newest ``salvo_em``, then highest OS); empty if none."""
     achado = vinculo_do_chamado(vinculos, numero)
     return str(achado.get("os") or "").strip() if achado else ""

@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from core.errors import DomainBusyError, DomainValidationError
 from domains import sebrae_os_recusadas as recusadas_store
@@ -272,6 +273,17 @@ class TrocasETest(unittest.TestCase):
         sugestoes = {"UTIC-2026-0001": self.sugestao("troca", "300"), "UTIC-2026-0002": self.sugestao("troca", "200")}
         self.assertEqual(trocas_e(sugestoes, abertos, [vinculo]), {"UTIC-2026-0001": "300"})
 
+    def test_e_vazia_com_vinculo_manual_e_os_mais_nova_com_chave_forte_troca_para_a_nova(self):
+        # E da planilha vazia + vínculo manual 100 + OS 200 mais nova citando o chamado: a 200 vai para a E (não a 100)
+        chamados = [linha("SER1", oracle_=[oracle("100"), oracle("200", "UTIC-2026-0094 notebook")])]
+        vinculo = {"fonte": "oracle", "serie": "SER1", "os": "100", "ano": 2026, "numero": "0094", "chamado": "UTIC-2026-0094"}
+        abertos = [aberto(E="")]
+        sugestoes = calcular(abertos, chamados, vinculos=[vinculo])
+        self.assertEqual((sugestoes["UTIC-2026-0094"]["tipo"], sugestoes["UTIC-2026-0094"]["atual"]["os"]), ("troca", "100"))
+        self.assertEqual(trocas_e(sugestoes, abertos, [vinculo]), {"UTIC-2026-0094": "200"})
+        recusada = calcular(abertos, chamados, vinculos=[vinculo], recusadas={"UTIC-2026-0094": ["200"]})
+        self.assertEqual(trocas_e(recusada, abertos, [vinculo]), {})  # recusar antes do "Atualizar" impede a troca
+
     def test_chamado_que_nao_esta_em_abertos_e_ignorado(self):
         self.assertEqual(trocas_e({"UTIC-2026-0009": self.sugestao("troca")}, [aberto("UTIC-2026-0001", E="100")], []), {})
 
@@ -342,6 +354,24 @@ class RecusadasTest(unittest.TestCase):
             with self.assertLogs(recusadas_store.logger, level="WARNING") as log:
                 self.assertEqual(recusadas_store.ler_ou_vazio(self.pasta), {})
             self.assertNotIn("UTIC", "".join(log.output))  # o log leva só o tipo do erro
+
+    def test_arquivo_travado_no_windows_diz_ocupado_e_nao_ilegivel(self):
+        arquivo = self.pasta / "sebrae_os_recusadas.json"
+        arquivo.write_text(json.dumps({"version": 1, "recusadas": {}}), encoding="utf-8")
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError("travado")):
+            with self.assertRaises(DomainBusyError) as erro:
+                recusadas_store.ler(self.pasta)
+            self.assertIn("ocupado", str(erro.exception.detail))
+            self.assertNotIn("ilegível", str(erro.exception.detail))
+            self.assertEqual(erro.exception.status_code, 503)
+            with self.assertLogs(recusadas_store.logger, level="WARNING") as log:
+                self.assertIsNone(recusadas_store.ler_ou_none(self.pasta))
+            self.assertIn("PermissionError", "".join(log.output))  # só o tipo do erro
+        with mock.patch.object(recusadas_store, "atomic_write_json", side_effect=PermissionError("travado")):
+            with self.assertRaises(DomainBusyError) as erro:
+                recusadas_store.recusar(self.pasta, "UTIC-2026-0094", "100")
+            self.assertIn("ocupado", str(erro.exception.detail))
+        self.assertEqual(json.loads(arquivo.read_text(encoding="utf-8")), {"version": 1, "recusadas": {}})
 
     def test_chave_fora_do_formato_no_json_editado_a_mao_fica_de_fora(self):
         (self.pasta / "sebrae_os_recusadas.json").write_text(

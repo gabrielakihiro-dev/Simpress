@@ -11,7 +11,10 @@ UTIC do chamado escrito no texto da OS (``sebrae_vinculos.cita_chamado``). Nada 
 - E preenchida: as OS mais novas da série (ou toda OS da série, se E não é dela) que não foram recusadas para o chamado.
   Alguma com chave forte: ``troca`` (a mais nova entre elas; grava em E e o vínculo derivado aponta para ela).
   Sem chave forte: ``sugestao`` (a mais nova), que espera Aceitar ou Manter.
-- E vazia e a série com OS: automático (``sebrae_novos.preenchimentos``); nada a sugerir.
+- E vazia e a série com OS: automático (``sebrae_novos.preenchimentos``); nada a sugerir. Com vínculo manual a E efetiva
+  não está vazia: vale o item "E preenchida" acima. Ex.: E da planilha vazia, vínculo manual M e uma OS N mais nova da
+  série que cita o UTIC dão ``troca`` para N; ``trocas_e`` devolve N e a gravação escreve N na E, por cima do M que o
+  preenchimento poria (decisão registrada em 17/11/2026, revisão do PR #284).
 - E vazia e a série sem OS: ``sem_os``, só quando exatamente uma OS do relatório tem a chave forte ou, na falta
   dela, cita o nome da pessoa do chamado. A chave forte não troca nada sozinha aqui.
 """
@@ -184,7 +187,10 @@ def trocas_e(
 
     Junta o vínculo manual cuja OS difere da E da linha (``abertos`` com a E gravada na planilha) e as sugestões do tipo
     ``troca`` (a troca vale mais que o vínculo manual, como em ``os_novas``). Só chamados de ``abertos``, só a coluna E e só
-    quando a OS difere da E gravada; E vazia segue o preenchimento normal (``sebrae_novos.preenchimentos``)."""
+    quando a OS difere da E gravada. E vazia sem ``troca`` segue o preenchimento normal (``sebrae_novos.preenchimentos``);
+    E vazia COM ``troca`` (vínculo manual M e OS N mais nova com chave forte) também entra aqui: a gravação aplica a troca
+    depois dos automáticos, então N vai para a E no lugar de M. Uma OS recusada para o chamado nunca chega aqui, porque
+    ``os_novas`` já a descarta."""
     gravadas = {str(item.get("numero") or "").strip(): str((item.get("automaticos") or {}).get("E") or "").strip() for item in abertos}
     trocas: Dict[str, str] = {}
     for numero, gravada in gravadas.items():
