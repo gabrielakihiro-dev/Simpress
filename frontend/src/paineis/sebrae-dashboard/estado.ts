@@ -1950,7 +1950,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const outros = finalizados.length - oks.length;
     app.showToast(oks.length ? `${oks.length} chamado(s) finalizado(s) no SoftExpert.${outros ? ` ${outros} finalizado(s) por outro técnico.` : ""} Veja em Chamados finalizados.`
       : `${outros} chamado(s) finalizado(s) por outro técnico. Veja em Chamados finalizados.`, "success");
-    carregarNovosSebrae();
+    // A lista na tela já foi pedida depois do fim da rotina (ex.: resultado antigo ao abrir a página): recarregar só repetiria as mesmas consultas.
+    // +1 s: `terminado_em` vem sem milissegundos.
+    const terminou = Date.parse(f.resultado?.terminado_em || "");
+    if (!(terminou + 1000 < (estado.novosPedidoEm ?? 0))) carregarNovosSebrae();
   }
 
   /** Consulta a rotina até terminar; erros passageiros de rede não derrubam o acompanhamento. */
@@ -2338,12 +2341,16 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   async function carregarNovosSebrae() {
     if (!el("sebrae-novos-painel") && !el("sebrae-novos-lista")) return; // vale com só o cartão F4 ou só o painel F5 montado
     const consulta = ++estado.consulta;
+    const pedidoEm = Date.now();
     const versaoDestaque = estado.destaqueVersao;
     const lista = el("sebrae-novos-lista");
     lista?.setAttribute("aria-busy", "true"); // o CSS mostra o esqueleto de carregamento enquanto a lista está vazia
     try {
       const dados = await app.apiFetch("/api/sebrae/novos", { errorMessage: "Não foi possível consultar os chamados novos." });
-      if (consulta === estado.consulta) renderizar(dados, versaoDestaque);
+      if (consulta === estado.consulta) {
+        estado.novosPedidoEm = pedidoEm;
+        renderizar(dados, versaoDestaque);
+      }
     } catch (falha) { const error = falha as ErroApi;
       if (consulta === estado.consulta) definirTexto("sebrae-dashboard-status", error.message);
     } finally {
