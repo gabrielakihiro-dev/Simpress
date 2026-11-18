@@ -971,5 +971,3 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     tiposDaAba, resolverTipo, categoriasDoTipo, avisoHistoricoComparacao,
   };
 }
-
-export type RendererResultado = ReturnType<typeof criarRenderizadorResultado>;

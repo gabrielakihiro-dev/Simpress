@@ -6,7 +6,7 @@ Especificação da interface do cartão **Sincronizar chamados Sebrae** na tela 
 
 ## Onde fica
 
-Aba **Automação**, logo abaixo do cartão "Automação do Chrome" e acima de Andamento (`#sebrae-painel`). Arquivos: `static/index.html`, `static/js/features/chrome-automation.js` (mesmo módulo das outras rotinas), `static/styles/ux-refinements.css`.
+Aba **Automação**, logo abaixo do cartão "Automação do Chrome" e acima de Andamento (`#sebrae-painel`). Arquivos: `static/index.html`, `frontend/src/paineis/chrome-automation/` (mesmo módulo das outras rotinas), `static/styles/ux-refinements.css`.
 
 ## Conteúdo do cartão
 

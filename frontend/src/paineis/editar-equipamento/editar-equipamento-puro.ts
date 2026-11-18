@@ -1,6 +1,6 @@
 // Regras puras do modal "Atualizar / Cadastrar equipamento" (Home F1). Sem import e só com sintaxe apagável, para os
 // testes de tests/frontend carregarem este arquivo com require() direto do Node, sem build.
-// Vieram de frontend/src/aplicacao/pontes.ts; os textos são os aprovados em docs/cockpit-prompts/11-modais-ajustes-finais.md.
+// Vieram do antigo frontend/src/legado/features/equipment-editor.js; os textos são os aprovados em docs/cockpit-prompts/11-modais-ajustes-finais.md.
 
 export const TEXTO = {
   tituloInicial: "Atualizar Dados do Equipamento",

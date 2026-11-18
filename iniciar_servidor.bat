@@ -23,6 +23,11 @@ echo ========================================================
 if not exist "%MAIN%" goto missing_main
 if not exist "%BOOTSTRAPPER%" goto missing_bootstrapper
 
+rem Modo rapido ("iniciar_servidor.bat rapido"): com a .venv pronta, pula a
+rem verificacao de atualizacao e a conferencia das dependencias; migracao,
+rem limpeza e escolha de porta continuam.
+if /i "%~1"=="rapido" if exist "%PYTHON%" goto quick_start
+
 if exist "%PYTHON%" goto bootstrap_using_project_python
 where py >nul 2>nul
 if not errorlevel 1 goto bootstrap_using_python_launcher
@@ -71,6 +76,8 @@ if exist "%UPDATER%" if not defined SIMPRESS_ATUALIZACAO_VERIFICADA (
 "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%"
 if errorlevel 1 goto bootstrap_failed
 if not exist "%PYTHON%" goto bootstrap_failed
+
+:quick_start
 if not exist "%PORT_SELECTOR%" goto missing_port_selector
 if not exist "%MIGRATOR%" goto missing_migrator
 if not exist "%CLEANER%" goto missing_cleaner
