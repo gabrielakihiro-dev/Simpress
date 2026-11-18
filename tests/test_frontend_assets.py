@@ -17,6 +17,26 @@ from core import config as app_config
 from domains.frontend_assets import CONTENT_SECURITY_POLICY, assembled_html, versioned_html
 from routers.frontend import RevalidatingStaticFiles, frontend_response
 
+DIST_STATIC_IMPORT = re.compile(r'\b(?:from|import)\s*"\./([^"]+)"')
+DIST_DYNAMIC_IMPORT = re.compile(r"\bimport\(`\./([^`]+)`\)")
+
+
+def dist_startup_files(dist: Path, start: str = "react-entry.js") -> list[str]:
+    """Arquivos de static/dist que `start` puxa por import estático, dependências antes de quem as importa (ordem de execução)."""
+    order: list[str] = []
+    seen: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in seen:
+            return
+        seen.add(name)
+        for dep in DIST_STATIC_IMPORT.findall((dist / name).read_text(encoding="utf-8")):
+            visit(dep)
+        order.append(name)
+
+    visit(start)
+    return order
+
 
 class FrontendAssetTests(unittest.TestCase):
     def setUp(self):
@@ -106,8 +126,9 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
         self.assertNotIn("<style", html.lower())
 
-    def test_react_bundle_is_a_single_file_that_fits_the_unchanged_policy(self):
-        # O React não pode afrouxar o CSP: nada de eval, data: ou chunks fora do versioned_html.
+    def test_react_bundle_fits_the_unchanged_policy(self):
+        # O React não pode afrouxar o CSP: nada de eval nem data:. Só a entrada sai no HTML com ?v=; os outros arquivos levam
+        # o hash no nome e nenhum importa a entrada (sem o ?v= seria outro módulo e a partida rodaria duas vezes).
         self.assertEqual(
             CONTENT_SECURITY_POLICY,
             "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
@@ -115,12 +136,20 @@ class FrontendAssetTests(unittest.TestCase):
             "frame-ancestors 'none'; form-action 'self'",
         )
         dist = app_config.STATIC_DIR / "dist"
-        self.assertEqual(sorted(p.name for p in dist.rglob("*")), ["react-entry.js"])
-        bundle = (dist / "react-entry.js").read_text(encoding="utf-8")
-        # URI data: (o React tem chaves de objeto "data:", que não contam).
-        self.assertNotRegex(bundle, r"(?i)\bdata:(?:image|font|text|application|audio|video)/")
-        self.assertNotRegex(bundle, r"\bimport\s*\(")
-        self.assertNotRegex(bundle, r"\beval\s*\(|new Function\s*\(")
+        files = {p.name: p.read_text(encoding="utf-8") for p in dist.rglob("*")}
+        lazy = {name for text in files.values() for name in DIST_DYNAMIC_IMPORT.findall(text)}
+        reached = {name for start in ["react-entry.js", *lazy] for name in dist_startup_files(dist, start)}
+        # Nenhum arquivo sobrando nem importado sem existir (read_text falharia).
+        self.assertEqual(sorted(files), sorted(reached))
+        self.assertTrue(lazy, "Os painéis sob demanda (frontend/src/paineis.ts) deveriam sair em arquivos próprios.")
+        for name, text in files.items():
+            if name != "react-entry.js":
+                self.assertRegex(name, r"^[a-z-]+-[\w-]{8}\.js$")
+            self.assertNotRegex(text, r"[\"`]\./react-entry\.js", name)
+            # URI data: (o React tem chaves de objeto "data:", que não contam).
+            self.assertNotRegex(text, r"(?i)\bdata:(?:image|font|text|application|audio|video)/", name)
+            self.assertNotRegex(text, r"\bimport\s*\((?!`\./[\w-]+\.js`\))", name)
+            self.assertNotRegex(text, r"\beval\s*\(|new Function\s*\(", name)
         html = versioned_html(app_config.STATIC_DIR)
         self.assertRegex(html, r'<script type="module" src="/static/dist/react-entry\.js\?v=[0-9a-f]{16}"></script>')
 

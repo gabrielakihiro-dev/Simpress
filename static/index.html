@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="/static/styles/ck-termos.css">
   <link rel="stylesheet" href="/static/styles/ck-lembretes.css">
   <link rel="stylesheet" href="/static/styles/ck-bento.css">
+  <link rel="stylesheet" href="/static/styles/nl-base.css">
 </head>
 <body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
@@ -113,7 +114,8 @@
   <form class="ck-busca" id="form-busca-serial" role="search" autocomplete="off" data-on-submit="buscarSerial">
     <div class="ck-busca__campo">
       <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-      <input type="text" id="input-serial" class="ck-busca__entrada" aria-keyshortcuts="/ Control+K Meta+K" role="combobox" aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento" aria-autocomplete="list" aria-controls="autocomplete-list" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" placeholder="Série, apelido, cidade ou usuário" data-on-input="handleSerialInput" data-args='["$value"]' data-on-keydown="handleSerialKeydown" data-args-keydown='["$event"]'>
+      <input type="text" id="input-serial" class="ck-busca__entrada" aria-keyshortcuts="/ Control+K Meta+K" role="combobox" aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento" aria-autocomplete="list" aria-controls="autocomplete-list" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" data-on-input="handleSerialInput" data-args='["$value"]' data-on-keydown="handleSerialKeydown" data-args-keydown='["$event"]'>
+      <kbd class="ck-kbd nl-busca__kbd" aria-hidden="true">Ctrl K</kbd>
       <button type="button" id="btn-clear-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm hidden" aria-label="Limpar pesquisa" title="Limpar pesquisa" data-on-click="limparSerial"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
       <button type="submit" id="btn-buscar-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Buscar Equipamento" title="Buscar Equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg><span class="ck-sr">Buscar Equipamento</span></button>
     </div>
@@ -161,25 +163,6 @@
   </div>
 
   <div class="ck-topbar__acoes">
-    <details class="ck-ancora cockpit-tools-dropdown" id="cockpit-tools-dropdown">
-      <summary id="cockpit-tools-trigger" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ferramentas" aria-controls="cockpit-tools-menu" title="Ferramentas"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-grid"></use></svg><span class="ck-sr">Ferramentas</span></summary>
-      <div class="ck-menu" id="cockpit-tools-menu" role="menu" aria-label="Ferramentas">
-        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-paineis">
-          <p class="ck-menu__titulo" id="ck-menu-g-paineis">Painéis</p>
-          <button type="button" id="btn-sebrae-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
-          <button type="button" id="btn-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">OS</span><kbd aria-hidden="true">F6</kbd></button>
-          <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
-          <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
-          <button type="button" id="btn-cobertura" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["cobertura"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg><span class="ck-menu__rotulo">Cobertura</span><kbd aria-hidden="true">F10</kbd></button>
-          <button type="button" id="btn-lembretes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["lembretes"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg><span class="ck-menu__rotulo">Lembretes</span></button>
-        </div>
-        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
-          <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
-          <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["unidades"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
-        </div>
-      </div>
-    </details>
-
     <div class="ck-ancora">
       <button type="button" id="btn-notificacoes" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bell"></use></svg><span id="badge-notificacoes" class="ck-contador" aria-hidden="true" hidden>0</span></button>
       <section id="notification-center-panel" class="ck-sino" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
@@ -223,6 +206,25 @@
         </div>
       </section>
     </div>
+
+    <details class="ck-ancora cockpit-tools-dropdown" id="cockpit-tools-dropdown">
+      <summary id="cockpit-tools-trigger" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ferramentas" aria-controls="cockpit-tools-menu" title="Ferramentas"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-grid"></use></svg><span class="ck-sr">Ferramentas</span></summary>
+      <div class="ck-menu" id="cockpit-tools-menu" role="menu" aria-label="Ferramentas">
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-paineis">
+          <p class="ck-menu__titulo" id="ck-menu-g-paineis">Painéis</p>
+          <button type="button" id="btn-sebrae-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
+          <button type="button" id="btn-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">OS</span><kbd aria-hidden="true">F6</kbd></button>
+          <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
+          <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
+          <button type="button" id="btn-cobertura" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["cobertura"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg><span class="ck-menu__rotulo">Cobertura</span><kbd aria-hidden="true">F10</kbd></button>
+          <button type="button" id="btn-lembretes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["lembretes"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg><span class="ck-menu__rotulo">Lembretes</span></button>
+        </div>
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
+          <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
+          <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["unidades"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
+        </div>
+      </div>
+    </details>
 
     <button type="button" id="btn-assistente" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Assistente" title="Assistente (F9)" aria-keyshortcuts="F9" aria-expanded="false" aria-controls="assistente-widget" data-on-click="alternarAssistente"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg></button>
 

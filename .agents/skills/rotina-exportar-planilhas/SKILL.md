@@ -38,7 +38,7 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
    ```
 2. Abra em abas **novas** do Chrome (mesmo com abas já abertas; podem ser em paralelo):
    - UX: https://ux.simpress.com.br/MeusEquipamentos/Index
-   - Endpoint: https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers
+   - Endpoint: o link `endpoint_url` de `config/contas_automacao.json` (Prontidão da base > Configuração local); sem ele, https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers
 3. **UX Simpress**:
    1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, na opção do contrato configurado em `config/cliente.json` (formato `<contrato> - <nome do contrato>`). Não clique fora. Pesquise apenas na busca interna do seletor.
    2. Confirme a marca ✓ na opção e o contrato no campo. Remova restrições indevidas dos demais filtros.

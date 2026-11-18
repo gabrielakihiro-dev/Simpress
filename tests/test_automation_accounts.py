@@ -15,6 +15,7 @@ EXAMPLE_KEYS = {
     "dashboard_email",
     "softexpert_email",
     "dashboard_pasta_url",
+    "endpoint_url",
     "outlook_email_sebrae",
     "outlook_email_simpress",
 }

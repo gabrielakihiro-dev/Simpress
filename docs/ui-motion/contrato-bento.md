@@ -17,6 +17,7 @@ Vale para todo o Simpress, exceto o Assistente (`#assistente-widget`). Neste pro
 | Ícone do cartão | `translateY(-2px) rotate(-6deg)`, 500 ms |
 | Seta "abrir" | `translate(3px,-3px)`, 300 ms |
 | Ponto pulsante | 1.6 s, só em status real "ao vivo" (Chrome livre) |
+| Peças do Novo layout | aviso (toast) sobe em 300 ms; véu aparece em 220 ms; folha desliza em 280 ms; linha de tabela, pílula e rótulo do campo em 200 ms |
 
 - Clicar em sub-aba ou filtro repete contagem, anel e barras.
 - Quadros-chave só com `opacity` e `transform`.
@@ -32,5 +33,6 @@ Vale para todo o Simpress, exceto o Assistente (`#assistente-widget`). Neste pro
 ## Onde ficam
 
 - `static/styles/ck-bento.css`: durações, curvas e quadros-chave.
+- `static/styles/nl-base.css` (Novo layout, carregado depois do `ck-bento.css`): tokens `--nl-*`, barra superior, véu e diálogos comuns e as peças de `frontend/src/componentes/`; todo movimento fica em `prefers-reduced-motion: no-preference` e os quadros-chave `nl-*` só usam `opacity` e `transform` (`tests/frontend/test_ui_motion.cjs`).
 - `static/js/ui/bento.js`: `iniciarBrilho()` (segue o ponteiro, ignora o Assistente) e `contarAte(el, alvo, formatar)` (termina com o texto final exato; no movimento reduzido, escreve o final na hora).
 - `SimpressMotion` (`static/js/ui/ui-motion.js`, 160 e 220 ms) continua valendo para modais, gavetas e trocas de conteúdo; não é substituído por este contrato.

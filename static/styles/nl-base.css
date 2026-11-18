@@ -1,0 +1,247 @@
+/* Novo layout (NL v23, 1794977337-d093) · base comum a todas as abas.
+   Carrega depois de ck-bento.css. Só acrescenta tokens --nl-* e reveste o que já existe (barra do topo,
+   janelas .ck-veu/.ck-dialogo, alvos de toque) + as peças nl-* de frontend/src/componentes/.
+   Contrato de movimento: docs/ui-motion/contrato-bento.md (keyframes só opacity/transform; todo movimento
+   dentro de prefers-reduced-motion: no-preference). O Assistente (#assistente-widget, #btn-assistente) fica fora. */
+
+/* ---------- 1. Tokens (tema claro padrão; contraste de texto ≥ 4,5:1 sobre --nl-card e --nl-bg) ---------- */
+:root {
+  --nl-bg: #f4f5fa; --nl-card: #fff; --nl-card2: #f8f9fc;
+  --nl-bd: rgba(15, 23, 42, .09); --nl-bd2: rgba(15, 23, 42, .16);
+  --nl-tx: #0f172a; --nl-tx2: #1e293b; --nl-mut: #475569; --nl-fraco: #566176;
+  /* Acentos em trio RGB (fundo e borda com alfa) + texto do acento por tema. */
+  --nl-i: 129, 140, 248; --nl-c: 34, 211, 238; --nl-e: 52, 211, 153; --nl-f: 232, 121, 249; --nl-a: 251, 191, 36; --nl-r: 248, 113, 113;
+  --nl-itx: #4f46e5; --nl-ctx: #155e75; --nl-etx: #065f46; --nl-ftx: #86198f; --nl-atx: #92400e; --nl-rtx: #b91c1c;
+  --nl-raio-cartao: 24px; --nl-raio-tabela: 16px; --nl-raio-controle: 12px; --nl-raio-sub: 10px;
+  --nl-sombra: 0 1px 2px rgba(15, 23, 42, .05);
+  --nl-sombra-flutua: 0 16px 32px -12px rgba(15, 23, 42, .38);
+  --nl-sombra-janela: 0 24px 64px rgba(15, 23, 42, .22);
+  --nl-veu: rgba(15, 23, 42, .25);
+  --nl-curva: cubic-bezier(.2, .7, .2, 1);
+  --nl-curva-gaveta: cubic-bezier(.16, 1, .3, 1);
+}
+:root[data-theme="dark"] {
+  --nl-bg: #07080d; --nl-card: #0b0d15; --nl-card2: #10131d;
+  --nl-bd: rgba(255, 255, 255, .10); --nl-bd2: rgba(255, 255, 255, .16);
+  --nl-tx: #f1f5f9; --nl-tx2: #cbd5e1; --nl-mut: #94a3b8; --nl-fraco: #94a3b8;
+  --nl-itx: #a5b4fc; --nl-ctx: #67e8f9; --nl-etx: #6ee7b7; --nl-ftx: #f0abfc; --nl-atx: #fcd34d; --nl-rtx: #fca5a5;
+  --nl-sombra: none;
+  --nl-sombra-janela: 0 24px 64px rgba(0, 0, 0, .35);
+  --nl-veu: rgba(7, 8, 13, .45);
+}
+/* Acento de uma peça: data-nl-tom troca o trio e a cor do texto; sem ele, cada peça cai no indigo (fallback do var()). */
+[data-nl-tom="ciano"] { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
+[data-nl-tom="esmeralda"] { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+[data-nl-tom="fucsia"] { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
+[data-nl-tom="ambar"] { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
+[data-nl-tom="vermelho"] { --nl-ac: var(--nl-r); --nl-actx: var(--nl-rtx); }
+
+/* ---------- 2. Barra do topo (página base): só aparência; IDs, ARIA e ordem ficam como estão ---------- */
+#ck-topbar { background: color-mix(in srgb, var(--nl-bg) 82%, transparent); border-bottom-color: var(--nl-bd); }
+#ck-topbar .ck-marca { border-right: 0; padding-right: 0; font-size: 17px; font-weight: 700; }
+#ck-topbar .ck-aba { border-radius: 999px; color: var(--nl-mut); font-weight: 500; }
+#ck-topbar .ck-aba:hover { background: rgba(var(--nl-i), .08); color: var(--nl-tx); }
+#ck-topbar .ck-aba[aria-selected="true"], #ck-topbar .ck-aba--painel[aria-pressed="true"] {
+  background: rgba(var(--nl-i), .16); color: var(--nl-itx); box-shadow: inset 0 0 0 1px rgba(var(--nl-i), .35);
+}
+#ck-topbar .ck-busca__campo { height: 40px; padding: 0 6px 0 12px; border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-fraco); }
+#ck-topbar .nl-busca__kbd { height: auto; padding: 2px 6px; border-color: var(--nl-bd2); border-radius: 6px; color: var(--nl-fraco); font: 500 11px/1.2 var(--fonte-mono); white-space: nowrap; }
+#ck-topbar .ck-chip { height: 28px; border-color: var(--nl-bd); border-radius: 999px; background: var(--nl-card); }
+#ck-topbar .ck-topbar__acoes { gap: 6px; }
+#ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle) {
+  width: 40px; height: 40px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-mut);
+}
+#ck-topbar .ck-contador { top: -4px; right: -4px; min-width: 18px; height: 18px; border-radius: 9px; background: rgb(var(--nl-f)); color: #0b0d15; line-height: 18px; }
+#ck-topbar :is(.ck-menu, .ck-sino) { border-color: var(--nl-bd); border-radius: 16px; box-shadow: var(--nl-sombra-janela); }
+
+@media (min-width: 1200px) {
+  :root { --altura-barra: 64px; }
+  #ck-topbar { gap: 12px; padding: 0 24px; }
+  #ck-abas { padding: 4px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card); }
+  #ck-topbar .ck-aba { height: 36px; padding: 0 14px; }
+  #ck-topbar .ck-aba--painel { margin-left: 0; border: 1px solid var(--nl-bd); background: var(--nl-card); }
+  #ck-topbar .ck-busca { max-width: 420px; }
+}
+@media (max-width: 1199.98px) {
+  #ck-topbar .ck-aba { height: 34px; padding: 0 12px; border: 1px solid var(--nl-bd); background: var(--nl-card); }
+}
+@media (max-width: 767.98px) {
+  #ck-topbar { padding: 8px 16px; }
+  #ck-topbar .ck-aba { padding: 0 4px; }
+}
+
+/* ---------- 3. Janelas e diálogos comuns (.ck-veu/.ck-dialogo): o movimento segue no SimpressMotion ---------- */
+.ck-veu:not(#assistente-widget *) { background: var(--nl-veu); backdrop-filter: blur(3px); }
+.ck-dialogo:not(#assistente-widget *) { border-color: var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra-janela); }
+.ck-dialogo:not(#assistente-widget *) :is(.ck-dialogo__cab, .ck-dialogo__rodape) { border-color: var(--nl-bd); }
+@media (max-width: 767.98px) { .ck-dialogo:not(#assistente-widget *) { border-radius: 20px; } }
+
+/* ---------- 3b. Janelas comuns (quadros NL-Janelas-*): casca .ckp-dialogo; só aparência, IDs e ARIA ficam ---------- */
+.ckp-veu { background: var(--nl-veu); backdrop-filter: blur(3px); }
+.ckp-dialogo { border-color: var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra-janela); color: var(--nl-tx); }
+/* O desenho não tem ícone no cabeçalho: título e ações em duas colunas. */
+.ckp-cab { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 18px 16px 14px 24px; border-color: var(--nl-bd); }
+.ckp-cab__icone { display: none; }
+/* Links dos sistemas embaixo do título e Fechar à direita, como no quadro (a ordem do DOM fica). */
+.ckp-cab__acoes { display: contents; }
+.ckp-cab__textos { grid-column: 1; grid-row: 1; }
+.ckp-cab__acoes > .ck-btn { grid-column: 2; grid-row: 1; align-self: start; }
+.ckp-cab .ckp-sistemas { grid-column: 1; grid-row: 2; justify-self: start; }
+.ckp-cab__kicker { color: var(--nl-mut); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.ckp-cab__titulo { color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+.ckp-cab__sub { color: var(--nl-mut); }
+.ckp-sistema { border-color: var(--nl-bd); border-radius: 10px; color: var(--nl-itx); }
+.ckp-sistemas { border-color: var(--nl-bd); }
+.ckp-corpo { padding: 16px 24px; }
+.ckp-rodape { justify-content: flex-end; padding: 14px 24px; border-color: var(--nl-bd); background: var(--nl-card); }
+.ckp-rodape__status { color: var(--nl-mut); }
+/* Cancelar e Fechar do rodapé: botão secundário com borda, não fantasma. */
+.ckp-rodape .ck-btn--fantasma { border: 1px solid var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); }
+/* Seções separadas por linha, sem caixa. */
+.ckp-dialogo .ckp-secao { padding-top: 12px; border: 0; border-top: 1px solid var(--nl-bd); border-radius: 0; background: transparent; }
+.ckp-dialogo .ckp-secao:first-child { padding-top: 0; border-top: 0; }
+.ckp-dialogo .ckp-secao--opcional { border-top-style: dashed; }
+.ckp-dialogo :is(.ckp-secao__cab, .ckp-secao__corpo) { padding-left: 0; padding-right: 0; }
+.ckp-dialogo .ckp-secao__titulo { font-size: 14px; font-weight: 600; }
+.ckp-dialogo .ckp-secao__desc { color: var(--nl-mut); }
+/* Arquivo: vazio = área tracejada para soltar; escolhido = verde; erro = vermelho. */
+.ckp-dialogo .ckp-arquivo { border: 1px dashed var(--nl-bd2); border-radius: 14px; background: var(--nl-card2); }
+.ckp-dialogo .ckp-arquivo:is([data-estado="ok"], [data-estado="pronto"]) { border-style: solid; border-color: rgba(var(--nl-e), .35); background: rgba(var(--nl-e), .06); }
+.ckp-dialogo .ckp-arquivo[data-estado="erro"] { border-style: solid; border-color: rgba(var(--nl-r), .45); background: rgba(var(--nl-r), .05); }
+@media (max-width: 767.98px) {
+  .ckp-dialogo { border-radius: 20px; }
+  .ckp-cab { padding: 16px 12px 12px 16px; }
+  .ckp-corpo { padding: 16px; }
+  .ckp-rodape { padding: 12px 16px; }
+  .ckp-rodape > .ck-btn { flex: 1 1 auto; }
+}
+
+/* ---------- 3c. Popovers da barra (quadro NL-Base-Topo): Pendências (.ck-sino) e Prontidão da base (.ck-pront) ---------- */
+.ck-pront { border-color: var(--nl-bd); border-radius: 16px; background: var(--nl-card); box-shadow: var(--nl-sombra-janela); }
+@media (min-width: 768px) { .ck-sino, .ck-pront { width: 440px; } }
+.ck-sino__titulo { color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+/* Cada pendência: cartão com barra de 3px na cor da gravidade (Atenção âmbar, Urgente fúcsia). */
+.ck-aviso { --nl-ac: var(--nl-a); border: 1px solid var(--nl-bd); border-left: 3px solid rgb(var(--nl-ac)); border-radius: 14px; background: var(--nl-card2); }
+.ck-aviso[data-gravidade="urgente"] { --nl-ac: var(--nl-f); }
+.ck-pront__kicker { color: var(--nl-mut); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.ck-pront__resumo { gap: 8px; margin: 4px 12px 0; border: 0; background: transparent; }
+.ck-pront__par { padding: 10px 12px; border-radius: 12px; background: var(--nl-card2); }
+.ck-pront__par + .ck-pront__par { border-left: 0; }
+.ck-pront__lista { display: grid; gap: 8px; padding: 12px; border-color: var(--nl-bd); }
+.ck-pront__item { padding: 10px 12px; border-radius: 14px; background: var(--nl-card2); }
+@media (max-width: 767.98px) { .ck-pront__resumo { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 3d. Campo de formulário (quadro NL-Base-Formulario): rótulo que flutua, erro com mensagem ---------- */
+.nl-campo { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nl-campo__inp { width: 100%; height: 48px; padding: 20px 14px 6px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font: 400 14px/1.3 var(--fonte-corpo); }
+textarea.nl-campo__inp { height: 92px; padding-top: 24px; resize: none; line-height: 1.4; }
+select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--nl-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center; cursor: pointer; }
+.nl-campo__inp:focus { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
+.nl-campo__rot { position: absolute; top: 14px; left: 15px; color: var(--nl-mut); font-size: 14px; pointer-events: none; transform-origin: left top; }
+/* Com foco, com valor ou em select, o rótulo sobe e encolhe (o campo usa placeholder=" "). */
+.nl-campo__inp:is(:focus, :not(:placeholder-shown)) + .nl-campo__rot, select.nl-campo__inp + .nl-campo__rot { transform: translateY(-8px) scale(.79); }
+.nl-campo[data-erro] .nl-campo__inp { border-color: rgb(var(--nl-r)); }
+.nl-campo__erro { color: var(--nl-rtx); font-size: 12px; }
+
+/* ---------- 4. Alvo de toque mínimo de 32px no celular (área invisível; o desenho não muda) ---------- */
+@media (max-width: 767.98px), (pointer: coarse) {
+  :is(.ck-link-btn, .info-tip-trigger, .ck-btn--icone):not(#assistente-widget *) { position: relative; }
+  :is(.ck-link-btn, .info-tip-trigger, .ck-btn--icone):not(#assistente-widget *)::after {
+    content: ""; position: absolute; top: 50%; left: 50%; width: max(100%, 32px); height: max(100%, 32px); transform: translate(-50%, -50%);
+  }
+}
+
+/* ---------- 5. Pílula de sub-aba (a marca desliza por trás do botão ativo) ---------- */
+.nl-subabas { position: relative; display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.nl-subabas__marca { position: absolute; top: 3px; left: 0; height: calc(100% - 6px); width: var(--nl-w, 0); transform: translateX(var(--nl-x, 0)); border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-sub); background: var(--nl-card); box-shadow: var(--nl-sombra); pointer-events: none; }
+.nl-subabas:not([data-pronta]) .nl-subabas__marca { opacity: 0; }
+.nl-subaba { position: relative; z-index: 1; height: 34px; padding: 0 12px; border: 0; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); font: 500 13px/1 var(--fonte-corpo); white-space: nowrap; cursor: pointer; }
+.nl-subaba[aria-pressed="true"] { color: var(--nl-tx); }
+
+/* ---------- 6. Tabela (quadro NL-Tabelas); no celular cada linha vira um cartão com os mesmos dados ---------- */
+.nl-tabela { border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); overflow: hidden; background: var(--nl-card); }
+.nl-tabela__t { width: 100%; border-collapse: collapse; table-layout: fixed; color: var(--nl-tx2); font-size: 13px; }
+.nl-tabela__t thead th { padding: 10px 14px; border-bottom: 1px solid var(--nl-bd); background: var(--nl-card2); color: var(--nl-mut); font-size: 12px; font-weight: 500; text-align: left; white-space: nowrap; }
+.nl-tabela__t td { padding: 12px 14px; border-top: 1px solid var(--nl-bd); overflow-wrap: anywhere; vertical-align: middle; }
+.nl-tabela__t tbody tr:first-child > td { border-top: 0; }
+/* Grupo (ex.: por dia): rótulo e contagem numa linha própria. */
+.nl-tabela__grupo th { padding: 14px 14px 8px; border-bottom: 1px solid var(--nl-bd); color: var(--nl-tx2); font-weight: 400; text-align: left; }
+.nl-tabela__grupo:not(:first-of-type) th { border-top: 1px solid var(--nl-bd); }
+.nl-tabela__grupo tr:nth-child(2) > td { border-top: 0; }
+.nl-tabela__grupo-q { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--nl-card2); color: var(--nl-mut); font-size: 12px; }
+.nl-tabela__lin[data-clicavel] { cursor: pointer; }
+.nl-tabela__lin:is(:hover, :focus-within) { background: rgba(var(--nl-ac, var(--nl-i)), .07); }
+.nl-tabela__lin:is(:hover, :focus-within) > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--nl-ac, var(--nl-i))); }
+.nl-tabela__lin[data-selecionada] { background: rgba(var(--nl-i), .07); }
+.nl-tabela__lin[data-selecionada] > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--nl-i)); }
+.nl-tabela__anot { color: var(--nl-fraco); font-size: 12px; }
+.nl-tabela__vazio { padding: 24px 14px; color: var(--nl-mut); text-align: center; }
+@media (max-width: 767.98px) {
+  .nl-tabela { border: 0; border-radius: 0; overflow: visible; background: transparent; }
+  .nl-tabela__t, .nl-tabela__t tbody { display: block; }
+  .nl-tabela__grupo th { display: block; padding: 8px 2px 0; border: 0; }
+  .nl-tabela__t thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .nl-tabela__t tbody { display: grid; gap: 10px; }
+  .nl-tabela__lin { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); }
+  .nl-tabela__lin[data-selecionada] { border-color: rgba(var(--nl-i), .55); }
+  .nl-tabela__t td { display: grid; grid-template-columns: minmax(0, 96px) minmax(0, 1fr); gap: 8px; padding: 0; border: 0; }
+  .nl-tabela__t td::before { content: attr(data-rotulo); color: var(--nl-mut); font-size: 12px; }
+  .nl-tabela__lin:is(:hover, :focus-within) > td:first-child, .nl-tabela__lin[data-selecionada] > td:first-child { box-shadow: none; }
+  .nl-tabela__t :is(button, a) { min-height: 32px; }
+}
+
+/* ---------- 7. Toast (aviso curto de sucesso ou erro) ---------- */
+.nl-toasts { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: grid; gap: 8px; justify-items: end; pointer-events: none; }
+.nl-toast { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid rgba(var(--nl-ac), .4); border-radius: 14px; background: var(--nl-card); box-shadow: var(--nl-sombra-flutua); color: var(--nl-actx); font: 600 13px/1.35 var(--fonte-corpo); pointer-events: auto; }
+.nl-toast[data-tipo="erro"] { --nl-ac: var(--nl-r); --nl-actx: var(--nl-rtx); }
+.nl-toast__fechar { display: grid; place-items: center; width: 32px; height: 32px; margin: -6px -8px -6px 0; border: 0; border-radius: 10px; background: transparent; color: var(--nl-mut); cursor: pointer; }
+@media (max-width: 767.98px) { .nl-toasts { right: 16px; left: 16px; bottom: 16px; justify-items: stretch; } }
+
+/* ---------- 8. Folha inferior (celular) / gaveta lateral (desktop) ---------- */
+.nl-veu { position: fixed; inset: 0; z-index: 70; background: var(--nl-veu); backdrop-filter: blur(3px); }
+.nl-folha { position: fixed; top: 0; right: 0; bottom: 0; z-index: 71; display: flex; flex-direction: column; width: min(440px, 100vw); background: var(--nl-card); border-left: 1px solid var(--nl-bd); box-shadow: -24px 0 48px rgba(0, 0, 0, .25); color: var(--nl-tx); }
+.nl-folha__cab { display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--nl-bd); }
+.nl-folha__titulo { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+.nl-folha__corpo { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 16px 20px; }
+.nl-folha__fechar { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-mut); cursor: pointer; }
+@media (max-width: 767.98px) {
+  .nl-folha { top: auto; left: 0; width: 100%; max-height: 82dvh; border-left: 0; border-top: 1px solid var(--nl-bd); border-radius: 20px 20px 0 0; box-shadow: 0 -24px 48px rgba(0, 0, 0, .25); }
+  .nl-folha__cab::before { content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--nl-bd2); }
+}
+
+/* ---------- 9. Selo de responsável (quadro NL-Responsaveis): iniciais em círculo com o papel na dica ---------- */
+.nl-avs { display: inline-flex; align-items: center; }
+.nl-av { position: relative; display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: -8px; border: 2px solid var(--nl-card); border-radius: 50%; background: color-mix(in srgb, rgb(var(--nl-ac, var(--nl-i))) 16%, var(--nl-card)); color: var(--nl-actx, var(--nl-itx)); font: 600 11px/1 var(--fonte-corpo); cursor: default; }
+.nl-av:first-child { margin-left: 0; }
+.nl-avs:is(:hover, :focus-within) .nl-av { margin-left: 2px; }
+.nl-avs:is(:hover, :focus-within) .nl-av:first-child { margin-left: 0; }
+.nl-av::after { content: attr(data-papel); position: absolute; bottom: calc(100% + 6px); left: 50%; z-index: 5; padding: 4px 8px; border-radius: 8px; background: var(--nl-tx); color: var(--nl-bg); font: 500 11px/1.3 var(--fonte-corpo); white-space: nowrap; opacity: 0; transform: translateX(-50%); pointer-events: none; }
+.nl-av:is(:hover, :focus-visible)::after { opacity: 1; }
+@media (max-width: 767.98px) { .nl-av::after { left: auto; right: 0; transform: none; } }
+
+/* Lado responsável (quadro NL-Responsaveis, F5): selo CLIENTE (ciano) ou SIMPRESS (índigo). */
+.nl-selo-lado { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid rgba(var(--nl-ac, var(--nl-i)), .35); border-radius: 999px; background: rgba(var(--nl-ac, var(--nl-i)), .10); color: var(--nl-actx, var(--nl-itx)); font: 600 11px/1 var(--fonte-corpo); letter-spacing: .04em; white-space: nowrap; }
+
+/* ---------- 10. Movimento (contrato bento; nada anima com movimento reduzido) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  #ck-topbar :is(.ck-aba, .ck-busca__campo, .ck-chip) { transition: background-color 300ms var(--nl-curva), color 300ms var(--nl-curva), border-color 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
+  #ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle) { transition: transform 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
+  #ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover { transform: translateY(-3px); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+  .nl-subabas[data-pronta] .nl-subabas__marca { transition: transform 200ms var(--nl-curva), opacity 200ms var(--nl-curva); }
+  .nl-subaba { transition: color 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
+  .nl-subaba:hover { transform: translateY(-2px); }
+  .nl-tabela__lin, .nl-tabela__lin > td:first-child { transition: background-color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva); }
+  .nl-toast { animation: nl-sobe 300ms var(--nl-curva) both; }
+  .nl-veu { animation: nl-aparece 220ms var(--nl-curva) both; }
+  .nl-folha { animation: nl-gaveta 280ms var(--nl-curva-gaveta) both; }
+  .nl-av { transition: margin-left 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
+  .nl-av:hover { transform: translateY(-2px); }
+  .nl-av::after { transition: opacity 150ms var(--nl-curva); }
+  .nl-campo__rot { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+  .nl-campo__inp { transition: border-color 200ms var(--nl-curva); }
+  @media (max-width: 767.98px) { .nl-folha { animation-name: nl-folha-sobe; } }
+}
+@keyframes nl-aparece { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nl-sobe { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes nl-gaveta { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes nl-folha-sobe { from { transform: translateY(100%); } to { transform: none; } }
