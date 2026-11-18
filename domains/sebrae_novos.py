@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 
 from core.integrity import lock_paths
 from domains import sebrae_cruzamento, sebrae_vinculos
+from domains.equipment_search import normalize_search_term
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
 from domains.sebrae_dashboard import (
     CRUZ_AUSENTE,
@@ -375,12 +376,27 @@ def preenchimentos_softexpert(abertos: Sequence[Mapping[str, Any]], antigos: Map
 
 # ---------------------------------------------------------------------------- rows
 
+def _por_nome(registros: Sequence[Mapping[str, Any]]) -> Dict[str, List[Mapping[str, Any]]]:
+    """Records grouped by the exact name key ``cruzar_por_nome`` compares, in their original order: it skips every
+    other record, so passing only the group gives the same result without normalising every name once per ticket."""
+    grupos: Dict[str, List[Mapping[str, Any]]] = {}
+    for registro in registros:
+        grupos.setdefault(normalize_search_term(" ".join(str(registro.get("nome") or "").split())), []).append(registro)
+    return grupos
+
+
+def _cruzar_nome(nome: str, registros: Sequence[Mapping[str, Any]], grupos: Mapping[str, Sequence[Mapping[str, Any]]]) -> Cruzamento:
+    if not (registros and nome):
+        return Cruzamento(CRUZ_AUSENTE)
+    return cruzar_por_nome(nome, grupos.get(normalize_search_term(" ".join(str(nome).split())), ()))
+
+
 def _cruzar(
     chamado: ChamadoSoftExpert, registros: Sequence[Mapping[str, Any]], relatorio: Optional[Mapping[str, Any]],
-    vinculos: Sequence[Mapping[str, Any]] = (),
+    vinculos: Sequence[Mapping[str, Any]] = (), grupos: Optional[Mapping[str, Sequence[Mapping[str, Any]]]] = None,
 ) -> Tuple[Cruzamento, str]:
     nome, _ = sebrae_cruzamento.nome_do_chamado(chamado.descricao, chamado.solicitante, registros)
-    cruzamento = cruzar_por_nome(nome, registros) if registros and nome else Cruzamento(CRUZ_AUSENTE)
+    cruzamento = _cruzar_nome(nome, registros, _por_nome(registros) if grupos is None else grupos)
     # a manual link of the ticket table wins over the OS of the serial
     os_ = sebrae_vinculos.os_do_chamado(vinculos, chamado.numero) or (
         sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else "")
@@ -395,8 +411,9 @@ def formulario(
 ) -> List[Dict[str, Any]]:
     """One item per new ticket: the automatic columns, the cross-reference status and its candidate count."""
     itens = []
+    grupos = _por_nome(registros)
     for chamado in chamados:
-        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos)
+        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos, grupos)
         itens.append({
             "numero": chamado.numero,
             "linha": montar_linha(chamado, cruzamento, os_),
@@ -420,12 +437,13 @@ def preenchimentos(
     has the other ``S`` spelling, only when that match is unique; K and the report's values stay as they are.
     shortcut: K vs the row's serial still compares as upper-case text (no ``S`` rule), upgrade if one row misses K/L/N because of it."""
     resultado: Dict[str, Dict[str, str]] = {}
+    grupos = _por_nome(registros)
     for item in abertos:
         atuais = {letra: str(valor or "").strip() for letra, valor in (item.get("automaticos") or {}).items()}
         usuario = str(item.get("usuario") or "")
         # the person cited in the description wins over the requester; two cited people: nothing by name (a serial the row already has still gives E)
         nome, _ = sebrae_cruzamento.nome_do_chamado(item.get("descricao"), usuario, registros)
-        cruzamento = cruzar_por_nome(nome, registros) if nome and registros else Cruzamento(CRUZ_AUSENTE)
+        cruzamento = _cruzar_nome(nome, registros, grupos)
         serie_atual = atuais.get("K", "")
         coerente = cruzamento.status == CRUZ_UNICO and (not serie_atual or serie_atual.upper() == cruzamento.serie.strip().upper())
         novos = {"K": cruzamento.serie, "L": cruzamento.modelo, "N": cruzamento.cidade} if coerente else {}
@@ -504,6 +522,7 @@ def linhas_completas(
     if not chamados:
         raise ManuaisInvalidos("Não há chamados novos para exportar.")
     linhas: List[Dict[str, str]] = []
+    grupos = _por_nome(registros)
     for chamado in chamados:
         if exigir and chamado.numero not in manuais_por_numero:
             raise ManuaisInvalidos(f"Preencha os campos manuais do {chamado.numero}.")
@@ -514,7 +533,7 @@ def linhas_completas(
             titulo = titulo_editado(enviados)
         except ManuaisInvalidos as erro:
             raise ManuaisInvalidos(f"{chamado.numero}: {erro}") from None
-        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos)
+        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos, grupos)
         linha = {**montar_linha(chamado, cruzamento, os_), **manuais}
         if titulo:
             linha["G"] = titulo

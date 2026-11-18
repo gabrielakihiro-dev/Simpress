@@ -42,10 +42,10 @@ async function registrarNecessidade(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   const form = event.currentTarget;
   await semRepetir(form, async () => {
-    const ok = await escrever("/api/cobertura/demandas", {
+    const ok = await escrever("POST /api/cobertura/demandas", { corpo: {
       data: valor(form, "data"), cidade: valor(form, "cidade"), quantidade: Number(valor(form, "quantidade")) || 1,
       perfil: valor(form, "perfil"), monitor: Boolean((form.elements.namedItem("monitor") as HTMLInputElement | null)?.checked), observacao: valor(form, "observacao"),
-    }, "Necessidade registrada.");
+    } }, "Necessidade registrada.");
     if (ok) form.reset();
   });
 }
@@ -57,7 +57,7 @@ async function registrarDisponibilidade(event: FormEvent<HTMLFormElement>) {
   await semRepetir(form, async () => {
     const serie = valor(form, "serie");
     const atual: Registro | undefined = casos(ler().dados, "disponibilidade")[modelo.chaveSerie(serie)];
-    const ok = await disponibilidade(serie, botao?.value || "disponivel", atual?.rev, valor(form, "cidade"));
+    const ok = await disponibilidade(serie, (botao?.value || "disponivel") as Parameters<typeof disponibilidade>[1], atual?.rev, valor(form, "cidade"));
     if (ok) form.reset();
   });
 }
@@ -66,9 +66,9 @@ async function registrarDevolucao(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   const form = event.currentTarget;
   await semRepetir(form, async () => {
-    const corpo: Registro = { serie: valor(form, "serie"), data_prevista: valor(form, "data_prevista"), observacao: valor(form, "observacao") };
+    const corpo: { serie: string; data_prevista: string; observacao: string; cidade?: string } = { serie: valor(form, "serie"), data_prevista: valor(form, "data_prevista"), observacao: valor(form, "observacao") };
     if (valor(form, "cidade")) corpo.cidade = valor(form, "cidade");
-    const ok = await escrever("/api/cobertura/devolucoes", corpo, "Devolução registrada.");
+    const ok = await escrever("POST /api/cobertura/devolucoes", { corpo }, "Devolução registrada.");
     if (ok) form.reset();
   });
 }

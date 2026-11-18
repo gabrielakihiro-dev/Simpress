@@ -48,6 +48,12 @@ export type AtualizarPayload = {
   "enviar_sharepoint"?: boolean;
 };
 
+export type BloqueioCobertura = {
+  "serie": unknown;
+  "motivo": string;
+  "id": string;
+};
+
 export type Body_anexar_pdf_api_sebrae_chamados__numero__anexo_post = {
   "file": Blob;
 };
@@ -92,6 +98,22 @@ export type CancelarPayload = {
   "session_id": string;
 };
 
+export type CasoCobertura = {
+  "secao": string;
+  "arquivado": boolean;
+  "registro": RegistroCobertura;
+};
+
+export type CasosCobertura = {
+  "disponibilidade"?: Record<string, DisponibilidadeCaso>;
+  "demandas"?: Record<string, RegistroCobertura>;
+  "devolucoes"?: Record<string, DevolucaoCaso>;
+  "reservas"?: Record<string, ReservaCaso>;
+  "movimentacoes"?: Record<string, RegistroCobertura>;
+  "vinculos"?: Record<string, RegistroCobertura>;
+  "rejeicoes"?: Record<string, RegistroCobertura>;
+};
+
 export type ChamadoManual = {
   "numero": string;
   "A"?: string;
@@ -107,6 +129,18 @@ export type ClienteConfigPayload = {
   "contrato"?: string;
   "cnpj_faturamento"?: string;
   "series_sebrae_fora"?: string[] | null;
+};
+
+export type Cobertura = {
+  "hoje": string;
+  "vagas": VagaCobertura[];
+  "contagens": ContagensCobertura;
+  "disponiveis": DisponivelCobertura[];
+  "bloqueios": BloqueioCobertura[];
+  "reservas_vencidas": string[];
+  "manutencao": ManutencaoCobertura;
+  "sinais": Record<string, unknown>[];
+  "casos": CasosCobertura;
 };
 
 export type CodigoPowerShellPayload = {
@@ -139,6 +173,13 @@ export type ConflitosPayload = {
 
 export type ConsultaEndpointPayload = {
   "serial": string;
+};
+
+export type ContagensCobertura = {
+  "atendivel": number;
+  "condicionada": number;
+  "sem_cobertura": number;
+  "entregue": number;
 };
 
 export type ContasPayload = {
@@ -193,6 +234,11 @@ export type DestaquePayload = {
   "destaque": boolean;
 };
 
+export type DevolucaoCaso = {
+  "rev": number;
+  "situacao": string;
+};
+
 export type DevolucaoPayload = {
   "serie": string;
   "data_prevista": string;
@@ -200,11 +246,24 @@ export type DevolucaoPayload = {
   "observacao"?: string;
 };
 
+export type DisponibilidadeCaso = {
+  "rev": number;
+  "estado_efetivo": string;
+};
+
 export type DisponibilidadePayload = {
   "serie": string;
   "estado": "disponivel" | "em_manutencao" | "indisponivel";
   "cidade"?: string | null;
   "rev"?: number | null;
+};
+
+export type DisponivelCobertura = {
+  "serie": unknown;
+  "cidade": unknown;
+  "confirmada_em": unknown;
+  "valida_ate": unknown;
+  "sinal": string | null;
 };
 
 export type DivergenciaPayload = {
@@ -342,6 +401,11 @@ export type ManualPersonNamePayload = {
   "nome"?: string;
 };
 
+export type ManutencaoCobertura = {
+  "verificada": boolean;
+  "aviso": string;
+};
+
 export type MensagemPayload = {
   "texto": string;
   "contexto_ux"?: ContextoUXPayload | null;
@@ -351,6 +415,14 @@ export type MovimentacaoPayload = {
   "reserva_id": string;
   "rev": number;
   "tipo"?: "transporte" | "local";
+};
+
+export type MovimentacaoPreparada = {
+  "id": unknown;
+  "serie": unknown;
+  "destino_cidade": unknown;
+  "chave": unknown;
+  "rev": number;
 };
 
 export type NotaPayload = {
@@ -465,6 +537,10 @@ export type RegistrarTransferenciaPayload = {
   "rev": number;
 };
 
+export type RegistroCobertura = {
+  "rev": number;
+};
+
 export type RepresentanteRegionalPayload = {
   "nome"?: string;
   "email"?: string;
@@ -477,6 +553,12 @@ export type RepresentanteRegionalPayload = {
 export type ReprogramarPayload = {
   "rev": number;
   "data_prevista": string;
+};
+
+export type ReservaCaso = {
+  "rev": number;
+  "vencida": boolean;
+  "kit_pronto": boolean;
 };
 
 export type ReservaPayload = {
@@ -573,6 +655,13 @@ export type TransferenciaPayload = {
   "entrega_voltagem"?: string;
 };
 
+export type TransferenciaRegistrada = {
+  "movimentacao": RegistroCobertura;
+  "historico_id": unknown;
+  "transferencia": unknown;
+  "repetido": boolean;
+};
+
 export type UnidadePayload = {
   "id"?: number | null;
   "cidade": string;
@@ -589,6 +678,23 @@ export type UsuarioUpdatePayload = {
 
 export type UsuariosConsultaPayload = {
   "series"?: string[];
+};
+
+export type VagaCobertura = {
+  "id": string;
+  "demanda_id": unknown;
+  "indice": number;
+  "data": unknown;
+  "cidade": unknown;
+  "perfil": unknown;
+  "monitor": boolean;
+  "situacao": string;
+  "serie": unknown;
+  "reserva_id": unknown;
+  "devolucao_id": unknown;
+  "movimentacao_id"?: unknown;
+  "selos": string[];
+  "motivo": string | null;
 };
 
 export type ValidationError = {
@@ -805,92 +911,92 @@ export interface Rotas {
   "GET /api/cobertura": {
     consulta: never;
     corpo: never;
-    resposta: Record<string, unknown>;
+    resposta: Cobertura;
   };
   "GET /api/cobertura/casos/{caso_id}": {
     consulta: never;
     corpo: never;
-    resposta: Record<string, unknown>;
+    resposta: CasoCobertura;
   };
   "POST /api/cobertura/demandas": {
     consulta: never;
     corpo: DemandaPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/demandas/{demanda_id}/cancelar": {
     consulta: never;
     corpo: RevPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/devolucoes": {
     consulta: never;
     corpo: DevolucaoPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/devolucoes/{devolucao_id}/cancelar": {
     consulta: never;
     corpo: RevPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/devolucoes/{devolucao_id}/receber": {
     consulta: never;
     corpo: RevPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/devolucoes/{devolucao_id}/reprogramar": {
     consulta: never;
     corpo: ReprogramarPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/disponibilidade": {
     consulta: never;
     corpo: DisponibilidadePayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/movimentacoes": {
     consulta: never;
     corpo: MovimentacaoPayload;
-    resposta: Record<string, unknown>;
+    resposta: MovimentacaoPreparada;
   };
   "POST /api/cobertura/movimentacoes/{movimentacao_id}/estado": {
     consulta: never;
     corpo: EstadoMovimentacaoPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/movimentacoes/{movimentacao_id}/registrar-transferencia": {
     consulta: never;
     corpo: RegistrarTransferenciaPayload;
-    resposta: Record<string, unknown>;
+    resposta: TransferenciaRegistrada;
   };
   "POST /api/cobertura/movimentacoes/{movimentacao_id}/resolver-divergencia": {
     consulta: never;
     corpo: ResolverDivergenciaPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/movimentacoes/{movimentacao_id}/vincular-historico": {
     consulta: never;
     corpo: VincularHistoricoPayload;
-    resposta: Record<string, unknown>;
+    resposta: TransferenciaRegistrada;
   };
   "POST /api/cobertura/reservas": {
     consulta: never;
     corpo: ReservaPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/reservas/{reserva_id}/cancelar": {
     consulta: never;
     corpo: RevPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/reservas/{reserva_id}/kit": {
     consulta: never;
     corpo: KitPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "POST /api/cobertura/reservas/{reserva_id}/renovar": {
     consulta: never;
     corpo: RevPayload;
-    resposta: Record<string, unknown>;
+    resposta: RegistroCobertura;
   };
   "GET /api/config/cliente": {
     consulta: never;
