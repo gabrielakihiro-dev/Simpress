@@ -151,10 +151,17 @@ function Edicao({ l, edicao }: { l: Lembrete; edicao: Estado["edicao"] }) {
         <BotaoRemoverData escopo="edicao" />
       </div>
       <div className="lembretes__edicao-acoes">
-        <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" onClick={() => cancelarEdicao(l.id)}>Cancelar</button>
-        <button type="submit" className="ck-btn ck-btn--primario ck-btn--sm" disabled={n === 0 || n > LIMITE}>Salvar</button>
+        <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" aria-keyshortcuts="Escape" onClick={() => cancelarEdicao(l.id)}>
+          Cancelar
+          <kbd aria-hidden="true">Esc</kbd>
+        </button>
+        <button type="submit" className="ck-btn ck-btn--primario ck-btn--sm" aria-keyshortcuts="Enter" disabled={n === 0 || n > LIMITE}>
+          Salvar
+          <kbd aria-hidden="true">Enter</kbd>
+        </button>
       </div>
-      <p className="lembretes__dica" id="lembretes-edicao-dica">
+      {/* Novo layout: as teclas aparecem nos botões; o texto da dica fica só para leitor de tela (aria-describedby do campo). */}
+      <p className="lembretes__dica sr-only" id="lembretes-edicao-dica">
         <kbd>Enter</kbd>
         {" salva · "}
         <kbd>Esc</kbd>
@@ -230,22 +237,22 @@ function Grupo({ grupo, hoje, estado }: { grupo: GrupoVista } & PropsLista) {
             Reagendar para hoje
           </button>
         )}
+        {grupo.adicionar && (
+          <button
+            type="button"
+            className="lembretes__adicionar-dia"
+            aria-label={`Adicionar lembrete em ${grupo.titulo}`}
+            onClick={() => adicionarNoDia(grupo.data as string)}
+          >
+            <IconeMais tamanho={14} />
+            Adicionar lembrete
+          </button>
+        )}
       </div>
       {grupo.itens.length > 0 && (
         <ul className="lembretes__lista lembretes__itens">
           {grupo.itens.map((l) => <Item key={l.id} l={l} hoje={hoje} estado={estado} />)}
         </ul>
-      )}
-      {grupo.adicionar && (
-        <button
-          type="button"
-          className="lembretes__adicionar-dia"
-          aria-label={`Adicionar lembrete em ${grupo.titulo}`}
-          onClick={() => adicionarNoDia(grupo.data as string)}
-        >
-          <IconeMais tamanho={14} />
-          Adicionar lembrete
-        </button>
       )}
     </section>
   );
@@ -314,22 +321,28 @@ export function Vistas({ lista, hoje, estado }: { lista: ListaDerivada } & Props
           Em breve
         </button>
       </div>
-      <div className="lembretes__navegar" id="lembretes-navegar" hidden={!embreve}>
-        <button
-          type="button"
-          className="lembretes__nav lembretes__nav--anterior"
-          id="lembretes-semana-anterior"
-          aria-label="Semana anterior"
-          disabled={estado.semanaAtual === 0}
-          onClick={() => mudarSemana(-1)}
-        >
-          <IconeSprite nome="chevron-right" />
-        </button>
-        <button type="button" className="lembretes__nav lembretes__nav--hoje" onClick={() => mudarSemana(0)}>Hoje</button>
-        <button type="button" className="lembretes__nav" id="lembretes-semana-proxima" aria-label="Próxima semana" onClick={() => mudarSemana(1)}>
-          <IconeSprite nome="chevron-right" />
-        </button>
-      </div>
+    </div>
+  );
+}
+
+// ‹ Hoje › da semana (só em Em breve); no Novo layout fica ao lado do mês, dentro de Semana.
+function NavegarSemana({ estado }: { estado: Estado }) {
+  return (
+    <div className="lembretes__navegar" id="lembretes-navegar" hidden={estado.vista !== "embreve"}>
+      <button
+        type="button"
+        className="lembretes__nav lembretes__nav--anterior"
+        id="lembretes-semana-anterior"
+        aria-label="Semana anterior"
+        disabled={estado.semanaAtual === 0}
+        onClick={() => mudarSemana(-1)}
+      >
+        <IconeSprite nome="chevron-right" />
+      </button>
+      <button type="button" className="lembretes__nav lembretes__nav--hoje" onClick={() => mudarSemana(0)}>Hoje</button>
+      <button type="button" className="lembretes__nav" id="lembretes-semana-proxima" aria-label="Próxima semana" onClick={() => mudarSemana(1)}>
+        <IconeSprite nome="chevron-right" />
+      </button>
     </div>
   );
 }
@@ -355,7 +368,10 @@ export function Semana({ hoje, estado }: PropsLista) {
   const dias = semanaDe(hoje, estado.semanaAtual);
   return (
     <div className="lembretes__semana" id="lembretes-semana" hidden={estado.vista !== "embreve"}>
-      <p className="lembretes__mes" id="lembretes-mes" aria-live="polite">{estado.vista === "embreve" ? tituloSemana(dias) : ""}</p>
+      <div className="lembretes__semana-cab">
+        <p className="lembretes__mes" id="lembretes-mes" aria-live="polite">{estado.vista === "embreve" ? tituloSemana(dias) : ""}</p>
+        <NavegarSemana estado={estado} />
+      </div>
       <div className="lembretes__faixa" id="lembretes-faixa" role="group" aria-label="Dias da semana">
         {estado.vista === "embreve" && dias.map((d) => <Dia key={d} data={d} hoje={hoje} />)}
       </div>

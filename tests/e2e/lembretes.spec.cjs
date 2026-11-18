@@ -128,6 +128,8 @@ test("editar: Esc cancela sem fechar o painel, Enter sem mudança não grava e E
   await expect(campo).toBeFocused();
   await expect(campo).toHaveValue("Lembrete sintético 1");
   await expect(page.getByText("Enter salva · Esc cancela")).toBeVisible();
+  await expect(item.locator('button[aria-keyshortcuts="Enter"] kbd')).toHaveText("Enter");
+  await expect(item.locator('button[aria-keyshortcuts="Escape"] kbd')).toHaveText("Esc");
   await campo.fill("Texto que será descartado");
   await page.keyboard.press("Escape");
   await expect(campo).toHaveCount(0);
