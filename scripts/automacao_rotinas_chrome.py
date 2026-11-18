@@ -46,6 +46,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
+from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Download, Page
@@ -65,9 +66,14 @@ ERROS_DIR = ROOT / "data" / "logs" / "automacao_chrome"
 ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
-ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
-# Telas de login abertas por `login` ("Abrir Chrome para login").
-ENDPOINT_LOGIN_URL = "https://centralendpoint.pr.sebrae.com.br/client#/login"
+# Link do Endpoint: SIMPRESS_ENDPOINT_URL ou `endpoint_url` em config/contas_automacao.json (Configuração local),
+# senão o padrão. Lido ao importar: a rotina (subprocesso) usa o novo na próxima execução; a consulta ao vivo, após reiniciar.
+ENDPOINT_URL = (
+    local_setting("SIMPRESS_ENDPOINT_URL", "endpoint_url")
+    or "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+)
+# Telas de login abertas por `login` ("Abrir Chrome para login"); mesmo host do ENDPOINT_URL.
+ENDPOINT_LOGIN_URL = f"{urlsplit(ENDPOINT_URL).scheme}://{urlsplit(ENDPOINT_URL).netloc}/client#/login"
 UX_LOGIN_URL = "https://ux.simpress.com.br/ng/autenticacao/login"
 # Contas e pasta são dados pessoais: vêm da variável de ambiente ou de config/contas_automacao.json (git-ignorado);
 # sem nenhum dos dois ficam vazias e a rotina espera o usuário (ou recusa, no caso da pasta do Dashboard).
@@ -1488,7 +1494,7 @@ def endpoint_vigiar_avisos(page: "Page") -> None:
 
 def endpoint_logado(page: "Page") -> bool:
     return (
-        "centralendpoint" in page.url.lower()
+        urlsplit(str(page.url)).hostname == urlsplit(ENDPOINT_URL).hostname
         and "#/uems" in page.url.lower()
         and not visivel(page.locator('input[type="password"]').filter(visible=True))
     )

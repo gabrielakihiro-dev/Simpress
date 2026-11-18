@@ -44,7 +44,7 @@ class PaginaStaged:
         self.carregando = carregando
         self.rodape = {"por_pagina": por_pagina, "proxima_ativa": proxima_ativa, "busca": busca,
                        "nenhum_dado": (not computadores) if nenhum_dado is None else nenhum_dado}
-        self.url = rotina.URL_STAGED_COMPUTERS
+        self.url = automacao.ENDPOINT_URL.split("#")[0] + rotina.TELA_STAGED_COMPUTERS
         self.visitas, self.seletores = [], []
         self.close = Mock()
 
@@ -331,7 +331,7 @@ class LeituraTest(Ambiente):
         pagina = PaginaStaged([pc("HOST-A")])
         pagina.url = automacao.ENDPOINT_URL
         self.rodar(pagina)
-        self.assertEqual(pagina.visitas, [rotina.URL_STAGED_COMPUTERS])
+        self.assertEqual(pagina.visitas, [automacao.ENDPOINT_URL.split("#")[0] + rotina.TELA_STAGED_COMPUTERS])
 
     def test_aba_que_sai_da_tela_durante_a_leitura_volta_ao_link_e_le_de_novo(self):
         pagina = PaginaStaged([pc("HOST-B")])
@@ -346,7 +346,7 @@ class LeituraTest(Ambiente):
 
         pagina.evaluate = evaluate
         self.rodar(pagina)
-        self.assertEqual(pagina.visitas, [rotina.URL_STAGED_COMPUTERS])
+        self.assertEqual(pagina.visitas, [automacao.ENDPOINT_URL.split("#")[0] + rotina.TELA_STAGED_COMPUTERS])
         (_, _, corpo), = self.puts()
         self.assertTrue(corpo["anotacao"].endswith(rotina.MENSAGEM_NAO_ENCONTRADO))
 

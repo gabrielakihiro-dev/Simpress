@@ -57,6 +57,13 @@ LINKS: tuple[dict[str, Any], ...] = (
         "placeholder": "https://exemplo.invalid/sites/pasta-do-dashboard",
         "usado_para": "Dashboard", "ajuda": "Usado para: Dashboard", "obrigatorio": True,
     },
+    {
+        "chave": "endpoint_url", "variavel": "SIMPRESS_ENDPOINT_URL",
+        "rotulo": "Link do Endpoint Central (Computadores)",
+        "placeholder": "https://exemplo.invalid/webclient#/uems/inventory/computers",
+        "usado_para": "Endpoint Central", "ajuda": "Usado para: Endpoint Central (em branco usa o link padrão)",
+        "obrigatorio": False,
+    },
 )
 
 CHAVES_IA = {
