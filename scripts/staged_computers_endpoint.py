@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Page
 
 ORIGEM = "Staged Computers"
-URL_STAGED_COMPUTERS = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/staged-computers"
+TELA_STAGED_COMPUTERS = "#/uems/agent/som/staged-computers"  # no mesmo host do ENDPOINT_URL (Configuração local)
 ID_BOTAO_BUSCA = "SoMStagedComputers_searchButton"  # presente = tela pronta
 LINHAS_POR_PAGINA = 25  # padrão do Endpoint, usado só se a tela não mostrar "Rows per page"
 LEITURAS_SEM_PAGINACAO = 5  # leituras iguais (~4 s) antes de aceitar que a paginação não vai aparecer
@@ -231,13 +231,14 @@ def verificar_staged_computers(context: "BrowserContext", automacao: ModuleType)
         automacao.log(ORIGEM, "Nenhum notebook que saiu do Endpoint (passou de 60 dias) para procurar em Staged Computers.")
         return 0
     automacao.log(ORIGEM, f"{len(linhas)} hostname(s) que saíram do Endpoint para procurar em Staged Computers.")
-    page = automacao.nova_aba(context, URL_STAGED_COMPUTERS, "Endpoint Central")
+    url_staged = automacao.ENDPOINT_URL.split("#")[0] + TELA_STAGED_COMPUTERS
+    page = automacao.nova_aba(context, url_staged, "Endpoint Central")
     automacao.definir_pagina_ativa_para_recuperacao(page)
     automacao.endpoint_vigiar_avisos(page)
     def ler() -> tuple[dict, dict | None]:
         # O login ou um clique acidental pode tirar a aba da tela: volta ao mesmo link (goto, nunca reload).
         if "staged-computers" not in page.url.lower():
-            page.goto(URL_STAGED_COMPUTERS, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+            page.goto(url_staged, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
         automacao.aguardar_estado(page.locator(f"#{ID_BOTAO_BUSCA}"), "visible")
         lida = ler_tela(page, automacao)
         if "staged-computers" not in page.url.lower():  # outra grade com as mesmas colunas daria "não encontrado" falso

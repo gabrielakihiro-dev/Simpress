@@ -6,7 +6,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 
-// estado.ts e vinculo.ts importam o apiFetch em tempo de execução: redireciona "../../api" para o fake publicado em globalThis.
+// estado.ts (apiRota) e vinculo.ts (apiFetch) importam a API em tempo de execução: redireciona "../../api" para os fakes
+// publicados em globalThis. O apiRota falso monta a URL da rota como o real e repassa ao apiFetch falso.
 const PAINEIS = /paineis[\/](cobertura|historico-transferencias)[\/][^\/]+\.ts$/;
 Module.registerHooks({
   resolve(especificador, contexto, proximo) {
@@ -20,7 +21,8 @@ Module.registerHooks({
   },
   load(url, contexto, proximo) {
     if (url === "simpress-teste:api") {
-      return { format: "module", shortCircuit: true, source: "export const apiFetch = (...argumentos) => globalThis.__apiFetchFalso(...argumentos);" };
+      return { format: "module", shortCircuit: true, source: "export const apiFetch = (...argumentos) => globalThis.__apiFetchFalso(...argumentos);\n"
+        + "export const apiRota = (...argumentos) => globalThis.__apiRotaFalso(...argumentos);" };
     }
     return proximo(url, contexto);
   },
@@ -40,6 +42,11 @@ globalThis.__apiFetchFalso = async (url, opcoes = {}) => {
   if (proxima.rede) throw new TypeError("Failed to fetch");
   if (proxima.status >= 400) throw Object.assign(new Error("erro"), { status: proxima.status, data: proxima.corpo ?? null });
   return { ok: true, status: proxima.status ?? 200, text: async () => proxima.texto ?? "" };
+};
+globalThis.__apiRotaFalso = (rota, { caminho, corpo, ...resto } = {}) => {
+  const [method, molde] = rota.split(" ");
+  const url = molde.replace(/\{(\w+)\}/g, (_trecho, nome) => encodeURIComponent(String(caminho?.[nome])));
+  return globalThis.__apiFetchFalso(url, { ...resto, method, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
 };
 const estado = require(path.resolve(__dirname, "../../frontend/src/paineis/cobertura/estado.ts"));
 
@@ -62,7 +69,7 @@ test("a primeira leitura carrega os dados que liberam a escrita", async () => {
 test("2xx com corpo ilegível conta como sucesso, relê a lista e avisa como no código antigo", async () => {
   for (const texto of ["<html>truncado", "{\"a\":", "", "[]"]) {
     reiniciar({ status: 200, texto }, LEITURA);
-    const retorno = await estado.escrever("/api/cobertura/demandas", { cidade: "Sintética" }, "Necessidade registrada.");
+    const retorno = await estado.escrever("POST /api/cobertura/demandas", { corpo: { cidade: "Sintética" } }, "Necessidade registrada.");
     assert.deepEqual(retorno, {}, `corpo ${JSON.stringify(texto)} devolve {} (truthy) como o antigo`);
     assert.deepEqual(chamadas.map(c => c.metodo), ["POST", "GET"], `corpo ${JSON.stringify(texto)} relê a lista`);
     assert.ok(chamadas.every(c => c.responseType === "response"));
@@ -72,25 +79,25 @@ test("2xx com corpo ilegível conta como sucesso, relê a lista e avisa como no 
 
 test("2xx com JSON legível devolve o corpo", async () => {
   reiniciar({ status: 201, texto: JSON.stringify({ id: "d-1", rev: 1 }) }, LEITURA);
-  const retorno = await estado.escrever("/api/cobertura/demandas", {}, "Necessidade registrada.");
+  const retorno = await estado.escrever("POST /api/cobertura/demandas", { corpo: {} }, "Necessidade registrada.");
   assert.deepEqual(retorno, { id: "d-1", rev: 1 });
 });
 
 test("queda de rede não relê a lista e mostra o erro de sem resposta", async () => {
   reiniciar({ rede: true });
-  assert.equal(await estado.escrever("/api/cobertura/demandas", {}, "ok"), null);
+  assert.equal(await estado.escrever("POST /api/cobertura/demandas", { corpo: {} }, "ok"), null);
   assert.deepEqual(chamadas.map(c => c.metodo), ["POST"]);
   assert.deepEqual(toasts, [{ texto: "Sem resposta do servidor local. Tente de novo.", tipo: "error" }]);
 });
 
 test("409 relê a lista e mostra a mensagem do servidor; 422 não relê", async () => {
   reiniciar({ status: 409, corpo: { detail: "Registro mudou." } }, LEITURA);
-  assert.equal(await estado.escrever("/api/cobertura/demandas", {}, "ok"), null);
+  assert.equal(await estado.escrever("POST /api/cobertura/demandas", { corpo: {} }, "ok"), null);
   assert.deepEqual(chamadas.map(c => c.metodo), ["POST", "GET"]);
   assert.deepEqual(toasts, [{ texto: "Registro mudou.", tipo: "error" }]);
 
   reiniciar({ status: 422, corpo: { detail: "Cidade obrigatória." } });
-  assert.equal(await estado.escrever("/api/cobertura/demandas", {}, "ok"), null);
+  assert.equal(await estado.escrever("POST /api/cobertura/demandas", { corpo: {} }, "ok"), null);
   assert.deepEqual(chamadas.map(c => c.metodo), ["POST"]);
 });
 

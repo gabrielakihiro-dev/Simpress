@@ -73,7 +73,8 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 
 test("Cockpit keeps compact typography and a single tools disclosure", async ({ page }, testInfo) => {
   const mobile = testInfo.project.name === "mobile";
-  if (!mobile) await expect(page.locator(".ck-topbar")).toHaveCSS("height", "48px");
+  // Novo layout (NL-Base-Topo): barra de 64px no desktop.
+  if (!mobile) await expect(page.locator(".ck-topbar")).toHaveCSS("height", "64px");
   const searchFontSize = mobile ? "16px" : "12.5px";
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
@@ -130,8 +131,8 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   const input = page.locator("#input-serial");
   const homeTab = page.locator("#tab-home");
   await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
-  // O chip visual Ctrl+K saiu da caixa de busca; o atalho segue anunciado por aria-keyshortcuts.
-  await expect(page.locator(".ck-busca__campo > .ck-kbd")).toHaveCount(0);
+  // Novo layout (NL-Base-Topo): o chip Ctrl K voltou à caixa de busca, só visual (aria-hidden).
+  await expect(page.locator(".ck-busca__campo > .ck-kbd")).toHaveCount(1);
 
   await openSidebarIfNeeded(page);
   await page.locator("#tab-retirada-entrega").click();

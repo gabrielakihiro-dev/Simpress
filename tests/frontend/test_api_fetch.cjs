@@ -165,3 +165,12 @@ test("apiRota takes method and URL from the route key, fills path params and sen
   assert.equal(calls[1][0], "/api/lembretes");
   assert.deepEqual(calls[1][1], { method: "GET" });
 });
+
+test("apiRota with responseType response returns the raw 2xx Response, even with an illegible body", async t => {
+  const { apiRota } = require("../../frontend/src/api.ts");
+  const calls = mockFetch(t, async () => new Response("<html>truncado", { status: 200 }));
+  const resposta = await apiRota("POST /api/cobertura/reservas/{reserva_id}/renovar", { caminho: { reserva_id: "res-1" }, corpo: { rev: 2 }, responseType: "response" });
+  assert.equal(await resposta.text(), "<html>truncado");
+  assert.equal(calls[0][0], "/api/cobertura/reservas/res-1/renovar");
+  assert.deepEqual(calls[0][1], { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"rev":2}' });
+});

@@ -33,7 +33,7 @@ class UIFixtureServerTests(unittest.TestCase):
                     while chunk := connection.recv(8192):
                         response.extend(chunk)
                     self.assertTrue(response.startswith(b"HTTP/1.0 200"))
-                    self.assertIn(b"SimpressApp", response)
+                    self.assertIn(b"simpress:react-pronto", response)
             finally:
                 server.shutdown()
                 worker.join(timeout=10)

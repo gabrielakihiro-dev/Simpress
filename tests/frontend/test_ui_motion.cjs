@@ -293,3 +293,33 @@ test("ck-bento.css follows the bento motion contract", () => {
     assert.doesNotMatch(no.prelude, /(^|[\s>+~,(])tr(?![\w-])|\.ck-tabela\b/, `seletor de tabela em "${no.prelude}"`);
   });
 });
+
+// Novo layout (nl-base.css): mesmo contrato, com nomes nl-*; a faixa da linha da tabela é permitida (sem brilho).
+test("nl-base.css follows the bento motion contract and leaves the Assistant out", () => {
+  const css = fs.readFileSync(path.join(__dirname, "../../static/styles/nl-base.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const arvore = arvoreCss(css);
+  const quadros = [];
+  percorrer(arvore, no => {
+    const nome = no.prelude.match(/^@keyframes\s+([\w-]+)/)?.[1];
+    if (!nome) return;
+    quadros.push(nome);
+    const props = [];
+    percorrer(no, passo => props.push(...[...passo.decls.matchAll(/([a-z-]+)\s*:/g)].map(m => m[1])));
+    assert.ok(nome.startsWith("nl-"), `${nome} fora do prefixo nl-`);
+    assert.deepEqual(props.filter(p => p !== "opacity" && p !== "transform"), [], `${nome} anima propriedade fora de opacity/transform`);
+  });
+  assert.ok(quadros.length > 0, "nenhum @keyframes");
+  let movimentos = 0;
+  percorrer(arvore, (no, cadeia) => {
+    if (!/(^|;|\s)(animation|transition)(-[a-z-]+)?\s*:/.test(no.decls)) return;
+    movimentos++;
+    assert.ok(cadeia.some(prelude => SEM_REDUCAO.test(prelude)), `movimento fora de no-preference em "${no.prelude}"`);
+  });
+  assert.ok(movimentos > 0, "nenhuma animation/transition encontrada");
+  percorrer(arvore, no => {
+    assert.doesNotMatch(no.decls.replace(/\s+/g, ""), /min-width:1200px/, `largura mínima de desktop em "${no.prelude}"`);
+    if (no.prelude.startsWith("@")) return;
+    const semExclusao = no.prelude.replace(/:not\(#assistente-widget \*\)/g, "");
+    assert.doesNotMatch(semExclusao, /assistente|ck-assist/, `o Assistente fica fora: "${no.prelude}"`);
+  });
+});

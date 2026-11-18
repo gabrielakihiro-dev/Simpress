@@ -52,3 +52,20 @@ test("com o painel publicado a ponte encaminha a ação; sem script e sem regist
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(terminou, false, "sem erro nem load a chamada continua pendente");
 });
+
+test("painel sob demanda: chamada antes do bundle espera, download que falha rejeita e a próxima chamada tenta de novo", async () => {
+  const { janela, documento, ponte } = montar();
+  let tentativas = 0;
+  const carregar = async () => {
+    tentativas += 1;
+    if (tentativas === 1) throw new Error("rede");
+    return { acao: valor => `sob-demanda:${valor}` };
+  };
+  const antesDoBundle = ponte.acao(1);
+  janela.SimpressReact = {};
+  janela.SimpressReactSobDemanda = { painel: carregar };
+  documento.emitir("simpress:react-pronto");
+  await assert.rejects(antesDoBundle, /O painel React "painel" não carregou\./);
+  assert.equal(await ponte.acao(2), "sob-demanda:2");
+  assert.equal(tentativas, 2);
+});
