@@ -191,12 +191,21 @@ def create_operations_router(
                 "historico": [],
             }
         try:
+            stat = path.stat()
+            signature = (str(path), stat.st_mtime_ns, stat.st_size)
+            if report_cache.get("assinatura") == signature:
+                return report_cache["relatorio"]
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados não pôde ser lido.") from None
         if not isinstance(data, dict) or not isinstance(data.get("chamados"), list):
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
+        # Shared read-only by every GET until the file's mtime or size changes; callers copy before changing it.
+        report_cache.clear()
+        report_cache.update({"assinatura": signature, "relatorio": data})
         return data
+
+    report_cache: Dict[str, Any] = {}
 
     def ticket_os_link_key(fonte: str, serie: str, ordem_servico: str) -> str:
         ordem_key = re.sub(r"\s+", "", str(ordem_servico or "")).upper()
@@ -359,7 +368,13 @@ def create_operations_router(
         return {"marca": marca}
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+        cached = report_cache.get("relatorio") is report
+        if cached and "exibidos" in report_cache:
+            return list(report_cache["exibidos"])
+        snapshots = [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+        if cached:
+            report_cache["exibidos"] = snapshots
+        return list(snapshots)
 
     services = ticket_import_services or TicketImportServices(
         ticket_report_path=ticket_report_path,
