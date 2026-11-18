@@ -1,10 +1,13 @@
 import { criarAcoesCartaoEquipamento, type ContextoCartaoEquipamento } from "./estado";
 
+// editar-equipamento e editar-apelido são painéis sob demanda (frontend/src/paineis.ts): não estão em window.SimpressReact
+// até o primeiro uso, então a ponte baixa e monta pelo SimpressReactSobDemanda. Painel já publicado roda no mesmo turno.
 function ponteReact(painel: string, nomes: string[]) {
-  return Object.fromEntries(nomes.map(nome => [nome, (...argumentos: string[]) => {
-    const acao = window.SimpressReact?.[painel]?.[nome];
-    if (typeof acao !== "function") return Promise.reject(new Error(`O painel React "${painel}" não carregou.`));
-    return Promise.resolve(acao(...argumentos));
+  return Object.fromEntries(nomes.map(nome => [nome, async (...argumentos: string[]) => {
+    const acoes = window.SimpressReact?.[painel] ?? await window.SimpressReactSobDemanda?.[painel]?.().catch(() => undefined);
+    const acao = acoes?.[nome];
+    if (typeof acao !== "function") throw new Error(`O painel React "${painel}" não carregou.`);
+    return acao(...argumentos);
   }]));
 }
 
