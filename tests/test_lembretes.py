@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import main
-from domains.lembretes import Lembretes
+from domains.lembretes import CAMPOS as CAMPOS_DOMINIO, Lembretes
 from domains.sebrae_observacoes import FUSO
 from routers.lembretes import create_lembretes_router
 
@@ -554,6 +554,32 @@ class ReagendarAtrasadosTests(LembretesBase):
         hoje = Lembretes(self.arquivo)._hoje()
         depois = datetime.now(FUSO).date()
         self.assertIn(hoje, {antes, depois})
+
+
+class FormatoDeRespostaTests(LembretesBase):
+    """O formato declarado nas rotas (response_model) não pode cortar nem mudar campo do domínio."""
+
+    def test_todas_as_rotas_devolvem_os_campos_do_dominio_sem_alterar_valores(self):
+        # Arquivo editado à mão: termo com chave estranha e data fora do formato continuam legíveis e iguais.
+        estranho = {
+            "id": "a1", "descricao": "Texto", "criado_em": "t", "alterado_em": None, "concluido": False,
+            "concluido_em": None, "origem": "entrega", "termo": {"campos": {"nome": "x"}, "extra": [1, {"b": None}]},
+            "data_agendada": "13/11/2026", "hora_agendada": "tarde",
+        }
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": [estranho]}), encoding="utf-8")
+        criado = self.criar("Novo", data_agendada="2020-01-01", hora_agendada="07:45")
+        alterado = self.client.patch(f"/api/lembretes/{criado['id']}", json={"concluido": True})
+        self.assertEqual(alterado.status_code, 200, alterado.text)
+        lista = self.lembretes()
+        reagendado = self.client.post("/api/lembretes/reagendar-atrasados")
+        self.assertEqual(reagendado.status_code, 200, reagendado.text)
+
+        for item in (criado, alterado.json(), *lista, *reagendado.json()["lembretes"]):
+            self.assertEqual(set(item), set(CAMPOS_DOMINIO))
+        self.assertEqual(lista[0], estranho)
+        self.assertEqual(lista, Lembretes(self.arquivo).listar())
+        self.assertEqual(reagendado.json()["lembretes"], Lembretes(self.arquivo).listar())
+        self.assertEqual(alterado.json(), lista[1])
 
 
 class LogTests(LembretesBase):

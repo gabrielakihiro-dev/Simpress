@@ -121,6 +121,7 @@ const MYPY_TARGETS = [
   "scripts/migrate_local_data.py",
   "scripts/cleanup_local_temps.py",
   "scripts/check_update.py",
+  "scripts/gerar_tipos_api.py",
 ];
 
 // Pacotes que já exigem anotações em todas as funções (--disallow-untyped-defs).
@@ -167,6 +168,7 @@ function buildSteps(python) {
       args: [resolveTsc(), "--project", "tsconfig.json"],
     },
     { name: "Bundle React atualizado (static/dist)", run: checkReactBuild },
+    { name: "Tipos da API atualizados (api-tipos.gerado.d.ts)", command: python, args: ["-B", "scripts/gerar_tipos_api.py", "--check"] },
     { name: "Sintaxe Python (compileall)", command: python, args: ["-m", "compileall", "-q", ...PYTHON_COMPILE_TARGETS] },
     {
       name: "Tipos (mypy gradual)",

@@ -47,6 +47,7 @@ Cada conta é pedida **uma vez**, com o texto de onde é usada. O formato do arq
 | Conta Sebrae (e-mail) | `nome@sebrae.com.br` | Usada para: SoftExpert | `softexpert_email`; `outlook_email_sebrae` se "Usar também no Outlook" estiver marcado (padrão marcado) |
 | Usuário do Endpoint Central (login, sem domínio) | `nome.usuario` | Usada para: Endpoint Central | `endpoint_usuario` |
 | Link da pasta do Dashboard (SharePoint) | `https://exemplo.invalid/sites/pasta-do-dashboard` | Usado para: Dashboard | `dashboard_pasta_url` |
+| Link do Endpoint Central (Computadores), opcional (18/11/2026) | `https://exemplo.invalid/webclient#/uems/inventory/computers` | Usado para: Endpoint Central (em branco usa o link padrão) | `endpoint_url` |
 
 O usuário confirmou em 15/11/2026 que os e-mails do Outlook são as mesmas contas Simpress e Sebrae; por isso "Usar também no Outlook" vem marcado.
 
@@ -56,6 +57,7 @@ Quem lê cada chave (conferido em 14/11/2026):
 
 - `dashboard_email`, `softexpert_email`, `endpoint_usuario`, `dashboard_pasta_url`: `scripts/automacao_rotinas_chrome.py:76-85`.
 - `outlook_email_sebrae`, `outlook_email_simpress`: `domains/outlook_mail.py:41-42`.
+- `endpoint_url` (`SIMPRESS_ENDPOINT_URL`): `ENDPOINT_URL` em `scripts/automacao_rotinas_chrome.py`; dele saem a tela de login, Staged Computers (`scripts/staged_computers_endpoint.py`) e a checagem de login pelo host.
 - Os logins do Dashboard, do UX Simpress e do Oracle usam `EMAIL_DASHBOARD` (`scripts/automacao_rotinas_chrome.py:1047-1231`, `2185`, `2590-2591`).
 
 Regras:
@@ -174,6 +176,6 @@ O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), s
 
 ## Limites conhecidos
 
-- `domains/ux_ticket_browser.py`, `scripts/sebrae_softexpert.py` e, em `scripts/automacao_rotinas_chrome.py`, `EMAIL_DASHBOARD`, `EMAIL_SOFTEXPERT` e `DASHBOARD_PASTA_URL` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress. O usuário do Endpoint já não entra aqui.
+- `domains/ux_ticket_browser.py`, `scripts/sebrae_softexpert.py` e, em `scripts/automacao_rotinas_chrome.py`, `EMAIL_DASHBOARD`, `EMAIL_SOFTEXPERT` e `DASHBOARD_PASTA_URL` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress. O usuário do Endpoint já não entra aqui. O link do Endpoint (`endpoint_url`) também é lido ao importar: a rotina usa o novo na próxima execução; a consulta ao vivo da Home, depois de reiniciar o Simpress.
 - Salvar a seção Links envia também o estado das caixas `Usar também no Outlook`; com a conta em branco, uma caixa desmarcada passa a valer nesse salvamento.
 - Conta em branco no formulário mantém o valor atual; para limpar, edite o arquivo.

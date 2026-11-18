@@ -24,6 +24,7 @@ declare var SimpressLoggedUserMarkers: any;
 declare var SimpressMotion: any;
 declare var SimpressNotifications: any;
 declare var SimpressReact: any; // ações dos painéis React, publicadas por frontend/src/main.tsx
+declare var SimpressReactSobDemanda: any; // painéis React baixados na primeira chamada da ponte (frontend/src/main.tsx)
 declare var SimpressRecentEquipment: any;
 declare var SimpressSebraeDashboardModel: any;
 declare var SimpressTransferUtils: any;
