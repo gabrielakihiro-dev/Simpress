@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, NoReturn, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, StrictBool, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 from core.integrity import FileBusyError, FileTransactionError
 from domains import coverage
@@ -151,6 +151,121 @@ class ResolverDivergenciaPayload(_Corpo):
     rev: StrictInt
 
 
+# Formato das respostas (response_model, sempre com response_model_exclude_unset). O arquivo pode ser editado à mão:
+# o que vem dele é Any e campo desconhecido passa como está (extra="allow"); só o que o domínio calcula ou o
+# store valida (rev inteiro) tem tipo. Campo ausente continua ausente, nunca vira null.
+class _Saida(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class RegistroCobertura(_Saida):
+    """Registro como está no arquivo (demanda, devolução, reserva, movimentação...)."""
+
+    rev: int
+
+
+class DisponibilidadeCaso(RegistroCobertura):
+    estado_efetivo: str
+
+
+class DevolucaoCaso(RegistroCobertura):
+    situacao: str
+
+
+class ReservaCaso(RegistroCobertura):
+    vencida: bool
+    kit_pronto: bool
+
+
+class CasosCobertura(_Saida):
+    disponibilidade: Dict[str, DisponibilidadeCaso] = {}
+    demandas: Dict[str, RegistroCobertura] = {}
+    devolucoes: Dict[str, DevolucaoCaso] = {}
+    reservas: Dict[str, ReservaCaso] = {}
+    # A movimentação preparada sem vínculo traz também candidatos_historico (lista de planilhas baixadas).
+    movimentacoes: Dict[str, RegistroCobertura] = {}
+    vinculos: Dict[str, RegistroCobertura] = {}
+    rejeicoes: Dict[str, RegistroCobertura] = {}
+
+
+class VagaCobertura(_Saida):
+    id: str
+    demanda_id: Any
+    indice: int
+    data: Any
+    cidade: Any
+    perfil: Any
+    monitor: bool
+    situacao: str
+    serie: Any
+    reserva_id: Any
+    devolucao_id: Any
+    movimentacao_id: Any = None
+    selos: List[str]
+    motivo: Optional[str]
+
+
+class DisponivelCobertura(_Saida):
+    serie: Any
+    cidade: Any
+    confirmada_em: Any
+    valida_ate: Any
+    sinal: Optional[str]
+
+
+class BloqueioCobertura(_Saida):
+    serie: Any
+    motivo: str
+    id: str
+
+
+class ContagensCobertura(BaseModel):
+    atendivel: int
+    condicionada: int
+    sem_cobertura: int
+    entregue: int
+
+
+class ManutencaoCobertura(BaseModel):
+    verificada: bool
+    aviso: str
+
+
+class Cobertura(BaseModel):
+    """GET /api/cobertura: tudo calculado pelo domínio (sem extra: campo novo do domínio precisa entrar aqui)."""
+
+    hoje: str
+    vagas: List[VagaCobertura]
+    contagens: ContagensCobertura
+    disponiveis: List[DisponivelCobertura]
+    bloqueios: List[BloqueioCobertura]
+    reservas_vencidas: List[str]
+    manutencao: ManutencaoCobertura
+    sinais: List[Dict[str, Any]]
+    casos: CasosCobertura
+
+
+class CasoCobertura(BaseModel):
+    secao: str
+    arquivado: bool
+    registro: RegistroCobertura
+
+
+class MovimentacaoPreparada(BaseModel):
+    id: Any
+    serie: Any
+    destino_cidade: Any
+    chave: Any
+    rev: int
+
+
+class TransferenciaRegistrada(BaseModel):
+    movimentacao: RegistroCobertura
+    historico_id: Any
+    transferencia: Any
+    repetido: bool
+
+
 Transicao = Callable[[coverage.Estado, Contexto], Tuple[coverage.Estado, coverage.Registro]]
 
 
@@ -227,7 +342,7 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
         except (CoberturaErro, FileBusyError, EstadoIlegivel, FileTransactionError) as error:
             _falhar(error)
 
-    @router.get("/api/cobertura")
+    @router.get("/api/cobertura", response_model=Cobertura, response_model_exclude_unset=True)
     def ler_cobertura() -> Dict[str, Any]:
         """Vagas calculadas, disponíveis, bloqueios com motivo e os casos (somente leitura)."""
         try:
@@ -240,7 +355,7 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
             casos["movimentacoes"][mov_id]["candidatos_historico"] = candidatos
         return {**coverage.build_coverage(estado, hoje, services.manutencao()), "casos": casos}
 
-    @router.get("/api/cobertura/casos/{caso_id}")
+    @router.get("/api/cobertura/casos/{caso_id}", response_model=CasoCobertura, response_model_exclude_unset=True)
     def ler_caso(caso_id: str) -> Dict[str, Any]:
         """Um caso pelo id, no arquivo principal ou nos arquivados (links antigos continuam abrindo)."""
         atual = store()
@@ -257,64 +372,64 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
             _falhar(error)
         raise HTTPException(status_code=404, detail={"codigo": "nao_encontrado", "mensagem": "Caso não encontrado.", "id": caso_id})
 
-    @router.post("/api/cobertura/demandas")
+    @router.post("/api/cobertura/demandas", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def registrar_demanda(payload: DemandaPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.registrar_demanda(estado, ctx, **payload.model_dump()))
 
-    @router.post("/api/cobertura/demandas/{demanda_id}/cancelar")
+    @router.post("/api/cobertura/demandas/{demanda_id}/cancelar", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def cancelar_demanda(demanda_id: str, payload: RevPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.cancelar_demanda(estado, ctx, demanda_id, payload.rev))
 
-    @router.post("/api/cobertura/disponibilidade")
+    @router.post("/api/cobertura/disponibilidade", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def registrar_disponibilidade(payload: DisponibilidadePayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.registrar_disponibilidade(
             estado, ctx, serie=payload.serie, situacao=payload.estado, cidade=payload.cidade, rev=payload.rev,
         ))
 
-    @router.post("/api/cobertura/devolucoes")
+    @router.post("/api/cobertura/devolucoes", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def registrar_devolucao(payload: DevolucaoPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.registrar_devolucao(estado, ctx, **payload.model_dump()))
 
-    @router.post("/api/cobertura/devolucoes/{devolucao_id}/reprogramar")
+    @router.post("/api/cobertura/devolucoes/{devolucao_id}/reprogramar", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def reprogramar_devolucao(devolucao_id: str, payload: ReprogramarPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.reprogramar_devolucao(
             estado, ctx, devolucao_id, payload.rev, payload.data_prevista,
         ))
 
-    @router.post("/api/cobertura/devolucoes/{devolucao_id}/receber")
+    @router.post("/api/cobertura/devolucoes/{devolucao_id}/receber", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def receber_devolucao(devolucao_id: str, payload: RevPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.receber_devolucao(estado, ctx, devolucao_id, payload.rev))
 
-    @router.post("/api/cobertura/devolucoes/{devolucao_id}/cancelar")
+    @router.post("/api/cobertura/devolucoes/{devolucao_id}/cancelar", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def cancelar_devolucao(devolucao_id: str, payload: RevPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.cancelar_devolucao(estado, ctx, devolucao_id, payload.rev))
 
-    @router.post("/api/cobertura/reservas")
+    @router.post("/api/cobertura/reservas", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def reservar(payload: ReservaPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.reservar(estado, ctx, **payload.model_dump()))
 
-    @router.post("/api/cobertura/reservas/{reserva_id}/renovar")
+    @router.post("/api/cobertura/reservas/{reserva_id}/renovar", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def renovar_reserva(reserva_id: str, payload: RevPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.renovar_reserva(estado, ctx, reserva_id, payload.rev))
 
-    @router.post("/api/cobertura/reservas/{reserva_id}/cancelar")
+    @router.post("/api/cobertura/reservas/{reserva_id}/cancelar", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def cancelar_reserva(reserva_id: str, payload: RevPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.cancelar_reserva(estado, ctx, reserva_id, payload.rev))
 
-    @router.post("/api/cobertura/reservas/{reserva_id}/kit")
+    @router.post("/api/cobertura/reservas/{reserva_id}/kit", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def marcar_kit(reserva_id: str, payload: KitPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.marcar_kit(
             estado, ctx, reserva_id, payload.rev, payload.item, payload.marcado,
         ))
 
-    @router.post("/api/cobertura/movimentacoes")
+    @router.post("/api/cobertura/movimentacoes", response_model=MovimentacaoPreparada, response_model_exclude_unset=True)
     def preparar_movimentacao(payload: MovimentacaoPayload) -> Dict[str, Any]:
         mov = executar(lambda estado, ctx: coverage.preparar_movimentacao(
             estado, ctx, payload.reserva_id, payload.rev, payload.tipo,
         ))
         return {key: mov.get(key) for key in ("id", "serie", "destino_cidade", "chave", "rev")}
 
-    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/estado")
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/estado", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def mudar_estado_movimentacao(movimentacao_id: str, payload: EstadoMovimentacaoPayload) -> coverage.Registro:
         divergencia = payload.divergencia.model_dump() if payload.divergencia is not None else None
         return executar(lambda estado, ctx: coverage.mudar_estado_movimentacao(
@@ -322,13 +437,13 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
             comprovante=payload.comprovante, divergencia=divergencia,
         ))
 
-    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/resolver-divergencia")
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/resolver-divergencia", response_model=RegistroCobertura, response_model_exclude_unset=True)
     def resolver_divergencia(movimentacao_id: str, payload: ResolverDivergenciaPayload) -> coverage.Registro:
         return executar(lambda estado, ctx: coverage.resolver_divergencia(
             estado, ctx, movimentacao_id, payload.rev, payload.resolucao, payload.serie_recebida,
         ))
 
-    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/registrar-transferencia")
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/registrar-transferencia", response_model=TransferenciaRegistrada, response_model_exclude_unset=True)
     def registrar_transferencia(movimentacao_id: str, payload: RegistrarTransferenciaPayload) -> coverage.Registro:
         """Registra no histórico a planilha que o operador baixou e passa a movimentação a ``gerada`` (idempotente)."""
         registro = build_record(payload.payload)
@@ -336,7 +451,7 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
             estado, historico, ctx, movimentacao_id, payload.rev, payload.chave, registro, MAX_HISTORY_RECORDS,
         ))
 
-    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/vincular-historico")
+    @router.post("/api/cobertura/movimentacoes/{movimentacao_id}/vincular-historico", response_model=TransferenciaRegistrada, response_model_exclude_unset=True)
     def vincular_historico(movimentacao_id: str, payload: VincularHistoricoPayload) -> coverage.Registro:
         """Liga à movimentação preparada uma planilha já baixada sem vínculo (de ``candidatos_historico``)."""
         return executar_com_historico(lambda estado, historico, ctx: coverage.vincular_historico(

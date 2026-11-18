@@ -1,6 +1,7 @@
 // Estado da Cobertura (F10), fora do componente: a aplicação chama carregarCobertura pela ponte
-// antes ou depois de o React desenhar o painel. Toda leitura e escrita passa por apiFetch.
-import { apiFetch, type ApiFetchError } from "../../api";
+// antes ou depois de o React desenhar o painel. Toda leitura e escrita passa por apiRota (rotas tipadas).
+import { apiRota, type ApiFetchError, type OpcoesRota } from "../../api";
+import type { Rotas } from "../../api-tipos.gerado";
 import { pendenciaSemVinculo } from "../historico-transferencias/vinculo";
 import * as modelo from "./modelo";
 import { appAntigo, type Aba, type Dados, type Registro } from "./tipos";
@@ -46,14 +47,9 @@ interface Resposta { ok: boolean; status: number; corpo: Registro | null }
 
 // Falha de rede vira status 0 ("Sem resposta do servidor local"). Resposta 2xx vale como sucesso mesmo com corpo
 // vazio ou ilegível (a escrita pode ter sido gravada): vem sem corpo e a lista é relida, como no código antigo.
-async function requisitar(metodo: "GET" | "POST", url: string, corpo?: unknown): Promise<Resposta> {
+async function requisitar<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Resposta> {
   try {
-    const resposta = await apiFetch(url, {
-      method: metodo,
-      headers: corpo ? { "Content-Type": "application/json" } : undefined,
-      body: corpo ? JSON.stringify(corpo) : undefined,
-      responseType: "response",
-    });
+    const resposta = await apiRota(rota, { ...opcoes, responseType: "response" });
     let lido: Registro | null = null;
     try {
       lido = JSON.parse(await resposta.text());
@@ -70,12 +66,12 @@ async function requisitar(metodo: "GET" | "POST", url: string, corpo?: unknown):
 }
 
 // Toda escrita leva o rev do registro; 404, 409 e 503 recarregam antes de mostrar a mensagem do servidor.
-export async function escrever(url: string, corpo: unknown, sucesso?: string): Promise<Registro | null> {
+export async function escrever<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>, sucesso?: string): Promise<Registro | null> {
   if (!estado.dados) {
     avisar("A cobertura não está carregada; nada foi gravado.", "error");
     return null;
   }
-  const r = await requisitar("POST", url, corpo);
+  const r = await requisitar(rota, opcoes);
   if (r.ok) {
     await carregarCobertura();
     if (sucesso) avisar(sucesso, "success");
@@ -111,7 +107,7 @@ export function carregarCobertura(): Promise<boolean> {
 async function lerCobertura(): Promise<boolean> {
   mudar({ status: { texto: "Carregando…", tipo: "info" }, ocupado: true });
   try {
-    const r = await requisitar("GET", "/api/cobertura");
+    const r = await requisitar("GET /api/cobertura", {});
     carregouAlgumaVez = true;
     if (!r.ok || !r.corpo) {
       mudar({

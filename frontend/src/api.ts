@@ -88,13 +88,17 @@ export type OpcoesRota<R extends keyof Rotas> = Omit<ApiFetchOptions, "method" |
   & ([Rotas[R]["corpo"]] extends [never] ? { corpo?: never } : { corpo: Rotas[R]["corpo"] });
 
 /** apiFetch tipado pela rota de api-tipos.gerado.d.ts: método e URL saem da chave, o corpo vai como JSON e a resposta
- * tem o tipo que o servidor declara. Ex.: apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: { concluido: true } }). */
-export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Rotas[R]["resposta"]> {
-  const { caminho, corpo, ...resto } = opcoes as Omit<ApiFetchOptions, "responseType"> & { caminho?: Record<string, string | number>; corpo?: unknown };
+ * tem o tipo que o servidor declara. Ex.: apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: { concluido: true } }).
+ * Com responseType "response" devolve a Response 2xx crua, para quem trata corpo vazio ou ilegível (Cobertura). */
+export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R> & { responseType: "response" }): Promise<Response>;
+export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Rotas[R]["resposta"]>;
+export function apiRota(rota: keyof Rotas, opcoes: object): Promise<unknown> {
+  const { caminho, corpo, responseType, ...resto } = opcoes as ApiFetchOptions & { caminho?: Record<string, string | number>; corpo?: unknown };
   const [method, molde = ""] = rota.split(" ");
   const url = molde.replace(/\{(\w+)\}/g, (_trecho, nome: string) => encodeURIComponent(String(caminho?.[nome])));
   const json = corpo === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) };
-  return apiFetch<Rotas[R]["resposta"]>(url, { ...resto, method, ...json });
+  const init = { ...resto, method, ...json };
+  return responseType === "response" ? apiFetch(url, { ...init, responseType }) : apiFetch(url, init);
 }
 
 // Publicação em window, lida por frontend/src/aplicacao/app.ts (context.apiFetch).
