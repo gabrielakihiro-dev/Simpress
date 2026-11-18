@@ -19,6 +19,7 @@ import openpyxl
 from core import openpyxl_compat
 from domains import inventory_state
 from domains.frontend_assets import assembled_html
+from tests.test_frontend_assets import dist_startup_files
 from fastapi import HTTPException
 from starlette.routing import Match
 from security import sessao_local
@@ -733,7 +734,9 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn("app-entry.js", html)
         self.assertEqual(re.findall(r'<script type="module" src="([^"]+)"></script>', html), ["/static/dist/react-entry.js"])
         self.assertTrue((app_config.STATIC_DIR / "dist" / "react-entry.js").is_file())
-        bundle = (app_config.STATIC_DIR / "dist" / "react-entry.js").read_text(encoding="utf-8")
+        # O que a página baixa na partida (entrada e os arquivos que ela importa), na ordem de execução.
+        dist = app_config.STATIC_DIR / "dist"
+        bundle = "".join((dist / name).read_text(encoding="utf-8") for name in dist_startup_files(dist))
         for global_name in ("SimpressTransferUtils", "SimpressSebraeDashboardModel", "SimpressApiFetch", "SimpressApp"):
             self.assertIn(global_name, bundle)
         # O modelo da Cobertura e o histórico de transferências viraram módulos TS dos painéis, como os painéis de dados e o modelo Chamado × OS: sem global antigo.
