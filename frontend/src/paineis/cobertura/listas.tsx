@@ -9,39 +9,27 @@ import {
 } from "./acoes";
 import { Botao, Campo, Grupo, Selo } from "./componentes";
 import * as modelo from "./modelo";
-import { casos, type Aba, type Dados, type Registro } from "./tipos";
+import { casos, type Aba, type Dados, type Equipamento, type Registro } from "./tipos";
 
-/* ---------- Filtro por tipo de equipamento: o único trecho que liga um item ao perfil da necessidade ---------- */
-// shortcut: os dados não têm campo de modelo/tipo; o tipo sai do texto livre "perfil" da necessidade ligada ao item.
-// Item sem perfil conhecido só aparece em "Todos". Trocar só este bloco quando houver um campo próprio.
+/* ---------- Tipo e modelo de cada série: vêm do cadastro oficial (campo "equipamentos" da API) ---------- */
+// Série fora do cadastro não tem tipo: só aparece em "Todos". A necessidade (vaga) usa o perfil pedido nela.
 export type Tipo = "todos" | "notebook" | "desktop";
 export const OPCOES_TIPO: readonly { valor: Tipo; rotulo: string }[] = [
   { valor: "todos", rotulo: "Todos" }, { valor: "notebook", rotulo: "Notebook" }, { valor: "desktop", rotulo: "Desktop" },
 ];
 
-const tipoDoPerfil = (perfil: unknown): Tipo | null => {
-  const texto = modelo.dobrar(perfil);
-  return texto.includes("notebook") ? "notebook" : texto.includes("desktop") ? "desktop" : null;
+const tipoDoTexto = (texto: unknown): Tipo | null => {
+  const dobrado = modelo.dobrar(texto);
+  return dobrado.includes("notebook") ? "notebook" : dobrado.includes("desktop") ? "desktop" : null;
 };
+const tipoPassa = (tipo: Tipo, texto: unknown) => tipo === "todos" || tipoDoTexto(texto) === tipo;
+
+function equipamentosPorSerie(dados: Dados | null): (serie: unknown) => Equipamento | undefined {
+  const mapa = new Map(Object.entries(dados?.equipamentos || {}).map(([serie, eq]) => [modelo.chaveSerie(serie), eq]));
+  return serie => mapa.get(modelo.chaveSerie(serie));
+}
 
 export interface Ligacao { acao: Registro; vaga: Registro }
-
-// Cada item chega ao perfil por um caminho: a vaga tem o perfil; disponível, reserva, movimentação e devolução o herdam da necessidade ligada.
-function perfisPorItem(dados: Dados | null, porSerie: Map<string, Ligacao>) {
-  const demandas = casos(dados, "demandas");
-  const reservas = casos(dados, "reservas");
-  const perfilDaDemanda = (id: unknown) => demandas[String(id)]?.perfil;
-  const perfilDaSerie = new Map<string, unknown>(modelo.reservasAbertas(dados).map(r => [modelo.chaveSerie(r.serie), perfilDaDemanda(r.demanda_id)]));
-  const perfilDaDevolucao = new Map<unknown, unknown>((dados?.vagas || []).filter(v => v.devolucao_id).map(v => [v.devolucao_id, v.perfil]));
-  return {
-    vaga: (vaga: Registro) => vaga.perfil,
-    disponivel: (reg: Registro) => porSerie.get(modelo.chaveSerie(reg.serie))?.vaga.perfil ?? perfilDaSerie.get(modelo.chaveSerie(reg.serie)),
-    reserva: (reserva: Registro) => perfilDaDemanda(reserva.demanda_id),
-    movimento: (mov: Registro) => perfilDaDemanda(mov.demanda_id ?? reservas[String(mov.reserva_id)]?.demanda_id),
-    devolucao: (dev: Registro) => perfilDaDevolucao.get(dev.id),
-  };
-}
-const tipoPassa = (tipo: Tipo, perfil: unknown) => tipo === "todos" || tipoDoPerfil(perfil) === tipo;
 /* ---------- fim do filtro por tipo ---------- */
 
 export type Folha = { tipo: "necessidade" } | { tipo: "reservas" | "movimento" | "devolucoes"; id: string };
@@ -62,6 +50,7 @@ export interface Visao {
   demandas: Record<string, Registro>;
   disponibilidades: Record<string, Registro>;
   porSerie: Map<string, Ligacao>;
+  equipamento: (serie: unknown) => Equipamento | undefined;
   nota: (reg: Registro) => string;
 }
 
@@ -75,7 +64,8 @@ export function montarVisao(dados: Dados | null, textoBusca: string, tipo: Tipo)
     const chave = modelo.chaveSerie(vaga.serie);
     if (acao?.tipo === "reservar" && !porSerie.has(chave)) porSerie.set(chave, { acao, vaga });
   }
-  const perfis = perfisPorItem(dados, porSerie);
+  const equipamento = equipamentosPorSerie(dados);
+  const tipoDaSerie = (reg: Registro) => tipoPassa(tipo, equipamento(reg.serie)?.tipo);
   const achaBusca = (...textos: unknown[]) => !busca || textos.some(t => modelo.dobrar(t).includes(busca));
   const bloqueios = new Map<string, string>((dados?.bloqueios || []).map(b => [modelo.chaveSerie(b.serie), b.motivo]));
   const sinais = new Map<string, string>((dados?.sinais || []).map(s => [modelo.chaveSerie(s.serie), s.sinal]));
@@ -85,19 +75,20 @@ export function montarVisao(dados: Dados | null, textoBusca: string, tipo: Tipo)
     .filter(reg => achaBusca(reg.serie, reg.cidade, porSerie.get(modelo.chaveSerie(reg.serie))?.vaga.cidade))
     .sort(porSerieAlfa);
   return {
-    vagas: (dados?.vagas || []).filter(vaga => tipoPassa(tipo, perfis.vaga(vaga)) && achaBusca(vaga.serie, vaga.cidade)),
+    vagas: (dados?.vagas || []).filter(vaga => tipoPassa(tipo, vaga.perfil) && achaBusca(vaga.serie, vaga.cidade)),
     // Quem já tem vaga para reservar vem primeiro.
-    disponiveis: lista.filter(reg => tipoPassa(tipo, perfis.disponivel(reg)))
+    disponiveis: lista.filter(tipoDaSerie)
       .sort((a, b) => Number(porSerie.has(modelo.chaveSerie(b.serie))) - Number(porSerie.has(modelo.chaveSerie(a.serie))) || porSerieAlfa(a, b)),
     lista,
-    reservas: modelo.reservasAbertas(dados).filter(r => tipoPassa(tipo, perfis.reserva(r)) && achaBusca(r.serie, demandas[r.demanda_id]?.cidade)),
+    reservas: modelo.reservasAbertas(dados).filter(r => tipoDaSerie(r) && achaBusca(r.serie, demandas[r.demanda_id]?.cidade)),
     movimentos: modelo.movimentacoesAbertas(dados)
-      .filter(m => tipoPassa(tipo, perfis.movimento(m)) && achaBusca(m.serie, m.destino_cidade))
+      .filter(m => tipoDaSerie(m) && achaBusca(m.serie, m.destino_cidade))
       .sort((a, b) => String(a.criada_em).localeCompare(String(b.criada_em))),
-    devolucoes: modelo.devolucoesAbertas(dados).filter(d => tipoPassa(tipo, perfis.devolucao(d)) && achaBusca(d.serie, d.cidade)),
+    devolucoes: modelo.devolucoesAbertas(dados).filter(d => tipoDaSerie(d) && achaBusca(d.serie, d.cidade)),
     demandas,
     disponibilidades,
     porSerie,
+    equipamento,
     nota: reg => {
       const chave = modelo.chaveSerie(reg.serie);
       return [bloqueios.has(chave) ? modelo.textoBloqueio(bloqueios.get(chave)) : "", sinais.get(chave) || ""].filter(Boolean).join(" · ");
@@ -171,6 +162,21 @@ export function ListaNecessidades({ visao, ctx, ocupado, carregado }: { visao: V
   return <Lista id="cobertura-lista-necessidades" itens={itens} limite={6} ocupado={ocupado} vazio={carregado ? "Nenhuma necessidade" : ""} />;
 }
 
+// Exibição B do desenho: selo do tipo ao lado da série e o modelo logo abaixo; série fora do cadastro fica só com a série.
+function Serie({ serie, visao }: { serie: string; visao: Visao }) {
+  const tipo = visao.equipamento(serie)?.tipo;
+  return (
+    <span className="cob__serie-eq">
+      <span className="cob__serie">{serie}</span>
+      {tipo ? <span className="ck-badge cob__tipo" data-tipo={tipoDoTexto(tipo) || "outro"}>{tipo}</span> : null}
+    </span>
+  );
+}
+const Modelo = ({ serie, visao }: { serie: string; visao: Visao }) => {
+  const nome = visao.equipamento(serie)?.modelo;
+  return nome ? <span className="cob__modelo">{nome}</span> : null;
+};
+
 function ItemDisponivel({ reg, visao, ctx }: { reg: Registro; visao: Visao; ctx: Contexto }) {
   const estado = reg.estado_efetivo || reg.estado;
   const ligacao = visao.porSerie.get(modelo.chaveSerie(reg.serie));
@@ -178,9 +184,10 @@ function ItemDisponivel({ reg, visao, ctx }: { reg: Registro; visao: Visao; ctx:
   return (
     <li className="cob__item">
       <div className="cob__lin">
-        <span className="cob__serie">{reg.serie}</span>
+        <Serie serie={reg.serie} visao={visao} />
         <Selo texto={modelo.DISPONIBILIDADE[estado] || estado} status={estado === "disponivel" ? "ok" : estado === "a_confirmar" ? "alerta" : "erro"} />
       </div>
+      <Modelo serie={reg.serie} visao={visao} />
       <span className="cob__k">{reg.cidade || "—"}</span>
       {nota ? <span className="cob__nota">{nota}</span> : null}
       {ctx.escrita && ligacao ? (
@@ -220,7 +227,8 @@ function ItemReserva({ reserva, visao, ctx }: { reserva: Registro; visao: Visao;
   const demanda = visao.demandas[reserva.demanda_id] || {};
   return (
     <li className="cob__item">
-      <div className="cob__lin"><span className="cob__serie">{reserva.serie}</span><span className="cob__k">{`até ${modelo.formatarData(reserva.valida_ate) || "—"}`}</span></div>
+      <div className="cob__lin"><Serie serie={reserva.serie} visao={visao} /><span className="cob__k">{`até ${modelo.formatarData(reserva.valida_ate) || "—"}`}</span></div>
+      <Modelo serie={reserva.serie} visao={visao} />
       <span className="cob__k">{`${demanda.cidade || "—"} · ${modelo.formatarData(demanda.data) || "—"}`}</span>
       <SelosReserva reserva={reserva} />
       <Abrir rotulo="Abrir" serie={reserva.serie} ctx={ctx} folha={{ tipo: "reservas", id: reserva.id }} />
@@ -228,10 +236,11 @@ function ItemReserva({ reserva, visao, ctx }: { reserva: Registro; visao: Visao;
   );
 }
 
-function ItemMovimento({ mov, ctx }: { mov: Registro; ctx: Contexto }) {
+function ItemMovimento({ mov, visao, ctx }: { mov: Registro; visao: Visao; ctx: Contexto }) {
   return (
     <li className="cob__item">
-      <div className="cob__lin"><span className="cob__serie">{mov.serie}</span></div>
+      <div className="cob__lin"><Serie serie={mov.serie} visao={visao} /></div>
+      <Modelo serie={mov.serie} visao={visao} />
       <span className="cob__k">{mov.destino_cidade || "—"}</span>
       <SelosMovimento mov={mov} />
       <Abrir rotulo="Acompanhar" serie={mov.serie} ctx={ctx} folha={{ tipo: "movimento", id: mov.id }} />
@@ -239,10 +248,11 @@ function ItemMovimento({ mov, ctx }: { mov: Registro; ctx: Contexto }) {
   );
 }
 
-function ItemDevolucao({ dev, ctx }: { dev: Registro; ctx: Contexto }) {
+function ItemDevolucao({ dev, visao, ctx }: { dev: Registro; visao: Visao; ctx: Contexto }) {
   return (
     <li className="cob__item">
-      <div className="cob__lin"><span className="cob__serie">{dev.serie}</span><SeloDevolucao dev={dev} /></div>
+      <div className="cob__lin"><Serie serie={dev.serie} visao={visao} /><SeloDevolucao dev={dev} /></div>
+      <Modelo serie={dev.serie} visao={visao} />
       <span className="cob__k">{`${dev.cidade || "—"} · ${modelo.formatarData(dev.data_prevista) || "—"}`}</span>
       <Abrir rotulo="Receber" serie={dev.serie} ctx={ctx} folha={{ tipo: "devolucoes", id: dev.id }} />
     </li>
@@ -281,12 +291,12 @@ export function Cartoes({ visao, ctx, ocupado, carregado, chip }: CartoesProps) 
       <CartaoBento tom="ciano" atraso={2} className={`cob__cartao${oculto("movimento")}`}>
         <Cab titulo="Em movimento" icone={ICONES.movimento} n={visao.movimentos.length} aba="movimento" />
         <Lista id="cobertura-lista-movimento" limite={4} ocupado={ocupado} vazio={vazio("Nada em movimento")}
-          itens={visao.movimentos.map(mov => <ItemMovimento key={mov.id} mov={mov} ctx={ctx} />)} />
+          itens={visao.movimentos.map(mov => <ItemMovimento key={mov.id} mov={mov} visao={visao} ctx={ctx} />)} />
       </CartaoBento>
       <CartaoBento tom="ambar" atraso={3} className={`cob__cartao${oculto("devolucoes")}`}>
         <Cab titulo="Devoluções" icone={ICONES.devolucoes} n={visao.devolucoes.length} aba="devolucoes" />
         <Lista id="cobertura-lista-devolucoes" limite={4} ocupado={ocupado} vazio={vazio("Nenhuma devolução")}
-          itens={visao.devolucoes.map(dev => <ItemDevolucao key={dev.id} dev={dev} ctx={ctx} />)} />
+          itens={visao.devolucoes.map(dev => <ItemDevolucao key={dev.id} dev={dev} visao={visao} ctx={ctx} />)} />
       </CartaoBento>
     </>
   );

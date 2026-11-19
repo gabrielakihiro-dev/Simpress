@@ -141,6 +141,7 @@ export type Cobertura = {
   "manutencao": ManutencaoCobertura;
   "sinais": Record<string, unknown>[];
   "casos": CasosCobertura;
+  "equipamentos"?: Record<string, EquipamentoCobertura>;
 };
 
 export type CodigoPowerShellPayload = {
@@ -302,6 +303,11 @@ export type EnviarTicketPayload = {
   "chamado_interno"?: string;
   "enviar"?: boolean;
   "confirmado"?: boolean;
+};
+
+export type EquipamentoCobertura = {
+  "modelo": string;
+  "tipo": string;
 };
 
 export type EquipamentoUpdatePayload = {
