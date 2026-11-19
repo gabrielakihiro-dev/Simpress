@@ -17,6 +17,7 @@ Vale para todo o Simpress, exceto o Assistente (`#assistente-widget`). Neste pro
 | Ícone do cartão | `translateY(-2px) rotate(-6deg)`, 500 ms |
 | Seta "abrir" | `translate(3px,-3px)`, 300 ms |
 | Ponto pulsante | 1.6 s, só em status real "ao vivo" (Chrome livre) |
+| Cursor (só mouse) | ponto de 8 px segue o ponteiro; anel de 30 px vem atrás com inércia; sobre botão, aba ou link de até 320×96 px o anel abraça o elemento (10 px de folga), maior que isso cresce para 48 px; cor do cartão bento sob o ponteiro (`--tom`) em 200 ms; onda do clique de 250 ms |
 | Peças do Novo layout | aviso (toast) sobe em 300 ms; véu aparece em 220 ms; folha desliza em 280 ms; linha de tabela, pílula e rótulo do campo em 200 ms |
 
 - Clicar em sub-aba ou filtro repete contagem, anel e barras.
@@ -29,10 +30,12 @@ Vale para todo o Simpress, exceto o Assistente (`#assistente-widget`). Neste pro
 - Nunca `overflow:hidden` no cartão real (cortaria menus, ⓘ, cabeçalhos fixos e tabelas roláveis); as camadas de brilho ficam em pseudo-elementos ou filhos `aria-hidden`.
 - Sem dado inventado: o pulso e as contagens só mostram estado e números reais.
 - Assistente (`#assistente-widget`, `.ck-assist*`) fica fora: não recebe brilho, entrada nem contagem do bento.
+- Cursor próprio só com `(pointer: fine) and (hover: hover)` e sem movimento reduzido (troca de preferência vale na hora). O cursor nativo volta em campo de texto, `select`, Assistente, diálogo modal, popover, `iframe` e fora da janela.
 
 ## Onde ficam
 
 - `static/styles/ck-bento.css`: durações, curvas e quadros-chave.
 - `static/styles/nl-base.css` (Novo layout, carregado depois do `ck-bento.css`): tokens `--nl-*`, barra superior, véu e diálogos comuns e as peças de `frontend/src/componentes/`; todo movimento fica em `prefers-reduced-motion: no-preference` e os quadros-chave `nl-*` só usam `opacity` e `transform` (`tests/frontend/test_ui_motion.cjs`).
 - `static/js/ui/bento.js`: `iniciarBrilho()` (segue o ponteiro, ignora o Assistente) e `contarAte(el, alvo, formatar)` (termina com o texto final exato; no movimento reduzido, escreve o final na hora).
+- `frontend/src/ui/cursor.ts` e `static/styles/ck-cursor.css`: cursor do Novo layout (teste: `tests/e2e/cursor.spec.cjs`).
 - `SimpressMotion` (`static/js/ui/ui-motion.js`, 160 e 220 ms) continua valendo para modais, gavetas e trocas de conteúdo; não é substituído por este contrato.

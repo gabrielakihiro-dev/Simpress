@@ -350,7 +350,10 @@ test("comparison summary cards jump to their section and clear filters that hide
   const links = painelApelidos.locator("[data-comparison-section-target]");
   await expect(links).toHaveCount(1);
   const card = painelApelidos.getByRole("button", { name: /Apelidos para conferência: 1\. Ir para Linhas mantidas para conferência/ });
+  // Com o cursor próprio na tela (frontend/src/ui/cursor.ts) o nativo fica "none"; confere o nativo com ele desligado.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(card).toHaveCSS("cursor", "pointer");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
 
   await card.click();
   await expect(dialog.locator("#resumo-aba-apelidos")).toHaveAttribute("aria-selected", "true");
