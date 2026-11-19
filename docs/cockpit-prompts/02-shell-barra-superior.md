@@ -31,13 +31,25 @@ Referência visual: imagem 1 (Resumo) e imagem 2 (Home) — a barra no topo com 
 | Posição | Elemento | Detalhes |
 |---------|----------|----------|
 | 1 | Logo | Texto "Simpress" com ícone hexagonal. Mantenha a marca visual. |
-| 2 | Navegação principal | Somente Home, Transporte, Resumo e Automação. Preserve os ids `#tab-home`, `#tab-retirada-entrega`, `#tab-resumo`, `#tab-automacao` e os contratos atuais de seleção. Atalhos F1–F4 funcionam, mas não mostre suas dicas ao lado dos nomes. Não coloque Chamados, Comparação, Histórico de apelidos ou Relatório mensal nesta faixa. |
+| 2 | Navegação principal | Somente Home, Transporte, Resumo e Automação. Preserve os ids `#tab-home`, `#tab-retirada-entrega`, `#tab-resumo`, `#tab-automacao` e os contratos atuais de seleção. Atalhos F1–F4 funcionam; a dica (`<kbd>`) não fica ao lado do nome: aparece só no hover e no foco do teclado (Novo layout, opção C). Não coloque Chamados, Comparação, Histórico de apelidos ou Relatório mensal nesta faixa. |
 | 3 | Espaçador | `flex:1` |
 | 4 | Busca global | Input sem placeholder (Novo layout, 18/11/2026); até **420px** a partir de 1200px; atalho `Ctrl+K` mostrado em `<kbd>` só no desktop. Use o **MESMO** `id="input-serial"` e os mesmos `data-on-input`, `data-on-keydown`, `aria-controls="autocomplete-list"`. O autocomplete dropdown (`#autocomplete-box`) continua funcionando. |
 | 5 | Chip "Base 2 h" | Ponto verde + texto. Ligado ao `#readiness-panel` (mantenha o `details#readiness-panel` funcionando, pode ficar oculto visualmente e abrir ao clicar no chip). |
 | 6 | Chip Chrome | "Chrome ocupado" ou "Chrome livre". Ligado ao estado da automação (`#automacao-estado`). |
 | 7 | Sino | `#btn-notificacoes` com `#badge-notificacoes`. Mantenha o `#notification-center-panel` funcionando. Fica antes de Ferramentas (Novo layout v23, quadro NL-Base-Topo); depois de Ferramentas vêm Assistente (F9) e tema. |
 | 8 | Ferramentas (nove pontos) | Botão de grade 3×3 com rótulo acessível `Ferramentas` e menu suspenso de 240px. No grupo principal, apresente `Chamados` `F5`, `Comparação` `F6`, `Histórico de apelidos` `F7` e `Relatório mensal` `F8`, nessa ordem. Cada item abre seu painel; o item fica ativo quando o painel correspondente está aberto. O botão da grade também fica ativo enquanto o menu está aberto ou uma dessas telas está selecionada. Badges só mostram contagens reais (atrasados em Chamados, divergentes em Comparação); nunca fixe os exemplos `2` e `41`. Chamados substitui o item antigo `Acompanhar chamados`, mas o fluxo antigo continua acessível dentro do painel pelo handler atual. Preserve Atualizar planilhas, Unidades e os demais itens/handlers existentes em seção após separador, sem duplicar IDs nem retirar acesso a fluxos. A ação F7 abre o novo painel Histórico de apelidos; mantenha `abrirModalHistoricoApelidos` no botão contextual da Home para os fluxos que ainda usam o modal existente. |
+
+### Novo layout: barra de abas opção C (aprovada em 18/11/2026)
+
+Desenho: canvas "Novo layout" v51 (https://claude.ai/artifact/2txBkhk2PDgyh1cr35zcED), quadros `NL-Abas-C` e `NL-Abas-C-cel`. Estilo em `static/styles/nl-base.css`; a cor vem do atributo `data-nl-tom` (sem ele, índigo).
+
+- **Cor por aba:** Home índigo, Transporte ciano, Resumo esmeralda, Automação fúcsia, Chamados âmbar, OS índigo. A pílula ativa pega a cor da aba.
+- **Hover:** brilho radial na cor da peça, anel interno, sombra, sobe 2 px em 200 ms e o ícone cresce (`scale(1.12)`) na cor de texto do tom. Foco do teclado: contorno sólido de 2 px na cor.
+- **Atalho:** o `<kbd>` F1…F6 fica oculto em repouso e aparece tingido no hover e no foco (150 ms), sem mudar a altura da barra (64 px).
+- **Ferramentas do topo:** o mesmo hover em Buscar (ciano), Notificações (índigo), Ferramentas (esmeralda), Assistente (fúcsia, só o hover do botão `#btn-assistente`; o repouso e o estado aberto seguem a paleta do Assistente) e Tema (âmbar). Os pontos de status (fontes, Chrome) ficam sem hover.
+- **Menu Ferramentas:** cada item no ciclo de cores depois da OS: Histórico de apelidos F7 ciano, Relatório mensal F8 esmeralda, Cobertura F10 fúcsia, Lembretes âmbar, Catálogo de unidades índigo; os itens do modo compacto seguem a aba (Chamados âmbar, OS índigo). No hover e no toque (`:active`), o mesmo brilho, o atalho tingido e um deslize de 2 px para a direita em 200 ms.
+- **Telas abaixo de 1200 px (celular e tablet):** as abas mostram só o ícone; a aba ativa mostra ícone e rótulo. O rótulo oculto segue no `aria-label`. No toque, o mesmo fundo do hover.
+- **Movimento reduzido:** sem subida, escala e deslize; cor e contorno ficam.
 
 ### IDs que NÃO podem mudar
 
@@ -88,6 +100,6 @@ Implemente no JS (pode ser em `app-shell.js` ou num novo arquivo):
 - Rode `npx playwright test tests/e2e/ui.spec.cjs` — as abas devem continuar trocando.
 - Confirme que a busca global funciona (digite uma série, veja o autocomplete).
 - Confirme que o sino de notificações abre o painel.
-- Confirme que F1–F4 trocam as abas principais; F5–F8 abrem os quatro painéis de Ferramentas e chamam `preventDefault`. As dicas de F1–F4 não aparecem visualmente na barra. O menu fecha após a navegação, Escape fecha o menu e restaura o foco ao botão dos nove pontos.
+- Confirme que F1–F4 trocam as abas principais; F5–F8 abrem os quatro painéis de Ferramentas e chamam `preventDefault`. As dicas de F1–F4 só aparecem no hover e no foco do teclado. O menu fecha após a navegação, Escape fecha o menu e restaura o foco ao botão dos nove pontos.
 
 **Commit:** `style(cockpit): substitui sidebar por barra superior de 48px`
