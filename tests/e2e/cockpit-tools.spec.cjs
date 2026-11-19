@@ -324,8 +324,11 @@ test("abas principais mostram o atalho F1-F6 no hover sem mudar o rótulo nem o 
     if (larguraComAtalho) {
       await page.mouse.move(0, page.viewportSize().height - 1);
       await expect(kbd).toHaveCSS("opacity", "0");
-      await page.locator(id).hover();
-      await expect(kbd).toHaveCSS("opacity", "1");
+      // Na CI lenta a barra ainda se acomoda depois do goto e a aba sai de baixo do ponteiro: repete o hover.
+      await expect(async () => {
+        await page.locator(id).hover();
+        await expect(kbd).toHaveCSS("opacity", "1", { timeout: 1000 });
+      }).toPass({ timeout: 10_000 });
     } else await expect(kbd).toBeHidden();
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
