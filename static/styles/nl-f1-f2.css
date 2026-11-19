@@ -1,0 +1,454 @@
+/* Novo layout, abas F1 Home e F2 Transporte. Cada aba tem a sua seção, escopada no próprio painel; não mexa na seção alheia. */
+
+/* ===== F1 Home (#tab-panel-home / #card-equipamento) ===== */
+/* Cartões do equipamento (quadro NL-F1-Home): só aparência. IDs, ARIA e handlers ficam no partial card-equipamento.html.
+   Cada cartão traz o próprio acento em --nl-ac (trio RGB) e --nl-actx (cor do texto). Sem overflow:hidden nos cartões
+   (os pop-ups ⓘ não podem ser cortados) e sem min-width fixo: de 320 a 2560px não há rolagem horizontal. */
+#card-equipamento .ck-home-layout { gap: 20px; }
+#card-equipamento :is(.ck-home-layout__principal, .ck-home-layout__lateral) { gap: 20px; }
+#card-equipamento :is(.nlh-ident, .nlh-chamado, .nlh-endpoint, .ck-ps-endpoint, .ck-home-layout__lateral > aside) {
+  --ac: var(--nl-ac, var(--nl-i));
+  position: relative; display: flex; flex-direction: column; gap: 18px; min-width: 0; padding: 24px; overflow: visible;
+  border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); box-shadow: var(--nl-sombra); color: var(--nl-tx);
+  background: linear-gradient(180deg, rgba(var(--nl-ac, var(--nl-i)), .08), transparent 38%), var(--nl-card);
+}
+#card-equipamento .nlh-ident { --nl-ac: var(--nl-i); --nl-actx: var(--nl-itx); }
+#card-equipamento .nlh-endpoint { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+#card-equipamento .nlh-chamado { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
+#card-equipamento .ck-ps-endpoint { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
+#card-equipamento .ck-home-layout__lateral > aside { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
+
+/* Cabeçalho dos cartões: ícone em quadrado tingido + título. */
+#card-equipamento .nlh-cab { display: flex; align-items: center; gap: 12px; min-width: 0; }
+#card-equipamento .nlh-cab__ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(var(--nl-ac, var(--nl-i)), .16); color: var(--nl-actx, var(--nl-itx)); }
+#card-equipamento .nlh-cab__ico .ck-ico { width: 18px; height: 18px; }
+#card-equipamento .nlh-cab__titulo, #card-equipamento .ck-ps-endpoint__titulo, #card-equipamento .ck-home-layout__lateral > aside .ck-cartao__titulo { margin: 0; font: 600 15px/1.3 var(--fonte-corpo); color: var(--nl-tx); }
+#card-equipamento .nlh-cab__titulo { min-width: 0; }
+
+/* Botão cheio (ação principal) e botão neutro com borda, os dois do desenho. */
+#card-equipamento :is(#btn-ir-para-transporte, .nlh-abrir-ux, #btn-powershell-endpoint) {
+  height: 40px; padding: 0 20px; border: 1px solid transparent; border-radius: var(--nl-raio-controle);
+  background: rgb(var(--nl-i)); color: #0b0d15; font: 600 14px/1 var(--fonte-corpo);
+}
+#card-equipamento :is(#btn-ir-para-transporte, .nlh-abrir-ux, #btn-powershell-endpoint):hover:not(:disabled) { background: rgb(var(--nl-i)); color: #0b0d15; filter: brightness(1.08); }
+#card-equipamento :is(#btn-editar-equipamento, .ck-eq-cab__acoes .ck-btn--icone, .nlh-bloco, .nlh-abertos-rodape .ck-btn, .ck-chamado__acoes .ck-btn, #btn-powershell-codigos-gerenciar, .ck-edicao .ck-btn) {
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font: 500 14px/1 var(--fonte-corpo);
+}
+#card-equipamento :is(#btn-editar-equipamento, .ck-eq-cab__acoes .ck-btn--icone, .nlh-bloco, .nlh-abertos-rodape .ck-btn, .ck-chamado__acoes .ck-btn, #btn-powershell-codigos-gerenciar, .ck-edicao .ck-btn):hover:not(:disabled) {
+  border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .08); color: var(--nl-tx);
+}
+#card-equipamento :is(.nlh-segmento__op, .nlh-link, .nlh-restaurar, .nlh-copiar-serie, .ck-dado > .ck-btn, .ck-dado__acoes .ck-btn):focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+
+/* Identificação: série grande, selo do tipo, "modelo · cidade". O apelido aparece na caixa de dados. */
+#card-equipamento .ck-eq-cab { gap: 12px; align-items: flex-start; flex-wrap: nowrap; }
+#card-equipamento .ck-eq-cab__id { flex: 1 1 0; min-width: 0; gap: 12px; }
+#card-equipamento .ck-eq-cab__icone { flex: none; width: 40px; height: 40px; border: 1px solid var(--nl-bd2); border-radius: 14px; background: var(--nl-card2); color: var(--nl-mut); }
+#card-equipamento .ck-eq-cab__textos { gap: 6px; }
+#card-equipamento .ck-eq-cab__linha { gap: 4px 6px; }
+#card-equipamento .ck-eq-cab__serie { font: 700 22px/1.1 var(--fonte-mono); color: var(--nl-tx); }
+#card-equipamento .ck-eq-cab__modelo { margin: 0; font: 400 14px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#card-equipamento .nlh-cidade { font-size: 14px; color: var(--nl-mut); }
+#card-equipamento .nlh-cidade:not(:empty)::before { content: "·"; margin-right: 6px; }
+#card-equipamento #badge-apelido { display: none; }
+#card-equipamento #badge-tipo { height: 22px; padding: 0 8px; border: 1px solid rgba(var(--nl-i), .35); border-radius: 999px; background: rgba(var(--nl-i), .14); color: var(--nl-itx); font: 600 11px/1 var(--fonte-corpo); }
+#card-equipamento .nlh-copiar-serie { width: 24px; height: 24px; border-radius: 8px; color: var(--nl-mut); }
+#card-equipamento .nlh-copiar-serie:hover { background: rgba(var(--nl-i), .12); color: var(--nl-tx); }
+#card-equipamento .ck-eq-cab__acoes { flex: none; gap: 8px; }
+#card-equipamento .ck-eq-cab__acoes .ck-btn--icone { width: 40px; height: 40px; padding: 0; }
+#card-equipamento .ck-eq-cab__acoes .ck-btn:not(.ck-btn--icone) { gap: 6px; height: 40px; padding: 0 14px; }
+#card-equipamento #btn-editar-equipamento > .ck-ico { display: none; }
+#card-equipamento #btn-editar-equipamento[aria-pressed="true"] { border-color: rgb(var(--nl-i)); background: rgba(var(--nl-i), .14); }
+
+/* Dados em caixas: rótulo em cima, valor na caixa e o botão de copiar/editar dentro dela (mesma célula da grade). */
+#card-equipamento .ck-dados { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+#card-equipamento .ck-dado { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 6px 0; padding: 0; background: transparent; }
+#card-equipamento .ck-dado__textos { display: contents; }
+#card-equipamento .nlh-oculto { display: none; }
+#card-equipamento .ck-dado dt { grid-column: 1 / -1; grid-row: 1; font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#card-equipamento .ck-dado dd {
+  grid-column: 1 / -1; grid-row: 2; display: grid; align-content: center; box-sizing: border-box; min-height: 44px; margin: 0; padding: 6px 44px 6px 14px;
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-bg); color: var(--nl-tx);
+  font: 600 14px/1.35 var(--fonte-mono); overflow-wrap: anywhere;
+}
+#card-equipamento .ck-dado dd:not(.ck-mono) { font: 500 14px/1.35 var(--fonte-corpo); }
+#card-equipamento .ck-dado > .ck-btn, #card-equipamento .ck-dado > .ck-dado__acoes { grid-column: 1 / -1; grid-row: 2; justify-self: end; margin-right: 8px; z-index: 1; }
+#card-equipamento .ck-dado > .ck-btn--mini, #card-equipamento .ck-dado__acoes .ck-btn--mini { width: 28px; height: 28px; border-radius: 8px; color: var(--nl-mut); }
+#card-equipamento .ck-dado > .ck-btn--mini:hover, #card-equipamento .ck-dado__acoes .ck-btn--mini:hover { background: rgba(var(--nl-i), .12); color: var(--nl-tx); }
+#card-equipamento .ck-dado:has(.ck-dado__acoes:not(.hidden)) dd { padding-right: 74px; }
+#card-equipamento .ck-dado > #btn-editar-nome-pessoa { width: auto; height: 28px; padding: 0 10px; }
+#card-equipamento .ck-dado dd:has(form.ck-edicao:not(.hidden), .ck-dado__entrada) { min-height: 0; padding: 0; border: 0; background: transparent; }
+#card-equipamento .ck-dado .ck-entrada { height: 44px; padding: 0 14px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-bg); color: var(--nl-tx); font: 500 14px/1.2 var(--fonte-corpo); }
+#card-equipamento .ck-dado .ck-entrada:focus { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
+#card-equipamento .ck-edicao { gap: 8px; margin: 0; }
+#card-equipamento .ck-edicao .ck-btn { height: 44px; padding: 0 16px; }
+/* "Nome completo" só aparece quando há nome ou quando a edição está aberta. */
+#card-equipamento #ck-dado-login:not(:has(#card-nome-pessoa:not(.hidden), #form-nome-pessoa:not(.hidden), #btn-editar-nome-pessoa:not(.hidden), .ck-dado__entrada)) { display: none; }
+#card-equipamento .ck-dados--editando { border: 0; }
+#card-equipamento .ck-dados-edicao { margin: 0; }
+
+/* Chamado manual: abas, chips, texto editável com "Restaurar modelo" e contador. */
+#card-equipamento .ck-chamado__abas { gap: 4px; padding: 0; border: 0; }
+#card-equipamento .ck-modelo-aba { height: 40px; padding: 0 8px; border-radius: var(--nl-raio-controle); background: transparent; color: var(--nl-mut); font: 500 13.5px/1 var(--fonte-corpo); box-shadow: none; }
+#card-equipamento .ck-modelo-aba:hover { background: rgba(var(--nl-i), .08); color: var(--nl-tx); }
+#card-equipamento .ck-modelo-aba[aria-selected="true"] { background: var(--nl-card2); color: var(--nl-tx); box-shadow: inset 0 0 0 1px var(--nl-bd2); }
+#card-equipamento #ticket-templates-content { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+#card-equipamento .ck-chamado__barra { gap: 8px; padding: 0; border: 0; }
+#card-equipamento .ck-chamado__info { flex: none; align-items: center; gap: 0; height: 36px; padding: 0 12px; border: 1px solid var(--nl-bd2); border-radius: 999px; background: var(--nl-card2); font-size: 0; }
+#card-equipamento .ck-chamado__info strong { font: 600 12px/1 var(--fonte-mono); color: var(--nl-tx); }
+#card-equipamento .ck-chamado__acoes { gap: 8px; }
+#card-equipamento .ck-chamado__acoes .ck-btn { height: 36px; padding: 0 14px; }
+#card-equipamento .nlh-abrir-ux { margin-left: auto; }
+#card-equipamento .nlh-texto-cab { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+#card-equipamento .nlh-texto-cab__rotulo { font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#card-equipamento .nlh-selo-editavel { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); gap: 4px; }
+#card-equipamento .nlh-restaurar { height: 36px; padding: 0 8px; border-radius: var(--nl-raio-controle); color: var(--nl-tx); font: 500 14px/1 var(--fonte-corpo); }
+#card-equipamento .nlh-restaurar:hover { background: rgba(var(--nl-i), .1); color: var(--nl-tx); }
+#card-equipamento .ck-chamado__texto {
+  box-sizing: border-box; min-height: 220px; padding: 14px 16px; border: 1px solid var(--nl-bd2); border-radius: 14px; background: var(--nl-bg);
+  color: var(--nl-tx); font: 400 14px/1.6 var(--fonte-corpo); white-space: pre-wrap; resize: vertical;
+}
+#card-equipamento .ck-chamado__texto:focus-visible { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
+#card-equipamento .nlh-contador-linha { margin: -6px 0 0; text-align: right; }
+#card-equipamento .nlh-contador { font: 500 12px/1.2 var(--fonte-mono); font-variant-numeric: tabular-nums; color: var(--nl-fraco); }
+#card-equipamento .nlh-contador--alerta { color: var(--nl-rtx); }
+
+/* Endpoint: dois blocos empilhados e o resultado da consulta. */
+#card-equipamento .nlh-endpoint__botoes { display: flex; flex-direction: column; gap: 12px; }
+#card-equipamento .nlh-bloco { width: 100%; height: 44px; }
+#card-equipamento .nlh-bloco > .ck-ico { display: none; }
+#card-equipamento .nlh-endpoint .ck-eq-cab__status, #card-equipamento #endpoint-powershell-result { margin: 0; color: var(--nl-mut); }
+#card-equipamento .nlh-endpoint .ck-eq-cab__status:empty, #card-equipamento #endpoint-powershell-result:empty { display: none; }
+
+/* PowerShell no Endpoint: modo em controle segmentado (o select de modo fica no DOM, escondido, e manda no valor). */
+#card-equipamento .ck-ps-endpoint__cab { justify-content: flex-start; gap: 12px; margin: 0; }
+#card-equipamento .ck-ps-endpoint__titulo { flex: 1 1 auto; min-width: 0; }
+#card-equipamento #btn-powershell-codigos-gerenciar { flex: none; width: 36px; height: 36px; padding: 0; }
+#card-equipamento .ck-ps-endpoint__form { gap: 14px; }
+#card-equipamento .nlh-segmento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+#card-equipamento .nlh-segmento__op { height: 36px; min-width: 0; padding: 0 8px; border: 0; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); font: 500 14px/1 var(--fonte-corpo); white-space: nowrap; cursor: pointer; }
+#card-equipamento .nlh-segmento__op:hover { color: var(--nl-tx); }
+#card-equipamento .nlh-segmento__op[aria-pressed="true"] { background: var(--nl-card); box-shadow: inset 0 0 0 1px var(--nl-bd2); color: var(--nl-tx); font-weight: 600; }
+/* Escondido só para a vista: continua no DOM e com caixa, para teclado, leitor de tela e testes. */
+#card-equipamento .nlh-modo-select { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+#card-equipamento .ck-ps-endpoint .ck-campo { gap: 6px; }
+#card-equipamento .ck-ps-endpoint .ck-campo__rotulo { font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#card-equipamento .ck-ps-endpoint .ck-entrada { height: 44px; padding: 0 14px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-bg); color: var(--nl-tx); font: 500 14px/1.2 var(--fonte-corpo); }
+#card-equipamento .ck-ps-endpoint .ck-entrada:focus { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
+#card-equipamento #input-powershell-hostname { font: 600 14px/1.2 var(--fonte-mono); }
+#card-equipamento .nlh-comando { gap: 6px; }
+#card-equipamento .nlh-comando__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#card-equipamento .nlh-link { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; border: 0; background: none; color: var(--nl-itx); font: 500 13px/1.2 var(--fonte-corpo); cursor: pointer; }
+#card-equipamento .nlh-link:hover { text-decoration: underline; }
+#card-equipamento .nlh-comando__campo { position: relative; }
+#card-equipamento #input-powershell-comando { display: block; height: 84px; min-height: 0; padding: 12px 14px; overflow-y: auto; scrollbar-width: none; resize: none; font: 600 12.5px/18px var(--fonte-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+#card-equipamento #input-powershell-comando::-webkit-scrollbar { display: none; }
+#card-equipamento .nlh-pill { position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border: 1px solid rgba(var(--nl-i), .35); border-radius: 999px; background: rgba(var(--nl-i), .18); color: var(--nl-itx); font: 600 11px/1.2 var(--fonte-mono); pointer-events: none; }
+#card-equipamento #nlh-ps-contador { align-self: flex-end; }
+#card-equipamento .ck-ps-endpoint__envio { gap: 10px; }
+#card-equipamento #btn-powershell-endpoint { width: 100%; }
+#card-equipamento #btn-powershell-endpoint > .ck-ico { display: none; }
+#card-equipamento .ck-ps-endpoint__aviso { margin: 0; text-align: center; font: 400 12px/1.4 var(--fonte-corpo); color: var(--nl-fraco); }
+#card-equipamento .ck-ps-codigos { margin: 0; }
+
+/* Chamados abertos: contagem em selo âmbar, itens em caixas e o rodapé com Ver dossiê / Enviar e-mail. */
+#card-equipamento .ck-home-layout__lateral > aside > .ck-cartao__cab { flex-wrap: nowrap; gap: 12px; min-height: 0; padding: 0; border: 0; }
+#card-equipamento #home-open-tickets-count:not(:empty):not([hidden]) { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 8px; border-radius: 999px; background: rgba(var(--nl-a), .16); color: var(--nl-atx); font: 600 12px/1 var(--fonte-corpo); }
+#card-equipamento #home-open-tickets-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+#card-equipamento .ck-abertos { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; }
+#card-equipamento .ck-aberto { padding: 14px 16px; border: 1px solid var(--nl-bd); border-radius: 14px; background: var(--nl-bg); }
+#card-equipamento .ck-abertos__vazio { margin: 0; color: var(--nl-mut); }
+#card-equipamento .nlh-abertos-rodape { display: flex; flex-wrap: wrap; gap: 8px; }
+#card-equipamento .nlh-abertos-rodape .ck-btn { flex: 1 1 120px; height: 40px; padding: 0 12px; }
+
+/* Celular e tablet (até 1199px): coluna única na ordem do desenho: identificação, Endpoint, Chamado manual, PowerShell, Chamados abertos. */
+@media (max-width: 1199.98px) {
+  #card-equipamento .ck-home-layout { display: flex; flex-direction: column; align-items: stretch; }
+  #card-equipamento :is(.ck-home-layout__principal, .ck-home-layout__lateral) { display: contents; }
+  #card-equipamento :is(.nlh-ident, .nlh-chamado, .nlh-endpoint, .ck-ps-endpoint, .ck-home-layout__lateral > aside) { align-self: stretch; width: auto; }
+  #card-equipamento .nlh-ident { order: 1; }
+  #card-equipamento .nlh-endpoint { order: 2; }
+  #card-equipamento .nlh-chamado { order: 3; }
+  #card-equipamento .ck-ps-endpoint { order: 4; }
+  #card-equipamento .ck-home-layout__lateral > aside { order: 5; }
+}
+@media (max-width: 767.98px) {
+  #card-equipamento :is(.nlh-ident, .nlh-chamado, .nlh-endpoint, .ck-ps-endpoint, .ck-home-layout__lateral > aside) { gap: 16px; padding: 18px 16px; }
+  #card-equipamento .ck-dados { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  #card-equipamento .ck-dado:has(form.ck-edicao:not(.hidden)) { grid-column: 1 / -1; }
+  #card-equipamento .ck-eq-cab { flex-wrap: wrap; }
+  #card-equipamento .ck-eq-cab__id, #card-equipamento .ck-eq-cab__acoes { flex: 1 1 100%; }
+  #card-equipamento .nlh-abrir-ux { width: 100%; margin-left: 0; }
+  #card-equipamento .ck-chamado__barra { gap: 8px; }
+}
+
+/* Movimento: só cor, borda e sombra (150 a 300 ms); nada anima com movimento reduzido. */
+@media (prefers-reduced-motion: no-preference) {
+  #card-equipamento :is(.ck-btn, .nlh-segmento__op, .nlh-link, .ck-modelo-aba, .ck-dado dd) { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), filter 200ms var(--nl-curva); }
+  #card-equipamento :is(.ck-chamado__texto, .ck-ps-endpoint .ck-entrada, .ck-dado .ck-entrada) { transition: border-color 200ms var(--nl-curva), outline-color 200ms var(--nl-curva); }
+}
+/* ===== fim F1 Home ===== */
+
+/* ===== F2 Transporte (#tab-panel-retirada-entrega) ===== */
+/* Quadro NL-F2-Transporte (opção B): cabeçalho, faixa de alertas, linha de progresso, quatro etapas recolhíveis e a
+   pré-visualização ao lado. Só aparência: IDs, ARIA e handlers ficam em frontend/partials/transporte.html e a lógica das
+   etapas em frontend/src/paineis/transporte/etapas.ts. Cada etapa traz o próprio acento em --nl-ac. Sem overflow:hidden
+   nos cartões (a dica das iniciais .nl-av::after não pode ser cortada) e sem min-width fixo: de 320 a 2560px não há
+   rolagem horizontal. Campos: .nl-campo da base; aqui só o que a base não cobre (rótulo flutuante com a mensagem de
+   erro do ux-enhancements entre o campo e o rótulo, e placeholder só em foco). */
+#tab-panel-retirada-entrega .ck-transp { gap: 20px; box-sizing: border-box; width: 100%; max-width: 1680px; margin-inline: auto; padding: 24px; color: var(--nl-tx); }
+
+/* Botões da tela: neutro com borda; o primário é cheio, como no desenho. */
+#tab-panel-retirada-entrega .ck-btn {
+  height: 40px; padding: 0 16px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle);
+  background: var(--nl-card); color: var(--nl-tx); font: 500 14px/1 var(--fonte-corpo);
+}
+#tab-panel-retirada-entrega .ck-btn:hover:not(:disabled) { border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .08); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .ck-btn--primario { border-color: transparent; background: rgb(var(--nl-i)); color: #0b0d15; font-weight: 600; }
+#tab-panel-retirada-entrega .ck-btn--primario:hover:not(:disabled) { border-color: transparent; background: rgb(var(--nl-i)); color: #0b0d15; filter: brightness(1.08); }
+#tab-panel-retirada-entrega .ck-btn--fantasma { border-color: transparent; background: transparent; color: var(--nl-mut); }
+#tab-panel-retirada-entrega .ck-btn--fantasma:hover:not(:disabled) { border-color: transparent; background: rgba(var(--nl-i), .12); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .ck-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; }
+#tab-panel-retirada-entrega .ck-btn--mini { width: 28px; height: 28px; padding: 0; border-radius: 8px; }
+#tab-panel-retirada-entrega .ck-btn:focus-visible, #tab-panel-retirada-entrega .nlt-gatilho:focus-visible, #tab-panel-retirada-entrega .nlt-detalhes > summary:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+
+/* Cabeçalho da tela. */
+#tab-panel-retirada-entrega .nlt-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
+#tab-panel-retirada-entrega .nlt-cab__titulo { margin: 0; font: 700 22px/1.2 var(--fonte-corpo); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-cab__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+/* app.css deixa o histórico só com o ícone abaixo de 640px (regra do banner antigo); aqui o rótulo aprovado fica visível. */
+#tab-panel-retirada-entrega #btn-historico-transferencias { min-width: 0; min-height: 0; padding: 0 16px; }
+#tab-panel-retirada-entrega #btn-historico-transferencias span { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+#tab-panel-retirada-entrega #btn-historico-transferencias svg { width: 16px; height: 16px; }
+
+/* Faixa de alertas de configuração (cliente e contato de origem). */
+#tab-panel-retirada-entrega .nlt-alertas { display: flex; flex-direction: column; gap: 8px; }
+#tab-panel-retirada-entrega .nlt-alertas:not(:has(.nlt-alerta:not(.hidden))) { display: none; }
+#tab-panel-retirada-entrega .nlt-alerta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px;
+  border: 1px solid rgba(var(--nl-a), .4); border-radius: var(--nl-raio-controle); background: rgba(var(--nl-a), .10); color: var(--nl-tx);
+}
+#tab-panel-retirada-entrega .nlt-alerta.hidden { display: none; }
+#tab-panel-retirada-entrega .nlt-alerta .ck-ico { color: var(--nl-atx); }
+#tab-panel-retirada-entrega .nlt-alerta p { flex: 1 1 260px; min-width: 0; margin: 0; font: 500 13px/1.4 var(--fonte-corpo); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-alerta .ck-btn { flex: none; height: auto; min-height: 32px; padding: 6px 12px; line-height: 1.2; text-align: center; }
+
+/* Linha de progresso: um segmento por etapa. O preenchimento é um scaleX (só transform), 700 ms, aprovado para esta linha. */
+#tab-panel-retirada-entrega .nlt-progresso { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+#tab-panel-retirada-entrega .nlt-prog__seg { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+#tab-panel-retirada-entrega .nlt-prog__rot { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); overflow-wrap: break-word; }
+#tab-panel-retirada-entrega .nlt-prog__rot b {
+  flex: none; display: inline-grid; place-items: center; box-sizing: border-box; width: 20px; height: 20px; border: 1px solid var(--nl-bd2);
+  border-radius: 50%; background: var(--nl-card2); color: var(--nl-mut); font: 700 11px/1 var(--fonte-corpo);
+}
+#tab-panel-retirada-entrega .nlt-prog__trilho { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: var(--nl-bd); }
+#tab-panel-retirada-entrega .nlt-prog__cheio { display: block; width: 100%; height: 100%; border-radius: inherit; background: rgb(var(--nl-i)); transform: scaleX(0); transform-origin: left center; }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="atual"] .nlt-prog__rot { color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="atual"] .nlt-prog__rot b { border-color: transparent; background: rgb(var(--nl-i)); color: #0b0d15; }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="atual"] .nlt-prog__cheio { transform: scaleX(.5); }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="feito"] .nlt-prog__rot { color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="feito"] .nlt-prog__rot b { border-color: rgba(var(--nl-e), .45); background: rgba(var(--nl-e), .18); color: var(--nl-etx); }
+#tab-panel-retirada-entrega .nlt-prog__seg[data-estado="feito"] .nlt-prog__cheio { background: rgb(var(--nl-e)); transform: scaleX(1); }
+
+/* Disposição: etapas à esquerda, pré-visualização à direita; abaixo de 1200px uma coluna, prévia depois das etapas. */
+#tab-panel-retirada-entrega .nlt-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 20px; align-items: start; min-width: 0; }
+#tab-panel-retirada-entrega .nlt-etapas { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Cartão de etapa. */
+#tab-panel-retirada-entrega .nlt-etapa {
+  --nl-ac: var(--nl-i); --nl-actx: var(--nl-itx);
+  position: relative; display: flex; flex-direction: column; min-width: 0; overflow: visible;
+  border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); box-shadow: var(--nl-sombra); color: var(--nl-tx);
+  background: linear-gradient(180deg, rgba(var(--nl-ac), .08), transparent 38%), var(--nl-card);
+}
+#tab-panel-retirada-entrega #ck-passo-retirada { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
+#tab-panel-retirada-entrega #ck-passo-entrega { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+#tab-panel-retirada-entrega #nlt-etapa-4 { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
+#tab-panel-retirada-entrega .nlt-etapa[data-atual="true"] { border-color: rgba(var(--nl-ac), .5); }
+#tab-panel-retirada-entrega .nlt-etapa__cab { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "h selo" "resumo resumo"; align-items: center; gap: 10px 12px; padding: 16px 24px; }
+#tab-panel-retirada-entrega .nlt-etapa__h { grid-area: h; min-width: 0; margin: 0; }
+#tab-panel-retirada-entrega .nlt-etapa__cab > .nlt-selo { grid-area: selo; }
+#tab-panel-retirada-entrega .nlt-gatilho {
+  display: flex; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--nl-tx); font: 600 16px/1.3 var(--fonte-corpo); text-align: left; cursor: pointer;
+}
+#tab-panel-retirada-entrega .nlt-num {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(var(--nl-ac), .16); color: var(--nl-actx); font: 700 14px/1 var(--fonte-corpo);
+}
+#tab-panel-retirada-entrega .nlt-num__ok { display: none; }
+#tab-panel-retirada-entrega .nlt-etapa:is([data-estado="ok"], [data-estado="auto"]) .nlt-num { background: rgba(var(--nl-e), .18); color: var(--nl-etx); }
+#tab-panel-retirada-entrega .nlt-etapa:is([data-estado="ok"], [data-estado="auto"]) .nlt-num__n { display: none; }
+#tab-panel-retirada-entrega .nlt-etapa:is([data-estado="ok"], [data-estado="auto"]) .nlt-num__ok { display: block; }
+#tab-panel-retirada-entrega .nlt-etapa__titulo { min-width: 0; }
+#tab-panel-retirada-entrega .nlt-atual-selo {
+  display: none; align-items: center; height: 22px; padding: 0 8px; border: 1px solid rgba(var(--nl-i), .35); border-radius: 999px;
+  background: rgba(var(--nl-i), .14); color: var(--nl-itx); font: 600 11px/1 var(--fonte-corpo); white-space: nowrap;
+}
+#tab-panel-retirada-entrega .nlt-etapa[data-atual="true"] .nlt-atual-selo { display: inline-flex; }
+#tab-panel-retirada-entrega .nlt-seta { margin-left: auto; color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-gatilho[aria-expanded="true"] .nlt-seta { transform: rotate(180deg); }
+
+/* Resumo da etapa recolhida: chips (vazios somem); aberta, o resumo some. */
+#tab-panel-retirada-entrega .nlt-resumo { grid-area: resumo; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding-left: 44px; }
+#tab-panel-retirada-entrega .nlt-etapa[data-aberta="true"] .nlt-resumo, #tab-panel-retirada-entrega .nlt-resumo:not(:has(> :not(:empty))) { display: none; }
+#tab-panel-retirada-entrega .nlt-chip {
+  display: inline-flex; align-items: center; min-height: 24px; max-width: 100%; box-sizing: border-box; padding: 2px 10px; border: 1px solid var(--nl-bd2);
+  border-radius: 999px; background: var(--nl-card2); color: var(--nl-tx2); font: 500 12px/1.3 var(--fonte-corpo); overflow-wrap: anywhere;
+}
+#tab-panel-retirada-entrega .nlt-chip--mono { font-family: var(--fonte-mono); }
+#tab-panel-retirada-entrega .nlt-chip:empty { display: none; }
+#tab-panel-retirada-entrega .nlt-resumo__resp { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+
+/* Selo de estado (ok / falta / automático), na etapa e na checklist. */
+#tab-panel-retirada-entrega .nlt-selo {
+  flex: none; display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid var(--nl-bd2); border-radius: 999px;
+  background: transparent; color: var(--nl-mut); font: 600 11px/1 var(--fonte-corpo); white-space: nowrap;
+}
+#tab-panel-retirada-entrega .nlt-selo[data-estado="ok"] { border-color: rgba(var(--nl-e), .4); background: rgba(var(--nl-e), .14); color: var(--nl-etx); }
+#tab-panel-retirada-entrega .nlt-selo[data-estado="falta"] { border-color: rgba(var(--nl-a), .45); background: rgba(var(--nl-a), .14); color: var(--nl-atx); }
+#tab-panel-retirada-entrega .nlt-selo[data-estado="auto"] { border-color: rgba(var(--nl-i), .35); background: rgba(var(--nl-i), .14); color: var(--nl-itx); }
+
+/* Corpo da etapa. */
+#tab-panel-retirada-entrega .nlt-corpo { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 4px 24px 24px; }
+#tab-panel-retirada-entrega .nlt-corpo[hidden] { display: none; }
+#tab-panel-retirada-entrega .nlt-duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 16px; align-items: start; min-width: 0; }
+#tab-panel-retirada-entrega .nlt-duas--iguais { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#tab-panel-retirada-entrega .nlt-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+#tab-panel-retirada-entrega .nlt-span-2 { grid-column: 1 / -1; }
+#tab-panel-retirada-entrega .nlt-linha { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+#tab-panel-retirada-entrega .nlt-linha > .nl-campo { flex: 1 1 0; }
+#tab-panel-retirada-entrega .nlt-linha > .ck-btn { height: 48px; }
+#tab-panel-retirada-entrega .nlt-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; }
+
+/* Equipamento (etapa 1): o banner de antes, agora uma caixa dentro do cartão. */
+#tab-panel-retirada-entrega .nlt-equip { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-bg); }
+#tab-panel-retirada-entrega .nlt-equip .ck-eq-cab__icone { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(var(--nl-i), .16); color: var(--nl-itx); }
+#tab-panel-retirada-entrega .nlt-equip .ck-selecionado__serie { font: 700 18px/1.2 var(--fonte-mono); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-equip .ck-selecionado__meta { margin: 0; font: 400 14px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-equip .ck-selecionado__acoes { gap: 8px; }
+
+/* Local (endereço e CNPJ) de retirada e de entrega. */
+#tab-panel-retirada-entrega .nlt-local { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-bg); }
+#tab-panel-retirada-entrega .nlt-local .ck-local__nome { font: 600 14px/1.3 var(--fonte-corpo); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-local .ck-local__end { font: 400 13px/1.4 var(--fonte-corpo); color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-local .ck-local__cnpj { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 400 12px/1.3 var(--fonte-mono); color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-local :is(.ck-local__nome, .ck-local__end, .ck-local__cnpj output):empty::before { color: var(--nl-fraco); }
+#tab-panel-retirada-entrega .nlt-unidades { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+#tab-panel-retirada-entrega .nlt-unidades > .nl-campo { flex: 1 1 280px; }
+#tab-panel-retirada-entrega .nlt-filiais { font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); }
+#tab-panel-retirada-entrega .ck-obs-rapidas { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Bloco do responsável (retirada e destino) com as iniciais. */
+#tab-panel-retirada-entrega .nlt-resp {
+  --nl-ac: var(--nl-i); --nl-actx: var(--nl-itx);
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid rgba(var(--nl-i), .30);
+  border-radius: var(--nl-raio-controle); background: rgba(var(--nl-i), .08);
+}
+#tab-panel-retirada-entrega .nlt-resp__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#tab-panel-retirada-entrega .nlt-resp__rot { min-width: 0; font: 700 11px/1.3 var(--fonte-corpo); letter-spacing: .08em; text-transform: uppercase; color: var(--nl-itx); }
+
+/* Agenda (etapa 4). */
+#tab-panel-retirada-entrega .nlt-nota { margin: 0; font: 400 13px/1.5 var(--fonte-corpo); color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-grupo { display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-bg); }
+#tab-panel-retirada-entrega .nlt-grupo__rot { padding: 0 6px; font: 700 11px/1.3 var(--fonte-corpo); letter-spacing: .08em; text-transform: uppercase; color: var(--nl-mut); }
+
+/* Campos (.nl-campo da base). O ux-enhancements insere a mensagem de erro logo depois do campo, entre ele e o rótulo:
+   o seletor "+" da base deixa de valer, então o rótulo flutuante repete a regra com "~". Placeholder só em foco, para não
+   sobrepor o rótulo. */
+#tab-panel-retirada-entrega .nl-campo__inp:is(:focus, :not(:placeholder-shown)) ~ .nl-campo__rot, #tab-panel-retirada-entrega select.nl-campo__inp ~ .nl-campo__rot { transform: translateY(-8px) scale(.79); }
+#tab-panel-retirada-entrega .nl-campo__inp::placeholder { color: transparent; }
+#tab-panel-retirada-entrega .nl-campo__inp:focus::placeholder { color: var(--nl-fraco); }
+#tab-panel-retirada-entrega .nl-campo__inp[aria-invalid="true"] { border-color: rgb(var(--nl-r)); }
+#tab-panel-retirada-entrega .required-mark { color: var(--nl-rtx); }
+#tab-panel-retirada-entrega .ux-field-error { margin: 0; font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-rtx); }
+#tab-panel-retirada-entrega .ux-field-error[hidden] { display: none; }
+
+/* Pré-visualização. */
+#tab-panel-retirada-entrega .nlt-previa {
+  position: static; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 20px; grid-column: auto;
+  border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); box-shadow: var(--nl-sombra); color: var(--nl-tx);
+  background: linear-gradient(180deg, rgba(var(--nl-i), .08), transparent 38%), var(--nl-card);
+}
+#tab-panel-retirada-entrega .nlt-previa__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#tab-panel-retirada-entrega .nlt-previa__titulo { margin: 0; font: 600 15px/1.3 var(--fonte-corpo); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-contagem {
+  height: 24px; padding: 0 10px; border: 1px solid var(--nl-bd2); border-radius: 999px; background: var(--nl-card2); color: var(--nl-tx2);
+  font: 600 12px/1 var(--fonte-corpo); font-variant-numeric: tabular-nums;
+}
+#tab-panel-retirada-entrega .nlt-contagem[data-status="ok"] { border-color: rgba(var(--nl-e), .4); background: rgba(var(--nl-e), .14); color: var(--nl-etx); }
+#tab-panel-retirada-entrega .nlt-contagem:is([data-status="alerta"], [data-status="erro"]) { border-color: rgba(var(--nl-a), .45); background: rgba(var(--nl-a), .14); color: var(--nl-atx); }
+#tab-panel-retirada-entrega .nlt-barra { --nlt-fracao: 0; height: 6px; overflow: hidden; border-radius: 999px; background: var(--nl-bd); }
+#tab-panel-retirada-entrega .nlt-barra__cheio { display: block; width: 100%; height: 100%; border-radius: inherit; background: rgb(var(--nl-i)); transform: scaleX(var(--nlt-fracao)); transform-origin: left center; }
+#tab-panel-retirada-entrega .nlt-barra[aria-valuenow="100"] .nlt-barra__cheio { background: rgb(var(--nl-e)); }
+#tab-panel-retirada-entrega .nlt-checklist { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+#tab-panel-retirada-entrega .nlt-chk { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 6px 0; border-bottom: 1px solid var(--nl-bd); }
+#tab-panel-retirada-entrega .nlt-chk:last-child { border-bottom: 0; }
+#tab-panel-retirada-entrega .nlt-chk__rot { min-width: 0; font: 500 13px/1.3 var(--fonte-corpo); color: var(--nl-tx); overflow-wrap: anywhere; }
+#tab-panel-retirada-entrega .nlt-passos3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+#tab-panel-retirada-entrega .nlt-passos3 > li { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-sub); background: var(--nl-bg); color: var(--nl-mut); font: 500 12px/1.3 var(--fonte-corpo); }
+#tab-panel-retirada-entrega .nlt-passos3__n { font: 700 11px/1 var(--fonte-mono); color: var(--nl-fraco); }
+#tab-panel-retirada-entrega .nlt-passos3 > li[data-estado="atual"] { border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .10); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-passos3 > li[data-estado="atual"] .nlt-passos3__n { color: var(--nl-itx); }
+#tab-panel-retirada-entrega .nlt-passos3 > li[data-estado="feito"] { border-color: rgba(var(--nl-e), .40); background: rgba(var(--nl-e), .10); color: var(--nl-tx); }
+#tab-panel-retirada-entrega .nlt-passos3 > li[data-estado="feito"] .nlt-passos3__n { color: var(--nl-etx); }
+
+/* Ações: a barra de antes (sticky, embaixo) vira o fim da prévia. O link "N pendentes" é criado pelo ux-enhancements no fim
+   da barra; sobe para o topo e ganha a seta. */
+#tab-panel-retirada-entrega .nlt-acoes { position: static; z-index: auto; display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 10px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+#tab-panel-retirada-entrega .nlt-acoes__principal { width: 100%; height: 48px; font-size: 15px; }
+#tab-panel-retirada-entrega .nlt-acoes__par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#tab-panel-retirada-entrega .nlt-acoes__par .ck-btn { flex: initial; height: auto; min-height: 44px; padding: 6px 8px; gap: 6px; font-size: 13px; line-height: 1.2; text-align: center; white-space: normal; }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes { order: -1; flex: none; align-self: flex-start; justify-content: flex-start; width: auto; height: auto; min-height: 28px; margin: 0; padding: 0 4px; gap: 8px; color: var(--nl-atx); font: 600 13px/1.3 var(--fonte-corpo); }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes:hover:not(:disabled) { background: transparent; border-color: transparent; color: var(--nl-atx); text-decoration: underline; }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes::after { content: "→"; content: "→" / ""; }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes[data-status="success"] { color: var(--nl-etx); }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes[data-status="success"]::after { content: none; }
+#tab-panel-retirada-entrega .nlt-acoes .ck-pendentes[hidden] { display: none; }
+#tab-panel-retirada-entrega .ck-pendentes__n { min-width: 20px; height: 20px; border-radius: 10px; background: rgba(var(--nl-a), .20); color: var(--nl-atx); font: 700 11px/1 var(--fonte-corpo); }
+
+/* Detalhes da planilha: as 13 linhas da prévia de antes, recolhidas. */
+#tab-panel-retirada-entrega .nlt-detalhes { padding-top: 12px; border-top: 1px solid var(--nl-bd); }
+#tab-panel-retirada-entrega .nlt-detalhes > summary { cursor: pointer; border-radius: 6px; font: 600 13px/1.3 var(--fonte-corpo); color: var(--nl-tx2); }
+#tab-panel-retirada-entrega .nlt-detalhes .ck-previa__linhas { grid-template-columns: 96px minmax(0, 1fr); gap: 4px 10px; padding: 12px 0 0; font: 400 12px/1.5 var(--fonte-mono); }
+#tab-panel-retirada-entrega .nlt-detalhes .ck-previa__linhas dt { color: var(--nl-mut); }
+#tab-panel-retirada-entrega .nlt-detalhes .ck-previa__linhas dd { color: var(--nl-tx); overflow-wrap: anywhere; }
+#tab-panel-retirada-entrega .nlt-detalhes .ck-previa__falta { color: var(--nl-atx); border-bottom: 1px dashed currentColor; }
+#tab-panel-retirada-entrega .nlt-detalhes .ck-previa__linhas dd:empty::before { color: var(--nl-fraco); }
+
+/* Notebook e desktop (1200px ou mais): a prévia acompanha a rolagem e rola por dentro se a tela for baixa. */
+@media (min-width: 1200px) {
+  #tab-panel-retirada-entrega .nlt-previa { position: sticky; top: 16px; max-height: calc(100dvh - var(--ck-topbar-h, 48px) - 32px); overflow: auto; overscroll-behavior: contain; }
+}
+
+/* Tablet e celular: coluna única, prévia depois das etapas. */
+@media (max-width: 1199.98px) {
+  #tab-panel-retirada-entrega .nlt-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767.98px) {
+  #tab-panel-retirada-entrega .ck-transp { gap: 16px; padding: 16px 12px; }
+  #tab-panel-retirada-entrega .nlt-cab__acoes { width: 100%; }
+  #tab-panel-retirada-entrega .nlt-cab__acoes .ck-btn { flex: 1 1 140px; height: auto; min-height: 40px; padding: 8px 12px; line-height: 1.2; text-align: center; }
+  #tab-panel-retirada-entrega .nlt-etapa__cab { padding: 14px 16px; }
+  #tab-panel-retirada-entrega .nlt-resumo { padding-left: 0; }
+  #tab-panel-retirada-entrega .nlt-corpo { padding: 4px 16px 18px; }
+  #tab-panel-retirada-entrega :is(.nlt-duas, .nlt-duas--iguais, .nlt-grade) { grid-template-columns: minmax(0, 1fr); }
+  #tab-panel-retirada-entrega .nlt-previa { padding: 16px; }
+  #tab-panel-retirada-entrega .nlt-gatilho { font-size: 15px; }
+}
+@media (max-width: 479.98px) {
+  #tab-panel-retirada-entrega .nlt-prog__rot { flex-direction: column; align-items: flex-start; gap: 4px; font-size: 10.5px; }
+  #tab-panel-retirada-entrega .nlt-passos3 { grid-template-columns: minmax(0, 1fr); }
+  #tab-panel-retirada-entrega .nlt-acoes__par { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Movimento: o preenchimento das linhas leva 700 ms (exceção aprovada); o resto, só cor, borda e transform (150 a 300 ms).
+   Com movimento reduzido nada anima: os estados aparecem de uma vez. */
+@media (prefers-reduced-motion: no-preference) {
+  #tab-panel-retirada-entrega .nlt-prog__cheio { transition: transform 700ms var(--nl-curva), background-color 700ms var(--nl-curva); }
+  #tab-panel-retirada-entrega .nlt-prog__rot b { transition: background-color 300ms var(--nl-curva), border-color 300ms var(--nl-curva), color 300ms var(--nl-curva); }
+  #tab-panel-retirada-entrega .nlt-barra__cheio { transition: transform 300ms var(--nl-curva), background-color 300ms var(--nl-curva); }
+  #tab-panel-retirada-entrega .nlt-seta { transition: transform 200ms var(--nl-curva); }
+  #tab-panel-retirada-entrega .nlt-etapa { transition: border-color 200ms var(--nl-curva); }
+  #tab-panel-retirada-entrega :is(.ck-btn, .nlt-selo, .nlt-chip, .nlt-passos3 > li, .nlt-num) { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), color 200ms var(--nl-curva), filter 200ms var(--nl-curva); }
+}
+/* ===== fim F2 Transporte ===== */

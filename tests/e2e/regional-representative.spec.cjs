@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 // Uses the in-memory /api/config/representantes-regionais endpoints of tests/support/serve_ui_motion_preview.py.
 test.beforeEach(async ({ request }) => {
@@ -14,6 +15,8 @@ async function openTransferTab(page) {
     await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   }
   await page.locator("#tab-retirada-entrega").click();
+  // Retirada e Entrega são cartões recolhíveis: os seletores de representante só aceitam ação com a etapa aberta.
+  await abrirEtapaTransporte(page, 2, 3);
 }
 
 test("edits, validates and restores a regional representative from the transfer tab", async ({ page }) => {

@@ -99,7 +99,7 @@ test("copy serial action uses the currently selected equipment serial", async ()
 test("transfer tab shows the selected serial with its copy action in the upper field", () => {
   const bannerStart = appHtml.indexOf('id="transfer-equipment-banner"');
   const copyButtonStart = appHtml.indexOf('id="btn-copiar-serie"');
-  const quickActionsStart = appHtml.indexOf('<aside aria-label="Painel de Ações Rápidas"');
+  const quickActionsStart = appHtml.indexOf('aria-label="Painel de Ações Rápidas"');
   assert.ok(bannerStart >= 0 && copyButtonStart > bannerStart && copyButtonStart < quickActionsStart);
   assert.equal((appHtml.match(/id="btn-copiar-serie"/g) || []).length, 1);
 
@@ -128,8 +128,9 @@ test("the empty transfer banner offers a real button that opens Home and focuses
   const ckCss = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "..", "static", "styles", "ck-cockpit.css"), "utf8");
   assert.match(ckCss, /\.ck-selecionado\[data-state="empty"\] \[data-show="selected"\]/);
   assert.match(ckCss, /\.ck-selecionado\[data-state="selected"\] \[data-show="empty"\] \{ display: none; \}/);
-  const banner = appHtml.slice(appHtml.indexOf('id="transfer-equipment-banner"'), appHtml.indexOf('class="ck-passos"'));
-  assert.match(banner, /id="btn-historico-transferencias"/);
+  // "Transferências geradas" mora no cabeçalho da tela, antes do banner do equipamento (etapa 1).
+  const cabecalho = appHtml.slice(appHtml.indexOf('id="ck-transp"'), appHtml.indexOf('id="transfer-equipment-banner"'));
+  assert.match(cabecalho, /id="btn-historico-transferencias"/);
 
   const harness = createAppHarness(async () => {
     throw new Error("Opening the search must not call the API");
