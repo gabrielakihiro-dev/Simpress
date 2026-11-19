@@ -189,6 +189,14 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
 .nl-campo__inp:focus { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
 .nl-campo[data-erro] .nl-campo__inp { border-color: rgb(var(--nl-r)); }
 .nl-campo__erro { color: var(--nl-rtx); font-size: 12px; }
+/* Marcação antiga (campo antes do rótulo, ex.: F2 em frontend/partials/transporte.html): mantém o rótulo flutuante
+   aprovado nessas telas; o rótulo fixo acima vale para o CampoNl, que põe o rótulo primeiro. */
+.nl-campo:has(> .nl-campo__inp:first-child) { position: relative; gap: 4px; }
+.nl-campo:has(> .nl-campo__inp:first-child) > .nl-campo__inp { height: 48px; padding: 20px 14px 6px; }
+.nl-campo:has(> .nl-campo__inp:first-child) > textarea.nl-campo__inp { height: 92px; min-height: 0; padding-top: 24px; padding-bottom: 6px; }
+.nl-campo:has(> .nl-campo__inp:first-child) > select.nl-campo__inp { padding-right: 36px; }
+.nl-campo:has(> .nl-campo__inp:first-child) > .nl-campo__rot { position: absolute; top: 14px; left: 15px; font-size: 14px; font-weight: inherit; line-height: inherit; pointer-events: none; transform-origin: left top; }
+.nl-campo__inp:is(:focus, :not(:placeholder-shown)) + .nl-campo__rot, select.nl-campo__inp + .nl-campo__rot { transform: translateY(-8px) scale(.79); }
 
 /* ---------- 4. Alvo de toque mínimo de 32px no celular (área invisível; o desenho não muda) ---------- */
 @media (max-width: 767.98px), (pointer: coarse) {
@@ -293,6 +301,7 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
   .nl-av { transition: margin-left 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
   .nl-av:hover { transform: translateY(-2px); }
   .nl-av::after { transition: opacity 150ms var(--nl-curva); }
+  .nl-campo__rot { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
   .nl-campo__inp { transition: border-color 200ms var(--nl-curva); }
   @media (max-width: 767.98px) { .nl-folha { animation-name: nl-folha-sobe; } }
 }
