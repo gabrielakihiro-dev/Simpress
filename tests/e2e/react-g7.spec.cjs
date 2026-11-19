@@ -3,6 +3,7 @@
 // para React: os painéis em React têm de enviar exatamente os mesmos pedidos e sair iguais nos dois tamanhos
 // (390 e 1366 px) e nos dois temas. Todas as rotas são simuladas: nenhum teste toca no UX, no Outlook nem no modelo.
 const { test, expect } = require("@playwright/test");
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 const CAPTURA = { animations: "disabled", maxDiffPixelRatio: 0.01 };
 
@@ -107,6 +108,7 @@ async function abrirTicket(page, ticket = padraoTicket) {
     "retirada-obs": "Notebook + kit", "entrega-contato": "Maria Teste", "entrega-email": "entrega@exemplo.com",
     "entrega-telefone": "(41) 3333-0000", "entrega-obs": "Nova contratação",
   };
+  await abrirEtapaTransporte(page, 2, 3);
   for (const [id, valor] of Object.entries(campos)) await page.locator(`#${id}`).fill(valor);
   const download = page.waitForEvent("download");
   await page.locator("#btn-gerar-planilha").click();
@@ -532,6 +534,7 @@ async function telaTicket(page, ticket, { unidade = UNIDADE, padrao = SOLICITANT
     "retirada-obs": "Notebook + kit", "entrega-contato": "Maria Teste", "entrega-email": "entrega@exemplo.com",
     "entrega-telefone": "(41) 3333-0000", "entrega-obs": "Nova contratação",
   };
+  await abrirEtapaTransporte(page, 2, 3);
   for (const [id, valor] of Object.entries(campos)) await page.locator(`#${id}`).fill(valor);
   return chamadas;
 }

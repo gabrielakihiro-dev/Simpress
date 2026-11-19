@@ -1,6 +1,7 @@
 import type { EstadoApp } from "../../estado-app";
 import type { Unidade } from "../unidades/estado";
 import type { ApiFetchOptions } from "../../api";
+import { criarEtapasTransporte } from "./etapas.ts";
 
 type TipoDadoLocal = "cep" | "faturamento" | "instalacao";
 type TipoDadoEntrega = "faturamento" | "instalacao";
@@ -124,6 +125,16 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
   }
   const AVISO_CNPJ_FATURAMENTO_VAZIO = "Configure os dados do cliente antes de copiar o CNPJ de faturamento.";
   const transferDraftTracker = context.draftTracker;
+  // Novo layout (etapas, checklist, iniciais): só apresentação, lê os mesmos dados do formulário.
+  // Fica aqui em cima porque a pré-visualização roda já na criação do formulário.
+  const etapas = criarEtapasTransporte({
+    serial: () => String(appState.currentEquipamento?.serial || "").trim().toUpperCase(),
+    modelo: () => String(appState.currentEquipamento?.modelo || "").trim(),
+    apelido: () => String(appState.currentEquipamento?.apelido || "").trim(),
+    cidadeRetirada: () => String(appState.retiradaCidadeSelecionada || "").trim(),
+    cidadeEntrega: () => String(elemento("entrega-local-nome")?.textContent || "").trim(),
+    contrato: () => String(dadosCliente().contrato || "").trim(),
+  });
 
   function atualizarResumoSerieTransferencia(equipment: EquipamentoTransporte | null | undefined): void {
     const banner = elemento("transfer-equipment-banner");
@@ -154,6 +165,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
         : "Nenhum equipamento selecionado.";
     }
     emitirEventoInterface("simpress:transporte-equipamento", { serial });
+    etapas.aoMudarEquipamento(serial);
   }
 
   // "Trocar equipamento": volta à Home com o campo de busca em foco, sem descartar a transferência.
@@ -323,6 +335,8 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     } else {
       textarea.value = texto;
     }
+    // Preenchimento por código não dispara "input": atualiza a prévia e a lista de pendências.
+    atualizarPreviaTransporteCockpit();
   }
 
   // Cobertura: só preenche o Transporte; quem gera a planilha é sempre o operador (nunca clica em Transporte, o antigo Gerar planilha).
@@ -474,6 +488,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     const entregaContato = elemento("entrega-contato").value.trim();
     if (!entregaContato) {
       app.showToast("Preencha o campo obrigatório “Nome do destinatário”.", "warning");
+      etapas.abrirDoCampo("entrega-contato");
       elemento("entrega-contato").focus();
       return null;
     }
@@ -485,6 +500,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     );
     if (!entregaCnpj || !entregaEndereco) {
       app.showToast("Selecione uma unidade de destino para preencher automaticamente o CNPJ e o endereço de entrega.", "warning");
+      etapas.abrirDoCampo("select-unidade-destino");
       elemento("select-unidade-destino").focus();
       return null;
     }
@@ -636,6 +652,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
       state.dataset.estado = equipamento && unidade?.value ? "pronto" : "vazio";
       state.dataset.status = equipamento ? (unidade?.value ? "ok" : "alerta") : "neutro";
     }
+    etapas.sincronizar({ preenchidos: filled, total: required.length });
   }
 
   const transportPreviewRoot = document.querySelector<HTMLElement>(".ck-transp");
@@ -645,6 +662,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     transportPreviewRoot.addEventListener("change", atualizarPreviaTransporteCockpit);
     atualizarPreviaTransporteCockpit();
   }
+  etapas.iniciar();
 
   // Modal Preview Handlers
   function abrirModalPreview() {
@@ -849,6 +867,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     if (campoVazio) {
       const input = elemento(campoVazio.id);
       app.showToast(`Preencha o campo obrigatório “${campoVazio.nome}” para gerar a planilha oficial.`, "warning");
+      etapas.abrirDoCampo(campoVazio.id);
       input.focus();
       input.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
@@ -862,6 +881,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
       }
       email.setAttribute("aria-invalid", "true");
       app.showToast("Corrija o formato do endereço de e-mail antes de gerar a planilha.", "warning");
+      etapas.abrirDoCampo(id);
       email.focus();
       email.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
@@ -923,6 +943,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
       app.showToast("Planilha Exportada com Sucesso!", "success");
       const movimentacao = movimentacaoDaPlanilha(payload);
       emitirEventoInterface("simpress:transfer-generated", movimentacao ? { payload, movimentacao } : { payload });
+      etapas.marcarGerado();
 
     } catch (err) {
       console.error("Erro ao gerar planilha:", err);
@@ -983,6 +1004,7 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     ativarAbaTransferencia("home");
     elemento("input-serial").focus();
     emitirEventoInterface("simpress:form-reset");
+    etapas.reiniciar();
   }
 
   // Optional hook for progressive enhancements; never affects the main flow.
