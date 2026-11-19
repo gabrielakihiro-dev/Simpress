@@ -1034,6 +1034,11 @@ export interface Rotas {
     corpo: ContasPayload;
     resposta: unknown;
   };
+  "GET /api/config/local/endpoint/{tela}": {
+    consulta: never;
+    corpo: never;
+    resposta: unknown;
+  };
   "GET /api/config/representantes-regionais": {
     consulta: never;
     corpo: never;
@@ -1469,7 +1474,17 @@ export interface Rotas {
     corpo: ObservacaoPayload;
     resposta: unknown;
   };
+  "PUT /api/sebrae/chamados/{numero}/os-manter": {
+    consulta: never;
+    corpo: OsRecusadaPayload;
+    resposta: unknown;
+  };
   "PUT /api/sebrae/chamados/{numero}/os-recusada": {
+    consulta: never;
+    corpo: OsRecusadaPayload;
+    resposta: unknown;
+  };
+  "PUT /api/sebrae/chamados/{numero}/os-remover": {
     consulta: never;
     corpo: OsRecusadaPayload;
     resposta: unknown;

@@ -29,8 +29,24 @@ export const POLL_LIVRE_MS = 5000;
 export const MAX_LINHAS = 500;
 export const MAX_EVENTOS = 200;
 
-// Rotinas com selo "última execução" nos cartões da aba.
-export const ROTINAS_DOS_CARTOES: readonly string[] = ["os", "inventarios", "ambas", "usuarios"];
+// Rotinas com selo "última execução" nos cartões da aba (dashboard e sebrae alimentam a trilha SharePoint / SoftExpert).
+export const ROTINAS_DOS_CARTOES: readonly string[] = ["os", "inventarios", "ambas", "usuarios", "dashboard", "sebrae"];
+
+// Abas do seletor de rotinas e a aba de cada rotina (login não tem aba).
+export const ABAS_ROTINA: readonly { id: string; nome: string }[] = [
+  { id: "sharepoint", nome: "SharePoint" },
+  { id: "softexpert", nome: "SoftExpert" },
+  { id: "completa", nome: "Rotina Completa" },
+  { id: "inventarios", nome: "Inventários" },
+];
+export const ABA_PADRAO = "softexpert";
+// "dashboard" parte do cartão do SoftExpert: abrir a aba SharePoint esconderia o botão e o andamento dela.
+const ABA_DA_ROTINA: Readonly<Record<string, string>> = Object.freeze({
+  dashboard: "softexpert", sebrae: "softexpert", os: "completa", usuarios: "completa", ambas: "completa", inventarios: "inventarios",
+});
+export const abaDaRotina = (rotina: string | undefined): string => (rotina ? ABA_DA_ROTINA[rotina] || "" : "");
+// A mais recente de duas execuções (a trilha do SoftExpert mostra a última entre "sebrae" e "dashboard").
+export const execucaoMaisRecente = (a: Execucao | null | undefined, b: Execucao | null | undefined): Execucao | null => (!a ? (b ?? null) : (!b ? a : ((a.inicio ?? "") >= (b.inicio ?? "") ? a : b)));
 
 export const ICONE_STATUS: Readonly<Record<string, string>> = Object.freeze({
   ok: "i-ok", erro: "i-erro", alerta: "i-alerta", info: "i-loader", "": "i-neutro",
@@ -329,4 +345,20 @@ export function verBackupsDepois(
 // Vale também para falha ou cancelamento: um lote já em pendentes pode ter sido importado, e recarregar não grava nada.
 export function osImportadaAoTerminar(e: { emAndamento: boolean; estavaAtivo: boolean; rotinaAnterior: string }): boolean {
   return e.estavaAtivo && !e.emAndamento && ["os", "ambas"].includes(e.rotinaAnterior);
+}
+
+// Etapa da trilha: concluída em qualquer dia conta como ok; o resto vem de situacaoDoSelo.
+export function situacaoDaEtapa(ativo: boolean, ultima: Execucao | null | undefined, agora: Date = new Date()): Selo {
+  const selo = situacaoDoSelo(ativo, ultima, agora);
+  return !ativo && ultima?.status === "concluido" && selo.status === "" ? { status: "ok", texto: `Concluído ${selo.texto.toLocaleLowerCase("pt-BR")}` } : selo;
+}
+
+// Percentual da rotina para a barra de etapas: o último "NN%" do log ao vivo; concluída vale 100; sem leitura, 0.
+export function percentualDaRotina(ativo: boolean, ultima: Execucao | null | undefined, linhas: readonly string[]): number {
+  if (!ativo) return ultima?.status === "concluido" ? 100 : 0;
+  for (let i = linhas.length - 1; i >= 0; i--) {
+    const achado = linhas[i].match(/(?:^|\s)(\d{1,3})%(?=\s|$)/);
+    if (achado) return Math.min(100, Number(achado[1]));
+  }
+  return 0;
 }

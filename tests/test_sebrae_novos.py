@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from domains import sebrae_cruzamento, sebrae_novos as novos
@@ -396,3 +397,33 @@ class MapearChavesDeLinhaTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OsRelacionadaNaChegadaTest(unittest.TestCase):
+    """E só recebe a OS da série relacionada ao chamado (regra de 18/11/2026); sem OS relacionada a E fica vazia."""
+
+    @staticmethod
+    def relatorio(data, assunto="Corretiva Mobile"):
+        return {"chamados": [{"serie": "ABC123", "oracle": [{"ordem_servico": "7365311", "assunto": assunto, "descricao": "Kit de teclado", "data_criacao": data}]}]}
+
+    def test_chamado_novo_nao_leva_a_os_anterior_de_outro_assunto_mas_leva_a_do_dia(self):
+        self.assertEqual(novos.formulario([CHAMADO], REGISTROS, self.relatorio("2026-10-20T10:00:00"))[0]["linha"]["E"], "")
+        self.assertEqual(novos.formulario([CHAMADO], REGISTROS, self.relatorio("2026-10-26T08:00:00"))[0]["linha"]["E"], "7365311")
+        parecido = novos.formulario([replace(CHAMADO, descricao="")], REGISTROS, self.relatorio("2026-10-20T10:00:00", "Travando"))
+        self.assertEqual(parecido[0]["linha"]["E"], "7365311")  # anterior, mas com assunto parecido
+
+    def test_antigo_usa_a_abertura_e_a_recusa_do_chamado(self):
+        item = {"numero": "UTIC-2026-1378", "titulo": "Travando", "usuario": "Camila Lopes", "abertura": "26/10/2026 17:25",
+                "automaticos": {"E": "", "K": "ABC123", "L": "Dell", "N": "Curitiba"}}
+        anterior = self.relatorio("2026-10-20T10:00:00")
+        self.assertEqual(novos.preenchimentos([item], REGISTROS, anterior), {})
+        self.assertEqual(novos.preenchimentos([{**item, "abertura": "20/10/2026 09:00"}], REGISTROS, anterior), {"UTIC-2026-1378": {"E": "7365311"}})
+        self.assertEqual(novos.preenchimentos([{**item, "abertura": ""}], REGISTROS, anterior), {"UTIC-2026-1378": {"E": "7365311"}})  # sem data: não adivinha
+        recusada = {"UTIC-2026-1378": ["7365311"]}
+        self.assertEqual(novos.preenchimentos([{**item, "abertura": ""}], REGISTROS, anterior, recusadas=recusada), {})
+
+    def test_abertura_do_antigo_vem_da_planilha_e_so_na_falta_dela_do_softexpert(self):
+        lido = {"UTIC-2026-1": {"titulo": "T", "descricao": "D", "solicitante": "S", "habilitada_em": "26/10/2026, 17:25:23"}}
+        sem_p = {"numero": "UTIC-2026-1", "descricao": "D", "usuario": "S"}
+        self.assertEqual(novos.complementar_antigos([sem_p], lido)[0]["abertura"], "26/10/2026, 17:25:23")
+        self.assertEqual(novos.complementar_antigos([{**sem_p, "abertura": "25/10/2026 08:00"}], lido)[0]["abertura"], "25/10/2026 08:00")
