@@ -133,7 +133,8 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     apelido: () => String(appState.currentEquipamento?.apelido || "").trim(),
     cidadeRetirada: () => String(appState.retiradaCidadeSelecionada || "").trim(),
     cidadeEntrega: () => String(elemento("entrega-local-nome")?.textContent || "").trim(),
-    contrato: () => String(dadosCliente().contrato || "").trim(),
+    // Antes de o painel de contatos montar, a ponte síncrona registra erro no console: até lá o contrato conta como faltando.
+    contrato: () => (window.SimpressReact?.["contatos-regionais"] ? String(dadosCliente().contrato || "").trim() : ""),
   });
 
   function atualizarResumoSerieTransferencia(equipment: EquipamentoTransporte | null | undefined): void {
