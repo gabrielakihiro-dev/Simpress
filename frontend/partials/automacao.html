@@ -9,7 +9,7 @@
 
       <section aria-labelledby="ck-rotinas-titulo" data-automacao-regiao="rotinas"></section>
 
-      <section class="ck-cartao" id="sebrae-novos-painel" aria-labelledby="sebrae-novos-titulo">
+      <section class="ck-cartao" id="sebrae-novos-painel" role="tabpanel" aria-labelledby="tab-rotina-softexpert sebrae-novos-titulo">
         <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span><span class="ck-espaco"></span><span class="sebrae-agenda-selos"><span class="ck-badge" data-status="ok" data-agendamento="ligado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Agendamento ligado</span></span><span class="ck-badge" data-agendamento="desligado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Agendamento desligado</span></span></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span></button></div>
         <div class="ck-cartao__corpo ck-det__corpo">
           <form class="sebrae-importar" data-on-submit="importarDashboardSebrae">
