@@ -10,7 +10,7 @@ from unittest import mock
 
 from core.errors import DomainBusyError, DomainValidationError
 from domains import sebrae_os_recusadas as recusadas_store
-from domains.sebrae_os_nova import os_novas, trocas_e
+from domains.sebrae_os_nova import limpar_e, os_da_chegada, os_novas, trocas_e
 
 
 def oracle(os_, assunto="", descricao="", data="2026-11-01T10:00:00"):
@@ -28,8 +28,8 @@ def aberto(numero="UTIC-2026-0094", K="SER1", E="", titulo="Notebook lento", des
     return {"numero": numero, "titulo": titulo, "descricao": descricao, "usuario": usuario, "automaticos": {"K": K, "E": E}}
 
 
-def calcular(abertos, chamados, vinculos=(), recusadas=None, registros=(), indice=None):
-    return os_novas(abertos, {"chamados": chamados}, list(vinculos), recusadas or {}, list(registros), indice)
+def calcular(abertos, chamados, vinculos=(), recusadas=None, registros=(), indice=None, mantidas=None):
+    return os_novas(abertos, {"chamados": chamados}, list(vinculos), recusadas or {}, list(registros), indice, mantidas)
 
 
 class CasoEPreenchidaTest(unittest.TestCase):
@@ -382,3 +382,110 @@ class RecusadasTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OsRelacionadaTest(unittest.TestCase):
+    """Regra de 18/11/2026: a OS da série só vale para o chamado se o cita, nasceu no dia da abertura ou depois, ou tem assunto parecido."""
+
+    CHAMADO = "UTIC-2026-2000"
+    ABERTURA = "17/11/2026 09:00"
+    TITULO = "Vistoria completa na minha máquina"
+
+    def chegada(self, chamados, abertura=ABERTURA, recusadas=()):
+        return os_da_chegada({"chamados": chamados}, "SER1", None, self.CHAMADO, abertura, self.TITULO, recusadas)
+
+    def antiga(self, assunto="Corretiva Mobile", descricao="Kit de teclado e mouse", data="2026-11-13T10:00:00"):
+        return [linha("SER1", oracle_=[oracle("7365311", assunto, descricao, data)])]
+
+    def test_os_anterior_com_outro_assunto_nao_preenche_e_so_o_nome_da_pessoa_nao_basta(self):
+        self.assertEqual(self.chegada(self.antiga()), "")
+        self.assertEqual(self.chegada(self.antiga(descricao="Kit de teclado e mouse da Maria Silva")), "")
+
+    def test_os_anterior_com_assunto_parecido_preenche(self):
+        self.assertEqual(self.chegada(self.antiga("Vistoria completa da máquina")), "7365311")
+
+    def test_os_do_dia_da_abertura_ou_posterior_preenche(self):
+        self.assertEqual(self.chegada(self.antiga(data="2026-11-17T08:00:00")), "7365311")
+        self.assertEqual(self.chegada(self.antiga(data="2026-11-18T08:00:00")), "7365311")
+
+    def test_os_que_cita_o_chamado_preenche_mesmo_anterior(self):
+        self.assertEqual(self.chegada(self.antiga("Ref UTIC-2026-2000")), "7365311")
+
+    def test_sem_data_na_os_ou_na_abertura_preenche(self):
+        self.assertEqual(self.chegada([linha("SER1", simpress=["500"])]), "500")
+        self.assertEqual(self.chegada(self.antiga(), abertura=""), "7365311")
+
+    def test_pega_a_mais_nova_relacionada_e_pula_a_recusada(self):
+        chamados = [linha("SER1", oracle_=[
+            oracle("100", "Vistoria completa", "", "2026-11-10T10:00:00"), oracle("200", "Corretiva Mobile", "", "2026-11-13T10:00:00"),
+            oracle("300", "Vistoria completa da máquina", "", "2026-11-12T10:00:00"),
+        ])]
+        self.assertEqual(self.chegada(chamados), "300")  # a 200 é mais nova mas não tem relação
+        self.assertEqual(self.chegada(chamados, recusadas=["300"]), "100")
+
+    def sem_relacao(self, **extra):
+        return calcular([{**aberto(self.CHAMADO, E="7365311", titulo=self.TITULO), "abertura": self.ABERTURA}], self.antiga(), **extra)
+
+    def test_e_ja_preenchida_sem_relacao_vira_sem_relacao_com_a_os_atual_e_os_sinais(self):
+        self.assertEqual(self.sem_relacao(), {self.CHAMADO: {
+            "tipo": "sem_relacao",
+            "atual": {"os": "7365311", "assunto": "Corretiva Mobile", "descricao": "Kit de teclado e mouse", "data": "13/11/2026"},
+            "sinais": {"assunto": False, "numero_chamado": False, "data_anterior": True},
+        }})
+
+    def test_manter_recusar_e_vinculo_manual_calam_o_sem_relacao(self):
+        self.assertEqual(self.sem_relacao(mantidas={self.CHAMADO: ["7365311"]}), {})
+        self.assertEqual(self.sem_relacao(recusadas={self.CHAMADO: ["7365311"]}), {})
+        vinculo = {"fonte": "oracle", "serie": "SER1", "os": "7365311", "ano": 2026, "numero": "2000", "chamado": self.CHAMADO, "origem": "manual"}
+        self.assertEqual(self.sem_relacao(vinculos=[vinculo]), {})
+        self.assertEqual(self.sem_relacao(mantidas={"UTIC-2026-0001": ["7365311"]})[self.CHAMADO]["tipo"], "sem_relacao")  # Manter vale só para o chamado dele
+
+    def test_troca_ou_sugestao_de_os_mais_nova_tem_prioridade_sobre_o_sem_relacao(self):
+        chamados = [linha("SER1", oracle_=[oracle("7365311", "Corretiva Mobile", "", "2026-11-13T10:00:00"), oracle("7365400", "UTIC-2026-2000", "", "2026-11-17T10:00:00")])]
+        resultado = calcular([{**aberto(self.CHAMADO, E="7365311", titulo=self.TITULO), "abertura": self.ABERTURA}], chamados)
+        self.assertEqual((resultado[self.CHAMADO]["tipo"], resultado[self.CHAMADO]["nova"]["os"]), ("troca", "7365400"))
+
+
+class LimparETest(unittest.TestCase):
+    ABERTOS = [aberto("UTIC-2026-2000", E="7365311"), aberto("UTIC-2026-2001", E="7365312"), aberto("UTIC-2026-2002", E="")]
+
+    def test_limpa_so_a_e_que_ainda_e_a_os_removida(self):
+        removidas = {"UTIC-2026-2000": ["7365311"], "UTIC-2026-2001": ["999"], "UTIC-2026-2002": ["7365313"]}
+        self.assertEqual(limpar_e(self.ABERTOS, removidas, [], {}), {"UTIC-2026-2000": "7365311"})
+
+    def test_vinculo_manual_e_troca_na_mesma_gravacao_vencem_a_remocao(self):
+        removidas = {"UTIC-2026-2000": ["7365311"]}
+        vinculo = {"fonte": "oracle", "serie": "SER1", "os": "7365311", "ano": 2026, "numero": "2000", "chamado": "UTIC-2026-2000", "origem": "manual"}
+        self.assertEqual(limpar_e(self.ABERTOS, removidas, [vinculo], {}), {})
+        self.assertEqual(limpar_e(self.ABERTOS, removidas, [], {"UTIC-2026-2000": "7365400"}), {})
+
+
+class ManterERemoverTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.pasta = Path(self._tmp.name)
+
+    def arquivo(self):
+        return json.loads((self.pasta / "sebrae_os_recusadas.json").read_text(encoding="utf-8"))
+
+    def test_manter_grava_so_em_mantidas_e_nao_recusa(self):
+        self.assertEqual(recusadas_store.manter(self.pasta, "utic-2026-2000", "7365311"), {"numero": "UTIC-2026-2000", "os": "7365311"})
+        self.assertEqual(recusadas_store.mantidas(self.pasta), {"UTIC-2026-2000": ["7365311"]})
+        self.assertEqual((recusadas_store.ler(self.pasta), recusadas_store.removidas(self.pasta)), ({}, {}))
+
+    def test_remover_recusa_e_marca_a_remocao_sem_duplicar_e_preserva_as_outras_chaves(self):
+        recusadas_store.manter(self.pasta, "UTIC-2026-2001", "5")
+        recusadas_store.remover(self.pasta, "UTIC-2026-2000", "7365311")
+        recusadas_store.remover(self.pasta, "UTIC-2026-2000", "7365311")
+        recusadas_store.recusar(self.pasta, "UTIC-2026-2000", "8")
+        self.assertEqual(self.arquivo(), {
+            "version": 1, "recusadas": {"UTIC-2026-2000": ["7365311", "8"]},
+            "mantidas": {"UTIC-2026-2001": ["5"]}, "removidas": {"UTIC-2026-2000": ["7365311"]},
+        })
+
+    def test_entrada_invalida_e_recusada_como_na_recusa(self):
+        with self.assertRaises(DomainValidationError):
+            recusadas_store.remover(self.pasta, "chamado-qualquer", "100")
+        with self.assertRaises(DomainValidationError):
+            recusadas_store.manter(self.pasta, "UTIC-2026-2000", "os com espaço!")

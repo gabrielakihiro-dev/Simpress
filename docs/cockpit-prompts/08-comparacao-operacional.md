@@ -72,7 +72,20 @@ Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover 
 
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
-`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos.
+`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos. Nota (18/11/2026, pedido do usuário): o histórico e a comparação carregam uma vez; ver "Carregar uma vez (18/11/2026)".
+
+### Carregar uma vez (18/11/2026)
+
+Pedido do usuário: o Resumo (F3) demorava a cada abertura, porque refazia `GET /api/historico-comparacoes`, o detalhe da comparação e `/api/painel`. Agora a primeira abertura carrega (pode demorar). Fechar e voltar mantém a tela já montada, sem pedido de rede; a sub-aba volta a `Divergências` (ou a do botão que abriu, como `sem-acesso`). Só front-end (`frontend/src/paineis/ferramentas-cockpit/estado.ts`); sem endpoint, texto nem dado gravado novo.
+
+Recarrega na próxima abertura quando:
+- o inventário foi trocado ou restaurado (`invalidarSemUsuarioResumo` dispara `simpress:resumo-desatualizado`);
+- o usuário de um equipamento foi editado (`simpress:usuarios-equipamento-atualizados`, muda o "Sem usuário") ou OS foram importadas (`simpress:chamados-atualizados`);
+- o painel (`simpress:painel-atualizado`) chega com outra comparação, outra `ultima_atualizacao` ou outro `arquivo_origem`; o mesmo painel a cada 5 min não recarrega;
+- outra tela pede um resultado novo (`pendingFreshComparison`), uma série (`abrirComparacaoDaSerie`) ou outra comparação;
+- a última carga falhou ou foi abandonada (trocar de aba antes de terminar).
+
+Testes: `tests/frontend/test_cockpit_tool_panels.cjs` ("Resumo (F3) carrega uma vez…" e "…com falha na carga tenta de novo ao voltar").
 
 ## Redesenho visual da aba Comparação (F7, 02/11/2026)
 
@@ -163,7 +176,7 @@ Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.m
 
 - `tituloSecaoComparacao(titulo, tom, idSecao, descricao)` (`frontend/src/paineis/resultado-comparacao/renderizador.ts`): com `descricao`, envolve o `h4` e o ⓘ em `div.info-tip-ancora.flex.items-center.gap-1`. O ⓘ usa `info-tip--bloco` (`infoTipHtml(..., { bloco: true })`): o balão fica preso à linha do título e, mesmo escondido, não cria rolagem horizontal no painel a 641-700px. O `id` e o `tabindex="-1"` continuam no `h4` (é o alvo de `irParaSecaoComparacao`); o ⓘ vem depois, com `aria-label="Sobre <título>"` e `id` automático `tip-auto-<n>`.
 - Seções com ⓘ: `Anotações sincronizadas`, `Sem usuário` (só com a lista carregada; no estado de erro a seção mostra só o título e o aviso), `Mudanças de usuário logado`, `Equipamentos sem correspondência por fonte`, `Localidade divergente`, `Duplicidades e correspondências ambíguas`, `Séries sem local definido`, `Linhas mantidas para conferência`, `Divergências com apelidos alterados manualmente`, `Apelidos/hostnames atualizados — no endpoint` (inclui "Informativo: não entra na contagem da aba.") e, no `Sem acesso`, `Sem acesso há 7 dias ou mais` e `Passou de 60 dias sem acesso (n)`.
-- Continuam visíveis (dado, status ou link): `Atualização usada como referência: <data>` e o link `Endpoint Central (Computadores)` em `Sem acesso há 7 dias ou mais`, o link `Endpoint Central (Staged computers)` em `Passou de 60 dias sem acesso`, a contagem `Novos no Endpoint · Alterados · …` das mudanças de usuário, os avisos `notice` (clone, histórico, anotações herdadas, lista ausente), os estados vazios (`Nenhuma divergência neste resultado.` etc.) e `#comparacao-planilhas-fontes`.
+- Continuam visíveis (dado, status ou link): `Atualização usada como referência: <data>` e o link `Endpoint Central (Computadores)` em `Sem acesso há 7 dias ou mais`, o link `Endpoint Central (Staged computers)` em `Passou de 60 dias sem acesso` (os dois abrem `GET /api/config/local/endpoint/{tela}`, que leva ao host do link do Endpoint da Configuração local), a contagem `Novos no Endpoint · Alterados · …` das mudanças de usuário, os avisos `notice` (clone, histórico, anotações herdadas, lista ausente), os estados vazios (`Nenhuma divergência neste resultado.` etc.) e `#comparacao-planilhas-fontes`.
 - `p.comparison-table-scroll-hint` ("Role a tabela horizontalmente para consultar todas as colunas.") foi apagado, junto com as regras de CSS `.comparison-table-scroll-hint` (`static/app.css`, `static/styles/ux-refinements.css`). A rolagem segue funcionando (`overflow-x: auto`) e a sombra da borda (`data-ux-overflow`) avisa que há mais colunas.
 - Em `#comparacao-planilhas-conteudo` o botão do ⓘ usa `min-height: 0` (`static/styles/ck-cockpit.css`), porque herda `min-height: 2.5rem` de `app.css` e esticaria a linha do título; a linha passa de ~20px para 24px (o tamanho do próprio ⓘ).
 - Testes: `tests/frontend/test_inventory_transfer_copy.cjs` (sem a asserção da dica de rolagem, que foi a única apagada de propósito), `tests/e2e/info-tips-resumo.spec.cjs` (texto escondido até mouse, toque ou foco; foco + `Esc` fecha só o balão; sem `.comparison-table-scroll-hint`; a 641 e 700px, `Divergências` e `Apelidos` sem rolagem horizontal e com o balão inteiro na janela). Capturas antes e depois (1366 e 390px, claro e escuro): `.claude/prints/limpeza-textos/bloco2/`, ignoradas pelo Git.
