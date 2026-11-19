@@ -448,7 +448,7 @@ test.describe("Histórico de planilhas", () => {
     await cartao(page, "25/10/2026, 10:00:00").getByRole("button", { name: "Consultar resultado" }).click();
     await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
     await expect(page.locator(MODAL)).toBeHidden();
-    await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveAttribute("data-history-date", "2026-10-25");
+    await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveCount(0);
     expect(servidor.chamadas.some(chamada => chamada.metodo === "GET" && chamada.caminho === "/api/historico-comparacoes/g9-hoje-atualizacao")).toBe(true);
   });
 

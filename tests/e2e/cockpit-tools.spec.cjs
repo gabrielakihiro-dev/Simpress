@@ -84,7 +84,6 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(row).toContainText("LENTO");
   await expect(result).toContainText("Localidade divergente");
   await expect(result.locator("[data-history-filter-bar]")).toBeVisible();
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   // Novo layout (18/11/2026): o texto das fontes saiu do Resumo; o elemento fica oculto e vazio.
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
   await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText("");
@@ -92,7 +91,6 @@ test("comparison tab shows the full result and survives an empty history refresh
   // Sem mudança, voltar ao Resumo reaproveita a tela; inventário trocado/restaurado força a recarga.
   await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:resumo-desatualizado")));
   await openTool(page, "#btn-resumo-aba");
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(result).not.toContainText("LENTO");
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
 });
@@ -110,7 +108,6 @@ test("comparison tab without a saved comparison still lists the notebooks withou
   await expect(result).toContainText("Não há comparação de inventários disponível neste histórico.");
   await expect(result.locator("#comparacao-secao-sem-usuario")).toHaveText("Sem usuário");
   await expect(result.locator('[data-comparison-category="sem_usuario"][data-comparison-serial="NOTE-SEM-USUARIO"]:visible').first()).toContainText("PRNOTEDEMO02");
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
 });
 
 test("each tool is accessible in both themes and remains reachable below 1200px", async ({ page }, testInfo) => {
@@ -187,7 +184,7 @@ test("comparison skips restoration and synchronized-note entries and uses the En
   const result = page.locator("#comparacao-planilhas-conteudo");
   await page.locator("#resumo-aba-divergencias").click();
   await expect(result.locator('[data-comparison-category="ausentes_em_detalhes"][data-comparison-serial="SN-ENDPOINT"]:visible').first()).toContainText("Curitiba");
-  await expect(page.getByRole("button", { name: "Exportar este resultado para Excel" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Exportar este resultado para Excel" })).toHaveCount(0);
 });
 
 test("a failed comparison switch cannot export the previously displayed event", async ({ page }) => {
@@ -200,15 +197,12 @@ test("a failed comparison switch cannot export the previously displayed event", 
   });
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("LENTO");
   await page.locator("#cockpit-comparison-event").selectOption("failed");
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(page.locator("#comparacao-planilhas-conteudo")).not.toContainText("LENTO");
   await expect.poll(() => typeof release).toBe("function");
   release();
   await expect(page.locator("#cockpit-comparison-status")).toContainText("Não foi possível abrir a versão.");
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(page.locator("#comparacao-planilhas-conteudo")).not.toContainText("LENTO");
 });
 
@@ -315,19 +309,27 @@ test("o item Chamados do menu Ferramentas abre o painel e volta com Esc", async 
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 });
 
-test("abas principais mostram o atalho F1-F6 sem mudar o rótulo nem o nome acessível", async ({ page }) => {
+test("abas principais mostram o atalho F1-F6 no hover sem mudar o rótulo nem o nome acessível", async ({ page }) => {
   await page.goto("/");
   const abas = [["#tab-home", "Home", "F1"], ["#tab-retirada-entrega", "Transporte", "F2"], ["#btn-resumo-aba", "Resumo", "F3"],
     ["#tab-automacao", "Automação", "F4"], ["#btn-sebrae-chamados-aba", "Chamados", "F5"], ["#btn-acompanhamento-chamados", "OS", "F6"]];
-  const larguraComAtalho = page.viewportSize().width >= 1290;
+  // Opção C (canvas v49): a partir de 1200px o atalho fica escondido e aparece embaixo da aba no hover; abaixo disso, só ícones e sem atalho.
+  const larguraComAtalho = page.viewportSize().width >= 1200;
   for (const [id, rotulo, atalho] of abas) {
     await expect(page.locator(`${id} span`)).toHaveText(rotulo);
     await expect(page.locator(id)).toHaveAttribute("aria-label", rotulo);
     const kbd = page.locator(`${id} .ck-aba__kbd`);
     await expect(kbd).toHaveText(atalho);
     await expect(kbd).toHaveAttribute("aria-hidden", "true");
-    if (larguraComAtalho) await expect(kbd).toBeVisible();
-    else if (page.viewportSize().width < 768) await expect(kbd).toBeHidden();
+    if (larguraComAtalho) {
+      await page.mouse.move(0, page.viewportSize().height - 1);
+      await expect(kbd).toHaveCSS("opacity", "0");
+      // Na CI lenta a barra ainda se acomoda depois do goto e a aba sai de baixo do ponteiro: repete o hover.
+      await expect(async () => {
+        await page.locator(id).hover();
+        await expect(kbd).toHaveCSS("opacity", "1", { timeout: 1000 });
+      }).toPass({ timeout: 10_000 });
+    } else await expect(kbd).toBeHidden();
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -396,6 +398,43 @@ test("OS: Importar e gerenciar abre o painel sem rolar o shell nem esconder a ba
   }
 });
 
+// Exportar Excel (apelidos e IdCliente): baixa a planilha primeiro e só depois pergunta se envia ao UX Simpress (sistema externo).
+async function prepararExportarExcel(page) {
+  const ambiente = { exportacoes: 0, uploadsUx: [] };
+  await page.route("**/api/stats", route => route.fulfill({ json: { total_equipamentos: 1, total_unidades: 0, exportacao_disponivel: true, total_alteracoes_exportaveis: 3 } }));
+  await page.route("**/api/automacao/ux-apelidos", route => {
+    ambiente.uploadsUx.push(route.request().postDataBuffer().toString("utf8"));
+    return route.fulfill({ status: 202, json: { estado: "livre", ultima: {
+      rotina: "ux_apelidos", status: "interrompido", mensagem: "Processo interrompido após salvar: resultado incerto. Confira o UX manualmente.",
+    } } });
+  });
+  await page.route("**/api/exportar-equipamentos", route => {
+    ambiente.exportacoes += 1;
+    return route.fulfill({ status: 200, headers: { "Content-Disposition": 'attachment; filename="EquipamentosDetalhes-atualizados.xlsx"' }, contentType: "application/octet-stream", body: "xlsx" });
+  });
+  await mockComparison(page);
+  await page.goto("/");
+  await openTool(page, "#btn-resumo-aba");
+  const botao = page.locator('[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr #btn-exportar-equipamentos');
+  await expect(botao).toBeVisible();
+  ambiente.botao = botao;
+  return ambiente;
+}
+
+async function exportarEExpectarDialogoUx(page, botao) {
+  const download = page.waitForEvent("download");
+  await botao.click();
+  expect((await download).suggestedFilename()).toBe("EquipamentosDetalhes-atualizados.xlsx");
+  await expect(page.locator("#toast-container")).toContainText("Planilha Exportada com Sucesso!");
+  const dialogo = page.locator("#modal-confirmar-acao");
+  await expect(dialogo).toBeVisible();
+  await expect(page.locator("#titulo-confirmar-acao")).toHaveText("Enviar ao UX Simpress?");
+  await expect(page.locator("#mensagem-confirmar-acao")).toHaveText("Atualiza apelidos e IdCliente no UX Simpress (sistema externo).");
+  await expect(page.locator("#btn-confirmar-acao-ok")).toHaveText("Enviar ao UX");
+  await expect(page.locator("#btn-confirmar-acao-cancelar")).toHaveText("Cancelar");
+  return dialogo;
+}
+
 test("Exportar Excel (apelidos e IdCliente) fica no Resumo e some sem alterações exportáveis", async ({ page }) => {
   const stats = (exportavel, total) => ({ total_equipamentos: 1, total_unidades: 0, exportacao_disponivel: exportavel, total_alteracoes_exportaveis: total });
   let corpo = stats(true, 0);
@@ -423,12 +462,17 @@ test("Exportar Excel (apelidos e IdCliente) fica no Resumo e some sem alteraçõ
   await openTool(page, "#btn-resumo-aba");
   await expect(botao).toBeVisible();
   await expect(botao).toHaveText("Exportar Excel");
-  await expect(botao).toHaveAttribute("aria-label", /^Exportar Excel/);
-  await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveText("Exportar");
-  const download = page.waitForEvent("download");
-  await botao.click();
-  expect((await download).suggestedFilename()).toBe("EquipamentosDetalhes-atualizados.xlsx");
-  await expect.poll(() => exportacoes).toBe(1);
+  await expect(botao).toHaveAttribute("aria-label", "Exportar Excel com apelidos e IdCliente atualizados");
+  await expect(botao).toHaveAttribute("title", "Baixar a planilha com apelidos e IdCliente atualizados");
+  // O botão "Exportar" do resultado saiu da barra; sobra só o Exportar Excel.
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveCount(0);
+
+  const dialogo = await exportarEExpectarDialogoUx(page, botao);
+  // Baixou, mas nada foi ao UX enquanto o diálogo está aberto.
+  expect(exportacoes).toBe(1);
+  expect(uploadsUx).toHaveLength(0);
+  await page.locator("#btn-confirmar-acao-ok").click();
+  await expect(dialogo).toBeHidden();
   await expect.poll(() => uploadsUx.length).toBe(1);
   expect(uploadsUx[0]).toContain('filename="EquipamentosDetalhes-atualizados.xlsx"');
   expect(uploadsUx[0]).toContain("\r\n\r\nxlsx\r\n");
@@ -436,7 +480,26 @@ test("Exportar Excel (apelidos e IdCliente) fica no Resumo e some sem alteraçõ
   await expect(botao).toBeEnabled();
   await expect(botao).not.toHaveAttribute("aria-busy", "true");
   await expect(botao).toHaveText("Exportar Excel");
+  expect(exportacoes).toBe(1);
 });
+
+for (const [rotulo, fechar] of [
+  ["Cancelar", page => page.locator("#btn-confirmar-acao-cancelar").click()],
+  ["Esc", page => page.keyboard.press("Escape")],
+]) {
+  test(`Exportar Excel: ${rotulo} no diálogo do UX só baixa a planilha e não envia nada`, async ({ page }) => {
+    const ambiente = await prepararExportarExcel(page);
+    const dialogo = await exportarEExpectarDialogoUx(page, ambiente.botao);
+    await fechar(page);
+    await expect(dialogo).toBeHidden();
+    // O envio, se houvesse, sairia logo depois de o diálogo fechar.
+    await page.waitForTimeout(400);
+    expect(ambiente.exportacoes).toBe(1);
+    expect(ambiente.uploadsUx).toHaveLength(0);
+    await expect(ambiente.botao).toBeEnabled();
+    await expect(ambiente.botao).toHaveText("Exportar Excel");
+  });
+}
 
 test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antigo", async ({ page }) => {
   const errors = [];

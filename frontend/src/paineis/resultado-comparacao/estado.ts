@@ -133,14 +133,6 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     const colunas = renderer.criarColunasAnotacao(comparison);
     // Novo layout (18/11/2026): o texto das fontes (#comparacao-planilhas-fontes) saiu do Resumo; o elemento fica oculto.
 
-    const exportButton = document.getElementById("btn-exportar-resultado-comparacao") as HTMLButtonElement | null;
-    const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
-    const exportable = /^\d{4}-\d{2}-\d{2}$/.test(historyDate);
-    if (exportButton) {
-      exportButton.dataset.historyDate = exportable ? historyDate : "";
-      exportButton.disabled = !exportable;
-    }
-
     desconectarObservadoresAnotacoes();
     const content = document.getElementById("comparacao-planilhas-conteudo")!;
     content.innerHTML = comparison.somente_anotacoes_sincronizadas
