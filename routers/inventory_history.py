@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import threading
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import partial
@@ -135,6 +137,46 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
             services.local_annotation_outbox_directory(),
             services.load_history_annotations,
         )
+
+    # The history list (also read by /api/painel on every home load) spent most of its time reading and
+    # resolving ~1300 shared notes; the resolved notes are kept while both folders list the same files.
+    annotation_cache: Dict[str, Any] = {"key": None, "records": None}
+    annotation_cache_lock = threading.Lock()
+
+    def _annotation_folders_signature() -> Optional[tuple]:
+        entries: List[tuple] = []
+        for directory in (services.history_annotations_directory(), services.local_annotation_outbox_directory()):
+            try:
+                with os.scandir(directory) as listing:
+                    for entry in listing:
+                        if entry.name.lower().endswith(".json") and entry.is_file(follow_symlinks=False):
+                            status = entry.stat(follow_symlinks=False)
+                            # OneDrive downloading a placeholder changes its attributes, not its size or mtime.
+                            entries.append((str(directory), entry.name, status.st_size, status.st_mtime_ns,
+                                            getattr(status, "st_file_attributes", 0)))
+            except FileNotFoundError:
+                entries.append((str(directory), None))
+            except OSError:
+                return None
+        return tuple(sorted(entries, key=repr))
+
+    def _listing_annotation_records() -> Dict[tuple, Dict[str, Any]]:
+        """Shared, read-only notes for the history list; callers must not change the result.
+
+        shortcut: a note file locked during an unchanged listing stays missing until a note folder
+        changes; the OneDrive write that held the lock changes the mtime, so this is short-lived.
+        """
+        key = _annotation_folders_signature()
+        with annotation_cache_lock:
+            cached_key, cached_records = annotation_cache["key"], annotation_cache["records"]
+        if key is not None and cached_key == key:
+            return cached_records
+        records = _latest_annotation_records()
+        # A folder that changed while it was read may be half-synced; cache only a stable listing.
+        if key is not None and key == _annotation_folders_signature():
+            with annotation_cache_lock:
+                annotation_cache.update(key=key, records=records)
+        return records
 
 
     def _sync_annotation_record(record: Dict[str, Any]) -> bool:
@@ -377,7 +419,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
     def get_historico_comparacoes():
         eventos = []
         history = services.load_comparison_history()
-        annotations = _latest_annotation_records()
+        annotations = _listing_annotation_records()
         local_event_ids = set()
         for evento in history:
             if not isinstance(evento, dict):

@@ -151,3 +151,13 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 - Temas claro e escuro, só com os tokens de `ck-tokens.css`.
 - Animações de 180–260 ms; com `prefers-reduced-motion`, sem movimento.
 - Foco visível, navegação por teclado, foco devolvido ao item ou ao campo depois de fechar diálogo ou edição.
+
+## Novo layout (18/11/2026)
+
+- Visual A do canvas "Novo layout" (NL-Lembretes, NL-Lembretes-Itens e as versões de celular), só na aba Lembretes e na pílula de sub-abas do topo do painel. Os Termos (conteúdo e folha do PDF) não mudaram. Comportamento, ids, ARIA, `data-*`, atalhos e textos aprovados ficam como estavam.
+- Dois cartões lado a lado (`.lembretes__grade`): `Novo lembrete` à esquerda (rótulo `Descrição` sempre acima do campo, botão `Data` com painel de data em fundo secundário e atalhos em pílulas, `Adicionar` preenchido) e a lista à direita (vistas `Hoje`/`Em breve` em controle segmentado, grupos com `Adicionar lembrete` no topo, um cartão por lembrete). Abaixo de 760 px de largura do painel os cartões empilham.
+- Item: círculo de concluir (concluído em verde), descrição, chip de data (hoje em destaque, atrasada em vermelho) e `Editar`/`Excluir` com borda. Na edição, `Salvar` e `Cancelar` mostram as teclas em `<kbd>` (`Enter`, `Esc`); a dica em texto continua para leitor de tela (`sr-only`).
+- A navegação de semana (`#lembretes-navegar`, anterior, `Hoje`, próxima) passou para o cabeçalho da `Semana`, ao lado do mês; os ids não mudaram.
+- Tokens `--nl-*` de `nl-base.css`; a estrutura e os alvos de 44 px (abaixo de 480 px) ficam em `ck-lembretes.css`, e cores, bordas e raios na seção "Lembretes" de `nl-lemb-cat.css`. Movimento só com `prefers-reduced-motion: no-preference`, 200 ms nos controles e 250 ms na entrada dos cartões.
+- Celular (abaixo de 480 px): as sub-abas do topo usam fonte de 13 px e menos folga lateral; com os textos aprovados completos cabem numa linha a partir de 375 px, e em 320 e 360 px a terceira desce para a linha de baixo (sem rolagem horizontal). O desenho do celular encurta os rótulos; isso não foi adotado.
+- Fora desta entrega: cabeçalho da página do canvas, rótulos curtos "Entrega"/"Devolução" do celular e marca deslizante na pílula do topo.

@@ -1,5 +1,6 @@
 import type { EstadoApp } from "../../estado-app";
 import type { ApiFetchError, ApiFetchOptions } from "../../api";
+import { ENDPOINT, painelCompartilhado } from "../paineis-dados/utilitarios.ts";
 
 interface EquipamentoPesquisa extends Record<string, unknown> {
   serial: string;
@@ -1203,9 +1204,9 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
   async function carregarFiltrosComparacaoHome() {
     const filters = homeComparisonFilters;
     try {
-      const dashboard = await context.apiFetch<DadosPainel>("/api/painel", {
+      const dashboard = await painelCompartilhado(() => context.apiFetch<DadosPainel>(ENDPOINT, {
         cache: "no-store", errorMessage: "Resumo do painel indisponível.",
-      });
+      }));
       const eventId = String(dashboard?.ultima_comparacao?.id || "").trim();
       if (!eventId) throw new Error("Ainda não há comparação de inventários.");
 
