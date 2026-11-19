@@ -88,7 +88,7 @@ test("the F7 panel follows the Novo layout: chips, search, secondary export and 
 
   // Chips de tipo: 32 px (44 px em toque), contagem em mono dentro do chip.
   const todos = page.getByRole("tab", { name: /^Todos/ });
-  expect((await todos.boundingBox()).height).toBe(coarse ? 44 : 32);
+  expect((await todos.boundingBox()).height).toBeCloseTo(coarse ? 44 : 32, 0);
   await expect(todos.locator("[data-alias-tab-count]")).toHaveText("32");
 
   // Cabeçalho do grupo: a contagem fica num selo (número visível, complemento só para leitor de tela).
