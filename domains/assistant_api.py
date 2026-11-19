@@ -312,10 +312,10 @@ def sanitizar_chamado(chamado: Any) -> Dict[str, Any]:
 
 
 def _os_nova_publica(valor: Any) -> Optional[Dict[str, str]]:
-    """``{os, tipo}`` of the F5's ``os_nova`` (OS newer than the one in E, or found for a ticket without OS); ``None`` without it."""
+    """``{os, tipo}`` of the F5's ``os_nova`` (OS newer than the one in E, or found for a ticket without OS; ``sem_relacao``: the OS in E itself); ``None`` without it."""
     sugestao = _dict(valor)
-    nova = _dict(sugestao.get("nova"))
-    return {"os": str(nova.get("os") or ""), "tipo": str(sugestao.get("tipo") or "")} if nova.get("os") else None
+    alvo = _dict(sugestao.get("atual") if sugestao.get("tipo") == "sem_relacao" else sugestao.get("nova"))
+    return {"os": str(alvo.get("os") or ""), "tipo": str(sugestao.get("tipo") or "")} if alvo.get("os") else None
 
 
 def _aparar(dados: Any) -> Any:
@@ -1773,7 +1773,7 @@ class SimpressApi:
                 "os": str(_dict(a.get("automaticos")).get("E") or ""),
                 "os_sugerida": str(_dict(a.get("automaticos_sugeridos")).get("E") or ""),
                 # Only the OS number and the kind (troca, sugestao, sem_os): no OS text, no name; accept/refuse stay on the F5 card.
-                "os_nova": _os_nova_publica(a.get("os_nova")),
+                "os_nova": _os_nova_publica(a.get("os_nova") or a.get("os_sem_relacao")),
                 # True: not in SoftExpert's task center on the last read (e.g. closed by another technician); the F5 card is red.
                 "nao_encontrado_softexpert": a.get("nao_encontrado_softexpert") is True,
             })
