@@ -2165,7 +2165,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       if (mudou) resumoDesatualizado = true;
       if (mudou || activeTool === "relatorio") refreshMonthlyAfterChange();
     });
-    document.addEventListener("simpress:resumo-desatualizado", () => { resumoDesatualizado = true; });
+    // Usuário do equipamento editado (muda o "Sem usuário") ou OS importada: o F3 recarrega na próxima abertura.
+    for (const nome of ["simpress:resumo-desatualizado", "simpress:usuarios-equipamento-atualizados", "simpress:chamados-atualizados"]) {
+      document.addEventListener(nome, () => { resumoDesatualizado = true; });
+    }
     byId("cockpit-sheets-refresh").addEventListener("click", loadSheets);
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || event.defaultPrevented || root.hidden) return;

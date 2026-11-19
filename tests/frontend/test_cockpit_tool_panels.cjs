@@ -828,6 +828,11 @@ test("Resumo (F3) carrega uma vez: voltar de outra aba não busca de novo; inven
     emite("simpress:resumo-desatualizado");
     await reabrir();
     assert.equal(pedidos[0], "/api/historico-comparacoes", "inventário trocado ou restaurado recarrega");
+    for (const nome of ["simpress:usuarios-equipamento-atualizados", "simpress:chamados-atualizados"]) {
+      emite(nome);
+      await reabrir();
+      assert.equal(pedidos[0], "/api/historico-comparacoes", `${nome} recarrega`);
+    }
     pedidos.length = 0;
     await api.fecharPainelCockpit();
     await api.abrirComparacaoDaSerie("SN-1");

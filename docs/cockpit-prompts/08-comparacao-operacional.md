@@ -80,6 +80,7 @@ Pedido do usuário: o Resumo (F3) demorava a cada abertura, porque refazia `GET 
 
 Recarrega na próxima abertura quando:
 - o inventário foi trocado ou restaurado (`invalidarSemUsuarioResumo` dispara `simpress:resumo-desatualizado`);
+- o usuário de um equipamento foi editado (`simpress:usuarios-equipamento-atualizados`, muda o "Sem usuário") ou OS foram importadas (`simpress:chamados-atualizados`);
 - o painel (`simpress:painel-atualizado`) chega com outra comparação, outra `ultima_atualizacao` ou outro `arquivo_origem`; o mesmo painel a cada 5 min não recarrega;
 - outra tela pede um resultado novo (`pendingFreshComparison`), uma série (`abrirComparacaoDaSerie`) ou outra comparação;
 - a última carga falhou ou foi abandonada (trocar de aba antes de terminar).
