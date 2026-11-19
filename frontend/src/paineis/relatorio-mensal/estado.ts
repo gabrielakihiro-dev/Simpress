@@ -72,6 +72,7 @@ export async function exportarRelatorioMensal() {
   const mes = input.value;
   if (!mesValido(mes)) {
     mostrarStatus("Selecione o mês atual ou um mês anterior.", true);
+    app().showToast("Selecione o mês atual ou um mês anterior.", "error");
     input.focus();
     return;
   }

@@ -250,7 +250,7 @@ test("comparison result tab takes focus, passes axe and closes with Escape", asy
   await expect(page.locator("#main-content")).toBeVisible();
 });
 
-test("comparison tables get sorting and copy tools through the render event", async ({ page }) => {
+test("comparison tables get sorting (no copy tools) through the render event", async ({ page }) => {
   await openFixtureComparison(page);
   const content = page.locator("#comparacao-planilhas-conteudo");
   const tabelas = content.locator(".comparison-desktop-table table");
@@ -258,8 +258,8 @@ test("comparison tables get sorting and copy tools through the render event", as
   const comLinhas = await tabelas.evaluateAll(lista => lista.filter(t => t.tBodies[0]?.rows.length).length);
   expect(comLinhas).toBeGreaterThan(0);
   await expect(content.locator('.comparison-desktop-table table[data-ux-table="ready"]')).toHaveCount(comLinhas);
-  // hasText em vez de getByRole: no projeto mobile a tabela desktop fica oculta, mas o tratamento é o mesmo.
-  await expect(content.locator(".ux-table-tools > button", { hasText: "Copiar tabela" })).toHaveCount(comLinhas);
+  // Novo layout (18/11/2026): a Comparação do Resumo (data-sem-ferramentas) não tem "Copiar tabela" nem "Modo compacto"; a ordenação continua.
+  await expect(content.locator(".ux-table-tools")).toHaveCount(0);
   await expect(content.locator(".ux-sort-button").first()).toBeAttached();
 });
 
@@ -343,9 +343,9 @@ test("comparison summary cards jump to their section and clear filters that hide
   await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
   const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
   await expect(heading).toBeHidden();
-  // Os cartões ficam numa faixa no topo da sub-aba da própria seção (Apelidos); a Visão geral tem a grade bento (sem data-metric-tone).
-  await dialog.locator("#resumo-aba-visao").click();
-  await expect(dialog.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
+  // Os cartões ficam numa faixa no topo da sub-aba da própria seção (Apelidos); o bento do topo (Novo layout, 18/11/2026) não tem data-metric-tone e a sub-aba "Visão geral" não existe mais.
+  await expect(dialog.locator("#resumo-aba-visao")).toHaveCount(0);
+  await expect(dialog.locator(".nf3-topo [data-metric-tone]")).toHaveCount(0);
   await dialog.locator("#resumo-aba-apelidos").click();
   const painelApelidos = dialog.locator("#resumo-painel-apelidos");
   // Only "Apelidos para conferência" has rows in the fixture; zero-count cards stay static.
@@ -679,11 +679,10 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await openSidebarIfNeeded(page);
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
-  // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026).
+  // Novo layout (18/11/2026): "Ativos por regional" é cartão do bento, sempre à vista acima das sub-abas (a "Visão geral" saiu).
   await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
   await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
-  await page.locator("#resumo-aba-visao").click();
-  await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
   await expect(page.locator("#resumo-regionais")).toBeVisible();
   await expect(page.locator("#tab-resumo")).toHaveCount(0);
 

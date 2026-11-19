@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { apiFetch } from "../../api";
 import { PainelBackups } from "./painel";
+import { marcarPainelIndisponivel, pintarPainelNoBento } from "../resultado-comparacao/bento-resumo";
 
 // Chamado por frontend/src/main.tsx com o painel #resumo-painel-backups (data-react-painel="backups-regionais").
 // Os dados chegam pelo evento `simpress:painel-atualizado`; o painel não consulta o /api/painel sozinho. Se o evento
@@ -141,12 +142,14 @@ export function montar(container: HTMLElement) {
   const aoAtualizar = (painelLido: unknown) => {
     if (!painelLido || typeof painelLido !== "object") return;
     dados = "backups_regionais" in painelLido ? (painelLido as Record<string, unknown>).backups_regionais : null;
+    pintarPainelNoBento(painelLido); // cartões Ativos e Backups em dia do Resumo (Novo layout)
     desenhar();
   };
   // Leitura do painel falhou antes de qualquer resposta: "aguardando" vira "indisponível" (selo e rótulo da aba também).
   const aoFalhar = () => {
     if (dados !== undefined) return;
     dados = { indisponivel: true, limitacoes: [] };
+    marcarPainelIndisponivel();
     desenhar();
   };
   document.addEventListener("simpress:painel-atualizado", evento => aoAtualizar((evento as CustomEvent).detail));
