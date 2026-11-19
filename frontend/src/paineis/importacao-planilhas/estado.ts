@@ -14,6 +14,8 @@ interface AppImportacao {
   abrirModalAcessivel(modalId: string, focoInicial: string, acaoFechar: string): void;
   fecharModalAcessivel(modalId: string): void;
   showToast(mensagem: string, tipo: string): void;
+  /** Cancelar resolve false; Esc e fechar o diálogo resolvem null (frontend/src/aplicacao/app-shell.ts). */
+  confirmarAcao(opcoes: { titulo: string; mensagem: string; confirmar: string; cancelar: string; destrutiva?: boolean }): Promise<boolean | null>;
   carregarProntidao(): Promise<unknown>;
   carregarEstatisticas(): Promise<unknown>;
   carregarUnidades(): Promise<unknown>;
@@ -418,6 +420,37 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     }
   }
 
+  // Escrita no UX Simpress (sistema externo): só depois do download e só com o clique em "Enviar ao UX".
+  async function enviarApelidosAoUx(blob: Blob, filename: string) {
+    const resposta = await app.confirmarAcao({
+      titulo: "Enviar ao UX Simpress?",
+      mensagem: "Atualiza apelidos e IdCliente no UX Simpress (sistema externo).",
+      confirmar: "Enviar ao UX",
+      cancelar: "Cancelar",
+      destrutiva: false,
+    });
+    // Cancelar resolve false e Esc resolve null: nos dois a planilha já foi baixada e nada é enviado.
+    if (resposta !== true) return;
+    try {
+      const form = new FormData();
+      form.append("file", blob, filename);
+      const execucao = await apiFetch<ExecucaoUx>("/api/automacao/ux-apelidos", {
+        method: "POST", body: form,
+        errorMessage: "Não foi possível iniciar a atualização no UX Simpress.",
+      });
+      app.showToast("Atualização no UX Simpress iniciada. Acompanhe o resultado e o login em Automação (F4).", "info");
+      app.acompanharExecucaoAutomacao?.(execucao);
+    } catch (error) {
+      const erro = error as ErroApi;
+      const status = Number(erro?.status);
+      if (status >= 400 && status < 500) {
+        app.showToast(`Atualização no UX Simpress não iniciada: ${erro.message}`, "error");
+      } else {
+        app.showToast(`Não foi possível confirmar o início da atualização no UX Simpress. Consulte Automação (F4) antes de tentar novamente. ${erro.message}`, "error");
+      }
+    }
+  }
+
   async function exportarEquipamentosAtualizados() {
     const btn = porId<HTMLButtonElement>("btn-exportar-equipamentos");
     const originalText = btn.innerHTML;
@@ -426,6 +459,8 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span class="hidden sm:inline">Gerando Excel...</span>`;
     lucide.createIcons({ root: btn });
 
+    let blob: Blob;
+    let filename: string;
     try {
       const res = await apiFetch("/api/exportar-equipamentos", {
         responseType: "response",
@@ -434,10 +469,10 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-      const filename = match && match[1]
+      filename = match && match[1]
         ? match[1].replace(/['"]/g, "")
         : "EquipamentosDetalhes-atualizados.xlsx";
-      const blob = await res.blob();
+      blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -448,33 +483,18 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
       window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
       app.showToast("Planilha Exportada com Sucesso!", "success");
-      try {
-        const form = new FormData();
-        form.append("file", blob, filename);
-        const execucao = await apiFetch<ExecucaoUx>("/api/automacao/ux-apelidos", {
-          method: "POST", body: form,
-          errorMessage: "Não foi possível iniciar a atualização no UX Simpress.",
-        });
-        app.showToast("Atualização no UX Simpress iniciada. Acompanhe o resultado e o login em Automação (F4).", "info");
-        app.acompanharExecucaoAutomacao?.(execucao);
-      } catch (error) {
-        const erro = error as ErroApi;
-        const status = Number(erro?.status);
-        if (status >= 400 && status < 500) {
-          app.showToast(`Atualização no UX Simpress não iniciada: ${erro.message}`, "error");
-        } else {
-          app.showToast(`Não foi possível confirmar o início da atualização no UX Simpress. Consulte Automação (F4) antes de tentar novamente. ${erro.message}`, "error");
-        }
-      }
     } catch (err) {
       console.error("Erro ao exportar planilha de equipamentos:", err);
       app.showToast((err as ErroApi).message, "error");
+      return;
     } finally {
       btn.disabled = false;
       btn.removeAttribute("aria-busy");
       btn.innerHTML = originalText;
       lucide.createIcons({ root: btn });
     }
+
+    await enviarApelidosAoUx(blob, filename);
   }
 
   return {

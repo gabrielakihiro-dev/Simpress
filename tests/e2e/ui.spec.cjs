@@ -242,7 +242,7 @@ test("comparison result tab takes focus, passes axe and closes with Escape", asy
   await expect(page.locator("#modal-historico-comparacoes")).toBeHidden();
   await expect(page.locator("#cockpit-tool-title")).toBeFocused();
   await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
-  await expect(panel.locator("#btn-exportar-resultado-comparacao")).toBeVisible();
+  await expect(panel.locator("#btn-exportar-resultado-comparacao")).toHaveCount(0);
   await auditAccessibility(page, COMPARISON_PANEL);
 
   await page.keyboard.press("Escape");

@@ -363,7 +363,7 @@ const toolComparison = {
     ausentes_no_endpoint: [], ausentes_em_detalhes: [],
   },
 };
-// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3 fica na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Lembretes só no menu, sem atalho (atalho vazio); os termos de entrega e devolução ficam dentro desse painel.
+// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3, Chamados F5 e OS F6 ficam na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Lembretes só no menu, sem atalho (atalho vazio); os termos de entrega e devolução ficam dentro desse painel.
 const toolButtons = [
   ["#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "sebrae-chamados", "F5", "Chamados"],
   ["#btn-acompanhamento-chamados", "#btn-chamados-menu", "chamados", "F6", "OS"],
@@ -387,7 +387,8 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       await expect(page.locator("#home-filter-total")).toHaveText("1");
     });
     for (const [barra, item, tool, key, titulo] of toolButtons) {
-      const naBarra = barra === "#btn-resumo-aba" || (barra !== item && width >= 1200);
+      // Opção C (18/11/2026): Chamados F5 e OS F6 ficam na barra em toda largura; o menu não os repete.
+      const naBarra = barra === "#btn-resumo-aba" || barra !== item;
       if (naBarra) {
         await expect(page.locator(barra)).toHaveAttribute("title", `${titulo} (${key})`);
         await expect(page.locator(barra)).toBeVisible();

@@ -197,7 +197,7 @@ test("ponte: publica as 9 ações de sempre e repassa as 7 do React ao painel hi
   assert.deepEqual(Object.keys(feature).sort(), [
     "abrirModalHistoricoComparacoes", "abrirResultadoHistoricoComparacao", "baixarHistoricoComparacoesExcel",
     "carregarContagemHistoricoComparacoes", "carregarHistoricoComparacoes", "exportarHistoricoComparacoesExcel",
-    "exportarResultadoComparacaoPlanilhas", "fecharModalHistoricoComparacoes", "restaurarHistoricoComparacao",
+    "fecharModalHistoricoComparacoes", "restaurarHistoricoComparacao",
   ]);
   assert.equal(chamadas.length, 0, "criar o módulo não chama o React");
 
