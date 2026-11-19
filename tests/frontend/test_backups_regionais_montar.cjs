@@ -13,6 +13,7 @@ const dubles = {
   "react-dom": "export const flushSync = funcao => funcao();",
   "react-dom/client": "export const createRoot = () => ({ render() {} });",
   "../../api": "export const apiFetch = async () => ({});",
+  "../resultado-comparacao/bento-resumo": "export const pintarPainelNoBento = () => {}; export const marcarPainelIndisponivel = () => {};",
   "./painel": "export const PainelBackups = ({ dados }) => { globalThis.__desenhosBackups.push(dados); return null; };",
 };
 

@@ -324,3 +324,114 @@ label.mr-rotulo .mr-req { margin-left: 2px; color: var(--nl-rtx); }
     & :is(.ck-btn, .ck-rel__link):hover .ck-rel__seta { transform: translateX(3px); }
   }
 }
+
+/* ---------- F3 Resumo (quadros NL-F3-Resumo, NL-F3-Hoje e NL-F3-Acoes, com os pares de celular): opção C + cartão Histórico da A ----------
+   Bento no topo (Ativos, Divergências, Apelidos, Usuários, Sem acesso, Backups em dia, Ativos por regional e Histórico) e,
+   abaixo, as sub-abas (Divergências, Apelidos, Usuários, Sem acesso, Backups) num cartão de tabela. Peças novas: nf3-*.
+   Ficam de fora do desenho (sem código): período 7/14/30 dias, seletor de Ativos, gráfico "Hoje", arrastar, Restaurar layout,
+   Repetir animação, Voltar aos cartões e os textos de variação nos cartões. */
+section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
+  /* Origem das planilhas: o texto saiu; o elemento fica no HTML (o JS da Comparação ainda o limpa), sempre oculto. */
+  & #comparacao-planilhas-fontes { display: none; }
+
+  /* "Nova comparação" é o botão principal da barra (o HTML continua .ck-btn--secundario, a barra pertence a outra frente) */
+  & #cockpit-comparison-new { border-color: #4f46e5; background: #4f46e5; color: #fff; font-weight: 600; }
+  & #cockpit-comparison-new:not(:disabled):hover { border-color: #4338ca; background: #4338ca; }
+
+  /* Topo: grade de cartões (3 colunas) ao lado do Histórico; Ativos e Ativos por regional ocupam 2 colunas */
+  & .nf3-topo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 16px; align-items: stretch; margin-top: 16px; }
+  & .nf3-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(176px, auto); grid-auto-flow: dense; gap: 16px; min-width: 0; }
+  & .nf3-cartao--larga, & .nf3-regional { grid-column: span 2; }
+  & .nf3-regional { display: grid; min-width: 0; }
+  & .nf3-regional > .ck-regionais.ck-cartao { min-width: 0; height: 100%; border-color: var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); }
+
+  /* Cartões: moldura de 1 px no --nl-bd, face no --nl-card, título e número no tom do tema */
+  & .nf3-cartao { border-radius: var(--nl-raio-cartao); background: var(--nl-bd); }
+  & .nf3-cartao > .ck-bento-face { border-radius: calc(var(--nl-raio-cartao) - 1px); background: var(--nl-card); }
+  & .nf3-titulo { flex: 1; min-width: 0; margin: 0; align-self: center; font: 500 14px/1.35 var(--fonte-corpo); color: var(--nl-tx); }
+  & .nf3-cartao .ck-bento-num { color: var(--nl-tx); }
+  & .nf3-cartao--larga .ck-bento-num { font-size: 64px; }
+  & .nf3-anelbox .ck-bento-anel { width: 96px; height: 96px; }
+  & .nf3-anelbox .ck-bento-anel > span { color: var(--nl-tx); font-size: 20px; }
+
+  /* "Ver lista →" e "Ver tudo →": link em botão, na cor do cartão (--tom); a seta anda 3 px no hover */
+  & .nf3-ver { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--tom, var(--nl-itx)); font: 500 13px/1.3 var(--fonte-corpo); cursor: pointer; }
+  & .nf3-ver:hover { text-decoration: underline; text-underline-offset: 3px; }
+  & .nf3-ver:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 3px; }
+  & .nf3-ver--tudo { margin-top: auto; }
+
+  /* Histórico: os 4 registros mais novos, o aberto em índigo com o selo "atual" */
+  & .nf3-historico__lista { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  & .nf3-historico__item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-tx2); text-align: left; cursor: pointer; }
+  & .nf3-historico__item:hover { background: rgba(var(--nl-i), .06); }
+  & .nf3-historico__item[aria-current="true"] { background: rgba(var(--nl-i), .10); color: var(--nl-tx); }
+  & .nf3-historico__item:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 1px; }
+  & .nf3-historico__quando { flex: 1 1 auto; min-width: 0; font: 500 13px/1.3 var(--fonte-mono); color: inherit; }
+  & .nf3-historico__tipo { min-width: 0; font: 400 12px/1.3 var(--fonte-corpo); color: var(--nl-mut); overflow-wrap: anywhere; }
+  & .nf3-historico__atual { display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px solid rgba(var(--nl-i), .35); border-radius: 999px; background: rgba(var(--nl-i), .12); color: var(--nl-itx); font: 600 11px/1 var(--fonte-corpo); letter-spacing: .04em; }
+  & .nf3-historico__vazio { margin: 0; font: 400 13px/1.4 var(--fonte-corpo); color: var(--nl-mut); }
+  & .nf3-historico__vazio[hidden] { display: none; }
+
+  /* Sub-abas: cartão de tabela com faixa segmentada; a aba aberta sobe para o --nl-card, a contagem é o número em mono */
+  & .nf3-sub { margin-top: 16px; }
+  & .nf3-sub__corpo { box-sizing: border-box; min-width: 0; padding: 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); }
+  & .nf3-sub .resumo-abas-barra { margin: 0 0 16px; }
+  & .nf3-sub .resumo-abas { display: inline-flex; max-width: 100%; gap: 4px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .nf3-sub .resumo-aba { gap: 8px; height: 34px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); box-shadow: none; font: 500 13px/1 var(--fonte-corpo); }
+  & .nf3-sub .resumo-aba:hover { background: transparent; color: var(--nl-tx); }
+  & .nf3-sub .resumo-aba[aria-selected="true"] { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); box-shadow: var(--nl-sombra); }
+  & .nf3-sub .resumo-aba[aria-disabled="true"] { border-color: transparent; color: var(--nl-fraco); cursor: not-allowed; opacity: .7; }
+  & .nf3-sub .resumo-aba__n { height: auto; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: 600 12px/1 var(--fonte-mono); }
+  & .nf3-sub .resumo-aba:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 1px; }
+}
+:root[data-theme="dark"] section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-new { border-color: #818cf8; background: #818cf8; color: #07080d; }
+:root[data-theme="dark"] section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-new:not(:disabled):hover { border-color: #a5b4fc; background: #a5b4fc; }
+
+/* Histórico completo (#modal-historico-comparacoes) como gaveta à direita; HTML, IDs e botões do diálogo ficam como estão.
+   A exclusão de registros continua dentro do diálogo. */
+#modal-historico-comparacoes { grid-template-rows: minmax(0, 1fr); place-items: stretch end; padding: 0; }
+#modal-historico-comparacoes > .ck-dialogo { width: min(520px, 100%); max-width: none; height: 100%; max-height: none; border-width: 0 0 0 1px; border-radius: var(--nl-raio-cartao) 0 0 var(--nl-raio-cartao); box-shadow: var(--nl-sombra-janela); }
+
+/* Tablet: o Histórico desce para baixo da grade, em linha inteira */
+@media (max-width: 1023.98px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .nf3-topo { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Celular (pares -cel): grade de 2 colunas, Ativos, Ativos por regional e Backups em linha inteira, título embaixo do ícone */
+@media (max-width: 639.98px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
+    & .nf3-topo { gap: 12px; margin-top: 12px; }
+    & .nf3-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; gap: 12px; }
+    & .nf3-cartao--larga, & .nf3-regional, & .nf3-cartao[data-nf3-cartao="backups"] { grid-column: 1 / -1; }
+    & .nf3-cartao > .ck-bento-face { gap: 10px; padding: 14px; }
+    & .nf3-cartao .ck-bento-cab { flex-direction: column; gap: 8px; }
+    & .nf3-cartao .ck-bento-icone { width: 32px; height: 32px; border-radius: 10px; }
+    & .nf3-cartao .ck-bento-svg { width: 16px; height: 16px; }
+    & .nf3-titulo { align-self: flex-start; }
+    & .nf3-cartao .ck-bento-num { font-size: 32px; }
+    & .nf3-cartao--larga .ck-bento-num { font-size: 44px; }
+    & .nf3-anelbox .ck-bento-anel { width: 84px; height: 84px; }
+    & .nf3-sub { margin-top: 12px; }
+    & .nf3-sub__corpo { padding: 14px; }
+    & .nf3-sub .resumo-abas { display: flex; width: 100%; }
+  }
+  #modal-historico-comparacoes > .ck-dialogo { border-width: 0; border-radius: 0; }
+}
+
+/* Toque: controles do Resumo com 44 px de altura mínima */
+@media (pointer: coarse) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] :is(.nf3-ver, .nf3-historico__item, .nf3-sub .resumo-aba, #cockpit-comparison-new) { min-height: 44px; }
+}
+
+/* Movimento: gaveta entra pela direita em 300 ms; setas e linhas com transição de 150 ms (a entrada dos cartões de 700/900 ms é a do ck-bento.css) */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes nf3-gaveta { from { transform: translateX(100%); } to { transform: none; } }
+  #modal-historico-comparacoes > .ck-dialogo { animation: nf3-gaveta 300ms var(--nl-curva-gaveta) backwards; }
+  section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
+    & .nf3-ver span { display: inline-block; transition: transform 150ms var(--nl-curva); }
+    & .nf3-ver:hover span { transform: translateX(3px); }
+    & .nf3-historico__item { transition: background-color 150ms var(--nl-curva), color 150ms var(--nl-curva); }
+    & .nf3-sub .resumo-aba { transition: color 150ms var(--nl-curva), background-color 150ms var(--nl-curva), border-color 150ms var(--nl-curva), box-shadow 150ms var(--nl-curva); }
+    & .nf3-sub .resumo-aba:not([aria-disabled="true"]):hover { transform: none; }
+  }
+}

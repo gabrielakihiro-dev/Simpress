@@ -742,7 +742,7 @@ test("abrirComparacaoDaSerie leva a categoria ao alvo e repassa o Sem usuário a
   } finally { delete global.document; }
 });
 
-test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do render (que volta a Visão geral)", async () => {
+test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do render (que volta a Divergências)", async () => {
   const ordem = [];
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };

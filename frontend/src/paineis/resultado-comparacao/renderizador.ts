@@ -260,7 +260,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           </div>`;
     }).join("");
     return wrapFilterGroup(`
-        <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-line-quiet" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+        <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-line-quiet" data-sem-ferramentas role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
           <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
             <thead class="bg-surface text-fg-tertiary"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
             <tbody class="divide-y divide-line-quiet">${rows.join("")}</tbody>
@@ -596,7 +596,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     return descricao ? `<div class="info-tip-ancora flex items-center gap-1">${h4}${infoTipHtml(titulo, descricao, { bloco: true })}</div>` : h4;
   }
 
-  // Visão geral em bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.ts
+  // Ícones e moldura dos cartões bento (docs/ui-motion/contrato-bento.md). Os números saem prontos no HTML; bento.ts
   // anima do zero até eles e aplica as larguras de data-bento-largura (CSP: nada de style= no HTML).
   const ICONES_BENTO: Record<string, string> = {
     notebook: '<rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M2 20h20"></path>',
@@ -607,40 +607,6 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     etiqueta: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"></path><path d="M7.5 7.5h.01"></path>',
   };
   const svgBento = (corpo: string) => `<svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${corpo}</svg>`;
-
-  function cartaoBento({ rotulo, valor, tom, icone, chaveSecao = "", extra = "", grande = false }: { rotulo: string; valor: unknown; tom: string; icone: string; chaveSecao?: string; extra?: string; grande?: boolean }) {
-    const numero = Number(valor || 0);
-    const texto = numero.toLocaleString("pt-BR");
-    const secao = (SECOES_CARTOES_RESUMO as Record<string, SecaoResumo | undefined>)[chaveSecao];
-    const abrir = secao && numero > 0
-      ? `<button type="button" class="ck-bento-abrir" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${texto}. Ir para ${secao.titulo}`)}">${svgBento('<path d="M7 17 17 7M9 7h8v8"></path>')}</button>`
-      : "";
-    return `<article class="ck-bento-cartao${grande ? " ck-bento-cartao--grande" : ""}" data-tom="${tom}" data-bento-cartao>
-          <div class="ck-bento-face">
-            <div class="ck-bento-cab"><span class="ck-bento-icone">${svgBento(ICONES_BENTO[icone])}</span><h4 class="ck-bento-titulo">${escapeHtml(rotulo)}</h4>${abrir}</div>
-            ${grande ? extra.replace("%NUM%", `<p class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>`) : `<p class="ck-bento-num" data-bento-contar="${numero}">${texto}</p>${extra}`}
-          </div>
-        </article>`;
-  }
-
-  function cartoesBentoVisao(comparison: ComparacaoRenderizada, contagens: { endpoint: number; simpress: number; local: number; duplicidades: number; series: number }) {
-    const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
-    const { endpoint, simpress, local, duplicidades, series } = contagens;
-    const maximo = Math.max(endpoint, simpress, local, duplicidades, series, 1);
-    const traco = (valor: number) => `<div class="ck-bento-traco" aria-hidden="true"><i data-bento-largura="${((valor / maximo) * 100).toFixed(1)}"></i></div>`;
-    // Decisão de 14/11/2026: anel = (total_endpoint − "Sem correspondência — na Simpress") / total_endpoint.
-    const fracao = comparados > 0 ? Math.min(1, Math.max(0, (comparados - simpress) / comparados)) : 0;
-    const pct = Math.floor(fracao * 100); // floor: 998 de 1000 não vira "100%"
-    const anel = `<div class="ck-bento-anelbox">%NUM%<span class="ck-bento-espaco"></span><div class="ck-bento-anel"><svg viewBox="0 0 120 120" aria-hidden="true" focusable="false"><circle class="ck-bento-anel__trilho" cx="60" cy="60" r="52" fill="none" stroke-width="10"></circle><circle class="ck-bento-anel__cheio" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.73" data-bento-anel="${fracao.toFixed(4)}"></circle></svg><span data-bento-contar="${pct}" data-bento-sufixo="%">${pct}%</span></div></div><p class="ck-bento-legenda">com correspondência nas duas bases</p>`;
-    return `<div class="ck-bento" role="group" aria-label="Contadores de Visão geral">
-        ${cartaoBento({ rotulo: "Notebooks comparados", valor: comparados, tom: "indigo", icone: "notebook", extra: anel, grande: true })}
-        ${cartaoBento({ rotulo: "Sem correspondência — no endpoint", valor: endpoint, tom: "ciano", icone: "link", chaveSecao: "ausentes_no_endpoint", extra: traco(endpoint) })}
-        ${cartaoBento({ rotulo: "Sem correspondência — na Simpress", valor: simpress, tom: "fucsia", icone: "predio", chaveSecao: "ausentes_em_detalhes", extra: traco(simpress) })}
-        ${cartaoBento({ rotulo: "Divergências de local", valor: local, tom: "ambar", icone: "local", chaveSecao: "divergencias_local", extra: traco(local) })}
-        ${cartaoBento({ rotulo: "Duplicidades e ambiguidades", valor: duplicidades, tom: "esmeralda", icone: "copia", chaveSecao: "correspondencias_ambiguas", extra: traco(duplicidades) })}
-        ${cartaoBento({ rotulo: "Séries sem mapeamento", valor: series, tom: "indigo", icone: "etiqueta", chaveSecao: "series_sem_mapeamento", extra: traco(series) })}
-      </div>`;
-  }
 
   // Bloco 2 do bento (docs/ui-motion/contrato-bento.md): contadores pequenos e cartões de seção das sub-abas.
   // O atraso de entrada é a classe ck-bento-dN (N x 80 ms); a cor é o data-tom do Bloco 1 (índigo = padrão).
@@ -727,7 +693,6 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   // Resumo (F3) sub-tabs: one tabpanel per subject. The controller in comparison-result.js owns state, counts and filters;
   // everything below is pure so tests can pin the texts and rules.
   const RESUMO_ABAS = [
-    { chave: "visao", rotulo: "Visão geral" },
     { chave: "divergencias", rotulo: "Divergências" },
     { chave: "apelidos", rotulo: "Apelidos" },
     { chave: "usuarios", rotulo: "Usuários" },
@@ -786,7 +751,6 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   // aria-label of a tab badge; total null = the list does not exist in this result (Usuários).
   function rotuloContagemAba(chave: string, total: number | null | undefined, filtrando = false) {
     const rotulo = rotuloAba(chave);
-    if (chave === "visao") return rotulo;
     if (chave === "backups") {
       if (total === undefined) return `${rotulo}: aguardando dados`;  // painel ainda não chegou
       if (total === null) return `${rotulo}: dados indisponíveis`;
@@ -880,23 +844,18 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
             ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
           </details>`,
       " data-user-change-summary") : "";
-    // Traço dos contadores de Divergências: mesma regra da Visão geral (anel = comparados menos "na Simpress" sobre comparados).
+    // Traço dos contadores de Divergências (comparados menos "na Simpress" sobre comparados).
     const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
     const maximoDivergencias = Math.max(ausentesEndpoint.length, ausentesDetalhes.length, divergenciasLocal.length, ambiguityRows.length, seriesSemMapa.length, 1);
     const tracoDivergencia = (valor: number) => (valor / maximoDivergencias) * 100;
     const tracoComparados = comparados > 0 ? Math.min(1, Math.max(0, (comparados - ausentesDetalhes.length) / comparados)) * 100 : 0;
     const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
+    const avisoAnotacoesHerdadas = Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
+      ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
+      : "";
     return `
+        ${avisoAnotacoesHerdadas}
         ${barra}
-        ${painelResumo("visao", `
-        ${Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
-        ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
-        : ""}
-        ${cartoesBentoVisao(comparison, {
-          endpoint: ausentesEndpoint.length, simpress: ausentesDetalhes.length, local: divergenciasLocal.length,
-          duplicidades: ambiguityRows.length, series: seriesSemMapa.length,
-        })}
-        `, true)}
         ${painelResumo("divergencias", `
         ${cartaoSecaoBento("ciano", 2,
           cabecalhoSecaoBento("Equipamentos sem correspondência por fonte", "", "Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro."),

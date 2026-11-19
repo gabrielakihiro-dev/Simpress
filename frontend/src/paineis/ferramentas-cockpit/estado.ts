@@ -3,6 +3,7 @@ import { paineisDados } from "../paineis-dados/paineis.ts";
 import { blocoCarregarMais, cabecalhoBloco, campoHistorico, gradeCampos, seloContagem } from "../historico-apelidos/elementos-historico.ts";
 import { chaveFiltroHistorico, fatiaHistorico, TAMANHO_PAGINA_HISTORICO } from "../historico-apelidos/paginacao-historico.ts";
 import { montarMovimento } from "../relatorio-mensal/grafico-semanal.ts";
+import { anunciarComparacoes, rotuloOpcaoComparacao, rotuloStatusComparacao } from "../resultado-comparacao/rotulos-comparacao.ts";
 import { capitalizar, mesPorExtenso, nomeDoMes } from "../relatorio-mensal/mes-extenso.ts";
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
 
@@ -632,12 +633,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   function renderComparisonSelect() {
     const select = byId("cockpit-comparison-event");
     select.replaceChildren(...comparisonEvents.map(event => {
-      const option = element("option", "", `${event.horario || "Data indisponível"} · ${event.tipo || "Atualização"}`);
+      const option = element("option", "", rotuloOpcaoComparacao(event));
       option.value = String(event.id || "");
       return option;
     }));
     select.value = selectedComparisonId;
     select.disabled = comparisonEvents.length === 0;
+    anunciarComparacoes(comparisonEvents, selectedComparisonId);
   }
 
   function updateComparisonStatus() {
@@ -646,7 +648,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       status.textContent = `${comparisonEvents.length} ${comparisonEvents.length === 1 ? "registro" : "registros"} no histórico local`;
       return;
     }
-    status.textContent = `${selectedComparison.tipo || "comparação local"} · ${selectedComparison.horario || "data indisponível"}`;
+    status.textContent = rotuloStatusComparacao(selectedComparison);
+    anunciarComparacoes(comparisonEvents, selectedComparisonId);
   }
 
   function openNewComparison() {
