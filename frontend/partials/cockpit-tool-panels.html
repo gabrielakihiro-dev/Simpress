@@ -18,8 +18,8 @@
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
           <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
-            <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off"></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada" size="5"><option value="todos" selected>Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label class="ckp-alternar" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="cockpit-tickets-attention" type="checkbox">Atenção · 3+ dias</label>
             <button type="button" id="cockpit-tickets-export" class="ck-btn ck-btn--secundario" data-on-click="exportarChamadosCockpit" disabled>Exportar Excel</button>
             <button type="button" id="cockpit-tickets-clear" class="ck-btn ck-btn--fantasma">Limpar filtros</button>
@@ -243,35 +243,6 @@
         <section class="ck-ferr-painel" data-cockpit-tool-panel="sebrae-chamados" aria-labelledby="sebrae-chamados-heading" hidden>
           <h2 id="sebrae-chamados-heading" class="sr-only">Chamados</h2>
           <div class="ck-det__corpo">
-            <div class="sebrae-topo">
-              <div class="sebrae-topo__acoes">
-                <div class="ck-grupo-botoes sebrae-topo__passos" role="group" aria-label="Ações do Dashboard">
-                  <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
-                  <svg class="ck-ico ck-ico--xs sebrae-topo__seta" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>
-                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
-                </div>
-                <div class="ck-grupo-botoes" role="group" aria-label="Chamados antigos">
-                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
-                </div>
-                <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
-                  <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
-                  <details id="sebrae-rascunho-detalhes" class="sebrae-rascunho__detalhes" hidden>
-                    <summary id="sebrae-rascunho-resumo"></summary>
-                    <ul id="sebrae-rascunho-itens"></ul>
-                  </details>
-                  <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
-                </div>
-              </div>
-              <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-              <p id="sebrae-antigos-leitura-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-              <ul id="sebrae-antigos-leitura-falhas" class="ck-cartao__meta" hidden></ul>
-              <div id="sebrae-fechar" class="sebrae-fechar" hidden>
-                <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-                <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
-              </div>
-              <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
-              <!-- include: partials/sebrae-conflitos.html -->
-            </div>
             <p id="sebrae-destaque-anuncio" class="ck-cartao__meta" role="status" aria-live="polite"></p>
             <div class="sebrae-abas-barra">
               <div class="sebrae-abas" role="tablist" aria-label="Chamados por situação">
@@ -282,20 +253,67 @@
               </div>
               <button type="button" id="btn-sebrae-filtro" class="sebrae-lupa" aria-label="Filtrar chamados" aria-expanded="false" aria-controls="sebrae-filtro"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg></button>
               <div id="sebrae-filtro" class="sebrae-filtro" hidden>
-                <label class="sebrae-busca"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="sebrae-filtro-termo" type="search" class="sebrae-busca__entrada" placeholder="UTIC, título, solicitante, série, modelo, cidade, OS…" aria-label="Filtrar chamados" autocomplete="off" spellcheck="false"></label>
-                <button type="button" id="btn-sebrae-limpar-filtro" class="ck-btn ck-btn--fantasma ck-btn--sm">Limpar filtro</button>
+                <p class="sebrae-filtro__titulo">Filtrar chamados</p>
+                <div class="sebrae-filtro__linha">
+                  <label class="sebrae-busca"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="sebrae-filtro-termo" type="search" class="sebrae-busca__entrada" placeholder="UTIC, título, solicitante, série, modelo, cidade, OS…" aria-label="Filtrar chamados" autocomplete="off" spellcheck="false"></label>
+                  <button type="button" id="btn-sebrae-limpar-filtro" class="ck-btn ck-btn--fantasma ck-btn--sm">Limpar filtro</button>
+                </div>
+                <p id="sebrae-filtro-resultado" class="sebrae-filtro__resultado" role="status" aria-live="polite"></p>
               </div>
             </div>
-            <p id="sebrae-filtro-resultado" class="sebrae-filtro__resultado" role="status" aria-live="polite"></p>
+            <div class="sebrae-topo">
+              <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
+                <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
+                <details id="sebrae-rascunho-detalhes" class="sebrae-rascunho__detalhes" hidden>
+                  <summary id="sebrae-rascunho-resumo"></summary>
+                  <ul id="sebrae-rascunho-itens"></ul>
+                </details>
+                <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
+              </div>
+              <div class="sebrae-topo__acoes">
+                <div id="sebrae-leitura" class="sebrae-leitura" role="group" aria-label="Última leitura dos chamados antigos" hidden>
+                  <span id="sebrae-leitura-hora" class="sebrae-chip" hidden><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span></span></span>
+                  <span id="sebrae-leitura-lidos" class="sebrae-chip sebrae-chip--ok" hidden></span>
+                  <span id="sebrae-leitura-falhas" class="sebrae-falhas" hidden>
+                    <button type="button" id="btn-sebrae-falhas" class="sebrae-chip sebrae-chip--erro" aria-expanded="false" aria-controls="sebrae-falhas-popover"><span></span><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg></button>
+                    <div id="sebrae-falhas-popover" class="sebrae-falhas__pop" role="group" aria-label="Chamados com falha na leitura" hidden>
+                      <ul id="sebrae-antigos-leitura-falhas" class="ck-cartao__meta" hidden></ul>
+                    </div>
+                  </span>
+                  <span id="sebrae-leitura-sem-utic" class="sebrae-chip" hidden></span>
+                </div>
+                <div class="ck-grupo-botoes sebrae-topo__passos" role="group" aria-label="Ações do Dashboard">
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
+                  <svg class="ck-ico ck-ico--xs sebrae-topo__seta" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>
+                  <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
+                  <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Enviar ao SharePoint" aria-describedby="sebrae-enviar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="sebrae-enviar-dica" role="tooltip" class="info-tip-text">Gere o Dashboard atualizado antes de enviar ao SharePoint.</span></span>
+                </div>
+                <div class="ck-grupo-botoes sebrae-topo__antigos" role="group" aria-label="Chamados antigos">
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
+                </div>
+              </div>
+              <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <p id="sebrae-antigos-leitura-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <div id="sebrae-fechar" class="sebrae-fechar" hidden>
+                <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+                <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
+              </div>
+              <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
+              <!-- include: partials/sebrae-conflitos.html -->
+            </div>
 
             <section id="sebrae-novos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-novos-secao" tabindex="0">
               <h3 class="sebrae-secao__titulo" id="sebrae-novos-secao">Chamados novos</h3>
+              <ul id="sebrae-novos-mestre" class="sebrae-mestre" aria-label="Chamados novos"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-novos-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
             </section>
             <section id="sebrae-antigos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-antigos-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-antigos-titulo">Chamados antigos em aberto</h3>
               <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-antigos-mestre" class="sebrae-mestre" aria-label="Chamados antigos"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-antigos-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
               <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>
@@ -303,12 +321,16 @@
             <section id="sebrae-destaques" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-destaques-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-destaques-titulo">Chamados em destaque</h3>
               <p id="sebrae-destaques-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-destaques-mestre" class="sebrae-mestre" aria-label="Chamados em destaque"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-destaques-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
             </section>
             <section id="sebrae-finalizados" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-finalizados-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-finalizados-titulo">Chamados finalizados</h3>
               <p id="sebrae-finalizados-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-finalizados-mestre" class="sebrae-mestre" aria-label="Chamados finalizados"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <ul id="sebrae-finalizados-lista" class="sebrae-avisos"></ul>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
               <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>

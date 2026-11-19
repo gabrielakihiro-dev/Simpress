@@ -1109,6 +1109,8 @@ test("Busca na web: começa desligada, avisa que a pergunta sai do computador ao
 });
 
 test("Busca na web: erro ao mudar volta o interruptor e erro ao ler deixa desligada", async ({ page }) => {
+  // Carrega o app duas vezes (segunda aba); na CI da main já levava 16–22 s, no limite dos 20 s padrão.
+  test.setTimeout(45_000);
   await mockAssistente(page, {
     estado: PRONTO,
     instrucoes: { texto: "", limite: 4000 },

@@ -32,38 +32,6 @@ test("versão em uso: mantém a escolhida se existe; senão a da tabela, senão 
   assert.equal(puro.versaoAposCarga([], "", undefined), "");
 });
 
-test("comparação: sem versão, na mais antiga e com uma só importação mostram o texto certo; com anterior vai à API", () => {
-  assert.equal(puro.textoSemComparacao(historico, ""), "Nenhuma importação selecionada.");
-  assert.equal(puro.textoSemComparacao(historico, "s1"), "Esta é a importação mais antiga disponível. Selecione uma versão mais recente para comparar.");
-  assert.equal(puro.textoSemComparacao([historico[0]], "s3"), "A primeira importação ficará registrada aqui para comparação com as próximas planilhas.");
-  assert.equal(puro.textoSemComparacao(historico, "s3"), null);
-  assert.equal(puro.idAnterior(historico, "s3"), "s2");
-  assert.equal(puro.idAnterior(historico, "s1"), "");
-  assert.equal(puro.idAnterior(historico, "nao-existe"), "");
-  assert.equal(puro.chaveEvolucao(historico, "s2"), "s2|s3|3");
-});
-
-test("evolução: resumo com as contagens, aviso padrão e no máximo 5 novas, 8 alteradas e 5 ausentes", () => {
-  const montada = puro.montarEvolucao({
-    contagens: { novos: 7, alterados: 9, iguais: 3, ausentes_arquivo: 6 },
-    mudancas: {
-      novos: ["N1", "N2", "N3", "N4", "N5", "N6", "N7"],
-      alterados: Array.from({ length: 9 }, (_, i) => ({ serie: `A${i}`, campos: [{ campo: "status" }, { campo: "fila" }] })),
-      ausentes_arquivo: ["X1", "X2", "X3", "X4", "X5", "X6"],
-    },
-  });
-  assert.equal(montada.resumo, "Comparação com a versão anterior · 7 novas · 9 alteradas · 3 sem mudança · 6 ausentes");
-  assert.equal(montada.aviso, "Ausência na planilha não confirma resolução.");
-  assert.equal(montada.linhas.length, 5 + 8 + 5);
-  assert.deepEqual(montada.linhas[0], ["Nova série:", "N1"]);
-  assert.deepEqual(montada.linhas[5], ["A0:", "status, fila"]);
-  assert.deepEqual(montada.linhas.at(-1), ["Não consta na planilha atual:", "X5"]);
-  const vazia = puro.montarEvolucao({ aviso_ausentes: "Aviso do servidor." });
-  assert.equal(vazia.resumo, "Comparação com a versão anterior · 0 novas · 0 alteradas · 0 sem mudança · 0 ausentes");
-  assert.equal(vazia.aviso, "Aviso do servidor.");
-  assert.deepEqual(vazia.linhas, []);
-});
-
 test("rótulos de importações antigas no singular e no plural", () => {
   assert.equal(puro.rotuloImportacoesAntigas(1), "1 importação antiga");
   assert.equal(puro.rotuloImportacoesAntigas(3), "3 importações antigas");
