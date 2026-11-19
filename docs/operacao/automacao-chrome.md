@@ -219,6 +219,7 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 | `POST /api/automacao/cancelar` | Sem corpo. | 202 `{metodo: "sinal"\|"processo", mensagem, estado}`. | 409 nenhuma rotina em andamento, ou execução de fora do site sem `--cancelar`. |
 | `GET /api/automacao/estado?offset=N` | `offset` em bytes do log (0 = início). | `{estado: "livre"\|"em_andamento", rotina, inicio, origem, pid, cancelamento_pedido, aguardando_login, login_origem, log: {arquivo, offset, linhas, reiniciado}, ultima}`. | 422 offset negativo. |
 | `GET /api/automacao/historico` | `limite` de 1 a 50 (padrão 15), `pagina`, `data_inicio`, `data_fim`, `rotina` e `status`. | `{execucoes: [{id, rotina, origem, inicio, fim, status, codigo, mensagem, lotes, capturas: [{nome, url}]}]}`, mais recentes primeiro. | 422 limite fora da faixa. |
+| `GET /api/automacao/historico/ultimas` | `rotina` repetida, de 1 a 11 (as mesmas de `GET /api/automacao/historico`). | `{ultimas: {rotina: execucao ou null}}`: a última execução de cada rotina, no mesmo formato. Os cartões da aba pedem as quatro numa só chamada (18/11/2026). | 422 sem rotina, mais de 11 ou rotina inválida. |
 | `GET /api/automacao/capturas/{nome}` | Nome de um `.png` da pasta de logs (sem caminho). | Imagem PNG. | 404 nome inválido ou inexistente. |
 
 - `log.linhas` traz até 64 KB por chamada e só linhas completas; `offset` é o próximo ponto de leitura. Se o arquivo mudou (outra execução) ou encolheu, `reiniciado: true` e a leitura recomeça do zero.
@@ -334,7 +335,7 @@ Pedido do usuário de 07/11/2026: se ele clicar ou mexer o mouse por acidente du
 
 Últimas execuções mostra cinco linhas por página (opções 5/10/20), total e navegação. Filtros por período inclusivo, rotina e status preservam a consulta aplicada. Cada linha oferece Ver log. O Andamento permite escolher uma data e uma execução, mantendo o log histórico separado do polling ao vivo; Voltar ao vivo restaura a execução atual. Nenhum desses controles apaga registros.
 
-Detalhes e análise de melhorias: [especificação](automacao-historico-especificacao.md). GET /api/automacao/historico agora inclui paginação e filtros; GET /api/automacao/execucoes/{execucao_id}/log consulta somente um log conhecido, com até 500 linhas e 64 KB. Arquivos removidos pela retenção já existente podem ficar indisponíveis; os resumos disponíveis continuam consultáveis.
+Detalhes e análise de melhorias: [especificação](automacao-historico-especificacao.md). GET /api/automacao/historico agora inclui paginação e filtros; GET /api/automacao/execucoes/{execucao_id}/log consulta somente um log conhecido, com até 500 linhas e 64 KB. Arquivos removidos pela retenção já existente podem ficar indisponíveis; os resumos disponíveis continuam consultáveis. Desempenho (18/11/2026): o servidor guarda o histórico montado em memória e só o refaz quando muda um arquivo de `data/logs/automacao_chrome` (nome, data ou tamanho; os `.log`, que crescem durante a execução, não contam), relendo só os JSON novos ou alterados; ao iniciar, `main.py` já o carrega em segundo plano. Os quatro cartões de rotina leem a última execução numa só chamada (`GET /api/automacao/historico/ultimas`).
 
 ## Verificar usuários (`--rotina usuarios`)
 

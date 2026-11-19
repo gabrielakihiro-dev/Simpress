@@ -868,6 +868,11 @@ export interface Rotas {
     corpo: never;
     resposta: unknown;
   };
+  "GET /api/automacao/historico/ultimas": {
+    consulta: { "rotina": ("os" | "inventarios" | "usuarios" | "ambas" | "login" | "sebrae" | "dashboard" | "enviar" | "fechar" | "antigos" | "ux_apelidos")[]; };
+    corpo: never;
+    resposta: unknown;
+  };
   "PUT /api/automacao/sebrae/agendamento": {
     consulta: never;
     corpo: AgendamentoPayload;
@@ -1458,7 +1463,17 @@ export interface Rotas {
     corpo: ObservacaoPayload;
     resposta: unknown;
   };
+  "PUT /api/sebrae/chamados/{numero}/os-manter": {
+    consulta: never;
+    corpo: OsRecusadaPayload;
+    resposta: unknown;
+  };
   "PUT /api/sebrae/chamados/{numero}/os-recusada": {
+    consulta: never;
+    corpo: OsRecusadaPayload;
+    resposta: unknown;
+  };
+  "PUT /api/sebrae/chamados/{numero}/os-remover": {
     consulta: never;
     corpo: OsRecusadaPayload;
     resposta: unknown;

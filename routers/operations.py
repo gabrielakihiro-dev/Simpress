@@ -191,12 +191,22 @@ def create_operations_router(
                 "historico": [],
             }
         try:
+            stat = path.stat()
+            signature = (str(path), stat.st_mtime_ns, stat.st_size)
+            entry = report_cache.get("relatorio")
+            if entry and entry[0] == signature:
+                return entry[1]
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados não pôde ser lido.") from None
         if not isinstance(data, dict) or not isinstance(data.get("chamados"), list):
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
+        # Shared read-only by every GET until the file's mtime or size changes; callers copy before changing it.
+        # One tuple per key: GETs run in parallel threads, so each read sees a whole entry or none.
+        report_cache["relatorio"] = (signature, data)
         return data
+
+    report_cache: Dict[str, Any] = {}
 
     def ticket_os_link_key(fonte: str, serie: str, ordem_servico: str) -> str:
         ordem_key = re.sub(r"\s+", "", str(ordem_servico or "")).upper()
@@ -359,7 +369,14 @@ def create_operations_router(
         return {"marca": marca}
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+        entry = report_cache.get("exibidos")
+        if entry and entry[0] is report:
+            return list(entry[1])
+        snapshots = [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+        current = report_cache.get("relatorio")
+        if current and current[1] is report:
+            report_cache["exibidos"] = (report, snapshots)
+        return list(snapshots)
 
     services = ticket_import_services or TicketImportServices(
         ticket_report_path=ticket_report_path,

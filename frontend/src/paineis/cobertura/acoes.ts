@@ -8,7 +8,9 @@ import type { Rotas } from "../../api-tipos.gerado";
 
 type Corpo<R extends keyof Rotas> = Rotas[R]["corpo"];
 
-export async function reservar(acao: Registro) {
+// Devolve a reserva criada (o aviso "Desfazer" usa id e rev dela) ou null se o operador desistiu ou a gravação falhou.
+// Sem pendência de manutenção a confirmação é "Reservar <série>?"; com pendência vale só a de "Manutenção não verificada".
+export async function reservar(acao: Registro, vaga?: Registro): Promise<Registro | null> {
   const corpo = { ...acao.corpo, manutencao_conferida: false };
   const { dados } = ler();
   if (modelo.exigeConferenciaManutencao(dados)) {
@@ -18,11 +20,24 @@ export async function reservar(acao: Registro) {
       confirmar: acao.rotulo,
       destrutiva: false,
     });
-    if (!confirmado) return;
+    if (!confirmado) return null;
     corpo.manutencao_conferida = true;
+  } else if (acao.tipo === "reservar") {
+    const confirmado = await appAntigo().confirmarAcao?.({
+      titulo: `Reservar ${vaga?.serie || acao.corpo.serie}?`,
+      mensagem: String(vaga?.cidade || "—"),
+      confirmar: "Confirmar",
+      cancelar: "Cancelar",
+      destrutiva: false,
+    });
+    if (!confirmado) return null;
   }
-  await escrever("POST /api/cobertura/reservas", { corpo }, "Reserva registrada.");
+  return escrever("POST /api/cobertura/reservas", { corpo }, "Reserva registrada.");
 }
+
+// Desfaz a reserva recém-criada sem nova confirmação: é o cancelamento direto da reserva, com o rev devolvido na criação.
+export const desfazerReserva = (reserva: Registro) =>
+  escrever("POST /api/cobertura/reservas/{reserva_id}/cancelar", { caminho: { reserva_id: reserva.id }, corpo: { rev: reserva.rev } }, `${reserva.serie} voltou para Disponíveis`);
 
 export async function cancelarNecessidade(demanda: Registro) {
   const ok = await appAntigo().confirmarAcao?.({
@@ -63,12 +78,13 @@ export async function cancelarReserva(reserva: Registro) {
   if (ok) await escrever("POST /api/cobertura/reservas/{reserva_id}/cancelar", { caminho: { reserva_id: reserva.id }, corpo: { rev: reserva.rev } }, "Reserva cancelada.");
 }
 
-// Só preenche o Transporte; quem gera a planilha é sempre o operador.
+// Só preenche o Transporte; quem gera a planilha é sempre o operador. Devolve a movimentação criada, ou null se a gravação falhou (a folha só fecha no sucesso).
 export async function prepararTransporte(reserva: Registro, demanda: Registro) {
   const mov = await escrever("POST /api/cobertura/movimentacoes", { corpo: { reserva_id: reserva.id, rev: reserva.rev, tipo: "transporte" } },
     "Transporte preparado: confira os dados e gere a planilha no Transporte.");
-  if (!mov) return;
+  if (!mov) return null;
   await appAntigo().prepararTransporte?.({ serial: mov.serie, cidade: mov.destino_cidade, obs: demanda?.observacao || "", movimentacao: mov });
+  return mov;
 }
 
 export function mudarEstado(mov: Registro, estado: Corpo<"POST /api/cobertura/movimentacoes/{movimentacao_id}/estado">["estado"], extra: Registro, sucesso: string) {
