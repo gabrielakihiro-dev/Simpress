@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 // Limpeza dos textos explicativos, Bloco 4 (varredura geral): percorre as abas, sub-abas, painéis e modais e confere TODO ⓘ (.info-tip)
 // visível em cada tela, no desktop (1366px) e no celular (390px): o botão se descreve (aria-label "Sobre ..." e aria-describedby para um
@@ -94,6 +95,15 @@ async function abrirPainelSebrae(page, request, { aba, extra = "" } = {}) {
   return painel;
 }
 
+async function abrirAutomacao(page, aba) {
+  await page.request.get("/__fixture_automacao?quantidade=0&sebrae=padrao");
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await expect(page.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
+  await page.locator(`#tab-rotina-${aba}`).click();
+  return page.locator("#tab-panel-automacao");
+}
+
 async function abrirTermo(page, termo) {
   await page.goto("/");
   await abrirFerramenta(page, "#btn-lembretes");
@@ -123,18 +133,21 @@ const chamar = (page, nome) => page.evaluate(funcao => window[funcao](), nome);
 // Cada tela: `abrir` deixa a tela aberta e devolve o contêiner a varrer; `minimo` é quantos ⓘ ela tem por desenho (a tela não pode
 // perder um sem o teste avisar) e `rotulos` lista os aria-label que precisam estar entre eles.
 const TELAS = [
+  // A Automação mostra uma rotina por vez (seletor de abas): cada aba é uma tela a varrer.
   {
-    nome: "Automação (rotinas e chamados novos)", minimo: 4,
-    rotulos: ["Sobre Rotina de OS", "Sobre Inventários", "Sobre Verificar usuários", "Sobre Rotina Completa"],
+    nome: "Automação, aba SoftExpert (chamados novos)", minimo: 0,
     // No celular (< 768px) o cartão compacto do Design esconde o ⓘ do título (ck-cockpit.css, F4 Bloco 2); só no desktop ele existe.
     rotulosSoDesktop: ["Sobre Chamados novos do SoftExpert"],
-    abrir: async (page, request) => {
-      await request.get("/__fixture_automacao?quantidade=0&sebrae=padrao");
-      await page.goto("/");
-      await page.locator("#tab-automacao").click();
-      await expect(page.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-      return page.locator("#tab-panel-automacao");
-    },
+    abrir: page => abrirAutomacao(page, "softexpert"),
+  },
+  {
+    nome: "Automação, aba Rotina Completa", minimo: 3,
+    rotulos: ["Sobre Rotina de OS", "Sobre Verificar usuários", "Sobre Rotina Completa"],
+    abrir: page => abrirAutomacao(page, "completa"),
+  },
+  {
+    nome: "Automação, aba Inventários", minimo: 1, rotulos: ["Sobre Inventários"],
+    abrir: page => abrirAutomacao(page, "inventarios"),
   },
   {
     nome: "Home: códigos prontos do PowerShell", minimo: 1, rotulos: ["Sobre Códigos prontos"],
@@ -162,7 +175,7 @@ const TELAS = [
     nome: "Transporte", minimo: 0,
     abrir: async page => { await page.goto("/"); await abrirAbaTransporte(page); return page.locator("#tab-panel-retirada-entrega"); },
   },
-  // A sub-aba "Visão geral" não tem cartões, painel vazio e sem ⓘ: fica de fora.
+  // A sub-aba "Visão geral" saiu do Resumo (Novo layout, 18/11/2026); o bento do topo não tem ⓘ.
   ...["sem-acesso", "divergencias", "apelidos", "usuarios", "backups"].map(aba => ({
     nome: `Resumo, sub-aba ${aba}`, minimo: 0, abrir: page => abrirResumo(page, aba),
   })),
@@ -254,6 +267,7 @@ const TELAS = [
     abrir: async page => {
       await page.goto("/");
       await abrirAbaTransporte(page);
+      await abrirEtapaTransporte(page, 2);
       await page.locator("#retirada-representante").selectOption("Londrina");
       await page.locator("#btn-editar-representante-retirada").click();
       await expect(page.locator("#representante-regional-nome")).toBeVisible();

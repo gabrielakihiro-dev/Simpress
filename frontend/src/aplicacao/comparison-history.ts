@@ -1,8 +1,7 @@
 /**
  * Histórico de Planilhas (diálogo com as atualizações salvas, exportação por data, restauração e exclusão).
  * Migrado para React no Dia 3 (G9): o diálogo vive em frontend/src/paineis/historico-comparacoes/.
- * Este módulo é a ponte que mantém as ações publicadas em window (frontend/src/aplicacao/app.ts), e guarda o download do Excel e o botão
- * "Exportar" da aba Comparação, que seguem fora do React.
+ * Este módulo é a ponte que mantém as ações publicadas em window (frontend/src/aplicacao/app.ts), e guarda o download do Excel, que segue fora do React.
  */
 import { registrar, registrarRejeicoes } from "./pontes.ts";
 import type { Acoes, ContextoApp, Qualquer } from "./tipos.ts";
@@ -45,34 +44,6 @@ export function createComparisonHistory(context: ContextoApp): Acoes {
     return filename;
   }
 
-  async function exportarResultadoComparacaoPlanilhas() {
-    const button = document.getElementById("btn-exportar-resultado-comparacao") as HTMLButtonElement | null;
-    const data = button?.dataset.historyDate || "";
-    if (!button || !data) {
-      app.showToast("Este resultado não tem uma data de histórico para exportar.", "warning");
-      return;
-    }
-
-    const htmlOriginal = button.innerHTML;
-    button.disabled = true;
-    button.setAttribute("aria-busy", "true");
-    button.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin" aria-hidden="true"></i>';
-    lucide.createIcons({ root: button });
-
-    try {
-      await app.baixarHistoricoComparacoesExcel(data);
-      app.showToast("Planilha Exportada com Sucesso!", "success");
-    } catch (err: Qualquer) {
-      console.error(`Erro ao exportar resultado da atualização das planilhas: ${err?.message}`);
-      app.showToast(err.message || "Não foi possível exportar o resultado.", "error");
-    } finally {
-      button.disabled = !button.dataset.historyDate;
-      button.removeAttribute("aria-busy");
-      button.innerHTML = htmlOriginal;
-      lucide.createIcons({ root: button });
-    }
-  }
-
   // Home dashboard shortcut: opens the saved result and scrolls to the section named by `secao`.
   function abrirResultadoHistoricoComparacao(eventoId: Qualquer, secao: Qualquer, botao: Qualquer) {
     return registrar("abrirResultadoHistoricoComparacao", ponte.consultarHistoricoComparacao(eventoId, botao, { section: secao }));
@@ -85,7 +56,6 @@ export function createComparisonHistory(context: ContextoApp): Acoes {
     carregarHistoricoComparacoes: registrada.carregarHistoricoComparacoes,
     baixarHistoricoComparacoesExcel,
     exportarHistoricoComparacoesExcel: registrada.exportarHistoricoComparacoesExcel,
-    exportarResultadoComparacaoPlanilhas,
     restaurarHistoricoComparacao: registrada.restaurarHistoricoComparacao,
     abrirResultadoHistoricoComparacao,
   };

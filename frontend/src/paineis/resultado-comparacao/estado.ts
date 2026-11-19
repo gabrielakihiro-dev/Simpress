@@ -1,5 +1,6 @@
 import type { ApiFetchError, ApiFetchOptions } from "../../api";
 import { criarRenderizadorResultado, type ContextoRenderizador } from "./renderizador";
+import { escreverNumeroCartao } from "./numeros-bento";
 
 // Resultado da aba Comparação: renderização, anotações com autosave, filtros, abas do Resumo e decisões
 // de apelido manual, hostname duplicado e pendência de usuário. Só sintaxe apagável (sem enum/namespace):
@@ -96,7 +97,6 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   const { app, appState, motion } = context;
   const { escapeHtml } = context.dom;
   const renderer = criarRenderizadorResultado(context);
-  const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
   let comparisonAnnotationSyncObservers: MutationObserver[] = [];
 
@@ -131,17 +131,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   ): void {
     const listas = { ...renderer.listasComparacao(comparison), semUsuario };
     const colunas = renderer.criarColunasAnotacao(comparison);
-    const arquivo = comparison.arquivos_enviados || {};
-    document.getElementById("comparacao-planilhas-fontes")!.textContent =
-      `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
-
-    const exportButton = document.getElementById("btn-exportar-resultado-comparacao") as HTMLButtonElement | null;
-    const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
-    const exportable = /^\d{4}-\d{2}-\d{2}$/.test(historyDate);
-    if (exportButton) {
-      exportButton.dataset.historyDate = exportable ? historyDate : "";
-      exportButton.disabled = !exportable;
-    }
+    // Novo layout (18/11/2026): o texto das fontes (#comparacao-planilhas-fontes) saiu do Resumo; o elemento fica oculto.
 
     desconectarObservadoresAnotacoes();
     const content = document.getElementById("comparacao-planilhas-conteudo")!;
@@ -186,7 +176,12 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   // Successful reads are reused between event selections; invalidated when the Comparação panel opens or inventories change.
   let semUsuarioCache: SemUsuario | null = null;
   let semUsuarioGeracao = 0;
-  function invalidarSemUsuarioResumo(): void { semUsuarioCache = null; semUsuarioGeracao += 1; }
+  // Inventário trocado ou restaurado: o Resumo (F3) recarrega na próxima abertura (ferramentas-cockpit).
+  function invalidarSemUsuarioResumo(): void {
+    semUsuarioCache = null;
+    semUsuarioGeracao += 1;
+    if (typeof document !== "undefined") document.dispatchEvent?.(new CustomEvent("simpress:resumo-desatualizado"));
+  }
 
   // Notebooks without a logged user in the current inventory (same rule and endpoint as the Home chip).
   // Never throws: a failure becomes {estado: "erro"} so the rest of the Resumo still renders.
@@ -431,14 +426,15 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   let atualizarResumo: (() => void) | null = null;
   // Sem comparação na tela (vazio, carregando ou erro): as abas que só filtram a comparação ficam desabilitadas.
   let semComparacao = true;
-  // Visão geral abre também sem comparação: mostra só "Ativos por regional" (decisão de 14/11/2026, opção A).
-  const ABAS_SEM_COMPARACAO = ["visao", "divergencias", "backups"];
+  // Novo layout (18/11/2026): sem "Visão geral"; o bento fica sempre acima das sub-abas, que abrem em Divergências.
+  // Sem comparação só "Divergências" (mensagem de vazio) e "Backups" (não dependem dela) ficam habilitadas.
+  const ABAS_SEM_COMPARACAO = ["divergencias", "backups"];
   const abaDesabilitada = (chave: string): boolean => semComparacao && !ABAS_SEM_COMPARACAO.includes(chave) && chave !== estadoResumo.aba;
 
   const elementoAbaResumo = (chave: string): HTMLElement | null => document.getElementById(`resumo-aba-${chave}`);
 
   function aplicarAbaResumo(): void {
-    const painelAtivo = ABAS_RESUMO.includes(estadoResumo.aba) ? estadoResumo.aba : "visao";
+    const painelAtivo = ABAS_RESUMO.includes(estadoResumo.aba) ? estadoResumo.aba : "divergencias";
     ABAS_RESUMO.forEach(chave => {
       const botao = elementoAbaResumo(chave);
       if (!botao) return;
@@ -452,15 +448,12 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
       painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
     });
     // "Backups" não depende da comparação: o painel fixo fica fora do conteúdo recriado e, com ele aberto,
-    // o conteúdo inteiro (filtros e mensagem de vazio) sai de cena. "Ativos por regional" só aparece na
-    // Visão geral, como último cartão da grade (decisão de 14/11/2026).
+    // o conteúdo inteiro (filtros e mensagem de vazio) sai de cena. "Ativos por regional" é cartão do bento (sempre visível).
     const noBackups = painelAtivo === "backups";
     const painelBackups = document.getElementById("resumo-painel-backups");
     if (painelBackups) painelBackups.hidden = !noBackups;
     const conteudo = document.getElementById("comparacao-planilhas-conteudo");
-    if (conteudo) conteudo.hidden = noBackups || (semComparacao && painelAtivo === "visao");
-    const ativos = document.getElementById("resumo-ativos-secao");
-    if (ativos) ativos.hidden = painelAtivo !== "visao";
+    if (conteudo) conteudo.hidden = noBackups;
   }
 
   // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
@@ -478,12 +471,42 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
       painelAberto.querySelectorAll<HTMLElement>("[data-sem-entrada]").forEach(cartao => { delete cartao.dataset.semEntrada; });
       globalThis.SimpressBento?.animarDentro?.(painelAberto);
     }
-    if (chave === "visao") document.dispatchEvent(new CustomEvent("simpress:bento-repetir"));
     // Pede dados novos só na chegada à aba (openPanel seleciona duas vezes e não pode gerar dois refresh).
     if (mudou && chave === "backups") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
   }
 
+  // Números dos cartões do bento que vêm da comparação (Ativos e Backups vêm do painel: bento-resumo.ts). Sem comparação: "—".
+  const CARTOES_DA_COMPARACAO = ["divergencias", "apelidos", "usuarios", "sem-acesso"];
+  function limparNumerosCartoes(): void {
+    CARTOES_DA_COMPARACAO.forEach(chave => escreverNumeroCartao(chave, null));
+  }
+
+  // "Ver lista →" dos cartões: abre a sub-aba, rola até ela e põe o foco na aba; "Ativos" vai ao cartão "Ativos por regional".
+  function conectarCartoesBento(): void {
+    const topo = document.querySelector<HTMLElement>(".nf3-topo");
+    if (!topo || topo.dataset.nf3Conectado === "true") return;
+    topo.dataset.nf3Conectado = "true";
+    topo.addEventListener("click", event => {
+      const botao = (event.target as HTMLElement).closest<HTMLElement>("[data-nf3-ver]");
+      if (!botao) return;
+      const reduzido = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const comportamento: ScrollBehavior = reduzido ? "auto" : "smooth";
+      const chave = botao.dataset.nf3Ver || "";
+      if (chave === "ativos") {
+        const regionais = document.getElementById("resumo-ativos-secao");
+        regionais?.scrollIntoView({ behavior: comportamento, block: "start" });
+        regionais?.focus({ preventScroll: true });
+        return;
+      }
+      if (abaDesabilitada(chave)) return; // sem comparação a aba não abre: não rola nem foca uma aba desabilitada
+      selecionarAbaResumo(chave);
+      document.querySelector<HTMLElement>(".nf3-sub")?.scrollIntoView({ behavior: comportamento, block: "start" });
+      elementoAbaResumo(chave)?.focus({ preventScroll: true });
+    });
+  }
+
   function conectarAbasResumo(): void {
+    conectarCartoesBento();
     const lista = document.querySelector<HTMLElement>(".resumo-abas");
     if (!lista || lista.dataset.resumoConectado === "true") return;
     lista.dataset.resumoConectado = "true";
@@ -524,7 +547,8 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     atualizarResumo = null;
     semComparacao = true;
     desconectarObservadoresAnotacoes();
-    ABAS_RESUMO.filter(chave => chave !== "visao" && chave !== "backups").forEach(chave => escreverContagemAba(chave, 0, false));
+    ABAS_RESUMO.filter(chave => chave !== "backups").forEach(chave => escreverContagemAba(chave, 0, false));
+    limparNumerosCartoes();
     const avisos = document.getElementById("comparacao-planilhas-avisos");
     if (avisos) avisos.innerHTML = "";
     const barra = document.querySelector<HTMLElement>(".resumo-abas-barra");
@@ -540,6 +564,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     const paineis = typeof content.querySelectorAll === "function" ? [...content.querySelectorAll<HTMLElement>("[data-resumo-painel]")] : [];
     const comPaineis = paineis.length > 0;
     semComparacao = !comPaineis;
+    if (!comPaineis) limparNumerosCartoes();
     // A barra fica sempre visível: a aba Backups existe com ou sem comparação.
     const barraAbas = document.querySelector<HTMLElement>(".resumo-abas-barra");
     if (barraAbas) barraAbas.hidden = false;
@@ -637,26 +662,27 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
         .filter(row => !informativa(row) && !row.hidden);
       paineis.forEach(painel => {
         const chave = painel.dataset.resumoPainel;
-        if (chave === "visao" || chave === undefined) return;
+        if (chave === undefined) return;
         const todas = [...painel.querySelectorAll<HTMLElement>("tr[data-comparison-category]")].filter(row => !informativa(row));
         const listaAusente = Boolean(painel.querySelector("[data-resumo-lista-ausente]")) && todas.length === 0;
         const total = listaAusente ? null : linhasVisiveis(painel).length;
         escreverContagemAba(chave, total, filtersActive);
+        // O cartão do bento mostra o total do resultado, sem o filtro de busca (o selo da sub-aba é que acompanha o filtro).
+        if (CARTOES_DA_COMPARACAO.includes(chave)) escreverNumeroCartao(chave, listaAusente ? null : todas.length);
         const vazio = painel.querySelector<HTMLElement>("[data-resumo-vazio]");
         if (vazio) vazio.hidden = !(total === 0 && !filtersActive);
       });
 
       if (filterBar) {
-        // A barra acompanha a sub-aba aberta: logo depois dos contadores dela (ou no topo, se não houver). Na Visão geral fica onde está.
-        if (painelAtivo && chaveAba !== "visao") {
+        // A barra acompanha a sub-aba aberta: logo depois dos contadores dela (ou no topo, se não houver).
+        if (painelAtivo) {
           const faixa = painelAtivo.querySelector(":scope > .resumo-cartoes");
           if (faixa ? faixa.nextElementSibling !== filterBar : painelAtivo.firstElementChild !== filterBar) {
             if (faixa) faixa.after(filterBar);
             else painelAtivo.prepend(filterBar);
           }
         }
-        // "Visão geral" has no rows to search, so its filter bar stays out of the way.
-        setHidden(filterBar, chaveAba === "visao");
+        setHidden(filterBar, false);
         const visiveis = painelAtivo
           ? linhasVisiveis(painelAtivo).length
           : todasLinhas.filter(row => row.tagName === "TR" && !informativa(row) && !row.hidden).length;

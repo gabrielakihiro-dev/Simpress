@@ -60,7 +60,13 @@ test("Comparação (Resumo): descrição da seção fica no ⓘ ao lado do títu
   await expect(page.locator(`${CONTEUDO} .comparison-table-scroll-hint`)).toHaveCount(0);
   // O título continua sendo o alvo do foco (id e tabindex no h4); o ⓘ (24px) não estica a linha até os 40px do botão padrão.
   await expect(titulo).toHaveAttribute("tabindex", "-1");
-  expect(await dica.evaluate(no => no.parentElement.getBoundingClientRect().height)).toBeLessThanOrEqual(28);
+  // No celular o título pode quebrar em 2 linhas dentro do cartão do bento; o ⓘ não pode deixar a linha mais alta que o próprio título.
+  const alturas = await dica.evaluate(no => {
+    const altura = el => Math.round(el.getBoundingClientRect().height);
+    return { linha: altura(no.parentElement), titulo: altura(no.parentElement.querySelector("h4")), dica: altura(no) };
+  });
+  expect(alturas.dica).toBeLessThanOrEqual(28);
+  expect(alturas.linha).toBeLessThanOrEqual(Math.max(alturas.titulo, 28));
 
   await abrirComMouseOuToque(trigger, balao, testInfo);
   await page.mouse.move(0, 0);

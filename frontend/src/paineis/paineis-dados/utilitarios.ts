@@ -1,6 +1,18 @@
 import type { Qualquer } from "./tipos";
 
 export const ENDPOINT = "/api/painel";
+
+// Na carga, a Home, o Resumo e a pesquisa pedem o painel ao mesmo tempo: pedidos que se cruzam dividem uma
+// só requisição. Nada fica guardado depois da resposta (o próximo pedido busca de novo) e cada um recebe a sua cópia.
+let painelEmVoo: Promise<unknown> | null = null;
+
+export function painelCompartilhado<T>(buscar: () => Promise<T>): Promise<T> {
+  if (!painelEmVoo) {
+    const pedido: Promise<unknown> = buscar().finally(() => { if (painelEmVoo === pedido) painelEmVoo = null; });
+    painelEmVoo = pedido;
+  }
+  return painelEmVoo.then(dados => structuredClone(dados) as T);
+}
 export const DENSITY_KEY = "simpress:table-density";
 const DIVERGENCE_FIELDS = Object.freeze(["divergencias_local", "divergencias_apelidos_manuais"]);
 

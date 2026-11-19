@@ -1,6 +1,6 @@
 import type { Janela, Qualquer } from "./tipos";
 import { criarTabelaOs } from "./tabela-os.ts";
-import { DENSITY_KEY, ENDPOINT, barPercentages, compareValues, divergenceTotal, formatNumber, nextDirection, pluralize, sortKey, sortedOrder, toTsv } from "./utilitarios.ts";
+import { DENSITY_KEY, ENDPOINT, barPercentages, compareValues, divergenceTotal, formatNumber, nextDirection, painelCompartilhado, pluralize, sortKey, sortedOrder, toTsv } from "./utilitarios.ts";
 
 const REFRESH_MIN_MS = 15000;
 
@@ -99,7 +99,8 @@ export function criarPaineisDados() {
         });
       });
 
-      const wrap = table.closest(".comparison-desktop-table");
+      // Resumo F3 (Novo layout): tabela marcada com data-sem-ferramentas fica sem "Copiar tabela" e sem "Modo compacto".
+      const wrap = table.closest(".comparison-desktop-table:not([data-sem-ferramentas])");
       const host = wrap && tableToolsHost(wrap);
       if (wrap && (host || !wrap.previousElementSibling?.classList?.contains("ux-table-tools"))) {
         const tools = el("div", "ux-table-tools");
@@ -181,6 +182,7 @@ export function criarPaineisDados() {
 
     let lastFetch = 0;
     let requestSerial = 0;
+    let painelOk = false; // a última resposta do painel chegou e foi desenhada
     const tabelaOs = criarTabelaOs(win, doc, el);
     const { refreshTicketSummary } = tabelaOs;
 
@@ -315,10 +317,13 @@ export function criarPaineisDados() {
       lastFetch = Date.now();
       const serial = ++requestSerial;
       try {
-        const response = await win.fetch(ENDPOINT, { headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error(String(response.status));
-        const data = await response.json();
+        const data = await painelCompartilhado<Qualquer>(async () => {
+          const response = await win.fetch(ENDPOINT, { headers: { Accept: "application/json" } });
+          if (!response.ok) throw new Error(String(response.status));
+          return response.json();
+        });
         if (serial !== requestSerial) return;
+        painelOk = true;
         renderBadge(divergenceTotal(data.ultima_comparacao));
         renderizarNotificacoes(data);
         // Other Home cards (usage in the last 30 days) render from the same response.
@@ -326,6 +331,7 @@ export function criarPaineisDados() {
       } catch (error: Qualquer) {
         // The dashboard is optional; never disturb the main flow.
         if (serial === requestSerial) {
+          painelOk = false;
           renderBadge(0);
           renderizarFalhaNotificacoes();
           // Quem espera o painel (Backups, F3) troca "aguardando" por "indisponível"; sem detalhe, nada pessoal.
@@ -343,7 +349,14 @@ export function criarPaineisDados() {
 
     // A change of the history counter means an update/restore/delete happened: refresh both the panel and the badge.
     const counter = doc.getElementById("total-historico-comparacoes");
-    if (counter) new win.MutationObserver(() => refresh(true)).observe(counter, { childList: true, characterData: true, subtree: true });
+    // A contagem da partida (historico-comparacoes/estado.ts marca data-contagem-partida) não é uma atualização: se o painel
+    // pedido na instalação já chegou, ela não pede de novo (se ainda está a caminho, o pedido é dividido; se falhou, tenta de novo).
+    if (counter) new win.MutationObserver(() => {
+      const daPartida = counter.hasAttribute("data-contagem-partida");
+      counter.removeAttribute("data-contagem-partida");
+      if (daPartida && painelOk) return;
+      refresh(true);
+    }).observe(counter, { childList: true, characterData: true, subtree: true });
     // Home and Transporte keep refreshing the sidebar divergence badge.
     const abasComDados = ["tab-home", "tab-retirada-entrega"].map(id => doc.getElementById(id)).filter(Boolean);
     const abaComDadosAtiva = () => abasComDados.some(tab => tab.getAttribute("aria-selected") === "true");

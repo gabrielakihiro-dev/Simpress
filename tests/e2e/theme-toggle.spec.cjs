@@ -17,14 +17,14 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
   }
 });
 
-test("Nova transferência fica ao lado de Trocar equipamento, fora do menu Ferramentas", async ({ page }) => {
+test("Nova transferência fica no cabeçalho do Transporte, ao lado de Transferências geradas, fora do menu Ferramentas", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#cockpit-tools-menu #btn-nova-transferencia")).toHaveCount(0);
   await page.locator("#tab-retirada-entrega").click();
   const nova = page.locator("#btn-nova-transferencia");
   await expect(nova).toBeVisible();
   const sameBar = await page.evaluate(() => document.querySelector("#btn-nova-transferencia").parentElement
-    === document.querySelector("#btn-trocar-equipamento").parentElement);
+    === document.querySelector("#btn-historico-transferencias").parentElement);
   expect(sameBar).toBe(true);
 });
 

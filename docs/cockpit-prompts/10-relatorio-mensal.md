@@ -62,6 +62,8 @@ Liste a origem usada por cada cartão, gráfico, tabela e trecho da prévia; ind
 
 ## Layout operacional (07/11/2026)
 
+Substituído em parte em 18/11/2026: ver "Novo layout, A com sub-abas" no fim deste arquivo (quatro abas, sem a comparação, sem a linha de status).
+
 Autorização: pedido do usuário de 07/11/2026 ("tudo está desconexo… planejar um layout perfeito e conectar às outras abas"), com plano e mockups aprovados no mesmo dia (canvas de Design da sessão: desktop claro, desktop escuro e celular). O usuário autorizou explicitamente os elementos visuais que o artefato de referência do Cockpit não tem: bloco tracejado para o que não muda com o mês, barras proporcionais em `Inventário por tipo` e botões de filtro por situação. Decisões do usuário: foco em acompanhar a operação (pendências no topo); remover `Tempo médio até fechar`, `Transportes` e `Alterações de apelido` da tela e da prévia (a XLSX não muda); escopo front-end + o campo de leitura `comparacao.evento_id`; incluir os chamados do SoftExpert (aba Chamados, F5) em duas etapas: primeiro a situação atual e a lista com data conhecida (esta entrega, só front-end), depois uma contagem mensal no backend (etapa 2, feita em 07/11/2026; ver "Etapa 2: contagem do mês no servidor" abaixo).
 
 Problemas que motivaram a mudança: o mesmo número aparecia três vezes (KPIs, gráfico e cartão) e de novo na prévia; dois KPIs eram sempre `—`; inventário da base atual misturado com dados do mês; listas sem ação; registros fora das contagens só no `title`; data crua no status; o painel não acompanhava importações.
@@ -98,6 +100,8 @@ Prévia: `Chamados (F5), com data em <mês>: Abertos no mês N · Finalizados no
 
 ## Sub-abas (12/11/2026)
 
+Substituído em parte em 18/11/2026: ver "Novo layout, A com sub-abas" no fim deste arquivo (quatro abas, sem a comparação, sem a linha de status).
+
 Autorização do usuário de 12/11/2026: dividir o Relatório Mensal (F8) em cinco sub-abas, para a tela não virar uma rolagem longa. É só navegação: nada é gravado em sistema externo nem em dado local, e a XLSX, a prévia e o endpoint seguem iguais. O `Layout operacional (07/11/2026)` continua valendo para o conteúdo de cada bloco; muda só onde cada bloco aparece.
 
 Sub-abas (tablist `Assuntos do relatório`, abaixo da barra de mês, acima do corpo):
@@ -124,12 +128,15 @@ IDs novos: `rel-aba-*`, `rel-painel-*`, `rel-*-contagem`, `cockpit-monthly-estad
 Comportamento:
 
 - Abre em `Visão geral` só na primeira abertura do F8. A aba escolhida fica ao mudar o mês, ao recarregar em silêncio (importar OS ou nova comparação com o F8 aberto) e ao fechar e reabrir o F8 na mesma carga da página. O filtro da OS fica só na recarga silenciosa; ao mudar o mês, volta a `Todas`. Carregando e erro aparecem em `cockpit-monthly-estado`, com as abas sempre à vista.
+- Carregar uma vez (18/11/2026, pedido do usuário): fechar e reabrir o F8 no mesmo mês não refaz `GET /api/relatorio-mensal/dados`; a tela, a aba e o filtro ficam como estavam. Se algo mudou com o F8 fechado (importar OS, `simpress:chamados-atualizados`; ou o painel chegou com outra comparação ou inventário, `simpress:painel-atualizado`), a reabertura faz a recarga silenciosa (mantém aba e filtros, sem `Carregando`). Falha na carga também recarrega ao voltar. Limite: o Dashboard regravado pelo agendador não avisa a tela; o F8 só vê a mudança ao trocar o mês ou quando um desses sinais chegar. Teste: "Relatório mensal (F8) carrega uma vez…" em `tests/frontend/test_cockpit_tool_panels.cjs`.
 - Teclado, mesmo molde da F6: `role=tablist` / `tab` / `tabpanel`, `aria-selected`, `tabindex` rotativo (só a aba ativa entra na ordem do Tab), setas circulares, `Home` e `End`; focar uma aba pelas setas a ativa.
 - Telas pequenas: a tablist rola sozinha na horizontal (a página nunca rola); em ponteiro grosso cada aba tem no mínimo 44px de altura.
 
 Verificação: `tests/e2e/monthly-report.spec.cjs` (abas, contadores, clique, teclado, `Ver lista ↓`, `Ver chamados →`, mudança de mês, 320px e axe nas cinco abas nos dois temas) e `tests/frontend/test_cockpit_tool_panels.cjs`.
 
 ## Notas dos cartões no ⓘ (Bloco 2, 14/11/2026)
+
+Substituído em parte em 18/11/2026: ver "Novo layout, A com sub-abas" no fim deste arquivo (quatro abas, sem a comparação, sem a linha de status).
 
 Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 2): as três notas que só explicavam o número saíram da tela e foram para um ⓘ (`.info-tip`) ao lado do título do cartão, na mesma linha (`div.ck-rel__cartao-cab`, em `flex`). O texto de cada nota é o mesmo de antes (texto aprovado, ver acima); mudou só o lugar. Componente e contrato: `docs/cockpit-prompts/14-cockpit-v2.md`.
 
@@ -145,6 +152,8 @@ Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.m
 
 ## Visual bento (Bloco 2, 14/11/2026)
 
+Substituído em parte em 18/11/2026: ver "Novo layout, A com sub-abas" no fim deste arquivo (quatro abas, sem a comparação, sem a linha de status).
+
 Só a aparência mudou, a pedido do usuário, seguindo o canvas "Simpress Bento" (opção A, telas `rel-visao`, `rel-os`, `rel-pend`, `rel-cha` e `rel-base`). Textos, IDs, ARIA, `data-*`, botões e regras ficam como estavam; nada de texto novo.
 
 - Cartões: `monthlyCartao` (`frontend/src/paineis/ferramentas-cockpit/estado.ts`) transforma cada cartão ou seção existente em cartão bento (`.ck-bento-cartao > .ck-bento-face`, com tom ciano, fúcsia, âmbar ou índigo). O elemento externo guarda `id`, ARIA e `data-*`, então os seletores do e2e continuam valendo. Visão geral: OS pendentes (ciano), Comparação de inventário (fúcsia), Fora das contagens (âmbar, número grande) e Movimento (índigo); OS e pedidos (ciano), Pendências (fúcsia) e Chamados (F5) (âmbar): um cartão por seção. Base atual: os quatro totais continuam numa seção só; os três blocos de dentro (números, tipos, unidades) viram cartões. Como no desenho, o cartão dos totais ocupa a largura toda, com os quatro totais em 4 colunas (2 abaixo de 1024px, 1 abaixo de 640px); tipos e unidades ficam lado a lado embaixo (1 coluna abaixo de 640px).
@@ -154,3 +163,25 @@ Só a aparência mudou, a pedido do usuário, seguindo o canvas "Simpress Bento"
 - Movimento (só com `prefers-reduced-motion: no-preference`, `docs/ui-motion/contrato-bento.md`): entrada de 700 ms (cartões 760 ms) com passos de 80 ms; barras crescem em 700 ms com 200 ms de espera e os números contam em 900 ms (`data-bento-largura` e `data-bento-contar`); tudo se repete ao trocar de sub-aba; filtrar ou usar `Carregar mais` não refaz a entrada do cartão (`data-sem-entrada`). Botão sobe 3px, sub-aba sobe 2px e a seta anda 3px ao passar o mouse (300 ms).
 - Desvios do desenho: a barra do mês (meses, campo do mês, `Copiar resumo` e `Exportar planilha`) segue numa linha compacta que o desenho não tem; as séries usam a fonte do corpo, como no desenho (antes eram em fonte monoespaçada).
 - Não verificado: comparação pixel a pixel com o desenho, capturas de 320px a 2560px e o tema escuro a olho.
+
+## Novo layout, "A com sub-abas" (18/11/2026)
+
+Pedido do usuário de 18/11/2026, seguindo as telas `NL-F8-Relatorio`, `NL-F8-Grafico` e `NL-F8-Meses` do canvas (versão desktop e `-cel`). Onde esta seção contradiz as anteriores (`Layout operacional`, `Sub-abas`, `Notas dos cartões`, `Visual bento`), vale esta: pedido do usuário vence texto aprovado. Mesmos dados, endpoints, XLSX e prévia; sem API nova e sem busca extra. IDs, ARIA e `data-*` existentes foram mantidos. Só a aparência vem do CSS de `static/styles/nl-f3-f7-f8.css` (seção F8, presa a `[data-cockpit-tool-panel="relatorio"]`); o que muda de estrutura está em `estado.ts` (`monthly*`), no partial do painel e em `frontend/src/paineis/relatorio-mensal/`.
+
+Mudanças:
+
+1. **Quatro sub-abas:** `Visão geral`, `OS e pedidos do mês`, `Chamados (F5)`, `Base atual`. A aba `Pendências da comparação` e a seção `Comparação de inventário` saíram da tela (ids `rel-aba-comp`, `rel-painel-comp`, `rel-comp-contagem` e `cockpit-monthly-comp-*` não existem mais). Os dados da comparação continuam na XLSX e em `Copiar resumo` (linha `Comparação usada`); a seção em texto simples não se aplica mais.
+2. **Barra do mês:** rótulo `Mês do relatório`, pílulas dos três meses mais recentes, selo `Parcial até dd/mm/aaaa` ou `Mês encerrado` (`#cockpit-monthly-period`), `Copiar resumo` e `Exportar planilha` (primário). No modal de exportação (`modais.html` e `relatorio-mensal/formulario.tsx`) o rótulo é `Mês` com `*` vermelho, sem dois-pontos.
+3. **Status sem linha visível:** `#cockpit-monthly-status` ficou `sr-only` com `aria-live="polite"`. Painel: carregando `Carregando dados do relatório…`; erro `Falha ao carregar o relatório.` (ou a mensagem do servidor), sempre com toast curto. Exportação (modal): inválido `Selecione o mês atual ou um mês anterior.` com toast; gerando `Gerando relatório...`; erro `Falha ao gerar o relatório mensal.` e toast curto; sucesso: toast `Planilha Exportada com Sucesso!` (texto exato, sem contagens).
+4. **Visão geral:** `Precisa de atenção` com o cartão `OS pendentes no fim do período`, o cartão `Chamados (F5)` (`#cockpit-monthly-chamados`, fixo no partial, nunca recriado; chips `N novos` âmbar e `N antigos` fúcsia e `Ver chamados →`) e, só quando há registros, `Fora das contagens`. Depois, `Movimento do mês` (tabela Fonte, Abertas, Concluídas, Encerradas; cartões no celular), o gráfico e `Prévia para a gestão`.
+5. **Gráfico do movimento** (`relatorio-mensal/grafico-semanal.ts`, teste `tests/frontend/test_relatorio_grafico.cjs`): segmentado `Fonte` (`Ambas`, `Oracle`, `Simpress`; `aria-label="Fonte"`), legenda com a soma das barras de cada série (o total do servidor de `Encerradas` inclui OS criadas antes do mês, que não têm barra), barras agrupadas por semana, eixo Y com grade, `title` em cada barra, área do gráfico com `role="img"` e `aria-label`. Escala única em `Ambas`, sem folga acima do maior valor. Entrada das barras com 40 ms de escalonamento (`scaleY`; atraso até 400 ms, mais 300 ms de animação), zerada com `prefers-reduced-motion`. Eixo, contagens e barras vêm de `report.os.linhas`; "Encerradas" por semana usa a data de criação, porque o relatório não guarda a data de encerramento.
+6. **OS e pedidos do mês:** rótulo `Filtrar por situação` acima do segmentado `Todas`, `Abertas`, `Concluídas` e `Pendentes`; paginação de 20 em 20 com `Mostrando 20 de N` e `Carregar mais` (o rodapé só aparece quando há mais a mostrar).
+7. **Chamados (F5):** título e selo `Situação atual` fora dos cartões; cartões `Chamados novos` com `Ver novos →` (âmbar) e `Antigos em aberto` com `Ver antigos →` (fúcsia); cartão de informação `Com data em <mês por extenso>` (por exemplo `outubro de 2026`) com o chip `N sem data` e os números `Abertos` e `Finalizados`. A nota da fonte e a frase `Sem data de abertura ou de encerramento: N (fora da contagem)` saíram da tela (continuam na prévia). A tabela de linhas do mês e os estados (`Nenhum Dashboard importado...`, erro só dessa parte) seguem como antes.
+8. **Base atual:** selo `Não muda com o mês` (sem bloco tracejado); `Inventário por tipo` em linhas sem barras; `Ver todas as N unidades →` / `Ver menos`; sem nota de origem.
+9. Links `Ver ... →` na cor do cartão; setas andam na horizontal ao passar o mouse (300 ms, zerado com movimento reduzido).
+
+Desvios do desenho (decididos, não pendências): sem o cabeçalho da tela do desenho (h1, `F8`, `Voltar`/`Esc`), porque o cockpit já tem o seu; sem a marca deslizante entre as sub-abas (a aba ativa troca de estilo); os quatro números da Base ficam em caixas dentro de um só cartão; a coluna `OS/Pedido` da tabela de OS foi mantida; em 320px as sub-abas rolam na horizontal se não couberem.
+
+Assistente (`domains/assistant_chat.py`, regra do F8, e `tests/test_assistant_estilo_e_abas.py`): alinhado às quatro sub-abas; não cita mais `Pendências da comparação` (o teste confere a ausência).
+
+Verificação: `tests/frontend/test_cockpit_tool_panels.cjs`, `tests/frontend/test_relatorio_grafico.cjs` e `tests/e2e/monthly-report.spec.cjs` (quatro abas, selo do período, toast, chip e cartões de Chamados, 320px e axe nos dois temas). Não verificado: comparação pixel a pixel com o desenho e o tema escuro a olho.

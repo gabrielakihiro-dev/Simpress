@@ -5,43 +5,6 @@ const HISTORICO = [
   { id: "old", atualizado_em: "2026-10-11T12:00:00Z" },
 ];
 
-test("Chamados: a comparação não é sobrescrita por uma resposta atrasada de outra versão", async ({ page }) => {
-  let releaseOld;
-  let notifyOldRequested;
-  const oldRequested = new Promise(resolve => { notifyOldRequested = resolve; });
-  await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
-    snapshot_id: "new", historico: [...HISTORICO, { id: "oldest", atualizado_em: "2026-10-10T12:00:00Z" }],
-    chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
-  } }));
-  await page.route("**/api/operacoes/chamados/evolucao**", async route => {
-    const atual = new URL(route.request().url()).searchParams.get("atual");
-    if (atual === "old") {
-      notifyOldRequested();
-      await new Promise(release => { releaseOld = release; });
-      await route.fulfill({ json: { contagens: { novos: 9 }, mudancas: {} } }).catch(() => {});
-      return;
-    }
-    await route.fulfill({ json: { contagens: { novos: 1 }, mudancas: {} } });
-  });
-  await page.goto("/");
-  await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
-  const selector = page.locator("#cockpit-tickets-version");
-  await expect(selector).toHaveValue("new");
-  await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
-  try {
-    await selector.selectOption("old");
-    await oldRequested;
-    await selector.selectOption("new");
-    await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
-    releaseOld();
-    await page.waitForTimeout(150);
-    await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
-    await expect(page.locator("#cockpit-tickets-evolution")).not.toContainText("9 novas");
-  } finally {
-    releaseOld?.();
-  }
-});
-
 test("Chamados: Exportar Excel usa a versão selecionada e os filtros do painel", async ({ page }) => {
   const exported = [];
   await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
@@ -95,7 +58,7 @@ test("Chamados: na versão da tabela, Exportar Excel manda por POST as séries q
   expect(request.postDataJSON()).toMatchObject({ series: [], search: "nada-casa-com-isto" });
 });
 
-test("Chamados: limpar a versão também limpa a comparação e bloqueia a exportação", async ({ page }) => {
+test("Chamados: limpar a versão bloqueia a exportação", async ({ page }) => {
   await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
     snapshot_id: "new", historico: HISTORICO,
     chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
@@ -105,12 +68,7 @@ test("Chamados: limpar a versão também limpa a comparação e bloqueia a expor
   } }));
   await page.goto("/");
   await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
-  const evolution = page.locator("#cockpit-tickets-evolution");
-  await expect(evolution).toContainText("7 novas");
-
   await page.locator("#cockpit-tickets-version").selectOption("");
-  await expect(evolution).toHaveText("Nenhuma importação selecionada.");
-  await expect(evolution).not.toContainText("7 novas");
   await expect(page.locator("#cockpit-tickets-export")).toBeDisabled();
 });
 

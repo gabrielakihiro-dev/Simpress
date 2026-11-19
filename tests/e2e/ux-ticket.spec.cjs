@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 // Transporte (F2): "Transporte" (#btn-gerar-planilha) downloads the file and then opens "Gerar ticket no UX";
 // "Alterar Endereço" opens the same modal with only the série and the addresses, without any workbook.
@@ -56,6 +57,7 @@ async function prepararTela(page, ticket, { contatos = true } = {}) {
     "retirada-obs": "Notebook + kit", "entrega-contato": "Maria Teste", "entrega-email": "entrega@exemplo.com",
     "entrega-telefone": "(41) 3333-0000", "entrega-obs": "Nova contratação",
   };
+  if (contatos) await abrirEtapaTransporte(page, 2, 3);
   if (contatos) for (const [id, valor] of Object.entries(campos)) await page.locator(`#${id}`).fill(valor);
   return chamadas;
 }

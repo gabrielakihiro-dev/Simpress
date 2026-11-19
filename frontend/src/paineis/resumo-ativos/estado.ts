@@ -1,6 +1,7 @@
 // Estado do cartão "Ativos por regional" (Resumo, F3), fora do componente: a aplicação chama
 // carregarResumoAtivos pela ponte antes ou depois de o React desenhar o cartão.
 import { apiFetch } from "../../api";
+import { ENDPOINT, painelCompartilhado } from "../paineis-dados/utilitarios.ts";
 
 export const VISIVEIS = 8; // "Ver menos" recolhe para as 8 maiores regionais
 export const TEXTO_CARREGANDO = "Carregando dados da base local…";
@@ -69,11 +70,6 @@ export function alternarExpandido() {
   mudar({ expandido: !estado.expandido, geracao: estado.geracao + 1 });
 }
 
-// Clique numa sub-aba do Resumo repete barras e contagens (evento simpress:bento-repetir, comparison-result.js).
-export function repetirAnimacao() {
-  if (estado.resultado?.tipo === "pronto") mudar({ geracao: estado.geracao + 1 });
-}
-
 let pedido = 0;
 let relogio: ReturnType<typeof setTimeout> | undefined;
 
@@ -86,7 +82,7 @@ export async function carregarResumoAtivos(): Promise<void> {
   mudar({ carregando: true });
   let resultado: Estado["resultado"];
   try {
-    const painel = await apiFetch<unknown>("/api/painel", { cache: "no-store" });
+    const painel = await painelCompartilhado(() => apiFetch<unknown>(ENDPOINT, { cache: "no-store" }));
     resultado = { tipo: "pronto", painel: painel && typeof painel === "object" ? (painel as Painel) : {} };
   } catch {
     resultado = { tipo: "erro" };

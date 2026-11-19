@@ -1,6 +1,7 @@
 import logging
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from core.errors import DomainValidationError
@@ -244,6 +245,35 @@ class EndpointAliasIndexTests(unittest.TestCase):
             endpoint_file.write_bytes(b"fixture-22")
             self.assertEqual(effective_alias.read_endpoint_alias_index(services)["unique"], {"S1": "fixture-22"})
             self.assertEqual(len(reads), 2)
+
+    def test_cached_rows_build_the_index_once_per_removed_set(self):
+        with tempfile.TemporaryDirectory() as directory:
+            endpoint_file = Path(directory) / "InvAll.xlsx"
+            endpoint_file.write_bytes(b"fixture-1")
+            services = effective_alias.EffectiveAliasServices(
+                endpoint_upload_file=lambda: endpoint_file,
+                validate_uploaded_workbook=lambda file_bytes, role: {
+                    "records": [{"SERIAL": "S1", "NOMEDOCOMPUTADOR": file_bytes.decode()}]},
+                logger=logging.getLogger("tests.effective_alias"),
+            )
+            builds = []
+            original = effective_alias.build_endpoint_alias_index
+
+            def counting(records, removed=frozenset()):
+                builds.append(removed)
+                return original(records, removed)
+
+            with unittest.mock.patch.object(effective_alias, "build_endpoint_alias_index", counting):
+                effective_alias.read_endpoint_alias_index(services)  # parses the file and fills the row cache
+                cached = effective_alias.read_endpoint_alias_index(services)
+                cached["unique"]["S1"] = "CHANGED-BY-CALLER"
+                self.assertEqual(effective_alias.read_endpoint_alias_index(services)["unique"], {"S1": "fixture-1"},
+                                 "callers do not share the cached index")
+                self.assertEqual(len(builds), 2)
+
+                removed = frozenset({("S1", effective_alias.normalize_reference_value("fixture-1"))})
+                self.assertEqual(effective_alias.read_endpoint_alias_index(services, removed)["unique"], {})
+                self.assertEqual(len(builds), 3, "a new removed set builds the index again")
 
 
 if __name__ == "__main__":

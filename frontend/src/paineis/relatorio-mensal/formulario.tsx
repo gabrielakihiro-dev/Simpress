@@ -10,7 +10,7 @@ export function FormularioRelatorio() {
   return (
     <>
       <div>
-        <label htmlFor="relatorio-mensal-mes" className="block text-xs text-fg-subtle mb-1">Mês: <span className="required-mark" aria-hidden="true">*</span></label>
+        <label htmlFor="relatorio-mensal-mes" className="block text-xs text-fg-subtle mb-1 mr-rotulo">Mês <span className="required-mark mr-req" aria-hidden="true">*</span></label>
         <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="tip-relatorio-mensal" className="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
       </div>
       <p id="status-relatorio-mensal" role={erro ? "alert" : "status"} aria-live="polite" aria-atomic="true" data-state={erro === null ? undefined : erro ? "error" : ""}>{status}</p>

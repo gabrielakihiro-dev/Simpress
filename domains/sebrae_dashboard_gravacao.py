@@ -269,12 +269,13 @@ class ChamadoAberto:
     usuario: str = ""  # column I
     automaticos: Mapping[str, str] = field(default_factory=dict)  # E, K, L, N as stored
     descricao: str = ""  # column H, only read to spot a ticket opened for another person
+    abertura: str = ""  # column P (DATA ABERTURA), read to tell whether an earlier OS is related to the ticket
 
     def como_dict(self) -> Dict[str, object]:
         return {
             "numero": self.numero, "titulo": self.titulo, "valores": dict(self.valores), "linha": self.linha,
             "chamado": self.chamado, "usuario": self.usuario, "automaticos": dict(self.automaticos),
-            "descricao": self.descricao,
+            "descricao": self.descricao, "abertura": self.abertura,
         }
 
 
@@ -311,7 +312,7 @@ def _abertos(linhas: Mapping[int, _Linha], compartilhadas: Sequence[str]) -> Lis
         ChamadoAberto(
             utic if utic and repeticoes[utic] == 1 else f"{CHAVE_DE_LINHA}{linha.numero}", linha.numero, lido(linha, "G"), valores,
             chamado, lido(linha, "I"), {letra: lido(linha, letra) for letra in AUTOMATICAS_VAZIAS},
-            lido(linha, "H")[:LIMITE_H_LIDO],
+            lido(linha, "H")[:LIMITE_H_LIDO], lido(linha, "P"),
         )
         for linha, chamado, utic, valores in abertas
     ]
@@ -438,9 +439,11 @@ def _recolocar(bruto: str, letra: str, numero: int, estilo: str) -> str:
 
 def _reescrever_linha(
     linha: _Linha, valores: Mapping[str, str], estilos: Mapping[str, str], formula_q: str, manter_estilo: bool,
-    brutas: Optional[Mapping[str, str]] = None,
+    brutas: Optional[Mapping[str, str]] = None, limpar: Sequence[str] = (),
 ) -> str:
     """The row with ``valores`` set (empty values leave the cell alone); formula caches dropped.
+
+    ``limpar``: columns emptied on purpose (the cell stays, with its style, but no value); only ``atualizar`` uses it, for ``limpar_e``.
 
     ``brutas``: column -> raw ``<c>`` copied as it is (``reaplicar``: multi-line text and seconds survive), re-addressed to this row.
     A cell keeps its own style when ``manter_estilo`` (edit of an existing ticket); otherwise it takes the
@@ -454,6 +457,9 @@ def _reescrever_linha(
     for letra, bruto in (brutas or {}).items():
         proprio = _estilo_da_celula(celulas.get(letra, "")) if manter_estilo else ""
         celulas[letra] = _recolocar(bruto, letra, linha.numero, proprio or estilos.get(letra, ""))
+    for letra in limpar:
+        estilo = _estilo_da_celula(celulas.get(letra, ""))
+        celulas[letra] = f'<c r="{letra}{linha.numero}"' + (f' s="{estilo}"' if estilo else "") + "/>"
     if formula_q and "<f" not in celulas.get("Q", ""):
         estilo_q = estilos.get("Q", "")
         celulas["Q"] = f'<c r="Q{linha.numero}"' + (f' s="{estilo_q}"' if estilo_q else "") + f' t="str"><f>{formula_q}</f></c>'
@@ -746,6 +752,7 @@ def atualizar(
     edicoes: Optional[Mapping[str, Mapping[str, str]]] = None,
     automaticos: Optional[Mapping[str, Mapping[str, str]]] = None,
     trocas_e: Optional[Mapping[str, str]] = None,
+    limpar_e: Optional[Mapping[str, str]] = None,
 ) -> Resultado:
     """Copy of the Dashboard with ``novas`` in the first free rows of Tabela3 and ``edicoes`` in existing rows.
 
@@ -758,12 +765,15 @@ def atualizar(
     ``trocas_e``: ``{key: OS}``, the only way to replace an E that is already filled (a newer OS of the serial that cites the
     ticket, or the OS of a manual link): writes only column E, only on old open tickets, only when the value differs; an empty
     value is ignored and it wins over ``automaticos``.
+    ``limpar_e``: ``{key: OS}``, empties column E of an old open ticket only when that cell is exactly this OS (the user clicked
+    Remover on an OS unrelated to the ticket); a cell with another OS, or already empty, is left alone; ``trocas_e`` wins over it.
     Raises ``GravacaoInvalida`` (message for the user) when it cannot.
     """
     edicoes = edicoes or {}
     automaticos = automaticos or {}
     trocas_e = {c: " ".join(str(os_ or "").split()) for c, os_ in (trocas_e or {}).items()}
     trocas_e = {c: os_ for c, os_ in trocas_e.items() if os_}
+    limpar_e = {c: " ".join(str(os_ or "").split()).upper() for c, os_ in (limpar_e or {}).items()}
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
     pacote = _ler_pacote(conteudo)
     texto = pacote.texto(pacote.aba)
@@ -791,12 +801,12 @@ def atualizar(
         substituicoes[numero_linha] = _reescrever_linha(linhas[numero_linha], letras, estilos, formula_q, False)
         gravadas.append(LinhaGravada(str(valores.get("C", "")), numero_linha, "novo", tuple(sorted(l for l, v in letras.items() if v != ""))))
 
-    if edicoes or automaticos or trocas_e:
+    if edicoes or automaticos or trocas_e or limpar_e:
         abertos = {c.numero: c for c in _abertos(linhas, compartilhadas)}
-        for chamado in dict.fromkeys([*edicoes, *automaticos, *trocas_e]):
+        for chamado in dict.fromkeys([*edicoes, *automaticos, *trocas_e, *limpar_e]):
             aberto = abertos.get(chamado)
             if aberto is None and chamado not in edicoes and chamado not in automaticos:
-                continue  # a swap for a ticket that is no longer open is dropped, never an error
+                continue  # a swap or a clear for a ticket that is no longer open is dropped, never an error
             if aberto is None:
                 raise GravacaoInvalida(f"{chamado}: não está entre os chamados antigos em aberto do Dashboard.")
             linha = linhas[aberto.linha]
@@ -822,9 +832,12 @@ def atualizar(
             troca = trocas_e.get(chamado)
             if troca and troca != _valor_legivel("E", linha.celulas.get("E", ""), compartilhadas):  # the one overwrite of a filled E
                 alteradas["E"] = troca
-            if alteradas:
-                substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
-                gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))
+            # única exceção a "campo em branco nunca apaga": E vazio só por clique em Remover, e só se a E ainda for essa OS (autorizado 18/11/2026)
+            limpas = ["E"] if limpar_e.get(chamado) and "E" not in alteradas and limpar_e[chamado] == " ".join(
+                _valor_legivel("E", linha.celulas.get("E", ""), compartilhadas).split()).upper() else []
+            if alteradas or limpas:
+                substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True, limpar=limpas)
+                gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted({*alteradas, *limpas}))))
 
     resultado, mapa = _entregar(pacote, texto, linhas, substituicoes, anteriores, [str(l.get("C", "")) for l in novas], True)
     return Resultado(resultado, tuple(replace(g, linha=mapa.get(g.linha, g.linha)) for g in gravadas))

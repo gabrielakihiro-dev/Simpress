@@ -729,8 +729,8 @@ def cobertura_reset(cenario="base"):
         hoje=lambda: date(*COBERTURA_HOJE),
         agora=lambda: COBERTURA_AGORA,
         manutencao=lambda: manutencao,
-        cadastro=lambda: [{"serial": "SINT-001", "retirada_cidade": "Cidade A"},
-                          {"serial": "SINT-002", "retirada_cidade": "Cidade B"}],
+        cadastro=lambda: [{"serial": "SINT-001", "retirada_cidade": "Cidade A", "modelo": "EliteBook 640 G10", "tipo": "Notebook"},
+                          {"serial": "SINT-002", "retirada_cidade": "Cidade B", "modelo": "ProDesk 400 G9", "tipo": "Micro Computador"}],
         history_file=lambda: state_dir / "historico_transferencias.json",
     ))
     api = FastAPI()
@@ -886,7 +886,7 @@ class Handler(BaseHTTPRequestHandler):
             globals()["automation_run"] = None
             globals()["automation_last_sebrae"] = query.get("ultimo_sebrae", ["0"])[0] == "1"
             rotina_ativa = query.get("run", [""])[0]
-            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae"):
+            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard"):
                 globals()["automation_run"] = {
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",
@@ -936,6 +936,9 @@ class Handler(BaseHTTPRequestHandler):
             page = max(1, min(int(query.get("pagina", ["1"])[0]), pages))
             self.send({"execucoes": entries[(page - 1) * limit:page * limit], "total": len(entries),
                        "pagina": page, "paginas": pages, "limite": limit})
+        elif path == "/api/automacao/historico/ultimas":
+            self.send({"ultimas": {rotina: next((entry for entry in AUTOMATION_HISTORY if entry["rotina"] == rotina), None)
+                                   for rotina in parse_qs(url.query).get("rotina", [])}})
         elif path.startswith("/api/automacao/capturas/"):
             self.send(FIXTURE_CAPTURE, content_type="image/png")
         elif path.startswith("/api/automacao/execucoes/") and path.endswith("/log"):

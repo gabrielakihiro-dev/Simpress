@@ -575,6 +575,8 @@ class RouteTests(unittest.TestCase):
 
 
 class AbaDaConsultaTests(unittest.TestCase):
+    # O link padrão, não o da Configuração local desta máquina.
+    @patch.object(endpoint_lookup.automation, "ENDPOINT_URL", "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers")
     def test_tab_of_another_site_is_never_asked_its_name(self):
         # evaluate has no timeout: a frozen Microsoft login tab hung the lookup forever (17/11/2026).
         travada = MagicMock(url="https://login.microsoftonline.com/x/oauth2/authorize")

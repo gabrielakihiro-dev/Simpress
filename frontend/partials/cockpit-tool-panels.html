@@ -18,8 +18,8 @@
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
           <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
-            <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off"></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada" size="5"><option value="todos" selected>Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label class="ckp-alternar" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="cockpit-tickets-attention" type="checkbox">Atenção · 3+ dias</label>
             <button type="button" id="cockpit-tickets-export" class="ck-btn ck-btn--secundario" data-on-click="exportarChamadosCockpit" disabled>Exportar Excel</button>
             <button type="button" id="cockpit-tickets-clear" class="ck-btn ck-btn--fantasma">Limpar filtros</button>
@@ -46,36 +46,93 @@
             <p id="cockpit-comparison-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando histórico…</p>
             <label class="ck-campo"><span class="ck-campo__rotulo">Comparação</span><select id="cockpit-comparison-event" class="ck-entrada"></select></label>
             <button type="button" id="cockpit-comparison-new" class="ck-btn ck-btn--secundario">Nova comparação</button>
-            <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="ck-btn ck-btn--primario disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar</span></button>
-            <button type="button" id="btn-exportar-equipamentos" class="ck-btn ck-btn--secundario hidden" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar Excel com apelidos e IdCliente atualizados e enviar ao UX Simpress" title="Baixar a planilha e atualizar apelidos e id no UX Simpress"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar Excel</span></button>
+            <button type="button" id="btn-exportar-equipamentos" class="ck-btn ck-btn--secundario hidden" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar Excel com apelidos e IdCliente atualizados" title="Baixar a planilha com apelidos e IdCliente atualizados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar Excel</span></button>
             <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--secundario">Histórico e ações completas</button>
           </div>
           <h3 class="sr-only">Resultado da atualização das planilhas</h3>
-          <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota"></p>
+          <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota" hidden></p>
           <div id="comparacao-planilhas-avisos"></div>
-          <div class="resumo-abas-barra">
-            <div class="resumo-abas" role="tablist" aria-label="Resumo por assunto">
-                <button type="button" role="tab" id="resumo-aba-visao" class="resumo-aba" data-resumo-aba="visao" aria-selected="false" tabindex="-1"><span class="resumo-aba__rotulo">Visão geral</span></button>
-                <button type="button" role="tab" id="resumo-aba-divergencias" class="resumo-aba" data-resumo-aba="divergencias" aria-selected="true" tabindex="0" aria-label="Divergências: 0 linhas"><span class="resumo-aba__rotulo">Divergências</span><span id="resumo-divergencias-contagem" class="ck-badge resumo-aba__n">0</span></button>
-                <button type="button" role="tab" id="resumo-aba-apelidos" class="resumo-aba" data-resumo-aba="apelidos" aria-selected="false" tabindex="-1" aria-label="Apelidos: 0 linhas"><span class="resumo-aba__rotulo">Apelidos</span><span id="resumo-apelidos-contagem" class="ck-badge resumo-aba__n">0</span></button>
-                <button type="button" role="tab" id="resumo-aba-usuarios" class="resumo-aba" data-resumo-aba="usuarios" aria-selected="false" tabindex="-1" aria-label="Usuários: 0 linhas"><span class="resumo-aba__rotulo">Usuários</span><span id="resumo-usuarios-contagem" class="ck-badge resumo-aba__n">0</span></button>
-                <button type="button" role="tab" id="resumo-aba-sem-acesso" class="resumo-aba" data-resumo-aba="sem-acesso" aria-selected="false" tabindex="-1" aria-label="Sem acesso: 0 linhas"><span class="resumo-aba__rotulo">Sem acesso</span><span id="resumo-sem-acesso-contagem" class="ck-badge resumo-aba__n">0</span></button>
-                <button type="button" role="tab" id="resumo-aba-backups" class="resumo-aba" data-resumo-aba="backups" aria-selected="false" tabindex="-1" aria-label="Backups: aguardando dados"><span class="resumo-aba__rotulo">Backups</span><span id="resumo-backups-contagem" class="ck-badge resumo-aba__n">—</span></button>
+          <!-- Novo layout (18/11/2026): bento do Resumo; números e Histórico vêm de frontend/src/paineis/resultado-comparacao/bento-resumo.ts. -->
+          <div class="nf3-topo">
+            <div class="nf3-grade" role="group" aria-label="Contadores do Resumo">
+            <article class="ck-bento-cartao nf3-cartao nf3-cartao--larga" data-tom="indigo" data-bento-cartao data-nf3-cartao="ativos">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M2 20h20"></path></svg></span><h3 class="ck-bento-titulo nf3-titulo">Ativos</h3></div>
+                <p id="nf3-num-ativos" class="ck-bento-num" data-nf3-numero>—</p>
+                <button type="button" class="nf3-ver" data-nf3-ver="ativos" aria-label="Ativos: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+            <article class="ck-bento-cartao nf3-cartao" data-tom="ambar" data-bento-cartao data-nf3-cartao="divergencias">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span><h3 class="ck-bento-titulo nf3-titulo">Divergências</h3></div>
+                <p id="nf3-num-divergencias" class="ck-bento-num" data-nf3-numero>—</p>
+                <button type="button" class="nf3-ver" data-nf3-ver="divergencias" aria-label="Divergências: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+            <article class="ck-bento-cartao nf3-cartao" data-tom="ciano" data-bento-cartao data-nf3-cartao="apelidos">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"></path><path d="M7.5 7.5h.01"></path></svg></span><h3 class="ck-bento-titulo nf3-titulo">Apelidos</h3></div>
+                <p id="nf3-num-apelidos" class="ck-bento-num" data-nf3-numero>—</p>
+                <button type="button" class="nf3-ver" data-nf3-ver="apelidos" aria-label="Apelidos: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+            <article class="ck-bento-cartao nf3-cartao" data-tom="indigo" data-bento-cartao data-nf3-cartao="usuarios">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span><h3 class="ck-bento-titulo nf3-titulo">Usuários</h3></div>
+                <p id="nf3-num-usuarios" class="ck-bento-num" data-nf3-numero>—</p>
+                <button type="button" class="nf3-ver" data-nf3-ver="usuarios" aria-label="Usuários: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+            <article class="ck-bento-cartao nf3-cartao" data-tom="fucsia" data-bento-cartao data-nf3-cartao="sem-acesso">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span><h3 class="ck-bento-titulo nf3-titulo">Sem acesso</h3></div>
+                <p id="nf3-num-sem-acesso" class="ck-bento-num" data-nf3-numero>—</p>
+                <button type="button" class="nf3-ver" data-nf3-ver="sem-acesso" aria-label="Sem acesso: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+            <article class="ck-bento-cartao nf3-cartao" data-tom="esmeralda" data-bento-cartao data-nf3-cartao="backups">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"></path><path d="m9 12 2 2 4-4"></path></svg></span><h3 class="ck-bento-titulo nf3-titulo">Backups em dia</h3></div>
+                <div class="ck-bento-anelbox nf3-anelbox"><div class="ck-bento-anel" role="img" aria-label="Backups em dia: aguardando dados"><svg viewBox="0 0 120 120" aria-hidden="true" focusable="false"><circle class="ck-bento-anel__trilho" cx="60" cy="60" r="52" fill="none" stroke-width="10"></circle><circle class="ck-bento-anel__cheio" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" data-nf3-anel></circle></svg><span id="nf3-num-backups" data-nf3-numero>—</span></div></div>
+                <button type="button" class="nf3-ver" data-nf3-ver="backups" aria-label="Backups em dia: ver lista">Ver lista <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+              <!-- Cartão "Ativos por regional" em React: frontend/src/paineis/resumo-ativos/cartao.tsx. -->
+              <section id="resumo-ativos-secao" class="ck-resumo-secao nf3-regional" aria-labelledby="resumo-regionais-titulo" tabindex="-1" data-react-painel="resumo-ativos"></section>
+            </div>
+            <article class="ck-bento-cartao nf3-cartao nf3-historico" data-tom="indigo" data-bento-cartao data-nf3-cartao="historico" aria-labelledby="nf3-historico-titulo">
+              <div class="ck-bento-face">
+                <div class="ck-bento-cab"><span class="ck-bento-icone"><svg class="ck-bento-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span><h3 id="nf3-historico-titulo" class="ck-bento-titulo nf3-titulo">Histórico</h3></div>
+                <ul id="nf3-historico-lista" class="nf3-historico__lista" aria-label="Últimas comparações"></ul>
+                <p id="nf3-historico-vazio" hidden class="nf3-historico__vazio">Nenhuma comparação ainda.</p>
+                <button type="button" id="nf3-historico-ver-tudo" class="nf3-ver nf3-ver--tudo" aria-haspopup="dialog">Ver tudo <span aria-hidden="true">→</span></button>
+              </div>
+            </article>
+          </div>
+          <div class="nf3-sub">
+            <div class="nf3-sub__corpo">
+              <div class="resumo-abas-barra">
+                <div class="resumo-abas" role="tablist" aria-label="Resumo por assunto">
+                  <button type="button" role="tab" id="resumo-aba-divergencias" class="resumo-aba" data-resumo-aba="divergencias" aria-selected="true" tabindex="0" aria-label="Divergências: 0 linhas"><span class="resumo-aba__rotulo">Divergências</span><span id="resumo-divergencias-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                  <button type="button" role="tab" id="resumo-aba-apelidos" class="resumo-aba" data-resumo-aba="apelidos" aria-selected="false" tabindex="-1" aria-label="Apelidos: 0 linhas"><span class="resumo-aba__rotulo">Apelidos</span><span id="resumo-apelidos-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                  <button type="button" role="tab" id="resumo-aba-usuarios" class="resumo-aba" data-resumo-aba="usuarios" aria-selected="false" tabindex="-1" aria-label="Usuários: 0 linhas"><span class="resumo-aba__rotulo">Usuários</span><span id="resumo-usuarios-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                  <button type="button" role="tab" id="resumo-aba-sem-acesso" class="resumo-aba" data-resumo-aba="sem-acesso" aria-selected="false" tabindex="-1" aria-label="Sem acesso: 0 linhas"><span class="resumo-aba__rotulo">Sem acesso</span><span id="resumo-sem-acesso-contagem" class="ck-badge resumo-aba__n">0</span></button>
+                  <button type="button" role="tab" id="resumo-aba-backups" class="resumo-aba" data-resumo-aba="backups" aria-selected="false" tabindex="-1" aria-label="Backups: aguardando dados"><span class="resumo-aba__rotulo">Backups</span><span id="resumo-backups-contagem" class="ck-badge resumo-aba__n">—</span></button>
+                </div>
+              </div>
+              <div role="tabpanel" id="resumo-painel-backups" class="ck-comparacao-resultado ck-backups" aria-labelledby="resumo-aba-backups" data-resumo-painel="backups" data-react-painel="backups-regionais" hidden></div>
+              <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
+              <!-- Resultado da comparação em React (só ações; o HTML segue acima): frontend/src/paineis/resultado-comparacao/. -->
+              <div data-react-painel="resultado-comparacao" hidden></div>
             </div>
           </div>
-          <div role="tabpanel" id="resumo-painel-backups" class="ck-comparacao-resultado ck-backups" aria-labelledby="resumo-aba-backups" data-resumo-painel="backups" data-react-painel="backups-regionais" hidden></div>
-          <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
-          <!-- Resultado da comparação em React (só ações; o HTML segue acima): frontend/src/paineis/resultado-comparacao/. -->
-          <div data-react-painel="resultado-comparacao" hidden></div>
-          <!-- Cartão "Ativos por regional" em React: frontend/src/paineis/resumo-ativos/cartao.tsx. -->
-          <section id="resumo-ativos-secao" class="ck-resumo-secao" aria-labelledby="resumo-regionais-titulo" data-react-painel="resumo-ativos"></section>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="apelidos" aria-labelledby="cockpit-alias-heading" hidden>
           <h2 id="cockpit-alias-heading" class="sr-only">Histórico de apelidos e alterações</h2>
           <div class="ck-alias-cab">
             <div id="cockpit-alias-kpis" class="ck-kpis ck-alias-kpis" role="group" aria-label="Resumo do histórico"></div>
-            <button type="button" id="cockpit-alias-export" class="ck-btn ck-btn--primario">Exportar CSV</button>
+            <button type="button" id="cockpit-alias-export" class="ck-btn ck-btn--secundario">Exportar CSV</button>
           </div>
           <div id="cockpit-alias-tabs" class="ck-alias-abas" role="tablist" aria-label="Tipo de alteração">
             <button type="button" role="tab" id="cockpit-alias-tab-todos" class="ck-alias-aba" data-alias-type="todos" aria-selected="true" tabindex="0" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Todos</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
@@ -85,14 +142,14 @@
             <button type="button" role="tab" id="cockpit-alias-tab-aviso_endpoint" class="ck-alias-aba" data-alias-type="aviso_endpoint" aria-selected="false" tabindex="-1" aria-controls="cockpit-alias-list"><span class="ck-alias-ponto" aria-hidden="true"></span><span>Avisos do Endpoint</span><span class="ck-alias-aba__n" data-alias-tab-count>0</span></button>
           </div>
           <div class="ck-barra-ferr ck-alias-barra">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input id="cockpit-alias-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, apelido, usuário ou origem"></label>
+            <label class="ck-campo ck-alias-busca"><span class="ck-campo__rotulo sr-only">Buscar no histórico</span><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="cockpit-alias-search" class="ck-entrada" type="search" autocomplete="off"></label>
             <label class="ck-campo" hidden><span class="ck-campo__rotulo">Tipo</span><select id="cockpit-alias-type" class="ck-entrada"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
             <div id="cockpit-alias-filters" class="ck-segmentado ck-alias-periodo" role="group" aria-label="Período">
               <button type="button" class="ck-segmentado__op" data-alias-period="todos" aria-pressed="true">Todas <span id="cockpit-alias-count-all">0</span></button>
               <button type="button" class="ck-segmentado__op" data-alias-period="7dias" aria-pressed="false">Últimos 7 dias <span id="cockpit-alias-count-7days">0</span></button>
             </div>
             <label class="ckp-alternar" title="Mostra só os registros que podem ser restaurados ou excluídos"><input id="cockpit-alias-actions-only" type="checkbox">Somente com ação disponível</label>
-            <button type="button" id="cockpit-alias-clear" class="ck-btn ck-btn--secundario">Limpar filtros</button>
+            <button type="button" id="cockpit-alias-clear" class="ck-btn ck-btn--secundario ck-btn--sm">Limpar filtros</button>
           </div>
           <div class="ck-dividido ck-alias-dupla">
             <div class="ck-bento-cartao ck-bento-d1">
@@ -107,19 +164,18 @@
         <section class="ck-ferr-painel" data-cockpit-tool-panel="relatorio" aria-labelledby="cockpit-monthly-heading" hidden>
           <h2 id="cockpit-monthly-heading" class="sr-only">Relatório mensal de operações</h2>
           <div class="ck-barra-ferr ck-rel__barra">
-            <div id="cockpit-monthly-periods" class="ck-pilulas" role="group" aria-label="Meses recentes"></div>
+            <div class="ck-campo ck-rel__mes"><span class="ck-campo__rotulo" aria-hidden="true">Mês do relatório</span><div id="cockpit-monthly-periods" class="ck-pilulas" role="group" aria-label="Meses recentes"></div></div>
             <label class="ck-campo"><span class="ck-campo__rotulo">Mês do relatório</span><input id="cockpit-monthly-month" class="ck-entrada" type="month"></label>
             <span id="cockpit-monthly-period" class="ck-badge ck-rel__periodo" hidden></span>
             <span class="ck-rel__espaco" aria-hidden="true"></span>
             <button type="button" id="cockpit-monthly-copy" class="ck-btn ck-btn--secundario">Copiar resumo</button>
             <button type="button" id="cockpit-monthly-export" class="ck-btn ck-btn--primario">Exportar planilha</button>
-            <p id="cockpit-monthly-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Selecione um mês para carregar o relatório.</p>
+            <p id="cockpit-monthly-status" class="sr-only" role="status" aria-live="polite">Selecione um mês para carregar o relatório.</p>
           </div>
           <div class="rel-abas-barra">
             <div class="rel-abas" role="tablist" aria-label="Assuntos do relatório">
               <button type="button" role="tab" id="rel-aba-visao" class="rel-aba" data-rel-aba="visao" aria-selected="true" aria-controls="rel-painel-visao" tabindex="0"><span class="rel-aba__rotulo">Visão geral</span></button>
               <button type="button" role="tab" id="rel-aba-os" class="rel-aba" data-rel-aba="os" aria-selected="false" aria-controls="rel-painel-os" tabindex="-1"><span class="rel-aba__rotulo">OS e pedidos do mês</span><span id="rel-os-contagem" class="ck-badge rel-aba__n" hidden></span></button>
-              <button type="button" role="tab" id="rel-aba-comp" class="rel-aba" data-rel-aba="comp" aria-selected="false" aria-controls="rel-painel-comp" tabindex="-1"><span class="rel-aba__rotulo">Pendências da comparação</span><span id="rel-comp-contagem" class="ck-badge rel-aba__n" hidden></span></button>
               <button type="button" role="tab" id="rel-aba-sebrae" class="rel-aba" data-rel-aba="sebrae" aria-selected="false" aria-controls="rel-painel-sebrae" tabindex="-1"><span class="rel-aba__rotulo">Chamados (F5)</span><span id="rel-sebrae-contagem" class="ck-badge rel-aba__n" hidden></span></button>
               <button type="button" role="tab" id="rel-aba-base" class="rel-aba" data-rel-aba="base" aria-selected="false" aria-controls="rel-painel-base" tabindex="-1"><span class="rel-aba__rotulo">Base atual</span></button>
             </div>
@@ -130,19 +186,21 @@
               <div id="rel-painel-visao" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-visao">
                 <section id="cockpit-monthly-attention" class="ck-rel__atencao-bloco" aria-labelledby="cockpit-monthly-attention-title" hidden>
                   <h3 id="cockpit-monthly-attention-title" class="ck-rel__titulo" tabindex="-1">Precisa de atenção</h3>
-                  <div id="cockpit-monthly-kpis" class="ck-rel__atencao-grade" role="group" aria-label="Indicadores do relatório"></div>
+                  <div id="cockpit-monthly-kpis" class="ck-rel__atencao-grade" role="group" aria-label="Indicadores do relatório">
+                    <!-- O JS põe "OS pendentes" antes e "Fora das contagens" (se houver) depois deste cartão; ele nunca é recriado. -->
+                    <section id="cockpit-monthly-chamados" class="nf8-chamados ck-bento-cartao ck-bento-d1" aria-labelledby="cockpit-monthly-chamados-title" hidden>
+                      <div class="ck-bento-face">
+                        <h4 id="cockpit-monthly-chamados-title" class="ck-rel__cartao-titulo">Chamados (F5)</h4>
+                        <div id="cockpit-monthly-chamados-dados" class="nf8-chamados__dados"></div>
+                        <button type="button" id="cockpit-monthly-chamados-ver" class="ck-rel__link">Ver chamados →</button>
+                      </div>
+                    </section>
+                  </div>
                 </section>
                 <div id="cockpit-monthly-movimento" class="ck-rel__slot"></div>
-                <section id="cockpit-monthly-chamados" class="ck-rel__faixa" aria-labelledby="cockpit-monthly-chamados-title" hidden>
-                  <strong id="cockpit-monthly-chamados-title" class="ck-rel__faixa-titulo">Chamados (F5)</strong>
-                  <span id="cockpit-monthly-chamados-dados" class="ck-rel__faixa-dados"></span>
-                  <span class="ck-rel__espaco" aria-hidden="true"></span>
-                  <button type="button" id="cockpit-monthly-chamados-ver" class="ck-rel__link">Ver chamados →</button>
-                </section>
                 <details class="ck-det-bloco ck-rel__previa"><summary class="ck-det__titulo">Prévia para a gestão</summary><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></details>
               </div>
               <div id="rel-painel-os" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-os" hidden></div>
-              <div id="rel-painel-comp" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-comp" hidden></div>
               <div id="rel-painel-sebrae" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-sebrae" hidden></div>
               <div id="rel-painel-base" class="ck-rel__painel" role="tabpanel" aria-labelledby="rel-aba-base" hidden></div>
             </div>
@@ -185,35 +243,6 @@
         <section class="ck-ferr-painel" data-cockpit-tool-panel="sebrae-chamados" aria-labelledby="sebrae-chamados-heading" hidden>
           <h2 id="sebrae-chamados-heading" class="sr-only">Chamados</h2>
           <div class="ck-det__corpo">
-            <div class="sebrae-topo">
-              <div class="sebrae-topo__acoes">
-                <div class="ck-grupo-botoes sebrae-topo__passos" role="group" aria-label="Ações do Dashboard">
-                  <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
-                  <svg class="ck-ico ck-ico--xs sebrae-topo__seta" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>
-                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
-                </div>
-                <div class="ck-grupo-botoes" role="group" aria-label="Chamados antigos">
-                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
-                </div>
-                <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
-                  <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
-                  <details id="sebrae-rascunho-detalhes" class="sebrae-rascunho__detalhes" hidden>
-                    <summary id="sebrae-rascunho-resumo"></summary>
-                    <ul id="sebrae-rascunho-itens"></ul>
-                  </details>
-                  <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
-                </div>
-              </div>
-              <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-              <p id="sebrae-antigos-leitura-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-              <ul id="sebrae-antigos-leitura-falhas" class="ck-cartao__meta" hidden></ul>
-              <div id="sebrae-fechar" class="sebrae-fechar" hidden>
-                <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
-                <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
-              </div>
-              <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
-              <!-- include: partials/sebrae-conflitos.html -->
-            </div>
             <p id="sebrae-destaque-anuncio" class="ck-cartao__meta" role="status" aria-live="polite"></p>
             <div class="sebrae-abas-barra">
               <div class="sebrae-abas" role="tablist" aria-label="Chamados por situação">
@@ -224,20 +253,67 @@
               </div>
               <button type="button" id="btn-sebrae-filtro" class="sebrae-lupa" aria-label="Filtrar chamados" aria-expanded="false" aria-controls="sebrae-filtro"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg></button>
               <div id="sebrae-filtro" class="sebrae-filtro" hidden>
-                <label class="sebrae-busca"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="sebrae-filtro-termo" type="search" class="sebrae-busca__entrada" placeholder="UTIC, título, solicitante, série, modelo, cidade, OS…" aria-label="Filtrar chamados" autocomplete="off" spellcheck="false"></label>
-                <button type="button" id="btn-sebrae-limpar-filtro" class="ck-btn ck-btn--fantasma ck-btn--sm">Limpar filtro</button>
+                <p class="sebrae-filtro__titulo">Filtrar chamados</p>
+                <div class="sebrae-filtro__linha">
+                  <label class="sebrae-busca"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><input id="sebrae-filtro-termo" type="search" class="sebrae-busca__entrada" placeholder="UTIC, título, solicitante, série, modelo, cidade, OS…" aria-label="Filtrar chamados" autocomplete="off" spellcheck="false"></label>
+                  <button type="button" id="btn-sebrae-limpar-filtro" class="ck-btn ck-btn--fantasma ck-btn--sm">Limpar filtro</button>
+                </div>
+                <p id="sebrae-filtro-resultado" class="sebrae-filtro__resultado" role="status" aria-live="polite"></p>
               </div>
             </div>
-            <p id="sebrae-filtro-resultado" class="sebrae-filtro__resultado" role="status" aria-live="polite"></p>
+            <div class="sebrae-topo">
+              <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
+                <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
+                <details id="sebrae-rascunho-detalhes" class="sebrae-rascunho__detalhes" hidden>
+                  <summary id="sebrae-rascunho-resumo"></summary>
+                  <ul id="sebrae-rascunho-itens"></ul>
+                </details>
+                <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
+              </div>
+              <div class="sebrae-topo__acoes">
+                <div id="sebrae-leitura" class="sebrae-leitura" role="group" aria-label="Última leitura dos chamados antigos" hidden>
+                  <span id="sebrae-leitura-hora" class="sebrae-chip" hidden><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span></span></span>
+                  <span id="sebrae-leitura-lidos" class="sebrae-chip sebrae-chip--ok" hidden></span>
+                  <span id="sebrae-leitura-falhas" class="sebrae-falhas" hidden>
+                    <button type="button" id="btn-sebrae-falhas" class="sebrae-chip sebrae-chip--erro" aria-expanded="false" aria-controls="sebrae-falhas-popover"><span></span><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg></button>
+                    <div id="sebrae-falhas-popover" class="sebrae-falhas__pop" role="group" aria-label="Chamados com falha na leitura" hidden>
+                      <ul id="sebrae-antigos-leitura-falhas" class="ck-cartao__meta" hidden></ul>
+                    </div>
+                  </span>
+                  <span id="sebrae-leitura-sem-utic" class="sebrae-chip" hidden></span>
+                </div>
+                <div class="ck-grupo-botoes sebrae-topo__passos" role="group" aria-label="Ações do Dashboard">
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
+                  <svg class="ck-ico ck-ico--xs sebrae-topo__seta" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>
+                  <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
+                  <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Enviar ao SharePoint" aria-describedby="sebrae-enviar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="sebrae-enviar-dica" role="tooltip" class="info-tip-text">Gere o Dashboard atualizado antes de enviar ao SharePoint.</span></span>
+                </div>
+                <div class="ck-grupo-botoes sebrae-topo__antigos" role="group" aria-label="Chamados antigos">
+                  <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-ler-antigos" data-automacao-rotina="antigos" data-on-click="lerAntigosSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Ler chamados antigos</span></button>
+                </div>
+              </div>
+              <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <p id="sebrae-antigos-leitura-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <div id="sebrae-fechar" class="sebrae-fechar" hidden>
+                <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+                <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
+              </div>
+              <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
+              <!-- include: partials/sebrae-conflitos.html -->
+            </div>
 
             <section id="sebrae-novos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-novos-secao" tabindex="0">
               <h3 class="sebrae-secao__titulo" id="sebrae-novos-secao">Chamados novos</h3>
+              <ul id="sebrae-novos-mestre" class="sebrae-mestre" aria-label="Chamados novos"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-novos-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
             </section>
             <section id="sebrae-antigos" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-antigos-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-antigos-titulo">Chamados antigos em aberto</h3>
               <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-antigos-mestre" class="sebrae-mestre" aria-label="Chamados antigos"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-antigos-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
               <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>
@@ -245,12 +321,16 @@
             <section id="sebrae-destaques" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-destaques-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-destaques-titulo">Chamados em destaque</h3>
               <p id="sebrae-destaques-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-destaques-mestre" class="sebrae-mestre" aria-label="Chamados em destaque"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <div id="sebrae-destaques-lista"></div>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
             </section>
             <section id="sebrae-finalizados" class="sebrae-painel" role="tabpanel" aria-labelledby="sebrae-finalizados-titulo" tabindex="0" hidden>
               <h3 class="sebrae-secao__titulo" id="sebrae-finalizados-titulo">Chamados finalizados</h3>
               <p id="sebrae-finalizados-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-finalizados-mestre" class="sebrae-mestre" aria-label="Chamados finalizados"></ul>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm sebrae-voltar" data-sebrae-voltar><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar à lista</span></button>
               <ul id="sebrae-finalizados-lista" class="sebrae-avisos"></ul>
               <div class="sebrae-vazio" data-sebrae-vazio-filtro hidden><p class="sebrae-vazio__1"></p><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-vazio__ir" hidden></button></div>
               <div class="sebrae-mais" data-sebrae-mais hidden><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm sebrae-mais__botao">Carregar mais</button><span class="sebrae-mais__n"></span></div>

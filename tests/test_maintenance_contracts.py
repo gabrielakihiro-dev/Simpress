@@ -301,9 +301,10 @@ class MaintenanceContractTests(unittest.TestCase):
         # Painéis migrados para React (frontend/src/paineis) também emitem o texto aprovado.
         script = _frontend_script() + "\n" + _react_panels_source()
         # A exportação de Chamados (G8) usa showToast?.(...) e é contada à parte abaixo; o texto aprovado não muda.
+        # Novo layout Bloco Base (18/11/2026): o botão "Exportar" do resultado da Atualização (F3) saiu, eram 6.
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
-            6,
+            5,
         )
         painel_chamados = (PROJECT_ROOT / "frontend/src/paineis/cockpit-chamados/estado.ts").read_text(encoding="utf-8")
         self.assertEqual(

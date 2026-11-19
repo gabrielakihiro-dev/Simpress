@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:  # o script roda sozinho (python scripts/...) e lê a configuração local do projeto
     sys.path.insert(0, str(ROOT))
-from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract, local_setting  # noqa: E402
+from core.config import CLIENT_NOT_CONFIGURED, SUPPORTED_CONTRACT_LEGAL_NAME, client_contract, endpoint_url, local_setting  # noqa: E402
 
 ONEDRIVE_DOWNLOADS = Path.home() / "OneDrive - SEBRAE" / "Downloads"
 DOWNLOADS_DIR = ONEDRIVE_DOWNLOADS if ONEDRIVE_DOWNLOADS.is_dir() else Path.home() / "Downloads"
@@ -68,10 +68,7 @@ UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
 # Link do Endpoint: SIMPRESS_ENDPOINT_URL ou `endpoint_url` em config/contas_automacao.json (Configuração local),
 # senão o padrão. Lido ao importar: a rotina (subprocesso) usa o novo na próxima execução; a consulta ao vivo, após reiniciar.
-ENDPOINT_URL = (
-    local_setting("SIMPRESS_ENDPOINT_URL", "endpoint_url")
-    or "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
-)
+ENDPOINT_URL = endpoint_url()
 # Telas de login abertas por `login` ("Abrir Chrome para login"); mesmo host do ENDPOINT_URL.
 ENDPOINT_LOGIN_URL = f"{urlsplit(ENDPOINT_URL).scheme}://{urlsplit(ENDPOINT_URL).netloc}/client#/login"
 UX_LOGIN_URL = "https://ux.simpress.com.br/ng/autenticacao/login"

@@ -403,7 +403,7 @@ for (const [status, detail] of [[409, "Chrome ocupado"], [503, "Falha geral"], [
   });
 }
 
-test("Home: proposta C — cabeçalho só com Transporte, Editar e histórico; Endpoint e Outros no painel Ações", () => {
+test("Home: cabeçalho só com Transporte, Editar e histórico; Endpoint, PowerShell e Chamados abertos em cartões na coluna lateral", () => {
   const cabInicio = appHtml.indexOf('<header class="ck-eq-cab"');
   const cab = appHtml.slice(cabInicio, appHtml.indexOf("</header>", cabInicio));
   assert.ok(cabInicio > 0);
@@ -412,19 +412,28 @@ test("Home: proposta C — cabeçalho só com Transporte, Editar e histórico; E
   for (const id of ["btn-consultar-endpoint", "btn-controle-remoto-endpoint", "btn-enviar-email", "btn-ver-dossie", "endpoint-powershell"]) {
     assert.doesNotMatch(cab, new RegExp(`id="${id}"`));
   }
-  const acoesInicio = appHtml.indexOf('<section class="ck-cartao ck-acoes" aria-labelledby="home-acoes-titulo">');
-  const outros = appHtml.indexOf('id="home-acoes-outros"');
+  const endpointInicio = appHtml.indexOf('<section class="ck-cartao nlh-endpoint" aria-labelledby="home-acoes-endpoint">');
+  const ps = appHtml.indexOf('id="endpoint-powershell"');
   const abertos = appHtml.indexOf('aria-labelledby="home-open-tickets-title"');
-  assert.ok(acoesInicio > 0 && acoesInicio < outros && outros < abertos, "Ações vem antes de Chamados abertos");
-  const endpoint = appHtml.slice(acoesInicio, outros);
-  for (const id of ["btn-consultar-endpoint", "btn-controle-remoto-endpoint", "endpoint-lookup-result", "endpoint-powershell"]) assert.match(endpoint, new RegExp(`id="${id}"`));
-  const secaoOutros = appHtml.slice(outros, abertos);
-  for (const id of ["btn-enviar-email", "btn-ver-dossie"]) assert.match(secaoOutros, new RegExp(`id="${id}"`));
+  assert.ok(endpointInicio > 0 && endpointInicio < ps && ps < abertos, "Endpoint, PowerShell e Chamados abertos, nessa ordem");
+  const endpoint = appHtml.slice(endpointInicio, ps);
+  for (const id of ["btn-consultar-endpoint", "btn-controle-remoto-endpoint", "endpoint-lookup-result"]) assert.match(endpoint, new RegExp(`id="${id}"`));
+  const rodape = appHtml.slice(abertos, appHtml.indexOf("</aside>", abertos));
+  for (const id of ["btn-enviar-email", "btn-ver-dossie"]) assert.match(rodape, new RegExp(`id="${id}"`));
+  assert.doesNotMatch(appHtml, /home-acoes-titulo|home-acoes-outros/);
 });
 
 test("Home: o aviso de que o sistema nunca aperta Enter fica junto do botão Inserir, sem botão de executar", () => {
-  assert.match(appHtml, /<div class="ck-ps-endpoint__envio">\s*<button type="submit" id="btn-powershell-endpoint"[\s\S]*?<\/button>\s*<p class="ck-ps-endpoint__aviso">O comando só é inserido no prompt\. O sistema nunca aperta Enter: a execução é sua, no terminal do Chrome\.<\/p>\s*<\/div>/);
+  assert.match(appHtml, /<div class="ck-ps-endpoint__envio">\s*<button type="submit" id="btn-powershell-endpoint"[\s\S]*?<\/button>\s*<p class="ck-ps-endpoint__aviso">Só insere\. Nunca envia Enter\.<\/p>\s*<\/div>/);
   assert.match(appHtml, /id="btn-powershell-codigos-gerenciar" class="ck-btn ck-btn--icone[^"]*"[^>]*aria-label="Gerenciar códigos"/);
-  const ps = appHtml.slice(appHtml.indexOf('id="endpoint-powershell"'), appHtml.indexOf('id="home-acoes-outros"'));
+  const ps = appHtml.slice(appHtml.indexOf('id="endpoint-powershell"'), appHtml.indexOf('aria-labelledby="home-open-tickets-title"'));
   assert.doesNotMatch(ps, /Executar|#i-play/);
+});
+
+test("Home: modo do PowerShell em controle segmentado ligado ao select de modo, sem enviar nada", () => {
+  const ps = appHtml.slice(appHtml.indexOf('id="endpoint-powershell"'), appHtml.indexOf('aria-labelledby="home-open-tickets-title"'));
+  assert.match(ps, /id="select-powershell-modo"/);
+  for (const modo of ["sistema", "usuario"]) assert.match(ps, new RegExp(`class="nlh-segmento__op"[^>]*data-modo="${modo}"[^>]*aria-pressed="(true|false)"`));
+  assert.doesNotMatch(ps, /<button type="submit"[^>]*nlh-segmento__op/);
+  assert.match(ps, /id="btn-ps-ver-inteiro"[^>]*aria-expanded="false"/);
 });

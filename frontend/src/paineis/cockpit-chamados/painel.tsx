@@ -6,7 +6,7 @@ import {
 } from "./cockpit-chamados-puro";
 import {
   abrirChamadoNoF5, abrirOsEmChamados, assinar, excluirImportacoesAntigasChamadosCockpit, formatarHorario, importarPlanilhas,
-  ler, selecionarVersaoChamadosCockpit, verNaAbaChamados, type AbertoHome, type Evolucao, type Home,
+  ler, selecionarVersaoChamadosCockpit, verNaAbaChamados, type AbertoHome, type Home,
 } from "./estado";
 
 export interface Alvos {
@@ -60,22 +60,6 @@ const CampoArquivo = memo(function CampoArquivo({ entrada, idEntrada, idNome, no
     </label>
   );
 });
-
-function BlocoEvolucao({ evolucao }: { evolucao: Evolucao }) {
-  if (evolucao.tipo === "texto") return <>{evolucao.texto}</>;
-  const { resumo, aviso, linhas } = evolucao.dados;
-  return (
-    <>
-      <p className="ck-chamados-evolucao__resumo">{resumo}</p>
-      <p>{aviso}</p>
-      {linhas.length > 0 && (
-        <ul className="ck-chamados-evolucao__lista">
-          {linhas.map(([rotulo, valor], indice) => <li key={indice}><strong>{rotulo}</strong>{` ${valor}`}</li>)}
-        </ul>
-      )}
-    </>
-  );
-}
 
 function ChamadoAberto({ ticket, serie }: { ticket: AbertoHome; serie: string }) {
   const ordem = ticket.ordem_servico;
@@ -187,7 +171,7 @@ export function PainelChamados({ alvos }: { alvos: Alvos }) {
       <div className="ckp-versao">
         <div className="ckp-campo">
           <span className="ckp-rotulo"><label htmlFor="cockpit-tickets-version">Versão em uso</label>{" "}
-            <InfoTip rotulo="Sobre a versão" idDica="cockpit-tickets-version-hint">A versão escolhida vale para Exportar Excel e para a comparação. A tabela mostra sempre a importação mais recente.</InfoTip>
+            <InfoTip rotulo="Sobre a versão" idDica="cockpit-tickets-version-hint">A versão escolhida vale para Exportar Excel. A tabela mostra sempre a importação mais recente.</InfoTip>
           </span>
           <select id="cockpit-tickets-version" className="ck-entrada" aria-describedby="cockpit-tickets-version-hint" value={versao} disabled={historico.length === 0} onChange={evento => selecionarVersaoChamadosCockpit(evento.target.value)}>
             <option value="">Nenhuma importação</option>
@@ -198,12 +182,6 @@ export function PainelChamados({ alvos }: { alvos: Alvos }) {
           {excluindo ? "Excluindo…" : <><Icone nome="i-trash" />Excluir importações antigas</>}
         </button>
       </div>
-      <details className="ckp-recolher ckp-recolher--interno">
-        <summary><Icone nome="i-chevron-right" />Comparação com a importação anterior</summary>
-        <div className="ckp-recolher__corpo">
-          <div id="cockpit-tickets-evolution" className="ckp-secao__desc" role="status" aria-live="polite"><BlocoEvolucao evolucao={estado.evolucao} /></div>
-        </div>
-      </details>
       {createPortal(estado.textoGestao, alvos.versao)}
       {createPortal(contagemHome(estado.home), alvos.contagemHome)}
       {createPortal(<CorpoHome home={estado.home} />, alvos.corpoHome)}

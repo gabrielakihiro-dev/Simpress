@@ -65,10 +65,13 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
   // OS com selo Entregue (Simpress, etapa "Pedido entregue" com data) também vai para Finalizadas, com ou sem vínculo UTIC.
   const osFinalizada = (marcas: Qualquer, serie: Qualquer, order: Qualquer) => Boolean(order.entregue) || marcaAtivaOs(marcas, serie, order.os);
 
-  // Leituras opcionais que falharam: a tabela segue montada e o status diz o que faltou.
-  function sufixoFalhasOs(st: Qualquer) {
-    const falhas = [st.falhaUsuarios && "usuário e hostname indisponíveis", st.falhaMarcas && "marcas de OS finalizada indisponíveis"].filter(Boolean);
-    return falhas.length ? "; " + falhas.join("; ") + "." : "";
+  // Leituras opcionais que falharam: a tabela segue montada e um toast curto diz o que faltou (uma vez por conjunto de falhas, não a cada carga).
+  function avisarFalhasOs(st: Qualquer, userFailure: Qualquer, marcas: Qualquer) {
+    if (!st) return;
+    const falhas = [userFailure && "Usuário e hostname indisponíveis", marcas === null && "Marcas de OS finalizada indisponíveis"].filter(Boolean);
+    const chave = falhas.join("|");
+    if (chave && chave !== st.avisoFalhas) win.showToast?.(falhas.join(". ") + ".", "warning");
+    st.avisoFalhas = chave;
   }
 
   // Números das abas (opcoes.aoContarAbas): só avisa o host quando mudam.
@@ -126,7 +129,7 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     avisarAbasOs(st, porAba);
     const status = statusOs(section);
     const texto = (visiveis === total ? formatNumber(visiveis) : formatNumber(visiveis) + " de " + formatNumber(total)) + " OS · "
-      + pluralize(series.size, "série", "séries") + sufixoFalhasOs(st);
+      + pluralize(series.size, "série", "séries");
     // role=status: reescrever o mesmo texto (ex.: "Carregar mais") faria o leitor de tela anunciar de novo.
     if (status.textContent !== texto) status.textContent = texto;
   }
@@ -209,7 +212,7 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     // (filtros aplicados, sem o limite da página), aoMudarSituacao(situacao) quando revelarLinhaOs troca de sub-aba e aoFocarAba() quando o foco
     // se perde porque a linha mudou de sub-aba. statusEm: elemento do host onde o status ("N OS · N séries") fica, em vez do cabeçalho.
     const st = {
-      busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, falhaMarcas: false, carregada: false,
+      busca: "", relacao: "", triagem: "", atencao: false, limite: OS_POR_PAGINA, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, falhaMarcas: false, avisoFalhas: "", carregada: false,
       aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
       soOs: opcoes.soOs || null, somenteLeitura: Boolean(opcoes.somenteLeitura),
       situacao: opcoes.soOs || opcoes.somenteLeitura ? "" : "abertas", status,
@@ -225,7 +228,6 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       busca.append(el("span", "ck-sr", "Buscar série, OS ou usuário"));
       const campo = el("input", "ck-entrada ck-entrada--sm");
       campo.type = "search";
-      campo.placeholder = "Série, OS ou usuário";
       campo.addEventListener("input", () => { st.busca = campo.value; st.limite = OS_POR_PAGINA; filtrarSecaoOs(section); });
       busca.append(campo);
       head.append(el("span", "ck-espaco"), busca);
@@ -309,7 +311,8 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       if (novo && !novo.closest("tr")?.hidden) novo.querySelector("button")?.focus();
       else osExternas.get(section)?.aoFocarAba?.();
     } catch (error: Qualquer) {
-      status.textContent = error.message || "Não foi possível atualizar a marca.";
+      status.textContent = "Não foi possível atualizar a marca.";
+      win.showToast?.(error.message || "Não foi possível atualizar a marca.", "error");
       botoes.forEach(botao => { botao.disabled = false; botao.removeAttribute("aria-busy"); });
       botoes[0]?.focus();
     }
@@ -444,17 +447,6 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     return labels.join(" + ") || "Fonte não informada";
   }
 
-  function renderTicketSummaryOrderButton(record: Qualquer, label = record.os) {
-    const button = el("button", "ticket-summary-order ticket-summary-order-link", label);
-    const sources = Array.isArray(record.fontes) ? record.fontes : [record.fonte];
-    button.type = "button";
-    button.setAttribute("aria-label", "Abrir andamento em Chamados: " + ticketSummarySourceLabel(sources)
-      + ", série " + record.serie + ", OS " + record.os);
-    button.setAttribute("data-on-click", "abrirChamadoDaOs");
-    button.setAttribute("data-args", JSON.stringify([sources, record.serie, record.os]));
-    return button;
-  }
-
   function collectTicketOsRows(report: Qualquer) {
     const rows: Qualquer = [];
     (Array.isArray(report?.chamados) ? report.chamados : []).forEach((ticket: Qualquer) => {
@@ -566,13 +558,21 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
   function renderTicketSummaryDescription(order: Qualquer, source: Qualquer) {
     const item = el("div", "ck-descricao ticket-summary-description-entry");
     const text = (source === "oracle" && order.descricao) || "Descrição não informada";
-    item.append(el("p", "ck-descricao__texto ticket-summary-description", text));
-    if (text.length > 90 || text.includes("\n")) {
-      item.id = "resumo-os-descricao-" + (++ticketDescriptionSeq);
-      const more = el("button", "ck-link-btn", "Ver mais");
+    const paragrafo = el("p", "ck-descricao__texto ticket-summary-description", text);
+    item.append(paragrafo);
+    // O texto fica em 3 linhas (CSS); "Ver tudo" só aparece quando pode haver corte. Sem data-expandir: o rótulo "Ver mais" do ouvinte global não vale aqui.
+    if (text.length > 120 || text.split("\n").length > 3) {
+      paragrafo.id = "resumo-os-descricao-" + (++ticketDescriptionSeq);
+      const more = el("button", "ck-link-btn ck-os__ver-tudo", "Ver tudo");
       more.type = "button";
-      more.setAttribute("data-expandir", item.id);
+      more.setAttribute("aria-controls", paragrafo.id);
       more.setAttribute("aria-expanded", "false");
+      more.addEventListener("click", () => {
+        const abrir = more.getAttribute("aria-expanded") !== "true";
+        item.dataset.expandido = String(abrir);
+        more.setAttribute("aria-expanded", String(abrir));
+        more.textContent = abrir ? "Ver menos" : "Ver tudo";
+      });
       item.append(more);
     }
     return item;
@@ -691,7 +691,8 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       await refreshTicketSummary(true);
       statusMessage.textContent = numero ? `Vínculo salvo: UTIC-${year}-${numero}.` : "Vínculo removido.";
     } catch (error: Qualquer) {
-      statusMessage.textContent = error.message || "Não foi possível salvar o vínculo.";
+      statusMessage.textContent = "Não foi possível salvar o vínculo.";
+      win.showToast?.(error.message || "Não foi possível salvar o vínculo.", "error");
       buttons.forEach(button => { button.disabled = false; button.removeAttribute("aria-busy"); });
       input?.focus();
     }
@@ -717,9 +718,8 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       return;
     }
     const orderCount = records.reduce((total: Qualquer, record: Qualquer) => total + record.ordens.length, 0);
-    status.textContent = userFailure
-      ? formatNumber(orderCount) + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
-      : formatNumber(orderCount) + " OS · " + pluralize(records.length, "série", "séries");
+    status.textContent = formatNumber(orderCount) + " OS · " + pluralize(records.length, "série", "séries");
+    avisarFalhasOs(externa, userFailure, marcas);
     const table = el("table", "ck-tabela ck-tabela--cards ticket-summary-table");
     const cols = el("colgroup");
     ["fonte", "serie", "os", "usuario", "host", "chamado", "", "obs"].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
@@ -768,13 +768,11 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
         serieCell.textContent = record.serie;
         // Um botão por série (na primeira OS) abre a linha extra com o andamento.
         if (externa?.aoExpandirSerie && orderIndex === 0) serieCell.append(renderAndamentoToggle(externa, record.serie));
+        // O número da OS é só texto: quem abre o Andamento é o botão da célula Série.
         const osCell = cell("OS", "ck-mono");
-        if (externa?.somenteLeitura) osCell.append(el("span", "ck-mono ticket-summary-order-link", order.os));
-        else {
-          const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
-          osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
-          osCell.append(osButton);
-        }
+        const osNumero = el("span", "ck-mono ticket-summary-order-link", order.os);
+        osNumero.tabIndex = -1;
+        osCell.append(osNumero);
         // Selos só da Oracle: record.diasAberta e record.envioTecnico vêm de order (fontes unidas); da Simpress vem só o selo Entregue.
         const dias = order.diasAberta;
         const temDias = dias !== null && dias !== undefined;
@@ -876,8 +874,14 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     button.removeAttribute("aria-controls");
     button.setAttribute("aria-expanded", String(abrir));
     if (!abrir) { st.abertas.delete(serie); return; }
-    st.abertas.add(serie);
     const body = button.closest("tbody");
+    // Uma OS aberta por vez: abrir outra série fecha a anterior.
+    [...st.abertas].filter(outra => outra !== serie).forEach(outra => {
+      const aberto = [...body.querySelectorAll(".ck-os__andamento-btn")].find(btn => btn.dataset.serie === outra);
+      if (aberto) alternarAndamento(aberto, st, outra, false);
+      else st.abertas.delete(outra);
+    });
+    st.abertas.add(serie);
     const rows = [...body.querySelectorAll("tr[data-serial]")].filter(item => item.dataset.serial === serie);
     const detail = doc.createElement("tr");
     detail.id = "ck-os-andamento-" + (++andamentoSeq);
@@ -910,45 +914,51 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     });
     try {
       const notasSeq = osObsSeq;
-      const [report, linksData, notasData, marcasData] = await Promise.all([
-        osSummaryRequest("/api/operacoes/chamados"),
+      const reportRequest = osSummaryRequest("/api/operacoes/chamados");
+      // O usuário logado depende só do relatório: o pedido sai assim que ele chega, junto das outras cargas.
+      const usersRequest = reportRequest.then(async (report: Qualquer) => {
+        const records = groupTicketOsRows(collectTicketOsRows(report));
+        const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
+          .map((ticket: Qualquer) => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
+        // Registros de cada seção: a da janela Chamado × OS fica só com a OS pedida.
+        const proprios = new Map<Qualquer, Qualquer>(alvos.map((section: Qualquer) => {
+          const st = osExternas.get(section);
+          return [section, st?.soOs ? soEssaOs(records, st.soOs, relacoes) : records];
+        }));
+        // Só janelas na carga: o usuário logado é pedido só para as séries delas.
+        const pedidas = [...new Set([...proprios.values()].flat().map(item => item.serie))];
+        let users = {};
+        let userFailure = false;
+        if (pedidas.length) {
+          try {
+            const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ series: pedidas }),
+            });
+            users = userData.usuarios || {};
+          } catch (_) {
+            userFailure = true;
+          }
+        }
+        return { records, relacoes, proprios, users, userFailure };
+      });
+      const [report, linksData, notasData, marcasData, { records, relacoes, proprios, users, userFailure }] = await Promise.all([
+        reportRequest,
         osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
         // Falha nas observações não derruba a tabela: a caixa fica só leitura.
         osSummaryRequest("/api/operacoes/chamados/observacoes").catch(() => null),
         // Falha nas marcas também não derruba a tabela: o status avisa que elas estão indisponíveis.
         osSummaryRequest(MARCA_ROTA).catch(() => null),
+        usersRequest,
       ]);
       const marcas = Array.isArray(marcasData?.marcas) ? modelo.marcasPorOs(marcasData.marcas) : null;
       const notas = Array.isArray(notasData?.observacoes) ? {
         seq: notasSeq,
         itens: new Map(notasData.observacoes.map((item: Qualquer) => [osObsKey(item.serie, item.os), String(item.observacao || "")])),
       } : null;
-      const records = groupTicketOsRows(collectTicketOsRows(report));
-      const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
-        .map((ticket: Qualquer) => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
       const modelos = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
         .map((ticket: Qualquer) => [serialKey(ticket?.serie), (Array.isArray(ticket?.simpress?.modelos) ? ticket.simpress.modelos : []).join(" ")]));
-      // Registros de cada seção: a da janela Chamado × OS fica só com a OS pedida.
-      const proprios = new Map<Qualquer, Qualquer>(alvos.map((section: Qualquer) => {
-        const st = osExternas.get(section);
-        return [section, st?.soOs ? soEssaOs(records, st.soOs, relacoes) : records];
-      }));
-      // Só janelas na carga: o usuário logado é pedido só para as séries delas.
-      const pedidas = [...new Set([...proprios.values()].flat().map(item => item.serie))];
-      let users = {};
-      let userFailure = false;
-      if (pedidas.length) {
-        try {
-          const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ series: pedidas }),
-          });
-          users = userData.usuarios || {};
-        } catch (_) {
-          userFailure = true;
-        }
-      }
       const linkItems = Array.isArray(linksData.vinculos) ? linksData.vinculos : [];
       const links = new Map(linkItems.map((item: Qualquer) => [ticketOsLinkKey({ fonte: item.fonte, serie: item.serie, os: item.os }), item]));
       vivos().forEach((section: Qualquer) => {

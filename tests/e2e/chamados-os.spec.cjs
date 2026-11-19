@@ -63,6 +63,7 @@ test("Chamado × OS: o botão da OS no cartão do chamado na aba Chamados (F5) a
   });
   await page.goto("/");
   await abrirAba(page, "#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "Chamados");
+  await abrirItemAntigo(page.locator('#sebrae-novos-lista article.sebrae-chamado[data-numero="UTIC-2026-1378"]')); // abaixo de 1024px o detalhe só aparece depois de tocar no item da lista
   const gatilho = page.locator('#sebrae-novos-lista article.sebrae-chamado[data-numero="UTIC-2026-1378"] button.sebrae-chamado__os');
   await expect(gatilho).toHaveText("7285070");
   await gatilho.click();
@@ -199,8 +200,9 @@ test("Marca de OS finalizada: falha do PUT mostra o erro, mantém a marca e reab
   const bloco = linha.locator(".ck-os-marca");
   await bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
-  // A mensagem de status da tabela fica na barra das sub-abas (#cockpit-tickets-contagem).
-  await expect(page.locator("#cockpit-tickets-contagem")).toContainText("Marcas indisponíveis no momento.");
+  // A mensagem completa vira toast; o status da tabela (barra das sub-abas) fica curto.
+  await expect(page.locator("#toast-container")).toContainText("Marcas indisponíveis no momento.");
+  await expect(page.locator("#cockpit-tickets-contagem")).toContainText("Não foi possível atualizar a marca.");
   await expect(bloco.locator(".ck-os-marca__selo")).toHaveText("Chamado finalizado");
   await expect(bloco.getByRole("button", { name: "Desfazer, chamado UTIC-2026-1378" })).toBeEnabled();
 });
@@ -272,17 +274,17 @@ async function abrirPainel(page, request, extra = "", antigos = "", consulta = "
   return { cartao, painel };
 }
 
-// Cada antigo é um `details.sebrae-antigo` recolhido (resumo + cartão): abre o do cartão `antigo` se ainda estiver fechado.
+// Novo layout (F5): o antigo aparece no detalhe ao escolher o chamado na lista compacta (`[data-sebrae-mestre]`); o resumo da linha fica escondido.
 async function abrirItemAntigo(antigo) {
-  const item = antigo.locator("xpath=..");
-  if (!(await item.evaluate(no => no.open))) await item.locator("> summary").click();
+  if (!(await antigo.isVisible())) await antigo.page().locator(`[data-sebrae-mestre="${await antigo.getAttribute("data-numero")}"]`).click();
   await expect(antigo).toBeVisible();
 }
 
 // "Chamados antigos em aberto" é a sub-aba Antigos do F5 (07/11/2026): seleciona a aba e espera o painel.
 async function abrirSecaoAntigos(painel) {
   await painel.locator("#sebrae-aba-antigos").click();
-  await expect(painel.locator("#sebrae-antigos-lista")).toBeVisible();
+  // Abaixo de 1024px a lista compacta vem antes do detalhe: o painel mostra o mestre ou a lista com o chamado aberto.
+  await expect(painel.locator("#sebrae-antigos-mestre, #sebrae-antigos-lista >> visible=true").first()).toBeVisible();
 }
 
 // ---- OS nova sugerida no cartão aberto do antigo (F5, 17/11/2026) ----
@@ -446,6 +448,7 @@ test("OS nova sugerida: as duas OS empilham no celular e lado a lado no desktop,
   const cartoes = caixa.locator(".sebrae-osnova__os");
   for (const [largura, empilha] of [[390, true], [320, true], [1280, false]]) {
     await page.setViewportSize({ width: largura, height: 900 });
+    await abrirItemAntigo(cartao); // abaixo de 1024px o detalhe só aparece depois de tocar no item da lista
     await expect(cartoes.nth(1)).toBeVisible();
     const [a, b] = [await cartoes.first().boundingBox(), await cartoes.nth(1).boundingBox()];
     if (empilha) expect(b.y, `${largura}px`).toBeGreaterThanOrEqual(a.y + a.height - 1);

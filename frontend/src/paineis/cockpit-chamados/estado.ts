@@ -6,10 +6,10 @@ import { apiFetch, type ApiFetchOptions } from "../../api";
 import { paineisDados } from "../paineis-dados/paineis.ts";
 import { criarRegrasChamados } from "../regras-chamados/regras";
 import {
-  chamadosAbertosDaSerie, chamadosSebraeDaSerie, chaveEvolucao, idAnterior, montarEvolucao, nomeArquivoExportado,
-  pedidoExportacao, rotuloImportacoesAntigas, rotuloImportacoesRemovidas, textoSemComparacao, versaoAposCarga,
-  type ChamadoOracle, type ChamadoSebrae, type DadosEvolucao, type DadosSebraeNovos, type EventoImportacao,
-  type EvolucaoMontada, type RegrasChamados, type RelatorioChamados,
+  chamadosAbertosDaSerie, chamadosSebraeDaSerie, nomeArquivoExportado,
+  pedidoExportacao, rotuloImportacoesAntigas, rotuloImportacoesRemovidas, versaoAposCarga,
+  type ChamadoOracle, type ChamadoSebrae, type DadosSebraeNovos, type EventoImportacao,
+  type RegrasChamados, type RelatorioChamados,
 } from "./cockpit-chamados-puro";
 
 // Helpers da aplicação publicados em window (frontend/src/aplicacao/app.ts), lidos só na hora do uso.
@@ -33,8 +33,6 @@ const regras = (): RegrasChamados => {
 
 export const formatarHorario = (valor?: string) => app.formatarHorarioHistorico(valor);
 
-export type Evolucao = { tipo: "texto"; texto: string } | { tipo: "dados"; dados: EvolucaoMontada };
-
 /** Chamado Oracle aberto com o rótulo de idade já calculado na hora da consulta (como era no código antigo). */
 export interface AbertoHome extends ChamadoOracle { idade: string }
 
@@ -46,11 +44,10 @@ export type Home =
 
 export interface Estado {
   historico: EventoImportacao[];
-  /** Versão em uso (Exportar Excel e comparação); a tabela mostra sempre a mais recente. */
+  /** Versão em uso (Exportar Excel); a tabela mostra sempre a mais recente. */
   versao: string;
   textoGestao: string;
   fontes: string;
-  evolucao: Evolucao;
   statusImportacao: string;
   importando: boolean;
   excluindo: boolean;
@@ -63,7 +60,6 @@ let estado: Estado = {
   versao: "",
   textoGestao: "Nenhuma importação",
   fontes: "",
-  evolucao: { tipo: "texto", texto: "O histórico de importações aparecerá aqui." },
   statusImportacao: "",
   importando: false,
   excluindo: false,
@@ -83,7 +79,6 @@ export const ler = () => estado;
 
 // Versão que a tabela de OS mostra (ela sempre carrega a mais recente); o Excel só sai igual à tela nessa versão.
 let versaoDaTabela = "";
-let chaveEvolucaoAtual = "";
 // shortcut: atualizado só por importação feita nesta aba ou ao abrir a aba Chamados; importação pela pasta pede recarregar a página.
 let chamadosRecentesHome: RelatorioChamados | null = null;
 
@@ -91,30 +86,11 @@ interface Portao {
   begin(): { id: number; signal: AbortSignal };
   isCurrent(id: number): boolean;
 }
-const portoes: Partial<Record<"evolucao" | "home", Portao>> = {};
+const portoes: Partial<Record<"home", Portao>> = {};
 // Criado na primeira consulta: o comum/transfer-utils.ts já está carregado, mas o módulo nasce antes.
-const portao = (nome: "evolucao" | "home"): Portao => (portoes[nome] ??= window.SimpressTransferUtils.createRequestGate());
+const portao = (nome: "home"): Portao => (portoes[nome] ??= window.SimpressTransferUtils.createRequestGate());
 
 const mensagemDe = (erro: unknown, padrao: string) => (erro as Error | undefined)?.message || padrao;
-
-async function carregarEvolucao() {
-  const pedido = portao("evolucao").begin();
-  const { historico, versao } = estado;
-  const semComparacao = textoSemComparacao(historico, versao);
-  if (semComparacao !== null) {
-    mudar({ evolucao: { tipo: "texto", texto: semComparacao } });
-    return;
-  }
-  mudar({ evolucao: { tipo: "texto", texto: "Comparando esta versão com a anterior…" } });
-  const erroPadrao = "Não foi possível comparar as versões dos chamados.";
-  try {
-    const consulta = new URLSearchParams({ anterior: idAnterior(historico, versao), atual: versao });
-    const dados = await apiFetch<DadosEvolucao>(`/api/operacoes/chamados/evolucao?${consulta.toString()}`, { signal: pedido.signal, errorMessage: erroPadrao });
-    if (portao("evolucao").isCurrent(pedido.id)) mudar({ evolucao: { tipo: "dados", dados: montarEvolucao(dados) } });
-  } catch (erro) {
-    if (portao("evolucao").isCurrent(pedido.id)) mudar({ evolucao: { tipo: "texto", texto: mensagemDe(erro, erroPadrao) } });
-  }
-}
 
 function aplicarRelatorio(relatorio: RelatorioChamados | null | undefined, versaoEscolhida: string) {
   const historico = Array.isArray(relatorio?.historico) ? relatorio.historico : [];
@@ -128,11 +104,6 @@ function aplicarRelatorio(relatorio: RelatorioChamados | null | undefined, versa
     textoGestao: relatorio?.atualizado_em ? `Atualizado ${formatarHorario(relatorio.atualizado_em)}` : "Nenhuma importação",
     fontes: `Simpress: ${fontes.simpress?.arquivo || "aguardando importação"} · Oracle: ${fontes.oracle?.arquivo || "aguardando importação"}`,
   });
-  const chave = chaveEvolucao(historico, versao);
-  if (chave !== chaveEvolucaoAtual) {
-    chaveEvolucaoAtual = chave;
-    void carregarEvolucao();
-  }
 }
 
 // Chamado pela tabela de OS a cada carga de /api/operacoes/chamados (e logo após importar): mantém versões, fontes e Home em dia.
@@ -143,9 +114,7 @@ export function sincronizarGestaoChamadosCockpit(relatorio?: RelatorioChamados |
 // Sem argumento (ponte da aplicação) lê o valor do seletor no HTML.
 export function selecionarVersaoChamadosCockpit(valor?: string) {
   const escolhida = valor ?? (document.getElementById("cockpit-tickets-version") as HTMLSelectElement | null)?.value ?? "";
-  chaveEvolucaoAtual = "";
   mudar({ versao: escolhida });
-  void carregarEvolucao();
 }
 
 // A tabela e os indicadores escutam este evento e recarregam a importação mais recente.
@@ -165,7 +134,6 @@ export async function importarPlanilhas(simpress: File | undefined, oracle: File
     corpo.append("simpress_file", simpress);
     corpo.append("oracle_file", oracle);
     const dados = await apiFetch<RelatorioChamados>("/api/operacoes/chamados/importar", { method: "POST", body: corpo, errorMessage: erroPadrao });
-    chaveEvolucaoAtual = "";
     aplicarRelatorio(dados, "");
     // Até a tabela recarregar ela ainda mostra a versão anterior; o aoCarregar da tabela volta a definir a versão dela.
     versaoDaTabela = "";

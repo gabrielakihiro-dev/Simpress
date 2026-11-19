@@ -1,4 +1,4 @@
-// Cartão "Ativos por regional" do Resumo (F3, Visão geral). Mesmos IDs, ARIA, classes e textos do
+// Cartão "Ativos por regional" do Resumo (F3, cartão do bento). Mesmos IDs, ARIA, classes e textos do
 // cartão antigo em JS puro (antigo frontend/src/legado/features/resumo-ativos.js até o Bloco 3); o visual vem do bento.
 import { useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import {

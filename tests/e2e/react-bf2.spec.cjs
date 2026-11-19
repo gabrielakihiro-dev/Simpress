@@ -228,13 +228,13 @@ test("F5: teclado nas sub-abas (setas, Home, End) e no filtro (Enter abre, Esc l
   await expect(termo).toBeFocused();
   await page.keyboard.type("1378");
   await expect(painel.locator("#sebrae-filtro-resultado")).toHaveText("1 chamado(s) encontrado(s)");
-  await expect(painel.locator("#sebrae-novos-lista > .sebrae-novo:visible")).toHaveCount(1);
+  await expect(painel.locator("#sebrae-novos-mestre [data-sebrae-mestre]")).toHaveCount(1); // Novo layout: só o chamado aberto aparece no detalhe; a lista compacta tem todas as linhas visíveis
   await termo.fill("zzzz"); // sem resultado: o aviso da aba some com a lista
   await expect(painel.locator("#sebrae-novos [data-sebrae-vazio-filtro] .sebrae-vazio__1")).toHaveText("Nenhum chamado encontrado para “zzzz”.");
   await page.keyboard.press("Escape"); // o primeiro Esc só limpa o termo
   await expect(termo).toHaveValue("");
   await expect(painel.locator("#sebrae-filtro")).toBeVisible();
-  await expect(painel.locator("#sebrae-novos-lista > .sebrae-novo:visible")).toHaveCount(2);
+  await expect(painel.locator("#sebrae-novos-mestre [data-sebrae-mestre]")).toHaveCount(2); // Novo layout: só o chamado aberto aparece no detalhe; a lista compacta tem todas as linhas visíveis
   await page.keyboard.press("Escape"); // o segundo fecha o filtro e devolve o foco à lupa
   await expect(painel.locator("#sebrae-filtro")).toBeHidden();
   await expect(lupa).toHaveAttribute("aria-expanded", "false");

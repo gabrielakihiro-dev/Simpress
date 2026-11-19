@@ -122,6 +122,15 @@ def local_setting(variable: str, key: str, path: Path = AUTOMATION_ACCOUNTS_FILE
     return from_file.strip() if isinstance(from_file, str) else ""
 
 
+ENDPOINT_URL_PADRAO = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+
+
+def endpoint_url(path: Path = AUTOMATION_ACCOUNTS_FILE) -> str:
+    """Link do Endpoint: SIMPRESS_ENDPOINT_URL, `endpoint_url` (Configuração local), senão o padrão. Fonte única
+    das automações e dos links da interface."""
+    return local_setting("SIMPRESS_ENDPOINT_URL", "endpoint_url", path) or ENDPOINT_URL_PADRAO
+
+
 # The client's contract, billing CNPJ and own notebook series are real client data and never versioned:
 # environment variable first, then this git-ignored file (see config/cliente.exemplo.json, written by the first
 # access), else empty. Read on every call, so a file saved by the first access applies without restarting.

@@ -31,11 +31,14 @@ const putsMarcas = [];
 let confirmar = true;
 const confirmacoes = [];
 const eventos = [];
+// Avisos curtos (toast): texto longo de status e de falha vai para cá, não para a linha de status.
+const toasts = [];
 const win = {
   document: doc,
   MutationObserver: class { observe() {} },
   CustomEvent: class { constructor(type) { this.type = type; } },
   confirmarAcao: async opcoes => { confirmacoes.push(opcoes); return confirmar; },
+  showToast: (mensagem, tipo) => { toasts.push([mensagem, tipo]); },
   getComputedStyle: () => ({ display: "" }),
   console: { warn() {} },
   fetch: async (url, options = {}) => {
@@ -184,6 +187,46 @@ test("Andamento expande uma linha por série, esconde com o filtro e recolhe", a
   assert.equal(section.querySelectorAll("tr[data-andamento]").length, 0);
   assert.equal(botao("SN-SOR").hasAttribute("aria-controls"), false);
   assert.equal(chamadas.length, 1);
+});
+
+test("Andamento abre uma OS por vez e o número da OS não abre nada", async () => {
+  const { section } = await montar({ semBusca: true, aoExpandirSerie: () => {} });
+  const botao = serie => section.querySelectorAll(".ck-os__andamento-btn").find(item => item.dataset.serie === serie);
+  const aberta = () => section.querySelectorAll("tr[data-andamento]").map(linha => linha.dataset.andamento);
+
+  section.querySelector('tbody tr[data-serial="SN-SOR"] .ticket-summary-order-link').click();
+  assert.deepEqual(aberta(), [], "clicar no número da OS não abre o Andamento");
+  assert.equal(section.querySelectorAll("button.ticket-summary-order-link").length, 0, "o número da OS não é botão");
+
+  botao("SN-SOR").click();
+  assert.deepEqual(aberta(), ["SN-SOR"]);
+  botao("SN-CONF").click();
+  assert.deepEqual(aberta(), ["SN-CONF"], "abrir outra série fecha a anterior");
+  assert.equal(botao("SN-CONF").getAttribute("aria-expanded"), "true");
+  assert.equal(botao("SN-SOR").getAttribute("aria-expanded"), "false");
+  botao("SN-CONF").click();
+  assert.deepEqual(aberta(), []);
+});
+
+test("descrição longa ganha Ver tudo com aria-expanded; a curta não", async () => {
+  const original = report.chamados;
+  const oracle = (serie, os, descricao) => ({ serie, relacao: "somente_oracle", simpress: { ordens_servico: [] },
+    oracle: [{ solicitacao: `R${os}`, ordem_servico: os, descricao }] });
+  report.chamados = [oracle("SN-LONGA", "9401", "Texto longo da solicitação. ".repeat(10)), oracle("SN-CURTA", "9402", "Tela quebrada.")];
+  try {
+    const { section } = await montar({ semBusca: true });
+    const verTudo = serie => section.querySelector(`tbody tr[data-serial="${serie}"] .ck-os__ver-tudo`);
+    assert.equal(verTudo("SN-CURTA"), null);
+    const botao = verTudo("SN-LONGA");
+    assert.equal(botao.textContent, "Ver tudo");
+    assert.equal(botao.getAttribute("aria-expanded"), "false");
+    assert.ok(section.querySelector("#" + botao.getAttribute("aria-controls")), "aria-controls aponta para o texto");
+    botao.click();
+    assert.equal(botao.getAttribute("aria-expanded"), "true");
+    assert.equal(botao.textContent, "Ver menos");
+    botao.click();
+    assert.equal(botao.getAttribute("aria-expanded"), "false");
+  } finally { report.chamados = original; }
 });
 
 test("sem aoExpandirSerie não há botão de Andamento", async () => {
@@ -618,16 +661,19 @@ test("Refazer confirma; Conferido grava sem confirmação", async () => {
   } finally { restaurarMarcas(); }
 });
 
-test("Erro 422 ou 503 no PUT da marca aparece no status e a tabela segue de pé", async () => {
+test("Erro 422 ou 503 no PUT da marca vira toast, o status fica curto e a tabela segue de pé", async () => {
   marcas = [novaMarca()];
   try {
     const { section, status } = await montar({ semBusca: true });
     panels.filtrarTabelaOs({ situacao: "finalizadas" });
     for (const falha of [{ status: 422, detail: "Marca inexistente ou ação inválida." }, { status: 503, detail: "Arquivo de marcas indisponível." }]) {
       falhaMarca = falha;
+      toasts.length = 0;
       const botao = blocosMarca(section, "SN-CONF")[0].querySelector("button");
       botao.dispatchEvent({ type: "click" });
-      await waitFor(() => status.textContent === falha.detail);
+      await waitFor(() => toasts.length === 1);
+      assert.deepEqual(toasts[0], [falha.detail, "error"]);
+      assert.equal(status.textContent, "Não foi possível atualizar a marca.");
       assert.equal(botao.disabled, false, "o botão volta a valer");
       assert.equal(botao.getAttribute("aria-busy"), null);
       assert.deepEqual(visiveis(section), ["SN-CONF"], "a tabela não é recriada nem quebra, e a OS segue em Finalizadas");
@@ -638,11 +684,13 @@ test("Erro 422 ou 503 no PUT da marca aparece no status e a tabela segue de pé"
   } finally { restaurarMarcas(); panels.filtrarTabelaOs({ situacao: "abertas" }); }
 });
 
-test("Falha ao ler as marcas não derruba a tabela e o status avisa", async () => {
+test("Falha ao ler as marcas não derruba a tabela e um toast avisa uma vez", async () => {
   marcas = null;
+  toasts.length = 0;
   try {
     const { section, status } = await montar({ semBusca: true });
-    assert.equal(status.textContent, "2 OS · 2 séries; marcas de OS finalizada indisponíveis.");
+    assert.equal(status.textContent, "2 OS · 2 séries");
+    assert.deepEqual(toasts, [["Marcas de OS finalizada indisponíveis.", "warning"]]);
     assert.equal(section.querySelectorAll(".ck-os-marca").length, 0);
     assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
   } finally { restaurarMarcas(); }
