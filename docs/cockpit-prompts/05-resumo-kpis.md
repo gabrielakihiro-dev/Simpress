@@ -154,3 +154,14 @@ Pedido do usuário (14/11/2026, plano `docs/planos/limpeza-textos-explicativos.m
 - Visível de propósito (regra E, dado ou aviso de qualidade): `Limitações dos dados`, a tabela das regionais, `Sobras`, `Candidatos nas demais regionais` e os estados de erro.
 - `static/styles/ck-cockpit.css`: `#resumo-painel-backups .info-tip-trigger` com `min-height: 0` (o botão herda `2.5rem` de `app.css`); a linha da meta passa de ~16px para 24px.
 - Testes: `tests/frontend/test_backups_regionais.cjs` (meta sem `Mínimo`; ⓘ de `id` fixo; mudança do mínimo recria o painel) e `tests/e2e/info-tips-resumo.spec.cjs` (aba `Backups`).
+
+## Novo layout (18/11/2026)
+
+Resumo (F3) no desenho da opção C com o cartão `Histórico` da A. Detalhe completo em `docs/cockpit-prompts/08-comparacao-operacional.md`, seção "Novo layout (18/11/2026)". Só front-end; sem endpoint, dado gravado nem escrita em sistema externo.
+
+- Os KPIs viraram o bento do topo, sempre acima das sub-abas: `Ativos`, `Divergências`, `Apelidos`, `Usuários`, `Sem acesso`, `Backups em dia` (anel, regionais prioritárias com status `ok` sobre todas as prioritárias), `Ativos por regional` e `Histórico`. Cada número mostra `—` quando o dado falta (sem comparação, `simpress:painel-indisponivel`); os números nunca são inventados.
+- A sub-aba `Visão geral` não existe mais; a aba inicial é `Divergências`. Sem comparação na tela, `Apelidos`, `Usuários` e `Sem acesso` ficam `aria-disabled="true"` e `Divergências` e `Backups` seguem habilitadas (o texto de 13/11/2026 acima, que citava `Visão geral`, vale sem ela).
+- `Ativos por regional` (`#resumo-ativos-secao`) é cartão do bento e fica visível em qualquer sub-aba (antes só na `Visão geral`); `cartao.tsx` e a lógica do painel `GET /api/painel` não mudaram. O botão `Repetir animação` e o evento `simpress:bento-repetir` saíram: as barras recomeçam a cada abertura do Resumo.
+- `Ver lista →` em cada cartão leva à sub-aba correspondente e foca a aba; `Ver tudo →` do `Histórico` abre o histórico completo como gaveta.
+- Desvios do desenho: período 7/14/30 dias, seletor de Ativos, gráfico `Hoje`, arrastar, `Restaurar layout`, `Voltar aos cartões` e textos de variação nos cartões não foram implementados.
+- Verificação: `tests/frontend/test_resumo_ativos.cjs`, `test_backups_regionais_montar.cjs`, `test_comparison_summary_cards.cjs`, `test_dom_id_coverage.cjs` e os specs `backups-regionais`, `react-bf3`, `react-piloto`, `color-contrast` e `ui` em `tests/e2e/`.

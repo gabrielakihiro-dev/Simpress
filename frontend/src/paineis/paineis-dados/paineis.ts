@@ -99,7 +99,8 @@ export function criarPaineisDados() {
         });
       });
 
-      const wrap = table.closest(".comparison-desktop-table");
+      // Resumo F3 (Novo layout): tabela marcada com data-sem-ferramentas fica sem "Copiar tabela" e sem "Modo compacto".
+      const wrap = table.closest(".comparison-desktop-table:not([data-sem-ferramentas])");
       const host = wrap && tableToolsHost(wrap);
       if (wrap && (host || !wrap.previousElementSibling?.classList?.contains("ux-table-tools"))) {
         const tools = el("div", "ux-table-tools");

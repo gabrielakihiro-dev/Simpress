@@ -1,5 +1,6 @@
 import { apiFetch } from "../../api";
 import { criarResultadoComparacao, type ContextoResultadoComparacao } from "./estado";
+import { montarBentoResumo } from "./bento-resumo";
 
 // Resultado da aba Comparação: o HTML continua em static/index.html (ids, ARIA e data-* intactos); este painel
 // liga renderização, filtros, abas do Resumo e anotações, e devolve as ações que
@@ -9,6 +10,8 @@ export function montar(_container: HTMLElement) {
   const appState = window.SimpressApp.state as ContextoResultadoComparacao["appState"];
   const dom = window.SimpressDomUtils(document);
   const contexto = { app, appState, dom };
+  // Cartão "Histórico" e animação de volta do bento do Resumo (Novo layout); os números vêm de backups-regionais/montar.tsx.
+  montarBentoResumo();
   return criarResultadoComparacao({
     app,
     appState,

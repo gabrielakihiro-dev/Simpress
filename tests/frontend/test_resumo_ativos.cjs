@@ -58,10 +58,12 @@ test("index.html: seção do cartão React no painel comparacao, sem a tabela To
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)[0];
   const secao = painel.match(/<section id="resumo-ativos-secao"[^>]*><\/section>/);
   assert.ok(secao, "a seção fica vazia no HTML: o React desenha o cartão dentro dela");
-  assert.match(secao[0], /class="ck-resumo-secao"/);
+  assert.match(secao[0], /class="ck-resumo-secao nf3-regional"/);
   assert.match(secao[0], /aria-labelledby="resumo-regionais-titulo"/);
   assert.match(secao[0], /data-react-painel="resumo-ativos"/);
-  assert.ok(painel.indexOf('id="comparacao-planilhas-conteudo"') < painel.indexOf('id="resumo-ativos-secao"'));
+  // Novo layout (18/11/2026): "Ativos por regional" é cartão da grade do bento, acima das sub-abas (.nf3-sub) e do resultado da comparação.
+  assert.ok(painel.indexOf('id="resumo-ativos-secao"') < painel.indexOf('class="nf3-sub"'));
+  assert.ok(painel.indexOf('class="nf3-sub"') < painel.indexOf('id="comparacao-planilhas-conteudo"'));
   assert.doesNotMatch(painel, /resumo-total|Total de ativos/);
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
   const duplicados = ids.filter((id, i) => ids.indexOf(id) !== i);
