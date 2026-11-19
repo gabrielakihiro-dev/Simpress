@@ -385,10 +385,10 @@ test.describe("comportamento (só no desktop)", () => {
 
   // Novo layout (18/11/2026): o seletor mostra "dd/mm/aaaa hh:mm · Tipo" e o status "Tipo · dd/mm/aaaa hh:mm" (hora local do navegador);
   // o texto das fontes saiu do Resumo e #comparacao-planilhas-fontes fica oculto e vazio.
-  const dois = n => String(n).padStart(2, "0");
-  const curto = horario => { const d = new Date(horario); return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} ${dois(d.getHours())}:${dois(d.getMinutes())}`; };
-  const CURTO_ATUAL = curto(HORARIO_ATUAL);
-  const CURTO_ANTERIOR = curto(HORARIO_ANTERIOR);
+  // Navegador no fuso de Brasília: a CI roda em UTC e a hora esperada não pode depender do fuso da máquina.
+  test.use({ timezoneId: "America/Sao_Paulo" });
+  const CURTO_ATUAL = "18/10/2026 09:00"; // HORARIO_ATUAL
+  const CURTO_ANTERIOR = "11/10/2026 08:00"; // HORARIO_ANTERIOR
   const semFontes = page => expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
   const interno = { useInnerText: true };
   const linhaDe = (page, serie) => page.locator(`#comparacao-planilhas-conteudo [data-comparison-serial="${serie}"]:visible`);
