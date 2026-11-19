@@ -516,7 +516,17 @@ test("busca por série e cidade e filtro de tipo refazem os cartões", async ({ 
   await expect(page.getByRole("button", { name: "Reservar — SINT-002 para Cidade A" })).toBeVisible();
   await busca.fill("");
 
-  // Tipo: o filtro lê o perfil da necessidade ligada; sem perfil conhecido o item só aparece em "Todos".
+  // Exibição B: selo do tipo e modelo vêm do cadastro oficial ("Micro Computador" aparece como Desktop); SINT-003 fora do cadastro fica só com a série.
+  await chip(page, "Disponíveis");
+  const disponiveis = page.locator("#cobertura-lista-disponiveis");
+  const sint001 = disponiveis.locator("li.cob__item", { hasText: "SINT-001" });
+  await expect(sint001.locator(".cob__tipo")).toHaveText("Notebook");
+  await expect(sint001.locator(".cob__modelo")).toHaveText("EliteBook 640 G10");
+  await expect(disponiveis.locator("li.cob__item", { hasText: "SINT-002" }).locator(".cob__tipo")).toHaveText("Desktop");
+  await chip(page, "Devoluções");
+  await expect(page.locator("#cobertura-lista-devolucoes li.cob__item", { hasText: "SINT-003" }).locator(".cob__tipo, .cob__modelo")).toHaveCount(0);
+
+  // Tipo: necessidade pelo perfil pedido; os demais pelo tipo do cadastro; série fora do cadastro só aparece em "Todos".
   await page.getByRole("button", { name: "Registrar necessidade", exact: true }).click();
   const form = page.getByRole("dialog", { name: "Registrar necessidade" }).locator("#cobertura-form-necessidade");
   await form.getByLabel("Data").fill("2026-11-25");
@@ -528,9 +538,9 @@ test("busca por série e cidade e filtro de tipo refazem os cartões", async ({ 
   await expect(tipo.getByRole("button", { name: "Todos", exact: true })).toHaveAttribute("aria-pressed", "true");
   await tipo.getByRole("button", { name: "Notebook", exact: true }).click();
   await expect(tipo.getByRole("button", { name: "Notebook", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(contagens).toHaveText(["1", "0", "0", "0", "0"]);
+  await expect(contagens).toHaveText(["1", "1", "0", "0", "0"]);
   await tipo.getByRole("button", { name: "Desktop", exact: true }).click();
-  await expect(contagens).toHaveText(["0", "0", "0", "0", "0"]);
+  await expect(contagens).toHaveText(["0", "1", "0", "0", "0"]);
   await tipo.getByRole("button", { name: "Todos", exact: true }).click();
   await expect(contagens).toHaveText(["5", "2", "0", "0", "1"]);
 });

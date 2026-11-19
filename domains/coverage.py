@@ -131,6 +131,28 @@ def indexar_cadastro(itens: Iterable[Mapping[str, Any]]) -> Dict[str, Mapping[st
     return {chave_serie(item.get("serial")): item for item in itens if chave_serie(item.get("serial"))}
 
 
+def equipamentos_das_series(estado: Mapping[str, Any], cadastro: Mapping[str, Mapping[str, Any]]) -> Dict[str, Dict[str, str]]:
+    """Modelo e tipo de cada série da Cobertura, só do cadastro oficial; série fora dele não entra (só leitura)."""
+    saida: Dict[str, Dict[str, str]] = {}
+    for secao in ("disponibilidade", "reservas", "devolucoes", "movimentacoes"):
+        for chave, registro in estado.get(secao, {}).items():
+            serie = registro.get("serie") or (chave if secao == "disponibilidade" else None)
+            item = cadastro.get(chave_serie(serie)) if serie else None
+            if item:
+                saida[str(serie)] = {"modelo": str(item.get("modelo") or "").strip(), "tipo": tipo_da_cobertura(item.get("tipo"))}
+    return saida
+
+
+def tipo_da_cobertura(tipo: Any) -> str:
+    """Tipo do cadastro com o nome da tela: "Micro Computador" vira "Desktop"; os outros ficam como estão."""
+    texto = normalize_search_term(tipo)
+    if "NOTEBOOK" in texto:
+        return "Notebook"
+    if "MICRO" in texto or "DESKTOP" in texto:
+        return "Desktop"
+    return str(tipo or "").strip()
+
+
 def estado_vazio() -> Estado:
     return {"esquema": ESQUEMA, **{secao: {} for secao in SECOES}}
 
