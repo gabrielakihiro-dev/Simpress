@@ -2558,3 +2558,18 @@ test("R não é obrigatório para antigo nunca lido, lido no SoftExpert nem com 
     else assert.equal(ajuda, null, rotulo);
   }
 });
+
+test("resultado antigo da finalização ao abrir a lista avisa, mas não pede GET /api/sebrae/novos de novo", async () => {
+  const urls = [];
+  const fechar = terminado => ({ em_andamento: false, resultado: { iniciado_em: terminado, terminado_em: terminado, resultados: [{ numero: "UTIC-2026-9", status: "ok" }] } });
+  for (const [terminado, esperado] of [["2026-11-17T19:40:32-03:00", 1], [new Date(Date.now() + 60000).toISOString(), 2]]) {
+    urls.length = 0;
+    await renderizarCartoes(structuredClone(CARGA_CARTOES), null, async url => {
+      urls.push(url);
+      return url === "/api/sebrae/finalizar-softexpert" ? fechar(terminado) : structuredClone(CARGA_CARTOES);
+    });
+    for (let i = 0; i < 20 && urls.filter(u => u === "/api/sebrae/novos").length < esperado; i++) await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+    assert.equal(urls.filter(u => u === "/api/sebrae/novos").length, esperado, terminado);
+  }
+});
