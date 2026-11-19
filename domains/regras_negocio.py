@@ -8,7 +8,7 @@ em vez de repetir o teste. Só depende de `core.config` (que não importa `domai
 import math
 import re
 import unicodedata
-from typing import Any, FrozenSet
+from typing import Any, Callable, FrozenSet, Tuple
 
 from core.config import client_own_serials
 
@@ -29,11 +29,27 @@ def normalize_reference_value(value: Any) -> str:
     return re.sub(r"[^A-Z0-9]", "", without_accents)
 
 
+# Conjunto normalizado memorizado por valor bruto (tupla de `client_own_serials()`), nunca de forma permanente.
+_series_sebrae_cache: Tuple[Tuple[str, ...], FrozenSet[str]] = ((), frozenset())
+
+
 # Séries de notebooks da própria Sebrae, fora das comparações (AGENTS.md, "Invariantes críticos"). São dados reais do
 # cliente: vêm de `config/cliente.json` (ou da variável de ambiente) a cada chamada; sem configuração, nenhuma fica fora.
 def series_sebrae() -> FrozenSet[str]:
     """Séries normalizadas dos notebooks da própria Sebrae, lidas da configuração local."""
-    return frozenset(filter(None, (normalize_reference_value(serie) for serie in client_own_serials())))
+    global _series_sebrae_cache
+    brutas = tuple(client_own_serials())  # já muda sozinha com o arquivo (mtime/tamanho) e com a variável de ambiente
+    guardado = _series_sebrae_cache  # cópia local: outra thread pode trocar o global entre a checagem e o retorno
+    if guardado[0] != brutas:
+        guardado = (brutas, frozenset(filter(None, (normalize_reference_value(serie) for serie in brutas))))
+        _series_sebrae_cache = guardado
+    return guardado[1]
+
+
+def predicado_serie_sebrae() -> Callable[[Any], bool]:
+    """Resolve o conjunto uma vez e devolve `serie -> bool` (mesma regra de `e_serie_sebrae`), para laços longos."""
+    proprias = series_sebrae()
+    return lambda serie: normalize_reference_value(serie) in proprias
 
 
 # Sufixo após `PRNOTE` dos hostnames instalados em Curitiba, sem divergência de localidade.
