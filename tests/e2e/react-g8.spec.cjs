@@ -327,6 +327,8 @@ for (const tema of ["light", "dark"]) {
     await expect(cartao.locator("#home-open-tickets-count")).toHaveText("6 abertos");
     await cartao.scrollIntoViewIfNeeded();
     await page.mouse.move(0, 0);
+    // O aviso "Equipamento … localizado." some sozinho e, no celular, cobre o rodapé do cartão: a captura espera ele sair.
+    await expect(page.getByText(`Equipamento ${SERIE} localizado.`)).toHaveCount(0, { timeout: 15000 });
     await expect(cartao).toHaveScreenshot(`home-chamados-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
   });
 }
