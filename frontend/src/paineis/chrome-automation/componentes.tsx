@@ -1,13 +1,13 @@
 // Regiões da aba Automação (F5). Cada uma é a raiz React de uma <section> do index.html (atributo data-automacao-regiao)
 // e lê o mesmo store (estado.ts). Os nós mantêm data-on-*/data-args: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama as ações
 // pela ponte; só a miniatura da captura (que não existia como data-on-*) usa onClick do React.
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { abrirCapturaAutomacao } from "./captura";
-import { assinar, ler } from "./estado";
+import { assinar, ler, mudar } from "./estado";
 import {
-  botaoBloqueado, descricaoDaCaptura, dicaDosLotes, formatarDuracao, formatarHora, ICONE_STATUS, iconeDoBotao, iconeDoSelo,
-  rotuloDaExecucao, rotuloDoBotao, rotuloInicio, ROTINAS, situacaoDoCartao, situacaoDoSelo, STATUS, STATUS_VISUAL, visaoDoLog,
-  type Execucao,
+  ABAS_ROTINA, abaDaRotina, botaoBloqueado, descricaoDaCaptura, dicaDosLotes, execucaoMaisRecente, formatarDuracao, formatarHora, ICONE_STATUS,
+  iconeDoBotao, iconeDoSelo, percentualDaRotina, ROTINAS_DOS_CARTOES, rotuloDaExecucao, rotuloDoBotao, rotuloInicio, ROTINAS, situacaoDaEtapa,
+  situacaoDoCartao, situacaoDoSelo, STATUS, STATUS_VISUAL, visaoDoLog, type Execucao, type Selo,
 } from "./regras-puro";
 
 const useAutomacao = () => useSyncExternalStore(assinar, ler);
@@ -82,51 +82,193 @@ function Dica({ rotulo, idDica, fim, children }: { rotulo: string; idDica: strin
   );
 }
 
+// Ícone do selo e da bolinha da trilha por status; sem status a bolinha mostra o número da etapa.
+const ICONE_ETAPA: Readonly<Record<string, string>> = { ok: "i-check", erro: "i-x", alerta: "i-alerta", info: "i-loader" };
+
+function SeloRotina({ selo, ativo, pronto, rotina }: { selo: Selo; ativo: boolean; pronto: boolean; rotina?: string }) {
+  return (
+    <span className="nl-f4-selo" data-rotina-badge={rotina} data-status={pronto ? selo.status : undefined}>
+      <Icone nome={pronto ? iconeDoSelo(ativo, selo.status) : "i-clock"} classe={pronto && ativo ? "ck-ico ck-ico--xs ck-girando" : "ck-ico ck-ico--xs"} />
+      <span>{pronto ? selo.texto : "—"}</span>
+    </span>
+  );
+}
+
+type Cartao = (typeof CARTOES)[number];
+const cartaoDe = (id: string): Cartao => CARTOES.find(item => item.id === id) as Cartao;
+
+function BotaoRotina({ cartao, primario = false }: { cartao: Cartao; primario?: boolean }) {
+  const e = useAutomacao();
+  const ativo = e.emAndamento && e.rotinaAtiva === cartao.id;
+  // A rotina em andamento vira "Acompanhar": o botão fica livre e leva ao console.
+  const repetir = e.ultimasPorRotina[cartao.id]?.status === "falha";
+  const rotulo = rotuloDoBotao(ativo, repetir);
+  const bloqueado = botaoBloqueado({ ocupado: e.ocupado, emAndamento: e.emAndamento, acompanhar: ativo, semSaida: false });
+  return (
+    <button
+      type="button" id={`btn-automacao-${cartao.id}`} data-automacao-rotina={cartao.id}
+      className={`ck-btn ${primario || (e.botoesProntos && ativo) ? "ck-btn--primario" : "ck-btn--secundario"} ck-btn--sm nl-f4-btn`}
+      aria-label={e.botoesProntos ? `${rotulo} ${cartao.nome}` : `Executar ${cartao.nome}`}
+      title={e.botoesProntos ? rotulo : "Executar"} aria-describedby={cartao.idTitulo}
+      data-on-click="iniciarRotinaAutomacao" data-args={args(cartao.id)}
+      disabled={e.botoesProntos ? bloqueado : undefined} aria-disabled={e.botoesProntos ? bloqueado : undefined}
+      aria-busy={e.iniciando === cartao.id ? "true" : undefined}
+    >
+      <Icone nome={e.botoesProntos ? iconeDoBotao(ativo, repetir) : "i-play"} classe="ck-ico ck-ico--xs" />
+      <span>{e.botoesProntos ? rotulo : "Executar"}</span>
+    </button>
+  );
+}
+
+function ItemRotina({ cartao }: { cartao: Cartao }) {
+  const e = useAutomacao();
+  const ativo = e.emAndamento && e.rotinaAtiva === cartao.id;
+  const selo = situacaoDoSelo(ativo, e.ultimasPorRotina[cartao.id]);
+  return (
+    <li className="nl-f4-item" data-rotina={cartao.id} data-estado={e.botoesProntos ? situacaoDoCartao(ativo, selo.status) : "ocioso"}>
+      <span className="nl-f4-item__nome">
+        <span className="nl-f4-item__titulo" id={cartao.idTitulo}>{cartao.nome}</span>
+        <Dica rotulo={`Sobre ${cartao.nome}`} idDica={cartao.idDica} fim={false}>{cartao.dica}</Dica>
+      </span>
+      <SeloRotina selo={selo} ativo={ativo} pronto={e.botoesProntos} rotina={cartao.id} />
+      <BotaoRotina cartao={cartao} />
+    </li>
+  );
+}
+
+// Etapas do inventário: cada uma ocupa um terço da barra; o percentual vem do log ao vivo (percentualDaRotina).
+const ETAPAS_INVENTARIOS = [
+  { n: "01", nome: "Abrir Endpoint", detalhe: "Endpoint Central" },
+  { n: "02", nome: "Ler inventário", detalhe: "UX e Endpoint" },
+  { n: "03", nome: "Gravar planilha", detalhe: "Base local" },
+] as const;
+
+function PainelRotina({ id, icone, titulo, idTitulo, selo, children }: { id: string; icone: string; titulo: string; idTitulo?: string; selo: ReactNode; children: ReactNode }) {
+  const e = useAutomacao();
+  return (
+    <section className="ck-cartao nl-f4-painel" id={`painel-rotina-${id}`} role="tabpanel" aria-labelledby={`tab-rotina-${id}`} hidden={e.abaRotina !== id}>
+      <header className="nl-f4-painel__cab">
+        <span className="nl-f4-ico" aria-hidden="true"><Icone nome={icone} /></span>
+        <h3 className="nl-f4-painel__titulo" id={idTitulo}>{titulo}</h3>
+        <span className="nl-f4-painel__selo">{selo}</span>
+      </header>
+      <div className="nl-f4-painel__corpo">{children}</div>
+    </section>
+  );
+}
+
+function teclarNaAba(evento: KeyboardEvent<HTMLButtonElement>, indice: number) {
+  const total = ABAS_ROTINA.length;
+  const destino = ({ ArrowRight: (indice + 1) % total, ArrowLeft: (indice - 1 + total) % total, Home: 0, End: total - 1 } as Record<string, number>)[evento.key];
+  if (destino === undefined) return;
+  evento.preventDefault();
+  mudar({ abaRotina: ABAS_ROTINA[destino].id });
+  document.getElementById(`tab-rotina-${ABAS_ROTINA[destino].id}`)?.focus();
+}
+
 export function Rotinas() {
   const e = useAutomacao();
+  const { abaRotina, botoesProntos, emAndamento, rotinaAtiva, ultimasPorRotina: ultimas } = e;
+  const ativa = (...rotinas: string[]) => emAndamento && rotinas.includes(rotinaAtiva);
+  // O cartão do SoftExpert é HTML estático (fora do React): o seletor só o mostra ou esconde.
+  useLayoutEffect(() => {
+    const painel = document.getElementById("sebrae-novos-painel");
+    if (painel) painel.hidden = abaRotina !== "softexpert";
+  }, [abaRotina]);
+  // Rotina que começa leva o seletor para a aba dela (login e "antigos" não têm aba).
+  useEffect(() => {
+    const aba = emAndamento ? abaDaRotina(rotinaAtiva) : "";
+    if (aba) mudar({ abaRotina: aba });
+  }, [emAndamento, rotinaAtiva]);
+  const etapas = [
+    { aba: "sharepoint", nome: "SharePoint", selo: situacaoDaEtapa(ativa("dashboard"), ultimas.dashboard) },
+    { aba: "softexpert", nome: "SoftExpert", selo: situacaoDaEtapa(ativa("sebrae", "dashboard"), execucaoMaisRecente(ultimas.sebrae, ultimas.dashboard)) },
+    { aba: "completa", nome: "Rotina Completa", selo: situacaoDaEtapa(ativa("ambas"), ultimas.ambas) },
+  ];
+  const inventarios = cartaoDe("inventarios");
+  const ativoInventarios = ativa("inventarios");
+  const seloInventarios = situacaoDoSelo(ativoInventarios, ultimas.inventarios);
+  const percentual = percentualDaRotina(ativoInventarios, ultimas.inventarios, e.linhasAoVivo);
+  const seloDashboard = situacaoDoSelo(ativa("dashboard"), ultimas.dashboard);
+  const completa = cartaoDe("ambas");
+  const seloCompleta = situacaoDoSelo(ativa("ambas"), ultimas.ambas);
   return (
     <>
       <h2 className="ck-sr" id="ck-rotinas-titulo">Rotinas principais</h2>
-      <div className="ck-rotinas" role="group" aria-label="Rotinas principais">
-        {CARTOES.map(cartao => {
-          const ativo = e.emAndamento && e.rotinaAtiva === cartao.id;
-          const selo = situacaoDoSelo(ativo, e.ultimasPorRotina[cartao.id]);
-          // A rotina em andamento vira "Acompanhar": o botão fica livre e leva ao console.
-          const repetir = e.ultimasPorRotina[cartao.id]?.status === "falha";
-          const rotulo = rotuloDoBotao(ativo, repetir);
-          const bloqueado = botaoBloqueado({ ocupado: e.ocupado, emAndamento: e.emAndamento, acompanhar: ativo, semSaida: false });
+      <ol className="nl-f4-trilha" aria-label="Etapas das rotinas">
+        {etapas.map((etapa, indice) => {
+          const status = botoesProntos ? etapa.selo.status : "";
+          const nome = `${etapa.nome}: ${botoesProntos ? etapa.selo.texto : "carregando"}`;
           return (
-            <article key={cartao.id} className="ck-cartao ck-rotina" data-rotina={cartao.id} data-estado={e.botoesProntos ? situacaoDoCartao(ativo, selo.status) : "ocioso"}>
-              <span className="ck-rotina__icone" aria-hidden="true"><Icone nome={cartao.icone} /></span>
-              <div className="ck-rotina__corpo">
-                <div className="ck-rotina__cab">
-                  <h3 className="ck-rotina__titulo" id={cartao.idTitulo}>{cartao.nome}</h3>
-                  <Dica rotulo={`Sobre ${cartao.nome}`} idDica={cartao.idDica} fim={cartao.fim}>{cartao.dica}</Dica>
-                </div>
-                <span className="ck-badge" data-rotina-badge={cartao.id} data-status={e.botoesProntos ? selo.status : undefined}>
-                  <Icone
-                    nome={e.botoesProntos ? iconeDoSelo(ativo, selo.status) : "i-clock"}
-                    classe={e.botoesProntos && ativo ? "ck-ico ck-ico--xs ck-girando" : "ck-ico ck-ico--xs"}
-                  />
-                  <span>{e.botoesProntos ? selo.texto : "—"}</span>
-                </span>
-              </div>
+            <li key={etapa.aba} className="nl-f4-passo" data-ok={status === "ok" ? "" : undefined}>
               <button
-                type="button" id={`btn-automacao-${cartao.id}`} data-automacao-rotina={cartao.id}
-                className={`ck-btn ${e.botoesProntos && ativo ? "ck-btn--primario" : "ck-btn--secundario"} ck-btn--sm ck-btn--icone`}
-                aria-label={e.botoesProntos ? `${rotulo} ${cartao.nome}` : `Executar ${cartao.nome}`}
-                title={e.botoesProntos ? rotulo : "Executar"} aria-describedby={cartao.idTitulo}
-                data-on-click="iniciarRotinaAutomacao" data-args={args(cartao.id)}
-                disabled={e.botoesProntos ? bloqueado : undefined} aria-disabled={e.botoesProntos ? bloqueado : undefined}
-                aria-busy={e.iniciando === cartao.id ? "true" : undefined}
+                type="button" className="nl-f4-bolinha" data-status={status || undefined} data-sel={abaRotina === etapa.aba ? "" : undefined}
+                aria-label={nome} title={nome} aria-current={abaRotina === etapa.aba ? "step" : undefined} onClick={() => mudar({ abaRotina: etapa.aba })}
               >
-                <Icone nome={e.botoesProntos ? iconeDoBotao(ativo, repetir) : "i-play"} />
-                <span className="ck-sr">{e.botoesProntos ? rotulo : "Executar"}</span>
+                {ICONE_ETAPA[status]
+                  ? <Icone nome={ICONE_ETAPA[status]} classe={status === "info" ? "ck-ico ck-ico--sm ck-girando" : "ck-ico ck-ico--sm"} />
+                  : <span aria-hidden="true">{indice + 1}</span>}
               </button>
-            </article>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="nl-f4-abas" role="tablist" aria-label="Rotinas">
+        {ABAS_ROTINA.map((aba, indice) => {
+          const selecionada = abaRotina === aba.id;
+          return (
+            <button
+              key={aba.id} type="button" role="tab" id={`tab-rotina-${aba.id}`} className="nl-f4-aba" aria-selected={selecionada}
+              aria-controls={aba.id === "softexpert" ? "sebrae-novos-painel" : `painel-rotina-${aba.id}`} tabIndex={selecionada ? 0 : -1}
+              onClick={() => mudar({ abaRotina: aba.id })} onKeyDown={evento => teclarNaAba(evento, indice)}
+            >{aba.nome}</button>
           );
         })}
       </div>
+      <PainelRotina id="sharepoint" icone="i-download" titulo="SharePoint" selo={<SeloRotina selo={seloDashboard} ativo={ativa("dashboard")} pronto={botoesProntos} />}>
+        <ul className="nl-f4-itens" aria-label="Etapas do SharePoint">
+          <li className="nl-f4-item"><span className="nl-f4-item__nome"><Icone nome="i-download" classe="ck-ico ck-ico--sm" /><span className="nl-f4-item__titulo">Baixar Dashboard</span></span></li>
+          <li className="nl-f4-item"><span className="nl-f4-item__nome"><Icone nome="i-upload" classe="ck-ico ck-ico--sm" /><span className="nl-f4-item__titulo">Importar aba CHAMADOS</span></span></li>
+        </ul>
+        <div className="nl-f4-acoes">
+          <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm nl-f4-btn" onClick={() => mudar({ abaRotina: "softexpert" })}>
+            <Icone nome="i-arrow-right" classe="ck-ico ck-ico--xs" /><span>Ir para SoftExpert</span>
+          </button>
+        </div>
+      </PainelRotina>
+      <PainelRotina
+        id="completa" icone="i-layers" titulo="Rotina Completa" idTitulo={completa.idTitulo}
+        selo={<><SeloRotina selo={seloCompleta} ativo={ativa("ambas")} pronto={botoesProntos} rotina="ambas" /><Dica rotulo={`Sobre ${completa.nome}`} idDica={completa.idDica} fim>{completa.dica}</Dica></>}
+      >
+        <ul className="nl-f4-itens" aria-label="Rotinas incluídas">
+          <ItemRotina cartao={cartaoDe("os")} />
+          <ItemRotina cartao={cartaoDe("usuarios")} />
+        </ul>
+        <div className="nl-f4-acoes"><BotaoRotina cartao={completa} primario /></div>
+      </PainelRotina>
+      <PainelRotina
+        id="inventarios" icone="i-laptop" titulo="Inventários" idTitulo={inventarios.idTitulo}
+        selo={<><SeloRotina selo={seloInventarios} ativo={ativoInventarios} pronto={botoesProntos} rotina="inventarios" /><Dica rotulo={`Sobre ${inventarios.nome}`} idDica={inventarios.idDica} fim>{inventarios.dica}</Dica></>}
+      >
+        <ol className="nl-f4-etapas" aria-label="Etapas do inventário">
+          {ETAPAS_INVENTARIOS.map((etapa, indice) => {
+            const preenchida = Math.max(0, Math.min(1, (percentual - (indice * 100) / 3) / (100 / 3)));
+            return (
+              <li key={etapa.n} className="nl-f4-etapa" data-acesa={preenchida > 0 ? "" : undefined}>
+                <span className="nl-f4-etapa__n">{etapa.n}</span>
+                <strong>{etapa.nome}</strong>
+                <span className="nl-f4-fio" aria-hidden="true"><i style={{ transform: `scaleX(${preenchida})` }} /></span>
+                <span className="nl-f4-etapa__k">{etapa.detalhe}</span>
+              </li>
+            );
+          })}
+        </ol>
+        <div className="nl-f4-andamento">
+          <span className="nl-f4-pct">{botoesProntos ? `${percentual}%` : "—"}</span>
+          <p className="nl-f4-msg" role="status" aria-live="polite">{botoesProntos ? seloInventarios.texto : "Consultando…"}</p>
+        </div>
+        <div className="nl-f4-acoes"><BotaoRotina cartao={inventarios} primario /></div>
+      </PainelRotina>
     </>
   );
 }
@@ -163,21 +305,23 @@ function LinhaHistorico({ execucao }: { execucao: Execucao }) {
       <td data-label="Duração">{execucao.status === "em_andamento" ? "—" : formatarDuracao(execucao.inicio, execucao.fim)}</td>
       <td data-label="Status">
         <span className="automation-history-status">
-          <span className="ck-status" data-status={visual} title={execucao.mensagem || undefined}>
+          <span className="ck-status nl-f4-selo" data-status={visual} title={execucao.mensagem || undefined}>
             <Icone nome={ICONE_STATUS[visual]} classe={visual === "info" ? "ck-ico ck-ico--xs ck-girando" : "ck-ico ck-ico--xs"} />
             {STATUS[execucao.status] || execucao.status || "—"}
           </span>
           {execucao.mensagem && execucao.status !== "concluido" && <small className="automation-history-message">{execucao.mensagem}</small>}
-          <button
-            type="button" className="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="abrirLogExecucaoAutomacao"
-            data-args={args(execucao.id, execucao.inicio)} aria-label={`Ver log de ${nome} em ${formatarHora(execucao.inicio)}`}
-          >Ver log</button>
           {capturas.length > 0 && (
             <span className="automation-history-captures">
               {capturas.map((captura, indice) => <Captura key={`${captura.url}-${indice}`} execucao={execucao} captura={captura} />)}
             </span>
           )}
         </span>
+      </td>
+      <td className="ck-td--sem-rotulo ck-td--largo nl-f4-td-log" data-label="Log">
+        <button
+          type="button" className="nl-f4-ver" data-on-click="abrirLogExecucaoAutomacao"
+          data-args={args(execucao.id, execucao.inicio)} aria-label={`Ver log de ${nome} em ${formatarHora(execucao.inicio)}`}
+        >Ver log<Icone nome="i-arrow-right" classe="ck-ico ck-ico--xs" /></button>
       </td>
     </tr>
   );
@@ -190,39 +334,66 @@ function ListaHistorico() {
   if (!historico.execucoes.length) return <p className="ck-lista__vazio">Nenhuma execução encontrada para os filtros selecionados.</p>;
   return (
     <table className="ck-tabela ck-tabela--cards">
-      <thead><tr>{["Rotina", "Início", "Duração", "Status"].map(titulo => <th key={titulo} scope="col">{titulo}</th>)}</tr></thead>
+      <thead><tr>{["Rotina", "Início", "Duração", "Status"].map(titulo => <th key={titulo} scope="col">{titulo}</th>)}<th scope="col"><span className="ck-sr">Log</span></th></tr></thead>
       <tbody>{historico.execucoes.map(execucao => <LinhaHistorico key={execucao.id} execucao={execucao} />)}</tbody>
     </table>
   );
 }
 
+// Chip com a lista de um filtro (Rotina ou Status); mudar a escolha já aplica o filtro.
+function FiltroChip({ id, rotulo, todas, children }: { id: string; rotulo: string; todas: string; children: ReactNode }) {
+  return (
+    <label className="nl-f4-chip">
+      <span className="nl-f4-chip__rotulo">{rotulo}:</span>
+      <select id={id} aria-label={rotulo} data-on-change="filtrarHistoricoAutomacao">
+        <option value="">{todas}</option>
+        {children}
+      </select>
+      <Icone nome="i-chevron-down" classe="ck-ico ck-ico--xs" />
+    </label>
+  );
+}
+
 export function Historico() {
   const e = useAutomacao();
+  const periodo = useRef<HTMLDetailsElement>(null);
+  const fecharPeriodo = (devolverFoco = false) => {
+    if (!periodo.current) return;
+    periodo.current.open = false;
+    if (devolverFoco) periodo.current.querySelector("summary")?.focus();
+  };
+  // Aplicar fecha o Período; se a data é inválida, o foco vai para um campo da caixa e ela fica aberta para corrigir.
+  const aplicarPeriodo = () => setTimeout(() => {
+    const foco = document.activeElement;
+    if (!(foco instanceof HTMLInputElement && periodo.current?.contains(foco))) fecharPeriodo();
+  });
   return (
     <>
-      <div className="ck-cartao__cab"><h2 className="ck-cartao__titulo" id="automacao-historico-titulo">Últimas execuções</h2><span className="ck-cartao__meta" id="automacao-historico-resumo" role="status">{e.resumoHist}</span></div>
-      <div className="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
-        <label className="ck-campo"><span className="ck-campo__rotulo">De</span><input className="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio" /></label>
-        <label className="ck-campo"><span className="ck-campo__rotulo">Até</span><input className="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim" /></label>
-        <label className="ck-campo">
-          <span className="ck-campo__rotulo">Rotina</span>
-          <select className="ck-entrada ck-entrada--sm" id="automacao-historico-rotina">
-            <option value="">Todas</option>
-            {ROTINAS_DO_FILTRO.map(rotina => <option key={rotina} value={rotina}>{ROTINAS[rotina]}</option>)}
-          </select>
-        </label>
-        <label className="ck-campo">
-          <span className="ck-campo__rotulo">Status</span>
-          <select className="ck-entrada ck-entrada--sm" id="automacao-historico-status">
-            <option value="">Todos</option>
-            {STATUS_DO_FILTRO.map(status => <option key={status} value={status}>{STATUS[status]}</option>)}
-          </select>
-        </label>
-        <button type="button" className="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar</button>
-        <button type="button" className="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar</button>
+      <div className="nl-f4-cab">
+        <h2 className="nl-f4-cab__titulo" id="automacao-historico-titulo">Últimas execuções</h2>
+        <span className="nl-f4-cab__meta" id="automacao-historico-resumo" role="status">{e.resumoHist}</span>
       </div>
-      <div className="ck-cartao__corpo" id="automacao-historico"><ListaHistorico /></div>
-      <nav className="ck-paginacao" aria-label="Páginas das execuções">
+      <div className="nl-f4-filtros" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
+        <FiltroChip id="automacao-historico-rotina" rotulo="Rotina" todas="Todas">
+          {ROTINAS_DO_FILTRO.map(rotina => <option key={rotina} value={rotina}>{ROTINAS[rotina]}</option>)}
+        </FiltroChip>
+        <FiltroChip id="automacao-historico-status" rotulo="Status" todas="Todos">
+          {STATUS_DO_FILTRO.map(status => <option key={status} value={status}>{STATUS[status]}</option>)}
+        </FiltroChip>
+        <details className="nl-f4-periodo" ref={periodo} onKeyDown={evento => { if (evento.key === "Escape") fecharPeriodo(true); }}>
+          <summary className="nl-f4-chip"><span className="nl-f4-chip__rotulo">Período</span><Icone nome="i-chevron-down" classe="ck-ico ck-ico--xs" /></summary>
+          <div className="nl-f4-periodo__caixa">
+            <label className="nl-f4-campo"><span>De</span><input type="date" id="automacao-historico-inicio" /></label>
+            <label className="nl-f4-campo"><span>Até</span><input type="date" id="automacao-historico-fim" /></label>
+            <div className="nl-f4-acoes">
+              <button type="button" className="ck-btn ck-btn--primario ck-btn--sm nl-f4-btn" data-on-click="filtrarHistoricoAutomacao" onClick={aplicarPeriodo}>Aplicar</button>
+              <button type="button" className="ck-btn ck-btn--fantasma ck-btn--sm nl-f4-btn" data-on-click="limparFiltrosAutomacao" onClick={() => fecharPeriodo()}>Limpar</button>
+            </div>
+          </div>
+        </details>
+      </div>
+      <div className="nl-f4-corpo" id="automacao-historico"><ListaHistorico /></div>
+      <nav className="ck-paginacao nl-f4-pag" aria-label="Páginas das execuções">
         <label className="ck-paginacao__grupo">Execuções por página<select className="ck-entrada ck-entrada--sm" id="automacao-historico-limite" data-on-change="filtrarHistoricoAutomacao" defaultValue="5"><option value="5">5</option><option value="10">10</option><option value="20">20</option></select></label>
         <div className="ck-paginacao__grupo">
           <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-historico-anterior" data-on-click="mudarPaginaHistoricoAutomacao" data-args={args(-1)} disabled={e.anteriorDesabilitado}>Anterior</button>
@@ -243,7 +414,7 @@ export function Console() {
   return (
     <>
       <div className="ck-console__cab">
-        <h2 className="ck-console__titulo" id="automacao-andamento-titulo">Console de atividades</h2>
+        <h2 className="ck-console__titulo" id="automacao-andamento-titulo">Console</h2>
         <span className="ck-ao-vivo" id="cockpit-automation-live" hidden={!e.emAndamento || visao.historico}><span className="ck-ao-vivo__ponto" aria-hidden="true"></span>ao vivo</span>
         <span className="ck-espaco"></span>
         <span className="ck-console__exec" id="automacao-log-modo" role="status">{visao.modo}</span>
@@ -302,8 +473,8 @@ export function DialogoLog() {
     if (area.current && !visao.historico && noFim.current) area.current.scrollTop = area.current.scrollHeight;
   }, [visao.texto, visao.historico]);
   return (
-    <section className="ck-dialogo" role="dialog" aria-modal="true" aria-labelledby="ck-dialogo-log-titulo">
-      <header className="ck-dialogo__cab"><h2 className="ck-dialogo__titulo" id="ck-dialogo-log-titulo">Log completo</h2><span id="automacao-log-arquivo" className="ck-cartao__meta">{visao.arquivoTexto}</span><button type="button" className="ck-btn ck-btn--fantasma ck-btn--sm" data-fechar="ck-dialogo-log" aria-label="Fechar">Fechar</button></header>
+    <section className="ck-dialogo nl-f4-dlg" role="dialog" aria-modal="true" aria-labelledby="ck-dialogo-log-titulo">
+      <header className="ck-dialogo__cab"><span className="nl-f4-ico" aria-hidden="true"><Icone nome="i-text" /></span><h2 className="ck-dialogo__titulo" id="ck-dialogo-log-titulo">Log completo</h2><span id="automacao-log-arquivo" className="ck-cartao__meta">{visao.arquivoTexto}</span><button type="button" className="ck-btn ck-btn--fantasma ck-btn--sm" data-fechar="ck-dialogo-log" aria-label="Fechar">Fechar</button></header>
       <pre ref={area} id="automacao-log" className="ck-log-bruto" role="log" aria-live={visao.historico ? "off" : "polite"} aria-labelledby="automacao-andamento-titulo" tabIndex={0}>{visao.texto}</pre>
     </section>
   );
