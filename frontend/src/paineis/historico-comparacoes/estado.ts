@@ -68,9 +68,13 @@ const mensagemDe = (erro: unknown, padrao: string) => (erro instanceof Error && 
 
 // O contador do cabeçalho fica fora do React e é escrito uma vez por carga: paineis-dados observa o nó e pede
 // GET /api/painel a cada mudança, então ele não pode ser recriado nem reescrito a mais.
-function definirTotal(total: unknown) {
+// A escrita da partida leva data-contagem-partida: paineis-dados não repete o painel que acabou de pedir.
+function definirTotal(total: unknown, daPartida = false) {
   const contador = document.getElementById("total-historico-comparacoes");
-  if (contador) contador.textContent = rotuloTotal(total);
+  if (!contador) return;
+  // Toda outra escrita tira a marca, mesmo se o observador ainda não existia quando a partida a pôs.
+  if (daPartida) contador.setAttribute("data-contagem-partida", ""); else contador.removeAttribute("data-contagem-partida");
+  contador.textContent = rotuloTotal(total);
 }
 
 function estadoDasDatas(eventos: unknown): Pick<Estado, "datas" | "dataEscolhida" | "mensagemDatas"> {
@@ -89,14 +93,17 @@ export function escolherData(data: string) {
 
 // Contador e datas vêm da contagem da partida e de cada carga da lista: só a busca mais nova escreve neles.
 let geracaoTotal = 0;
+let primeiraContagem = true; // a primeira chamada é a da partida (app.ts); depois de importar, chama de novo
 
 // Chamado na partida do app (sem await): só atualiza o contador e as datas do seletor. Nunca rejeita.
 export async function carregarContagemHistoricoComparacoes(): Promise<void> {
   const minha = ++geracaoTotal;
+  const daPartida = primeiraContagem;
+  primeiraContagem = false;
   try {
     const dados = await apiFetch<RespostaLista>("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar as datas do histórico." });
     if (minha !== geracaoTotal) return;
-    definirTotal(dados.total);
+    definirTotal(dados.total, daPartida);
     mudar(estadoDasDatas(dados.eventos));
   } catch (erro) {
     console.warn("Não foi possível carregar a contagem do histórico de planilhas:", erro);

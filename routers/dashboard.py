@@ -16,6 +16,7 @@ from domains.inventory_comparison import (
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
 )
+from domains.regras_negocio import series_sebrae
 from domains.ticket_reporting import normalize_ticket_snapshot, ticket_attention
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,9 @@ class DashboardServices:
 # depends only on the history content, so it is kept per history file signature.
 _NEW_DIVERGENCES_CACHE: Optional[Tuple[tuple, Dict[str, Any]]] = None
 _NEW_DIVERGENCES_CACHE_LOCK = threading.Lock()
+# Same for the 60-day alert: its key also carries the day limits and the Sebrae series it filters out.
+_LONG_UNUSED_CACHE: Optional[Tuple[tuple, Dict[str, Any]]] = None
+_LONG_UNUSED_CACHE_LOCK = threading.Lock()
 
 
 def _count(value: Any) -> int:
@@ -179,7 +183,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "os_paradas": _stale_tickets_summary(services),
         "chamados_outro_tecnico": _other_technician_summary(services),
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
-        "sem_acesso_60_dias": _long_unused_summary(services, history),
+        "sem_acesso_60_dias": _long_unused_summary(services, history, history_signature),
         "backups_regionais": _backups_regionais_summary(services),
     }
 
@@ -587,7 +591,12 @@ def long_unused_status(
     return result
 
 
-def _long_unused_summary(services: DashboardServices, history: Optional[Sequence[Any]]) -> Optional[Dict[str, Any]]:
+def _long_unused_summary(
+    services: DashboardServices,
+    history: Optional[Sequence[Any]],
+    signature: Optional[tuple] = None,
+) -> Optional[Dict[str, Any]]:
+    global _LONG_UNUSED_CACHE
     if services.get_comparison_history is None:
         return None
     unavailable = {
@@ -596,12 +605,24 @@ def _long_unused_summary(services: DashboardServices, history: Optional[Sequence
     }
     if history is None:
         return unavailable
+    key = None if signature is None else (
+        signature, services.long_unused_warning_days, services.long_unused_days, series_sebrae(),
+    )
+    with _LONG_UNUSED_CACHE_LOCK:
+        cached = _LONG_UNUSED_CACHE
+    if key is not None and cached is not None and cached[0] == key:
+        return deepcopy(cached[1])
     try:
-        return long_unused_status(history, services.long_unused_warning_days, services.long_unused_days)
+        result = long_unused_status(history, services.long_unused_warning_days, services.long_unused_days)
     except Exception:
         # The alert is optional; the inventory summary must still load.
         logger.exception("Falha ao calcular o alerta de notebooks sem acesso há 60 dias.")
         return unavailable
+    # Cache only a history that did not change while it was read (see _new_divergences_summary).
+    if key is not None and signature == _history_signature(services):
+        with _LONG_UNUSED_CACHE_LOCK:
+            _LONG_UNUSED_CACHE = (key, deepcopy(result))
+    return result
 
 
 @dataclass(frozen=True)

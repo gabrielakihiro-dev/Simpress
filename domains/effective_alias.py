@@ -8,6 +8,7 @@ applied only when the serial appears exactly once in both sources.
 import logging
 import re
 import threading
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,23 @@ class EffectiveAliasServices:
 # ~0.7 s on every logged-user lookup. build_endpoint_alias_index only reads the records.
 _endpoint_records_cache: Optional[Tuple[EffectiveAliasServices, Tuple[Any, ...], List[Dict[str, Any]]]] = None
 _endpoint_records_lock = threading.Lock()
+# The built index for the cached rows and the last removed pairs (/api/painel rebuilt it on every home load).
+_endpoint_index_cache: Optional[Tuple[EffectiveAliasServices, Tuple[Any, ...], FrozenSet[Tuple[str, str]], Dict[str, Any]]] = None
+
+
+def _cached_endpoint_alias_index(
+    services: EffectiveAliasServices, signature: Tuple[Any, ...], records: List[Dict[str, Any]],
+    removed: FrozenSet[Tuple[str, str]],
+) -> Dict[str, Any]:
+    global _endpoint_index_cache
+    with _endpoint_records_lock:
+        cached = _endpoint_index_cache
+    if cached is not None and cached[0] is services and cached[1] == signature and cached[2] == removed:
+        return deepcopy(cached[3])  # callers add keys to the index; each gets its own copy
+    index = build_endpoint_alias_index(records, removed)
+    with _endpoint_records_lock:
+        _endpoint_index_cache = (services, signature, removed, deepcopy(index))
+    return index
 
 
 def unavailable_endpoint_alias_index() -> Dict[str, Any]:
@@ -174,7 +192,7 @@ def read_endpoint_alias_index(
     with _endpoint_records_lock:
         cached = _endpoint_records_cache
     if cached is not None and cached[0] is services and cached[1] == signature:
-        return build_endpoint_alias_index(cached[2], removed)
+        return _cached_endpoint_alias_index(services, signature, cached[2], removed)
 
     try:
         table = services.validate_uploaded_workbook(endpoint_file.read_bytes(), "endpoint")
