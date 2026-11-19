@@ -175,7 +175,7 @@ const TELAS = [
     nome: "Transporte", minimo: 0,
     abrir: async page => { await page.goto("/"); await abrirAbaTransporte(page); return page.locator("#tab-panel-retirada-entrega"); },
   },
-  // A sub-aba "Visão geral" não tem cartões, painel vazio e sem ⓘ: fica de fora.
+  // A sub-aba "Visão geral" saiu do Resumo (Novo layout, 18/11/2026); o bento do topo não tem ⓘ.
   ...["sem-acesso", "divergencias", "apelidos", "usuarios", "backups"].map(aba => ({
     nome: `Resumo, sub-aba ${aba}`, minimo: 0, abrir: page => abrirResumo(page, aba),
   })),

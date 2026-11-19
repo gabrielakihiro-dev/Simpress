@@ -349,7 +349,7 @@ for (const tema of ["light", "dark"]) {
     test.setTimeout(60_000);
     await preparar(page, { tema });
     await abrirResumo(page);
-    await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
+    await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
     await fotografar(page, '[data-cockpit-tool-panel="comparacao"]', `comparacao-divergencias-${tema}.png`);
 
     await irParaAba(page, "usuarios");
@@ -383,8 +383,13 @@ test.describe("comportamento (só no desktop)", () => {
   test.skip(({ viewport }) => viewport.width < 1366, "o comportamento é igual no celular; as fotos cobrem o layout");
   test.describe.configure({ timeout: 40_000 });
 
-  const FONTES_A = "no endpoint: Endpoint_teste.xlsx · na Simpress: Simpress_teste.xlsx · 18/10/2026, 09:00:00";
-  const FONTES_B = "no endpoint: Endpoint_antigo.xlsx · na Simpress: Simpress_antigo.xlsx · 11/10/2026, 08:00:00";
+  // Novo layout (18/11/2026): o seletor mostra "dd/mm/aaaa hh:mm · Tipo" e o status "Tipo · dd/mm/aaaa hh:mm" (hora local do navegador);
+  // o texto das fontes saiu do Resumo e #comparacao-planilhas-fontes fica oculto e vazio.
+  // Navegador no fuso de Brasília: a CI roda em UTC e a hora esperada não pode depender do fuso da máquina.
+  test.use({ timezoneId: "America/Sao_Paulo" });
+  const CURTO_ATUAL = "18/10/2026 09:00"; // HORARIO_ATUAL
+  const CURTO_ANTERIOR = "11/10/2026 08:00"; // HORARIO_ANTERIOR
+  const semFontes = page => expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
   const interno = { useInnerText: true };
   const linhaDe = (page, serie) => page.locator(`#comparacao-planilhas-conteudo [data-comparison-serial="${serie}"]:visible`);
   const barra = page => page.locator("#comparacao-planilhas-conteudo [data-history-filter-bar]:visible");
@@ -393,21 +398,24 @@ test.describe("comportamento (só no desktop)", () => {
 
   // ---------- Comparação ----------
 
-  test("Comparação: linha de fontes, status e seletor de comparações", async ({ page }) => {
+  test("Comparação: status e seletor de comparações (sem linha de fontes)", async ({ page }) => {
     const ambiente = await preparar(page);
     await abrirResumo(page);
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_A, interno);
-    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`atualizacao · ${HORARIO_ATUAL}`, interno);
-    await expect(page.locator("#cockpit-comparison-event option")).toHaveText([`${HORARIO_ATUAL} · atualizacao`, `${HORARIO_ANTERIOR} · atualizacao`]);
+    await semFontes(page);
+    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText("", interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
+    await expect(page.locator("#cockpit-comparison-event option")).toHaveText([`${CURTO_ATUAL} · Atualização`, `${CURTO_ANTERIOR} · Atualização`]);
     await expect(page.locator("#cockpit-comparison-event")).toHaveValue("ev-bf3-a");
     expect(escritas(ambiente)).toEqual([]);
   });
 
-  test("Comparação: abas com contadores, Visão geral e cartões que levam à seção", async ({ page }) => {
+  test("Comparação: abas com contadores, bento sempre à vista e cartões que levam à seção", async ({ page }) => {
     const ambiente = await preparar(page);
     await abrirResumo(page);
-    const abas = [["visao", "Visão geral"], ["divergencias", "Divergências 7"], ["apelidos", "Apelidos 1"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
+    // Novo layout (18/11/2026): sem "Visão geral"; as seis sub-abas viraram cinco e o bento fica sempre acima delas.
+    const abas = [["divergencias", "Divergências 7"], ["apelidos", "Apelidos 1"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
     await expect(page.locator(".resumo-abas button")).toHaveText(abas.map(([, rotulo]) => rotulo), interno);
+    await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-label", "Divergências: 7 linhas");
     await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-label", "Usuários: 4 linhas");
@@ -418,22 +426,128 @@ test.describe("comportamento (só no desktop)", () => {
         const painel = page.locator(`#resumo-painel-${outra}`);
         if (outra === chave) await expect(painel).toBeVisible(); else await expect(painel).toBeHidden();
       }
+      await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
     }
 
-    await irParaAba(page, "visao");
-    await expect(barra(page)).toHaveCount(0);
-    await expect(page.locator("#resumo-painel-visao .ck-bento-cartao")).toHaveText([
-      "Notebooks comparados 118 99% com correspondência nas duas bases",
-      "Sem correspondência — no endpoint 2",
-      "Sem correspondência — na Simpress 1",
-      "Divergências de local 2",
-      "Duplicidades e ambiguidades 1",
-      "Séries sem mapeamento 1",
-    ], interno);
-    await page.locator('#resumo-painel-visao [data-comparison-section-target="comparacao-secao-localidade-divergente"]').first().click();
+    // Números do bento (a contagem anima até o valor) e "Ver lista →": seleciona a sub-aba, rola até ela e foca a aba.
+    await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
+    await expect(page.locator("#nf3-num-apelidos")).toHaveText("1");
+    await expect(page.locator("#nf3-num-usuarios")).toHaveText("4");
+    await expect(page.locator("#nf3-num-sem-acesso")).toHaveText("3");
+    await irParaAba(page, "divergencias");
+    await page.locator('[data-nf3-cartao="usuarios"] [data-nf3-ver]').click();
+    await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-aba-usuarios")).toBeFocused();
+
+    // Os cartões de Divergências continuam levando à seção.
+    await irParaAba(page, "divergencias");
+    await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').first().click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     await expect(titulo(page, "comparacao-secao-localidade-divergente")).toBeInViewport();
     expect(escritas(ambiente)).toEqual([]);
+  });
+
+  // Novo layout (18/11/2026): cartão "Histórico" do bento (4 registros, selo "atual", "Ver tudo →" abre o diálogo como gaveta).
+  test("Resumo: cartão Histórico mostra os 4 primeiros registros, troca a comparação e abre o histórico completo", async ({ page }, info) => {
+    const extra = (id, horario) => ({ ...eventoB(), id, horario });
+    const ambiente = await preparar(page, {
+      eventos: [eventoA(), eventoB(), extra("ev-bf3-c", "2026-10-04T08:00:00-03:00"), extra("ev-bf3-d", "2026-09-27T08:00:00-03:00"), extra("ev-bf3-e", "2026-09-20T08:00:00-03:00")],
+    });
+    await abrirResumo(page);
+    const itens = page.locator("#nf3-historico-lista .nf3-historico__item");
+    await expect(itens).toHaveCount(4);
+    await expect(page.locator("#nf3-historico-vazio")).toBeHidden();
+    await expect(itens.nth(0)).toHaveAttribute("aria-current", "true");
+    await expect(itens.nth(0).locator(".nf3-historico__atual")).toHaveText("atual");
+    await expect(page.locator(".nf3-historico__atual")).toHaveCount(1);
+    await expect(itens.nth(0)).toContainText("Atualização");
+
+    // Escolher um registro faz o mesmo que o seletor: carrega o resultado e atualiza o status.
+    await itens.nth(1).click();
+    await expect(page.locator("#cockpit-comparison-event")).toHaveValue("ev-bf3-b");
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ANTERIOR}`, interno);
+    await expect(itens.nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(itens.nth(1).locator(".nf3-historico__atual")).toHaveText("atual");
+    await expect(page.locator(".nf3-historico__atual")).toHaveCount(1);
+
+    // "Ver tudo →" abre o diálogo completo (a exclusão de registros continua dentro dele); no desktop ele é uma gaveta à direita.
+    await page.locator("#nf3-historico-ver-tudo").click();
+    const dialogo = page.locator("#modal-historico-comparacoes");
+    await expect(dialogo).toBeVisible();
+    if (info.project.name === "desktop") {
+      const caixa = await dialogo.locator(".ck-dialogo").boundingBox();
+      const largura = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(Math.abs(caixa.x + caixa.width - largura)).toBeLessThanOrEqual(1);
+      expect(caixa.width).toBeLessThanOrEqual(520);
+    }
+    expect(escritas(ambiente)).toEqual([]);
+  });
+
+  test("Resumo sem histórico: cartão Histórico mostra o vazio e a lista fica sem itens", async ({ page }) => {
+    await preparar(page, { eventos: [] });
+    await abrirResumo(page);
+    await expect(page.locator("#nf3-historico-vazio")).toBeVisible();
+    await expect(page.locator("#nf3-historico-lista .nf3-historico__item")).toHaveCount(0);
+    for (const chave of ["divergencias", "apelidos", "usuarios", "sem-acesso"]) await expect(page.locator(`#nf3-num-${chave}`)).toHaveText("—");
+    for (const chave of ["apelidos", "usuarios", "sem-acesso"]) await expect(page.locator(`#resumo-aba-${chave}`)).toHaveAttribute("aria-disabled", "true");
+  });
+
+  // Novo layout (18/11/2026): "Copiar tabela" e "Modo compacto" saíram do Resumo; a densidade compacta não mexe na tabela da Comparação.
+  test("Resumo: sem Copiar tabela nem Modo compacto, e a densidade compacta não muda a tabela", async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "tabela só no desktop; no celular a Comparação vira cards");
+    await preparar(page);
+    await abrirResumo(page);
+    const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
+    await expect(painel.locator(".comparison-desktop-table:visible").first()).toBeVisible();
+    await expect(painel.locator(".ux-table-tools")).toHaveCount(0);
+    await expect(painel.getByRole("button", { name: /Copiar tabela/i })).toHaveCount(0);
+    await expect(painel.getByRole("button", { name: /Modo compacto/i })).toHaveCount(0);
+    const medir = () => page.evaluate(() => {
+      const celula = document.querySelector("#comparacao-planilhas-conteudo .comparison-desktop-table td");
+      const cabeca = document.querySelector("#comparacao-planilhas-conteudo .comparison-desktop-table th");
+      const lido = elemento => { const css = getComputedStyle(elemento); return [css.paddingTop, css.paddingBottom, css.fontSize]; };
+      return { td: lido(celula), th: lido(cabeca) };
+    });
+    const normal = await medir();
+    await page.evaluate(() => { document.documentElement.dataset.uxDensity = "compact"; });
+    expect(await medir()).toEqual(normal);
+    await page.evaluate(() => { delete document.documentElement.dataset.uxDensity; });
+  });
+
+  // Novo layout (18/11/2026): de 320 a 2560 px o Resumo não rola na horizontal, o bento cabe na janela e abaixo de 1024 px a tabela vira cards.
+  test("Resumo: sem rolagem horizontal de 320 a 2560 px e tabela vira cards no celular", async ({ page }, info) => {
+    test.skip(info.project.name !== "desktop", "a janela é redimensionada dentro do teste");
+    await preparar(page);
+    await abrirResumo(page);
+    for (const largura of [320, 390, 768, 1024, 2560]) {
+      await page.setViewportSize({ width: largura, height: 844 });
+      await assentar(page);
+      const medida = await page.evaluate(() => {
+        const janela = document.documentElement.clientWidth;
+        const fora = [...document.querySelectorAll("#cockpit-tool-panels .nf3-cartao, #cockpit-tool-panels .nf3-regional, #cockpit-tool-panels .nf3-historico, #cockpit-tool-panels .nf3-sub")]
+          .filter(elemento => elemento.getBoundingClientRect().right > janela + 1 || elemento.getBoundingClientRect().left < -1)
+          .map(elemento => elemento.className);
+        return { janela, documento: document.documentElement.scrollWidth, corpo: document.body.scrollWidth, fora };
+      });
+      expect(medida.documento, `documento a ${largura}px`).toBeLessThanOrEqual(medida.janela);
+      expect(medida.corpo, `corpo a ${largura}px`).toBeLessThanOrEqual(medida.janela);
+      expect(medida.fora, `blocos fora da janela a ${largura}px`).toEqual([]);
+      const celular = largura < 1024;
+      const tabela = page.locator("#comparacao-planilhas-conteudo .comparison-desktop-table").first();
+      const cartoes = page.locator("#comparacao-planilhas-conteudo .comparison-mobile-list").first();
+      if (celular) {
+        await expect(tabela, `tabela a ${largura}px`).toBeHidden();
+        await expect(cartoes, `cards a ${largura}px`).toBeVisible();
+      } else {
+        await expect(tabela, `tabela a ${largura}px`).toBeVisible();
+        await expect(cartoes, `cards a ${largura}px`).toBeHidden();
+      }
+    }
+    await irParaAba(page, "backups");
+    await expect(page.locator("#resumo-painel-backups")).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 844 });
+    await assentar(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), "Backups a 320px").toBeLessThanOrEqual(320);
   });
 
   test("Comparação: filtros de busca, tipo e só com anotação", async ({ page }) => {
@@ -531,15 +645,14 @@ test.describe("comportamento (só no desktop)", () => {
     await abrirResumo(page);
     const seletor = page.locator("#cockpit-comparison-event");
     await seletor.selectOption("ev-bf3-b");
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_B, interno);
-    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`atualizacao · ${HORARIO_ANTERIOR}`, interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ANTERIOR}`, interno);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 1", interno);
     await expect(linhaDe(page, "BRJ200AAAA")).toBeVisible();
     await expect(linhaDe(page, "BRJ100DDDD")).toHaveCount(0);
     expect(chamadasDe(ambiente, "GET", "/api/historico-comparacoes/ev-bf3-b")).toHaveLength(1);
 
     await seletor.selectOption("ev-bf3-a");
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_A, interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 7", interno);
     await expect(linhaDe(page, "BRJ100DDDD")).toBeVisible();
     expect(escritas(ambiente)).toEqual([]);
@@ -1040,19 +1153,18 @@ test.describe("comportamento (só no desktop)", () => {
     const ambiente = await preparar(page);
     await abrirResumo(page);
     const seletor = page.locator("#cockpit-comparison-event");
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_A, interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
 
     const portao = ambiente.segurar("detalhe-ev-bf3-b");
     await seletor.selectOption("ev-bf3-b");
     await expect.poll(() => chamadasDe(ambiente, "GET", "/api/historico-comparacoes/ev-bf3-b").length).toBe(1);
     await seletor.selectOption("ev-bf3-a");
     await expect(seletor).toHaveValue("ev-bf3-a");
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_A, interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
     portao.liberar();
     await assentar(page);
     await assentar(page);
-    await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText(FONTES_A, interno);
-    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`atualizacao · ${HORARIO_ATUAL}`, interno);
+    await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 7", interno);
     await expect(linhaDe(page, "BRJ200AAAA")).toHaveCount(0);
   });
