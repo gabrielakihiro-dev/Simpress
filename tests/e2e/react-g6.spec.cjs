@@ -39,13 +39,22 @@ async function abrirCobertura(page) {
   await page.keyboard.press("F10");
   await expect(page.locator('[data-cockpit-tool-panel="cobertura"]')).toBeVisible();
   await expect(page.locator("#cobertura-status")).toContainText("Cobertura atualizada");
-  await expect(page.locator(".cob__painel[aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
+  await expect(page.locator("[id^='cobertura-lista-'][aria-busy], #cobertura-alertas[aria-busy]")).toHaveCount(0);
 }
 
-async function aba(page, nome) {
-  await page.locator(`#cobertura-aba-${nome}`).click();
-  await expect(page.locator(`#cobertura-aba-${nome}`)).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator(`#cobertura-painel-${nome}`)).toBeVisible();
+// Celular: um bloco por vez (chips "Lista de equipamentos"); no desktop o grupo de chips nem aparece.
+async function chip(page, rotulo) {
+  const grupo = page.locator(".cob__chips");
+  if (await grupo.isVisible()) await grupo.getByRole("button", { name: rotulo, exact: true }).click();
+}
+
+// Abre a folha de um item pelo botão do cartão ("Abrir/Acompanhar/Receber — <série>") e devolve o diálogo.
+async function abrirFolha(page, rotuloDoChip, botao, tituloDaFolha) {
+  await chip(page, rotuloDoChip);
+  await page.getByRole("button", { name: botao, exact: true }).click();
+  const folha = page.getByRole("dialog", { name: tituloDaFolha });
+  await expect(folha).toBeVisible();
+  return folha;
 }
 
 // ----- Termos e Lembretes (mesmo painel: data-cockpit-tool-panel="lembretes") -----
@@ -136,26 +145,26 @@ test.describe("baselines de screenshot", () => {
   test.use({ locale: "pt-BR", timezoneId: "America/Sao_Paulo" });
 
   for (const tema of ["light", "dark"]) {
-    test(`baseline: Cobertura, aba Necessidades com dados da fixture, tema ${tema}`, async ({ page }) => {
+    test(`baseline: Cobertura, bloco Necessidades com dados da fixture, tema ${tema}`, async ({ page }) => {
       await cenario(page);
       await prepararPagina(page, tema);
       await irParaInicio(page, tema);
       await abrirCobertura(page);
-      await aba(page, "necessidades");
+      await chip(page, "Necessidades");
       await expect(page.locator("[data-cobertura-n]")).toHaveText(["4", "2", "0", "0", "1"]);
       await prepararFoto(page, 'section[data-cockpit-tool-panel="cobertura"]');
       await expect(page.locator('section[data-cockpit-tool-panel="cobertura"]')).toHaveScreenshot(`cobertura-necessidades-${tema}.png`, FOTO);
     });
 
-    test(`baseline: Cobertura, aba Reservas com uma reserva em preparo e outra com kit pronto, tema ${tema}`, async ({ page }) => {
+    test(`baseline: Cobertura, bloco Reservas com uma reserva em preparo e outra com kit pronto, tema ${tema}`, async ({ page }) => {
       await cenario(page);
       await reservar(page, "SINT-001", { primeiroItem: true });
       await reservar(page, "SINT-002", { kitCompleto: true });
       await prepararPagina(page, tema);
       await irParaInicio(page, tema);
       await abrirCobertura(page);
-      await aba(page, "reservas");
-      await expect(page.locator("#cobertura-lista-reservas tbody tr")).toHaveCount(2);
+      await chip(page, "Reservas");
+      await expect(page.locator("#cobertura-lista-reservas li.cob__item")).toHaveCount(2);
       await expect(page.locator("#cobertura-lista-reservas").getByText("Kit pronto", { exact: true })).toHaveCount(1);
       await prepararFoto(page, 'section[data-cockpit-tool-panel="cobertura"]');
       await expect(page.locator('section[data-cockpit-tool-panel="cobertura"]')).toHaveScreenshot(`cobertura-reservas-${tema}.png`, FOTO);
@@ -249,17 +258,30 @@ test.describe("invariantes (1366 px)", () => {
     expect(escritas[0].corpo).toMatchObject({ serie: "SINT-001", manutencao_conferida: true });
   });
 
-  test("reserva com manutenção verificada: sem confirmação e POST com manutencao_conferida false", async ({ page }) => {
+  test("reserva com manutenção verificada: confirma 'Reservar <série>?' com a cidade, recusar não grava e confirmar grava manutencao_conferida false", async ({ page }) => {
     await cenario(page);
     await page.goto("/");
     await abrirCobertura(page);
     await expect(page.locator('[data-cobertura-alerta="manutencao"]')).toHaveCount(0);
-    const pedido = page.waitForRequest(requisicao => requisicao.method() === "POST" && requisicao.url().endsWith("/api/cobertura/reservas"));
-    await page.getByRole("button", { name: "Reservar — SINT-001 para Cidade A", exact: true }).click();
-    const requisicao = await pedido;
-    expect(lerCorpo(requisicao)).toMatchObject({ serie: "SINT-001", manutencao_conferida: false });
+    const escritas = gravarEscritas(page, "/api/cobertura/reservas");
+    const reservarBotao = page.getByRole("button", { name: "Reservar — SINT-001 para Cidade A", exact: true });
+
+    await reservarBotao.click();
+    await expect(tituloConfirmar(page)).toHaveText("Reservar SINT-001?");
+    await expect(page.locator("#mensagem-confirmar-acao")).toHaveText("Cidade A");
+    await recusar(page);
+    await expect(modalConfirmar(page)).toBeHidden();
+    expect(escritas).toEqual([]);
+    await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("0");
+
+    await reservarBotao.click();
+    await expect(tituloConfirmar(page)).toHaveText("Reservar SINT-001?");
+    await aceitar(page);
     await expect(page.locator("[data-cobertura-n='reservas']")).toHaveText("1");
     await expect(modalConfirmar(page)).toBeHidden();
+    // Um só POST: se a recusa tivesse gravado, haveria dois.
+    expect(escritas).toHaveLength(1);
+    expect(escritas[0].corpo).toMatchObject({ serie: "SINT-001", manutencao_conferida: false });
   });
 
   // Cada cancelamento pede confirmação com o título aprovado, e só ao confirmar sai uma escrita.
@@ -269,25 +291,24 @@ test.describe("invariantes (1366 px)", () => {
   };
   const CANCELAMENTOS = [
     {
-      nome: "necessidade", titulo: "Cancelar necessidade", botao: "Cancelar necessidade de Cidade A", aba: "necessidades",
+      nome: "necessidade", titulo: "Cancelar necessidade", botao: "Cancelar necessidade de Cidade A", chip: "Necessidades",
       caminho: /^\/api\/cobertura\/demandas\/[^/]+\/cancelar$/,
     },
     {
-      nome: "reserva", titulo: "Cancelar reserva", botao: "Cancelar reserva — SINT-001", aba: "reservas",
+      nome: "reserva", titulo: "Cancelar reserva", botao: "Cancelar reserva — SINT-001", chip: "Reservas", abrir: "Abrir — SINT-001", folha: "Reservas",
       antes: page => reservar(page, "SINT-001"),
       caminho: /^\/api\/cobertura\/reservas\/[^/]+\/cancelar$/,
     },
     {
-      nome: "movimentação", titulo: "Cancelar movimentação", botao: "Cancelar movimentação — SINT-002", aba: "movimento",
+      nome: "movimentação", titulo: "Cancelar movimentação", botao: "Cancelar movimentação — SINT-002", chip: "Em movimento", abrir: "Acompanhar — SINT-002", folha: "Em movimento",
       antes: page => preparaMovimentacao(page, "SINT-002"),
       caminho: /^\/api\/cobertura\/movimentacoes\/[^/]+\/estado$/, corpo: { estado: "cancelada" },
     },
     {
-      nome: "Cancelar e reabrir vaga", titulo: "Cancelar e reabrir vaga", botao: "Cancelar e reabrir vaga — SINT-001", aba: "movimento",
+      nome: "Cancelar e reabrir vaga", titulo: "Cancelar e reabrir vaga", botao: "Cancelar e reabrir vaga — SINT-001", chip: "Em movimento", abrir: "Acompanhar — SINT-001", folha: "Em movimento",
       antes: page => preparaMovimentacao(page, "SINT-001", "local"),
       // Mesmo caminho de cobertura.spec.cjs: a divergência é registrada pela tela e só então aparecem as três resoluções.
-      depoisDeAbrir: async page => {
-        const movimento = page.locator("#cobertura-lista-movimento");
+      depoisDeAbrir: async (page, movimento) => {
         await movimento.getByLabel("Recebido por").fill("Pessoa Sintética");
         await movimento.getByLabel("Tipo da divergência").selectOption("serie_diferente");
         await movimento.getByLabel("Série recebida").fill("SINT-009");
@@ -297,7 +318,7 @@ test.describe("invariantes (1366 px)", () => {
       caminho: /^\/api\/cobertura\/movimentacoes\/[^/]+\/resolver-divergencia$/, corpo: { resolucao: "cancelar" },
     },
     {
-      nome: "devolução", titulo: "Cancelar devolução", botao: "Cancelar devolução — SINT-003", aba: "devolucoes",
+      nome: "devolução", titulo: "Cancelar devolução", botao: "Cancelar devolução — SINT-003", chip: "Devoluções", abrir: "Receber — SINT-003", folha: "Devoluções",
       caminho: /^\/api\/cobertura\/devolucoes\/[^/]+\/cancelar$/,
     },
   ];
@@ -308,8 +329,10 @@ test.describe("invariantes (1366 px)", () => {
       await caso.antes?.(page);
       await page.goto("/");
       await abrirCobertura(page);
-      await aba(page, caso.aba);
-      await caso.depoisDeAbrir?.(page);
+      // Necessidade cancela na própria lista; os demais abrem a folha do item e cancelam lá dentro.
+      const folha = caso.abrir ? await abrirFolha(page, caso.chip, caso.abrir, caso.folha) : null;
+      if (!folha) await chip(page, caso.chip);
+      await caso.depoisDeAbrir?.(page, folha);
       const escritas = gravarEscritas(page, "/api/cobertura");
       const botao = page.getByRole("button", { name: caso.botao, exact: true });
 
@@ -335,14 +358,14 @@ test.describe("invariantes (1366 px)", () => {
     await reservar(page, "SINT-002", { kitCompleto: true });
     await page.goto("/");
     await abrirCobertura(page);
-    await aba(page, "reservas");
+    const reservas = await abrirFolha(page, "Reservas", "Abrir — SINT-002", "Reservas");
     // Antes: o Transporte está fechado e vazio.
     await expect(page.locator("#tab-panel-retirada-entrega")).toBeHidden();
     await expect(page.locator("#input-serial")).toHaveValue("");
     const escritas = gravarEscritas(page, "/api/");
     const geracoes = [];
     page.on("request", requisicao => { if (requisicao.url().includes("/api/gerar-planilha")) geracoes.push(`${requisicao.method()} ${requisicao.url()}`); });
-    await page.getByRole("button", { name: "Preparar Transporte — SINT-002", exact: true }).click();
+    await reservas.getByRole("button", { name: "Preparar Transporte — SINT-002", exact: true }).click();
     // Ponto de parada: o Transporte abriu e foi preenchido com a série e a observação da necessidade.
     await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
     await expect(page.locator("#input-serial")).toHaveValue("SINT-002");
