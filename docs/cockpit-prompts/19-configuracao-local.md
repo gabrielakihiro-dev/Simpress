@@ -57,7 +57,7 @@ Quem lê cada chave (conferido em 14/11/2026):
 
 - `dashboard_email`, `softexpert_email`, `endpoint_usuario`, `dashboard_pasta_url`: `scripts/automacao_rotinas_chrome.py:76-85`.
 - `outlook_email_sebrae`, `outlook_email_simpress`: `domains/outlook_mail.py:41-42`.
-- `endpoint_url` (`SIMPRESS_ENDPOINT_URL`): `ENDPOINT_URL` em `scripts/automacao_rotinas_chrome.py`; dele saem a tela de login, Staged Computers (`scripts/staged_computers_endpoint.py`) e a checagem de login pelo host.
+- `endpoint_url` (`SIMPRESS_ENDPOINT_URL`): `endpoint_url()` em `core/config.py` (fonte única com o link padrão); dele saem `ENDPOINT_URL` em `scripts/automacao_rotinas_chrome.py`, a tela de login, Staged Computers (`scripts/staged_computers_endpoint.py`), a checagem de login pelo host e os links da interface (`GET /api/config/local/endpoint/{tela}`, sem reiniciar).
 - Os logins do Dashboard, do UX Simpress e do Oracle usam `EMAIL_DASHBOARD` (`scripts/automacao_rotinas_chrome.py:1047-1231`, `2185`, `2590-2591`).
 
 Regras:
@@ -110,6 +110,7 @@ Todos os endpoints exigem o cookie `simpress_sessao_<porta>` (401 sem ele).
 |---|---|
 | `GET /api/config/local` | status de cada seção; e-mails e usuário voltam inteiros (são do próprio usuário, na máquina dele); chaves só como `configurada` e `final` |
 | `PUT /api/config/local/contas` | grava `config/contas_automacao.json` |
+| `GET /api/config/local/endpoint/{tela}` | redireciona os links da interface para o Endpoint (`computadores`, `som-computadores`, `staged-computers`) no host do link configurado, lido a cada clique |
 | `GET` e `PUT /api/config/cliente` (já existem) | lê e grava `config/cliente.json` |
 | `PUT /api/config/local/assistente` | grava as chaves no `.env`; corpo vazio numa chave mantém o valor |
 | `DELETE /api/config/local/assistente/{chave}` | remove a chave do `.env` |
