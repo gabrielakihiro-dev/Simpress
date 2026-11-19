@@ -1,0 +1,89 @@
+/* Novo layout · F10 Cobertura (opção B, bento). Carrega depois de nl-base.css; tudo sob o painel da Cobertura.
+   Cores só por tokens (--nl-*, --ac/--tom do cartão bento). Movimento só dentro de prefers-reduced-motion: no-preference
+   (contrato docs/ui-motion/contrato-bento.md: keyframes só opacity/transform). Os cartões herdam a entrada global do bento. */
+
+/* ---------- 1. Barra: busca, tipo de equipamento e "Registrar necessidade" ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__barra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+[data-cockpit-tool-panel="cobertura"] .cob__busca { position: relative; flex: 0 1 340px; min-width: 200px; margin: 0; }
+[data-cockpit-tool-panel="cobertura"] .cob__busca svg { position: absolute; top: 50%; left: 12px; z-index: 1; width: 16px; height: 16px; transform: translateY(-50%); color: var(--nl-mut); pointer-events: none; }
+[data-cockpit-tool-panel="cobertura"] .cob__busca .ck-entrada { width: 100%; padding-left: 36px; }
+[data-cockpit-tool-panel="cobertura"] .cob__espaco { flex: 1 1 0; }
+[data-cockpit-tool-panel="cobertura"] .cob__novo { display: inline-flex; align-items: center; gap: 8px; }
+[data-cockpit-tool-panel="cobertura"] .cob__novo svg { width: 16px; height: 16px; }
+
+/* ---------- 2. Aviso de reserva: a faixa fica sem altura enquanto vazia, mas continua no DOM como região viva ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__avisos { display: flex; align-items: center; }
+[data-cockpit-tool-panel="cobertura"] .cob__avisos:empty { height: 0; min-height: 0; margin-top: -12px; }
+[data-cockpit-tool-panel="cobertura"] .cob__aviso { --ac: var(--nl-e); display: inline-flex; align-items: center; gap: 10px; padding: 4px 6px 4px 14px; border: 1px solid rgba(var(--ac), .45); border-radius: 999px; background: rgba(var(--ac), .12); color: var(--nl-tx); font: 500 14px/1.3 var(--fonte-corpo); }
+
+/* ---------- 3. Necessidades, bento de quatro cartões e formulários ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__conteudo { display: grid; gap: 16px; }
+[data-cockpit-tool-panel="cobertura"] .cob__sec { display: grid; gap: 12px; }
+[data-cockpit-tool-panel="cobertura"] .cob__cab-sec { display: flex; align-items: center; gap: 10px; }
+[data-cockpit-tool-panel="cobertura"] .cob__h2 { margin: 0; font: 600 18px/1.25 var(--fonte-corpo); letter-spacing: -.01em; color: var(--nl-tx); }
+[data-cockpit-tool-panel="cobertura"] .cob__bento,
+[data-cockpit-tool-panel="cobertura"] .cob__forms { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: start; }
+[data-cockpit-tool-panel="cobertura"] .cob__forms { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+[data-cockpit-tool-panel="cobertura"] .cob__largo { grid-column: 1 / -1; }
+[data-cockpit-tool-panel="cobertura"] .cob__cartao .ck-bento-face { gap: 12px; padding: 20px; }
+[data-cockpit-tool-panel="cobertura"] .cob__cartao .ck-bento-cab { align-items: center; }
+[data-cockpit-tool-panel="cobertura"] .cob__cartao .ck-bento-titulo { flex: 1; min-width: 0; margin: 0; font: 600 16px/1.25 var(--fonte-corpo); color: var(--nl-tx); }
+[data-cockpit-tool-panel="cobertura"] .cob__cartao .ck-bento-icone svg { width: 20px; height: 20px; }
+/* Reservas em índigo: o par de classes vence as regras data-tom do ciano (claro e escuro) do ck-bento.css. */
+[data-cockpit-tool-panel="cobertura"] .ck-bento-cartao.cob__cartao--indigo[data-tom] { --ac: 129, 140, 248; --tom: #4f46e5; }
+:root[data-theme="dark"] [data-cockpit-tool-panel="cobertura"] .ck-bento-cartao.cob__cartao--indigo[data-tom] { --tom: #a5b4fc; }
+[data-cockpit-tool-panel="cobertura"] .cob__n { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 8px; border: 1px solid rgba(var(--ac, var(--nl-i)), .28); border-radius: 999px; background: rgba(var(--ac, var(--nl-i)), .12); color: var(--tom, var(--nl-itx)); font: 600 12px/1 var(--fonte-corpo); font-variant-numeric: tabular-nums; }
+
+/* ---------- 4. Listas e itens ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__lista { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+[data-cockpit-tool-panel="cobertura"] .cob__sec .cob__lista { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-cockpit-tool-panel="cobertura"] .cob__item { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+[data-cockpit-tool-panel="cobertura"] .cob__sec .cob__item { background: var(--nl-card); }
+[data-cockpit-tool-panel="cobertura"] .cob__lin { display: flex; align-items: center; justify-content: space-between; gap: 8px; align-self: stretch; min-width: 0; }
+[data-cockpit-tool-panel="cobertura"] .cob__tit { min-width: 0; font-weight: 600; color: var(--nl-tx); }
+[data-cockpit-tool-panel="cobertura"] .cob__k { font-size: 12.5px; line-height: 1.4; color: var(--nl-mut); }
+[data-cockpit-tool-panel="cobertura"] .cob__serie { font-family: var(--fonte-mono); font-weight: 700; color: var(--nl-tx); }
+[data-cockpit-tool-panel="cobertura"] .cob__vazio { grid-column: 1 / -1; padding: 6px 2px; }
+[data-cockpit-tool-panel="cobertura"] .cob__mais { align-self: flex-start; min-height: 32px; padding: 4px 2px; border: 0; background: transparent; color: var(--tom, var(--nl-itx)); font: 600 13px/1.2 var(--fonte-corpo); cursor: pointer; }
+[data-cockpit-tool-panel="cobertura"] .cob__mais:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 6px; }
+
+/* ---------- 5. Formulários (cartões e folha) e conteúdo da folha ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__form { display: grid; gap: 10px; align-items: stretch; }
+[data-cockpit-tool-panel="cobertura"] .cob__form[hidden] { display: none; }
+[data-cockpit-tool-panel="cobertura"] .nl-folha__corpo { display: grid; gap: 12px; align-content: start; }
+[data-cockpit-tool-panel="cobertura"] .cob__id { margin: 0; font: 600 14px/1.4 var(--fonte-corpo); color: var(--nl-tx); }
+[data-cockpit-tool-panel="cobertura"] .cob__receber { display: grid; align-items: stretch; flex-basis: 100%; }
+[data-cockpit-tool-panel="cobertura"] .cob__candidato { align-items: center; padding: 8px 10px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-sub); }
+
+/* ---------- 6. Tablet: duas colunas ---------- */
+@media (max-width: 1199.98px) {
+  [data-cockpit-tool-panel="cobertura"] .cob__bento,
+  [data-cockpit-tool-panel="cobertura"] .cob__forms { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-cockpit-tool-panel="cobertura"] .cob__sec .cob__lista { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- 7. Celular: uma coluna, um bloco por vez (chips) e "Registrar necessidade" como barra fixa embaixo ---------- */
+[data-cockpit-tool-panel="cobertura"] .cob__chips { display: none; }
+@media (max-width: 767.98px) {
+  [data-cockpit-tool-panel="cobertura"] .cob__barra { display: contents; }
+  [data-cockpit-tool-panel="cobertura"] .cob__busca { flex: none; min-width: 0; }
+  [data-cockpit-tool-panel="cobertura"] .cob__espaco { display: none; }
+  [data-cockpit-tool-panel="cobertura"] .cob__tipo { min-width: 0; }
+  [data-cockpit-tool-panel="cobertura"] .cob__novo { order: 99; position: sticky; bottom: 12px; z-index: 5; justify-content: center; width: 100%; min-height: 48px; box-shadow: var(--nl-sombra-flutua); }
+  [data-cockpit-tool-panel="cobertura"] .cob__chips { display: block; min-width: 0; }
+  [data-cockpit-tool-panel="cobertura"] .cob__chips .nl-subabas { display: flex; }
+  [data-cockpit-tool-panel="cobertura"] .cob__oculto-cel { display: none; }
+  [data-cockpit-tool-panel="cobertura"] .cob__bento,
+  [data-cockpit-tool-panel="cobertura"] .cob__forms,
+  [data-cockpit-tool-panel="cobertura"] .cob__sec .cob__lista { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- 8. Movimento: fade curto ao refazer as listas e entrada do aviso (só sem redução de movimento) ---------- */
+@keyframes nl-f10-fa { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes nl-f10-fb { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes nl-f10-aviso { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  [data-cockpit-tool-panel="cobertura"] .nl-f10-fa { animation: nl-f10-fa 220ms var(--nl-curva) both; }
+  [data-cockpit-tool-panel="cobertura"] .nl-f10-fb { animation: nl-f10-fb 220ms var(--nl-curva) both; }
+  [data-cockpit-tool-panel="cobertura"] .cob__aviso { animation: nl-f10-aviso 200ms ease-out both; }
+}

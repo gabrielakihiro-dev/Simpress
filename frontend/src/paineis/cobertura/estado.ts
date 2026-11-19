@@ -110,10 +110,9 @@ async function lerCobertura(): Promise<boolean> {
     const r = await requisitar("GET /api/cobertura", {});
     carregouAlgumaVez = true;
     if (!r.ok || !r.corpo) {
-      mudar({
-        dados: null, alertas: [], contagens: {}, bloqueado: true,
-        status: { texto: modelo.mensagemErro(r.corpo, r.status), tipo: "erro" },
-      });
+      mudar({ dados: null, alertas: [], contagens: {}, bloqueado: true });
+      // A região #cobertura-status é só para leitor de tela; o aviso visível é o toast.
+      avisar(modelo.mensagemErro(r.corpo, r.status), "error");
       return false;
     }
     const dados = r.corpo;
