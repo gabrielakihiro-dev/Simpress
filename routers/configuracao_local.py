@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
+from core.config import ENDPOINT_URL_PADRAO, endpoint_url
 from core.integrity import FileBusyError, FileTransactionError
 from domains import configuracao_local as configuracao
 
@@ -14,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 # Os valores recebidos nunca voltam em erro nem entram no log: só a classe do erro.
 ERROS_DE_GRAVACAO = (OSError, FileTransactionError, FileBusyError)
+# Telas do Endpoint abertas pelos links da interface: None = o link configurado como está; senão, o fragmento no host dele.
+TELAS_ENDPOINT = {
+    "computadores": None,
+    "som-computadores": "#/uems/agent/som/computers",
+    "staged-computers": "#/uems/agent/som/staged-computers",
+}
 
 
 class ContasPayload(BaseModel):
@@ -52,6 +60,17 @@ def create_configuracao_local_router(*, contas_file: Callable[[], Path], client_
     @router.get("/api/config/local")
     def get_configuracao_local() -> Any:
         return leitura()
+
+    @router.get("/api/config/local/endpoint/{tela}")
+    def abrir_endpoint(tela: str) -> RedirectResponse:
+        """Links da interface para o Endpoint: lê o link a cada clique, então vale sem reiniciar."""
+        if tela not in TELAS_ENDPOINT:
+            raise HTTPException(404, "Tela do Endpoint desconhecida.")
+        url = endpoint_url(contas_file())
+        if configuracao.validar_valor("link", url) is not None:
+            url = ENDPOINT_URL_PADRAO
+        fragmento = TELAS_ENDPOINT[tela]
+        return RedirectResponse(url if fragmento is None else url.split("#")[0] + fragmento, status_code=302)
 
     @router.put("/api/config/local/contas")
     def put_contas(payload: ContasPayload) -> Any:
