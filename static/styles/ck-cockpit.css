@@ -2446,10 +2446,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   font-size: var(--fs-ui); line-height: 1.25; color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums;
 }
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-new { order: 3; margin-left: auto; }
-.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #btn-exportar-resultado-comparacao { order: 4; }
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #btn-exportar-equipamentos { order: 5; }
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy { order: 6; }
-/* Exportar é a única ação principal; "Histórico e ações completas" é navegação e fica com o visual secundário (a classe no HTML não muda). */
+/* "Histórico e ações completas" é navegação e fica com o visual secundário (a classe no HTML não muda). */
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy { border-color: var(--cor-borda); background: var(--cor-superficie-elevada); color: var(--cor-texto-forte); }
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy:hover { border-color: var(--cor-texto-apagado); background: var(--cor-superficie-elevada); color: var(--cor-texto); }
 .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] #cockpit-comparison-legacy:active { border-color: var(--cor-destaque-forte); background: var(--cor-destaque-fundo); }

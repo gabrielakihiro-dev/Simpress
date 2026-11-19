@@ -135,14 +135,6 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     document.getElementById("comparacao-planilhas-fontes")!.textContent =
       `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
-    const exportButton = document.getElementById("btn-exportar-resultado-comparacao") as HTMLButtonElement | null;
-    const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
-    const exportable = /^\d{4}-\d{2}-\d{2}$/.test(historyDate);
-    if (exportButton) {
-      exportButton.dataset.historyDate = exportable ? historyDate : "";
-      exportButton.disabled = !exportable;
-    }
-
     desconectarObservadoresAnotacoes();
     const content = document.getElementById("comparacao-planilhas-conteudo")!;
     content.innerHTML = comparison.somente_anotacoes_sincronizadas

@@ -44,10 +44,11 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
   const comparacao = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)?.[0] || "";
   // O cartão "Ativos por regional" (resumo-regionais*) é desenhado pelo React dentro de #resumo-ativos-secao:
   // os IDs dele são conferidos no navegador (tests/e2e/react-piloto.spec.cjs).
-  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao", "resumo-ativos-secao"]) {
+  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "resumo-ativos-secao"]) {
     assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro do painel Resumo`);
   }
-  assert.match(comparacao, /id="btn-exportar-resultado-comparacao"[^>]*data-on-click="exportarResultadoComparacaoPlanilhas"/);
+  // O botão "Exportar" do resultado saiu da barra (18/11/2026); sobra só o Exportar Excel.
+  assert.doesNotMatch(html, /btn-exportar-resultado-comparacao|exportarResultadoComparacaoPlanilhas/);
   assert.doesNotMatch(html, /id="cockpit-comparison-(kpis|filters|list|detail|export)"/);
   assert.doesNotMatch(html, /id="modal-comparacao-/);
 assert.match(html, /id="cockpit-alias-filters"/);
@@ -307,6 +308,9 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.match(exportar, /class="ck-btn ck-btn--secundario hidden"/);
   assert.match(exportar, /data-on-click="exportarEquipamentosAtualizados"/);
   assert.match(exportar, /<span>Exportar Excel<\/span>/);
+  assert.match(exportar, /aria-label="Exportar Excel com apelidos e IdCliente atualizados"/);
+  assert.match(exportar, /title="Baixar a planilha com apelidos e IdCliente atualizados"/);
+  assert.doesNotMatch(exportar, /UX/);
   const botao = html.match(/<button[^>]*id="btn-sebrae-abrir-chamados"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.match(botao, /data-args='\["sebrae-chamados"\]'/);
   assert.match(botao, /<span>Chamados<\/span>/);
@@ -849,7 +853,7 @@ test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há
   } finally { delete global.document; }
 });
 
-test("histórico de comparações vazio limpa a aba e mantém o Exportar desativado", async () => {
+test("histórico de comparações vazio limpa a aba", async () => {
   const renders = [];
   const { api, el } = criarAmbientePaineis({
     apiFetch: async () => ({ eventos: [] }),
@@ -858,7 +862,6 @@ test("histórico de comparações vazio limpa a aba e mantém o Exportar desativ
   try {
     await api.abrirPainelCockpit("comparacao");
     assert.equal(renders.length, 0);
-    assert.equal(el("btn-exportar-resultado-comparacao").disabled, true);
     assert.equal(el("cockpit-comparison-event").disabled, true);
     assert.equal(el("comparacao-planilhas-fontes").textContent, "");
   } finally { delete global.document; }
@@ -876,7 +879,6 @@ test("histórico vazio ainda mostra a seção Sem usuário abaixo da mensagem va
     assert.equal(secoes.length, 1);
     assert.equal(secoes[0][0], semUsuario);
     assert.deepEqual(JSON.parse(JSON.stringify(secoes[0][1])), { serial: "SN-1", category: "sem_usuario" });
-    assert.equal(el("btn-exportar-resultado-comparacao").disabled, true);
     assert.equal(el("comparacao-planilhas-conteudo").dataset.estado, "vazio");
     // Erro e limite do inventário também chegam à seção (o renderer escolhe a mensagem).
     for (const estado of ["erro", "limite"]) {

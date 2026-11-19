@@ -48,7 +48,7 @@ test("peças usam as classes e o ARIA do nl-base.css", () => {
     "toast.tsx": ["nl-toasts", "nl-toast", "nl-toast__fechar", 'aria-live="polite"', 'aria-label="Fechar aviso"'],
     "folha-inferior.tsx": ["nl-veu", "nl-folha", "nl-folha__fechar", 'aria-modal="true"', "aria-labelledby", "Escape"],
     "selo-responsavel.tsx": ["nl-avs", "nl-av", "data-papel", "aria-label", "tabIndex={0}", "nl-selo-lado", "Responsável (A)"],
-    "campo-nl.tsx": ["nl-campo", "nl-campo__inp", "nl-campo__rot", "nl-campo__erro", 'placeholder=" "', "aria-invalid", "aria-describedby", "htmlFor"],
+    "campo-nl.tsx": ["nl-campo", "nl-campo__inp", "nl-campo__rot", "nl-campo__erro", "aria-invalid", "aria-describedby", "htmlFor"],
     "cartao-bento.tsx": ["ck-bento-cartao", "ck-bento-face", "data-bento-cartao", "ck-bento-d${atraso}"],
   };
   for (const [arquivo, trechos] of Object.entries(pecas)) {

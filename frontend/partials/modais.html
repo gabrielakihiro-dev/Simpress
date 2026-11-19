@@ -214,8 +214,6 @@
           </section>
         </div>
 
-        <div id="upload-impacto-aviso" class="ckp-nota" data-status="alerta"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-alerta"></use></svg><p>Ao confirmar, <strong>as duas bases ativas serão substituídas</strong> pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p></div>
-
         <div class="ckp-nota">
           <input id="auto-export-history-after-update" type="checkbox">
           <span class="ck-rotulo-info"><label for="auto-export-history-after-update"><strong>Baixar o Histórico de Planilhas automaticamente.</strong></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o download automático" aria-describedby="auto-export-history-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="auto-export-history-dica" role="tooltip" class="info-tip-text">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span></span></span>
@@ -233,6 +231,8 @@
       </div>
 
       <footer class="ckp-rodape">
+        <!-- Aviso de impacto atrás do ⓘ, no hover e no foco por teclado (Novo layout, nota n_janelas_planilhas, etapas 1 e 2). -->
+        <span id="upload-impacto-aviso" class="info-tip nl-impacto"><button type="button" class="info-tip-trigger" aria-label="Sobre o impacto" aria-describedby="tip-upload-impacto"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg>Impacto</button><span id="tip-upload-impacto" role="tooltip" class="info-tip-text">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</span></span>
         <p id="upload-planilhas-status" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
         <span class="ck-espaco"></span>
         <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharModalAtualizarPlanilhas">Cancelar</button>

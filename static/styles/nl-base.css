@@ -39,10 +39,30 @@
 /* ---------- 2. Barra do topo (página base): só aparência; IDs, ARIA e ordem ficam como estão ---------- */
 #ck-topbar { background: color-mix(in srgb, var(--nl-bg) 82%, transparent); border-bottom-color: var(--nl-bd); }
 #ck-topbar .ck-marca { border-right: 0; padding-right: 0; font-size: 17px; font-weight: 700; }
-#ck-topbar .ck-aba { border-radius: 999px; color: var(--nl-mut); font-weight: 500; }
-#ck-topbar .ck-aba:hover { background: rgba(var(--nl-i), .08); color: var(--nl-tx); }
+/* Abas: opção C do canvas v49 (quadros NL-Abas-C e NL-Abas-C-cel). As 6 abas ficam numa cápsula só (.nl-abas envolve
+   o tablist e os 2 botões de painel, que seguem com aria-pressed); cada aba tem a sua cor (data-nl-tom, índigo sem ele). */
+#ck-topbar .nl-abas { display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card); }
+#ck-topbar #ck-abas { gap: 2px; padding: 0; border: 0; background: none; }
+#ck-topbar .ck-aba { position: relative; height: 36px; margin: 0; padding: 0 12px; column-gap: 7px; border: 0; border-radius: 999px; background: transparent; color: var(--nl-mut); font: 500 13px/1 var(--fonte-corpo); }
+#ck-topbar .ck-aba:hover { color: var(--nl-tx); background: radial-gradient(120% 150% at 50% 130%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 72%); box-shadow: inset 0 0 0 1px rgba(var(--nl-ac, var(--nl-i)), .34), 0 8px 20px -10px rgba(var(--nl-ac, var(--nl-i)), .75); }
+#ck-topbar .ck-aba:is(:hover, [aria-selected="true"], [aria-pressed="true"]) .ck-ico { color: var(--nl-actx, var(--nl-itx)); }
 #ck-topbar .ck-aba[aria-selected="true"], #ck-topbar .ck-aba--painel[aria-pressed="true"] {
-  background: rgba(var(--nl-i), .16); color: var(--nl-itx); box-shadow: inset 0 0 0 1px rgba(var(--nl-i), .35);
+  background: rgba(var(--nl-ac, var(--nl-i)), .16); color: var(--nl-tx); box-shadow: inset 0 0 0 1px rgba(var(--nl-ac, var(--nl-i)), .4), 0 6px 18px -10px rgba(var(--nl-ac, var(--nl-i)), .85);
+}
+/* Uma aba destacada por vez: com Chamados ou OS aberto por cima, a aba do tablist apaga. */
+#ck-topbar #ck-abas:has(~ .ck-aba--painel[aria-pressed="true"]) .ck-aba[aria-selected="true"]:not(:hover) { background: transparent; color: var(--nl-mut); box-shadow: none; }
+#ck-topbar #ck-abas:has(~ .ck-aba--painel[aria-pressed="true"]) .ck-aba[aria-selected="true"]:not(:hover) .ck-ico { color: inherit; }
+#ck-topbar .ck-aba:focus-visible { outline: 2px solid rgb(var(--nl-ac, var(--nl-i))); outline-offset: 2px; }
+/* Atalho F1-F6: fica escondido e aparece embaixo da aba no hover e no foco por teclado (rótulo e altura não mudam). */
+#ck-topbar .ck-aba__kbd { display: block; grid-area: auto; position: absolute; top: calc(100% + 10px); left: 50%; z-index: 30; margin: 0; padding: 3px 7px; border: 1px solid var(--nl-bd2); border-radius: 7px; background: var(--nl-card2); color: var(--nl-tx2); font: 500 11px/14px var(--fonte-mono); opacity: 0; transform: translate(-50%, 0); pointer-events: none; }
+#ck-topbar .ck-aba:is(:hover, :focus-visible) .ck-aba__kbd { opacity: 1; border-color: rgba(var(--nl-ac, var(--nl-i)), .5); color: var(--nl-actx, var(--nl-itx)); box-shadow: 0 8px 18px -10px rgba(var(--nl-ac, var(--nl-i)), .8); }
+/* Ferramentas do topo: o mesmo hover, cada uma com a sua cor (Buscar ciano, Notificações índigo, Ferramentas esmeralda, Tema âmbar). */
+#ck-topbar .ck-busca__campo { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
+#cockpit-tools-trigger { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+#theme-toggle { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
+#ck-topbar .ck-busca__campo:hover { border-color: rgba(var(--nl-ac), .45); }
+#ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover {
+  border-color: rgba(var(--nl-ac, var(--nl-i)), .45); background: radial-gradient(120% 150% at 50% 130%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 72%), var(--nl-card); color: var(--nl-actx, var(--nl-itx)); box-shadow: 0 8px 20px -10px rgba(var(--nl-ac, var(--nl-i)), .75);
 }
 #ck-topbar .ck-busca__campo { height: 40px; padding: 0 6px 0 12px; border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-fraco); }
 #ck-topbar .nl-busca__kbd { height: auto; padding: 2px 6px; border-color: var(--nl-bd2); border-radius: 6px; color: var(--nl-fraco); font: 500 11px/1.2 var(--fonte-mono); white-space: nowrap; }
@@ -53,21 +73,45 @@
 }
 #ck-topbar .ck-contador { top: -4px; right: -4px; min-width: 18px; height: 18px; border-radius: 9px; background: rgb(var(--nl-f)); color: #0b0d15; line-height: 18px; }
 #ck-topbar :is(.ck-menu, .ck-sino) { border-color: var(--nl-bd); border-radius: 16px; box-shadow: var(--nl-sombra-janela); }
+/* Menu Ferramentas (canvas v51, NL-Abas-C): o mesmo hover das abas, cor do ciclo depois da OS
+   (Histórico F7 ciano, Relatório F8 esmeralda, Cobertura F10 fúcsia, Lembretes âmbar, Catálogo índigo). */
+#btn-historico-apelidos { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
+#btn-relatorio-mensal { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+#btn-cobertura { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
+#btn-lembretes { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
+#ck-topbar .ck-menu__item { height: 40px; padding: 0 10px 0 8px; border-radius: 11px; color: var(--nl-tx2); font: 500 13px/16px var(--fonte-corpo); }
+#ck-topbar .ck-menu__item:hover { color: var(--nl-tx); background: radial-gradient(140% 180% at 0% 50%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 70%); box-shadow: inset 0 0 0 1px rgba(var(--nl-ac, var(--nl-i)), .38), 0 8px 20px -12px rgba(var(--nl-ac, var(--nl-i)), .75); }
+#ck-topbar .ck-menu__item:hover .ck-ico { color: var(--nl-actx, var(--nl-itx)); }
+#ck-topbar .ck-menu__item:hover > kbd { border-color: rgba(var(--nl-ac, var(--nl-i)), .5); color: var(--nl-actx, var(--nl-itx)); }
+#ck-topbar .ck-menu__item:focus-visible { outline: 2px solid rgb(var(--nl-ac, var(--nl-i))); outline-offset: 1px; }
 
 @media (min-width: 1200px) {
   :root { --altura-barra: 64px; }
   #ck-topbar { gap: 12px; padding: 0 24px; }
-  #ck-abas { padding: 4px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card); }
-  #ck-topbar .ck-aba { height: 36px; padding: 0 14px; }
-  #ck-topbar .ck-aba--painel { margin-left: 0; border: 1px solid var(--nl-bd); background: var(--nl-card); }
   #ck-topbar .ck-busca { max-width: 420px; }
 }
+/* Abaixo de 1200px (NL-Abas-C-cel): as 6 abas ficam visíveis, só com ícone; a aba ativa mostra o rótulo; sem atalhos F.
+   Chamados e OS deixam de repetir no menu Ferramentas, porque já estão na barra. */
 @media (max-width: 1199.98px) {
-  #ck-topbar .ck-aba { height: 34px; padding: 0 12px; border: 1px solid var(--nl-bd); background: var(--nl-card); }
+  #ck-topbar .nl-abas { order: 2; padding: 0; border: 0; border-radius: 0; background: none; }
+  #ck-topbar #ck-abas { order: 0; flex: 0 1 auto; display: flex; min-width: 0; }
+  #ck-topbar .ck-aba.ck-aba--painel { display: inline-flex; }
+  .ck-menu__item.ck-menu__item--so-compacto { display: none; }
+  /* Em 320px a aba ativa encolhe e o rótulo ganha reticências, para a barra não passar da largura. */
+  #ck-topbar .ck-aba { display: inline-flex; flex: none; gap: 0; min-width: 38px; height: 40px; padding: 0 9px; border: 1px solid transparent; }
+  #ck-topbar .ck-aba .ck-ico { display: block; width: 18px; height: 18px; }
+  #ck-topbar .ck-aba > span { min-width: 0; max-width: 0; overflow: hidden; opacity: 0; text-overflow: ellipsis; white-space: nowrap; }
+  #ck-topbar .ck-aba__kbd { display: none; }
+  #ck-topbar .ck-aba:hover { box-shadow: none; background: rgba(var(--nl-ac, var(--nl-i)), .09); }
+  #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) { gap: 7px; padding: 0 14px 0 11px; border-color: rgba(var(--nl-ac, var(--nl-i)), .5); background: rgba(var(--nl-ac, var(--nl-i)), .13); box-shadow: none; }
+  #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) { flex: 0 1 auto; }
+  #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) > span { max-width: 110px; opacity: 1; }
+  #ck-topbar #ck-abas:has(~ .ck-aba--painel[aria-pressed="true"]) .ck-aba[aria-selected="true"] { gap: 0; padding: 0 9px; border-color: transparent; background: transparent; }
+  #ck-topbar #ck-abas:has(~ .ck-aba--painel[aria-pressed="true"]) .ck-aba[aria-selected="true"] > span { max-width: 0; opacity: 0; }
 }
 @media (max-width: 767.98px) {
   #ck-topbar { padding: 8px 16px; }
-  #ck-topbar .ck-aba { padding: 0 4px; }
+  #ck-topbar .nl-abas { order: 4; flex-basis: 100%; min-width: 0; }
 }
 
 /* ---------- 3. Janelas e diálogos comuns (.ck-veu/.ck-dialogo): o movimento segue no SimpressMotion ---------- */
@@ -108,6 +152,11 @@
 .ckp-dialogo .ckp-arquivo { border: 1px dashed var(--nl-bd2); border-radius: 14px; background: var(--nl-card2); }
 .ckp-dialogo .ckp-arquivo:is([data-estado="ok"], [data-estado="pronto"]) { border-style: solid; border-color: rgba(var(--nl-e), .35); background: rgba(var(--nl-e), .06); }
 .ckp-dialogo .ckp-arquivo[data-estado="erro"] { border-style: solid; border-color: rgba(var(--nl-r), .45); background: rgba(var(--nl-r), .05); }
+/* "Impacto" no rodapé (quadro NL-Janelas-Planilhas): ⓘ com rótulo à esquerda; o balão abre para cima, porque o diálogo corta o que passa da borda de baixo. */
+.ckp-rodape .nl-impacto { margin-right: auto; }
+.nl-impacto .info-tip-trigger { width: auto; grid-auto-flow: column; gap: 6px; padding: 0 6px; border-radius: 8px; color: var(--nl-mut); font-size: 12px; font-weight: 500; }
+/* Com o Impacto no rodapé, o status cede largura para os três botões caberem numa linha. */
+@media (min-width: 641px) { .nl-impacto .info-tip-text { inset-block-start: auto; inset-block-end: calc(100% + 0.4rem); } .nl-impacto ~ .ckp-rodape__status { flex-basis: 120px; } }
 @media (max-width: 767.98px) {
   .ckp-dialogo { border-radius: 20px; }
   .ckp-cab { padding: 16px 12px 12px 16px; }
@@ -131,15 +180,13 @@
 .ck-pront__item { padding: 10px 12px; border-radius: 14px; background: var(--nl-card2); }
 @media (max-width: 767.98px) { .ck-pront__resumo { grid-template-columns: minmax(0, 1fr); } }
 
-/* ---------- 3d. Campo de formulário (quadro NL-Base-Formulario): rótulo que flutua, erro com mensagem ---------- */
-.nl-campo { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.nl-campo__inp { width: 100%; height: 48px; padding: 20px 14px 6px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font: 400 14px/1.3 var(--fonte-corpo); }
-textarea.nl-campo__inp { height: 92px; padding-top: 24px; resize: none; line-height: 1.4; }
+/* ---------- 3d. Campo de formulário (quadro NL-Base-Formulario v43, nl-campo-rotulo-fix): rótulo fixo acima, erro com mensagem ---------- */
+.nl-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
+.nl-campo__rot { color: var(--nl-mut); font-size: 12px; font-weight: 500; line-height: 16px; overflow-wrap: anywhere; }
+.nl-campo__inp { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font: 400 14px/1.3 var(--fonte-corpo); }
+textarea.nl-campo__inp { height: auto; min-height: 88px; padding-block: 10px; resize: none; line-height: 1.4; }
 select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--nl-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center; cursor: pointer; }
 .nl-campo__inp:focus { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); outline-offset: 0; }
-.nl-campo__rot { position: absolute; top: 14px; left: 15px; color: var(--nl-mut); font-size: 14px; pointer-events: none; transform-origin: left top; }
-/* Com foco, com valor ou em select, o rótulo sobe e encolhe (o campo usa placeholder=" "). */
-.nl-campo__inp:is(:focus, :not(:placeholder-shown)) + .nl-campo__rot, select.nl-campo__inp + .nl-campo__rot { transform: translateY(-8px) scale(.79); }
 .nl-campo[data-erro] .nl-campo__inp { border-color: rgb(var(--nl-r)); }
 .nl-campo__erro { color: var(--nl-rtx); font-size: 12px; }
 
@@ -224,9 +271,18 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
 
 /* ---------- 10. Movimento (contrato bento; nada anima com movimento reduzido) ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  #ck-topbar :is(.ck-aba, .ck-busca__campo, .ck-chip) { transition: background-color 300ms var(--nl-curva), color 300ms var(--nl-curva), border-color 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
-  #ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle) { transition: transform 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
-  #ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover { transform: translateY(-3px); box-shadow: 0 10px 30px -10px rgba(129, 140, 248, .5); }
+  #ck-topbar :is(.ck-busca__campo, .ck-chip) { transition: background-color 300ms var(--nl-curva), color 300ms var(--nl-curva), border-color 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
+  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #theme-toggle) { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), transform 200ms var(--nl-curva), padding 220ms var(--nl-curva); }
+  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #theme-toggle) .ck-ico { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #theme-toggle):hover { transform: translateY(-2px); }
+  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover .ck-ico { transform: scale(1.12); }
+  #ck-topbar .ck-aba__kbd { transform: translate(-50%, -4px); transition: opacity 150ms var(--nl-curva), transform 150ms var(--nl-curva); }
+  #ck-topbar .ck-aba:is(:hover, :focus-visible) .ck-aba__kbd { transform: translate(-50%, 0); }
+  #ck-topbar .ck-aba > span { transition: max-width 220ms var(--nl-curva), opacity 220ms var(--nl-curva); }
+  #ck-topbar .ck-menu__item { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
+  #ck-topbar .ck-menu__item .ck-ico { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+  #ck-topbar .ck-menu__item:hover { transform: translateX(2px); }
+  #ck-topbar .ck-menu__item:hover .ck-ico { transform: scale(1.12); }
   .nl-subabas[data-pronta] .nl-subabas__marca { transition: transform 200ms var(--nl-curva), opacity 200ms var(--nl-curva); }
   .nl-subaba { transition: color 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
   .nl-subaba:hover { transform: translateY(-2px); }
@@ -237,7 +293,6 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
   .nl-av { transition: margin-left 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
   .nl-av:hover { transform: translateY(-2px); }
   .nl-av::after { transition: opacity 150ms var(--nl-curva); }
-  .nl-campo__rot { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
   .nl-campo__inp { transition: border-color 200ms var(--nl-curva); }
   @media (max-width: 767.98px) { .nl-folha { animation-name: nl-folha-sobe; } }
 }

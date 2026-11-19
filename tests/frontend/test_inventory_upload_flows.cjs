@@ -91,28 +91,6 @@ test("automatic history export preference is restored and saved in this browser"
   assert.equal(nextHarness.element("auto-export-history-after-update").checked, true);
 });
 
-// A exportação do histórico (botão do modal) vive no React: o texto aprovado é conferido em tests/e2e/react-g9.spec.cjs.
-test("comparison export uses the approved success confirmation", async () => {
-  const requests = [];
-  const harness = createAppHarness(async url => {
-    requests.push(url);
-    return {
-      ok: true,
-      status: 200,
-      headers: { get: () => 'attachment; filename="Historico_Planilhas_20261009.xlsx"' },
-      blob: async () => ({}),
-    };
-  });
-  harness.element("btn-exportar-resultado-comparacao").dataset.historyDate = "2026-10-09";
-
-  await harness.run("exportarResultadoComparacaoPlanilhas()");
-
-  assert.deepEqual(requests, ["/api/historico-comparacoes/exportar/excel?data=2026-10-09"]);
-  assert.equal(harness.effects.toasts.length, 1);
-  assert.equal(harness.effects.toasts[0].message, "Planilha Exportada com Sucesso!");
-  assert.equal(harness.effects.toasts[0].type, "success");
-});
-
 test("enabled automatic history export downloads the updated event day", async () => {
   const calls = [];
   const eventTime = "2026-10-09T14:30:00-03:00";

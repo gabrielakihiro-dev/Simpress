@@ -647,25 +647,6 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     app.abrirModalAtualizarPlanilhas();
   }
 
-  async function exportSelectedComparison(event = selectedComparison) {
-    const eventDate = String(event?.horario || "").slice(0, 10);
-    const button = byId("btn-exportar-resultado-comparacao");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !button || typeof app.exportarResultadoComparacaoPlanilhas !== "function") {
-      app.showToast("Este resultado não tem uma data de histórico válida para exportar.", "warning");
-      return;
-    }
-    const previousDate = button.dataset.historyDate;
-    button.dataset.historyDate = eventDate;
-    button.disabled = false;
-    try {
-      await app.exportarResultadoComparacaoPlanilhas();
-    } finally {
-      if (previousDate) button.dataset.historyDate = previousDate;
-      else delete button.dataset.historyDate;
-      button.disabled = !button.dataset.historyDate;
-    }
-  }
-
   function comparisonFromEvent(event: Qualquer) {
     return {
       ...(event.comparacao || {}),
@@ -676,12 +657,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     };
   }
 
-  // Empties the result area (and the export button) while a result loads or is unavailable.
+  // Empties the result area while a result loads or is unavailable.
   function clearComparisonResult(message: Qualquer, estado = "vazio") {
     byId("comparacao-planilhas-fontes").textContent = "";
-    const exportButton = byId("btn-exportar-resultado-comparacao");
-    exportButton.dataset.historyDate = "";
-    exportButton.disabled = true;
     app.limparAbasResumo?.();
     renderEmpty(byId("comparacao-planilhas-conteudo"), message);
     byId("comparacao-planilhas-conteudo").dataset.estado = estado;
