@@ -85,7 +85,7 @@ jobs:
         include:
           - shard: 1
             specs: >-
-              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs
+              assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs cursor.spec.cjs
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs
