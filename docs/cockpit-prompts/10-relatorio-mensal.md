@@ -124,6 +124,7 @@ IDs novos: `rel-aba-*`, `rel-painel-*`, `rel-*-contagem`, `cockpit-monthly-estad
 Comportamento:
 
 - Abre em `Visão geral` só na primeira abertura do F8. A aba escolhida fica ao mudar o mês, ao recarregar em silêncio (importar OS ou nova comparação com o F8 aberto) e ao fechar e reabrir o F8 na mesma carga da página. O filtro da OS fica só na recarga silenciosa; ao mudar o mês, volta a `Todas`. Carregando e erro aparecem em `cockpit-monthly-estado`, com as abas sempre à vista.
+- Carregar uma vez (18/11/2026, pedido do usuário): fechar e reabrir o F8 no mesmo mês não refaz `GET /api/relatorio-mensal/dados`; a tela, a aba e o filtro ficam como estavam. Se algo mudou com o F8 fechado (importar OS, `simpress:chamados-atualizados`; ou o painel chegou com outra comparação ou inventário, `simpress:painel-atualizado`), a reabertura faz a recarga silenciosa (mantém aba e filtros, sem `Carregando`). Falha na carga também recarrega ao voltar. Limite: o Dashboard regravado pelo agendador não avisa a tela; o F8 só vê a mudança ao trocar o mês ou quando um desses sinais chegar. Teste: "Relatório mensal (F8) carrega uma vez…" em `tests/frontend/test_cockpit_tool_panels.cjs`.
 - Teclado, mesmo molde da F6: `role=tablist` / `tab` / `tabpanel`, `aria-selected`, `tabindex` rotativo (só a aba ativa entra na ordem do Tab), setas circulares, `Home` e `End`; focar uma aba pelas setas a ativa.
 - Telas pequenas: a tablist rola sozinha na horizontal (a página nunca rola); em ponteiro grosso cada aba tem no mínimo 44px de altura.
 
