@@ -2,7 +2,7 @@
    Carrega depois de ck-bento.css. Só acrescenta tokens --nl-* e reveste o que já existe (barra do topo,
    janelas .ck-veu/.ck-dialogo, alvos de toque) + as peças nl-* de frontend/src/componentes/.
    Contrato de movimento: docs/ui-motion/contrato-bento.md (keyframes só opacity/transform; todo movimento
-   dentro de prefers-reduced-motion: no-preference). O Assistente (#assistente-widget, #btn-assistente) fica fora. */
+   dentro de prefers-reduced-motion: no-preference). O Assistente (#assistente-widget) fica fora; o botão #btn-assistente só ganha o hover fúcsia do topo (aprovado em 18/11/2026). */
 
 /* ---------- 1. Tokens (tema claro padrão; contraste de texto ≥ 4,5:1 sobre --nl-card e --nl-bg) ---------- */
 :root {
@@ -56,12 +56,14 @@
 /* Atalho F1-F6: fica escondido e aparece embaixo da aba no hover e no foco por teclado (rótulo e altura não mudam). */
 #ck-topbar .ck-aba__kbd { display: block; grid-area: auto; position: absolute; top: calc(100% + 10px); left: 50%; z-index: 30; margin: 0; padding: 3px 7px; border: 1px solid var(--nl-bd2); border-radius: 7px; background: var(--nl-card2); color: var(--nl-tx2); font: 500 11px/14px var(--fonte-mono); opacity: 0; transform: translate(-50%, 0); pointer-events: none; }
 #ck-topbar .ck-aba:is(:hover, :focus-visible) .ck-aba__kbd { opacity: 1; border-color: rgba(var(--nl-ac, var(--nl-i)), .5); color: var(--nl-actx, var(--nl-itx)); box-shadow: 0 8px 18px -10px rgba(var(--nl-ac, var(--nl-i)), .8); }
-/* Ferramentas do topo: o mesmo hover, cada uma com a sua cor (Buscar ciano, Notificações índigo, Ferramentas esmeralda, Tema âmbar). */
+/* Ferramentas do topo: o mesmo hover, cada uma com a sua cor (Buscar ciano, Notificações índigo, Ferramentas esmeralda, Assistente fúcsia, Tema âmbar).
+   O Assistente só ganha o hover: o repouso e o estado aberto (aria-expanded) seguem a paleta dele. */
 #ck-topbar .ck-busca__campo { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
 #cockpit-tools-trigger { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
+#btn-assistente { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
 #theme-toggle { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
 #ck-topbar .ck-busca__campo:hover { border-color: rgba(var(--nl-ac), .45); }
-#ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover {
+#ck-topbar .ck-topbar__acoes :is(#cockpit-tools-trigger, #btn-notificacoes, #btn-assistente, #theme-toggle):hover {
   border-color: rgba(var(--nl-ac, var(--nl-i)), .45); background: radial-gradient(120% 150% at 50% 130%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 72%), var(--nl-card); color: var(--nl-actx, var(--nl-itx)); box-shadow: 0 8px 20px -10px rgba(var(--nl-ac, var(--nl-i)), .75);
 }
 #ck-topbar .ck-busca__campo { height: 40px; padding: 0 6px 0 12px; border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-fraco); }
@@ -74,15 +76,17 @@
 #ck-topbar .ck-contador { top: -4px; right: -4px; min-width: 18px; height: 18px; border-radius: 9px; background: rgb(var(--nl-f)); color: #0b0d15; line-height: 18px; }
 #ck-topbar :is(.ck-menu, .ck-sino) { border-color: var(--nl-bd); border-radius: 16px; box-shadow: var(--nl-sombra-janela); }
 /* Menu Ferramentas (canvas v51, NL-Abas-C): o mesmo hover das abas, cor do ciclo depois da OS
-   (Histórico F7 ciano, Relatório F8 esmeralda, Cobertura F10 fúcsia, Lembretes âmbar, Catálogo índigo). */
+   (Histórico F7 ciano, Relatório F8 esmeralda, Cobertura F10 fúcsia, Lembretes âmbar, Catálogo índigo);
+   no modo compacto, Chamados F5 segue a aba (âmbar) e OS F6 fica índigo. */
+#btn-sebrae-chamados-menu { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
 #btn-historico-apelidos { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
 #btn-relatorio-mensal { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }
 #btn-cobertura { --nl-ac: var(--nl-f); --nl-actx: var(--nl-ftx); }
 #btn-lembretes { --nl-ac: var(--nl-a); --nl-actx: var(--nl-atx); }
 #ck-topbar .ck-menu__item { height: 40px; padding: 0 10px 0 8px; border-radius: 11px; color: var(--nl-tx2); font: 500 13px/16px var(--fonte-corpo); }
-#ck-topbar .ck-menu__item:hover { color: var(--nl-tx); background: radial-gradient(140% 180% at 0% 50%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 70%); box-shadow: inset 0 0 0 1px rgba(var(--nl-ac, var(--nl-i)), .38), 0 8px 20px -12px rgba(var(--nl-ac, var(--nl-i)), .75); }
-#ck-topbar .ck-menu__item:hover .ck-ico { color: var(--nl-actx, var(--nl-itx)); }
-#ck-topbar .ck-menu__item:hover > kbd { border-color: rgba(var(--nl-ac, var(--nl-i)), .5); color: var(--nl-actx, var(--nl-itx)); }
+#ck-topbar .ck-menu__item:is(:hover, :active) { color: var(--nl-tx); background: radial-gradient(140% 180% at 0% 50%, rgba(var(--nl-ac, var(--nl-i)), .24), rgba(var(--nl-ac, var(--nl-i)), .06) 70%); box-shadow: inset 0 0 0 1px rgba(var(--nl-ac, var(--nl-i)), .38), 0 8px 20px -12px rgba(var(--nl-ac, var(--nl-i)), .75); }
+#ck-topbar .ck-menu__item:is(:hover, :active) .ck-ico { color: var(--nl-actx, var(--nl-itx)); }
+#ck-topbar .ck-menu__item:is(:hover, :active) > kbd { border-color: rgba(var(--nl-ac, var(--nl-i)), .5); color: var(--nl-actx, var(--nl-itx)); }
 #ck-topbar .ck-menu__item:focus-visible { outline: 2px solid rgb(var(--nl-ac, var(--nl-i))); outline-offset: 1px; }
 
 @media (min-width: 1200px) {
@@ -102,7 +106,7 @@
   #ck-topbar .ck-aba .ck-ico { display: block; width: 18px; height: 18px; }
   #ck-topbar .ck-aba > span { min-width: 0; max-width: 0; overflow: hidden; opacity: 0; text-overflow: ellipsis; white-space: nowrap; }
   #ck-topbar .ck-aba__kbd { display: none; }
-  #ck-topbar .ck-aba:hover { box-shadow: none; background: rgba(var(--nl-ac, var(--nl-i)), .09); }
+  #ck-topbar .ck-aba:is(:hover, :active) { box-shadow: none; background: rgba(var(--nl-ac, var(--nl-i)), .09); }
   #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) { gap: 7px; padding: 0 14px 0 11px; border-color: rgba(var(--nl-ac, var(--nl-i)), .5); background: rgba(var(--nl-ac, var(--nl-i)), .13); box-shadow: none; }
   #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) { flex: 0 1 auto; }
   #ck-topbar :is(.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"]) > span { max-width: 110px; opacity: 1; }
@@ -280,17 +284,17 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
 /* ---------- 10. Movimento (contrato bento; nada anima com movimento reduzido) ---------- */
 @media (prefers-reduced-motion: no-preference) {
   #ck-topbar :is(.ck-busca__campo, .ck-chip) { transition: background-color 300ms var(--nl-curva), color 300ms var(--nl-curva), border-color 300ms var(--nl-curva), box-shadow 300ms var(--nl-curva); }
-  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #theme-toggle) { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), transform 200ms var(--nl-curva), padding 220ms var(--nl-curva); }
-  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #theme-toggle) .ck-ico { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
-  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #theme-toggle):hover { transform: translateY(-2px); }
-  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #theme-toggle):hover .ck-ico { transform: scale(1.12); }
+  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #btn-assistente, .ck-topbar__acoes #theme-toggle) { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), transform 200ms var(--nl-curva), padding 220ms var(--nl-curva); }
+  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #btn-assistente, #theme-toggle) .ck-ico { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+  #ck-topbar :is(.ck-aba, .ck-topbar__acoes #cockpit-tools-trigger, .ck-topbar__acoes #btn-notificacoes, .ck-topbar__acoes #btn-assistente, .ck-topbar__acoes #theme-toggle):hover { transform: translateY(-2px); }
+  #ck-topbar :is(.ck-aba, #cockpit-tools-trigger, #btn-notificacoes, #btn-assistente, #theme-toggle):hover .ck-ico { transform: scale(1.12); }
   #ck-topbar .ck-aba__kbd { transform: translate(-50%, -4px); transition: opacity 150ms var(--nl-curva), transform 150ms var(--nl-curva); }
   #ck-topbar .ck-aba:is(:hover, :focus-visible) .ck-aba__kbd { transform: translate(-50%, 0); }
   #ck-topbar .ck-aba > span { transition: max-width 220ms var(--nl-curva), opacity 220ms var(--nl-curva); }
   #ck-topbar .ck-menu__item { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
   #ck-topbar .ck-menu__item .ck-ico { transition: transform 200ms var(--nl-curva), color 200ms var(--nl-curva); }
-  #ck-topbar .ck-menu__item:hover { transform: translateX(2px); }
-  #ck-topbar .ck-menu__item:hover .ck-ico { transform: scale(1.12); }
+  #ck-topbar .ck-menu__item:is(:hover, :active) { transform: translateX(2px); }
+  #ck-topbar .ck-menu__item:is(:hover, :active) .ck-ico { transform: scale(1.12); }
   .nl-subabas[data-pronta] .nl-subabas__marca { transition: transform 200ms var(--nl-curva), opacity 200ms var(--nl-curva); }
   .nl-subaba { transition: color 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
   .nl-subaba:hover { transform: translateY(-2px); }

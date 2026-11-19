@@ -319,7 +319,8 @@ for (const arquivo of ["nl-base.css", "nl-f10.css"]) test(`${arquivo} follows th
   percorrer(arvore, no => {
     assert.doesNotMatch(no.decls.replace(/\s+/g, ""), /min-width:1200px/, `largura mínima de desktop em "${no.prelude}"`);
     if (no.prelude.startsWith("@")) return;
-    const semExclusao = no.prelude.replace(/:not\(#assistente-widget \*\)/g, "");
+    // O botão #btn-assistente só ganha o hover fúcsia do topo (aprovado em 18/11/2026); o widget segue fora.
+    const semExclusao = no.prelude.replace(/:not\(#assistente-widget \*\)/g, "").replace(/#btn-assistente\b/g, "");
     assert.doesNotMatch(semExclusao, /assistente|ck-assist/, `o Assistente fica fora: "${no.prelude}"`);
   });
 });
