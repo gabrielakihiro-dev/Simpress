@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -146,6 +147,7 @@ test("search shortcuts focus Home search except while typing or with a dialog op
 
   await openSidebarIfNeeded(page);
   await page.locator("#tab-retirada-entrega").click();
+  await abrirEtapaTransporte(page, 3);
   const notes = page.locator("#entrega-obs");
   await notes.fill("");
   await notes.focus();

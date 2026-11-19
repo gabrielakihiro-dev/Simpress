@@ -1,0 +1,349 @@
+    <section id="tab-panel-retirada-entrega" class="ck-tela ck-tela--transporte" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
+
+    <div class="ck-transp" id="ck-transp">
+
+    <!-- Cabeçalho da tela -->
+    <header class="nlt-cab">
+      <h1 class="nlt-cab__titulo" id="nlt-titulo-pagina">Transporte</h1>
+      <div class="nlt-cab__acoes">
+        <button type="button" id="btn-historico-transferencias" data-on-click="abrirModalHistoricoTransferencias" class="ck-btn ck-btn--secundario" title="Ver as planilhas de transferência já geradas">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span>Transferências geradas</span>
+        </button>
+        <button type="button" id="btn-nova-transferencia" data-on-click="resetarFormulario" class="ck-btn ck-btn--primario" aria-label="Nova transferência" title="Nova transferência">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg><span>Nova transferência</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Faixa de alertas de configuração (mesmos botões e regras de exibição de antes) -->
+    <div class="nlt-alertas">
+      <div id="aviso-cliente-config" class="nlt-alerta hidden" data-status="alerta" role="status">
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
+        <p id="aviso-cliente-config-texto">Dados do cliente (contrato e CNPJ de faturamento) não configurados nesta instalação. Sem eles, transferências, chamados e rotinas do Chrome ficam bloqueados.</p>
+        <button type="button" id="btn-configurar-cliente" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-cliente-config" data-on-click="abrirConfiguracaoCliente">Configurar dados do cliente</button>
+      </div>
+      <div id="aviso-contato-origem" class="nlt-alerta hidden" data-status="alerta" role="status">
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
+        <p id="aviso-contato-origem-texto">Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.</p>
+        <button type="button" id="btn-configurar-contato-origem" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
+      </div>
+    </div>
+
+    <!-- Linha de progresso: um segmento por etapa (feito / atual / pendente) -->
+    <ol class="nlt-progresso" id="nlt-progresso" aria-label="Progresso da transferência">
+      <li class="nlt-prog__seg" id="nlt-seg-1" data-estado="atual" aria-current="step"><span class="nlt-prog__rot"><b>1</b> Equipamento</span><span class="nlt-prog__trilho"><span class="nlt-prog__cheio"></span></span></li>
+      <li class="nlt-prog__seg" id="nlt-seg-2" data-estado="pendente"><span class="nlt-prog__rot"><b>2</b> Retirada</span><span class="nlt-prog__trilho"><span class="nlt-prog__cheio"></span></span></li>
+      <li class="nlt-prog__seg" id="nlt-seg-3" data-estado="pendente"><span class="nlt-prog__rot"><b>3</b> Entrega</span><span class="nlt-prog__trilho"><span class="nlt-prog__cheio"></span></span></li>
+      <li class="nlt-prog__seg" id="nlt-seg-4" data-estado="pendente"><span class="nlt-prog__rot"><b>4</b> Agenda</span><span class="nlt-prog__trilho"><span class="nlt-prog__cheio"></span></span></li>
+    </ol>
+
+    <div class="nlt-layout">
+
+      <div class="nlt-etapas" id="nlt-etapas">
+
+      <!-- Etapa 1 · Equipamento -->
+      <section class="nlt-etapa" id="nlt-etapa-1" data-etapa="1" data-estado="falta" data-atual="true">
+        <div class="nlt-etapa__cab">
+          <h2 class="nlt-etapa__h">
+            <button type="button" class="nlt-gatilho" id="nlt-gatilho-1" aria-expanded="true" aria-controls="nlt-corpo-1">
+              <span class="nlt-num" aria-hidden="true"><span class="nlt-num__n">1</span><svg class="ck-ico ck-ico--sm nlt-num__ok" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span>
+              <span class="nlt-etapa__titulo" id="transfer-equipment-title">Equipamento</span>
+              <span class="nlt-atual-selo">Etapa atual</span>
+              <svg class="ck-ico ck-ico--sm nlt-seta" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
+            </button>
+          </h2>
+          <div class="nlt-resumo" id="nlt-resumo-1">
+            <span class="nlt-chip nlt-chip--mono" id="nlt-chip-serie" translate="no"></span>
+            <span class="nlt-chip" id="nlt-chip-modelo"></span>
+            <span class="nlt-chip" id="nlt-chip-apelido" translate="no"></span>
+            <span class="nlt-chip" id="nlt-chip-cidade"></span>
+          </div>
+          <span class="nlt-selo" id="nlt-selo-1" data-estado="falta">falta</span>
+        </div>
+        <div class="nlt-corpo" id="nlt-corpo-1">
+          <section id="transfer-equipment-banner" class="ck-selecionado nlt-equip" data-state="empty" data-estado="vazio" aria-labelledby="transfer-equipment-title">
+            <div class="ck-selecionado__id">
+              <span class="ck-eq-cab__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span>
+              <span class="ck-selecionado__linha" data-show="selected">
+                <span id="transfer-serial" class="ck-selecionado__serie" translate="no"></span>
+                <span id="transfer-alias" class="ck-tag ck-tag--destaque" translate="no" hidden></span>
+              </span>
+              <p id="transfer-equipment-description" class="ck-selecionado__meta" role="status" aria-live="polite">Nenhum equipamento selecionado.</p>
+            </div>
+            <div class="ck-selecionado__acoes">
+              <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="empty">
+                <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Pesquisar equipamento na Home</span>
+              </button>
+              <button type="button" id="ck-link-os" data-on-click="abrirChamadosDoEquipamento" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" title="Abrir OS filtrada pela série do equipamento">
+                <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span id="ck-link-os-texto">OS deste equipamento</span>
+              </button>
+              <button type="button" id="btn-trocar-equipamento" data-on-click="trocarEquipamentoTransporte" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="selected">
+                <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Trocar equipamento</span>
+              </button>
+              <button
+                type="button"
+                id="btn-copiar-serie"
+                data-on-click="copiarSerieAtual"
+                disabled
+                aria-disabled="true"
+                aria-label="Copiar série"
+                title="Copiar a série do equipamento selecionado"
+                class="ck-btn ck-btn--secundario ck-btn--sm"
+                data-show="selected"
+              >
+                <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span id="transfer-serial-status">Copiar</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Etapa 2 · Retirada (origem) -->
+      <section class="nlt-etapa" id="ck-passo-retirada" data-etapa="2" data-estado="falta" data-atual="false" aria-labelledby="ck-passo-retirada-titulo">
+        <div class="nlt-etapa__cab">
+          <h2 class="nlt-etapa__h">
+            <button type="button" class="nlt-gatilho" id="nlt-gatilho-2" aria-expanded="false" aria-controls="nlt-corpo-2">
+              <span class="nlt-num" aria-hidden="true"><span class="nlt-num__n">2</span><svg class="ck-ico ck-ico--sm nlt-num__ok" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span>
+              <span class="nlt-etapa__titulo" id="ck-passo-retirada-titulo">Retirada</span>
+              <span class="nlt-atual-selo">Etapa atual</span>
+              <svg class="ck-ico ck-ico--sm nlt-seta" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
+            </button>
+          </h2>
+          <div class="nlt-resumo" id="nlt-resumo-2">
+            <span class="nlt-chip" id="nlt-chip-ret-cidade"></span>
+            <span class="nlt-chip" id="nlt-chip-ret-acesso"></span>
+            <span class="nlt-chip" id="nlt-chip-ret-volt"></span>
+            <span class="nlt-chip nlt-chip--mono" id="ck-passo-retirada-serie" translate="no"></span>
+          </div>
+          <span class="nlt-selo" id="nlt-selo-2" data-estado="falta">falta</span>
+        </div>
+        <div class="nlt-corpo" id="nlt-corpo-2" hidden>
+          <div class="ck-local nlt-local">
+            <span id="retirada-local-nome" class="ck-local__nome" data-vazio="Aguardando equipamento"></span>
+            <output id="retirada-endereco" class="ck-local__end" data-vazio="Endereço preenchido pela série pesquisada" aria-label="Endereço de retirada"></output>
+            <span class="ck-local__cnpj">CNPJ&nbsp;<output id="retirada-cnpj" data-vazio="—" aria-label="CNPJ de retirada"></output></span>
+          </div>
+          <div class="nlt-duas">
+            <div class="nlt-grade">
+              <div class="nlt-linha nlt-span-2">
+                <div class="nl-campo"><select id="retirada-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]' class="nl-campo__inp" aria-label="Representante regional do ponto de retirada"></select><label class="nl-campo__rot" for="retirada-representante">Representante regional</label></div>
+                <button type="button" id="btn-editar-representante-retirada" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-representante-regional" aria-label="Editar representante regional do ponto de retirada" disabled data-on-click="abrirEdicaoRepresentanteRegional" data-args='["retirada"]'>Editar</button>
+              </div>
+              <div class="nl-campo"><input type="text" id="retirada-tipo-acesso" value="Elevador / Rampa / Térreo" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="retirada-tipo-acesso">Tipo de acesso</label></div>
+              <div class="nl-campo"><input type="text" id="retirada-voltagem" value="Bivolt" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="retirada-voltagem">Voltagem</label></div>
+              <div class="nl-campo nlt-span-2"><input type="text" id="retirada-obs" required class="nl-campo__inp" placeholder="Ex: Notebook + kit na mochila" /><label class="nl-campo__rot" for="retirada-obs">Observações <span class="required-mark" aria-hidden="true">*</span></label></div>
+            </div>
+            <div class="nlt-resp" id="nlt-resp-retirada" role="group" aria-labelledby="nlt-resp-retirada-rot">
+              <div class="nlt-resp__cab">
+                <span class="nlt-resp__rot" id="nlt-resp-retirada-rot">Responsável na retirada</span>
+                <span class="nl-avs"><span class="nl-av" id="nlt-av-retirada" role="img" tabindex="0" aria-label="Responsável na retirada" title="Responsável na retirada" data-papel="Responsável na retirada">?</span></span>
+              </div>
+              <div class="nl-campo"><input type="text" id="retirada-contato" required class="nl-campo__inp" autocomplete="name" placeholder=" " /><label class="nl-campo__rot" for="retirada-contato">Nome <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="email" id="retirada-email" required class="nl-campo__inp" autocomplete="email" placeholder=" " /><label class="nl-campo__rot" for="retirada-email">E-mail <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="text" id="retirada-telefone" required class="nl-campo__inp ck-mono" inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" /><label class="nl-campo__rot" for="retirada-telefone">Celular <span class="required-mark" aria-hidden="true">*</span></label></div>
+            </div>
+          </div>
+          <div class="nlt-rodape">
+            <button type="button" class="ck-btn ck-btn--secundario" data-nlt-ir="1"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar</span></button>
+            <button type="button" class="ck-btn ck-btn--primario" data-nlt-ir="3"><span>Próximo: Entrega</span><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Etapa 3 · Entrega (destino) -->
+      <section class="nlt-etapa" id="ck-passo-entrega" data-etapa="3" data-estado="falta" data-atual="false" aria-labelledby="ck-passo-entrega-titulo">
+        <div class="nlt-etapa__cab">
+          <h2 class="nlt-etapa__h">
+            <button type="button" class="nlt-gatilho" id="nlt-gatilho-3" aria-expanded="false" aria-controls="nlt-corpo-3">
+              <span class="nlt-num" aria-hidden="true"><span class="nlt-num__n">3</span><svg class="ck-ico ck-ico--sm nlt-num__ok" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span>
+              <span class="nlt-etapa__titulo" id="ck-passo-entrega-titulo">Entrega</span>
+              <span class="nlt-atual-selo">Etapa atual</span>
+              <svg class="ck-ico ck-ico--sm nlt-seta" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
+            </button>
+          </h2>
+          <div class="nlt-resumo" id="nlt-resumo-3">
+            <span class="nlt-chip" id="nlt-chip-ent-filial"></span>
+            <span class="nlt-chip" id="nlt-chip-ent-cnpj"></span>
+            <span class="nlt-resumo__resp">Responsável no destino <span class="nl-avs"><span class="nl-av" id="nlt-av-destino-resumo" role="img" tabindex="0" aria-label="Responsável no destino" title="Responsável no destino" data-papel="Responsável no destino">?</span></span></span>
+          </div>
+          <span class="nlt-selo" id="nlt-selo-3" data-estado="falta">falta</span>
+        </div>
+        <div class="nlt-corpo" id="nlt-corpo-3" hidden>
+          <div class="ck-unidades nlt-unidades" id="entrega-unidades" role="group" aria-label="Unidade de destino" data-grupo="unidade">
+            <div class="nl-campo"><select id="select-unidade-destino" data-on-change="handleUnidadeDestinoChange" data-args='["$value"]' class="nl-campo__inp" aria-label="Selecione a filial">
+              <option value="">Selecione a filial</option>
+            </select><label class="nl-campo__rot" for="select-unidade-destino">Filial</label></div>
+            <span id="filiais-count" class="nlt-filiais">30 filiais catalogadas</span>
+          </div>
+          <div class="ck-local nlt-local">
+            <span id="entrega-local-nome" class="ck-local__nome" data-vazio="Selecione a unidade de destino"></span>
+            <output id="entrega-endereco" class="ck-local__end" data-vazio="Endereço preenchido pela unidade selecionada" aria-label="Endereço de entrega"></output>
+            <span class="ck-local__cnpj">CNPJ&nbsp;<output id="entrega-cnpj" data-vazio="—" aria-label="CNPJ de entrega"></output>
+              <button type="button" id="btn-copiar-cnpj-instalacao-entrega" disabled data-on-click="copiarDadoEntrega" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" title="Copiar o CNPJ de instalação da unidade de destino selecionada" aria-label="Copiar CNPJ de instalação da unidade de destino">
+                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
+              </button>
+              <button type="button" data-on-click="copiarDadoEntrega" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--sm" title="Copiar o CNPJ de faturamento padrão" aria-label="Copiar CNPJ de faturamento da entrega">
+                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Faturamento</span>
+              </button>
+            </span>
+          </div>
+          <div class="nlt-duas">
+            <div class="nlt-grade">
+              <div class="nlt-linha nlt-span-2">
+                <div class="nl-campo"><select id="entrega-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]' class="nl-campo__inp" aria-label="Representante regional da unidade de entrega"></select><label class="nl-campo__rot" for="entrega-representante">Representante regional</label></div>
+                <button type="button" id="btn-editar-representante-entrega" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-representante-regional" aria-label="Editar representante regional da unidade de entrega" disabled data-on-click="abrirEdicaoRepresentanteRegional" data-args='["entrega"]'>Editar</button>
+              </div>
+              <div class="nl-campo nlt-span-2"><textarea id="entrega-obs" required rows="2" class="nl-campo__inp" placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."></textarea><label class="nl-campo__rot" for="entrega-obs">Observações <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="ck-obs-rapidas nlt-span-2" role="group" aria-label="Observações rápidas">
+                <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para colaborador(a) substituição preventiva."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Substituição</button>
+                <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Novo colaborador</button>
+                <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Manutenção</button>
+              </div>
+            </div>
+            <div class="nlt-resp" id="nlt-resp-destino" role="group" aria-labelledby="nlt-resp-destino-rot">
+              <div class="nlt-resp__cab">
+                <span class="nlt-resp__rot" id="nlt-resp-destino-rot">Responsável no destino</span>
+                <span class="nl-avs"><span class="nl-av" id="nlt-av-destino" role="img" tabindex="0" aria-label="Responsável no destino" title="Responsável no destino" data-papel="Responsável no destino">?</span></span>
+              </div>
+              <div class="nl-campo"><input type="text" id="entrega-contato" required class="nl-campo__inp" placeholder="Nome do destinatário" /><label class="nl-campo__rot" for="entrega-contato">Destinatário <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="email" id="entrega-email" required class="nl-campo__inp" placeholder="nome@pr.sebrae.com.br" /><label class="nl-campo__rot" for="entrega-email">E-mail <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="text" id="entrega-telefone" required class="nl-campo__inp ck-mono" inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" /><label class="nl-campo__rot" for="entrega-telefone">Celular <span class="required-mark" aria-hidden="true">*</span></label></div>
+            </div>
+          </div>
+          <div class="nlt-rodape">
+            <button type="button" class="ck-btn ck-btn--secundario" data-nlt-ir="2"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar</span></button>
+            <button type="button" class="ck-btn ck-btn--primario" data-nlt-ir="4"><span>Próximo: Agenda</span><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Etapa 4 · Agenda (horários automáticos) -->
+      <section class="nlt-etapa" id="nlt-etapa-4" data-etapa="4" data-estado="auto" data-atual="false" aria-labelledby="nlt-titulo-4">
+        <div class="nlt-etapa__cab">
+          <h2 class="nlt-etapa__h">
+            <button type="button" class="nlt-gatilho" id="nlt-gatilho-4" aria-expanded="false" aria-controls="nlt-corpo-4">
+              <span class="nlt-num" aria-hidden="true"><span class="nlt-num__n">4</span><svg class="ck-ico ck-ico--sm nlt-num__ok" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span>
+              <span class="nlt-etapa__titulo" id="nlt-titulo-4">Agenda</span>
+              <span class="nlt-atual-selo">Etapa atual</span>
+              <svg class="ck-ico ck-ico--sm nlt-seta" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
+            </button>
+          </h2>
+          <div class="nlt-resumo" id="nlt-resumo-4">
+            <span class="nlt-chip nlt-chip--mono" id="nlt-chip-ag-exp"></span>
+            <span class="nlt-chip nlt-chip--mono" id="nlt-chip-ag-alm"></span>
+            <span class="nlt-chip nlt-chip--mono" id="nlt-chip-ag-pausa"></span>
+          </div>
+          <span class="nlt-selo" id="nlt-selo-4" data-estado="auto">automático</span>
+        </div>
+        <div class="nlt-corpo" id="nlt-corpo-4" hidden>
+          <p class="nlt-nota">Os horários já vêm preenchidos e a planilha usa estes valores. Edite só se o local tiver outro expediente.</p>
+          <div class="nlt-duas nlt-duas--iguais">
+            <fieldset class="nlt-grupo">
+              <legend class="nlt-grupo__rot">Retirada</legend>
+              <div class="nl-campo"><input type="text" id="retirada-horario" value="09:00:00 às 18:00:00" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="retirada-horario">Expediente</label></div>
+              <div class="nl-campo"><input type="text" id="retirada-almoco" value="12:00:00" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="retirada-almoco">Almoço</label></div>
+              <div class="nl-campo"><input type="text" id="retirada-pausa-duracao" value="1h12" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="retirada-pausa-duracao">Pausa</label></div>
+            </fieldset>
+            <fieldset class="nlt-grupo">
+              <legend class="nlt-grupo__rot">Entrega</legend>
+              <div class="nl-campo"><input type="text" id="entrega-horario" required value="09:00:00 às 18:00:00" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="entrega-horario">Expediente <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="text" id="entrega-almoco" required value="12:00:00" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="entrega-almoco">Almoço <span class="required-mark" aria-hidden="true">*</span></label></div>
+              <div class="nl-campo"><input type="text" id="entrega-pausa-duracao" required value="1h" class="nl-campo__inp" placeholder=" " /><label class="nl-campo__rot" for="entrega-pausa-duracao">Pausa <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label></div>
+            </fieldset>
+          </div>
+          <div class="nlt-rodape">
+            <button type="button" class="ck-btn ck-btn--secundario" data-nlt-ir="3"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg><span>Voltar</span></button>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <!-- Pré-visualização ao vivo -->
+      <aside class="ck-previa nlt-previa" id="ck-previa-transporte" aria-labelledby="cockpit-transport-preview-title">
+        <div class="nlt-previa__cab">
+          <h2 class="nlt-previa__titulo" id="cockpit-transport-preview-title">Pré-visualização</h2>
+          <span id="cockpit-transport-preview-state" class="ck-sr" data-estado="vazio" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
+          <span class="ck-badge nlt-contagem" data-status="neutro" id="ck-previa-contagem"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="ck-previa-contagem-texto">0/0 campos</span></span>
+        </div>
+        <div class="nlt-barra" id="nlt-barra" role="progressbar" aria-label="Campos obrigatórios preenchidos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="nlt-barra__cheio" id="nlt-barra-cheio"></span></div>
+
+        <ul class="nlt-checklist" id="nlt-checklist" aria-label="Checklist da transferência">
+          <li class="nlt-chk" id="nlt-chk-equipamento" data-estado="falta"><span class="nlt-chk__rot">Equipamento</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-retirada" data-estado="falta"><span class="nlt-chk__rot">Retirada · contato</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-retirada-obs" data-estado="falta"><span class="nlt-chk__rot">Retirada · observações</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-filial" data-estado="falta"><span class="nlt-chk__rot">Filial de destino</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-destinatario" data-estado="falta"><span class="nlt-chk__rot">Destinatário · E-mail · Celular</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-entrega-obs" data-estado="falta"><span class="nlt-chk__rot">Entrega · observações</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-contrato" data-estado="falta"><span class="nlt-chk__rot">Contrato</span><span class="nlt-selo" data-estado="falta">falta</span></li>
+          <li class="nlt-chk" id="nlt-chk-horarios" data-estado="auto"><span class="nlt-chk__rot">Horários</span><span class="nlt-selo" data-estado="auto">automático</span></li>
+        </ul>
+
+        <ol class="nlt-passos3" id="nlt-passos3" aria-label="Etapas até a planilha">
+          <li id="nlt-p3-1" data-estado="atual" aria-current="step"><span class="nlt-passos3__n">01</span><span>Informar série</span></li>
+          <li id="nlt-p3-2" data-estado="pendente"><span class="nlt-passos3__n">02</span><span>Gerar</span></li>
+          <li id="nlt-p3-3" data-estado="pendente"><span class="nlt-passos3__n">03</span><span>Baixar</span></li>
+        </ol>
+
+        <!-- Ações: os handlers existentes continuam associados aos mesmos IDs. -->
+        <div aria-label="Painel de Ações Rápidas" role="group" class="ck-acoes-barra nlt-acoes">
+          <div class="ck-acoes-status ck-sr">
+            <span class="ck-acoes-ponto" id="status-indicator" data-state="ready" aria-hidden="true"></span>
+            <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
+              <span class="ck-acoes-pronto" data-ux-ready-status>Pronto para emissão.</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="btn-gerar-planilha"
+            data-on-click="gerarPlanilhaExcel"
+            aria-keyshortcuts="Control+Enter"
+            title="Transporte: gera a planilha e prepara o ticket de Atualização Cadastral no UX (Ctrl+Enter)"
+            class="ck-btn ck-btn--primario nlt-acoes__principal"
+          >
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span>Transporte</span>
+          </button>
+
+          <div class="nlt-acoes__par">
+            <!-- Alterar Endereço: só série e endereços; abre o ticket UX Transporte / Transferência Fisica, sem planilha. -->
+            <button
+              type="button"
+              id="btn-alterar-endereco"
+              data-on-click="alterarEnderecoTicketUX"
+              title="Alterar Endereço: prepara o ticket de Transporte no UX só com a série e os endereços"
+              class="ck-btn ck-btn--secundario"
+              disabled
+            >
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Alterar Endereço</span>
+            </button>
+            <button type="button" data-on-click="gerarTextoSolicitacaoTransporte" class="ck-btn ck-btn--secundario" title="Gerar texto de solicitação de transporte">
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-text"></use></svg><span>Texto para Transporte</span>
+            </button>
+          </div>
+        </div>
+
+        <details class="nlt-detalhes" id="nlt-detalhes">
+          <summary>Detalhes da planilha</summary>
+          <dl class="ck-previa__linhas">
+            <dt>Equipamento</dt><dd id="cockpit-preview-equipment">—</dd>
+            <dt>Apelido</dt><dd id="cockpit-preview-alias">—</dd>
+            <dt>Retirada</dt><dd id="cockpit-preview-pickup">—</dd>
+            <dt>CNPJ retirada</dt><dd id="cockpit-preview-pickup-cnpj">—</dd>
+            <dt>Contato</dt><dd id="cockpit-preview-contact">—</dd>
+            <dt>Horário</dt><dd id="cockpit-preview-hours">—</dd>
+            <dt>Acesso</dt><dd id="cockpit-preview-access">—</dd>
+            <dt>Entrega</dt><dd id="cockpit-preview-delivery">—</dd>
+            <dt>CEP</dt><dd id="cockpit-preview-cep">—</dd>
+            <dt>CNPJ entrega</dt><dd id="cockpit-preview-delivery-cnpj">—</dd>
+            <dt>Destinatário</dt><dd id="cockpit-preview-recipient">—</dd>
+            <dt>Horário</dt><dd id="cockpit-preview-delivery-hours">—</dd>
+            <dt>Observações</dt><dd id="cockpit-preview-notes">—</dd>
+          </dl>
+        </details>
+      </aside>
+    </div>
+
+    </div>
+
+    </section>
