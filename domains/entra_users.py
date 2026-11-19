@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 DOMAIN = "pr.sebrae.com.br"
 HEADERS = ("id", "displayName", "userPrincipalName", "userType", "onPremisesSyncEnabled", "identities", "companyName", "creationType")
-# Newer Entra exports append this column; only the first eight are used.
-HEADERS_WITH_PROTECTION = HEADERS + ("isHardDeleteProtectionEnabled",)
+# Entra keeps adding columns (isHardDeleteProtectionEnabled, identityVerification*), sometimes
+# in the middle: require these by name and read displayName/userPrincipalName by position.
 MAX_CSV_BYTES = 60 * 1024 * 1024
 MAX_ROWS = 100_000
 MAX_NAME_LENGTH = 300
@@ -57,7 +57,7 @@ def login_key(value: Any) -> str:
     return key if _LOGIN.fullmatch(key) else ""
 
 
-def _csv_row(outer: list[str], row_number: int, columns: tuple[int, ...] = (len(HEADERS), len(HEADERS) + 1)) -> list[str]:
+def _csv_row(outer: list[str], row_number: int, columns: tuple[int, ...] | None = None) -> list[str]:
     if len(outer) == 1:
         line = outer[0]
         if line.endswith(";"):
@@ -68,7 +68,7 @@ def _csv_row(outer: list[str], row_number: int, columns: tuple[int, ...] = (len(
             raise EntraImportError(f"CSV inválido na linha {row_number}.") from error
     else:
         row = outer
-    if len(row) not in columns:
+    if columns is not None and len(row) not in columns:
         expected = " ou ".join(str(count) for count in columns)
         raise EntraImportError(f"CSV inválido na linha {row_number}: esperadas {expected} colunas.")
     row[-1] = row[-1].removesuffix(";")
@@ -82,9 +82,10 @@ def parse_csv(content: bytes) -> dict[str, Any]:
         stream = io.StringIO(content.decode("utf-8-sig"), newline="")
         reader = csv.reader(stream)
         header = _csv_row(next(reader), 1)
-        if tuple(header) not in (HEADERS, HEADERS_WITH_PROTECTION):
+        if len(set(header)) != len(header) or not set(HEADERS) <= set(header):
             raise EntraImportError("Cabeçalhos do CSV do Entra inválidos.")
         columns = (len(header),)
+        name_index, upn_index = header.index("displayName"), header.index("userPrincipalName")
         users: dict[str, str] = {}
         conflicts: set[str] = set()
         source_rows = 0
@@ -101,8 +102,8 @@ def parse_csv(content: bytes) -> dict[str, Any]:
             if f"@{DOMAIN}" not in " ".join(outer).casefold():
                 continue
             row = _csv_row(outer, reader.line_num, columns)
-            name = row[1].strip().strip('"').strip()
-            upn = row[2].strip().strip('"').strip()
+            name = row[name_index].strip().strip('"').strip()
+            upn = row[upn_index].strip().strip('"').strip()
             local, separator, domain = upn.rpartition("@")
             if not separator or domain.casefold() != DOMAIN:
                 continue

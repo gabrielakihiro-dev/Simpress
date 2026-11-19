@@ -371,6 +371,46 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         with self.assertRaises(DomainError):
             harness.runner.history_page(start=date(2026, 10, 20), end=date(2026, 10, 19))
 
+    def test_history_cache_reloads_when_a_log_record_enters_or_changes(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        self.assertEqual(harness.runner.history(None)[0]["id"], "20261020_080000_os")
+        with patch.object(chrome_automation, "_read_json", wraps=chrome_automation._read_json) as reads:
+            harness.runner.history(1)
+            self.assertEqual(reads.call_count, 0)  # unchanged folder: served from memory
+            new = harness.contract.log_dir / "20261021_080000_ambas.json"
+            new.write_text(json.dumps({"rotina": "ambas", "inicio": "2026-10-21T08:00:00-03:00", "status": "falha"}), encoding="utf-8")
+            self.assertEqual(harness.runner.history(1)[0]["id"], "20261021_080000_ambas")
+            self.assertEqual(reads.call_count, 1)  # only the new file is read
+        new.write_text(json.dumps({"rotina": "ambas", "inicio": "2026-10-21T08:00:00-03:00", "status": "concluido", "codigo": 0}), encoding="utf-8")
+        os.utime(new, ns=(new.stat().st_mtime_ns + 1_000_000, new.stat().st_mtime_ns + 1_000_000))
+        self.assertEqual(harness.runner.history(1)[0]["status"], "concluido")
+        new.unlink()
+        self.assertEqual(harness.runner.history(1)[0]["id"], "20261020_080000_os")
+        # A growing .log never invalidates the cache.
+        with patch.object(chrome_automation, "_read_json", wraps=chrome_automation._read_json) as reads:
+            (harness.contract.log_dir / "20261020_080000_os.log").write_text("mais\n" * 50,encoding="utf-8")
+            harness.runner.history(1)
+            self.assertEqual(reads.call_count, 0)
+
+    def test_history_copies_are_independent_of_the_cache(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        harness.runner.history(1)[0]["status"] = "mexido"
+        self.assertEqual(harness.runner.history(1)[0]["status"], "concluido")
+
+    def test_latest_by_routine_matches_one_page_per_routine(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        (harness.contract.log_dir / "20261019_090000_usuarios.json").write_text(json.dumps({
+            "rotina": "usuarios", "inicio": "2026-10-19T09:00:00-03:00", "status": "falha",
+        }), encoding="utf-8")
+        rotinas = ["os", "inventarios", "ambas", "usuarios"]
+        latest = harness.runner.latest_by_routine(rotinas)
+        for rotina in rotinas:
+            page = harness.runner.history_page(1, 1, routine=rotina)["execucoes"]
+            self.assertEqual(latest[rotina], page[0] if page else None, rotina)
+
     def test_execution_log_reads_only_selected_record_and_limits_lines(self):
         harness = self.harness()
         self._history_fixture(harness)
@@ -462,6 +502,9 @@ class FakeRunner:
     def history_page(self, limit, page, **filters):
         return {"execucoes": self.history(limit), "pagina": page, "paginas": 1, "total": 1, "limite": limit}
 
+    def latest_by_routine(self, routines):
+        return {routine: None for routine in routines}
+
     def execution_log(self, identifier, lines):
         return {"arquivo": "a.log", "linhas": [identifier], "limite": lines}
 
@@ -514,6 +557,10 @@ class AutomationRouteTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/automacao/historico", params={"limite": 51}).status_code, 422)
         for params in ({"pagina": 0}, {"data_inicio": "wrong"}, {"rotina": "other"}, {"status": "other"}):
             self.assertEqual(self.client.get("/api/automacao/historico", params=params).status_code, 422)
+        ultimas = self.client.get("/api/automacao/historico/ultimas?rotina=os&rotina=ambas")
+        self.assertEqual((ultimas.json(), ultimas.headers["cache-control"]), ({"ultimas": {"os": None, "ambas": None}}, "no-store"))
+        for query in ("", "?rotina=other", "?" + "&".join(["rotina=os"] * 12)):
+            self.assertEqual(self.client.get("/api/automacao/historico/ultimas" + query).status_code, 422, query)
         self.assertEqual(self.client.get("/api/automacao/execucoes/demo/log?linhas=2").json()["linhas"], ["demo"])
         self.assertEqual(self.client.get("/api/automacao/execucoes/demo/log?linhas=501").status_code, 422)
         self.assertEqual(self.client.post("/api/automacao/cancelar").status_code, 202)
