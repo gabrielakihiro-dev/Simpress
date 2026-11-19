@@ -35,6 +35,7 @@
   display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--nl-bd); border-radius: 999px;
   font-size: 12px; color: var(--nl-mut); white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+[data-cockpit-tool-panel="unidades"] .nlc-status--erro { white-space: normal; height: auto; min-height: 28px; color: rgb(var(--nl-r)); }
 [data-cockpit-tool-panel="unidades"] .nlc-status--filtro { color: var(--nl-tx); border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .12); }
 
 [data-cockpit-tool-panel="unidades"] .nlc-grade {

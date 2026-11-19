@@ -191,10 +191,10 @@ function Acoes({ termo, status }: { termo: NomeTermo; status: StatusTermo }) {
       return;
     }
     if (!status.texto) return;
-    // Mesmo texto de novo dentro da vida do aviso (cerca de 6 s): não empilha outro. No celular o aviso cobre os botões de baixo,
-    // e vários iguais empilhados cobririam mais; o status acima já foi atualizado.
+    // Mesmo texto de novo enquanto o aviso anterior ainda está na tela: não empilha outro. No celular o aviso cobre os botões
+    // de baixo. A janela (3,5 s) fica abaixo da vida do toast (4 s, ui-notifications.ts): repetir depois que ele some avisa de novo.
     const agora = Date.now();
-    if (ultimoAviso.current.texto === status.texto && agora - ultimoAviso.current.em < 6000) return;
+    if (ultimoAviso.current.texto === status.texto && agora - ultimoAviso.current.em < 3500) return;
     ultimoAviso.current = { texto: status.texto, em: agora };
     avisar(status.texto, status.tipo === "erro" ? "error" : "success");
   }, [status]);

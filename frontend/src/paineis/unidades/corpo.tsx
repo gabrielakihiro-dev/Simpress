@@ -127,7 +127,7 @@ export function CorpoUnidades() {
             </button>
           ) : null}
         </div>
-        <span id="cockpit-units-status" className={busca ? "nlc-status nlc-status--filtro" : "nlc-status"} role="status" aria-live="polite">{status}</span>
+        <span id="cockpit-units-status" className={fase === "erro" ? "nlc-status nlc-status--erro" : busca ? "nlc-status nlc-status--filtro" : "nlc-status"} role="status" aria-live="polite">{status}</span>
       </div>
       <div id="cockpit-units-list" className="nlc-lista">
         <div id="cockpit-units-list-body">{corpo}</div>
