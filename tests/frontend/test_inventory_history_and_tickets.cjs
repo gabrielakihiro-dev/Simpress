@@ -34,9 +34,9 @@ test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tra
   assert.doesNotMatch(appHtml, /aria-label="Abrir (portal Oracle AgentWeb|acompanhamento de chamados Simpress)"/);
   assert.match(painelChamados, /<nav className="ckp-sistemas" aria-label="Abrir sistemas">/);
   assert.match(appHtml, /id="cockpit-tickets-os"/);
-  assert.match(painelChamados, /id="cockpit-tickets-evolution"/);
+  assert.doesNotMatch(painelChamados, /id="cockpit-tickets-evolution"/, "o acordeão de comparação saiu da aba OS");
   assert.match(painelChamados, /id="cockpit-tickets-version"/);
-  assert.match(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/);
+  assert.doesNotMatch(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/, "sem acordeão, a aba não busca mais a comparação");
 });
 
 test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {

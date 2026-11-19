@@ -324,7 +324,8 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
     'id="sebrae-sharepoint-aviso"', 'id="sebrae-novos-secao"', 'id="sebrae-novos-lista"', 'id="sebrae-antigos"', 'id="sebrae-finalizados"'].map(marca => painel.indexOf(marca));
   assert.ok(ordem.every(posicao => posicao >= 0), `marcas do painel presentes: ${ordem}`);
   assert.deepEqual([...ordem].sort((a, b) => a - b), ordem, "topo, ações, status, lista de novos, antigos e finalizados nesta ordem");
-  assert.match(painel, /<button[^>]*class="ck-btn ck-btn--primario[^"]*"[^>]*id="btn-sebrae-atualizar"/, "Atualizar Dashboard é o botão primário");
+  assert.match(painel, /<button[^>]*class="ck-btn ck-btn--primario[^"]*"[^>]*id="btn-sebrae-enviar"/, "Enviar ao SharePoint é o botão primário (Atualizar Dashboard é o passo anterior, secundário)");
+  assert.doesNotMatch(painel, /<button[^>]*class="ck-btn ck-btn--primario[^"]*"[^>]*id="btn-sebrae-atualizar"/);
   assert.doesNotMatch(painel, /<details id="sebrae-(antigos|finalizados)"[^>]*\bopen\b/, "antigos e finalizados nascem recolhidos");
   assert.match(css, /#sebrae-novos-lista:empty:not\(\[aria-busy="true"\]\)::before \{ content: "Nenhum chamado novo na lista\."/);
   assert.match(css, /#sebrae-novos-lista:empty:not\(\[aria-busy="true"\]\)::after \{ content: "A importação do Dashboard e a busca ficam na aba Automação \(F4\)\."/);
@@ -362,7 +363,7 @@ test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e man
   assert.match(html, /<div class="ckp-recolher__corpo" data-react-painel="cockpit-chamados"><\/div>/);
   const idsReact = [
     "cockpit-tickets-form", "cockpit-tickets-file-simpress", "cockpit-tickets-file-oracle", "cockpit-tickets-import", "cockpit-tickets-import-status",
-    "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution",
+    "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old",
   ];
   for (const id of idsReact) {
     assert.ok(!html.includes(`id="${id}"`), `${id} não fica mais no HTML estático`);
@@ -371,7 +372,7 @@ test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e man
     assert.equal(painelChamados.split(marca).length - 1, 1, id);
   }
   // Textos explicativos no ⓘ: o seletor de versão segue descrito pelo balão, sem texto visível fora dele.
-  assert.match(painelChamados, /<InfoTip rotulo="Sobre a versão" idDica="cockpit-tickets-version-hint">A versão escolhida vale para Exportar Excel e para a comparação\. A tabela mostra sempre a importação mais recente\.<\/InfoTip>/);
+  assert.match(painelChamados, /<InfoTip rotulo="Sobre a versão" idDica="cockpit-tickets-version-hint">A versão escolhida vale para Exportar Excel\. A tabela mostra sempre a importação mais recente\.<\/InfoTip>/);
   assert.match(painelChamados, /<span id=\{idDica\} role="tooltip" className="info-tip-text">/);
   assert.match(painelChamados, /<select id="cockpit-tickets-version"[^>]*aria-describedby="cockpit-tickets-version-hint"/);
   assert.doesNotMatch(painelChamados, /ckp-secao__desc"[^>]*>A versão escolhida/);
