@@ -37,17 +37,17 @@
 .termos__sn { display: inline-flex; flex: none; gap: 2px; padding: 2px; }
 .termos__sn label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 52px; min-height: 36px; padding: 0 10px; cursor: pointer; }
 .termos__sn input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; appearance: none; }
-/* Prévia: título com contador, trilho de progresso, folha em miniatura (só barras e marcas) e as ações. */
+/* Prévia: título com contador, trilho de progresso, folha do PDF em miniatura e as ações. */
 .termos__previa { display: grid; gap: 14px; min-width: 0; }
 .termos__previa-titulo { display: flex; align-items: center; gap: 8px; margin: 0; }
 .termos__trilho { height: 6px; overflow: hidden; border-radius: 999px; }
 .termos__trilho > i { display: block; height: 100%; border-radius: inherit; }
-.termos__folha { display: flex; flex-direction: column; gap: 10px; aspect-ratio: 210 / 297; min-width: 0; padding: 22px 20px; overflow: hidden; }
-.termos__folha-linhas { display: grid; gap: 6px; }
-.termos__folha-item { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; align-items: center; }
-.termos__folha-marca { width: 10px; height: 10px; border-radius: 3px; }
-.termos__barra { display: block; height: 7px; border-radius: 4px; }
-.termos__barra--titulo { width: 62%; height: 12px; }
+/* Folha da prévia: a folha real do PDF (.tp) numa página A4 com as medidas da impressão, reduzida por zoom (termos-forms.tsx).
+   Fonte, cor e as cores que na impressão só existem em @media print repetidas aqui, para a prévia sair igual ao PDF. */
+.termos__folha { justify-self: center; width: 100%; max-width: 210mm; min-width: 0; overflow: hidden; }
+.termos__folha-pagina { box-sizing: border-box; width: 210mm; min-height: 297mm; padding: 14mm 12mm; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.35; color: #000; }
+.termos__folha .tp__cab, .termos__folha .tp__tabela thead th { background: var(--tp-fundo); }
+.termos__folha .tp__titulo, .termos__folha .tp__marca { color: var(--tp-cor); }
 /* Ações: Gerar PDF (com o ⓘ) em linha cheia; Criar lembrete e Limpar lado a lado; o status fica no DOM e só mostra o botão Ver em Lembretes. */
 .termos__acoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; }
 .termos__acoes > .ck-btn, .termos__gerar .ck-btn { min-height: 44px; }
