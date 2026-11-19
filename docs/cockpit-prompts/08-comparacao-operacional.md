@@ -72,7 +72,20 @@ Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover 
 
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
-`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos.
+`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos. Nota (18/11/2026, pedido do usuário): o histórico e a comparação carregam uma vez; ver "Carregar uma vez (18/11/2026)".
+
+### Carregar uma vez (18/11/2026)
+
+Pedido do usuário: o Resumo (F3) demorava a cada abertura, porque refazia `GET /api/historico-comparacoes`, o detalhe da comparação e `/api/painel`. Agora a primeira abertura carrega (pode demorar). Fechar e voltar mantém a tela já montada, sem pedido de rede; a sub-aba volta a `Divergências` (ou a do botão que abriu, como `sem-acesso`). Só front-end (`frontend/src/paineis/ferramentas-cockpit/estado.ts`); sem endpoint, texto nem dado gravado novo.
+
+Recarrega na próxima abertura quando:
+- o inventário foi trocado ou restaurado (`invalidarSemUsuarioResumo` dispara `simpress:resumo-desatualizado`);
+- o usuário de um equipamento foi editado (`simpress:usuarios-equipamento-atualizados`, muda o "Sem usuário") ou OS foram importadas (`simpress:chamados-atualizados`);
+- o painel (`simpress:painel-atualizado`) chega com outra comparação, outra `ultima_atualizacao` ou outro `arquivo_origem`; o mesmo painel a cada 5 min não recarrega;
+- outra tela pede um resultado novo (`pendingFreshComparison`), uma série (`abrirComparacaoDaSerie`) ou outra comparação;
+- a última carga falhou ou foi abandonada (trocar de aba antes de terminar).
+
+Testes: `tests/frontend/test_cockpit_tool_panels.cjs` ("Resumo (F3) carrega uma vez…" e "…com falha na carga tenta de novo ao voltar").
 
 ## Redesenho visual da aba Comparação (F7, 02/11/2026)
 

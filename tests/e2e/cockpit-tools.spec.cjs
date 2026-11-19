@@ -87,6 +87,8 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
+  // Sem mudança, voltar ao Resumo reaproveita a tela; inventário trocado/restaurado força a recarga.
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:resumo-desatualizado")));
   await openTool(page, "#btn-resumo-aba");
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(result).not.toContainText("LENTO");
