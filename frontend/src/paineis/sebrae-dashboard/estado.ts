@@ -788,19 +788,19 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   /**
-   * Host da caixa React "OS nova sugerida" (`sugestao-os.tsx`). Este arquivo só cria o `<div data-sugestao-os>` e o entrega;
-   * nunca escreve dentro dele. Sem sugestão nem decisão guardada, não há host.
+   * Host da caixa React "OS nova sugerida" e do aviso "OS sem relação" (`sugestao-os.tsx`). Este arquivo só cria o
+   * `<div data-sugestao-os>` e o entrega; nunca escreve dentro dele. Sem sugestão, aviso nem decisão guardada, não há host.
    */
   function hostSugestaoOs(item: Registro) {
     const painel = context.sugestaoOs;
-    if (!painel || (!item.os_nova && !painel.temDecisao(item.numero))) return null;
+    if (!painel || (!item.os_nova && !item.os_sem_relacao && !painel.temDecisao(item.numero))) return null;
     const host = document.createElement("div");
     host.setAttribute("data-sugestao-os", "");
-    painel.montar(host, { numero: item.numero, osNova: item.os_nova || null, recarregar: () => recarregarOsNova(item.numero) });
+    painel.montar(host, { numero: item.numero, osNova: item.os_nova || null, osSemRelacao: item.os_sem_relacao || null, recarregar: () => recarregarOsNova(item.numero) });
     return host;
   }
 
-  /** Depois de Aceitar, Recusar ou Manter: recarrega o F5, reabre o cartão (a linha é refeita recolhida) e leva o foco à nota. */
+  /** Depois de Aceitar, Recusar, Manter ou Remover: recarrega o F5, reabre o cartão (a linha é refeita recolhida) e leva o foco à nota. */
   async function recarregarOsNova(numero: string) {
     await carregarNovosSebrae();
     const artigo = mostrarChamadoSebrae(numero);
