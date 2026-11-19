@@ -1,5 +1,5 @@
 // Peças repetidas das listas da Cobertura, com o mesmo DOM e as mesmas classes do painel antigo.
-import { isValidElement, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 interface BotaoProps {
   rotulo: string;
@@ -9,18 +9,25 @@ interface BotaoProps {
   extra?: string;
 }
 
-// O botão fica desabilitado enquanto a ação roda; se a lista foi redesenhada, o foco volta para o painel da aba, nunca para o body.
+// O botão fica desabilitado enquanto a ação roda; se a lista foi redesenhada, o foco vai para a folha aberta (o título do painel fica atrás do véu) ou, sem folha, para o título do painel; nunca para o body.
 export function Botao({ rotulo, variante, aoClicar, rotuloAcessivel, extra }: BotaoProps) {
   const [ocupado, setOcupado] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   async function clicar() {
+    const folha = ref.current?.closest<HTMLElement>(".nl-folha");
     setOcupado(true);
     try {
       await aoClicar();
     } finally {
       setOcupado(false);
       setTimeout(() => {
-        if (!ref.current?.isConnected) document.querySelector<HTMLElement>(".cob__painel:not([hidden])")?.focus();
+        if (ref.current?.isConnected) return;
+        if (folha?.isConnected) {
+          if (!folha.hasAttribute("tabindex")) folha.tabIndex = -1;
+          folha.focus();
+        } else {
+          document.getElementById("cobertura-heading")?.focus();
+        }
       });
     }
   }
@@ -53,30 +60,4 @@ export function Campo({ rotulo, children }: { rotulo: string; children: ReactNod
 
 export function Grupo({ classe, children }: { classe: string; children?: ReactNode }) {
   return <div className={classe}>{children}</div>;
-}
-
-// Célula vazia mostra "—"; elementos React entram como estão.
-const textoDaCelula = (conteudo: unknown): ReactNode =>
-  isValidElement(conteudo) ? conteudo : conteudo === undefined || conteudo === null || conteudo === "" ? "—" : String(conteudo);
-
-export function Tabela({ rotulo, colunas, linhas, vazio }: { rotulo: string; colunas: string[]; linhas: unknown[][]; vazio: string }) {
-  if (!linhas.length) return <p className="cob__vazio">{vazio}</p>;
-  return (
-    <table className="ck-tabela ck-tabela--cards cob__tabela" aria-label={rotulo}>
-      <thead>
-        <tr>{colunas.map(coluna => <th key={coluna} scope="col">{coluna}</th>)}</tr>
-      </thead>
-      <tbody>
-        {linhas.map((celulas, n) => (
-          <tr key={n}>
-            {celulas.map((conteudo, i) => (
-              <td key={i} data-label={colunas[i]} className={i === celulas.length - 1 ? "ck-td--largo" : undefined}>
-                {textoDaCelula(conteudo)}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
 }

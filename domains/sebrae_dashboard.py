@@ -7,6 +7,7 @@ Ticket content is data: nothing read from a ticket is ever interpreted as an ins
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 import unicodedata
@@ -188,6 +189,10 @@ def ler_status_chamados(conteudo: bytes) -> Dict[str, Dict[str, str]]:
     return resultado
 
 
+# Uma entrada só (chave: sha256 dos bytes): o relatório mensal relê o mesmo Dashboard a cada abertura. Atribuição de tupla é atômica.
+_datas_chamados_cache: Tuple[bytes, List[Dict[str, Any]]] = (b"", [])
+
+
 def ler_datas_chamados(conteudo: bytes) -> List[Dict[str, Any]]:
     """Per filled row of ``CHAMADOS``: ``{"linha", "chamado", "titulo", "serie", "abertura", "encerramento"}``.
 
@@ -195,15 +200,24 @@ def ler_datas_chamados(conteudo: bytes) -> List[Dict[str, Any]]:
     ``encerramento`` (R) are naive São Paulo datetimes or ``None``. Same checks and stopping rule as ``ler_coluna_c``;
     no other column is read into the result.
     """
+    global _datas_chamados_cache
+    chave = hashlib.sha256(conteudo).digest()
+    guardado = _datas_chamados_cache
+    if guardado[0] == chave:
+        return [dict(item) for item in guardado[1]]  # cópia: quem chama pode alterar o retorno sem estragar o cache
+
     def celula(linha: Tuple[Any, ...], indice: int) -> Any:
         return linha[indice] if len(linha) > indice else None
 
-    return [
+    linhas = [
         {"linha": numero_linha, "chamado": linha[2], "titulo": str(celula(linha, 6) or ""),
          "serie": str(celula(linha, 10) or "").strip(),
          "abertura": _data_ou_dia_da_celula(celula(linha, 15)), "encerramento": _data_ou_dia_da_celula(celula(linha, 17))}
         for numero_linha, linha in _linhas_preenchidas(conteudo)
     ]
+    # Só sucesso entra (erro sempre levanta de novo); valores são imutáveis, então copiar o dict de cada linha basta.
+    _datas_chamados_cache = (chave, [dict(item) for item in linhas])
+    return linhas
 
 
 # ---------------------------------------------------------------------------- triage

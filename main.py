@@ -2303,6 +2303,13 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
         return _chrome_automation_runner
 
 
+def _warm_automation_history() -> None:
+    try:
+        get_chrome_automation_runner().history(1)
+    except Exception as error:
+        logger.warning("Não foi possível pré-carregar o histórico da automação (erro=%s).", type(error).__name__)
+
+
 def _chrome_session_alive() -> bool:
     """A prepared UX session or an open PowerShell/remote-control tab keeps the idle automation Chrome open."""
     return _ux_chamados.tem_sessao_viva() or _ux_tickets.tem_sessao_viva() or endpoint_lookup_domain.sessao_viva()
@@ -2489,5 +2496,7 @@ if __name__ == "__main__":
     sessao_local.gravar_segredo(SERVER_PORT)
     if os.environ.get("SIMPRESS_NAO_ABRIR_NAVEGADOR") != "1":
         threading.Thread(target=_open_browser_when_listening, args=(SERVER_PORT,), daemon=True).start()
+    # Reads the automation logs once in the background, so the first Automação (F4) open is served from cache.
+    threading.Thread(target=_warm_automation_history, daemon=True).start()
     # Access lines would carry ?q= searches (serials, hostnames) and the bootstrap token to the console.
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)
