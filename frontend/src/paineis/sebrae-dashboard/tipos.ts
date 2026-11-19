@@ -4,7 +4,8 @@
 import type { ApiFetchOptions } from "../../api";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type Registro = Record<string, any>;
+/** Os antigos em aberto (`abertos[]`) trazem `os_nova` e, no lugar dele, `os_sem_relacao` (nunca os dois com valor). */
+export type Registro = Record<string, any> & { os_sem_relacao?: OsSemRelacao | null };
 /** Elemento do DOM com as propriedades de controle (value, checked, files, open) que o código antigo lia sem checar o tipo. */
 export type ElementoSebrae = HTMLElement & Record<string, any>;
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -100,13 +101,23 @@ export interface OsNova {
   aceitar: { fonte: string; serie: string; os: string; ano: number; numero: string };
 }
 
+/** `abertos[].os_sem_relacao` (GET /api/sebrae/novos, 18/11/2026): a OS da coluna E não tem relação com o chamado. Sem `nova` nem `aceitar`; quando existe, `os_nova` vem null. */
+export interface OsSemRelacao {
+  tipo: "sem_relacao";
+  atual: TextosOs;
+  sinais: { assunto: boolean; numero_chamado: boolean; data_anterior: boolean };
+}
+
 /** Resultado de uma decisão já gravada: a nota fica no cartão mesmo depois que o recarregamento tira `os_nova`. */
 export interface DecisaoOs { acao: "aceita" | "recusada"; os: string }
+
+/** Mesma ideia para o aviso "sem relação": Manter ou Remover a OS da coluna E (`os` é a OS atual, não uma nova). */
+export interface DecisaoSemRelacao { acao: "mantida" | "removida"; os: string }
 
 /** Ponte do componente React `sugestao-os.tsx` (injetada por montar.tsx): estado.ts não importa JSX porque os testes o carregam sem transformação. */
 export interface SugestaoOsPainel {
   /** Desenha (ou redesenha) a caixa no host; desmonta a raiz anterior do mesmo chamado. `recarregar` roda depois de uma decisão gravada. */
-  montar(host: HTMLElement, chamado: { numero: string; osNova: OsNova | null; recarregar: () => unknown }): void;
+  montar(host: HTMLElement, chamado: { numero: string; osNova: OsNova | null; osSemRelacao: OsSemRelacao | null; recarregar: () => unknown }): void;
   /** Há decisão guardada para o chamado: o host precisa existir mesmo sem `os_nova`. */
   temDecisao(numero: string): boolean;
   /** Desmonta as raízes cujo host saiu do DOM (lista redesenhada, chamado finalizado). */

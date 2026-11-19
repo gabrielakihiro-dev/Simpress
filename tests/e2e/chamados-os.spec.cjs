@@ -288,9 +288,18 @@ async function abrirSecaoAntigos(painel) {
 }
 
 // ---- OS nova sugerida no cartão aberto do antigo (F5, 17/11/2026) ----
-// O servidor de teste não devolve `os_nova`: a rota troca GET /api/sebrae/novos por três antigos sintéticos (sugestão, chamado sem OS e
-// troca já feita) e imita as duas gravações (vinculos-os e os-recusada). Nada vai ao SoftExpert, ao SharePoint nem aos dados reais.
-const CHAMADOS_OS = { sugestao: "UTIC-2026-1200", sem_os: "UTIC-2026-1300", troca: "UTIC-2026-1301" };
+// O servidor de teste não devolve `os_nova` nem `os_sem_relacao`: a rota troca GET /api/sebrae/novos por quatro antigos sintéticos (sugestão,
+// chamado sem OS, troca já feita e OS da coluna E sem relação) e imita as quatro gravações (vinculos-os, os-recusada, os-manter e os-remover).
+// Nada vai ao SoftExpert, ao SharePoint nem aos dados reais.
+const CHAMADOS_OS = { sugestao: "UTIC-2026-1200", sem_os: "UTIC-2026-1300", troca: "UTIC-2026-1301", sem_relacao: "UTIC-2026-1302" };
+
+function osSemRelacaoDe(os) {
+  return {
+    tipo: "sem_relacao",
+    atual: { os, assunto: `Troca de teclado (OS ${os})`, descricao: `Descrição sintética da OS ${os}.`, data: "02/11/2026" },
+    sinais: { assunto: false, numero_chamado: false, data_anterior: true },
+  };
+}
 
 function osNovaDe(tipo, chamado, os, atual) {
   const [, ano, numero] = chamado.split("-");
@@ -303,14 +312,14 @@ function osNovaDe(tipo, chamado, os, atual) {
 }
 
 async function simularOsNova(page) {
-  const estado = { vinculos: [], recusas: [], leituras: 0, tentativas: 0, falhar: false, decididos: new Set() };
+  const estado = { vinculos: [], recusas: [], mantidas: [], removidas: [], leituras: 0, tentativas: 0, falhar: false, decididos: new Set() };
   await page.route("**/api/sebrae/novos", async rota => {
     const resposta = await rota.fetch();
     const corpo = await resposta.json();
     estado.leituras += 1;
     const base = corpo.importado.abertos.find(item => item.numero === CHAMADOS_OS.sugestao);
     const decidido = numero => estado.decididos.has(numero);
-    const antigo = (numero, titulo, extra) => ({ ...structuredClone(base), numero, chamado: numero, titulo, ...extra });
+    const antigo = (numero, titulo, extra) => ({ ...structuredClone(base), numero, chamado: numero, titulo, os_sem_relacao: null, ...extra });
     corpo.importado.abertos = [
       antigo(CHAMADOS_OS.sugestao, "Teclado sem resposta", {
         automaticos: { E: "7303022", K: "DEMO0001" }, automaticos_sugeridos: {},
@@ -323,6 +332,11 @@ async function simularOsNova(page) {
       antigo(CHAMADOS_OS.troca, "Notebook não liga", {
         automaticos: { E: "7400002", K: "DEMO0003" }, automaticos_sugeridos: {},
         os_nova: osNovaDe("troca", CHAMADOS_OS.troca, "7400002", { os: "7303000", assunto: "Notebook não liga (OS antiga)", descricao: "Sem descrição.", data: "02/11/2026" }),
+      }),
+      antigo(CHAMADOS_OS.sem_relacao, "Impressora sem toner", {
+        automaticos: { E: "7303050", K: "DEMO0004" }, automaticos_sugeridos: {},
+        os_nova: null,
+        os_sem_relacao: decidido(CHAMADOS_OS.sem_relacao) ? null : osSemRelacaoDe("7303050"),
       }),
     ];
     await rota.fulfill({ response: resposta, json: corpo });
@@ -345,6 +359,18 @@ async function simularOsNova(page) {
     estado.decididos.add(numero);
     return rota.fulfill({ json: { ok: true } });
   });
+  // Manter e Remover do aviso "OS sem relação": só PUT, e depois da gravação o servidor de mentira devolve `os_sem_relacao: null`.
+  for (const [sufixo, destino] of [["os-manter", estado.mantidas], ["os-remover", estado.removidas]]) {
+    await page.route(`**/api/sebrae/chamados/*/${sufixo}`, async rota => {
+      if (rota.request().method() !== "PUT") return rota.fallback();
+      estado.tentativas += 1;
+      if (estado.falhar) return rota.fulfill({ status: 500, json: { detail: "Falha sintética ao gravar." } });
+      const numero = decodeURIComponent(new URL(rota.request().url()).pathname.split("/")[4]);
+      destino.push({ numero, corpo: rota.request().postDataJSON() });
+      estado.decididos.add(numero);
+      return rota.fulfill({ json: { ok: true } });
+    });
+  }
   return estado;
 }
 
@@ -461,6 +487,107 @@ test("OS nova sugerida: as duas OS empilham no celular e lado a lado no desktop,
   expect(await caixa.evaluate(no => getComputedStyle(no).animationName)).toBe("none");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   expect(await caixa.evaluate(no => getComputedStyle(no).animationName)).not.toBe("none");
+  expect(await caixa.evaluate(no => Number.parseFloat(getComputedStyle(no).animationDuration) * 1000)).toBeLessThanOrEqual(300);
+  for (const tema of ["light", "dark"]) {
+    await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
+    const resultado = await new AxeBuilder({ page }).include("#sebrae-antigos-lista [data-sugestao-os]").analyze();
+    expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`), tema).toEqual([]);
+  }
+});
+
+// ---- Aviso "OS sem relação" no cartão aberto do antigo (F5, 18/11/2026; visual provisório) ----
+// Mesma caixa `.sebrae-osnova`, com `data-tipo="sem-relacao"`: uma OS (a da coluna E), três chips negativos e Manter / Remover.
+
+test("OS sem relação: só o chamado com os_sem_relacao mostra o aviso, com título, chips, OS atual e os dois botões; a linha não ganha selo", async ({ page, request }) => {
+  const { painel, linha, cartao, seloNovo, campoOs, caixa } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
+  const lista = painel.locator("#sebrae-antigos-lista");
+  await expect(lista.locator('.sebrae-osnova[data-tipo="sem-relacao"]')).toHaveCount(1); // os outros três antigos não ganham o aviso
+  await expect(lista.locator(`.sebrae-chamado[data-numero="${CHAMADOS_OS.sugestao}"] .sebrae-osnova[data-tipo="sem-relacao"]`)).toHaveCount(0);
+  await expect(seloNovo).toHaveCount(0);
+  await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
+  await abrirItemAntigo(cartao);
+  await expect(campoOs).toHaveText("7303050");
+  await expect(caixa).toHaveAttribute("data-tipo", "sem-relacao");
+  await expect(caixa.getByRole("heading", { name: "OS da coluna E sem relação com este chamado: 7303050" })).toBeVisible();
+  await expect(caixa).toContainText("A OS não cita o número do chamado, tem outro assunto e é anterior à abertura. Mantenha a OS ou remova-a da coluna E.");
+  await expect(caixa.locator(".sebrae-osnova__chip")).toHaveText(["Número do chamado na OS", "Assunto parecido", "OS anterior à abertura"]);
+  await expect(caixa.locator(".sebrae-osnova__chip").evaluateAll(chips => chips.map(chip => chip.getAttribute("data-ok")))).resolves.toEqual(["nao", "nao", "alerta"]);
+  const cartoes = caixa.locator(".sebrae-osnova__os");
+  await expect(cartoes).toHaveCount(1);
+  await expect(cartoes).toContainText("7303050");
+  await expect(cartoes).toContainText("atual · 02/11/2026");
+  await expect(cartoes).toContainText("Descrição sintética da OS 7303050.");
+  await expect(caixa.getByRole("button", { name: "Manter 7303050" })).toBeVisible();
+  await expect(caixa.getByRole("button", { name: "Remover 7303050" })).toBeVisible();
+  await expect(caixa.getByRole("button")).toHaveCount(2); // nada de Aceitar
+});
+
+test("OS sem relação: Manter grava em os-manter com a OS da coluna E, recarrega, tira o aviso e deixa a nota com o foco", async ({ page, request }) => {
+  const { simulacao, linha, cartao, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
+  await abrirItemAntigo(cartao);
+  const leiturasAntes = simulacao.leituras;
+  await caixa.getByRole("button", { name: "Manter 7303050" }).click();
+  await expect(nota).toHaveText("OS 7303050 mantida. O aviso não volta para este chamado.");
+  await expect(nota).toHaveAttribute("data-tipo", "neutro");
+  await expect(nota).toBeFocused();
+  expect(simulacao.mantidas).toEqual([{ numero: CHAMADOS_OS.sem_relacao, corpo: { os: "7303050" } }]);
+  expect(simulacao.removidas).toEqual([]);
+  expect(simulacao.recusas).toEqual([]);
+  expect(simulacao.vinculos).toEqual([]);
+  expect(simulacao.leituras).toBeGreaterThan(leiturasAntes); // o F5 recarregou depois da gravação
+  await expect(cartao).toBeVisible(); // a linha refeita volta aberta, no mesmo chamado
+  await expect(cartao.locator(".sebrae-osnova")).toHaveCount(0); // o aviso sumiu: a API já devolve null
+  await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+  await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
+});
+
+test("OS sem relação: Remover grava em os-remover com a OS da coluna E e deixa a nota verde com o foco", async ({ page, request }) => {
+  const { simulacao, cartao, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
+  await abrirItemAntigo(cartao);
+  await caixa.getByRole("button", { name: "Remover 7303050" }).click();
+  await expect(nota).toHaveText("OS 7303050 removida. A coluna E fica vazia na próxima atualização do Dashboard.");
+  await expect(nota).toHaveAttribute("data-tipo", "ok");
+  await expect(nota).toBeFocused();
+  expect(simulacao.removidas).toEqual([{ numero: CHAMADOS_OS.sem_relacao, corpo: { os: "7303050" } }]);
+  expect(simulacao.mantidas).toEqual([]);
+  expect(simulacao.recusas).toEqual([]);
+  expect(simulacao.vinculos).toEqual([]);
+  await expect(cartao.locator(".sebrae-osnova")).toHaveCount(0);
+  await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+});
+
+test("OS sem relação: erro ao gravar mostra aviso curto, devolve os botões e não repete sozinho", async ({ page, request }) => {
+  const { simulacao, cartao, caixa, nota } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
+  await abrirItemAntigo(cartao);
+  simulacao.falhar = true;
+  await caixa.getByRole("button", { name: "Remover 7303050" }).click();
+  await expect(caixa.getByRole("alert")).toContainText("Falha sintética ao gravar.");
+  await expect(caixa.getByRole("button", { name: "Remover 7303050" })).toBeEnabled();
+  await expect(caixa.getByRole("button", { name: "Manter 7303050" })).toBeEnabled();
+  await page.waitForTimeout(700);
+  expect(simulacao.tentativas).toBe(1); // sem repetição automática
+  expect(simulacao.removidas).toEqual([]);
+  simulacao.falhar = false;
+  await caixa.getByRole("button", { name: "Manter 7303050" }).click();
+  await expect(nota).toHaveText("OS 7303050 mantida. O aviso não volta para este chamado.");
+  expect(simulacao.tentativas).toBe(2);
+  expect(simulacao.mantidas).toEqual([{ numero: CHAMADOS_OS.sem_relacao, corpo: { os: "7303050" } }]);
+});
+
+test("OS sem relação: cabe de 320px a 1280px sem rolagem horizontal, com botões de 44px, movimento reduzido e axe nos dois temas", async ({ page, request }) => {
+  const { cartao, caixa } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
+  await abrirItemAntigo(cartao);
+  for (const largura of [390, 320, 1280]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await abrirItemAntigo(cartao); // abaixo de 1024px o detalhe só aparece depois de tocar no item da lista
+    await expect(caixa).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `página a ${largura}px`).toBe(true);
+    expect(await caixa.evaluate(no => no.scrollWidth <= no.clientWidth), `caixa a ${largura}px`).toBe(true);
+    for (const botao of await caixa.locator(".sebrae-osnova__acoes .ck-btn").all()) expect((await botao.boundingBox()).height, `botão a ${largura}px`).toBeGreaterThanOrEqual(44);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await caixa.evaluate(no => getComputedStyle(no).animationName)).toBe("none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   expect(await caixa.evaluate(no => Number.parseFloat(getComputedStyle(no).animationDuration) * 1000)).toBeLessThanOrEqual(300);
   for (const tema of ["light", "dark"]) {
     await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);

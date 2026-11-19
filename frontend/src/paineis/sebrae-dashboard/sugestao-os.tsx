@@ -3,26 +3,31 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { apiFetch } from "../../api";
 import {
-  chipsSinais, corpoAceitar, corpoRecusar, explicacaoCaixa, notaAceita, notaRecusada, notaTroca, rotuloAceitar, rotuloRecusar,
-  seloOs, textoOuIndisponivel, tituloCaixa, URL_VINCULOS_OS, urlOsRecusada,
+  chipsSinais, CHIPS_SEM_RELACAO, corpoAceitar, corpoRecusar, corpoSemRelacao, ERRO_MANTER, ERRO_REMOVER, EXPLICACAO_SEM_RELACAO,
+  explicacaoCaixa, notaAceita, notaMantida, notaRecusada, notaRemovida, notaTroca, rotuloAceitar, rotuloManter, rotuloRecusar,
+  rotuloRemover, seloOs, textoOuIndisponivel, tituloCaixa, tituloSemRelacao, URL_VINCULOS_OS, urlOsRecusada, urlSemRelacao,
+  type ChipSinal,
 } from "./sugestao-os-modelo";
-import type { DecisaoOs, OsNova, SugestaoOsPainel, TextosOs } from "./tipos";
+import type { DecisaoOs, DecisaoSemRelacao, OsNova, OsSemRelacao, SugestaoOsPainel, TextosOs } from "./tipos";
 
 // "OS nova sugerida" no cartão aberto de um chamado antigo do F5 (visual aprovado em 17/11/2026; CSS em static/styles/ck-cockpit.css,
 // classes `.sebrae-osnova*`). O código imperativo de estado.ts só cria o host `<div data-sugestao-os>` e chama `montar`; nunca
 // escreve dentro dele. Aceitar grava o vínculo manual (PUT vinculos-os); Recusar e Manter gravam o par chamado + OS em
 // `sebrae_os_recusadas.json`. Depois da gravação o F5 recarrega pelo `recarregar` que estado.ts entrega, e o resultado fica guardado
 // aqui para a nota aparecer no host novo mesmo com `os_nova` já vazio.
+// O aviso "OS sem relação" (`os_sem_relacao`, 18/11/2026) usa a mesma caixa e o mesmo host, mas é outro componente (`AvisoSemRelacao`):
+// a OS que ele mostra é a da coluna E (`atual`), não existe `nova`, e Manter e Remover gravam em rotas próprias (os-manter e os-remover).
 
 const raizes = new Map<string, { raiz: Root; host: HTMLElement }>();
 const decisoes = new Map<string, DecisaoOs>();
+const decisoesSemRelacao = new Map<string, DecisaoSemRelacao>();
 
 const CABECALHO_JSON = { "Content-Type": "application/json" };
 
-function Icone({ ok }: { ok: boolean }) {
+function Icone({ ok, alerta = false }: { ok: boolean; alerta?: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={ok ? "M20 6 9 17l-5-5" : "M6 12h12"} />
+      <path d={alerta ? "M12 3 2 21h20zM12 10v4M12 18h.01" : ok ? "M20 6 9 17l-5-5" : "M6 12h12"} />
     </svg>
   );
 }
@@ -39,6 +44,16 @@ function CartaoOs({ texto, selo, destaque, serie }: { texto: TextosOs; selo: str
         <div><dt>Assunto</dt><dd>{textoOuIndisponivel(texto.assunto)}</dd></div>
         <div><dt>Descrição</dt><dd>{textoOuIndisponivel(texto.descricao)}</dd></div>
       </dl>
+    </div>
+  );
+}
+
+function Chips({ chips }: { chips: readonly ChipSinal[] }) {
+  return (
+    <div className="sebrae-osnova__chips">
+      {chips.map(chip => (
+        <span key={chip.texto} className="sebrae-osnova__chip" data-ok={chip.alerta ? "alerta" : chip.ok ? "sim" : "nao"}><Icone ok={chip.ok} alerta={chip.alerta} />{chip.texto}</span>
+      ))}
     </div>
   );
 }
@@ -102,11 +117,7 @@ function SugestaoOs({ numero, osNova, recarregar }: Propriedades) {
         <h4 className="sebrae-osnova__titulo" id={`sebrae-osnova-${numero}`}>{tituloCaixa(osNova)}</h4>
         <p className="sebrae-osnova__explica">{explicacaoCaixa(osNova)}</p>
       </div>
-      <div className="sebrae-osnova__chips">
-        {chipsSinais(osNova).map(chip => (
-          <span key={chip.texto} className="sebrae-osnova__chip" data-ok={chip.ok ? "sim" : "nao"}><Icone ok={chip.ok} />{chip.texto}</span>
-        ))}
-      </div>
+      <Chips chips={chipsSinais(osNova)} />
       <div className="sebrae-osnova__cartoes" data-cartoes={doisCartoes ? "2" : "1"}>
         {osNova.atual && osNova.tipo === "sugestao" ? <CartaoOs texto={osNova.atual} selo={seloOs("atual", osNova.atual)} destaque={false} /> : null}
         <CartaoOs
@@ -125,15 +136,78 @@ function SugestaoOs({ numero, osNova, recarregar }: Propriedades) {
   );
 }
 
+interface PropriedadesSemRelacao { numero: string; aviso: OsSemRelacao | null; recarregar: () => unknown }
+
+/** Aviso "OS da coluna E sem relação com este chamado": Manter e Remover gravam só no registro local de recusas (os-manter e os-remover). */
+function AvisoSemRelacao({ numero, aviso, recarregar }: PropriedadesSemRelacao) {
+  const [decisao, setDecisao] = useState<DecisaoSemRelacao | null>(() => decisoesSemRelacao.get(numero) || null);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [foco, setFoco] = useState(false);
+  const emEnvio = useRef(false); // mesmo motivo de SugestaoOs: dois cliques seguidos não podem gravar duas vezes
+
+  if (decisao) return <Nota tipo={decisao.acao === "removida" ? "ok" : "neutro"} texto={decisao.acao === "mantida" ? notaMantida(decisao.os) : notaRemovida(decisao.os)} foco={foco} />;
+  if (!aviso) return null;
+
+  async function decidir(acao: DecisaoSemRelacao["acao"]) {
+    if (!aviso || emEnvio.current) return;
+    const mensagemErro = acao === "mantida" ? ERRO_MANTER : ERRO_REMOVER;
+    emEnvio.current = true;
+    setEnviando(true);
+    setErro("");
+    try {
+      await apiFetch(urlSemRelacao(acao, numero), { method: "PUT", headers: CABECALHO_JSON, body: JSON.stringify(corpoSemRelacao(aviso)), errorMessage: mensagemErro });
+    } catch (falha) {
+      // Sem repetir sozinho: os botões voltam e a pessoa decide se clica de novo.
+      emEnvio.current = false;
+      setEnviando(false);
+      setErro((falha as Error).message || mensagemErro);
+      return;
+    }
+    const gravada = { acao, os: aviso.atual.os };
+    decisoesSemRelacao.set(numero, gravada);
+    emEnvio.current = false;
+    setEnviando(false);
+    setFoco(true);
+    setDecisao(gravada);
+    void recarregar();
+  }
+
+  return (
+    <section className="sebrae-osnova" data-tipo="sem-relacao" aria-labelledby={`sebrae-osnova-${numero}`} aria-busy={enviando || undefined}>
+      <div className="sebrae-osnova__texto">
+        <h4 className="sebrae-osnova__titulo" id={`sebrae-osnova-${numero}`}>{tituloSemRelacao(aviso)}</h4>
+        <p className="sebrae-osnova__explica">{EXPLICACAO_SEM_RELACAO}</p>
+      </div>
+      <Chips chips={CHIPS_SEM_RELACAO} />
+      <div className="sebrae-osnova__cartoes" data-cartoes="1">
+        <CartaoOs texto={aviso.atual} selo={seloOs("atual", aviso.atual)} destaque={false} />
+      </div>
+      <div className="sebrae-osnova__acoes">
+        <button type="button" className="ck-btn ck-btn--secundario" disabled={enviando} onClick={() => decidir("mantida")}>{rotuloManter(aviso)}</button>
+        <button type="button" className="ck-btn ck-btn--secundario" disabled={enviando} onClick={() => decidir("removida")}>{rotuloRemover(aviso)}</button>
+      </div>
+      {erro ? <p className="sebrae-osnova__erro" role="alert">{erro}</p> : null}
+    </section>
+  );
+}
+
+interface Chamado { numero: string; osNova: OsNova | null; osSemRelacao: OsSemRelacao | null; recarregar: () => unknown }
+
 /** Desenha (ou redesenha) a caixa no host. flushSync: o cartão já nasce pronto quando estado.ts devolve a linha. */
-function montar(host: HTMLElement, { numero, osNova, recarregar }: { numero: string; osNova: OsNova | null; recarregar: () => unknown }) {
+function montar(host: HTMLElement, { numero, osNova, osSemRelacao, recarregar }: Chamado) {
   const anterior = raizes.get(numero);
   if (anterior && anterior.host !== host) anterior.raiz.unmount();
   // Outra OS sugerida para o mesmo chamado: a decisão antiga não vale para ela.
   if (osNova && decisoes.get(numero) && decisoes.get(numero)?.os !== osNova.nova.os) decisoes.delete(numero);
+  // Uma sugestão nova encerra a nota do aviso (o selo "OS nova?" some enquanto `temDecisao`); outra OS na E também: a decisão antiga não vale para ela.
+  if (osNova || (osSemRelacao && decisoesSemRelacao.get(numero)?.os !== osSemRelacao.atual.os)) decisoesSemRelacao.delete(numero);
   const raiz = anterior && anterior.host === host ? anterior.raiz : createRoot(host);
   raizes.set(numero, { raiz, host });
-  flushSync(() => raiz.render(<SugestaoOs numero={numero} osNova={osNova} recarregar={recarregar} />));
+  const comAviso = !osNova && Boolean(osSemRelacao || decisoesSemRelacao.has(numero));
+  flushSync(() => raiz.render(comAviso
+    ? <AvisoSemRelacao numero={numero} aviso={osSemRelacao} recarregar={recarregar} />
+    : <SugestaoOs numero={numero} osNova={osNova} recarregar={recarregar} />));
 }
 
 function limparOrfas() {
@@ -142,11 +216,12 @@ function limparOrfas() {
     raiz.unmount();
     raizes.delete(numero);
     decisoes.delete(numero);
+    decisoesSemRelacao.delete(numero);
   });
 }
 
 export const sugestaoOsPainel: SugestaoOsPainel = {
   montar,
-  temDecisao: numero => decisoes.has(numero),
+  temDecisao: numero => decisoes.has(numero) || decisoesSemRelacao.has(numero),
   limparOrfas,
 };
