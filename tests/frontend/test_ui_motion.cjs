@@ -294,9 +294,9 @@ test("ck-bento.css follows the bento motion contract", () => {
   });
 });
 
-// Novo layout (nl-base.css): mesmo contrato, com nomes nl-*; a faixa da linha da tabela é permitida (sem brilho).
-test("nl-base.css follows the bento motion contract and leaves the Assistant out", () => {
-  const css = fs.readFileSync(path.join(__dirname, "../../static/styles/nl-base.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+// Novo layout (nl-base.css e as folhas por aba, como nl-f10.css): mesmo contrato, com nomes nl-*; a faixa da linha da tabela é permitida (sem brilho).
+for (const arquivo of ["nl-base.css", "nl-f10.css"]) test(`${arquivo} follows the bento motion contract and leaves the Assistant out`, () => {
+  const css = fs.readFileSync(path.join(__dirname, "../../static/styles", arquivo), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const arvore = arvoreCss(css);
   const quadros = [];
   percorrer(arvore, no => {

@@ -14,6 +14,7 @@ from domains.regras_negocio import (
     hostname_e_macbook,
     is_missing_cell_value,
     normalize_reference_value,
+    predicado_serie_sebrae,
 )
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
@@ -321,10 +322,8 @@ def is_prnoteti_curitiba_location_match(
 def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
-    return [
-        item for item in items
-        if not isinstance(item, dict) or not is_sebrae_owned_notebook_serial(item.get("serie"))
-    ]
+    e_propria = predicado_serie_sebrae()  # conjunto resolvido uma vez, não a cada item
+    return [item for item in items if not isinstance(item, dict) or not e_propria(item.get("serie"))]
 
 def filter_update_review_items(
     items: Any,

@@ -936,6 +936,9 @@ class Handler(BaseHTTPRequestHandler):
             page = max(1, min(int(query.get("pagina", ["1"])[0]), pages))
             self.send({"execucoes": entries[(page - 1) * limit:page * limit], "total": len(entries),
                        "pagina": page, "paginas": pages, "limite": limit})
+        elif path == "/api/automacao/historico/ultimas":
+            self.send({"ultimas": {rotina: next((entry for entry in AUTOMATION_HISTORY if entry["rotina"] == rotina), None)
+                                   for rotina in parse_qs(url.query).get("rotina", [])}})
         elif path.startswith("/api/automacao/capturas/"):
             self.send(FIXTURE_CAPTURE, content_type="image/png")
         elif path.startswith("/api/automacao/execucoes/") and path.endswith("/log"):

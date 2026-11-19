@@ -48,6 +48,13 @@ function aplicarEstado(dados: DadosEstado) {
   const estavaAtivo = antes.emAndamento;
   const rotinaAnterior = antes.rotinaAtiva;
   const emAndamento = dados.estado === "em_andamento";
+  // Requests first: rendering up to 64 KB of log lines below would delay them on the first open.
+  const ultimaId = dados.ultima?.id || "";
+  if (ultimaId !== interno.ultimaExecucaoId || estavaAtivo !== emAndamento) {
+    interno.ultimaExecucaoId = ultimaId;
+    void carregarHistoricoAutomacao();
+    void carregarUltimasPorRotina();
+  }
   const descricao = descreverEstado(dados);
   mudar({ emAndamento, rotinaAtiva: emAndamento ? (dados.rotina || "") : "", descricao });
   mostrarChip(descricao);
@@ -57,12 +64,6 @@ function aplicarEstado(dados: DadosEstado) {
   if (verBackups !== null) mudar({ verBackups });
   if (estavaAtivo && !emAndamento && ["sebrae", "dashboard"].includes(rotinaAnterior)) appAntigo().carregarNovosSebrae?.();
   if (osImportadaAoTerminar({ emAndamento, estavaAtivo, rotinaAnterior })) document.dispatchEvent(new CustomEvent("simpress:chamados-atualizados"));
-  const ultimaId = dados.ultima?.id || "";
-  if (ultimaId !== interno.ultimaExecucaoId || estavaAtivo !== emAndamento) {
-    interno.ultimaExecucaoId = ultimaId;
-    void carregarHistoricoAutomacao();
-    void carregarUltimasPorRotina();
-  }
   if (estavaAtivo && !emAndamento && interno.acompanharFim) {
     interno.acompanharFim = false;
     if (dados.ultima) avisarResultado(dados.ultima);
@@ -72,17 +73,16 @@ function aplicarEstado(dados: DadosEstado) {
 async function carregarUltimasPorRotina() {
   const consulta = ++interno.consultaUltimas;
   const novo: Record<string, Execucao | null> = {};
-  await Promise.all(ROTINAS_DOS_CARTOES.map(async rotina => {
-    try {
-      const dados = await consultarAutomacao<RespostaHistorico>(
-        `/api/automacao/historico?${new URLSearchParams({ limite: "1", pagina: "1", rotina })}`,
-        { errorMessage: "Não foi possível consultar a última execução." },
-      );
-      novo[rotina] = dados.execucoes?.[0] || null;
-    } catch {
-      novo[rotina] = null;
-    }
-  }));
+  try {
+    // One request for every card; the server answers from its cached history.
+    const dados = await consultarAutomacao<{ ultimas?: Record<string, Execucao | null> }>(
+      `/api/automacao/historico/ultimas?${new URLSearchParams(ROTINAS_DOS_CARTOES.map(rotina => ["rotina", rotina]))}`,
+      { errorMessage: "Não foi possível consultar a última execução." },
+    );
+    for (const rotina of ROTINAS_DOS_CARTOES) novo[rotina] = dados.ultimas?.[rotina] || null;
+  } catch {
+    for (const rotina of ROTINAS_DOS_CARTOES) novo[rotina] = null;
+  }
   if (consulta === interno.consultaUltimas) mudar({ ultimasPorRotina: novo });
 }
 
