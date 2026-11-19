@@ -149,10 +149,10 @@ O resultado traz, entre outras seções:
 ## 6. Gerar uma transferência
 
 1. Na **Home**, pesquise o equipamento e selecione-o. Confira os dados do cartão (modelo, série, localidade).
-2. Abra manualmente a aba **Transporte** no menu lateral.
+2. Abra manualmente a aba **Transporte** no menu lateral. A aba tem quatro etapas (Equipamento, Retirada, Entrega e Agenda); a primeira incompleta abre sozinha e as outras ficam recolhidas, com um resumo e o selo ok, falta ou automático.
 3. Revise **origem** (retirada) e **destino** (entrega): CNPJ, endereço e contatos. O **Catálogo de unidades** ajuda a preencher.
 4. Preencha todos os campos obrigatórios: série; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega (e a duração da pausa, se o escritório fechar para o almoço). Botões como **+ Substituição** inserem observações prontas.
-5. Clique em **Transporte** (antigo **Gerar Planilha**), o primeiro botão do rodapé. O arquivo é baixado pelo navegador.
+5. Clique em **Transporte** (antigo **Gerar Planilha**), o botão principal da coluna **Pré-visualização**. O arquivo é baixado pelo navegador. Se faltar um campo obrigatório numa etapa recolhida, a etapa abre sozinha e o campo recebe o foco.
 6. Abra a planilha baixada e confira os dados antes de encaminhá-la.
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).
