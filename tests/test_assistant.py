@@ -1715,15 +1715,18 @@ class OsDosAntigosTests(unittest.TestCase):
                             "nova": {"os": "9", "serie": "ABC123", "fonte": "oracle", "assunto": "Assunto sintetico", "descricao": "Descricao nova", "data": "10/11/2026"},
                             "sinais": {"mesma_serie": True, "nome": False, "assunto": False, "numero_chamado": False},
                             "aceitar": {"fonte": "oracle", "serie": "ABC123", "os": "9", "ano": 2026, "numero": "0095"}}},
+                        {"numero": "UTIC-2026-0096", "automaticos": {"K": "ABC124", "E": "6"}, "os_nova": None, "os_sem_relacao": {
+                            "tipo": "sem_relacao", "atual": {"os": "6", "assunto": "Texto sintetico", "descricao": "Descricao sintetica", "data": "01/11/2026"},
+                            "sinais": {"assunto": False, "numero_chamado": False, "data_anterior": True}}},
                     ]}}
                 return super().__call__(method, path, params, body)
 
         itens = SimpressApi(Simpress()).chamados_antigos_abertos_sebrae()["abertos"]
-        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", "")])
+        self.assertEqual([(i["serie"], i["os"], i["os_sugerida"]) for i in itens], [("SCXC9F072K1", "", "77"), ("ABC123", "5", ""), ("ABC124", "6", "")])
         # os_nova: only number and kind, never the OS text or the accept body
-        self.assertEqual([i["os_nova"] for i in itens], [None, {"os": "9", "tipo": "sugestao"}])
+        self.assertEqual([i["os_nova"] for i in itens], [None, {"os": "9", "tipo": "sugestao"}, {"os": "6", "tipo": "sem_relacao"}])
         self.assertNotIn("sintetic", json.dumps(itens))
-        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True])
+        self.assertEqual([i.get("nao_encontrado_softexpert", False) for i in itens], [False, True, False])
         model = FakeModel(calls(call("chamados_antigos_abertos_sebrae")), text("ok"))
         conversation, _ = make_conversation(model, Simpress())
         self.assertEqual(conversation.enviar_mensagem("qual a OS dos antigos?").texto, "ok")

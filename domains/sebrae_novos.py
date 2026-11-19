@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.integrity import lock_paths
-from domains import sebrae_cruzamento, sebrae_vinculos
+from domains import sebrae_cruzamento, sebrae_os_nova, sebrae_vinculos
 from domains.equipment_search import normalize_search_term
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
 from domains.sebrae_dashboard import (
@@ -339,7 +339,8 @@ def titulo_em_h(aberto: Mapping[str, Any], lido: Optional[Mapping[str, str]]) ->
 
 
 def complementar_antigos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]]) -> List[Mapping[str, Any]]:
-    """Old open tickets with the SoftExpert description and requester filling what the Dashboard row has empty (H, I).
+    """Old open tickets with the SoftExpert description and requester filling what the Dashboard row has empty (H, I)
+    and the opening date (``abertura``: column P of the row, else the SoftExpert ``habilitada_em``).
     Feeds the same name cross-reference the new tickets get; the Dashboard values win when present, except an H that
     is only the SoftExpert title (``titulo_em_h``), which gives way to the read description."""
     resultado: List[Mapping[str, Any]] = []
@@ -348,6 +349,7 @@ def complementar_antigos(abertos: Sequence[Mapping[str, Any]], antigos: Mapping[
         resultado.append(aberto if not lido else {
             **aberto, "descricao": lido["descricao"] if titulo_em_h(aberto, lido) else aberto.get("descricao") or lido["descricao"],
             "usuario": aberto.get("usuario") or lido["solicitante"],
+            "abertura": aberto.get("abertura") or lido.get("habilitada_em") or "",
         })
     return resultado
 
@@ -397,9 +399,9 @@ def _cruzar(
 ) -> Tuple[Cruzamento, str]:
     nome, _ = sebrae_cruzamento.nome_do_chamado(chamado.descricao, chamado.solicitante, registros)
     cruzamento = _cruzar_nome(nome, registros, _por_nome(registros) if grupos is None else grupos)
-    # a manual link of the ticket table wins over the OS of the serial
-    os_ = sebrae_vinculos.os_do_chamado(vinculos, chamado.numero) or (
-        sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else "")
+    # a manual link of the ticket table wins over the OS of the serial; the serial's newest OS only counts when related to the ticket (``os_relacionada``)
+    os_ = sebrae_vinculos.os_do_chamado(vinculos, chamado.numero) or sebrae_os_nova.os_da_chegada(
+        relatorio, cruzamento.serie, None, chamado.numero, chamado.habilitada_em, f"{chamado.titulo} {chamado.descricao}")
     return cruzamento, os_
 
 
@@ -429,9 +431,10 @@ def preenchimentos(
     relatorio: Optional[Mapping[str, Any]],
     vinculos: Sequence[Mapping[str, Any]] = (),
     indice_endpoint: Optional[Mapping[str, Any]] = None,
+    recusadas: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Dict[str, Dict[str, str]]:
     """E, K, L and N still empty in old open tickets: the unique equipment of the name in column I gives K, L and N;
-    E is the latest OS of the serial the row has or just got. K, L and N are never mixed with a different serial
+    E is the latest OS of the serial the row has or just got that is related to the ticket and not refused for it (``recusadas``, ``os_da_chegada``). K, L and N are never mixed with a different serial
     already in the row. A manual ``vinculos`` entry of the row's UTIC gives E first, even without a serial. ``abertos`` are ``ChamadoAberto.como_dict()`` items; keys of the result are their ``numero``.
     With ``indice_endpoint`` (Endpoint index plus Simpress base serials) E also finds a MacBook whose report serial
     has the other ``S`` spelling, only when that match is unique; K and the report's values stay as they are.
@@ -452,7 +455,9 @@ def preenchimentos(
         if os_vinculada:
             novos["E"] = os_vinculada
         elif serie:
-            novos["E"] = sebrae_cruzamento.os_da_serie(relatorio, serie, indice_endpoint)
+            novos["E"] = sebrae_os_nova.os_da_chegada(
+                relatorio, serie, indice_endpoint, item.get("numero"), item.get("abertura"),
+                f"{item.get('titulo') or ''} {item.get('descricao') or ''}", (recusadas or {}).get(str(item.get("numero") or ""), ()))
         faltam = {letra: _texto_de_celula(valor) for letra, valor in novos.items() if valor and not atuais.get(letra)}
         if faltam:
             resultado[str(item.get("numero") or "")] = faltam
