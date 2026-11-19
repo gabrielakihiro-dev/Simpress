@@ -43,6 +43,13 @@
 [data-cockpit-tool-panel="cobertura"] .cob__tit { min-width: 0; font-weight: 600; color: var(--nl-tx); }
 [data-cockpit-tool-panel="cobertura"] .cob__k { font-size: 12.5px; line-height: 1.4; color: var(--nl-mut); }
 [data-cockpit-tool-panel="cobertura"] .cob__serie { font-family: var(--fonte-mono); font-weight: 700; color: var(--nl-tx); }
+/* Exibição B: série + selo do tipo (Notebook índigo, Desktop ciano, como no canvas) e modelo abaixo. */
+[data-cockpit-tool-panel="cobertura"] .cob__serie-eq { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+[data-cockpit-tool-panel="cobertura"] .cob__tipo[data-tipo="notebook"] { background: rgba(129, 140, 248, .16); color: #4f46e5; }
+[data-cockpit-tool-panel="cobertura"] .cob__tipo[data-tipo="desktop"] { background: rgba(34, 211, 238, .16); color: #0e7490; }
+:root[data-theme="dark"] [data-cockpit-tool-panel="cobertura"] .cob__tipo[data-tipo="notebook"] { color: #a5b4fc; }
+:root[data-theme="dark"] [data-cockpit-tool-panel="cobertura"] .cob__tipo[data-tipo="desktop"] { color: #67e8f9; }
+[data-cockpit-tool-panel="cobertura"] .cob__modelo { font-size: 13px; line-height: 1.4; color: var(--nl-tx); overflow-wrap: anywhere; }
 [data-cockpit-tool-panel="cobertura"] .cob__vazio { grid-column: 1 / -1; padding: 6px 2px; }
 [data-cockpit-tool-panel="cobertura"] .cob__mais { align-self: flex-start; min-height: 32px; padding: 4px 2px; border: 0; background: transparent; color: var(--tom, var(--nl-itx)); font: 600 13px/1.2 var(--fonte-corpo); cursor: pointer; }
 [data-cockpit-tool-panel="cobertura"] .cob__mais:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 6px; }

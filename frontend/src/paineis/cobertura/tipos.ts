@@ -3,6 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type Registro = Record<string, any>;
+export interface Equipamento { modelo: string; tipo: string }
 export interface Dados extends Registro {
   hoje?: string;
   vagas?: Registro[];
@@ -10,6 +11,7 @@ export interface Dados extends Registro {
   bloqueios?: Registro[];
   sinais?: Registro[];
   manutencao?: Registro;
+  equipamentos?: Record<string, Equipamento>; // série -> modelo e tipo do cadastro oficial
 }
 
 export const ABAS = ["necessidades", "disponiveis", "reservas", "movimento", "devolucoes"] as const;
