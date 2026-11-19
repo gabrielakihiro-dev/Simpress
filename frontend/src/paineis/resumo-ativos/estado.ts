@@ -69,11 +69,6 @@ export function alternarExpandido() {
   mudar({ expandido: !estado.expandido, geracao: estado.geracao + 1 });
 }
 
-// Clique numa sub-aba do Resumo repete barras e contagens (evento simpress:bento-repetir, comparison-result.js).
-export function repetirAnimacao() {
-  if (estado.resultado?.tipo === "pronto") mudar({ geracao: estado.geracao + 1 });
-}
-
 let pedido = 0;
 let relogio: ReturnType<typeof setTimeout> | undefined;
 

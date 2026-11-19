@@ -22,12 +22,12 @@ const comparison = {
   },
 };
 
-// openPanel recarrega a comparação e o render volta a Divergências: só depois do estado final o clique na Visão geral é estável.
-async function abrirVisaoGeral(page) {
+// Novo layout (18/11/2026): o Resumo não tem mais "Visão geral"; o bento (com "Ativos por regional") fica sempre acima das sub-abas.
+// openPanel recarrega a comparação e o render volta a Divergências: só depois do estado final o Resumo está estável.
+async function esperarResumoPronto(page) {
   await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
   await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
-  await page.locator("#resumo-aba-visao").click();
-  await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
 }
 
 // O bento anima a entrada dos blocos (opacity 0→1, 700 ms): o Axe só mede contraste com a animação concluída.
@@ -85,7 +85,9 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(result).toContainText("Localidade divergente");
   await expect(result.locator("[data-history-filter-bar]")).toBeVisible();
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
-  await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
+  // Novo layout (18/11/2026): o texto das fontes saiu do Resumo; o elemento fica oculto e vazio.
+  await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
+  await expect(page.locator("#comparacao-planilhas-fontes")).toHaveText("");
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
   // Sem mudança, voltar ao Resumo reaproveita a tela; inventário trocado/restaurado força a recarga.
   await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:resumo-desatualizado")));
@@ -527,8 +529,8 @@ test("Resumo mostra Ativos por regional com filtros por categoria ao abrir, sem 
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
-  // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026); o Resumo abre em Divergências.
-  await abrirVisaoGeral(page);
+  // "Ativos por regional" é cartão do bento, sempre visível acima das sub-abas; o Resumo abre em Divergências.
+  await esperarResumoPronto(page);
   await expect(painel.getByRole("heading", { name: "Ativos por regional" })).toBeVisible();
   await expect(painel.getByRole("heading", { name: "Total de ativos" })).toHaveCount(0);
   await expect(page.locator("#resumo-total-ativos")).toHaveCount(0);
@@ -552,12 +554,9 @@ test("Resumo passa pela auditoria de acessibilidade", async ({ page }) => {
   await esperarAnimacoes(page);
   const results = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(results.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
-  // O cartão "Ativos por regional" só fica visível na Visão geral: a auditoria também passa por lá.
-  await abrirVisaoGeral(page);
+  // O bento (com "Ativos por regional") fica sempre acima das sub-abas: a auditoria acima já o cobre.
+  await esperarResumoPronto(page);
   await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
-  await esperarAnimacoes(page);
-  const visao = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="comparacao"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
-  expect(visao.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(",")}`)).toEqual([]);
   const nav = await new AxeBuilder({ page }).include("#ck-abas").withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(nav.violations.map(v => v.id)).toEqual([]);
 });
