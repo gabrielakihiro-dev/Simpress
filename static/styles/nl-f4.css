@@ -1,0 +1,340 @@
+/* Novo layout (NL) · Automação (F4), visual B: cabeçalho do Chrome, trilha de 3 etapas, abas de rotina,
+   Últimas execuções e Console lado a lado.
+   Carrega depois de nl-base.css e só reveste o que está dentro de #tab-panel-automacao (a janela de log também vive ali).
+   Só tokens --nl-* e --ck-*. Contrato de movimento: docs/ui-motion/contrato-bento.md (keyframes só opacity/transform,
+   todo movimento dentro de prefers-reduced-motion: no-preference, de 150 a 300 ms). Marcação: frontend/src/paineis/chrome-automation/componentes.tsx. */
+
+/* ---------- 1. Tokens locais ---------- */
+#tab-panel-automacao {
+  --f4-pri: #4f46e5; --f4-pri-tx: #fff; --f4-pri-hover: #4338ca;
+  --f4-bolinha: 40px;
+}
+:root[data-theme="dark"] #tab-panel-automacao { --f4-pri: #818cf8; --f4-pri-tx: #07080d; --f4-pri-hover: #a5b4fc; }
+/* Cor por status: o mesmo data-status (ok, alerta, erro, info) pinta selo, bolinha e chip. Sem status, tom neutro. */
+#tab-panel-automacao :is(.nl-f4-selo, .nl-f4-bolinha, .ck-badge)[data-status="ok"] { --f4-ac: var(--nl-e); --f4-actx: var(--nl-etx); }
+#tab-panel-automacao :is(.nl-f4-selo, .nl-f4-bolinha, .ck-badge)[data-status="alerta"] { --f4-ac: var(--nl-a); --f4-actx: var(--nl-atx); }
+#tab-panel-automacao :is(.nl-f4-selo, .nl-f4-bolinha, .ck-badge)[data-status="erro"] { --f4-ac: var(--nl-r); --f4-actx: var(--nl-rtx); }
+#tab-panel-automacao :is(.nl-f4-selo, .nl-f4-bolinha, .ck-badge)[data-status="info"] { --f4-ac: var(--nl-i); --f4-actx: var(--nl-itx); }
+
+/* ---------- 2. Grade da tela: avisos, cabeçalho, rotinas em toda a largura; Últimas execuções (2fr) e Console (1fr) lado a lado ---------- */
+.cockpit-shell #automacao-cards.ck-auto {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-content: start; padding: 20px 24px 28px;
+}
+/* O contêiner antigo deixa de gerar caixa: os cartões passam a ser itens da grade, sem mover o HTML. */
+#automacao-cards > .ck-auto__principal { display: contents; }
+#automacao-cards > .ck-auto__principal > :not(#automacao-historico-painel) { grid-column: 1 / -1; }
+#automacao-cards > #automacao-andamento-painel.ck-console { grid-column: 2; min-width: 0; }
+#automacao-cards > .ck-auto__principal > #automacao-historico-painel { grid-column: 1; min-width: 0; }
+@media (min-width: 1200px) {
+  #tab-panel-automacao.ck-tela--auto { overflow: auto; }
+  #automacao-cards > #automacao-andamento-painel.ck-console {
+    position: sticky; top: 16px; align-self: start; height: min(720px, calc(100dvh - var(--altura-barra, 48px) - 48px)); min-height: 440px; overflow: hidden;
+  }
+}
+@media (max-width: 1199.98px) {
+  .cockpit-shell #automacao-cards.ck-auto { grid-template-columns: minmax(0, 1fr); }
+  #automacao-cards > #automacao-andamento-painel.ck-console,
+  #automacao-cards > .ck-auto__principal > #automacao-historico-painel { grid-column: 1 / -1; }
+}
+@media (max-width: 767.98px) {
+  .cockpit-shell #automacao-cards.ck-auto { gap: 14px; padding: 16px 16px 24px; }
+}
+
+/* ---------- 3. Cartões, botões e campos da tela ---------- */
+#tab-panel-automacao .ck-cartao {
+  padding: 20px 24px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra); color: var(--nl-tx);
+}
+#tab-panel-automacao .ck-cartao__meta { color: var(--nl-mut); font-size: 12px; }
+#tab-panel-automacao .ck-cartao__titulo, #tab-panel-automacao .ck-secao-titulo { color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+#tab-panel-automacao .ck-btn {
+  height: 36px; min-height: 36px; padding: 0 14px; border-radius: var(--nl-raio-controle); border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); font: 500 13px/1 var(--fonte-corpo);
+}
+#tab-panel-automacao .ck-btn--icone { width: 36px; padding: 0; }
+#tab-panel-automacao .ck-btn:not(:disabled):hover { border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .07); color: var(--nl-tx); }
+#tab-panel-automacao .ck-btn--primario { border-color: var(--f4-pri); background: var(--f4-pri); color: var(--f4-pri-tx); font-weight: 600; }
+#tab-panel-automacao .ck-btn--primario:not(:disabled):hover { border-color: var(--f4-pri-hover); background: var(--f4-pri-hover); color: var(--f4-pri-tx); }
+#tab-panel-automacao .ck-btn--fantasma { border-color: transparent; background: transparent; color: var(--nl-mut); }
+#tab-panel-automacao .ck-btn--fantasma:not(:disabled):hover { border-color: var(--nl-bd2); background: var(--nl-card2); color: var(--nl-tx); }
+#tab-panel-automacao .ck-btn--perigo { border-color: rgba(var(--nl-r), .45); color: var(--nl-rtx); }
+#tab-panel-automacao .ck-btn--perigo:not(:disabled):hover { border-color: rgb(var(--nl-r)); background: rgba(var(--nl-r), .08); color: var(--nl-rtx); }
+#tab-panel-automacao .ck-btn:disabled, #tab-panel-automacao .ck-btn[aria-disabled="true"] { opacity: .5; }
+#tab-panel-automacao .ck-btn:focus-visible, #tab-panel-automacao :is(.nl-f4-aba, .nl-f4-bolinha, .nl-f4-ver, summary):focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+#tab-panel-automacao .ck-entrada {
+  height: 36px; border-color: var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font-size: 13px;
+}
+#tab-panel-automacao .ck-entrada:focus { border-color: rgb(var(--nl-i)); }
+@media (max-width: 767.98px), (pointer: coarse) {
+  #tab-panel-automacao .ck-btn { min-height: 44px; }
+  #tab-panel-automacao .ck-btn--icone { width: 44px; min-width: 44px; }
+  #tab-panel-automacao .ck-entrada { height: 44px; }
+}
+
+/* ---------- 4. Selo de status (rotinas, chip do Chrome, histórico) ---------- */
+#tab-panel-automacao :is(.nl-f4-selo, #automacao-estado.ck-badge) {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border: 1px solid rgba(var(--f4-ac, 100, 116, 139), .38); border-radius: 999px;
+  background: rgba(var(--f4-ac, 100, 116, 139), .12); color: var(--f4-actx, var(--nl-mut)); font: 500 12px/1 var(--fonte-corpo); white-space: nowrap;
+}
+#tab-panel-automacao #automacao-estado.ck-badge { height: 28px; padding: 0 12px; font-size: 13px; }
+#tab-panel-automacao #automacao-estado.ck-badge strong { font-weight: 600; }
+#tab-panel-automacao :is(.nl-f4-selo, #automacao-estado.ck-badge) .ck-ico { width: 12px; height: 12px; flex: none; }
+
+/* ---------- 5. Aviso de login ---------- */
+#tab-panel-automacao #automacao-aviso-login.ck-aviso {
+  grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 14px 20px; border: 1px solid rgba(var(--nl-a), .5); border-radius: 16px;
+  background: rgba(var(--nl-a), .10); color: var(--nl-atx);
+}
+#tab-panel-automacao #automacao-aviso-login .ck-secao-titulo, #tab-panel-automacao #automacao-aviso-login .ck-cartao__meta { color: var(--nl-atx); }
+#tab-panel-automacao #automacao-aviso-login .ck-secao-titulo { font-size: 14px; }
+
+/* ---------- 6. Cabeçalho: nome do Chrome, chip de estado, Backups e Login ---------- */
+#tab-panel-automacao .ck-chrome { align-items: center; gap: 10px 12px; padding: 14px 24px; }
+#tab-panel-automacao .ck-chrome__nome { gap: 10px; color: var(--nl-tx); font-size: 15px; font-weight: 600; }
+#tab-panel-automacao .ck-chrome__nome .ck-ico { color: var(--nl-itx); }
+#tab-panel-automacao .ck-chrome__det { color: var(--nl-mut); font-size: 13px; }
+@media (max-width: 767.98px) {
+  #tab-panel-automacao .ck-chrome { padding: 14px 16px; }
+  #tab-panel-automacao .ck-chrome .ck-espaco { display: none; }
+}
+
+/* ---------- 7. Trilha de 3 bolinhas (SharePoint, SoftExpert, Rotina Completa) ---------- */
+section[data-automacao-regiao="rotinas"] { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.nl-f4-trilha { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.nl-f4-passo { position: relative; display: flex; justify-content: center; }
+/* Fio entre duas bolinhas: o cinza é a pista; o verde cresce por scaleX quando a etapa da esquerda está ok. */
+.nl-f4-passo:not(:last-child)::before, .nl-f4-passo:not(:last-child)::after {
+  content: ""; position: absolute; top: calc(var(--f4-bolinha) / 2 - 1.5px); left: 50%; width: 100%; height: 3px; border-radius: 3px;
+}
+.nl-f4-passo:not(:last-child)::before { background: var(--nl-bd2); }
+.nl-f4-passo:not(:last-child)::after { background: rgb(var(--nl-e)); transform: scaleX(0); transform-origin: left center; }
+.nl-f4-passo[data-ok]:not(:last-child)::after { transform: scaleX(1); }
+.nl-f4-bolinha {
+  position: relative; z-index: 1; display: grid; place-items: center; flex: none; width: var(--f4-bolinha); height: var(--f4-bolinha); min-height: 0; padding: 0;
+  border: 2px solid rgba(var(--f4-ac, 100, 116, 139), .55); border-radius: 50%; background: var(--nl-card); color: var(--f4-actx, var(--nl-mut)); font: 600 14px/1 var(--fonte-corpo); cursor: pointer;
+}
+.nl-f4-bolinha[data-status] { background: color-mix(in srgb, rgb(var(--f4-ac)) 14%, var(--nl-card)); }
+.nl-f4-bolinha:hover { border-color: rgb(var(--f4-ac, 100, 116, 139)); }
+.nl-f4-bolinha[data-sel] { box-shadow: 0 0 0 3px var(--cor-fundo, var(--nl-bg)), 0 0 0 5px rgb(var(--f4-ac, var(--nl-i))); }
+@media (max-width: 767.98px), (pointer: coarse) {
+  #tab-panel-automacao { --f4-bolinha: 44px; }
+}
+
+/* ---------- 8. Abas de rotina ---------- */
+.nl-f4-abas {
+  display: inline-flex; align-self: flex-start; gap: 4px; max-width: 100%; padding: 3px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card2);
+}
+.nl-f4-aba {
+  display: flex; align-items: center; justify-content: center; height: 36px; min-height: 0; padding: 0 18px; border: 0; border-radius: 999px; background: none; color: var(--nl-mut);
+  font: 500 13px/1 var(--fonte-corpo); white-space: nowrap; cursor: pointer;
+}
+.nl-f4-aba:hover { color: var(--nl-tx); }
+.nl-f4-aba[aria-selected="true"] { background: var(--nl-card); box-shadow: 0 0 0 1px var(--nl-bd2); color: var(--nl-tx); }
+.nl-f4-aba:focus-visible { outline-offset: -2px; }
+@media (max-width: 767.98px) {
+  .nl-f4-abas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: stretch; border-radius: 22px; }
+  .nl-f4-aba { min-height: 44px; padding: 0 8px; }
+}
+
+/* ---------- 9. Painéis das rotinas ---------- */
+.nl-f4-painel { position: relative; display: flex; flex-direction: column; gap: 18px; }
+.nl-f4-painel[hidden], #sebrae-novos-painel[hidden] { display: none; }
+.nl-f4-painel__cab { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.nl-f4-painel__titulo { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+.nl-f4-painel__selo { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.nl-f4-painel__corpo { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.nl-f4-ico { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px; background: rgba(var(--nl-i), .14); color: var(--nl-itx); }
+.nl-f4-ico .ck-ico { width: 16px; height: 16px; }
+.nl-f4-itens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.nl-f4-item {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2);
+}
+.nl-f4-item[data-estado="em-andamento"] { border-color: rgba(var(--nl-i), .55); }
+.nl-f4-item__nome { display: flex; flex: 1 1 120px; align-items: center; gap: 8px; min-width: 0; color: var(--nl-tx); font-size: 13px; font-weight: 500; }
+.nl-f4-item__titulo { min-width: 0; overflow-wrap: anywhere; }
+.nl-f4-item .nl-f4-btn { margin-left: auto; }
+.nl-f4-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* O balão do ⓘ ancora no painel (não no ícone): a largura dele nunca passa da do cartão. Até 640px vale o fixed de ux-refinements.css. */
+@media (min-width: 641px) {
+  .nl-f4-painel .info-tip { position: static; }
+  .nl-f4-painel .info-tip .info-tip-text { inset-inline: 12px; width: auto; max-width: none; }
+}
+#tab-panel-automacao .info-tip-trigger { min-height: 0; color: var(--nl-mut); }
+@media (max-width: 767.98px) {
+  .nl-f4-itens { grid-template-columns: minmax(0, 1fr); }
+  #tab-panel-automacao .ck-cartao { padding: 16px; }
+}
+
+/* Inventários: três etapas e a barra de progresso (percentual do log ao vivo). */
+.nl-f4-etapas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.nl-f4-etapa { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 0 24px; }
+.nl-f4-etapa:first-child { padding-left: 0; }
+.nl-f4-etapa:last-child { padding-right: 0; }
+.nl-f4-etapa + .nl-f4-etapa::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--nl-bd); }
+.nl-f4-etapa__n { color: var(--nl-fraco); font: 500 12px/1 var(--fonte-mono); }
+.nl-f4-etapa strong { color: var(--nl-mut); font-size: 17px; font-weight: 500; }
+.nl-f4-etapa__k { color: var(--nl-mut); font-size: 13px; line-height: 1.5; }
+.nl-f4-etapa[data-acesa] :is(.nl-f4-etapa__n, strong, .nl-f4-etapa__k) { color: var(--nl-tx); }
+.nl-f4-fio { display: block; height: 3px; border-radius: 3px; background: var(--nl-bd2); overflow: hidden; }
+.nl-f4-fio > i { display: block; width: 100%; height: 100%; background: rgb(var(--nl-i)); transform: scaleX(0); transform-origin: left center; }
+.nl-f4-andamento { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.nl-f4-pct { color: var(--nl-tx); font: 500 22px/1 var(--fonte-mono); font-variant-numeric: tabular-nums; }
+.nl-f4-msg { margin: 0; color: var(--nl-mut); font-size: 13px; overflow-wrap: anywhere; }
+@media (max-width: 767.98px) {
+  .nl-f4-etapas { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .nl-f4-etapa, .nl-f4-etapa:first-child, .nl-f4-etapa:last-child { padding: 0; }
+  .nl-f4-etapa + .nl-f4-etapa::before { top: -7px; bottom: auto; width: auto; height: 1px; right: 0; }
+}
+
+/* ---------- 10. Cartão do SoftExpert (HTML estático; troca só o visual) ---------- */
+#tab-panel-automacao #sebrae-novos-painel { padding: 0; }
+#sebrae-novos-painel .ck-cartao__cab { padding: 20px 24px 0; border-bottom: 0; gap: 10px; }
+#sebrae-novos-painel .ck-cartao__corpo { gap: 14px; padding: 16px 24px 22px; }
+#sebrae-novos-painel .sebrae-importar { gap: 10px; }
+#sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes { gap: 8px; }
+#sebrae-novos-painel .sebrae-importar > .ck-grupo-botoes .ck-btn { height: 36px; }
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario { background: var(--f4-pri); border-color: var(--f4-pri); color: var(--f4-pri-tx); }
+#sebrae-novos-painel .sebrae-importar .ck-btn--primario:is(:hover, :active) { background: var(--f4-pri-hover); border-color: var(--f4-pri-hover); color: var(--f4-pri-tx); }
+#sebrae-novos-painel .ckp-arquivo { min-height: 40px; padding: 0 12px; border: 1px dashed var(--nl-bd2); border-radius: 14px; background: var(--nl-card2); }
+#sebrae-novos-painel .ckp-arquivo:is([data-estado="ok"], [data-estado="pronto"], [data-estado="selecionado"]) { border-style: solid; border-color: rgba(var(--nl-e), .45); background: rgba(var(--nl-e), .06); }
+#sebrae-novos-painel .ckp-arquivo[data-estado="erro"] { border-style: solid; border-color: rgba(var(--nl-r), .5); background: rgba(var(--nl-r), .05); }
+#sebrae-novos-painel .ckp-arquivo[data-arrastando="true"] { border-color: rgb(var(--nl-i)); background: rgba(var(--nl-i), .08); }
+#sebrae-novos-painel .ckp-arquivo__nome { color: var(--nl-tx); font-size: 13px; font-weight: 500; }
+#sebrae-novos-painel .ckp-arquivo__acoes .ck-btn--icone { width: 28px; height: 28px; min-height: 0; border: 0; }
+#sebrae-novos-painel .sebrae-agenda { gap: 8px 18px; }
+#sebrae-novos-painel .sebrae-agenda > p { color: var(--nl-mut); font-size: 12px; }
+#tab-panel-automacao .ck-campo + #dashboard-agendamento-status, #tab-panel-automacao #dashboard-agendamento-status + #sebrae-dashboard-status, #tab-panel-automacao #sebrae-dashboard-status + #sebrae-novos-resumo { margin-top: 0; }
+/* Repetir a cada: a caixa nativa vira interruptor; continua sendo o mesmo input (clique, teclado e leitor de tela). */
+#sebrae-novos-painel .sebrae-agenda .ck-campo__linha > label { display: inline-flex; align-items: center; gap: 10px; color: var(--nl-tx); font-size: 13px; font-weight: 500; cursor: pointer; }
+#dashboard-agendamento-ativo {
+  appearance: none; position: relative; flex: none; width: 38px; height: 22px; margin: 0; border: 1px solid var(--nl-bd2); border-radius: 999px; background: var(--nl-card2); cursor: pointer;
+}
+#dashboard-agendamento-ativo::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--nl-mut); }
+#dashboard-agendamento-ativo:checked { border-color: rgb(var(--nl-e)); background: rgba(var(--nl-e), .22); }
+#dashboard-agendamento-ativo:checked::after { background: rgb(var(--nl-e)); transform: translateX(16px); }
+#dashboard-agendamento-ativo:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+@media (max-width: 767.98px) {
+  #sebrae-novos-painel .ck-cartao__cab { padding: 16px 16px 0; }
+  #sebrae-novos-painel .ck-cartao__corpo { padding: 14px 16px 18px; }
+}
+
+/* ---------- 11. Últimas execuções ---------- */
+#tab-panel-automacao #automacao-historico-painel { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 20px 24px; }
+.nl-f4-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.nl-f4-cab__titulo { margin: 0; color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+#automacao-historico-painel #automacao-historico-resumo { padding: 0; color: var(--nl-mut); font-size: 12px; }
+.nl-f4-filtros { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nl-f4-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px 0 14px; border: 1px solid var(--nl-bd2); border-radius: 999px;
+  background: var(--nl-card); color: var(--nl-mut); font: 500 13px/1 var(--fonte-corpo); cursor: pointer; list-style: none; box-sizing: border-box; max-width: 100%; min-width: 0;
+}
+.nl-f4-chip::-webkit-details-marker { display: none; }
+.nl-f4-chip:hover, details[open] > .nl-f4-chip { border-color: rgba(var(--nl-i), .55); }
+.nl-f4-chip:focus-within { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+.nl-f4-chip__rotulo { color: var(--nl-mut); }
+.nl-f4-chip select {
+  appearance: none; width: auto; min-width: 0; max-width: 100%; flex: 0 1 auto; text-overflow: ellipsis; height: 100%; min-height: 0; padding: 0 2px 0 0; border: 0; background: transparent; color: var(--nl-tx); font: 600 13px/1 var(--fonte-corpo); cursor: pointer;
+}
+.nl-f4-chip select:focus { outline: none; }
+.nl-f4-chip select option { background: var(--nl-card); color: var(--nl-tx); }
+.nl-f4-chip > .ck-ico { flex: none; color: var(--nl-mut); pointer-events: none; }
+.nl-f4-periodo { position: relative; }
+.nl-f4-periodo > summary { padding-right: 12px; }
+.nl-f4-periodo__caixa {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; display: grid; gap: 12px; width: min(320px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--nl-bd2);
+  border-radius: 16px; background: var(--nl-card); box-shadow: var(--nl-sombra-flutua);
+}
+.nl-f4-campo { display: grid; gap: 4px; color: var(--nl-mut); font-size: 12px; }
+.nl-f4-campo input {
+  box-sizing: border-box; width: 100%; height: 36px; min-height: 0; padding: 0 10px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card2); color: var(--nl-tx); font: 400 13px/1 var(--fonte-corpo);
+}
+.nl-f4-campo input:focus { outline: none; border-color: rgb(var(--nl-i)); }
+.nl-f4-periodo__caixa .nl-f4-acoes { justify-content: flex-end; }
+.nl-f4-btn { white-space: nowrap; }
+#automacao-historico-painel #automacao-historico.nl-f4-corpo { max-height: none; padding: 0; overflow: hidden; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); }
+.nl-f4-corpo .ck-lista__vazio { padding: 28px 16px; color: var(--nl-mut); font-size: 13px; text-align: center; }
+.nl-f4-td-log { white-space: nowrap; }
+.nl-f4-ver {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--nl-itx); font: 600 13px/1 var(--fonte-corpo); cursor: pointer;
+}
+.nl-f4-ver:hover { background: rgba(var(--nl-i), .1); }
+#tab-panel-automacao .automation-history-origin, #tab-panel-automacao .automation-history-message { color: var(--nl-mut); font-size: 12px; }
+#tab-panel-automacao .automation-history-status { gap: 4px; }
+.nl-f4-pag { padding: 0; border: 0; color: var(--nl-mut); font-size: 13px; }
+#automacao-historico-painel .ck-paginacao.nl-f4-pag { border-top: 0; }
+.nl-f4-pag label { display: inline-flex; align-items: center; gap: 8px; }
+.nl-f4-pag .ck-entrada { width: auto; padding: 0 8px; }
+/* Tabela no desktop (a partir de 1200px, ao lado do Console); abaixo disso cada linha vira um cartão com os mesmos dados. */
+@media (min-width: 1200px) {
+  #automacao-historico .ck-tabela th { padding: 10px 16px; border-bottom: 1px solid var(--nl-bd); background: var(--nl-card2); color: var(--nl-mut); font-size: 12px; font-weight: 500; }
+  #automacao-historico .ck-tabela td { padding: 12px 16px; border-top: 1px solid var(--nl-bd); border-bottom: 0; color: var(--nl-tx2); font-size: 13px; vertical-align: middle; }
+  #automacao-historico .ck-tabela tbody tr:first-child > td { border-top: 0; }
+  #automacao-historico .ck-tabela tbody tr:hover { background: rgba(var(--nl-i), .06); }
+  #automacao-historico .ck-tabela th:nth-child(1) { width: 26%; }
+  #automacao-historico .ck-tabela th:nth-child(2) { width: 17%; }
+  #automacao-historico .ck-tabela th:nth-child(3) { width: 13%; }
+  #automacao-historico .ck-tabela th:nth-child(5) { width: 112px; }
+  .nl-f4-td-log { text-align: right; }
+}
+#automacao-historico .ck-tabela td[data-label="Início"], #automacao-historico .ck-tabela td[data-label="Duração"] { font: 500 12px/1.4 var(--fonte-mono); font-variant-numeric: tabular-nums; }
+@media (max-width: 1199.98px) {
+  #automacao-historico-painel #automacao-historico.nl-f4-corpo { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+  #automacao-historico .ck-tabela--cards tr { gap: 10px 14px; margin-bottom: 10px; padding: 14px 16px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card2); }
+  #automacao-historico .ck-tabela--cards tbody tr:last-child { margin-bottom: 0; }
+  #automacao-historico .ck-tabela--cards td { color: var(--nl-tx2); font-size: 13px; }
+  #automacao-historico .ck-tabela--cards td::before { color: var(--nl-mut); font-size: 12px; }
+  #automacao-historico .ck-tabela--cards td.nl-f4-td-log { align-items: flex-start; }
+}
+@media (max-width: 767.98px) {
+  .nl-f4-filtros { position: static; }
+  .nl-f4-periodo { position: static; }
+  .nl-f4-periodo__caixa { left: 0; right: 0; width: auto; }
+  .nl-f4-chip { min-height: 44px; }
+  .nl-f4-ver { min-height: 44px; }
+  .nl-f4-pag { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------- 12. Console ---------- */
+#tab-panel-automacao #automacao-andamento-painel.ck-console {
+  min-height: 0; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra); color: var(--nl-tx);
+}
+#automacao-andamento-painel .ck-console__cab { gap: 8px 10px; min-height: 0; padding: 18px 20px 12px; border-bottom: 0; }
+#automacao-andamento-painel .ck-console__titulo { color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+#automacao-andamento-painel .ck-ao-vivo { height: 22px; border-radius: 999px; background: rgba(var(--nl-e), .14); color: var(--nl-etx); }
+#automacao-andamento-painel .ck-ao-vivo__ponto { background: rgb(var(--nl-e)); }
+#automacao-andamento-painel .ck-console__exec { padding: 0; color: var(--nl-mut); font-size: 12px; }
+#automacao-andamento-painel .ck-console__ferramentas { gap: 8px 10px; padding: 0 20px 12px; border-bottom: 0; }
+#automacao-andamento-painel .ck-consulta legend { color: var(--nl-mut); font-size: 12px; }
+#automacao-andamento-painel .ck-log {
+  min-height: 160px; margin: 0 16px; padding: 6px 0; border: 1px solid var(--nl-bd); border-radius: 14px; background: var(--nl-bg);
+}
+#automacao-andamento-painel .ck-log__linha { padding: 6px 12px; }
+#automacao-andamento-painel .ck-log__hora, #automacao-andamento-painel .ck-log__origem { color: var(--nl-mut); font-size: 12px; }
+#automacao-andamento-painel .ck-log__msg { color: var(--nl-tx2); font-size: 12px; line-height: 1.6; }
+#automacao-andamento-painel .ck-console__rodape { flex-wrap: wrap; gap: 8px; padding: 14px 20px 18px; border-top: 0; }
+@media (max-width: 1199.98px) {
+  #automacao-andamento-painel .ck-log { max-height: 420px; }
+}
+
+/* ---------- 13. Janela Log completo ---------- */
+#ck-dialogo-log .nl-f4-dlg .ck-dialogo__cab { gap: 10px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--nl-bd); }
+#ck-dialogo-log .nl-f4-dlg .ck-dialogo__titulo { margin: 0; color: var(--nl-tx); font-size: 16px; font-weight: 600; }
+#ck-dialogo-log .nl-f4-dlg .ck-cartao__meta { color: var(--nl-mut); }
+#ck-dialogo-log .nl-f4-dlg .ck-log-bruto {
+  margin: 16px 20px 20px; padding: 12px 14px; border: 1px solid var(--nl-bd); border-radius: 14px; background: var(--nl-bg); color: var(--nl-tx2); font: 400 12px/1.8 var(--fonte-mono);
+}
+
+/* ---------- 14. Movimento (150 a 300 ms; nada anima com movimento reduzido) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .nl-f4-painel:not([hidden]) { animation: nl-sobe 260ms var(--nl-curva) both; }
+  .nl-f4-periodo[open] .nl-f4-periodo__caixa { animation: nl-sobe 200ms var(--nl-curva) both; }
+  .nl-f4-passo:not(:last-child)::after { transition: transform 300ms var(--nl-curva); }
+  .nl-f4-bolinha { transition: border-color 200ms var(--nl-curva), background-color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+  .nl-f4-aba { transition: background-color 200ms var(--nl-curva), color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva); }
+  .nl-f4-chip { transition: border-color 200ms var(--nl-curva); }
+  .nl-f4-chip > .ck-ico { transition: transform 200ms var(--nl-curva); }
+  .nl-f4-periodo[open] > summary > .ck-ico { transform: rotate(180deg); }
+  .nl-f4-fio > i { transition: transform 250ms var(--nl-curva); }
+  .nl-f4-ver, .nl-f4-item { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva); }
+  #automacao-historico .ck-tabela tbody tr { transition: background-color 200ms var(--nl-curva); }
+  #dashboard-agendamento-ativo, #dashboard-agendamento-ativo::after { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), transform 200ms var(--nl-curva); }
+  #tab-panel-automacao .ck-btn { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), color 200ms var(--nl-curva); }
+}

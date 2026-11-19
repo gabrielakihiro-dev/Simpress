@@ -1,7 +1,7 @@
 // Estado da aba Automação (F5), fora dos componentes: as ações vivem em acoes.ts e a aplicação as chama pela ponte
 // (frontend/src/aplicacao/pontes.ts) antes ou depois de o React desenhar a aba. Cada região da aba é uma raiz
 // React própria e todas assinam este mesmo store.
-import type { DescricaoEstado, Execucao, LogHistorico } from "./regras-puro";
+import { ABA_PADRAO, type DescricaoEstado, type Execucao, type LogHistorico } from "./regras-puro";
 
 export interface OpcoesLog {
   tipo: "inicial" | "sem-data" | "carregando" | "lista" | "erro";
@@ -23,6 +23,7 @@ export interface EstadoAutomacao {
   botoesProntos: boolean; // só depois da primeira atualização os botões ganham disabled/aria-disabled
   descricao: DescricaoEstado | null; // null até o primeiro estado real da API
   verBackups: boolean;
+  abaRotina: string; // aba aberta no seletor de rotinas (id de ABAS_ROTINA em regras-puro.ts)
   ultimasPorRotina: Record<string, Execucao | null>;
   logMostrado: boolean; // false até a primeira leitura do log: o modo ainda diz "execução mais recente"
   linhasAoVivo: string[];
@@ -72,6 +73,7 @@ let estado: EstadoAutomacao = {
   botoesProntos: false,
   descricao: null,
   verBackups: false,
+  abaRotina: ABA_PADRAO,
   ultimasPorRotina: {},
   logMostrado: false,
   linhasAoVivo: [],

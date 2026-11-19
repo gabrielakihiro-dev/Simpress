@@ -229,7 +229,9 @@ function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {}, cont
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
   // dispara(id, tipo, evento): chama os ouvintes que o painel registrou naquele elemento (cliques e teclas das sub-abas da F6).
   const dispara = (id, tipo, evento = {}) => ouvintesElemento.filter(([alvo, t]) => alvo === id && t === tipo).forEach(([, , fn]) => fn(evento));
-  return { api, el, esc, dispara };
+  // emite(tipo, detail): chama os ouvintes que o painel registrou no documento (ex.: simpress:resumo-desatualizado).
+  const emite = (tipo, detail) => ouvintes.filter(([t]) => t === tipo).forEach(([, fn]) => fn({ detail }));
+  return { api, el, esc, dispara, emite };
 }
 
 test("Voltar retorna ao painel anterior e, sem anterior, fecha para a tela principal", async () => {
@@ -747,7 +749,7 @@ test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do rend
   const ordem = [];
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
-  const { api } = criarAmbientePaineis({
+  const { api, emite } = criarAmbientePaineis({
     apiFetch,
     appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
   });
@@ -757,6 +759,7 @@ test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do rend
     await api.abrirPainelCockpit("comparacao", "sem-acesso");
     assert.deepEqual(ordem, ["aba:divergencias", "render", "aba:sem-acesso"]);
     ordem.length = 0;
+    emite("simpress:resumo-desatualizado");
     await api.abrirPainelCockpit("comparacao");
     assert.deepEqual(ordem, ["render"], "reabrir o painel já aberto, sem aba pedida, não troca a aba");
   } finally { delete global.document; }
@@ -790,6 +793,71 @@ test("abrirPainelCockpit('comparacao') sem painel aberto volta a Divergências a
   try {
     await api.abrirPainelCockpit("comparacao");
     assert.deepEqual(ordem, ["aba:divergencias", "render"]);
+  } finally { delete global.document; }
+});
+
+test("Resumo (F3) carrega uma vez: voltar de outra aba não busca de novo; inventário, painel ou série novos recarregam", async () => {
+  const pedidos = [];
+  const ordem = [];
+  const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  const apiFetch = async url => { pedidos.push(url); return url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento }; };
+  const { api, emite } = criarAmbientePaineis({
+    apiFetch,
+    appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
+  });
+  global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
+  const reabrir = async aba => { pedidos.length = 0; ordem.length = 0; await api.fecharPainelCockpit(); await api.abrirPainelCockpit("comparacao", aba); };
+  try {
+    await api.abrirPainelCockpit("comparacao");
+    assert.deepEqual(pedidos, ["/api/historico-comparacoes", "/api/historico-comparacoes/4"]);
+    await reabrir();
+    assert.deepEqual(pedidos, [], "voltar sem mudança não busca nada");
+    assert.deepEqual(ordem, ["aba:divergencias"], "vindo de outra aba volta a Divergências, sem render");
+    await reabrir("sem-acesso");
+    assert.deepEqual(ordem, ["aba:divergencias", "aba:sem-acesso"], "a aba pedida (sino) vale sem recarregar");
+    assert.deepEqual(pedidos, []);
+    // O painel de 5 em 5 min: a primeira chave vista e uma chave nova marcam mudança; a mesma chave, não.
+    emite("simpress:painel-atualizado", { ultima_comparacao: { id: "4" } });
+    await reabrir();
+    assert.equal(pedidos[0], "/api/historico-comparacoes", "primeira chave do painel recarrega");
+    emite("simpress:painel-atualizado", { ultima_comparacao: { id: "4" } });
+    await reabrir();
+    assert.deepEqual(pedidos, [], "mesma chave do painel não recarrega");
+    emite("simpress:painel-atualizado", { ultima_comparacao: { id: "5" } });
+    await reabrir();
+    assert.equal(pedidos[0], "/api/historico-comparacoes", "comparação nova no painel recarrega");
+    emite("simpress:resumo-desatualizado");
+    await reabrir();
+    assert.equal(pedidos[0], "/api/historico-comparacoes", "inventário trocado ou restaurado recarrega");
+    for (const nome of ["simpress:usuarios-equipamento-atualizados", "simpress:chamados-atualizados"]) {
+      emite(nome);
+      await reabrir();
+      assert.equal(pedidos[0], "/api/historico-comparacoes", `${nome} recarrega`);
+    }
+    pedidos.length = 0;
+    await api.fecharPainelCockpit();
+    await api.abrirComparacaoDaSerie("SN-1");
+    assert.equal(pedidos[0], "/api/historico-comparacoes", "série pedida pela Home recarrega para achar a linha");
+  } finally { delete global.document; }
+});
+
+test("Resumo (F3) com falha na carga tenta de novo ao voltar", async () => {
+  let falhar = true;
+  const pedidos = [];
+  const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  const apiFetch = async url => {
+    pedidos.push(url);
+    if (falhar) throw new Error("fora do ar");
+    return url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  };
+  const { api } = criarAmbientePaineis({ apiFetch, appExtra: { renderizarResultadoComparacao() {}, selecionarAbaResumo() {} } });
+  try {
+    await api.abrirPainelCockpit("comparacao");
+    falhar = false;
+    pedidos.length = 0;
+    await api.fecharPainelCockpit();
+    await api.abrirPainelCockpit("comparacao");
+    assert.deepEqual(pedidos, ["/api/historico-comparacoes", "/api/historico-comparacoes/4"]);
   } finally { delete global.document; }
 });
 
@@ -827,7 +895,7 @@ test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há
     if (url === "/api/historico-comparacoes" && segurar) await segurar;
     return url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
   };
-  const { api } = criarAmbientePaineis({
+  const { api, emite } = criarAmbientePaineis({
     apiFetch,
     appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
   });
@@ -838,6 +906,7 @@ test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há
     // Com painéis, uma abertura mais nova vence: a antiga não troca a aba depois.
     global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
     ordem.length = 0;
+    emite("simpress:resumo-desatualizado"); // sem mudança, as aberturas reaproveitariam a tela sem rede
     let soltar;
     segurar = new Promise(resolve => { soltar = resolve; });
     const antiga = api.abrirPainelCockpit("comparacao", "sem-acesso");
@@ -1189,6 +1258,28 @@ async function comRelatorio(corpo) {
 }
 
 const textoDe = no => (no.ownText || "") + no.children.map(textoDe).join("");
+
+test("Relatório mensal (F8) carrega uma vez: voltar no mesmo mês não busca; OS ou painel novos recarregam sem limpar a tela", async () => {
+  await comRelatorio(async ({ api, servidor, abrir, emite, el }) => {
+    assert.ok(servidor.pedidos.some(url => url.startsWith("/api/relatorio-mensal/dados")));
+    const voltar = async () => { servidor.pedidos.length = 0; await api.fecharPainelCockpit(); await abrir(); };
+    await voltar();
+    assert.deepEqual(servidor.pedidos, [], "mesmo mês, sem mudança: nada a buscar");
+    await api.fecharPainelCockpit();
+    emite("simpress:chamados-atualizados"); // OS importadas com o F8 fechado
+    servidor.pedidos.length = 0;
+    await abrir();
+    assert.ok(servidor.pedidos.some(url => url.startsWith("/api/relatorio-mensal/dados")), "OS novas recarregam ao voltar");
+    assert.equal(el("cockpit-monthly-attention").hidden, false, "recarga discreta: a tela não é limpa");
+    await voltar();
+    assert.deepEqual(servidor.pedidos, [], "depois da recarga, voltar de novo não busca");
+    await api.fecharPainelCockpit();
+    emite("simpress:painel-atualizado");
+    servidor.pedidos.length = 0;
+    await abrir();
+    assert.ok(servidor.pedidos.some(url => url.startsWith("/api/relatorio-mensal/dados")), "painel com chave nova recarrega");
+  });
+});
 
 test("Relatório mensal (F8): abre na Visão geral e preenche painéis, seções e contadores", async () => {
   await comRelatorio(async ({ el, aba, painel, visiveis, selecionada, tabindices }) => {

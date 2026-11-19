@@ -97,6 +97,11 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         result = services.runner().history_page(limite, pagina, start=data_inicio, end=data_fim, routine=rotina, status=status)
         return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
+    @router.get("/api/automacao/historico/ultimas")
+    def ultimas_por_rotina(rotina: list[RotinaNome | Literal["ux_apelidos"]] = Query(..., max_length=11)):
+        """Última execução de cada rotina pedida (null quando não houver), numa só leitura do histórico."""
+        return JSONResponse({"ultimas": services.runner().latest_by_routine(rotina)}, headers={"Cache-Control": "no-store"})
+
     @router.get("/api/automacao/execucoes/{execucao_id}/log")
     def log_execucao_automacao(execucao_id: str, linhas: int = Query(200, ge=1, le=500)):
         result = services.runner().execution_log(execucao_id, linhas)

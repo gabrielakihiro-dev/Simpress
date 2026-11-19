@@ -5,7 +5,7 @@ Valem junto com o `AGENTS.md` da raiz (não repetidas aqui); texto integral no d
 ## Sebrae e Chamados (F5) — doc `docs/operacao/sincronizar-chamados-sebrae.md`
 
 - Chamado novo = `UTIC-AAAA-N` ausente da coluna C do Dashboard; o Dashboard só é gravado no arquivo gerado, nunca no Excel Online nem no SharePoint (`sebrae_dashboard*.py`).
-- `Tabela3`: Q, T, U e V são fórmulas (nunca grave valor); W não se toca; C nunca é reescrita; campo em branco nunca apaga o existente (`sebrae_dashboard_gravacao.py`).
+- `Tabela3`: Q, T, U e V são fórmulas (nunca grave valor); W não se toca; C nunca é reescrita; campo em branco nunca apaga o existente, salvo `limpar_e` (a E, só por clique em Remover numa OS sem relação com o chamado, autorizado em 18/11/2026) (`sebrae_dashboard_gravacao.py`).
 - Observação e destaque só em `data/state/sebrae_observacoes.json`, nunca em planilha, SharePoint ou SoftExpert (`sebrae_observacoes.py`).
 - Finalizar é irreversível, só a pedido do usuário, um a um; descrição vazia é recusada antes de qualquer clique (`sebrae_finalizacao.py`).
 - Sugestão de A, B e J nunca é salva sozinha; IA opcional só com `SIMPRESS_SUGESTAO_IA=1` e texto mascarado (`sebrae_categoria*.py`).

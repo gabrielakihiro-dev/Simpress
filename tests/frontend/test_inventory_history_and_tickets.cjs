@@ -41,7 +41,7 @@ test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tra
 
 test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {
   assert.match(appHtml, /id="modal-atualizar-planilhas"/);
-  assert.ok(appHtml.includes('href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer"'));
+  assert.ok(appHtml.includes('href="/api/config/local/endpoint/computadores" target="_blank" rel="noopener noreferrer"'));
   assert.ok(appHtml.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
   assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
   assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);

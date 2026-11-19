@@ -7,6 +7,7 @@ reads files or opens a browser; ``domains/sebrae_dashboard.py`` decides what to 
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
 from domains.effective_alias import mac_endpoint_serial_key, strip_manual_alias_marker
@@ -51,8 +52,18 @@ def apelidos_por_serie(equipamentos: Iterable[Mapping[str, Any]]) -> Dict[str, s
     return {serie: apelido for serie, apelido in apelidos.items() if serie not in ambiguas}
 
 
-def _palavras(texto: Any) -> str:
+def _palavras_calculadas(texto: Any) -> str:
     return " " + " ".join("".join(c if c.isalnum() else " " for c in normalize_search_term(texto)).split()) + " "
+
+
+@lru_cache(maxsize=4096)
+def _palavras_de_str(texto: str) -> str:
+    return _palavras_calculadas(texto)
+
+
+def _palavras(texto: Any) -> str:
+    # Nomes dos registros se repetem a cada chamado: memoriza só str; None e outros tipos seguem o caminho sem cache.
+    return _palavras_de_str(texto) if isinstance(texto, str) else _palavras_calculadas(texto)
 
 
 def pessoas_citadas(descricao: Any, solicitante: Any, registros: Iterable[Mapping[str, Any]]) -> List[str]:

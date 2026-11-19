@@ -186,7 +186,12 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   // Successful reads are reused between event selections; invalidated when the Comparação panel opens or inventories change.
   let semUsuarioCache: SemUsuario | null = null;
   let semUsuarioGeracao = 0;
-  function invalidarSemUsuarioResumo(): void { semUsuarioCache = null; semUsuarioGeracao += 1; }
+  // Inventário trocado ou restaurado: o Resumo (F3) recarrega na próxima abertura (ferramentas-cockpit).
+  function invalidarSemUsuarioResumo(): void {
+    semUsuarioCache = null;
+    semUsuarioGeracao += 1;
+    if (typeof document !== "undefined") document.dispatchEvent?.(new CustomEvent("simpress:resumo-desatualizado"));
+  }
 
   // Notebooks without a logged user in the current inventory (same rule and endpoint as the Home chip).
   // Never throws: a failure becomes {estado: "erro"} so the rest of the Resumo still renders.
