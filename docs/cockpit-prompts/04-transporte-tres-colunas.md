@@ -16,6 +16,24 @@ Cole este prompt no agente de código com o repositório Simpress aberto.
 
 ---
 
+## Novo layout (NL-F2, 18/11/2026): etapas recolhíveis e pré-visualização
+
+Substitui o grid de 3 colunas descrito abaixo (opção B do canvas "Novo layout"). IDs, `name`, `data-on-*`, `data-args`, `aria-*`, `required`, a geração da planilha e a validação não mudaram. Marcação em `frontend/partials/transporte.html`, estilo em `static/styles/nl-f1-f2.css` (seção F2, tudo sob `#tab-panel-retirada-entrega`), lógica das etapas em `frontend/src/paineis/transporte/etapas.ts` (ligada por `estado.ts`).
+
+- **Cabeçalho:** "Transporte" com `#btn-historico-transferencias` ("Transferências geradas") e `#btn-nova-transferencia` ("+ Nova transferência", `aria-label` e `title` "Nova transferência"). O histórico saiu do banner do equipamento. O `app.css` deixa esse botão só com o ícone abaixo de 640 px; a seção F2 do `nl-f1-f2.css` devolve o rótulo.
+- **Faixa de avisos:** `#aviso-cliente-config` e `#aviso-contato-origem` com `#btn-configurar-cliente` e `#btn-configurar-contato-origem`, mesmas regras de `hidden` e mesmos textos.
+- **Linha de progresso:** 4 segmentos (concluída, atual, pendente); a barra anima em 700 ms (exceção aprovada, `docs/ui-motion/contrato-bento.md`); sem animação com `prefers-reduced-motion`.
+- **Quatro etapas numeradas e recolhíveis:** 1 Equipamento (reaproveita `#transfer-equipment-banner`; chips série, modelo, apelido, cidade), 2 Retirada, 3 Entrega e 4 Agenda (selo "automático": expediente, almoço e pausa; sem manhã/tarde e sem chips UTIC, que não voltam). Os blocos "Responsável na retirada" e "Responsável no destino" trazem avatar com iniciais, atualizado enquanto se digita (`iniciais` de `frontend/src/componentes`).
+- **Estado das etapas:** a etapa inicial é a primeira incompleta; a atual abre e leva o selo "Etapa atual"; a recolhida mostra chips-resumo e o selo ok / falta / automático. O cabeçalho é um botão (`#nlt-gatilho-N`, `aria-expanded`, `aria-controls="nlt-corpo-N"`); o corpo recolhido usa `hidden`. Ao gerar com campo obrigatório vazio em etapa recolhida, a etapa abre e o campo recebe o foco (também com o chip `#ux-pending-chip`, com a troca de filial e com "Duplicar destino" do histórico). Campo de etapa recolhida não está no DOM visível: testes que digitam ou escolhem abrem a etapa antes (`tests/e2e/support/etapas-transporte.cjs`, `abrirEtapaTransporte`).
+- **Coluna "Pré-visualização" (`#ck-previa-transporte`):** contador "N/M campos" com barra; checklist com selos; passos 01 Informar série, 02 Gerar, 03 Baixar; botão "Transporte" (`#btn-gerar-planilha`, mesmo handler e Ctrl+Enter), "Texto para Transporte", "Alterar Endereço" (`#btn-alterar-endereco`) e o link "N pendentes". A antiga barra fixa de ações foi absorvida aqui (acima de 1200 px a coluna acompanha a rolagem); a lista de 13 linhas ficou em "Detalhes da planilha".
+- **Telas menores:** abaixo de 768 px as etapas empilham e a pré-visualização vem depois delas; sem rolagem horizontal de 320 a 2560 px; temas claro e escuro.
+- **Textos aprovados:** "Pré-visualização", "Transporte" e o aviso `Planilha Exportada com Sucesso!`; "Prévia da planilha" e "Gerar planilha" não voltam.
+- **Testes:** `tests/e2e/react-bf1.spec.cjs` (baseline `transferencia-destino-escolhido-*`), `asset-updates`, `cockpit-layout` ("Transporte não tem mais OS por equipamento e a pré-visualização acompanha a rolagem"), `theme-toggle`, `regional-representative`, `ux-ticket`, `react-g7`, `info-tips-todos`, `ui` e `tests/frontend/test_inventory_transfer_copy.cjs`.
+
+As seções abaixo descrevem o layout anterior (3 colunas) e valem só como histórico dos campos e das regras de geração.
+
+---
+
 ## Etapa 4: Transporte — Três colunas (Retirada, Entrega, Pré-visualização)
 
 Referência visual: imagem 3 (Transporte com 3 colunas).
