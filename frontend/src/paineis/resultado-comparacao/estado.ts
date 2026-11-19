@@ -190,7 +190,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   function invalidarSemUsuarioResumo(): void {
     semUsuarioCache = null;
     semUsuarioGeracao += 1;
-    document.dispatchEvent(new CustomEvent("simpress:resumo-desatualizado"));
+    if (typeof document !== "undefined") document.dispatchEvent?.(new CustomEvent("simpress:resumo-desatualizado"));
   }
 
   // Notebooks without a logged user in the current inventory (same rule and endpoint as the Home chip).
