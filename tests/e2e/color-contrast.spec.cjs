@@ -35,11 +35,9 @@ for (const theme of ["dark", "light"]) {
     // Resumo (F3): cartão Ativos por regional (filtros + barras) dentro do painel de ferramenta.
     await openSidebarForTabs(page);
     await page.locator("#btn-resumo-aba").click();
-    // "Ativos por regional" só aparece na Visão geral (decisão de 14/11/2026).
+    // Novo layout (18/11/2026): "Ativos por regional" é cartão do bento, sempre à vista acima das sub-abas.
     await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
     await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
-    await page.locator("#resumo-aba-visao").click();
-    await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
     await expect(page.locator("#resumo-regionais .ck-barra")).toHaveCount(1);
     await expect(page.locator("#resumo-regionais-filtros .ck-pilula")).toHaveCount(2);

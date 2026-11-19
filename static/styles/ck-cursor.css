@@ -1,0 +1,21 @@
+/* Cursor do Novo layout (frontend/src/ui/cursor.ts; contrato: docs/ui-motion/contrato-bento.md).
+   Ponto + anel com inércia + onda de 250 ms no clique. O script só cria estes elementos com mouse e sem movimento reduzido. */
+.ck-cursor { --ck-cursor-cor: #4f46e5; position: fixed; inset: 0 auto auto 0; z-index: 2147483000; pointer-events: none; opacity: 0; }
+:root[data-theme="dark"] .ck-cursor { --ck-cursor-cor: rgb(129, 140, 248); }
+.ck-cursor--visivel { opacity: 1; }
+.ck-cursor__ponto, .ck-cursor__anel, .ck-cursor__onda { position: fixed; left: 0; top: 0; box-sizing: border-box; border-radius: 50%; pointer-events: none; }
+.ck-cursor__ponto { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--ck-cursor-cor); }
+.ck-cursor__anel { width: 30px; height: 30px; border: 1.5px solid color-mix(in srgb, var(--ck-cursor-cor) 70%, transparent); }
+.ck-cursor--abraco .ck-cursor__anel { border-color: color-mix(in srgb, var(--ck-cursor-cor) 80%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ck-cursor-cor) 10%, transparent); }
+.ck-cursor__onda { width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid color-mix(in srgb, var(--ck-cursor-cor) 45%, transparent); opacity: 0; }
+
+/* !important de propósito: com o cursor próprio na tela, regras como .ck-btn:hover { cursor: pointer } mostrariam dois cursores.
+   A classe só existe enquanto o cursor próprio está visível; campo de texto, Assistente e modal a retiram (cursor.ts). */
+html.ck-cursor-on, html.ck-cursor-on * { cursor: none !important; }
+
+@media print { .ck-cursor { display: none; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ck-cursor { transition: opacity 150ms ease-out; }
+  .ck-cursor__ponto, .ck-cursor__anel { transition: background-color 200ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out; }
+}

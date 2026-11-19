@@ -29,3 +29,24 @@ for (const oldFails of [false, true]) test(`estatísticas: ${oldFails ? "erro" :
     console.warn = previousWarn;
   }
 });
+
+// "Exportar Excel" só aparece quando há alteração exportável; sem contagem (exportação indisponível) o botão fica para o usuário verificar.
+for (const [rotulo, resposta, escondido] of [
+  ["0 alterações exportáveis esconde o botão", { exportacao_disponivel: true, total_alteracoes_exportaveis: 0 }, true],
+  ["1 alteração exportável mostra o botão", { exportacao_disponivel: true, total_alteracoes_exportaveis: 1 }, false],
+  ["contagem indisponível mostra o botão", { exportacao_disponivel: false, total_alteracoes_exportaveis: 0 }, false],
+]) test(`exportar Excel: ${rotulo}`, async () => {
+  const botao = { textContent: "", dataset: {}, classList: { toggle(nome, valor) { this[nome] = valor; } }, title: "" };
+  const anterior = global.document;
+  global.document = { getElementById: id => (id === "btn-exportar-equipamentos" ? botao : null) };
+  try {
+    const painel = createDashboard({
+      app: {}, transferUtils, motion: {}, dom: { pluralize: n => `${n} equipamentos` },
+      apiFetch: async () => ({ total_equipamentos: 20, total_unidades: 3, ...resposta }),
+    });
+    await painel.carregarEstatisticas();
+    assert.equal(botao.classList.hidden, escondido);
+  } finally {
+    global.document = anterior;
+  }
+});

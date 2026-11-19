@@ -1,0 +1,54 @@
+    <section id="tab-panel-home" class="ck-tela ck-tela--home" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+    <div class="ck-home">
+
+    <!-- COLUNA ESQUERDA: lista de equipamentos -->
+    <aside class="ck-lista" aria-label="Lista de equipamentos">
+      <div class="ck-filtros" role="group" aria-label="Filtros da lista de equipamentos">
+        <button type="button" class="ck-filtro" data-filter="todos" data-on-click="filtrarListaHome" data-args='["todos"]' aria-pressed="true">Todos<span class="ck-filtro__n" id="home-filter-total">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="sem-usuario" data-on-click="filtrarListaHome" data-args='["sem-usuario"]' aria-pressed="false">Sem usuário<span class="ck-filtro__n" id="home-filter-sem-usuario">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="7-dias" data-on-click="filtrarListaHome" data-args='["7-dias"]' aria-pressed="false" disabled>7+ dias<span class="ck-filtro__n" id="home-filter-7-dias">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="divergentes" data-on-click="filtrarListaHome" data-args='["divergentes"]' aria-pressed="false" disabled>Divergentes<span class="ck-filtro__n" id="home-filter-divergentes">—</span></button>
+      </div>
+
+      <div id="equipment-loading" class="ui-equipment-loading"></div>
+      <ul id="home-equipment-list" class="ck-itens" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true" data-estado="carregando"></ul>
+      <p id="home-list-empty" class="ck-lista__vazio" role="status" hidden>Nenhum equipamento encontrado.</p>
+      <div id="home-equipment-actions" class="ck-lista__acoes" role="group" aria-label="Ações do equipamento ativo" hidden></div>
+      <div class="ck-lista__rodape">
+        <span class="ck-lista__info">
+          <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
+        </span>
+        <button type="button" id="btn-home-list-more" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="carregarMaisItensHome" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>Carregar mais</button>
+      </div>
+
+      <section id="home-recentes" class="ck-recentes" aria-labelledby="home-recentes-titulo" hidden>
+        <div class="ck-recentes__cab">
+          <h2 id="home-recentes-titulo" class="ck-recentes__titulo">Recentes</h2>
+          <button type="button" id="btn-limpar-recentes" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
+        </div>
+        <ul id="home-recentes-lista" class="ck-recentes__lista"></ul>
+      </section>
+    </aside>
+
+    <!-- COLUNA DIREITA: detalhe do equipamento -->
+    <section class="ck-detalhe" aria-label="Detalhes do equipamento selecionado">
+
+      <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
+        <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
+        <div class="stale-base-alert-copy">
+          <h2 id="alerta-base-desatualizada-titulo" class="stale-base-alert-title">Base desatualizada</h2>
+          <p id="alerta-base-desatualizada-texto" class="stale-base-alert-text"></p>
+        </div>
+        <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="ck-btn ck-btn--secundario ck-btn--sm stale-base-alert-action">Atualizar base</button>
+      </section>
+
+      <div id="home-detail-empty" class="ck-detalhe__vazio">
+        <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg>
+        <p>Selecione um equipamento.</p>
+      </div>
+
+      <!-- include: partials/card-equipamento.html -->
+    </section>
+
+    </div>
+    </section>

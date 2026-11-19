@@ -729,8 +729,8 @@ def cobertura_reset(cenario="base"):
         hoje=lambda: date(*COBERTURA_HOJE),
         agora=lambda: COBERTURA_AGORA,
         manutencao=lambda: manutencao,
-        cadastro=lambda: [{"serial": "SINT-001", "retirada_cidade": "Cidade A"},
-                          {"serial": "SINT-002", "retirada_cidade": "Cidade B"}],
+        cadastro=lambda: [{"serial": "SINT-001", "retirada_cidade": "Cidade A", "modelo": "EliteBook 640 G10", "tipo": "Notebook"},
+                          {"serial": "SINT-002", "retirada_cidade": "Cidade B", "modelo": "ProDesk 400 G9", "tipo": "Micro Computador"}],
         history_file=lambda: state_dir / "historico_transferencias.json",
     ))
     api = FastAPI()
@@ -886,7 +886,7 @@ class Handler(BaseHTTPRequestHandler):
             globals()["automation_run"] = None
             globals()["automation_last_sebrae"] = query.get("ultimo_sebrae", ["0"])[0] == "1"
             rotina_ativa = query.get("run", [""])[0]
-            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae"):
+            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard"):
                 globals()["automation_run"] = {
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",

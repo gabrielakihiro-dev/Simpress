@@ -127,6 +127,9 @@ class OsNovaSugeridaRotasTest(unittest.TestCase):
     def os_nova(self):
         return self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"][0]["os_nova"]
 
+    def os_sem_relacao(self):
+        return self.cliente.get("/api/sebrae/novos").json()["importado"]["abertos"][0]["os_sem_relacao"]
+
     def atualizar(self, estado):
         return self.cliente.post("/api/sebrae/dashboard/atualizar", json={"versao_importacao": estado["versao"]})
 
@@ -203,6 +206,60 @@ class OsNovaSugeridaRotasTest(unittest.TestCase):
         self.assertEqual([(g["numero"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", ["E"])])
         saida = G.valores_dos_chamados(base64.b64decode(resposta.json()["conteudo_base64"]))
         self.assertEqual(saida[2][G.COLUNAS_DE_DADO.index("E")], "150")
+
+
+    def antiga(self, os_="100"):
+        """OS criada antes da abertura do chamado de teste (09/12/2025) e com assunto sem relação com ele."""
+        return {"ordem_servico": os_, "assunto": "Teclado", "descricao": "", "data_criacao": "2025-11-01T09:30:00"}
+
+    def registro(self):
+        return json.loads((fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json").read_text(encoding="utf-8"))
+
+    def test_e_sem_relacao_e_apontada_sem_nova_e_manter_silencia_sem_mexer_na_planilha(self):
+        estado = self.montar_cliente([self.antiga()])
+        self.assertIsNone(estado["abertos"][0]["os_nova"])  # a tela atual lê os_nova.nova: sem_relacao fica fora dela
+        os_nova = estado["abertos"][0]["os_sem_relacao"]
+        self.assertEqual(set(os_nova), {"tipo", "atual", "sinais"})
+        self.assertEqual((os_nova["tipo"], os_nova["atual"]["os"]), ("sem_relacao", "100"))
+        self.assertEqual(os_nova["sinais"], {"assunto": False, "numero_chamado": False, "data_anterior": True})
+        resposta = self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-manter", json={"os": "100"})
+        self.assertEqual((resposta.status_code, resposta.json(), resposta.headers["cache-control"]), (200, {"ok": True}, "no-store"))
+        self.assertEqual(self.registro(), {"version": 1, "recusadas": {}, "mantidas": {"UTIC-2026-0001": ["100"]}})
+        self.assertIsNone(self.os_sem_relacao())
+        self.assertEqual(self.atualizar(estado).status_code, 422)  # nada a gravar: a E segue 100
+
+    def test_remover_recusa_a_os_e_a_atualizacao_esvazia_so_a_e_dessa_os(self):
+        estado = self.montar_cliente([self.antiga()])
+        resposta = self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-remover", json={"os": "100"})
+        self.assertEqual((resposta.status_code, resposta.json()), (200, {"ok": True}))
+        self.assertEqual(self.registro(), {"version": 1, "recusadas": {"UTIC-2026-0001": ["100"]}, "removidas": {"UTIC-2026-0001": ["100"]}})
+        self.assertEqual((self.os_nova(), self.os_sem_relacao()), (None, None))  # recusada: sem aviso nem sugestão
+        resposta = self.atualizar(estado)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["E"])])
+        saida = G.valores_dos_chamados(base64.b64decode(resposta.json()["conteudo_base64"]))
+        entrada = G.valores_dos_chamados(sebrae_novos.caminho_planilha(self.caminhos).read_bytes())
+        coluna_e = G.COLUNAS_DE_DADO.index("E")
+        self.assertEqual((saida[2][coluna_e], entrada[2][coluna_e]), ("", "100"))
+        self.assertEqual([c for c in range(len(saida[2])) if saida[2][c] != entrada[2][c]], [coluna_e])
+
+    def test_remover_nao_limpa_a_e_com_vinculo_manual_nem_quando_a_e_ja_e_outra_os(self):
+        vinculo = {"fonte": "oracle", "serie": "SER1", "os": "100", "ano": 2026, "numero": "0001", "chamado": "UTIC-2026-0001", "origem": "manual"}
+        estado = self.montar_cliente([self.antiga()], vinculos=[vinculo])
+        self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-remover", json={"os": "100"})
+        self.assertEqual(self.atualizar(estado).status_code, 422)  # vínculo manual vence: E fica
+        estado = self.montar_cliente([self.antiga()])
+        self.cliente.put("/api/sebrae/chamados/UTIC-2026-0001/os-remover", json={"os": "999"})
+        self.assertEqual(self.atualizar(estado).status_code, 422)  # E é 100, a removida é 999
+
+    def test_manter_e_remover_com_dados_invalidos_dao_422_e_nao_gravam(self):
+        self.montar_cliente([self.antiga()])
+        arquivo = fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json"
+        for rota in ("os-manter", "os-remover"):
+            for numero, corpo in (("UTIC-2026-0001", {"os": "7400000;rm"}), ("UTIC-2026-0001", {"os": ""}), ("UTIC-2026-0001", {"os": "100", "extra": 1}), ("chamado-x", {"os": "100"})):
+                resposta = self.cliente.put(f"/api/sebrae/chamados/{numero}/{rota}", json=corpo)
+                self.assertEqual(resposta.status_code, 422, (rota, numero, corpo, resposta.text))
+        self.assertFalse(arquivo.exists())
 
 
 class RotasSebraeTest(RotasBase):

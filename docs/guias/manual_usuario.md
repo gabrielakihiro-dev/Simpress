@@ -138,21 +138,21 @@ O resultado traz, entre outras seções:
 - Cada linha tem um campo de **anotação** (até 2.000 caracteres). Ele salva sozinho e é incluído nas exportações. Use-o para registrar o que já foi verificado.
 - Notebooks próprios do Sebrae e hostnames de Curitiba já são tratados pelo sistema e não aparecem como erro; você não precisa fazer nada.
 
-**Exportar o resultado:** use o botão de exportar no resultado da comparação, ou, na janela do histórico (**Comparação** › **Histórico e ações completas**), escolha a data no seletor *Selecionar a data do histórico para exportar* e clique no botão de exportação. A confirmação exata é **Planilha Exportada com Sucesso!**.
+**Exportar o resultado:** na janela do histórico (**Comparação** › **Histórico e ações completas**), escolha a data no seletor *Selecionar a data do histórico para exportar* e clique no botão de exportação. A confirmação exata é **Planilha Exportada com Sucesso!**.
 
 **Comparar duas atualizações:** a tela **Evolução das atualizações** foi removida em 31/10/2026. A comparação de cada atualização fica em **Comparação** (menu **Ferramentas**); o aviso **Divergências novas** (Home e sino) traz o botão **Ver evolução**, que abre **Comparação**.
 
-**Exportar Excel** (barra da aba **Comparação**, F3, ao lado de **Exportar**) baixa o modelo com `Apelido` e `IdCliente` atualizados e inicia o envio dessa mesma planilha ao UX Simpress (autorizado em 03/11/2026). Por exemplo: o arquivo que acabou de baixar é o mesmo escolhido em **Enviar planilha**, sem procurar outro em Downloads. A rotina confirma o contrato configurado em `config/cliente.json` (**<contrato> - <nome do contrato>**), abre **Editar apelido e id**, envia e clica **Salvar edições** uma vez. Login/senha/MFA ficam com você no Chrome de automação. Acompanhe em **Automação (F4)**; pode cancelar ali.
+**Exportar Excel** (barra da aba **Comparação**, F3; só aparece quando há alteração para exportar) baixa o modelo com `Apelido` e `IdCliente` atualizados. Em seguida pergunta **Enviar ao UX Simpress?**: com **Enviar ao UX**, a mesma planilha é enviada ao UX Simpress (autorizado em 03/11/2026); com **Cancelar** ou Esc, só fica o download. Por exemplo: o arquivo que acabou de baixar é o mesmo escolhido em **Enviar planilha**, sem procurar outro em Downloads. A rotina confirma o contrato configurado em `config/cliente.json` (**<contrato> - <nome do contrato>**), abre **Editar apelido e id**, envia e clica **Salvar edições** uma vez. Login/senha/MFA ficam com você no Chrome de automação. Acompanhe em **Automação (F4)**; pode cancelar ali.
 
 **Planilha Exportada com Sucesso!** confirma o download. A atualização no UX tem mensagem e resultado separados: se houver erro de contrato/editor/arquivo, ela para antes de salvar; se o clique em salvar já ocorreu e o aviso não for claro, confira manualmente no UX antes de tentar novamente. Se a resposta do início se perder, consulte Automação (F4) antes de tentar de novo. A rotina não repete o clique. Os controles e o aviso real do UX ainda precisam de validação supervisionada; os testes usam uma bancada local. Pedir uma exportação no **Assistente** continua fornecendo apenas o arquivo para baixar e não inicia essa escrita externa.
 
 ## 6. Gerar uma transferência
 
 1. Na **Home**, pesquise o equipamento e selecione-o. Confira os dados do cartão (modelo, série, localidade).
-2. Abra manualmente a aba **Transporte** no menu lateral.
+2. Abra manualmente a aba **Transporte** no menu lateral. A aba tem quatro etapas (Equipamento, Retirada, Entrega e Agenda); a primeira incompleta abre sozinha e as outras ficam recolhidas, com um resumo e o selo ok, falta ou automático.
 3. Revise **origem** (retirada) e **destino** (entrega): CNPJ, endereço e contatos. O **Catálogo de unidades** ajuda a preencher.
 4. Preencha todos os campos obrigatórios: série; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega (e a duração da pausa, se o escritório fechar para o almoço). Botões como **+ Substituição** inserem observações prontas.
-5. Clique em **Transporte** (antigo **Gerar Planilha**), o primeiro botão do rodapé. O arquivo é baixado pelo navegador.
+5. Clique em **Transporte** (antigo **Gerar Planilha**), o botão principal da coluna **Pré-visualização**. O arquivo é baixado pelo navegador. Se faltar um campo obrigatório numa etapa recolhida, a etapa abre sozinha e o campo recebe o foco.
 6. Abra a planilha baixada e confira os dados antes de encaminhá-la.
 
 **Como confirmar:** o navegador baixa um `.xlsx` e aparece a confirmação **Planilha Exportada com Sucesso!**. As planilhas já geradas ficam listadas em **Transferências geradas** (botão na própria aba **Transporte**).

@@ -107,9 +107,10 @@ test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoCompara
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    // O F3 abre em Divergências, onde fica o KPI de localidade; a Visão geral não tem cartões.
+    // O F3 abre em Divergências, onde fica o KPI de localidade; o bento do topo não usa data-metric-tone e não há "Visão geral".
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#resumo-painel-visao [data-metric-tone]")).toHaveCount(0);
+    await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
+    await expect(page.locator(".nf3-topo [data-metric-tone]")).toHaveCount(0);
     await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     const divergente = page.locator("#comparacao-secao-localidade-divergente");
@@ -117,7 +118,7 @@ test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoCompara
     await expect(divergente).toBeInViewport();
 
     // Sem clicar na aba antes: a seção "Sem acesso há 7 dias" abre a aba Sem acesso sozinha.
-    await page.locator("#resumo-aba-visao").click();
+    await page.locator("#resumo-aba-apelidos").click();
     await expect(divergente).toBeHidden();
     expect(await page.evaluate(() => window.irParaSecaoComparacao("comparacao-secao-sem-acesso-7"))).toBe(true);
     await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
@@ -142,7 +143,7 @@ test("Resumo: navegarParaLinhaComparacao abre a sub-aba da linha antes de procur
     await expect(saiu).toBeInViewport();
 
     // LENTO está em duas abas e a chamada vem sem categoria: vale a categoria de maior prioridade (PRIORIDADE_CATEGORIAS_SERIE), Divergências.
-    await page.locator("#resumo-aba-visao").click();
+    await page.locator("#resumo-aba-apelidos").click();
     await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "LENTO" }));
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first()).toBeInViewport();
@@ -362,7 +363,7 @@ const toolComparison = {
     ausentes_no_endpoint: [], ausentes_em_detalhes: [],
   },
 };
-// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3 fica na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Lembretes só no menu, sem atalho (atalho vazio); os termos de entrega e devolução ficam dentro desse painel.
+// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Resumo F3, Chamados F5 e OS F6 ficam na barra principal; Histórico F7 e Relatório F8 só no menu (kbd); Lembretes só no menu, sem atalho (atalho vazio); os termos de entrega e devolução ficam dentro desse painel.
 const toolButtons = [
   ["#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "sebrae-chamados", "F5", "Chamados"],
   ["#btn-acompanhamento-chamados", "#btn-chamados-menu", "chamados", "F6", "OS"],
@@ -386,7 +387,8 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       await expect(page.locator("#home-filter-total")).toHaveText("1");
     });
     for (const [barra, item, tool, key, titulo] of toolButtons) {
-      const naBarra = barra === "#btn-resumo-aba" || (barra !== item && width >= 1200);
+      // Opção C (18/11/2026): Chamados F5 e OS F6 ficam na barra em toda largura; o menu não os repete.
+      const naBarra = barra === "#btn-resumo-aba" || barra !== item;
       if (naBarra) {
         await expect(page.locator(barra)).toHaveAttribute("title", `${titulo} (${key})`);
         await expect(page.locator(barra)).toBeVisible();
@@ -408,7 +410,7 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
       if (tool === "comparacao") {
-        // A Visão geral não tem cartões: mede também a faixa compacta de Divergências.
+        // Mede também a faixa compacta de Divergências (o bento do topo já foi medido acima).
         await page.locator("#resumo-aba-divergencias").click();
         await expect(page.locator("#resumo-painel-divergencias .resumo-cartoes")).toBeVisible();
         expect(await overflowingRight(page, "#cockpit-tool-panels"), "comparacao/divergencias").toEqual([]);
@@ -434,8 +436,8 @@ test("a real modal stays reachable on a short compact screen", async ({ page }) 
   await expect(page.locator("[aria-label='Fechar histórico de planilhas']")).toBeInViewport();
 });
 
-test("Transporte não tem mais OS por equipamento e a barra de ações fica na base da janela", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === "mobile", "a altura limitada da tela vale a partir de 1200px");
+test("Transporte não tem mais OS por equipamento e a pré-visualização acompanha a rolagem", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "a coluna fixa vale a partir de 1200px");
   await page.setViewportSize({ width: 1366, height: 600 });
   await page.goto("/");
   await page.locator("#tab-retirada-entrega").click();
@@ -443,29 +445,33 @@ test("Transporte não tem mais OS por equipamento e a barra de ações fica na b
   await expect(tela).toBeVisible();
   await expect(page.locator("#resumo-os-equipamento")).toHaveCount(0);
   await expect(page.locator("#ck-transp .ck-os, #ck-transp #ck-os-tabela")).toHaveCount(0);
+  // As quatro etapas abertas deixam o conteúdo mais alto que a janela.
+  for (const etapa of [1, 2, 3, 4]) {
+    const gatilho = page.locator(`#nlt-gatilho-${etapa}`);
+    if ((await gatilho.getAttribute("aria-expanded")) !== "true") await gatilho.click();
+  }
 
-  const barra = page.locator("#tab-panel-retirada-entrega .ck-acoes-barra");
-  await expect(barra).toBeVisible();
+  const previa = page.locator("#ck-previa-transporte");
+  await expect(previa).toBeVisible();
   const medir = () => page.evaluate(() => {
     const painel = document.getElementById("tab-panel-retirada-entrega");
-    const rect = document.querySelector("#tab-panel-retirada-entrega .ck-acoes-barra").getBoundingClientRect();
+    const rect = document.getElementById("ck-previa-transporte").getBoundingClientRect();
     return { bottom: rect.bottom, top: rect.top, inner: window.innerHeight, scroll: painel.scrollHeight, client: painel.clientHeight };
   });
 
-  // Conteúdo mais alto que a janela: a tela rola por dentro e a barra continua colada na base.
-  let medidas = await medir();
-  expect(medidas.scroll, "o conteúdo precisa ser mais alto que a tela para provar a barra fixa").toBeGreaterThan(medidas.client);
-  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
+  // Conteúdo mais alto que a janela: a tela rola por dentro e a pré-visualização continua na janela (sticky).
+  await tela.evaluate(node => { node.scrollTop = 0; });
+  const antes = await medir();
+  expect(antes.scroll, "o conteúdo precisa ser mais alto que a tela para provar a coluna fixa").toBeGreaterThan(antes.client);
   await tela.evaluate(node => { node.scrollTop = node.scrollHeight; });
-  medidas = await medir();
-  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
+  const depois = await medir();
+  expect(depois.top, "a pré-visualização não sai pelo topo").toBeGreaterThanOrEqual(0);
+  expect(depois.bottom, "a pré-visualização não sai pela base").toBeLessThanOrEqual(depois.inner + 1);
   await tela.evaluate(node => { node.scrollTop = 0; });
 
-  // Janela alta: a tela preenche a altura e a barra segue na base, sem rolagem da página.
+  // Janela alta: sem rolagem da página.
   await page.setViewportSize({ width: 1920, height: 1080 });
-  medidas = await medir();
-  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
-  // A folga legada do body (app.css) não pode criar uma faixa vazia rolável sob a barra; sobra só o ajuste de poucos px da barra superior.
+  // A folga legada do body (app.css) não pode criar uma faixa vazia rolável; sobra só o ajuste de poucos px da barra superior.
   expect(await page.evaluate(() => getComputedStyle(document.body).paddingBottom)).toBe("0px");
   const pagina = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
   expect(pagina[0] - pagina[1], JSON.stringify(pagina)).toBeLessThanOrEqual(16);

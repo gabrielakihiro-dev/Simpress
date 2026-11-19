@@ -64,22 +64,6 @@ export interface DadosSebraeNovos {
   novos?: { formulario?: ItemSebraeNovo[] };
 }
 
-export interface DadosEvolucao {
-  contagens?: { novos?: number; alterados?: number; iguais?: number; ausentes_arquivo?: number };
-  mudancas?: {
-    novos?: string[];
-    alterados?: { serie: string; campos?: { campo: string }[] }[];
-    ausentes_arquivo?: string[];
-  };
-  aviso_ausentes?: string;
-}
-
-export interface EvolucaoMontada {
-  resumo: string;
-  aviso: string;
-  linhas: [string, string][];
-}
-
 type FormatarHorario = (valor?: string) => string;
 
 /** Rótulo de uma importação no seletor de versões: horário e os nomes dos dois arquivos. */
@@ -95,45 +79,6 @@ export function rotuloImportacao(evento: EventoImportacao, formatarHorario: Form
 export function versaoAposCarga(historico: EventoImportacao[], escolhida: string, snapshotId?: string): string {
   if (historico.some(evento => evento.id === escolhida)) return escolhida;
   return snapshotId || historico[0]?.id || "";
-}
-
-/** Chave que decide se a comparação precisa ser recarregada. */
-export function chaveEvolucao(historico: EventoImportacao[], versao: string): string {
-  return `${versao}|${historico[0]?.id || ""}|${historico.length}`;
-}
-
-/** Texto do bloco de comparação quando não há versão anterior para comparar; null = há, vá à API. */
-export function textoSemComparacao(historico: EventoImportacao[], versao: string): string | null {
-  if (!versao) return "Nenhuma importação selecionada.";
-  const indice = historico.findIndex(evento => evento.id === versao);
-  const anterior = indice >= 0 ? historico[indice + 1] : null;
-  if (anterior) return null;
-  return historico.length > 1
-    ? "Esta é a importação mais antiga disponível. Selecione uma versão mais recente para comparar."
-    : "A primeira importação ficará registrada aqui para comparação com as próximas planilhas.";
-}
-
-export function idAnterior(historico: EventoImportacao[], versao: string): string {
-  const indice = historico.findIndex(evento => evento.id === versao);
-  return (indice >= 0 ? historico[indice + 1]?.id : "") || "";
-}
-
-export function montarEvolucao(dados: DadosEvolucao): EvolucaoMontada {
-  const contagens = dados.contagens || {};
-  const mudancas = dados.mudancas || {};
-  const alterados = Array.isArray(mudancas.alterados) ? mudancas.alterados : [];
-  const novos = Array.isArray(mudancas.novos) ? mudancas.novos : [];
-  const ausentes = Array.isArray(mudancas.ausentes_arquivo) ? mudancas.ausentes_arquivo : [];
-  const linhas: [string, string][] = [
-    ...novos.slice(0, 5).map((serie): [string, string] => ["Nova série:", serie]),
-    ...alterados.slice(0, 8).map((linha): [string, string] => [`${linha.serie}:`, (linha.campos || []).map(campo => campo.campo).join(", ")]),
-    ...ausentes.slice(0, 5).map((serie): [string, string] => ["Não consta na planilha atual:", serie]),
-  ];
-  return {
-    resumo: `Comparação com a versão anterior · ${Number(contagens.novos) || 0} novas · ${Number(contagens.alterados) || 0} alteradas · ${Number(contagens.iguais) || 0} sem mudança · ${Number(contagens.ausentes_arquivo) || 0} ausentes`,
-    aviso: dados.aviso_ausentes || "Ausência na planilha não confirma resolução.",
-    linhas,
-  };
 }
 
 export function rotuloImportacoesAntigas(quantidade: number): string {

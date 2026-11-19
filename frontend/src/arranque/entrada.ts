@@ -11,6 +11,7 @@ import "../comum/api-errors.ts";
 import "../api.ts";
 import "../ui/ui-motion.ts";
 import "../ui/bento.ts";
+import "../ui/cursor.ts";
 import "../ui/accessible-dialogs.ts";
 import "../ui/file-picker.ts";
 import "../ui/ui-notifications.ts";

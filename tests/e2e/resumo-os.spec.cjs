@@ -126,7 +126,7 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(simpressOnly.locator(".ticket-summary-description")).toHaveText("Descrição não informada");
   await expect(seriesGroup.locator(".ticket-summary-description-label")).toHaveCount(0);
   // A célula da OS fica alinhada ao topo, como as demais.
-  const osTop = await unitedRow.locator('td[data-label="OS"] button').evaluate(b => b.getBoundingClientRect().top - b.closest("td").getBoundingClientRect().top);
+  const osTop = await unitedRow.locator('td[data-label="OS"] .ticket-summary-order-link').evaluate(b => b.getBoundingClientRect().top - b.closest("td").getBoundingClientRect().top);
   const serieTop = await unitedRow.locator('td[data-label="Série"]').evaluate(td => { const r = document.createRange(); r.selectNodeContents(td); return r.getBoundingClientRect().top - td.getBoundingClientRect().top; });
   expect(Math.abs(osTop - serieTop)).toBeLessThan(6);
   const serialFont = await seriesGroup.first().locator('td[data-label="Série"]').evaluate(element => getComputedStyle(element).fontFamily);
@@ -156,11 +156,14 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(linkedOracle.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
   await expect(linkedOracle.locator("input")).toHaveValue("1116");
 
-  // O botão da OS abre o Andamento da série no próprio painel OS (sem modal).
-  await linkedOrder.getByRole("button", {
-    name: "Abrir andamento em Chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
-  }).click();
+  // O número da OS é só texto: clicar nele não abre nada. Só o botão Andamento da série abre, no próprio painel OS (sem modal).
   const andamento = page.locator('#cockpit-tickets-os tr[data-andamento="DEMO-SN-001"]');
+  await linkedOrder.locator('td[data-label="OS"] .ticket-summary-order-link').click();
+  await expect(andamento).toHaveCount(0);
+  const botaoAndamento = page.locator('#cockpit-tickets-os .ck-os__andamento-btn[data-serie="DEMO-SN-001"]');
+  await expect(botaoAndamento).toHaveAttribute("aria-expanded", "false");
+  await botaoAndamento.click();
+  await expect(botaoAndamento).toHaveAttribute("aria-expanded", "true");
   await expect(andamento).toBeVisible();
   await expect(andamento.getByRole("region", { name: "Andamento registrado da série DEMO-SN-001" })).toBeVisible();
   await expect(andamento).toContainText("Ordens no Oracle");

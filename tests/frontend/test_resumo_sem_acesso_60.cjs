@@ -33,7 +33,7 @@ test("Resumo lists notebooks past 60 days after the 7+ table, with estimated day
   assert.match(linhas[0][0], /~64[\s\S]*Saiu para Ausentes no Endpoint/);
   assert.match(linhas[1][0], />61<[\s\S]*Ainda em Sem acesso há 7 dias ou mais/);
   assert.match(linhas[1][0], /&lt;b&gt;PRNOTE-N1/);
-  assert.match(html, /href="https:\/\/centralendpoint\.pr\.sebrae\.com\.br\/webclient#\/uems\/agent\/som\/staged-computers"[^>]*data-endpoint-staged-link/);
+  assert.match(html, /href="\/api\/config\/local\/endpoint\/staged-computers"[^>]*data-endpoint-staged-link/);
 });
 
 test("Empty list keeps the section with a message; without the field the section is left out", () => {

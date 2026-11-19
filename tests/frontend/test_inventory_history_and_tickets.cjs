@@ -34,14 +34,14 @@ test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tra
   assert.doesNotMatch(appHtml, /aria-label="Abrir (portal Oracle AgentWeb|acompanhamento de chamados Simpress)"/);
   assert.match(painelChamados, /<nav className="ckp-sistemas" aria-label="Abrir sistemas">/);
   assert.match(appHtml, /id="cockpit-tickets-os"/);
-  assert.match(painelChamados, /id="cockpit-tickets-evolution"/);
+  assert.doesNotMatch(painelChamados, /id="cockpit-tickets-evolution"/, "o acordeão de comparação saiu da aba OS");
   assert.match(painelChamados, /id="cockpit-tickets-version"/);
-  assert.match(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/);
+  assert.doesNotMatch(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/, "sem acordeão, a aba não busca mais a comparação");
 });
 
 test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {
   assert.match(appHtml, /id="modal-atualizar-planilhas"/);
-  assert.ok(appHtml.includes('href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer"'));
+  assert.ok(appHtml.includes('href="/api/config/local/endpoint/computadores" target="_blank" rel="noopener noreferrer"'));
   assert.ok(appHtml.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
   assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
   assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);

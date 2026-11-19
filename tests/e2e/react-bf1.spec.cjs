@@ -10,6 +10,7 @@
 // Comportamento (só no desktop): PowerShell nunca envia Enter, consulta ao Endpoint, geração da planilha, edição em
 // linha, nome da pessoa e usuário manual, contatos regionais, corrida de filtros da Home e histórico de apelidos.
 const { test, expect } = require("@playwright/test");
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 const TIPOS = ["Notebook", "Monitor", "Micro Computador"];
 const resumoBase = n => ({
@@ -205,6 +206,8 @@ async function abrirTransferencia(page) {
   }
   await page.locator("#tab-retirada-entrega").click();
   await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
+  // Retirada e Entrega são etapas recolhíveis: campo de etapa fechada não recebe clique nem preenchimento.
+  await abrirEtapaTransporte(page, 2, 3);
 }
 
 const esperarToast = (page, texto) => expect(page.locator("#toast-container .ck-toast", { hasText: texto })).toBeVisible();
@@ -239,10 +242,11 @@ for (const tema of ["light", "dark"]) {
     await page.locator("#btn-consultar-endpoint").click();
     await expect(page.locator("#endpoint-lookup-result")).toHaveText("Usuário do último logon: usuario.endpoint1");
     await fotografar(page, '[aria-labelledby="home-acoes-endpoint"]', `endpoint-powershell-${tema}.png`);
+    await fotografar(page, "#endpoint-powershell", `powershell-endpoint-${tema}.png`);
 
     await page.locator("#btn-editar-equipamento").click();
     await expect(page.locator("#form-editar-equipamento")).toBeVisible();
-    await fotografar(page, ".ck-home-layout__principal", `edicao-em-linha-${tema}.png`);
+    await fotografar(page, "#card-equipamento .nlh-ident", `edicao-em-linha-${tema}.png`);
     expect(escritas(ambiente).filter(chamada => chamada.caminho !== "/api/endpoint/consultar")).toEqual([]);
   });
 
@@ -277,7 +281,7 @@ test.describe("comportamento (só no desktop)", () => {
   test("PowerShell: o aviso nunca promete Enter e nada é enviado sem confirmar", async ({ page }) => {
     const ambiente = await preparar(page);
     await buscar(page, "BRJ0001");
-    await expect(page.locator("#endpoint-powershell")).toContainText("O sistema nunca aperta Enter");
+    await expect(page.locator("#endpoint-powershell")).toContainText("Nunca envia Enter");
     await expect(page.locator("#input-powershell-hostname")).toHaveValue("PRTESTE001");
 
     await page.locator("#input-powershell-comando").fill("Get-Service");
@@ -300,6 +304,43 @@ test.describe("comportamento (só no desktop)", () => {
     const corpo = corpoDe(envios[0]);
     expect(Object.keys(corpo).sort()).toEqual(["comando", "hostname", "modo"]);
     expect(corpo).toEqual({ modo: "sistema", comando: "Get-Service", hostname: "PRTESTE001" });
+  });
+
+  test("Home: contadores, Restaurar modelo, modo segmentado e Ver inteiro só mexem na tela, sem enviar nada", async ({ page }) => {
+    const ambiente = await preparar(page);
+    await buscar(page, "BRJ0001");
+
+    const area = page.locator(".ck-chamado__painel:not([hidden]) textarea");
+    const modelo = await area.inputValue();
+    await expect(page.locator("#nlh-chamado-contador")).toHaveText(`${modelo.length} / 2500`);
+    await area.fill("Texto novo");
+    await expect(page.locator("#nlh-chamado-contador")).toHaveText("10 / 2500");
+    await page.locator("#btn-restaurar-chamado").click();
+    await expect(area).toHaveValue(modelo);
+    await expect(page.locator("#nlh-chamado-contador")).toHaveText(`${modelo.length} / 2500`);
+
+    const comando = page.locator("#input-powershell-comando");
+    await comando.fill("Get-Service");
+    await expect(page.locator("#nlh-ps-contador")).toHaveText("11 / 2000");
+    const sistema = page.locator("#btn-ps-modo-sistema");
+    const usuario = page.locator("#btn-ps-modo-usuario");
+    await expect(sistema).toHaveAttribute("aria-pressed", "true");
+    await usuario.click();
+    await expect(usuario).toHaveAttribute("aria-pressed", "true");
+    await expect(sistema).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#select-powershell-modo")).toHaveValue("usuario");
+    await sistema.click();
+    await expect(page.locator("#select-powershell-modo")).toHaveValue("sistema");
+
+    const inteiro = page.locator("#btn-ps-ver-inteiro");
+    await expect(inteiro).toHaveAttribute("aria-expanded", "false");
+    await inteiro.click();
+    await expect(inteiro).toHaveAttribute("aria-expanded", "true");
+    await inteiro.click();
+    await expect(inteiro).toHaveAttribute("aria-expanded", "false");
+
+    await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+    expect(escritas(ambiente)).toEqual([]);
   });
 
   test("PowerShell: comando vazio, quebra de linha, Enter no campo e hostname ausente não enviam nada", async ({ page }) => {

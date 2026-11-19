@@ -29,7 +29,7 @@ from security import sessao_local
 
 VARIAVEIS = (
     "SIMPRESS_DASHBOARD_EMAIL", "SIMPRESS_SOFTEXPERT_EMAIL", "SIMPRESS_ENDPOINT_USUARIO",
-    "SIMPRESS_OUTLOOK_EMAIL_SIMPRESS", "SIMPRESS_OUTLOOK_EMAIL_SEBRAE", "SIMPRESS_DASHBOARD_PASTA_URL",
+    "SIMPRESS_OUTLOOK_EMAIL_SIMPRESS", "SIMPRESS_OUTLOOK_EMAIL_SEBRAE", "SIMPRESS_DASHBOARD_PASTA_URL", "SIMPRESS_ENDPOINT_URL",
     "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY",
     "SIMPRESS_CLIENTE_CONTRATO", "SIMPRESS_CLIENTE_CNPJ_FATURAMENTO", "SIMPRESS_CLIENTE_SERIES_SEBRAE_FORA",
 )
@@ -72,6 +72,28 @@ class ConfiguracaoBase(unittest.TestCase):
 
     def put_assistente(self, **campos):
         return self.client.put("/api/config/local/assistente", json=campos)
+
+
+class LinksDoEndpointTests(ConfiguracaoBase):
+    def destino(self, tela: str) -> str:
+        resposta = self.client.get(f"/api/config/local/endpoint/{tela}", follow_redirects=False)
+        self.assertEqual(resposta.status_code, 302)
+        return resposta.headers["location"]
+
+    def test_links_seguem_o_host_configurado_e_mantem_o_fragmento(self):
+        self.contas.write_text(json.dumps({"endpoint_url": "https://novo.exemplo.invalid/webclient#/uems/inventory/computers"}), encoding="utf-8")
+        self.assertEqual(self.destino("computadores"), "https://novo.exemplo.invalid/webclient#/uems/inventory/computers")
+        self.assertEqual(self.destino("som-computadores"), "https://novo.exemplo.invalid/webclient#/uems/agent/som/computers")
+        self.assertEqual(self.destino("staged-computers"), "https://novo.exemplo.invalid/webclient#/uems/agent/som/staged-computers")
+
+    def test_sem_link_ou_link_invalido_usa_o_padrao(self):
+        padrao = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+        self.assertEqual(self.destino("computadores"), padrao)
+        self.contas.write_text(json.dumps({"endpoint_url": "javascript:alert(1)"}), encoding="utf-8")
+        self.assertEqual(self.destino("computadores"), padrao)
+
+    def test_tela_desconhecida_da_404(self):
+        self.assertEqual(self.client.get("/api/config/local/endpoint/outra", follow_redirects=False).status_code, 404)
 
 
 class RotasContasTests(ConfiguracaoBase):

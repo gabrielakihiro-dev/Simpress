@@ -213,6 +213,11 @@ class DisponivelCobertura(_Saida):
     sinal: Optional[str]
 
 
+class EquipamentoCobertura(BaseModel):
+    modelo: str
+    tipo: str
+
+
 class BloqueioCobertura(_Saida):
     serie: Any
     motivo: str
@@ -243,6 +248,8 @@ class Cobertura(BaseModel):
     manutencao: ManutencaoCobertura
     sinais: List[Dict[str, Any]]
     casos: CasosCobertura
+    # Série -> modelo e tipo do cadastro oficial (EquipamentosDetalhes); série fora do cadastro não aparece.
+    equipamentos: Dict[str, EquipamentoCobertura] = {}
 
 
 class CasoCobertura(BaseModel):
@@ -353,7 +360,8 @@ def create_coverage_router(services: CoverageServices) -> Tuple[APIRouter, Cover
         casos = coverage.anotar_casos(estado, hoje)
         for mov_id, candidatos in candidatos_por_movimentacao(estado).items():
             casos["movimentacoes"][mov_id]["candidatos_historico"] = candidatos
-        return {**coverage.build_coverage(estado, hoje, services.manutencao()), "casos": casos}
+        equipamentos = coverage.equipamentos_das_series(estado, coverage.indexar_cadastro(services.cadastro()))
+        return {**coverage.build_coverage(estado, hoje, services.manutencao()), "casos": casos, "equipamentos": equipamentos}
 
     @router.get("/api/cobertura/casos/{caso_id}", response_model=CasoCobertura, response_model_exclude_unset=True)
     def ler_caso(caso_id: str) -> Dict[str, Any]:

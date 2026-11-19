@@ -224,7 +224,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
         ``relatorio`` and ``indice`` are read once by the caller and shared with ``_os_novas_dos_abertos``."""
         efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
-        cruzados = sebrae_novos.preenchimentos(efetivos, registros, relatorio, services.vinculos_os(), indice)
+        cruzados = sebrae_novos.preenchimentos(
+            efetivos, registros, relatorio, services.vinculos_os(), indice, sebrae_os_recusadas.ler_ou_vazio(_pasta_estado()),
+        )
         lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
         return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
 
@@ -249,12 +251,21 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         try:
             return sebrae_os_nova.os_novas(
                 efetivos, relatorio, list(services.vinculos_os()), sebrae_os_recusadas.ler(_pasta_estado()), registros, indice,
+                sebrae_os_recusadas.mantidas(_pasta_estado()),
             )
         except DomainBusyError as erro:
             logger.warning("OS nova sugerida indisponível (%s).", type(erro).__name__)
         except Exception as erro:  # noqa: BLE001 - a sugestão é só auxílio; o F5 segue sem ela
             logger.warning("Falha ao calcular a OS nova sugerida (%s).", type(erro).__name__)
         return {}
+
+    def _limpar_e_dos_abertos(abertos: Sequence[Mapping[str, Any]], trocas: Mapping[str, str]) -> Dict[str, str]:
+        """E que o usuário mandou Remover e que ainda são essa OS (``sebrae_os_nova.limpar_e``); registro ilegível: nada é limpo."""
+        try:
+            removidas = sebrae_os_recusadas.removidas(_pasta_estado())
+        except DomainBusyError:
+            return {}
+        return sebrae_os_nova.limpar_e(abertos, removidas, list(services.vinculos_os()), trocas)
 
     def _sugestoes_antigo(aberto: Mapping[str, Any], efetivo: Mapping[str, Any], lido: Optional[Mapping[str, str]], opcoes_a: Sequence[str]) -> Dict[str, Optional[str]]:
         """Sugestão de A e J de um chamado antigo em aberto, só para exibir (nada é gravado); campo já preenchido não é sugerido.
@@ -307,10 +318,16 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
              "destaque": _destacado(obs_map, a.get("numero")),
-             "os_nova": os_novas.get(str(a.get("numero"))),  # ``softexpert`` is the finalization state; this is the read data
+             **_os_nova_e_sem_relacao(os_novas.get(str(a.get("numero")))),  # ``softexpert`` is the finalization state; this is the read data
              **_sugestoes_antigo(a, e, antigos.get(str(a.get("numero"))), opcoes_a)}
             for a, e in zip(abertos, efetivos)
         ]
+
+    def _os_nova_e_sem_relacao(sugestao: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """``sem_relacao`` goes to its own key: the current F5 screen reads ``os_nova.nova`` and would break on it."""
+        if sugestao and sugestao.get("tipo") == "sem_relacao":
+            return {"os_nova": None, "os_sem_relacao": sugestao}
+        return {"os_nova": sugestao, "os_sem_relacao": None}
 
     def _destacado(observacoes: Mapping[str, Mapping[str, Any]], numero: Any) -> bool:
         return bool(observacoes.get(str(numero or ""), {}).get("destaque"))
@@ -801,13 +818,14 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             trocas = sebrae_os_nova.trocas_e(
                 _os_novas_dos_abertos(abertos, antigos, registros, automaticos, relatorio, indice), abertos, list(services.vinculos_os()),
             )
+            limpar = _limpar_e_dos_abertos(abertos, trocas)
             descricoes = _descricoes_editadas_dos_antigos(abertos)
-            if not linhas and not edicoes and not automaticos and not descricoes and not trocas:
+            if not linhas and not edicoes and not automaticos and not descricoes and not trocas and not limpar:
                 if aceita_vazio:
                     return None
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
             gravar = {**edicoes, **{n: {**edicoes.get(n, {}), "H": h} for n, h in descricoes.items()}}
-            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, gravar, automaticos, trocas)
+            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, gravar, automaticos, trocas, limpar)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         conteudo = _reaplicar_encerramentos(resultado.conteudo)
@@ -1003,6 +1021,18 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def recusar_os(numero: str, payload: OsRecusadaPayload):
         """Recusa (ou mantém) a OS sugerida: o par chamado + OS nunca mais é sugerido nem trocado sozinho (só local)."""
         sebrae_os_recusadas.recusar(_pasta_estado(), numero, payload.os)
+        return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/os-manter")
+    def manter_os(numero: str, payload: OsRecusadaPayload):
+        """Mantém a OS que já está na E (aviso "sem relação" encerrado); só local, nada é gravado no Dashboard."""
+        sebrae_os_recusadas.manter(_pasta_estado(), numero, payload.os)
+        return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/sebrae/chamados/{numero}/os-remover")
+    def remover_os(numero: str, payload: OsRecusadaPayload):
+        """Recusa a OS e manda limpar a E: a próxima gravação do Dashboard esvazia só a E que ainda for essa OS."""
+        sebrae_os_recusadas.remover(_pasta_estado(), numero, payload.os)
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/destaque")

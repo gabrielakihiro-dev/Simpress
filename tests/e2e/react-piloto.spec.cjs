@@ -1,6 +1,7 @@
-// Piloto da migração React (Bloco 3): cartão "Ativos por regional" do Resumo (F3, Visão geral).
+// Piloto da migração React (Bloco 3): cartão "Ativos por regional" do Resumo (F3, cartão do bento).
 // O baseline de screenshots foi gravado com o cartão antigo (JS puro), antes da troca para React:
 // o cartão em React tem de sair igual nos dois tamanhos (390 e 1366 px) e nos dois temas.
+// Novo layout (18/11/2026): os baselines foram regravados para o cartão "Ativos por regional" do novo bento do F3.
 const { test, expect } = require("@playwright/test");
 
 // 12 regionais (mostra "Ver menos", o --linhas e as duas colunas a partir de 1000 px) e uma categoria zerada (pílula desabilitada).
@@ -43,8 +44,6 @@ async function abrirCartao(page, { tema, painel }) {
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
   await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", (typeof painel === "function" ? painel() : painel) === "erro" ? "erro" : "pronto");
-  await page.locator("#resumo-aba-visao").click();
-  await expect(page.locator("#resumo-aba-visao")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
   // O brilho do bento segue o ponteiro (--mx/--my): o mouse fica fora do cartão.
   await page.mouse.move(0, 0);
@@ -241,7 +240,8 @@ test.describe("comportamento (1366 px)", () => {
         const ac = estilo.getPropertyValue("--ac").trim();
         const resultado = {
           cartao: [estilo.borderRadius, estilo.boxShadow, estilo.borderTopColor, estilo.getPropertyValue("--tom").trim()],
-          esperadoCartao: ["24px", "none", cor("var(--cor-borda)")],
+          // Novo layout (18/11/2026): a moldura do cartão é o token --nl-bd (nl-f3-f7-f8.css), não mais --cor-borda.
+          esperadoCartao: ["24px", "none", cor("var(--nl-bd)")],
           titulo: [titulo.fontWeight, titulo.fontSize, titulo.fontFamily, titulo.color],
           esperadoTitulo: ["500", "14px", getComputedStyle(sonda).fontFamily, cor("var(--cor-texto-forte)")],
           pilula: [pilula.borderTopColor, pilula.backgroundColor, pilula.borderRadius],
@@ -280,19 +280,19 @@ test.describe("comportamento (1366 px)", () => {
     await rotaPainel(page, painelBase());
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    await page.locator("#resumo-aba-visao").click();
     await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText(["10", "5", "1"]);
   });
 
-  test("voltar à Visão geral repete o bento: as barras são recriadas (simpress:bento-repetir)", async ({ page }) => {
+  test("voltar ao Resumo repete o bento: as barras são recriadas pela nova leitura do painel", async ({ page }) => {
     await rotaPainel(page, painelBase());
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    await page.locator("#resumo-aba-visao").click();
     await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText(["10", "5", "1"]);
     await page.locator("#resumo-regionais .ck-barra").first().evaluate(el => { el.dataset.marcaTeste = "1"; });
-    await page.locator("#resumo-aba-divergencias").click();
-    await page.locator("#resumo-aba-visao").click();
+    // Sai do Resumo por outra aba e volta: openPanel lê o painel de novo.
+    await page.locator("#tab-retirada-entrega").click();
+    await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
+    await page.locator("#btn-resumo-aba").click();
     // React troca a key das barras (geracao + 1): o elemento marcado sai e entra um novo com o mesmo valor.
     await expect(page.locator("#resumo-regionais [data-marca-teste]")).toHaveCount(0);
     await expect(page.locator("#resumo-regionais .ck-barra__valor")).toHaveText(["10", "5", "1"]);

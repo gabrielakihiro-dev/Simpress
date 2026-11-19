@@ -30,14 +30,12 @@ async function abrirGestaoChamados(page, { tema = "light" } = {}) {
   await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
   const painel = page.locator("#cockpit-tickets-manage-panel");
   await expect(painel).toHaveAttribute("open", "");
-  await expect(painel.locator("#cockpit-tickets-evolution")).toContainText("1 alteradas");
   return painel;
 }
 
 for (const tema of ["light", "dark"]) {
   test(`baseline: bloco Importar e gerenciar dos chamados, tema ${tema}`, async ({ page }) => {
     const painel = await abrirGestaoChamados(page, { tema });
-    await painel.locator("details", { hasText: "Comparação com a importação anterior" }).evaluate(no => { no.open = true; });
     await painel.scrollIntoViewIfNeeded();
     await page.mouse.move(0, 0);
     await expect(painel).toHaveScreenshot(`chamados-gestao-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
@@ -62,11 +60,6 @@ test.describe("chamados: comportamento", () => {
     await expect(versao).toHaveAttribute("aria-describedby", "cockpit-tickets-version-hint");
     await expect(painel.locator("#cockpit-tickets-delete-old")).toBeEnabled();
     await expect(page.locator("#cockpit-tickets-export")).toBeEnabled();
-    const evolucao = painel.locator("#cockpit-tickets-evolution");
-    await expect(evolucao).toHaveAttribute("role", "status");
-    await expect(evolucao.locator(".ck-chamados-evolucao__resumo")).toHaveText("Comparação com a versão anterior · 0 novas · 1 alteradas · 0 sem mudança · 0 ausentes");
-    await expect(evolucao).toContainText("Ausência na planilha não confirma resolução.");
-    await expect(evolucao.locator(".ck-chamados-evolucao__lista li")).toHaveText(["DEMO-SN-001: Status Oracle"]);
     await expect(painel.locator("#cockpit-tickets-import-status")).toHaveAttribute("role", "status");
     await expect(painel.locator("#cockpit-tickets-file-simpress")).toHaveAttribute("name", "simpress_file");
     await expect(page.locator("#cockpit-tickets-file-simpress")).toBeFocused(); // abrirGestaoChamadosCockpit foca o primeiro arquivo
@@ -74,13 +67,11 @@ test.describe("chamados: comportamento", () => {
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
   });
 
-  test("versão mais antiga: sem comparação e sem exportar enquanto não houver versão", async ({ page }) => {
+  test("sem versão selecionada: Exportar Excel fica bloqueado", async ({ page }) => {
     const painel = await abrirGestaoChamados(page);
     const versao = painel.locator("#cockpit-tickets-version");
     await versao.selectOption("20261002_090000");
-    await expect(painel.locator("#cockpit-tickets-evolution")).toHaveText("Esta é a importação mais antiga disponível. Selecione uma versão mais recente para comparar.");
     await versao.selectOption("");
-    await expect(painel.locator("#cockpit-tickets-evolution")).toHaveText("Nenhuma importação selecionada.");
     await expect(page.locator("#cockpit-tickets-export")).toBeDisabled();
   });
 
@@ -226,52 +217,6 @@ test.describe("chamados: comportamento", () => {
       liberar();
     }
   });
-
-  test("comparação: o erro atrasado de uma versão antiga não sobrescreve a comparação atual", async ({ page }) => {
-    const versoes = ["s3", "s2", "s1"];
-    await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
-      snapshot_id: "s3", atualizado_em: "2026-10-12T12:00:00Z",
-      historico: versoes.map((id, indice) => ({ id, atualizado_em: `2026-10-1${2 - indice}T12:00:00Z` })),
-      chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
-    } }));
-    let segurarAtual = false;
-    let liberarVelha;
-    let liberarAtual;
-    const velhaLiberada = new Promise(resolve => { liberarVelha = resolve; });
-    const atualLiberada = new Promise(resolve => { liberarAtual = resolve; });
-    await page.route("**/api/operacoes/chamados/evolucao**", async route => {
-      const atual = new URL(route.request().url()).searchParams.get("atual");
-      if (atual === "s2") {
-        await velhaLiberada;
-        return route.fulfill({ status: 500, json: { detail: "falha antiga" } }).catch(() => {});
-      }
-      if (segurarAtual) await atualLiberada;
-      return route.fulfill({ json: { contagens: { novos: 4, alterados: 0, iguais: 0, ausentes_arquivo: 0 }, mudancas: {} } }).catch(() => {});
-    });
-    try {
-      await page.goto("/");
-      await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
-      const versao = page.locator("#cockpit-tickets-version");
-      const evolucao = page.locator("#cockpit-tickets-evolution");
-      await expect(versao).toHaveValue("s3");
-      await expect(evolucao).toContainText("4 novas");
-      await versao.selectOption("s2"); // pedido da versão antiga: fica preso na rota
-      await expect(evolucao).toHaveText("Comparando esta versão com a anterior…");
-      segurarAtual = true;
-      const abortado = page.waitForEvent("requestfailed", pedido => pedido.url().includes("atual=s2"));
-      await versao.selectOption("s3"); // volta à atual: cancela o pedido antigo (ele falha na página) e prende o novo
-      await abortado;
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); // deixa o catch do pedido antigo rodar
-      await expect(evolucao).toHaveText("Comparando esta versão com a anterior…"); // o erro da versão antiga não vira o texto da comparação atual
-      liberarVelha();
-      liberarAtual();
-      await expect(evolucao).toContainText("4 novas");
-      await expect(evolucao).not.toContainText("falha antiga");
-    } finally {
-      liberarVelha();
-      liberarAtual();
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -327,6 +272,8 @@ for (const tema of ["light", "dark"]) {
     await expect(cartao.locator("#home-open-tickets-count")).toHaveText("6 abertos");
     await cartao.scrollIntoViewIfNeeded();
     await page.mouse.move(0, 0);
+    // O aviso "Equipamento … localizado." some sozinho e, no celular, cobre o rodapé do cartão: a captura espera ele sair.
+    await expect(page.getByText(`Equipamento ${SERIE} localizado.`)).toHaveCount(0, { timeout: 15000 });
     await expect(cartao).toHaveScreenshot(`home-chamados-${tema}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
   });
 }
