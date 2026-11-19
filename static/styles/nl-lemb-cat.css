@@ -275,6 +275,10 @@
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--primario:hover:not(:disabled) { filter: brightness(1.08); }
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__estado { font-size: 13px; color: var(--nl-tx2); }
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__estado[data-tipo="erro"] { color: var(--nl-rtx); }
+/* A partir de 1200 px o ⓘ "Sobre o PDF" fica na coluna da prévia, junto da borda direita: o balão abre para a esquerda (como info-tip--end). */
+@media (min-width: 1200px) {
+  [data-cockpit-tool-panel="lembretes"] .termos__gerar .info-tip-text { inset-inline-start: auto; inset-inline-end: -0.5rem; }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   /* "backwards" e não "both": com "both" o cartão guarda um transform e vira o ancestral dos balões do ⓘ (position: fixed no celular), que abriam abaixo da janela. */
