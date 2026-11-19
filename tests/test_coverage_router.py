@@ -145,6 +145,19 @@ class CoverageRouterTests(unittest.TestCase):
         self.assertEqual(erro["motivo"], "manutencao_nao_verificada")
         self.post("/api/cobertura/reservas", {"demanda_id": demanda["id"], "serie": "SINT-001", "manutencao_conferida": True})
 
+    def test_modelo_e_tipo_vem_so_do_cadastro_oficial(self):
+        self.cadastro = [
+            {"serial": "SINT-001", "retirada_cidade": "Cidade A", "apelido": "PRNOTE0001", "modelo": " EliteBook 640 G10 ", "tipo": "Notebook"},
+            {"serial": "SINT-003", "modelo": "ProDesk 400 G9", "tipo": "Micro Computador"},
+        ]
+        self.cenario()
+        self.post("/api/cobertura/disponibilidade", {"serie": "SINT-009", "estado": "disponivel", "cidade": "Cidade A"})
+        leitura = self.leitura()
+        self.assertEqual(leitura["equipamentos"], {
+            "SINT-001": {"modelo": "EliteBook 640 G10", "tipo": "Notebook"},
+            "SINT-003": {"modelo": "ProDesk 400 G9", "tipo": "Desktop"},
+        })  # SINT-002 e SINT-009 estão fora do cadastro: não ganham modelo nem tipo inventado
+
     def test_serie_do_sebrae_fica_fora(self):
         erro = self.post("/api/cobertura/disponibilidade", {"serie": "BRT100XA02", "estado": "disponivel", "cidade": "Cidade A"}, 422)
         self.assertEqual(erro["detail"]["motivo"], "fora_do_inventario")
