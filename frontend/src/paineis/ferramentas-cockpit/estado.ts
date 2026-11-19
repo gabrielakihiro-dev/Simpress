@@ -60,6 +60,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   let skipLinkHref: string | null = null;
   let pendingComparisonTarget: Registro | null = null;
   let pendingFreshComparison: Registro | null = null;
+  // Carregar uma vez: os painéis só ficam ocultos ao trocar de aba, então voltar ao Resumo (F3) ou ao Relatório (F8)
+  // reaproveita o que já está na tela; recarrega só se algo mudou (inventário, histórico, OS) desde a última carga.
+  let resumoCarregado = false;
+  let resumoDesatualizado = false;
+  let relatorioMesCarregado = "";
+  let relatorioDesatualizado = false;
+  let painelChave: string | null = null;
   const HIGHLIGHT_MS = 1500;
 
   function normalize(value: Qualquer) {
@@ -693,13 +700,15 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     selectedComparison = null;
     if (!eventId) {
       updateComparisonStatus();
-      if (keepContent) return;
+      if (keepContent) { resumoCarregado = true; return; }
       clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
       // Without a saved comparison the "Sem usuário" section (current inventory) still shows below the empty message.
       const target = pendingComparisonTarget;
       pendingComparisonTarget = null;
       const semUsuario = await app.carregarSemUsuarioResumo?.();
-      if (semUsuario && request === comparisonDetailRequest && activeTool === "comparacao") app.renderizarSemUsuarioSemComparacao(semUsuario, target);
+      if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
+      if (semUsuario) app.renderizarSemUsuarioSemComparacao(semUsuario, target);
+      resumoCarregado = true;
       return;
     }
     if (!keepContent) clearComparisonResult("Carregando comparação…", "carregando");
@@ -715,6 +724,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       pendingComparisonTarget = null;
       app.renderizarResultadoComparacao(comparisonFromEvent(selectedComparison), target, semUsuario);
       updateComparisonStatus();
+      resumoCarregado = true;
     } catch (error: Qualquer) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       if (!keepContent) {
@@ -731,6 +741,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const status = byId("cockpit-comparison-status");
     const fresh = pendingFreshComparison;
     pendingFreshComparison = null;
+    resumoCarregado = false;
+    resumoDesatualizado = false;
     status.textContent = "Carregando histórico local…";
     comparisonDetailRequest += 1;
     selectedComparison = null;
@@ -1878,7 +1890,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const current = ++monthlyRequest;
     // Carregando e erro vão para #cockpit-monthly-estado: o invólucro dos painéis nunca é esvaziado.
     const target = byId("cockpit-monthly-estado");
+    relatorioDesatualizado = false;
     if (!quiet) {
+      relatorioMesCarregado = "";
       Object.assign(monthlyView, { report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteComp: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false });
       byId("cockpit-monthly-preview").textContent = "";
       byId("cockpit-monthly-kpis").replaceChildren();
@@ -1896,17 +1910,19 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     try {
       const report = await apiFetch(`/api/relatorio-mensal/dados?mes=${encodeURIComponent(month)}`, { errorMessage: "Não foi possível carregar o relatório mensal." });
       const sebraeResult = await sebrae;
-      if (current !== monthlyRequest || activeTool !== "relatorio") return;
+      if (current !== monthlyRequest || activeTool !== "relatorio") { relatorioDesatualizado = true; return; }
       const focused = document.activeElement as ElementoCockpit | null;
       const focusedSection = quiet ? focused?.closest?.<ElementoCockpit>("[data-rel-secao]")?.dataset.relSecao : "";
       const focusedAttention = quiet && byId("cockpit-monthly-attention")?.contains(focused);
       monthlyView.sebrae = sebraeResult.data;
       monthlyView.sebraeErro = sebraeResult.error;
       renderMonthly(report);
+      relatorioMesCarregado = month;
       byId("cockpit-monthly-copy").disabled = false;
       if (focusedSection) byId(`cockpit-monthly-${focusedSection}-title`)?.focus();
       else if (focusedAttention) byId("cockpit-monthly-attention-title")?.focus();
     } catch (error: Qualquer) {
+      relatorioDesatualizado = true;
       if (current !== monthlyRequest || activeTool !== "relatorio") return;
       byId("cockpit-monthly-status").textContent = error.message || "Falha ao carregar o relatório.";
       if (quiet && monthlyView.report) return;
@@ -1917,7 +1933,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
 
   // Importar OS (F6) ou nova comparação com o F8 aberto: recarrega o mês exibido sem perder filtros.
   function refreshMonthlyAfterChange() {
-    if (activeTool !== "relatorio") return;
+    if (activeTool !== "relatorio") { relatorioDesatualizado = true; return; }
     const month = byId("cockpit-monthly-month")?.value;
     if (month) void loadMonthlyReport(month, { quiet: true });
   }
@@ -2140,7 +2156,19 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
     document.addEventListener("simpress:chamados-atualizados", refreshMonthlyAfterChange);
-    document.addEventListener("simpress:painel-atualizado", refreshMonthlyAfterChange);
+    document.addEventListener("simpress:painel-atualizado", (event: Qualquer) => {
+      // O painel volta a cada 5 min igual: só marca F3/F8 como desatualizados quando a comparação ou o inventário mudou.
+      const painel = event.detail || {};
+      const chave = [painel.ultima_comparacao?.id, painel.ultima_atualizacao, painel.arquivo_origem].join("|");
+      const mudou = chave !== painelChave; // a primeira chave vista conta como mudança: não se sabe com qual o F3/F8 carregou
+      painelChave = chave;
+      if (mudou) resumoDesatualizado = true;
+      if (mudou || activeTool === "relatorio") refreshMonthlyAfterChange();
+    });
+    // Usuário do equipamento editado (muda o "Sem usuário") ou OS importada: o F3 recarrega na próxima abertura.
+    for (const nome of ["simpress:resumo-desatualizado", "simpress:usuarios-equipamento-atualizados", "simpress:chamados-atualizados"]) {
+      document.addEventListener(nome, () => { resumoDesatualizado = true; });
+    }
     byId("cockpit-sheets-refresh").addEventListener("click", loadSheets);
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || event.defaultPrevented || root.hidden) return;
@@ -2234,13 +2262,20 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     byId("cockpit-tool-title").focus();
     if (tool === "chamados") await loadTickets();
     if (tool === "comparacao") {
-      app.invalidarSemUsuarioResumo?.();
-      const ativos = app.carregarResumoAtivos?.();
-      const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
+      // Voltar ao Resumo sem mudança nem pedido de outra aba (resultado novo, série, evento): mantém a tela, sem rede.
+      const reaproveitar = resumoCarregado && !resumoDesatualizado && !pendingFreshComparison && !pendingComparisonTarget
+        && selectedComparisonId === String(selectedComparison?.id || "");
       // Backups não depende da comparação: abre já (sem esperar a rede) e de novo depois, caso o render a tenha mexido.
       // A primeira abertura do painel (ou um pedido de outra aba) volta a Divergências; reabrir o painel já aberto sem aba mantém a aba atual.
       if (aba === "backups") app.selecionarAbaResumo?.("backups");
       else if (aba || !jaAberto) app.selecionarAbaResumo?.("divergencias");
+      if (reaproveitar) {
+        if (aba && aba !== "backups" && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
+        return;
+      }
+      app.invalidarSemUsuarioResumo?.();
+      const ativos = app.carregarResumoAtivos?.();
+      const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
       await loadComparisons();
       await ativos;
       // O render acima volta a Divergências (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
@@ -2255,8 +2290,11 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       const input = byId("cockpit-monthly-month");
       if (!input.value) input.value = currentMonth();
       input.max = currentMonth();
-      renderMonthlyPeriods(input.value);
-      await loadMonthlyReport(input.value);
+      // Mesmo mês já na tela: sem mudança, nada a buscar; com mudança, recarga discreta (mantém filtros, sem "Carregando").
+      if (relatorioMesCarregado !== input.value) {
+        renderMonthlyPeriods(input.value);
+        await loadMonthlyReport(input.value);
+      } else if (relatorioDesatualizado) await loadMonthlyReport(input.value, { quiet: true });
     }
     if (tool === "planilhas") await loadSheets();
     if (tool === "cobertura") await app.carregarCobertura?.();
