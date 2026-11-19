@@ -3,7 +3,7 @@
 ## Comportamento aprovado para implementação
 
 - Preservar os registros existentes e os controles de iniciar/cancelar.
-- Últimas execuções: 5 linhas por página por padrão; opções 5, 10 e 20; paginação com total e anterior/próxima. Filtrar o período pela data de início local e, como complemento, por rotina e status. Filtros dentro de uma área recolhível. Filtros recolhidos continuam ativos e são resumidos junto à contagem.
+- Últimas execuções: 5 linhas por página por padrão; opções 5, 10 e 20; paginação com total e anterior/próxima. Filtrar o período pela data de início local e, como complemento, por rotina e status. Filtros (visual B, 18/11/2026): os chips `Rotina` e `Status` ficam sempre visíveis e aplicam ao mudar a escolha; o chip `Período` abre uma caixa recolhível com `De`, `Até`, `Aplicar` e `Limpar` (data inválida mantém a caixa aberta e leva o foco a `Até`). Filtros com a caixa fechada continuam ativos e são resumidos junto à contagem.
 - Andamento: modo ao vivo por padrão, com altura fixa e no máximo 200 linhas visíveis (opções 100, 200 e 500). Consulta de logs anteriores pela data e execução, sem misturar arquivos. Abertura de uma execução pela linha do histórico. Voltar ao vivo por ação explícita; uma atualização de estado nunca troca o log histórico que está sendo consultado.
 - Ambos os painéis: recolher conteúdo e ampliar para a área disponível, com restauração e Escape; manter foco e nomes acessíveis, sem bloquear os botões de cancelamento. Apenas um painel ampliado por vez.
 - Datas inicial/final inclusivas, validação de período invertido e estado vazio claro. Seleção de uma execução continua disponível mesmo que outra rotina comece.

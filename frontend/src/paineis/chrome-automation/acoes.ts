@@ -285,7 +285,11 @@ export function filtrarHistoricoAutomacao(): Promise<void> | undefined {
   const fim = valor("automacao-historico-fim");
   if (inicio && fim && inicio > fim) {
     mudar({ resumoHist: "A data inicial deve ser anterior ou igual à data final." });
-    document.getElementById("automacao-historico-fim")?.focus();
+    const campo = document.getElementById("automacao-historico-fim");
+    // O campo fica na caixa "Período" (<details>); fechada, o foco não chegaria nele.
+    const caixa = campo?.closest("details");
+    if (caixa) caixa.open = true;
+    campo?.focus();
     return undefined;
   }
   interno.filtros = Object.fromEntries(Object.entries({

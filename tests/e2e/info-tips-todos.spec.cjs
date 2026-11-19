@@ -95,6 +95,15 @@ async function abrirPainelSebrae(page, request, { aba, extra = "" } = {}) {
   return painel;
 }
 
+async function abrirAutomacao(page, aba) {
+  await page.request.get("/__fixture_automacao?quantidade=0&sebrae=padrao");
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await expect(page.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
+  await page.locator(`#tab-rotina-${aba}`).click();
+  return page.locator("#tab-panel-automacao");
+}
+
 async function abrirTermo(page, termo) {
   await page.goto("/");
   await abrirFerramenta(page, "#btn-lembretes");
@@ -124,18 +133,21 @@ const chamar = (page, nome) => page.evaluate(funcao => window[funcao](), nome);
 // Cada tela: `abrir` deixa a tela aberta e devolve o contêiner a varrer; `minimo` é quantos ⓘ ela tem por desenho (a tela não pode
 // perder um sem o teste avisar) e `rotulos` lista os aria-label que precisam estar entre eles.
 const TELAS = [
+  // A Automação mostra uma rotina por vez (seletor de abas): cada aba é uma tela a varrer.
   {
-    nome: "Automação (rotinas e chamados novos)", minimo: 4,
-    rotulos: ["Sobre Rotina de OS", "Sobre Inventários", "Sobre Verificar usuários", "Sobre Rotina Completa"],
+    nome: "Automação, aba SoftExpert (chamados novos)", minimo: 0,
     // No celular (< 768px) o cartão compacto do Design esconde o ⓘ do título (ck-cockpit.css, F4 Bloco 2); só no desktop ele existe.
     rotulosSoDesktop: ["Sobre Chamados novos do SoftExpert"],
-    abrir: async (page, request) => {
-      await request.get("/__fixture_automacao?quantidade=0&sebrae=padrao");
-      await page.goto("/");
-      await page.locator("#tab-automacao").click();
-      await expect(page.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-      return page.locator("#tab-panel-automacao");
-    },
+    abrir: page => abrirAutomacao(page, "softexpert"),
+  },
+  {
+    nome: "Automação, aba Rotina Completa", minimo: 3,
+    rotulos: ["Sobre Rotina de OS", "Sobre Verificar usuários", "Sobre Rotina Completa"],
+    abrir: page => abrirAutomacao(page, "completa"),
+  },
+  {
+    nome: "Automação, aba Inventários", minimo: 1, rotulos: ["Sobre Inventários"],
+    abrir: page => abrirAutomacao(page, "inventarios"),
   },
   {
     nome: "Home: códigos prontos do PowerShell", minimo: 1, rotulos: ["Sobre Códigos prontos"],

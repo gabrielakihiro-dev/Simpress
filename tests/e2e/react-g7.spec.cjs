@@ -1251,6 +1251,8 @@ async function abrirAutomacao(page, request, executar = () => ({ status: 202, js
   await expect(painel).toBeVisible();
   await expect(painel.locator("#automacao-estado-detalhe")).toContainText("Última execução"); // a fixture traz um histórico: o primeiro estado real chegou
   await expect(painel.locator("#automacao-estado")).toContainText("Livre");
+  // Os botões de OS e Verificar usuários ficam na aba "Rotina Completa" do seletor (só o painel da aba escolhida aparece).
+  await painel.getByRole("tab", { name: "Rotina Completa", exact: true }).click();
   return { painel, servidor };
 }
 
