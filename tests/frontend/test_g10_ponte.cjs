@@ -111,7 +111,7 @@ test("contêineres: o HTML só tem os três pontos de montagem vazios, e os ids 
     }
   }
   assert.ok(idsDosDialogos.size >= 20, "os diálogos mantêm os ids que o e2e e o código antigo leem");
-  const hospedeiros = ["frontend/partials/modais.html", "frontend/partials/card-equipamento.html", "frontend/partials/cockpit-tool-panels.html", "static/index.html"];
+  const hospedeiros = ["frontend/partials/modais.html", "frontend/partials/card-equipamento.html", "frontend/partials/home.html", "frontend/partials/transporte.html", "frontend/partials/cockpit-tool-panels.html", "static/index.html"];
   for (const arquivo of hospedeiros) {
     const texto = ler(arquivo);
     for (const id of idsDosDialogos.keys()) assert.ok(!texto.includes(`id="${id}"`), `id "${id}" ainda no ${arquivo}`);

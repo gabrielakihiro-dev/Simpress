@@ -113,7 +113,7 @@ Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-d
 
 - Menu Ferramentas: IDs preservados (`#btn-historico-comparacoes` e `#badge-total-historico-comparacoes` removidos em 31/10/2026); ações `abrirPainelCockpit` com `data-args` `["planilhas"]`, `["unidades"]` (`["evolucao"]` removido em 31/10/2026). Voltar: `fecharPainelCockpit` (volta à tela anterior).
 - Home, edição em linha: `#btn-editar-equipamento` (`editarDadosCadastrais`), `#form-editar-equipamento` (`salvarDadosCadastrais`), campos `data-campo` = `apelido`, `usuario`, `login`. Rotas existentes: `/api/equipamento/atualizar-apelido`, `/api/equipamento/atualizar-usuario`, `/api/equipamento/nome-pessoa`; só campos alterados. Usuário do Endpoint não é editável.
-- Transporte: `#btn-nova-transferencia` ao lado de `#btn-trocar-equipamento` (`resetarFormulario`).
+- Transporte: `#btn-nova-transferencia` (`resetarFormulario`) fica no cabeçalho da página, ao lado de `#btn-historico-transferencias` ("Transferências geradas"); o banner `#transfer-equipment-banner` mantém só `#btn-trocar-equipamento`. Até 17/11/2026 ele ficava ao lado de `#btn-trocar-equipamento`; a mudança é do NL-F2 (18/11/2026), com o layout em 4 etapas descrito em `docs/cockpit-prompts/04-transporte-tres-colunas.md`, seção "Novo layout (NL-F2)".
 - Textos de planilha entram só por `textContent`; sem `style=` (CSP). Barras do gráfico do Relatório mensal com `<rect height>` em SVG (o gráfico da Evolução saiu em 31/10/2026).
 
 ### Pontos sem fonte real

@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
 // Limpeza dos textos explicativos, Bloco 4 (varredura geral): percorre as abas, sub-abas, painéis e modais e confere TODO ⓘ (.info-tip)
 // visível em cada tela, no desktop (1366px) e no celular (390px): o botão se descreve (aria-label "Sobre ..." e aria-describedby para um
@@ -266,6 +267,7 @@ const TELAS = [
     abrir: async page => {
       await page.goto("/");
       await abrirAbaTransporte(page);
+      await abrirEtapaTransporte(page, 2);
       await page.locator("#retirada-representante").selectOption("Londrina");
       await page.locator("#btn-editar-representante-retirada").click();
       await expect(page.locator("#representante-regional-nome")).toBeVisible();
