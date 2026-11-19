@@ -1,6 +1,7 @@
-// Regras puras da "OS nova sugerida" do F5 (textos, chips, corpos de PUT). Fica fora do .tsx para que estado.ts e os testes
-// em node leiam este arquivo sem transformar JSX. Contrato do servidor: `abertos[].os_nova` de GET /api/sebrae/novos.
-import type { OsNova, TextosOs } from "./tipos";
+// Regras puras da "OS nova sugerida" e do aviso "OS sem relação" do F5 (textos, chips, URLs e corpos de PUT). Fica fora do .tsx
+// para que estado.ts e os testes em node leiam este arquivo sem transformar JSX. Contrato do servidor: `abertos[].os_nova` e
+// `abertos[].os_sem_relacao` de GET /api/sebrae/novos.
+import type { OsNova, OsSemRelacao, TextosOs } from "./tipos";
 
 export const DESCRICAO_INDISPONIVEL = "Descrição não disponível";
 export const SELO_OS_NOVA = "OS nova?";
@@ -30,7 +31,7 @@ export function explicacaoCaixa(osNova: OsNova) {
     : "O número do chamado não está na OS, então a troca espera a sua decisão.";
 }
 
-export interface ChipSinal { texto: string; ok: boolean }
+export interface ChipSinal { texto: string; ok: boolean; alerta?: boolean }
 
 /** Chips de sinais. Com chamado sem OS (`sem_os`) os sinais do solicitante vêm antes da série, como no desenho aprovado. */
 export function chipsSinais(osNova: OsNova): ChipSinal[] {
@@ -66,3 +67,28 @@ export const urlOsRecusada = (numero: string) => `/api/sebrae/chamados/${encodeU
 export const corpoRecusar = (osNova: OsNova) => ({ os: osNova.nova.os });
 /** O servidor já entrega o corpo do vínculo pronto; só é copiado, nunca montado aqui. */
 export const corpoAceitar = (osNova: OsNova) => ({ ...osNova.aceitar });
+
+// ---- Aviso "OS sem relação" (`abertos[].os_sem_relacao`, 18/11/2026): a OS que já está na coluna E não combina com o chamado.
+// Visual escolhido em 19/11/2026: opção A do artefato Novo layout (quadro NL-F5-OS-SemRelacao), sem confirmação e sem selo na linha.
+
+export const tituloSemRelacao = (aviso: OsSemRelacao) => `OS da coluna E sem relação com este chamado: ${aviso.atual.os}`;
+export const EXPLICACAO_SEM_RELACAO = "A OS não cita o número do chamado, tem outro assunto e é anterior à abertura. Mantenha a OS ou remova-a da coluna E.";
+/** Os três sinais que definem `sem_relacao` (o servidor só emite o aviso com todos eles): dois ausentes e a data anterior em alerta. */
+export const CHIPS_SEM_RELACAO: readonly ChipSinal[] = [
+  { texto: "Número do chamado na OS", ok: false },
+  { texto: "Assunto parecido", ok: false },
+  { texto: "OS anterior à abertura", ok: false, alerta: true },
+];
+
+export const rotuloManter = (aviso: OsSemRelacao) => `Manter ${aviso.atual.os}`;
+export const rotuloRemover = (aviso: OsSemRelacao) => `Remover ${aviso.atual.os}`;
+export const notaMantida = (os: string) => `OS ${os} mantida. O aviso não volta para este chamado.`;
+export const notaRemovida = (os: string) => `OS ${os} removida. A coluna E fica vazia na próxima atualização do Dashboard.`;
+export const ERRO_MANTER = "Não foi possível manter a OS.";
+export const ERRO_REMOVER = "Não foi possível remover a OS.";
+
+export type AcaoSemRelacao = "mantida" | "removida";
+export const urlSemRelacao = (acao: AcaoSemRelacao, numero: string) =>
+  `/api/sebrae/chamados/${encodeURIComponent(numero)}/${acao === "mantida" ? "os-manter" : "os-remover"}`;
+/** Manter e Remover recebem a mesma OS: a da coluna E que o aviso mostra. */
+export const corpoSemRelacao = (aviso: OsSemRelacao) => ({ os: aviso.atual.os });

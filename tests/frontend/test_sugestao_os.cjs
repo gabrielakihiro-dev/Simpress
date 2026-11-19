@@ -1,8 +1,8 @@
-// "OS nova sugerida" no F5 (cartão aberto de um chamado antigo). Três camadas:
+// "OS nova sugerida" e aviso "OS sem relação" no F5 (cartão aberto de um chamado antigo). Três camadas:
 // 1) regras puras de sugestao-os-modelo.ts (textos aprovados, chips, corpos dos PUT);
 // 2) estado.ts com um provedor falso no lugar da caixa React: campo OS, selo "OS nova?", host `data-sugestao-os`, limpeza de raízes;
 // 3) leitura do sugestao-os.tsx (o Node não lê JSX): endpoints e corpos dos PUT, sem repetição automática. O comportamento desenhado
-//    no navegador (Aceitar, Recusar, troca) é provado em tests/e2e/chamados-os.spec.cjs. Só dados sintéticos.
+//    no navegador (Aceitar, Recusar, troca, Manter e Remover do aviso) é provado em tests/e2e/chamados-os.spec.cjs. Só dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,6 +17,7 @@ const sinais = (extra = {}) => ({ mesma_serie: true, nome: false, assunto: true,
 const aceitar = (os, chamado = "UTIC-2026-1200", serie = "BRJ0001") => ({ fonte: "oracle", serie, os, ano: 2026, numero: chamado.split("-").pop() });
 const sugestao = () => ({ tipo: "sugestao", atual: textos("7303022", { data: "03/11/2026" }), nova: { ...textos("7400000"), serie: "BRJ0001", fonte: "oracle" }, sinais: sinais(), aceitar: aceitar("7400000") });
 const semOs = () => ({ tipo: "sem_os", atual: null, nova: { ...textos("7400001"), serie: "BRJ0002", fonte: "oracle" }, sinais: sinais({ nome: true, mesma_serie: false }), aceitar: aceitar("7400001", "UTIC-2026-1201", "BRJ0002") });
+const semRelacao = (os = "7303888") => ({ tipo: "sem_relacao", atual: textos(os, { data: "02/11/2026" }), sinais: { assunto: false, numero_chamado: false, data_anterior: true } });
 const troca = () => ({ tipo: "troca", atual: textos("7303000"), nova: { ...textos("7400002"), serie: "BRJ0003", fonte: "oracle" }, sinais: sinais({ numero_chamado: true }), aceitar: aceitar("7400002", "UTIC-2026-1202", "BRJ0003") });
 
 // ---- 1) regras puras ----
@@ -84,6 +85,32 @@ test("Aceitar copia o corpo pronto do servidor; Recusar e Manter gravam só a OS
   assert.equal(modelo.urlOsRecusada("linha:27"), "/api/sebrae/chamados/linha%3A27/os-recusada");
 });
 
+test("aviso sem relação: título, explicação, chips e botões seguem os textos aprovados (dois chips ausentes e um em alerta)", () => {
+  const aviso = semRelacao();
+  assert.equal(modelo.tituloSemRelacao(aviso), "OS da coluna E sem relação com este chamado: 7303888");
+  assert.equal(modelo.EXPLICACAO_SEM_RELACAO, "A OS não cita o número do chamado, tem outro assunto e é anterior à abertura. Mantenha a OS ou remova-a da coluna E.");
+  assert.deepEqual(modelo.CHIPS_SEM_RELACAO, [
+    { texto: "Número do chamado na OS", ok: false }, { texto: "Assunto parecido", ok: false }, { texto: "OS anterior à abertura", ok: false, alerta: true },
+  ]);
+  assert.equal(modelo.rotuloManter(aviso), "Manter 7303888");
+  assert.equal(modelo.rotuloRemover(aviso), "Remover 7303888");
+  assert.equal(modelo.seloOs("atual", aviso.atual), "atual · 02/11/2026");
+});
+
+test("aviso sem relação: notas e erros usam os textos aprovados", () => {
+  assert.equal(modelo.notaMantida("7303888"), "OS 7303888 mantida. O aviso não volta para este chamado.");
+  assert.equal(modelo.notaRemovida("7303888"), "OS 7303888 removida. A coluna E fica vazia na próxima atualização do Dashboard.");
+  assert.equal(modelo.ERRO_MANTER, "Não foi possível manter a OS.");
+  assert.equal(modelo.ERRO_REMOVER, "Não foi possível remover a OS.");
+});
+
+test("aviso sem relação: Manter e Remover vão para a rota do chamado com a OS atual da coluna E no corpo", () => {
+  assert.equal(modelo.urlSemRelacao("mantida", "UTIC-2026-1204"), "/api/sebrae/chamados/UTIC-2026-1204/os-manter");
+  assert.equal(modelo.urlSemRelacao("removida", "UTIC-2026-1204"), "/api/sebrae/chamados/UTIC-2026-1204/os-remover");
+  assert.equal(modelo.urlSemRelacao("removida", "linha:27"), "/api/sebrae/chamados/linha%3A27/os-remover");
+  assert.deepEqual(modelo.corpoSemRelacao(semRelacao()), { os: "7303888" });
+});
+
 // ---- 2) estado.ts com provedor falso ----
 
 const esvaziarFila = () => new Promise(resolver => setImmediate(resolver));
@@ -94,12 +121,13 @@ const aberto = (numero, extra = {}) => ({
 });
 const cargaComOsNova = () => ({
   importado: {
-    arquivo: "Dashboard.xlsx", importado_em: "2026-11-16T10:00:00-03:00", total: 4, atualizavel: true, saida_pronta: false, listas: { A: ["CLIENTE"] },
+    arquivo: "Dashboard.xlsx", importado_em: "2026-11-16T10:00:00-03:00", total: 5, atualizavel: true, saida_pronta: false, listas: { A: ["CLIENTE"] },
     abertos: [
       aberto("UTIC-2026-1200", { automaticos: { E: "7303022", K: "BRJ0001" }, os_nova: sugestao() }),
       aberto("UTIC-2026-1201", { automaticos: { K: "BRJ0002" }, os_nova: semOs() }),
       aberto("UTIC-2026-1202", { automaticos: { E: "7400002", K: "BRJ0003" }, os_nova: troca() }),
-      aberto("UTIC-2026-1203", { automaticos: { E: "7303999", K: "BRJ0004" }, os_nova: null }),
+      aberto("UTIC-2026-1203", { automaticos: { E: "7303999", K: "BRJ0004" }, os_nova: null, os_sem_relacao: null }),
+      aberto("UTIC-2026-1204", { automaticos: { E: "7303888", K: "BRJ0005" }, os_nova: null, os_sem_relacao: semRelacao() }),
     ],
     finalizados: [],
   },
@@ -143,6 +171,7 @@ async function montarComProvedor(carga = cargaComOsNova(), decididos = [], comPr
   return { doc, el, feature, provedor, chamadas, carga };
 }
 
+const montagensDe = (provedor, numero) => provedor.montagens.filter(m => m.numero === numero);
 const campoE = cartao => cartao.querySelectorAll(".sebrae-chamado__auto div").find(linha => linha.querySelector("dt")?.textContent === "OS")?.querySelector("dd");
 
 test("sugestão: campo OS 'mais nova: N?', selo 'OS nova?' na linha, host entregue à caixa e raízes antigas limpas", async () => {
@@ -191,6 +220,39 @@ test("chamado sem os_nova: sem host, sem selo e sem chamada ao provedor", async 
   assert.equal(provedor.montagens.some(m => m.numero === "UTIC-2026-1203"), false);
 });
 
+test("os_sem_relacao: host entregue à caixa com o aviso, sem selo 'OS nova?' nem marca no campo OS", async () => {
+  const { el, provedor } = await montarComProvedor();
+  const cartao = cartaoAntigoDe(el, "UTIC-2026-1204");
+  const host = cartao.querySelector("[data-sugestao-os]");
+  assert.ok(host, "o aviso precisa de host mesmo com os_nova null");
+  assert.equal(host.children.length, 0, "estado.ts nunca escreve dentro do host");
+  const montagem = provedor.montagens.find(m => m.numero === "UTIC-2026-1204");
+  assert.equal(montagem.host, host);
+  assert.equal(montagem.osNova, null);
+  assert.equal(montagem.osSemRelacao.tipo, "sem_relacao");
+  assert.equal(montagem.osSemRelacao.atual.os, "7303888");
+  assert.equal(typeof montagem.recarregar, "function");
+  assert.equal(cartao.querySelector(".sebrae-selo-os-nova"), null);
+  assert.notEqual(campoE(cartao).className, "sebrae-osnova-campo", "o campo OS não ganha marca de sugestão");
+  assert.equal(campoE(cartao).textContent, "7303888", "a OS da E segue como está: o aviso não sugere outra");
+  assert.equal(montagensDe(provedor, "UTIC-2026-1203").length, 0, "sem os_nova nem os_sem_relacao: sem host");
+});
+
+test("os_nova e os_sem_relacao saem separados para a caixa: a sugestão não leva aviso e o aviso não leva sugestão", async () => {
+  const { provedor } = await montarComProvedor();
+  assert.equal(provedor.montagens.find(m => m.numero === "UTIC-2026-1200").osSemRelacao, null);
+  assert.equal(provedor.montagens.find(m => m.numero === "UTIC-2026-1204").osNova, null);
+});
+
+test("decisão já tomada no aviso: o host continua mesmo com os_sem_relacao vazio", async () => {
+  const carga = cargaComOsNova();
+  carga.importado.abertos[4].os_sem_relacao = null;
+  const { el, provedor } = await montarComProvedor(carga, ["UTIC-2026-1204"]);
+  const cartao = cartaoAntigoDe(el, "UTIC-2026-1204");
+  assert.ok(cartao.querySelector("[data-sugestao-os]"), "a nota de Manter ou Remover precisa de host depois da recarga");
+  assert.equal(provedor.montagens.find(m => m.numero === "UTIC-2026-1204").osSemRelacao, null);
+});
+
 test("decisão já tomada: o host continua mesmo com os_nova vazio, sem selo 'OS nova?'", async () => {
   const carga = cargaComOsNova();
   carga.importado.abertos[0].os_nova = null;
@@ -232,7 +294,7 @@ const fonteTsx = fs.readFileSync(path.resolve(__dirname, "../../frontend/src/pai
 test("sugestao-os.tsx: Aceitar grava em vinculos-os, Recusar e Manter em os-recusada, sem repetir sozinho e sem importar CSS", () => {
   assert.match(fonteTsx, /apiFetch\(URL_VINCULOS_OS, \{ method: "PUT"[^}]*body: JSON\.stringify\(corpoAceitar\(osNova\)\)/);
   assert.match(fonteTsx, /apiFetch\(urlOsRecusada\(numero\), \{ method: "PUT"[^}]*body: JSON\.stringify\(corpoRecusar\(osNova\)\)/);
-  assert.equal((fonteTsx.match(/apiFetch\(/g) || []).length, 2, "só dois pontos de gravação");
+  assert.equal((fonteTsx.match(/apiFetch\(/g) || []).length, 3, "só três pontos de gravação: vínculo ou recusa (SugestaoOs) e Manter ou Remover (AvisoSemRelacao)");
   assert.doesNotMatch(fonteTsx, /setTimeout|setInterval|retry/i, "sem repetição automática");
   assert.doesNotMatch(fonteTsx, /import\s+["'][^"']+\.css["']/, "o CSS vem de static/styles/ck-cockpit.css");
   assert.match(fonteTsx, /emEnvio\.current/, "guarda contra dois cliques seguidos");
@@ -245,4 +307,25 @@ test("sugestao-os.tsx: só a troca automática mostra nota sem botões; erro dev
   assert.match(fonteTsx, /errorMessage: "Não foi possível aceitar a OS\."/);
   assert.match(fonteTsx, /errorMessage: "Não foi possível recusar a OS\."/);
   assert.match(fonteTsx, /role="alert"/);
+});
+
+test("sugestao-os.tsx: Manter e Remover usam a rota e o corpo do modelo, a trava de duplo clique e o aviso próprio", () => {
+  assert.match(fonteTsx, /apiFetch\(urlSemRelacao\(acao, numero\), \{ method: "PUT"[^}]*body: JSON\.stringify\(corpoSemRelacao\(aviso\)\)/);
+  assert.match(fonteTsx, /errorMessage: mensagemErro/);
+  assert.match(fonteTsx, /acao === "mantida" \? ERRO_MANTER : ERRO_REMOVER/);
+  assert.match(fonteTsx, /function AvisoSemRelacao\(/);
+  assert.match(fonteTsx, /data-tipo="sem-relacao"/);
+  assert.match(fonteTsx, /onClick=\{\(\) => decidir\("mantida"\)\}/);
+  assert.match(fonteTsx, /onClick=\{\(\) => decidir\("removida"\)\}/);
+  const trecho = fonteTsx.slice(fonteTsx.indexOf("function AvisoSemRelacao("), fonteTsx.indexOf("interface Chamado "));
+  assert.match(trecho, /emEnvio\.current/, "guarda contra dois cliques seguidos");
+  assert.match(trecho, /disabled=\{enviando\}/);
+  assert.match(trecho, /role="alert"/);
+  assert.match(trecho, /void recarregar\(\)/, "depois do sucesso recarrega o F5 e o aviso some porque a API volta null");
+});
+
+test("sugestao-os.tsx: montar escolhe o aviso só sem os_nova e descarta a decisão do aviso quando chega sugestão ou outra OS na E", () => {
+  assert.match(fonteTsx, /const comAviso = !osNova && Boolean\(osSemRelacao \|\| decisoesSemRelacao\.has\(numero\)\)/);
+  assert.match(fonteTsx, /if \(osNova \|\| \(osSemRelacao && decisoesSemRelacao\.get\(numero\)\?\.os !== osSemRelacao\.atual\.os\)\) decisoesSemRelacao\.delete\(numero\)/);
+  assert.match(fonteTsx, /temDecisao: numero => decisoes\.has\(numero\) \|\| decisoesSemRelacao\.has\(numero\)/);
 });
