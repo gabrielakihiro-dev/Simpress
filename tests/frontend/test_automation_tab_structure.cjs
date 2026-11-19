@@ -26,13 +26,14 @@ const {
   ROTINAS, STATUS, POLL_ATIVO_MS, POLL_LIVRE_MS, MAX_LINHAS, MAX_EVENTOS, ROTINAS_DOS_CARTOES, eServidorDesatualizado, nomeDaRotina,
   nomeDoStatus, formatarDuracao, descreverQuando, rotuloInicio, dataLocalIso, situacaoDoSelo, iconeDoSelo, situacaoDoCartao, botaoBloqueado,
   rotuloDoBotao, iconeDoBotao, descreverEstado, textoResultado, classificarEvento, eventosDoLog, textoDoModo, textoDoArquivo, resumoDoHistorico,
-  limitarPagina, descricaoDaCaptura, dicaDosLotes, visaoDoLog, verBackupsDepois,
+  limitarPagina, descricaoDaCaptura, dicaDosLotes, visaoDoLog, verBackupsDepois, ABAS_ROTINA, ABA_PADRAO, abaDaRotina, execucaoMaisRecente,
+  situacaoDaEtapa, percentualDaRotina,
 } = regras;
 
 const AGORA = new Date(2026, 10, 12, 10, 0, 0); // 12/11/2026 10:00, hora local
 
 // ---- Regras puras ----
-test("regras: as rotinas têm os nomes aprovados e a aba mostra quatro cartões, na ordem dos botões", () => {
+test("regras: as rotinas têm os nomes aprovados; os quatro cartões vêm na ordem dos botões e a trilha soma o SharePoint e o SoftExpert", () => {
   assert.equal(ROTINAS.os, "Rotina de OS");
   assert.equal(ROTINAS.inventarios, "Inventários");
   assert.equal(ROTINAS.usuarios, "Verificar usuários");
@@ -44,8 +45,31 @@ test("regras: as rotinas têm os nomes aprovados e a aba mostra quatro cartões,
   assert.equal(nomeDoStatus("falha"), "Falha");
   assert.equal(nomeDoStatus(""), "");
   assert.deepEqual(Object.keys(STATUS), ["em_andamento", "concluido", "falha", "cancelado", "ocupada", "interrompido"]);
-  assert.deepEqual([...ROTINAS_DOS_CARTOES], ["os", "inventarios", "ambas", "usuarios"]);
+  assert.deepEqual([...ROTINAS_DOS_CARTOES], ["os", "inventarios", "ambas", "usuarios", "dashboard", "sebrae"]);
   assert.equal(Object.isFrozen(ROTINAS) && Object.isFrozen(STATUS), true);
+});
+
+test("regras: as quatro abas, a aba de cada rotina, a trilha e a barra de etapas", () => {
+  assert.deepEqual(ABAS_ROTINA.map(aba => aba.nome), ["SharePoint", "SoftExpert", "Rotina Completa", "Inventários"]);
+  assert.equal(ABA_PADRAO, "softexpert");
+  assert.deepEqual(["dashboard", "sebrae", "os", "usuarios", "ambas", "inventarios", "login", undefined].map(abaDaRotina), ["softexpert", "softexpert", "completa", "completa", "completa", "inventarios", "", ""]);
+  const antiga = { id: "a", rotina: "sebrae", status: "concluido", inicio: "2026-11-11T09:00:00" };
+  const nova = { id: "b", rotina: "dashboard", status: "falha", inicio: "2026-11-12T08:00:00" };
+  assert.equal(execucaoMaisRecente(antiga, nova), nova);
+  assert.equal(execucaoMaisRecente(nova, null), nova);
+  assert.equal(execucaoMaisRecente(null, antiga), antiga);
+  assert.equal(execucaoMaisRecente(null, undefined), null);
+  const hoje = { id: "c", rotina: "ambas", status: "concluido", inicio: "2026-11-12T08:00:00", fim: "2026-11-12T08:30:00" };
+  const outroDia = { ...hoje, inicio: "2026-11-10T08:00:00", fim: "2026-11-10T08:30:00" };
+  assert.equal(situacaoDaEtapa(false, hoje, AGORA).status, "ok");
+  assert.equal(situacaoDaEtapa(false, outroDia, AGORA).status, "ok", "concluída em outro dia também acende a etapa");
+  assert.equal(situacaoDaEtapa(false, null, AGORA).status, "");
+  assert.equal(situacaoDaEtapa(true, hoje, AGORA).status, "info");
+  assert.equal(percentualDaRotina(false, hoje, []), 100);
+  assert.equal(percentualDaRotina(false, null, []), 0);
+  assert.equal(percentualDaRotina(true, null, ["[10:00] iniciando", "[10:01] 35% coletado", "[10:02] 60% coletado"]), 60);
+  assert.equal(percentualDaRotina(true, null, ["sem percentual"]), 0);
+  assert.equal(percentualDaRotina(true, null, ["999% absurdo 150%"]), 100);
 });
 
 test("regras: o polling segue 1,5 s com rotina em andamento e 5 s livre; o log guarda 500 linhas e 200 eventos", () => {
@@ -362,11 +386,12 @@ test("o TSX desenha as quatro rotinas na ordem, com ícone, rótulo acessível, 
   assert.deepEqual(ordem, [...ordem].sort((x, y) => x - y), "os, inventarios, usuarios, ambas");
   assert.match(componentes, /data-on-click="iniciarRotinaAutomacao" data-args=\{args\(cartao\.id\)\}/);
   assert.match(componentes, /id=\{`btn-automacao-\$\{cartao\.id\}`\} data-automacao-rotina=\{cartao\.id\}/);
-  assert.match(componentes, /ck-btn--sm ck-btn--icone/);
+  assert.match(componentes, /ck-btn--sm nl-f4-btn/);
   assert.match(componentes, /aria-label=\{e\.botoesProntos \? `\$\{rotulo\} \$\{cartao\.nome\}` : `Executar \$\{cartao\.nome\}`\}/);
-  assert.match(componentes, /<span className="ck-sr">\{e\.botoesProntos \? rotulo : "Executar"\}<\/span>/);
-  assert.match(componentes, /className="ck-cartao ck-rotina" data-rotina=\{cartao\.id\}/);
-  assert.match(componentes, /<div className="ck-rotinas" role="group" aria-label="Rotinas principais">/);
+  assert.match(componentes, /<span>\{e\.botoesProntos \? rotulo : "Executar"\}<\/span>/);
+  assert.match(componentes, /<li className="nl-f4-item" data-rotina=\{cartao\.id\}/);
+  assert.match(componentes, /role="tablist" aria-label="Rotinas"/);
+  assert.match(componentes, /role="tabpanel"/);
   assert.match(componentes, /icone: "i-users", nome: "Verificar usuários", idTitulo: "ck-verificacao-titulo"/);
   assert.match(componentes, /id="btn-automacao-login" data-automacao-rotina="login"/);
   assert.match(componentes, /id="btn-automacao-cancelar"/);

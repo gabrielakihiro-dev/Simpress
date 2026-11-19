@@ -886,7 +886,7 @@ class Handler(BaseHTTPRequestHandler):
             globals()["automation_run"] = None
             globals()["automation_last_sebrae"] = query.get("ultimo_sebrae", ["0"])[0] == "1"
             rotina_ativa = query.get("run", [""])[0]
-            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae"):
+            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard"):
                 globals()["automation_run"] = {
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",
