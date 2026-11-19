@@ -14,6 +14,20 @@ async function openAutomation(page, request, count = 0, sebrae = "padrao", run =
   return panel;
 }
 
+// Cada rotina vive numa aba do seletor "Rotinas"; só o painel da aba escolhida fica visível.
+async function selectRoutineTab(panel, name) {
+  const tab = panel.getByRole("tab", { name, exact: true });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
+// O filtro de datas fica na caixa do chip "Período" (um <details>); abre só se estiver fechada.
+async function openPeriod(panel) {
+  const box = panel.locator("details.nl-f4-periodo");
+  if (!(await box.evaluate(el => el.open))) await box.locator("summary").click();
+  await expect(box).toHaveJSProperty("open", true);
+}
+
 test("Automação transforma as linhas do log ativo em eventos seguros e atualiza o indicador ao vivo", async ({ page, request }) => {
   const panel = await openAutomation(page, request, 0, "padrao", "os");
   const events = panel.locator("#cockpit-automation-events");
@@ -54,6 +68,7 @@ test("Automação starts a routine, shows the login warning and the live log, th
   await expect(cancel).toBeDisabled();
   await expect(panel.locator("#automacao-aviso-login")).toBeHidden();
 
+  await selectRoutineTab(panel, "Rotina Completa");
   const started = page.waitForRequest(req => req.url().endsWith("/api/automacao/executar") && req.method() === "POST");
   await panel.locator("#btn-automacao-os").click();
   expect((await started).postDataJSON()).toEqual({ rotina: "os" });
@@ -95,22 +110,24 @@ test("Automação pages and filters executions without growing the history", asy
   await expect(rows).toHaveCount(3);
   await panel.getByRole("combobox", {name: "Execuções por página", exact: true}).selectOption("10");
   await expect(rows).toHaveCount(10);
+  await openPeriod(panel);
   await panel.getByLabel("De", {exact: true}).fill("2026-10-19");
   await panel.getByLabel("Até", {exact: true}).fill("2026-10-19");
   await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(rows).toHaveCount(4);
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("4 execuções · de 19/10/2026 · até 19/10/2026");
-  await panel.getByRole("combobox", {name: "Status", exact: true}).selectOption("falha");
-  await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
-  await expect(rows).toHaveCount(2);
+  // Os chips Rotina e Status aplicam o filtro assim que a escolha muda.
+  await panel.getByRole("combobox", {name: /^Status/}).selectOption("falha");
   await expect(rows).toHaveCount(2);
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("Falha");
+  await openPeriod(panel);
   await panel.getByLabel("De", {exact: true}).fill("2026-10-21");
   await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("A data inicial deve ser anterior");
   await expect(panel.getByLabel("Até", {exact: true})).toBeFocused();
   await panel.getByRole("button", {name: "Limpar", exact: true}).click();
   await expect(rows).toHaveCount(10);
+  await openPeriod(panel);
   await panel.getByLabel("De", {exact: true}).fill("2026-01-01");
   await panel.getByLabel("Até", {exact: true}).fill("2026-01-01");
   await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
@@ -157,6 +174,34 @@ test("Automação passes the accessibility audit without horizontal overflow in 
   await expect(panel.locator("#automacao-historico")).toBeVisible();
 });
 
+test("Automação shows the three-step track and switches routine tabs with the keyboard", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+  const tabs = panel.getByRole("tablist", { name: "Rotinas" });
+  await expect(tabs.getByRole("tab")).toHaveText(["SharePoint", "SoftExpert", "Rotina Completa", "Inventários"]);
+  await expect(panel.locator("#tab-rotina-softexpert")).toHaveAttribute("aria-selected", "true");
+  await expect(panel.locator("#sebrae-novos-painel")).toBeVisible();
+  await expect(panel.getByRole("list", { name: "Etapas das rotinas" }).getByRole("button")).toHaveCount(3);
+
+  await panel.locator("#tab-rotina-softexpert").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(panel.locator("#tab-rotina-completa")).toBeFocused();
+  await expect(panel.locator("#painel-rotina-completa")).toBeVisible();
+  await expect(panel.locator("#sebrae-novos-painel")).toBeHidden();
+  await page.keyboard.press("End");
+  await expect(panel.locator("#painel-rotina-inventarios")).toBeVisible();
+  await page.keyboard.press("Home");
+  await expect(panel.locator("#painel-rotina-sharepoint")).toBeVisible();
+});
+
+// "dashboard" parte do cartão do SoftExpert: a troca automática de aba não pode escondê-lo.
+test("Automação keeps the SoftExpert card visible while the Dashboard routine runs", async ({ page, request }) => {
+  const panel = await openAutomation(page, request, 0, "padrao", "dashboard");
+  await expect(panel.locator("#automacao-estado")).toContainText("Ocupado");
+  await expect(panel.locator("#tab-rotina-softexpert")).toHaveAttribute("aria-selected", "true");
+  await expect(panel.locator("#sebrae-novos-painel")).toBeVisible();
+  await expect(panel.locator("#sebrae-novos-painel")).toHaveAccessibleName(/Chamados novos do SoftExpert/);
+});
+
 test("Automação shows the 409 message when another run is in progress", async ({ page, request }) => {
   await page.route("**/api/automacao/executar", route => route.fulfill({
     status: 409,
@@ -164,6 +209,7 @@ test("Automação shows the 409 message when another run is in progress", async 
     body: JSON.stringify({ detail: "Já há uma rotina em andamento: Inventários desde 07:30. Aguarde terminar ou cancele." }),
   }));
   const panel = await openAutomation(page, request);
+  await selectRoutineTab(panel, "Rotina Completa");
   await panel.locator("#btn-automacao-ambas").click();
   await expect(page.locator("#toast-container")).toContainText("Já há uma rotina em andamento: Inventários desde 07:30.");
   await expect(panel.locator("#btn-automacao-ambas")).toBeEnabled();
