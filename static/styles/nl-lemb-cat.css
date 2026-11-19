@@ -1,0 +1,302 @@
+/* Novo layout, bloco Lembretes-Catálogo: Lembretes (visual A), Termos (visual C) e Catálogo de unidades (visual B).
+   Usa os tokens --nl-* de nl-base.css (carregado antes). Movimento só dentro de prefers-reduced-motion: no-preference. */
+
+/* ---------- Catálogo de unidades (NL-Catalogo, NL-Catalogo-Filtros) ---------- */
+[data-cockpit-tool-panel="unidades"] .nlc { display: flex; flex-direction: column; gap: 16px; }
+
+[data-cockpit-tool-panel="unidades"] .nlc-resumo {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao);
+  background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-resumo__nums { display: flex; gap: 32px; flex-wrap: wrap; margin-right: auto; }
+[data-cockpit-tool-panel="unidades"] .nlc-kpi {
+  display: flex; flex-direction: column-reverse; gap: 2px; padding: 0; border: 0; background: none; box-shadow: none; min-width: 0;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__rotulo { font-size: 12px; color: var(--nl-mut); }
+[data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__valor {
+  font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--nl-tx); font-variant-numeric: tabular-nums;
+}
+
+[data-cockpit-tool-panel="unidades"] .nlc-barra { display: flex; align-items: center; gap: 12px; }
+[data-cockpit-tool-panel="unidades"] .nlc-busca {
+  display: flex; align-items: center; gap: 8px; width: 300px; max-width: 100%; height: 40px; padding: 0 6px 0 12px;
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-mut);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-busca--cheia { border-color: rgba(var(--nl-i), .55); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca:focus-within { border-color: rgb(var(--nl-i)); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--nl-tx); font: inherit; font-size: 14px;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp::-webkit-search-cancel-button { display: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__inp::placeholder { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="unidades"] .nlc-busca__x { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 8px; flex: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-status {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--nl-bd); border-radius: 999px;
+  font-size: 12px; color: var(--nl-mut); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-status--erro { white-space: normal; height: auto; min-height: 28px; color: rgb(var(--nl-r)); }
+[data-cockpit-tool-panel="unidades"] .nlc-status--filtro { color: var(--nl-tx); border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .12); }
+
+[data-cockpit-tool-panel="unidades"] .nlc-grade {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none;
+}
+[data-cockpit-tool-panel="unidades"] .nlc-cartao {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 16px;
+  border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="unidades"] .nlc-cartao--sede { border-color: rgba(var(--nl-i), .45); background: rgba(var(--nl-i), .06); }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao__lin { display: flex; align-items: center; gap: 8px; min-width: 0; }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao__nome { font-weight: 700; color: var(--nl-tx); overflow-wrap: anywhere; }
+[data-cockpit-tool-panel="unidades"] .nlc-cartao mark { background: rgba(var(--nl-i), .28); color: var(--nl-tx); border-radius: 4px; padding: 0 1px; }
+[data-cockpit-tool-panel="unidades"] .nlc-sede { margin-left: auto; flex: none; }
+[data-cockpit-tool-panel="unidades"] .nlc-k { font-size: 12px; color: var(--nl-mut); }
+[data-cockpit-tool-panel="unidades"] .nlc-cnpj { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--nl-tx2); }
+[data-cockpit-tool-panel="unidades"] .nlc-fraco { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="unidades"] .nlc-lapis { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 8px; flex: none; }
+
+[data-cockpit-tool-panel="unidades"] .nlc-vazio {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; margin: 0;
+  border: 1px dashed var(--nl-bd2); border-radius: 14px; color: var(--nl-mut); text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-cockpit-tool-panel="unidades"] .nlc-busca,
+  [data-cockpit-tool-panel="unidades"] .nlc-status { transition: border-color .2s ease, color .2s ease, background-color .2s ease; }
+  [data-cockpit-tool-panel="unidades"] .nlc-busca__x { animation: nl-aparece .2s ease both; }
+  [data-cockpit-tool-panel="unidades"] .nlc-cartao { animation: nl-sobe .25s var(--nl-curva) both; }
+}
+
+@media (max-width: 1199px) {
+  [data-cockpit-tool-panel="unidades"] .nlc-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  [data-cockpit-tool-panel="unidades"] .nlc-resumo { padding: 0; border: 0; background: none; box-shadow: none; }
+  [data-cockpit-tool-panel="unidades"] .nlc-resumo__nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; margin: 0; }
+  [data-cockpit-tool-panel="unidades"] .nlc-kpi {
+    padding: 10px 12px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card);
+  }
+  [data-cockpit-tool-panel="unidades"] .nlc-kpi .ck-kpi__valor { font-size: 22px; }
+  [data-cockpit-tool-panel="unidades"] #cockpit-units-new { width: 100%; justify-content: center; }
+  [data-cockpit-tool-panel="unidades"] .nlc-barra { flex-wrap: wrap; }
+  [data-cockpit-tool-panel="unidades"] .nlc-busca { width: 100%; flex: 1 1 100%; }
+  [data-cockpit-tool-panel="unidades"] .nlc-grade { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Lembretes (NL-Lembretes, NL-Lembretes-Itens; visual A) ---------- */
+/* Só a aba Lembretes e a pílula de sub-abas do topo; o conteúdo dos Termos não entra aqui. Estrutura, alvos de 44px e container queries ficam em ck-lembretes.css; aqui só cor, borda, raio, fundo e tipografia. */
+
+/* Pílula de sub-abas do topo: aba ativa em cartão com borda; as outras só texto. */
+[data-cockpit-tool-panel="lembretes"] .termos__abas { gap: 4px; }
+[data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula {
+  border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: none; box-shadow: none;
+  color: var(--nl-mut); font-family: inherit; font-size: 14px; font-weight: 500;
+}
+[data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula:hover { color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula[aria-selected="true"] {
+  border-color: var(--nl-bd2); background: var(--nl-card); box-shadow: none; color: var(--nl-tx);
+}
+/* Celular: fonte e folga menores para as três sub-abas caberem numa linha a partir de 375 px (em 320 e 360 px a terceira desce, sem rolagem horizontal); no desenho do celular os rótulos são encurtados, aqui os textos aprovados ficam. */
+@media (max-width: 479px) {
+  [data-cockpit-tool-panel="lembretes"] .termos__abas { gap: 2px; }
+  [data-cockpit-tool-panel="lembretes"] .termos__abas .ck-pilula { padding-inline: 8px; font-size: 13px; }
+}
+[data-cockpit-tool-panel="lembretes"] :is(.termos__abas, .lembretes__vistas) .ck-pilula__n {
+  border-radius: 999px; background: rgba(var(--nl-i), .16); color: var(--nl-itx); font-size: 12px; opacity: 1;
+}
+[data-cockpit-tool-panel="lembretes"] :is(.termos__abas, .lembretes__vistas) .ck-pilula[aria-selected="true"] .ck-pilula__n { background: rgba(var(--nl-i), .3); }
+
+/* Cartões: Novo lembrete à esquerda, lista à direita. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__cartao {
+  padding: 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="lembretes"] .lembretes__cartao-titulo { font-size: 16px; font-weight: 600; color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__cartao-ico { color: var(--nl-itx); }
+
+/* Botões e campos (rótulo sempre acima do campo). */
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn { border-radius: var(--nl-raio-controle); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--secundario { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--secundario:hover:not(:disabled) { border-color: var(--nl-mut); background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .lembretes__data-botao--ativa,
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .lembretes__data-botao--ativa:hover:not(:disabled) { border-color: rgb(var(--nl-i)); background: rgba(var(--nl-i), .16); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario,
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario:hover,
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario:active { border-color: rgb(var(--nl-i)); background: rgb(var(--nl-i)); color: #0b0d15; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario:hover:not(:disabled) { filter: brightness(1.08); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario:disabled,
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario:disabled:hover { border-color: transparent; background: rgba(var(--nl-i), .3); color: var(--nl-tx); opacity: 1; filter: none; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn kbd {
+  margin-inline-start: 4px; padding: 2px 6px; border: 1px solid var(--nl-bd2); border-radius: 6px; background: none; color: var(--nl-mut);
+  font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace;
+}
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn--primario kbd { border-color: rgba(11, 13, 21, .35); color: rgba(11, 13, 21, .7); }
+
+[data-cockpit-tool-panel="lembretes"] .lembretes__rotulo,
+[data-cockpit-tool-panel="lembretes"] .lembretes__rotulo-campo { font-size: 12px; font-weight: 500; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-entrada {
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font-size: 14px;
+}
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-entrada::placeholder { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-entrada:focus-visible { border-color: rgb(var(--nl-i)); box-shadow: 0 0 0 3px rgba(var(--nl-i), .16); outline: none; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-entrada[aria-invalid="true"] { border-color: rgb(var(--nl-r)); }
+
+/* Data agendada: painel em fundo secundário, atalhos em pílulas. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__data-painel { gap: 12px; padding: 6px 16px 16px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-tabela); background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__data-legenda { padding: 0 6px; font-size: 12px; font-weight: 500; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__atalho { border-color: var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__atalho:hover { border-color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__atalho[aria-pressed="true"] { border-color: rgb(var(--nl-i)); background: rgba(var(--nl-i), .16); color: var(--nl-tx); font-weight: 500; }
+
+/* Vistas Hoje / Em breve em controle segmentado. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__vistas { gap: 4px; padding: 3px; border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__vistas .ck-pilula { border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: none; box-shadow: none; color: var(--nl-mut); font-weight: 500; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__vistas .ck-pilula:hover { color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__vistas .ck-pilula[aria-selected="true"] { border-color: rgba(var(--nl-i), .5); background: rgba(var(--nl-i), .16); box-shadow: none; color: var(--nl-tx); }
+
+/* Semana (Em breve): mês, navegação e faixa de dias. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__mes { font-size: 14px; font-weight: 600; color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__navegar { border-color: var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__nav { color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__nav:hover:not(:disabled) { background: var(--nl-card2); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__faixa { border-bottom-color: var(--nl-bd); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__dia { border-radius: var(--nl-raio-controle); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__dia:hover:not(:disabled) { background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__dia:disabled { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__dia[aria-current="date"] { background: rgba(var(--nl-i), .16); color: var(--nl-itx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__dia[aria-current="date"] .lembretes__dia-num { background: rgb(var(--nl-i)); color: #0b0d15; }
+
+/* Grupos: título, contagem e Adicionar lembrete no topo; um cartão por lembrete. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__grupo-titulo { font-size: 14px; font-weight: 600; color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__grupo-n { border: 1px solid var(--nl-bd); border-radius: 999px; font-size: 12px; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__adicionar-dia { border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx2); font-size: 13px; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__adicionar-dia:hover { background: var(--nl-card2); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__adicionar-dia .lembretes__ico { color: var(--nl-itx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__item { border-color: var(--nl-bd); border-radius: var(--nl-raio-tabela); background: var(--nl-card); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__item:hover { border-color: var(--nl-bd2); }
+
+/* Círculo de concluir: anel cinza; concluído em verde. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar { color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar::before { border-color: var(--nl-bd2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar:hover { color: rgb(var(--nl-i)); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar:hover::before { border-color: rgb(var(--nl-i)); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar--fixo, [data-cockpit-tool-panel="lembretes"] .lembretes__marcar--fixo:hover { color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__marcar--fixo:hover::before { border-color: var(--nl-bd2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__item--feito .lembretes__marcar { color: var(--nl-etx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__item--feito .lembretes__marcar::before { border-color: rgba(var(--nl-e), .5); background: rgba(var(--nl-e), .16); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__item--feito .lembretes__marcar::after { border-color: var(--nl-etx); }
+
+/* Editar e Excluir com borda; Excluir fica vermelho ao passar o mouse. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__acao { border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-sub); color: var(--nl-tx2); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__acao:hover { background: var(--nl-card2); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__excluir:hover { border-color: rgba(var(--nl-r), .5); background: rgba(var(--nl-r), .12); color: var(--nl-rtx); }
+
+/* Agenda em chip; hoje em destaque, atrasada em vermelho. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__agenda { padding: 2px 8px; border: 1px solid var(--nl-bd); border-radius: 999px; background: var(--nl-card2); color: var(--nl-tx2); line-height: 1.4; }
+[data-cockpit-tool-panel="lembretes"] .lembretes__agenda--hoje { border-color: rgba(var(--nl-i), .5); background: rgba(var(--nl-i), .12); color: var(--nl-itx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__agenda--atrasada { border-color: rgba(var(--nl-r), .5); background: rgba(var(--nl-r), .12); color: var(--nl-rtx); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__data--alterado { color: var(--nl-itx); }
+
+/* Concluídos e estado vazio. */
+[data-cockpit-tool-panel="lembretes"] .lembretes__vazio { border-color: var(--nl-bd2); border-radius: var(--nl-raio-tabela); background: none; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .lembretes__vazio-ico { background: rgba(var(--nl-i), .16); color: var(--nl-itx); }
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-cockpit-tool-panel="lembretes"] :is(.termos__abas, .lembretes__vistas) .ck-pilula,
+  [data-cockpit-tool-panel="lembretes"] .lembretes__caixa :is(.ck-btn, .ck-entrada, .lembretes__atalho, .lembretes__adicionar-dia, .lembretes__acao, .lembretes__nav, .lembretes__dia) {
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+  }
+  [data-cockpit-tool-panel="lembretes"] .lembretes__cartao { animation: nl-sobe .25s var(--nl-curva) both; }
+}
+
+@container (max-width: 479px) {
+  [data-cockpit-tool-panel="lembretes"] .lembretes__cartao { padding: 16px; }
+  [data-cockpit-tool-panel="lembretes"] .lembretes__caixa .ck-btn kbd { display: none; }
+}
+
+/* ---------- Termos Entrega e Devolução (NL-Lembretes, NL-Lembretes-TermoDevolucao; visual C: formulário + prévia) ---------- */
+/* Só cor, borda, raio, fundo e tipografia; a grade, a prévia fixa e o resto do layout ficam em ck-termos.css. O rótulo de cada campo fica sempre acima dele. */
+
+/* Cartões: um por seção do formulário e um para a prévia. */
+[data-cockpit-tool-panel="lembretes"] .termos__form :is(.termos__grupo, .termos__previa) {
+  padding: 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: var(--nl-sombra);
+}
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__grupo > legend,
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__previa-titulo { font-size: 16px; font-weight: 600; line-height: 1.3; color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__ico { border-radius: 8px; background: rgba(var(--nl-i), .16); color: var(--nl-itx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__chip {
+  padding: 2px 8px; border: 1px solid var(--nl-bd2); border-radius: 999px; color: var(--nl-mut);
+  font: 500 12px/1.4 "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums;
+}
+
+/* Campos. */
+[data-cockpit-tool-panel="lembretes"] .termos__form .ck-campo__rotulo { font-size: 12px; font-weight: 500; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .ck-entrada {
+  border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-tx); font-size: 14px;
+}
+[data-cockpit-tool-panel="lembretes"] .termos__form .ck-entrada::placeholder { color: var(--nl-fraco); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .ck-entrada:focus-visible { border-color: rgb(var(--nl-i)); box-shadow: 0 0 0 3px rgba(var(--nl-i), .16); outline: none; }
+
+/* Equipamento anterior / entregue. */
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela th,
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela td { border-bottom-color: var(--nl-bd); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela thead th { font-size: 12px; font-weight: 500; color: var(--nl-mut); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela tbody th { font-size: 13px; font-weight: 500; color: var(--nl-tx2); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela tbody tr:last-child :is(th, td) { border-bottom: 0; }
+
+/* Itens: uma linha por item; Sim / Não em controle segmentado (verde = Sim, vermelho = Não). */
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__item { border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); color: var(--nl-tx); font-size: 13px; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn { border: 1px solid var(--nl-bd2); border-radius: var(--nl-raio-sub); background: var(--nl-card); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn label { border-radius: 8px; color: var(--nl-mut); font-size: 13px; font-weight: 500; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn label:hover { background: var(--nl-card2); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn label:has(input[value="sim"]:checked) { background: rgba(var(--nl-e), .16); color: var(--nl-etx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn label:has(input[value="nao"]:checked) { background: rgba(var(--nl-r), .16); color: var(--nl-rtx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__sn label:has(input:focus-visible) { outline: 2px solid rgb(var(--nl-i)); outline-offset: 1px; }
+
+/* Prévia: trilho de progresso, folha em miniatura (papel claro nos dois temas) e botões. */
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__trilho { background: var(--nl-bd); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__trilho > i { background: rgb(var(--nl-i)); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha { border-radius: 10px; background: #f7f7f4; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__barra { background: #dfe1e8; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__barra[data-cheio="1"] { background: #9097a8; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha[data-termo="entrega"] .termos__barra--titulo { background: #1f4e8c; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha[data-termo="devolucao"] .termos__barra--titulo { background: #7a1f2b; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca { border: 1.5px solid #c3c8d4; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca[data-resposta="sim"] { border-color: #2f9e6a; background: #2f9e6a; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca[data-resposta="nao"] { border-color: #c24d4d; background: #c24d4d; }
+
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn { border-radius: var(--nl-raio-controle); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--secundario { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--secundario:hover:not(:disabled) { border-color: var(--nl-mut); background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--fantasma { border: 1px solid var(--nl-bd2); background: none; color: var(--nl-tx); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--fantasma:hover:not(:disabled) { background: var(--nl-card2); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--primario,
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--primario:hover,
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--primario:active { border-color: rgb(var(--nl-i)); background: rgb(var(--nl-i)); color: #0b0d15; }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--primario:hover:not(:disabled) { filter: brightness(1.08); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__estado { font-size: 13px; color: var(--nl-tx2); }
+[data-cockpit-tool-panel="lembretes"] .termos__form .termos__estado[data-tipo="erro"] { color: var(--nl-rtx); }
+/* A partir de 1200 px o ⓘ "Sobre o PDF" fica na coluna da prévia, junto da borda direita: o balão abre para a esquerda (como info-tip--end). */
+@media (min-width: 1200px) {
+  [data-cockpit-tool-panel="lembretes"] .termos__gerar .info-tip-text { inset-inline-start: auto; inset-inline-end: -0.5rem; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* "backwards" e não "both": com "both" o cartão guarda um transform e vira o ancestral dos balões do ⓘ (position: fixed no celular), que abriam abaixo da janela. */
+  [data-cockpit-tool-panel="lembretes"] .termos__form :is(.termos__grupo, .termos__previa) { animation: nl-sobe .25s var(--nl-curva) backwards; }
+  [data-cockpit-tool-panel="lembretes"] .termos__form :is(.ck-entrada, .ck-btn, .termos__item, .termos__sn label) {
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+  }
+  [data-cockpit-tool-panel="lembretes"] .termos__form .termos__trilho > i { transition: width .3s var(--nl-curva); }
+}
+
+/* Celular: entradas de 44 px, cartões mais justos e a tabela de equipamento em cartões com as cores do Novo layout. */
+@media (max-width: 767.98px) {
+  /* Folga no fim da página: o aviso (toast) fica fixo embaixo e cobriria Criar lembrete e Limpar, que são o último bloco; com a folga dá para rolar até eles ficarem acima do aviso. */
+  [data-cockpit-tool-panel="lembretes"] .termos__form { padding-bottom: 112px; }
+  [data-cockpit-tool-panel="lembretes"] .termos__form .ck-entrada:not(textarea) { min-height: 44px; }
+  [data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela tr { border-color: var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  [data-cockpit-tool-panel="lembretes"] .termos__form .termos__tabela td[data-rotulo]::before { color: var(--nl-mut); }
+}
+@media (max-width: 479px) {
+  [data-cockpit-tool-panel="lembretes"] .termos__form :is(.termos__grupo, .termos__previa) { padding: 16px; }
+}

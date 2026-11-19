@@ -19,7 +19,7 @@ Autorização: pedido do usuário de 09/11/2026 (painel novo, sem atalho de tecl
 
 ## Tela
 
-Menu Ferramentas, grupo `Painéis`, botão `Lembretes` (sem tecla). O painel `section[data-cockpit-tool-panel="lembretes"]` traz as sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega`, `Termo Devolução` e `Lembretes` (a lista, em `18-lembretes.md`); o painel abre em `Lembretes`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais um ⓘ depois de `Gerar PDF` (`aria-label="Sobre o PDF"`, balões `#termos-pdf-dica-entrega` e `#termos-pdf-dica-devolucao`) com o texto `Na janela que abrir, escolha Salvar como PDF e a pasta.` (era um aviso visível; foi para o ⓘ em 14/11/2026, limpeza dos textos explicativos, Bloco 3), e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo, que continua visível.
+Menu Ferramentas, grupo `Painéis`, botão `Lembretes` (sem tecla). O painel `section[data-cockpit-tool-panel="lembretes"]` traz as sub-abas (`.ck-pilulas`, `role="tablist"`, setas, `Home` e `End` trocam de aba): `Termo Entrega`, `Termo Devolução` e `Lembretes` (a lista, em `18-lembretes.md`); o painel abre em `Lembretes`. Cada sub-aba é um formulário (campos com `<label>` associado, `autocomplete="off"`) e uma barra com os botões `Gerar PDF` e `Limpar` (não existe botão `Imprimir`), mais um ⓘ depois de `Gerar PDF` (`aria-label="Sobre o PDF"`, balões `#termos-pdf-dica-entrega` e `#termos-pdf-dica-devolucao`) com o texto `Na janela que abrir, escolha Salvar como PDF e a pasta.` (era um aviso visível; foi para o ⓘ em 14/11/2026, limpeza dos textos explicativos, Bloco 3), e uma linha de aviso de erro (`role="status"`) para o bloqueio descrito abaixo; desde o Novo layout (18/11/2026) ela fica só para leitor de tela e a mensagem aparece no toast.
 
 ### Termo Entrega
 
@@ -42,11 +42,11 @@ Folha impressa no mesmo padrão do Termo Entrega (pedido do usuário de 10/11/20
 - Título `Termo de Devolução de Equipamentos`, cabeçalho `SEBRAE/PR`, marca `Interno`.
 - `Dados do colaborador`: `Nome do colaborador`, `Unidade`, `Data`, `Modelo do computador`, `Número de série`.
 - Sem a tabela `Identificação do equipamento` (só existe na entrega, a pedido do usuário em 10/11/2026).
-- `Equipamentos e acessórios devolvidos`, dica `Assinale Sim ou Não para cada item apresentado no ato da devolução.`, tabela `Equipamento / Acessório` / `Sim / Não`.
+- `Equipamentos e acessórios devolvidos` (também o nome acessível do grupo de itens desde 18/11/2026), dica `Assinale Sim ou Não para cada item apresentado no ato da devolução.`, cada item com `Sim` / `Não` (o cabeçalho `Equipamento / Acessório` / `Sim / Não` ficou só na folha do PDF).
 - `Observações`.
 - `Validação da devolução`: `Declaro que conferi as informações deste termo e devolvi os equipamentos e acessórios assinalados acima.`
 - Assinaturas: `Assinatura do colaborador` e `Assinatura do Técnico`.
-- Destaque em vinho (`#7a1f2b`, classe `tp--devolucao`): faixa à esquerda e fundo claro no cabeçalho, faixa à esquerda nos títulos de seção. A entrega usa o mesmo esquema em azul (`#1f4e8c`), sem as faixas: título, títulos de seção e marca na cor do termo, bordas das tabelas na cor e cabeçalho das tabelas com fundo claro.
+- Destaque em vinho (`#7a1f2b`, classe `tp--devolucao`); a entrega usa o mesmo esquema em azul (`#1f4e8c`). Desde 18/11/2026 os dois termos têm o mesmo visual (ver "Novo layout (18/11/2026)"): cabeçalho em faixa de fundo claro com barra à esquerda na cor do termo, títulos de seção em barra cheia na cor do termo (texto branco), bordas das tabelas em tom claro da cor e cabeçalho das tabelas com fundo claro.
 
 Sim e Não são um par de botões de rádio por item (só um pode ficar marcado; item não respondido sai com as duas caixas vazias na folha).
 
@@ -94,11 +94,23 @@ O navegador usa o título da página como nome do arquivo em `Salvar como PDF`. 
 
 `Limpar` esvazia a sub-aba ativa e a folha, depois de `app.confirmarAcao` (título `Limpar o termo?`, mensagem `Todos os campos do termo serão apagados. Nada foi guardado em outro lugar.`, botões `Limpar` e `Cancelar`). Só segue com o clique em `Limpar`; `Cancelar`, Esc e fechar o diálogo não apagam nada.
 
+## Novo layout (18/11/2026)
+
+Visual C do canvas "Novo layout" (NL-Lembretes, NL-Lembretes-TermoDevolucao e NL-Lembretes-PDF, com as versões de celular), só na apresentação: ids, `name` e textos aprovados não mudaram; mudaram a linha de status (só leitor de tela, mensagem no toast) e o nome acessível do grupo de itens da devolução (`Equipamentos e acessórios devolvidos`). Decisões do usuário: o rótulo fica sempre acima do campo, nunca sobre ele; o PDF mantém `Interno` e `Validação do recebimento` / `Validação da devolução`; nenhum parágrafo explicativo (o ⓘ pode ficar); erro e sucesso curtos vão para o toast.
+
+- Tela: a partir de 1200 px o formulário fica em cartões à esquerda e a prévia do PDF (`.termos__previa`) fixa à direita; abaixo de 1200 px a prévia desce para depois do formulário. Cada cartão é um `fieldset` com a `legend` (ícone, título, ⓘ e contador marcados/total nos itens) dentro dele: `Dados do colaborador`, `Identificação do equipamento` (só na entrega), itens e `Observações`.
+- Itens: uma linha por item, com o nome à esquerda e `Sim` / `Não` em controle segmentado à direita (verde = Sim, vermelho = Não). Os rádios continuam nativos e não controlados, sem aparência, cobrindo o rótulo; ids e `name` iguais aos de antes.
+- Prévia: título `Prévia do PDF` com contador de campos e itens preenchidos, trilho de progresso, folha em miniatura só com barras e marcas (não mostra nenhum texto digitado, por causa da LGPD) e os botões `Gerar PDF` (com o ⓘ), `Criar lembrete` e `Limpar`.
+- Mensagens: o texto de `#termos-status-<termo>` continua no DOM (`role="status"`, só para leitor de tela) e também vai para o toast (`error` quando é erro). Na tela só sobra o botão `Ver em Lembretes`, quando há lembrete criado. Efeito aceito: o leitor de tela pode anunciar a mesma frase duas vezes. A mesma frase repetida em menos de 3,5 s (enquanto o toast anterior, de 4 s, ainda está na tela) não gera outro toast, para não empilhar avisos iguais; depois disso avisa de novo. No celular o toast fica fixo embaixo e cobriria `Criar lembrete` e `Limpar`; por isso o formulário tem 112 px de folga no fim (seção "Termos" de `static/styles/nl-lemb-cat.css`).
+- Folha impressa: mesmo DOM; só o CSS muda (cabeçalho em faixa tingida com barra lateral, `Interno` em pílula, títulos de seção em barra cheia, borda esquerda verde ou vermelha na coluna Sim / Não por `td.tp__marcas[data-resposta]`; a resposta continua escrita em `[X]` / `[ ]`). Na impressão, exceções com `!important` mantêm essas cores (`print-color-adjust: exact`).
+- Fora desta entrega: a janela de impressão própria (cartão Cancelar / Imprimir), o aviso "Deslize para o lado" com rolagem da folha, a barra fixa de ações do celular, o rótulo flutuante, o estado "gerando / pronto" do `Gerar PDF`, a data no cabeçalho da folha e a caixa de ícone somente leitura dos itens da entrega (trocada pelo `Sim` / `Não` real).
+- CSS: layout em `static/styles/ck-termos.css`; cor, borda e raio na seção "Termos" de `static/styles/nl-lemb-cat.css`, escopada em `[data-cockpit-tool-panel="lembretes"] .termos__form`. Entrada dos cartões em 250 ms, transições em 200 ms e trilho em 300 ms, só em `prefers-reduced-motion: no-preference`.
+
 ## Interface
 
 - Temas claro e escuro, de 320 px a 2560 px sem rolagem horizontal da página.
-- Animação de entrada do painel de 200 ms (dentro de 150 a 300 ms), desligada em `prefers-reduced-motion`.
-- Reaproveita as classes do kit do Cockpit (`.ck-pilulas`, `.ck-campo`, `.ck-entrada`, `.ck-btn--*`, `.ck-cartao`); `static/styles/ck-termos.css` só traz o layout e a folha impressa.
+- Animação de entrada dos cartões de 250 ms (dentro de 150 a 300 ms), desligada em `prefers-reduced-motion`.
+- Reaproveita as classes do kit do Cockpit (`.ck-pilulas`, `.ck-campo`, `.ck-entrada`, `.ck-btn--*`); `static/styles/ck-termos.css` traz o layout e a folha impressa, e a seção "Termos" de `static/styles/nl-lemb-cat.css` traz as cores.
 
 ## Assistente
 

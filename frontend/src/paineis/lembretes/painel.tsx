@@ -129,15 +129,26 @@ export function Painel() {
 
       <div className="termos__painel lembretes__painel" role="tabpanel" id="termos-painel-lembretes" aria-labelledby="termos-aba-lembretes" hidden={estado.aba !== "lembretes"}>
         <div className="lembretes__caixa">
-          <FormNovo estado={estado} hoje={hoje} />
-          <p className="lembretes__vazio" id="lembretes-vazio" hidden={vazio}>
-            <span className="lembretes__vazio-ico" aria-hidden="true"><IconeSprite nome="check" /></span>
-            <span>Nenhum lembrete.</span>
-          </p>
-          <Vistas lista={lista} hoje={hoje} estado={estado} />
-          <Semana hoje={hoje} estado={estado} />
-          <Grupos lista={lista} hoje={hoje} estado={estado} />
-          <Concluidos lista={lista} hoje={hoje} estado={estado} />
+          {/* Novo layout: dois cartões lado a lado (formulário à esquerda, lista à direita); abaixo de 760px empilham. */}
+          <div className="lembretes__grade">
+            <section className="lembretes__cartao" aria-labelledby="lembretes-novo-titulo">
+              <h3 className="lembretes__cartao-titulo" id="lembretes-novo-titulo">
+                <span className="lembretes__cartao-ico" aria-hidden="true"><IconeSprite nome="plus" /></span>
+                Novo lembrete
+              </h3>
+              <FormNovo estado={estado} hoje={hoje} />
+            </section>
+            <div className="lembretes__cartao">
+              <p className="lembretes__vazio" id="lembretes-vazio" hidden={vazio}>
+                <span className="lembretes__vazio-ico" aria-hidden="true"><IconeSprite nome="check" /></span>
+                <span>Nenhum lembrete.</span>
+              </p>
+              <Vistas lista={lista} hoje={hoje} estado={estado} />
+              <Semana hoje={hoje} estado={estado} />
+              <Grupos lista={lista} hoje={hoje} estado={estado} />
+              <Concluidos lista={lista} hoje={hoje} estado={estado} />
+            </div>
+          </div>
         </div>
       </div>
 

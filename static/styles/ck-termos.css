@@ -3,25 +3,57 @@
 .termos { display: grid; gap: 12px; align-content: start; padding: 12px 20px 20px; }
 .termos__abas { flex-wrap: wrap; }
 .termos__painel { display: grid; gap: 12px; min-width: 0; }
-.termos__form { display: grid; gap: 14px; min-width: 0; }
-.termos__grupo { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); }
-.termos__grupo > legend { padding: 0 6px; font-weight: var(--peso-medio); }
+/* Novo layout (18/11/2026), visual C: cartões do formulário à esquerda e prévia do PDF à direita; abaixo de 1200px a prévia desce para depois do formulário. Cores, bordas e raios: seção "Termos" de nl-lemb-cat.css. */
+.termos__form { display: block; min-width: 0; }
+.termos__grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.termos__esq { display: grid; gap: 16px; align-content: start; min-width: 0; }
+@media (min-width: 1200px) {
+  .termos__grade { grid-template-columns: minmax(0, 1fr) clamp(320px, 38%, 600px); }
+  .termos__previa { position: sticky; top: 16px; }
+}
+.termos__grupo { display: block; min-width: 0; margin: 0; }
+/* Legend flutuante: fica dentro do cartão, na linha de cima (e não sobre a borda); o irmão seguinte limpa o float. */
+.termos__grupo > legend { float: left; display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 14px; padding: 0; }
+.termos__grupo > legend + * { clear: both; }
+.termos__grupo > :not(legend) + :not(legend) { margin-top: 12px; }
 /* ⓘ dentro da legenda e ao lado de Gerar PDF: o botão herda min-height 2.5rem de app.css e não deve esticar a linha. */
 .termos__grupo > legend .info-tip { margin-block: -4px; margin-inline-start: 2px; }
 .termos__grupo > legend .info-tip-trigger, .termos__acoes .info-tip-trigger { min-height: 0; }
-.termos__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
-.termos__campos .ck-campo { min-width: 0; }
-.termos__obs { height: auto; min-height: 96px; padding: 8px 9px; resize: vertical; line-height: 1.4; }
+.termos__ico { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; }
+.termos__ico .ck-ico { width: 16px; height: 16px; }
+.termos__chip { flex: none; margin-inline-start: auto; }
+.termos__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 16px; }
+.termos__campos .ck-campo { gap: 6px; min-width: 0; }
+.termos__obs { height: auto; min-height: 96px; padding: 8px 12px; resize: vertical; line-height: 1.4; }
 .termos__tabela { width: 100%; border-collapse: collapse; }
 .termos__tabela th, .termos__tabela td { padding: 6px 8px; border-bottom: 1px solid var(--cor-borda-suave); text-align: left; vertical-align: middle; font-weight: var(--peso-regular); }
 .termos__tabela thead th { font-size: var(--fs-xs); color: var(--cor-texto-sutil); font-weight: var(--peso-medio); }
 .termos__tabela tbody th { font-weight: var(--peso-medio); }
 .termos__tabela .ck-entrada { width: 100%; min-width: 0; }
-.termos__sn { display: flex; gap: 16px; }
-.termos__sn label { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle); }
-.termos__sn input { margin: 0; }
-.termos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.termos__estado { margin: 0; flex: 1 1 100%; min-height: 1.2em; font-size: var(--fs-sm); }
+/* Itens: uma linha por item, nome à esquerda e Sim / Não em controle segmentado à direita. Os rádios continuam nativos (sem aparência, cobrindo o rótulo). */
+.termos__itens { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 8px 12px; }
+.termos__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 44px; padding: 4px 4px 4px 12px; }
+.termos__item-nome { min-width: 0; overflow-wrap: anywhere; }
+.termos__sn { display: inline-flex; flex: none; gap: 2px; padding: 2px; }
+.termos__sn label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 52px; min-height: 36px; padding: 0 10px; cursor: pointer; }
+.termos__sn input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; appearance: none; }
+/* Prévia: título com contador, trilho de progresso, folha em miniatura (só barras e marcas) e as ações. */
+.termos__previa { display: grid; gap: 14px; min-width: 0; }
+.termos__previa-titulo { display: flex; align-items: center; gap: 8px; margin: 0; }
+.termos__trilho { height: 6px; overflow: hidden; border-radius: 999px; }
+.termos__trilho > i { display: block; height: 100%; border-radius: inherit; }
+.termos__folha { display: flex; flex-direction: column; gap: 10px; aspect-ratio: 210 / 297; min-width: 0; padding: 22px 20px; overflow: hidden; }
+.termos__folha-linhas { display: grid; gap: 6px; }
+.termos__folha-item { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; align-items: center; }
+.termos__folha-marca { width: 10px; height: 10px; border-radius: 3px; }
+.termos__barra { display: block; height: 7px; border-radius: 4px; }
+.termos__barra--titulo { width: 62%; height: 12px; }
+/* Ações: Gerar PDF (com o ⓘ) em linha cheia; Criar lembrete e Limpar lado a lado; o status fica no DOM e só mostra o botão Ver em Lembretes. */
+.termos__acoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; }
+.termos__acoes > .ck-btn, .termos__gerar .ck-btn { min-height: 44px; }
+.termos__gerar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.termos__gerar .ck-btn { flex: 1 1 auto; }
+.termos__estado { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm); }
 .termos__estado[data-tipo="erro"] { color: var(--cor-erro-texto); }
 
 /* Abaixo de 768 px as tabelas viram cartões com os mesmos dados. */
@@ -39,35 +71,35 @@
 @media screen { #termos-impressao { display: none; } }
 #termos-impressao { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.35; }
 /* Cor de destaque de cada termo: azul na entrega, vinho na devolução (pedidos do usuário de 10/11/2026). */
-.tp { --tp-cor: #1f4e8c; --tp-fundo: #e8eef7; display: grid; gap: 10px; }
-.tp--devolucao { --tp-cor: #7a1f2b; --tp-fundo: #f6e9eb; }
-.tp__cab { position: relative; display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 2px solid var(--tp-cor); }
+.tp { --tp-cor: #1f4e8c; --tp-fundo: #e8eef7; --tp-linha: #c9d4e6; display: grid; gap: 10px; }
+.tp--devolucao { --tp-cor: #7a1f2b; --tp-fundo: #f6e9eb; --tp-linha: #e5d5d8; }
+/* Novo layout (18/11/2026, NL-Lembretes-PDF): cabeçalho em faixa tingida com barra lateral, "Interno" em pílula, títulos de seção em barra cheia. */
+.tp__cab { position: relative; display: grid; gap: 2px; padding: 10px 12px; border-left: 6px solid var(--tp-cor); background: var(--tp-fundo); }
 .tp__org { font-weight: 700; letter-spacing: 0.04em; }
-.tp__marca { position: absolute; top: 0; right: 0; padding: 1px 8px; border: 1px solid var(--tp-cor); font-size: 9pt; }
+.tp__marca { position: absolute; top: 10px; right: 12px; padding: 1px 8px; border: 1px solid var(--tp-cor); border-radius: 999px; font-size: 9pt; }
 .tp__titulo { margin: 0; font-size: 15pt; }
 .tp__secao { display: grid; gap: 4px; break-inside: avoid; }
-.tp__secao-titulo { margin: 0; font-size: 11pt; border-bottom: 1px solid var(--tp-cor); }
+.tp__secao-titulo { margin: 0; padding: 3px 8px; border-radius: 2px; background: var(--tp-cor); color: #fff; font-size: 11pt; }
 .tp__dica { margin: 0; font-size: 9pt; }
 .tp__campos { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
 .tp__campo { display: flex; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .tp__campo--cheio { grid-column: 1 / -1; }
 .tp__rotulo { font-weight: 700; white-space: nowrap; }
 .tp__tabela { width: 100%; border-collapse: collapse; }
-.tp__tabela th, .tp__tabela td { padding: 2px 6px; border: 1px solid var(--tp-cor); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.tp__tabela th, .tp__tabela td { padding: 2px 6px; border: 1px solid var(--tp-linha); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .tp__tabela tr { break-inside: avoid; }
-.tp__tabela .tp__marcas { white-space: nowrap; width: 1%; }
+/* Coluna Sim / Não: faixa na borda esquerda (verde = Sim, vermelho = Não); a resposta continua escrita em [X] / [ ]. */
+.tp__tabela .tp__marcas { white-space: nowrap; width: 1%; border-left: 4px solid var(--tp-linha); }
+.tp__tabela .tp__marcas[data-resposta="sim"] { border-left-color: #2f9e6a; }
+.tp__tabela .tp__marcas[data-resposta="nao"] { border-left-color: #c24d4d; }
 .tp__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid var(--tp-cor); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tp__obs { min-height: 28mm; padding: 4px 6px; border: 1px solid var(--tp-linha); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tp__assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18mm; break-inside: avoid; }
 .tp__assinatura { position: relative; padding-top: 3px; border-top: 1px solid var(--tp-cor); text-align: center; }
 /* Assinatura do técnico (GET /api/assinatura-tecnico): fica sobre a linha, na folga de 18 mm acima dela, sem mudar o layout.
    Desce 39/122,3 da altura (unidades do viewBox de data/state/assinatura_tecnico.svg) para o corpo das letras apoiar na linha;
    só as caudas da primeira e da última letra passam dela (pedido do usuário, 12/11/2026). Trocar o SVG exige recalcular a fração. */
 .tp__assinatura-img { position: absolute; bottom: calc(100% + 1px - 14mm * 39 / 122.3); left: 50%; transform: translateX(-50%); height: 14mm; width: auto; max-width: 100%; object-fit: contain; }
-/* Devolução: além da cor, faixa à esquerda no cabeçalho e nos títulos de seção. */
-.tp--devolucao .tp__cab { padding: 6px 10px; border-bottom: 0; border-left: 6px solid var(--tp-cor); }
-.tp--devolucao .tp__marca { top: 6px; right: 10px; }
-.tp--devolucao .tp__secao-titulo { padding-left: 6px; border-left: 3px solid var(--tp-cor); }
 
 @media print {
   /* Página nomeada: margens A4 só para a folha do termo, não para outro Ctrl+P do Cockpit.
@@ -78,12 +110,12 @@
   html.termos-imprimindo body > *:not(#termos-impressao) { display: none !important; }
   /* Só a folha aparece, em preto no branco; termos.js tira o [hidden] dela ao imprimir. */
   html.termos-imprimindo #termos-impressao, html.termos-imprimindo #termos-impressao * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
-  /* Exceção à regra acima: título, títulos de seção e cabeçalhos ficam na cor do termo. */
+  /* Exceção à regra acima: cabeçalho e linha de títulos da tabela com o fundo tingido, títulos de seção em barra cheia na cor do termo (texto branco), título e "Interno" na cor do termo. */
   html.termos-imprimindo #termos-impressao .tp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html.termos-imprimindo #termos-impressao .tp--devolucao .tp__cab,
+  html.termos-imprimindo #termos-impressao .tp .tp__cab,
   html.termos-imprimindo #termos-impressao .tp .tp__tabela thead th { background: var(--tp-fundo) !important; }
+  html.termos-imprimindo #termos-impressao .tp .tp__secao-titulo { background: var(--tp-cor) !important; color: #fff !important; }
   html.termos-imprimindo #termos-impressao .tp .tp__titulo,
-  html.termos-imprimindo #termos-impressao .tp .tp__secao-titulo,
   html.termos-imprimindo #termos-impressao .tp .tp__marca { color: var(--tp-cor) !important; }
   /* A assinatura desce abaixo da linha: com o fundo branco da regra acima, cobria a linha e o rótulo do técnico. */
   html.termos-imprimindo #termos-impressao .tp__assinatura-img { background: transparent !important; }

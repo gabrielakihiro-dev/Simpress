@@ -1,8 +1,8 @@
 // Formulários dos termos de entrega e devolução, com o mesmo DOM do painel antigo. Os campos têm dado pessoal:
 // ficam só no estado do painel (campos de texto controlados; os rádios Sim/Não guardam a marca no DOM), nunca em log nem em storage.
-import { useLayoutEffect, useRef } from "react";
-import { InfoTip } from "./componentes";
-import { ler, mudar, type FormTermo, type StatusTermo } from "./estado";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { IconeSprite, InfoTip } from "./componentes";
+import { avisar, ler, mudar, type FormTermo, type StatusTermo } from "./estado";
 import { criarDoTermo, verLembretes } from "./lembretes-acoes";
 import { gerarPdf, idItem, limpar } from "./termos-acoes";
 import { TERMOS, type NomeTermo } from "./termos-puro";
@@ -95,10 +95,19 @@ function CelulaEquipamento({ termo, form, nome, rotuloColuna, rotuloLinha }: Cam
   );
 }
 
-function TabelaEquipamento({ termo, form }: Omit<CampoProps, "nome">) {
+// Cartão do formulário: o título é a legend do fieldset (a ⓘ e o contador ficam dentro dela); o ícone é só enfeite.
+function Cartao({ icone, titulo, children }: { icone: string; titulo: string; children: ReactNode }) {
   return (
     <fieldset className="termos__grupo">
-      <legend>Identificação do equipamento</legend>
+      <legend><span className="termos__ico" aria-hidden="true"><IconeSprite nome={icone} /></span>{titulo}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+function TabelaEquipamento({ termo, form }: Omit<CampoProps, "nome">) {
+  return (
+    <Cartao icone="laptop" titulo="Identificação do equipamento">
       <table className="termos__tabela">
         <thead><tr><th scope="col">Campo</th><th scope="col">Equipamento anterior</th><th scope="col">Equipamento entregue</th></tr></thead>
         <tbody>
@@ -111,46 +120,44 @@ function TabelaEquipamento({ termo, form }: Omit<CampoProps, "nome">) {
           ))}
         </tbody>
       </table>
-    </fieldset>
+    </Cartao>
   );
 }
 
-function TabelaItens({ termo, form }: Omit<CampoProps, "nome">) {
-  const entrega = termo === "entrega";
-  const corpo = useRef<HTMLTableSectionElement>(null);
+// Contagem do cartão de itens e da prévia: sempre calculada do estado (marcados / total), nunca fixa.
+const contarItens = (form: FormTermo) => form.itens.filter((resposta) => resposta === "sim" || resposta === "nao").length;
+const contarCampos = (termo: NomeTermo, form: FormTermo) => TERMOS[termo].campos.filter((nome) => (form.campos[nome] ?? "").trim() !== "").length;
+
+function GradeItens({ termo, form }: Omit<CampoProps, "nome">) {
+  const grade = useRef<HTMLDivElement>(null);
   // Rádios não controlados: o navegador guarda a marca, e as ações leem do DOM (lerItens). O código só reescreve a
   // marca quando muda os itens por conta própria (versaoItens sobe), e no primeiro desenho.
   useLayoutEffect(() => {
-    corpo.current?.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach((radio) => {
+    grade.current?.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach((radio) => {
       radio.checked = form.itens[Number(radio.name.slice("item-".length)) - 1] === radio.value;
     });
   }, [form.versaoItens]);
   return (
-    <table className="termos__tabela">
-      <thead className={entrega ? "sr-only" : undefined}><tr><th scope="col">Equipamento / Acessório</th><th scope="col">Sim / Não</th></tr></thead>
-      <tbody ref={corpo}>
-        {TERMOS[termo].itens.map((rotulo, i) => {
-          const n = String(i + 1).padStart(2, "0");
-          return (
-            <tr key={n}>
-              <th scope="row">{rotulo}</th>
-              <td>
-                <div className="termos__sn" role="radiogroup" aria-label={rotulo}>
-                  <label>
-                    <input type="radio" id={idItem(termo, i, "sim")} name={`item-${n}`} value="sim" onChange={() => marcarItem(termo, i, "sim")} />
-                    {" Sim"}
-                  </label>
-                  <label>
-                    <input type="radio" id={idItem(termo, i, "nao")} name={`item-${n}`} value="nao" onChange={() => marcarItem(termo, i, "nao")} />
-                    {" Não"}
-                  </label>
-                </div>
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="termos__itens" ref={grade}>
+      {TERMOS[termo].itens.map((rotulo, i) => {
+        const n = String(i + 1).padStart(2, "0");
+        return (
+          <div className="termos__item" key={n}>
+            <span className="termos__item-nome">{rotulo}</span>
+            <div className="termos__sn" role="radiogroup" aria-label={rotulo}>
+              <label>
+                <input type="radio" id={idItem(termo, i, "sim")} name={`item-${n}`} value="sim" onChange={() => marcarItem(termo, i, "sim")} />
+                {" Sim"}
+              </label>
+              <label>
+                <input type="radio" id={idItem(termo, i, "nao")} name={`item-${n}`} value="nao" onChange={() => marcarItem(termo, i, "nao")} />
+                {" Não"}
+              </label>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -173,16 +180,36 @@ function Observacoes({ termo, form }: Omit<CampoProps, "nome">) {
   );
 }
 
+// Erros e sucessos curtos vão para o toast. O status continua no DOM (leitor de tela e testes) e só mostra o botão
+// Ver em Lembretes. Efeito colateral aceito: o leitor de tela pode anunciar a mesma frase duas vezes (status e toast).
 function Acoes({ termo, status }: { termo: NomeTermo; status: StatusTermo }) {
+  const primeiroDesenho = useRef(true);
+  const ultimoAviso = useRef({ texto: "", em: 0 });
+  useEffect(() => {
+    if (primeiroDesenho.current) {
+      primeiroDesenho.current = false;
+      return;
+    }
+    if (!status.texto) return;
+    // Mesmo texto de novo enquanto o aviso anterior ainda está na tela: não empilha outro. No celular o aviso cobre os botões
+    // de baixo. A janela (3,5 s) fica abaixo da vida do toast (4 s, ui-notifications.ts): repetir depois que ele some avisa de novo.
+    const agora = Date.now();
+    if (ultimoAviso.current.texto === status.texto && agora - ultimoAviso.current.em < 3500) return;
+    ultimoAviso.current = { texto: status.texto, em: agora };
+    avisar(status.texto, status.tipo === "erro" ? "error" : "success");
+  }, [status]);
+  const comBotao = status.verLembrete !== undefined;
   return (
     <div className="termos__acoes">
-      <button type="button" className="ck-btn ck-btn--primario" onClick={() => { void gerarPdf(termo); }}>Gerar PDF</button>
-      <InfoTip rotulo="Sobre o PDF" idDica={`termos-pdf-dica-${termo}`}>Na janela que abrir, escolha Salvar como PDF e a pasta.</InfoTip>
+      <div className="termos__gerar">
+        <button type="button" className="ck-btn ck-btn--primario" onClick={() => { void gerarPdf(termo); }}>Gerar PDF</button>
+        <InfoTip rotulo="Sobre o PDF" idDica={`termos-pdf-dica-${termo}`}>Na janela que abrir, escolha Salvar como PDF e a pasta.</InfoTip>
+      </div>
       <button type="button" className="ck-btn ck-btn--secundario" onClick={() => criarDoTermo(termo)}>Criar lembrete</button>
       <button type="button" className="ck-btn ck-btn--secundario" onClick={() => { void limpar(termo); }}>Limpar</button>
-      <p className="termos__estado" id={`termos-status-${termo}`} role="status" aria-live="polite" data-tipo={status.tipo}>
-        {status.texto}
-        {status.verLembrete !== undefined && (
+      <p className={comBotao ? "termos__estado" : "termos__estado sr-only"} id={`termos-status-${termo}`} role="status" aria-live="polite" data-tipo={status.tipo}>
+        <span className={comBotao ? "sr-only" : undefined}>{status.texto}</span>
+        {comBotao && (
           <button type="button" className="ck-btn ck-btn--fantasma ck-btn--sm lembretes__ver" onClick={() => verLembretes(status.verLembrete as string | number)}>
             Ver em Lembretes
           </button>
@@ -192,8 +219,57 @@ function Acoes({ termo, status }: { termo: NomeTermo; status: StatusTermo }) {
   );
 }
 
+// Prévia do PDF: folha miniatura só com barras e marcas, desenhada do estado do formulário (valor preenchido = barra
+// escura, vazio = barra clara). Não mostra nenhum texto digitado, então não leva dado pessoal; fica fora do leitor de tela.
+function FolhaPrevia({ termo, form }: { termo: NomeTermo; form: FormTermo }) {
+  const obsCheia = form.obs.trim() !== "" ? "1" : undefined;
+  return (
+    <div className="termos__folha" data-termo={termo} aria-hidden="true">
+      <i className="termos__barra termos__barra--titulo" />
+      <div className="termos__folha-linhas">
+        {TERMOS[termo].campos.map((nome) => (
+          <i key={nome} className="termos__barra" data-cheio={(form.campos[nome] ?? "").trim() !== "" ? "1" : undefined} />
+        ))}
+      </div>
+      <div className="termos__folha-linhas">
+        {form.itens.map((resposta, i) => (
+          <div key={i} className="termos__folha-item">
+            <i className="termos__folha-marca" data-resposta={resposta || undefined} />
+            <i className="termos__barra" />
+          </div>
+        ))}
+      </div>
+      <div className="termos__folha-linhas">
+        <i className="termos__barra" data-cheio={obsCheia} />
+        <i className="termos__barra" data-cheio={obsCheia} />
+      </div>
+    </div>
+  );
+}
+
+function Previa({ termo, form, status }: { termo: NomeTermo; form: FormTermo; status: StatusTermo }) {
+  const total = TERMOS[termo].campos.length + TERMOS[termo].itens.length;
+  const feitos = contarCampos(termo, form) + contarItens(form);
+  return (
+    <section className="termos__previa" aria-labelledby={`termos-previa-${termo}-titulo`}>
+      <h3 className="termos__previa-titulo" id={`termos-previa-${termo}-titulo`}>
+        <span className="termos__ico" aria-hidden="true"><IconeSprite nome="file-check" /></span>
+        Prévia do PDF
+        <span className="termos__chip" aria-hidden="true">{`${feitos}/${total}`}</span>
+      </h3>
+      <div className="termos__trilho" aria-hidden="true"><i style={{ width: `${Math.round((feitos / total) * 100)}%` }} /></div>
+      <FolhaPrevia termo={termo} form={form} />
+      <Acoes termo={termo} status={status} />
+    </section>
+  );
+}
+
 export function FormularioTermo({ termo, form, status }: { termo: NomeTermo; form: FormTermo; status: StatusTermo }) {
   const entrega = termo === "entrega";
+  const campos = CAMPOS_COLABORADOR[termo];
+  // Devolução: nome, unidade e data na primeira linha; modelo e série na segunda. Entrega: uma linha só.
+  const linhas = entrega ? [campos] : [campos.slice(0, 3), campos.slice(3)];
+  const chipItens = <span className="termos__chip" aria-hidden="true">{`${contarItens(form)}/${TERMOS[termo].itens.length}`}</span>;
   return (
     <form
       className="termos__form"
@@ -203,42 +279,53 @@ export function FormularioTermo({ termo, form, status }: { termo: NomeTermo; for
       data-serie-home={form.serieHome ?? undefined}
       onSubmit={(e) => e.preventDefault()}
     >
-      <fieldset className="termos__grupo">
-        <legend>Dados do colaborador</legend>
-        <div className="termos__campos">
-          {CAMPOS_COLABORADOR[termo].map((def) => <CampoTermo key={def.nome} termo={termo} form={form} def={def} />)}
+      <div className="termos__grade">
+        <div className="termos__esq">
+          <Cartao icone="user" titulo="Dados do colaborador">
+            {linhas.map((linha, i) => (
+              <div key={i} className="termos__campos">
+                {linha.map((def) => <CampoTermo key={def.nome} termo={termo} form={form} def={def} />)}
+              </div>
+            ))}
+          </Cartao>
+          {entrega && <TabelaEquipamento termo={termo} form={form} />}
+          {entrega ? (
+            <fieldset className="termos__grupo" aria-labelledby="termos-entrega-itens-leg">
+              <legend>
+                <span className="termos__ico" aria-hidden="true"><IconeSprite nome="clipboard" /></span>
+                <span id="termos-entrega-itens-leg">Equipamentos e acessórios entregues</span>
+                <InfoTip rotulo="Sobre os itens entregues" idDica="termos-entrega-itens-dica">Assinale Sim ou Não para cada item apresentado no ato da entrega.</InfoTip>
+                {chipItens}
+              </legend>
+              <GradeItens termo={termo} form={form} />
+            </fieldset>
+          ) : (
+            <fieldset className="termos__grupo">
+              <legend>
+                <span className="termos__ico" aria-hidden="true"><IconeSprite nome="clipboard" /></span>
+                Equipamentos e acessórios devolvidos
+                {chipItens}
+              </legend>
+              <GradeItens termo={termo} form={form} />
+            </fieldset>
+          )}
+          {entrega ? (
+            <fieldset className="termos__grupo" aria-labelledby="termos-entrega-obs-leg">
+              <legend>
+                <span className="termos__ico" aria-hidden="true"><IconeSprite nome="text" /></span>
+                <span id="termos-entrega-obs-leg">Observações</span>
+                <InfoTip rotulo="Sobre as observações" idDica="termos-entrega-obs-dica">Registre avarias no equipamento anterior ou itens pendentes.</InfoTip>
+              </legend>
+              <Observacoes termo={termo} form={form} />
+            </fieldset>
+          ) : (
+            <Cartao icone="text" titulo="Observações">
+              <Observacoes termo={termo} form={form} />
+            </Cartao>
+          )}
         </div>
-      </fieldset>
-      {entrega && <TabelaEquipamento termo={termo} form={form} />}
-      {entrega ? (
-        <fieldset className="termos__grupo" aria-labelledby="termos-entrega-itens-leg">
-          <legend>
-            <span id="termos-entrega-itens-leg">Equipamentos e acessórios entregues</span>
-            <InfoTip rotulo="Sobre os itens entregues" idDica="termos-entrega-itens-dica">Assinale Sim ou Não para cada item apresentado no ato da entrega.</InfoTip>
-          </legend>
-          <TabelaItens termo={termo} form={form} />
-        </fieldset>
-      ) : (
-        <fieldset className="termos__grupo">
-          <legend className="sr-only">Equipamentos devolvidos</legend>
-          <TabelaItens termo={termo} form={form} />
-        </fieldset>
-      )}
-      {entrega ? (
-        <fieldset className="termos__grupo" aria-labelledby="termos-entrega-obs-leg">
-          <legend>
-            <span id="termos-entrega-obs-leg">Observações</span>
-            <InfoTip rotulo="Sobre as observações" idDica="termos-entrega-obs-dica">Registre avarias no equipamento anterior ou itens pendentes.</InfoTip>
-          </legend>
-          <Observacoes termo={termo} form={form} />
-        </fieldset>
-      ) : (
-        <fieldset className="termos__grupo">
-          <legend>Observações</legend>
-          <Observacoes termo={termo} form={form} />
-        </fieldset>
-      )}
-      <Acoes termo={termo} status={status} />
+        <Previa termo={termo} form={form} status={status} />
+      </div>
     </form>
   );
 }

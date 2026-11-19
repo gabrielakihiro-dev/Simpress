@@ -1,32 +1,40 @@
-/* Lembretes (Ferramentas): visual do modelo estilo Todoist (artefato de design "Lembretes — Ferramentas"); só tokens de ck-tokens.css. */
+/* Lembretes (Ferramentas): estrutura, tamanhos de alvo e container queries; só tokens de ck-tokens.css. */
+/* Novo layout (18/11/2026): cartões, cores, bordas e a pílula de sub-abas vêm da seção "Lembretes" de nl-lemb-cat.css (escopo [data-cockpit-tool-panel="lembretes"]). */
 /* O painel herda .termos (grid, padding, abas). container-type fica na caixa e não no overlay: position:fixed dentro de um container de tamanho quebra. */
-.lembretes__caixa { container-type: inline-size; display: grid; gap: 14px; min-width: 0; align-content: start; padding: 14px 16px 16px; border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); background: var(--cor-superficie); box-shadow: var(--sombra-sm); }
+.lembretes__caixa { container-type: inline-size; display: block; min-width: 0; }
+/* @container só estiliza descendentes do container: por isso a grade é filha da caixa. Dois cartões lado a lado; abaixo de 760px de caixa, um sobre o outro. */
+.lembretes__grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; min-width: 0; }
+.lembretes__cartao { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.lembretes__cartao-titulo { display: flex; align-items: center; gap: 8px; margin: 0; }
+.lembretes__cartao-ico { display: inline-grid; place-items: center; flex: none; }
+.lembretes__cartao-ico .ck-ico { width: 18px; height: 18px; }
+@container (max-width: 759px) {
+  .lembretes__grade { grid-template-columns: minmax(0, 1fr); }
+}
 
-/* Formulário: rótulo visível, campo e Adicionar na mesma linha. */
-.lembretes__novo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+/* Formulário: rótulo visível acima do campo; Data à esquerda e Adicionar à direita na linha de baixo. */
+.lembretes__novo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .lembretes__rotulo { flex: 1 1 100%; font-size: var(--fs-sm, 12px); font-weight: var(--peso-medio); color: var(--cor-texto-suave); }
-.lembretes__novo .lembretes__campo { flex: 1 1 200px; width: auto; }
+.lembretes__novo .lembretes__campo { flex: 1 1 100%; width: auto; margin-bottom: 4px; }
+.lembretes__novo > .ck-btn--primario { margin-inline-start: auto; }
 .lembretes__erro { margin: 0; flex: 1 1 100%; font-size: var(--fs-xs); color: var(--cor-alerta-texto); }
 /* display:flex/grid vence o atributo hidden: todo elemento escondível por hidden precisa da própria regra. */
 .lembretes__erro[hidden], .lembretes__vazio[hidden], .lembretes__concluidos[hidden], .lembretes__lista[hidden], .lembretes__data-painel[hidden], .lembretes__semana[hidden], .lembretes__navegar[hidden] { display: none; }
 
-/* Botões primário (Adicionar, Salvar) e de perigo (Excluir) preenchidos, como no modelo; o kit ck-btn segue com contorno no resto do app. */
-.lembretes__caixa .ck-btn--primario, .lembretes__caixa .ck-btn--primario:hover, .lembretes__caixa .ck-btn--primario:active { gap: 6px; border-color: var(--cor-destaque-forte); background: var(--cor-destaque-forte); color: var(--cor-superficie); }
-.lembretes__caixa .ck-btn--primario:hover:not(:disabled) { filter: brightness(1.08); }
+/* Botões primário (Adicionar, Salvar): o preenchimento e as cores vêm de nl-lemb-cat.css; aqui só espaçamento e ícone. */
+.lembretes__caixa .ck-btn--primario { gap: 6px; }
 .lembretes__caixa .ck-btn--primario .ck-ico { width: 14px; height: 14px; }
 .lembretes__caixa .ck-btn:disabled { opacity: .45; cursor: not-allowed; }
-[data-theme="dark"] .lembretes__caixa .ck-btn--primario { border-color: var(--cor-destaque); background: var(--cor-destaque); color: var(--cor-destaque-fundo); }
 
 /* Estado vazio: ícone em círculo sobre o fundo da página. */
 .lembretes__vazio { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0; padding: 32px 12px; text-align: center; font-size: var(--fs-md); color: var(--cor-texto-mudo); border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-fundo); }
 .lembretes__vazio-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--cor-destaque-fundo); color: var(--cor-destaque-forte); }
-[data-theme="dark"] .lembretes__vazio-ico { color: var(--cor-destaque-texto); }
 .lembretes__vazio-ico .ck-ico { width: 16px; height: 16px; }
 
 /* Lista: cada lembrete é um cartão separado. */
 .lembretes__lista { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 0; }
 .lembretes__lista:empty { display: none; }
-.lembretes__item { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "check corpo acoes"; align-items: start; column-gap: 10px; min-width: 0; padding: 10px 8px 10px 6px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); animation: ck-surgir var(--duracao) var(--curva); transition: border-color var(--duracao) var(--curva); }
+.lembretes__item { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "check corpo acoes"; align-items: start; column-gap: 10px; min-width: 0; padding: 12px 12px 12px 10px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); animation: ck-surgir var(--duracao) var(--curva); transition: border-color var(--duracao) var(--curva); }
 .lembretes__item:hover { border-color: var(--cor-texto-apagado); }
 /* Chamado/OS dentro do texto (abre a janela Chamado × OS): segue o tamanho e a quebra do texto; o concluído mantém o link, riscado. */
 .lembretes__ref { display: inline; font-size: inherit; line-height: inherit; text-align: start; white-space: normal; overflow-wrap: anywhere; text-decoration: underline dotted; text-underline-offset: 2px; }
@@ -38,13 +46,12 @@
 .lembretes__texto { margin: 0; font-size: var(--fs-base); line-height: 1.45; color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; text-decoration: line-through; text-decoration-color: transparent; transition: text-decoration-color var(--duracao) var(--curva); }
 .lembretes__data { font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .lembretes__data--alterado { color: var(--cor-destaque-forte); }
-[data-theme="dark"] .lembretes__data--alterado { color: var(--cor-destaque); }
 .lembretes__item--feito .lembretes__texto { color: var(--cor-texto-mudo); text-decoration-color: currentColor; }
 
 /* Círculo de concluir: área de 28px, anel de 18px desenhado por ::before e visto por ::after (sem herdar o min-height global de botão). */
 .lembretes__marcar { grid-area: check; position: relative; display: block; width: 28px; height: 28px; min-width: 0; min-height: 0; margin: -3px 0 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--cor-texto-mudo); cursor: pointer; }
-.lembretes__marcar::before { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; box-sizing: border-box; margin: -9px 0 0 -9px; border: 1.5px solid currentColor; border-radius: 50%; background: transparent; transition: border-color var(--duracao) var(--curva), background-color var(--duracao) var(--curva); }
-.lembretes__marcar::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 8px; margin: -6px 0 0 -2px; border: solid currentColor; border-width: 0 2px 2px 0; opacity: 0; transform: rotate(45deg) scale(.6); transition: opacity var(--duracao) var(--curva), transform var(--duracao) var(--curva); }
+.lembretes__marcar::before { content: ""; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; box-sizing: border-box; margin: -11px 0 0 -11px; border: 1.5px solid currentColor; border-radius: 50%; background: transparent; transition: border-color var(--duracao) var(--curva), background-color var(--duracao) var(--curva); }
+.lembretes__marcar::after { content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 10px; margin: -7px 0 0 -2.5px; border: solid currentColor; border-width: 0 2px 2px 0; opacity: 0; transform: rotate(45deg) scale(.6); transition: opacity var(--duracao) var(--curva), transform var(--duracao) var(--curva); }
 .lembretes__marcar:hover { color: var(--cor-destaque); }
 .lembretes__marcar:hover::after { opacity: .55; transform: rotate(45deg); }
 .lembretes__marcar--fixo, .lembretes__marcar--fixo:hover { cursor: default; color: var(--cor-texto-mudo); }
@@ -54,8 +61,8 @@
 .lembretes__item--feito .lembretes__marcar::after { border-color: var(--cor-superficie); opacity: 1; transform: rotate(45deg); }
 
 /* Ações sempre visíveis, como no modelo. */
-.lembretes__acoes { grid-area: acoes; display: flex; align-items: center; gap: 2px; margin-top: -4px; }
-.lembretes__acao { display: inline-grid; place-items: center; width: 28px; height: 28px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.lembretes__acoes { grid-area: acoes; display: flex; align-items: center; gap: 6px; margin-top: -4px; }
+.lembretes__acao { display: inline-grid; place-items: center; box-sizing: border-box; width: 32px; height: 32px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .lembretes__acao svg { width: 16px; height: 16px; pointer-events: none; }
 .lembretes__acao:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
 .lembretes__excluir:hover { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
@@ -78,7 +85,7 @@
 .lembretes__data-painel { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; flex: 1 1 100%; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-campo); animation: ck-surgir var(--duracao) var(--curva); }
 .lembretes__data-legenda { padding: 0 4px; font-size: var(--fs-sm); font-weight: var(--peso-marca); color: var(--cor-texto-suave); }
 .lembretes__atalhos { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; min-width: 0; }
-.lembretes__atalho { min-height: 28px; padding: 0 10px; border: 1px solid var(--cor-borda); border-radius: var(--altura-pilula); background: var(--cor-superficie); color: var(--cor-texto); font: var(--peso-regular) var(--fs-ui)/1 var(--fonte-corpo); cursor: pointer; transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.lembretes__atalho { min-height: 32px; padding: 0 12px; border: 1px solid var(--cor-borda); border-radius: var(--altura-pilula); background: var(--cor-superficie); color: var(--cor-texto); font: var(--peso-regular) var(--fs-ui)/1 var(--fonte-corpo); cursor: pointer; transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .lembretes__atalho:hover { border-color: var(--cor-texto-apagado); }
 .lembretes__atalho[aria-pressed="true"] { border-color: var(--cor-destaque-forte); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-weight: var(--peso-marca); }
 .lembretes__campo-data { display: grid; gap: 4px; flex: 0 1 160px; min-width: 0; }
@@ -92,10 +99,9 @@
 
 /* Vistas Hoje / Em breve: pílulas do kit, navegação ‹ Hoje › e faixa de 7 dias. */
 .lembretes__barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.lembretes__vistas { flex: none; }
-.lembretes__vistas .ck-pilula { min-height: 0; height: 30px; padding: 0 12px; font-size: var(--fs-md); }
+.lembretes__vistas { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; }
+.lembretes__vistas .ck-pilula { display: inline-flex; align-items: center; justify-content: center; flex: 1 1 0; min-width: 0; min-height: 0; height: 32px; padding: 0 12px; font-size: var(--fs-md); }
 .lembretes__vistas .ck-pilula__n { min-width: 18px; padding: 0 5px; border-radius: var(--altura-pilula); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-size: var(--fs-xs); line-height: 18px; text-align: center; opacity: 1; }
-.lembretes__vistas .ck-pilula[aria-selected="true"] .ck-pilula__n { background: var(--cor-superficie); }
 .lembretes__navegar { display: flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); }
 .lembretes__nav { display: inline-grid; place-items: center; min-width: 30px; min-height: 0; height: 28px; padding: 0; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); font: var(--peso-marca) var(--fs-ui)/1 var(--fonte-corpo); cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .lembretes__nav:hover:not(:disabled) { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
@@ -104,6 +110,7 @@
 .lembretes__nav .ck-ico { width: 14px; height: 14px; }
 .lembretes__nav--anterior .ck-ico { transform: scaleX(-1); }
 .lembretes__semana { display: grid; gap: 8px; min-width: 0; }
+.lembretes__semana-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .lembretes__mes { margin: 0; font-size: var(--fs-base); font-weight: var(--peso-marca); color: var(--cor-texto); }
 .lembretes__faixa { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--cor-borda-suave); }
 .lembretes__dia { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 32px; padding: 0 4px; border: 0; border-radius: var(--raio-md); background: transparent; color: var(--cor-texto); font: var(--peso-medio) var(--fs-ui)/1 var(--fonte-corpo); cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
@@ -112,25 +119,22 @@
 .lembretes__dia[aria-current="date"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-weight: var(--peso-marca); }
 .lembretes__dia-num { min-width: 20px; padding: 0 4px; border-radius: var(--altura-pilula); line-height: 20px; text-align: center; }
 .lembretes__dia[aria-current="date"] .lembretes__dia-num { background: var(--cor-destaque-forte); color: var(--cor-superficie); }
-[data-theme="dark"] .lembretes__dia[aria-current="date"] .lembretes__dia-num { background: var(--cor-destaque); color: var(--cor-destaque-fundo); }
 
 /* Grupos: Atrasada, um por dia, Sem data. */
 .lembretes__grupos { display: grid; gap: 18px; min-width: 0; }
 .lembretes__grupos:empty { display: none; }
 .lembretes__grupo { display: grid; gap: 8px; min-width: 0; animation: ck-surgir var(--duracao) var(--curva); }
-.lembretes__grupo-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding: 6px 4px; border-bottom: 1px solid var(--cor-borda-suave); }
+.lembretes__grupo-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding: 0 2px; }
 .lembretes__grupo-titulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-texto); }
 .lembretes__grupo-n { font-size: var(--fs-md); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .lembretes__caixa .lembretes__reagendar { min-height: 0; height: var(--altura-controle-sm); margin-inline-start: auto; color: var(--cor-destaque-forte); font-weight: var(--peso-marca); }
 [data-theme="dark"] .lembretes__caixa .lembretes__reagendar { color: var(--cor-destaque); }
 .lembretes__caixa .lembretes__reagendar:hover { color: var(--cor-destaque-texto); }
-.lembretes__adicionar-dia { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); font: var(--peso-regular) var(--fs-base)/1 var(--fonte-corpo); text-align: left; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.lembretes__adicionar-dia { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); font: var(--peso-regular) var(--fs-base)/1 var(--fonte-corpo); text-align: left; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .lembretes__adicionar-dia .lembretes__ico { color: var(--cor-destaque-forte); }
-[data-theme="dark"] .lembretes__adicionar-dia .lembretes__ico { color: var(--cor-destaque); }
 .lembretes__adicionar-dia:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
 .lembretes__agenda { display: inline-flex; align-items: center; gap: 4px; justify-self: start; font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .lembretes__agenda--hoje { color: var(--cor-destaque-forte); }
-[data-theme="dark"] .lembretes__agenda--hoje { color: var(--cor-destaque); }
 .lembretes__agenda--atrasada { color: var(--cor-erro-texto); }
 
 /* Concluídos: cabeçalho recolhível com linha superior. */

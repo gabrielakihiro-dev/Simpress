@@ -23,7 +23,8 @@ function CampoFolha({ rotulo, valor, cheio }: { rotulo: string; valor: string | 
   );
 }
 
-function Tabela({ cabecalhos, linhas, classes = [] }: { cabecalhos: string[]; linhas: (string | undefined)[][]; classes?: string[] }) {
+// respostas (opcional): "sim" ou "nao" por linha; só colore a borda da coluna Sim / Não (data-resposta), o texto não muda.
+function Tabela({ cabecalhos, linhas, classes = [], respostas }: { cabecalhos: string[]; linhas: (string | undefined)[][]; classes?: string[]; respostas?: string[] }) {
   return (
     <table className="tp__tabela">
       <thead>
@@ -34,7 +35,7 @@ function Tabela({ cabecalhos, linhas, classes = [] }: { cabecalhos: string[]; li
           <tr key={linha}>
             {celulas.map((texto, i) => (i === 0
               ? <th key={i} scope="row">{texto}</th>
-              : <td key={i} className={classes[i] || undefined}>{texto}</td>))}
+              : <td key={i} className={classes[i] || undefined} data-resposta={respostas?.[linha] || undefined}>{texto}</td>))}
           </tr>
         ))}
       </tbody>
@@ -97,6 +98,7 @@ function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatura: HTML
           cabecalhos={["Equipamento / Acessório", "Sim / Não"]}
           linhas={dados.itens.map((item) => [item.rotulo, marcas(String(item.resposta))])}
           classes={["", "tp__marcas"]}
+          respostas={dados.itens.map((item) => String(item.resposta))}
         />
       </Secao>
       <Secao titulo="Observações">

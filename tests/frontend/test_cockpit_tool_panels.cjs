@@ -967,7 +967,7 @@ test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026); 
   assert.match(painel, /data-react-painel="unidades"/);
   assert.match(html, /data-react-painel="unidades"[^>]*hidden><\/section>/, "a seção fica vazia: o React desenha o conteúdo");
   const corpo = fs.readFileSync(path.join(root, "frontend/src/paineis/unidades/corpo.tsx"), "utf8");
-  for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-copy-cnpj", "cockpit-units-copy-cep", "cockpit-units-detail-badge", "cockpit-units-new"]) {
+  for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-search", "cockpit-units-status", "cockpit-units-list-body", "cockpit-units-new"]) {
     assert.equal(corpo.split(`id="${id}"`).length - 1, 1, `${id} uma vez no corpo`);
     assert.equal(html.split(`id="${id}"`).length - 1, 0, `${id} fora do HTML estático`);
   }
@@ -975,6 +975,8 @@ test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026); 
   assert.match(corpo, /id="btn-salvar-unidade" data-on-click="salvarUnidadeForm"/);
   assert.doesNotMatch(html, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit|lista-unidades-container/);
   assert.doesNotMatch(corpo, /Fluxo completo/);
+  // Novo layout (18/11/2026): grade de cartões sem tela de detalhe.
+  assert.doesNotMatch(corpo, /cockpit-units-detail|cockpit-units-copy/);
 });
 
 test("digitar na busca da aba OS filtra só depois de 150 ms (contagem anunciada uma vez)", async () => {
