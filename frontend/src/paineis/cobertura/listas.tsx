@@ -8,6 +8,7 @@ import {
   disponibilidade, entregarSemTransporte, mudarEstado, prepararTransporte, renovarReserva, resolverDivergencia, vincularHistorico,
 } from "./acoes";
 import { Botao, Campo, Grupo, Selo } from "./componentes";
+import { ler } from "./estado";
 import * as modelo from "./modelo";
 import { casos, type Aba, type Dados, type Registro } from "./tipos";
 
@@ -355,7 +356,9 @@ function Kit({ reserva }: { reserva: Registro }) {
               setGravando(true);
               try {
                 const ok = await alterarKit(reserva, item, novo);
-                if (!ok && caixa.isConnected) caixa.checked = !novo;
+                // Falha (409, rede): a marca segue o que a releitura trouxe, não o inverso do clique.
+                const atual = modelo.reservasAbertas(ler().dados).find(r => r.id === reserva.id);
+                if (!ok && caixa.isConnected) caixa.checked = atual ? Boolean(atual.kit?.[item]) : !novo;
               } finally {
                 travado.current = false;
                 setGravando(false);
