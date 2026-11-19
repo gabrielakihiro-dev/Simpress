@@ -60,7 +60,7 @@ function Assinatura({ texto, imagem }: { texto: string; imagem?: HTMLImageElemen
   );
 }
 
-function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatura: HTMLImageElement | null }) {
+export function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatura: HTMLImageElement | null }) {
   const c = dados.campos;
   const entrega = dados.termo === "entrega";
   // Mesma estrutura nos dois termos; a devolução muda só os textos e a cor de destaque (tp--devolucao).

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { IconeSprite, InfoTip } from "./componentes";
 import { avisar, ler, mudar, type FormTermo, type StatusTermo } from "./estado";
+import { FolhaTermo } from "./folha";
 import { criarDoTermo, verLembretes } from "./lembretes-acoes";
 import { gerarPdf, idItem, limpar } from "./termos-acoes";
 import { TERMOS, type NomeTermo } from "./termos-puro";
@@ -219,29 +220,37 @@ function Acoes({ termo, status }: { termo: NomeTermo; status: StatusTermo }) {
   );
 }
 
-// Prévia do PDF: folha miniatura só com barras e marcas, desenhada do estado do formulário (valor preenchido = barra
-// escura, vazio = barra clara). Não mostra nenhum texto digitado, então não leva dado pessoal; fica fora do leitor de tela.
+// Prévia do PDF: a mesma folha do Gerar PDF (FolhaTermo), com o texto digitado, reduzida por zoom à largura da coluna.
+// Lê do estado (os rádios gravam nele no onChange), não do DOM. Sem a assinatura do técnico: o <img> dela é um nó só e
+// mudaria de lugar entre a prévia e a impressão. Fica fora do leitor de tela (repete o formulário). Pedido do usuário de
+// 19/11/2026: antes era só barras, sem texto. O dado pessoal continua só na tela, nunca em log nem storage.
 function FolhaPrevia({ termo, form }: { termo: NomeTermo; form: FormTermo }) {
-  const obsCheia = form.obs.trim() !== "" ? "1" : undefined;
+  const papel = useRef<HTMLDivElement>(null);
+  const pagina = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const externo = papel.current;
+    const miolo = pagina.current;
+    if (!externo || !miolo) return;
+    // zoom (não transform) para a altura da folha acompanhar a escala; offsetWidth do miolo não muda com o zoom.
+    // Até 1: com a prévia abaixo do formulário (< 1200 px) a coluna é larga e a folha não passa do tamanho A4.
+    const ajustar = () => { miolo.style.zoom = String(Math.min(1, externo.clientWidth / miolo.offsetWidth)); };
+    ajustar();
+    // No quadro seguinte: o zoom muda a altura da própria folha observada e, no mesmo quadro, o Chrome acusa "ResizeObserver loop".
+    let quadro = 0;
+    const observador = new ResizeObserver(() => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); });
+    observador.observe(externo);
+    return () => { observador.disconnect(); cancelAnimationFrame(quadro); };
+  }, []);
+  const dados = {
+    termo,
+    campos: form.campos,
+    itens: TERMOS[termo].itens.map((rotulo, i) => ({ rotulo, resposta: form.itens[i] ?? "" })),
+    obs: form.obs,
+  };
   return (
-    <div className="termos__folha" data-termo={termo} aria-hidden="true">
-      <i className="termos__barra termos__barra--titulo" />
-      <div className="termos__folha-linhas">
-        {TERMOS[termo].campos.map((nome) => (
-          <i key={nome} className="termos__barra" data-cheio={(form.campos[nome] ?? "").trim() !== "" ? "1" : undefined} />
-        ))}
-      </div>
-      <div className="termos__folha-linhas">
-        {form.itens.map((resposta, i) => (
-          <div key={i} className="termos__folha-item">
-            <i className="termos__folha-marca" data-resposta={resposta || undefined} />
-            <i className="termos__barra" />
-          </div>
-        ))}
-      </div>
-      <div className="termos__folha-linhas">
-        <i className="termos__barra" data-cheio={obsCheia} />
-        <i className="termos__barra" data-cheio={obsCheia} />
+    <div className="termos__folha" data-termo={termo} aria-hidden="true" ref={papel}>
+      <div className="termos__folha-pagina" ref={pagina}>
+        <FolhaTermo dados={dados} assinatura={null} />
       </div>
     </div>
   );

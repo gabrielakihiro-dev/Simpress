@@ -256,13 +256,6 @@
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__trilho { background: var(--nl-bd); }
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__trilho > i { background: rgb(var(--nl-i)); }
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha { border-radius: 10px; background: #f7f7f4; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__barra { background: #dfe1e8; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__barra[data-cheio="1"] { background: #9097a8; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha[data-termo="entrega"] .termos__barra--titulo { background: #1f4e8c; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha[data-termo="devolucao"] .termos__barra--titulo { background: #7a1f2b; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca { border: 1.5px solid #c3c8d4; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca[data-resposta="sim"] { border-color: #2f9e6a; background: #2f9e6a; }
-[data-cockpit-tool-panel="lembretes"] .termos__form .termos__folha-marca[data-resposta="nao"] { border-color: #c24d4d; background: #c24d4d; }
 
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn { border-radius: var(--nl-raio-controle); }
 [data-cockpit-tool-panel="lembretes"] .termos__form .termos__acoes .ck-btn--secundario { border-color: var(--nl-bd2); background: var(--nl-card); color: var(--nl-tx); }
