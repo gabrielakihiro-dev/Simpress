@@ -1028,6 +1028,11 @@ export interface Rotas {
     corpo: ContasPayload;
     resposta: unknown;
   };
+  "GET /api/config/local/endpoint/{tela}": {
+    consulta: never;
+    corpo: never;
+    resposta: unknown;
+  };
   "GET /api/config/representantes-regionais": {
     consulta: never;
     corpo: never;
