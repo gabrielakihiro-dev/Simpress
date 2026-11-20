@@ -377,3 +377,76 @@ button.sebrae-chip[aria-expanded="true"] .ck-ico { transform: rotate(180deg); }
   #modal-chamado-os { top: var(--ck-topbar-h, 48px); padding: 0; place-items: stretch; }
   #modal-chamado-os > .ck-dialogo { width: 100%; max-width: none; height: 100%; max-height: none; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
 }
+
+/* ---------- F6.7 Lista à esquerda + uma OS à direita em blocos (como o F5), a partir de 1024 px ----------
+   Pedido do usuário (19/11/2026). As linhas não escolhidas somem só por CSS (data-selecionada); o atributo hidden continua dos filtros.
+   Abaixo de 1024 px a lista some e a tabela fica como antes (celular igual). */
+#cockpit-tickets-os .ck-os-lateral { display: none; }
+@media (min-width: 1024px) {
+  #cockpit-tickets-os .ck-os__corpo--lateral { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; gap: 12px 16px; padding: 12px 12px 4px; }
+  #cockpit-tickets-os .ck-os__corpo--lateral > .ck-os-lateral {
+    display: flex; flex-direction: column; gap: 10px; grid-column: 1; grid-row: 1; min-width: 0; max-height: min(78vh, 900px); margin: 0; padding: 2px;
+    overflow-y: auto; overscroll-behavior: contain; list-style: none;
+  }
+  #cockpit-tickets-os .ck-os-lateral__li[hidden] { display: none; }
+  /* "Carregar mais" fica embaixo da lista, como em Finalizados do F5. */
+  #cockpit-tickets-os .ck-os__corpo--lateral > .ck-os__mais { grid-column: 1; grid-row: 2; margin-top: 0; flex-wrap: wrap; }
+  #cockpit-tickets-os .ck-os__corpo--lateral::after { grid-column: 1 / -1; }
+
+  /* Detalhe (opção A, escolhida em 19/11/2026): a tabela vira uma grade de blocos só com a OS escolhida.
+     A linha escolhida usa display: contents, para as células e a linha do Andamento dividirem a mesma grade:
+     Identificação (5 caixas) · Andamento (linha toda, sempre aberto) · Chamado + Observação · Descrição. */
+  #cockpit-tickets-os .ck-os__corpo--lateral > .ck-tabela { display: block; grid-column: 2; grid-row: 1 / span 2; min-width: 0; border: 0; background: none; }
+  #cockpit-tickets-os .ck-os__corpo--lateral > .ck-tabela > :is(thead, colgroup) { display: none; }
+  #cockpit-tickets-os .ck-os__corpo--lateral > .ck-tabela > tbody { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px 12px; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-serial]:not([data-selecionada="true"]) { display: none; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-serial][data-selecionada="true"] { display: contents; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-serial][data-selecionada="true"] > td {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px; order: 1; min-width: 0; padding: 12px 14px;
+    border: 1px solid var(--nl-bd); border-radius: 14px; background: var(--nl-card2); box-shadow: none; color: var(--nl-tx); font-size: 14px;
+  }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-serial][data-selecionada="true"] > td::before {
+    content: attr(data-label); display: block; color: var(--nl-mut); font: 500 12px/16px var(--fonte-corpo);
+  }
+  /* Blocos grandes, com título como os cartões do F5. */
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td:is([data-label="Chamado"], [data-label="Descrição"], [data-label="Observação do andamento"]) {
+    gap: 12px; padding: 18px 20px; border-radius: 20px; background: var(--nl-card);
+  }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td:is([data-label="Chamado"], [data-label="Descrição"], [data-label="Observação do andamento"])::before {
+    color: var(--nl-tx); font: 600 15px/1.3 var(--fonte-corpo);
+  }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td[data-label="Chamado"] { grid-column: 1 / span 2; order: 3; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td[data-label="Observação do andamento"] { grid-column: 3 / span 3; order: 3; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td[data-label="Observação do andamento"] > * { align-self: stretch; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-selecionada="true"] > td[data-label="Descrição"] { grid-column: 1 / -1; order: 4; }
+  /* Descrição inteira no bloco, sem o corte de 3 linhas. */
+  #cockpit-tickets-os .ck-os__corpo--lateral tr[data-selecionada="true"] .ck-descricao__texto { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tr[data-selecionada="true"] .ck-os__ver-tudo { display: none; }
+  /* Andamento sempre aberto: o botão some no modo detalhe (abaixo de 1024 px continua). */
+  #cockpit-tickets-os .ck-os__corpo--lateral .ck-os__andamento-btn { display: none; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-andamento] { display: block; grid-column: 1 / -1; order: 2; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-andamento][hidden] { display: none; }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-andamento] > td {
+    display: block; padding: 18px 20px; border: 1px solid var(--nl-bd); border-radius: 20px; background: var(--nl-card);
+  }
+  #cockpit-tickets-os .ck-os__corpo--lateral tbody tr[data-andamento] > td::before {
+    content: "Andamento"; display: block; margin-bottom: 12px; color: var(--nl-tx); font: 600 15px/1.3 var(--fonte-corpo);
+  }
+}
+#cockpit-tickets-os .ck-os-lateral__item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "num selos" "serie serie" "quem quem"; align-items: center; gap: 4px 8px;
+  width: 100%; padding: 14px 16px; border: 1px solid var(--nl-bd); border-radius: 18px; background: var(--nl-card); color: var(--nl-tx);
+  font: inherit; text-align: left; cursor: pointer;
+}
+#cockpit-tickets-os .ck-os-lateral__item:hover { border-color: var(--nl-bd2); }
+#cockpit-tickets-os .ck-os-lateral__item[aria-current="true"] { border-color: rgba(var(--nl-i), .55); background: rgba(var(--nl-i), .07); }
+#cockpit-tickets-os .ck-os-lateral__item[data-tom="alerta"] { border-left: 4px solid var(--nl-atx); }
+#cockpit-tickets-os .ck-os-lateral__item:focus-visible { outline: 2px solid rgba(var(--nl-i), .8); outline-offset: 2px; }
+#cockpit-tickets-os .ck-os-lateral__num { grid-area: num; font: 700 14px/1.3 var(--fonte-mono); white-space: nowrap; }
+#cockpit-tickets-os .ck-os-lateral__selos { grid-area: selos; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
+#cockpit-tickets-os .ck-os-lateral__selos:empty { display: none; }
+#cockpit-tickets-os .ck-os-lateral__serie { grid-area: serie; color: var(--nl-tx); font: 500 14px/1.35 var(--fonte-mono); overflow-wrap: anywhere; }
+#cockpit-tickets-os .ck-os-lateral__quem { grid-area: quem; color: var(--nl-mut); font: 400 12px/1.4 var(--fonte-mono); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) {
+  #cockpit-tickets-os .ck-os-lateral__item { transition: background-color var(--duracao) var(--nl-curva), border-color var(--duracao) var(--nl-curva); }
+}
