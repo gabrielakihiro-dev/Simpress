@@ -34,7 +34,7 @@ from core.integrity import FileBusyError, FileTransactionError, atomic_write_byt
 from core.errors import DomainBusyError, DomainConflictError  # noqa: E402
 from domains import sebrae_dashboard_gravacao as gravacao  # noqa: E402
 from domains import sebrae_finalizacao as fin  # noqa: E402
-from domains import sebrae_novos  # noqa: E402
+from domains import sebrae_credenciais, sebrae_novos  # noqa: E402
 from domains.sebrae_dashboard import ler_coluna_c  # noqa: E402
 from scripts import sebrae_softexpert  # noqa: E402
 
@@ -434,6 +434,10 @@ def _processar(
             encerramentos[numero] = quando
             anotar(numero, status, encerrado_em=quando, **extras)
             log(f"{numero}: finalizado no SoftExpert.")
+            try:  # senha guardada para o F5 sai junto com o chamado (regra do usuário, 19/11/2026)
+                sebrae_credenciais.remover(state_dir, numero)
+            except Exception as erro:  # noqa: BLE001 - never blocks the result; log only the type
+                log(f"{numero}: senha guardada não apagada ({type(erro).__name__}).")
         elif status == fin.STATUS_NAO_ENCONTRADO and manual:
             # Fora da central, com D=FINALIZADO e R do usuário: finalizado por outro técnico (regra do usuário, 12/11/2026).
             quando = manual

@@ -1527,6 +1527,12 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__texto > summary { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: var(--raio-sm); cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-suave); transition: background-color var(--duracao) var(--curva); }
 .sebrae-chamado__texto > summary:hover { background: var(--cor-neutro-fundo); }
 .sebrae-chamado__texto p { max-height: 9em; margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--cor-borda-suave); overflow: auto; font-size: var(--fs-sm); line-height: 1.5; color: var(--cor-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Senha do chamado (F5): só o botão; o valor entra no DOM no clique e sai ao ocultar */
+.sebrae-senha { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.sebrae-senha__mostrar { justify-self: start; }
+.sebrae-senha__lista { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.sebrae-senha__lista li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sebrae-senha__valor { min-width: 0; padding: 2px 6px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); color: var(--cor-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; user-select: all; }
 /* Lápis da Descrição (F5): botão pequeno no resumo, editor inline abaixo do texto */
 .sebrae-descricao__selo { margin-left: auto; }
 .sebrae-descricao__selo[hidden] { display: none; }
