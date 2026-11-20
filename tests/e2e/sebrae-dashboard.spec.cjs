@@ -82,6 +82,23 @@ test("Chamados novos: campos manuais com padrão, sem botão de exportar", async
   await expect(cartao.locator("#btn-sebrae-exportar, #sebrae-exportacao-status, #sebrae-exportacao-blocos")).toHaveCount(0);
 });
 
+// Senha do chamado (exceção de LGPD autorizada em 19/11/2026): fora do DOM até o clique; fixture com senha fictícia.
+test("Senha do chamado: só o botão até o clique, mostra, copia e some ao ocultar", async ({ page, request, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  const { painel } = await abrirPainel(page, request);
+  await abrirItemNovo(painel.locator("#sebrae-novos-lista .sebrae-chamado").first());
+  const senha = painel.getByRole("group", { name: "Senha do chamado" });
+  await expect(senha).toHaveCount(1); // só o chamado com senha guardada tem o botão
+  await expect(page.locator("body")).not.toContainText("Ficticia#2026");
+  await senha.getByRole("button", { name: "Mostrar senha" }).click();
+  await expect(senha.locator("code")).toHaveText("Ficticia#2026");
+  await senha.getByRole("button", { name: "Copiar" }).click();
+  await expect(page.locator("body")).toContainText("Senha copiada.");
+  await senha.getByRole("button", { name: "Ocultar senha" }).click();
+  await expect(senha.locator("code")).toHaveCount(0);
+  await expect(senha).not.toContainText("Ficticia#2026");
+});
+
 test("Chamados finalizados é a sub-aba Finalizados, escondida até ser escolhida e só com leitura", async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request);
   const secao = painel.locator("#sebrae-finalizados");

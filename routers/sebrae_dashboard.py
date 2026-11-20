@@ -27,7 +27,7 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError, Domai
 from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, REGIONAL_REPRESENTATIVES_FILE, format_size_limit
 from core.integrity import atomic_write_json, lock_paths
 from domains import (
-    local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
+    local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_credenciais, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_os_nova, sebrae_os_recusadas, sebrae_vinculos,
 )
 from domains.assistant_lgpd import e_solicitante_sistema
@@ -309,6 +309,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
         apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if abertos else {}
+        com_senha = sebrae_credenciais.numeros(_pasta_estado()) if abertos else frozenset()
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
              "apelido": _apelido(apelidos, (a.get("automaticos") or {}).get("K") or sugestoes.get(str(a.get("numero")), {}).get("K")),
@@ -316,6 +317,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
              "leitura_softexpert": antigos.get(str(a.get("numero"))),
              "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
+             "tem_credencial": str(a.get("numero")) in com_senha,  # only the flag; the value needs the click (GET .../credenciais)
              "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
              "destaque": _destacado(obs_map, a.get("numero")),
              **_os_nova_e_sem_relacao(os_novas.get(str(a.get("numero")))),  # ``softexpert`` is the finalization state; this is the read data
@@ -429,6 +431,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         pasta = _pasta_estado()
         finalizacao = fin.ler_estado(pasta) if (novos or importado) else {}
         observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
+        com_senha = sebrae_credenciais.numeros(pasta) if novos else frozenset()
         leituras: Dict[str, Any] = {}
         apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if novos else {}
         indice_categoria = sebrae_categoria.carregar_indice(_pasta_estado() / sebrae_categoria.ARQUIVO_INDICE) if novos else None  # uma leitura por resposta
@@ -458,6 +461,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                      "softexpert": fin.publico(finalizacao.get(item["numero"])),
                      "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
                      "destaque": _destacado(observacoes, item["numero"]),
+                     "tem_credencial": item["numero"] in com_senha,
                      **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor, opcoes_a)}
                     for item in sebrae_novos.formulario(
                         novos["chamados"], _uma_vez(leituras, "registros", services.registros), _uma_vez(leituras, "relatorio", _relatorio),
@@ -1040,6 +1044,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Destaque manual do chamado (só local, inclusive finalizado; fica até o usuário tirar)."""
         resultado = obs.definir_destaque(_pasta_estado(), numero, payload.destaque)
         return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/chamados/{numero}/credenciais")
+    def credenciais_do_chamado(numero: str):
+        """Senhas do chamado, só no clique em "Mostrar senha" do F5 (exceção de LGPD autorizada em 19/11/2026); nunca em log."""
+        numero = fin.validar_numero(numero)
+        return JSONResponse(
+            {"numero": numero, "credenciais": sebrae_credenciais.ler(_pasta_estado(), numero)},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.get("/api/sebrae/observacoes")
     def listar_observacoes():
