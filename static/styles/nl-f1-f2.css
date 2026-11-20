@@ -104,11 +104,14 @@
 #card-equipamento .nlh-restaurar { height: 36px; padding: 0 8px; border-radius: var(--nl-raio-controle); color: var(--nl-tx); font: 500 14px/1 var(--fonte-corpo); }
 #card-equipamento .nlh-restaurar:hover { background: rgba(var(--nl-i), .1); color: var(--nl-tx); }
 /* Renomear aba e "Salvar como padrão" (config/modelos_chamado.json). */
-#card-equipamento .nlh-abas-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-#card-equipamento .nlh-renomear { width: 36px; height: 36px; padding: 0; justify-content: center; color: var(--nl-mut); }
+/* Lápis e campo de renomear ficam por cima da aba ativa (artefato): fora do tablist para o axe aceitar. */
+#card-equipamento .nlh-abas-linha { position: relative; }
+#card-equipamento .ck-modelo-aba[aria-selected="true"] { padding-right: 40px; }
+#card-equipamento .nlh-renomear { position: absolute; width: 32px; height: 32px; padding: 0; justify-content: center; color: var(--nl-mut); background: transparent; }
 #card-equipamento .nlh-renomear:hover { background: rgba(var(--nl-i), .1); color: var(--nl-tx); }
-#card-equipamento .nlh-renomear-campo:not([hidden]) { display: inline-flex; align-items: center; gap: 6px; }
-#card-equipamento .nlh-renomear-campo input { width: 180px; max-width: 100%; height: 36px; padding: 0 10px; border: 1px solid rgb(var(--nl-i)); border-radius: var(--nl-raio-controle); background: var(--nl-card2); color: var(--nl-tx); font: 500 13.5px/1 var(--fonte-corpo); }
+#card-equipamento .nlh-renomear-campo:not([hidden]) { position: absolute; z-index: 2; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; border: 1px solid rgb(var(--nl-i)); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+#card-equipamento .nlh-renomear-campo input { width: 150px; max-width: 100%; height: 30px; padding: 0; border: 0; background: transparent; color: var(--nl-tx); font: 500 13.5px/1 var(--fonte-corpo); }
+#card-equipamento .nlh-renomear-campo input:focus-visible { outline: none; }
 #card-equipamento .nlh-salvar-padrao:disabled { opacity: .45; cursor: default; background: transparent; }
 #card-equipamento .ck-chamado__texto {
   box-sizing: border-box; min-height: 220px; padding: 14px 16px; border: 1px solid var(--nl-bd2); border-radius: 14px; background: var(--nl-bg);
