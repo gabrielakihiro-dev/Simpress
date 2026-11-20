@@ -175,7 +175,9 @@ if not errorlevel 1 (
 where uv >nul 2>nul
 if errorlevel 1 goto graphify_com_pip
 echo   graphify nao encontrado; instalando com uv ^(grafo de conhecimento do codigo; opcional^)...
-uv tool install graphifyy
+rem --system-certs: usa os certificados do Windows (rede com inspecao TLS da empresa da "invalid peer certificate: UnknownIssuer"); uv antigo sem a opcao repete sem ela.
+uv tool install --system-certs graphifyy
+if errorlevel 1 uv tool install graphifyy
 goto graphify_resultado
 
 :graphify_com_pip
