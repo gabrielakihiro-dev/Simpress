@@ -67,15 +67,18 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Conduza trabalho grande com subagentes sucessivos, um papel por vez, na sequência análise → implementação → revisão independente quando fizer sentido. Aguarde cada etapa terminar antes de iniciar a próxima e não paralelize etapas que dependam umas das outras ou que toquem os mesmos arquivos.
 - Escolha o subagente pelo papel, não pelo nome do modelo:
 
-| Papel | Claude Code (plugin `model-super-power`) | Codex | Antigravity |
+| Papel | Claude Code (agentes do projeto em `.claude/agents/`) | Codex | Antigravity |
 |---|---|---|---|
-| Análise: buscar e ler em volume | `model-super-power:batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
-| Implementação decidida | `model-super-power:executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
-| Revisão independente | `model-super-power:revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
-| Segunda opinião sobre texto ou plano | `model-super-power:segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
-| Arquitetura ou estratégia cara de errar (raramente) | `model-super-power:arquiteto` (Fable 5.1) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
+| Análise: buscar e ler em volume | `batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
+| Implementação decidida | `executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
+| Revisão independente | `revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
+| Segunda opinião sobre texto ou plano | `segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
+| Arquitetura ou estratégia cara de errar (raramente) | `arquiteto` (Fable 5.2) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
 
-- Se o plugin não estiver instalado no Claude Code, use o agente embutido de função equivalente.
+- Os agentes do Claude Code são adaptados do [model-super-power](https://github.com/johnnyhelder/claude-model-super-power) (MIT), versionados em `.claude/agents/` sem instalar o plugin; a segunda opinião usa Sonnet 5.5 e o arquiteto, Fable 5.2 (escolha do usuário, 20/11/2026). Se um modelo não estiver no plano, troque o `model` do arquivo.
+- Nível de esforço (regra do usuário, 20/11/2026): no início de cada chat, o agente classifica a dificuldade e escolhe sozinho `medium`, `high` ou `xhigh`, sem perguntar ao usuário. Diz o nível na primeira linha. Não muda o esforço da própria sessão; ao abrir sessão nova, passa o nível escolhido (no Claude Code, `set_session_effort`).
+- Sessão nova para execução (regra do usuário, 20/11/2026): quando o chat já gastou contexto em análise e vai começar um trabalho novo de execução, abra uma sessão nova com brief completo em vez de executar na mesma conversa.
+- Blocos em sessões (regra do usuário, 20/11/2026): trabalho dividido em blocos que mexem em código diferente vai, cada bloco, para uma sessão nova no seu worktree. Bloco que depende de outro roda em sequência: espere um terminar e comece o próximo sozinho, sem perguntar ao usuário.
 - O agente principal define o escopo, integra os resultados e verifica o estado final; faz na própria conversa o que for pequeno (um arquivo, uma busca, um comando, uma edição). No Antigravity, o maestro dispara subagentes via `invoke_subagent` com o `Model` correspondente e `Workspace: branch` quando isolamento for necessário. Cada subagente recebe só o seu bloco e entrega só a conclusão. Evite `fork`, que herda o contexto todo.
 - Trabalho independente que termina em algo próprio (branch, PR) vai para uma sessão separada, em seu próprio worktree.
 - Compactação que atrapalha o fluxo (regra do usuário, 09/11/2026): se a conversa compactar e perder o fio (resumo incompleto, passo repetido ou esquecido, contexto trocado), não insista nela. Abra uma sessão nova com brief completo (tarefa, restrições, estado atual, worktree e branch, commits feitos, próximo passo) e continue o trabalho lá; a conversa antiga só acompanha e confere o resultado.
