@@ -21,6 +21,19 @@ test("Home: o formulário do PowerShell tem IDs, ARIA e ação declarativa, sem 
   assert.doesNotMatch(appHtml, /id="[^"]*powershell[^"]*enter/i);
 });
 
+test("Home: o editor do comando fica fora do formulário, não tem envio próprio nem parâmetro de Enter", () => {
+  const editor = appHtml.match(/<dialog id="ps-editor"[\s\S]*?<\/dialog>/)?.[0];
+  assert.ok(editor, "editor do comando ausente");
+  const inicioForm = appHtml.indexOf('data-on-submit="abrirPowerShellEndpoint"');
+  assert.ok(appHtml.indexOf("</form>", inicioForm) < appHtml.indexOf('<dialog id="ps-editor"'), "o editor não pode ficar dentro do formulário");
+  assert.match(editor, /aria-label="Editor do comando"/);
+  assert.match(editor, /id="ps-editor-texto"[^>]*maxlength="2000"/);
+  assert.match(editor, /id="btn-ps-editor-inserir"[^>]*>Inserir no PowerShell<\/button>/);
+  assert.match(editor, />Sem Enter</);
+  assert.doesNotMatch(editor, /type="submit"|data-on-(click|submit)|id="[^"]*enter/i);
+  assert.match(appHtml, /id="btn-ps-ver-inteiro"[^>]*aria-haspopup="dialog"[^>]*aria-controls="ps-editor"/);
+});
+
 test("Home: selecionar uma série preenche o hostname do PowerShell com o apelido; sem apelido, limpa", () => {
   const h = createAppHarness(() => apiResponse({}), { stubDisplay: false });
   h.element("input-powershell-hostname").value = "DIGITADO";

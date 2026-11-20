@@ -228,6 +228,7 @@ from routers.ux_ticket import create_ux_ticket_router
 from routers.outlook_mail import create_outlook_mail_router
 from routers.assinatura_tecnico import create_assinatura_tecnico_router
 from routers.lembretes import create_lembretes_router
+from routers.modelos_chamado import create_modelos_chamado_router
 from domains.ux_ticket import TicketsUX
 from domains.ux_ticket_browser import conectar_ux_ticket
 from domains.assistant_api import asgi_transport
@@ -1550,6 +1551,8 @@ app.include_router(create_outlook_mail_router(
     STATE_DIR / "outlook_email_modelos.json", ENTRA_USERS_FILE, arquivo_padrao_cabo=OUTLOOK_MODELO_CABO_DEFAULTS_FILE,
 ))
 app.include_router(create_lembretes_router(STATE_DIR / "lembretes.json"))
+# Versionado de propósito: o padrão salvo pelo usuário entra no próximo commit.
+app.include_router(create_modelos_chamado_router(BASE_DIR / "config" / "modelos_chamado.json"))
 app.include_router(create_assinatura_tecnico_router(STATE_DIR / "assinatura_tecnico.svg"))
 
 

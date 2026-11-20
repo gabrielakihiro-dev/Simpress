@@ -335,11 +335,136 @@ test.describe("comportamento (só no desktop)", () => {
     const inteiro = page.locator("#btn-ps-ver-inteiro");
     await expect(inteiro).toHaveAttribute("aria-expanded", "false");
     await inteiro.click();
+    await expect(page.locator("#ps-editor")).toBeVisible();
     await expect(inteiro).toHaveAttribute("aria-expanded", "true");
-    await inteiro.click();
+    await page.locator("#btn-ps-editor-fechar").click();
+    await expect(page.locator("#ps-editor")).toBeHidden();
     await expect(inteiro).toHaveAttribute("aria-expanded", "false");
 
     await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+    expect(escritas(ambiente)).toEqual([]);
+  });
+
+  test("Home: Chamado manual carrega o padrão salvo, renomeia a aba e salva nome e texto como padrão", async ({ page }) => {
+    const salvos = [];
+    await page.route("**/api/modelos-chamado", route => responder(route, { json: { modelos: { "teclado-mouse": { rotulo: "Kit periféricos", texto: "Texto salvo de teste" } } } }));
+    await page.route("**/api/modelos-chamado/*", route => {
+      salvos.push({ slug: route.request().url().split("/").pop(), corpo: route.request().postDataJSON() });
+      return responder(route, { json: { modelos: {} } });
+    });
+    await preparar(page);
+    await buscar(page, "BRJ0001");
+
+    await expect(page.getByRole("tab", { name: "Kit periféricos" })).toBeVisible();
+    await page.getByRole("tab", { name: "Kit periféricos" }).click();
+    await expect(page.locator("#texto-chamado-teclado-mouse")).toHaveValue("Texto salvo de teste");
+
+    await page.getByRole("tab", { name: "Deslocamento" }).click();
+    const salvar = page.locator("#btn-salvar-padrao-chamado");
+    await expect(salvar).toBeDisabled();
+    await page.locator("#btn-renomear-chamado").click();
+    await page.locator("#input-rotulo-chamado").fill("Visita técnica");
+    await page.locator("#input-rotulo-chamado").press("Enter");
+    await expect(page.getByRole("tab", { name: "Visita técnica" })).toHaveAttribute("aria-selected", "true");
+    await expect(salvar).toBeEnabled();
+
+    await page.locator("#btn-restaurar-chamado").click();
+    await expect(page.getByRole("tab", { name: "Deslocamento" })).toBeVisible();
+    await expect(salvar).toBeDisabled();
+
+    await page.locator("#btn-renomear-chamado").click();
+    await page.locator("#input-rotulo-chamado").fill("Visita técnica");
+    await page.locator("#btn-renomear-ok").click();
+    await page.locator("#texto-chamado-deslocamento").fill("Novo texto padrão");
+    await salvar.click();
+    await esperarToast(page, "Modelo salvo como padrão.");
+    expect(salvos).toEqual([{ slug: "deslocamento", corpo: { rotulo: "Visita técnica", texto: "Novo texto padrão" } }]);
+    await expect(salvar).toBeDisabled();
+    await page.locator("#texto-chamado-deslocamento").fill("Outro");
+    await page.locator("#btn-restaurar-chamado").click();
+    await expect(page.locator("#texto-chamado-deslocamento")).toHaveValue("Novo texto padrão");
+  });
+
+  test("PowerShell: o editor do comando abre vazio, descarta ao cancelar e insere pelo mesmo envio, sem Enter", async ({ page }) => {
+    const ambiente = await preparar(page);
+    await buscar(page, "BRJ0001");
+    const inteiro = page.locator("#btn-ps-ver-inteiro");
+    const editor = page.locator("#ps-editor");
+    const texto = page.locator("#ps-editor-texto");
+    const campo = page.locator("#input-powershell-comando");
+
+    // Vazio também abre; Enter não cria linha; contador e linhas acompanham.
+    await inteiro.click();
+    await expect(editor).toBeVisible();
+    await expect(editor).toHaveAttribute("aria-label", "Editor do comando");
+    await expect(texto).toBeFocused();
+    await expect(texto).toHaveValue("");
+    await expect(page.locator("#ps-editor-contador")).toHaveText("0 / 2000");
+    await expect(page.locator("#ps-editor-total-linhas")).toHaveText("1 linha");
+    await expect(page.locator("#ps-editor-hostname")).toHaveText("PRTESTE001");
+    await texto.pressSequentially("Get-Service");
+    await texto.press("Enter");
+    await expect(texto).toHaveValue("Get-Service");
+    await expect(page.locator("#ps-editor-contador")).toHaveText("11 / 2000");
+    const longo = `Get-ChildItem -Path 'C:\\Users' -Directory | ${"Select-Object Name, LastWriteTime | ".repeat(12)}Format-Table -AutoSize`;
+    await texto.fill(longo);
+    const linhas = Number((await page.locator("#ps-editor-total-linhas").textContent()).split(" ")[0]);
+    expect(linhas).toBeGreaterThan(1);
+    await expect(page.locator("#ps-editor-linhas")).toHaveText(Array.from({ length: linhas }, (_, i) => i + 1).join("\n"));
+
+    // Cancelar e Esc descartam e devolvem o foco ao "Ver inteiro".
+    await page.locator("#btn-ps-editor-cancelar").click();
+    await expect(editor).toBeHidden();
+    await expect(campo).toHaveValue("");
+    await expect(inteiro).toBeFocused();
+    await campo.fill("ipconfig");
+    await inteiro.click();
+    await expect(texto).toHaveValue("ipconfig");
+    await texto.fill("ipconfig /all");
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(campo).toHaveValue("ipconfig");
+    await expect(inteiro).toHaveAttribute("aria-expanded", "false");
+
+    // Quebra de linha colada é recusada no editor, sem fechar nem enviar.
+    await inteiro.click();
+    await texto.fill("a\nb");
+    await page.locator("#btn-ps-editor-inserir").click();
+    await expect(page.locator("#ps-editor-aviso")).toHaveText("O comando não pode ter quebra de linha.");
+    await expect(editor).toBeVisible();
+
+    // Segmento do editor muda o modo do cartão; Inserir grava, confirma e faz um único POST.
+    await texto.fill("Get-Service");
+    await editor.locator('.nlh-segmento__op[data-modo="usuario"]').click();
+    await expect(page.locator("#select-powershell-modo")).toHaveValue("usuario");
+    await editor.locator('.nlh-segmento__op[data-modo="sistema"]').click();
+    await page.locator("#btn-ps-editor-inserir").click();
+    await expect(editor).toBeHidden();
+    await expect(campo).toHaveValue("Get-Service");
+    await expect(page.locator("#modal-confirmar-acao")).toBeVisible();
+    await confirmar(page);
+    await expect(page.locator("#endpoint-powershell-result")).toContainText("NÃO foi executado");
+    const envios = chamadasDe(ambiente, "POST", "/api/endpoint/powershell");
+    expect(envios).toHaveLength(1);
+    expect(corpoDe(envios[0])).toEqual({ modo: "sistema", comando: "Get-Service", hostname: "PRTESTE001" });
+  });
+
+  test("PowerShell: no celular o editor é folha inferior, sem rolagem horizontal", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const ambiente = await preparar(page);
+    await buscar(page, "BRJ0001");
+    await page.locator("#btn-ps-ver-inteiro").click();
+    const caixa = page.locator("#ps-editor .nlh-editor__caixa");
+    await expect(caixa).toBeVisible();
+    const box = await caixa.boundingBox();
+    expect(Math.round(box.y + box.height)).toBe(812);
+    expect(Math.round(box.width)).toBe(375);
+    expect(await caixa.evaluate(el => getComputedStyle(el).borderTopLeftRadius)).toBe("24px");
+    expect(await page.locator("#ps-editor-texto").evaluate(el => el.getBoundingClientRect().height)).toBe(236);
+    const [cancelar, inserir] = await Promise.all(["#btn-ps-editor-cancelar", "#btn-ps-editor-inserir"].map(s => page.locator(s).boundingBox()));
+    expect(Math.round(cancelar.y)).toBe(Math.round(inserir.y));
+    expect(await page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth)).toBe(true);
+    await page.locator("#btn-ps-editor-cancelar").click();
     expect(escritas(ambiente)).toEqual([]);
   });
 

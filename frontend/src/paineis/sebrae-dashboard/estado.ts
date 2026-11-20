@@ -920,7 +920,6 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       }));
     } else if (dados.descricao) detalhes.push(blocoDetalhe("Descrição", dados.descricao, true)); // sem UTIC: coluna H da planilha, só leitura
     if (dados.lido) detalhes.push(blocoDetalhe("Atendimento realizado", dados.atendimento));
-    if (item.tem_credencial) detalhes.push(blocoSenha(item.numero));
     else {
       if (NUMERO_UTIC.test(item.numero)) {
         // Não encontrado na última leitura (ex.: finalizado por outro técnico): o CSS pinta a linha para conferir depois.
@@ -931,6 +930,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         notas.push(dica);
       }
     }
+    if (item.tem_credencial) detalhes.push(blocoSenha(item.numero));
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
     return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,

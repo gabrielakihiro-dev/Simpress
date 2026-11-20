@@ -1185,3 +1185,70 @@ test("revelarLinhaOs leva à sub-aba da OS, volta à primeira página e avisa o 
     assert.deepEqual(trocas, ["finalizadas", "abertas", "finalizadas"], "e a sub-aba não muda");
   } finally { report.chamados = original; restaurarMarcas(); reiniciarFiltros(); }
 });
+
+test("lateral abaixo de 1024 px: um cartão por OS, segue o filtro e só marca a linha (nada abre sozinho)", async () => {
+  const { section } = await montar({ semBusca: true, lateral: true, aoExpandirSerie: () => {} });
+  const lista = section.querySelector(".ck-os-lateral");
+  assert.ok(lista, "a lista de identificação existe com opcoes.lateral");
+  assert.equal(lista.getAttribute("aria-label"), "Identificação das OS");
+  const cartoes = () => section.querySelectorAll(".ck-os-lateral__item");
+  assert.equal(cartoes().length, section.querySelectorAll("tbody tr[data-serial]").length, "um cartão por linha de OS");
+  const cartao = os => cartoes().find(item => item.querySelector(".ck-os-lateral__num").textContent === os);
+  const linha = os => section.querySelector(`tbody tr[data-os="${os}"]`);
+
+  cartao("9002").click();
+  assert.equal(cartao("9002").getAttribute("aria-current"), "true");
+  assert.equal(cartao("9001").getAttribute("aria-current"), "false");
+  assert.equal(linha("9002").dataset.selecionada, "true", "a linha da tabela fica marcada");
+  assert.equal(section.querySelectorAll("tr[data-andamento]").length, 0, "o cartão não abre o Andamento");
+
+  section.querySelectorAll(".ck-os__andamento-btn").find(item => item.dataset.serie === "SN-CONF").click();
+  assert.equal(cartao("9001").getAttribute("aria-current"), "true", "abrir o Andamento marca o cartão da série");
+  assert.equal(linha("9002").dataset.selecionada, undefined);
+
+  panels.filtrarTabelaOs({ relacao: "conferida" });
+  assert.equal(cartao("9002").parentNode.hidden, true, "o cartão some com a linha filtrada");
+  assert.equal(cartao("9001").parentNode.hidden, false);
+  panels.filtrarTabelaOs({ relacao: "todos" });
+  assert.equal(cartao("9002").parentNode.hidden, false);
+});
+
+test("sem opcoes.lateral (e na janela Chamado × OS) não há lista de identificação", async () => {
+  const { section } = await montar({ semBusca: true });
+  assert.equal(section.querySelector(".ck-os-lateral"), null);
+  const { section: janela } = await montar({ semBusca: true, lateral: true, soOs: { serie: "SN-CONF", os: "9001" }, somenteLeitura: true });
+  assert.equal(janela.querySelector(".ck-os-lateral"), null, "a janela não ganha lista");
+});
+
+test("lateral a partir de 1024 px: mostra uma OS por vez com o Andamento aberto, refaz a escolha com filtro e com revelarLinhaOs", async () => {
+  const antes = win.matchMedia;
+  win.matchMedia = consulta => ({ matches: consulta === "(min-width: 1024px)", addEventListener() {} });
+  try {
+    const expandidas = [];
+    const { section } = await montar({ semBusca: true, lateral: true, aoExpandirSerie: serie => expandidas.push(serie) });
+    const mostradas = () => section.querySelectorAll('tbody tr[data-selecionada="true"]').map(row => row.dataset.os);
+    const aberta = () => section.querySelectorAll("tr[data-andamento]").map(row => row.dataset.andamento);
+    const cartao = os => section.querySelectorAll(".ck-os-lateral__item").find(item => item.querySelector(".ck-os-lateral__num").textContent === os);
+    const primeira = section.querySelectorAll("tbody tr[data-serial]").find(row => !row.hidden);
+
+    assert.deepEqual(mostradas(), [primeira.dataset.os], "a primeira OS visível já aparece no detalhe");
+    assert.deepEqual(aberta(), [primeira.dataset.serial], "com o Andamento dela aberto");
+
+    cartao("9002").click();
+    assert.deepEqual(mostradas(), ["9002"], "só uma OS no detalhe");
+    assert.deepEqual(aberta(), ["SN-SOR"], "o Andamento acompanha a OS escolhida (um por vez)");
+    assert.equal(cartao("9002").getAttribute("aria-current"), "true");
+
+    panels.filtrarTabelaOs({ relacao: "conferida" });
+    assert.deepEqual(mostradas(), ["9001"], "a OS escolhida saiu do filtro: mostra a primeira que sobrou");
+    assert.deepEqual(aberta(), ["SN-CONF"]);
+    panels.filtrarTabelaOs({ relacao: "todos" });
+    assert.deepEqual(mostradas(), ["9001"], "voltar o filtro mantém a OS mostrada");
+
+    assert.equal(panels.revelarLinhaOs(section.querySelector('tbody tr[data-os="9002"]')), true);
+    assert.deepEqual(mostradas(), ["9002"], "revelarLinhaOs mostra a OS pedida no detalhe");
+    assert.ok(expandidas.includes("SN-SOR"));
+  } finally {
+    win.matchMedia = antes;
+  }
+});

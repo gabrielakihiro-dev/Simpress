@@ -397,6 +397,10 @@ export type ListaLembretes = {
   "lembretes": Lembrete[];
 };
 
+export type ListaModelos = {
+  "modelos": Record<string, ModeloSalvo>;
+};
+
 export type ManualAliasConflictResolutionPayload = {
   "acao": string;
 };
@@ -415,6 +419,11 @@ export type ManutencaoCobertura = {
 export type MensagemPayload = {
   "texto": string;
   "contexto_ux"?: ContextoUXPayload | null;
+};
+
+export type ModeloSalvo = {
+  "rotulo"?: string;
+  "texto"?: string;
 };
 
 export type MovimentacaoPayload = {
@@ -590,6 +599,11 @@ export type RevPayload = {
 
 export type RotinaPayload = {
   "rotina": "os" | "inventarios" | "usuarios" | "ambas" | "login" | "sebrae" | "dashboard" | "enviar" | "fechar" | "antigos";
+};
+
+export type SalvarModeloPayload = {
+  "rotulo": string;
+  "texto": string;
 };
 
 export type SolicitantePayload = {
@@ -1258,6 +1272,16 @@ export interface Rotas {
     consulta: never;
     corpo: never;
     resposta: unknown;
+  };
+  "GET /api/modelos-chamado": {
+    consulta: never;
+    corpo: never;
+    resposta: ListaModelos;
+  };
+  "PUT /api/modelos-chamado/{slug}": {
+    consulta: never;
+    corpo: SalvarModeloPayload;
+    resposta: ListaModelos;
   };
   "POST /api/modelos/{tipo}/importar": {
     consulta: never;
