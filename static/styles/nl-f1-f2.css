@@ -103,6 +103,13 @@
 #card-equipamento .nlh-selo-editavel { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); gap: 4px; }
 #card-equipamento .nlh-restaurar { height: 36px; padding: 0 8px; border-radius: var(--nl-raio-controle); color: var(--nl-tx); font: 500 14px/1 var(--fonte-corpo); }
 #card-equipamento .nlh-restaurar:hover { background: rgba(var(--nl-i), .1); color: var(--nl-tx); }
+/* Renomear aba e "Salvar como padrão" (config/modelos_chamado.json). */
+#card-equipamento .nlh-abas-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+#card-equipamento .nlh-renomear { width: 36px; height: 36px; padding: 0; justify-content: center; color: var(--nl-mut); }
+#card-equipamento .nlh-renomear:hover { background: rgba(var(--nl-i), .1); color: var(--nl-tx); }
+#card-equipamento .nlh-renomear-campo:not([hidden]) { display: inline-flex; align-items: center; gap: 6px; }
+#card-equipamento .nlh-renomear-campo input { width: 180px; max-width: 100%; height: 36px; padding: 0 10px; border: 1px solid rgb(var(--nl-i)); border-radius: var(--nl-raio-controle); background: var(--nl-card2); color: var(--nl-tx); font: 500 13.5px/1 var(--fonte-corpo); }
+#card-equipamento .nlh-salvar-padrao:disabled { opacity: .45; cursor: default; background: transparent; }
 #card-equipamento .ck-chamado__texto {
   box-sizing: border-box; min-height: 220px; padding: 14px 16px; border: 1px solid var(--nl-bd2); border-radius: 14px; background: var(--nl-bg);
   color: var(--nl-tx); font: 400 14px/1.6 var(--fonte-corpo); white-space: pre-wrap; resize: vertical;
