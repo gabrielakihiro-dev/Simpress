@@ -102,6 +102,7 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 
 - Autorização para commit não autoriza push. Confirme destino e autorização e informe claramente se houve commit, push e sincronização com o remoto.
 - Depois de abrir ou atualizar um PR, verifique sempre a CI e informe o resultado (aprovada, falhou ou pendente). Se não for possível ler a CI (por exemplo, `gh` sem login), diga isso explicitamente em vez de supor que passou.
+- Quem mescla os PRs é o Antigravity (regras acima). O agente que abriu o PR não para de acompanhar a CI no merge: depois dele, acompanhe também os runs do commit de merge na `main` (`gh run list --branch main`) até terminarem e informe o resultado. Falha de infraestrutura que passou no PR (ex.: `O Chrome da bancada não abriu a porta CDP.`) roda de novo com `gh run rerun <id> --failed`; falha real vira correção em branch nova com PR próprio, sem mesclar (pedido do usuário em 20/11/2026).
 - Revise o que vai para o commit; não reescreva histórico nem inclua dados operacionais ou confidenciais.
 - Identifique branches e worktrees reais antes de integrar trabalho. Não use `reset --hard`, `git clean` ou force push sem autorização.
 - Cada agente (Claude Code, Codex e Cursor) trabalha no próprio git worktree e não troca o branch do checkout principal. Antes de cada commit, confira o branch atual com `git branch --show-current`.
