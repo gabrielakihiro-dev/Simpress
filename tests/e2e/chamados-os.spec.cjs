@@ -13,6 +13,14 @@ async function abrirAba(page, botaoBarra, itemMenu, titulo) {
   await expect(page.locator("#cockpit-tool-title")).toHaveText(titulo);
 }
 
+// A partir de 1024 px a aba OS (F6) mostra uma OS por vez à direita: clica o cartão da série na lista à esquerda.
+// Abaixo disso a lista some e a tabela mostra todas as linhas, então não há o que clicar.
+async function mostrarSerieOs(page, serie) {
+  await expect(page.locator(`#cockpit-tickets-os tbody tr[data-serial="${serie}"]`).first()).toBeAttached();
+  const cartao = page.locator(`#cockpit-tickets-os .ck-os-lateral__item:visible[aria-label$="série ${serie}"]`).first();
+  if (await cartao.isVisible()) await cartao.click();
+}
+
 // A OS com marca ativa (ou selo Entregue da Simpress) fica na sub-aba Finalizadas; as demais, em Abertas (a padrão).
 async function abrirAbaOsComVinculo(page, numero, { finalizadas = false } = {}) {
   const vinculo = { fonte: "oracle", serie: "DEMO-SN-001", os: "7285070", ano: 2026, numero, origem: "manual", chamado: `UTIC-2026-${numero}` };
@@ -22,6 +30,7 @@ async function abrirAbaOsComVinculo(page, numero, { finalizadas = false } = {}) 
   await page.goto("/");
   await abrirAba(page, "#btn-acompanhamento-chamados", "#btn-chamados-menu", "OS");
   if (finalizadas) await page.locator("#os-aba-finalizadas").click();
+  await mostrarSerieOs(page, "DEMO-SN-001");
   const gatilho = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"] button.ticket-os-link-goto').first();
   await expect(gatilho).toBeVisible();
   await expect(gatilho).toHaveAttribute("aria-haspopup", "dialog");
@@ -113,6 +122,7 @@ async function abrirF6ComMarcas(page, iniciais, aba = "finalizadas") {
   await page.goto("/");
   await abrirAba(page, "#btn-acompanhamento-chamados", "#btn-chamados-menu", "OS");
   if (aba === "finalizadas") await page.locator("#os-aba-finalizadas").click();
+  await mostrarSerieOs(page, "DEMO-SN-001");
   const linha = page.locator('#cockpit-tickets-os tbody tr[data-serial="DEMO-SN-001"]').first();
   await expect(linha).toBeVisible();
   return { estado, linha };

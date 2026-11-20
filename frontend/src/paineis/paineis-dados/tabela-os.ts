@@ -119,6 +119,9 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       visiveis += 1;
     });
     section.querySelectorAll("tbody tr[data-andamento]").forEach((row: Qualquer) => { row.hidden = !mostradas.has(row.dataset.andamento); });
+    // Lista lateral (F6): cada cartão segue a visibilidade da própria linha; no modo detalhe sempre há uma OS mostrada.
+    st.lateral?.forEach((item: Qualquer, row: Qualquer) => { item.li.hidden = row.hidden; });
+    garantirSelecaoOs(st);
     const mais = section.querySelector("[data-os-mais]");
     if (mais) {
       mais.hidden = Boolean(termo) || visiveis <= st.limite;
@@ -135,7 +138,14 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
   }
 
   // Abrir uma OS escondida só pela página (não pelo filtro): amplia a página até ela. Devolve se a linha ficou visível.
+  // No modo detalhe (F6 com a lista lateral) a OS revelada vira a OS mostrada à direita.
   function revelarLinhaOs(row: Qualquer) {
+    const ok = revelarLinhaPaginaOs(row);
+    if (ok) selecionarOsLateral(osExternas.get(row.closest(".ck-os")), row);
+    return ok;
+  }
+
+  function revelarLinhaPaginaOs(row: Qualquer) {
     const section = row?.closest?.(".ck-os");
     const st = osExternas.get(section);
     if (!st || !row.hidden) return Boolean(row && !row.hidden);
@@ -155,6 +165,54 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     st.limite = Math.max(st.limite, Math.ceil((posicao + 1) / OS_POR_PAGINA) * OS_POR_PAGINA);
     filtrarSecaoOs(section);
     return !row.hidden;
+  }
+
+  // ----- lista lateral + detalhe (só a F6, opcoes.lateral): igual ao F5, a partir de 1024 px -----
+  // Pedido do usuário (19/11/2026): clicar uma OS na lista mostra só ela à direita, em blocos, com o Andamento aberto.
+  // As outras linhas só somem por CSS (data-selecionada); o atributo hidden continua só dos filtros e da página.
+  const chaveLinhaOs = (row: Qualquer) => JSON.stringify([serialKey(row.dataset.serial), orderKey(row.dataset.os)]);
+  const modoDetalheOs = () => Boolean(win.matchMedia?.("(min-width: 1024px)")?.matches);
+  function selecionarOsLateral(st: Qualquer, row: Qualquer) {
+    if (!st?.lateral?.has(row)) return;
+    st.selecionada = chaveLinhaOs(row);
+    st.lateral.forEach((item: Qualquer, linha: Qualquer) => {
+      const atual = linha === row;
+      item.botao.setAttribute("aria-current", String(atual));
+      if (atual) linha.dataset.selecionada = "true";
+      else delete linha.dataset.selecionada;
+    });
+    // Só no modo detalhe a OS escolhida já mostra o Andamento (a série dela, uma por vez); no celular nada abre sozinho.
+    if (!modoDetalheOs()) return;
+    const toggle = [...row.closest("tbody").querySelectorAll(".ck-os__andamento-btn")].find((btn: Qualquer) => btn.dataset.serie === row.dataset.serial);
+    if (toggle && toggle.getAttribute("aria-expanded") !== "true") alternarAndamento(toggle, st, row.dataset.serial, true);
+  }
+
+  // Sem OS mostrada (primeira carga, filtro, troca de sub-aba, OS que mudou de sub-aba): mostra a primeira visível.
+  function garantirSelecaoOs(st: Qualquer) {
+    if (!st?.lateral?.size || !modoDetalheOs()) return;
+    const linhas = [...st.lateral.keys()];
+    const atual = linhas.find(row => chaveLinhaOs(row) === st.selecionada);
+    if (atual && !atual.hidden) {
+      if (atual.dataset.selecionada !== "true") selecionarOsLateral(st, atual);
+      return;
+    }
+    const primeira = linhas.find(row => !row.hidden);
+    if (primeira) selecionarOsLateral(st, primeira);
+  }
+
+  function renderItemLateralOs(st: Qualquer, row: Qualquer, { os, serie, selos, quem }: Qualquer) {
+    const li = el("li", "ck-os-lateral__li");
+    const botao = el("button", "ck-os-lateral__item");
+    botao.type = "button";
+    botao.setAttribute("aria-current", "false");
+    botao.setAttribute("aria-label", `Mostrar a OS ${os}, série ${serie}`);
+    if (row.dataset.triagem === "atrasados" || row.dataset.triagem === "sem_data") botao.dataset.tom = "alerta";
+    const caixaSelos = el("span", "ck-os-lateral__selos");
+    selos.forEach((selo: Qualquer) => caixaSelos.append(el("span", selo.className, selo.textContent)));
+    botao.append(el("span", "ck-os-lateral__num", os), caixaSelos, el("span", "ck-os-lateral__serie", serie), el("span", "ck-os-lateral__quem", quem));
+    botao.addEventListener("click", () => selecionarOsLateral(st, row));
+    li.append(botao);
+    return { li, botao };
   }
 
   // Séries de todas as OS que passam no filtro atual, em todas as páginas (o "Exportar Excel" sai igual à tela).
@@ -216,6 +274,8 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
       soOs: opcoes.soOs || null, somenteLeitura: Boolean(opcoes.somenteLeitura),
       situacao: opcoes.soOs || opcoes.somenteLeitura ? "" : "abertas", status,
+      // Lista lateral (Map linha → cartão), só no host da F6; selecionada: chave série+OS marcada, refeita depois de recriar a tabela.
+      lateral: opcoes.lateral && !opcoes.soOs && !opcoes.somenteLeitura ? new Map() : null, selecionada: "",
       aoContarSituacao: opcoes.aoContarSituacao, aoContarAbas: opcoes.aoContarAbas, aoMudarSituacao: opcoes.aoMudarSituacao, aoFocarAba: opcoes.aoFocarAba, abas: null,
     };
     const head = el("div", "ck-cartao__cab");
@@ -235,6 +295,8 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     }
     section.append(head);
     osExternas.set(section, st);
+    // Passar a 1024 px ou mais (janela maior) já mostra uma OS no detalhe.
+    if (st.lateral) win.matchMedia?.("(min-width: 1024px)")?.addEventListener?.("change", () => { if (section.isConnected) filtrarSecaoOs(section); });
     host.append(section);
     if (!st.soOs) idLivre(status, "ck-os-contagem");
     refreshTicketSummary(false);
@@ -735,6 +797,13 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     header.append(headRow);
     table.append(header);
     const body = doc.createElement("tbody");
+    const lista = externa?.lateral ? el("ul", "ck-os-lateral") : null;
+    if (lista) {
+      externa.lateral.clear();
+      lista.setAttribute("aria-label", "Identificação das OS");
+      content.className += " ck-os__corpo--lateral";
+      content.append(lista);
+    }
     records.forEach((record: Qualquer) => {
       const user = users[record.serie];
       const userText = userFailure ? "Indisponível" : ticketUserLabel(user);
@@ -823,6 +892,13 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
         descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
         cell("Observação do andamento", "ck-td--largo").append(...renderOsObservacao(record.serie, order.os, notas, externa?.somenteLeitura));
         body.append(row);
+        if (lista) {
+          const item = renderItemLateralOs(externa, row, {
+            os: order.os, serie: record.serie, selos: [...osCell.querySelectorAll(".ck-os__selo")], quem: `${hostText} · ${userText}`,
+          });
+          externa.lateral.set(row, item);
+          lista.append(item.li);
+        }
       });
     });
     table.append(body);
@@ -855,6 +931,9 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
       if (toggle) alternarAndamento(toggle, externa, serie, true);
       else externa.abertas.delete(serie);
     });
+    // Recriar a tabela mantém a OS mostrada (filtrarSecaoOs → garantirSelecaoOs); fora do modo detalhe só refaz a marca.
+    const marcada = externa?.selecionada && [...(externa.lateral?.keys() || [])].find(row => chaveLinhaOs(row) === externa.selecionada);
+    if (marcada && !modoDetalheOs()) selecionarOsLateral(externa, marcada);
     filtrarSecaoOs(section);
   }
 
@@ -883,6 +962,9 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     });
     st.abertas.add(serie);
     const rows = [...body.querySelectorAll("tr[data-serial]")].filter(item => item.dataset.serial === serie);
+    // Abrir o Andamento pela célula Série mostra a OS dessa linha (se a OS mostrada já é desta série, fica).
+    const mostrada = rows.find(item => item.dataset.selecionada === "true");
+    if (!mostrada) selecionarOsLateral(st, rows[0]);
     const detail = doc.createElement("tr");
     detail.id = "ck-os-andamento-" + (++andamentoSeq);
     detail.dataset.andamento = serie;

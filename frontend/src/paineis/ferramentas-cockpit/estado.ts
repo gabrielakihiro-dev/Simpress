@@ -561,6 +561,8 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const mounted = host.querySelector(".ck-os");
     const section = mounted || panels?.montarTabelaOs(host, {
       titulo: "Ordens de serviço por série", semBusca: true,
+      // Lista de identificação à esquerda (como o F5), a partir de 1200 px.
+      lateral: true,
       aoExpandirSerie: expandTicketSeries,
       grupoSerie: app.grupoTriagemChamado,
       // O contador "N OS · N séries" da tabela fica na barra das sub-abas, à direita.

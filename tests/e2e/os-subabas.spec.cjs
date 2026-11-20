@@ -86,10 +86,19 @@ async function abrirF6(page) {
 const ABA_ABERTAS = "#os-aba-abertas";
 const ABA_FINALIZADAS = "#os-aba-finalizadas";
 const VISIVEIS = "#ck-os-tabela tbody tr[data-serial]:visible";
+// Linhas que passam nos filtros e na paginação (o atributo hidden). No desktop (>= 1024 px) só a OS selecionada aparece, então ":visible" não serve para contar.
+const FILTRADAS = "#ck-os-tabela tbody tr[data-serial]:not([hidden])";
 const CONTAGEM = "#cockpit-tickets-contagem .ticket-summary-status";
 
+// A partir de 1024 px só a OS selecionada aparece à direita: clica o cartão da série na lista à esquerda.
+// Abaixo disso a lista some e todas as linhas aparecem, então não há o que clicar.
+async function mostrarSerieOs(page, serie) {
+  const cartao = page.locator(`#cockpit-tickets-os .ck-os-lateral__item:visible[aria-label$="série ${serie}"]`).first();
+  if (await cartao.isVisible()) await cartao.click();
+}
+
 async function seriesVisiveis(page) {
-  return page.locator(VISIVEIS).evaluateAll(linhas => linhas.map(linha => `${linha.dataset.serial}/${linha.dataset.finalizada}`).sort());
+  return page.locator(FILTRADAS).evaluateAll(linhas => linhas.map(linha => `${linha.dataset.serial}/${linha.dataset.finalizada}`).sort());
 }
 
 async function kpis(page) {
@@ -192,7 +201,7 @@ test("Sub-abas: KPIs e triagem contam só as OS abertas e não mudam ao trocar d
 
   // Filtrar também não mexe nos KPIs.
   await page.locator("#cockpit-tickets-search").fill("SUB-D");
-  await expect(page.locator(VISIVEIS)).toHaveCount(1);
+  await expect(page.locator(FILTRADAS)).toHaveCount(1);
   expect(await kpis(page)).toEqual(esperado);
 });
 
@@ -244,7 +253,7 @@ test("Sub-abas: busca e Relação valem nas duas sub-abas e os números das abas
   await expect(abertas).toHaveAttribute("aria-label", "Abertas: 1 OS");
   await expect(finalizadas).toHaveAttribute("aria-label", "Finalizadas: 0 OS");
   await expect(finalizadas).toHaveAttribute("data-zero", "");
-  await expect(page.locator(VISIVEIS)).toHaveCount(0);
+  await expect(page.locator(FILTRADAS)).toHaveCount(0);
   await abertas.click();
   expect(await seriesVisiveis(page)).toEqual(["SUB-B/false"]);
 
@@ -295,6 +304,7 @@ test("Sub-abas: Abertas mostra o campo manual; Finalizadas mostra o link automá
   await expect(abertaA.locator(".os-selo")).toHaveCount(0);
 
   await page.locator(ABA_FINALIZADAS).click();
+  await mostrarSerieOs(page, "SUB-A");
   const finalizadaA = page.locator('#ck-os-tabela tbody tr[data-serial="SUB-A"][data-finalizada="true"]');
   const bloco = finalizadaA.locator(".os-chamado");
   await expect(bloco).toHaveAttribute("data-origem", "finalizacao");
@@ -306,6 +316,7 @@ test("Sub-abas: Abertas mostra o campo manual; Finalizadas mostra o link automá
   await expect(finalizadaA.locator(".os-finalizado-em")).toHaveText("Finalizado em 08/11/2026");
   await expect(finalizadaA.getByRole("button", { name: "Desfazer, chamado UTIC-2026-2001" })).toBeVisible();
   // Conferido só aparece quando o SoftExpert precisa ser conferido (finalizado por outro técnico).
+  await mostrarSerieOs(page, "SUB-D");
   const finalizadaD = page.locator('#ck-os-tabela tbody tr[data-serial="SUB-D"][data-finalizada="true"]');
   await expect(finalizadaD.getByRole("button", { name: "Conferido, chamado UTIC-2026-2005" })).toBeVisible();
   await expect(finalizadaD.getByRole("button", { name: "Desfazer, chamado UTIC-2026-2005" })).toBeVisible();
@@ -442,4 +453,36 @@ test("Sub-abas: movimento reduzido desliga a transição das abas e a animação
   await page.emulateMedia({ reducedMotion: "reduce" });
   const reduzido = await page.locator(ABA_ABERTAS).evaluate(no => parseFloat(getComputedStyle(no).transitionDuration));
   expect(reduzido).toBeLessThan(0.01);
+});
+
+test("Lista à esquerda (como o F5): clicar uma OS mostra só ela à direita, em blocos, com o Andamento aberto; some no celular", async ({ page }, info) => {
+  await simular(page);
+  await abrirF6(page);
+  const lista = page.getByRole("list", { name: "Identificação das OS" });
+  if (info.project.name === "mobile") {
+    await expect(lista).toBeHidden();
+    return;
+  }
+  await expect(lista).toBeVisible();
+  const cartoes = lista.locator(".ck-os-lateral__item:visible");
+  await expect(cartoes).toHaveCount(3);
+  // Uma OS por vez à direita, com o Andamento dela aberto.
+  await expect(page.locator(VISIVEIS)).toHaveCount(1);
+  await expect(page.locator("#ck-os-tabela tr[data-andamento]:visible")).toHaveCount(1);
+  const caixaLista = await lista.boundingBox();
+  const caixaTabela = await page.locator("#ck-os-tabela").boundingBox();
+  expect(caixaLista.x + caixaLista.width).toBeLessThanOrEqual(caixaTabela.x);
+
+  const cartao = cartoes.filter({ hasText: "5003" });
+  await cartao.click();
+  await expect(cartao).toHaveAttribute("aria-current", "true");
+  await expect(page.locator(VISIVEIS)).toHaveCount(1);
+  await expect(page.locator('#ck-os-tabela tbody tr[data-os="5003"]')).toBeVisible();
+  await expect(page.locator('#ck-os-tabela tr[data-andamento="SUB-B"]')).toBeVisible();
+  await page.locator("#cockpit-tickets-os").screenshot({ path: "TEMP/os-lateral-1366.png" });
+
+  // Finalizadas: a lista acompanha a sub-aba e mostra a primeira OS dela.
+  await page.locator(ABA_FINALIZADAS).click();
+  await expect(cartoes).toHaveCount(2);
+  await expect(page.locator(VISIVEIS)).toHaveCount(1);
 });
