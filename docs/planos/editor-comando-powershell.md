@@ -1,5 +1,7 @@
 # Plano: editor do comando do PowerShell no Endpoint (Home F1)
 
+Situação: executado em 19/11/2026 (Blocos 1 a 3, por PR). O fechamento não anima (só a abertura).
+
 Escrito em 19/11/2026 pela sessão "Plano Profitize e Web3 Bento". Só interface (marcação, TS do cartão, CSS, testes e doc); nenhuma API, regra de negócio ou dado gravado muda.
 
 ## Problema
@@ -27,7 +29,7 @@ No cartão "PowerShell no Endpoint" da Home (F1), o botão "Ver inteiro" (`#btn-
 
 ## Comportamento proposto
 
-O desenho mostra a janela e os botões, mas não mostra se o texto é editável, a sincronia com o cartão nem o clique fora. Esses pontos são proposta desta sessão: confirme com o usuário antes do Bloco 1 e ajuste aqui o que ele mudar.
+O desenho mostra a janela e os botões, mas não mostra se o texto é editável, a sincronia com o cartão nem o clique fora. Confirmado pelo usuário em 19/11/2026, com uma decisão a mais: o desenho mostra 11 linhas, mas o comando recusa quebra de linha (cliente e servidor), então o editor **bloqueia o Enter**, o texto só dobra e os números contam as linhas que aparecem na tela; quebra de linha colada mostra `O comando não pode ter quebra de linha.` no editor, sem fechar. Entrega por PR do worktree.
 
 - "Ver inteiro" abre o editor **sempre**, inclusive com o comando vazio.
 - O editor é editável (textarea com a coluna de números ao lado, rolagem sincronizada) e começa com o texto atual de `#input-powershell-comando`.

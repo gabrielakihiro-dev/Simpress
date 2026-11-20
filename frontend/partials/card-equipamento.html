@@ -261,7 +261,7 @@
                 <div class="ck-campo nlh-comando">
                   <div class="nlh-comando__cab">
                     <label class="ck-campo__rotulo" for="input-powershell-comando">Comando</label>
-                    <button type="button" id="btn-ps-ver-inteiro" class="nlh-link" aria-expanded="false" aria-controls="input-powershell-comando">
+                    <button type="button" id="btn-ps-ver-inteiro" class="nlh-link" aria-haspopup="dialog" aria-expanded="false" aria-controls="ps-editor">
                       <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-maximize"></use></svg><span>Ver inteiro</span>
                     </button>
                   </div>
@@ -279,6 +279,34 @@
                 </div>
                 <p id="endpoint-powershell-result" role="status" aria-live="polite" class="ck-eq-cab__status"></p>
               </form>
+              <!-- Editor do comando ("Ver inteiro"): só edita; "Inserir no PowerShell" daqui usa o mesmo envio do formulário. -->
+              <dialog id="ps-editor" class="nlh-editor" aria-label="Editor do comando">
+                <div class="nlh-editor__caixa">
+                  <div class="nlh-editor__cab">
+                    <strong class="nlh-editor__titulo">Comando</strong>
+                    <span id="ps-editor-hostname" class="nlh-editor__host" hidden></span>
+                    <div class="nlh-segmento" role="group" aria-label="Modo do comando">
+                      <button type="button" class="nlh-segmento__op" data-modo="sistema" aria-pressed="true">SYSTEM</button>
+                      <button type="button" class="nlh-segmento__op" data-modo="usuario" aria-pressed="false">Usuário logado</button>
+                    </div>
+                    <span class="nlh-editor__selo"><svg class="ck-ico ck-ico--xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg>Sem Enter</span>
+                    <button type="button" id="btn-ps-editor-fechar" class="nlh-editor__fechar" aria-label="Fechar editor">
+                      <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg>
+                    </button>
+                  </div>
+                  <div class="nlh-editor__codigo">
+                    <div id="ps-editor-linhas" class="nlh-editor__linhas" aria-hidden="true">1</div>
+                    <textarea id="ps-editor-texto" class="nlh-editor__texto" maxlength="2000" spellcheck="false" aria-label="Comando" aria-describedby="ps-editor-aviso"></textarea>
+                  </div>
+                  <p id="ps-editor-aviso" class="nlh-editor__aviso" role="status" aria-live="polite"></p>
+                  <div class="nlh-editor__rodape">
+                    <span id="ps-editor-contador" class="nlh-editor__contador">0 / 2000</span>
+                    <span id="ps-editor-total-linhas" class="nlh-editor__contador">1 linha</span>
+                    <button type="button" id="btn-ps-editor-cancelar" class="ck-btn ck-btn--secundario">Cancelar</button>
+                    <button type="button" id="btn-ps-editor-inserir" class="ck-btn ck-btn--primario">Inserir no PowerShell</button>
+                  </div>
+                </div>
+              </dialog>
               <div id="powershell-codigos-editor" class="ck-ps-codigos hidden" role="group" aria-labelledby="powershell-codigos-titulo">
                 <p class="ck-campo__rotulo ck-rotulo-info"><span id="powershell-codigos-titulo">Códigos prontos</span> <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Códigos prontos" aria-describedby="powershell-codigos-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="powershell-codigos-dica" role="tooltip" class="info-tip-text">Cada código tem título, modo e comando de uma linha.</span></span></p>
                 <div id="powershell-codigos-lista" class="ck-ps-codigos__lista"></div>

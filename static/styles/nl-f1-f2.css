@@ -157,6 +157,34 @@
 #card-equipamento .ck-ps-endpoint__aviso { margin: 0; text-align: center; font: 400 12px/1.4 var(--fonte-corpo); color: var(--nl-fraco); }
 #card-equipamento .ck-ps-codigos { margin: 0; }
 
+/* Editor do comando ("Ver inteiro"): janela no computador (quadro NL-F1-Home, "Editor do comando") e folha inferior no
+   celular (NL-F1-Bento-cel, "Tela 4 de 5"). O <dialog> não tem padding: o clique no próprio elemento é o fundo. */
+#card-equipamento .nlh-editor { width: min(820px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: visible; border: 0; background: none; color: var(--nl-tx); }
+#card-equipamento .nlh-editor::backdrop { background: var(--nl-veu, rgba(2, 6, 23, .6)); backdrop-filter: blur(3px); }
+#card-equipamento .nlh-editor__caixa { display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; max-height: calc(100dvh - 32px); padding: 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); box-shadow: 0 24px 48px -16px rgba(15, 23, 42, .38); }
+#card-equipamento .nlh-editor__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#card-equipamento .nlh-editor__titulo { font: 600 16px/1.2 var(--fonte-corpo); }
+#card-equipamento .nlh-editor__host { padding: 4px 10px; border: 1px solid var(--nl-bd2); border-radius: 999px; background: var(--nl-card2); font: 600 12px/1.2 var(--fonte-mono); }
+#card-equipamento .nlh-editor__cab .nlh-segmento { width: auto; padding: 3px; }
+#card-equipamento .nlh-editor__cab .nlh-segmento__op { height: 30px; padding: 0 12px; font-size: 13px; }
+#card-equipamento .nlh-editor__selo { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 4px 10px; border-radius: 999px; background: rgba(var(--nl-f), .16); color: var(--nl-ftx); font: 600 12px/1.2 var(--fonte-corpo); }
+#card-equipamento .nlh-editor__fechar { display: grid; place-items: center; width: 40px; height: 40px; margin-left: auto; padding: 0; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card); color: var(--nl-mut); cursor: pointer; }
+#card-equipamento .nlh-editor__codigo { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 8px; min-height: 0; border: 1px solid var(--nl-bd2); border-radius: 14px; background: var(--nl-card2); font: 400 13px/1.7 var(--fonte-mono); overflow: hidden; }
+#card-equipamento .nlh-editor__linhas { padding: 12px 10px 12px 0; border-right: 1px solid var(--nl-bd); color: var(--nl-fraco); text-align: right; white-space: pre; overflow: hidden; user-select: none; }
+/* Como no desenho, a caixa acompanha o texto (mínimo de 3 linhas, máximo de 60% da tela, depois rola). */
+#card-equipamento .nlh-editor__texto { box-sizing: border-box; width: 100%; field-sizing: content; min-height: calc(3 * 1.7em + 24px); max-height: min(60dvh, 520px); padding: 12px 14px 12px 6px; border: 0; background: none; color: var(--nl-tx); font: inherit; resize: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+#card-equipamento .nlh-editor__texto:focus { outline: none; }
+#card-equipamento .nlh-editor__codigo:focus-within { border-color: rgb(var(--nl-i)); outline: 2px solid rgba(var(--nl-i), .25); }
+#card-equipamento .nlh-editor__aviso { margin: 0; color: var(--nl-rtx); font: 500 13px/1.4 var(--fonte-corpo); }
+#card-equipamento .nlh-editor__aviso:empty { display: none; }
+#card-equipamento .nlh-editor__rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+#card-equipamento .nlh-editor__contador { color: var(--nl-fraco); font: 500 12px/1.2 var(--fonte-mono); }
+#card-equipamento #ps-editor-contador::after { content: " ·"; }
+#card-equipamento #btn-ps-editor-cancelar { margin-left: auto; }
+#card-equipamento .nlh-editor__rodape .ck-btn { height: 40px; padding: 0 16px; }
+#card-equipamento #btn-ps-editor-inserir { border-color: transparent; background: rgb(var(--nl-i)); color: #0b0d15; font-weight: 600; }
+#card-equipamento :is(.nlh-editor__fechar, .nlh-editor__rodape .ck-btn):focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; }
+
 /* Chamados abertos: contagem em selo âmbar, itens em caixas e o rodapé com Ver dossiê / Enviar e-mail. */
 #card-equipamento .ck-home-layout__lateral > aside > .ck-cartao__cab { flex-wrap: nowrap; gap: 12px; min-height: 0; padding: 0; border: 0; }
 #card-equipamento #home-open-tickets-count:not(:empty):not([hidden]) { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 8px; border-radius: 999px; background: rgba(var(--nl-a), .16); color: var(--nl-atx); font: 600 12px/1 var(--fonte-corpo); }
@@ -186,12 +214,32 @@
   #card-equipamento .ck-eq-cab__id, #card-equipamento .ck-eq-cab__acoes { flex: 1 1 100%; }
   #card-equipamento .nlh-abrir-ux { width: 100%; margin-left: 0; }
   #card-equipamento .ck-chamado__barra { gap: 8px; }
+  /* Editor do comando vira folha inferior: presa embaixo, raio 24px no topo, editor de 236px e botões lado a lado. */
+  #card-equipamento .nlh-editor { width: 100%; max-height: 92dvh; margin: auto 0 0; }
+  #card-equipamento .nlh-editor::backdrop { background: color-mix(in srgb, var(--nl-bg, #0b0d15) 80%, transparent); backdrop-filter: none; }
+  #card-equipamento .nlh-editor__caixa { max-height: 92dvh; padding: 16px; border-width: 1px 0 0; border-color: var(--nl-bd2); border-radius: 24px 24px 0 0; box-shadow: 0 -20px 40px -16px rgba(0, 0, 0, .6); }
+  #card-equipamento .nlh-editor__cab { gap: 8px; }
+  #card-equipamento .nlh-editor__cab :is(.nlh-editor__host, .nlh-segmento) { display: none; }
+  #card-equipamento .nlh-editor__selo { margin-left: 0; }
+  #card-equipamento .nlh-editor__codigo { grid-template-columns: 30px minmax(0, 1fr); column-gap: 6px; font-size: 11px; }
+  #card-equipamento .nlh-editor__linhas { padding: 10px 6px 10px 0; }
+  #card-equipamento .nlh-editor__texto { field-sizing: fixed; height: 236px; min-height: 0; max-height: none; padding: 10px 10px 10px 4px; }
+  #card-equipamento .nlh-editor__rodape { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 8px; }
+  #card-equipamento #ps-editor-contador::after { content: none; }
+  #card-equipamento #ps-editor-total-linhas { justify-self: end; }
+  #card-equipamento #btn-ps-editor-cancelar { margin-left: 0; }
 }
 
 /* Movimento: só cor, borda e sombra (150 a 300 ms); nada anima com movimento reduzido. */
 @media (prefers-reduced-motion: no-preference) {
   #card-equipamento :is(.ck-btn, .nlh-segmento__op, .nlh-link, .ck-modelo-aba, .ck-dado dd) { transition: background-color 200ms var(--nl-curva), border-color 200ms var(--nl-curva), color 200ms var(--nl-curva), box-shadow 200ms var(--nl-curva), filter 200ms var(--nl-curva); }
   #card-equipamento :is(.ck-chamado__texto, .ck-ps-endpoint .ck-entrada, .ck-dado .ck-entrada) { transition: border-color 200ms var(--nl-curva), outline-color 200ms var(--nl-curva); }
+  /* Editor do comando: véu em 220ms e janela subindo; no celular a folha desliza em 280ms (contrato bento). */
+  #card-equipamento .nlh-editor[open]::backdrop { animation: nl-aparece 220ms var(--nl-curva) both; }
+  #card-equipamento .nlh-editor[open] .nlh-editor__caixa { animation: nl-sobe 220ms var(--nl-curva) both; }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 767.98px) {
+  #card-equipamento .nlh-editor[open] .nlh-editor__caixa { animation: nl-folha-sobe 280ms var(--nl-curva-gaveta) both; }
 }
 /* ===== fim F1 Home ===== */
 
