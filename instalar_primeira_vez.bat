@@ -117,9 +117,9 @@ if exist "%MIGRATOR%" (
 echo.
 
 rem ---------------------------------------------------------------
-rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify, Node.js e plugin model-super-power (nunca bloqueiam)
+rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify, Node.js e subagentes do maestro (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js, skills dos agentes e plugin model-super-power^)...
+echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js, skills e subagentes dos agentes^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
@@ -234,28 +234,22 @@ if exist "%PROJECT_DIR%.agents\skills" (
     xcopy /e /i /y /q "%PROJECT_DIR%.agents\skills\*" "%GEMINI_USER_SKILLS%\" >nul 2>nul
 )
 
-:checar_super_power
-rem Plugin model-super-power do Claude Code: subagentes da tabela "Delegacao em subagentes" de docs/desenvolvimento/regras-agentes.md.
-rem shortcut: instala do repositorio oficial, que ainda nao tem as correcoes do maestro no app desktop (PR #1 do upstream); trocar a fonte se o PR nao for mesclado.
-set "SUPER_POWER_INSTALAR=model-super-power --marketplace johnnyhelder/claude-model-super-power"
-where claude >nul 2>nul
-if errorlevel 1 (
-    echo   Claude Code ^(comando claude^) nao encontrado no PATH; o plugin model-super-power nao foi instalado ^(opcional^).
-    echo   No Claude Code, rode uma vez: /plugin install %SUPER_POWER_INSTALAR%
-    goto resumo
-)
-claude plugin list --json 2>nul | findstr /l /c:"model-super-power@claude-model-super-power" >nul
-if not errorlevel 1 (
-    echo   OK: plugin model-super-power do Claude Code encontrado.
-    goto resumo
-)
-echo   Plugin model-super-power do Claude Code nao encontrado; instalando ^(subagentes dos agentes; altera ~/.claude^)...
-call claude plugin install %SUPER_POWER_INSTALAR%
-if errorlevel 1 (
-    echo   [AVISO] Nao foi possivel instalar o plugin model-super-power; o servidor nao e afetado.
-    echo           No Claude Code, rode uma vez: /plugin install %SUPER_POWER_INSTALAR%
+:checar_agentes
+rem Subagentes do maestro (batedor, executor, revisor, segunda-opiniao, arquiteto): vem no clone em .claude\agents; nada a instalar.
+rem O app desktop le .claude\agents da pasta principal do repositorio, nao a do worktree (docs/desenvolvimento/regras-agentes.md).
+set "AGENTES_OK=1"
+for %%A in (batedor executor revisor segunda-opiniao arquiteto) do if not exist "%PROJECT_DIR%.claude\agents\%%A.md" set "AGENTES_OK=0"
+if "%AGENTES_OK%"=="1" (
+    echo   OK: subagentes do maestro em .claude\agents ^(carregam sozinhos nas sessoes novas do Claude Code^).
 ) else (
-    echo   OK: plugin model-super-power instalado. Vale nas sessoes novas do Claude Code.
+    echo   [AVISO] Faltam subagentes em .claude\agents; rode "git pull" na pasta principal do repositorio.
+)
+where claude >nul 2>nul
+if errorlevel 1 goto resumo
+claude plugin list --json 2>nul | findstr /l /c:"model-super-power@" >nul
+if not errorlevel 1 (
+    echo   [AVISO] Plugin externo model-super-power instalado: duplica os subagentes com outros modelos.
+    echo           Para remover: claude plugin uninstall model-super-power --scope user
 )
 
 :resumo
