@@ -95,6 +95,8 @@ async function openSummary(page) {
 test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados do chamado", async ({ page }) => {
   const links = new Map();
   await installSummaryRoutes(page, { links });
+  // Confere a tabela com todas as linhas (abaixo de 1024 px); acima, só a OS selecionada aparece (os-subabas.spec.cjs).
+  if ((page.viewportSize()?.width ?? 0) >= 1024) await page.setViewportSize({ width: 1000, height: 900 });
   await openSummary(page);
 
   const section = page.locator(SECAO);
@@ -275,7 +277,7 @@ test("Chamados filtra a tabela de OS por Relação e busca, não lista séries s
 
   const section = page.locator(SECAO);
   const rows = page.locator("#ck-os-tabela tbody tr[data-serial]");
-  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
+  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:not([hidden])");
   const status = page.locator(STATUS);
   // A busca é a do painel; a tabela não cria a própria.
   await expect(page.locator("#cockpit-tickets-os #ck-os-busca")).toHaveCount(0);
@@ -331,6 +333,8 @@ test("Chamados só pede a linha do tempo ao expandir o Andamento da série", asy
     timelineRequests.push(new URL(route.request().url()));
     return route.fulfill({ json: { eventos: [{ tipo: "Atualização", atualizado_em: "2026-10-01 10:00", mudancas: [{ campo: "status", anterior: "Aberta", atual: "Encerrada" }] }] } });
   });
+  // O botão Andamento só existe abaixo de 1024 px; acima, a OS selecionada na lista já abre o Andamento (os-subabas.spec.cjs).
+  if ((page.viewportSize()?.width ?? 0) >= 1024) await page.setViewportSize({ width: 1000, height: 900 });
   await openSummary(page);
   await page.waitForTimeout(300);
   expect(timelineRequests).toHaveLength(0);
@@ -381,7 +385,7 @@ test("OS deste equipamento abre Chamados já filtrado pela série", async ({ pag
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await expect(page.locator("#cockpit-tickets-search")).toHaveValue("REL-SOR-2");
   await expect(page.locator(CONTAGEM)).toContainText(" OS · ");
-  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
+  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:not([hidden])");
   await expect(visible).toHaveCount(1);
   await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
 });
@@ -404,13 +408,15 @@ test("Observação do andamento da OS salva sozinha, volta após recarregar e di
   const caixa = row.getByRole("textbox", { name: "Observação do andamento" });
   await expect(caixa).toBeVisible();
   await expect(row.locator(".sebrae-obs__feedback")).toHaveText("Salva automaticamente.");
+  // A partir de 1024 px o Andamento da OS selecionada já vem aberto; digitar não pode abrir nem fechar nenhum.
+  const andamentosAbertos = await page.locator("#cockpit-tickets-os tr[data-andamento]").count();
   await caixa.click();
   await page.keyboard.type("/tec teste");
   await expect(caixa).toHaveValue("/tec teste");
   await expect(row.locator(".sebrae-obs__feedback")).toHaveText("Salva.");
   expect(puts.at(-1)).toEqual({ serie: "DEMO-SN-AMB", os: "7285073", observacao: "/tec teste" });
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
-  await expect(page.locator("#cockpit-tickets-os tr[data-andamento]")).toHaveCount(0);
+  await expect(page.locator("#cockpit-tickets-os tr[data-andamento]")).toHaveCount(andamentosAbertos);
   await expect(page.locator(CONTAGEM)).toContainText("4 OS · 2 séries");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 

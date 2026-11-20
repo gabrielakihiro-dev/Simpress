@@ -71,6 +71,16 @@ Pedido do usuário, a partir do desenho aprovado "Novo layout" (NL-F6). Só apre
 - Não existe botão `Importar OS` na aba OS: o único é `Importar e gerenciar` (abre o bloco `Importação e versões`) e foi mantido.
 - Testes: `tests/frontend/test_data_panels_os_table.cjs` (toast, Andamento exclusivo, `Ver tudo`), `tests/e2e/resumo-os.spec.cjs`, `tests/e2e/chamados-os.spec.cjs`, `tests/e2e/os-subabas.spec.cjs`, `tests/e2e/react-g8.spec.cjs` (imagens `chamados-gestao-*`).
 
+## Lista à esquerda e uma OS por vez à direita na aba OS (F6, 19/11/2026)
+
+Pedidos do usuário em 19/11/2026: a aba OS parecida com Chamados (F5), com uma identificação na lateral esquerda; depois, "quando clicar em uma OS no bloco esquerdo, ele apareça só aquela OS com todas as informações, ao invés de várias colunas e linhas", em blocos maiores como no F5. Desenho: quadro `NL-F6-Lateral` no canvas "Novo layout" (página F6). Só apresentação: nenhum endpoint, dado gravado ou regra de negócio mudou. Este pedido substitui, para o cartão da lista, a regra de 17/11 "só › Andamento abre": escolher uma OS já mostra o Andamento dela.
+
+- A partir de 1024 px (como o F5), à esquerda fica a lista `ul.ck-os-lateral` (`aria-label="Identificação das OS"`, 300 px): um cartão por OS com número, os selos da célula OS (`Aberta há N dias`, `Técnico`, `Entregue`), série e `hostname · usuário`; série com `3+ dias` ou `Sem data` na triagem ganha a barra âmbar de 4 px.
+- À direita aparece só a OS escolhida (`tr[data-selecionada="true"]`), no layout escolhido pelo usuário entre 3 opções (opção A, 19/11/2026): Fonte, Série, OS com selos, Usuário e Hostname em 5 caixas pequenas; o Andamento na linha toda, sempre aberto (o botão `Andamento` some a partir de 1024 px); Chamado e Observação do andamento lado a lado; Descrição inteira (sem o corte de 3 linhas) no fim. A linha escolhida usa `display: contents` para as células e a linha do Andamento dividirem a mesma grade. As outras linhas somem só por CSS: o atributo `hidden` continua dos filtros e da página, então busca, Relação, triagem, sub-abas, contagens e `Exportar Excel` não mudam.
+- Escolher uma OS (clique no cartão ou `revelarLinhaOs` vindo de outra aba ou da Home) marca o cartão (`aria-current="true"`) e abre o Andamento da série dela; continua uma série aberta por vez. Sem OS escolhida (primeira carga, filtro que a esconde, troca de sub-aba, OS que mudou de sub-aba) aparece a primeira visível. `Carregar mais` fica embaixo da lista.
+- Abaixo de 1024 px a lista não aparece e a tabela fica como antes (celular igual; nada abre sozinho). A janela `Chamado × OS` não tem lista (só a F6 passa `lateral: true` para `montarTabelaOs`).
+- Código: `frontend/src/paineis/paineis-dados/tabela-os.ts` (`renderItemLateralOs`, `selecionarOsLateral`, `garantirSelecaoOs`), `frontend/src/paineis/ferramentas-cockpit/estado.ts` (`lateral: true`) e a seção F6.7 de `static/styles/nl-f5-f6.css`. Testes: `tests/frontend/test_data_panels_os_table.cjs` e `tests/e2e/os-subabas.spec.cjs`.
+
 ## Chamados × OS e observação por OS (F5/F6, 07/11/2026)
 
 Pedido do usuário (07/11/2026). A janela `Chamado × OS` é só leitura; a observação por OS é a única escrita nova da aba OS e fica só no computador.
