@@ -38,6 +38,21 @@ Vale para todas as abas do site (Home, Transporte, Resumo, Automação e as que 
 
 Não altere arquivos, dados operacionais, dependências nem o estado do Git. Passos e formato do relatório (falhas confirmadas × melhorias, evidências, impacto, gravidade, certeza, áreas revisadas, limitações): skill `.claude/skills/auditoria-somente-leitura`.
 
+### Skills de revisão (20/11/2026)
+
+Pedido do usuário em 20/11/2026: o projeto mantém estas skills de terceiros para revisar back-end e front-end. Ficam em `.claude/skills/` (Claude Code) e `.agents/skills/` (Codex), com cópia igual nos dois; os checklists que elas citam ficam em `.claude/references/` e `.agents/references/`.
+
+| Skill | Quando usar | Origem (licença MIT) |
+|---|---|---|
+| `code-review-and-quality` | Revisar uma mudança ou PR antes do merge (correção, legibilidade, arquitetura, segurança, desempenho) | `addyosmani/agent-skills` |
+| `security-and-hardening` | Entrada do usuário, sessão e cookie, integração externa, dados pessoais (LGPD) e dependências | `addyosmani/agent-skills` |
+| `performance-optimization` | Lentidão, consultas repetidas, tamanho do bundle, tempo de carga | `addyosmani/agent-skills` |
+| `vercel-react-best-practices` | Componentes em `frontend/src/` (React + Vite); as regras exclusivas de Next.js e de servidor não se aplicam | `vercel-labs/agent-skills` |
+
+- Em revisão, combine com `auditoria-somente-leitura` (formato do relatório) e com as regras do projeto. Se uma skill contradiz o `AGENTS.md` (por exemplo, sugere backend remoto ou envio automático), vale o `AGENTS.md`.
+- Única edição local: em `security-and-hardening/references/hardening-patterns.md`, o exemplo `const API_KEY = process.env...` virou `const stripeKey = ...` (linhas 124 e 125). O nome antigo era um falso positivo da busca de credenciais (`scripts/check_secrets.py`). Repita essa troca ao atualizar.
+- Para atualizar, copie a pasta da skill do repositório de origem sem editar o texto (exceto a troca acima). Mantenha o `LICENSE` e repita a cópia nas duas pastas. Antes de copiar, leia o conteúdo: só `.md` e `.json`, sem scripts, sem hooks e sem buscar instruções na internet. Por esse motivo, `web-design-guidelines` (Vercel) ficou de fora: ela baixa as regras da web a cada uso.
+
 ### Explicações para leigo
 
 O usuário é leigo em back-end e front-end, mas conhece Git: em comandos Git, seja sucinto e mantenha o que o comando altera e o destino quando houver risco (push, force, reset). Em análises, auditorias, revisões e instruções sobre o código:

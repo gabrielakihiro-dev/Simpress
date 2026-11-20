@@ -69,3 +69,4 @@ O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples pri
 - `frontend/AGENTS.md`: interface (`frontend/` e `static/`), responsividade, atalhos, Playwright e docs de cada tela.
 - Configuração local pelo site (contas, links, chaves): `docs/cockpit-prompts/19-configuracao-local.md`.
 - Alertas e manual: `docs/operacao/alertas-os-divergencias.md`, `docs/guias/manual_usuario.md`.
+- Revisão de back-end ou front-end: skills `code-review-and-quality`, `security-and-hardening`, `performance-optimization`, `vercel-react-best-practices` (quando usar: `docs/desenvolvimento/regras-agentes.md`, "Skills de revisão").
