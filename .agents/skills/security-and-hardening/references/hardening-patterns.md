@@ -121,8 +121,8 @@ function sanitizeUser(user: UserRecord): PublicUser {
 }
 
 // Use environment variables for secrets
-const API_KEY = process.env.STRIPE_API_KEY;
-if (!API_KEY) throw new Error('STRIPE_API_KEY not configured');
+const stripeKey = process.env.STRIPE_API_KEY;
+if (!stripeKey) throw new Error('STRIPE_API_KEY not configured');
 ```
 
 ### Server-Side Request Forgery (SSRF)
