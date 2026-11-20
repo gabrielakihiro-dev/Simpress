@@ -1,5 +1,6 @@
 import { criarAcoesCartaoEquipamento, type ContextoCartaoEquipamento } from "./estado";
 import { instalarLayoutNl } from "./layout-nl";
+import { instalarModelosChamado } from "./modelos-chamado";
 
 // editar-equipamento e editar-apelido são painéis sob demanda (frontend/src/paineis.ts): não estão em window.SimpressReact
 // até o primeiro uso, então a ponte baixa e monta pelo SimpressReactSobDemanda. Painel já publicado roda no mesmo turno.
@@ -17,6 +18,7 @@ export function montar(_container: HTMLElement) {
   const appState = window.SimpressApp.state as ContextoCartaoEquipamento["appState"];
   const contexto = { app, appState, dom: window.SimpressDomUtils(document) };
   instalarLayoutNl(appState);
+  instalarModelosChamado((mensagem, tipo) => app.showToast(mensagem, tipo));
   return criarAcoesCartaoEquipamento({
     app,
     appState,

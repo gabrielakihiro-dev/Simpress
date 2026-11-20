@@ -343,6 +343,46 @@ test.describe("comportamento (só no desktop)", () => {
     expect(escritas(ambiente)).toEqual([]);
   });
 
+  test("Home: Chamado manual carrega o padrão salvo, renomeia a aba e salva nome e texto como padrão", async ({ page }) => {
+    const salvos = [];
+    await page.route("**/api/modelos-chamado", route => responder(route, { json: { modelos: { "teclado-mouse": { rotulo: "Kit periféricos", texto: "Texto salvo de teste" } } } }));
+    await page.route("**/api/modelos-chamado/*", route => {
+      salvos.push({ slug: route.request().url().split("/").pop(), corpo: route.request().postDataJSON() });
+      return responder(route, { json: { modelos: {} } });
+    });
+    await preparar(page);
+    await buscar(page, "BRJ0001");
+
+    await expect(page.getByRole("tab", { name: "Kit periféricos" })).toBeVisible();
+    await page.getByRole("tab", { name: "Kit periféricos" }).click();
+    await expect(page.locator("#texto-chamado-teclado-mouse")).toHaveValue("Texto salvo de teste");
+
+    await page.getByRole("tab", { name: "Deslocamento" }).click();
+    const salvar = page.locator("#btn-salvar-padrao-chamado");
+    await expect(salvar).toBeDisabled();
+    await page.locator("#btn-renomear-chamado").click();
+    await page.locator("#input-rotulo-chamado").fill("Visita técnica");
+    await page.locator("#input-rotulo-chamado").press("Enter");
+    await expect(page.getByRole("tab", { name: "Visita técnica" })).toHaveAttribute("aria-selected", "true");
+    await expect(salvar).toBeEnabled();
+
+    await page.locator("#btn-restaurar-chamado").click();
+    await expect(page.getByRole("tab", { name: "Deslocamento" })).toBeVisible();
+    await expect(salvar).toBeDisabled();
+
+    await page.locator("#btn-renomear-chamado").click();
+    await page.locator("#input-rotulo-chamado").fill("Visita técnica");
+    await page.locator("#btn-renomear-ok").click();
+    await page.locator("#texto-chamado-deslocamento").fill("Novo texto padrão");
+    await salvar.click();
+    await esperarToast(page, "Modelo salvo como padrão.");
+    expect(salvos).toEqual([{ slug: "deslocamento", corpo: { rotulo: "Visita técnica", texto: "Novo texto padrão" } }]);
+    await expect(salvar).toBeDisabled();
+    await page.locator("#texto-chamado-deslocamento").fill("Outro");
+    await page.locator("#btn-restaurar-chamado").click();
+    await expect(page.locator("#texto-chamado-deslocamento")).toHaveValue("Novo texto padrão");
+  });
+
   test("PowerShell: comando vazio, quebra de linha, Enter no campo e hostname ausente não enviam nada", async ({ page }) => {
     const ambiente = await preparar(page);
     await buscar(page, "BRJ0001");
