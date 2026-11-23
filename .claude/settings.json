@@ -14,6 +14,15 @@
             "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'Chame o advisor (Opus) antes de concluir tarefas e para sintese, arquitetura e seguranca. Maestro obrigatorio nesta sessao, em qualquer assunto e antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Voce so coordena.'}}))\""
           }
         ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'Excecao: se esta sessao foi aberta por outra sessao com brief (start_session), nao pergunte; siga o brief no esforco recebido. Caso contrario, na primeira resposta deste chat, antes de qualquer trabalho, classifique a dificuldade do pedido e pergunte o nivel de esforco com AskUserQuestion, opcoes Low, Medium, High e xHigh, com o nivel recomendado em primeiro marcado (Recommended). Se a escolha for diferente do esforco atual, a sessao nao pode mudar o proprio esforco: diga ao usuario para trocar no seletor de esforco do app ou ofereca abrir sessao nova nesse nivel. Toda sessao nova que voce abrir (start_session) recebe effort pela dificuldade; acima do seu nivel, inicie e chame set_session_effort no id dela.'}}))\""
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

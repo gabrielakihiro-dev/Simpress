@@ -246,6 +246,13 @@ if "%AGENTES_OK%"=="1" (
 ) else (
     echo   [AVISO] Faltam subagentes em .claude\agents; rode "git pull" na pasta principal do repositorio.
 )
+rem Hook de esforco: .claude\settings.json (versionado) pergunta Low/Medium/High/xHigh no inicio de toda sessao nova do Claude Code.
+findstr /l /c:"AskUserQuestion" "%PROJECT_DIR%.claude\settings.json" >nul 2>nul
+if errorlevel 1 (
+    echo   [AVISO] Hook de nivel de esforco ausente em .claude\settings.json; rode "git pull" na pasta principal do repositorio.
+) else (
+    echo   OK: hook de nivel de esforco em .claude\settings.json ^(pergunta Low/Medium/High/xHigh em toda sessao nova^).
+)
 where claude >nul 2>nul
 if errorlevel 1 goto resumo
 claude plugin list --json 2>nul | findstr /l /c:"model-super-power@" >nul
