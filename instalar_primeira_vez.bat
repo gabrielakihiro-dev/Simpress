@@ -254,6 +254,19 @@ if not errorlevel 1 (
     echo           Para remover: claude plugin uninstall model-super-power --scope user
 )
 
+:checar_plugins
+rem Plugins do Claude Code: ponytail (faixa de custo e modo enxuto), context7 (documentacao de bibliotecas)
+rem e custo-modelos (custo por modelo Opus/Sonnet/Fable/Haiku; vem no clone em .claude\plugins, marketplace "simpress").
+echo   Conferindo plugins do Claude Code ^(ponytail, context7, custo-modelos^)...
+call claude plugin marketplace add DietrichGebert/ponytail >nul 2>nul
+call claude plugin marketplace add anthropics/claude-plugins-official >nul 2>nul
+rem Copia fixa em %USERPROFILE%: o marketplace continua valendo se o clone ou um worktree for movido ou apagado.
+set "SIMPRESS_PLUGINS=%USERPROFILE%\.claude\simpress-plugins"
+xcopy /e /i /y /q "%PROJECT_DIR%.claude\plugins\*" "%SIMPRESS_PLUGINS%\" >nul 2>nul
+call claude plugin marketplace add "%SIMPRESS_PLUGINS%" >nul 2>nul
+call claude plugin marketplace update simpress >nul 2>nul
+for %%P in (ponytail@ponytail context7@claude-plugins-official custo-modelos@simpress) do call :instalar_plugin %%P
+
 :resumo
 echo.
 echo ========================================================
@@ -275,6 +288,23 @@ exit /b 0
 rem ---------------------------------------------------------------
 rem Sub-rotinas e erros
 rem ---------------------------------------------------------------
+:instalar_plugin
+rem %1 = plugin@marketplace. Ja instalado (de qualquer marketplace, ex.: biblioteca da organizacao): nao instala de novo.
+for /f "tokens=1 delims=@" %%N in ("%~1") do set "PLUGIN_NOME=%%N"
+claude plugin list 2>nul | findstr /l /c:"%PLUGIN_NOME%@" >nul
+if not errorlevel 1 (
+    echo   OK: plugin %PLUGIN_NOME% ja instalado.
+    exit /b 0
+)
+call claude plugin install %~1 --scope user >nul 2>nul
+if errorlevel 1 (
+    echo   [AVISO] Plugin %~1 nao foi instalado. Rode depois: claude plugin install %~1
+    set /a PENDENCIAS+=1
+) else (
+    echo   OK: plugin %~1 instalado ^(vale nas sessoes novas do Claude Code^).
+)
+exit /b 0
+
 :testar_python
 rem %1 = executavel, %2 = prefixo (ex.: -3.12). Define BOOTSTRAP_* se a versao for 3.12 ate PY_MAX (exclusivo).
 "%~1" %~2 -c "import sys; sys.exit(0 if (3, 12) <= sys.version_info[:2] < (3, %PY_MAX%) else 1)" >nul 2>nul
