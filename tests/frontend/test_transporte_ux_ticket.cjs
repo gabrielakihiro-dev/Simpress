@@ -323,12 +323,13 @@ test("Deslocamento é o padrão da Home e o Texto para Transporte fica no F2", (
   assert.doesNotMatch(html, /btn-copiar-resumo-cockpit/);
 });
 
+// Botões trocados em 23/11/2026: "Transporte" é o #btn-alterar-endereco (só série) e "Alterar Endereço" o #btn-gerar-planilha.
 test("the bar shows Transporte first and Alterar Endereço second, before Texto para Transporte", () => {
-  const transporte = html.indexOf('id="btn-gerar-planilha"');
-  const alterar = html.indexOf('id="btn-alterar-endereco"');
+  const transporte = html.indexOf('id="btn-alterar-endereco"');
+  const alterar = html.indexOf('id="btn-gerar-planilha"');
   const texto = html.indexOf("Texto para Transporte</span>");
   assert.ok(transporte > 0 && transporte < alterar && alterar < texto);
-  assert.match(html, /id="btn-gerar-planilha"[^>]*>[\s\S]*?<span>Transporte<\/span>/);
-  assert.match(html, /id="btn-alterar-endereco"\s+data-on-click="alterarEnderecoTicketUX"[^>]*disabled\s*>[\s\S]*?<span>Alterar Endereço<\/span>/);
+  assert.match(html, /id="btn-alterar-endereco"\s+data-on-click="alterarEnderecoTicketUX"[^>]*disabled\s*>[\s\S]*?<span>Transporte<\/span>/);
+  assert.match(html, /id="btn-gerar-planilha"\s+data-on-click="gerarPlanilhaExcel"[^>]*>[\s\S]*?<span>Alterar Endereço<\/span>/);
   assert.doesNotMatch(html, /Gerar Planilha/);
 });

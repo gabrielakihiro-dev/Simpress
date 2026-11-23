@@ -132,9 +132,9 @@ class AssistantUXTests(unittest.TestCase):
 
     def test_system_prompt_points_the_cadastral_ticket_to_transporte(self):
         from domains.assistant_chat import SYSTEM_PROMPT
-        for trecho in ('botão "Transporte" (antigo "Gerar Planilha")', "Transporte (F2)", '"Alterar Endereço"',
-                       "Transferência Fisica de Equipamentos", "Solicito alteração do endereço do equipamento", "Gerar ticket no UX", "Revisar e finalizar",
-                       "Você não abre nem finaliza esse ticket", "O Registro já vem preenchido com o Texto para Transporte",
+        for trecho in ('botão "Alterar Endereço" (antigo "Gerar Planilha"', "Transporte (F2)", '"Alterar Endereço"',
+                       "Transferência Fisica de Equipamentos", "Solicito alteração do endereço do equipamento", "Gerar ticket no UX", '"Alterar Endereço no UX"', 'O botão "Transporte", o primeiro da barra', "Revisar e finalizar",
+                       "Você não abre nem finaliza esse ticket", "o Registro já vem preenchido com o Texto para Transporte",
                        "modelo de chamado \"Deslocamento\"", "botão \"Texto para Transporte\" da aba Transporte (F2)",
                        "retirada e entrega"):
             self.assertIn(trecho, SYSTEM_PROMPT)

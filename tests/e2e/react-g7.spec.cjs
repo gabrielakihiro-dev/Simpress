@@ -113,7 +113,7 @@ async function abrirTicket(page, ticket = padraoTicket) {
   const download = page.waitForEvent("download");
   await page.locator("#btn-gerar-planilha").click();
   expect((await download).suggestedFilename()).toBe("Transferencia_LENTO.xlsx");
-  const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
+  const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
   await expect(modal).toBeVisible();
   await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
   return { chamadas, modal };
@@ -494,7 +494,7 @@ const TRANSPORTE_INICIO = /^Prezados,\n\nSolicito o transporte do equipamento da
 const ALTERAR_INICIO = /^Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de .+ para .*Cidade Teste.*\.$/;
 const FALHA_CHROME = { status: 503, json: { detail: "O Chrome de automação não abriu.", codigo: "chrome_indisponivel" } };
 
-// Monta a tela como abrirTicket, mas sem apertar "Transporte": cada teste decide quando baixar a planilha ou usar "Alterar Endereço".
+// Monta a tela como abrirTicket, mas sem apertar nada: cada teste decide quando baixar a planilha ("Alterar Endereço") ou usar "Transporte".
 // `buscar: false` deixa a página sem equipamento; `escolher: false` busca o equipamento mas não escolhe a unidade de destino.
 async function telaTicket(page, ticket, { unidade = UNIDADE, padrao = SOLICITANTE, buscar = true, escolher = true } = {}) {
   const chamadas = [];
@@ -539,12 +539,12 @@ async function telaTicket(page, ticket, { unidade = UNIDADE, padrao = SOLICITANT
   return chamadas;
 }
 
-// "Transporte": baixa a planilha e abre o modal "Gerar ticket no UX" (o download não espera o ticket).
+// "Alterar Endereço" (#btn-gerar-planilha): baixa a planilha e abre o modal "Alterar Endereço no UX" (o download não espera o ticket).
 async function baixarPlanilha(page) {
   const download = page.waitForEvent("download");
   await page.locator("#btn-gerar-planilha").click();
   expect((await download).suggestedFilename()).toBe("Transferencia_LENTO.xlsx");
-  const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
+  const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
   await expect(modal).toBeVisible();
   return modal;
 }
@@ -558,7 +558,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     await prepararPagina(page);
   });
 
-  test("Transporte abre o modal com série, modelo, endereço e solicitante; Esc fecha pela ponte e cancela a sessão", async ({ page }) => {
+  test("Alterar Endereço abre o modal com série, modelo, endereço e solicitante; Esc fecha pela ponte e cancela a sessão", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo));
     const modal = await baixarPlanilha(page);
     await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
@@ -566,7 +566,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     await expect(page.locator("#ux-ticket-modelo")).toHaveText(PREPARADO.modelo);
     await expect(page.locator("#ux-ticket-endereco")).toHaveText(PREPARADO.endereco);
     await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
-    await expect(modal.getByLabel("Registro")).toHaveValue(TRANSPORTE_INICIO);
+    await expect(modal.getByLabel("Registro")).toHaveValue(ALTERAR_INICIO);
     await expect(modal.getByRole("alert")).toBeHidden();
     expect(chamadas).toHaveLength(1);
     expect(chamadas[0].etapa).toBe("preparar");
@@ -755,17 +755,17 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     }]);
   });
 
-  test("Alterar Endereço prepara só com a série, esconde os campos do Transporte e confirma com o incidente do Transporte", async ({ page }) => {
+  test("Transporte prepara só com a série, esconde os campos da planilha e confirma com o incidente do Transporte", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => (
       etapa === "preparar-alterar-endereco" ? { json: PREPARADO_ENDERECO } : padraoTicket(etapa, corpo)
     ));
     await page.locator("#btn-alterar-endereco").click();
-    const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
+    const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
     await expect(modal).toBeVisible();
     await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
     expect(chamadas).toEqual([{ etapa: "preparar-alterar-endereco", corpo: { serial: "LENTO" } }]);
     const registro = modal.getByLabel("Registro");
-    await expect(registro).toHaveValue(ALTERAR_INICIO);
+    await expect(registro).toHaveValue(TRANSPORTE_INICIO);
     await expect(modal.locator("dt").filter({ hasText: "Endereço escolhido" })).toBeHidden();
     for (const id of ["#ux-ticket-endereco", "#ux-ticket-cnpj-instalacao", "#ux-ticket-cnpj-faturamento", "#ux-ticket-anexo", "#ux-ticket-chamado-interno"]) {
       await expect(page.locator(id)).toBeHidden();
@@ -783,16 +783,16 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     expect(etapasDe(chamadas)).not.toContain("preparar");
   });
 
-  test("Alterar Endereço sem equipamento pesquisado só avisa e não chama o UX", async ({ page }) => {
+  test("Transporte sem equipamento pesquisado só avisa e não chama o UX", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { buscar: false });
     await page.evaluate(() => window.alterarEnderecoTicketUX());
-    await expect(page.locator("#toast-container")).toContainText("Pesquise e selecione o equipamento antes de alterar o endereço.");
+    await expect(page.locator("#toast-container")).toContainText("Pesquise e selecione o equipamento antes de preparar o Transporte.");
     await page.waitForTimeout(300);
     expect(chamadas).toEqual([]);
     await expect(page.locator("#modal-ticket-ux")).toBeHidden();
   });
 
-  test("Alterar Endereço com equipamento mas sem endereços carregados só avisa e não chama o UX", async ({ page }) => {
+  test("Transporte com equipamento mas sem endereços carregados só avisa e não chama o UX", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { escolher: false });
     await page.evaluate(() => window.alterarEnderecoTicketUX());
     await expect(page.locator("#toast-container")).toContainText("Selecione o equipamento de origem e a unidade de destino para carregar os endereços.");
@@ -801,25 +801,27 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     await expect(page.locator("#modal-ticket-ux")).toBeHidden();
   });
 
-  test("Depois de Alterar Endereço, Transporte restaura o modal completo e o Registro do Transporte", async ({ page }) => {
+  test("Depois de Transporte, Alterar Endereço restaura o modal completo e o Registro da alteração de endereço", async ({ page }) => {
     await telaTicket(page, (etapa, corpo) => (
       etapa === "preparar-alterar-endereco" ? { json: PREPARADO_ENDERECO } : padraoTicket(etapa, corpo)
     ));
     await page.locator("#btn-alterar-endereco").click();
-    const alterar = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
+    const alterar = page.getByRole("dialog", { name: "Gerar ticket no UX" });
     await expect(alterar).toBeVisible();
     await alterar.getByRole("button", { name: "Cancelar" }).click();
     await expect(alterar).toBeHidden();
     const modal = await baixarPlanilha(page);
-    await expect(modal.getByRole("heading", { name: "Gerar ticket no UX" })).toBeVisible();
-    await expect(modal.getByLabel("Registro")).toHaveValue(TRANSPORTE_INICIO);
+    await expect(modal.getByRole("heading", { name: "Alterar Endereço no UX" })).toBeVisible();
+    await expect(modal.getByLabel("Registro")).toHaveValue(ALTERAR_INICIO);
     await expect(page.locator("#ux-ticket-cnpj-instalacao")).toBeVisible();
     await expect(page.locator("#ux-ticket-chamado-interno")).toBeVisible();
   });
 
   test("O evento simpress:transfer-generated sem payload não abre o modal nem chama o UX", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { buscar: false });
-    await page.waitForFunction(() => Boolean(window.SimpressReact?.["ux-ticket"]));
+    // ux-ticket é painel sob demanda (frontend/src/paineis.ts): nunca entra em SimpressReact, só no carregador.
+    await page.waitForFunction(() => Boolean(window.SimpressReactSobDemanda?.["ux-ticket"]));
+    expect(await page.evaluate(() => Boolean(window.SimpressReact?.["ux-ticket"]))).toBe(false);
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated", { detail: {} })));
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated")));
     await page.waitForTimeout(300);
