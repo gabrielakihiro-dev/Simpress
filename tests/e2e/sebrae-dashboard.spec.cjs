@@ -117,7 +117,7 @@ test("Chamados finalizados é a sub-aba Finalizados, escondida até ser escolhid
   await expect(cartao.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
   await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("27/10/2026 14:05");
   await expect(cartao.getByLabel("Descrição para Finalizar o Chamado")).toHaveValue("Teclado trocado.");
-  await expect(cartao.locator('input:not([disabled]), select, button:not([data-sebrae-destaque]):not(.sebrae-chamado__recolher):not(.sebrae-ver-tudo), textarea:not([readonly])')).toHaveCount(0); // só leitura (Recolher chamado só fecha a linha; Ver tudo só expande a caixa da descrição)
+  await expect(cartao.locator('input:not([disabled]), select, button:not([data-sebrae-destaque]):not(.sebrae-chamado__recolher), textarea:not([readonly])')).toHaveCount(0); // só leitura (Recolher chamado só fecha a linha)
 });
 
 test("Desfazer finalização: só no finalizado por outro técnico, pede confirmação, avisa e tira o chamado de Finalizados", async ({ page, request }) => {

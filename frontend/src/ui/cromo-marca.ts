@@ -3,15 +3,7 @@
 // Sem WebGL2 ou se algo falhar, o texto da marca continua visivel (fallback).
 // O paper-shaders segue como módulo do navegador em /static/vendor/ (external no vite.config.mts); os tipos
 // mínimos dele estão em frontend/types/vendor/ (mapeados por `paths` no tsconfig.json).
-import {
-  LiquidMetalShapes,
-  ShaderFitOptions,
-  ShaderMount,
-  getShaderColorFromString,
-  liquidMetalFragmentShader,
-  toProcessedLiquidMetal,
-} from "/static/vendor/paper-shaders-0.0.81/index.js";
-
+// Só 4 módulos do pacote (não o index.js, que puxa 35) e só depois do carregamento, para o efeito não atrasar a abertura.
 type Qualquer = any;
 
 const TEXTO = "Simpress";
@@ -55,6 +47,13 @@ function corDoTema(): string {
 }
 
 async function montar(el: HTMLElement): Promise<void> {
+  const [{ ShaderMount }, { ShaderFitOptions }, { getShaderColorFromString }, { LiquidMetalShapes, liquidMetalFragmentShader, toProcessedLiquidMetal }] =
+    await Promise.all([
+      import("/static/vendor/paper-shaders-0.0.81/shader-mount.js"),
+      import("/static/vendor/paper-shaders-0.0.81/shader-sizing.js"),
+      import("/static/vendor/paper-shaders-0.0.81/get-shader-color-from-string.js"),
+      import("/static/vendor/paper-shaders-0.0.81/shaders/liquid-metal.js"),
+    ]);
   const blob = await drawMask(TEXTO);
   const { pngBlob } = await toProcessedLiquidMetal(new File([blob], "mascara.png", { type: "image/png" }));
   const image = new Image();
@@ -114,8 +113,17 @@ async function montar(el: HTMLElement): Promise<void> {
 }
 
 const el = document.getElementById("ck-marca-cromo");
-if (el) {
+function iniciar(): void {
+  if (!el) return;
   montar(el)
     .then(() => el.closest(".ck-marca")?.classList.add("ck-marca--cromo"))
     .catch((erro) => console.warn("Marca em metal indisponivel; texto mantido.", erro));
 }
+
+// Depois do load, e quando o navegador estiver ocioso (setTimeout onde nao ha requestIdleCallback).
+function aoOcioso(): void {
+  if ("requestIdleCallback" in window) window.requestIdleCallback(iniciar, { timeout: 2000 });
+  else setTimeout(iniciar, 200);
+}
+if (document.readyState === "complete") aoOcioso();
+else window.addEventListener("load", aoOcioso, { once: true });

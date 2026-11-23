@@ -148,7 +148,8 @@ class FrontendAssetTests(unittest.TestCase):
             self.assertNotRegex(text, r"[\"`]\./react-entry\.js", name)
             # URI data: (o React tem chaves de objeto "data:", que não contam).
             self.assertNotRegex(text, r"(?i)\bdata:(?:image|font|text|application|audio|video)/", name)
-            self.assertNotRegex(text, r"\bimport\s*\((?!`\./[\w-]+\.js`\))", name)
+            # Fora os painéis (./x.js) e os módulos do paper-shaders em /static/vendor/ (marca em metal, carregada depois da abertura).
+            self.assertNotRegex(text, r"\bimport\s*\((?!`\./[\w-]+\.js`\)|`/static/vendor/paper-shaders-[\w.-]+/[\w/-]+\.js`\))", name)
             self.assertNotRegex(text, r"\beval\s*\(|new Function\s*\(", name)
         html = versioned_html(app_config.STATIC_DIR)
         self.assertRegex(html, r'<script type="module" src="/static/dist/react-entry\.js\?v=[0-9a-f]{16}"></script>')
@@ -156,9 +157,10 @@ class FrontendAssetTests(unittest.TestCase):
     def test_logo_metal_imports_a_vendored_file_that_exists(self):
         static = Path(__file__).resolve().parents[1] / "static"
         source = (static.parent / "frontend" / "src" / "ui" / "cromo-marca.ts").read_text(encoding="utf-8")
-        imported = re.search(r'from "(/static/vendor/paper-shaders-[^"]+)"', source)
-        self.assertIsNotNone(imported)
-        self.assertTrue((static.parent / imported.group(1).lstrip("/")).is_file(), imported.group(1))
+        imported = re.findall(r'import\("(/static/vendor/paper-shaders-[^"]+)"\)', source)
+        self.assertTrue(imported)
+        for caminho in imported:
+            self.assertTrue((static.parent / caminho.lstrip("/")).is_file(), caminho)
 
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
         for name in ("index.html",):
