@@ -908,9 +908,79 @@ test("campos de duas abas sobrevivem à reimportação e novos migram para antig
   assert.deepEqual(aplicado.edicoes["UTIC-2026-1"], { J: "INCIDENTE" });
   assert.equal(aplicado.conflitos.length, 1);
   assert.match(aplicado.conflitos[0], /MANUAL.*DA PLANILHA/);
-  assert.equal(Object.keys(disco.dados).length, 3); // até a linha sem identidade está preservada
+  // A linha sem UTIC da importação anterior não volta mais: a leitura a apaga do armazenamento (11/2026).
+  assert.deepEqual(Object.keys(disco.dados).sort(), ["simpress:sebrae-rascunho:campo:UTIC-2026-1:A", "simpress:sebrae-rascunho:campo:UTIC-2026-1:J"]);
   apagarRascunho(disco);
   assert.equal(Object.keys(disco.dados).length, 0);
+});
+
+// ---- Rascunho por campo (11/2026): uma chave fixa por campo, sem crescer a cada tecla ----
+
+const CAMPO = "simpress:sebrae-rascunho:campo:";
+function registroAntigo(numero, campo, valor, em, importado = "v1", alvo = "novo") {
+  return JSON.stringify({ importado_em: importado, numero, campo, valor, alvo, em, instante: 0 });
+}
+
+test("100 gravações no mesmo campo deixam uma chave só, com o último valor", () => {
+  const disco = armazenamentoFalso();
+  for (let i = 0; i < 100; i++) assert.equal(gravarCampoRascunho(disco, "v1", "UTIC-2026-900", "A", `VALOR ${i}`, "novo"), true);
+  assert.deepEqual(Object.keys(disco.dados), [`${CAMPO}UTIC-2026-900:A`]);
+  assert.equal(lerRascunho(disco, "v1").valores["UTIC-2026-900"].A, "VALOR 99");
+});
+
+test("a leitura apaga registros de outra importação sem UTIC e mantém os UTIC", () => {
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, "v1", "linha:7", "A", "LINHA ANTIGA", "antigo");
+  gravarCampoRascunho(disco, "v1", "UTIC-2026-901", "B", "REDE", "novo");
+  gravarCampoRascunho(disco, "v2", "linha:7", "A", "LINHA NOVA", "antigo");
+  const lido = lerRascunho(disco, "v2");
+  assert.deepEqual(lido.edicoes["linha:7"], { A: "LINHA NOVA" });
+  assert.deepEqual(lido.valores["UTIC-2026-901"], { B: "REDE" });
+  assert.deepEqual(Object.keys(disco.dados).sort(), [`${CAMPO}UTIC-2026-901:B`, `${CAMPO}v2:linha:7:A`]);
+});
+
+test("chaves antigas (uma por tecla, com data) migram para a chave fixa sem perder o rascunho", () => {
+  const disco = armazenamentoFalso({
+    [`${CAMPO}2026-11-01T10:00:00.000Z:aaa`]: registroAntigo("UTIC-2026-902", "A", "CLI", "2026-11-01T10:00:00.000Z"),
+    [`${CAMPO}2026-11-01T10:00:02.000Z:ccc`]: registroAntigo("UTIC-2026-902", "A", "CLIENTE", "2026-11-01T10:00:02.000Z"),
+    [`${CAMPO}2026-11-01T10:00:01.000Z:bbb`]: registroAntigo("UTIC-2026-902", "A", "CLIEN", "2026-11-01T10:00:01.000Z"),
+    [`${CAMPO}2026-11-01T10:00:03.000Z:ddd`]: registroAntigo("linha:3", "S", "DISPONIBILIDADE", "2026-11-01T10:00:03.000Z", "v1", "antigo"),
+  });
+  const antes = lerRascunho(armazenamentoFalso({ ...disco.dados }), "v1");
+  const lido = lerRascunho(disco, "v1");
+  assert.deepEqual(lido.valores, { "UTIC-2026-902": { A: "CLIENTE" } });
+  assert.deepEqual(lido.edicoes, { "linha:3": { S: "DISPONIBILIDADE" } });
+  assert.deepEqual(Object.keys(disco.dados).sort(), [`${CAMPO}UTIC-2026-902:A`, `${CAMPO}v1:linha:3:S`]);
+  const depois = lerRascunho(disco, "v1");
+  assert.deepEqual({ valores: depois.valores, edicoes: depois.edicoes, salvoEm: depois.salvoEm }, { valores: antes.valores, edicoes: antes.edicoes, salvoEm: antes.salvoEm });
+});
+
+test("migração com a cota cheia: apaga as chaves velhas antes de gravar a nova e não perde o valor", () => {
+  const dados = {};
+  for (let i = 0; i < 5; i++) dados[`${CAMPO}2026-11-01T10:00:0${i}.000Z:x${i}`] = registroAntigo("UTIC-2026-903", "J", `TIPO ${i}`, `2026-11-01T10:00:0${i}.000Z`);
+  const disco = armazenamentoFalso(dados);
+  const gravar = disco.setItem;
+  disco.setItem = (k, v) => { if (Object.keys(disco.dados).length >= 5) throw new Error("QuotaExceededError"); gravar(k, v); };
+  assert.equal(lerRascunho(disco, "v1").valores["UTIC-2026-903"].J, "TIPO 4");
+  assert.deepEqual(Object.keys(disco.dados), [`${CAMPO}UTIC-2026-903:J`]);
+  assert.equal(lerRascunho(disco, "v1").valores["UTIC-2026-903"].J, "TIPO 4");
+});
+
+test("se a gravação da migração falhar, o rascunho lido volta inteiro e a chave antiga fica", () => {
+  const antiga = `${CAMPO}2026-11-01T10:00:00.000Z:zzz`;
+  const disco = armazenamentoFalso({ [antiga]: registroAntigo("UTIC-2026-904", "D", "FINALIZADO", "2026-11-01T10:00:00.000Z", "v1", "antigo") });
+  disco.setItem = () => { throw new Error("QuotaExceededError"); };
+  assert.deepEqual(lerRascunho(disco, "v1").edicoes, { "UTIC-2026-904": { D: "FINALIZADO" } });
+  assert.deepEqual(Object.keys(disco.dados), [antiga]);
+});
+
+test("duas abas no mesmo navegador: campos diferentes do mesmo chamado não se sobrescrevem", () => {
+  const disco = armazenamentoFalso(); // o localStorage é um só para as abas
+  gravarCampoRascunho(disco, "v1", "UTIC-2026-905", "A", "CLIENTE", "novo"); // aba 1
+  gravarCampoRascunho(disco, "v1", "UTIC-2026-905", "J", "INCIDENTE", "novo"); // aba 2
+  gravarCampoRascunho(disco, "v1", "UTIC-2026-905", "A", "SIMPRESS", "novo"); // aba 1 de novo
+  assert.deepEqual(lerRascunho(disco, "v1").valores["UTIC-2026-905"], { A: "SIMPRESS", J: "INCIDENTE" });
+  assert.equal(Object.keys(disco.dados).length, 2);
 });
 
 test("status divergente da nova importação não reaplica FINALIZADO e preserva conflito", () => {
