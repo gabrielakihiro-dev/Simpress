@@ -20,7 +20,7 @@ Vocabulário do domínio: consulte o `GLOSSARY.md` (definições; as regras cont
 - A confirmação de exportação bem-sucedida usa o texto exato `Planilha Exportada com Sucesso!`, sem contagens ou explicações adicionais.
 - Os nomes visíveis das fontes são `No Endpoint` e `na Simpress`, respeitando as variações definidas em "Rótulos do Histórico de Planilhas".
 - Ao mudar um termo aprovado, propague-o para interface, validação e testes.
-- Transporte (F2, 07/11/2026): o modal se chama `Gerar ticket no UX` e os botões de envio são `Simular preenchimento` e `Revisar e finalizar` (detalhes em "Ticket de Atualização Cadastral no UX").
+- Transporte (F2, 07/11/2026): o modal se chama `Alterar Endereço no UX` (planilha, botão `Alterar Endereço`) ou `Gerar ticket no UX` (botão `Transporte`, só série; troca de 23/11/2026) e os botões de envio são `Simular preenchimento` e `Revisar e finalizar` (detalhes em "Ticket de Atualização Cadastral no UX").
 - Pesquisa da Home sem resultado: o autocompletar mostra `Você quis dizer <usuário mais próximo>?` (campo `sugestao`); `Enter` na barra (`#input-serial`) ou `Buscar Equipamento` leva sempre à Home (F1) antes de pesquisar (04/11/2026, pedido do usuário); só navegação, sem escrita.
 - Home (02/11/2026): com um só caractere na busca, mantenha `Digite ao menos 2 caracteres para filtrar a lista.` mesmo se uma resposta antiga chegar depois; `aria-selected` acompanha só o equipamento carregado. As ações `Sem acesso`/`Divergente` ficam em `#home-equipment-actions`; tudo é consulta/navegação, sem escrita em dados locais ou sistemas externos. Detalhes em `docs/cockpit-prompts/03-home-split-view.md`.
 

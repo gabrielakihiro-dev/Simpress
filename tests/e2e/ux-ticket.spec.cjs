@@ -1,8 +1,8 @@
 const { test, expect } = require("@playwright/test");
 const { abrirEtapaTransporte } = require("./support/etapas-transporte.cjs");
 
-// Transporte (F2): "Transporte" (#btn-gerar-planilha) downloads the file and then opens "Gerar ticket no UX";
-// "Alterar Endereço" opens the same modal with only the série and the addresses, without any workbook.
+// Transporte (F2), buttons swapped 23/11/2026: "Alterar Endereço" (#btn-gerar-planilha) downloads the file and then opens
+// "Alterar Endereço no UX"; "Transporte" (#btn-alterar-endereco) opens "Gerar ticket no UX" with only the série and the addresses.
 // Every /api/ux/gerar-ticket/* call is stubbed here: no suite reaches the real ticket backend, Chrome or the UX.
 
 const SESSION = "b".repeat(32);
@@ -17,6 +17,7 @@ const PREPARADO = {
   arquivo: "Transferencia_LENTO.xlsx", solicitante: SOLICITANTE, ultimo_envio: null,
 };
 const TRANSPORTE_INICIO = /^Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de .+ para a unidade do Sebrae de Cidade Teste/;
+const ALTERAR_TEXTO = /^Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de \S.*\/PR para \S.*\/PR\.$/;
 const TRANSPORTE_ENDERECOS = /\nEndereço para Retirada: \S.*\nEndereço para Entrega: Rua Fictícia, 100/;
 const REGISTRO_OK = "Prezados,\n\nSolicito o deslocamento de um técnico.\n\nContato no local: Maria Teste\nColaborador(a) Novo(a): Fulano\nData de Instalação: 10/11/2026\nHorário da Instalação: 09h";
 
@@ -66,7 +67,7 @@ async function gerarPlanilha(page) {
   const download = page.waitForEvent("download");
   await page.locator("#btn-gerar-planilha").click();
   expect((await download).suggestedFilename()).toBe("Transferencia_LENTO.xlsx");
-  const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
+  const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
   await expect(modal).toBeVisible();
   return modal;
 }
@@ -87,9 +88,8 @@ test("Transporte opens the ticket; an ambiguous address needs a choice; Simular 
   expect(chamadas[0].corpo).not.toHaveProperty("conferido");
   await expect(modal.getByRole("status")).toContainText("Escolha o endereço");
   const registro = modal.getByLabel("Registro");
-  // Default Registro = the F2 "Texto para Transporte" (same function as the button); Deslocamento stays in the Home (F1).
-  await expect(registro).toHaveValue(TRANSPORTE_INICIO);
-  await expect(registro).toHaveValue(TRANSPORTE_ENDERECOS);
+  // Default Registro = the address-change text; Deslocamento stays in the Home (F1).
+  await expect(registro).toHaveValue(ALTERAR_TEXTO);
   const textoTransporte = await registro.inputValue();
   await expect(modal.getByLabel("Nome", { exact: true })).toHaveValue(SOLICITANTE.nome);
   await semRolagemHorizontal(page);
@@ -181,10 +181,9 @@ test("the unedited default Registro is the descricao sent to the UX ticket", asy
   const modal = await gerarPlanilha(page);
   await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
   const registro = modal.getByLabel("Registro");
-  await expect(registro).toHaveValue(TRANSPORTE_ENDERECOS);
+  await expect(registro).toHaveValue(ALTERAR_TEXTO);
   const textoTransporte = await registro.inputValue();
-  // Same function the F2 "Texto para Transporte" button uses.
-  expect(await page.evaluate(() => window.montarTextoSolicitacaoTransporte().texto)).toBe(textoTransporte);
+  expect(await page.evaluate(() => window.montarTextoAlterarEndereco().texto)).toBe(textoTransporte);
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhum ticket foi enviado");
   expect(chamadas.at(-1)).toEqual({ etapa: "enviar", corpo: expect.objectContaining({ enviar: false, descricao: textoTransporte }) });
@@ -203,7 +202,7 @@ test("Texto para Transporte (F2) fills the request text with the pickup and deli
   await expect(page.locator("#modal-texto-transporte")).toBeHidden();
 });
 
-test("Alterar Endereço lights up with only the série and both addresses and never builds the workbook", async ({ page }) => {
+test("Transporte lights up with only the série and both addresses and never builds the workbook", async ({ page }) => {
   const chamadas = await prepararTela(page, (etapa, corpo) => {
     if (etapa === "preparar-alterar-endereco") {
       return [200, { status: "preparado", tipo: "endereco", session_id: SESSION, serial: "LENTO", modelo: PREPARADO.modelo, solicitante: SOLICITANTE, ultimo_envio: null }];
@@ -217,12 +216,15 @@ test("Alterar Endereço lights up with only the série and both addresses and ne
   const alterar = page.locator("#btn-alterar-endereco");
   await expect(alterar).toBeEnabled(); // no representative name, phone or e-mail needed
   await alterar.click();
-  const modal = page.getByRole("dialog", { name: "Alterar Endereço no UX" });
+  const modal = page.getByRole("dialog", { name: "Gerar ticket no UX" });
   await expect(modal).toBeVisible();
   expect(chamadas[0]).toEqual({ etapa: "preparar-alterar-endereco", corpo: { serial: "LENTO" } });
   await expect(modal.getByRole("status")).toContainText("Transferência Fisica de Equipamentos");
   const registro = modal.getByLabel("Registro");
-  await expect(registro).toHaveValue(/^Prezados,\n\nSolicito alteração do endereço do equipamento da Unidade de \S.*\/PR para \S.*\/PR\.$/);
+  // Default Registro = the F2 "Texto para Transporte" (same function as the button).
+  await expect(registro).toHaveValue(TRANSPORTE_INICIO);
+  await expect(registro).toHaveValue(TRANSPORTE_ENDERECOS);
+  expect(await page.evaluate(() => window.montarTextoSolicitacaoTransporte().texto)).toBe(await registro.inputValue());
   for (const id of ["#ux-ticket-cnpj-instalacao", "#ux-ticket-cnpj-faturamento", "#ux-ticket-anexo", "#ux-ticket-chamado-interno"]) {
     await expect(modal.locator(id)).toBeHidden();
   }
