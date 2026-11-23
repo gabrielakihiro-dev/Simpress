@@ -27,6 +27,29 @@ function areaDo(slug: string) {
   return porId<HTMLTextAreaElement>(`texto-chamado-${slug}`);
 }
 
+// O lápis (e o campo de renomear) ficam fora do tablist, por cima da aba ativa, como no artefato.
+function posicionarLapis() {
+  const aba = abaAtiva();
+  const linha = aba?.closest<HTMLElement>(".nlh-abas-linha");
+  if (!aba || !linha) return;
+  const base = linha.getBoundingClientRect();
+  const caixa = aba.getBoundingClientRect();
+  const esquerda = caixa.left - base.left;
+  const topo = caixa.top - base.top;
+  const lapis = porId("btn-renomear-chamado");
+  if (lapis) {
+    lapis.style.left = `${esquerda + caixa.width - 36}px`;
+    lapis.style.top = `${topo + (caixa.height - 32) / 2}px`;
+  }
+  const campo = porId("nlh-renomear-campo");
+  if (campo) {
+    campo.style.left = `${esquerda}px`;
+    campo.style.top = `${topo}px`;
+    campo.style.height = `${caixa.height}px`;
+    campo.style.minWidth = `${caixa.width}px`;
+  }
+}
+
 function guardarPadraoDoHtml() {
   document.querySelectorAll<HTMLElement>(".ck-modelo-aba").forEach(aba => {
     const rotulo = rotuloDa(aba);
@@ -38,6 +61,7 @@ function atualizarBotaoSalvar() {
   const botao = porId<HTMLButtonElement>("btn-salvar-padrao-chamado");
   const aba = abaAtiva();
   const area = areaDo(slugDa(aba));
+  posicionarLapis();
   if (!botao) return;
   const mudouNome = (rotuloDa(aba)?.textContent?.trim() ?? "") !== (aba?.dataset.rotuloPadrao ?? "");
   botao.disabled = !area || !(mudouNome || area.value !== area.defaultValue);
@@ -82,6 +106,7 @@ function abrirRenomear() {
   entrada.value = rotuloDa(abaAtiva())?.textContent?.trim() ?? "";
   lapis.hidden = true;
   campo.hidden = false;
+  posicionarLapis();
   entrada.focus();
   entrada.select();
 }
@@ -136,6 +161,9 @@ export function instalarModelosChamado(avisar: Avisar) {
     if (evento.key === "Enter") { evento.preventDefault(); fecharRenomear(true); }
     else if (evento.key === "Escape") { evento.preventDefault(); fecharRenomear(false); }
   });
+
+  const linha = document.querySelector(".nlh-abas-linha");
+  if (linha && typeof ResizeObserver === "function") new ResizeObserver(posicionarLapis).observe(linha);
 
   // Sem servidor ou sem arquivo, ficam o nome e o texto do HTML, sem aviso.
   apiRota("GET /api/modelos-chamado", {})
