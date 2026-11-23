@@ -532,6 +532,11 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
       if (shadow) await expect(control).toHaveCSS("box-shadow", shadow);
     }
   }
+});
+
+// Separado do teste acima: juntos somavam ~18 s locais (controles ~10 s + abrir a comparação ~6 s) e passavam dos 20 s no runner da CI.
+test("keyboard focus stays visible on the comparison annotation in both themes", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
   await openFixtureComparison(page);
   const annotation = page.locator('textarea[data-comparison-annotation]:visible').first();
   for (const theme of ["dark", "light"]) {
