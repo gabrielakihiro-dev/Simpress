@@ -83,33 +83,7 @@
 .resumo-aba[aria-selected="true"] { background: var(--cor-superficie); color: var(--cor-texto); border-color: rgba(34, 211, 238, .55); box-shadow: 0 8px 24px -14px rgba(34, 211, 238, .8); }
 @media (pointer: coarse) { .resumo-aba { min-height: 44px; } }
 
-/* ---------- 5. Visão geral em bento: a grade é o próprio painel; os invólucros somem do layout ---------- */
-.ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-content: start;
-}
-.ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
-  & > * { grid-column: 1 / -1; min-width: 0; }
-  & > :is(#comparacao-planilhas-fontes, #comparacao-planilhas-avisos):empty { display: none; }
-  & :is(#comparacao-planilhas-conteudo, #resumo-painel-visao, .ck-bento, #resumo-ativos-secao) { display: contents; }
-  & #comparacao-planilhas-conteudo > *, & #resumo-painel-visao > * { grid-column: 1 / -1; order: 0; min-width: 0; }
-  & .ck-bento > .ck-bento-cartao { grid-column: auto; min-height: 210px; }
-  & .ck-bento > .ck-bento-cartao--grande { grid-column: span 2; grid-row: span 2; }
-  & .ck-regionais { grid-column: span 3; order: 1; }
-}
-@media (max-width: 1023.98px) {
-  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    & .ck-bento > .ck-bento-cartao--grande { grid-column: span 2; grid-row: auto; }
-    & .ck-regionais { grid-column: auto; }
-  }
-}
-@media (max-width: 639.98px) {
-  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"]:has(#resumo-painel-visao:not([hidden])):has(#comparacao-planilhas-conteudo:not([hidden])) {
-    grid-template-columns: minmax(0, 1fr);
-    & .ck-bento > .ck-bento-cartao--grande { grid-column: auto; grid-row: auto; }
-    & .ck-regionais { grid-column: 1 / -1; }
-  }
-}
+/* ---------- 5. (removido em 23/11/2026) Regras de grade para #resumo-painel-visao: o seletor nunca existiu no HTML atual; a grade do bento vive em nl-f3-f7-f8.css (.nf3-topo/.nf3-grade) ---------- */
 
 /* ---------- 6. Cartão bento: moldura de 1px que acende + face com holofote e grade ---------- */
 .ck-bento-cartao { --ac: 129, 140, 248; --tom: #4f46e5; position: relative; isolation: isolate; border-radius: 24px; padding: 1px; background: var(--cor-borda); min-width: 0; }
@@ -211,7 +185,7 @@
 @media (prefers-reduced-motion: no-preference) {
   .ck-ferr-painel:not([hidden]) { animation: ck-bento-entra 700ms var(--bento-curva) backwards; }
   .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .ck-barra-ferr { animation: ck-bento-entra 700ms var(--bento-curva) 80ms backwards; }
-  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] > .resumo-abas-barra { animation: ck-bento-entra 700ms var(--bento-curva) 140ms backwards; }
+  .ck-ferr-painel[data-cockpit-tool-panel="comparacao"] .nf3-sub--abas > .resumo-abas-barra { animation: ck-bento-entra 700ms var(--bento-curva) 140ms backwards; }
   .ck-bento-cartao { animation: ck-bento-entra 760ms var(--bento-curva) backwards; }
   .ck-bento-cartao[data-sem-entrada] { animation: none; }
   .ck-bento-cartao:nth-child(2) { animation-delay: 80ms; }

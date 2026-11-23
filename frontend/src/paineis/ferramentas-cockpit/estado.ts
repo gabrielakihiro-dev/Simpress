@@ -605,7 +605,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     const category = String(categoria || "").trim();
     pendingComparisonTarget = value ? (category ? { serial: value, category } : { serial: value }) : null;
     selectedComparisonId = "";
-    app.selecionarAbaResumo?.("divergencias"); // sai de Backups: o resultado pedido aparece mesmo com o painel já aberto
+    // Sai de Backups: o resultado pedido aparece mesmo com o painel já aberto. Primeira abertura: openPanel volta à Visão Geral
+    // (padrão desde 23/11/2026) e navegarParaLinhaComparacao abre a aba da linha depois do render.
+    app.selecionarAbaResumo?.("divergencias");
     await openPanel("comparacao");
     pendingComparisonTarget = null;
   }
@@ -617,7 +619,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     pendingComparisonTarget = navigationTarget;
     pendingFreshComparison = eventId ? null : comparison;
     selectedComparisonId = eventId;
-    app.selecionarAbaResumo?.("divergencias"); // sai de Backups: o resultado pedido aparece mesmo com o painel já aberto
+    // Sai de Backups: o resultado pedido aparece mesmo com o painel já aberto. Resultado novo abre na Visão Geral (padrão, 23/11/2026);
+    // com alvo de linha, a aba certa é escolhida por navegarParaLinhaComparacao.
+    app.selecionarAbaResumo?.(navigationTarget ? "divergencias" : "visao-geral");
     await openPanel("comparacao");
     pendingComparisonTarget = null;
     pendingFreshComparison = null;
@@ -675,10 +679,13 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     };
   }
 
+  // Aba que openPanel acabou de pedir (alerta, sino, série), repassada a limparAbasResumo enquanto o histórico carrega: sem piscar a Visão Geral.
+  let abaPedidaAoAbrir = "";
+
   // Empties the result area while a result loads or is unavailable.
   function clearComparisonResult(message: Qualquer, estado = "vazio") {
     byId("comparacao-planilhas-fontes").textContent = "";
-    app.limparAbasResumo?.();
+    app.limparAbasResumo?.(abaPedidaAoAbrir);
     renderEmpty(byId("comparacao-planilhas-conteudo"), message);
     byId("comparacao-planilhas-conteudo").dataset.estado = estado;
   }
@@ -717,7 +724,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     } catch (error: Qualquer) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       if (!keepContent) {
-        app.limparAbasResumo?.();
+        app.limparAbasResumo?.(abaPedidaAoAbrir);
         renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }
@@ -752,7 +759,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
       status.textContent = error.message || "Não foi possível carregar o histórico.";
       if (!fresh) {
-        app.limparAbasResumo?.();
+        app.limparAbasResumo?.(abaPedidaAoAbrir);
         renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
         byId("comparacao-planilhas-conteudo").dataset.estado = "erro";
       }
@@ -2265,9 +2272,11 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       const reaproveitar = resumoCarregado && !resumoDesatualizado && !pendingFreshComparison && !pendingComparisonTarget
         && selectedComparisonId === String(selectedComparison?.id || "");
       // Backups não depende da comparação: abre já (sem esperar a rede) e de novo depois, caso o render a tenha mexido.
-      // A primeira abertura do painel (ou um pedido de outra aba) volta a Divergências; reabrir o painel já aberto sem aba mantém a aba atual.
+      // A primeira abertura do painel volta à Visão Geral (padrão desde 23/11/2026) e um pedido de aba abre a aba pedida direto;
+      // `abaPedidaAoAbrir` leva a mesma aba a limparAbasResumo, que roda ao recarregar o histórico, para a Visão Geral não piscar antes dela.
+      // Reabrir o painel já aberto sem aba mantém a aba atual. Quem precisa de uma lista (alerta de divergências, sino) passa a aba em `aba`.
       if (aba === "backups") app.selecionarAbaResumo?.("backups");
-      else if (aba || !jaAberto) app.selecionarAbaResumo?.("divergencias");
+      else if (aba || !jaAberto) app.selecionarAbaResumo?.(aba || "visao-geral");
       if (reaproveitar) {
         if (aba && aba !== "backups" && document.querySelector("#comparacao-planilhas-conteudo [data-resumo-painel]")) app.selecionarAbaResumo?.(aba);
         return;
@@ -2275,10 +2284,11 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       app.invalidarSemUsuarioResumo?.();
       const ativos = app.carregarResumoAtivos?.();
       const pedido = comparisonRequest + 1; // loadComparisons incrementa para este valor
-      await loadComparisons();
+      abaPedidaAoAbrir = aba || (pendingComparisonTarget ? "divergencias" : "");
+      try { await loadComparisons(); } finally { abaPedidaAoAbrir = ""; }
       await ativos;
-      // O render acima volta a Divergências (limparAbasResumo); a aba pedida (ex.: sino) vale depois dele,
-      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica em Divergências).
+      // O render acima volta à Visão Geral (limparAbasResumo) se a aba pedida não vale sem comparação; a aba pedida (ex.: sino) vale depois dele,
+      // só se nenhuma abertura mais nova começou e se há painéis (sem comparação, fica onde estava).
       if (aba === "backups") {
         if (pedido === comparisonRequest && activeTool === "comparacao") app.selecionarAbaResumo?.("backups");
       } else if (aba && pedido === comparisonRequest && activeTool === "comparacao"

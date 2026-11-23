@@ -61,9 +61,16 @@ test("index.html: seção do cartão React no painel comparacao, sem a tabela To
   assert.match(secao[0], /class="ck-resumo-secao nf3-regional"/);
   assert.match(secao[0], /aria-labelledby="resumo-regionais-titulo"/);
   assert.match(secao[0], /data-react-painel="resumo-ativos"/);
-  // Novo layout (18/11/2026): "Ativos por regional" é cartão da grade do bento, acima das sub-abas (.nf3-sub) e do resultado da comparação.
-  assert.ok(painel.indexOf('id="resumo-ativos-secao"') < painel.indexOf('class="nf3-sub"'));
-  assert.ok(painel.indexOf('class="nf3-sub"') < painel.indexOf('id="comparacao-planilhas-conteudo"'));
+  // Visão Geral (23/11/2026): a barra de sub-abas (.nf3-sub--abas) fica no topo; "Ativos por regional" é cartão do bento (painel da Visão Geral), antes das listas e do resultado da comparação.
+  const barra = painel.indexOf('class="nf3-sub nf3-sub--abas"');
+  assert.ok(barra >= 0 && barra < painel.indexOf('id="resumo-painel-visao-geral"'), "barra de abas acima do bento");
+  assert.ok(painel.indexOf('id="resumo-painel-visao-geral"') < painel.indexOf('id="resumo-ativos-secao"'));
+  assert.ok(painel.indexOf('id="resumo-ativos-secao"') < painel.indexOf('id="resumo-paineis-lista"'));
+  assert.ok(painel.indexOf('id="resumo-paineis-lista"') < painel.indexOf('id="comparacao-planilhas-conteudo"'));
+  assert.match(painel, /id="resumo-aba-visao-geral"[^>]*aria-selected="true"/);
+  assert.ok(painel.indexOf('id="resumo-aba-visao-geral"') < painel.indexOf('id="resumo-aba-divergencias"'));
+  assert.match(painel, /<span class="resumo-aba__rotulo">Visão Geral<\/span>/);
+  assert.match(html, /id="btn-alerta-divergencias-novas"[^>]*data-args='\["comparacao","divergencias"\]'/);
   assert.doesNotMatch(painel, /resumo-total|Total de ativos/);
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
   const duplicados = ids.filter((id, i) => ids.indexOf(id) !== i);

@@ -22,12 +22,12 @@ const comparison = {
   },
 };
 
-// Novo layout (18/11/2026): o Resumo não tem mais "Visão geral"; o bento (com "Ativos por regional") fica sempre acima das sub-abas.
-// openPanel recarrega a comparação e o render volta a Divergências: só depois do estado final o Resumo está estável.
+// Visão Geral (23/11/2026): a primeira sub-aba do Resumo guarda o bento (com "Ativos por regional") e é a aba padrão; as listas ficam nas outras abas.
+// openPanel recarrega a comparação e o render volta à Visão Geral: só depois do estado final o Resumo está estável.
 async function esperarResumoPronto(page) {
   await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
   await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
-  await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
 }
 
 // O bento anima a entrada dos blocos (opacity 0→1, 700 ms): o Axe só mede contraste com a animação concluída.
@@ -77,7 +77,7 @@ test("comparison tab shows the full result and survives an empty history refresh
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const result = page.locator("#comparacao-planilhas-conteudo");
-  // O Resumo abre em Divergências, onde fica a linha LENTO; o clique confirma a aba.
+  // O Resumo abre na Visão Geral; a linha LENTO fica em Divergências.
   await page.locator("#resumo-aba-divergencias").click();
   // Tabela no desktop e card no mobile: só a variante visível conta.
   const row = result.locator('[data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
@@ -105,9 +105,44 @@ test("comparison tab without a saved comparison still lists the notebooks withou
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const result = page.locator("#comparacao-planilhas-conteudo");
+  // Sem comparação, a Visão Geral mostra o bento ("—") e, logo abaixo, a mensagem de vazio e a seção "Sem usuário" (sem clicar em aba).
+  await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#resumo-painel-visao-geral")).toBeVisible();
+  await expect(result).toBeVisible();
   await expect(result).toContainText("Não há comparação de inventários disponível neste histórico.");
   await expect(result.locator("#comparacao-secao-sem-usuario")).toHaveText("Sem usuário");
   await expect(result.locator('[data-comparison-category="sem_usuario"][data-comparison-serial="NOTE-SEM-USUARIO"]:visible').first()).toContainText("PRNOTEDEMO02");
+});
+
+test("sem comparação, o chip Sem usuário da Home leva à linha mesmo com a aba Usuários desabilitada", async ({ page }) => {
+  await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
+  await page.route("**/api/buscar-expandida?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("usuario") !== "sem") return route.fallback();
+    const item = { serial: "NOTE-SEM-USUARIO", apelido: "PRNOTEDEMO02", retirada_cidade: "Curitiba", modelo: "Notebook" };
+    await route.fulfill({ json: { items: [item], total: 1, offset: 0, limit: 100, has_more: false } });
+  });
+  await page.goto("/");
+  await page.evaluate(() => window.abrirComparacaoDaSerie("NOTE-SEM-USUARIO", "sem_usuario"));
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Resumo");
+  await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-disabled", "true");
+  const linha = page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_usuario"][data-comparison-serial="NOTE-SEM-USUARIO"]:visible').first();
+  await expect(linha).toContainText("PRNOTEDEMO02");
+  await expect(linha).toBeInViewport();
+  // De Backups (que esconde o conteúdo), o mesmo pedido também chega à linha.
+  await page.locator("#resumo-aba-backups").click();
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toBeHidden();
+  await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "NOTE-SEM-USUARIO", category: "sem_usuario" }));
+  await expect(linha).toBeVisible();
+});
+
+test("histórico com erro mostra a mensagem de falha na Visão Geral", async ({ page }) => {
+  await page.route("**/api/historico-comparacoes", route => route.fulfill({ status: 500, json: { detail: "falha de teste" } }));
+  await page.goto("/");
+  await openTool(page, "#btn-resumo-aba");
+  await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", "erro");
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toBeVisible();
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("falha de teste"); // a mensagem do servidor aparece na Visão Geral, sem precisar trocar de aba
 });
 
 test("each tool is accessible in both themes and remains reachable below 1200px", async ({ page }, testInfo) => {
@@ -590,7 +625,7 @@ test("Resumo mostra Ativos por regional com filtros por categoria ao abrir, sem 
   await page.goto("/");
   await openTool(page, "#btn-resumo-aba");
   const painel = page.locator('[data-cockpit-tool-panel="comparacao"]');
-  // "Ativos por regional" é cartão do bento, sempre visível acima das sub-abas; o Resumo abre em Divergências.
+  // "Ativos por regional" é cartão do bento (Visão Geral); o Resumo abre na Visão Geral (aba padrão).
   await esperarResumoPronto(page);
   await expect(painel.getByRole("heading", { name: "Ativos por regional" })).toBeVisible();
   await expect(painel.getByRole("heading", { name: "Total de ativos" })).toHaveCount(0);

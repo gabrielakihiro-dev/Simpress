@@ -58,7 +58,7 @@ test("groups secondary actions under cockpit tools dropdown", () => {
   assert.match(appHtml, /id="cockpit-comparison-legacy"/); // abre o modal do histórico (listener em cockpit-tool-panels.js)
   // 31/10/2026: a tela "Evolução das atualizações" saiu; o alerta "Ver evolução" da Home abre Comparações.
   assert.doesNotMatch(appHtml, /btn-evolucao-atualizacoes|modal-evolucao-atualizacoes|data-cockpit-tool-panel="evolucao"/);
-  assert.match(appHtml, /<button(?=[^>]*id="btn-alerta-divergencias-novas")(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["comparacao"\]')[^>]*>/);
+  assert.match(appHtml, /<button(?=[^>]*id="btn-alerta-divergencias-novas")(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["comparacao","divergencias"\]')[^>]*>/);
   assert.doesNotMatch(appScript, /\/api\/operacoes\/evolucao\?/);
   assert.doesNotMatch(appHtml, /id="btn-relatorio-mensal"[^>]*data-on-click="abrirRelatorioMensal"/);
   // 31/10/2026: o modal "Gerenciar unidades" e o "Fluxo completo" saíram; o painel do catálogo traz o formulário.

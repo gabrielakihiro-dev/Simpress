@@ -326,8 +326,9 @@ label.mr-rotulo .mr-req { margin-left: 2px; color: var(--nl-rtx); }
 }
 
 /* ---------- F3 Resumo (quadros NL-F3-Resumo, NL-F3-Hoje e NL-F3-Acoes, com os pares de celular): opção C + cartão Histórico da A ----------
-   Bento no topo (Ativos, Divergências, Apelidos, Usuários, Sem acesso, Backups em dia, Ativos por regional e Histórico) e,
-   abaixo, as sub-abas (Divergências, Apelidos, Usuários, Sem acesso, Backups) num cartão de tabela. Peças novas: nf3-*.
+   Atualizado em 23/11/2026: a barra de sub-abas (Visão Geral, Divergências, Apelidos, Usuários, Sem acesso, Backups) fica no topo;
+   a Visão Geral guarda o bento (Ativos, Divergências, Apelidos, Usuários, Sem acesso, Backups em dia, Ativos por regional e Histórico)
+   e as demais abas mostram a tabela num cartão abaixo da barra. Peças novas: nf3-*.
    Ficam de fora do desenho (sem código): período 7/14/30 dias, seletor de Ativos, gráfico "Hoje", arrastar, Restaurar layout,
    Repetir animação, Voltar aos cartões e os textos de variação nos cartões. */
 section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
@@ -374,8 +375,11 @@ section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
 
   /* Sub-abas: cartão de tabela com faixa segmentada; a aba aberta sobe para o --nl-card, a contagem é o número em mono */
   & .nf3-sub { margin-top: 16px; }
+  /* Visão Geral (23/11/2026): a barra de sub-abas fica no topo, sem cartão; o bento é o painel da primeira aba. [hidden] precisa vencer o display:grid. */
+  & .nf3-topo[hidden], & .nf3-sub[hidden] { display: none; }
   & .nf3-sub__corpo { box-sizing: border-box; min-width: 0; padding: 20px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-cartao); background: var(--nl-card); }
   & .nf3-sub .resumo-abas-barra { margin: 0 0 16px; }
+  & .nf3-sub.nf3-sub--abas .resumo-abas-barra { margin: 0; }
   & .nf3-sub .resumo-abas { display: inline-flex; max-width: 100%; gap: 4px; padding: 3px; border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
   & .nf3-sub .resumo-aba { gap: 8px; height: 34px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--nl-raio-sub); background: transparent; color: var(--nl-mut); box-shadow: none; font: 500 13px/1 var(--fonte-corpo); }
   & .nf3-sub .resumo-aba:hover { background: transparent; color: var(--nl-tx); }
@@ -416,6 +420,14 @@ section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
     & .nf3-sub .resumo-abas { display: flex; width: 100%; }
   }
   #modal-historico-comparacoes > .ck-dialogo { border-width: 0; border-radius: 0; }
+}
+
+/* Seis abas abaixo de 768px (celular e tablet estreito): duas linhas de três (docs/cockpit-prompts/14-cockpit-v2.md), sem faixa que rola nem aba cortada. A 640px a faixa de uma linha já estoura. */
+@media (max-width: 767.98px) {
+  section.ck-ferr-painel[data-cockpit-tool-panel="comparacao"] {
+    & .nf3-sub--abas .resumo-abas { display: flex; width: 100%; flex-wrap: wrap; overflow-x: visible; }
+    & .nf3-sub--abas .resumo-aba { flex: 1 1 calc((100% - 8px) / 3); min-width: 0; justify-content: center; padding: 0 8px; }
+  }
 }
 
 /* Toque: controles do Resumo com 44 px de altura mínima */

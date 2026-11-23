@@ -269,13 +269,19 @@ async function abrirMenu(page) {
   }
 }
 
-// O Resumo volta para Divergências quando termina de montar: espera o estado assentado antes de mexer nas abas.
-async function abrirResumo(page) {
+// O Resumo volta para a Visão Geral (padrão desde 23/11/2026) quando termina de montar: espera o estado assentado antes de mexer nas abas.
+// Os testes de lista seguem em Divergências (aba: "divergencias"); aba: null deixa na Visão Geral.
+async function abrirResumo(page, { aba = "divergencias" } = {}) {
   await abrirMenu(page);
   await page.locator("#btn-resumo-aba").click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
   await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
   await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
+  await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+  if (aba) {
+    await page.locator(`#resumo-aba-${aba}`).click();
+    await expect(page.locator(`#resumo-aba-${aba}`)).toHaveAttribute("aria-selected", "true");
+  }
 }
 
 async function irParaAba(page, chave) {
@@ -409,14 +415,21 @@ test.describe("comportamento (só no desktop)", () => {
     expect(escritas(ambiente)).toEqual([]);
   });
 
-  test("Comparação: abas com contadores, bento sempre à vista e cartões que levam à seção", async ({ page }) => {
+  test("Comparação: Visão Geral com o bento, abas com contadores e cartões que levam à seção", async ({ page }) => {
     const ambiente = await preparar(page);
-    await abrirResumo(page);
-    // Novo layout (18/11/2026): sem "Visão geral"; as seis sub-abas viraram cinco e o bento fica sempre acima delas.
-    const abas = [["divergencias", "Divergências 7"], ["apelidos", "Apelidos 1"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
+    await abrirResumo(page, { aba: null });
+    // Visão Geral (23/11/2026): a barra de sub-abas sobe para o topo e a primeira aba guarda o bento (aba padrão, sem selo de contagem); seis abas.
+    const abas = [["visao-geral", "Visão Geral"], ["divergencias", "Divergências 7"], ["apelidos", "Apelidos 1"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
     await expect(page.locator(".resumo-abas button")).toHaveText(abas.map(([, rotulo]) => rotulo), interno);
     await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeVisible();
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toBeHidden();
+    // A barra de abas fica acima do bento.
+    const yBarra = (await page.locator(".resumo-abas").boundingBox()).y;
+    const yBento = (await page.locator("#resumo-painel-visao-geral").boundingBox()).y;
+    expect(yBarra).toBeLessThan(yBento);
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "false");
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-label", "Divergências: 7 linhas");
     await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-label", "Usuários: 4 linhas");
 
@@ -426,7 +439,9 @@ test.describe("comportamento (só no desktop)", () => {
         const painel = page.locator(`#resumo-painel-${outra}`);
         if (outra === chave) await expect(painel).toBeVisible(); else await expect(painel).toBeHidden();
       }
-      await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
+      // O bento (com "Ativos por regional") só aparece na Visão Geral.
+      if (chave === "visao-geral") await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
+      else await expect(page.locator("#resumo-ativos-secao")).toBeHidden();
     }
 
     // Números do bento (a contagem anima até o valor) e "Ver lista →": seleciona a sub-aba, rola até ela e foca a aba.
@@ -434,10 +449,13 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#nf3-num-apelidos")).toHaveText("1");
     await expect(page.locator("#nf3-num-usuarios")).toHaveText("4");
     await expect(page.locator("#nf3-num-sem-acesso")).toHaveText("3");
-    await irParaAba(page, "divergencias");
+    await irParaAba(page, "visao-geral");
+    await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
     await page.locator('[data-nf3-cartao="usuarios"] [data-nf3-ver]').click();
     await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-aba-usuarios")).toBeFocused();
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeHidden();
+    await expect(page.locator("#resumo-painel-usuarios")).toBeVisible();
 
     // Os cartões de Divergências continuam levando à seção.
     await irParaAba(page, "divergencias");
@@ -453,7 +471,7 @@ test.describe("comportamento (só no desktop)", () => {
     const ambiente = await preparar(page, {
       eventos: [eventoA(), eventoB(), extra("ev-bf3-c", "2026-10-04T08:00:00-03:00"), extra("ev-bf3-d", "2026-09-27T08:00:00-03:00"), extra("ev-bf3-e", "2026-09-20T08:00:00-03:00")],
     });
-    await abrirResumo(page);
+    await abrirResumo(page, { aba: null }); // o cartão Histórico vive no bento da Visão Geral
     const itens = page.locator("#nf3-historico-lista .nf3-historico__item");
     await expect(itens).toHaveCount(4);
     await expect(page.locator("#nf3-historico-vazio")).toBeHidden();
@@ -485,7 +503,7 @@ test.describe("comportamento (só no desktop)", () => {
 
   test("Resumo sem histórico: cartão Histórico mostra o vazio e a lista fica sem itens", async ({ page }) => {
     await preparar(page, { eventos: [] });
-    await abrirResumo(page);
+    await abrirResumo(page, { aba: null });
     await expect(page.locator("#nf3-historico-vazio")).toBeVisible();
     await expect(page.locator("#nf3-historico-lista .nf3-historico__item")).toHaveCount(0);
     for (const chave of ["divergencias", "apelidos", "usuarios", "sem-acesso"]) await expect(page.locator(`#nf3-num-${chave}`)).toHaveText("—");
@@ -647,6 +665,8 @@ test.describe("comportamento (só no desktop)", () => {
     await seletor.selectOption("ev-bf3-b");
     await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ANTERIOR}`, interno);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 1", interno);
+    // Trocar de comparação volta o Resumo à Visão Geral (limparAbasResumo); a lista é reaberta pela aba.
+    await irParaAba(page, "divergencias");
     await expect(linhaDe(page, "BRJ200AAAA")).toBeVisible();
     await expect(linhaDe(page, "BRJ100DDDD")).toHaveCount(0);
     expect(chamadasDe(ambiente, "GET", "/api/historico-comparacoes/ev-bf3-b")).toHaveLength(1);
@@ -654,6 +674,7 @@ test.describe("comportamento (só no desktop)", () => {
     await seletor.selectOption("ev-bf3-a");
     await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 7", interno);
+    await irParaAba(page, "divergencias");
     await expect(linhaDe(page, "BRJ100DDDD")).toBeVisible();
     expect(escritas(ambiente)).toEqual([]);
   });

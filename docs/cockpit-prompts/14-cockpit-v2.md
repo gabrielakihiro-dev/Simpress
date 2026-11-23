@@ -206,6 +206,7 @@ Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups` com 
 - Em 1200 px ou mais, tabela; abaixo disso, cards com os mesmos dados e ações; sem rolagem horizontal de 320 px a 2560 px.
 - Abaixo de 600 px as seis abas do Resumo ficam em duas linhas de três (`.resumo-abas` com `flex-wrap`), para nenhum rótulo ser cortado.
 - Comparação nova, aberta do histórico ou navegação por série com a aba Backups aberta volta a Divergências antes de mostrar o resultado.
+- Atualização de 23/11/2026 (pedido do usuário): o Resumo ganhou a sub-aba `Visão Geral` como primeira e padrão; um resultado novo sem alvo de linha volta à `Visão Geral` (com alvo, à aba da linha). A barra de abas ficou no topo e, abaixo de 768 px, as seis abas seguem em duas linhas de três (`.nf3-sub--abas .resumo-abas` com `flex-wrap`).
 - Depois de um redesenho, o foco volta ao mesmo botão, ao botão da mesma série e cidade (Confirmar vira Desfazer), ao resumo `N excluídos` que estava em foco ou, sem par, à aba Backups.
 - Nas sobras de regional fora das prioritárias, cada série mostra a origem (`marca` ou `confirmação`) e, se for confirmação, o próprio `Desfazer confirmação` (12/11/2026); nas sobras das prioritárias o botão fica só na tabela da regional.
 - Botões `Confirmar disponível por 7 dias` e `Desfazer confirmação`; a tela pede a atualização do painel depois de cada ação (`simpress:atualizar-notificacoes`).
