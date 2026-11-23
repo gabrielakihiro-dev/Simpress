@@ -819,7 +819,9 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
 
   test("O evento simpress:transfer-generated sem payload não abre o modal nem chama o UX", async ({ page }) => {
     const chamadas = await telaTicket(page, (etapa, corpo) => padraoTicket(etapa, corpo), { buscar: false });
-    await page.waitForFunction(() => Boolean(window.SimpressReact?.["ux-ticket"]));
+    // ux-ticket é painel sob demanda (frontend/src/paineis.ts): nunca entra em SimpressReact, só no carregador.
+    await page.waitForFunction(() => Boolean(window.SimpressReactSobDemanda?.["ux-ticket"]));
+    expect(await page.evaluate(() => Boolean(window.SimpressReact?.["ux-ticket"]))).toBe(false);
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated", { detail: {} })));
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated")));
     await page.waitForTimeout(300);
