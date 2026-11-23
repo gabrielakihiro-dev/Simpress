@@ -16,6 +16,16 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'UserPromptSubmit',additionalContext:'Maestro obrigatorio em todo prompt, antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Voce so coordena. Detalhe: docs/desenvolvimento/regras-agentes.md, Delegacao em subagentes.'}}))\""
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
