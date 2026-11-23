@@ -11,8 +11,8 @@ const PAINEL = "#resumo-painel-backups";
 const CONTEUDO = "#comparacao-planilhas-conteudo";
 const CARTAO = "#alerta-backups-regionais";
 const SELO_ABA = "#resumo-backups-contagem";
-// Novo layout (18/11/2026): sem "Visão geral"; o bento fica sempre acima das sub-abas.
-const ABAS_RESUMO = ["divergencias", "apelidos", "usuarios", "sem-acesso", "backups"];
+// Visão Geral (23/11/2026): seis sub-abas; a primeira (Visão Geral, aba padrão) guarda o bento e a barra fica no topo do Resumo.
+const ABAS_RESUMO = ["visao-geral", "divergencias", "apelidos", "usuarios", "sem-acesso", "backups"];
 const EVENTO_ANTERIOR = "fixture-event-000";
 
 async function zerarFixture(request) {
@@ -70,7 +70,7 @@ async function esperarBackupsAberta(page) {
   await expect(page.locator(ABA)).toHaveAttribute("tabindex", "0");
   await expect(page.locator(PAINEL)).toBeVisible();
   await expect(page.locator(CONTEUDO)).toBeHidden();
-  await expect(page.locator("#resumo-ativos-secao")).toBeVisible(); // "Ativos por regional" é cartão do bento, sempre à vista
+  await expect(page.locator("#resumo-ativos-secao")).toBeHidden(); // "Ativos por regional" é cartão do bento, que só aparece na Visão Geral (23/11/2026)
   for (const outra of ABAS_RESUMO.filter(chave => chave !== "backups")) await expect(aba(page, outra)).toHaveAttribute("aria-selected", "false");
   await expect(linha(page, "Londrina")).toBeVisible();
 }
@@ -95,23 +95,25 @@ test("o botão do sino abre o Resumo direto em Backups, mesmo sem nenhum evento 
   await expect(page.locator("#cockpit-comparison-event")).toBeDisabled();
   await esperarBackupsAberta(page);
   await expect(linha(page, "Cascavel").locator(".ck-badge")).toHaveText("Sem backup disponível");
-  // Sem comparação, as abas que só filtram a comparação ficam desabilitadas e o teclado as pula; Divergências (mensagem de vazio) e Backups seguem habilitadas.
+  // Sem comparação, as abas que só filtram a comparação ficam desabilitadas e o teclado as pula; Visão Geral, Divergências (mensagem de vazio) e Backups seguem habilitadas.
   for (const chave of ["apelidos", "usuarios", "sem-acesso"]) await expect(aba(page, chave)).toHaveAttribute("aria-disabled", "true");
-  for (const chave of ["divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
+  for (const chave of ["visao-geral", "divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
   await aba(page, "apelidos").click({ force: true });
   await expect(aba(page, "backups")).toHaveAttribute("aria-selected", "true");
-  // Habilitadas: divergencias, backups (circular).
+  // Habilitadas: visao-geral, divergencias, backups (circular).
   // openPanel reaplica Backups depois de carregar comparação e ativos, sem sinal na tela: uma seta dada antes disso é desfeita.
-  // A sequência recomeça de Backups e termina em Divergências, então repete até a abertura assentar.
+  // A sequência recomeça de Backups e termina na Visão Geral, então repete até a abertura assentar.
   await expect(async () => {
     await aba(page, "backups").focus();
     await page.keyboard.press("ArrowRight");
+    await expect(aba(page, "visao-geral")).toBeFocused();
+    await expect(aba(page, "visao-geral")).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowRight");
     await expect(aba(page, "divergencias")).toBeFocused();
-    await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("ArrowRight");
     await expect(aba(page, "backups")).toBeFocused();
     await page.keyboard.press("Home");
-    await expect(aba(page, "divergencias")).toBeFocused();
+    await expect(aba(page, "visao-geral")).toBeFocused();
     await page.keyboard.press("End");
     await expect(aba(page, "backups")).toBeFocused();
     // Foco numa aba desabilitada (clique): as setas ainda levam a uma habilitada.
@@ -120,7 +122,7 @@ test("o botão do sino abre o Resumo direto em Backups, mesmo sem nenhum evento 
     await expect(aba(page, "backups")).toBeFocused();
     await aba(page, "usuarios").focus();
     await page.keyboard.press("ArrowRight");
-    await expect(aba(page, "divergencias")).toBeFocused();
+    await expect(aba(page, "visao-geral")).toBeFocused();
   }).toPass({ timeout: 15_000 });
 });
 
@@ -131,7 +133,8 @@ test("o botão do sino abre Backups também com outro evento de comparação sel
   await evento.selectOption(EVENTO_ANTERIOR);
   // Status no formato "<Tipo legível> · dd/mm/aaaa hh:mm" (a hora depende do fuso; a data do evento da fixture não).
   await expect(page.locator("#cockpit-comparison-status")).toHaveText(/^.+ · 07\/10\/2026 \d{2}:\d{2}$/);
-  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
+  // Trocar de comparação volta o Resumo à Visão Geral (limparAbasResumo).
+  await expect(aba(page, "visao-geral")).toHaveAttribute("aria-selected", "true");
   // O sino fica acessível com o painel aberto; a escolha do evento vive no módulo e não pode se perder.
   await irParaBackupsPeloSino(page);
   await expect(evento).toHaveValue(EVENTO_ANTERIOR);
@@ -158,7 +161,7 @@ test("teclado: End chega em Backups, Home volta à primeira aba e as setas circu
   await expect(aba(page, "divergencias")).toHaveAttribute("tabindex", "-1");
 
   await page.keyboard.press("Home");
-  await foco("divergencias");
+  await foco("visao-geral");
   await expect(page.locator(PAINEL)).toBeHidden();
   await expect(aba(page, "backups")).toHaveAttribute("aria-selected", "false");
   await expect(aba(page, "backups")).toHaveAttribute("tabindex", "-1");
@@ -169,7 +172,7 @@ test("teclado: End chega em Backups, Home volta à primeira aba e as setas circu
   }
   await expect(page.locator(PAINEL)).toBeVisible();
   await page.keyboard.press("ArrowRight"); // de Backups, a seta volta à primeira
-  await foco("divergencias");
+  await foco("visao-geral");
   await page.keyboard.press("ArrowLeft"); // da primeira, a seta volta a Backups
   await foco("backups");
   for (const chave of [...ABAS_RESUMO].reverse().slice(1)) {
@@ -178,45 +181,47 @@ test("teclado: End chega em Backups, Home volta à primeira aba e as setas circu
   }
 });
 
-// Novo layout (18/11/2026): "Ativos por regional" é cartão do bento (grade de cima), visível em qualquer sub-aba, antes das sub-abas.
-test("com comparação: Ativos por regional é cartão do bento e fica à vista em todas as sub-abas", async ({ page }) => {
+// Visão Geral (23/11/2026): "Ativos por regional" é cartão do bento (grade), que é o painel da primeira sub-aba; a barra de sub-abas fica acima dele.
+test("com comparação: Ativos por regional é cartão do bento e só aparece na Visão Geral", async ({ page }) => {
   await abrirResumo(page);
   const ativos = page.locator("#resumo-ativos-secao");
-  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true");
+  await expect(aba(page, "visao-geral")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
   await expect(ativos).toBeVisible();
   await expect(page.locator("#resumo-regionais")).toBeVisible();
-  await expect(page.locator(CONTEUDO)).toBeVisible();
+  await expect(page.locator(CONTEUDO)).toBeHidden();
   // Seis cartões de número/anel na grade (Ativos, Divergências, Apelidos, Usuários, Sem acesso, Backups em dia) + Ativos por regional.
   await expect(page.locator(".nf3-grade .nf3-cartao")).toHaveCount(6);
   await expect(page.locator(".nf3-grade #resumo-ativos-secao")).toHaveCount(1);
-  // O bento fica acima das sub-abas.
+  // A barra de sub-abas fica acima do bento.
   await expect.poll(() => page.evaluate(() => {
     const regional = document.querySelector("#resumo-ativos-secao").getBoundingClientRect();
-    const sub = document.querySelector(".nf3-sub").getBoundingClientRect();
-    return { acima: regional.bottom <= sub.top + 1, grade: getComputedStyle(document.querySelector(".nf3-grade")).display };
-  })).toEqual({ acima: true, grade: "grid" });
+    const sub = document.querySelector(".nf3-sub--abas").getBoundingClientRect();
+    return { abaixo: regional.top >= sub.bottom - 1, grade: getComputedStyle(document.querySelector(".nf3-grade")).display };
+  })).toEqual({ abaixo: true, grade: "grid" });
 
-  for (const chave of ["apelidos", "usuarios", "sem-acesso", "backups"]) {
+  for (const chave of ["divergencias", "apelidos", "usuarios", "sem-acesso", "backups"]) {
     await aba(page, chave).click();
     await expect(aba(page, chave)).toHaveAttribute("aria-selected", "true");
-    await expect(ativos).toBeVisible();
+    await expect(ativos).toBeHidden();
   }
+  await aba(page, "visao-geral").click();
+  await expect(ativos).toBeVisible();
 });
 
-test("sem comparação: cartões do bento mostram \"—\", só Divergências e Backups ficam habilitadas e Ativos por regional segue à vista", async ({ page }) => {
+test("sem comparação: cartões do bento mostram \"—\", só Visão Geral, Divergências e Backups ficam habilitadas e Ativos por regional está na Visão Geral", async ({ page }) => {
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [], total: 0 } }));
   const erros = [];
   page.on("pageerror", erro => erros.push(erro.message));
   await abrirResumo(page);
   const ativos = page.locator("#resumo-ativos-secao");
-  await expect(aba(page, "divergencias")).toHaveAttribute("aria-selected", "true"); // abre em Divergências
+  await expect(aba(page, "visao-geral")).toHaveAttribute("aria-selected", "true"); // abre na Visão Geral
   for (const chave of ["apelidos", "usuarios", "sem-acesso"]) await expect(aba(page, chave)).toHaveAttribute("aria-disabled", "true");
-  for (const chave of ["divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
+  for (const chave of ["visao-geral", "divergencias", "backups"]) await expect(aba(page, chave)).not.toHaveAttribute("aria-disabled", "true");
   for (const chave of ["divergencias", "apelidos", "usuarios", "sem-acesso"]) await expect(page.locator(`#nf3-num-${chave}`)).toHaveText("—");
   await expect(ativos).toBeVisible();
   await expect(page.locator("#resumo-regionais")).toBeVisible();
-  await expect(page.locator(CONTEUDO)).toBeVisible(); // a mensagem de vazio vive em Divergências
+  await expect(page.locator(CONTEUDO)).toBeVisible(); // sem comparação, a mensagem de vazio aparece já na Visão Geral (23/11/2026)
   // Sem comparação, o conteúdo só tem o aviso de vazio e o cartão "Sem usuário" do cadastro (seção, não contador); os cartões bento de Backups vivem em #resumo-painel-backups.
   await expect(page.locator(`${CONTEUDO} .ck-bento-cartao--mini`)).toHaveCount(0);
   expect(erros).toEqual([]);

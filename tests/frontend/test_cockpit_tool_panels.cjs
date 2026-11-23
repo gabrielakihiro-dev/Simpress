@@ -749,7 +749,7 @@ test("abrirComparacaoDaSerie leva a categoria ao alvo e repassa o Sem usuário a
   } finally { delete global.document; }
 });
 
-test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do render (que volta a Divergências)", async () => {
+test("abrirPainelCockpit('comparacao', aba) abre a sub-aba pedida direto e a reaplica depois do render (que volta à Visão Geral)", async () => {
   const ordem = [];
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
@@ -761,7 +761,7 @@ test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do rend
   global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
   try {
     await api.abrirPainelCockpit("comparacao", "sem-acesso");
-    assert.deepEqual(ordem, ["aba:divergencias", "render", "aba:sem-acesso"]);
+    assert.deepEqual(ordem, ["aba:sem-acesso", "render", "aba:sem-acesso"]);
     ordem.length = 0;
     emite("simpress:resumo-desatualizado");
     await api.abrirPainelCockpit("comparacao");
@@ -769,7 +769,7 @@ test("abrirPainelCockpit('comparacao', aba) escolhe a sub-aba só depois do rend
   } finally { delete global.document; }
 });
 
-test("resultado novo com o Resumo já aberto em Backups volta a Divergências antes do render", async () => {
+test("resultado novo com o Resumo já aberto em Backups volta à Visão Geral antes do render", async () => {
   const ordem = [];
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
@@ -781,12 +781,12 @@ test("resultado novo com o Resumo já aberto em Backups volta a Divergências an
     await api.abrirPainelCockpit("comparacao", "backups");
     ordem.length = 0;
     await api.mostrarResultadoNaAbaComparacao({ evento_id: "4" });
-    assert.equal(ordem[0], "aba:divergencias", "sai de Backups antes de mostrar a comparação");
+    assert.equal(ordem[0], "aba:visao-geral", "sai de Backups antes de mostrar a comparação");
     assert.ok(!ordem.includes("aba:backups"));
   } finally { delete global.document; }
 });
 
-test("abrirPainelCockpit('comparacao') sem painel aberto volta a Divergências antes do render", async () => {
+test("abrirPainelCockpit('comparacao') sem painel aberto volta à Visão Geral antes do render", async () => {
   const ordem = [];
   const evento = { id: "4", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
   const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
@@ -796,7 +796,7 @@ test("abrirPainelCockpit('comparacao') sem painel aberto volta a Divergências a
   });
   try {
     await api.abrirPainelCockpit("comparacao");
-    assert.deepEqual(ordem, ["aba:divergencias", "render"]);
+    assert.deepEqual(ordem, ["aba:visao-geral", "render"]);
   } finally { delete global.document; }
 });
 
@@ -816,9 +816,9 @@ test("Resumo (F3) carrega uma vez: voltar de outra aba não busca de novo; inven
     assert.deepEqual(pedidos, ["/api/historico-comparacoes", "/api/historico-comparacoes/4"]);
     await reabrir();
     assert.deepEqual(pedidos, [], "voltar sem mudança não busca nada");
-    assert.deepEqual(ordem, ["aba:divergencias"], "vindo de outra aba volta a Divergências, sem render");
+    assert.deepEqual(ordem, ["aba:visao-geral"], "vindo de outra aba volta à Visão Geral (padrão desde 23/11/2026), sem render");
     await reabrir("sem-acesso");
-    assert.deepEqual(ordem, ["aba:divergencias", "aba:sem-acesso"], "a aba pedida (sino) vale sem recarregar");
+    assert.deepEqual(ordem, ["aba:sem-acesso", "aba:sem-acesso"], "a aba pedida (sino) vale sem recarregar");
     assert.deepEqual(pedidos, []);
     // O painel de 5 em 5 min: a primeira chave vista e uma chave nova marcam mudança; a mesma chave, não.
     emite("simpress:painel-atualizado", { ultima_comparacao: { id: "4" } });
@@ -904,9 +904,9 @@ test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há
     appExtra: { renderizarResultadoComparacao: () => ordem.push("render"), selecionarAbaResumo: aba => ordem.push(`aba:${aba}`) },
   });
   try {
-    // Sem painéis (sem comparação ou com erro): fica em Divergências, sem pedir a aba depois do render.
+    // Sem painéis (sem comparação ou com erro): a aba pedida é só tentada antes do render (desabilitada, não abre), sem repetir depois.
     await api.abrirPainelCockpit("comparacao", "sem-acesso");
-    assert.deepEqual(ordem, ["aba:divergencias", "render"]);
+    assert.deepEqual(ordem, ["aba:sem-acesso", "render"]);
     // Com painéis, uma abertura mais nova vence: a antiga não troca a aba depois.
     global.document.querySelector = seletor => (String(seletor).includes("data-resumo-painel") ? {} : null);
     ordem.length = 0;
@@ -918,7 +918,8 @@ test("abrirPainelCockpit('comparacao', aba) não escolhe sub-aba quando não há
     const nova = api.abrirPainelCockpit("comparacao", "divergencias");
     soltar();
     await Promise.all([antiga, nova]);
-    assert.ok(!ordem.includes("aba:sem-acesso"), `ordem: ${ordem.join(", ")}`);
+    assert.equal(ordem.filter(item => item === "aba:sem-acesso").length, 1, `a antiga só tenta a aba antes do render; depois vale a nova. ordem: ${ordem.join(", ")}`);
+    assert.equal(ordem.at(-1), "aba:divergencias", `ordem: ${ordem.join(", ")}`);
     assert.ok(ordem.includes("aba:divergencias"), `ordem: ${ordem.join(", ")}`);
   } finally { delete global.document; }
 });

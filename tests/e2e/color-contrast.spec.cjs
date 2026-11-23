@@ -35,7 +35,7 @@ for (const theme of ["dark", "light"]) {
     // Resumo (F3): cartão Ativos por regional (filtros + barras) dentro do painel de ferramenta.
     await openSidebarForTabs(page);
     await page.locator("#btn-resumo-aba").click();
-    // Novo layout (18/11/2026): "Ativos por regional" é cartão do bento, sempre à vista acima das sub-abas.
+    // Visão Geral (23/11/2026): "Ativos por regional" é cartão do bento, que é o painel da aba padrão (Visão Geral).
     await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", /^(pronto|vazio|erro)$/);
     await expect(page.locator("#resumo-regionais")).toHaveAttribute("data-estado", /^(pronto|erro)$/);
     await expect(page.locator("#resumo-ativos-secao")).toBeVisible();
@@ -43,6 +43,16 @@ for (const theme of ["dark", "light"]) {
     await expect(page.locator("#resumo-regionais-filtros .ck-pilula")).toHaveCount(2);
     // O bento anima a entrada dos blocos (opacity 0→1): o Axe só mede contraste com a animação concluída.
     // Só animações finitas em curso, com teto de 3 s (uma animação pausada nunca resolve `finished`).
+    await page.evaluate(() => Promise.race([
+      Promise.all(document.getAnimations()
+        .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
+        .map(item => item.finished.catch(() => undefined))),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]));
+    expect(await contrastViolations(page, '[data-cockpit-tool-panel="comparacao"]')).toEqual([]);
+    // As listas (Divergências) só aparecem fora da Visão Geral: mede também essa aba.
+    await page.locator("#resumo-aba-divergencias").click();
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toBeVisible();
     await page.evaluate(() => Promise.race([
       Promise.all(document.getAnimations()
         .filter(item => item.playState === "running" && item.effect?.getTiming().iterations !== Infinity)
