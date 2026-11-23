@@ -824,6 +824,8 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     expect(await page.evaluate(() => Boolean(window.SimpressReact?.["ux-ticket"]))).toBe(false);
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated", { detail: {} })));
     await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:transfer-generated")));
+    // O evento baixa e monta o painel: espera o diálogo existir para a checagem valer depois da montagem.
+    await expect(page.locator("#titulo-ticket-ux")).toBeAttached();
     await page.waitForTimeout(300);
     await expect(page.locator("#modal-ticket-ux")).toBeHidden();
     expect(chamadas).toEqual([]);
