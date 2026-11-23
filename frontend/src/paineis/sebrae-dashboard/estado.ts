@@ -631,7 +631,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   /** Bloco "Descrição" / "Atendimento realizado" (novo, antigo lido e finalizado), recolhido. Com `direta` (a Descrição dos cartões do F5) o texto fica à mostra
-   * (3 linhas, `Ver tudo →` abre o resto): o `details` fica sempre aberto e o `summary` vira só o rótulo, sem alternar. A cópia só leitura da janela Chamado × OS não usa `direta`. */
+   * e inteiro, sem corte nem botão de expandir: o `details` fica sempre aberto e o `summary` vira só o rótulo, sem alternar. A cópia só leitura da janela Chamado × OS não usa `direta`. */
   /**
    * Senha do chamado (exceção de LGPD autorizada em 19/11/2026): só o botão fica na tela; o valor vem do servidor no clique
    * e sai do DOM ao ocultar, para nenhuma leitura da página (snapshot de automação inclusive) vê-lo sem a pessoa pedir.
@@ -694,18 +694,6 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     detalhe.className += " sebrae-chamado__texto--direto";
     resumo.setAttribute("tabindex", "-1");
     resumo.addEventListener("click", evento => evento.preventDefault());
-    const ver = document.createElement("button");
-    ver.type = "button";
-    ver.className = "sebrae-ver-tudo";
-    ver.textContent = "Ver tudo →";
-    ver.setAttribute("aria-expanded", "false");
-    ver.addEventListener("click", () => {
-      const tudo = ver.getAttribute("aria-expanded") !== "true";
-      ver.setAttribute("aria-expanded", String(tudo));
-      ver.textContent = tudo ? "Ver menos" : "Ver tudo →";
-      if (tudo) detalhe.setAttribute("data-tudo", ""); else detalhe.removeAttribute("data-tudo");
-    });
-    detalhe.appendChild(ver);
     return detalhe;
   }
 
@@ -759,11 +747,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     feedback.setAttribute("role", "status");
     detalhe.append(editor, feedback);
     const mostrarEstado = () => { selo.hidden = !editada; restaurar.hidden = !editada; };
-    const verTudo = detalhe.querySelector<ElementoSebrae>(".sebrae-ver-tudo")!;
     const abrirEditor = (aberto: boolean) => {
       editor.hidden = !aberto;
       paragrafo.hidden = aberto;
-      verTudo.hidden = aberto;
       lapis.setAttribute("aria-expanded", String(aberto));
     };
     mostrarEstado();

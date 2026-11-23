@@ -13,6 +13,13 @@ const PRECO: Record<Familia, { entrada: number; saida: number; leitura: number }
 
 export const ZERO: Custos = { opus: 0, sonnet: 0, fable: 0, haiku: 0 }
 
+// Total zero devolve tudo 0, nunca NaN.
+export const porcentagens = (c: Custos): Custos => {
+  const t = c.opus + c.sonnet + c.fable + c.haiku
+  const p = (v: number) => (t > 0 ? Math.round((v / t) * 100) : 0)
+  return { opus: p(c.opus), sonnet: p(c.sonnet), fable: p(c.fable), haiku: p(c.haiku) }
+}
+
 export const familia = (model: string): Familia | undefined =>
   (Object.keys(PRECO) as Familia[]).find(f => model.includes(`-${f}-`) || model.includes(`${f}[`) || model.endsWith(f))
 

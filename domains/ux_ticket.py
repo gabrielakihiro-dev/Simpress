@@ -1,7 +1,7 @@
 """Session and history for preparing the UX "Gerar ticket" from the Transporte tab.
 
-Two kinds: "Transporte" (Atualização Cadastral with the transfer workbook attached) and "Alterar Endereço"
-(Transporte / Transferência Fisica de Equipamentos, no workbook, CNPJ, CEP or Nº interno)."""
+Two kinds (buttons swapped 23/11/2026): "Alterar Endereço" (Atualização Cadastral with the transfer workbook attached)
+and "Transporte" (Transporte / Transferência Fisica de Equipamentos, no workbook, CNPJ, CEP or Nº interno)."""
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
@@ -27,8 +27,8 @@ SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_tickets_historico.json"
 INCIDENTE = "Atualização Cadastral"
 MOTIVO = "Alteração de Endereço ou Razão Social"
-TIPO_ATUALIZACAO = "atualizacao"  # button "Transporte" (workbook + Atualização Cadastral)
-TIPO_ENDERECO = "endereco"  # button "Alterar Endereço"
+TIPO_ATUALIZACAO = "atualizacao"  # button "Alterar Endereço" (workbook + Atualização Cadastral)
+TIPO_ENDERECO = "endereco"  # button "Transporte" (série only)
 # Incidente and Motivo per kind, exact UX labels ("Fisica" without accent, as the portal lists it).
 ESCOLHAS = {
     TIPO_ATUALIZACAO: (INCIDENTE, MOTIVO),
@@ -278,7 +278,7 @@ class TicketsUX:
             }
 
     def preparar_alterar_endereco(self, *, serial: str, conferido: bool = False) -> dict[str, Any]:
-        """"Alterar Endereço": Transporte / Transferência Fisica in the UX; no workbook, CNPJ, CEP or address choice."""
+        """"Transporte" button: Transporte / Transferência Fisica in the UX; no workbook, CNPJ, CEP or address choice."""
         serial = serial.strip().upper()
         exigir_dados_cliente()
         aba = f"simpress-gerar-ticket-{uuid4().hex}"
@@ -366,7 +366,7 @@ class TicketsUX:
             raise ErroUX(422, f"O Nº do chamado interno aceita até {CHAMADO_INTERNO_MAX} caracteres.")
         sessao = self._sessao_valida(session_id, serial)
         if sessao.tipo == TIPO_ENDERECO:
-            interno = ""  # "Alterar Endereço" never fills the Nº do chamado interno
+            interno = ""  # the "Transporte" button never fills the Nº do chamado interno
         if sessao.endereco is None:
             raise ErroUX(409, "Escolha o endereço em Meus Endereços antes de continuar.", codigo="endereco_ambiguo")
         formulario = Formulario(

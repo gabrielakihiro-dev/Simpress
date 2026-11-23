@@ -2,6 +2,9 @@ import * as modelo from "./chamados-os.ts";
 import type { Janela, Qualquer, Registro } from "./tipos";
 import { formatNumber, orderKey, pluralize, serialKey } from "./utilitarios.ts";
 
+// Criado uma vez: localeCompare com opções remonta as regras de idioma a cada comparação da ordenação.
+export const collatorOs = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
 // Tabela de OS do Cockpit (F6), montada em Chamados via montarTabelaOs. Porta fiel do bloco "tabela de OS" de
 // data-panels.js (legado, removido): o estado (seções montadas, pedidos em andamento) vive só dentro da fábrica.
 export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, className?: string, text?: string) => Qualquer) {
@@ -560,7 +563,7 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
         if (a !== b) return a > b ? -1 : 1;
       } else if (leftDigits && !rightDigits) return -1;
       else if (!leftDigits && rightDigits) return 1;
-      return right.os.localeCompare(left.os, "pt-BR", { numeric: true, sensitivity: "base" })
+      return collatorOs.compare(right.os, left.os)
         || left.fonte.localeCompare(right.fonte, "pt-BR");
     };
     return rows.sort(compareOrder);

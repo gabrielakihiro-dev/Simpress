@@ -26,7 +26,7 @@ class PrepararTicketPayload(TransferenciaPayload):
 
 
 class PrepararAlterarEnderecoPayload(SeriePayload):
-    """"Alterar Endereço": only the série; no workbook, CNPJ or CEP (the Registro text comes in /enviar)."""
+    """"Transporte" button: only the série; no workbook, CNPJ or CEP (the Registro text comes in /enviar)."""
     conferido: StrictBool = False
 
 

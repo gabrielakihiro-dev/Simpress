@@ -24,7 +24,7 @@ export function DialogoTicketUX() {
   useLayoutEffect(() => { registro.current?.setAttribute("aria-invalid", String(invalido)); });
   return (
     <div className="ck-dialogo">
-      <h3 id="titulo-ticket-ux" className="text-base font-bold">{endereco ? "Alterar Endereço no UX" : "Gerar ticket no UX"}</h3>
+      <h3 id="titulo-ticket-ux" className="text-base font-bold">{endereco ? "Gerar ticket no UX" : "Alterar Endereço no UX"}</h3>
       <p id="ux-ticket-status" role="status" aria-live="polite"><strong id="ux-ticket-estado">{s.estadoTitulo}</strong><span id="ux-ticket-status-detalhe">{s.estadoDetalhe}</span></p>
       <p id="ux-ticket-erro" className="ux-ticket-erro" role="alert" hidden={!s.erro}>{s.erro}</p>
       <p id="ux-ticket-ultimo-envio" className="ux-ticket-aviso" hidden={!s.avisoUltimoEnvio}>{s.avisoUltimoEnvio}</p>
