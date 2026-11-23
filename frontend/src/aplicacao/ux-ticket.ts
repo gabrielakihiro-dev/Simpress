@@ -1,5 +1,5 @@
 /**
- * Transporte (F2): depois de "Transporte" (planilha) ou "Alterar Endereço" (série + endereços), prepara o "Gerar ticket"
+ * Transporte (F2): depois de "Alterar Endereço" (planilha) ou "Transporte" (série + endereços), prepara o "Gerar ticket"
  * do UX e simula ou confirma o envio.
  * Migrado para React no Dia 3 (G7): o modal vive em frontend/src/paineis/ux-ticket/.
  * Este módulo é só a ponte que mantém as ações publicadas em window (frontend/src/aplicacao/app.ts) e o evento que abre o ticket.

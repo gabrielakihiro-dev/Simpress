@@ -34,7 +34,7 @@ interface Dados {
 
 interface Envio { status: string; ticket?: unknown; mensagem?: string }
 
-// Corpo enviado ao /preparar (payload do evento simpress:transfer-generated + CEP) ou só a série (Alterar Endereço).
+// Corpo enviado ao /preparar (payload do evento simpress:transfer-generated + CEP) ou só a série (botão Transporte).
 type Corpo = { serial: string } & Record<string, unknown>;
 
 interface Pedido {
@@ -254,10 +254,11 @@ async function preparar(pedido: Pedido, conferido: boolean) {
   }
 }
 
-// Zera o modal para o pedido novo. "Transporte": Registro padrão = "Texto para Transporte" do F2; "Alterar Endereço":
-// texto próprio; vazio sem os dois endereços. "Alterar Endereço" nunca manda o Nº de chamado interno.
+// Zera o modal para o pedido novo. Botão "Transporte" (tipo ENDERECO): Registro padrão = "Texto para Transporte" do F2;
+// botão "Alterar Endereço" (planilha): texto de alteração de endereço; vazio sem os dois endereços. O tipo ENDERECO nunca
+// manda o Nº de chamado interno.
 function limparModal(payload: { serial?: string }, tipo: TipoTicket) {
-  const texto = tipo === ENDERECO ? app().montarTextoAlterarEndereco?.() : app().montarTextoSolicitacaoTransporte?.();
+  const texto = tipo === ENDERECO ? app().montarTextoSolicitacaoTransporte?.() : app().montarTextoAlterarEndereco?.();
   mudar({
     tipo, resumo: { ...RESUMO_VAZIO, serie: payload.serial || "—" }, avisoUltimoEnvio: "", ambiguo: false, opcoes: [], enderecoEscolhido: "",
     registro: texto?.texto || "", nome: "", email: "", telefone: "", chamadoInterno: "", erro: "",
@@ -315,12 +316,12 @@ export async function prepararTicketUX(payload?: { serial?: string } & Record<st
   }
 }
 
-// Botão "Alterar Endereço": só a série e os dois endereços; nunca chama /api/gerar-planilha.
+// Botão "Transporte" (#btn-alterar-endereco, nome antigo): só a série e os dois endereços; nunca chama /api/gerar-planilha.
 export function alterarEnderecoTicketUX() {
   const serial = app().serialAlterarEndereco?.();
   const { aviso } = app().montarTextoAlterarEndereco?.() || { aviso: "Não foi possível montar o texto do Registro." };
   if (!serial || aviso) {
-    app().showToast(serial ? String(aviso) : "Pesquise e selecione o equipamento antes de alterar o endereço.", "warning");
+    app().showToast(serial ? String(aviso) : "Pesquise e selecione o equipamento antes de preparar o Transporte.", "warning");
     return;
   }
   void prepararTicketUX({ serial }, ENDERECO);
