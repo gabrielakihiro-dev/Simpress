@@ -552,8 +552,13 @@ def antigos_consulta():
     return {"em_andamento": st["rodando"], "resultado": st["resultado"]}
 
 
+SENHA_NUMERO, SENHA_FICTICIA = "UTIC-2026-1378", "Ficticia#2026"
+
+
 def sebrae_novos_payload():
     dados = json.loads(json.dumps(SEBRAE_NOVOS_FIXTURE))
+    for item in dados["novos"]["formulario"]:
+        item["tem_credencial"] = item["numero"] == SENHA_NUMERO  # só o sinal; o valor vem de .../credenciais
     if antigos_state["cenario"] == "leitura":
         dados["importado"]["abertos"] += json.loads(json.dumps(ANTIGOS_EXTRAS))
         if antigos_state["lido"]:
@@ -899,6 +904,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"estado": "livre"})
         elif path == "/api/sebrae/novos":
             self.send(sebrae_novos_payload())
+        elif path.startswith("/api/sebrae/chamados/") and path.endswith("/credenciais"):  # senha fictícia, só no clique
+            numero = unquote(path.split("/")[4])
+            self.send({"numero": numero, "credenciais": [SENHA_FICTICIA] if numero == SENHA_NUMERO else []})
         elif path == "/api/sebrae/finalizar-softexpert":
             self.send(finalizar_consulta())
         elif path == "/api/sebrae/dashboard/conflitos":

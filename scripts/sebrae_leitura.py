@@ -3,6 +3,7 @@
 Só leitura, com uma exceção: a confirmação de associar o chamado ao usuário (botão Sim) que o SoftExpert
 pede ao abrir o formulário é aceita por ``sebrae_softexpert.extrair_chamado``. Entrada: ``data/state/sebrae_dashboard_existentes.json`` (coluna C do Dashboard importado no site).
 Saída: ``data/state/sebrae_novos.json`` (CPF e senhas já mascarados), que a tela do site mostra como formulário.
+As senhas achadas vão só para ``data/state/sebrae_credenciais.json`` (``domains/sebrae_credenciais.py``; exceção autorizada em 19/11/2026).
 Depois dos novos, lê também os antigos em aberto com UTIC que ainda não estão em ``sebrae_antigos_softexpert.json``
 (cache incremental, mascarado; título, descrição etc. para a tela Chamados).
 Nada mais é gravado no SoftExpert nem no Excel; o chamado de cada leitura é fechado sem salvar. Ver
@@ -22,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from domains import sebrae_historico, sebrae_novos  # noqa: E402
+from domains import sebrae_credenciais, sebrae_historico, sebrae_novos  # noqa: E402
 from domains.sebrae_chamados import ChamadoSoftExpert, chave_do_numero  # noqa: E402
 from domains.sebrae_dashboard import triar_novos  # noqa: E402
 from scripts import sebrae_softexpert  # noqa: E402
@@ -82,6 +83,16 @@ def _registrar_busca(historico: Path, triagem: Any, lidos: List[ChamadoSoftExper
         log(f"Histórico não gravado ({type(erro).__name__}).")
 
 
+def _guardar_credenciais(state_dir: Path, chamado: ChamadoSoftExpert, log: Any) -> None:
+    """Senhas do chamado para o botão "Mostrar senha" do F5; uma falha aqui nunca derruba a leitura (log só do tipo)."""
+    try:
+        sebrae_credenciais.guardar(
+            state_dir, chamado.numero, chamado.titulo, chamado.descricao, chamado.detalhes_atendimento_realizado
+        )
+    except Exception as erro:  # noqa: BLE001 - never log the value
+        log(f"{chamado.numero}: senha não guardada ({type(erro).__name__}).")
+
+
 def _antigos_a_ler(existentes: Any, cache: Any) -> "tuple[List[str], int, int]":
     """(UTIC still without cache, rows without UTIC, already cached); ``linha:<n>`` and legacy numbers have no UTIC."""
     chaves: List[str] = []
@@ -135,6 +146,7 @@ def executar(
                 log(f"{numero}: não lido ({resultado}).")
             else:
                 lidos.append(resultado)
+                _guardar_credenciais(state_dir, resultado, log)
                 log(f"{numero}: lido.")
             # Saved after each ticket: a cancel or a crash keeps what was already read.
             sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
@@ -196,6 +208,7 @@ def executar_antigos(
                     log(f"{numero}: antigo não lido ({lido}).")
                 else:
                     sebrae_novos.salvar_antigo(destino, lido, rotinas.agora_iso())
+                    _guardar_credenciais(state_dir, lido, log)
                     resultado["lidos"].append(numero)
                     log(f"{numero}: antigo lido.")
             except Exception as erro:  # noqa: BLE001 - one old ticket never stops the others; log only the type

@@ -76,6 +76,7 @@ export interface DialogoConfirmacao {
 export interface AppSebrae {
   apiFetch(url: string, opcoes?: Omit<ApiFetchOptions, "responseType">): Promise<Registro>;
   showToast(mensagem: string, tipo?: string): void;
+  copiarTextoParaAreaTransferencia(texto: string): Promise<unknown>;
   confirmarAcao(dialogo: DialogoConfirmacao): Promise<boolean | null>;
   abrirJanelaChamadoOs?: (alvo: { chamado: string; serie: unknown; os: unknown }, origem: ElementoSebrae) => unknown;
   atualizarEstadoAutomacao?: () => void;

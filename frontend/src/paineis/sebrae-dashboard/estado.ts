@@ -632,6 +632,58 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
 
   /** Bloco "Descrição" / "Atendimento realizado" (novo, antigo lido e finalizado), recolhido. Com `direta` (a Descrição dos cartões do F5) o texto fica à mostra
    * (3 linhas, `Ver tudo →` abre o resto): o `details` fica sempre aberto e o `summary` vira só o rótulo, sem alternar. A cópia só leitura da janela Chamado × OS não usa `direta`. */
+  /**
+   * Senha do chamado (exceção de LGPD autorizada em 19/11/2026): só o botão fica na tela; o valor vem do servidor no clique
+   * e sai do DOM ao ocultar, para nenhuma leitura da página (snapshot de automação inclusive) vê-lo sem a pessoa pedir.
+   */
+  function blocoSenha(numero: string) {
+    const bloco = document.createElement("div");
+    bloco.className = "sebrae-senha";
+    bloco.setAttribute("role", "group");
+    bloco.setAttribute("aria-label", "Senha do chamado");
+    const botao = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm sebrae-senha__mostrar", "Mostrar senha");
+    botao.type = "button";
+    botao.setAttribute("aria-expanded", "false");
+    const lista = document.createElement("ul");
+    lista.className = "sebrae-senha__lista";
+    const ocultar = () => {
+      lista.replaceChildren();
+      botao.textContent = "Mostrar senha";
+      botao.setAttribute("aria-expanded", "false");
+    };
+    botao.addEventListener("click", async () => {
+      if (botao.getAttribute("aria-expanded") === "true") return ocultar();
+      botao.disabled = true;
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "credenciais"), { errorMessage: "Não foi possível consultar a senha do chamado." });
+        const valores: string[] = Array.isArray(dados?.credenciais) ? dados.credenciais.map(String) : [];
+        if (!valores.length) {
+          app.showToast(`${numero}: nenhuma senha guardada.`, "warning");
+          return;
+        }
+        lista.replaceChildren(...valores.map(valor => {
+          const linha = document.createElement("li");
+          const copiar = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm sebrae-senha__copiar", "Copiar");
+          copiar.type = "button";
+          copiar.addEventListener("click", async () => {
+            await app.copiarTextoParaAreaTransferencia(valor);
+            app.showToast("Senha copiada.", "success");
+          });
+          linha.append(dom.createTextElement("code", "sebrae-senha__valor", valor), " ", copiar);
+          return linha;
+        }));
+        botao.textContent = "Ocultar senha";
+        botao.setAttribute("aria-expanded", "true");
+      } catch (error) {
+        app.showToast((error as Error).message, "error");
+      } finally {
+        botao.disabled = false;
+      }
+    });
+    bloco.append(botao, lista);
+    return bloco;
+  }
+
   function blocoDetalhe(rotulo: string, texto: string, direta = false) {
     const detalhe = document.createElement("details");
     detalhe.className = "sebrae-chamado__texto";
@@ -878,6 +930,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         notas.push(dica);
       }
     }
+    if (item.tem_credencial) detalhes.push(blocoSenha(item.numero));
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
     return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,
@@ -976,6 +1029,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       marcarDescricaoEditada(item, resposta);
       item.linha = { ...item.linha, H: resposta.descricao };
     }), blocoDetalhe("Atendimento realizado", item.linha.F)];
+    if (item.tem_credencial) detalhes.push(blocoSenha(item.numero));
     const manuais = document.createElement("div");
     manuais.className = "sebrae-chamado__manuais";
     manuais.appendChild(campoTitulo(item.numero));

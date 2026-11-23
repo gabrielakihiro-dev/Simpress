@@ -14,6 +14,7 @@ export function montar(_container: HTMLElement) {
   const app: AppSebrae = {
     apiFetch: (url, opcoes) => apiFetch<Registro>(url, opcoes),
     showToast: (mensagem, tipo) => janela.showToast(mensagem, tipo),
+    copiarTextoParaAreaTransferencia: texto => janela.copiarTextoParaAreaTransferencia(texto),
     confirmarAcao: dialogo => janela.confirmarAcao(dialogo),
     atualizarEstadoAutomacao: () => janela.atualizarEstadoAutomacao?.(),
     carregarResumoHistoricoSebrae: () => janela.carregarResumoHistoricoSebrae?.(),

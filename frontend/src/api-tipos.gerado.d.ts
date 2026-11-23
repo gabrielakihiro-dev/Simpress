@@ -1473,6 +1473,11 @@ export interface Rotas {
     corpo: never;
     resposta: unknown;
   };
+  "GET /api/sebrae/chamados/{numero}/credenciais": {
+    consulta: never;
+    corpo: never;
+    resposta: unknown;
+  };
   "PUT /api/sebrae/chamados/{numero}/descricao": {
     consulta: never;
     corpo: DescricaoEditadaPayload;
