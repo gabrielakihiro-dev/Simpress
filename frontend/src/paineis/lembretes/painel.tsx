@@ -1,7 +1,7 @@
 // Painel Lembretes e Termos (F-ferramentas): abas Termo Entrega, Termo Devolução e Lembretes, com o mesmo DOM do painel
 // antigo (ids, classes, ARIA, info-tips e textos aprovados). O estado fica em estado.ts, fora do componente, porque a
 // Home preenche o termo a partir da busca de série mesmo com este painel fechado ou ainda não desenhado.
-import { useSyncExternalStore, type ReactNode } from "react";
+import { memo, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { IconeCalendario, IconeSprite } from "./componentes";
 import { DialogoCriar, DialogoExcluir } from "./dialogos";
 import { assinar, ler, type AbaPainel, type Estado } from "./estado";
@@ -15,8 +15,7 @@ import type { NomeTermo } from "./termos-puro";
 
 const ROTULOS_TERMO: Record<NomeTermo, string> = { entrega: "Termo Entrega", devolucao: "Termo Devolução" };
 
-function Aba({ nome, estado, children }: { nome: AbaPainel; estado: Estado; children: ReactNode }) {
-  const ativa = estado.aba === nome;
+const Aba = memo(function Aba({ nome, ativa, children }: { nome: AbaPainel; ativa: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -31,7 +30,7 @@ function Aba({ nome, estado, children }: { nome: AbaPainel; estado: Estado; chil
       {children}
     </button>
   );
-}
+});
 
 function Atalho({ id, rotulo, nome, ativo }: { id: string; rotulo: string; nome: string; ativo: boolean }) {
   return (
@@ -99,15 +98,18 @@ export function Painel() {
   const estado = useSyncExternalStore(assinar, ler);
   // O dia é recalculado a cada desenho: "Hoje" e os atrasados acompanham a virada do dia sem recarregar a página.
   const hoje = hojeEm();
-  const lista = derivarLista(estado.lembretes, hoje, estado.vista, estado.semanaAtual);
+  const lista = useMemo(
+    () => derivarLista(estado.lembretes, hoje, estado.vista, estado.semanaAtual),
+    [estado.lembretes, hoje, estado.vista, estado.semanaAtual],
+  );
   const vazio = !estado.renderizado || estado.lembretes.length > 0;
   return (
     <>
       <h2 id="lembretes-heading" className="sr-only">Lembretes</h2>
       <div className="ck-pilulas termos__abas" role="tablist" aria-label="Lembretes" onKeyDown={(e) => teclaAba(e)}>
-        <Aba nome="entrega" estado={estado}>Termo Entrega</Aba>
-        <Aba nome="devolucao" estado={estado}>Termo Devolução</Aba>
-        <Aba nome="lembretes" estado={estado}>
+        <Aba nome="entrega" ativa={estado.aba === "entrega"}>Termo Entrega</Aba>
+        <Aba nome="devolucao" ativa={estado.aba === "devolucao"}>Termo Devolução</Aba>
+        <Aba nome="lembretes" ativa={estado.aba === "lembretes"}>
           Lembretes{" "}
           <span className="ck-pilula__n" id="lembretes-pendentes">{String(lista.pendentes)}</span>
           <span className="sr-only"> pendentes</span>
@@ -143,10 +145,10 @@ export function Painel() {
                 <span className="lembretes__vazio-ico" aria-hidden="true"><IconeSprite nome="check" /></span>
                 <span>Nenhum lembrete.</span>
               </p>
-              <Vistas lista={lista} hoje={hoje} estado={estado} />
-              <Semana hoje={hoje} estado={estado} />
-              <Grupos lista={lista} hoje={hoje} estado={estado} />
-              <Concluidos lista={lista} hoje={hoje} estado={estado} />
+              <Vistas lista={lista} hoje={hoje} vista={estado.vista} />
+              <Semana hoje={hoje} vista={estado.vista} semanaAtual={estado.semanaAtual} />
+              <Grupos lista={lista} hoje={hoje} vista={estado.vista} editandoId={estado.editandoId} edicao={estado.edicao} termosAbertos={estado.termosAbertos} />
+              <Concluidos lista={lista} hoje={hoje} concluidosAbertos={estado.concluidosAbertos} editandoId={estado.editandoId} edicao={estado.edicao} termosAbertos={estado.termosAbertos} />
             </div>
           </div>
         </div>
