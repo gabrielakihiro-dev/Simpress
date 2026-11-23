@@ -5,6 +5,8 @@ import type { OsNova, OsSemRelacao, TextosOs } from "./tipos";
 
 export const DESCRICAO_INDISPONIVEL = "Descrição não disponível";
 export const SELO_OS_NOVA = "OS nova?";
+/** Selo da linha enquanto o aviso "OS sem relação" espera Manter ou Remover (23/11/2026). */
+export const SELO_OS_SEM_RELACAO = "OS sem relação?";
 export const URL_VINCULOS_OS = "/api/operacoes/chamados/vinculos-os";
 
 /** Só `sugestao` e `sem_os` esperam decisão; `troca` já foi feita pelo servidor e só mostra a nota verde. */
@@ -69,7 +71,8 @@ export const corpoRecusar = (osNova: OsNova) => ({ os: osNova.nova.os });
 export const corpoAceitar = (osNova: OsNova) => ({ ...osNova.aceitar });
 
 // ---- Aviso "OS sem relação" (`abertos[].os_sem_relacao`, 18/11/2026): a OS que já está na coluna E não combina com o chamado.
-// Visual escolhido em 19/11/2026: opção A do artefato Novo layout (quadro NL-F5-OS-SemRelacao), sem confirmação e sem selo na linha.
+// Visual escolhido em 19/11/2026: opção A do artefato Novo layout (quadro NL-F5-OS-SemRelacao), sem confirmação. Desde 23/11/2026 a linha
+// ganha o selo "OS sem relação?" e o cartão rosa enquanto a decisão espera (opção C, Rosa).
 
 export const tituloSemRelacao = (aviso: OsSemRelacao) => `OS da coluna E sem relação com este chamado: ${aviso.atual.os}`;
 export const EXPLICACAO_SEM_RELACAO = "A OS não cita o número do chamado, tem outro assunto e é anterior à abertura. Mantenha a OS ou remova-a da coluna E.";

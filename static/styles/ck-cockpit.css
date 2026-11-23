@@ -1592,7 +1592,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-osnova-campo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
 .sebrae-osnova-campo__legenda { color: var(--cor-texto-mudo); font-size: var(--fs-base); }
 .sebrae-osnova-campo__os { padding: 1px 6px; border-radius: var(--raio-sm); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); font-weight: var(--peso-marca); }
-.sebrae-selo-os-nova { border: 1px solid color-mix(in srgb, var(--cor-destaque) 45%, transparent); font-weight: var(--peso-marca); }
+/* Selos "OS nova?" e "OS sem relação?": rosa da decisão pendente (tokens em nl-base.css); `.ck-badge.` vence o roxo de `[data-status="info"]`. */
+.ck-badge.sebrae-selo-os-decidir { border: 1px solid var(--cor-decidir-borda); background: var(--cor-decidir-selo-fundo); color: var(--cor-decidir-selo-texto); font-weight: var(--peso-marca); }
 .sebrae-osnova { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--cor-destaque) 35%, var(--cor-superficie)); border-radius: var(--raio-lg); background: color-mix(in srgb, var(--cor-destaque-fundo) 45%, var(--cor-superficie)); }
 .sebrae-osnova__texto { display: flex; flex-direction: column; gap: 2px; }
 .sebrae-osnova__titulo { margin: 0; color: var(--cor-destaque-texto); font-size: var(--fs-lg); font-weight: var(--peso-marca); overflow-wrap: anywhere; }
