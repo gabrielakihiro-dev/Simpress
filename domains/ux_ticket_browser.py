@@ -322,7 +322,7 @@ class PortalTicketUXChrome:
         return self._com_contingencia(page, aba, lambda: self._ate_enderecos(page, serial, aba, cep))
 
     def preparar_transferencia(self, serial: str, aba: str) -> str:
-        """"Alterar Endereço": stop after Transporte / Transferência Fisica; return the model."""
+        """"Transporte" button: stop after Transporte / Transferência Fisica; return the model."""
         page = self._vigiar(self._contexto.new_page())
         page.bring_to_front()
         return self._com_contingencia(page, aba, lambda: self._ate_motivo(page, serial, aba, TIPO_ENDERECO))
@@ -372,7 +372,7 @@ class PortalTicketUXChrome:
 
     def _preencher_campos(self, page: Any, formulario: Formulario) -> None:
         """CNPJs → Registro → anexo → solicitante → Nº interno; stops before Finalizar.
-        Transferência Fisica ("Alterar Endereço") has no CNPJ fields and goes without attachment or Nº interno."""
+        Transferência Fisica (button "Transporte") has no CNPJ fields and goes without attachment or Nº interno."""
         atualizacao = formulario.tipo == TIPO_ATUALIZACAO
         self._passo(page, "Aviso de backup", lambda: _fechar_aviso_backup(page))
         self._passo(page, "Incidente, motivo e endereço",

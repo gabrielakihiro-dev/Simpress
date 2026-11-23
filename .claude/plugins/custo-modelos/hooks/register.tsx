@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import { custo, ZERO } from './precos'
+import { custo, porcentagens, ZERO } from './precos'
 
 const custos = atom({ plugin: 'custo-modelos', key: 'custos' } as const, ZERO)
 
@@ -20,13 +20,14 @@ export const register: Register = on => {
     // A faixa do Ponytail divide o espaço: a linha dela vem antes, a nossa logo abaixo.
     const acima = await next(e).catch(() => undefined)
     const x = { ...ZERO, ...(await read($, custos)) }
+    const pct = porcentagens(x)
     const { Box, Text } = $.ui.resolve(e)
     const linha = (
       <Box flexDirection="row" gap={2}>
         <Text dimColor>custo por modelo</Text>
         {(Object.keys(ROTULO) as (keyof typeof ROTULO)[]).map(f => (
           <Text key={f} dimColor={x[f] === 0}>
-            {ROTULO[f]} ${x[f].toFixed(2)}
+            {ROTULO[f]} ${x[f].toFixed(2)} ({pct[f]}%)
           </Text>
         ))}
       </Box>

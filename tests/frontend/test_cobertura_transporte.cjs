@@ -319,7 +319,7 @@ test("localStorage que lança erro ou guarda lixo não quebra o vínculo", async
   assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
 });
 
-test("Alterar Endereço: texto com os endereços reais e botão aceso só com série e os dois endereços", () => {
+test("Alterar Endereço: texto com os endereços reais; botão Transporte (#btn-alterar-endereco) aceso só com série e os dois endereços", () => {
   const env = bootTransferForm();
   const botao = env.document.getElementById("btn-alterar-endereco");
   env.document.getElementById("retirada-endereco").value = "Rua Retirada, 10";

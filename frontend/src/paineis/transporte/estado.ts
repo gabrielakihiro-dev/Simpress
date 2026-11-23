@@ -716,8 +716,8 @@ export function criarFormularioTransferencia(context: ContextoTransferencia) {
     return { texto: `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}` };
   }
 
-  // "Alterar Endereço" (ux-ticket.js): only the série and both addresses; no representative, phone, e-mail or workbook.
-  // Short form, from the Retirada city to the Entrega city.
+  // Registro of the "Alterar Endereço" button (workbook + Atualização Cadastral); short form, Retirada city to Entrega city.
+  // Also gates the "Transporte" button (#btn-alterar-endereco): série and both addresses, no workbook.
   function montarTextoAlterarEndereco(): TextoGerado {
     const retiradaEndereco = elemento("retirada-endereco").value.trim();
     const entregaEndereco = elemento("entrega-endereco").value.trim();
