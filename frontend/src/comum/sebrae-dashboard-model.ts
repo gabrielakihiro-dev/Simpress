@@ -318,6 +318,15 @@ export function limparValoresRascunho(bruto: Qualquer): Qualquer {
 
 export const PREFIXO_CAMPO = `${CHAVE_RASCUNHO}:campo:`;
 
+/**
+ * Uma chave fixa por campo: a última gravação vence e o armazenamento não cresce a cada tecla.
+ * `linha:<n>` só vale na importação em que nasceu, por isso leva a versão na chave (uma aba antiga não sobrescreve a nova).
+ * shortcut: chaves de chamados UTIC já finalizados ficam até o "Descartar rascunho" (uma por campo); limpar por chamado se isso crescer.
+ */
+function chaveCampo(importadoEm: Qualquer, numero: Qualquer, campo: Qualquer): string {
+  return NUMERO_UTIC.test(String(numero)) ? `${PREFIXO_CAMPO}${numero}:${campo}` : `${PREFIXO_CAMPO}${importadoEm}:${numero}:${campo}`;
+}
+
 /** Eventos separados por campo evitam que uma aba substitua o rascunho inteiro de outra. */
 export function lerRascunho(armazenamento: Qualquer, importadoEm: Qualquer): Qualquer {
   const vazio: Qualquer = { valores: {}, edicoes: {}, salvoEm: "" };
@@ -342,10 +351,15 @@ export function lerRascunho(armazenamento: Qualquer, importadoEm: Qualquer): Qua
       } catch (_erro) { /* um registro danificado não oculta os demais */ }
     }
     registros.sort((a, b) => a.em.localeCompare(b.em) || (Number(a.instante) || 0) - (Number(b.instante) || 0) || a.chave.localeCompare(b.chave));
+    const apagar: string[] = [];
+    const grupos = new Map<string, Qualquer[]>(); // chave fixa -> registros válidos, do mais antigo ao mais novo
     registros.forEach(registro => {
-      if (registro.importado_em !== importadoEm && !NUMERO_UTIC.test(registro.numero)) return;
+      if (registro.importado_em !== importadoEm && !NUMERO_UTIC.test(registro.numero)) { apagar.push(registro.chave); return; }
       const campos = limparValoresRascunho({ [registro.numero]: { [registro.campo]: registro.valor } });
-      if (!campos[registro.numero]) return;
+      if (!campos[registro.numero]) { apagar.push(registro.chave); return; } // nunca é lido: apagar não perde nada
+      const fixa = chaveCampo(registro.importado_em, registro.numero, registro.campo);
+      if (!grupos.has(fixa)) grupos.set(fixa, []);
+      grupos.get(fixa)!.push(registro);
       const alvo = registro.alvo === "antigo" ? "edicoes" : "valores";
       // Um chamado pode ter passado de novo para antigo na reimportação.
       ["valores", "edicoes"].forEach(tipo => {
@@ -355,16 +369,37 @@ export function lerRascunho(armazenamento: Qualquer, importadoEm: Qualquer): Qua
       saida.origens[registro.numero] = { ...saida.origens[registro.numero], [registro.campo]: registro.importado_em };
       saida.salvoEm = registro.em;
     });
+    limparRegistrosCampo(armazenamento, apagar, grupos);
     return saida;
   } catch (_erro) { return vazio; }
+}
+
+/**
+ * Apaga registros de outra importação sem UTIC e migra as chaves antigas (uma por tecla, com data) para a chave fixa.
+ * Com a cota cheia, as perdedoras saem antes da gravação; a antiga vencedora só sai depois que a nova foi gravada.
+ * Uma falha aqui nunca esconde o rascunho já lido.
+ */
+function limparRegistrosCampo(armazenamento: Qualquer, apagar: string[], grupos: Map<string, Qualquer[]>): void {
+  const remover = (chave: string) => { try { armazenamento.removeItem(chave); } catch (_erro) { /* fica para a próxima leitura */ } };
+  apagar.forEach(remover);
+  grupos.forEach((lista, fixa) => {
+    const vencedor = lista[lista.length - 1];
+    lista.slice(0, -1).forEach(registro => { if (registro.chave !== fixa) remover(registro.chave); });
+    if (vencedor.chave === fixa) return;
+    try {
+      const valor = { ...vencedor };
+      delete valor.chave;
+      armazenamento.setItem(fixa, JSON.stringify(valor));
+    } catch (_erro) { return; } // sem espaço: a chave antiga continua e é lida de novo
+    remover(vencedor.chave);
+  });
 }
 
 export function gravarCampoRascunho(armazenamento: Qualquer, importadoEm: Qualquer, numero: Qualquer, campo: Qualquer, valor: Qualquer, alvo: Qualquer): boolean {
   if (!armazenamento || !importadoEm) return false;
   try {
     const em = new Date().toISOString();
-    const chave = `${PREFIXO_CAMPO}${em}:${Math.random().toString(36).slice(2)}`;
-    armazenamento.setItem(chave, JSON.stringify({ importado_em: importadoEm, numero, campo, valor, alvo, em, instante: performance.timeOrigin + performance.now() }));
+    armazenamento.setItem(chaveCampo(importadoEm, numero, campo), JSON.stringify({ importado_em: importadoEm, numero, campo, valor, alvo, em, instante: performance.timeOrigin + performance.now() }));
     return true;
   } catch (_erro) { return false; }
 }

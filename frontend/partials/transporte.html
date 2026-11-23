@@ -294,28 +294,30 @@
             </div>
           </div>
 
+          <!-- Transporte (23/11/2026): só série e endereços; abre o ticket UX Transporte / Transferência Fisica, sem planilha.
+               Os ids e handlers guardam os nomes antigos de propósito (#btn-alterar-endereco = Transporte). -->
           <button
             type="button"
-            id="btn-gerar-planilha"
-            data-on-click="gerarPlanilhaExcel"
-            aria-keyshortcuts="Control+Enter"
-            title="Transporte: gera a planilha e prepara o ticket de Atualização Cadastral no UX (Ctrl+Enter)"
+            id="btn-alterar-endereco"
+            data-on-click="alterarEnderecoTicketUX"
+            title="Transporte: prepara o ticket de Transporte no UX só com a série e os endereços"
             class="ck-btn ck-btn--primario nlt-acoes__principal"
+            disabled
           >
-            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span>Transporte</span>
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Transporte</span>
           </button>
 
           <div class="nlt-acoes__par">
-            <!-- Alterar Endereço: só série e endereços; abre o ticket UX Transporte / Transferência Fisica, sem planilha. -->
+            <!-- Alterar Endereço (23/11/2026): gera a planilha e o ticket UX de Atualização Cadastral (#btn-gerar-planilha). -->
             <button
               type="button"
-              id="btn-alterar-endereco"
-              data-on-click="alterarEnderecoTicketUX"
-              title="Alterar Endereço: prepara o ticket de Transporte no UX só com a série e os endereços"
+              id="btn-gerar-planilha"
+              data-on-click="gerarPlanilhaExcel"
+              aria-keyshortcuts="Control+Enter"
+              title="Alterar Endereço: gera a planilha e prepara o ticket de Atualização Cadastral no UX (Ctrl+Enter)"
               class="ck-btn ck-btn--secundario"
-              disabled
             >
-              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Alterar Endereço</span>
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span>Alterar Endereço</span>
             </button>
             <button type="button" data-on-click="gerarTextoSolicitacaoTransporte" class="ck-btn ck-btn--secundario" title="Gerar texto de solicitação de transporte">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-text"></use></svg><span>Texto para Transporte</span>
