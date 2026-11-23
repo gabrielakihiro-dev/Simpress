@@ -1,1 +1,1 @@
-{ "name": "custo-modelos", "version": "0.1.0", "description": "Custo da sessão por modelo (Opus, Sonnet, Fable, Haiku) abaixo da faixa do Ponytail", "types": "./types/index.d.ts" }
+{ "name": "custo-modelos", "version": "0.2.0", "description": "Custo da sessão por modelo (Opus, Sonnet, Fable, Haiku) abaixo da faixa do Ponytail", "types": "./types/index.d.ts" }
