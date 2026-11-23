@@ -1,6 +1,6 @@
 // Lista de lembretes (vistas Hoje e Em breve, faixa da semana, grupos, itens, edição e Concluídos), com o mesmo DOM do
 // painel antigo. A descrição de um lembrete tem dado pessoal: só vira texto na tela, nunca log nem storage.
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 import { IconeCalendario, IconeFechar, IconeMais, IconeSprite } from "./componentes";
 import { ler, mudar, type Estado } from "./estado";
 import {
@@ -14,9 +14,12 @@ import {
 import { termosSecoesLembrete } from "./termos-puro";
 import { appAntigo, referenciasNoTexto } from "./tipos";
 
-interface PropsLista {
-  estado: Estado;
+// Cada componente recebe só o pedaço do estado que usa: assim digitar em "Novo lembrete" não redesenha a lista.
+interface PropsItens {
   hoje: string;
+  editandoId: Estado["editandoId"];
+  edicao: Estado["edicao"];
+  termosAbertos: string[];
 }
 
 // Chamado UTIC-AAAA-N e OS de 7 dígitos no texto viram botão que abre a janela Chamado × OS (só leitura); o resto fica texto puro.
@@ -180,15 +183,15 @@ function BotaoIcone({ classe, rotulo, icone, aoClicar }: { classe: string; rotul
   );
 }
 
-function Item({ l, hoje, estado }: { l: Lembrete; hoje: string; estado: Estado }) {
-  const editando = String(l.id) === String(estado.editandoId);
+const Item = memo(function Item({ l, hoje, editandoId, edicao, termosAbertos }: { l: Lembrete } & PropsItens) {
+  const editando = String(l.id) === String(editandoId);
   const classe = ["lembretes__item", l.concluido && "lembretes__item--feito", editando && "lembretes__item--editando"].filter(Boolean).join(" ");
   if (editando) {
     return (
       <li className={classe} data-lembrete-id={String(l.id)}>
         {/* Anel só visual: o item segue no lugar, como no modelo; concluir fica para depois de salvar ou cancelar. */}
         <span className="lembretes__marcar lembretes__marcar--fixo" aria-hidden="true" />
-        <Edicao l={l} edicao={estado.edicao} />
+        <Edicao l={l} edicao={edicao} />
       </li>
     );
   }
@@ -214,7 +217,7 @@ function Item({ l, hoje, estado }: { l: Lembrete; hoje: string; estado: Estado }
         <time className={l.alterado_em ? "lembretes__data lembretes__data--alterado" : "lembretes__data"} dateTime={dataExibida(l)}>
           {`${l.alterado_em ? "Alterado" : "Criado"} em ${formatarData(dataExibida(l))}`}
         </time>
-        <BlocoTermo l={l} abertos={estado.termosAbertos} />
+        <BlocoTermo l={l} abertos={termosAbertos} />
       </div>
       <div className="lembretes__acoes">
         <BotaoIcone classe="lembretes__editar" rotulo="Editar lembrete" icone="pencil" aoClicar={() => editar(l.id)} />
@@ -222,10 +225,10 @@ function Item({ l, hoje, estado }: { l: Lembrete; hoje: string; estado: Estado }
       </div>
     </li>
   );
-}
+});
 
 // Um grupo da vista: título, contagem, Reagendar (só em Atrasada), itens e + Adicionar lembrete (só nos dias).
-function Grupo({ grupo, hoje, estado }: { grupo: GrupoVista } & PropsLista) {
+const Grupo = memo(function Grupo({ grupo, ...itens }: { grupo: GrupoVista } & PropsItens) {
   const idTitulo = `lembretes-grupo-${grupo.chave}`;
   return (
     <section className="lembretes__grupo" data-grupo={grupo.chave} aria-labelledby={idTitulo}>
@@ -251,22 +254,22 @@ function Grupo({ grupo, hoje, estado }: { grupo: GrupoVista } & PropsLista) {
       </div>
       {grupo.itens.length > 0 && (
         <ul className="lembretes__lista lembretes__itens">
-          {grupo.itens.map((l) => <Item key={l.id} l={l} hoje={hoje} estado={estado} />)}
+          {grupo.itens.map((l) => <Item key={l.id} l={l} {...itens} />)}
         </ul>
       )}
     </section>
   );
-}
+});
 
-export function Grupos({ lista, hoje, estado }: { lista: ListaDerivada } & PropsLista) {
+export const Grupos = memo(function Grupos({ lista, vista, ...itens }: { lista: ListaDerivada; vista: Estado["vista"] } & PropsItens) {
   return (
-    <div className="lembretes__grupos" id="lembretes-lista" role="tabpanel" aria-labelledby={`lembretes-aba-${estado.vista}`}>
-      {lista.grupos.map((grupo) => <Grupo key={grupo.chave} grupo={grupo} hoje={hoje} estado={estado} />)}
+    <div className="lembretes__grupos" id="lembretes-lista" role="tabpanel" aria-labelledby={`lembretes-aba-${vista}`}>
+      {lista.grupos.map((grupo) => <Grupo key={grupo.chave} grupo={grupo} {...itens} />)}
     </div>
   );
-}
+});
 
-export function Concluidos({ lista, hoje, estado }: { lista: ListaDerivada } & PropsLista) {
+export const Concluidos = memo(function Concluidos({ lista, concluidosAbertos, ...itens }: { lista: ListaDerivada; concluidosAbertos: boolean } & PropsItens) {
   const total = lista.concluidos.length;
   return (
     <div className="lembretes__concluidos" id="lembretes-concluidos" hidden={total === 0}>
@@ -274,24 +277,24 @@ export function Concluidos({ lista, hoje, estado }: { lista: ListaDerivada } & P
         type="button"
         className="lembretes__recolher"
         id="lembretes-concluidos-botao"
-        aria-expanded={estado.concluidosAbertos}
+        aria-expanded={concluidosAbertos}
         aria-controls="lembretes-concluidos-lista"
         onClick={alternarConcluidos}
       >
         <IconeSprite nome="chevron-right" classe="ck-ico lembretes__seta" />
         <span id="lembretes-concluidos-rotulo">{`Concluídos (${total})`}</span>
       </button>
-      <ul className="lembretes__lista" id="lembretes-concluidos-lista" aria-label="Lembretes concluídos" hidden={!estado.concluidosAbertos}>
-        {lista.concluidos.map((l) => <Item key={l.id} l={l} hoje={hoje} estado={estado} />)}
+      <ul className="lembretes__lista" id="lembretes-concluidos-lista" aria-label="Lembretes concluídos" hidden={!concluidosAbertos}>
+        {lista.concluidos.map((l) => <Item key={l.id} l={l} {...itens} />)}
       </ul>
     </div>
   );
-}
+});
 
 // Pílulas Hoje <n> / Em breve e a navegação ‹ Hoje › (só em Em breve).
-export function Vistas({ lista, hoje, estado }: { lista: ListaDerivada } & PropsLista) {
+export const Vistas = memo(function Vistas({ lista, hoje, vista }: { lista: ListaDerivada; hoje: string; vista: Estado["vista"] }) {
   const contagemHoje = lista.agrupado.atrasados.length + (lista.agrupado.porDia.get(hoje)?.length ?? 0);
-  const embreve = estado.vista === "embreve";
+  const embreve = vista === "embreve";
   return (
     <div className="lembretes__barra">
       <div className="ck-pilulas lembretes__vistas" role="tablist" aria-label="Vistas de lembretes" onKeyDown={(e) => teclaVista(e)}>
@@ -323,18 +326,18 @@ export function Vistas({ lista, hoje, estado }: { lista: ListaDerivada } & Props
       </div>
     </div>
   );
-}
+});
 
 // ‹ Hoje › da semana (só em Em breve); no Novo layout fica ao lado do mês, dentro de Semana.
-function NavegarSemana({ estado }: { estado: Estado }) {
+function NavegarSemana({ vista, semanaAtual }: { vista: Estado["vista"]; semanaAtual: number }) {
   return (
-    <div className="lembretes__navegar" id="lembretes-navegar" hidden={estado.vista !== "embreve"}>
+    <div className="lembretes__navegar" id="lembretes-navegar" hidden={vista !== "embreve"}>
       <button
         type="button"
         className="lembretes__nav lembretes__nav--anterior"
         id="lembretes-semana-anterior"
         aria-label="Semana anterior"
-        disabled={estado.semanaAtual === 0}
+        disabled={semanaAtual === 0}
         onClick={() => mudarSemana(-1)}
       >
         <IconeSprite nome="chevron-right" />
@@ -364,17 +367,17 @@ function Dia({ data, hoje }: { data: string; hoje: string }) {
   );
 }
 
-export function Semana({ hoje, estado }: PropsLista) {
-  const dias = semanaDe(hoje, estado.semanaAtual);
+export const Semana = memo(function Semana({ hoje, vista, semanaAtual }: { hoje: string; vista: Estado["vista"]; semanaAtual: number }) {
+  const dias = semanaDe(hoje, semanaAtual);
   return (
-    <div className="lembretes__semana" id="lembretes-semana" hidden={estado.vista !== "embreve"}>
+    <div className="lembretes__semana" id="lembretes-semana" hidden={vista !== "embreve"}>
       <div className="lembretes__semana-cab">
-        <p className="lembretes__mes" id="lembretes-mes" aria-live="polite">{estado.vista === "embreve" ? tituloSemana(dias) : ""}</p>
-        <NavegarSemana estado={estado} />
+        <p className="lembretes__mes" id="lembretes-mes" aria-live="polite">{vista === "embreve" ? tituloSemana(dias) : ""}</p>
+        <NavegarSemana vista={vista} semanaAtual={semanaAtual} />
       </div>
       <div className="lembretes__faixa" id="lembretes-faixa" role="group" aria-label="Dias da semana">
-        {estado.vista === "embreve" && dias.map((d) => <Dia key={d} data={d} hoje={hoje} />)}
+        {vista === "embreve" && dias.map((d) => <Dia key={d} data={d} hoje={hoje} />)}
       </div>
     </div>
   );
-}
+});

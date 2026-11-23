@@ -1,6 +1,6 @@
 // Formulários dos termos de entrega e devolução, com o mesmo DOM do painel antigo. Os campos têm dado pessoal:
 // ficam só no estado do painel (campos de texto controlados; os rádios Sim/Não guardam a marca no DOM), nunca em log nem em storage.
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { IconeSprite, InfoTip } from "./componentes";
 import { avisar, ler, mudar, type FormTermo, type StatusTermo } from "./estado";
 import { FolhaTermo } from "./folha";
@@ -273,7 +273,7 @@ function Previa({ termo, form, status }: { termo: NomeTermo; form: FormTermo; st
   );
 }
 
-export function FormularioTermo({ termo, form, status }: { termo: NomeTermo; form: FormTermo; status: StatusTermo }) {
+export const FormularioTermo = memo(function FormularioTermo({ termo, form, status }: { termo: NomeTermo; form: FormTermo; status: StatusTermo }) {
   const entrega = termo === "entrega";
   const campos = CAMPOS_COLABORADOR[termo];
   // Devolução: nome, unidade e data na primeira linha; modelo e série na segunda. Entrega: uma linha só.
@@ -337,4 +337,4 @@ export function FormularioTermo({ termo, form, status }: { termo: NomeTermo; for
       </div>
     </form>
   );
-}
+});
