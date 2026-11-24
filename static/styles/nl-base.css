@@ -29,6 +29,9 @@
   --nl-sombra-janela: 0 24px 64px rgba(0, 0, 0, .35);
   --nl-veu: rgba(7, 8, 13, .45);
 }
+/* Decisão de OS pendente no F5 (cartão e selo rosa, opção C aprovada em 23/11/2026); o texto do selo passa de 4,5:1 sobre o fundo do selo. */
+:root { --cor-decidir-fundo: #fdf0f7; --cor-decidir-borda: #eebad6; --cor-decidir-selo-fundo: #fbdaea; --cor-decidir-selo-texto: #8e1a5a; }
+:root[data-theme="dark"] { --cor-decidir-fundo: #1c0f1b; --cor-decidir-borda: #6e2559; --cor-decidir-selo-fundo: #451a3a; --cor-decidir-selo-texto: #fbb3dc; }
 /* Acento de uma peça: data-nl-tom troca o trio e a cor do texto; sem ele, cada peça cai no indigo (fallback do var()). */
 [data-nl-tom="ciano"] { --nl-ac: var(--nl-c); --nl-actx: var(--nl-ctx); }
 [data-nl-tom="esmeralda"] { --nl-ac: var(--nl-e); --nl-actx: var(--nl-etx); }

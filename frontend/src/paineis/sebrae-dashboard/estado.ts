@@ -3,7 +3,7 @@
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
 // montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID.
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
-import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA } from "./sugestao-os-modelo.ts";
+import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
 export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
@@ -816,12 +816,24 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     return selo;
   }
 
-  /** Selo `OS nova?` da linha recolhida: só enquanto a sugestão espera decisão (a troca automática já foi feita e não ganha selo). */
-  function seloOsNova(item: Registro) {
-    if (!pedeDecisao(item.os_nova) || context.sugestaoOs?.temDecisao(item.numero)) return null;
-    const selo = dom.createTextElement("span", "ck-badge sebrae-selo sebrae-selo-os-nova", SELO_OS_NOVA);
+  /**
+   * Decisão de OS que o chamado espera (cartão rosa, `data-os-decidir`): `nova` com a caixa Aceitar/Manter ou Recusar, `sem-relacao` com o
+   * aviso Manter/Remover (o mesmo `!item.os_nova` cru de `montar`: a troca mostra só a nota). Chamar depois de `hostSugestaoOs`, que apaga
+   * a decisão antiga de outra OS.
+   */
+  function osDecidir(item: Registro): "nova" | "sem-relacao" | null {
+    if (context.sugestaoOs?.temDecisao(item.numero)) return null;
+    if (pedeDecisao(item.os_nova)) return "nova";
+    return !item.os_nova && item.os_sem_relacao ? "sem-relacao" : null;
+  }
+
+  /** Selo rosa da linha recolhida enquanto a decisão espera: `OS nova?` (a troca automática já foi feita e não ganha selo) ou `OS sem relação?`. */
+  function seloOsDecidir(item: Registro, decidir: ReturnType<typeof osDecidir>) {
+    if (!decidir) return null;
+    const nova = decidir === "nova";
+    const selo = dom.createTextElement("span", `ck-badge sebrae-selo sebrae-selo-os-decidir ${nova ? "sebrae-selo-os-nova" : "sebrae-selo-os-sem-relacao"}`, nova ? SELO_OS_NOVA : SELO_OS_SEM_RELACAO);
     selo.dataset.status = "info";
-    selo.title = `OS ${item.os_nova.nova.os}`;
+    selo.title = `OS ${nova ? item.os_nova.nova.os : item.os_sem_relacao?.atual.os}`;
     return selo;
   }
 
@@ -919,8 +931,11 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     if (item.tem_credencial) detalhes.push(blocoSenha(item.numero));
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
-    return linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,
-      [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloOsNova(item), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
+    const decidir = osDecidir(item); // depois de hostSugestaoOs: o montar já apagou a decisão que não vale mais (outra OS ou só o aviso)
+    const linha = linhaRecolhida("sebrae-antigo", item.numero, tituloAntigo(item), tituloAtual, dados.solicitante,
+      [seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.automaticos?.E || item.automaticos_sugeridos?.E), seloOsDecidir(item, decidir), seloLeitura(item, dados), ...selosAutomaticos()], artigo);
+    if (decidir) linha.dataset.osDecidir = decidir;
+    return linha;
   }
 
   /** Linha recolhida dos novos e antigos: `details` cujo resumo mostra número, assunto, pessoa e selos; o cartão fica dentro. */
@@ -1508,13 +1523,14 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   };
 
   /** Botão do item: número, selos, título, `quem`, data (`quando`, à direita) e o trecho achado pelo filtro. */
-  function montarItemMestre(d: { numero: string; titulo: string; quem: string; selos: ElementoSebrae[]; selecionado: boolean; tom?: string; quando?: string; achado?: string }) {
+  function montarItemMestre(d: { numero: string; titulo: string; quem: string; selos: ElementoSebrae[]; selecionado: boolean; tom?: string; quando?: string; achado?: string; osDecidir?: string }) {
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "sebrae-mestre__botao";
     botao.dataset.sebraeMestre = d.numero;
     if (d.selecionado) botao.setAttribute("aria-current", "true");
     if (d.tom) botao.dataset.tom = d.tom;
+    if (d.osDecidir) botao.dataset.osDecidir = d.osDecidir;
     const selos = dom.createTextElement("span", "sebrae-mestre__selos", "");
     selos.append(...d.selos);
     botao.append(dom.createTextElement("span", "sebrae-mestre__num", d.numero), selos, dom.createTextElement("span", "sebrae-mestre__titulo", d.titulo), dom.createTextElement("span", "sebrae-mestre__quem", d.quem));
@@ -1566,7 +1582,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       if (tomDoLado(lado) !== "indigo") selo.dataset.nlTom = tomDoLado(lado);
       selos.push(selo);
     }
-    return montarItemMestre({ numero, titulo: texto(".sebrae-antigo__assunto"), quem: [texto(".sebrae-antigo__quem"), serie].filter(Boolean).join(" · "), selos, selecionado, tom, achado });
+    return montarItemMestre({ numero, titulo: texto(".sebrae-antigo__assunto"), quem: [texto(".sebrae-antigo__quem"), serie].filter(Boolean).join(" · "), selos, selecionado, tom, achado, osDecidir: linha.dataset.osDecidir });
   }
 
   /** Refaz as listas compactas e, sem chamado aberto na aba atual, abre o primeiro (o detalhe nunca fica vazio). */

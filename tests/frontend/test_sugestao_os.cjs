@@ -66,6 +66,7 @@ test("selo do cartão de OS leva a data quando existe; descrição vazia vira 'D
   assert.equal(modelo.textoOuIndisponivel(null), "Descrição não disponível");
   assert.equal(modelo.textoOuIndisponivel(" Teclado trocado "), "Teclado trocado");
   assert.equal(modelo.SELO_OS_NOVA, "OS nova?");
+  assert.equal(modelo.SELO_OS_SEM_RELACAO, "OS sem relação?");
 });
 
 test("notas depois da decisão usam os textos aprovados", () => {
@@ -244,6 +245,33 @@ test("os_nova e os_sem_relacao saem separados para a caixa: a sugestão não lev
   assert.equal(provedor.montagens.find(m => m.numero === "UTIC-2026-1204").osNova, null);
 });
 
+test("decisão pendente: a linha ganha data-os-decidir (rosa) e o selo da decisão; troca, chamado sem aviso e decisão guardada ficam normais", async () => {
+  const { el } = await montarComProvedor();
+  const decidir = numero => cartaoAntigoDe(el, numero).dataset.osDecidir;
+  assert.equal(decidir("UTIC-2026-1200"), "nova");
+  assert.equal(decidir("UTIC-2026-1201"), "nova");
+  assert.equal(decidir("UTIC-2026-1204"), "sem-relacao");
+  assert.equal(decidir("UTIC-2026-1202"), undefined, "troca já feita não espera decisão");
+  assert.equal(decidir("UTIC-2026-1203"), undefined);
+  const seloNova = cartaoAntigoDe(el, "UTIC-2026-1200").querySelector(".sebrae-selo-os-decidir");
+  assert.equal(seloNova.textContent, "OS nova?");
+  assert.match(seloNova.className, /sebrae-selo-os-nova/);
+  const seloAviso = cartaoAntigoDe(el, "UTIC-2026-1204").querySelector(".sebrae-selo-os-decidir");
+  assert.equal(seloAviso.textContent, "OS sem relação?");
+  assert.match(seloAviso.className, /sebrae-selo-os-sem-relacao/);
+  assert.equal(seloAviso.title, "OS 7303888");
+  ["UTIC-2026-1202", "UTIC-2026-1203"].forEach(numero => assert.equal(cartaoAntigoDe(el, numero).querySelector(".sebrae-selo-os-decidir"), null));
+});
+
+test("decisão guardada (Aceitar, Recusar, Manter ou Remover): a linha volta ao normal, sem data-os-decidir nem selo", async () => {
+  const { el } = await montarComProvedor(cargaComOsNova(), ["UTIC-2026-1200", "UTIC-2026-1204"]);
+  for (const numero of ["UTIC-2026-1200", "UTIC-2026-1204"]) {
+    assert.equal(cartaoAntigoDe(el, numero).dataset.osDecidir, undefined);
+    assert.equal(cartaoAntigoDe(el, numero).querySelector(".sebrae-selo-os-decidir"), null);
+  }
+  assert.equal(cartaoAntigoDe(el, "UTIC-2026-1201").dataset.osDecidir, "nova", "a decisão de um chamado não apaga a de outro");
+});
+
 test("decisão já tomada no aviso: o host continua mesmo com os_sem_relacao vazio", async () => {
   const carga = cargaComOsNova();
   carga.importado.abertos[4].os_sem_relacao = null;
@@ -328,4 +356,6 @@ test("sugestao-os.tsx: montar escolhe o aviso só sem os_nova e descarta a decis
   assert.match(fonteTsx, /const comAviso = !osNova && Boolean\(osSemRelacao \|\| decisoesSemRelacao\.has\(numero\)\)/);
   assert.match(fonteTsx, /if \(osNova \|\| \(osSemRelacao && decisoesSemRelacao\.get\(numero\)\?\.os !== osSemRelacao\.atual\.os\)\) decisoesSemRelacao\.delete\(numero\)/);
   assert.match(fonteTsx, /temDecisao: numero => decisoes\.has\(numero\) \|\| decisoesSemRelacao\.has\(numero\)/);
+  // Recusar a OS nova e voltar só com o aviso: a decisão antiga não pode esconder o rosa do aviso (osDecidir lê temDecisao).
+  assert.match(fonteTsx, /if \(!osNova && osSemRelacao\) decisoes\.delete\(numero\)/);
 });

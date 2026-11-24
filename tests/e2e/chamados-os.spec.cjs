@@ -420,6 +420,8 @@ test("OS nova sugerida: mostra selo, campo e caixa; Aceitar grava o vínculo pro
   await expect(cartao).toBeVisible(); // a linha refeita volta aberta, no mesmo chamado
   await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
   await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
+  await expect(linha).not.toHaveAttribute("data-os-decidir"); // sem recarregar a página, o cartão deixa o rosa
+  await expect(page.locator(`[data-sebrae-mestre="${CHAMADOS_OS.sugestao}"]`)).not.toHaveAttribute("data-os-decidir");
 });
 
 test("OS nova sugerida: chamado sem OS mostra 'sem OS sugerida' e Recusar grava só o par chamado + OS", async ({ page, request }) => {
@@ -505,16 +507,51 @@ test("OS nova sugerida: as duas OS empilham no celular e lado a lado no desktop,
   }
 });
 
+// ---- Cartão rosa enquanto a decisão de OS espera (F5, opção C Rosa, 23/11/2026) ----
+// `data-os-decidir` na linha e no item da lista compacta; cores pelos tokens --cor-decidir-* de nl-base.css (claro e escuro).
+const CORES_DECIDIR = {
+  light: { fundo: "rgb(253, 240, 247)", borda: "rgb(238, 186, 214)", seloFundo: "rgb(251, 218, 234)", seloTexto: "rgb(142, 26, 90)" },
+  dark: { fundo: "rgb(28, 15, 27)", borda: "rgb(110, 37, 89)", seloFundo: "rgb(69, 26, 58)", seloTexto: "rgb(251, 179, 220)" },
+};
+
+test("Decisão de OS pendente: sugestão e aviso sem relação ficam rosa na lista, com o selo rosa; a seleção mantém a borda índigo sobre o fundo rosa", async ({ page, request }) => {
+  await abrirChamadoOs(page, request, CHAMADOS_OS.troca);
+  const mestre = numero => page.locator(`[data-sebrae-mestre="${numero}"]`);
+  await expect(mestre(CHAMADOS_OS.sugestao)).toHaveAttribute("data-os-decidir", "nova");
+  await expect(mestre(CHAMADOS_OS.sem_os)).toHaveAttribute("data-os-decidir", "nova");
+  await expect(mestre(CHAMADOS_OS.sem_relacao)).toHaveAttribute("data-os-decidir", "sem-relacao");
+  await expect(mestre(CHAMADOS_OS.troca)).not.toHaveAttribute("data-os-decidir"); // troca já feita: nada a decidir
+  await expect(mestre(CHAMADOS_OS.sugestao).locator(".sebrae-selo-os-nova")).toHaveText("OS nova?");
+  await expect(mestre(CHAMADOS_OS.sem_relacao).locator(".sebrae-selo-os-sem-relacao")).toHaveText("OS sem relação?");
+  await expect(mestre(CHAMADOS_OS.troca).locator(".sebrae-selo-os-decidir")).toHaveCount(0);
+  // O primeiro antigo (a sugestão) abre sozinho: fica selecionado por cima do rosa.
+  await expect(mestre(CHAMADOS_OS.sugestao)).toHaveAttribute("aria-current", "true");
+  for (const [tema, cor] of Object.entries(CORES_DECIDIR)) {
+    await page.locator("html").evaluate((raiz, valor) => { raiz.dataset.theme = valor; }, tema);
+    const aviso = mestre(CHAMADOS_OS.sem_relacao);
+    await expect(aviso).toHaveCSS("background-color", cor.fundo);
+    await expect(aviso).toHaveCSS("border-top-color", cor.borda);
+    await expect(aviso.locator(".sebrae-selo-os-decidir")).toHaveCSS("background-color", cor.seloFundo);
+    await expect(aviso.locator(".sebrae-selo-os-decidir")).toHaveCSS("color", cor.seloTexto);
+    await expect(mestre(CHAMADOS_OS.sugestao).locator(".sebrae-selo-os-decidir")).toHaveCSS("color", cor.seloTexto);
+    const selecionado = mestre(CHAMADOS_OS.sugestao);
+    await expect(selecionado).toHaveCSS("background-color", cor.fundo);
+    await expect(selecionado).toHaveCSS("border-top-color", "rgba(129, 140, 248, 0.55)");
+    await expect(mestre(CHAMADOS_OS.troca)).not.toHaveCSS("background-color", cor.fundo);
+  }
+});
+
 // ---- Aviso "OS sem relação" no cartão aberto do antigo (F5, 18/11/2026; visual provisório) ----
 // Mesma caixa `.sebrae-osnova`, com `data-tipo="sem-relacao"`: uma OS (a da coluna E), três chips negativos e Manter / Remover.
 
-test("OS sem relação: só o chamado com os_sem_relacao mostra o aviso, com título, chips, OS atual e os dois botões; a linha não ganha selo", async ({ page, request }) => {
+test("OS sem relação: só o chamado com os_sem_relacao mostra o aviso, com título, chips, OS atual e os dois botões; a linha ganha o selo 'OS sem relação?'", async ({ page, request }) => {
   const { painel, linha, cartao, seloNovo, campoOs, caixa } = await abrirChamadoOs(page, request, CHAMADOS_OS.sem_relacao);
   const lista = painel.locator("#sebrae-antigos-lista");
   await expect(lista.locator('.sebrae-osnova[data-tipo="sem-relacao"]')).toHaveCount(1); // os outros três antigos não ganham o aviso
   await expect(lista.locator(`.sebrae-chamado[data-numero="${CHAMADOS_OS.sugestao}"] .sebrae-osnova[data-tipo="sem-relacao"]`)).toHaveCount(0);
   await expect(seloNovo).toHaveCount(0);
   await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
+  await expect(linha.locator("> summary .sebrae-selo-os-sem-relacao")).toHaveText("OS sem relação?"); // selo da linha desde 23/11/2026
   await abrirItemAntigo(cartao);
   await expect(campoOs).toHaveText("7303050");
   await expect(caixa).toHaveAttribute("data-tipo", "sem-relacao");
@@ -549,6 +586,9 @@ test("OS sem relação: Manter grava em os-manter com a OS da coluna E, recarreg
   await expect(cartao.locator(".sebrae-osnova")).toHaveCount(0); // o aviso sumiu: a API já devolve null
   await expect(cartao.locator("[data-sugestao-os]").getByRole("button")).toHaveCount(0);
   await expect(linha.locator("> summary .sebrae-selo-os-nova")).toHaveCount(0);
+  await expect(linha.locator("> summary .sebrae-selo-os-decidir")).toHaveCount(0);
+  await expect(linha).not.toHaveAttribute("data-os-decidir"); // sem recarregar a página, o cartão deixa o rosa
+  await expect(page.locator(`[data-sebrae-mestre="${CHAMADOS_OS.sem_relacao}"]`)).not.toHaveAttribute("data-os-decidir");
 });
 
 test("OS sem relação: Remover grava em os-remover com a OS da coluna E e deixa a nota verde com o foco", async ({ page, request }) => {
@@ -578,9 +618,12 @@ test("OS sem relação: erro ao gravar mostra aviso curto, devolve os botões e 
   expect(simulacao.tentativas).toBe(1); // sem repetição automática
   expect(simulacao.removidas).toEqual([]);
   simulacao.falhar = false;
+  const leituras = simulacao.leituras;
   await caixa.getByRole("button", { name: "Manter 7303050" }).click();
   await expect(nota).toHaveText("OS 7303050 mantida. O aviso não volta para este chamado.");
   expect(simulacao.tentativas).toBe(2);
+  // Espera a recarga do F5 depois de Manter: sem isso o teste fecha a página com a leitura simulada no meio (Response has been disposed).
+  await expect.poll(() => simulacao.leituras).toBeGreaterThan(leituras);
   expect(simulacao.mantidas).toEqual([{ numero: CHAMADOS_OS.sem_relacao, corpo: { os: "7303050" } }]);
 });
 

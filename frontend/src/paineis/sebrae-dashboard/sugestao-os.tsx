@@ -200,6 +200,8 @@ function montar(host: HTMLElement, { numero, osNova, osSemRelacao, recarregar }:
   if (anterior && anterior.host !== host) anterior.raiz.unmount();
   // Outra OS sugerida para o mesmo chamado: a decisão antiga não vale para ela.
   if (osNova && decisoes.get(numero) && decisoes.get(numero)?.os !== osNova.nova.os) decisoes.delete(numero);
+  // Só o aviso, sem sugestão: a decisão da OS nova (ex.: Recusar) não vale para ele, que ainda espera Manter ou Remover (cartão rosa, 23/11/2026).
+  if (!osNova && osSemRelacao) decisoes.delete(numero);
   // Uma sugestão nova encerra a nota do aviso (o selo "OS nova?" some enquanto `temDecisao`); outra OS na E também: a decisão antiga não vale para ela.
   if (osNova || (osSemRelacao && decisoesSemRelacao.get(numero)?.os !== osSemRelacao.atual.os)) decisoesSemRelacao.delete(numero);
   const raiz = anterior && anterior.host === host ? anterior.raiz : createRoot(host);
