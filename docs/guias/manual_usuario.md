@@ -132,6 +132,8 @@ O resultado traz, entre outras seções:
 - **Duplicidades e correspondências ambíguas**;
 - **Séries sem local definido**.
 
+Equipamento com apelido `Backup <Cidade>` (por exemplo `Backup Curitiba 03`) usa essa cidade como local previsto e some dessas listas quando tem usuário ou aparece no Endpoint; equipamento em que o Endpoint mostra o usuário Administrador também some, exceto das listas de duplicados e ambíguos.
+
 **Como ler**
 
 - "No Endpoint" e "na Simpress" indicam em qual fonte a informação foi encontrada ou falta.
