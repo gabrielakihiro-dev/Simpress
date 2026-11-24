@@ -11,7 +11,8 @@ Contrato de entrada:
 * ``endpoint``: dict no formato de ``build_endpoint_alias_index`` mais ``manual_users`` (``{serial_key: login}``),
   ``user_holds`` (``{serial_key: {tipo, estado, usuario_atual, ...}}``) e ``verified_by_serial``. ``available: False``
   vira ``fontes.endpoint="indisponivel"``. Chaves por ``normalize_reference_value``.
-* ``confirmacoes``: lista de ``{serie, cidade, confirmado_em, expira_em}`` (ISO).
+* ``confirmacoes``: lista de ``{serie, cidade, confirmado_em, expira_em}`` (7 dias, ISO) ou ``{serie, cidade,
+  confirmado_em, tipo, usuario_ref}`` (``tipo: "backup"``, sem prazo); ``usuario_ref`` nunca sai na saída.
 * ``estado_cobertura``: estado da Cobertura ou ``None`` (ilegível: ``fontes.cobertura="ilegivel"``, sem bloqueio de
   cobertura). ``estado["disponibilidade"]`` usa a chave de ``chave_serie``.
 * ``manutencao``: ``coverage.Manutencao``; ``ilegivel=True`` vira limitação e não bloqueia.
@@ -21,6 +22,8 @@ Contrato de entrada:
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -106,14 +109,27 @@ def _bloqueio(estado: Optional[Mapping[str, Any]], serie: str, hoje: Any, manute
     return situacao if situacao in _MOTIVOS_DISPONIBILIDADE else None
 
 
+_SUFIXO_HORARIO = re.compile(r"Hor[aá]rio\s+da\s+[uú]ltima[^:,;]*:[^,;]*,\s*\d{4}[^,;/]*", re.IGNORECASE)
+
+
 def normalizar_usuario_endpoint(valor: Any) -> str:
-    """Usuário do Endpoint sem domínio (`SEBRAE\fulano`), sem sufixo `@...` e em minúsculas."""
-    return str(valor or "").strip().rsplit("\\", 1)[-1].split("@", 1)[0].strip().casefold()
+    """Usuários do Endpoint (lista, sufixo `Horário da última...`, domínio, `@...`, acento, caixa, Administrador) em texto único e estável."""
+    nomes = set()
+    # A data do sufixo (`out 22, 2026 12:21 PM`) tem vírgula: sai antes de dividir a lista.
+    texto = _SUFIXO_HORARIO.sub("", str(valor or ""))
+    for parte in re.split(r",|;| / ", texto):
+        if usuario_e_administrador(parte):
+            continue
+        sem_acento = "".join(c for c in unicodedata.normalize("NFKD", parte) if not unicodedata.combining(c)).casefold()
+        nome = sem_acento.split("horario da ultima")[0].rsplit("\\", 1)[-1].split("@", 1)[0].strip()
+        if nome:
+            nomes.add(nome)
+    return ",".join(sorted(nomes))
 
 
 def usuario_ref(valor: Any) -> str:
     """Pseudônimo do usuário (hash sem segredo, não é anonimização); `""` sem usuário ou com Administrador."""
-    normalizado = "" if usuario_e_administrador(valor) else normalizar_usuario_endpoint(valor)
+    normalizado = normalizar_usuario_endpoint(valor)
     return "sha256:" + hashlib.sha256(normalizado.encode("utf-8")).hexdigest() if normalizado else ""
 
 

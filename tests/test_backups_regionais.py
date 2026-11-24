@@ -731,6 +731,14 @@ class ConfirmarBackupCalculoTests(unittest.TestCase):
         self.assertEqual(backups_regionais.usuario_ref("SEBRAE\\Joao "), ref("joao"))
         self.assertEqual(backups_regionais.usuario_ref("  "), "")
 
+    def test_usuario_ref_normaliza_lista_horario_e_acento(self):
+        ref_ = backups_regionais.usuario_ref
+        self.assertEqual(ref_("joao Horário da última inicialização : out 22, 2026 12:21 PM"), ref_("joao"))
+        self.assertEqual(ref_("João"), ref_("joao"))
+        self.assertEqual(ref_("joao, maria"), ref_("maria; joao"))
+        self.assertEqual(ref_("joao, Administrador"), ref_("joao"))
+        self.assertEqual(ref_(".\\Administrador, administrator"), "")
+
     def test_usuario_manual_e_trava_continuam_excluindo(self):
         confirmacao = [novo("NB1", usuario_ref=ref("joao"))]
         manual = calcular([notebook("NB1")], endpoint(manual={"NB1": "joao"}), confirmacao)
