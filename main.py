@@ -150,6 +150,7 @@ from domains.inventory_comparison import (
     comparison_review_item_id,
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
+    filtrar_backup_e_administrador,
     filter_update_review_items,
     filter_update_unmatched_details,
     filter_update_unmatched_series,
@@ -272,18 +273,18 @@ WORKBOOK_PARSE_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_WORKBOOK_PA
 logger = logging.getLogger(__name__)
 
 
-def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolve present-day Entra names on a copy, never in stored history."""
+def _filtro_backup_kwargs() -> Dict[str, Any]:
+    """Apelidos manuais e consulta de usuário de hoje para `filtrar_backup_e_administrador`; falha não derruba a tela."""
     try:
         apelidos_manuais = _manual_aliases_by_serial(load_modified_apelidos())
-    except (OSError, ValueError):
+    except Exception:
         logger.warning("Apelidos manuais ilegíveis; filtro de Backup <Cidade> usa só o texto do histórico.", exc_info=True)
         apelidos_manuais = {}
 
     def series_com_usuario(series: List[str]) -> Set[str]:
         try:
             usuarios = user_changes.logged_users_for_series(_alias_change_services, series)["usuarios"]
-        except (OSError, ValueError, KeyError):
+        except Exception:
             logger.warning("Usuários por série indisponíveis; Backup <Cidade> sem consulta de usuário.", exc_info=True)
             return set()
         return {
@@ -292,9 +293,12 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(info, dict) and str(info.get("usuario") or "").strip()
         }
 
-    view = _comparison_history_for_display(
-        evento, apelidos_manuais=apelidos_manuais, series_com_usuario=series_com_usuario
-    )
+    return {"apelidos_manuais": apelidos_manuais, "series_com_usuario": series_com_usuario}
+
+
+def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve present-day Entra names on a copy, never in stored history."""
+    view = _comparison_history_for_display(evento, **_filtro_backup_kwargs())
     comparison = view.get("comparacao")
     if not isinstance(comparison, dict):
         return view
@@ -1970,7 +1974,20 @@ def _dashboard_event_details(event_id: str) -> Optional[Dict[str, Any]]:
     details = None
     for item in load_comparison_history():
         if isinstance(item, dict) and str(item.get("id") or "") == event_id and isinstance(item.get("comparacao"), dict):
-            details = {"ausentes_no_endpoint": item["comparacao"].get("ausentes_no_endpoint")}
+            comparacao = item["comparacao"]
+            kwargs = _filtro_backup_kwargs()
+            # Só estas três listas, com a regra Backup/Administrador (não a visão inteira: outros filtros mudariam a contagem).
+            details = {
+                "ausentes_no_endpoint": (
+                    filtrar_backup_e_administrador(comparacao["ausentes_no_endpoint"], ausente_do_endpoint=True, **kwargs)
+                    if isinstance(comparacao.get("ausentes_no_endpoint"), list) else comparacao.get("ausentes_no_endpoint")
+                ),
+                **{
+                    campo: filtrar_backup_e_administrador(comparacao[campo], **kwargs)
+                    for campo in ("divergencias_local", "sem_acesso_7_dias")
+                    if isinstance(comparacao.get(campo), list)
+                },
+            }
             break
     # A write between the two stats may have been read halfway; cache only a stable file.
     if signature is not None and signature == _comparison_history_signature():

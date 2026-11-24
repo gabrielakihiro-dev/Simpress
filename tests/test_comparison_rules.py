@@ -179,6 +179,31 @@ class InventoryComparisonTests(unittest.TestCase):
         with patch.object(main, "load_modified_apelidos", side_effect=main.LocalJsonCorruptionError("x")):
             self.assertEqual(len(lista(main.comparison_history_for_display(evento()))), 1)
 
+    def test_backup_em_ausentes_no_endpoint_sem_campos_de_fonte_continua_aparecendo(self):
+        item = {"computador": "BACKUP CURITIBA 03 (M)", "serie": "BRJL1"}
+        evento = self._evento(ausentes_no_endpoint=[item])
+        itens = self._view(evento)["ausentes_no_endpoint"]
+        self.assertEqual([i["serie"] for i in itens], ["BRJL1"])
+
+    def test_texto_administrador_do_cadastro_em_ausentes_no_endpoint_nao_remove(self):
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("PRNOTEX01", "BRJL2", "Administrador")])
+        self.assertEqual(len(self._view(evento)["ausentes_no_endpoint"]), 1)
+
+    def test_wrapper_do_main_tolera_erro_de_dominio_ao_ler_usuarios(self):
+        from core.errors import DomainBusyError
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("BACKUP CURITIBA 03 (M)", "BRJL3")])
+        with patch.object(main, "load_modified_apelidos", return_value={}), \
+                patch.object(main.user_changes, "logged_users_for_series", side_effect=DomainBusyError("x")):
+            itens = main.comparison_history_for_display(evento)["comparacao"]["ausentes_no_endpoint"]
+        self.assertEqual(len(itens), 1)
+
+    def test_wrapper_do_main_tolera_erro_inesperado_ao_ler_apelidos(self):
+        from core.errors import DomainBusyError
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("BACKUP CURITIBA 03 (M)", "BRJL4")])
+        with patch.object(main, "load_modified_apelidos", side_effect=DomainBusyError("x")):
+            itens = main.comparison_history_for_display(evento)["comparacao"]["ausentes_no_endpoint"]
+        self.assertEqual(len(itens), 1)
+
     def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
         reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
         ages = {

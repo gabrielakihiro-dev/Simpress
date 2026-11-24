@@ -259,10 +259,6 @@ class DashboardBackupsRegionaisTests(unittest.TestCase):
         self.assertTrue(dados["backups_regionais"]["limitacoes"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
     def test_long_unused_status_ignora_item_com_administrador(self):
         from routers.dashboard import long_unused_status
@@ -278,7 +274,20 @@ class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
     def test_absent_serial_keys_sem_item_com_administrador_no_usuario(self):
         from routers.dashboard import _absent_serial_keys
         comparison = {"ausentes_no_endpoint": [
-            {"serie": "BRJ-A", "usuario": ".\Administrador"},
-            {"serie": "BRJ-B", "usuario": "fulano"},
+            {"serie": "BRJ-A", "computador": "Backup Curitiba 01 (M)", "usuario": "fulano"},
+            {"serie": "BRJ-B", "computador": "Backup Curitiba 02 (M)"},
         ]}
         self.assertEqual(_absent_serial_keys(comparison), {"BRJ-B"})
+
+    def test_total_da_home_segue_a_lista_quando_ela_vem_em_details(self):
+        eventos = [{"id": "e1", "horario": "2026-11-01T10:00:00", "tipo": "atualizacao",
+                    "resumo": {"divergencias_local": 3, "sem_acesso_7_dias": 4},
+                    "comparacao": {"divergencias_local": [{"serie": "A"}, {"serie": "B"}]}}]
+        latest = make_client([], eventos).get("/api/painel").json()["ultima_comparacao"]
+        totais = {i["campo"]: i["total"] for i in latest["atencao"]}
+        self.assertEqual(totais["divergencias_local"], 2)
+        self.assertEqual(totais["sem_acesso_7_dias"], 4)
+
+
+if __name__ == "__main__":
+    unittest.main()

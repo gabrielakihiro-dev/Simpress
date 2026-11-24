@@ -93,11 +93,7 @@ def cidade_do_apelido_backup(apelido: Any, cidades: Iterable[str]) -> Optional[s
     if not texto.startswith("BACKUP "):
         return None
     resto = re.sub(r"[\s\d]+$", "", texto[len("BACKUP "):])
-    por_nome = {_texto_normalizado(cidade): cidade for cidade in cidades}
-    for nome in sorted(por_nome, key=len, reverse=True):
-        if resto == nome:
-            return por_nome[nome]
-    return None
+    return {_texto_normalizado(cidade): cidade for cidade in cidades}.get(resto)
 
 
 def usuario_e_administrador(texto: Any) -> bool:

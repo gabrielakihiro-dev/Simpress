@@ -150,6 +150,10 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         details: Dict[str, Any] = details_value if isinstance(details_value, dict) else {}
         absences_value: Any = details.get("ausentes_no_endpoint")
         totals = {field: _count(summary.get(field)) for field, _ in ATTENTION_FIELDS}
+        # A lista (já filtrada pela regra Backup/Administrador) vale mais que o resumo gravado na importação.
+        for field in ("divergencias_local", "sem_acesso_7_dias"):
+            if isinstance(details.get(field), list):
+                totals[field] = len(details[field])
         # Without the detailed list the notebook/MacBook scope cannot be applied, so the row is omitted.
         totals["ausentes_no_endpoint"] = (
             _endpoint_absences_in_scope(absences_value, category_by_serial) if isinstance(absences_value, list) else 0
@@ -488,7 +492,7 @@ def _absent_serial_keys(comparison: Any) -> set:
     rows = comparison.get("ausentes_no_endpoint") if isinstance(comparison, dict) else None
     return set().union(*(
         _serial_keys(row.get("serie"))
-        for row in filtrar_backup_e_administrador(filter_sebrae_owned_unmatched_items(rows))
+        for row in filtrar_backup_e_administrador(filter_sebrae_owned_unmatched_items(rows), ausente_do_endpoint=True)
         if isinstance(row, dict)
     ))
 

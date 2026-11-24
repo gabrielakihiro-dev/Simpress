@@ -350,11 +350,15 @@ def filtrar_backup_e_administrador(
     *,
     apelidos_manuais: Optional[Dict[str, str]] = None,
     series_com_usuario: Optional[Callable[[List[str]], Set[str]]] = None,
+    ausente_do_endpoint: bool = False,
 ) -> List[Dict[str, Any]]:
     """Tira da lista o equipamento com Administrador no Endpoint e o Backup <Cidade> identificado.
 
     Backup identificado = apelido `Backup <Cidade>` com usuário (no item ou via ``series_com_usuario``) ou
     presente no Endpoint; os que ficam recebem `local_previsto` = a cidade. Trabalha em cópias.
+
+    ``ausente_do_endpoint`` é verdadeiro só para a lista `ausentes_no_endpoint`: nela o `usuario` vem do
+    cadastro, então o texto dele não prova Administrador no Endpoint (só a flag `usuario_administrador`).
     """
     from domains.effective_alias import strip_manual_alias_marker  # import tardio: effective_alias importa este módulo
 
@@ -368,7 +372,7 @@ def filtrar_backup_e_administrador(
         if not isinstance(item, dict):
             result.append(item)
             continue
-        if item.get("usuario_administrador") or usuario_e_administrador(item.get("usuario")):
+        if item.get("usuario_administrador") or (not ausente_do_endpoint and usuario_e_administrador(item.get("usuario"))):
             continue
         copia = dict(item)
         chave = normalize_reference_value(item.get("serie"))
@@ -376,8 +380,7 @@ def filtrar_backup_e_administrador(
         cidade = cidade_do_apelido_backup(strip_manual_alias_marker(apelido), cidades)
         if cidade:
             copia["local_previsto"] = cidade
-            ausentes = [*(item.get("ausente_em") or []), item.get("fonte_ausente")]
-            if str(item.get("usuario") or "").strip() or COMPARISON_SOURCE_LABELS["endpoint"] not in ausentes:
+            if str(item.get("usuario") or "").strip() or not ausente_do_endpoint:
                 continue
             candidatos.append((copia, str(item.get("serie") or "")))
         result.append(copia)
@@ -501,9 +504,10 @@ def comparison_history_for_display(
     series_com_usuario: Optional[Callable[[List[str]], Set[str]]] = None,
 ) -> Dict[str, Any]:
     """Aplica a classificação atual às visualizações sem reescrever o histórico salvo."""
-    def backup_admin(items: Any) -> List[Dict[str, Any]]:
+    def backup_admin(items: Any, ausente_do_endpoint: bool = False) -> List[Dict[str, Any]]:
         return filtrar_backup_e_administrador(
-            items, apelidos_manuais=apelidos_manuais, series_com_usuario=series_com_usuario
+            items, apelidos_manuais=apelidos_manuais, series_com_usuario=series_com_usuario,
+            ausente_do_endpoint=ausente_do_endpoint,
         )
 
     event_view = dict(evento)
@@ -674,7 +678,7 @@ def comparison_history_for_display(
         }
         comparison_view["filtros_atualizacao_aplicados"] = True
     missing_lists = {
-        key: backup_admin(filter_sebrae_owned_unmatched_items(items))
+        key: backup_admin(filter_sebrae_owned_unmatched_items(items), key == "ausentes_no_endpoint")
         for key, items in missing_lists.items()
     }
     comparison_view.update(missing_lists)
