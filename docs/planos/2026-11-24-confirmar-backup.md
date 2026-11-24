@@ -121,3 +121,32 @@
 - [ ] Commit `docs(backups): Confirmar Backup e referência do usuário do Endpoint`; push; PR para `main`; Auto-fix ligado (`set_monitor`, `auto_fix: true`); não mesclar.
 - [ ] Revisor (Opus) sobre o branch inteiro antes de dar como pronto.
 - [ ] Resumo para leigo com `AC: <critério> — PROVEN BY <evidência>` para: botão novo; conta como backup; persiste em `data/state`; cai e some com outro usuário; mesmo usuário não derruba; registros de 7 dias antigos intactos; sem `usuario_ref` fora do arquivo; `.md` alterados; e a pergunta aberta do Administrador.
+
+---
+
+## Adendo (24/11/2026): Administrador e Manter/Excluir
+
+Pedido do usuário, repassado pela sessão F3 (Backup+Cidade/Administrador), com interpretações confirmadas por ele: "mesmo quando tiver usuário 'administrador', quero que ainda continue. E se aparecer um usuário em um notebook que alterei o apelido manualmente, quero que deixe a opção de manter ou excluir, e o registro grave na memória." Responde à "Pergunta aberta": Administrador não derruba.
+
+### Decisões do adendo (valem sobre as anteriores onde conflitarem)
+
+5b. **Correção da decisão 5 / Tarefa 2:** série com confirmação nova (`tipo == "backup"`) vigente **ignora** a cláusula "Endpoint recente com usuário" de `usuario_vigente` (seja o usuário igual ou diferente). Só usuário manual e trava ativa a tiram como `usuario_vigente`; usuário diferente vai para `usuario_mudou` (ou pendente, decisão 12). Sem isso, a troca de usuário (que chega sempre numa verificação recente) cairia como `usuario_vigente` e nunca viraria `usuario_mudou`. Substitui a fórmula da linha "Implementar decisões 5, 6 e 7" da Tarefa 2.
+11. **Administrador = sem usuário (Tarefa 2).** `usuario_e_administrador(valor) -> bool` em `domains/backups_regionais.py` (cópia local; a sessão F3 cria a mesma em `domains/regras_negocio.py`; quem mesclar por último unifica). `normalizar_usuario_endpoint(valor)` em `{"administrador", "administrator"}` → `True` (cobre `.\Administrador`, `DOMINIO\Administrador`, `Administrator@x`, maiúsculas). `usuario_ref(admin)` devolve `""`. Efeito: confirmar com admin logado grava ref vazio; admin aparecendo depois conta como usuário atual vazio e não derruba; só usuário real derruba. Fonte do usuário: `endpoint_user_for_serial`, que usa o "Usuário do último logon" e, se vazio, "Usuários logados" (`endpoint_user_value` em `domains/inventory_comparison.py`); se o último logon é admin, a regra vale mesmo com outro nome em "Usuários logados".
+12. **Apelido manual + usuário real novo = decisão pendente (Tarefa 6).** Série com confirmação nova vigente, apelido manual (chave em `manual_aliases_by_serial`) e condição de `usuario_mudou`: continua em `backups` (conta até o usuário decidir), com `confirmacao = {"estado": "vigente", "tipo": "backup", "expira_em": None, "decisao_pendente": true}`. O cálculo recebe as séries com apelido manual pela entrada `endpoint["series_apelido_manual"]` (montada em `_entradas` do router; cálculo segue puro). Sem apelido manual: decisões 5/7.
+13. **Manter (Tarefa 6):** rota `POST /api/backups-regionais/manter` (`{serie, cidade}`, `extra=forbid`): só com `decisao_pendente` (senão 409); regrava a confirmação com o `usuario_ref` do usuário atual do Endpoint (o mesmo usuário não pergunta de novo; outro usuário real depois pergunta de novo) e registra a decisão. Apelido manual intacto.
+14. **Excluir (Tarefa 6):** rota `POST /api/backups-regionais/excluir` (`{serie, cidade}`): só com `decisao_pendente` (senão 409). Ordem: primeiro remove o apelido manual com `apply_alias_change(..., drop_override=True)` de `domains/alias_changes.py` (volta o apelido da fonte e grava o evento em `historico_alteracoes.json`; não usa `undo_alias_change`, que só volta um passo e exige evento no histórico); depois remove a confirmação e registra a decisão em `backups_regionais.json`. Erro do apelido: nada gravado, devolve o erro. Falha na segunda escrita não reverte a primeira (comentário `shortcut:` no código).
+15. **Memória da decisão (Tarefa 6):** `data/state/backups_regionais.json` ganha a chave opcional `decisoes`: lista de `{"serie", "cidade", "decisao": "manter" | "excluir", "decidido_em"}`; `podar()` aplica a mesma retenção. `esquema` continua `1`; arquivo sem `decisoes` continua válido. Nenhum usuário (nem ref) na decisão.
+16. **Front (Tarefa 6):** item de Backups com `decisao_pendente` mostra `Usuário novo no Endpoint: manter como backup?` e botões `Manter` e `Excluir` (`data-backup-acao="manter" | "excluir"`). Toasts: `Backup mantido: <série>`, `Backup excluído: <série>`.
+
+### Tarefa 6: Manter/Excluir com apelido manual
+
+Depois da Tarefa 4, antes da 5 (docs da 5 cobrem tudo).
+
+**Arquivos:** `domains/backups_regionais.py`, `domains/backups_regionais_store.py`, `routers/backups_regionais.py`, testes de cada um, `frontend/src/paineis/backups-regionais/*`, testes node/e2e e fixture `tests/support/serve_ui_motion_preview.py`, `frontend/src/api-tipos.gerado.d.ts`.
+
+- [ ] Testes (calc): `test_apelido_manual_usuario_novo_fica_pendente`, `test_apelido_manual_admin_nao_pendente`, `test_sem_apelido_manual_usuario_novo_cai`, `test_pendente_sem_usuario_ref_no_payload`.
+- [ ] Testes (store/rota): `manter` regrava ref atual e grava decisão; `manter`/`excluir` sem pendência 409; `excluir` remove apelido manual (override some, evento no histórico), remove confirmação e grava decisão; `excluir` com erro do apelido: nada gravado; `decisoes` inválido ilegível; arquivo sem `decisoes` válido; respostas sem `usuario_ref`.
+- [ ] Front + node + e2e (fixture com série pendente), um spec por vez. `python scripts/gerar_tipos_api.py`.
+- [ ] Commit `feat(backups): Manter ou Excluir backup quando aparece usuário em apelido manual`.
+
+Tarefa 2 inclui também: `usuario_e_administrador` e decisão 11, testes `test_admin_nao_derruba` (ref `joao`, atual `.\Administrador` → continua), `test_admin_variacoes` (`administrator`, `SEBRAE\Administrador`, `Administrador@x`), `test_usuario_ref_admin_vazio`, `test_usuario_novo_com_verificacao_recente_vira_usuario_mudou` (decisão 5b). Tarefa 3 inclui: `test_confirmar_com_admin_grava_ref_vazio`.
