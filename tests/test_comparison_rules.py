@@ -163,6 +163,22 @@ class InventoryComparisonTests(unittest.TestCase):
         result = main.compare_uploaded_workbooks(endpoint, source_table([]), {})
         self.assertEqual([s["serie"] for s in result["series_sem_mapeamento"]], ["YYY"])
 
+    def test_wrapper_do_main_usa_apelido_manual_usuario_do_cadastro_e_tolera_falha(self):
+        def evento():
+            return self._evento(ausentes_no_endpoint=[self._ausente("OUTRO TEXTO", "BRJW1")])
+
+        def lista(view):
+            return view["comparacao"]["ausentes_no_endpoint"]
+
+        manual = {"BRJW1": "BACKUP CURITIBA 03 (M)"}
+        with patch.object(main, "load_modified_apelidos", return_value=manual):
+            self.assertEqual(lista(main.comparison_history_for_display(evento()))[0]["local_previsto"], "Curitiba")
+            with patch.object(main.user_changes, "logged_users_for_series",
+                              return_value={"usuarios": {"BRJW1": {"usuario": "fulano"}}}):
+                self.assertEqual(lista(main.comparison_history_for_display(evento())), [])
+        with patch.object(main, "load_modified_apelidos", side_effect=main.LocalJsonCorruptionError("x")):
+            self.assertEqual(len(lista(main.comparison_history_for_display(evento()))), 1)
+
     def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
         reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
         ages = {

@@ -261,3 +261,24 @@ class DashboardBackupsRegionaisTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
+    def test_long_unused_status_ignora_item_com_administrador(self):
+        from routers.dashboard import long_unused_status
+        evento = {"id": "e1", "horario": "2026-11-01T10:00:00-03:00", "tipo": "atualizacao", "comparacao": {
+            "sem_acesso_7_dias": [
+                {"serie": "BRJ-A", "computador": "PRNOTE-A", "dias_sem_verificacao": 12, "usuario_administrador": True},
+                {"serie": "BRJ-B", "computador": "PRNOTE-B", "dias_sem_verificacao": 12},
+            ],
+        }}
+        status = long_unused_status([evento], warning_days=5, limit_days=10)
+        self.assertEqual([e["serie"] for e in status["equipamentos"]], ["BRJ-B"])
+
+    def test_absent_serial_keys_sem_item_com_administrador_no_usuario(self):
+        from routers.dashboard import _absent_serial_keys
+        comparison = {"ausentes_no_endpoint": [
+            {"serie": "BRJ-A", "usuario": ".\Administrador"},
+            {"serie": "BRJ-B", "usuario": "fulano"},
+        ]}
+        self.assertEqual(_absent_serial_keys(comparison), {"BRJ-B"})
