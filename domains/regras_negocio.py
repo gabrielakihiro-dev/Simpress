@@ -8,7 +8,7 @@ em vez de repetir o teste. Só depende de `core.config` (que não importa `domai
 import math
 import re
 import unicodedata
-from typing import Any, Callable, FrozenSet, Tuple
+from typing import Any, Callable, FrozenSet, Iterable, Optional, Tuple
 
 from core.config import client_own_serials
 
@@ -76,3 +76,34 @@ def cadastro_e_macbook(*textos: Any) -> bool:
     """Lado do cadastro: `MACBOOK` nos campos passados (categoria, tipo e/ou modelo), sem acento e em maiúsculas."""
     juntos = unicodedata.normalize("NFKD", " ".join(str(texto or "") for texto in textos))
     return "MACBOOK" in "".join(c for c in juntos if not unicodedata.combining(c)).upper()
+
+
+def _texto_normalizado(value: Any) -> str:
+    """Maiúscula, sem acento, espaços colapsados (mantém pontuação)."""
+    if is_missing_cell_value(value):
+        return ""
+    decomposed = unicodedata.normalize("NFKD", str(value).upper())
+    sem_acento = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(sem_acento.split())
+
+
+def cidade_do_apelido_backup(apelido: Any, cidades: Iterable[str]) -> Optional[str]:
+    """Cidade de um apelido `Backup <Cidade> [número]` (já sem o marcador "(M)"), senão None."""
+    texto = _texto_normalizado(apelido)
+    if not texto.startswith("BACKUP "):
+        return None
+    resto = re.sub(r"[\s\d]+$", "", texto[len("BACKUP "):])
+    por_nome = {_texto_normalizado(cidade): cidade for cidade in cidades}
+    for nome in sorted(por_nome, key=len, reverse=True):
+        if resto == nome:
+            return por_nome[nome]
+    return None
+
+
+def usuario_e_administrador(texto: Any) -> bool:
+    """Verdadeiro se alguma parte do texto de usuários do Endpoint for exatamente Administrador."""
+    for parte in re.split(r",|;| / ", _texto_normalizado(texto)):
+        parte = parte.split("HORARIO DA ULTIMA")[0].split("(")[0].strip(" .:-")
+        if parte.rsplit("\\", 1)[-1].strip() in {"ADMINISTRADOR", "ADMINISTRATOR"}:
+            return True
+    return False
