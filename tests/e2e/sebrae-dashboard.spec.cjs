@@ -824,10 +824,16 @@ test("o cartão tem três zonas e as pendências acendem ao escolher A, D FINALI
   await situacao("D", true); await situacao("DESC", false);
   const descricao = novo.getByLabel(ROTULO_DESCRICAO);
   const feedback = novo.locator(".sebrae-chamado__feedback").first();
+  // "Alteração ainda não salva…" dura só os 800 ms do salvamento automático; em máquina lenta ele já virou
+  // "Salvando…"/erro quando o expect olha. Um MutationObserver anota cada estado do aviso no instante em que muda.
+  await feedback.evaluate(no => {
+    no.__estados = [];
+    new MutationObserver(() => no.__estados.push(`${no.textContent}|${no.dataset.estado}`))
+      .observe(no, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["data-estado"] });
+  });
   await descricao.fill("Troquei o teclado.");
   await situacao("DESC", true);
-  await expect(feedback).toHaveText("Alteração ainda não salva…");
-  await expect(feedback).toHaveAttribute("data-estado", "pendente");
+  await expect.poll(() => feedback.evaluate(no => no.__estados)).toContain("Alteração ainda não salva…|pendente");
   // (a fixture só grava a descrição dos antigos; o "ok" do feedback é conferido nos testes dos antigos.)
   // Desfazer volta a pendência (nenhum estado fica guardado no JS).
   await novo.locator('[data-sebrae-campo="D"]').selectOption("EM ABERTO");
