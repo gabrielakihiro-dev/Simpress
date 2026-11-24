@@ -26,6 +26,7 @@ const MOTIVOS: Record<string, string> = {
   cidade_ausente: "Cadastro sem cidade; o apelido indica esta regional",
   // Excluídos (fora do cálculo).
   usuario_vigente: "Com usuário vigente",
+  usuario_mudou: "O usuário do Endpoint mudou",
   "bloqueio:reserva_ativa": "Reserva ativa",
   "bloqueio:reserva_vencida_em_revisao": "Reserva vencida em revisão",
   "bloqueio:reserva_em_espera": "Reserva em espera",
@@ -129,14 +130,15 @@ function ItemCandidato({ candidato, cidade }: { candidato: Item; cidade: string 
 // Confirmação vigente de série que caiu na conferência: não conta, mas pode ser desfeita.
 function ItemConferencia({ item, cidade }: { item: Item; cidade: string }) {
   return (
-    <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} />
+    <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} /><DecisaoPendente item={item} cidade={cidade} />
       {item.confirmacao?.estado === "vigente" ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>
   );
 }
 
 // Confirmação invalidada (ex.: usuário mudou) também pode ser desfeita, para limpar o registro.
 function ItemExcluido({ item, cidade }: { item: Item; cidade: string }) {
-  const desfazer = item.confirmacao?.estado === "invalidada";
+  // cidade_mudou: o Desfazer enviaria a cidade atual e falharia.
+  const desfazer = item.confirmacao?.estado === "invalidada" && item.confirmacao?.motivo !== "cidade_mudou";
   return <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} />{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
 }
 

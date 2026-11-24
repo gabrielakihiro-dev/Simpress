@@ -388,6 +388,26 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         self.assertNotIn("decisoes", self.arquivo())
         self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], usuario_ref("pedro"))
 
+    def test_corrida_excluir_depois_de_outra_decisao_409_nada_gravado(self):
+        self.com_pendencia()
+        import routers.backups_regionais as rota
+        chamadas = []
+        real = rota._pendente
+
+        def pendente_e_troca(calculo, serie, cidade):
+            achada = real(calculo, serie, cidade)
+            if achada and not chamadas:
+                chamadas.append(1)
+                outro = json.loads(self.state.read_text(encoding="utf-8"))
+                outro["confirmacoes"][0]["usuario_ref"] = usuario_ref("pedro")
+                self.state.write_text(json.dumps(outro), encoding="utf-8")
+            return achada
+        with mock.patch.object(rota, "_pendente", pendente_e_troca):
+            erro = self.post(EXCLUIR, status=409)["detail"]
+        self.assertEqual(erro["codigo"], "sem_decisao_pendente")
+        self.assertNotIn("decisoes", self.arquivo())
+        self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], usuario_ref("pedro"))
+
     def test_decisoes_invalido_e_ilegivel_503(self):
         self.com_pendencia()
         conteudo = json.dumps({"esquema": 1, "confirmacoes": [], "decisoes": "x"}).encode("utf-8")

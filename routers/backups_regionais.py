@@ -278,7 +278,9 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
         def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
             if not vigente_visto(estado, serie, cidade, ref_visto):
                 # Corrida com Manter/Desfazer: a confirmação já mudou; não a remove nem grava decisão (o apelido já saiu).
-                return estado, None
+                raise HTTPException(status_code=409, detail={
+                    "codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente.",
+                })
             novo, _removido = store_mod.desfazer(estado, serie, cidade)
             return store_mod.registrar_decisao(novo, serie, cidade, "excluir", agora), None
 

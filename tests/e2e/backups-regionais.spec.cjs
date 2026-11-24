@@ -313,6 +313,8 @@ test("confirmação nova mostra Confirmado como backup com Desfazer; excluído p
   await cascavel.locator(".ck-backups__excluidos > summary").click();
   const excluido = cascavel.locator("li").filter({ has: page.locator("code", { hasText: "TSTBK0011" }) });
   await expect(excluido).toContainText("Antes: o usuário do Endpoint mudou");
+  await expect(excluido).toContainText("O usuário do Endpoint mudou");
+  await expect(excluido).not.toContainText("usuario_mudou");
   await excluido.getByRole("button", { name: "Desfazer confirmação: série TSTBK0011, Cascavel" }).click();
   await expect(cascavel.locator("code", { hasText: "TSTBK0011" })).toHaveCount(0);
 

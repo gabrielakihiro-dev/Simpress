@@ -122,7 +122,8 @@ def normalizar_usuario_endpoint(valor: Any) -> str:
         if usuario_e_administrador(parte):
             continue
         sem_acento = "".join(c for c in unicodedata.normalize("NFKD", parte) if not unicodedata.combining(c)).casefold()
-        nome = sem_acento.split("horario da ultima")[0].rsplit("\\", 1)[-1].split("@", 1)[0].strip()
+        nome = sem_acento.split("horario da ultima")[0].split("(")[0].strip(" .:-")
+        nome = " ".join(nome.rsplit("\\", 1)[-1].split("@", 1)[0].split())
         if nome:
             nomes.add(nome)
     return ",".join(sorted(nomes))

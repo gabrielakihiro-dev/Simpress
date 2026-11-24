@@ -731,6 +731,9 @@ class ConfirmarBackupCalculoTests(unittest.TestCase):
             self.assertEqual(backups_regionais.usuario_ref(texto), "")
         self.assertEqual(backups_regionais.usuario_ref("SEBRAE\\Joao "), ref("joao"))
         self.assertEqual(backups_regionais.usuario_ref("  "), "")
+        self.assertEqual(backups_regionais.usuario_ref("Joao  Silva"), backups_regionais.usuario_ref("Joao Silva"))
+        self.assertEqual(backups_regionais.usuario_ref("joao (Horário da última atividade 01/01/2026)"), ref("joao"))
+        self.assertEqual(backups_regionais.usuario_ref("ADMINISTRADOR (Horário da última atividade 01/01/2026)"), "")
 
     def test_usuario_ref_normaliza_lista_horario_e_acento(self):
         ref_ = backups_regionais.usuario_ref
