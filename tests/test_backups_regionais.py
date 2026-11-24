@@ -371,7 +371,7 @@ class ConfirmacaoTests(unittest.TestCase):
         self.assertEqual(cascavel["backups"], [{
             "serie": "NB1", "apelido": "", "origem": "confirmacao", "ultima_verificacao": None,
             "confirmado_ate": expira.isoformat(),
-            "confirmacao": {"estado": "vigente", "expira_em": expira.isoformat()},
+            "confirmacao": {"estado": "vigente", "tipo": "7_dias", "expira_em": expira.isoformat()},
         }])
         self.assertEqual((cascavel["status"], cascavel["candidatos"]), ("ok", []))
 
@@ -386,7 +386,7 @@ class ConfirmacaoTests(unittest.TestCase):
         self.assertEqual(cascavel["contados"], 0)
         self.assertEqual(cascavel["conferencia"], [{
             "serie": "NB1", "apelido": "Backup Cascavel 01", "motivo": "leitura_ambigua",
-            "confirmacao": {"estado": "vigente", "expira_em": expira.isoformat()},
+            "confirmacao": {"estado": "vigente", "tipo": "7_dias", "expira_em": expira.isoformat()},
         }])
 
     def test_marca_com_confirmacao_vigente_conta_pela_marca_e_mostra_o_prazo(self):
@@ -398,7 +398,7 @@ class ConfirmacaoTests(unittest.TestCase):
         )
         backup = regional(resultado, "Cascavel")["backups"][0]
         self.assertEqual((backup["origem"], backup["confirmado_ate"]), ("marca", expira.isoformat()))
-        self.assertEqual(backup["confirmacao"], {"estado": "vigente", "expira_em": expira.isoformat()})
+        self.assertEqual(backup["confirmacao"], {"estado": "vigente", "tipo": "7_dias", "expira_em": expira.isoformat()})
 
     def test_confirmacao_vigente_vale_com_endpoint_indisponivel(self):
         resultado = calcular(
@@ -666,6 +666,99 @@ def novo(serie="TSTBK002", cidade="Cascavel", usuario_ref=""):
 
 def estado_de(*registros):
     return {"esquema": 1, "confirmacoes": list(registros)}
+
+
+class ConfirmarBackupCalculoTests(unittest.TestCase):
+    def excluido(self, resultado):
+        return regional(resultado, "Cascavel")["excluidos"]
+
+    def test_confirmar_backup_conta_sem_prazo(self):
+        depois = AGORA + timedelta(days=30)
+        resultado = calcular([notebook("NB1")], endpoint(), [novo("NB1", usuario_ref=ref("joao"))], agora=depois)
+        backup = regional(resultado, "Cascavel")["backups"][0]
+        self.assertEqual(backup["origem"], "confirmacao")
+        self.assertEqual(backup["confirmacao"], {"estado": "vigente", "tipo": "backup", "expira_em": None})
+        self.assertIsNone(backup["confirmado_ate"])
+
+    def test_usuario_mudou_exclui(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=30), "maria")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual(self.excluido(resultado), [{
+            "serie": "NB1", "motivo": "usuario_mudou", "confirmacao": {"estado": "invalidada", "motivo": "usuario_mudou"},
+        }])
+        self.assertEqual(regional(resultado, "Cascavel")["backups"], [])
+
+    def test_usuario_novo_com_verificacao_recente_vira_usuario_mudou(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), "maria")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual([e["motivo"] for e in self.excluido(resultado)], ["usuario_mudou"])
+
+    def test_mesmo_usuario_recente_continua_backup(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), "SEBRAE\\Joao ")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
+        self.assertEqual(self.excluido(resultado), [])
+
+    def test_sem_usuario_e_aparece_usuario_exclui(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=30), "maria")), [novo("NB1")])
+        self.assertEqual([e["motivo"] for e in self.excluido(resultado)], ["usuario_mudou"])
+
+    def test_usuario_atual_vazio_nao_derruba(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), "")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
+
+    def test_serie_sumiu_do_endpoint_nao_derruba(self):
+        resultado = calcular([notebook("NB1")], endpoint(("OUTRA", "H2", antes(days=1), "maria")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
+
+    def test_admin_nao_derruba(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), ".\\Administrador")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
+
+    def test_admin_variacoes(self):
+        for texto in ("administrator", "SEBRAE\\Administrador", "Administrador@x"):
+            with self.subTest(texto=texto):
+                resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), texto)),
+                                     [novo("NB1", usuario_ref=ref("joao"))])
+                self.assertEqual(series(regional(resultado, "Cascavel")["backups"]), ["NB1"])
+
+    def test_usuario_ref_admin_vazio(self):
+        for texto in ("Administrador", "SEBRAE\\administrator", "Administrador@x"):
+            self.assertEqual(backups_regionais.usuario_ref(texto), "")
+        self.assertEqual(backups_regionais.usuario_ref("SEBRAE\\Joao "), ref("joao"))
+        self.assertEqual(backups_regionais.usuario_ref("  "), "")
+
+    def test_usuario_manual_e_trava_continuam_excluindo(self):
+        confirmacao = [novo("NB1", usuario_ref=ref("joao"))]
+        manual = calcular([notebook("NB1")], endpoint(manual={"NB1": "joao"}), confirmacao)
+        trava = calcular(
+            [notebook("NB1")],
+            endpoint(holds={"NB1": {"usuario_atual": "joao", "tipo": "usuario_ausente", "estado": "pendente"}}),
+            confirmacao,
+        )
+        for resultado in (manual, trava):
+            self.assertEqual([e["motivo"] for e in self.excluido(resultado)], ["usuario_vigente"])
+
+    def test_confirmacao_7_dias_antiga_continua_expirando(self):
+        resultado = calcular([notebook("NB1")], endpoint(), [antigo("NB1", expira_em=AGORA - timedelta(days=1))])
+        self.assertEqual(regional(resultado, "Cascavel")["candidatos"][0]["confirmacao"],
+                         {"estado": "invalidada", "motivo": "expirada"})
+
+    def test_confirmacao_7_dias_com_usuario_recente_continua_excluindo(self):
+        resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=1), "joao")), [antigo("NB1")])
+        self.assertEqual([e["motivo"] for e in self.excluido(resultado)], ["usuario_vigente"])
+
+    def test_payload_sem_usuario_ref(self):
+        resultado = calcular(
+            [notebook("NB1"), notebook("NB2")], endpoint(("NB2", "H2", antes(days=1), "maria")),
+            [novo("NB1", usuario_ref=ref("joao")), novo("NB2", usuario_ref=ref("joao"))],
+        )
+        texto = json.dumps(resultado)
+        self.assertNotIn("usuario_ref", texto)
+        self.assertNotIn("sha256:", texto)
 
 
 class StoreConfirmarBackupTests(unittest.TestCase):

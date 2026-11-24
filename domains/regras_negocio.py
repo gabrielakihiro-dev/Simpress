@@ -76,3 +76,13 @@ def cadastro_e_macbook(*textos: Any) -> bool:
     """Lado do cadastro: `MACBOOK` nos campos passados (categoria, tipo e/ou modelo), sem acento e em maiúsculas."""
     juntos = unicodedata.normalize("NFKD", " ".join(str(texto or "") for texto in textos))
     return "MACBOOK" in "".join(c for c in juntos if not unicodedata.combining(c)).upper()
+
+
+def usuario_e_administrador(texto: Any) -> bool:
+    """Usuário do Endpoint é `Administrador`/`Administrator` (com ou sem domínio, `@...` ou horário); lista com admin conta como admin."""
+    for parte in re.split(r",|;| / ", str(texto or "")):
+        sem_acento = "".join(c for c in unicodedata.normalize("NFKD", parte) if not unicodedata.combining(c)).casefold()
+        nome = sem_acento.split("horario da ultima")[0].rsplit("\\", 1)[-1].split("@")[0].strip()
+        if nome in ("administrador", "administrator"):
+            return True
+    return False

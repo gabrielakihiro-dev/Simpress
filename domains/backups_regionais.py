@@ -20,6 +20,7 @@ Contrato de entrada:
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -27,7 +28,7 @@ from domains.coverage import Manutencao, chave_serie, disponibilidade_efetiva, m
 from domains.effective_alias import endpoint_user_for_serial, strip_manual_alias_marker
 from domains.equipment_search import categorize_equipment
 from domains.inventory_comparison import SERIE_LOCAL_MAP, _parse_verification_datetime
-from domains.regras_negocio import e_serie_sebrae, normalize_reference_value
+from domains.regras_negocio import e_serie_sebrae, normalize_reference_value, usuario_e_administrador
 from domains.user_holds import ACTIVE_STATES
 
 CIDADES_PRIORITARIAS = ("Cascavel", "Londrina", "Pato Branco", "Maringá", "Ponta Grossa")
@@ -105,8 +106,19 @@ def _bloqueio(estado: Optional[Mapping[str, Any]], serie: str, hoje: Any, manute
     return situacao if situacao in _MOTIVOS_DISPONIBILIDADE else None
 
 
+def normalizar_usuario_endpoint(valor: Any) -> str:
+    """Usuário do Endpoint sem domínio (`SEBRAE\fulano`), sem sufixo `@...` e em minúsculas."""
+    return str(valor or "").strip().rsplit("\\", 1)[-1].split("@", 1)[0].strip().casefold()
+
+
+def usuario_ref(valor: Any) -> str:
+    """Pseudônimo do usuário (hash sem segredo, não é anonimização); `""` sem usuário ou com Administrador."""
+    normalizado = "" if usuario_e_administrador(valor) else normalizar_usuario_endpoint(valor)
+    return "sha256:" + hashlib.sha256(normalizado.encode("utf-8")).hexdigest() if normalizado else ""
+
+
 def _confirmacoes_por_serie(confirmacoes: Optional[Iterable[Any]], agora: datetime) -> Dict[str, List[Dict[str, Any]]]:
-    """Confirmações agrupadas por série; ``expira`` ilegível vale como expirada."""
+    """Confirmações agrupadas por série; 7 dias com ``expira`` ilegível vale como expirada, ``backup`` não tem prazo."""
     resultado: Dict[str, List[Dict[str, Any]]] = {}
     for confirmacao in confirmacoes or []:
         if not isinstance(confirmacao, Mapping):
@@ -114,8 +126,12 @@ def _confirmacoes_por_serie(confirmacoes: Optional[Iterable[Any]], agora: dateti
         chave = normalize_reference_value(confirmacao.get("serie"))
         if not chave:
             continue
-        expira = _parse_verification_datetime(confirmacao.get("expira_em"), agora.tzinfo)
-        resultado.setdefault(chave, []).append({"cidade": confirmacao.get("cidade"), "expira": expira})
+        tipo = "backup" if confirmacao.get("tipo") == "backup" else "7_dias"
+        expira = None if tipo == "backup" else _parse_verification_datetime(confirmacao.get("expira_em"), agora.tzinfo)
+        resultado.setdefault(chave, []).append({
+            "cidade": confirmacao.get("cidade"), "expira": expira, "tipo": tipo,
+            "usuario_ref": str(confirmacao.get("usuario_ref") or ""),
+        })
     return resultado
 
 
@@ -124,7 +140,9 @@ def _confirmacao_da_serie(lista: List[Dict[str, Any]], cidade_cadastro: str) -> 
     cidade = normalize_reference_value(cidade_cadastro)
     return max(
         lista,
-        key=lambda c: (normalize_reference_value(c["cidade"]) == cidade, c["expira"] is not None, c["expira"] or _DATA_MINIMA),
+        key=lambda c: (
+            normalize_reference_value(c["cidade"]) == cidade, c["tipo"] == "backup", c["expira"] is not None, c["expira"] or _DATA_MINIMA,
+        ),
         default=None,
     )
 
@@ -195,7 +213,10 @@ def build_backups_regionais(
         trava_ativa = bool(str(trava.get("usuario_atual") or "").strip()) and trava.get("estado") in ACTIVE_STATES.get(
             str(trava.get("tipo")), ()
         )
-        usuario_vigente = bool(usuario_manual) or trava_ativa or (recente and bool(endpoint_user_for_serial(endpoint, chave).strip()))
+        usuario_atual = endpoint_user_for_serial(endpoint, chave).strip() if presente else ""
+        usuario_pleno = bool(usuario_manual) or trava_ativa or (recente and bool(usuario_atual))
+        usuario_firme = bool(usuario_manual) or trava_ativa  # confirmação nova ignora o usuário recente do Endpoint
+        usuario_vigente = usuario_pleno
         bloqueio = _bloqueio(estado_cobertura, serie, hoje, manutencao)
         duplicada = bool(item.get("serie_detalhes_duplicada")) or chave in endpoint.get("duplicates", {})
 
@@ -205,21 +226,32 @@ def build_backups_regionais(
         confirmada = _confirmacao_da_serie(confirmadas.get(chave, []), cidade_cadastro)
         if confirmada is not None:
             expira = confirmada["expira"]
+            nova = confirmada["tipo"] == "backup"
+            ref_atual = usuario_ref(usuario_atual)
+            usuario_mudou = nova and presente and bool(ref_atual) and ref_atual != confirmada["usuario_ref"]
             motivo_invalida = (
-                "expirada" if expira is None or agora >= expira
+                "expirada" if not nova and (expira is None or agora >= expira)
                 else "cidade_mudou" if normalize_reference_value(confirmada["cidade"]) != normalize_reference_value(cidade_cadastro)
-                else "usuario_vigente" if usuario_vigente
+                else "usuario_vigente" if (usuario_firme if nova else usuario_pleno)
+                else "usuario_mudou" if usuario_mudou
                 else "bloqueio" if bloqueio
                 else None
             )
             if motivo_invalida:
                 confirmacao_invalidada = {"estado": "invalidada", "motivo": motivo_invalida}
             else:
-                confirmacao_vigente = {"estado": "vigente", "expira_em": expira.isoformat()}
+                confirmacao_vigente = {
+                    "estado": "vigente", "tipo": confirmada["tipo"], "expira_em": expira.isoformat() if expira else None,
+                }
+                usuario_vigente = usuario_firme if nova else usuario_pleno
 
         marca_valida = bool(cidade_lida) and motivo_marca is None
-        if usuario_vigente or bloqueio:
-            excluido: Dict[str, Any] = {"serie": serie, "motivo": "usuario_vigente" if usuario_vigente else f"bloqueio:{bloqueio}"}
+        mudou = bool(confirmacao_invalidada) and confirmacao_invalidada["motivo"] == "usuario_mudou"
+        if usuario_vigente or bloqueio or mudou:
+            excluido: Dict[str, Any] = {
+                "serie": serie,
+                "motivo": "usuario_mudou" if mudou else "usuario_vigente" if usuario_vigente else f"bloqueio:{bloqueio}",
+            }
             if confirmacao_invalidada:
                 excluido["confirmacao"] = confirmacao_invalidada
             grupo["excluidos"].append(excluido)

@@ -115,3 +115,23 @@ class RegrasNegocioTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UsuarioAdministradorTests(unittest.TestCase):
+    def test_variacoes_de_administrador(self):
+        from domains.regras_negocio import usuario_e_administrador
+
+        for texto in (
+            "Administrador", "administrator", "SEBRAE\Administrador", ".\Administrador", "Administrador@x",
+            "  ADMINISTRADOR  ", "Joao, Administrador", "joao; SEBRAE\Administrator", "joao / administrador",
+            "Administrador Horário da última verificação: 01/01",
+        ):
+            with self.subTest(texto=texto):
+                self.assertTrue(usuario_e_administrador(texto))
+
+    def test_usuario_comum_nao_e_administrador(self):
+        from domains.regras_negocio import usuario_e_administrador
+
+        for texto in ("", None, "joao", "SEBRAE\Joao", "administradora", "joao@administrador.com", "Admin"):
+            with self.subTest(texto=texto):
+                self.assertFalse(usuario_e_administrador(texto))
