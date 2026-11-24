@@ -381,7 +381,7 @@ def backups_acao(acao, corpo):
     if acao in ("manter", "excluir"):
         achado = procurar("backups", lambda i: (i.get("confirmacao") or {}).get("decisao_pendente"))
         if achado is None:
-            return 409, {"detail": {"codigo": "sem_decisao_pendente", "mensagem": "Não há decisão pendente para esta série."}}
+            return 409, {"detail": {"codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente."}}
         if acao == "manter":
             achado["confirmacao"] = {"estado": "vigente", "tipo": "backup", "expira_em": None}
         else:

@@ -112,7 +112,7 @@ async function aoClicar(evento: MouseEvent) {
   const botao = (evento.target as Element | null)?.closest<HTMLButtonElement>("[data-backup-acao]");
   if (!botao || emAndamento) return;
   const { backupAcao: acao, serie, cidade } = botao.dataset;
-  if (!acao || !(acao in ERROS_ACAO) || !serie || !cidade) return;
+  if (!acao || !Object.hasOwn(ERROS_ACAO, acao) || !serie || !cidade) return;
   // Marca e `disabled` no mesmo clique, antes de qualquer await: o segundo clique de um duplo clique não manda outro POST.
   emAndamento = true;
   window.clearTimeout(reabrir);

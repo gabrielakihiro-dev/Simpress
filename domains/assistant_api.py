@@ -2579,7 +2579,12 @@ class SimpressApi:
 
         prioritarias = []
         for g in das_cidades:
-            backups, backups_omitidos = cortar(g.get("backups"), ("serie", "origem", "ultima_verificacao", "confirmado_ate"))
+            backups, backups_omitidos = cortar(g.get("backups"), ("serie", "origem", "ultima_verificacao", "confirmado_ate", "confirmacao"))
+            for b in backups:
+                # Confirmação nova não tem prazo (`confirmado_ate` None): quem diz se há confirmação é `confirmacao`; só flags saem.
+                conf = _dict(b.pop("confirmacao"))
+                b["confirmado"] = conf.get("estado") == "vigente"
+                b["decisao_pendente"] = bool(conf.get("decisao_pendente"))
             candidatos, candidatos_omitidos = cortar(g.get("candidatos"), ("serie", "motivo", "dias_sem_verificacao"))
             prioritarias.append({
                 **{k: g.get(k) for k in ("cidade", "status", "contados", "minimo", "excedente")},
