@@ -199,7 +199,7 @@ Avisar quando uma regional prioritária está sem notebook de backup disponível
 ### Dados
 
 - Fonte: `backups_regionais.pendencias` em `GET /api/painel`, que o front recebe pelo evento `simpress:painel-atualizado` (`sem_backup` e `conferir` são listas de cidades).
-- Só leitura: o cartão não grava nada. `Confirmar disponível por 7 dias` e `Desfazer confirmação` ficam na sub-aba Backups do Resumo.
+- Só leitura: o cartão não grava nada. `Confirmar Backup`, `Desfazer confirmação`, `Manter` e `Excluir` ficam na sub-aba Backups do Resumo. Confirmação nova (24/11/2026) não tem prazo e cai com outro usuário real no Endpoint, e some do cartão como backup contado; a referência do usuário (`usuario_ref`) nunca chega ao cartão (`docs/cockpit-prompts/05-resumo-kpis.md`).
 
 ### Quando aparece e quando some
 
