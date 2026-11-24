@@ -104,6 +104,6 @@ def usuario_e_administrador(texto: Any) -> bool:
     """Verdadeiro se alguma parte do texto de usuários do Endpoint for exatamente Administrador."""
     for parte in re.split(r",|;| / ", _texto_normalizado(texto)):
         parte = parte.split("HORARIO DA ULTIMA")[0].split("(")[0].strip(" .:-")
-        if parte.rsplit("\\", 1)[-1].strip() in {"ADMINISTRADOR", "ADMINISTRATOR"}:
+        if parte.rsplit("\\", 1)[-1].split("@")[0].strip() in {"ADMINISTRADOR", "ADMINISTRATOR"}:
             return True
     return False

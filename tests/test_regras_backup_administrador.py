@@ -28,7 +28,7 @@ class CidadeDoApelidoBackupTests(unittest.TestCase):
 class UsuarioAdministradorTests(unittest.TestCase):
     def test_verdadeiro(self):
         for texto in (
-            "Administrador", "administrator", ".\Administrador", "SEBRAE\Administrador",
+            "Administrador", "administrator", r".\Administrador", r"SEBRAE\Administrador", "Administrador@SEBRAE",
             "ADMINISTRADOR (Horário da última atividade 01/01/2026)", "fulano, Administrador",
         ):
             self.assertTrue(usuario_e_administrador(texto), texto)
