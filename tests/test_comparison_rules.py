@@ -65,6 +65,19 @@ class InventoryComparisonTests(unittest.TestCase):
             "ultimo.logon", "usuario.legado", "usuario.arquivo.antigo",
         ])
 
+    def test_usuario_administrador_marca_item_so_quando_verdadeiro(self):
+        endpoint = source_table([
+            {"NOMEDOCOMPUTADOR": "PRNOTEADM01", "SERIAL": "SN-ADM",
+             "USUARIODOULTIMOLOGON": "fulano", "USUARIOSLOGADOS": "fulano, Administrador"},
+            {"NOMEDOCOMPUTADOR": "PRNOTEOK01", "SERIAL": "SN-OK",
+             "USUARIODOULTIMOLOGON": "fulano", "USUARIOSLOGADOS": "fulano"},
+        ])
+        result = main.compare_uploaded_workbooks(endpoint, source_table([]), {})
+        itens = {item["serie"]: item for item in result["ausentes_em_detalhes"]}
+        self.assertIs(itens["SN-ADM"]["usuario_administrador"], True)
+        self.assertNotIn("usuario_administrador", itens["SN-OK"])
+        self.assertEqual(itens["SN-ADM"]["usuario"], "fulano")
+
     def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
         reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
         ages = {

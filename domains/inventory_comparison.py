@@ -15,6 +15,7 @@ from domains.regras_negocio import (
     is_missing_cell_value,
     normalize_reference_value,
     predicado_serie_sebrae,
+    usuario_e_administrador,
 )
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
@@ -60,6 +61,23 @@ def endpoint_user_value(record: Dict[str, Any]) -> str:
     if normalize_reference_value(logged_users) in {"", "NA"}:
         return ""
     return str(logged_users).strip()
+
+
+def _endpoint_tem_administrador(record: Dict[str, Any]) -> bool:
+    """Administrador em qualquer coluna de último logon ou de usuários logados (mesmas colunas de `endpoint_user_value`)."""
+    return any(
+        usuario_e_administrador(_record_value(record, key))
+        for key in (
+            "USUARIODOULTIMOLOGON", "LASTLOGONUSER", "LASTLOGGEDONUSER",
+            "USUARIOSLOGADOS", "USUARIOLOGADO", "LOGGEDINUSERS", "USUARIO",
+        )
+    )
+
+
+def _marcar_administrador(item: Dict[str, Any], tem_administrador: bool) -> Dict[str, Any]:
+    if tem_administrador:
+        item["usuario_administrador"] = True
+    return item
 
 
 def _upload_serial_value(record: Dict[str, Any], role: str) -> Any:
@@ -278,6 +296,7 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
                 else str(_record_value(row, *user_headers) or "").strip()
             ),
             "ultima_verificacao": _upload_verification_value(row) if role == "endpoint" else None,
+            "administrador": role == "endpoint" and _endpoint_tem_administrador(row),
             "row": row,
         })
     return records
@@ -1307,6 +1326,7 @@ def _comparison_entity(
             if status == "ausente"
         ],
     }
+    _marcar_administrador(entity, any(record["administrador"] for record in endpoint_records))
     return entity, expected_location
 
 
@@ -1420,12 +1440,12 @@ def _location_mismatches(entities: List[_ComparisonEntity]) -> List[Dict[str, An
             ):
                 any_location_mismatch = True
             if any_location_mismatch:
-                location_mismatches.append({
+                location_mismatches.append(_marcar_administrador({
                     "computador": computer_name,
                     "serie": endpoint_record["serie"],
                     "local_previsto": expected_location,
                     **location_values,
-                })
+                }, endpoint_record["administrador"]))
     return location_mismatches
 
 
@@ -1437,13 +1457,13 @@ def _stale_verification_item(
     verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
     if verified_at is None or verified_at > stale_threshold:
         return None
-    return {
+    return _marcar_administrador({
         "computador": record["computador"],
         "serie": record["serie"],
         "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
         "dias_sem_verificacao": max(7, (as_of - verified_at).days),
         "linha_endpoint": record["row_number"],
-    }
+    }, record["administrador"])
 
 
 def _unmapped_series_code(computer_name: str) -> Optional[str]:
