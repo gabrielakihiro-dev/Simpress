@@ -8,7 +8,7 @@ em vez de repetir o teste. Só depende de `core.config` (que não importa `domai
 import math
 import re
 import unicodedata
-from typing import Any, Callable, FrozenSet, Tuple
+from typing import Any, Callable, FrozenSet, Iterable, Optional, Tuple
 
 from core.config import client_own_serials
 
@@ -78,11 +78,28 @@ def cadastro_e_macbook(*textos: Any) -> bool:
     return "MACBOOK" in "".join(c for c in juntos if not unicodedata.combining(c)).upper()
 
 
+def _texto_normalizado(value: Any) -> str:
+    """Maiúscula, sem acento, espaços colapsados (mantém pontuação)."""
+    if is_missing_cell_value(value):
+        return ""
+    decomposed = unicodedata.normalize("NFKD", str(value).upper())
+    sem_acento = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(sem_acento.split())
+
+
+def cidade_do_apelido_backup(apelido: Any, cidades: Iterable[str]) -> Optional[str]:
+    """Cidade de um apelido `Backup <Cidade> [número]` (já sem o marcador "(M)"), senão None."""
+    texto = _texto_normalizado(apelido)
+    if not texto.startswith("BACKUP "):
+        return None
+    resto = re.sub(r"[\s\d]+$", "", texto[len("BACKUP "):])
+    return {_texto_normalizado(cidade): cidade for cidade in cidades}.get(resto)
+
+
 def usuario_e_administrador(texto: Any) -> bool:
-    """Usuário do Endpoint é `Administrador`/`Administrator` (com ou sem domínio, `@...` ou horário); lista com admin conta como admin."""
-    for parte in re.split(r",|;| / ", str(texto or "")):
-        sem_acento = "".join(c for c in unicodedata.normalize("NFKD", parte) if not unicodedata.combining(c)).casefold()
-        nome = sem_acento.split("horario da ultima")[0].rsplit("\\", 1)[-1].split("@")[0].strip()
-        if nome in ("administrador", "administrator"):
+    """Verdadeiro se alguma parte do texto de usuários do Endpoint for exatamente Administrador."""
+    for parte in re.split(r",|;| / ", _texto_normalizado(texto)):
+        parte = parte.split("HORARIO DA ULTIMA")[0].split("(")[0].strip(" .:-")
+        if parte.rsplit("\\", 1)[-1].split("@")[0].strip() in {"ADMINISTRADOR", "ADMINISTRATOR"}:
             return True
     return False

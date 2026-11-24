@@ -121,6 +121,14 @@ class ComparisonTests(unittest.TestCase):
             history_annotation_row_fingerprint("sem_acesso_7_dias", enriched),
         )
 
+    def test_annotation_fingerprint_ignores_the_administrator_signal(self):
+        row = {"computador": "H", "serie": "S"}
+        for category in ("registros_ambiguos", "divergencias_local"):
+            self.assertEqual(
+                history_annotation_row_fingerprint(category, row),
+                history_annotation_row_fingerprint(category, {**row, "usuario_administrador": True}),
+            )
+
 
 class RemovalWorkflowTests(unittest.TestCase):
     def setUp(self):
