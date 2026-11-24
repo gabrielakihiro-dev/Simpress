@@ -63,15 +63,27 @@ function NotaConfirmacaoAnterior({ confirmacao }: { confirmacao: Item | null | u
 }
 
 // Sem `disabled` nem `aria-busy` aqui: o clique (montar.tsx) os põe e tira direto no DOM, como antes.
-function Botao({ acao, serie, cidade, desabilitado = false }: { acao: "confirmar" | "desfazer"; serie: string; cidade: string; desabilitado?: boolean }) {
-  const confirmar = acao === "confirmar";
-  const rotulo = confirmar ? "Confirmar Backup" : "Desfazer confirmação";
-  const nome = confirmar ? `Confirmar ${serie} como backup de ${cidade}` : `${rotulo}: série ${serie}, ${cidade}`;
+type AcaoBackup = "confirmar" | "desfazer" | "manter" | "excluir";
+const ROTULOS_ACAO: Record<AcaoBackup, string> = { confirmar: "Confirmar Backup", desfazer: "Desfazer confirmação", manter: "Manter", excluir: "Excluir" };
+const CLASSES_ACAO: Record<AcaoBackup, string> = { confirmar: "ck-btn--secundario", desfazer: "ck-btn--fantasma", manter: "ck-btn--secundario", excluir: "ck-btn--fantasma" };
+
+// Sem `disabled` nem `aria-busy` aqui: o clique (montar.tsx) os põe e tira direto no DOM, como antes.
+function Botao({ acao, serie, cidade, desabilitado = false }: { acao: AcaoBackup; serie: string; cidade: string; desabilitado?: boolean }) {
+  const rotulo = ROTULOS_ACAO[acao];
+  const nome = acao === "confirmar" ? `Confirmar ${serie} como backup de ${cidade}` : acao === "manter" || acao === "excluir" ? `${rotulo} backup: série ${serie}, ${cidade}` : `${rotulo}: série ${serie}, ${cidade}`;
   return (
-    <button type="button" className={`ck-btn ck-btn--sm ${confirmar ? "ck-btn--secundario" : "ck-btn--fantasma"}`} data-backup-acao={acao} data-serie={serie} data-cidade={cidade} aria-label={nome} disabled={desabilitado || undefined}>
+    <button type="button" className={`ck-btn ck-btn--sm ${CLASSES_ACAO[acao]}`} data-backup-acao={acao} data-serie={serie} data-cidade={cidade} aria-label={nome} disabled={desabilitado || undefined}>
       {rotulo}
     </button>
   );
+}
+
+// Apelido manual com usuário novo no Endpoint: o usuário decide entre Manter e Excluir (Desfazer segue disponível).
+const decisaoPendente = (item: Item) => item.confirmacao?.decisao_pendente === true;
+function DecisaoPendente({ item, cidade }: { item: Item; cidade: string }) {
+  if (!decisaoPendente(item)) return null;
+  const serie = texto(item.serie);
+  return <><span className="ck-backups__nota">Usuário novo no Endpoint: manter como backup?</span><Botao acao="manter" serie={serie} cidade={cidade} /><Botao acao="excluir" serie={serie} cidade={cidade} /></>;
 }
 
 // Desfazer vale para qualquer confirmação vigente, nova (sem prazo) ou antiga de 7 dias.
@@ -101,7 +113,7 @@ function ItemBackup({ backup, cidade }: { backup: Item; cidade: string }) {
   ]);
   // Contado pela marca, mas com confirmação vigente: o Desfazer continua disponível.
   const desfazer = temConfirmacaoVigente(backup);
-  return <><Identificacao item={backup} /><span className="ck-backups__detalhe">{texto_}</span>{desfazer ? <Botao acao="desfazer" serie={texto(backup.serie)} cidade={cidade} /> : null}</>;
+  return <><Identificacao item={backup} /><span className="ck-backups__detalhe">{texto_}</span><DecisaoPendente item={backup} cidade={cidade} />{desfazer ? <Botao acao="desfazer" serie={texto(backup.serie)} cidade={cidade} /> : null}</>;
 }
 
 function ItemCandidato({ candidato, cidade }: { candidato: Item; cidade: string }) {
@@ -201,7 +213,7 @@ function Tabela({ regionais }: { regionais: Item[] }) {
 function ItemSobra({ item, cidade }: { item: Item; cidade: string }) {
   const texto_ = detalhes([traduzir(ORIGENS, item.origem), textoConfirmacao(item)]);
   const desfazer = temConfirmacaoVigente(item);
-  return <><code className="ck-backups__serie">{texto(item.serie)}</code>{texto_ ? <span className="ck-backups__detalhe">{texto_}</span> : null}{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
+  return <><code className="ck-backups__serie">{texto(item.serie)}</code>{texto_ ? <span className="ck-backups__detalhe">{texto_}</span> : null}<DecisaoPendente item={item} cidade={cidade} />{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
 }
 
 function SecaoSobras({ sobras }: { sobras: Item[] }) {

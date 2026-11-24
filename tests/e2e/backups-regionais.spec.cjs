@@ -321,6 +321,36 @@ test("confirmação nova mostra Confirmado como backup com Desfazer; excluído p
   await expect(page.locator("#toast-container")).toContainText("Backup confirmado: TSTBK0001");
 });
 
+// Apelido manual com usuário novo no Endpoint: decisão pendente com Manter e Excluir (fixture: Toledo, TSTBK0013 e TSTBK0014).
+test("decisão pendente: Manter some a pergunta e Excluir tira o item de Backups, com toast sem apelido", async ({ page }) => {
+  test.slow();
+  await abrirResumo(page);
+  await irParaBackupsPeloSino(page);
+  await esperarBackupsAberta(page);
+  const toledo = linha(page, "Toledo");
+  const pergunta = "Usuário novo no Endpoint: manter como backup?";
+  const manter = toledo.getByRole("button", { name: "Manter backup: série TSTBK0013, Toledo" });
+  const excluir = toledo.getByRole("button", { name: "Excluir backup: série TSTBK0014, Toledo" });
+  await expect(toledo.getByText(pergunta)).toHaveCount(2);
+  await expect(manter).toHaveText("Manter");
+  await expect(excluir).toHaveText("Excluir");
+  await expect(manter).toHaveAttribute("data-backup-acao", "manter");
+  await expect(excluir).toHaveAttribute("data-backup-acao", "excluir");
+  await expect(toledo.getByRole("button", { name: /Confirmar .* como backup/ })).toHaveCount(0);
+  await expect(toledo.getByRole("button", { name: "Desfazer confirmação: série TSTBK0013, Toledo" })).toBeVisible();
+
+  await manter.click();
+  await expect(page.locator("#toast-container")).toContainText("Backup mantido: TSTBK0013");
+  await expect(toledo.getByText(pergunta)).toHaveCount(1);
+  await expect(toledo.locator("code", { hasText: "TSTBK0013" })).toBeVisible();
+
+  await excluir.click();
+  await expect(page.locator("#toast-container")).toContainText("Backup excluído: TSTBK0014");
+  await expect(toledo.getByText(pergunta)).toHaveCount(0);
+  await expect(toledo.locator("code", { hasText: "TSTBK0014" })).toHaveCount(0);
+  await expect(page.locator("#toast-container")).not.toContainText(/estacao teste/i);
+});
+
 // Regional fora das prioritárias (Curitiba): o candidato TSTBK0008 vira "sobra" ao confirmar, com o Desfazer na própria seção.
 test("sobra fora das prioritárias: confirmar mostra Desfazer em Sobras e desfazer devolve o candidato, com foco e sem rolagem horizontal", async ({ page }) => {
   test.slow();
@@ -416,7 +446,7 @@ for (const largura of [320]) {
     expect(estilos.cabecalhoPosicao).toBe("absolute");
     expect(estilos.cabecalhoLargura).toBeLessThanOrEqual(1);
     expect(estilos.rotulo).toBe('"Situação"');
-    await expect(page.locator(`${PAINEL} tbody tr`)).toHaveCount(5);
+    await expect(page.locator(`${PAINEL} tbody tr`)).toHaveCount(6);
     for (const cidade of ["Cascavel", "Londrina", "Pato Branco", "Maringá", "Ponta Grossa"]) {
       await expect(linha(page, cidade)).toBeVisible();
       await expect(linha(page, cidade).locator(".ck-badge")).toBeVisible();

@@ -272,7 +272,7 @@ panel_alerts_state = "ocultos"
 # GET /__fixture_backups?estado=padrao|so_conferir|nulo|indisponivel resets the state (and picks the mode):
 # padrao = Cascavel sem_backup, Londrina conferir, Pato Branco ok (com backup por confirmacao), Maringa e Ponta Grossa ok;
 # so_conferir = so Londrina pendente; nulo = campo null (servico desligado); indisponivel = {indisponivel:true,...}.
-# POST /api/backups-regionais/confirmar|desfazer mexem nesse estado e o painel recalcula status, sobras e pendencias.
+# POST /api/backups-regionais/confirmar|desfazer|manter|excluir mexem nesse estado e o painel recalcula status, sobras e pendencias.
 BACKUPS_MINIMO = 1
 BACKUPS_MODOS = ("padrao", "so_conferir", "nulo", "indisponivel")
 backups_state = {"modo": "padrao", "cidades": {}}
@@ -300,6 +300,11 @@ def backups_reset(modo="padrao"):
         return {"serie": serie, "apelido": apelido, "origem": "confirmacao", "ultima_verificacao": None,
                 "confirmado_ate": None, "confirmacao": {"estado": "vigente", "tipo": "backup", "expira_em": None}}
 
+    def pendente(serie, apelido):
+        # Apelido manual + usuário novo no Endpoint: confirmação vigente com decisão pendente (Manter/Excluir).
+        return {"serie": serie, "apelido": apelido, "origem": "confirmacao", "ultima_verificacao": None,
+                "confirmado_ate": None, "confirmacao": {"estado": "vigente", "tipo": "backup", "expira_em": None, "decisao_pendente": True}}
+
     def candidato(serie, apelido, motivo, dias=None):
         return {"serie": serie, "apelido": apelido, "motivo": motivo, "confirmacao": None, "dias_sem_verificacao": dias,
                 "ultima_verificacao": (agora - timedelta(days=dias)).isoformat() if dias is not None else None}
@@ -319,6 +324,7 @@ def backups_reset(modo="padrao"):
         grupo("Pato Branco", backups=[marca("TSTBK0003", "Estacao Teste 3"), confirmado("TSTBK0004", "Estacao Teste 4")]),
         grupo("Maringá", backups=[marca("TSTBK0006", "Estacao Teste 6"), confirmado_backup("TSTBK0010", "Estacao Teste 10")]),
         grupo("Ponta Grossa", backups=[marca("TSTBK0007", "Estacao Teste 7")]),
+        grupo("Toledo", backups=[pendente("TSTBK0013", "Estacao Teste 13"), pendente("TSTBK0014", "Estacao Teste 14")]),
         grupo("Curitiba", prioritaria=False, candidatos=[candidato("TSTBK0008", "Estacao Teste 8", "ausente_no_endpoint"),
                                                     candidato("TSTBK0012", "Estacao Teste 12", "fonte_endpoint_indisponivel")]),
     ]
@@ -372,6 +378,15 @@ def backups_acao(acao, corpo):
     def procurar(lista, filtro=lambda item: True):
         return next((i for i in (grupo[lista] if grupo else []) if backups_chave(i["serie"]) == serie and filtro(i)), None)
 
+    if acao in ("manter", "excluir"):
+        achado = procurar("backups", lambda i: (i.get("confirmacao") or {}).get("decisao_pendente"))
+        if achado is None:
+            return 409, {"detail": {"codigo": "sem_decisao_pendente", "mensagem": "Não há decisão pendente para esta série."}}
+        if acao == "manter":
+            achado["confirmacao"] = {"estado": "vigente", "tipo": "backup", "expira_em": None}
+        else:
+            grupo["backups"].remove(achado)
+        return 200, {"serie": achado["serie"], "cidade": grupo["cidade"], "decisao": acao}
     if acao == "desfazer":
         achado = procurar("backups", lambda i: i.get("confirmacao"))
         if achado is None:
@@ -1244,7 +1259,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
-        if path in ("/api/backups-regionais/confirmar", "/api/backups-regionais/desfazer"):
+        if path in ("/api/backups-regionais/confirmar", "/api/backups-regionais/desfazer", "/api/backups-regionais/manter", "/api/backups-regionais/excluir"):
             size = int(self.headers.get("Content-Length", "0"))
             try:
                 corpo = json.loads(self.rfile.read(size) or b"{}")
