@@ -165,3 +165,11 @@ Resumo (F3) no desenho da opção C com o cartão `Histórico` da A. Detalhe com
 - `Ver lista →` em cada cartão leva à sub-aba correspondente e foca a aba; `Ver tudo →` do `Histórico` abre o histórico completo como gaveta.
 - Desvios do desenho: período 7/14/30 dias, seletor de Ativos, gráfico `Hoje`, arrastar, `Restaurar layout`, `Voltar aos cartões` e textos de variação nos cartões não foram implementados.
 - Verificação: `tests/frontend/test_resumo_ativos.cjs`, `test_backups_regionais_montar.cjs`, `test_comparison_summary_cards.cjs`, `test_dom_id_coverage.cjs` e os specs `backups-regionais`, `react-bf3`, `react-piloto`, `color-contrast` e `ui` em `tests/e2e/`.
+
+## Visão Geral como primeira sub-aba (23/11/2026, pedido do usuário)
+
+- Nova primeira sub-aba `Visão Geral` (texto aprovado, G maiúsculo; `#resumo-aba-visao-geral`, sem selo de contagem). Ela é o painel do bento inteiro (`#resumo-painel-visao-geral`, `role="tabpanel"`): `Ativos`, `Divergências`, `Apelidos`, `Usuários`, `Sem acesso`, `Backups em dia`, `Ativos por regional` e `Histórico`.
+- A barra de sub-abas subiu para o topo do Resumo (logo abaixo da barra de ferramentas, das fontes e dos avisos) e agora tem seis abas. É a aba padrão ao abrir o F3 e depois de `limparAbasResumo`. Só um painel aparece por vez; `#comparacao-planilhas-avisos` fica sempre visível (o aviso das anotações herdadas passou para ele, texto igual).
+- Sem comparação na tela (vazio, erro ou carregando), a `Visão Geral` mostra o bento com `—` e, logo abaixo, a mensagem de vazio ou de erro e a seção `Sem usuário`; com comparação, as listas só aparecem nas outras abas.
+- `#btn-alerta-divergencias-novas` passou a levar `data-args=["comparacao","divergencias"]`, porque deixou de contar com o padrão; `Ver lista →` dos cartões abre a sub-aba e leva ao topo da barra. O texto acima (padrão `Divergências`, bento sempre visível) vale como registro de datas anteriores.
+- Código: `RESUMO_ABAS` (`renderizador.ts`), `estado.ts` de `resultado-comparacao` e de `ferramentas-cockpit`, `frontend/partials/cockpit-tool-panels.html`, `static/styles/nl-f3-f7-f8.css`.

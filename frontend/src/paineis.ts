@@ -13,10 +13,10 @@ export interface ModuloPainel {
 export const modulos = import.meta.glob<ModuloPainel>(
   [
     "./paineis/*/montar.tsx",
-    "!./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos}/montar.tsx",
+    "!./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos,ux-ticket}/montar.tsx",
   ],
   { eager: true },
 );
 export const modulosSobDemanda = import.meta.glob<ModuloPainel>(
-  "./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos}/montar.tsx",
+  "./paineis/{assistant-chat,cobertura,configuracao-local,dossie-equipamento,editar-apelido,editar-equipamento,lembretes,outlook-email,pesquisa-completa,resumo-ativos,ux-ticket}/montar.tsx",
 );

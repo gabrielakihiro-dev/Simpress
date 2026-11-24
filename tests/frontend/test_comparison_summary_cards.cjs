@@ -174,19 +174,23 @@ test("strip cards keep tones and links: counted cards are buttons to their secti
   });
 });
 
-test("Resumo sem Visão geral (Novo layout, 18/11/2026): sem painel, sem anel e sem o rodapé 'Equipamentos carregados'", () => {
+test("Resumo (18/11/2026, atualizado 23/11/2026): o resultado não traz o bento nem painel de Visão Geral (ele é estático, fora de #comparacao-planilhas-conteudo); sem anel e sem o rodapé 'Equipamentos carregados'", () => {
   const html = renderizar(
     { ...COMPARACAO_COMPLETA, total_equipamentos_carregados: 4321, backup_diretorio: "_backups_x", anotacoes_herdadas_enfileiradas: 2 },
     { estado: "ok", items: [{ serial: "SN-1", apelido: "PRNOTE-A" }] },
   );
   assert.equal(html.includes('id="resumo-painel-visao"'), false);
-  assert.deepEqual(renderer.RESUMO_ABAS.map(aba => aba.chave), ["divergencias", "apelidos", "usuarios", "sem-acesso", "backups"]);
-  for (const texto of [/Visão geral/, /Contadores de Visão geral/, /ck-bento-anel/, /ck-bento-legenda/, /com correspondência nas duas bases/, /Equipamentos carregados na Simpress/, /Backup das versões anteriores/, /4\.321/, /_backups_x/]) {
+  assert.equal(html.includes('id="resumo-painel-visao-geral"'), false);
+  assert.deepEqual(renderer.RESUMO_ABAS.map(aba => aba.chave), ["visao-geral", "divergencias", "apelidos", "usuarios", "sem-acesso", "backups"]);
+  assert.equal(renderer.RESUMO_ABAS[0].rotulo, "Visão Geral", "texto aprovado, G maiúsculo");
+  for (const texto of [/Visão geral/, /Visão Geral/, /Contadores de Visão geral/, /ck-bento-anel/, /ck-bento-legenda/, /com correspondência nas duas bases/, /Equipamentos carregados na Simpress/, /Backup das versões anteriores/, /4\.321/, /_backups_x/]) {
     assert.doesNotMatch(html, texto);
   }
-  // O aviso das anotações herdadas continua no topo do resultado, fora das sub-abas.
-  const aviso = html.indexOf("2 anotações herdadas foram gravadas junto com o resultado");
-  assert.ok(aviso >= 0 && aviso < html.indexOf('id="resumo-painel-divergencias"'), "aviso fica antes do primeiro painel");
+  // O aviso das anotações herdadas vive em #comparacao-planilhas-avisos (avisoHistoricoComparacao), fora do conteúdo das sub-abas, para aparecer na Visão Geral.
+  assert.doesNotMatch(html, /anotações herdadas foram gravadas/);
+  const avisos = renderer.avisoHistoricoComparacao({ ...COMPARACAO_COMPLETA, anotacoes_herdadas_enfileiradas: 2, historico_salvo: true });
+  assert.match(avisos, /2 anotações herdadas foram gravadas junto com o resultado\. A sincronização com a pasta compartilhada será tentada automaticamente\./);
+  assert.match(avisos, /Resultado registrado no Histórico de planilhas\./);
 });
 
 test("strips stay with static cards at zero and the Usuários tab has no wrapper without cards", () => {
@@ -194,4 +198,17 @@ test("strips stay with static cards at zero and the Usuários tab has no wrapper
   assert.equal(cartoes(painel(html, "divergencias")).length, 6);
   assert.equal(cartoes(painel(html, "apelidos")).length, 3);
   assert.doesNotMatch(painel(html, "usuarios"), /resumo-cartoes/);
+});
+
+test("Visão Geral (23/11/2026): aba padrão do Resumo, habilitada sem comparação e fora dos selos de contagem", () => {
+  const fonte = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../frontend/src/paineis/resultado-comparacao/estado.ts"), "utf8");
+  assert.match(fonte, /ESTADO_RESUMO_INICIAL: EstadoResumo = \{ aba: "visao-geral"/);
+  assert.match(fonte, /ABAS_SEM_COMPARACAO = \["visao-geral", "divergencias", "backups"\]/);
+  assert.match(fonte, /chave !== "backups" && chave !== "visao-geral"/);
+  assert.match(fonte, /escondeListas = naVisaoGeral && !semComparacao/);
+  // Sem piscar a Visão Geral: limparAbasResumo mantém a aba que a abertura pediu, se ela vale sem comparação.
+  assert.match(fonte, /function limparAbasResumo\(abaPedida\?: string\)/);
+  assert.match(fonte, /abaPedida && ABAS_SEM_COMPARACAO\.includes\(abaPedida\)/);
+  const painel = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../frontend/src/paineis/ferramentas-cockpit/estado.ts"), "utf8");
+  assert.equal(painel.split("app.limparAbasResumo?.(abaPedidaAoAbrir)").length - 1, 3);
 });

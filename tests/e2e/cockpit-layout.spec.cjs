@@ -107,10 +107,11 @@ test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoCompara
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    // O F3 abre em Divergências, onde fica o KPI de localidade; o bento do topo não usa data-metric-tone e não há "Visão geral".
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    // O F3 abre na Visão Geral (23/11/2026); o KPI de localidade fica em Divergências. O bento não usa data-metric-tone.
+    await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
     await expect(page.locator(".nf3-topo [data-metric-tone]")).toHaveCount(0);
+    await page.locator("#resumo-aba-divergencias").click();
     await page.locator('#resumo-painel-divergencias [data-comparison-section-target="comparacao-secao-localidade-divergente"]').click();
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
     const divergente = page.locator("#comparacao-secao-localidade-divergente");
@@ -128,14 +129,92 @@ test("Resumo: o KPI rola até a seção da própria sub-aba e irParaSecaoCompara
   }
 });
 
+test("Resumo: abre na Visão Geral com o bento abaixo da barra de abas; Divergências e \"Ver lista\" trocam o painel", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    await page.locator("#btn-resumo-aba").click();
+    const visao = page.locator("#resumo-aba-visao-geral");
+    await expect(visao).toHaveText("Visão Geral");
+    await expect(visao).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".resumo-abas button").first()).toHaveAttribute("id", "resumo-aba-visao-geral");
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeVisible();
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toHaveAttribute("data-estado", "pronto");
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toBeHidden();
+    await expect(page.locator("#resumo-painel-backups")).toBeHidden();
+    const [barra, bento] = await page.evaluate(() => [".resumo-abas", "#resumo-painel-visao-geral"].map(seletor => document.querySelector(seletor).getBoundingClientRect().top));
+    expect(barra).toBeLessThan(bento);
+    // Divergências esconde o bento e mostra a lista.
+    await page.locator("#resumo-aba-divergencias").click();
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeHidden();
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toBeVisible();
+    // "Ver lista" de um cartão abre a aba correspondente.
+    await visao.click();
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeVisible();
+    await page.locator('[data-nf3-cartao="sem-acesso"] [data-nf3-ver]').click();
+    await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-painel-visao-geral")).toBeHidden();
+    await expect(page.locator("#resumo-painel-sem-acesso")).toBeVisible();
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+for (const largura of [640, 700, 768]) {
+  test(`Resumo a ${largura}px: as seis abas cabem na barra sem rolar por dentro e sem rolagem horizontal da página`, async ({ page, request }) => {
+    await request.get("/__fixture_cockpit?comparacao=1");
+    try {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await page.goto("/");
+      await page.locator("#btn-resumo-aba").click();
+      await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+      const barra = await page.evaluate(() => {
+        const lista = document.querySelector(".nf3-sub--abas .resumo-abas");
+        return { rolagem: lista.scrollWidth, largura: lista.clientWidth, abas: lista.querySelectorAll(".resumo-aba").length };
+      });
+      expect(barra.abas).toBe(6);
+      expect(barra.rolagem, "todas as abas visíveis, sem rolar por dentro da barra").toBeLessThanOrEqual(barra.largura);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(largura);
+    } finally {
+      await request.get("/__fixture_cockpit?comparacao=0");
+    }
+  });
+}
+
+for (const largura of [320, 390]) {
+  test(`Resumo a ${largura}px: as seis abas aparecem inteiras em duas linhas, sem rolagem horizontal da página`, async ({ page, request }) => {
+    await request.get("/__fixture_cockpit?comparacao=1");
+    try {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await page.goto("/");
+      await page.locator("#btn-resumo-aba").click();
+      await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
+      const abas = await page.evaluate(() => [...document.querySelectorAll(".nf3-sub--abas .resumo-aba")].map(aba => {
+        const caixa = aba.getBoundingClientRect();
+        return { id: aba.id, esquerda: caixa.left, direita: caixa.right, topo: Math.round(caixa.top), cortada: aba.scrollWidth > aba.clientWidth + 1 };
+      }));
+      expect(abas).toHaveLength(6);
+      for (const aba of abas) {
+        expect(aba.esquerda, `${aba.id} dentro da janela`).toBeGreaterThanOrEqual(0);
+        expect(aba.direita, `${aba.id} dentro da janela`).toBeLessThanOrEqual(largura);
+        expect(aba.cortada, `${aba.id} sem rótulo cortado`).toBe(false);
+      }
+      expect(new Set(abas.map(aba => aba.topo)).size, "duas linhas de três").toBe(2);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(largura);
+    } finally {
+      await request.get("/__fixture_cockpit?comparacao=0");
+    }
+  });
+}
+
 test("Resumo: navegarParaLinhaComparacao abre a sub-aba da linha antes de procurá-la", async ({ page, request }) => {
   await request.get("/__fixture_cockpit?comparacao=1");
   try {
     await page.goto("/");
     await page.locator("#btn-resumo-aba").click();
-    // Divergências já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
+    // A Visão Geral já vem selecionada antes do render: espera as linhas (mesmo ocultas) existirem.
     await expect(page.locator('#comparacao-planilhas-conteudo [data-comparison-category="sem_acesso_60_dias"]').first()).toBeAttached();
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
     // SAIU60 só existe em "Passou de 60 dias sem acesso" (aba Sem acesso), aqui sem categoria.
     await page.evaluate(() => window.navegarParaLinhaComparacao({ serial: "SAIU60" }));
     await expect(page.locator("#resumo-aba-sem-acesso")).toHaveAttribute("aria-selected", "true");

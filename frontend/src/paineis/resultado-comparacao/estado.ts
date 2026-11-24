@@ -420,21 +420,23 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
   }
 
   const ABAS_RESUMO = renderer.RESUMO_ABAS.map(aba => aba.chave);
-  const ESTADO_RESUMO_INICIAL: EstadoResumo = { aba: "divergencias", busca: "", soAnotadas: false, tipo: "" };
+  const ESTADO_RESUMO_INICIAL: EstadoResumo = { aba: "visao-geral", busca: "", soAnotadas: false, tipo: "" };
   const estadoResumo: EstadoResumo = { ...ESTADO_RESUMO_INICIAL };
   // Set by conectarFiltrosHistoricoComparacao for the content currently on screen; null when there is none.
   let atualizarResumo: (() => void) | null = null;
   // Sem comparação na tela (vazio, carregando ou erro): as abas que só filtram a comparação ficam desabilitadas.
   let semComparacao = true;
-  // Novo layout (18/11/2026): sem "Visão geral"; o bento fica sempre acima das sub-abas, que abrem em Divergências.
-  // Sem comparação só "Divergências" (mensagem de vazio) e "Backups" (não dependem dela) ficam habilitadas.
-  const ABAS_SEM_COMPARACAO = ["divergencias", "backups"];
+  // Novo layout (18/11/2026): bento acima das sub-abas, que abriam em Divergências. Atualizado em 23/11/2026 (pedido do usuário):
+  // a barra de sub-abas sobe para o topo e a primeira aba, "Visão Geral", guarda o bento e é a aba padrão.
+  // Sem comparação só "Visão Geral", "Divergências" (mensagem de vazio) e "Backups" (não dependem dela) ficam habilitadas.
+  const ABAS_SEM_COMPARACAO = ["visao-geral", "divergencias", "backups"];
+  const ABA_PADRAO = "visao-geral";
   const abaDesabilitada = (chave: string): boolean => semComparacao && !ABAS_SEM_COMPARACAO.includes(chave) && chave !== estadoResumo.aba;
 
   const elementoAbaResumo = (chave: string): HTMLElement | null => document.getElementById(`resumo-aba-${chave}`);
 
   function aplicarAbaResumo(): void {
-    const painelAtivo = ABAS_RESUMO.includes(estadoResumo.aba) ? estadoResumo.aba : "divergencias";
+    const painelAtivo = ABAS_RESUMO.includes(estadoResumo.aba) ? estadoResumo.aba : ABA_PADRAO;
     ABAS_RESUMO.forEach(chave => {
       const botao = elementoAbaResumo(chave);
       if (!botao) return;
@@ -447,13 +449,22 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     document.querySelectorAll<HTMLElement>("#comparacao-planilhas-conteudo [data-resumo-painel]").forEach(painel => {
       painel.hidden = painel.dataset.resumoPainel !== painelAtivo;
     });
+    // Um painel por vez. "Visão Geral" mostra o bento (#resumo-painel-visao-geral) e, abaixo dele, só o que vale sem comparação
+    // (mensagem de vazio, erro ou "Carregando" e a seção "Sem usuário"), porque não há painéis [data-resumo-painel] para mostrar.
+    // Com comparação, a Visão Geral esconde as listas; as outras abas escondem o bento.
     // "Backups" não depende da comparação: o painel fixo fica fora do conteúdo recriado e, com ele aberto,
-    // o conteúdo inteiro (filtros e mensagem de vazio) sai de cena. "Ativos por regional" é cartão do bento (sempre visível).
+    // o conteúdo inteiro (filtros e mensagem de vazio) sai de cena. "Ativos por regional" é cartão do bento.
+    const naVisaoGeral = painelAtivo === "visao-geral";
+    const bento = document.getElementById("resumo-painel-visao-geral");
+    if (bento) bento.hidden = !naVisaoGeral;
+    const escondeListas = naVisaoGeral && !semComparacao;
+    const listas = document.getElementById("resumo-paineis-lista");
+    if (listas) listas.hidden = escondeListas;
     const noBackups = painelAtivo === "backups";
     const painelBackups = document.getElementById("resumo-painel-backups");
     if (painelBackups) painelBackups.hidden = !noBackups;
     const conteudo = document.getElementById("comparacao-planilhas-conteudo");
-    if (conteudo) conteudo.hidden = noBackups;
+    if (conteudo) conteudo.hidden = noBackups || escondeListas;
   }
 
   // Tab change keeps the search and the "só anotadas" choice; the type belongs to one tab, so it is cleared.
@@ -481,7 +492,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     CARTOES_DA_COMPARACAO.forEach(chave => escreverNumeroCartao(chave, null));
   }
 
-  // "Ver lista →" dos cartões: abre a sub-aba, rola até ela e põe o foco na aba; "Ativos" vai ao cartão "Ativos por regional".
+  // "Ver lista →" dos cartões: abre a sub-aba (a barra fica no topo do Resumo, então rola ao topo dela) e põe o foco na aba; "Ativos" vai ao cartão "Ativos por regional".
   function conectarCartoesBento(): void {
     const topo = document.querySelector<HTMLElement>(".nf3-topo");
     if (!topo || topo.dataset.nf3Conectado === "true") return;
@@ -500,7 +511,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
       }
       if (abaDesabilitada(chave)) return; // sem comparação a aba não abre: não rola nem foca uma aba desabilitada
       selecionarAbaResumo(chave);
-      document.querySelector<HTMLElement>(".nf3-sub")?.scrollIntoView({ behavior: comportamento, block: "start" });
+      document.querySelector<HTMLElement>(".nf3-sub--abas")?.scrollIntoView({ behavior: comportamento, block: "start" });
       elementoAbaResumo(chave)?.focus({ preventScroll: true });
     });
   }
@@ -538,16 +549,19 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     if (botao) botao.setAttribute("aria-label", renderer.rotuloContagemAba(chave, total, filtrando));
   }
 
-  // Back to the empty state: tab "Divergências" (where F3 and the alert land), no filters, zeroed counters, no notice from the previous result.
+  // Back to the empty state: tab "Visão Geral" (default; the alert and row navigation pick their tab explicitly), no filters, zeroed counters, no notice from the previous result.
   // "Backups" não é da comparação: a aba aberta continua aberta e o selo dela (escrito pelo painel React frontend/src/paineis/backups-regionais/) não é zerado.
-  function limparAbasResumo(): void {
+  // `abaPedida` (opcional): aba que a abertura do painel já pediu (alerta, sino, série); vale se estiver habilitada sem comparação,
+  // para o Resumo não piscar a Visão Geral antes de a aba pedida voltar depois do render (23/11/2026).
+  function limparAbasResumo(abaPedida?: string): void {
     const abaAtual = estadoResumo.aba;
     Object.assign(estadoResumo, ESTADO_RESUMO_INICIAL);
     if (abaAtual === "backups") estadoResumo.aba = "backups";
+    if (abaPedida && ABAS_SEM_COMPARACAO.includes(abaPedida)) estadoResumo.aba = abaPedida;
     atualizarResumo = null;
     semComparacao = true;
     desconectarObservadoresAnotacoes();
-    ABAS_RESUMO.filter(chave => chave !== "backups").forEach(chave => escreverContagemAba(chave, 0, false));
+    ABAS_RESUMO.filter(chave => chave !== "backups" && chave !== "visao-geral").forEach(chave => escreverContagemAba(chave, 0, false));
     limparNumerosCartoes();
     const avisos = document.getElementById("comparacao-planilhas-avisos");
     if (avisos) avisos.innerHTML = "";
@@ -800,12 +814,17 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     const achada = acharLinhaComparacao(linhasDe(target.category), target);
     if (!achada) {
       // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
-      if (target.category) navegarParaLinhaComparacao({ ...target, category: "" });
+      if (target.category) { navegarParaLinhaComparacao({ ...target, category: "" }); return; }
+      // Linha não encontrada: o usuário vê a lista (Divergências), como antes da Visão Geral, e não o bento (23/11/2026).
+      if (!abaDesabilitada("divergencias")) selecionarAbaResumo("divergencias");
       return;
     }
     const categoria = achada.dataset.comparisonCategory;
     const aba = renderer.abaDaCategoria(categoria) || achada.closest<HTMLElement>("[data-resumo-painel]")?.dataset.resumoPainel;
-    if (aba) selecionarAbaResumo(aba);
+    if (aba && !abaDesabilitada(aba)) selecionarAbaResumo(aba);
+    // Sem comparação a aba da lista (ex.: "Usuários") está desabilitada e a linha ("Sem usuário") não mora em painel de aba:
+    // "Divergências" mostra o conteúdo, então a linha fica alcançável de qualquer aba (23/11/2026).
+    else if (!achada.closest("[data-resumo-painel]")) selecionarAbaResumo("divergencias");
     // Com a aba aberta, o gêmeo visível da linha (tr no desktop, cartão no mobile).
     const row = acharLinhaComparacao(linhasDe(categoria).filter(candidate => candidate.getClientRects().length > 0), {
       itemId: achada.dataset.comparisonItemId, serial: achada.dataset.comparisonSerial, hostname: achada.dataset.comparisonHostname, category: categoria,

@@ -92,6 +92,7 @@ function criarLinha(categoria, serial, hostname) {
     dataset: { comparisonCategory: categoria, comparisonSerial: serial, comparisonHostname: hostname, comparisonItemId: "" },
     scrolled: 0,
     getClientRects: () => [{}],
+    closest: () => null, // linha fora de painel [data-resumo-painel] (ex.: "Sem usuário" sem comparação)
     scrollIntoView() { this.scrolled += 1; },
   };
 }

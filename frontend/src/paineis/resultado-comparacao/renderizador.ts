@@ -693,6 +693,8 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   // Resumo (F3) sub-tabs: one tabpanel per subject. The controller in comparison-result.js owns state, counts and filters;
   // everything below is pure so tests can pin the texts and rules.
   const RESUMO_ABAS = [
+    // Visão Geral (23/11/2026, pedido do usuário): primeira sub-aba e padrão do Resumo; guarda o bento. Fica fora de CATEGORIAS_POR_ABA e TEXTO_VAZIO_ABA (sem lista nem selo de contagem); o painel é estático (#resumo-painel-visao-geral).
+    { chave: "visao-geral", rotulo: "Visão Geral" },
     { chave: "divergencias", rotulo: "Divergências" },
     { chave: "apelidos", rotulo: "Apelidos" },
     { chave: "usuarios", rotulo: "Usuários" },
@@ -790,10 +792,14 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   }
   // Banner above the tabs (#comparacao-planilhas-avisos); a failed history save is an alert.
   function avisoHistoricoComparacao(comparison: ComparacaoRenderizada) {
-    if (comparison.historico_salvo === false) {
-      return `<p class="notice notice-warn" role="alert">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`;
-    }
-    return comparison.historico_salvo === true ? '<p class="notice notice-info">Resultado registrado no Histórico de planilhas.</p>' : "";
+    const registrado = comparison.historico_salvo === false
+      ? `<p class="notice notice-warn" role="alert">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
+      : comparison.historico_salvo === true ? '<p class="notice notice-info">Resultado registrado no Histórico de planilhas.</p>' : "";
+    // O aviso das anotações herdadas vive aqui (fora do conteúdo das sub-abas) para aparecer também na Visão Geral (23/11/2026).
+    const herdadas = Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
+      ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
+      : "";
+    return registrado + herdadas;
   }
 
   // One tabpanel per Resumo tab; only the selected one is visible. The controller shows data-resumo-vazio when the tab has no rows.
@@ -850,11 +856,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     const tracoDivergencia = (valor: number) => (valor / maximoDivergencias) * 100;
     const tracoComparados = comparados > 0 ? Math.min(1, Math.max(0, (comparados - ausentesDetalhes.length) / comparados)) * 100 : 0;
     const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
-    const avisoAnotacoesHerdadas = Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
-      ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
-      : "";
     return `
-        ${avisoAnotacoesHerdadas}
         ${barra}
         ${painelResumo("divergencias", `
         ${cartaoSecaoBento("ciano", 2,
