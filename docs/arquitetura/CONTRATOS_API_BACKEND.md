@@ -86,6 +86,8 @@ A dependência da rota é um único callback de snapshot atômico: `main._endpoi
 | 29 | POST /api/historico-comparacoes/{evento_id}/apelido-manual/{serial} | JSON {acao:"manter"|"excluir"}. | {sucesso,resolucao,mensagem,equipamento,total_modificados}. | 400 ação inválida; 404 item ausente; 409 conflito/decisão stale. Arquivos. routers/inventory_history.py; static/js/features/comparison-result.js. |
 | 30 | DELETE /api/historico-comparacoes/{evento_id} | Path evento; remove registro visível e registra tombstones de anotação para evitar ressurreição. | {sucesso,total,sincronizacao}. | 404 ausente; 500 gravação; 503 quando sincronização está habilitada e local falha. Arquivos. routers/inventory_history.py; static/js/features/comparison-history.js. |
 
+Campo opcional `usuario_administrador: true` nos itens das listas da comparação (Sem correspondência, Sem acesso 7 dias, Divergência de local, ambíguos): só aparece quando o Endpoint mostra Administrador no último logon ou nos usuários logados, nunca `false` (24/11/2026). A visão do histórico (`GET /api/historico-comparacoes/{evento_id}`) usa o campo, e o texto do `usuario` quando ele vem do Endpoint, para tirar o item das listas; o evento gravado não muda.
+
 ## Acompanhamento de chamados
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
