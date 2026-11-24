@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'Chame o advisor (Opus) antes de concluir tarefas e para sintese, arquitetura e seguranca. Maestro obrigatorio nesta sessao, em qualquer assunto e antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Se a tarefa casa com um especialista de .claude/agents (testador, testador-e2e, depurador, implementador, refatorador, front-react, leitor-logs, documentador, auditor-seguranca e outros), use o especialista no lugar do geral. Voce so coordena.'}}))\""
+            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:'Chame o advisor (Opus) antes de concluir tarefas e para sintese, arquitetura e seguranca. Maestro obrigatorio nesta sessao, em qualquer assunto e antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Especialistas (testador, depurador, implementador, auditores e outros) em .claude/agents/; quando usar: regras-agentes.md. Voce so coordena.'}}))\""
           }
         ]
       },
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'UserPromptSubmit',additionalContext:'Maestro obrigatorio em todo prompt, antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Se a tarefa casa com um especialista de .claude/agents (testador, testador-e2e, depurador, implementador, refatorador, front-react, leitor-logs, documentador, auditor-seguranca e outros), use o especialista no lugar do geral. Voce so coordena. Detalhe: docs/desenvolvimento/regras-agentes.md, Delegacao em subagentes.'}}))\""
+            "command": "node -e \"console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'UserPromptSubmit',additionalContext:'Maestro obrigatorio em todo prompt, antes de executar: leitura e busca pelo agente batedor (Haiku), execucao e testes pelo executor (Sonnet), revisao final pelo revisor (Opus), decisao dificil pelo arquiteto (Fable). Especialistas (testador, depurador, implementador, auditores e outros) em .claude/agents/; quando usar: regras-agentes.md. Voce so coordena. Detalhe: docs/desenvolvimento/regras-agentes.md, Delegacao em subagentes.'}}))\""
           }
         ]
       }
