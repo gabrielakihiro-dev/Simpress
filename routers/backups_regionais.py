@@ -180,5 +180,5 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
 
 
 def _confirmar(estado: store_mod.Estado, serie: str, cidade: str, agora: datetime) -> Tuple[store_mod.Estado, Tuple[Any, bool]]:
-    novo, registro, repetido = store_mod.confirmar(estado, serie, cidade, agora)
+    novo, registro, repetido = store_mod.confirmar(estado, serie, cidade, agora, usuario_ref="")  # provisório: Tarefa 3
     return novo, (registro, repetido)

@@ -1,10 +1,11 @@
 import copy
+import hashlib
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from domains import backups_regionais
+from domains import backups_regionais, backups_regionais_store as store
 from domains.backups_regionais import CIDADES_PRIORITARIAS, MINIMO, build_backups_regionais, identificar_marca
 from domains.coverage import Manutencao
 from domains.effective_alias import build_endpoint_alias_index, unavailable_endpoint_alias_index
@@ -647,6 +648,89 @@ class CorrecoesDaRevisaoTests(unittest.TestCase):
         )
         excluidos = regional(resultado, "Cascavel")["excluidos"]
         self.assertEqual([(e["serie"], e["motivo"]) for e in excluidos], [("NB-1", "bloqueio:em_manutencao")])
+
+
+def ref(nome):
+    return "sha256:" + hashlib.sha256(nome.encode()).hexdigest()
+
+
+def antigo(serie="TSTBK001", cidade="Cascavel", expira_em=None):
+    return {"serie": serie, "cidade": cidade, "confirmado_em": "2026-11-20T10:00:00-03:00",
+            "expira_em": (expira_em or AGORA + timedelta(days=3)).isoformat()}
+
+
+def novo(serie="TSTBK002", cidade="Cascavel", usuario_ref=""):
+    return {"serie": serie, "cidade": cidade, "confirmado_em": "2026-11-20T10:00:00-03:00",
+            "tipo": "backup", "usuario_ref": usuario_ref}
+
+
+def estado_de(*registros):
+    return {"esquema": 1, "confirmacoes": list(registros)}
+
+
+class StoreConfirmarBackupTests(unittest.TestCase):
+    def test_estado_misto_valido(self):
+        estado = estado_de(antigo(), novo(usuario_ref=ref("joao")))
+        self.assertEqual(store.validar_estado(estado)["confirmacoes"], estado["confirmacoes"])
+
+    def test_registro_backup_com_campo_extra_ilegivel(self):
+        with self.assertRaises(store.EstadoIlegivel):
+            store.validar_estado(estado_de({**novo(), "expira_em": AGORA.isoformat()}))
+
+    def test_usuario_ref_invalido_ilegivel(self):
+        for invalido in ("fulano", "sha256:abc", "sha256:" + "A" * 64, None):
+            with self.subTest(invalido=invalido), self.assertRaises(store.EstadoIlegivel):
+                store.validar_estado(estado_de(novo(usuario_ref=invalido)))
+
+    def test_confirmar_grava_tipo_backup_sem_expira(self):
+        estado, registro, repetido = store.confirmar(estado_de(), "TSTBK002", "Cascavel", AGORA, ref("joao"))
+        self.assertFalse(repetido)
+        self.assertEqual(set(registro), set(store.CAMPOS_BACKUP))
+        self.assertEqual((registro["tipo"], registro["usuario_ref"]), ("backup", ref("joao")))
+        self.assertEqual(estado["confirmacoes"], [registro])
+
+    def test_confirmar_repetido_mesmo_ref(self):
+        inicial = estado_de(novo(usuario_ref=ref("joao")))
+        estado, registro, repetido = store.confirmar(inicial, "TSTBK002", "Cascavel", AGORA, ref("joao"))
+        self.assertTrue(repetido)
+        self.assertEqual(estado, inicial)
+        self.assertEqual(registro, inicial["confirmacoes"][0])
+
+    def test_confirmar_substitui_ref_diferente(self):
+        estado, registro, repetido = store.confirmar(
+            estado_de(novo(usuario_ref=ref("joao"))), "TSTBK002", "Cascavel", AGORA, ref("maria"))
+        self.assertFalse(repetido)
+        self.assertEqual([r["usuario_ref"] for r in estado["confirmacoes"]], [ref("maria")])
+
+    def test_confirmar_substitui_registro_7_dias(self):
+        estado, registro, repetido = store.confirmar(estado_de(antigo()), "TSTBK001", "Cascavel", AGORA, "")
+        self.assertFalse(repetido)
+        self.assertEqual(estado["confirmacoes"], [registro])
+        self.assertEqual(registro["tipo"], "backup")
+
+    def test_confirmar_recusa_ref_invalido(self):
+        with self.assertRaises(ValueError):
+            store.confirmar(estado_de(), "TSTBK002", "Cascavel", AGORA, "joao")
+
+    def test_podar_mantem_backup_e_remove_7_dias_antigo(self):
+        velho = antigo("TSTBK003", expira_em=AGORA - timedelta(days=store.RETENCAO_DIAS + 1))
+        recente = antigo("TSTBK004", expira_em=AGORA - timedelta(days=1))
+        podado = store.podar(estado_de(velho, recente, novo()), AGORA)
+        self.assertEqual([r["serie"] for r in podado["confirmacoes"]], ["TSTBK004", "TSTBK002"])
+
+    def test_arquivo_esquema1_real_le_sem_erro(self):
+        import tempfile
+        from pathlib import Path
+        conteudo = estado_de(
+            antigo("TSTBK010", "Londrina"),
+            antigo("TSTBK011", "Maringá", expira_em=AGORA + timedelta(days=6)),
+        )
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "backups_regionais.json"
+            arquivo.write_text(json.dumps(conteudo), encoding="utf-8")
+            lido = store.BackupsRegionaisStore(arquivo, Path(pasta) / ".tx").ler()
+        self.assertEqual(lido["confirmacoes"], conteudo["confirmacoes"])
+        self.assertTrue(all(store._vigente(r, AGORA) for r in lido["confirmacoes"]))
 
 
 if __name__ == "__main__":

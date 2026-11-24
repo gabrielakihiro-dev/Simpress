@@ -122,16 +122,15 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         resposta = self.post(CONFIRMAR)
         registro = resposta["confirmacao"]
         self.assertFalse(resposta["repetido"])
-        self.assertEqual(set(registro), CAMPOS)
+        self.assertEqual(set(registro), {"serie", "cidade", "confirmado_em", "tipo", "usuario_ref"})  # provisório: Tarefa 3
         self.assertEqual((registro["serie"], registro["cidade"]), ("NB1", "Cascavel"))
         self.assertEqual(registro["confirmado_em"], AGORA.isoformat(timespec="seconds"))
-        self.assertEqual(registro["expira_em"], (AGORA + timedelta(days=7)).isoformat(timespec="seconds"))
         self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [registro]})
 
         self.agora = AGORA + timedelta(days=1)
         segunda = self.post(CONFIRMAR)
         self.assertTrue(segunda["repetido"])
-        self.assertEqual(segunda["confirmacao"]["expira_em"], registro["expira_em"])
+        self.assertEqual(segunda["confirmacao"], registro)
         self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [registro]})
 
     def test_endpoint_com_falha_nao_derruba_confirmar_e_o_log_so_tem_a_classe(self):
@@ -215,11 +214,9 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         }]})
         resposta = self.post(CONFIRMAR)
         self.assertFalse(resposta["repetido"])
-        esperado = (AGORA + timedelta(days=7)).isoformat(timespec="seconds")
-        self.assertEqual(resposta["confirmacao"]["expira_em"], esperado)
+        self.assertEqual(resposta["confirmacao"]["tipo"], "backup")
         confirmacoes = self.arquivo()["confirmacoes"]
-        self.assertEqual(len(confirmacoes), 1)
-        self.assertEqual(confirmacoes[0]["expira_em"], esperado)
+        self.assertEqual(confirmacoes, [resposta["confirmacao"]])
 
     def test_desfazer_com_outra_grafia_remove_e_devolve_a_gravada(self):
         self.post(CONFIRMAR)
