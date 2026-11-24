@@ -2,7 +2,7 @@
 
 Manter e Excluir (só para confirmação com ``decisao_pendente``: apelido manual e usuário real novo no Endpoint; senão 409
 ``sem_decisao_pendente``): Manter regrava a confirmação com o usuário atual e registra a decisão; Excluir remove antes o
-apelido manual (``remover_apelido_manual``; erro dele sobe e nada mais é gravado) e depois a confirmação, registrando a decisão.
+apelido manual (``remover_apelido_manual``; erro dele vira 409 ou o status dele com `apelido_nao_removido`, e nada mais é gravado) e depois a confirmação, registrando a decisão.
 
 Cálculo em ``domains/backups_regionais.py``; gravação em ``domains/backups_regionais_store.py``
 (``AtomicFileTransaction``, sem lock Python). Nada aqui grava em ``EquipamentosDetalhes`` nem em sistemas externos.
@@ -25,6 +25,7 @@ from typing import Any, Callable, Dict, Iterable, Mapping, NoReturn, Optional, T
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from core.errors import DomainError
 from core.integrity import FileBusyError, FileTransactionError
 from domains import backups_regionais_store as store_mod
 from domains.backups_regionais import build_backups_regionais, usuario_ref
@@ -193,6 +194,11 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
                 "mensagem": "Esta série não aparece como candidata a backup nesta cidade.",
             })
         serie, cidade = achada
+        if _pendente(calculo, serie, cidade) is not None:
+            raise HTTPException(status_code=409, detail={
+                "codigo": "decisao_pendente",
+                "mensagem": "Este backup tem uma decisão pendente: escolha Manter ou Excluir.",
+            })
         if not (endpoint or {}).get("available"):
             # Foto vazia confundiria "usuário desconhecido" com "sem usuário".
             raise HTTPException(status_code=409, detail={
@@ -204,8 +210,8 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
         publico = {campo: registro[campo] for campo in ("serie", "cidade", "confirmado_em", "tipo")}  # sem usuario_ref
         return {"confirmacao": publico, "repetido": repetido}
 
-    def pendente(payload: ConfirmacaoPayload) -> Tuple[Tuple[str, str], Mapping[str, Any], Any]:
-        """``((serie, cidade), endpoint, agora)`` da decisão pendente; sem ela, 409."""
+    def pendente(payload: ConfirmacaoPayload) -> Tuple[Tuple[str, str], Mapping[str, Any], Any, str]:
+        """``((serie, cidade), endpoint, agora, usuario_ref_visto)`` da decisão pendente; sem Endpoint ou sem ela, 409."""
         agora = services.agora()
         try:
             atual = store().ler()
@@ -214,21 +220,38 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
         except OSError as error:
             _falhar(FileBusyError(type(error).__name__))
         equipamentos, endpoint, cobertura, manutencao = _entradas(services)
+        if not (endpoint or {}).get("available"):
+            raise HTTPException(status_code=409, detail={
+                "codigo": "endpoint_indisponivel",
+                "mensagem": "O Endpoint está indisponível; não dá para decidir sobre o backup agora.",
+            })
         calculo = build_backups_regionais(equipamentos, endpoint, atual["confirmacoes"], cobertura, manutencao, agora)
         achada = _pendente(calculo, payload.serie, payload.cidade)
         if achada is None:
             raise HTTPException(status_code=409, detail={
                 "codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente.",
             })
-        return achada, endpoint, agora
+        visto = next((r for r in atual["confirmacoes"] if store_mod._mesma(r, *achada)), None)
+        return achada, endpoint, agora, str((visto or {}).get("usuario_ref", ""))
+
+    def vigente_visto(estado: store_mod.Estado, serie: str, cidade: str, ref_visto: str) -> bool:
+        """O registro novo que a tela viu ainda está lá, com o mesmo usuário (outra decisão não o trocou)."""
+        return any(
+            store_mod._mesma(r, serie, cidade) and r.get("tipo") == store_mod.TIPO_BACKUP and r["usuario_ref"] == ref_visto
+            for r in estado["confirmacoes"]
+        )
 
     @router.post("/api/backups-regionais/manter")
     def manter(payload: ConfirmacaoPayload) -> Dict[str, Any]:
         """Mantém o backup com o usuário atual do Endpoint; o apelido manual não muda."""
-        (serie, cidade), endpoint, agora = pendente(payload)
+        (serie, cidade), endpoint, agora, ref_visto = pendente(payload)
         ref = usuario_ref(endpoint_user_for_serial(endpoint, normalize_reference_value(serie)))
 
         def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
+            if not vigente_visto(estado, serie, cidade, ref_visto):  # outra decisão chegou antes: nada é gravado
+                raise HTTPException(status_code=409, detail={
+                    "codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente.",
+                })
             novo, _registro, _repetido = store_mod.confirmar(estado, serie, cidade, agora, usuario_ref=ref)
             return store_mod.registrar_decisao(novo, serie, cidade, "manter", agora), None
 
@@ -238,19 +261,28 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     @router.post("/api/backups-regionais/excluir")
     def excluir(payload: ConfirmacaoPayload) -> Dict[str, Any]:
         """Remove o apelido manual, depois a confirmação, e registra a decisão."""
-        (serie, cidade), _endpoint, agora = pendente(payload)
+        (serie, cidade), _endpoint, agora, ref_visto = pendente(payload)
         if services.remover_apelido_manual is None:
             raise HTTPException(status_code=500, detail={
                 "codigo": "falha_gravacao", "mensagem": "Não foi possível remover o apelido manual.",
             })
-        # O erro do apelido (DomainError/HTTPException) sobe como está e nada mais é gravado.
-        services.remover_apelido_manual(serie)
+        try:
+            services.remover_apelido_manual(serie)
+        except DomainError as error:  # nada mais é gravado; o texto do erro pode ter série ou caminho: só a classe vai ao log
+            logger.warning("Falha ao remover o apelido manual no Excluir dos Backups: %s.", type(error).__name__)
+            raise HTTPException(status_code=error.status_code, detail={
+                "codigo": "apelido_nao_removido",
+                "mensagem": "Não foi possível remover o apelido manual; nada foi alterado.",
+            }) from error
 
         def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
+            if not vigente_visto(estado, serie, cidade, ref_visto):
+                # Corrida com Manter/Desfazer: a confirmação já mudou; não a remove nem grava decisão (o apelido já saiu).
+                return estado, None
             novo, _removido = store_mod.desfazer(estado, serie, cidade)
             return store_mod.registrar_decisao(novo, serie, cidade, "excluir", agora), None
 
-        # shortcut: se esta gravação falhar, o apelido já removido não volta e a confirmação segue sem decisão pendente; o usuário usa Desfazer.
+        # shortcut: se esta gravação falhar, o apelido já saiu e a confirmação passa a cair como usuario_mudou; só a decisão não é gravada.
         gravar(operacao)
         return {"serie": serie, "cidade": cidade, "decisao": "excluir"}
 

@@ -22,6 +22,7 @@ with (
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core.errors import DomainConflictError
 from core.integrity import FileBusyError, TransactionConflictError
 from domains.backups_regionais import usuario_ref
 from domains.coverage import Manutencao
@@ -326,17 +327,66 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
 
     def test_excluir_com_erro_do_apelido_nada_gravado(self):
         self.com_pendencia()
-        from fastapi import HTTPException
-        self.erro_apelido = HTTPException(status_code=409, detail="apelido ocupado")
+        self.erro_apelido = DomainConflictError("SEGREDO NB1 C:/Users/pessoa/apelidos.json")
         antes_ = self.state.read_bytes()
-        self.post(EXCLUIR, status=409)
+        with self.assertLogs(level="WARNING") as logs:
+            erro = self.post(EXCLUIR, status=409)["detail"]
+        self.assertEqual(erro["codigo"], "apelido_nao_removido")
+        self.assertNotIn("SEGREDO", json.dumps(erro))
+        self.assertFalse(any("SEGREDO" in linha for linha in logs.output))
         self.assertEqual(self.state.read_bytes(), antes_)
 
     def test_respostas_sem_usuario_ref_nem_apelido(self):
         self.com_pendencia()
-        self.assertNotIn("sha256", json.dumps(self.post(MANTER)))
+        self.equipamentos = [notebook("NB1", "Cascavel", base="Fulano (M)", apelido="Fulano (M)", _apelido_manual_override=True)]
+        respostas = [self.client.post(CONFIRMAR, json={"serie": "NB1", "cidade": "Cascavel"}).text]  # 409 decisao_pendente
+        respostas.append(json.dumps(self.post(MANTER)))
         self.endpoint = endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), "pedro"))
-        self.assertNotIn("sha256", json.dumps(self.post(EXCLUIR)))
+        respostas.append(json.dumps(self.post(EXCLUIR)))
+        for texto in respostas:
+            self.assertNotIn("sha256", texto)
+            self.assertNotIn("Fulano", texto)
+
+    def test_confirmar_em_item_pendente_409_decisao_pendente(self):
+        self.com_pendencia()
+        antes_ = self.state.read_bytes()
+        self.assertEqual(self.post(CONFIRMAR, status=409)["detail"]["codigo"], "decisao_pendente")
+        self.assertEqual(self.state.read_bytes(), antes_)
+
+    def test_manter_e_excluir_sem_endpoint_ou_com_admin_409_nada_gravado(self):
+        self.com_pendencia()
+        antes_ = self.state.read_bytes()
+        for nome, endpoint_novo, codigo in (
+            ("indisponivel", {"available": False}, "endpoint_indisponivel"),
+            ("admin", endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), ".\Administrador")), "sem_decisao_pendente"),
+        ):
+            for caminho in (MANTER, EXCLUIR):
+                with self.subTest(caso=nome, caminho=caminho):
+                    self.endpoint = endpoint_novo
+                    self.assertEqual(self.post(caminho, status=409)["detail"]["codigo"], codigo)
+                    self.assertEqual(self.state.read_bytes(), antes_)
+        self.assertEqual(self.removidos, [])
+
+    def test_corrida_manter_depois_de_outra_decisao_409_nada_gravado(self):
+        self.com_pendencia()
+        # A confirmação muda entre a leitura da rota e a gravação (outro Manter chegou antes).
+        import routers.backups_regionais as rota
+        chamadas = []
+        real = rota._pendente
+
+        def pendente_e_troca(calculo, serie, cidade):
+            achada = real(calculo, serie, cidade)
+            if achada and not chamadas:
+                chamadas.append(1)
+                outro = json.loads(self.state.read_text(encoding="utf-8"))
+                outro["confirmacoes"][0]["usuario_ref"] = usuario_ref("pedro")
+                self.state.write_text(json.dumps(outro), encoding="utf-8")
+            return achada
+        with mock.patch.object(rota, "_pendente", pendente_e_troca):
+            erro = self.post(MANTER, status=409)["detail"]
+        self.assertEqual(erro["codigo"], "sem_decisao_pendente")
+        self.assertNotIn("decisoes", self.arquivo())
+        self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], usuario_ref("pedro"))
 
     def test_decisoes_invalido_e_ilegivel_503(self):
         self.com_pendencia()
