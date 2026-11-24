@@ -163,6 +163,18 @@ class InventoryComparisonTests(unittest.TestCase):
         result = main.compare_uploaded_workbooks(endpoint, source_table([]), {})
         self.assertEqual([s["serie"] for s in result["series_sem_mapeamento"]], ["YYY"])
 
+    def test_serie_sem_mapeamento_com_administrador_entre_usuarios_logados(self):
+        def codigos(logados):
+            endpoint = source_table([{
+                "NOMEDOCOMPUTADOR": "PRNOTEYYY01", "SERIAL": "SN-Y1",
+                "USUARIODOULTIMOLOGON": "fulano", "USUARIOSLOGADOS": logados,
+            }])
+            result = main.compare_uploaded_workbooks(endpoint, source_table([]), {})
+            return [s["serie"] for s in result["series_sem_mapeamento"]]
+
+        self.assertEqual(codigos("fulano, Administrador"), [])
+        self.assertEqual(codigos("fulano"), ["YYY"])
+
     def test_wrapper_do_main_usa_apelido_manual_usuario_do_cadastro_e_tolera_falha(self):
         def evento():
             return self._evento(ausentes_no_endpoint=[self._ausente("OUTRO TEXTO", "BRJW1")])
