@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.integrity import FileBusyError, TransactionConflictError
+from domains.backups_regionais import usuario_ref
 from domains.coverage import Manutencao
 from domains.effective_alias import build_endpoint_alias_index
 from routers.backups_regionais import BackupsRegionaisServices, create_backups_regionais_router
@@ -30,7 +31,7 @@ from routers.backups_regionais import BackupsRegionaisServices, create_backups_r
 AGORA = datetime(2026, 11, 12, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
 CONFIRMAR = "/api/backups-regionais/confirmar"
 DESFAZER = "/api/backups-regionais/desfazer"
-CAMPOS = {"serie", "cidade", "confirmado_em", "expira_em"}
+CAMPOS = {"serie", "cidade", "confirmado_em", "tipo"}
 
 
 def notebook(serie, cidade="Cascavel", base="", **extra):
@@ -118,28 +119,63 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
                 self.assertEqual(erro["codigo"], "serie_nao_elegivel")
         self.assertFalse(self.state.exists())
 
-    def test_confirmar_candidata_grava_so_os_quatro_campos_e_repetir_mantem_o_prazo(self):
+    def test_confirmar_candidata_grava_registro_sem_prazo_e_repetir_nao_muda_nada(self):
         resposta = self.post(CONFIRMAR)
         registro = resposta["confirmacao"]
         self.assertFalse(resposta["repetido"])
-        self.assertEqual(set(registro), {"serie", "cidade", "confirmado_em", "tipo", "usuario_ref"})  # provisório: Tarefa 3
-        self.assertEqual((registro["serie"], registro["cidade"]), ("NB1", "Cascavel"))
+        self.assertEqual(set(registro), CAMPOS)  # a resposta nunca leva usuario_ref
+        self.assertEqual((registro["serie"], registro["cidade"], registro["tipo"]), ("NB1", "Cascavel", "backup"))
         self.assertEqual(registro["confirmado_em"], AGORA.isoformat(timespec="seconds"))
-        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [registro]})
+        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [{**registro, "usuario_ref": ""}]})
+        gravado = self.arquivo()
 
         self.agora = AGORA + timedelta(days=1)
         segunda = self.post(CONFIRMAR)
         self.assertTrue(segunda["repetido"])
         self.assertEqual(segunda["confirmacao"], registro)
-        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": [registro]})
+        self.assertEqual(self.arquivo(), gravado)
 
-    def test_endpoint_com_falha_nao_derruba_confirmar_e_o_log_so_tem_a_classe(self):
+    def com_usuario(self, usuario):
+        """NB1 candidata com verificação velha (não é usuário vigente) e o usuário dado no Endpoint."""
+        self.endpoint = endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=30), usuario))
+        self.endpoint["verified_by_serial"] = {}
+
+    def test_confirmar_grava_ref_do_usuario_endpoint(self):
+        self.com_usuario("joao")
+        resposta = self.post(CONFIRMAR)
+        self.assertEqual(set(resposta["confirmacao"]), CAMPOS)
+        self.assertNotIn("sha256", json.dumps(resposta))
+        self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], usuario_ref("joao"))
+        self.assertTrue(usuario_ref("joao").startswith("sha256:"))
+
+    def test_confirmar_com_admin_grava_ref_vazio(self):
+        self.com_usuario(r".\Administrador")
+        self.post(CONFIRMAR)
+        self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], "")
+
+    def test_confirmar_sem_usuario_grava_ref_vazio(self):
+        self.post(CONFIRMAR)  # NB1 some do Endpoint
+        self.assertEqual(self.arquivo()["confirmacoes"][0]["usuario_ref"], "")
+
+    def test_confirmar_endpoint_indisponivel_409_nada_gravado(self):
+        self.endpoint = {"available": False}
+        erro = self.post(CONFIRMAR, status=409)["detail"]
+        self.assertEqual(erro["codigo"], "endpoint_indisponivel")
+        self.assertFalse(self.state.exists())
+
+    def test_payload_com_usuario_recusado_422(self):
+        resposta = self.client.post(CONFIRMAR, json={"serie": "NB1", "cidade": "Cascavel", "usuario": "joao"})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertFalse(self.state.exists())
+
+    def test_endpoint_com_falha_recusa_confirmar_409_e_o_log_so_tem_a_classe(self):
         def falha():
             raise OSError(r"C:\caminho\local\endpoint.xlsx")
         self.ler_endpoint = falha
         with self.assertLogs(level="WARNING") as logs:
-            registro = self.post(CONFIRMAR)["confirmacao"]  # o painel mostra NB1 com fonte_endpoint_indisponivel
-        self.assertEqual((registro["serie"], registro["cidade"]), ("NB1", "Cascavel"))
+            erro = self.post(CONFIRMAR, status=409)["detail"]  # o painel mostra NB1 com fonte_endpoint_indisponivel
+        self.assertEqual(erro["codigo"], "endpoint_indisponivel")
+        self.assertFalse(self.state.exists())
         self.assertTrue(any("OSError" in linha for linha in logs.output))
         self.assertFalse(any("caminho" in linha for linha in logs.output))
 
@@ -216,7 +252,7 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         self.assertFalse(resposta["repetido"])
         self.assertEqual(resposta["confirmacao"]["tipo"], "backup")
         confirmacoes = self.arquivo()["confirmacoes"]
-        self.assertEqual(confirmacoes, [resposta["confirmacao"]])
+        self.assertEqual(confirmacoes, [{**resposta["confirmacao"], "usuario_ref": ""}])
 
     def test_desfazer_com_outra_grafia_remove_e_devolve_a_gravada(self):
         self.post(CONFIRMAR)

@@ -4,7 +4,7 @@ Cálculo em ``domains/backups_regionais.py``; gravação em ``domains/backups_re
 (``AtomicFileTransaction``, sem lock Python). Nada aqui grava em ``EquipamentosDetalhes`` nem em sistemas externos.
 
 Confirmar só aceita a série que o cálculo atual mostra naquela cidade como candidata ou já contada (por marca ou por
-confirmação); repetir com confirmação vigente não renova: mantém o ``expira_em`` (``repetido: true``). Erros:
+confirmação); repetir com confirmação nova com o mesmo usuário não muda nada (``repetido: true``). Sem Endpoint → 409 ``endpoint_indisponivel``. Erros:
 ``HTTPException`` com ``detail = {"codigo", "mensagem"}``. Arquivo ocupado ou falha passageira de leitura (``OSError``)
 → 409 ``arquivo_ocupado``; estado ilegível → 503 ``estado_ilegível`` (o arquivo é preservado); série fora do
 cálculo → 422 ``serie_nao_elegivel``; falha de gravação → 500 ``falha_gravacao``.
@@ -23,9 +23,10 @@ from pydantic import BaseModel, Field
 
 from core.integrity import FileBusyError, FileTransactionError
 from domains import backups_regionais_store as store_mod
-from domains.backups_regionais import build_backups_regionais
+from domains.backups_regionais import build_backups_regionais, usuario_ref
 from domains.backups_regionais_store import BackupsRegionaisStore, EstadoIlegivel, eh_ilegivel
 from domains.coverage import Manutencao
+from domains.effective_alias import endpoint_user_for_serial
 from domains.regras_negocio import normalize_reference_value
 
 logger = logging.getLogger(__name__)
@@ -145,7 +146,7 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
 
     @router.post("/api/backups-regionais/confirmar")
     def confirmar(payload: ConfirmacaoPayload) -> Dict[str, Any]:
-        """Confirma por 7 dias; repetir mantém o ``expira_em`` vigente."""
+        """Confirma sem prazo, gravando só o pseudônimo do usuário do Endpoint; repetir com o mesmo usuário não muda nada."""
         agora = services.agora()
         try:
             atual = store().ler()
@@ -165,8 +166,16 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
                 "mensagem": "Esta série não aparece como candidata a backup nesta cidade.",
             })
         serie, cidade = achada
-        registro, repetido = gravar(lambda estado: _confirmar(estado, serie, cidade, agora))
-        return {"confirmacao": registro, "repetido": repetido}
+        if not (endpoint or {}).get("available"):
+            # Foto vazia confundiria "usuário desconhecido" com "sem usuário".
+            raise HTTPException(status_code=409, detail={
+                "codigo": "endpoint_indisponivel",
+                "mensagem": "O Endpoint está indisponível; não dá para confirmar o backup agora.",
+            })
+        ref = usuario_ref(endpoint_user_for_serial(endpoint, normalize_reference_value(serie)))
+        registro, repetido = gravar(lambda estado: _confirmar(estado, serie, cidade, agora, ref))
+        publico = {campo: registro[campo] for campo in ("serie", "cidade", "confirmado_em", "tipo")}  # sem usuario_ref
+        return {"confirmacao": publico, "repetido": repetido}
 
     @router.post("/api/backups-regionais/desfazer")
     def desfazer(payload: ConfirmacaoPayload) -> Dict[str, Any]:
@@ -179,6 +188,8 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     return router
 
 
-def _confirmar(estado: store_mod.Estado, serie: str, cidade: str, agora: datetime) -> Tuple[store_mod.Estado, Tuple[Any, bool]]:
-    novo, registro, repetido = store_mod.confirmar(estado, serie, cidade, agora, usuario_ref="")  # provisório: Tarefa 3
+def _confirmar(
+    estado: store_mod.Estado, serie: str, cidade: str, agora: datetime, ref: str,
+) -> Tuple[store_mod.Estado, Tuple[Any, bool]]:
+    novo, registro, repetido = store_mod.confirmar(estado, serie, cidade, agora, usuario_ref=ref)
     return novo, (registro, repetido)
