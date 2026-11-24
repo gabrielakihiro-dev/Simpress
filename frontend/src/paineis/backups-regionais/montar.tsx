@@ -121,7 +121,7 @@ async function aoClicar(evento: MouseEvent) {
       errorMessage,
     });
     if (acao === "desfazer" && resposta?.removido === false) mostrarToast(`Não havia confirmação para desfazer: série ${serie}, ${cidade}.`, "warning");
-    else mostrarToast(acao === "confirmar" ? `Backup confirmado por 7 dias: série ${serie}, ${cidade}.` : `Confirmação desfeita: série ${serie}, ${cidade}.`, "success");
+    else mostrarToast(acao === "confirmar" ? `Backup confirmado: ${serie}` : `Confirmação desfeita: série ${serie}, ${cidade}.`, "success");
     pedirPainel();
     // O redesenho troca o botão; se a leitura do painel falhar, ele volta a funcionar sozinho em 10 s.
     reabrir = window.setTimeout(() => liberar(botao), 10000);

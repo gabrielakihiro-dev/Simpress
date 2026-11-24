@@ -570,12 +570,13 @@ class StatusESobrasTests(unittest.TestCase):
         ate_c2 = (AGORA + timedelta(days=2)).isoformat()
         self.assertEqual(resultado["sobras"], [
             {"cidade": "Cascavel", "quantidade": 2, "series": ["C3", "C2"], "prioritaria": True, "itens": [
-                {"serie": "C3", "origem": "marca", "confirmado_ate": None},
-                {"serie": "C2", "origem": "confirmacao", "confirmado_ate": ate_c2},
+                {"serie": "C3", "origem": "marca", "confirmado_ate": None, "confirmacao": None},
+                {"serie": "C2", "origem": "confirmacao", "confirmado_ate": ate_c2,
+                 "confirmacao": {"estado": "vigente", "tipo": "7_dias", "expira_em": ate_c2}},
             ]},
             {"cidade": "Toledo", "quantidade": 2, "series": ["T1", "T2"], "prioritaria": False, "itens": [
-                {"serie": "T1", "origem": "marca", "confirmado_ate": None},
-                {"serie": "T2", "origem": "marca", "confirmado_ate": None},
+                {"serie": "T1", "origem": "marca", "confirmado_ate": None, "confirmacao": None},
+                {"serie": "T2", "origem": "marca", "confirmado_ate": None, "confirmacao": None},
             ]},
         ])
         self.assertEqual(

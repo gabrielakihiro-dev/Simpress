@@ -38,6 +38,7 @@ const MOTIVOS: Record<string, string> = {
 const MOTIVOS_CONFIRMACAO: Record<string, string> = {
   expirada: "a confirmação anterior expirou",
   cidade_mudou: "a confirmação anterior era de outra cidade",
+  usuario_mudou: "o usuário do Endpoint mudou",
   usuario_vigente: "a confirmação anterior perdeu o efeito: usuário vigente",
   bloqueio: "a confirmação anterior perdeu o efeito: máquina bloqueada",
 };
@@ -62,15 +63,22 @@ function NotaConfirmacaoAnterior({ confirmacao }: { confirmacao: Item | null | u
 }
 
 // Sem `disabled` nem `aria-busy` aqui: o clique (montar.tsx) os põe e tira direto no DOM, como antes.
-function Botao({ acao, serie, cidade }: { acao: "confirmar" | "desfazer"; serie: string; cidade: string }) {
+function Botao({ acao, serie, cidade, desabilitado = false }: { acao: "confirmar" | "desfazer"; serie: string; cidade: string; desabilitado?: boolean }) {
   const confirmar = acao === "confirmar";
-  const rotulo = confirmar ? "Confirmar disponível por 7 dias" : "Desfazer confirmação";
+  const rotulo = confirmar ? "Confirmar Backup" : "Desfazer confirmação";
+  const nome = confirmar ? `Confirmar ${serie} como backup de ${cidade}` : `${rotulo}: série ${serie}, ${cidade}`;
   return (
-    <button type="button" className={`ck-btn ck-btn--sm ${confirmar ? "ck-btn--secundario" : "ck-btn--fantasma"}`} data-backup-acao={acao} data-serie={serie} data-cidade={cidade} aria-label={`${rotulo}: série ${serie}, ${cidade}`}>
+    <button type="button" className={`ck-btn ck-btn--sm ${confirmar ? "ck-btn--secundario" : "ck-btn--fantasma"}`} data-backup-acao={acao} data-serie={serie} data-cidade={cidade} aria-label={nome} disabled={desabilitado || undefined}>
       {rotulo}
     </button>
   );
 }
+
+// Desfazer vale para qualquer confirmação vigente, nova (sem prazo) ou antiga de 7 dias.
+const temConfirmacaoVigente = (item: Item) => item.confirmacao?.estado === "vigente";
+
+// Nova confirmação não tem prazo: "Confirmado como backup"; a antiga de 7 dias mostra "confirmado até".
+const textoConfirmacao = (item: Item) => (item.confirmacao?.tipo === "backup" ? "Confirmado como backup" : item.confirmado_ate ? `confirmado até ${data(item.confirmado_ate)}` : "");
 
 function Identificacao({ item }: { item: Item }) {
   const apelido = texto(item.apelido);
@@ -89,10 +97,10 @@ function ItemBackup({ backup, cidade }: { backup: Item; cidade: string }) {
   const texto_ = detalhes([
     traduzir(ORIGENS, backup.origem),
     backup.ultima_verificacao ? `verificado em ${data(backup.ultima_verificacao)}` : "",
-    backup.confirmado_ate ? `confirmado até ${data(backup.confirmado_ate)}` : "",
+    textoConfirmacao(backup),
   ]);
-  // Contado pela marca, mas com confirmação vigente (`confirmado_ate`): o Desfazer continua disponível.
-  const desfazer = backup.origem === "confirmacao" || backup.confirmado_ate;
+  // Contado pela marca, mas com confirmação vigente: o Desfazer continua disponível.
+  const desfazer = temConfirmacaoVigente(backup);
   return <><Identificacao item={backup} /><span className="ck-backups__detalhe">{texto_}</span>{desfazer ? <Botao acao="desfazer" serie={texto(backup.serie)} cidade={cidade} /> : null}</>;
 }
 
@@ -103,7 +111,7 @@ function ItemCandidato({ candidato, cidade }: { candidato: Item; cidade: string 
     dias === null ? "" : `${dias} ${plural(dias, "dia", "dias")} sem verificação`,
     candidato.ultima_verificacao ? `última verificação em ${data(candidato.ultima_verificacao)}` : "",
   ]);
-  return <><Identificacao item={candidato} /><span className="ck-backups__detalhe">{texto_}</span><NotaConfirmacaoAnterior confirmacao={candidato.confirmacao} /><Botao acao="confirmar" serie={texto(candidato.serie)} cidade={cidade} /></>;
+  return <><Identificacao item={candidato} /><span className="ck-backups__detalhe">{texto_}</span><NotaConfirmacaoAnterior confirmacao={candidato.confirmacao} /><Botao acao="confirmar" serie={texto(candidato.serie)} cidade={cidade} desabilitado={candidato.motivo === "fonte_endpoint_indisponivel"} /></>;
 }
 
 // Confirmação vigente de série que caiu na conferência: não conta, mas pode ser desfeita.
@@ -114,8 +122,10 @@ function ItemConferencia({ item, cidade }: { item: Item; cidade: string }) {
   );
 }
 
-function ItemExcluido({ item }: { item: Item }) {
-  return <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} /></>;
+// Confirmação invalidada (ex.: usuário mudou) também pode ser desfeita, para limpar o registro.
+function ItemExcluido({ item, cidade }: { item: Item; cidade: string }) {
+  const desfazer = item.confirmacao?.estado === "invalidada";
+  return <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} />{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
 }
 
 // <details> não controlado: o React não mexe no `open`, que continua aberto entre um redesenho e outro.
@@ -125,7 +135,7 @@ function CelulaExcluidos({ excluidos, cidade }: { excluidos: Item[]; cidade: str
   return (
     <details className="ck-backups__excluidos" data-cidade={cidade}>
       <summary>{n} {plural(n, "excluído", "excluídos")}</summary>
-      <Itens linhas={excluidos.map((item, indice) => ({ chave: chave(item, indice), conteudo: <ItemExcluido item={item} /> }))} />
+      <Itens linhas={excluidos.map((item, indice) => ({ chave: chave(item, indice), conteudo: <ItemExcluido item={item} cidade={cidade} /> }))} />
     </details>
   );
 }
@@ -189,8 +199,8 @@ function Tabela({ regionais }: { regionais: Item[] }) {
 }
 
 function ItemSobra({ item, cidade }: { item: Item; cidade: string }) {
-  const texto_ = detalhes([traduzir(ORIGENS, item.origem), item.confirmado_ate ? `confirmado até ${data(item.confirmado_ate)}` : ""]);
-  const desfazer = item.origem === "confirmacao" || item.confirmado_ate;
+  const texto_ = detalhes([traduzir(ORIGENS, item.origem), textoConfirmacao(item)]);
+  const desfazer = temConfirmacaoVigente(item);
   return <><code className="ck-backups__serie">{texto(item.serie)}</code>{texto_ ? <span className="ck-backups__detalhe">{texto_}</span> : null}{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
 }
 

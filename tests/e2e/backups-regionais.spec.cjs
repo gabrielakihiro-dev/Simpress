@@ -236,7 +236,7 @@ test("confirmar e desfazer atualizam a linha, o cartão do sino e o selo da aba"
   const londrina = linha(page, "Londrina");
   const badgeSino = page.locator("#badge-notificacoes");
   const itensSino = page.locator(`${CARTAO} li`);
-  const confirmar = page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" });
+  const confirmar = page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" });
   const desfazer = page.getByRole("button", { name: "Desfazer confirmação: série TSTBK0001, Londrina" });
 
   await expect(selo).toHaveText("2");
@@ -279,7 +279,7 @@ test("confirmar e desfazer atualizam a linha, o cartão do sino e o selo da aba"
   await expect(pato.locator(".ck-badge")).toHaveText("Backup disponível");
   await desfazerPato.click();
   await expect(desfazerPato).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0004, Pato Branco" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirmar TSTBK0004 como backup de Pato Branco" })).toBeVisible();
   await expect(pato.locator(".ck-backups__nota", { hasText: "além do mínimo" })).toHaveCount(0);
   await expect(pato.locator(".ck-badge")).toHaveText("Backup disponível");
   await expect(selo).toHaveText("2");
@@ -291,8 +291,34 @@ test("o rótulo acessível da aba Backups acompanha o selo", async ({ page }) =>
   await expect(aba(page, "backups")).toHaveAttribute("aria-label", "Backups: 2 regionais pendentes");
   await irParaBackupsPeloSino(page);
   await esperarBackupsAberta(page);
-  await page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" }).click();
+  await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).click();
   await expect(aba(page, "backups")).toHaveAttribute("aria-label", "Backups: 1 regional pendente");
+});
+
+// Confirmação nova (tipo backup, sem prazo) e confirmação invalidada por troca de usuário do Endpoint.
+test("confirmação nova mostra Confirmado como backup com Desfazer; excluído por usuário trocado mostra a nota e Desfazer", async ({ page }) => {
+  test.slow();
+  await abrirResumo(page);
+  await irParaBackupsPeloSino(page);
+  await esperarBackupsAberta(page);
+  const maringa = linha(page, "Maringá");
+  await expect(maringa).toContainText("Confirmado como backup");
+  await expect(maringa).not.toContainText("confirmado até");
+  await expect(maringa.getByRole("button", { name: "Desfazer confirmação: série TSTBK0010, Maringá" })).toBeVisible();
+  await expect(maringa.getByRole("button", { name: "Desfazer confirmação: série TSTBK0010, Maringá" })).toHaveCount(1);
+  // A confirmação antiga de 7 dias segue mostrando o prazo.
+  await expect(linha(page, "Pato Branco")).toContainText("confirmado até");
+
+  const cascavel = linha(page, "Cascavel");
+  await cascavel.locator(".ck-backups__excluidos > summary").click();
+  const excluido = cascavel.locator("li").filter({ has: page.locator("code", { hasText: "TSTBK0011" }) });
+  await expect(excluido).toContainText("Antes: o usuário do Endpoint mudou");
+  await excluido.getByRole("button", { name: "Desfazer confirmação: série TSTBK0011, Cascavel" }).click();
+  await expect(cascavel.locator("code", { hasText: "TSTBK0011" })).toHaveCount(0);
+
+  // Confirmar mostra o toast novo, sem apelido nem cidade.
+  await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).click();
+  await expect(page.locator("#toast-container")).toContainText("Backup confirmado: TSTBK0001");
 });
 
 // Regional fora das prioritárias (Curitiba): o candidato TSTBK0008 vira "sobra" ao confirmar, com o Desfazer na própria seção.
@@ -304,12 +330,15 @@ test("sobra fora das prioritárias: confirmar mostra Desfazer em Sobras e desfaz
   const secao = titulo => page.locator(`${PAINEL} .ck-backups__secao`).filter({ has: page.getByRole("heading", { name: titulo }) });
   const sobras = secao("Sobras");
   const demais = secao("Candidatos nas demais regionais");
-  const nomeConfirmar = "Confirmar disponível por 7 dias: série TSTBK0008, Curitiba";
+  const nomeConfirmar = "Confirmar TSTBK0008 como backup de Curitiba";
   const nomeDesfazer = "Desfazer confirmação: série TSTBK0008, Curitiba";
   const sobraCuritiba = sobras.locator("li").filter({ has: page.locator(".ck-backups__cidade", { hasText: "Curitiba" }) }).first();
 
   // Estado inicial: TSTBK0008 é candidato de Curitiba; Curitiba não tem sobra. Pato Branco tem sobra prioritária (TSTBK0004) sem botão.
   await expect(demais.getByRole("button", { name: nomeConfirmar })).toBeVisible();
+  await expect(demais.getByRole("button", { name: nomeConfirmar })).toHaveText("Confirmar Backup");
+  // Endpoint indisponível para o candidato: o botão fica desabilitado.
+  await expect(demais.getByRole("button", { name: "Confirmar TSTBK0012 como backup de Curitiba" })).toBeDisabled();
   await expect(sobras.locator(".ck-backups__cidade", { hasText: "Curitiba" })).toHaveCount(0);
   await expect(sobras.locator(".ck-backups__cidade", { hasText: "Pato Branco" })).toHaveCount(1);
   await expect(sobras.locator("code", { hasText: "TSTBK0004" })).toBeVisible();
@@ -325,10 +354,11 @@ test("sobra fora das prioritárias: confirmar mostra Desfazer em Sobras e desfaz
   await expect(desfazer).toHaveAttribute("data-cidade", "Curitiba");
   await expect(sobraCuritiba.locator("code", { hasText: "TSTBK0008" })).toBeVisible();
   await expect(sobraCuritiba).toContainText("Confirmado manualmente");
-  await expect(sobraCuritiba).toContainText("confirmado até");
+  await expect(sobraCuritiba).toContainText("Confirmado como backup");
+  await expect(sobraCuritiba).not.toContainText("confirmado até");
   await expect(sobraCuritiba).toContainText("1 backup em regional fora das prioritárias");
   await expect(page.getByRole("button", { name: nomeConfirmar })).toHaveCount(0);
-  await expect(demais).toHaveCount(0); // Curitiba era o único grupo com candidatos
+  await expect(demais.getByRole("button", { name: "Confirmar TSTBK0012 como backup de Curitiba" })).toBeDisabled(); // sobra só o candidato sem Endpoint
   await expect(desfazerPato).toHaveCount(1); // continua só o da tabela
   await expect(sobras.getByRole("button")).toHaveCount(1);
   // O redesenho troca Confirmar por Desfazer: o foco vai ao botão da mesma série e cidade.
@@ -400,10 +430,10 @@ for (const largura of [320]) {
       expect(cartao.direita).toBeLessThanOrEqual(largura);
       expect(cartao.largura).toBeGreaterThan(150);
     }
-    await expect(page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" })).toBeInViewport({ ratio: 0.9 }).catch(async () => {
-      await page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" })).toBeInViewport({ ratio: 0.9 }).catch(async () => {
+      await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).scrollIntoViewIfNeeded();
     });
-    const botao = await page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" }).boundingBox();
+    const botao = await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).boundingBox();
     expect(botao.x).toBeGreaterThanOrEqual(0);
     expect(botao.x + botao.width).toBeLessThanOrEqual(largura);
   });
@@ -500,9 +530,9 @@ test("o apelido nunca aparece em toast nem em região aria-live global depois de
   // O apelido aparece na tela local (o teste não passa por não ter o dado).
   await expect(page.locator(PAINEL)).toContainText(`${APELIDO} 1`);
 
-  await page.getByRole("button", { name: "Confirmar disponível por 7 dias: série TSTBK0001, Londrina" }).click();
+  await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).click();
   await expect(linha(page, "Londrina").locator(".ck-badge")).toHaveText("Backup disponível");
-  await expect.poll(() => page.evaluate(() => [...window.__regioesVivas].some(texto => texto.includes("Backup confirmado por 7 dias: série TSTBK0001, Londrina.")))).toBe(true);
+  await expect.poll(() => page.evaluate(() => [...window.__regioesVivas].some(texto => texto.includes("Backup confirmado: TSTBK0001")))).toBe(true);
   await page.getByRole("button", { name: "Desfazer confirmação: série TSTBK0001, Londrina" }).click();
   await expect(linha(page, "Londrina").locator(".ck-badge")).toHaveText("Conferir possível backup");
   await expect.poll(() => page.evaluate(() => [...window.__regioesVivas].some(texto => texto.includes("Confirmação desfeita: série TSTBK0001, Londrina.")))).toBe(true);

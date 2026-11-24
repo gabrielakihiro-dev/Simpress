@@ -330,8 +330,8 @@ def build_backups_regionais(
     sobras: List[Dict[str, Any]] = []
     outras_candidatos: List[Dict[str, Any]] = []
     for chave, grupo in grupos.items():
-        # ``itens`` acompanha ``series`` (mesma ordem) e diz como cada série contou; sem ``apelido``.
-        itens_sobra = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate")} for backup in grupo["backups"]]
+        # ``itens`` acompanha ``series`` (mesma ordem) e diz como cada série contou e se tem confirmação vigente; sem ``apelido``.
+        itens_sobra = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate", "confirmacao")} for backup in grupo["backups"]]
         series = [item["serie"] for item in itens_sobra]
         if chave in _PRIORITARIAS:
             if len(series) > MINIMO:
