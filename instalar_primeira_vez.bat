@@ -236,16 +236,6 @@ if exist "%PROJECT_DIR%.agents\skills" (
     xcopy /e /i /y /q "%PROJECT_DIR%.agents\skills\*" "%GEMINI_USER_SKILLS%\" >nul 2>nul
 )
 
-:checar_agentes
-rem Subagentes do maestro (batedor, executor, revisor, segunda-opiniao, arquiteto): vem no clone em .claude\agents; nada a instalar.
-rem O app desktop le .claude\agents da pasta principal do repositorio, nao a do worktree (docs/desenvolvimento/regras-agentes.md).
-set "AGENTES_OK=1"
-for %%A in (batedor executor revisor segunda-opiniao arquiteto) do if not exist "%PROJECT_DIR%.claude\agents\%%A.md" set "AGENTES_OK=0"
-if "%AGENTES_OK%"=="1" (
-    echo   OK: subagentes do maestro em .claude\agents ^(carregam sozinhos nas sessoes novas do Claude Code^).
-) else (
-    echo   [AVISO] Faltam subagentes em .claude\agents; rode "git pull" na pasta principal do repositorio.
-)
 rem Hook de esforco: .claude\settings.json (versionado) pergunta Low/Medium/High/xHigh no inicio de toda sessao nova do Claude Code.
 findstr /l /c:"AskUserQuestion" "%PROJECT_DIR%.claude\settings.json" >nul 2>nul
 if errorlevel 1 (
@@ -275,6 +265,16 @@ call claude plugin marketplace update simpress >nul 2>nul
 for %%P in (ponytail@ponytail context7@claude-plugins-official custo-modelos@simpress) do call :instalar_plugin %%P
 
 :resumo
+rem Conferencia final de skills, agentes, plugins, MCP, hooks e instrucoes (le o que o repositorio espera).
+if exist "%PYTHON%" (
+    "%PYTHON%" "%PROJECT_DIR%scripts\conferir_ferramentas_ia.py" --instalado
+    if errorlevel 1 (
+        echo   [AVISO] A conferencia encontrou FALHA acima; a instalacao continua. Corrija e rode de novo.
+        set /a PENDENCIAS+=1
+    )
+) else (
+    echo   [AVISO] Conferencia de skills/agentes nao rodou ^(sem .venv^).
+)
 echo.
 echo ========================================================
 if "%PENDENCIAS%"=="0" (
