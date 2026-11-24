@@ -1,5 +1,9 @@
 """Backups regionais (Resumo F3): confirmar e desfazer manualmente um backup por série e cidade.
 
+Manter e Excluir (só para confirmação com ``decisao_pendente``: apelido manual e usuário real novo no Endpoint; senão 409
+``sem_decisao_pendente``): Manter regrava a confirmação com o usuário atual e registra a decisão; Excluir remove antes o
+apelido manual (``remover_apelido_manual``; erro dele sobe e nada mais é gravado) e depois a confirmação, registrando a decisão.
+
 Cálculo em ``domains/backups_regionais.py``; gravação em ``domains/backups_regionais_store.py``
 (``AtomicFileTransaction``, sem lock Python). Nada aqui grava em ``EquipamentosDetalhes`` nem em sistemas externos.
 
@@ -48,6 +52,9 @@ class BackupsRegionaisServices:
     estado_cobertura: Callable[[], Optional[Mapping[str, Any]]]
     manutencao: Callable[[], Manutencao]
     agora: Callable[[], datetime] = lambda: datetime.now().astimezone()
+    # Séries com apelido manual (só leitura) e remoção desse apelido (escrita do módulo de apelidos); ver Excluir.
+    series_apelido_manual: Callable[[], Iterable[str]] = lambda: ()
+    remover_apelido_manual: Optional[Callable[[str], Any]] = None
 
 
 class ConfirmacaoPayload(BaseModel):
@@ -82,9 +89,13 @@ def _entrada_tolerante(descricao: str, ler: Callable[[], Any], padrao: Any) -> A
 
 def _entradas(services: BackupsRegionaisServices) -> Tuple[Any, Any, Any, Manutencao]:
     """Cadastro, Endpoint, Cobertura e manutenção, cada um isolado: o painel e a rota de confirmar leem igual."""
+    endpoint = _entrada_tolerante("o Endpoint", services.endpoint, {"available": False})
+    manuais = _entrada_tolerante("os apelidos manuais", lambda: set(services.series_apelido_manual()), set())
+    if isinstance(endpoint, Mapping):
+        endpoint = {**endpoint, "series_apelido_manual": manuais}
     return (
         _entrada_tolerante("o cadastro", services.equipamentos, None),
-        _entrada_tolerante("o Endpoint", services.endpoint, {"available": False}),
+        endpoint,
         _entrada_tolerante("a Cobertura", services.estado_cobertura, None),
         _entrada_tolerante("a manutenção", services.manutencao, Manutencao(ilegivel=True)),
     )
@@ -113,6 +124,22 @@ def ler_painel_backups(services: BackupsRegionaisServices) -> Dict[str, Any]:
             LIMITACAO_CONFIRMACOES if fonte == "ilegivel" else LIMITACAO_CONFIRMACOES_INDISPONIVEIS
         )
     return resultado
+
+
+def _pendente(calculo: Mapping[str, Any], serie: str, cidade: str) -> Optional[Tuple[str, str]]:
+    """``(serie, cidade)`` do item com ``decisao_pendente`` naquela série e cidade, ou ``None``."""
+    chave_serie, chave_cidade = normalize_reference_value(serie), normalize_reference_value(cidade)
+    itens = [
+        (g["cidade"], item) for g in calculo.get("prioritarias", []) for item in (*g["backups"], *g["conferencia"])
+    ] + [(g["cidade"], item) for g in calculo.get("sobras", []) for item in g["itens"]]
+    for nome, item in itens:
+        if (
+            normalize_reference_value(item["serie"]) == chave_serie
+            and normalize_reference_value(nome) == chave_cidade
+            and (item.get("confirmacao") or {}).get("decisao_pendente")
+        ):
+            return item["serie"], nome
+    return None
 
 
 def series_elegiveis(calculo: Mapping[str, Any], cidade: str) -> Dict[str, Tuple[str, str]]:
@@ -176,6 +203,56 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
         registro, repetido = gravar(lambda estado: _confirmar(estado, serie, cidade, agora, ref))
         publico = {campo: registro[campo] for campo in ("serie", "cidade", "confirmado_em", "tipo")}  # sem usuario_ref
         return {"confirmacao": publico, "repetido": repetido}
+
+    def pendente(payload: ConfirmacaoPayload) -> Tuple[Tuple[str, str], Mapping[str, Any], Any]:
+        """``((serie, cidade), endpoint, agora)`` da decisão pendente; sem ela, 409."""
+        agora = services.agora()
+        try:
+            atual = store().ler()
+        except EstadoIlegivel as error:
+            _falhar(error)
+        except OSError as error:
+            _falhar(FileBusyError(type(error).__name__))
+        equipamentos, endpoint, cobertura, manutencao = _entradas(services)
+        calculo = build_backups_regionais(equipamentos, endpoint, atual["confirmacoes"], cobertura, manutencao, agora)
+        achada = _pendente(calculo, payload.serie, payload.cidade)
+        if achada is None:
+            raise HTTPException(status_code=409, detail={
+                "codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente.",
+            })
+        return achada, endpoint, agora
+
+    @router.post("/api/backups-regionais/manter")
+    def manter(payload: ConfirmacaoPayload) -> Dict[str, Any]:
+        """Mantém o backup com o usuário atual do Endpoint; o apelido manual não muda."""
+        (serie, cidade), endpoint, agora = pendente(payload)
+        ref = usuario_ref(endpoint_user_for_serial(endpoint, normalize_reference_value(serie)))
+
+        def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
+            novo, _registro, _repetido = store_mod.confirmar(estado, serie, cidade, agora, usuario_ref=ref)
+            return store_mod.registrar_decisao(novo, serie, cidade, "manter", agora), None
+
+        gravar(operacao)
+        return {"serie": serie, "cidade": cidade, "decisao": "manter"}
+
+    @router.post("/api/backups-regionais/excluir")
+    def excluir(payload: ConfirmacaoPayload) -> Dict[str, Any]:
+        """Remove o apelido manual, depois a confirmação, e registra a decisão."""
+        (serie, cidade), _endpoint, agora = pendente(payload)
+        if services.remover_apelido_manual is None:
+            raise HTTPException(status_code=500, detail={
+                "codigo": "falha_gravacao", "mensagem": "Não foi possível remover o apelido manual.",
+            })
+        # O erro do apelido (DomainError/HTTPException) sobe como está e nada mais é gravado.
+        services.remover_apelido_manual(serie)
+
+        def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
+            novo, _removido = store_mod.desfazer(estado, serie, cidade)
+            return store_mod.registrar_decisao(novo, serie, cidade, "excluir", agora), None
+
+        # shortcut: se esta gravação falhar, o apelido já removido não volta e a confirmação segue sem decisão pendente; o usuário usa Desfazer.
+        gravar(operacao)
+        return {"serie": serie, "cidade": cidade, "decisao": "excluir"}
 
     @router.post("/api/backups-regionais/desfazer")
     def desfazer(payload: ConfirmacaoPayload) -> Dict[str, Any]:

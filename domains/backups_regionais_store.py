@@ -4,6 +4,9 @@
   Vale até ser desfeito ou cair por regra (cidade ou usuário mudou). Repetir com o mesmo ``usuario_ref`` não muda nada.
 - Registro antigo de 7 dias (``serie``, ``cidade``, ``confirmado_em``, ``expira_em``): continua lido e vale até
   ``expira_em``; ``podar`` o remove depois da retenção. Nada é migrado; as duas formas podem coexistir (esquema 1).
+- ``decisoes`` (opcional, no topo): memória do Manter/Excluir quando aparece usuário novo num notebook com apelido
+  manual; lista de ``{serie, cidade, decisao: "manter"|"excluir", decidido_em}``, sem usuário nem ref. ``podar`` aplica
+  a mesma retenção; arquivo sem a chave continua válido.
 - LGPD: ``usuario_ref`` é pseudônimo (``sha256:`` do usuário normalizado, sem segredo, reversível por dicionário),
   não anonimização. Fica só neste arquivo; nunca em ``/api/painel``, resposta de rota, Assistente, toast ou log.
 - Arquivo ilegível nunca é sobrescrito: a leitura levanta ``EstadoIlegivel`` (503) e a gravação aborta.
@@ -28,6 +31,8 @@ RETENCAO_DIAS = PRAZO_DIAS
 TIPO_BACKUP = "backup"
 CAMPOS_7_DIAS = ("serie", "cidade", "confirmado_em", "expira_em")
 CAMPOS_BACKUP = ("serie", "cidade", "confirmado_em", "tipo", "usuario_ref")
+DECISOES = ("manter", "excluir")
+CAMPOS_DECISAO = ("serie", "cidade", "decisao", "decidido_em")
 _USUARIO_REF = re.compile(r"sha256:[0-9a-f]{64}")
 
 Estado = Dict[str, Any]
@@ -70,13 +75,31 @@ def _registro_valido(registro: Any) -> bool:
     return False
 
 
+def _decisao_valida(decisao: Any) -> bool:
+    return (
+        isinstance(decisao, dict)
+        and set(decisao) == set(CAMPOS_DECISAO)
+        and all(isinstance(decisao[c], str) and decisao[c].strip() for c in ("serie", "cidade"))
+        and decisao["decisao"] in DECISOES
+        and _data_iso_valida(decisao["decidido_em"])
+    )
+
+
+def _com_decisoes(estado: Estado, confirmacoes: Any, decisoes: Any) -> Estado:
+    """Estado novo; ``decisoes`` só entra se o original já tinha a chave ou há decisões a gravar."""
+    novo: Estado = {"esquema": ESQUEMA, "confirmacoes": list(confirmacoes)}
+    if decisoes or "decisoes" in estado:
+        novo["decisoes"] = list(decisoes or [])
+    return novo
+
+
 def validar_estado(valor: Any, nome: str = "backups_regionais.json") -> Estado:
     """Validação estrita: esquema conhecido, nenhuma chave desconhecida e registros com os campos de uma das duas formas."""
     if not isinstance(valor, dict):
         raise EstadoIlegivel(f"'{nome}' precisa conter um objeto.")
     if type(valor.get("esquema")) is not int or valor["esquema"] != ESQUEMA:  # recusa true e 1.0
         raise EstadoIlegivel(f"'{nome}' tem um esquema desconhecido ({valor.get('esquema')!r}).")
-    desconhecidas = set(valor) - {"esquema", "confirmacoes"}
+    desconhecidas = set(valor) - {"esquema", "confirmacoes", "decisoes"}
     if desconhecidas:
         raise EstadoIlegivel(f"'{nome}' tem chaves desconhecidas: {', '.join(sorted(desconhecidas))}.")
     confirmacoes = valor.get("confirmacoes", [])
@@ -85,7 +108,17 @@ def validar_estado(valor: Any, nome: str = "backups_regionais.json") -> Estado:
     for indice, registro in enumerate(confirmacoes):
         if not _registro_valido(registro):
             raise EstadoIlegivel(f"A confirmação {indice} de '{nome}' é inválida.")
-    return {"esquema": ESQUEMA, "confirmacoes": list(confirmacoes)}
+    decisoes = valor.get("decisoes")
+    if decisoes is not None:
+        if not isinstance(decisoes, list):
+            raise EstadoIlegivel(f"'decisoes' de '{nome}' precisa ser uma lista.")
+        for indice, decisao in enumerate(decisoes):
+            if not _decisao_valida(decisao):
+                raise EstadoIlegivel(f"A decisão {indice} de '{nome}' é inválida.")
+    estado: Estado = {"esquema": ESQUEMA, "confirmacoes": list(confirmacoes)}
+    if decisoes is not None:
+        estado["decisoes"] = list(decisoes)
+    return estado
 
 
 def _mesma(registro: Registro, serie: str, cidade: str) -> bool:
@@ -104,13 +137,19 @@ def _vigente(registro: Registro, agora: datetime) -> bool:
     return agora < expira
 
 
+def _data_com_fuso(texto: str, agora: datetime) -> datetime:
+    data = datetime.fromisoformat(texto)
+    return data.replace(tzinfo=agora.tzinfo) if data.tzinfo is None else data
+
+
 def podar(estado: Estado, agora: datetime) -> Estado:
     """Tira as confirmações expiradas há mais de ``RETENCAO_DIAS``; a recém-expirada fica para a nota "Antes: expirou".
 
     Só roda dentro da transação de escrita (confirmar e desfazer): o GET nunca grava.
     """
     limite = agora - timedelta(days=RETENCAO_DIAS)
-    return {"esquema": ESQUEMA, "confirmacoes": [r for r in estado["confirmacoes"] if _vigente(r, limite)]}
+    decisoes = [d for d in estado.get("decisoes", []) if _data_com_fuso(d["decidido_em"], agora) >= limite]
+    return _com_decisoes(estado, [r for r in estado["confirmacoes"] if _vigente(r, limite)], decisoes)
 
 
 def confirmar(
@@ -135,7 +174,7 @@ def confirmar(
         "usuario_ref": usuario_ref,
     }
     restantes = [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]
-    return podar({"esquema": ESQUEMA, "confirmacoes": [*restantes, registro]}, agora), registro, False
+    return podar(_com_decisoes(estado, [*restantes, registro], estado.get("decisoes")), agora), registro, False
 
 
 def desfazer(
@@ -146,8 +185,21 @@ def desfazer(
     Com ``agora``, poda as expiradas antigas depois de remover (o ``removido`` não muda por causa da poda).
     """
     removido = next((r for r in estado["confirmacoes"] if _mesma(r, serie, cidade)), None)
-    novo = {"esquema": ESQUEMA, "confirmacoes": [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]}
+    novo = _com_decisoes(
+        estado, [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)], estado.get("decisoes"),
+    )
     return (novo if agora is None else podar(novo, agora)), removido
+
+
+def registrar_decisao(estado: Estado, serie: str, cidade: str, decisao: str, agora: datetime) -> Estado:
+    """Grava a decisão (``manter`` ou ``excluir``) da série naquela cidade; a mais recente substitui a anterior."""
+    if agora.tzinfo is None or agora.utcoffset() is None:
+        raise ValueError("agora precisa ter fuso horário")
+    if decisao not in DECISOES:
+        raise ValueError("decisao inválida")
+    restantes = [d for d in estado.get("decisoes", []) if not _mesma(d, serie, cidade)]
+    registro = {"serie": serie, "cidade": cidade, "decisao": decisao, "decidido_em": agora.isoformat(timespec="seconds")}
+    return podar(_com_decisoes(estado, estado["confirmacoes"], [*restantes, registro]), agora)
 
 
 class BackupsRegionaisStore:

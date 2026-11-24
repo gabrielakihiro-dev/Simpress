@@ -769,6 +769,49 @@ class ConfirmarBackupCalculoTests(unittest.TestCase):
         self.assertNotIn("usuario_ref", texto)
         self.assertNotIn("sha256:", texto)
 
+    def com_manual(self, *linhas, manuais=("NB1",)):
+        indice = endpoint(*linhas)
+        indice["series_apelido_manual"] = set(manuais)
+        return indice
+
+    def test_apelido_manual_usuario_novo_fica_pendente(self):
+        resultado = calcular([notebook("NB1")], self.com_manual(("NB1", "H1", antes(days=1), "maria")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        regiao = regional(resultado, "Cascavel")
+        self.assertEqual(series(regiao["backups"]), ["NB1"])
+        self.assertEqual(regiao["excluidos"], [])
+        self.assertEqual(regiao["backups"][0]["confirmacao"],
+                         {"estado": "vigente", "tipo": "backup", "expira_em": None, "decisao_pendente": True})
+
+    def test_apelido_manual_admin_nao_pendente(self):
+        resultado = calcular([notebook("NB1")], self.com_manual(("NB1", "H1", antes(days=1), ".\\Administrador")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        backup = regional(resultado, "Cascavel")["backups"][0]
+        self.assertEqual(backup["confirmacao"], {"estado": "vigente", "tipo": "backup", "expira_em": None})
+
+    def test_apelido_manual_mesmo_usuario_nao_pendente(self):
+        resultado = calcular([notebook("NB1")], self.com_manual(("NB1", "H1", antes(days=1), "joao")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertNotIn("decisao_pendente", regional(resultado, "Cascavel")["backups"][0]["confirmacao"])
+
+    def test_sem_apelido_manual_usuario_novo_cai(self):
+        resultado = calcular([notebook("NB1")], self.com_manual(("NB1", "H1", antes(days=1), "maria"), manuais=("OUTRA",)),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        self.assertEqual([e["motivo"] for e in self.excluido(resultado)], ["usuario_mudou"])
+        self.assertEqual(regional(resultado, "Cascavel")["backups"], [])
+
+    def test_pendente_sem_usuario_ref_no_payload(self):
+        resultado = calcular([notebook("NB1")], self.com_manual(("NB1", "H1", antes(days=1), "maria")),
+                             [novo("NB1", usuario_ref=ref("joao"))])
+        texto = json.dumps(resultado)
+        self.assertNotIn("sha256", texto)
+        self.assertNotIn("usuario_ref", texto)
+
+    def test_pendente_em_sobras_traz_a_confirmacao(self):
+        resultado = calcular([notebook("NB9", "Curitiba")], self.com_manual(("NB9", "H1", antes(days=1), "maria"), manuais=("NB9",)),
+                             [novo("NB9", "Curitiba", usuario_ref=ref("joao"))])
+        self.assertTrue(resultado["sobras"][0]["itens"][0]["confirmacao"]["decisao_pendente"])
+
 
 class StoreConfirmarBackupTests(unittest.TestCase):
     def test_estado_misto_valido(self):
@@ -833,6 +876,37 @@ class StoreConfirmarBackupTests(unittest.TestCase):
             lido = store.BackupsRegionaisStore(arquivo, Path(pasta) / ".tx").ler()
         self.assertEqual(lido["confirmacoes"], conteudo["confirmacoes"])
         self.assertTrue(all(store._vigente(r, AGORA) for r in lido["confirmacoes"]))
+
+    def test_decisoes_validas_e_arquivo_sem_decisoes_valido(self):
+        sem = estado_de(novo())
+        self.assertNotIn("decisoes", store.validar_estado(sem))
+        com = {**sem, "decisoes": [{"serie": "A", "cidade": "Cascavel", "decisao": "manter", "decidido_em": AGORA.isoformat()}]}
+        self.assertEqual(store.validar_estado(com)["decisoes"], com["decisoes"])
+
+    def test_decisoes_invalidas_ilegivel(self):
+        base = {"serie": "A", "cidade": "Cascavel", "decisao": "manter", "decidido_em": AGORA.isoformat()}
+        invalidas = ("x", [1], [{**base, "decisao": "talvez"}], [{**base, "extra": 1}], [{**base, "decidido_em": "ontem"}],
+                     [{k: v for k, v in base.items() if k != "serie"}])
+        for invalida in invalidas:
+            with self.subTest(invalida=invalida), self.assertRaises(store.EstadoIlegivel):
+                store.validar_estado({**estado_de(), "decisoes": invalida})
+
+    def test_registrar_decisao_substitui_e_confirmar_desfazer_preservam(self):
+        estado = store.registrar_decisao(estado_de(novo("NB1")), "NB1", "Cascavel", "manter", AGORA)
+        estado = store.registrar_decisao(estado, "nb1", "cascavel", "excluir", AGORA)
+        self.assertEqual([d["decisao"] for d in estado["decisoes"]], ["excluir"])
+        self.assertEqual(set(estado["decisoes"][0]), set(store.CAMPOS_DECISAO))
+        confirmado, _, _ = store.confirmar(estado, "NB7", "Cascavel", AGORA, "")
+        self.assertEqual(confirmado["decisoes"], estado["decisoes"])
+        desfeito, _ = store.desfazer(estado, "NB1", "Cascavel", AGORA)
+        self.assertEqual(desfeito["decisoes"], estado["decisoes"])
+
+    def test_podar_aplica_a_retencao_as_decisoes(self):
+        velha = {"serie": "A", "cidade": "C", "decisao": "manter",
+                 "decidido_em": (AGORA - timedelta(days=store.RETENCAO_DIAS + 1)).isoformat()}
+        recente = {**velha, "serie": "B", "decidido_em": (AGORA - timedelta(days=1)).isoformat()}
+        podado = store.podar({**estado_de(), "decisoes": [velha, recente]}, AGORA)
+        self.assertEqual([d["serie"] for d in podado["decisoes"]], ["B"])
 
 
 if __name__ == "__main__":

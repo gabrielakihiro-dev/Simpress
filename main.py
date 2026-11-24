@@ -1914,6 +1914,11 @@ _backups_services = BackupsRegionaisServices(
     endpoint=read_endpoint_alias_index,
     estado_cobertura=_backups_estado_cobertura,
     manutencao=lambda: manutencao_dos_chamados(TICKET_REPORT_FILE, sebrae_novos.caminhos_padrao(STATE_DIR).existentes),
+    # Mesmos apelidos manuais do cadastro; Excluir remove o apelido pelo módulo de apelidos (sem reimplementar a gravação).
+    series_apelido_manual=lambda: _manual_aliases_by_serial(load_modified_apelidos()).keys(),
+    remover_apelido_manual=lambda serie: alias_changes.apply_alias_change(
+        _alias_change_services, serie.strip().upper(), "", action="desfazer", drop_override=True,
+    ),
 )
 app.include_router(create_backups_regionais_router(_backups_services))
 

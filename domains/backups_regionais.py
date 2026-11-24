@@ -9,7 +9,8 @@ Contrato de entrada:
   Campos: ``serial``, ``tipo``, ``modelo``, ``retirada_cidade``, ``apelido``, ``_apelido_base``,
   ``_apelido_manual_override`` (bool), ``serie_detalhes_duplicada`` (bool).
 * ``endpoint``: dict no formato de ``build_endpoint_alias_index`` mais ``manual_users`` (``{serial_key: login}``),
-  ``user_holds`` (``{serial_key: {tipo, estado, usuario_atual, ...}}``) e ``verified_by_serial``. ``available: False``
+  ``user_holds`` (``{serial_key: {tipo, estado, usuario_atual, ...}}``), ``verified_by_serial`` e ``series_apelido_manual``
+  (conjunto de chaves de séries com apelido manual; ausente = vazio). ``available: False``
   vira ``fontes.endpoint="indisponivel"``. Chaves por ``normalize_reference_value``.
 * ``confirmacoes``: lista de ``{serie, cidade, confirmado_em, expira_em}`` (7 dias, ISO) ou ``{serie, cidade,
   confirmado_em, tipo, usuario_ref}`` (``tipo: "backup"``, sem prazo); ``usuario_ref`` nunca sai na saída.
@@ -199,6 +200,7 @@ def build_backups_regionais(
     }
     confirmadas = _confirmacoes_por_serie(confirmacoes, agora)
     verificacoes = endpoint.get("verified_by_serial") or {}
+    apelido_manual = {normalize_reference_value(s) for s in endpoint.get("series_apelido_manual") or ()}
     grupos: Dict[str, Dict[str, Any]] = {
         chave: {"cidade": cidade, "backups": [], "candidatos": [], "conferencia": [], "excluidos": []}
         for chave, cidade in _PRIORITARIAS.items()
@@ -245,11 +247,13 @@ def build_backups_regionais(
             nova = confirmada["tipo"] == "backup"
             ref_atual = usuario_ref(usuario_atual)
             usuario_mudou = nova and presente and bool(ref_atual) and ref_atual != confirmada["usuario_ref"]
+            # Apelido manual + usuário real novo: a confirmação não cai, espera o Manter ou Excluir do usuário.
+            decisao_pendente = usuario_mudou and chave in apelido_manual
             motivo_invalida = (
                 "expirada" if not nova and (expira is None or agora >= expira)
                 else "cidade_mudou" if normalize_reference_value(confirmada["cidade"]) != normalize_reference_value(cidade_cadastro)
                 else "usuario_vigente" if (usuario_firme if nova else usuario_pleno)
-                else "usuario_mudou" if usuario_mudou
+                else "usuario_mudou" if usuario_mudou and not decisao_pendente
                 else "bloqueio" if bloqueio
                 else None
             )
@@ -259,6 +263,8 @@ def build_backups_regionais(
                 confirmacao_vigente = {
                     "estado": "vigente", "tipo": confirmada["tipo"], "expira_em": expira.isoformat() if expira else None,
                 }
+                if decisao_pendente:
+                    confirmacao_vigente["decisao_pendente"] = True
                 usuario_vigente = usuario_firme if nova else usuario_pleno
 
         marca_valida = bool(cidade_lida) and motivo_marca is None

@@ -31,6 +31,8 @@ from routers.backups_regionais import BackupsRegionaisServices, create_backups_r
 AGORA = datetime(2026, 11, 12, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
 CONFIRMAR = "/api/backups-regionais/confirmar"
 DESFAZER = "/api/backups-regionais/desfazer"
+MANTER = "/api/backups-regionais/manter"
+EXCLUIR = "/api/backups-regionais/excluir"
 CAMPOS = {"serie", "cidade", "confirmado_em", "tipo"}
 
 
@@ -71,6 +73,9 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         self.equipamentos = [notebook("NB1", "Cascavel"), notebook("NB2", "Londrina")]
         self.endpoint = endpoint(("OUTRO", "PRNOTE-X", AGORA - timedelta(days=1)))
         self.ler_endpoint = lambda: self.endpoint
+        self.manuais = set()
+        self.removidos = []
+        self.erro_apelido = None
         router = create_backups_regionais_router(BackupsRegionaisServices(
             state_file=lambda: self.state,
             transaction_root=lambda: self.root,
@@ -79,11 +84,18 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
             estado_cobertura=lambda: {"disponibilidade": {}, "reservas": {}, "movimentacoes": {}, "devolucoes": {}},
             manutencao=lambda: Manutencao(),
             agora=lambda: self.agora,
+            series_apelido_manual=lambda: self.manuais,
+            remover_apelido_manual=lambda serie: self.remover(serie),
         ))
         app = FastAPI()
         app.include_router(router)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
+
+    def remover(self, serie):
+        if self.erro_apelido is not None:
+            raise self.erro_apelido
+        self.removidos.append(serie)
 
     def post(self, caminho, serie="NB1", cidade="Cascavel", status=200):
         resposta = self.client.post(caminho, json={"serie": serie, "cidade": cidade})
@@ -269,6 +281,76 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         self.assertEqual(resposta.json()["detail"]["codigo"], "falha_gravacao")
         self.assertNotIn("pessoa", resposta.text)
 
+    # Manter e Excluir: NB1 confirmada por joao, apelido manual, Endpoint agora mostra maria.
+    def com_pendencia(self):
+        self.manuais = {"NB1"}
+        self.endpoint = endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), "maria"))
+        self.semear({"esquema": 1, "confirmacoes": [{
+            "serie": "NB1", "cidade": "Cascavel", "confirmado_em": AGORA.isoformat(timespec="seconds"),
+            "tipo": "backup", "usuario_ref": usuario_ref("joao"),
+        }]})
+
+    def test_manter_regrava_ref_atual_e_grava_decisao(self):
+        self.com_pendencia()
+        resposta = self.post(MANTER)
+        self.assertEqual(resposta, {"serie": "NB1", "cidade": "Cascavel", "decisao": "manter"})
+        gravado = self.arquivo()
+        self.assertEqual(gravado["confirmacoes"][0]["usuario_ref"], usuario_ref("maria"))
+        self.assertEqual([(d["serie"], d["cidade"], d["decisao"]) for d in gravado["decisoes"]], [("NB1", "Cascavel", "manter")])
+        self.assertEqual(self.removidos, [])
+        # Mesmo usuário não pergunta de novo; outro usuário real pergunta.
+        self.post(MANTER, status=409)
+        self.endpoint = endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), "pedro"))
+        self.post(MANTER)
+
+    def test_manter_e_excluir_sem_pendencia_409_nada_gravado(self):
+        self.com_pendencia()
+        for nome, manuais, serie in (("sem_apelido_manual", set(), "NB1"), ("outra_serie", {"NB1"}, "ZZZ")):
+            for caminho in (MANTER, EXCLUIR):
+                with self.subTest(caso=nome, caminho=caminho):
+                    self.manuais = manuais
+                    antes_ = self.state.read_bytes()
+                    erro = self.post(caminho, serie, status=409)["detail"]
+                    self.assertEqual(erro["codigo"], "sem_decisao_pendente")
+                    self.assertEqual(self.state.read_bytes(), antes_)
+        self.assertEqual(self.removidos, [])
+
+    def test_excluir_remove_apelido_depois_confirmacao_e_grava_decisao(self):
+        self.com_pendencia()
+        resposta = self.post(EXCLUIR)
+        self.assertEqual(resposta, {"serie": "NB1", "cidade": "Cascavel", "decisao": "excluir"})
+        self.assertEqual(self.removidos, ["NB1"])
+        gravado = self.arquivo()
+        self.assertEqual(gravado["confirmacoes"], [])
+        self.assertEqual([d["decisao"] for d in gravado["decisoes"]], ["excluir"])
+
+    def test_excluir_com_erro_do_apelido_nada_gravado(self):
+        self.com_pendencia()
+        from fastapi import HTTPException
+        self.erro_apelido = HTTPException(status_code=409, detail="apelido ocupado")
+        antes_ = self.state.read_bytes()
+        self.post(EXCLUIR, status=409)
+        self.assertEqual(self.state.read_bytes(), antes_)
+
+    def test_respostas_sem_usuario_ref_nem_apelido(self):
+        self.com_pendencia()
+        self.assertNotIn("sha256", json.dumps(self.post(MANTER)))
+        self.endpoint = endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), "pedro"))
+        self.assertNotIn("sha256", json.dumps(self.post(EXCLUIR)))
+
+    def test_decisoes_invalido_e_ilegivel_503(self):
+        self.com_pendencia()
+        conteudo = json.dumps({"esquema": 1, "confirmacoes": [], "decisoes": "x"}).encode("utf-8")
+        self.state.write_bytes(conteudo)
+        for caminho in (MANTER, EXCLUIR):
+            with self.subTest(caminho=caminho):
+                self.post(caminho, status=503)
+                self.assertEqual(self.state.read_bytes(), conteudo)
+
+    def test_corpo_extra_manter_excluir(self):
+        self.com_pendencia()
+        for caminho in (MANTER, EXCLUIR):
+            self.assertEqual(self.client.post(caminho, json={"serie": "NB1", "cidade": "Cascavel", "x": 1}).status_code, 422)
 
 if __name__ == "__main__":
     unittest.main()
