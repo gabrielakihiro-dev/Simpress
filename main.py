@@ -274,7 +274,27 @@ logger = logging.getLogger(__name__)
 
 def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve present-day Entra names on a copy, never in stored history."""
-    view = _comparison_history_for_display(evento)
+    try:
+        apelidos_manuais = _manual_aliases_by_serial(load_modified_apelidos())
+    except (OSError, ValueError):
+        logger.warning("Apelidos manuais ilegíveis; filtro de Backup <Cidade> usa só o texto do histórico.", exc_info=True)
+        apelidos_manuais = {}
+
+    def series_com_usuario(series: List[str]) -> Set[str]:
+        try:
+            usuarios = user_changes.logged_users_for_series(_alias_change_services, series)["usuarios"]
+        except (OSError, ValueError, KeyError):
+            logger.warning("Usuários por série indisponíveis; Backup <Cidade> sem consulta de usuário.", exc_info=True)
+            return set()
+        return {
+            normalize_reference_value(serie)
+            for serie, info in usuarios.items()
+            if isinstance(info, dict) and str(info.get("usuario") or "").strip()
+        }
+
+    view = _comparison_history_for_display(
+        evento, apelidos_manuais=apelidos_manuais, series_com_usuario=series_com_usuario
+    )
     comparison = view.get("comparacao")
     if not isinstance(comparison, dict):
         return view

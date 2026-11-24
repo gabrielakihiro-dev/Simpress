@@ -78,6 +78,91 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertNotIn("usuario_administrador", itens["SN-OK"])
         self.assertEqual(itens["SN-ADM"]["usuario"], "fulano")
 
+    # --- filtro Backup <Cidade> e Administrador (Resumo F3) ---
+
+    @staticmethod
+    def _ausente(computador, serie, usuario="", **extra):
+        return {
+            "computador": computador, "serie": serie, "usuario": usuario,
+            "local_previsto": "Sem mapeamento de local",
+            "fontes": {"no endpoint": "ausente", "EquipamentosDetalhes": "presente"},
+            "ausente_em": ["no endpoint"], "fonte_ausente": "no endpoint", **extra,
+        }
+
+    @staticmethod
+    def _evento(**listas):
+        return {"id": "evt-sintetico", "horario": "2026-11-01T10:00:00-03:00", "comparacao": dict(listas)}
+
+    def _view(self, evento, **kw):
+        from domains.inventory_comparison import comparison_history_for_display
+        return comparison_history_for_display(evento, **kw)["comparacao"]
+
+    def test_backup_sem_usuario_e_ausente_fica_com_local_previsto(self):
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("BACKUP CURITIBA 03 (M)", "BRJB1")])
+        antes = copy.deepcopy(evento)
+        itens = self._view(evento)["ausentes_no_endpoint"]
+        self.assertEqual([i["serie"] for i in itens], ["BRJB1"])
+        self.assertEqual(itens[0]["local_previsto"], "Curitiba")
+        self.assertEqual(evento, antes)
+
+    def test_backup_com_usuario_do_item_some(self):
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("BACKUP CURITIBA 01 (M)", "BRJB2", "asoliveira")])
+        self.assertEqual(self._view(evento)["ausentes_no_endpoint"], [])
+
+    def test_backup_com_usuario_do_cadastro_some_e_so_consulta_candidatos(self):
+        chamadas = []
+
+        def com_usuario(series):
+            chamadas.append(list(series))
+            return {"BRJB3"}
+
+        evento = self._evento(ausentes_no_endpoint=[
+            self._ausente("BACKUP CURITIBA 01 (M)", "BRJB3"),
+            self._ausente("Não encontrado 2", "BRJN2"),
+        ])
+        itens = self._view(evento, series_com_usuario=com_usuario)["ausentes_no_endpoint"]
+        self.assertEqual([i["serie"] for i in itens], ["BRJN2"])
+        self.assertEqual(chamadas, [["BRJB3"]])
+
+    def test_backup_presente_no_endpoint_some(self):
+        evento = self._evento(sem_acesso_7_dias=[
+            {"computador": "Backup Paranavaí 01 (M)", "serie": "BRJB4", "dias_sem_verificacao": 9},
+        ])
+        self.assertEqual(self._view(evento)["sem_acesso_7_dias"], [])
+
+    def test_nao_backup_ausente_sem_usuario_fica_inalterado(self):
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("Não encontrado 2", "BRJN2")])
+        itens = self._view(evento)["ausentes_no_endpoint"]
+        self.assertEqual(itens[0]["local_previsto"], "Sem mapeamento de local")
+
+    def test_apelido_manual_vem_de_apelidos_manuais(self):
+        evento = self._evento(ausentes_no_endpoint=[self._ausente("OUTRO TEXTO", "BRJB5")])
+        itens = self._view(evento, apelidos_manuais={"BRJB5": "Backup Paranavaí 01 (M)"})["ausentes_no_endpoint"]
+        self.assertEqual(itens[0]["local_previsto"], "Paranavaí")
+
+    def test_administrador_some_de_divergencias_local_e_fica_em_ambiguos(self):
+        evento = self._evento(
+            divergencias_local=[{"computador": "PRNOTEAPU01", "serie": "SN-A1", "local_previsto": "Apucarana",
+                                 "local_detalhes": "Londrina", "usuario_administrador": True}],
+            registros_ambiguos=[{"computador": "PRNOTEAPU01", "serie": "SN-A1", "usuario_administrador": True}],
+        )
+        view = self._view(evento)
+        self.assertEqual(view["divergencias_local"], [])
+        self.assertEqual(len(view["registros_ambiguos"]), 1)
+
+    def test_evento_antigo_sem_campo_usa_texto_do_usuario(self):
+        item = self._ausente("PRMACAPU02", "SN-A2", ".\\Administrador")
+        evento = self._evento(ausentes_em_detalhes=[item])
+        self.assertEqual(self._view(evento)["ausentes_em_detalhes"], [])
+
+    def test_serie_sem_mapeamento_pula_administrador_na_importacao(self):
+        endpoint = source_table([
+            {"NOMEDOCOMPUTADOR": "PRNOTEZZZ01", "SERIAL": "SN-Z1", "USUARIOSLOGADOS": "Administrador"},
+            {"NOMEDOCOMPUTADOR": "PRNOTEYYY01", "SERIAL": "SN-Y1", "USUARIOSLOGADOS": "fulano"},
+        ])
+        result = main.compare_uploaded_workbooks(endpoint, source_table([]), {})
+        self.assertEqual([s["serie"] for s in result["series_sem_mapeamento"]], ["YYY"])
+
     def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
         reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
         ages = {

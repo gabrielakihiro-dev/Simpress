@@ -15,6 +15,7 @@ from domains.history_insights import PENDING_CATEGORIES, PINNED_BASELINE_ID, com
 from domains.inventory_comparison import (
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
+    filtrar_backup_e_administrador,
 )
 from domains.regras_negocio import series_sebrae
 from domains.ticket_reporting import normalize_ticket_snapshot, ticket_attention
@@ -487,7 +488,7 @@ def _absent_serial_keys(comparison: Any) -> set:
     rows = comparison.get("ausentes_no_endpoint") if isinstance(comparison, dict) else None
     return set().union(*(
         _serial_keys(row.get("serie"))
-        for row in filter_sebrae_owned_unmatched_items(rows)
+        for row in filtrar_backup_e_administrador(filter_sebrae_owned_unmatched_items(rows))
         if isinstance(row, dict)
     ))
 
@@ -536,7 +537,7 @@ def long_unused_status(
     comparison = current.get("comparacao")
     if not isinstance(comparison, dict):
         return result
-    stale = _dict_rows(comparison, "sem_acesso_7_dias")
+    stale = filtrar_backup_e_administrador(_dict_rows(comparison, "sem_acesso_7_dias"))
     equipment: List[Dict[str, Any]] = []
     for row in stale:
         age = _count(row.get("dias_sem_verificacao"))
