@@ -130,6 +130,15 @@ class DashboardDivergente(RotinaErro):
         self.sha256 = sha256
 
 
+class EnvioNaoConfirmado(RotinaErro):
+    """O upload do Dashboard terminou sem o aviso de concluído; ``andamento``: o SharePoint ainda mostrava o envio em andamento
+    (navegar cancelaria o upload, então a rotina não confere baixando de novo)."""
+
+    def __init__(self, mensagem: str, andamento: bool) -> None:
+        super().__init__(mensagem)
+        self.andamento = andamento
+
+
 class DashboardEmConflito(RotinaErro):
     """O SharePoint e o site alteraram a mesma célula: nada é enviado nem guardado como cópia pendente; a escolha é feita na tela.
 
@@ -2149,6 +2158,17 @@ _AVISO_CONFLITO = re.compile(r"save conflict|changes conflict with|conflito (?:d
 _AVISO_COPIA_CONCLUIDA = re.compile(r"copied \d+ items?|copiad[oa]s? \d+ ite|\d+ ite(?:m|ns) copiad", re.IGNORECASE)
 # Cópia em andamento ("Copying 1 item"): no teste real de 08/11/2026 durou mais de 30 s e a linha só surgiu no fim.
 _AVISO_COPIANDO = re.compile(r"copying \d+ items?|copiando \d+ ite", re.IGNORECASE)
+# Andamento do envio (chaves k, l e m do módulo 5729): "Uploading 1 item to X", "Carregando Dashboard... para X". Só as formas do envio:
+# "Carregando" sozinho é o rótulo genérico da lista carregando.
+_AVISO_ENVIANDO = re.compile(r"uploading (?:\d+ items?\b|.+? to \S)|carregando (?:\d+ ite(?:m|ns)\b|.+? para \S)", re.IGNORECASE)
+# Botão da barra de seleção ("X 1 selected", "1 selecionado") ou "Limpar seleção": a barra de comandos age sobre a linha selecionada.
+_BOTAO_LIMPAR_SELECAO = re.compile(
+    r"^\s*(?:\d+\s+(?:items?\s+|ite(?:m|ns)\s+)?(?:selected|selecionad[oa]s?)|clear selection|limpar sele[cç][aã]o)", re.IGNORECASE,
+)
+ESPERA_LISTA_S = 60  # 25/11/2026: logo depois do login a lista da pasta levou mais de 15 s para mostrar o Dashboard
+ESPERA_INICIO_ENVIO_S = 60  # sem diálogo Replace/Keep both nem andamento nesse prazo, o upload não começou
+ESPERA_ENVIO_CONCLUIDO_S = 90
+ESPERA_NOVA_VERSAO_S = 20  # entre os dois downloads da conferência do recebimento (a versão nova pode demorar a aparecer)
 # Cópia local do que estava no SharePoint antes de sobrepor (a cópia "Duplicata" fica lá, intocada).
 DASHBOARD_BACKUPS_DIR = ROOT / "data" / "state" / "sebrae_backups"
 DASHBOARD_BACKUPS_MAX = 20
@@ -2166,9 +2186,52 @@ def _localizar_linha_do_dashboard(page: "Page"):
 
 def _linha_do_dashboard(page: "Page"):
     linha = _localizar_linha_do_dashboard(page)
-    if not esperar_visivel(linha, 15000):
+    if not esperar_visivel(linha, ESPERA_LISTA_S * 1000):
         raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" na pasta DASHBOARD SEBRAE.')
     return linha
+
+
+def _linhas_selecionadas(page: "Page"):
+    return page.get_by_role("row", selected=True)
+
+
+def limpar_selecao(page: "Page") -> None:
+    """Deixa a pasta sem linha selecionada: a barra de comandos da seleção (Open/Share/Download/Duplicate) age sobre ela.
+
+    25/11/2026: a cópia recém-criada pela Duplicata ficou selecionada ("1 selected") e o "Download" encontrado era o dessa barra.
+    """
+    if not visivel(_linhas_selecionadas(page)):
+        return
+    log("Dashboard", "Há linha selecionada na pasta; limpando a seleção antes de continuar.")
+    botao = page.get_by_role("button", name=_BOTAO_LIMPAR_SELECAO).filter(visible=True)
+    if visivel(botao):
+        botao.first.click()
+    else:
+        page.keyboard.press("Escape")
+    for _ in range(10):
+        page.wait_for_timeout(500)
+        if not visivel(_linhas_selecionadas(page)):
+            return
+    raise EtapaInstavel("Não consegui limpar a seleção de linhas na pasta DASHBOARD SEBRAE.")
+
+
+def _item_do_menu_da_linha(page: "Page", linha, nome: "re.Pattern[str]"):
+    """Seleção limpa > "Mais ações" da linha do Dashboard principal > item ``nome`` do menu de contexto aberto.
+
+    shortcut: o escopo é ``role=menu`` (o menu de contexto), que exclui a barra de comandos (``menubar``, cujos botões também são
+    ``menuitem``); o DOM real não foi conferido em ensaio supervisionado. A guarda abaixo garante que nenhuma outra linha está selecionada.
+    """
+    limpar_selecao(page)
+    _abrir_mais_acoes(linha)
+    item = page.get_by_role("menu").get_by_role("menuitem", name=nome).first
+    item.wait_for(state="visible", timeout=15000)
+    page.wait_for_timeout(500)  # o menu re-renderiza logo depois de abrir (25/11/2026: o item visível não aceitava a ação)
+    item.wait_for(state="visible", timeout=15000)
+    # Abrir o menu pode selecionar a linha do principal; qualquer outra linha selecionada faria a barra agir sobre ela.
+    if visivel(_linhas_selecionadas(page).filter(has_not=page.get_by_text(_NOME_DASHBOARD_NA_LISTA))):
+        page.keyboard.press("Escape")
+        raise EtapaInstavel("Outra linha da pasta ficou selecionada com o menu aberto; refazendo.")
+    return item
 
 
 def pasta_dashboard_url() -> str:
@@ -2201,10 +2264,7 @@ def baixar_dashboard_da_pasta(page: "Page") -> Path:
 
     def clicar() -> None:
         log("Dashboard", "Clicando em Mais ações > Baixar...")
-        _abrir_mais_acoes(linha)
-        baixar = page.get_by_role("menuitem", name=_MENU_BAIXAR).first
-        baixar.wait_for(state="visible", timeout=15000)
-        baixar.click()
+        _item_do_menu_da_linha(page, linha, _MENU_BAIXAR).click()
 
     arquivo = exportar_com_download(page, "Dashboard", clicar, _DASHBOARD_BAIXADO)
     if arquivo.suffix.lower() != ".xlsx":
@@ -2353,10 +2413,7 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     def _abrir_menu_duplicata():
         try:
             voltar_para_pasta_dashboard(page)
-            _abrir_mais_acoes(linha)
-            duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first
-            duplicata.wait_for(state="visible", timeout=15000)
-            return duplicata
+            return _item_do_menu_da_linha(page, linha, _MENU_DUPLICATA)
         except RotinaErro:
             raise
         except Exception as erro:
@@ -2395,8 +2452,12 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     log("Dashboard", f"Cópia de segurança na pasta, sem o aviso de cópia concluída em {ESPERA_COPIA_CONCLUIDA_S} s; seguindo.")
 
 
-def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
-    """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos valores em todas as colunas de dado dos chamados)."""
+def conferir_dashboard_do_sharepoint(baixado: Path) -> "bytes | None":
+    """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos valores em todas as colunas de dado dos chamados).
+
+    Devolve ``None`` quando o baixado é byte a byte o importado (o arquivo gerado vai como está); senão, a cópia de referência cuja CHAMADOS
+    tem os valores do baixado (a importada ou a do último envio): as outras abas do SharePoint podem ter mudado e são preservadas por
+    ``montar_sobre_o_sharepoint``."""
     import hashlib
 
     from domains import sebrae_finalizacao, sebrae_novos
@@ -2410,12 +2471,12 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
     conteudo = baixado.read_bytes()
     hash_baixado = hashlib.sha256(conteudo).hexdigest()
     if existentes["sha256"] and hash_baixado == existentes["sha256"]:
-        return
+        return None
     # Segundo envio em diante: o SharePoint já tem o arquivo que o próprio site enviou, e não o importado.
     # Um envio mesclado levou edições de terceiros que o próximo arquivo gerado não tem: nunca vale como "sem mudança"; cai no merge.
     mesclado = sebrae_finalizacao.enviado_mesclado(DASHBOARD_SAIDA_DIR.parent)
     if not mesclado and hash_baixado == sebrae_finalizacao.ler_enviado(DASHBOARD_SAIDA_DIR.parent):
-        return
+        return conteudo
     # O SharePoint reserializa o xlsx depois do envio (hash novo, valores iguais): compara com a cópia do último envio e, sem ela, com a importada.
     referencias = [
         ref for ref in (None if mesclado else sebrae_finalizacao.ler_copia_enviada(DASHBOARD_SAIDA_DIR.parent), sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"]))
@@ -2429,10 +2490,41 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
         valores_das_referencias = [valores_dos_chamados(ref) for ref in referencias]
     except DashboardInvalido as erro:
         raise RotinaErro(f"Não consegui conferir o Dashboard do SharePoint: {erro}") from erro
-    if valores not in valores_das_referencias:
-        # explica pela cópia mais próxima do baixado (a enviada pode ser anterior à importada)
-        motivo = _motivo_da_divergencia(valores, valores_das_referencias)
-        raise DashboardDivergente(f"{MSG_SHAREPOINT_MUDOU} {motivo}{MSG_SHAREPOINT_PROXIMO_PASSO}", hash_baixado)
+    for referencia, valores_da_referencia in zip(referencias, valores_das_referencias):
+        if valores == valores_da_referencia:
+            return referencia
+    # explica pela cópia mais próxima do baixado (a enviada pode ser anterior à importada)
+    motivo = _motivo_da_divergencia(valores, valores_das_referencias)
+    raise DashboardDivergente(f"{MSG_SHAREPOINT_MUDOU} {motivo}{MSG_SHAREPOINT_PROXIMO_PASSO}", hash_baixado)
+
+
+MSG_SEM_PRESERVAR = (
+    "Não consegui aplicar as alterações do site sobre o Dashboard do SharePoint preservando as outras abas; nada foi substituído. "
+    "Use Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint."
+)
+
+
+def montar_sobre_o_sharepoint(baixado: Path, gerado: bytes, referencia: bytes) -> bytes:
+    """O arquivo a enviar parte do Dashboard baixado agora: só as células da CHAMADOS que o site mudou em relação a ``referencia``.
+
+    A CHAMADOS do SharePoint tem os valores de ``referencia`` (``conferir_dashboard_do_sharepoint``), mas as outras abas (ex.: Laudos
+    editada à mão) podem ter mudado: ``reaplicar`` regrava só a aba CHAMADOS e copia as demais partes do zip byte a byte. O resultado
+    tem de ter na CHAMADOS as mesmas linhas do ``gerado`` (a ordem pode ser a do SharePoint); senão para sem enviar.
+    """
+    from domains import sebrae_finalizacao
+    from domains.sebrae_dashboard import DashboardInvalido
+    from domains.sebrae_dashboard_gravacao import reaplicar, valores_dos_chamados
+
+    try:
+        resultado = reaplicar(referencia, gerado, baixado.read_bytes(), escolhas=sebrae_finalizacao.escolhas_dos_conflitos(DASHBOARD_SAIDA_DIR.parent))
+        certo = resultado.conteudo is not None and not resultado.conflitos and (
+            sorted(valores_dos_chamados(resultado.conteudo).values()) == sorted(valores_dos_chamados(gerado).values())
+        )
+    except DashboardInvalido as erro:
+        raise RotinaErro(f"{MSG_SEM_PRESERVAR} ({erro})") from erro
+    if not certo or resultado.conteudo is None:
+        raise RotinaErro(MSG_SEM_PRESERVAR)
+    return resultado.conteudo
 
 
 def mesclar_dashboard_com_sharepoint(baixado: Path, gerado: bytes, base_origem: "str | None", divergencia: DashboardDivergente) -> "bytes | None":
@@ -2541,6 +2633,7 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
     def _abrir_menu_e_escolher_arquivo() -> None:
         try:
             voltar_para_pasta_dashboard(page)  # outro link antes do upload: volta à pasta e só então abre o Carregar
+            limpar_selecao(page)
             _botao_enviar(page).click()
             arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
             arquivos.wait_for(state="visible", timeout=15000)
@@ -2552,21 +2645,15 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
         except Exception as erro:
             raise EtapaInstavel(str(erro)) from erro
 
+    # A escolha do arquivo nunca se repete daqui em diante: sem sinal do envio, a rotina para (EnvioNaoConfirmado).
     etapa_resiliente(_abrir_menu_e_escolher_arquivo, "Abrir menu de upload e escolher arquivo")
+    log("Dashboard", "Arquivo escolhido; esperando o diálogo Replace/Keep both, o andamento ou o aviso de envio concluído.")
     substituir = page.get_by_role("button", name=_BOTAO_SUBSTITUIR)
     manter = page.get_by_role("button", name=_BOTAO_MANTER_AMBOS)
-    if esperar_visivel(substituir.or_(manter).first, 8000):
-        if substituir.count() == 0:
-            try:
-                page.keyboard.press("Escape")
-            except Exception:
-                pass
-            raise RotinaErro('O SharePoint ofereceu só "Keep both" (manter os dois); não enviei para não criar um segundo arquivo.')
-        aguardar_estabilidade_pre_clique(lambda: substituir.count() > 0, "Substituir o Dashboard no SharePoint")
-        substituir.first.click()
     aviso_uso = page.get_by_role("dialog").or_(page.get_by_role("alertdialog")).filter(has_text=_AVISO_ARQUIVO_EM_USO)
-    limite = time.time() + 90
-    while time.time() < limite:
+    inicio = time.time()
+    substituiu = andamento_visto = False
+    while (agora := time.time()) < inicio + ESPERA_ENVIO_CONCLUIDO_S:
         verificar_cancelamento()
         if visivel(aviso_uso.first):
             raise RotinaErro("O SharePoint não deixou substituir: o Dashboard está em uso ou bloqueado por outra pessoa. Feche-o e envie de novo.")
@@ -2575,9 +2662,76 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
             raise RotinaErro(MSG_CONFLITO_SHAREPOINT)
         # Só o aviso confirma: o texto da linha muda sozinho (data relativa) mesmo se o envio falhar.
         if visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
+            log("Dashboard", "Aviso de envio concluído visto.")
             return
+        # O diálogo de nome repetido pode aparecer a qualquer momento da espera; Replace no máximo uma vez.
+        if not substituiu and visivel(substituir.or_(manter).first):
+            if substituir.count() == 0:
+                try:
+                    page.keyboard.press("Escape")
+                except Exception:
+                    pass
+                raise RotinaErro('O SharePoint ofereceu só "Keep both" (manter os dois); não enviei para não criar um segundo arquivo.')
+            log("Dashboard", "Diálogo de nome repetido visto; clicando em Replace uma única vez.")
+            aguardar_estabilidade_pre_clique(lambda: substituir.count() > 0, "Substituir o Dashboard no SharePoint")
+            substituir.first.click()
+            substituiu = True
+            log("Dashboard", "Replace clicado.")
+        if not andamento_visto and visivel(page.get_by_text(_AVISO_ENVIANDO).first):
+            andamento_visto = True
+            log("Dashboard", "Andamento do envio visto.")
+        if not substituiu and not andamento_visto and agora >= inicio + ESPERA_INICIO_ENVIO_S:
+            raise EnvioNaoConfirmado(
+                f"O upload não começou: em {ESPERA_INICIO_ENVIO_S} s não vi o diálogo Replace/Keep both nem o andamento do envio; "
+                "não escolhi o arquivo de novo.", andamento=False,
+            )
         page.wait_for_timeout(1000)
-    raise RotinaErro("Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.")
+    raise EnvioNaoConfirmado(
+        f"Não vi o aviso de envio concluído em {ESPERA_ENVIO_CONCLUIDO_S} s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.",
+        andamento=visivel(page.get_by_text(_AVISO_ENVIANDO).first),
+    )
+
+
+MSG_NAO_RECEBIDO = (
+    "O SharePoint não recebeu o Dashboard: baixei o arquivo de novo, duas vezes, e ele ainda tem os valores de antes do envio. "
+    "Nada foi substituído; pode usar Enviar ao SharePoint de novo."
+)
+
+
+def conferir_recebimento(page: "Page", enviado: bytes, antes: bytes) -> "bool | None":
+    """Sem o aviso de concluído e sem andamento: baixa o Dashboard principal de novo (só leitura) e compara os valores da CHAMADOS.
+
+    ``True``: tem os valores enviados. ``False``: nos dois downloads (com ``ESPERA_NOVA_VERSAO_S`` entre eles) ainda tem os valores de
+    ``antes`` (o download antes do envio). ``None`` (incerto): enviado e ``antes`` têm os mesmos valores (a comparação não distingue),
+    o SharePoint tem outros valores, ou o download falhou. Nunca clica em Replace nem escolhe o arquivo de novo.
+    """
+    from domains.sebrae_dashboard import DashboardInvalido
+    from domains.sebrae_dashboard_gravacao import valores_dos_chamados
+
+    try:
+        valores_enviados, valores_antes = valores_dos_chamados(enviado), valores_dos_chamados(antes)
+    except DashboardInvalido:
+        return None
+    if valores_enviados == valores_antes:
+        log("Dashboard", "O arquivo enviado tem na CHAMADOS os mesmos valores de antes do envio; baixar de novo não distingue.")
+        return None
+    for tentativa in (1, 2):
+        verificar_cancelamento()
+        try:
+            voltar_para_pasta_dashboard(page)
+            agora = valores_dos_chamados(baixar_dashboard_da_pasta(page).read_bytes())
+        except Exception as erro:  # qualquer falha aqui deixa o envio incerto, como antes
+            log("Dashboard", f"Não consegui baixar o Dashboard para conferir o envio ({type(erro).__name__}).")
+            return None
+        if agora == valores_enviados:
+            return True
+        if agora != valores_antes:
+            log("Dashboard", "O Dashboard baixado não tem nem os valores enviados nem os de antes do envio.")
+            return None
+        if tentativa == 1:
+            log("Dashboard", f"O Dashboard baixado ainda tem os valores de antes do envio; esperando {ESPERA_NOVA_VERSAO_S} s e baixando de novo.")
+            page.wait_for_timeout(ESPERA_NOVA_VERSAO_S * 1000)
+    return False
 
 
 def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
@@ -2627,7 +2781,8 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         verificar_cancelamento()
 
         divergencia_anterior: list = []  # sha256 do download que já reprovou na conferência
-        mesclado: list = []  # [bytes] do Dashboard do SharePoint com as células do site reaplicadas; vazio: vai o arquivo gerado
+        montado: list = []  # [bytes] do Dashboard do SharePoint com as células do site reaplicadas; vazio: vai o arquivo gerado
+        terceiro: list = []  # [True]: um terceiro mudou a CHAMADOS do SharePoint (merge); só montado sobre ele: vazio
 
         def _baixar_e_conferir() -> Path:
             # Baixar e conferir formam uma única etapa: nada irreversível acontece aqui (só leitura),
@@ -2638,12 +2793,12 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
             # mensagem original (MSG_SHAREPOINT_MUDOU no início) e o motivo. Mudança real: antes de parar, tenta reaplicar só as
             # células do site sobre o arquivo do SharePoint; conflito ou erro levantado aqui sai direto, sem nova tentativa.
             baixado = None
-            mesclado.clear()  # nunca vale o merge de um download anterior
+            montado.clear()  # nunca vale o merge de um download anterior
+            terceiro.clear()
             try:
                 voltar_para_pasta_dashboard(page)
                 baixado = baixar_dashboard_da_pasta(page)
-                conferir_dashboard_do_sharepoint(baixado)
-                return baixado
+                referencia = conferir_dashboard_do_sharepoint(baixado)
             except DashboardDivergente as erro:
                 if divergencia_anterior == [erro.sha256]:
                     gerado = arquivo.read_bytes()
@@ -2652,13 +2807,17 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                     )
                     if conteudo_mesclado is None:
                         raise RotinaErro(str(erro)) from erro
-                    mesclado[:] = [conteudo_mesclado]
+                    montado[:], terceiro[:] = [conteudo_mesclado], [True]
                     log("Dashboard", "O SharePoint mudou; as células alteradas pelo site foram reaplicadas sobre ele.")
                     return baixado
                 divergencia_anterior[:] = [erro.sha256]
                 raise EtapaInstavel(str(erro)) from erro
             except Exception as erro:
                 raise EtapaInstavel(str(erro)) from erro
+            if referencia is not None:  # o SharePoint não é byte a byte o importado: as outras abas dele são preservadas (25/11/2026)
+                montado[:] = [montar_sobre_o_sharepoint(baixado, arquivo.read_bytes(), referencia)]  # erro aqui é terminal
+                log("Dashboard", "As alterações do site foram aplicadas sobre o Dashboard baixado agora; as outras abas ficam como estão no SharePoint.")
+            return baixado
 
         baixado = etapa_resiliente(_baixar_e_conferir, "Baixar e conferir Dashboard da pasta")
         guardar_backup_do_dashboard(baixado)
@@ -2667,15 +2826,27 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         base_origem = sebrae_finalizacao.base_do_conteudo(state_dir, conteudo)  # importação em que o arquivo foi montado (None: desconhecida)
         if envio_id is None:
             envio_id = sebrae_finalizacao.preparar_envio(state_dir, conteudo)
-        if mesclado:  # a cópia privada e o registro passam a ser os do arquivo que vai de fato ao SharePoint
-            sebrae_finalizacao.substituir_conteudo_envio(state_dir, envio_id, mesclado[0])
-            conteudo = mesclado[0]
+        if montado:  # a cópia privada e o registro passam a ser os do arquivo que vai de fato ao SharePoint
+            sebrae_finalizacao.substituir_conteudo_envio(state_dir, envio_id, montado[0], mesclado=bool(terceiro))
+            conteudo = montado[0]
         registro = sebrae_finalizacao.ler_envio(state_dir)
         if registro is None or registro["id"] != envio_id or registro["sha256"] != hashlib.sha256(conteudo).hexdigest():
             raise RotinaErro("O arquivo mudou antes do envio; nenhuma substituição foi iniciada.")
         sebrae_finalizacao.marcar_envio_incerto(state_dir, envio_id)
         snapshot = sebrae_finalizacao.snapshot_envio(state_dir, envio_id)
-        enviar_arquivo_para_pasta(page, snapshot)
+        try:
+            enviar_arquivo_para_pasta(page, snapshot)
+        except EnvioNaoConfirmado as erro:
+            if erro.andamento:  # navegar (goto) para baixar cancelaria o upload em andamento
+                log("Dashboard", "O SharePoint ainda mostra o envio em andamento; não navego para não cancelá-lo. O resultado fica incerto.")
+                raise
+            recebido = conferir_recebimento(page, conteudo, baixado.read_bytes())
+            if recebido is None:
+                raise
+            if not recebido:
+                sebrae_finalizacao.registrar_envio_nao_recebido(state_dir, envio_id)
+                raise RotinaErro(f"{MSG_NAO_RECEBIDO} ({erro})") from erro
+            log("Dashboard", "Sem o aviso, mas o Dashboard baixado de novo tem os valores enviados: envio confirmado pela conferência.")
         if snapshot.read_bytes() != conteudo:
             raise RotinaErro("O arquivo local mudou durante o envio. O resultado é incerto; confira o SharePoint manualmente.")
         sebrae_finalizacao.confirmar_envio(state_dir, envio_id)
@@ -2684,7 +2855,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         try:
             enviado = snapshot.read_bytes()
             sebrae_finalizacao.gravar_enviado(
-                DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado, base_sha256=base_origem, mesclado=bool(mesclado),
+                DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(enviado).hexdigest(), enviado, base_sha256=base_origem, mesclado=bool(terceiro),
             )
         except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
             log("Dashboard", f"Não consegui guardar o hash do arquivo enviado ({erro}); o próximo envio usará só a comparação de valores.")

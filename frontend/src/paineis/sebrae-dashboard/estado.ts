@@ -2030,6 +2030,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         return;
       }
       host.appendChild(dom.createTextElement("p", "", "O sistema não consultou o SharePoint. Compare o conteúdo do Dashboard com a cópia local antes de declarar o resultado. A declaração não dispara upload."));
+      // 25/11/2026: "CONFIRMO APLICADO" foi digitado sem o arquivo ter chegado; a data, o aviso e o tamanho não provam o envio.
+      host.appendChild(dom.createTextElement("p", "", "Para conferir: feche o Dashboard no Excel (Online e desktop), abra o Dashboard no SharePoint e veja se as linhas alteradas por este envio estão lá. A data de modificação, um aviso de envio ou o tamanho do arquivo não provam que o envio chegou."));
       const entrada = document.createElement("input");
       entrada.id = "sebrae-envio-confirmacao";
       entrada.className = "ck-entrada";

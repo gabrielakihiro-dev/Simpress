@@ -14,7 +14,7 @@ import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from scripts import automacao_rotinas_chrome as automacao
 
@@ -35,6 +35,11 @@ def setUpModule():
 def tearDownModule():
     for alvo in reversed(_CONTAS_FICTICIAS):
         alvo.stop()
+
+
+def _menu_da_linha_simulado():
+    """Menu de contexto da linha simulado como antes: o item é ``page.get_by_role("menuitem", name=...).first``."""
+    return patch.object(automacao, "_item_do_menu_da_linha", side_effect=lambda page, _linha, nome: page.get_by_role("menuitem", name=nome).first)
 
 
 class ChromeAutomationHelpersTests(unittest.TestCase):
@@ -780,8 +785,41 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
         linha.hover.assert_called_once()
         self.assertIs(linha.get_by_role.call_args.kwargs["name"], automacao._MENU_MAIS_ACOES)
         self.assertEqual(linha.get_by_role.call_args.args, ("button",))
-        self.assertIs(page.get_by_role.call_args_list[-1].kwargs["name"], automacao._MENU_BAIXAR)
-        page.get_by_role.return_value.first.click.assert_called_once()
+        # 25/11/2026: o item vem do menu de contexto (role=menu), nunca de um menuitem qualquer da página (a barra de comandos)
+        menu = page.get_by_role.return_value
+        self.assertIn(call("menu"), page.get_by_role.call_args_list)
+        self.assertNotIn(call("menuitem", name=automacao._MENU_BAIXAR), page.get_by_role.call_args_list)
+        self.assertIs(menu.get_by_role.call_args.kwargs["name"], automacao._MENU_BAIXAR)
+        menu.get_by_role.return_value.first.click.assert_called_once()
+
+    def test_menu_of_the_row_clears_the_selection_first(self):
+        # 25/11/2026: a cópia da Duplicata ficou selecionada; leituras: linha selecionada, botão "X 1 selected", seleção limpa, guarda
+        page = MagicMock()
+        with patch.object(automacao, "visivel", side_effect=[True, True, False, False]), patch.object(automacao, "log"):
+            automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_BAIXAR)
+        page.get_by_role.return_value.filter.return_value.first.click.assert_called_once()  # o botão de limpar
+        self.assertIn(call("row", selected=True), page.get_by_role.call_args_list)
+        self.assertIn(call("button", name=automacao._BOTAO_LIMPAR_SELECAO), page.get_by_role.call_args_list)
+
+    def test_menu_of_the_row_stops_when_the_selection_does_not_clear(self):
+        linha = MagicMock()
+        with patch.object(automacao, "visivel", side_effect=[True, False] + [True] * 10), patch.object(automacao, "log"):
+            with self.assertRaises(automacao.EtapaInstavel):
+                automacao._item_do_menu_da_linha(MagicMock(), linha, automacao._MENU_DUPLICATA)
+        linha.hover.assert_not_called()  # o menu nem abre
+
+    def test_menu_of_the_row_refuses_when_another_row_is_selected_with_the_menu_open(self):
+        page = MagicMock()
+        with patch.object(automacao, "visivel", side_effect=[False, True]), patch.object(automacao, "log"):
+            with self.assertRaisesRegex(automacao.EtapaInstavel, "Outra linha"):
+                automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_DUPLICATA)
+        page.keyboard.press.assert_called_once_with("Escape")
+        page.get_by_role.return_value.get_by_role.return_value.first.click.assert_not_called()
+
+    def test_row_waits_up_to_sixty_seconds_for_the_list(self):
+        with patch.object(automacao, "esperar_visivel", return_value=True) as esperar:
+            automacao._linha_do_dashboard(MagicMock())
+        self.assertEqual(esperar.call_args.args[1], 60000)
 
     def test_download_rejects_a_zip(self):
         with patch.object(automacao, "exportar_com_download", return_value=Path("pasta.zip")), patch.object(automacao, "esperar_visivel", return_value=True):
@@ -820,39 +858,58 @@ class EnviarDashboardTests(unittest.TestCase):
         page = MagicMock()
         locators = {}
 
-        def get_by_role(role, name=None):
+        def get_by_role(role, name=None, **_kwargs):
             if role == "button" and name in (automacao._BOTAO_SUBSTITUIR, automacao._BOTAO_MANTER_AMBOS):
                 chave = "substituir" if name is automacao._BOTAO_SUBSTITUIR else "manter"
                 locators.setdefault(chave, MagicMock()).count.return_value = 1 if chave in botoes else 0
                 return locators[chave]
+            if role in ("dialog", "row"):
+                return locators.setdefault(role, MagicMock())
             return MagicMock()
 
         page.get_by_role.side_effect = get_by_role
         page.locators = locators
         return page
 
-    def _enviar(self, page, concluido=True, em_uso=False, conflito=False, botao=None):
-        """Roda o envio com os avisos de conclusão, de arquivo em uso e de conflito (Save Conflict) simulados."""
+    def _enviar(self, page, concluido=None, em_uso=False, conflito=False, botao=None, dialogo=True, andamento=False, relogio=None):
+        """Roda o envio com os avisos simulados; cada aviso é um valor fixo ou uma função sem argumentos lida a cada volta.
+
+        ``concluido`` padrão: o aviso de concluído aparece depois do clique em Replace (ou logo, sem diálogo).
+        ``dialogo``: o diálogo de nome repetido (Replace/Keep both) visível; ``andamento``: "Uploading 1 item to ..." visível;
+        ``relogio``: valores de ``time.time`` (padrão: 10 s por leitura)."""
         avisos = {}
         page.get_by_text.side_effect = lambda padrao, *_a, **_k: avisos.setdefault(padrao, MagicMock())
-        aviso = page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO).first
-        aviso_conflito = page.get_by_text(automacao._AVISO_CONFLITO).first
+        if concluido is None:
+            concluido = lambda: not dialogo or self._substituiu(page)  # noqa: E731
+        leituras = {
+            page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO).first: concluido,
+            page.get_by_text(automacao._AVISO_CONFLITO).first: conflito,
+            page.get_by_text(automacao._AVISO_ENVIANDO).first: andamento,
+        }
 
         def visivel(loc):
-            if loc is aviso:
-                return concluido
-            return conflito if loc is aviso_conflito else em_uso
+            if "dialog" in page.locators and loc is page.locators["dialog"].or_.return_value.filter.return_value.first:
+                valor = em_uso
+            elif "substituir" in page.locators and loc is page.locators["substituir"].or_.return_value.first:
+                valor = dialogo
+            else:
+                valor = leituras.get(loc, False)  # linhas selecionadas e o resto: não
+            return valor() if callable(valor) else valor
 
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             arquivo.write_bytes(b"x")
             with patch.object(automacao, "esperar_visivel", return_value=True), \
                     patch.object(automacao, "visivel", side_effect=visivel), \
-                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log, \
                     patch.object(automacao, "_botao_enviar", return_value=botao or MagicMock()), \
                     patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                    patch.object(automacao.time, "time", side_effect=relogio if relogio is not None else itertools.count(0, 10)), \
                     patch.object(automacao.time, "sleep"):
-                automacao.enviar_arquivo_para_pasta(page, arquivo)
+                try:
+                    automacao.enviar_arquivo_para_pasta(page, arquivo)
+                finally:
+                    self.logs = "\n".join(str(c.args[1]) for c in log.call_args_list)
 
     def test_menu_and_dialog_labels_in_portuguese_and_english(self):
         for texto in ("Duplicata", "Duplicate", " duplicata "):
@@ -864,6 +921,10 @@ class EnviarDashboardTests(unittest.TestCase):
         for texto in ("Keep both", "Manter ambos"):
             self.assertTrue(automacao._BOTAO_MANTER_AMBOS.match(texto), texto)
             self.assertFalse(automacao._BOTAO_SUBSTITUIR.match(texto), texto)
+
+    @staticmethod
+    def _substituiu(page) -> bool:
+        return "substituir" in page.locators and page.locators["substituir"].first.click.called
 
     def test_upload_clicks_replace_and_never_keep_both(self):
         page = self._pagina({"substituir", "manter"})
@@ -893,9 +954,8 @@ class EnviarDashboardTests(unittest.TestCase):
     def test_upload_stops_on_save_conflict_without_retrying(self):
         # 08/11/2026: "Save Conflict" do SharePoint; Replace clicado uma vez e nada repetido ("Retry" nunca).
         page = self._pagina({"substituir"})
-        with patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 4, 5]):
-            with self.assertRaises(automacao.RotinaErro) as erro:
-                self._enviar(page, concluido=False, conflito=True)
+        with self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, concluido=False, conflito=lambda: self._substituiu(page))
         self.assertEqual(str(erro.exception), automacao.MSG_CONFLITO_SHAREPOINT)
         page.locators["substituir"].first.click.assert_called_once()
         nomes = [c.kwargs.get("name") for c in page.get_by_role.call_args_list]
@@ -923,10 +983,58 @@ class EnviarDashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(automacao.RotinaErro, "Não vi o aviso"):
                 self._enviar(page, concluido=False)
 
+    # 25/11/2026: sem diálogo nem andamento, a cópia da Duplicata selecionada e nenhum aviso em 90 s.
+
+    def test_upload_waits_for_a_late_dialog_and_clicks_replace_once_logging_each_step(self):
+        page = self._pagina({"substituir", "manter"})
+        dialogo = iter([False] * 3 + [True] * 100)  # aparece depois de 8 s (a espera antiga)
+        self._enviar(page, dialogo=lambda: next(dialogo), relogio=itertools.count(0, 5))
+        page.locators["substituir"].first.click.assert_called_once()
+        page.locators["manter"].first.click.assert_not_called()
+        for etapa in ("Arquivo escolhido", "Diálogo de nome repetido visto", "Replace clicado", "Aviso de envio concluído visto"):
+            self.assertIn(etapa, self.logs)
+
+    def test_upload_refuses_keep_both_even_when_it_appears_late(self):
+        page = self._pagina({"manter"})
+        dialogo = iter([False] * 3 + [True] * 100)
+        with self.assertRaisesRegex(automacao.RotinaErro, "Keep both"):
+            self._enviar(page, concluido=False, dialogo=lambda: next(dialogo), relogio=itertools.count(0, 5))
+        page.locators["manter"].first.click.assert_not_called()
+
+    def test_upload_that_never_starts_fails_clearly_without_choosing_the_file_again(self):
+        page = self._pagina(set())
+        botao = MagicMock()
+        with self.assertRaises(automacao.EnvioNaoConfirmado) as erro:
+            self._enviar(page, concluido=False, dialogo=False, botao=botao, relogio=itertools.count(0, 5))
+        self.assertIn("O upload não começou", str(erro.exception))
+        self.assertFalse(erro.exception.andamento)
+        botao.click.assert_called_once()
+        page.expect_file_chooser.assert_called_once()
+        page.locators["substituir"].first.click.assert_not_called()
+
+    def test_upload_in_progress_at_the_deadline_is_reported_as_in_progress(self):
+        page = self._pagina(set())
+        with self.assertRaises(automacao.EnvioNaoConfirmado) as erro:
+            self._enviar(page, concluido=False, dialogo=False, andamento=True)
+        self.assertTrue(str(erro.exception).startswith("Não vi o aviso de envio concluído em 90 s"))
+        self.assertTrue(erro.exception.andamento)
+        self.assertIn("Andamento do envio visto", self.logs)
+
+    def test_progress_and_clear_selection_patterns(self):
+        for texto in ("Uploading 1 item to DASHBOARD SEBRAE", "Uploading Dashboard Operacional_SEBRAE.xlsx to DASHBOARD SEBRAE",
+                      "Carregando 1 item para DASHBOARD SEBRAE", "Carregando 2 itens", "Carregando Dashboard Operacional_SEBRAE.xlsx para DASHBOARD SEBRAE"):
+            self.assertTrue(automacao._AVISO_ENVIANDO.search(texto), texto)
+        for texto in ("Carregando...", "Carregando", "Uploaded 1 item to DASHBOARD SEBRAE", "1 item carregado"):
+            self.assertFalse(automacao._AVISO_ENVIANDO.search(texto), texto)
+        for texto in ("1 selected", "2 items selected", "1 selecionado", "2 itens selecionados", "Clear selection", "Limpar seleção"):
+            self.assertTrue(automacao._BOTAO_LIMPAR_SELECAO.match(texto), texto)
+        for texto in ("Select all", "Selecionar tudo", "Dashboard Operacional_SEBRAE.xlsx"):
+            self.assertFalse(automacao._BOTAO_LIMPAR_SELECAO.match(texto), texto)
+
     def test_duplicate_clicks_the_menu_and_waits_for_the_copy(self):
         page = MagicMock()
         contagens = iter([1, 1, 2])
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado() as abrir, \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), patch.object(automacao, "visivel", return_value=True), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
@@ -946,7 +1054,7 @@ class EnviarDashboardTests(unittest.TestCase):
             return next(leituras[page.get_by_text.call_args.args[0]], False)
 
         relogio = patch.object(automacao.time, "time", side_effect=tempo) if tempo is not None else contextlib.nullcontext()
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado(), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao, "visivel", side_effect=visivel), \
@@ -982,7 +1090,7 @@ class EnviarDashboardTests(unittest.TestCase):
 
     def _logs_da_duplicata(self, copias: int) -> str:
         contagens = iter([copias + 1, copias + 2])  # original + cópias, depois a nova
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado(), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=copias), patch.object(automacao, "visivel", return_value=True), \
                 patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), patch.object(automacao.time, "sleep"), \
@@ -1015,7 +1123,7 @@ class EnviarDashboardTests(unittest.TestCase):
 
     def test_duplicate_stops_without_overwriting_when_the_copy_does_not_appear(self):
         page = MagicMock()
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado(), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", return_value=1), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao.time, "time", side_effect=[0, 1, 99, 99]), \
@@ -1109,18 +1217,25 @@ class EnviarDashboardTests(unittest.TestCase):
             fin.gravar_origem_saida(saida, fin.base_importada(raiz))
         return raiz, saida
 
-    def _rodar_com_merge(self, raiz: Path, arquivo: Path, sharepoint: bytes, *, pelo_final: bool = True):
-        """Rotina enviar com conferência, merge e estado reais; só o navegador é simulado. Devolve (código ou exceção, bytes enviados, download)."""
+    def _rodar_com_merge(self, raiz: Path, arquivo: Path, sharepoint: bytes, *, pelo_final: bool = True, falha_no_envio=None):
+        """Rotina enviar com conferência, merge e estado reais; só o navegador é simulado. Devolve (código ou exceção, bytes enviados, download).
+
+        ``falha_no_envio``: exceção levantada pelo upload simulado depois de registrar os bytes."""
         baixado = raiz / "baixado.xlsx"
         baixado.write_bytes(sharepoint)
         enviados: list = []
+
+        def enviar(_page, snapshot):
+            enviados.append(snapshot.read_bytes())
+            if falha_no_envio is not None:
+                raise falha_no_envio
         with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
                 patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
                 patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                 patch.object(automacao, "duplicar_dashboard_na_pasta"), \
                 patch.object(automacao, "baixar_dashboard_da_pasta", return_value=baixado) as baixar, \
                 patch.object(automacao, "guardar_backup_do_dashboard"), \
-                patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: enviados.append(a.read_bytes())), \
+                patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=enviar), \
                 patch.object(automacao, "registrar_erro"), patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
             try:
                 resultado = automacao.rodar_rotina_enviar(MagicMock(), None if pelo_final else arquivo)
@@ -1309,6 +1424,228 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(registro["base_sha256"], fin.base_importada(raiz))
         self.assertNotIn("mesclado", registro)
         self.assertNotIn("sha256_origem", fin.ler_envio(raiz))
+
+    def _estado_envenenado(self, pendente_alheio: bool = False):
+        """Estado real de 25/11/2026: conflito resolvido com "Usar o do site" em 2 chamados, envio sem aviso, "CONFIRMO APLICADO"
+        digitado sem o arquivo ter chegado. Devolve (raiz, saida, sharepoint), com o SharePoint ainda sem os 2 FINALIZADO."""
+        from domains import sebrae_finalizacao as fin
+        from domains.sebrae_dashboard_gravacao import registrar_encerramentos
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = registrar_encerramentos(base, {"UTIC-2026-0001": "20/11/2026 10:00", "UTIC-2026-0002": "21/11/2026 11:00"})[0].conteudo
+        # terceiro mexeu na D dos 2 e anotou a F de um terceiro chamado (o arquivo mesclado não é igual ao gerado)
+        sharepoint = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>EM ATENDIMENTO</t>")] * 2)
+        sharepoint = T._antes_da_coluna_p(sharepoint, 4, T.texto("F4", "nota do colega"))
+        raiz, saida = self._montar_envio(base, gerado)
+        resultado, _, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertIsInstance(resultado, automacao.DashboardEmConflito)
+        conflitos = fin.ler_conflitos(raiz)
+        self.assertEqual(sorted((c["chamado"], c["coluna"]) for c in conflitos["conflitos"]), [("UTIC-2026-0001", "D"), ("UTIC-2026-0002", "D")])
+        fin.caminho_conflitos(raiz).write_text(json.dumps({**conflitos, "escolhas": {c["id"]: "site" for c in conflitos["conflitos"]}}), encoding="utf-8")
+        resultado, _, _ = self._rodar_com_merge(raiz, saida, sharepoint, falha_no_envio=automacao.RotinaErro("Não vi o aviso de envio concluído em 90 s"))
+        self.assertIsInstance(resultado, automacao.RotinaErro)
+        registro = fin.ler_envio(raiz)
+        self.assertEqual(registro["status"], "incerto")
+        if pendente_alheio:  # cópia pendente de outro conteúdo, que o envio não cobre
+            outra = raiz / "outra.xlsx"
+            outra.write_bytes(b"outro conteudo")
+            fin.guardar_pendente(raiz, outra, fin.agora_local(), motivo="x", tickets=[])
+        fin.recuperar_envio(raiz, registro["id"], "confirmar_recebimento", confirmacao="CONFIRMO APLICADO")
+        self.assertTrue(fin.enviado_mesclado(raiz))
+        self.assertEqual(fin.ler_envio(raiz)["status"], "confirmado" if pendente_alheio else "concluido")
+        enviado = json.loads(fin.caminho_enviado(raiz).read_text(encoding="utf-8"))
+        self.assertIs(enviado.pop("declarado"), True)
+        fin.caminho_enviado(raiz).write_text(json.dumps(enviado), encoding="utf-8")  # como gravado antes da correção, sem a marca
+        return raiz, saida, sharepoint
+
+    def test_poisoned_state_next_send_carries_the_two_site_choices(self):
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        raiz, saida, sharepoint = self._estado_envenenado()
+        fin.exigir_envio_livre(raiz)  # "concluido": um envio novo é aceito
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        enviado = T.por_chamado(enviados[0])
+        self.assertEqual((enviado["UTIC-2026-0001"]["D"], enviado["UTIC-2026-0002"]["D"]), ("FINALIZADO", "FINALIZADO"))
+        self.assertEqual((enviado["UTIC-2026-0001"]["R"], enviado["UTIC-2026-0002"]["R"]), ("20/11/2026 10:00", "21/11/2026 11:00"))
+        self.assertEqual(enviado["UTIC-2026-0003"]["F"], "nota do colega")  # a edição do terceiro continua
+        self.assertEqual(fin.ler_envio(raiz)["status"], "concluido")
+        self.assertNotIn("declarado", json.loads(fin.caminho_enviado(raiz).read_text(encoding="utf-8")))  # confirmado pela rotina
+
+    def test_poisoned_state_with_an_uncovered_pending_copy_blocks_a_new_send(self):
+        from domains import sebrae_finalizacao as fin
+
+        raiz, saida, sharepoint = self._estado_envenenado(pendente_alheio=True)
+        with self.assertRaises(fin.DomainConflictError):
+            fin.exigir_envio_livre(raiz)
+
+    # Envio sem o aviso de concluído (25/11/2026): a rotina confere baixando de novo, só leitura, nunca repete o Replace.
+
+    def _envio_sem_aviso(self, andamento: bool, recebido):
+        """Envio sem aviso de concluído, com ``conferir_recebimento`` simulado; devolve (resultado, raiz, saida, base, conferir)."""
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        raiz, saida = self._montar_envio(base, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        erro = automacao.EnvioNaoConfirmado("Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado.", andamento=andamento)
+        with patch.object(automacao, "conferir_recebimento", return_value=recebido) as conferir:
+            resultado, _, _ = self._rodar_com_merge(raiz, saida, base, falha_no_envio=erro)
+        return resultado, raiz, saida, base, conferir
+
+    def test_upload_still_in_progress_stays_uncertain_without_navigating(self):
+        from domains import sebrae_finalizacao as fin
+
+        resultado, raiz, *_, conferir = self._envio_sem_aviso(andamento=True, recebido=True)
+        self.assertIsInstance(resultado, automacao.EnvioNaoConfirmado)
+        conferir.assert_not_called()
+        self.assertEqual(fin.ler_envio(raiz)["status"], "incerto")
+        with self.assertRaises(fin.DomainConflictError):
+            fin.exigir_envio_livre(raiz)
+
+    def test_upload_without_notice_confirmed_by_the_new_download_concludes_like_the_notice(self):
+        from domains import sebrae_finalizacao as fin
+
+        resultado, raiz, saida, base, conferir = self._envio_sem_aviso(andamento=False, recebido=True)
+        self.assertEqual(resultado, 0)
+        self.assertEqual(conferir.call_args.args[1:], (saida.read_bytes(), base))  # enviado e o download de antes do envio
+        self.assertEqual(fin.ler_envio(raiz)["status"], "concluido")
+        self.assertEqual(fin.ler_enviado(raiz), self._sha(saida.read_bytes()))
+        self.assertNotIn("declarado", json.loads(fin.caminho_enviado(raiz).read_text(encoding="utf-8")))
+
+    def test_upload_not_received_fails_clearly_and_a_new_send_is_allowed(self):
+        from domains import sebrae_finalizacao as fin
+
+        resultado, raiz, saida, base, _ = self._envio_sem_aviso(andamento=False, recebido=False)
+        self.assertIs(type(resultado), automacao.RotinaErro)
+        self.assertTrue(str(resultado).startswith(automacao.MSG_NAO_RECEBIDO))
+        registro = fin.ler_envio(raiz)
+        self.assertEqual((registro["status"], registro["limpeza_pendente"]), ("falhou", False))
+        self.assertIsNone(registro.get("recuperacao"))  # não é a declaração do usuário
+        self.assertEqual(fin.ler_enviado(raiz), "")
+        fin.exigir_envio_livre(raiz)
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
+        self.assertEqual((resultado, len(enviados)), (0, 1))
+        self.assertEqual(fin.ler_envio(raiz)["status"], "concluido")
+
+    def test_upload_without_notice_and_inconclusive_check_stays_uncertain(self):
+        from domains import sebrae_finalizacao as fin
+
+        resultado, raiz, *_ = self._envio_sem_aviso(andamento=False, recebido=None)
+        self.assertIsInstance(resultado, automacao.EnvioNaoConfirmado)
+        self.assertEqual(fin.ler_envio(raiz)["status"], "incerto")
+
+    def _conferir_recebimento(self, downloads, enviado: bytes, antes: bytes):
+        page = MagicMock()
+        pasta = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        fila = list(downloads)
+
+        def baixar(_page):
+            efeito = fila.pop(0)
+            if isinstance(efeito, Exception):
+                raise efeito
+            destino = pasta / f"d{len(fila)}.xlsx"
+            destino.write_bytes(efeito)
+            return destino
+
+        with patch.object(automacao, "voltar_para_pasta_dashboard"), patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=baixar) as b, \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
+            resultado = automacao.conferir_recebimento(page, enviado, antes)
+        return resultado, b.call_count, page
+
+    def test_receipt_check_compares_values_and_waits_once_for_a_late_version(self):
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        antes = self._dashboard(abertos=True)
+        enviado = T.do_site(antes, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        resalvo = self._dashboard(abertos=True, regravado=True)  # mesmos valores de antes, outro hash
+        outro = self._dashboard(abertos=True, trocas=[("<t>EM ABERTO</t>", "<t>FINALIZADO</t>")])
+        casos = [
+            ("chegou", [enviado], True, 1),
+            ("chegou na 2a", [resalvo, enviado], True, 2),
+            ("não chegou", [antes, resalvo], False, 2),
+            ("terceiro mexeu", [outro], None, 1),
+            ("download falhou", [automacao.RotinaErro("O download não começou em 2 minutos.")], None, 1),
+        ]
+        for nome, downloads, esperado, baixados in casos:
+            with self.subTest(nome):
+                resultado, chamadas, page = self._conferir_recebimento(downloads, enviado, antes)
+                self.assertIs(resultado, esperado)
+                self.assertEqual(chamadas, baixados)
+                if baixados == 2:
+                    page.wait_for_timeout.assert_called_once_with(automacao.ESPERA_NOVA_VERSAO_S * 1000)
+        with self.subTest("enviado igual ao de antes"):
+            resultado, chamadas, _ = self._conferir_recebimento([], resalvo, antes)
+            self.assertEqual((resultado, chamadas), (None, 0))  # não distingue: nem baixa
+
+    # O arquivo enviado parte do baixado agora (25/11/2026): uma aba editada à mão no SharePoint (ex.: Laudos) não se perde.
+
+    @staticmethod
+    def _com_laudos(conteudo: bytes, texto: str) -> bytes:
+        """``conteudo`` com uma aba Laudos (sheet9) de texto ``texto``."""
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        partes = T.partes_de(conteudo)
+        partes["xl/workbook.xml"] = partes["xl/workbook.xml"].replace(b"</sheets>", b'<sheet name="Laudos" sheetId="9" r:id="rId9"/></sheets>')
+        partes["xl/_rels/workbook.xml.rels"] = partes["xl/_rels/workbook.xml.rels"].replace(
+            b"</Relationships>", f'<Relationship Id="rId9" Type="{T.DOC}/worksheet" Target="worksheets/sheet9.xml"/></Relationships>'.encode())
+        partes["xl/worksheets/sheet9.xml"] = f'<worksheet {T.NS}><sheetData><row r="1">{T.texto("A1", texto)}</row></sheetData></worksheet>'.encode()
+        saida = io.BytesIO()
+        with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+            for nome, dados in partes.items():
+                arquivo.writestr(nome, dados)
+        return saida.getvalue()
+
+    def _laudos(self, conteudo: bytes) -> bytes:
+        with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
+            return arquivo.read("xl/worksheets/sheet9.xml")
+
+    def test_send_keeps_the_hand_edited_laudos_sheet_when_chamados_did_not_change(self):
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._com_laudos(self._dashboard(abertos=True), "laudo importado")
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        sharepoint = self._com_laudos(self._dashboard(abertos=True), "laudo editado à mão")  # CHAMADOS igual, Laudos editada
+        raiz, saida = self._montar_envio(base, gerado)
+        resultado, enviados, baixar = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual((resultado, baixar.call_count, len(enviados)), (0, 1, 1))
+        self.assertEqual(self._laudos(enviados[0]), self._laudos(sharepoint))  # a entrada do zip, byte a byte
+        self.assertEqual(T.por_chamado(enviados[0]), T.por_chamado(gerado))
+        self.assertFalse(fin.enviado_mesclado(raiz))  # "mesclado" continua sendo "um terceiro mudou a CHAMADOS"
+        self.assertIs(fin.ler_envio(raiz)["mesclado"], False)
+
+    def test_send_without_any_difference_goes_as_generated_and_keeps_the_laudos_bytes(self):
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._com_laudos(self._dashboard(abertos=True), "laudo")
+        gerado = T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}})
+        raiz, saida = self._montar_envio(base, gerado)
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)  # hash igual ao importado
+        self.assertEqual((resultado, enviados), (0, [gerado]))
+        self.assertEqual(self._laudos(enviados[0]), self._laudos(base))
+
+    def test_second_send_of_the_same_import_reedits_and_removes_without_conflict_and_keeps_laudos(self):
+        # O SharePoint tem o último envio (referência = cópia enviada): reeditar a mesma célula ou Remover a OS não é conflito.
+        from domains.sebrae_dashboard_gravacao import atualizar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._com_laudos(T._antes_da_coluna_p(self._dashboard(abertos=True), 2, T.texto("E2", "7365311")), "laudo")
+        raiz, saida = self._montar_envio(base, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
+        self.assertEqual(resultado, 0)
+        from domains import sebrae_finalizacao as fin
+
+        saida.write_bytes(atualizar(base, edicoes={"UTIC-2026-0002": {"J": "REQUISIÇÃO"}}, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo)
+        fin.gravar_origem_saida(saida, fin.base_importada(raiz))
+        sharepoint = T._trocar_parte(enviados[0], "xl/worksheets/sheet9.xml", "<t>laudo</t>", "<t>laudo editado à mão</t>")
+        resultado, enviados2, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        segundo = T.por_chamado(enviados2[0])
+        self.assertEqual(segundo["UTIC-2026-0002"]["J"], "REQUISIÇÃO")
+        self.assertNotIn("E", segundo["UTIC-2026-0001"])
+        self.assertEqual(self._laudos(enviados2[0]), self._laudos(sharepoint))
 
     def test_precheck_aborts_when_the_stored_copy_is_missing(self):
         with tempfile.TemporaryDirectory() as pasta:
@@ -1659,7 +1996,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
                 patch.object(automacao, "nova_aba", return_value=MagicMock(close=MagicMock(side_effect=OSError("close") if falha_close else None))), patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                 patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
-                patch.object(automacao, "conferir_dashboard_do_sharepoint"), patch.object(automacao, "guardar_backup_do_dashboard"), \
+                patch.object(automacao, "conferir_dashboard_do_sharepoint", return_value=None), patch.object(automacao, "guardar_backup_do_dashboard"), \
                 patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=erro), patch.object(automacao, "registrar_erro"), \
                 redirect_stdout(io.StringIO()):
             return automacao.rodar_rotina_enviar(MagicMock(), arquivo)
@@ -1920,7 +2257,7 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
                     patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                     patch.object(automacao, "duplicar_dashboard_na_pasta"), self._fora_da_pasta_ate_voltar(page), \
                     patch.object(automacao, "baixar_dashboard_da_pasta", return_value=Path(pasta) / "baixado.xlsx"), \
-                    patch.object(automacao, "conferir_dashboard_do_sharepoint"), patch.object(automacao, "guardar_backup_do_dashboard"), \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint", return_value=None), patch.object(automacao, "guardar_backup_do_dashboard"), \
                     patch.object(automacao, "enviar_arquivo_para_pasta"), patch.object(automacao, "log"), redirect_stdout(io.StringIO()):
                 self.assertEqual(automacao.rodar_rotina_enviar(MagicMock()), 0)
         page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
@@ -1932,7 +2269,7 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
         duplicata = page.get_by_role.return_value.first
         duplicata.click.side_effect = lambda *_a, **_k: ordem.append("clique")
         contagens = iter([1, 2])
-        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado(), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
                 patch.object(automacao, "_copias_na_lista", return_value=0), self._fora_da_pasta_ate_voltar(page), \
                 patch.object(automacao, "visivel", return_value=True), \
@@ -1950,15 +2287,15 @@ class RetomadaNoMesmoLinkTests(unittest.TestCase):
         botao = MagicMock()
         botao.click.side_effect = lambda *_a, **_k: ordem.append("carregar")
 
-        def esperar(_loc, ms):
-            if ms == 8000:  # já escolheu o arquivo: o resto do envio não importa aqui
-                raise automacao.RotinaErro("fim do teste")
+        def esperar(_loc, _ms):
             return page.goto.called  # a linha do Dashboard só aparece depois do goto
 
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             arquivo.write_bytes(b"x")
+            # a primeira volta da espera depois de escolher o arquivo encerra o teste: o resto do envio não importa aqui
             with patch.object(automacao, "esperar_visivel", side_effect=esperar), patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "verificar_cancelamento", side_effect=automacao.RotinaErro("fim do teste")), \
                     patch.object(automacao, "_botao_enviar", return_value=botao), patch.object(automacao, "log"), \
                     patch.object(automacao, "definir_pagina_ativa_para_recuperacao"):
                 with self.assertRaisesRegex(automacao.RotinaErro, "fim do teste"):

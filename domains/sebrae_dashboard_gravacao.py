@@ -1050,7 +1050,7 @@ def reaplicar(
     """Re-applies what the site changed (``gerado`` against ``base``) onto the newer ``sharepoint`` file, cell by cell.
 
     The site's operations are the cells of ``gerado`` whose readable value differs from ``base`` in ``COLUNAS_DE_DADO`` (never C
-    of an existing row, never Q, T, U, V, W; a blank value never erases). Rows are matched by the UTIC of column C, never by position.
+    of an existing row, never Q, T, U, V, W; a blank value never erases, except E emptied by ``limpar_e``, the Remover of 25/11/2026). Rows are matched by the UTIC of column C, never by position.
     Per cell: SharePoint still holds the ``base`` value -> the site's value is written (the raw ``<c>`` of ``gerado``, re-addressed
     and with the style of the SharePoint cell); it already holds the site's value -> nothing; anything else -> conflict. E, K, L, N
     empty in ``base`` and filled in SharePoint keep SharePoint. ``enviado``: copy of the last send of the same import; a cell whose
@@ -1103,7 +1103,10 @@ def reaplicar(
         operacoes: Dict[str, str] = {}
         for letra in COLUNAS_DE_DADO:
             site = g.valor(n_g, letra)
-            if letra == "C" or site == "" or site == (b.valor(n_b, letra) if n_b is not None else ""):
+            no_base = b.valor(n_b, letra) if n_b is not None else ""
+            # única operação de apagar: a E vazia no site sobre uma E preenchida na base só vem de limpar_e (Remover, 18/11/2026)
+            apagar_e = letra == "E" and site == "" and no_base != ""
+            if letra == "C" or (site == "" and not apagar_e) or site == no_base:
                 continue
             if n_e is not None and e.valor(n_e, letra) == site:  # type: ignore[union-attr]
                 continue  # already sent: SharePoint's value (maybe edited since) stands
@@ -1135,7 +1138,7 @@ def reaplicar(
                 continue
             if (not decidir and atuais[0] == antigo) or vale_o_site(chamado, letra, " / ".join(atuais), site, certo=certo):
                 if fila is not None:
-                    edicoes.setdefault(fila, {})[letra] = _bruto_do_site(g, n_g, letra)
+                    edicoes.setdefault(fila, {})[letra] = _bruto_do_site(g, n_g, letra) if site else ""  # "": limpar a E
     if conflitos:
         return ResultadoMerge(None, tuple(conflitos.values()))
 
@@ -1150,7 +1153,10 @@ def reaplicar(
     ):
         raise GravacaoInvalida(f"Sem espaço na {TABELA}: faltam linhas livres para {len(acrescentar)} chamado(s).")
     substituicoes: Dict[int, str] = {
-        fila: _reescrever_linha(s.linhas[fila], {}, estilos, "", True, brutas) for fila, brutas in edicoes.items()
+        fila: _reescrever_linha(
+            s.linhas[fila], {}, estilos, "", True, {l: c for l, c in brutas.items() if c}, limpar=[l for l, c in brutas.items() if not c],
+        )
+        for fila, brutas in edicoes.items()
     }
     novos: List[str] = []
     for deslocamento, n_g in enumerate(acrescentar):

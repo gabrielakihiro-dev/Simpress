@@ -18,7 +18,7 @@ Rotinas e automação do Chrome. Valem junto com o `AGENTS.md` da raiz; o texto 
 
 ## SharePoint e SoftExpert
 
-- `enviar` guarda cópia `Duplicata` antes de sobrepor, recusa `Keep both`, não faz `Retry` em `Save Conflict` e confirma só pelo aviso de envio concluído. Doc: `docs/operacao/sincronizar-chamados-sebrae.md`.
+- `enviar` guarda cópia `Duplicata` antes de sobrepor, recusa `Keep both`, não faz `Retry` em `Save Conflict` e confirma pelo aviso de envio concluído ou, sem ele e sem andamento, baixando de novo e comparando os valores (25/11/2026). Doc: `docs/operacao/sincronizar-chamados-sebrae.md`.
 - SoftExpert é só leitura; a única escrita é `finalizar_chamado` em `sebrae_softexpert.py`, a pedido do usuário, com `Finalizar` e o `Enviar` do anexo liberados só dentro dela. Doc: o mesmo.
 - `fechar`, `enviar`, `antigos` e `ux_apelidos` ficam fora de `ROTINAS_VALIDAS`. Doc: o mesmo.
 
