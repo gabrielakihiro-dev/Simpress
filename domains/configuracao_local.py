@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
@@ -378,3 +379,57 @@ def remover_chave_ia(arquivo_env: Path, pasta_backups: Path, identificador: str,
     arquivo = Path(arquivo_env)
     if arquivo.exists():
         _aplicar_env(arquivo, Path(pasta_backups), {variavel: None}, agora(), com_backup=False)
+
+
+# Assinatura do técnico nos PDFs dos Termos (``data/state/assinatura_tecnico.json``, seção opcional: vazia não deixa Pendente).
+ESTILOS_ASSINATURA = ("desenho", "digitada", "great-vibes", "dancing-script", "allura", "alex-brush", "sacramento")
+ASSINATURA_PADRAO = {"estilo": "desenho", "nome": ""}
+LIMITE_NOME_ASSINATURA = 80
+
+
+class AssinaturaInvalida(ValueError):
+    """``codigo`` e ``detail`` são frases fixas: nunca repetem o nome recebido."""
+
+    def __init__(self, codigo: str, detail: str) -> None:
+        super().__init__(detail)
+        self.codigo, self.detail = codigo, detail
+
+
+def normalizar_nome_assinatura(valor: Any) -> str:
+    if not isinstance(valor, str) or any(unicodedata.category(c) == "Cc" for c in valor):
+        raise AssinaturaInvalida("assinatura_nome_invalido", "Nome da assinatura inválido.")
+    nome = " ".join(unicodedata.normalize("NFC", valor).replace("’", "'").replace("‘", "'").split())
+    if len(nome) > LIMITE_NOME_ASSINATURA or any(not (c.isalpha() or c in " .'-") for c in nome)             or (nome and not any(c.isalpha() for c in nome)):
+        raise AssinaturaInvalida(
+            "assinatura_nome_invalido",
+            "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.",
+        )
+    return nome
+
+
+def validar_assinatura(estilo: Any, nome: Any) -> dict:
+    if estilo not in ESTILOS_ASSINATURA:
+        raise AssinaturaInvalida("assinatura_estilo_invalido", "Estilo de assinatura inválido.")
+    nome = normalizar_nome_assinatura(nome)
+    if estilo != "desenho" and not nome:
+        raise AssinaturaInvalida("assinatura_nome_invalido", "Informe o nome para esse estilo de assinatura.")
+    return {"estilo": estilo, "nome": nome}
+
+
+def ler_assinatura(arquivo: Path) -> dict:
+    """Arquivo ausente ou ilegível devolve o padrão (desenho): o PDF segue com o SVG."""
+    guardado, _ = _ler_json(arquivo)
+    try:
+        return validar_assinatura(guardado.get("estilo"), guardado.get("nome", ""))
+    except AssinaturaInvalida:
+        return dict(ASSINATURA_PADRAO)
+
+
+def gravar_assinatura(arquivo: Path, pasta_backups: Path, estilo: Any, nome: Any,
+                      agora: Callable[[], datetime] = datetime.now) -> dict:
+    novo = validar_assinatura(estilo, nome)
+    arquivo = Path(arquivo)
+    _backup(arquivo, Path(pasta_backups), agora())
+    atomic_write_json(arquivo, novo)
+    logger.info("configuracao_local: assinatura_tecnico gravada")
+    return novo

@@ -1577,7 +1577,8 @@ app.include_router(create_outlook_mail_router(
 app.include_router(create_lembretes_router(STATE_DIR / "lembretes.json"))
 # Versionado de propósito: o padrão salvo pelo usuário entra no próximo commit.
 app.include_router(create_modelos_chamado_router(BASE_DIR / "config" / "modelos_chamado.json"))
-app.include_router(create_assinatura_tecnico_router(STATE_DIR / "assinatura_tecnico.svg"))
+app.include_router(create_assinatura_tecnico_router(
+    STATE_DIR / "assinatura_tecnico.svg", STATE_DIR / "assinatura_tecnico.json", STATE_DIR / "config_backups"))
 
 
 def aplicar_alteracao_apelido(

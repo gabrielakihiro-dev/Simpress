@@ -65,6 +65,36 @@ copyPackageFile(
   "LICENSE-fontsource-jetbrains-mono.txt",
 );
 
+// Cursivas da assinatura do tecnico (peso 400, latin e latin-ext): o unicode-range vem do CSS do proprio pacote.
+const signatureFonts = [
+  ["great-vibes", "Great Vibes"],
+  ["dancing-script", "Dancing Script"],
+  ["allura", "Allura"],
+  ["alex-brush", "Alex Brush"],
+  ["sacramento", "Sacramento"],
+];
+let signatureFontCss = "";
+for (const [slug, family] of signatureFonts) {
+  const pkg = `@fontsource/${slug}`;
+  const css = fs.readFileSync(path.join(root, "node_modules", pkg, "400.css"), "utf8");
+  copyPackageFile(pkg, "LICENSE", `fonts/LICENSE-fontsource-${slug}.txt`);
+  for (const subset of ["latin-ext", "latin"]) {
+    const file = `${slug}-${subset}-400-normal.woff2`;
+    copyPackageFile(pkg, `files/${file}`, `fonts/${file}`);
+    const block = css.split(`/* ${slug}-${subset}-400-normal */`)[1];
+    const range = block.match(/unicode-range: ([^;]+);/)[1];
+    signatureFontCss += `@font-face {
+  font-family: "${family}";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/static/vendor/fonts/${file}") format("woff2");
+  unicode-range: ${range};
+}
+`;
+  }
+}
+
 const fontCss = `
 @font-face {
   font-family: "Inter Variable";
@@ -98,6 +128,6 @@ const fontCss = `
   src: url("/static/vendor/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
-`.trimStart();
+`.trimStart() + signatureFontCss;
 
 fs.writeFileSync(path.join(vendorDir, "fonts.css"), fontCss, "utf8");

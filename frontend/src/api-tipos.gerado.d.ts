@@ -753,6 +753,16 @@ export interface Rotas {
     corpo: never;
     resposta: unknown;
   };
+  "GET /api/assinatura-tecnico/config": {
+    consulta: never;
+    corpo: never;
+    resposta: unknown;
+  };
+  "PUT /api/assinatura-tecnico/config": {
+    consulta: never;
+    corpo: never;
+    resposta: unknown;
+  };
   "POST /api/assistente/anexo": {
     consulta: never;
     corpo: never;

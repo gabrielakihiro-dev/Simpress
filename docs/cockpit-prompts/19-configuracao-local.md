@@ -90,6 +90,15 @@ Regras de segredo:
 - A chave nunca vai para log, histórico, resposta de erro nem conteúdo enviado ao modelo.
 - Gravação do `.env`: troca só as linhas `CHAVE=` afetadas e preserva comentários e as demais linhas, em UTF-8. Se a linha não existir, acrescenta no fim.
 
+### Seção 4: Assinatura do técnico (`data/state/assinatura_tecnico.json`, só back-end)
+
+Opcional: vazia nunca deixa a prontidão Pendente (`domains/readiness.py` não a lê). Rotas `GET` e `PUT /api/assinatura-tecnico/config` (`routers/assinatura_tecnico.py`; lógica em `domains/configuracao_local.py`).
+- Corpo `{estilo, nome}`; `estilo`: `desenho` (SVG atual, padrão), `digitada`, `great-vibes`, `dancing-script`, `allura`, `alex-brush`, `sacramento`. Arquivo ausente: `{"estilo":"desenho","nome":""}`.
+- Nome: NFC, `’`/`‘` viram `'`, espaços colapsados, até 80 caracteres, só letras, espaço, `.`, `'` e `-`. Estilo diferente de `desenho` exige nome.
+- 422 só com `detail` e `codigo` (`assinatura_nome_invalido`, `assinatura_estilo_invalido`, `assinatura_corpo_invalido`), sem repetir o nome. O log leva só `configuracao_local: assinatura_tecnico gravada`.
+- Mesma gravação atômica e backup das outras seções. Fontes das cursivas: `@fontsource/*` copiadas por `scripts/build/copy_ui_assets.cjs` para `static/vendor/fonts/` (declaradas em `static/vendor/fonts.css`).
+- Testes: `tests/test_assinatura_tecnico_config.py`.
+
 ### Seções já existentes (só atalho)
 
 - Contato de origem da transferência (`config/contato_origem.json`) e representantes regionais: já têm formulário e `PUT` em `routers/local_setup.py`. O modal só mostra o status deles e leva ao formulário atual.

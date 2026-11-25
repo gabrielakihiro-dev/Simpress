@@ -2,10 +2,13 @@
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
+
+from core.integrity import FileBusyError, FileTransactionError
+from domains import configuracao_local as configuracao
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +29,33 @@ def _recusa(status: int, codigo: str, detail: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"detail": detail, "codigo": codigo})
 
 
-def create_assinatura_tecnico_router(arquivo: Path) -> APIRouter:
+def create_assinatura_tecnico_router(arquivo: Path, config: Optional[Path] = None,
+                                     backups: Optional[Path] = None) -> APIRouter:
     router = APIRouter(prefix="/api/assinatura-tecnico")
+    config = config or arquivo.with_suffix(".json")
+    backups = backups or arquivo.parent / "config_backups"
+
+    # Rotas fixas antes de qualquer rota com parâmetro; o nome nunca vai a log nem ao corpo de erro.
+    @router.get("/config")
+    def obter_config() -> Any:
+        return configuracao.ler_assinatura(config)
+
+    @router.put("/config")
+    async def gravar_config(request: Request) -> Any:
+        try:
+            corpo = await request.json()
+        except ValueError:
+            corpo = None
+        if not isinstance(corpo, dict):
+            return JSONResponse(status_code=422, content={
+                "detail": "Corpo inválido: envie estilo e nome.", "codigo": "assinatura_corpo_invalido"})
+        try:
+            return configuracao.gravar_assinatura(config, backups, corpo.get("estilo"), corpo.get("nome", ""))
+        except configuracao.AssinaturaInvalida as erro:
+            return JSONResponse(status_code=422, content={"detail": erro.detail, "codigo": erro.codigo})
+        except (OSError, FileTransactionError, FileBusyError) as erro:
+            logger.warning("configuracao_local: falha ao gravar assinatura_tecnico (erro=%s)", type(erro).__name__)
+            return JSONResponse(status_code=500, content={"detail": "Não foi possível gravar a configuração local."})
 
     @router.get("")
     def obter() -> Any:
