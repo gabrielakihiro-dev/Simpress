@@ -246,7 +246,7 @@ async function distanciaDaTintaAteALinha(page, captura) {
         for (let x = 0; x < img.width; x++) if (escura(x, y)) escuros++;
         linhas.push(escuros);
       }
-      const linha = linhas.findIndex(total => total > img.width * 0.5);
+      const linha = linhas.findIndex((total, y) => y > 3 && total > img.width * 0.5); // ignora a borda do quadro (escura no tema escuro)
       let baixo = -1;
       for (let y = linha - 1; y >= 0; y--) if (linhas[y] > 0) { baixo = y; break; }
       return { linha, baixo, distancia: baixo < 0 ? null : linha - baixo };
@@ -274,15 +274,21 @@ test("Configuração local: assinatura do técnico valida, mostra a prévia ao v
   await expect(page.getByRole("dialog", { name: "Configuração local" })).toBeVisible();
 
   const nome = page.locator("#cfg-local-assinatura-nome");
-  const estilo = page.locator("#cfg-local-assinatura-estilo");
   const aviso = page.locator("#cfg-local-assinatura-previa-aviso");
   const previa = page.locator(".cfg-assin-previa");
-  await expect(estilo).toHaveValue("desenho");
-  await expect(aviso).toHaveText("O desenho atual aparece no PDF; não há prévia dele aqui.");
-  await expect(estilo.locator("option")).toHaveText(["Desenho atual", "Digitada", "Great Vibes", "Dancing Script", "Allura", "Alex Brush", "Sacramento"]);
+  const cartao = valor => page.locator(`.cfg-assin-opcao[data-estilo="${valor}"]`);
+  const radio = valor => cartao(valor).locator("input[type=radio]");
+  const ESTILOS = ["desenho", "digitada", "great-vibes", "dancing-script", "allura", "alex-brush", "sacramento"];
+  await expect(page.getByRole("group", { name: "Estilo da assinatura" })).toBeVisible();
+  await expect(radio("desenho")).toBeChecked();
+  await expect(page.locator(".cfg-assin-opcao__nome")).toHaveText(["Desenho atual", "Digitada", "Great Vibes", "Dancing Script", "Allura", "Alex Brush", "Sacramento"]);
+  await expect(cartao("desenho")).toContainText("O desenho atual aparece no PDF; não há prévia dele aqui.");
+  await expect(previa).toHaveCount(0);
 
   // Cliente: nome inválido ou ausente não chega ao servidor.
-  await estilo.selectOption("allura");
+  await cartao("allura").click();
+  await expect(radio("allura")).toBeChecked();
+  await expect(aviso).toHaveText("Digite o nome para ver as prévias.");
   await page.locator("#cfg-local-salvar-assinatura").click();
   await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Informe o nome para esse estilo de assinatura.");
   await expect(nome).toBeFocused();
@@ -291,21 +297,54 @@ test("Configuração local: assinatura do técnico valida, mostra a prévia ao v
   await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.");
   expect(gravacoes).toEqual([]);
 
-  // Prévia ao vivo: cada estilo troca o SVG; a digitada fica rente à linha (tinta mais baixa a poucos pixels dela, sem tocá-la).
+  // Ao digitar, a grade mostra o nome nos 6 estilos de texto; cada cartão é uma mini-folha com a linha e o rótulo embaixo.
   await nome.fill("  Joaquim   Gonçalves Pereira ");
+  for (const valor of ESTILOS.slice(1)) {
+    await expect(cartao(valor).locator("svg")).toHaveAttribute("data-estilo", valor);
+    await expect(cartao(valor).locator("svg text")).toHaveText("Joaquim Gonçalves Pereira");
+    await expect(cartao(valor).locator(".cfg-assin-previa__bloco")).toContainText("Assinatura do técnico responsável");
+    const borda = await cartao(valor).locator(".cfg-assin-previa__bloco").evaluate(el => getComputedStyle(el).borderTopWidth + " " + getComputedStyle(el).borderTopColor);
+    expect(borda, valor).toBe("1px rgb(0, 0, 0)");
+  }
+  await expect(page.locator(".cfg-assin-opcao svg")).toHaveCount(6);
   await expect(previa.locator("svg")).toHaveAttribute("data-estilo", "allura");
-  await estilo.selectOption("digitada");
+  await expect(previa.locator(".cfg-assin-previa__bloco")).toContainText("Assinatura do técnico responsável");
+
+  // Teclado: setas trocam de rádio (e o estilo).
+  await radio("allura").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(radio("alex-brush")).toBeChecked();
+  await page.keyboard.press("ArrowLeft");
+  await expect(radio("allura")).toBeChecked();
+
+  // Clicar num cartão troca o estilo; a digitada fica rente à linha (tinta mais baixa a poucos pixels dela, sem tocá-la).
+  await cartao("digitada").click();
   await expect(previa.locator("svg")).toHaveAttribute("data-estilo", "digitada");
   await expect(previa.locator("svg text")).toHaveText("Joaquim Gonçalves Pereira");
   await expect(previa.locator("svg text")).toHaveCSS("font-family", /Inter Variable/);
   const medida = await distanciaDaTintaAteALinha(page, await previa.screenshot());
   expect(medida.distancia, JSON.stringify(medida)).toBeGreaterThanOrEqual(1);
   expect(medida.distancia, JSON.stringify(medida)).toBeLessThanOrEqual(4);
+  await expect(aviso).toHaveText("");
 
+  // Cursiva com nome todo em maiúsculas: só a renderização vira Título; o valor digitado e o salvo não mudam.
+  await nome.fill("JOÃO PAULO FERREIRA");
+  await expect(cartao("sacramento").locator("svg text")).toHaveText("João Paulo Ferreira");
+  await expect(cartao("digitada").locator("svg text")).toHaveText("JOÃO PAULO FERREIRA");
+
+  // Nome longo: aviso não bloqueante; salvar continua valendo.
+  const longo = "Maria Aparecida dos Santos Albuquerque de Oliveira Gonçalves Pereira Lima";
+  await nome.fill(longo);
+  await expect(aviso).toHaveText("Nome longo: a assinatura fica pequena. Considere abreviar (ex.: Maria A. S. Lima).");
+  await nome.fill("Joaquim Gonçalves Pereira");
+  await expect(aviso).toHaveText("");
+
+  await cartao("great-vibes").click();
   await page.locator("#cfg-local-salvar-assinatura").click();
   await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Assinatura do técnico salva.");
-  expect(gravacoes).toEqual([{ estilo: "digitada", nome: "Joaquim Gonçalves Pereira" }]);
+  expect(gravacoes).toEqual([{ estilo: "great-vibes", nome: "Joaquim Gonçalves Pereira" }]);
   await expect(nome).toHaveValue("Joaquim Gonçalves Pereira");
+  await expect(radio("great-vibes")).toBeChecked();
 });
 
 test("Configuração local: o modal não gera rolagem horizontal de 320 a 2560 px nos dois temas", async ({ page }) => {
@@ -348,6 +387,29 @@ test("Configuração local: capturas do painel e do modal nos temas claro e escu
     await page.screenshot({ path: path.join(pasta, `depois-modal-topo-${perfil}-${tema}.png`) });
     await page.locator("#cfg-local-corpo").evaluate(corpo => { corpo.scrollTop = corpo.scrollHeight; });
     await page.screenshot({ path: path.join(pasta, `depois-modal-fim-${perfil}-${tema}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#modal-configuracao-local")).toBeHidden();
+  }
+});
+
+// Capturas da seção "Assinatura do técnico" com a grade: SIMPRESS_CAPTURAS_DIR=<pasta fora de static/> (desktop claro/escuro e 375 px).
+test("Configuração local: capturas da seção da assinatura com a grade", async ({ page }) => {
+  test.skip(!process.env.SIMPRESS_CAPTURAS_DIR, "Defina SIMPRESS_CAPTURAS_DIR para salvar as capturas.");
+  test.setTimeout(90_000);
+  const pasta = process.env.SIMPRESS_CAPTURAS_DIR;
+  await simularApi(page);
+  await page.route("**/api/assinatura-tecnico/config", route => route.fulfill({ json: { estilo: "allura", nome: "Maria Eduarda Souza" } }));
+  await page.goto("/");
+  await abrirPainelDeProntidao(page);
+  for (const [nomeArquivo, tema, largura, altura] of [["desktop-claro", "light", 1366, 1000], ["desktop-escuro", "dark", 1366, 1000], ["mobile", "light", 375, 1500]]) {
+    await page.setViewportSize({ width: largura, height: altura });
+    await page.locator("html").evaluate((raiz, valor) => { raiz.dataset.theme = valor; }, tema);
+    await page.locator("#btn-configuracao-local").click();
+    await expect(page.getByRole("dialog", { name: "Configuração local" })).toBeVisible();
+    await expect(page.locator(".cfg-assin-opcao svg")).toHaveCount(6);
+    await page.waitForTimeout(500);
+    await page.locator("#cfg-local-secao-assinatura").evaluate(secao => secao.scrollIntoView({ block: "start" }));
+    await page.screenshot({ path: path.join(pasta, `config-${nomeArquivo}.png`) });
     await page.keyboard.press("Escape");
     await expect(page.locator("#modal-configuracao-local")).toBeHidden();
   }

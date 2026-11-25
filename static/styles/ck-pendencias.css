@@ -188,10 +188,24 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 .ckp-secao__status[data-status="ok"] { color: var(--cor-ok-texto); }
 .ckp-secao__status[data-status="erro"] { color: var(--cor-erro-texto); }
 .ckp-secao__status + .ck-btn { margin-left: auto; }
-/* Prévia da assinatura do técnico: papel branco, tinta preta, mesma geometria da folha (.tp__assinatura-texto em ck-termos.css). */
-.cfg-assin-previa { max-width: 26rem; padding: 0.5rem 1rem 0.75rem; border: 1px solid var(--cor-borda); border-radius: var(--raio-md, 6px); background: #fff; color: #000; }
+/* Prévia da assinatura do técnico: papel branco, tinta preta, mesma geometria da folha (.tp__assinatura-texto em ck-termos.css).
+   A prévia grande e os cartões de estilo usam o mesmo bloco (.cfg-assin-previa__area/__bloco): só o papel muda de tamanho. */
+.cfg-assin-previa, .cfg-assin-opcao__folha { padding: 0.5rem 1rem 0.75rem; border: 1px solid var(--cor-borda); border-radius: var(--raio-md, 6px); background: #fff; color: #000; }
+.cfg-assin-previa { max-width: 26rem; }
 .cfg-assin-previa__area { container-type: inline-size; position: relative; padding-top: 20%; }
 .cfg-assin-previa__bloco { position: relative; padding-top: 3px; border-top: 1px solid #000; text-align: center; font-size: 4.1cqw; line-height: 1.35; }
+.cfg-assin-estilos { min-width: 0; margin: 0; padding: 0; border: 0; }
+.cfg-assin-estilos > legend { padding: 0; margin-bottom: 6px; }
+.cfg-assin-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.cfg-assin-opcao { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md, 6px); background: var(--cor-neutro-fundo); cursor: pointer; }
+.cfg-assin-opcao:hover { border-color: var(--cor-destaque); }
+.cfg-assin-opcao:has(.cfg-assin-opcao__radio:checked) { border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); box-shadow: 0 0 0 1px var(--cor-destaque); }
+.cfg-assin-opcao:has(.cfg-assin-opcao__radio:focus-visible) { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.cfg-assin-opcao__radio { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.cfg-assin-opcao__nome { font-size: var(--fs-ui); font-weight: var(--peso-medio); color: var(--cor-texto); }
+.cfg-assin-opcao:has(.cfg-assin-opcao__radio:checked) .cfg-assin-opcao__nome::after { content: " · escolhido"; font-weight: var(--peso-regular); color: var(--cor-destaque-texto); }
+.cfg-assin-opcao__folha { padding: 0.25rem 0.5rem 0.4rem; }
+.cfg-assin-opcao__texto { font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); }
 
 /* ---------- Página de demonstração ---------- */
 .ckp-palco { flex: 1; display: grid; place-items: center; padding: 40px 20px; color: var(--cor-texto-sutil); font-size: var(--fs-ui); text-align: center; }
@@ -200,12 +214,16 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 @media (max-width: 1199.98px) {
   .ckp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+@media (max-width: 899.98px) {
+  .cfg-assin-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 767.98px) {
   .ckp-veu { padding: 0; place-items: stretch; }
   .ckp-dialogo { max-height: 100vh; border-radius: 0; border: 0; }
   .ckp-cab { grid-template-columns: 32px minmax(0, 1fr) auto; padding: 12px; }
   .ckp-sistemas { grid-column: 1 / -1; grid-row: 2; border-right: 0; padding: 4px 0 0; }
   .ckp-corpo { padding: 12px; }
+  .cfg-assin-grade { grid-template-columns: minmax(0, 1fr); }
   .ckp-par-fontes, .ckp-importar, .ckp-form, .ckp-versao, .ckp-campos { grid-template-columns: minmax(0, 1fr); }
   .ckp-kpis, .ckp-triagem__nums, .ckp-diff { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ckp-triagem__num:nth-child(3) { border-left: 0; }

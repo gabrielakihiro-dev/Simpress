@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
 
-const { AREA, calcularMedida, erroDoNome, normalizarNome } = require(path.resolve(__dirname, "../../frontend/src/componentes/assinatura-medida.ts"));
+const { AREA, calcularMedida, erroDoNome, normalizarNome, textoDaAssinatura } = require(path.resolve(__dirname, "../../frontend/src/componentes/assinatura-medida.ts"));
 
 test("normalizarNome: NFC, apóstrofos tipográficos, espaços colapsados", () => {
   assert.equal(normalizarNome("  Ana\u0301   D’Ávila \u2018Neto\u2018 "), "Ana\u0301".normalize("NFC") + " D'Ávila 'Neto'");
@@ -37,4 +37,20 @@ test("calcularMedida: nome longo encolhe para a largura; cursiva apoia a base na
   assert.ok(-cursiva.y + 100 * (cursiva.tamanho / 200) <= AREA.subida);
   assert.equal(calcularMedida({ esq: 0, dir: 0, asc: 0, desc: 0 }, "allura"), null);
   assert.equal(calcularMedida({ esq: NaN, dir: 1, asc: 1, desc: 1 }, "allura"), null);
+});
+
+test("textoDaAssinatura: cursiva com nome todo em maiúsculas vira Título; digitada e nome misto ficam como estão", () => {
+  assert.equal(textoDaAssinatura("JOÃO PAULO FERREIRA", "allura"), "João Paulo Ferreira");
+  assert.equal(textoDaAssinatura("MARIA DA CONCEIÇÃO E SILVA DOS SANTOS", "great-vibes"), "Maria da Conceição e Silva dos Santos");
+  assert.equal(textoDaAssinatura("PEDRO D'ÁVILA ANA-CLARA", "sacramento"), "Pedro D'Ávila Ana-Clara");
+  assert.equal(textoDaAssinatura("DA SILVA JR.", "alex-brush"), "Da Silva Jr.");
+  assert.equal(textoDaAssinatura("JOÃO PAULO FERREIRA", "digitada"), "JOÃO PAULO FERREIRA");
+  for (const misto of ["João paulo Ferreira", "Ana-Clara", "joão da silva", "...", ""]) assert.equal(textoDaAssinatura(misto, "allura"), misto);
+});
+
+test("calcularMedida: altura da tinta em mm (aviso de nome longo)", () => {
+  const curto = calcularMedida({ esq: 0, dir: 500, asc: 100, desc: 5 }, "allura");
+  assert.ok(curto.altura > 3);
+  const longo = calcularMedida({ esq: 0, dir: 8000, asc: 100, desc: 5 }, "allura");
+  assert.ok(longo.altura < 3);
 });

@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
+const { textoDaAssinatura } = require("../../frontend/src/componentes/assinatura-medida.ts");
 
 // Assinatura do técnico por nome na folha impressa do Termo de Entrega: 6 estilos x nomes fictícios. A tinta é isolada por
 // diferença entre o bloco com a assinatura e o mesmo bloco sem o SVG (display:none não muda layout: o SVG é absoluto).
@@ -36,7 +37,7 @@ async function gerarFolha(page, configRef, estilo, nome) {
   await page.waitForFunction(n => window.__n > n, antes);
   await page.emulateMedia({ media: "print" });
   await page.setViewportSize({ width: 794, height: 1123 }); // A4 a 96 dpi: o bloco do técnico fica com ~90 mm reais
-  await expect(page.locator("#termos-impressao svg.tp__assinatura-texto")).toHaveText(nome);
+  await expect(page.locator("#termos-impressao svg.tp__assinatura-texto")).toHaveText(textoDaAssinatura(nome, estilo));
   await page.evaluate(() => document.fonts.ready);
 }
 

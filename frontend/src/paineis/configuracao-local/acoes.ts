@@ -210,7 +210,7 @@ export function salvarClienteConfiguracaoLocal(): Promise<void> {
 export function salvarAssinaturaConfiguracaoLocal(): Promise<void> {
   return salvarSecao("assinatura", async () => {
     const campoNome = el("cfg-local-assinatura-nome") as HTMLInputElement;
-    const estilo = (el<HTMLSelectElement>("cfg-local-assinatura-estilo") as HTMLSelectElement).value;
+    const estilo = document.querySelector<HTMLInputElement>('input[name="cfg-local-assinatura-estilo"]:checked')?.value ?? "desenho";
     // O servidor é a autoridade; aqui só se evita a ida e volta com a mesma regra.
     const nome = normalizarNome(campoNome.value);
     const erro = erroDoNome(nome) || (estilo !== "desenho" && !nome ? "Informe o nome para esse estilo de assinatura." : "");

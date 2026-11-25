@@ -18,6 +18,8 @@ export interface MedidaAssinatura {
   x: number;
   y: number;
   tamanho: number;
+  /** Altura da tinta em mm (subida + descida), para avisar de nome que fica pequeno. */
+  altura: number;
 }
 
 export type AssinaturaFolha =
@@ -36,6 +38,9 @@ const TAMANHO_MAXIMO = { digitada: 5, cursiva: 9 };
 // Cursiva: o rótulo da folha começa ~2,1 mm abaixo da linha (borda + 3 px de respiro); a cauda não passa de 1,7 mm, o resto sobe o texto.
 const DESCIDA_CURSIVA = 1.7;
 
+export const ALTURA_MINIMA_MM = 3; // abaixo disso a assinatura vira uma risca
+export const AVISO_NOME_LONGO = "Nome longo: a assinatura fica pequena. Considere abreviar (ex.: Maria A. S. Lima).";
+
 export const LIMITE_NOME = 80;
 export const MENSAGEM_NOME = "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.";
 
@@ -48,6 +53,16 @@ export function normalizarNome(valor: string): string {
 export function erroDoNome(nome: string): string {
   if ([...nome].length > LIMITE_NOME || /[^\p{L} .'-]/u.test(nome) || (nome && !/\p{L}/u.test(nome))) return MENSAGEM_NOME;
   return "";
+}
+
+const PARTICULAS = new Set(["da", "de", "do", "das", "dos", "e"]);
+
+// Texto que realmente se desenha: na cursiva, nome todo em maiúsculas fica ilegível e vira "Título" (partículas em minúscula;
+// maiúscula após hífen e apóstrofo). Só na renderização: o nome salvo não muda. Digitada: como digitado.
+export function textoDaAssinatura(nome: string, estilo: EstiloTexto): string {
+  if (estilo === "digitada" || nome !== nome.toLocaleUpperCase() || nome === nome.toLocaleLowerCase()) return nome;
+  return nome.toLocaleLowerCase().split(" ").map((palavra, i) => (i > 0 && PARTICULAS.has(palavra)
+    ? palavra : palavra.replace(/(^|[-'])(\p{L})/gu, (_, antes: string, letra: string) => antes + letra.toLocaleUpperCase()))).join(" ");
 }
 
 export interface Tinta {
@@ -79,6 +94,7 @@ export function calcularMedida({ esq, dir, asc, desc }: Tinta, estilo: EstiloTex
   const tamanho = u * REFERENCIA_PX;
   return {
     tamanho: arredondar(tamanho),
+    altura: arredondar((Math.max(0, asc) + baixo) * u),
     x: arredondar(AREA.largura / 2 - ((dir - esq) / 2) * u),
     y: digitada ? arredondar(-(baixo * u + FOLGA_DIGITADA * tamanho)) : arredondar(0 - Math.max(0, baixo * u - DESCIDA_CURSIVA)),
   };
@@ -88,14 +104,15 @@ export function calcularMedida({ esq, dir, asc, desc }: Tinta, estilo: EstiloTex
 // Fonte que não carrega devolve null: nunca se substitui por fonte do sistema.
 export async function medirAssinatura(nome: string, estilo: EstiloTexto): Promise<MedidaAssinatura | null> {
   const fonte = `400 ${REFERENCIA_PX}px "${FAMILIAS[estilo]}"`;
-  const faces = await document.fonts.load(fonte, nome);
-  if (!faces.length || !document.fonts.check(fonte, nome)) return null;
+  const texto = textoDaAssinatura(nome, estilo);
+  const faces = await document.fonts.load(fonte, texto);
+  if (!faces.length || !document.fonts.check(fonte, texto)) return null;
   const contexto = document.createElement("canvas").getContext("2d");
   if (!contexto) return null;
   contexto.font = fonte;
   contexto.textAlign = "left";
   contexto.textBaseline = "alphabetic";
-  const m = contexto.measureText(nome);
+  const m = contexto.measureText(texto);
   return calcularMedida({
     esq: m.actualBoundingBoxLeft, dir: m.actualBoundingBoxRight, asc: m.actualBoundingBoxAscent, desc: m.actualBoundingBoxDescent,
   }, estilo);
