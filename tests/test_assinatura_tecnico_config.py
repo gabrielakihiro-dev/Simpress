@@ -52,7 +52,9 @@ class AssinaturaConfigTests(unittest.TestCase):
         casos = [
             ("digitada", "a" * 81, "assinatura_nome_invalido"), ("digitada", "Ana1", "assinatura_nome_invalido"),
             ("digitada", "<b>", "assinatura_nome_invalido"), ("digitada", "Ana\x07", "assinatura_nome_invalido"),
-            ("allura", "", "assinatura_nome_invalido"), ("allura", "   ", "assinatura_nome_invalido"),
+            ("allura", "", "assinatura_nome_invalido"),
+            *[("digitada", n, "assinatura_nome_invalido") for n in
+              ("Жанна Ana", "\U0001d4d0na", "שלום Ana", "Việt", "Ana\u3164Lima")], ("allura", "   ", "assinatura_nome_invalido"),
             ("comic-sans", "SegredoXyz", "assinatura_estilo_invalido"),
         ]
         for estilo, nome, codigo in casos:

@@ -385,6 +385,10 @@ def remover_chave_ia(arquivo_env: Path, pasta_backups: Path, identificador: str,
 ESTILOS_ASSINATURA = ("desenho", "digitada", "great-vibes", "dancing-script", "allura", "alex-brush", "sacramento")
 ASSINATURA_PADRAO = {"estilo": "desenho", "nome": ""}
 LIMITE_NOME_ASSINATURA = 80
+# Só as letras que as 6 fontes da assinatura cobrem (tests/e2e/assinatura-fontes.spec.cjs); espelho de LETRAS em
+# frontend/src/componentes/assinatura-medida.ts. Outras letras (cirílico, hebraico, matemáticas) cairiam em fonte do sistema.
+_MAIUSCULAS_ASSINATURA = "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀÂÃÄÉÊËÍÎÓÔÕÖÚÛÜÇÑ"
+LETRAS_ASSINATURA = frozenset(_MAIUSCULAS_ASSINATURA + _MAIUSCULAS_ASSINATURA.lower())
 
 
 class AssinaturaInvalida(ValueError):
@@ -399,7 +403,8 @@ def normalizar_nome_assinatura(valor: Any) -> str:
     if not isinstance(valor, str) or any(unicodedata.category(c) == "Cc" for c in valor):
         raise AssinaturaInvalida("assinatura_nome_invalido", "Nome da assinatura inválido.")
     nome = " ".join(unicodedata.normalize("NFC", valor).replace("’", "'").replace("‘", "'").split())
-    if len(nome) > LIMITE_NOME_ASSINATURA or any(not (c.isalpha() or c in " .'-") for c in nome)             or (nome and not any(c.isalpha() for c in nome)):
+    if len(nome) > LIMITE_NOME_ASSINATURA or any(c not in LETRAS_ASSINATURA and c not in " .'-" for c in nome) \
+            or (nome and not any(c in LETRAS_ASSINATURA for c in nome)):
         raise AssinaturaInvalida(
             "assinatura_nome_invalido",
             "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.",

@@ -865,13 +865,14 @@ FIXTURE_ASSINATURA_SVG = (
 # Configuração da assinatura do técnico (GET e PUT /api/assinatura-tecnico/config): estado em memória, nomes fictícios.
 ASSINATURA_ESTILOS = ("desenho", "digitada", "great-vibes", "dancing-script", "allura", "alex-brush", "sacramento")
 assinatura_config = {"estilo": "desenho", "nome": ""}
+ASSINATURA_LETRAS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀÂÃÄÉÊËÍÎÓÔÕÖÚÛÜÇÑ" + "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀÂÃÄÉÊËÍÎÓÔÕÖÚÛÜÇÑ".lower())
 
 
 def assinatura_gravar(payload):
     estilo, nome = payload.get("estilo"), " ".join(str(payload.get("nome", "")).split())
     if estilo not in ASSINATURA_ESTILOS:
         return {"detail": "Estilo de assinatura inválido.", "codigo": "assinatura_estilo_invalido"}, 422
-    if len(nome) > 80 or any(not (c.isalpha() or c in " .'-") for c in nome):
+    if len(nome) > 80 or any(c not in ASSINATURA_LETRAS and c not in " .'-" for c in nome):
         return {"detail": "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.", "codigo": "assinatura_nome_invalido"}, 422
     if estilo != "desenho" and not nome:
         return {"detail": "Informe o nome para esse estilo de assinatura.", "codigo": "assinatura_nome_invalido"}, 422

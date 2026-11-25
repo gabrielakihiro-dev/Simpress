@@ -3,8 +3,9 @@ const { test, expect } = require("@playwright/test");
 // Cobertura de glifos das 6 famílias da assinatura por nome: o caractere só vale se a largura com a família + monospace
 // for igual à largura com a família + serif (senão um dos dois fallbacks entrou no lugar do glifo).
 const FAMILIAS = ["Inter Variable", "Great Vibes", "Dancing Script", "Allura", "Alex Brush", "Sacramento"];
-const MAIUSCULAS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀÂÃÄÉÊËÍÎÓÔÕÖÚÛÜÇÑ";
-const CARACTERES = [...new Set([...MAIUSCULAS, ...MAIUSCULAS.toLowerCase(), ".", "'", "-"])];
+// Mesma lista do front (e espelho do servidor): a cobertura vale para exatamente o que o nome aceita.
+const { LETRAS, PONTUACAO } = require("../../frontend/src/componentes/assinatura-medida.ts");
+const CARACTERES = [...LETRAS, ...PONTUACAO.replace(" ", "")];
 
 test("as 6 famílias da assinatura trazem glifo próprio para todo caractere permitido", async ({ page }) => {
   await page.goto("/");

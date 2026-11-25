@@ -42,6 +42,10 @@ export const ALTURA_MINIMA_MM = 3; // abaixo disso a assinatura vira uma risca
 export const AVISO_NOME_LONGO = "Nome longo: a assinatura fica pequena. Considere abreviar (ex.: Maria A. S. Lima).";
 
 export const LIMITE_NOME = 80;
+// Só as letras que as 6 fontes cobrem (provado por tests/e2e/assinatura-fontes.spec.cjs); espelho de LETRAS_ASSINATURA no servidor.
+const MAIUSCULAS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÀÂÃÄÉÊËÍÎÓÔÕÖÚÛÜÇÑ";
+export const LETRAS = new Set([...MAIUSCULAS, ...MAIUSCULAS.toLowerCase()]);
+export const PONTUACAO = " .'-";
 export const MENSAGEM_NOME = "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.";
 
 // Mesma normalização do servidor (domains/configuracao_local.py): o servidor é a autoridade.
@@ -51,7 +55,7 @@ export function normalizarNome(valor: string): string {
 
 /** Mensagem de erro do nome já normalizado, ou "" quando vale. */
 export function erroDoNome(nome: string): string {
-  if ([...nome].length > LIMITE_NOME || /[^\p{L} .'-]/u.test(nome) || (nome && !/\p{L}/u.test(nome))) return MENSAGEM_NOME;
+  if ([...nome].length > LIMITE_NOME || [...nome].some(c => !LETRAS.has(c) && !PONTUACAO.includes(c)) || (nome && ![...nome].some(c => LETRAS.has(c)))) return MENSAGEM_NOME;
   return "";
 }
 
@@ -60,9 +64,9 @@ const PARTICULAS = new Set(["da", "de", "do", "das", "dos", "e"]);
 // Texto que realmente se desenha: na cursiva, nome todo em maiúsculas fica ilegível e vira "Título" (partículas em minúscula;
 // maiúscula após hífen e apóstrofo). Só na renderização: o nome salvo não muda. Digitada: como digitado.
 export function textoDaAssinatura(nome: string, estilo: EstiloTexto): string {
-  if (estilo === "digitada" || nome !== nome.toLocaleUpperCase() || nome === nome.toLocaleLowerCase()) return nome;
-  return nome.toLocaleLowerCase().split(" ").map((palavra, i) => (i > 0 && PARTICULAS.has(palavra)
-    ? palavra : palavra.replace(/(^|[-'])(\p{L})/gu, (_, antes: string, letra: string) => antes + letra.toLocaleUpperCase()))).join(" ");
+  if (estilo === "digitada" || nome !== nome.toLocaleUpperCase("pt-BR") || nome === nome.toLocaleLowerCase("pt-BR")) return nome;
+  return nome.toLocaleLowerCase("pt-BR").split(" ").map((palavra, i) => (i > 0 && PARTICULAS.has(palavra)
+    ? palavra : palavra.replace(/(^|[-'])(\p{L})/gu, (_, antes: string, letra: string) => antes + letra.toLocaleUpperCase("pt-BR")))).join(" ");
 }
 
 export interface Tinta {

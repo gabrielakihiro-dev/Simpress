@@ -129,7 +129,8 @@ async function salvarSecao(secao: Secao, tarefa: () => Promise<string>): Promise
     app().carregarProntidao?.();
   } catch (error) {
     mudarStatus(secao, (error as Error).message || "Não foi possível salvar.", "erro");
-    if (error instanceof ErroDeCampo) error.campo.focus();
+    // O campo pode estar travado (ocupado) até o React redesenhar: foca depois do próximo quadro.
+    if (error instanceof ErroDeCampo) { const campo = error.campo; requestAnimationFrame(() => campo.focus()); }
   } finally {
     mudar({ ocupado: false });
     modal?.removeAttribute("aria-busy");

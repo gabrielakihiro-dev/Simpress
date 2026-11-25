@@ -1,7 +1,7 @@
 // Corpo do modal Configuração local (#cfg-local-corpo). Cabeçalho e rodapé ficam no partial (frontend/partials/modais.html).
 // Os botões mantêm os data-on-* do HTML antigo: o action-dispatcher chama a ação em window, que passa pela ponte.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ALTURA_MINIMA_MM, AVISO_NOME_LONGO, ehEstiloTexto, erroDoNome, LIMITE_NOME, medirAssinatura, normalizarNome, type EstiloTexto, type MedidaAssinatura } from "../../componentes/assinatura-medida";
+import { ALTURA_MINIMA_MM, AVISO_NOME_LONGO, ehEstiloTexto, erroDoNome, medirAssinatura, normalizarNome, type EstiloTexto, type MedidaAssinatura } from "../../componentes/assinatura-medida";
 import { AssinaturaTexto } from "../../componentes/assinatura-texto";
 import { CHAVES_IA, ESTILOS_ASSINATURA } from "./acoes";
 import { assinar, ler, type ConfigAssinatura, type Conta, type EstadoChave, type Link, type Secao, type Status } from "./estado";
@@ -169,7 +169,7 @@ function useMedidas(nome: string): Medidas {
 }
 
 // Grupo de rádios (setas entre as opções, nativas): cada cartão é uma mini-folha com o nome naquele estilo.
-function EstilosAssinatura({ nome, estilo, medidas, aoEscolher }: { nome: string; estilo: string; medidas: Medidas; aoEscolher: (valor: string) => void }) {
+function EstilosAssinatura({ nome, estilo, medidas, aoEscolher, ocupado }: { ocupado: boolean; nome: string; estilo: string; medidas: Medidas; aoEscolher: (valor: string) => void }) {
   return (
     <fieldset className="cfg-assin-estilos">
       <legend className="ck-campo__rotulo">Estilo da assinatura</legend>
@@ -177,7 +177,7 @@ function EstilosAssinatura({ nome, estilo, medidas, aoEscolher }: { nome: string
         {ESTILOS_ASSINATURA.map(({ valor, rotulo }) => (
           <label key={valor} className="cfg-assin-opcao" data-estilo={valor}>
             <input type="radio" className="cfg-assin-opcao__radio" name="cfg-local-assinatura-estilo" value={valor}
-              checked={estilo === valor} onChange={() => aoEscolher(valor)} />
+              checked={estilo === valor} disabled={ocupado} onChange={() => aoEscolher(valor)} />
             <span className="cfg-assin-opcao__nome">{rotulo}</span>
             {ehEstiloTexto(valor)
               ? <span className="cfg-assin-opcao__folha"><FolhaAssinatura nome={nome} estilo={valor} medida={medidas[valor]} /></span>
@@ -191,7 +191,7 @@ function EstilosAssinatura({ nome, estilo, medidas, aoEscolher }: { nome: string
 
 // Campos da assinatura: o rascunho vive aqui (as prévias precisam dele); a ação lê os valores do DOM ao salvar. A chave
 // do componente muda a cada leitura ou gravação, e o rascunho volta ao valor do servidor.
-function CamposAssinatura({ inicial }: { inicial: ConfigAssinatura | null }) {
+function CamposAssinatura({ inicial, ocupado }: { inicial: ConfigAssinatura | null; ocupado: boolean }) {
   const [nome, setNome] = useState(inicial?.nome ?? "");
   const [estilo, setEstilo] = useState(inicial?.estilo ?? "desenho");
   const normalizado = useAtraso(normalizarNome(nome), 150);
@@ -206,12 +206,12 @@ function CamposAssinatura({ inicial }: { inicial: ConfigAssinatura | null }) {
     <div className="ckp-campos">
       <div className="ck-campo ckp-span">
         <label className="ck-campo__rotulo" htmlFor="cfg-local-assinatura-nome">Nome do técnico</label>
-        <input className="ck-entrada" id="cfg-local-assinatura-nome" type="text" maxLength={LIMITE_NOME} autoComplete="off"
+        <input className="ck-entrada" id="cfg-local-assinatura-nome" type="text" disabled={ocupado} autoComplete="off"
           spellCheck="false" value={nome} onChange={evento => setNome(evento.target.value)} aria-describedby="cfg-local-assinatura-nome-ajuda" />
         <span className="ckp-meta" id="cfg-local-assinatura-nome-ajuda">Só letras, espaço, ponto, apóstrofo e hífen. Vale para os dois termos.</span>
       </div>
       <div className="ck-campo ckp-span">
-        <EstilosAssinatura nome={valido ? normalizado : ""} estilo={estilo} medidas={medidas} aoEscolher={setEstilo} />
+        <EstilosAssinatura ocupado={ocupado} nome={valido ? normalizado : ""} estilo={estilo} medidas={medidas} aoEscolher={setEstilo} />
         <span className="ckp-meta" id="cfg-local-assinatura-previa-aviso" role="status" aria-live="polite">{aviso}</span>
       </div>
       {ehEstiloTexto(estilo) ? (
@@ -296,7 +296,7 @@ export function CorpoConfiguracao() {
         <Cabecalho secao="assinatura" titulo="Assinatura do técnico" opcional
           desc="Como a assinatura sai nos PDFs do Termo de Entrega e do Termo de Devolução: o desenho atual, digitada ou uma de cinco cursivas." />
         <div className="ckp-secao__corpo">
-          <CamposAssinatura key={revisao.assinatura} inicial={estado.assinatura} />
+          <CamposAssinatura key={revisao.assinatura} inicial={estado.assinatura} ocupado={ocupado} />
           <div className="ckp-linha">
             <StatusSecao secao="assinatura" status={status.assinatura} />
             <BotaoSalvar secao="assinatura" rotulo="Salvar assinatura do técnico" ocupado={ocupado} />
