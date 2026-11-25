@@ -6,6 +6,7 @@ import { AVISO_SERVIDOR_ANTIGO, eServidorDesatualizado } from "./regras-puro";
 interface AppAntigo {
   showToast?: (mensagem: string, tipo?: string) => void;
   carregarNovosSebrae?: () => unknown;
+  confirmarAcao?: (opcoes: { titulo: string; mensagem: string; confirmar: string; cancelar?: string; destrutiva?: boolean }) => Promise<boolean | null>;
 }
 export const appAntigo = () => window as unknown as AppAntigo;
 

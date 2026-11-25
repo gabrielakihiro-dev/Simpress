@@ -317,7 +317,10 @@ test("a rotina só começa por clique e um segundo clique não inicia outra", ()
   assert.match(iniciar, /if \(atual\.emAndamento\) \{\s*if \(atual\.rotinaAtiva === rotina\) acompanharRotina\(\);\s*return;\s*\}/);
   assert.ok(iniciar.indexOf("mudar({ ocupado: true") < iniciar.indexOf("await consultarAutomacao"), "ocupado antes de qualquer await");
   assert.match(iniciar, /method: "POST"/);
-  assert.match(iniciar, /body: JSON\.stringify\(\{ rotina \}\)/);
+  assert.match(iniciar, /body: JSON\.stringify\(rotina === "enviar" \? \{ rotina, confirmado: true \} : \{ rotina \}\)/);
+  // Escrita no SharePoint: "enviar" só vai ao servidor depois do diálogo e com confirmado: true.
+  assert.ok(iniciar.indexOf('confirmarAcao?.(') < iniciar.indexOf("await consultarAutomacao"), "diálogo antes do POST");
+  assert.match(iniciar, /if \(rotina === "enviar"\) \{[\s\S]*?Enviar ao SharePoint\?[\s\S]*?if \(resposta !== true\) return;/);
   // Nenhum efeito, timer ou montagem chama iniciarRotinaAutomacao: só o data-on-click dos botões.
   for (const arquivo of fs.readdirSync(pasta).filter(nome => nome !== "regras-puro.ts")) {
     const codigo = lerPasta(arquivo);
