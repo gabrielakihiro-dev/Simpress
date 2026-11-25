@@ -793,13 +793,23 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
         menu.get_by_role.return_value.first.click.assert_called_once()
 
     def test_menu_of_the_row_clears_the_selection_first(self):
-        # 25/11/2026: a cópia da Duplicata ficou selecionada; leituras: linha selecionada, botão "X 1 selected", seleção limpa, guarda
+        # 25/11/2026: a cópia da Duplicata ficou selecionada; leituras: linha selecionada, botão "X 1 selected",
+        # linha e botão já sem seleção, guarda
         page = MagicMock()
-        with patch.object(automacao, "visivel", side_effect=[True, True, False, False]), patch.object(automacao, "log"):
+        with patch.object(automacao, "visivel", side_effect=[True, True, False, False, False]), patch.object(automacao, "log"):
             automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_BAIXAR)
         page.get_by_role.return_value.filter.return_value.first.click.assert_called_once()  # o botão de limpar
         self.assertIn(call("row", selected=True), page.get_by_role.call_args_list)
         self.assertIn(call("button", name=automacao._BOTAO_LIMPAR_SELECAO), page.get_by_role.call_args_list)
+
+    def test_menu_of_the_row_clears_the_selection_shown_only_by_the_button(self):
+        # Linha sem aria-selected, mas o botão "X 1 selected" visível: ainda limpa. Leituras: linha, botão, botão (clique),
+        # linha e botão já sem seleção, guarda
+        page = MagicMock()
+        with patch.object(automacao, "visivel", side_effect=[False, True, True, False, False, False]), patch.object(automacao, "log"):
+            automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_BAIXAR)
+        page.get_by_role.return_value.filter.return_value.first.click.assert_called_once()
+        page.keyboard.press.assert_not_called()
 
     def test_menu_of_the_row_stops_when_the_selection_does_not_clear(self):
         linha = MagicMock()
@@ -810,7 +820,8 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
 
     def test_menu_of_the_row_refuses_when_another_row_is_selected_with_the_menu_open(self):
         page = MagicMock()
-        with patch.object(automacao, "visivel", side_effect=[False, True]), patch.object(automacao, "log"):
+        # leituras: linha e botão sem seleção, guarda com outra linha selecionada
+        with patch.object(automacao, "visivel", side_effect=[False, False, True]), patch.object(automacao, "log"):
             with self.assertRaisesRegex(automacao.EtapaInstavel, "Outra linha"):
                 automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_DUPLICATA)
         page.keyboard.press.assert_called_once_with("Escape")

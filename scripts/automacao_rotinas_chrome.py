@@ -2200,17 +2200,18 @@ def limpar_selecao(page: "Page") -> None:
 
     25/11/2026: a cópia recém-criada pela Duplicata ficou selecionada ("1 selected") e o "Download" encontrado era o dessa barra.
     """
-    if not visivel(_linhas_selecionadas(page)):
+    botao = page.get_by_role("button", name=_BOTAO_LIMPAR_SELECAO).filter(visible=True)
+    # O botão "X 1 selected" também conta: a linha pode não expor aria-selected (DOM real não conferido).
+    if not visivel(_linhas_selecionadas(page)) and not visivel(botao):
         return
     log("Dashboard", "Há linha selecionada na pasta; limpando a seleção antes de continuar.")
-    botao = page.get_by_role("button", name=_BOTAO_LIMPAR_SELECAO).filter(visible=True)
     if visivel(botao):
         botao.first.click()
     else:
         page.keyboard.press("Escape")
     for _ in range(10):
         page.wait_for_timeout(500)
-        if not visivel(_linhas_selecionadas(page)):
+        if not visivel(_linhas_selecionadas(page)) and not visivel(botao):
             return
     raise EtapaInstavel("Não consegui limpar a seleção de linhas na pasta DASHBOARD SEBRAE.")
 
