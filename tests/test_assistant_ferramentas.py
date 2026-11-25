@@ -357,5 +357,31 @@ class SchemasPorMensagemTests(unittest.TestCase):
         self.assertEqual(nomes, sorted(nomes, key=ordem.index))
 
 
+class UltimaComparacaoTests(unittest.TestCase):
+    """consultar_ultima_comparacao counts the filtered lists of the view, the same ones the list tools read."""
+
+    def test_counts_come_from_the_view_lists_not_the_stored_summary(self) -> None:
+        cru = {"ausentes_no_endpoint": 10, "ausentes_em_detalhes": 4, "sem_acesso_7_dias": 6, "divergencias_local": 5,
+               "series_sem_mapeamento": 3, "apelidos_sem_atualizacao": 2}
+        item = {"serie": "SER1"}
+        comparacao = {"ausentes_no_endpoint": [item] * 7, "ausentes_em_detalhes": [item] * 4, "sem_acesso_7_dias": [item] * 2,
+                      "divergencias_local": [], "series_sem_mapeamento": [item]}
+        api, transporte = montar({
+            ("GET", "/api/historico-comparacoes"): (200, {"eventos": [{"id": "e1", "horario": "2026-11-24 10:00", "tipo": "importacao", "resumo": cru}]}),
+            ("GET", "/api/historico-comparacoes/e1"): (200, {"evento": {"resumo": dict(cru), "comparacao": comparacao}}),
+        })
+        saida = executar("consultar_ultima_comparacao", api, {})
+        self.assertEqual((saida["horario"], saida["tipo"]), ("2026-11-24 10:00", "importacao"))
+        self.assertEqual(saida["resumo_divergencias"], {"ausentes_no_endpoint": 7, "ausentes_em_detalhes": 4, "sem_acesso_7_dias": 2,
+                                                        "divergencias_local": 0, "series_sem_mapeamento": 1, "apelidos_sem_atualizacao": 2})
+        self.assertEqual(transporte.writes(), [])
+
+    def test_without_history_or_with_a_broken_detail(self) -> None:
+        api, _ = montar({("GET", "/api/historico-comparacoes"): (200, {"eventos": []})})
+        self.assertIn("mensagem", executar("consultar_ultima_comparacao", api, {}))
+        api, _ = montar({("GET", "/api/historico-comparacoes"): (200, {"eventos": [{"id": "e9"}]})})
+        self.assertIn("erro", executar("consultar_ultima_comparacao", api, {}))
+
+
 if __name__ == "__main__":
     unittest.main()
