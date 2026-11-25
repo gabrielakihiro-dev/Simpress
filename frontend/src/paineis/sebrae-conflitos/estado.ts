@@ -25,6 +25,8 @@ export interface Conflito {
   sharepoint?: unknown;
   site?: unknown;
   aceita_site?: boolean;
+  titulo?: string; // coluna G do chamado na base importada, já mascarada pelo servidor (vazio quando não dá para achar a linha)
+  solicitante?: string; // coluna I (NOME USUARIO), idem
 }
 type Escolhas = Record<string, unknown>;
 
@@ -38,17 +40,36 @@ const app = window as unknown as {
 /** aceita_site false: a linha de destino é incerta e o servidor recusa "site" (conflito sem a chave aceita os dois). */
 export const aceitaSite = (conflito: Conflito) => conflito.aceita_site !== false;
 
-/** Valor da célula como aparece na frase: entre aspas, cortado se longo, "(vazio)" se em branco. */
-export function valorVisivel(valor: unknown): string {
+/** Valor da célula como aparece na tela: cortado se longo, "(vazio)" se em branco; entre aspas no meio de uma frase. */
+export function valorVisivel(valor: unknown, aspas = true): string {
   const texto = String(valor ?? "");
   if (!texto.trim()) return "(vazio)";
-  return `"${texto.length > LIMITE_VALOR ? `${texto.slice(0, LIMITE_VALOR)}…` : texto}"`;
+  const cortado = texto.length > LIMITE_VALOR ? `${texto.slice(0, LIMITE_VALOR)}…` : texto;
+  return aspas ? `"${cortado}"` : cortado;
 }
 
+const apagada = (conflito: Conflito) => conflito.tipo === "linha_apagada";
+
+/** Legenda do grupo: o chamado e o que mudou (os valores ficam junto de cada opção). */
 export function textoDoConflito(conflito: Conflito): string {
   const chamado = conflito.chamado || "—";
-  if (conflito.tipo === "linha_apagada") return `Chamado ${chamado}: linha apagada no SharePoint, mas editada no site.`;
-  return `Chamado ${chamado}, coluna ${conflito.coluna || "—"}: SharePoint diz ${valorVisivel(conflito.sharepoint)}, site quer ${valorVisivel(conflito.site)}.`;
+  return apagada(conflito) ? `${chamado} · linha apagada no SharePoint, editada no site` : `${chamado} · coluna ${conflito.coluna || "—"}`;
+}
+
+/** Chamado (e coluna) numa linha do resumo: vários conflitos do mesmo chamado se distinguem pela coluna. */
+export const rotuloCurto = (conflito: Conflito) => (apagada(conflito) ? conflito.chamado || "—" : `${conflito.chamado || "—"} · ${conflito.coluna || "—"}`);
+
+/** Valor de um lado junto da opção; linha apagada não tem (o "site" dela junta várias colunas). */
+export function valorDaOpcao(conflito: Conflito, opcao: string): string {
+  if (apagada(conflito)) return "";
+  return valorVisivel(opcao === "site" ? conflito.site : conflito.sharepoint, false);
+}
+
+/** O que acontece no SharePoint com a escolha válida (a de escolhasParaEnviar); sem ela, "falta escolher". */
+export function consequencia(conflito: Conflito, escolha: string | undefined): string {
+  if (escolha !== "sharepoint" && escolha !== "site") return "falta escolher";
+  if (apagada(conflito)) return escolha === "site" ? "a linha volta com os dados do site" : "a linha continua apagada";
+  return escolha === "site" ? `vira ${valorVisivel(conflito.site)}` : `fica ${valorVisivel(conflito.sharepoint)}`;
 }
 
 /** Só os ids da lista atual com escolha válida vão no POST (nunca "site" onde não é aceito). */

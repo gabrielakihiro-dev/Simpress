@@ -918,6 +918,16 @@ export interface Rotas {
     corpo: routers__backups_regionais__ConfirmacaoPayload;
     resposta: Record<string, unknown>;
   };
+  "POST /api/backups-regionais/excluir": {
+    consulta: never;
+    corpo: routers__backups_regionais__ConfirmacaoPayload;
+    resposta: Record<string, unknown>;
+  };
+  "POST /api/backups-regionais/manter": {
+    consulta: never;
+    corpo: routers__backups_regionais__ConfirmacaoPayload;
+    resposta: Record<string, unknown>;
+  };
   "GET /api/buscar": {
     consulta: { "q": string; };
     corpo: never;

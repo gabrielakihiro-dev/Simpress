@@ -75,6 +75,27 @@ test("escolhasParaEnviar: só ids da lista atual com valor válido; site nunca s
   assert.deepEqual(estado.escolhasParaEnviar([celula("e")], { e: undefined }), {});
 });
 
+test("layout C: legenda curta, valor de cada opção e consequência da escolha no resumo", () => {
+  const apagada = { id: "z", tipo: "linha_apagada", chamado: "UTIC-2026-2", coluna: "D,R", sharepoint: "", site: "D: FINALIZADO; R: 01/11/2026" };
+  assert.equal(estado.textoDoConflito(celula("a", { coluna: "D" })), "UTIC-2026-1 · coluna D");
+  assert.equal(estado.textoDoConflito(apagada), "UTIC-2026-2 · linha apagada no SharePoint, editada no site");
+  assert.equal(estado.rotuloCurto(celula("a")), "UTIC-2026-1 · G");
+  assert.equal(estado.rotuloCurto(apagada), "UTIC-2026-2");
+  assert.equal(estado.valorDaOpcao(celula("a"), "sharepoint"), "A");
+  assert.equal(estado.valorDaOpcao(celula("a", { site: " " }), "site"), "(vazio)");
+  assert.equal(estado.valorDaOpcao(celula("a", { site: "x".repeat(400) }), "site"), `${"x".repeat(300)}…`);
+  assert.equal(estado.valorDaOpcao(apagada, "site"), "", "linha apagada não mostra o valor junto da opção");
+  assert.equal(estado.consequencia(celula("a"), "sharepoint"), 'fica "A"');
+  assert.equal(estado.consequencia(celula("a"), "site"), 'vira "B"');
+  assert.equal(estado.consequencia(celula("a", { site: "" }), "site"), "vira (vazio)");
+  assert.equal(estado.consequencia(apagada, "sharepoint"), "a linha continua apagada");
+  assert.equal(estado.consequencia(apagada, "site"), "a linha volta com os dados do site");
+  assert.equal(estado.consequencia(celula("a"), undefined), "falta escolher");
+  // a tela passa a escolha válida: site gravado onde não é aceito não conta
+  const restrito = celula("c", { aceita_site: false });
+  assert.equal(estado.consequencia(restrito, estado.escolhasParaEnviar([restrito], { c: "site" }).c), "falta escolher");
+});
+
 test("fim do envio com conflitos: 'O envio parou de novo…' sobrevive à releitura da lista e sai na próxima escolha", async t => {
   await reiniciar();
   const lista = { conflitos: [celula("t8")], escolhas: { t8: "site" }, versao_importacao: "v1" };

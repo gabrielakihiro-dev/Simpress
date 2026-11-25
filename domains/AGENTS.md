@@ -37,7 +37,7 @@ Valem junto com o `AGENTS.md` da raiz (não repetidas aqui); texto integral no d
 
 ## Backups regionais (Resumo F3) — docs `docs/cockpit-prompts/05-resumo-kpis.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`
 
-- Cálculo puro em `backups_regionais.py` (só Notebook; sem MacBook e séries do Sebrae; mínimo 1 em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa); cadastro, Endpoint, Cobertura e manutenção são só leitura. Confirmação manual de 7 dias só em `data/state/backups_regionais.json` (`backups_regionais_store.py`), sem dado pessoal. `apelido` pode ser nome de pessoa: só na tela local, nunca no Assistente, toast ou log.
+- Cálculo puro em `backups_regionais.py` (só Notebook; sem MacBook e séries do Sebrae; mínimo 1 em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa); cadastro, Endpoint, Cobertura e manutenção são só leitura. `Confirmar Backup` (sem prazo) só em `data/state/backups_regionais.json` (`backups_regionais_store.py`), com `usuario_ref` (hash do usuário do Endpoint, pseudônimo, nunca fora do arquivo); usuário real novo derruba, e com apelido manual pergunta `Manter`/`Excluir`. `apelido` pode ser nome de pessoa: só na tela local, nunca no Assistente, toast ou log.
 
 ## Transporte e representantes (F2) — doc `docs/arquitetura/CONTRATOS_API_BACKEND.md`
 

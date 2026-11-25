@@ -272,7 +272,7 @@ panel_alerts_state = "ocultos"
 # GET /__fixture_backups?estado=padrao|so_conferir|nulo|indisponivel resets the state (and picks the mode):
 # padrao = Cascavel sem_backup, Londrina conferir, Pato Branco ok (com backup por confirmacao), Maringa e Ponta Grossa ok;
 # so_conferir = so Londrina pendente; nulo = campo null (servico desligado); indisponivel = {indisponivel:true,...}.
-# POST /api/backups-regionais/confirmar|desfazer mexem nesse estado e o painel recalcula status, sobras e pendencias.
+# POST /api/backups-regionais/confirmar|desfazer|manter|excluir mexem nesse estado e o painel recalcula status, sobras e pendencias.
 BACKUPS_MINIMO = 1
 BACKUPS_MODOS = ("padrao", "so_conferir", "nulo", "indisponivel")
 backups_state = {"modo": "padrao", "cidades": {}}
@@ -293,7 +293,17 @@ def backups_reset(modo="padrao"):
     def confirmado(serie, apelido):
         expira = (agora + timedelta(days=5)).isoformat()
         return {"serie": serie, "apelido": apelido, "origem": "confirmacao", "ultima_verificacao": None,
-                "confirmado_ate": expira, "confirmacao": {"estado": "vigente", "expira_em": expira}}
+                "confirmado_ate": expira, "confirmacao": {"estado": "vigente", "tipo": "7_dias", "expira_em": expira}}
+
+    def confirmado_backup(serie, apelido):
+        # Confirmação nova: sem prazo (confirmado_ate None) e tipo "backup".
+        return {"serie": serie, "apelido": apelido, "origem": "confirmacao", "ultima_verificacao": None,
+                "confirmado_ate": None, "confirmacao": {"estado": "vigente", "tipo": "backup", "expira_em": None}}
+
+    def pendente(serie, apelido):
+        # Apelido manual + usuário novo no Endpoint: confirmação vigente com decisão pendente (Manter/Excluir).
+        return {"serie": serie, "apelido": apelido, "origem": "confirmacao", "ultima_verificacao": None,
+                "confirmado_ate": None, "confirmacao": {"estado": "vigente", "tipo": "backup", "expira_em": None, "decisao_pendente": True}}
 
     def candidato(serie, apelido, motivo, dias=None):
         return {"serie": serie, "apelido": apelido, "motivo": motivo, "confirmacao": None, "dias_sem_verificacao": dias,
@@ -305,13 +315,20 @@ def backups_reset(modo="padrao"):
 
     cascavel = [marca("TSTBK0009", "Estacao Teste 9")] if modo == "so_conferir" else []
     grupos = [
-        grupo("Cascavel", backups=cascavel, excluidos=[{"serie": "TSTBK0005", "motivo": "usuario_vigente"}]),
+        grupo("Cascavel", backups=cascavel, excluidos=[
+            {"serie": "TSTBK0005", "motivo": "usuario_vigente"},
+            {"serie": "TSTBK0011", "motivo": "usuario_mudou", "confirmacao": {"estado": "invalidada", "motivo": "usuario_mudou"}},
+            {"serie": "TSTBK0015", "motivo": "usuario_vigente",
+             "confirmacao": {"estado": "invalidada", "motivo": "cidade_mudou", "cidade": "Londrina"}},
+        ]),
         grupo("Londrina", candidatos=[candidato("TSTBK0001", "Estacao Teste 1", "sem_verificacao_7_dias", 9)],
               conferencia=[{"serie": "TSTBK0002", "apelido": "Estacao Teste 2", "motivo": "cidade_divergente"}]),
         grupo("Pato Branco", backups=[marca("TSTBK0003", "Estacao Teste 3"), confirmado("TSTBK0004", "Estacao Teste 4")]),
-        grupo("Maringá", backups=[marca("TSTBK0006", "Estacao Teste 6")]),
+        grupo("Maringá", backups=[marca("TSTBK0006", "Estacao Teste 6"), confirmado_backup("TSTBK0010", "Estacao Teste 10")]),
         grupo("Ponta Grossa", backups=[marca("TSTBK0007", "Estacao Teste 7")]),
-        grupo("Curitiba", prioritaria=False, candidatos=[candidato("TSTBK0008", "Estacao Teste 8", "ausente_no_endpoint")]),
+        grupo("Toledo", backups=[pendente("TSTBK0013", "Estacao Teste 13"), pendente("TSTBK0014", "Estacao Teste 14")]),
+        grupo("Curitiba", prioritaria=False, candidatos=[candidato("TSTBK0008", "Estacao Teste 8", "ausente_no_endpoint"),
+                                                    candidato("TSTBK0012", "Estacao Teste 12", "fonte_endpoint_indisponivel")]),
     ]
     backups_state.update(modo=modo, cidades={backups_chave(item["cidade"]): item for item in grupos})
     return {"estado": modo}
@@ -325,7 +342,7 @@ def backups_payload():
     prioritarias, sobras, outras, pendencias = [], [], [], {"sem_backup": [], "conferir": []}
     for item in backups_state["cidades"].values():
         backups = sorted(item["backups"], key=lambda backup: backup["origem"] != "marca")  # estável: marca antes
-        itens = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate")} for backup in backups]
+        itens = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate", "confirmacao")} for backup in backups]
         series = [backup["serie"] for backup in backups]
         if item["prioritaria"]:
             status = "ok" if len(backups) >= BACKUPS_MINIMO else "conferir" if item["candidatos"] else "sem_backup"
@@ -354,26 +371,52 @@ def backups_payload():
 
 
 def backups_acao(acao, corpo):
-    """Returns (status, body) like routers/backups_regionais.py: 422 serie_nao_elegivel; desfazer sem registro → removido false."""
+    """Returns (status, body) like routers/backups_regionais.py: 422 serie_nao_elegivel; 409 endpoint_indisponivel;
+    desfazer sem registro → removido false. Confirmar grava confirmação nova (tipo backup, sem prazo); desfazer vale
+    para confirmação vigente (item em backups) e invalidada (item em excluidos)."""
     grupo = backups_state["cidades"].get(backups_chave(corpo.get("cidade")))
     serie = backups_chave(corpo.get("serie"))
-    lista = "candidatos" if acao == "confirmar" else "backups"
-    achado = next((i for i in (grupo[lista] if grupo else [])
-                   if backups_chave(i["serie"]) == serie and (acao == "confirmar" or i["origem"] == "confirmacao")), None)
-    if achado is None and acao == "desfazer":
-        return 200, {"serie": corpo.get("serie"), "cidade": corpo.get("cidade"), "removido": False}
-    if achado is None:
-        return 422, {"detail": {"codigo": "serie_nao_elegivel", "mensagem": "A série não é candidata a backup nesta cidade."}}
-    grupo[lista].remove(achado)
+
+    def procurar(lista, filtro=lambda item: True):
+        return next((i for i in (grupo[lista] if grupo else []) if backups_chave(i["serie"]) == serie and filtro(i)), None)
+
+    if acao in ("manter", "excluir"):
+        achado = procurar("backups", lambda i: (i.get("confirmacao") or {}).get("decisao_pendente"))
+        if achado is None:
+            return 409, {"detail": {"codigo": "sem_decisao_pendente", "mensagem": "Este backup não tem decisão pendente."}}
+        if acao == "manter":
+            achado["confirmacao"] = {"estado": "vigente", "tipo": "backup", "expira_em": None}
+        else:
+            grupo["backups"].remove(achado)
+        return 200, {"serie": achado["serie"], "cidade": grupo["cidade"], "decisao": acao}
     if acao == "desfazer":
+        achado = procurar("backups", lambda i: i.get("confirmacao"))
+        if achado is None:
+            # cidade_mudou: o corpo traz a cidade gravada, e o item está na regional atual (outro grupo).
+            invalidado = None
+            for g in backups_state["cidades"].values():
+                invalidado = next((i for i in g["excluidos"] if backups_chave(i["serie"]) == serie
+                                   and (i.get("confirmacao") or {}).get("estado") == "invalidada"), None)
+                if invalidado is not None:
+                    g["excluidos"].remove(invalidado)
+                    break
+            return 200, {"serie": corpo.get("serie"), "cidade": corpo.get("cidade"), "removido": invalidado is not None}
+        grupo["backups"].remove(achado)
         grupo["candidatos"].append({"serie": achado["serie"], "apelido": achado["apelido"], "motivo": "ausente_no_endpoint",
                                     "ultima_verificacao": None, "dias_sem_verificacao": None, "confirmacao": None})
         return 200, {"serie": achado["serie"], "cidade": grupo["cidade"], "removido": True}
-    ate = (datetime.now().astimezone() + timedelta(days=7)).isoformat()
+    achado = procurar("candidatos")
+    if achado is None:
+        return 422, {"detail": {"codigo": "serie_nao_elegivel", "mensagem": "A série não é candidata a backup nesta cidade."}}
+    if achado["motivo"] == "fonte_endpoint_indisponivel":
+        return 409, {"detail": {"codigo": "endpoint_indisponivel", "mensagem": "Endpoint indisponível: não foi possível confirmar."}}
+    grupo["candidatos"].remove(achado)
     grupo["backups"].append({"serie": achado["serie"], "apelido": achado["apelido"], "origem": "confirmacao",
-                             "ultima_verificacao": achado["ultima_verificacao"], "confirmado_ate": ate,
-                             "confirmacao": {"estado": "vigente", "expira_em": ate}})
-    return 200, {"serie": achado["serie"], "cidade": grupo["cidade"], "confirmado_ate": ate}
+                             "ultima_verificacao": achado["ultima_verificacao"], "confirmado_ate": None,
+                             "confirmacao": {"estado": "vigente", "tipo": "backup", "expira_em": None}})
+    agora = datetime.now().astimezone().isoformat()
+    return 200, {"confirmacao": {"serie": achado["serie"], "cidade": grupo["cidade"], "confirmado_em": agora, "tipo": "backup"},
+                 "repetido": False}
 
 
 backups_reset()
@@ -486,13 +529,16 @@ def reset_finalizar(sharepoint_falha=False, outro_tecnico=False):
 
 reset_finalizar()
 
-# Conflitos de edição do Dashboard (F5): fictional cells; /__fixture_automacao?conflitos=1 brings three (the 3rd accepts only SharePoint),
+# Conflitos de edição do Dashboard (F5): fictional cells, titles and requesters; /__fixture_automacao?conflitos=1 brings three (the 3rd accepts only SharePoint),
 # /__fixture_conflitos reads the last POST. Like the real route, the POST needs the version the GET gave (409) and refuses "site" on c3 (422).
 VERSAO_CONFLITOS = "versao-fixture-conflitos"
 CONFLITOS_FIXTURE = [
-    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site", "aceita_site": True},
-    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002", "aceita_site": True},
-    {"id": "c3", "tipo": "celula", "chamado": "linha:3", "coluna": "J", "sharepoint": "", "site": "INCIDENTE", "aceita_site": False},
+    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site", "aceita_site": True,
+     "titulo": "Impressora do 2º andar sem toner", "solicitante": "Pessoa Fictícia Um"},
+    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002", "aceita_site": True,
+     "titulo": "Notebook não liga", "solicitante": "Pessoa Fictícia Dois"},
+    {"id": "c3", "tipo": "celula", "chamado": "linha:3", "coluna": "J", "sharepoint": "", "site": "INCIDENTE", "aceita_site": False,
+     "titulo": "", "solicitante": ""},  # linha sem UTIC: o servidor não acha a linha e manda vazio
 ]
 conflitos_state = {}
 
@@ -1223,7 +1269,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
-        if path in ("/api/backups-regionais/confirmar", "/api/backups-regionais/desfazer"):
+        if path in ("/api/backups-regionais/confirmar", "/api/backups-regionais/desfazer", "/api/backups-regionais/manter", "/api/backups-regionais/excluir"):
             size = int(self.headers.get("Content-Length", "0"))
             try:
                 corpo = json.loads(self.rfile.read(size) or b"{}")

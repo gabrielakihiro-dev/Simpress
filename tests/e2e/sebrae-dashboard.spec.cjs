@@ -1015,8 +1015,13 @@ test("Conflitos de edição: lista cada célula, só libera o reenvio com todas 
   const secao = painel.locator("#sebrae-conflitos");
   await expect(secao).toBeVisible();
   await expect(secao.getByRole("group")).toHaveCount(3);
-  await expect(secao.getByRole("group").first()).toContainText('Chamado UTIC-2026-9001, coluna G: SharePoint diz "Título no SharePoint", site quer "Título no site".');
-  await expect(secao.getByRole("group").nth(1)).toContainText("Chamado UTIC-2026-9002: linha apagada no SharePoint, mas editada no site.");
+  await expect(secao.getByRole("group").first().locator("legend")).toHaveText("UTIC-2026-9001 · coluna G");
+  await expect(secao.getByRole("group").first().getByRole("radio", { name: "Manter o do SharePoint", exact: true })).toHaveAccessibleDescription("Título no SharePoint");
+  await expect(secao.getByRole("group").first().getByRole("radio", { name: "Usar o do site", exact: true })).toHaveAccessibleDescription("Título no site");
+  await expect(secao.getByRole("group").first().locator(".sebrae-conflito__dados")).toContainText("Impressora do 2º andar sem toner");
+  await expect(secao.getByRole("group").first().locator(".sebrae-conflito__dados")).toContainText("Pessoa Fictícia Um");
+  await expect(secao.getByRole("group").nth(1).locator("legend")).toHaveText("UTIC-2026-9002 · linha apagada no SharePoint, editada no site");
+  await expect(secao.getByRole("group").nth(2).locator(".sebrae-conflito__dados dd")).toHaveText(["—", "—"]); // linha sem UTIC: sem título nem solicitante
   const enviar = secao.getByRole("button", { name: "Salvar escolhas e reenviar", exact: true });
   await expect(enviar).toBeDisabled();
   await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("Escolha uma opção em cada célula (faltam 3).");
