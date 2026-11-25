@@ -271,7 +271,7 @@ def build_backups_regionais(
                 usuario_vigente = usuario_firme if nova else usuario_pleno
 
         marca_valida = bool(cidade_lida) and motivo_marca is None
-        mudou = bool(confirmacao_invalidada) and confirmacao_invalidada["motivo"] == "usuario_mudou"
+        mudou = confirmacao_invalidada is not None and confirmacao_invalidada["motivo"] == "usuario_mudou"
         if usuario_vigente or bloqueio or mudou:
             excluido: Dict[str, Any] = {
                 "serie": serie,

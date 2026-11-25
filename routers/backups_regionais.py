@@ -245,7 +245,7 @@ def create_backups_regionais_router(services: BackupsRegionaisServices) -> APIRo
     def manter(payload: ConfirmacaoPayload) -> Dict[str, Any]:
         """Mantém o backup com o usuário atual do Endpoint; o apelido manual não muda."""
         (serie, cidade), endpoint, agora, ref_visto = pendente(payload)
-        ref = usuario_ref(endpoint_user_for_serial(endpoint, normalize_reference_value(serie)))
+        ref = usuario_ref(endpoint_user_for_serial(dict(endpoint), normalize_reference_value(serie)))
 
         def operacao(estado: store_mod.Estado) -> Tuple[store_mod.Estado, None]:
             if not vigente_visto(estado, serie, cidade, ref_visto):  # outra decisão chegou antes: nada é gravado

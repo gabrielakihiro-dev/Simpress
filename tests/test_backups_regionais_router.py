@@ -367,7 +367,7 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         antes_ = self.state.read_bytes()
         for nome, endpoint_novo, codigo in (
             ("indisponivel", {"available": False}, "endpoint_indisponivel"),
-            ("admin", endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), ".\Administrador")), "sem_decisao_pendente"),
+            ("admin", endpoint(("NB1", "PRNOTE-1", AGORA - timedelta(days=1), r".\Administrador")), "sem_decisao_pendente"),
         ):
             for caminho in (MANTER, EXCLUIR):
                 with self.subTest(caso=nome, caminho=caminho):
