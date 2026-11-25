@@ -82,6 +82,7 @@ jobs:
         # 12 partes (17/11/2026, revisão do PR #284): os 6 testes "OS nova sugerida" saíram do sebrae-dashboard (9) para o
         # chamados-os (7). O 12 leva chamados-os e ux-chamados (do 7), react-bf2 (do 5) e react-infra (do 6).
         # Divisão sem medição nova: reconfira na CI.
+        # assinatura-fontes e assinatura-visual (assinatura do técnico, 25/11/2026) entraram no 7, um dos menores (3 specs); reconfira na CI.
         include:
           - shard: 1
             specs: >-
@@ -107,6 +108,7 @@ jobs:
           - shard: 7
             specs: >-
               monthly-report.spec.cjs cobertura.spec.cjs react-g10.spec.cjs
+              assinatura-fontes.spec.cjs assinatura-visual.spec.cjs
           - shard: 8
             specs: >-
               react-g7.spec.cjs termos.spec.cjs os-subabas.spec.cjs react-g8.spec.cjs
