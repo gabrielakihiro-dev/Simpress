@@ -953,9 +953,10 @@ QUERY_TOOLS: List[Tool] = [
         "de outro assunto, e o usuário decide Manter ou Remover no cartão; você não aceita, recusa, mantém nem remove, e não mostra texto da OS. "
         "`nao_encontrado_softexpert: true` = a última leitura (Ler chamados antigos) não achou o chamado na central de tarefas do "
         "SoftExpert (pode ter sido finalizado por outro técnico); o cartão fica vermelho com o selo `Não encontrado` para conferir "
-        "depois; não diga que foi finalizado, só que não foi encontrado. Só quando o usuário marca D=FINALIZADO com a DT ENCERRAMENTO (R) e manda "
-        "finalizar, a rotina registra o chamado como `finalizado_outro_tecnico` (aparece em `resultado_softexpert` de situacao_finalizacao_sebrae e "
-        "o chamado passa para a sub-aba Finalizados); sem R segue só `Não encontrado`. `solicitante` é quem abriu o chamado (coluna I) e `data` a "
+        "depois; não diga que foi finalizado, só que não foi encontrado. Só quando o usuário confirma na tela que outro técnico finalizou "
+        "(com A, B, D=FINALIZADO e a DT ENCERRAMENTO (R) preenchidos) e a rotina também não acha o chamado, ele vira `finalizado_outro_tecnico` "
+        "(aparece em `resultado_softexpert` de situacao_finalizacao_sebrae e o chamado passa para a sub-aba Finalizados); você nunca confirma "
+        "isso, e a finalização pedida por você termina em `nao_encontrado`. `solicitante` é quem abriu o chamado (coluna I) e `data` a "
         "data de abertura lida do SoftExpert (vazia se o chamado não foi lido). A lista traz no máximo 20 itens, na ordem da coluna C (a mesma da F5): "
         "`total_abertos` é o total, `encontrados` quantos passaram pela `busca` e `omitidos` quantos ficaram de fora. Para achar um "
         "chamado por pessoa, número, série ou palavra do título, passe `busca` (todas as palavras precisam aparecer); com o primeiro nome "
@@ -1260,7 +1261,8 @@ CHANGE_TOOLS: List[Tool] = [
         "Só chamado antigo em aberto do Dashboard importado; use situacao_finalizacao_sebrae antes. A descrição (\"Detalhes do "
         "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
         "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "
-        "(\"Atualizar Dashboard\"). " + _INSTRUCAO_ENCERRAMENTO + " O usuário confirma antes.",
+        "(\"Atualizar Dashboard\"). " + _INSTRUCAO_ENCERRAMENTO + " O usuário confirma antes. "
+        "Você nunca confirma \"finalizado por outro técnico\": se a rotina não achar o chamado, o resultado é `nao_encontrado`.",
         lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao"), a.get("_versao_importacao"), a.get("encerramento")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},

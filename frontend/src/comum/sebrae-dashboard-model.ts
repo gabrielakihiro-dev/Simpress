@@ -199,7 +199,7 @@ export const INTERVALO_FECHAR_MS = 1500;
 export const STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"; // fora da central, com D=FINALIZADO e R do usuário (regra de 12/11/2026)
 export const STATUS_DESFEITOS: readonly string[] = Object.freeze(["ok", STATUS_OUTRO_TECNICO]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
 export const ROTULOS_RESULTADO: Readonly<Record<string, string>> = Object.freeze({
-  ok: "Finalizado no SoftExpert", [STATUS_OUTRO_TECNICO]: "Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
+  ok: "Finalizado no SoftExpert", [STATUS_OUTRO_TECNICO]: "Finalizado por outro técnico (confirmado por você): Dashboard atualizado com a DT ENCERRAMENTO informada", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
   sem_descricao: "Sem descrição para finalizar", sem_encerramento: "Sem DT ENCERRAMENTO (R)", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
 });
 export const MOTIVOS_PULADO: Readonly<Record<string, string>> = Object.freeze({
@@ -243,6 +243,29 @@ export function camposFaltando(valores: Qualquer, descricao: Qualquer): string[]
   if (!encerramentoInformado(valores?.R)) faltas.push(ROTULOS_FALTA.R);
   if (vazio(descricao)) faltas.push("Descrição para Finalizar o Chamado");
   return faltas;
+}
+
+/** Bloco laranja do diálogo de Finalizar para chamado antigo NÃO encontrado no SoftExpert (decisão de 25/11/2026): mostra A, B, D e R e pede a caixa
+ * "registrar como finalizado por outro técnico". A caixa fica bloqueada (`bloqueio`) se A, B, D=FINALIZADO ou R válida faltar, como no 422 do servidor. */
+export function blocoOutroTecnico(numero: string, valores: Qualquer) {
+  const texto = (valor: Qualquer) => String(valor ?? "").trim();
+  const faltas: string[] = [];
+  if (!texto(valores?.A)) faltas.push("A (Cliente/Simpress)");
+  if (!texto(valores?.B)) faltas.push("B (Categoria)");
+  if (texto(valores?.D).toUpperCase() !== "FINALIZADO") faltas.push("D (FINALIZADO)");
+  const encerramento = encerramentoInformado(valores?.R);
+  if (!encerramento) faltas.push("R (DT ENCERRAMENTO)");
+  const lista = faltas.length > 1 ? `${faltas.slice(0, -1).join(", ")} e ${faltas[faltas.length - 1]}` : faltas[0];
+  return {
+    id: numero,
+    titulo: "Este chamado não foi encontrado na última leitura do SoftExpert",
+    texto: "Confira os campos que vão ao Dashboard e ao SharePoint se ele também não for encontrado agora:",
+    linhas: [["A · Cliente/Simpress", texto(valores?.A)], ["B · Categoria", texto(valores?.B)], ["D · Situação", texto(valores?.D)], ["R · DT ENCERRAMENTO", encerramento]],
+    caixa: "Se o SoftExpert não encontrar o chamado, registrar como finalizado por outro técnico",
+    ajudaDesmarcada: "Sem marcar: se achar, finaliza normalmente. Se não achar, fica “não encontrado”, D e R não vão ao SharePoint, e você pode tentar de novo.",
+    ajudaMarcada: "Marcado: se não achar, fica “finalizado por outro técnico” e A, B, D e R vão ao Dashboard e ao SharePoint.",
+    bloqueio: faltas.length ? `Preencha ${lista} no cartão para poder confirmar.` : "",
+  };
 }
 
 /** Chamados que o usuário marcou com D = FINALIZADO nesta atualização (formulários novos e edições dos antigos). */
@@ -496,7 +519,7 @@ if (typeof window !== "undefined") {
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
-    ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
+    ROTULOS_FALTA, camposFaltando, blocoOutroTecnico, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
     resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     CHAVE_RASCUNHO, NUMERO_RASCUNHO, limparValoresRascunho, PREFIXO_CAMPO, lerRascunho, gravarCampoRascunho, gravarRascunho, apagarRascunho, aplicarRascunho,
   });

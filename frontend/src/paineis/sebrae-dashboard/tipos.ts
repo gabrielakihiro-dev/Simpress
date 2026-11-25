@@ -55,6 +55,7 @@ export interface ModeloSebrae {
   textoResultado: Funcao;
   textoPulado: Funcao;
   camposFaltando: Funcao;
+  blocoOutroTecnico: Funcao;
   candidatosFinalizar: Funcao;
   excluidosFinalizar: Funcao;
   avisoExcluidosFinalizar: Funcao;
@@ -74,11 +75,27 @@ export interface DialogoConfirmacao {
   cancelar: string;
 }
 
+/** Bloco com caixa do diálogo de confirmação (`blocoOutroTecnico`); `bloqueio` não vazio deixa a caixa desabilitada e explica o motivo. */
+export interface BlocoConfirmacao {
+  id: string;
+  titulo: string;
+  texto: string;
+  linhas: string[][];
+  caixa: string;
+  ajudaDesmarcada: string;
+  ajudaMarcada: string;
+  bloqueio: string;
+}
+
+/** Resposta do diálogo com blocos: `marcados` são os `id` das caixas marcadas (vazio se Esc, fechar ou Cancelar). */
+export interface RespostaBlocos { confirmado: boolean | null; marcados: string[] }
+
 /** O que o painel usa do restante do app (window): chamadas feitas na hora, nunca guardadas em `montar`. */
 export interface AppSebrae {
   apiFetch(url: string, opcoes?: Omit<ApiFetchOptions, "responseType">): Promise<Registro>;
   showToast(mensagem: string, tipo?: string): void;
   copiarTextoParaAreaTransferencia(texto: string): Promise<unknown>;
+  confirmarAcao(dialogo: DialogoConfirmacao & { blocos: BlocoConfirmacao[] }): Promise<RespostaBlocos>;
   confirmarAcao(dialogo: DialogoConfirmacao): Promise<boolean | null>;
   abrirJanelaChamadoOs?: (alvo: { chamado: string; serie: unknown; os: unknown }, origem: ElementoSebrae) => unknown;
   atualizarEstadoAutomacao?: () => void;

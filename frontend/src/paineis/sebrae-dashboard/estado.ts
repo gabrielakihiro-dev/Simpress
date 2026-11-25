@@ -15,7 +15,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
-    camposFaltando, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
+    camposFaltando, blocoOutroTecnico, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     lerRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho,
   } = context.sebraeDashboardModel;
   const armazenamento = (() => { try { return window.localStorage || null; } catch (_erro) { return null; } })();
@@ -818,7 +818,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   function seloLeitura(item: Registro, dados: Registro) {
     if (!NUMERO_UTIC.test(item.numero)) return null;
     const selo = dom.createTextElement("span", "ck-badge sebrae-selo", dados.lido ? "Lido" : dados.naoEncontrado ? "Não encontrado" : "Não lido");
-    selo.dataset.status = dados.lido ? "info" : dados.naoEncontrado ? "erro" : "";
+    selo.dataset.status = dados.lido ? "info" : dados.naoEncontrado ? "laranja" : "";
     return selo;
   }
 
@@ -1574,8 +1574,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const resumo = linha.querySelector<ElementoSebrae>("summary");
     const texto = (seletor: string) => resumo?.querySelector<ElementoSebrae>(seletor)?.textContent || "";
     const serie = entrada?.campos.find((c: CampoVisao) => c.rotulo === "Série")?.valor;
-    // O realce que o resumo antigo dava (borda à esquerda) passa ao item da lista: vermelho se o SoftExpert não achou o chamado, âmbar se é destaque.
-    const tom = linha.querySelector('[data-leitura="nao_encontrado"]') ? "erro" : linha.querySelector(".sebrae-chamado--destaque") ? "alerta" : undefined;
+    // O realce que o resumo antigo dava (borda à esquerda) passa ao item da lista: laranja se o SoftExpert não achou o chamado, âmbar se é destaque.
+    const tom = linha.querySelector('[data-leitura="nao_encontrado"]') ? "laranja" : linha.querySelector(".sebrae-chamado--destaque") ? "alerta" : undefined;
     const selos: ElementoSebrae[] = [];
     // Os selos `--auto` (D: FINALIZADO, Pronto para finalizar, Finalizando…, atenção, falha) são acesos por CSS (`:has`) no resumo; a cópia só leva os que estão acesos agora.
     const aceso = (selo: ElementoSebrae) => !selo.matches(".sebrae-selo--auto") || (typeof getComputedStyle === "function" && getComputedStyle(selo).display !== "none");
@@ -1916,13 +1916,22 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     }
     // O R confirmado no diálogo é o mesmo enviado em `encerramento` (regra de 24/11/2026: digitado pelo usuário, nunca a hora atual).
     const encerramento = encerramentoInformado(valores.R);
-    const confirmado = await app.confirmarAcao({
+    const dialogo = {
       titulo: "Finalizar no SoftExpert",
       mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
         + `${soft.pdf ? " e o PDF anexado será enviado" : ""}. DT ENCERRAMENTO (R): ${encerramento}.`
         + (soft.novo ? " Este chamado novo ainda não está no Dashboard: depois clique em Atualizar Dashboard para gravar o status FINALIZADO e a data de encerramento." : ""),
       confirmar: "Confirmar finalização", cancelar: "Cancelar",
-    });
+    };
+    // Antigo não encontrado na última leitura: o bloco laranja pede a caixa; sem ela (padrão) o servidor recusa "outro técnico".
+    const naoEncontrado = estado.abertos.some(item => item.numero === numero && dadosAntigo(item).naoEncontrado);
+    let confirmarOutroTecnico = false;
+    let confirmado: boolean | null;
+    if (naoEncontrado) {
+      const resposta = await app.confirmarAcao({ ...dialogo, blocos: [blocoOutroTecnico(numero, valores)] });
+      confirmado = resposta.confirmado;
+      confirmarOutroTecnico = resposta.marcados.includes(numero);
+    } else confirmado = await app.confirmarAcao(dialogo);
     if (!confirmado) return;
     ref.botao.disabled = true;
     if (!(await salvarDescricao(numero))) {
@@ -1934,7 +1943,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     try {
       await app.apiFetch("/api/sebrae/finalizar-softexpert", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero, confirmado: true, versao_importacao: estado.versaoImportacao, encerramento, ...manuaisDoChamado(numero) }),
+        body: JSON.stringify({ numero, confirmado: true, confirmar_outro_tecnico: confirmarOutroTecnico, versao_importacao: estado.versaoImportacao, encerramento, ...manuaisDoChamado(numero) }),
         errorMessage: "Não foi possível iniciar a finalização no SoftExpert.",
       });
     } catch (falha) { const error = falha as ErroApi;
@@ -2766,6 +2775,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       // Sem candidatos não há diálogo: atualiza e envia ao SharePoint. Com candidatos, só "Atualizar e finalizar" (true) finaliza e envia;
       // "Atualizar sem finalizar", Esc e fechar o diálogo (null) só atualizam e baixam: D FINALIZADO sem SoftExpert nunca vai ao SharePoint por este clique.
       let resposta: boolean | null = false;
+      let marcadosOutroTecnico: string[] = [];
       if (!finalizar.length && excluidos.some((e: Registro) => e.motivo === "sem_descricao")) {
         // FINALIZADO sem descrição iria ao SharePoint sem passar pelo SoftExpert: só envia com confirmação explícita.
         const enviar = await app.confirmarAcao({
@@ -2776,14 +2786,22 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         });
         resposta = enviar ? false : null;
       } else if (finalizar.length) {
-        resposta = await app.confirmarAcao({
+        const dialogo = {
           titulo: "Atualizar Dashboard e finalizar no SoftExpert",
           mensagem: `${finalizar.length} chamado(s) marcado(s) como FINALIZADO (${finalizar.join(", ")}) podem ser finalizados no SoftExpert. `
             + "Atualizar e finalizar: atualiza o Dashboard, finaliza no SoftExpert (o que não tem volta) e envia ao SharePoint. "
             + "Atualizar sem finalizar: só atualiza e baixa o Dashboard; NÃO finaliza no SoftExpert nem envia ao SharePoint."
             + (avisoExcluidos ? ` ${avisoExcluidos}` : ""),
           confirmar: "Atualizar e finalizar", cancelar: "Atualizar sem finalizar",
-        }) || null;
+        };
+        // Cada não encontrado ganha o bloco laranja com a caixa própria; só os marcados vão em `confirmar_outro_tecnico`.
+        const blocos = finalizar.filter((numero: string) => estado.abertos.some(item => item.numero === numero && dadosAntigo(item).naoEncontrado))
+          .map((numero: string) => blocoOutroTecnico(numero, valoresEfetivos(numero)));
+        if (blocos.length) {
+          const respondido = await app.confirmarAcao({ ...dialogo, blocos });
+          resposta = respondido.confirmado || null;
+          marcadosOutroTecnico = respondido.marcados;
+        } else resposta = await app.confirmarAcao(dialogo) || null;
       }
       const finalizarSoftExpert = Boolean(resposta);
       const enviarSharepoint = resposta !== null;
@@ -2800,7 +2818,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       if (finalizarSoftExpert) await Promise.all(finalizar.map(guardarFicha));
       const dados = await app.apiFetch("/api/sebrae/dashboard/atualizar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chamados, edicoes, versao_importacao: estado.versaoImportacao, finalizar_softexpert: finalizarSoftExpert, enviar_sharepoint: enviarSharepoint }),
+        body: JSON.stringify({ chamados, edicoes, versao_importacao: estado.versaoImportacao, finalizar_softexpert: finalizarSoftExpert, confirmar_outro_tecnico: marcadosOutroTecnico, enviar_sharepoint: enviarSharepoint }),
         errorMessage: "Não foi possível atualizar o Dashboard.",
       });
       baixarArquivo(dados.arquivo, dados.conteudo_base64);

@@ -46,6 +46,7 @@ export type AtualizarPayload = {
   "versao_importacao"?: string;
   "finalizar_softexpert"?: boolean;
   "enviar_sharepoint"?: boolean;
+  "confirmar_outro_tecnico"?: string[];
 };
 
 export type BloqueioCobertura = {
@@ -355,6 +356,7 @@ export type FinalizarPayload = {
   "encerramento"?: string;
   "chamados"?: ChamadoManual[];
   "edicoes"?: ChamadoManual[];
+  "confirmar_outro_tecnico"?: boolean;
 };
 
 export type HTTPValidationError = {

@@ -260,7 +260,7 @@ test("textos de resultado e de chamado pulado ficam em português", () => {
     "Não encontrado na central de tarefas: UTIC-2026-4 não está na central de tarefas");
   assert.equal(textoResultado({ status: "nao_encontrado" }), "Não encontrado na central de tarefas");
   assert.equal(textoResultado({ status: "finalizado_outro_tecnico", encerrado_em: "12/11/2026 09:30" }),
-    "Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada (encerrado em 12/11/2026 09:30)");
+    "Finalizado por outro técnico (confirmado por você): Dashboard atualizado com a DT ENCERRAMENTO informada (encerrado em 12/11/2026 09:30)");
   assert.deepEqual(sebraeDashboardModel.STATUS_DESFEITOS, ["ok", "finalizado_outro_tecnico"]);
   assert.equal(textoPulado({ numero: "UTIC-2026-9", motivo: "sem_descricao" }), "UTIC-2026-9: não será finalizado no SoftExpert (sem descrição para finalizar).");
   assert.match(textoPulado({ numero: "UTIC-2026-8", motivo: "ja_finalizado" }), /já finalizado no SoftExpert/);
@@ -849,7 +849,7 @@ test("o finalizado por outro técnico leva o selo exato no resumo da lista Final
   const { el } = await renderizarCartoes(carga);
   assert.equal(seloDoResumo(el).length, 1);
   assert.match(el["sebrae-finalizados-lista"].querySelector("summary.sebrae-finalizado__resumo").textContent, /UTIC-2026-1100/);
-  assert.match(el["sebrae-finalizados-lista"].querySelector(".sebrae-chamado__resultado").textContent, /^Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada/);
+  assert.match(el["sebrae-finalizados-lista"].querySelector(".sebrae-chamado__resultado").textContent, /^Finalizado por outro técnico \(confirmado por você\): Dashboard atualizado com a DT ENCERRAMENTO informada/);
 });
 
 test("Desfazer finalização aparece só no finalizado por outro técnico; confirma, desfaz e recarrega", async () => {
@@ -2755,4 +2755,133 @@ test("quando a finalização acompanhada termina, a tela pede a atualização do
   for (let i = 0; i < 40 && !eventos.includes("simpress:atualizar-notificacoes"); i++) await new Promise(r => setImmediate(r));
   assert.deepEqual(eventos.filter(tipo => tipo === "simpress:atualizar-notificacoes"), ["simpress:atualizar-notificacoes"]);
   assert.ok(consultas >= 2, "acompanhou até o fim");
+});
+
+// ---- Finalizar chamado antigo NÃO encontrado: bloco laranja e caixa "outro técnico" (decisão de 25/11/2026) ----
+
+const POST_FINALIZAR = "/api/sebrae/finalizar-softexpert";
+
+test("blocoOutroTecnico lista A, B, D e R e só libera a caixa com tudo preenchido", () => {
+  const { blocoOutroTecnico } = sebraeDashboardModel;
+  const completo = blocoOutroTecnico("UTIC-2026-1200", { A: "CLIENTE", B: "REDE", D: "FINALIZADO", R: "2026-10-30T14:05" });
+  assert.equal(completo.titulo, "Este chamado não foi encontrado na última leitura do SoftExpert");
+  assert.equal(completo.caixa, "Se o SoftExpert não encontrar o chamado, registrar como finalizado por outro técnico");
+  assert.deepEqual(completo.linhas, [["A · Cliente/Simpress", "CLIENTE"], ["B · Categoria", "REDE"], ["D · Situação", "FINALIZADO"], ["R · DT ENCERRAMENTO", "30/10/2026 14:05"]]);
+  assert.equal(completo.bloqueio, "");
+  assert.equal(completo.ajudaDesmarcada, "Sem marcar: se achar, finaliza normalmente. Se não achar, fica “não encontrado”, D e R não vão ao SharePoint, e você pode tentar de novo.");
+  assert.equal(completo.ajudaMarcada, "Marcado: se não achar, fica “finalizado por outro técnico” e A, B, D e R vão ao Dashboard e ao SharePoint.");
+  assert.equal(blocoOutroTecnico("x", { A: "CLIENTE", B: "", D: "FINALIZADO", R: "30/10/2026 14:05" }).bloqueio, "Preencha B (Categoria) no cartão para poder confirmar.");
+  assert.equal(blocoOutroTecnico("x", { A: "", B: "REDE", D: "EM ABERTO", R: "30/10/2026" }).bloqueio, "Preencha A (Cliente/Simpress), D (FINALIZADO) e R (DT ENCERRAMENTO) no cartão para poder confirmar.");
+});
+
+async function telaFinalizarNaoEncontrado({ naoEncontrado = true, B = "REDE", marcados = ["UTIC-2026-1200"], confirmado = true, falha422 = "" } = {}) {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].nao_encontrado_softexpert = naoEncontrado;
+  carga.importado.abertos[0].valores.B = B;
+  const posts = [];
+  const apiFetch = async (url, opcoes = {}) => {
+    if (opcoes.method === "POST" && url === POST_FINALIZAR) {
+      posts.push(JSON.parse(opcoes.body));
+      if (falha422) throw Object.assign(new Error(falha422), { status: 422 });
+      return { iniciado: true };
+    }
+    return carga;
+  };
+  const { el, app } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  const dialogos = [];
+  const toasts = [];
+  app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return opcoes.blocos ? { confirmado, marcados: confirmado ? marcados : [] } : confirmado; };
+  app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  const cartao = cartaoAntigoDe(el, "UTIC-2026-1200");
+  const digitar = (seletor, valor) => { const campo = cartao.querySelector(seletor); campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  digitar('[data-sebrae-campo="D"]', "FINALIZADO");
+  digitar('[data-sebrae-campo="R"]', "2026-10-30T14:05");
+  digitar("textarea[data-sebrae-descricao]", "Teclado trocado.");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  return { dialogos, posts, toasts };
+}
+
+test("Finalizar de antigo não encontrado: o diálogo ganha o bloco laranja e a caixa marcada manda confirmar_outro_tecnico true", async () => {
+  const { dialogos, posts } = await telaFinalizarNaoEncontrado();
+  assert.equal(dialogos.length, 1);
+  assert.equal(dialogos[0].blocos.length, 1);
+  assert.deepEqual(dialogos[0].blocos[0].linhas, [["A · Cliente/Simpress", "SIMPRESS"], ["B · Categoria", "REDE"], ["D · Situação", "FINALIZADO"], ["R · DT ENCERRAMENTO", "30/10/2026 14:05"]]);
+  assert.equal(dialogos[0].blocos[0].bloqueio, "");
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].confirmar_outro_tecnico, true);
+});
+
+test("Finalizar de antigo não encontrado com a caixa desmarcada manda confirmar_outro_tecnico false", async () => {
+  const { posts } = await telaFinalizarNaoEncontrado({ marcados: [] });
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].confirmar_outro_tecnico, false);
+});
+
+test("Finalizar cancelado no diálogo com bloco não envia nada, mesmo que a caixa estivesse marcada", async () => {
+  const { dialogos, posts } = await telaFinalizarNaoEncontrado({ confirmado: false });
+  assert.equal(dialogos.length, 1);
+  assert.equal(posts.length, 0);
+});
+
+test("Finalizar de antigo achado no SoftExpert não mostra o bloco e manda confirmar_outro_tecnico false", async () => {
+  const { dialogos, posts } = await telaFinalizarNaoEncontrado({ naoEncontrado: false });
+  assert.equal(dialogos[0].blocos, undefined);
+  assert.equal(posts[0].confirmar_outro_tecnico, false);
+});
+
+test("Finalizar de antigo não encontrado sem B desabilita a caixa com o aviso do campo que falta", async () => {
+  const { dialogos } = await telaFinalizarNaoEncontrado({ B: "", marcados: [] });
+  assert.equal(dialogos[0].blocos[0].bloqueio, "Preencha B (Categoria) no cartão para poder confirmar.");
+});
+
+test("422 do servidor ao finalizar como outro técnico mostra o detail ao usuário", async () => {
+  const detail = "Para registrar UTIC-2026-1200 como finalizado por outro técnico, preencha B (Categoria).";
+  const { toasts } = await telaFinalizarNaoEncontrado({ falha422: detail });
+  assert.deepEqual(toasts.at(-1), [detail, "error"]);
+});
+
+test("Atualizar Dashboard em lote: blocos só dos não encontrados e confirmar_outro_tecnico leva só os marcados", async () => {
+  const montar = () => {
+    const carga = structuredClone(CARGA_CARTOES);
+    carga.novos.formulario = [];
+    const [primeiro] = carga.importado.abertos;
+    primeiro.nao_encontrado_softexpert = true;
+    primeiro.valores.B = "REDE";
+    primeiro.softexpert = { descricao_finalizacao: "Teclado trocado.", descricao_definida: true, pdf: null, finalizacao: null };
+    carga.importado.abertos.push({ ...structuredClone(primeiro), numero: "UTIC-2026-1201", chamado: "UTIC-2026-1201", titulo: "Mouse", nao_encontrado_softexpert: false });
+    return carga;
+  };
+  for (const [marcados, esperado] of [[["UTIC-2026-1200"], ["UTIC-2026-1200"]], [[], []]]) {
+    const carga = montar();
+    const posts = [];
+    const apiFetch = async (url, opcoes = {}) => {
+      if (opcoes.method === "POST" && url === POST_ATUALIZAR) { posts.push(JSON.parse(opcoes.body)); return { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [], base: {}, ...ENVIO_INICIADO }; }
+      return carga;
+    };
+    const { el, feature, app } = await renderizarCartoes(carga, null, apiFetch);
+    await esvaziarFila();
+    global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
+    for (const numero of ["UTIC-2026-1200", "UTIC-2026-1201"]) {
+      const cartao = cartaoAntigoDe(el, numero);
+      for (const [letra, valor] of [["D", "FINALIZADO"], ["R", "2026-10-30T14:05"]]) {
+        const campo = cartao.querySelector(`[data-sebrae-campo="${letra}"]`);
+        campo.value = valor;
+        campo.dispatchEvent({ type: "input", currentTarget: campo });
+      }
+    }
+    const dialogos = [];
+    app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return { confirmado: true, marcados }; };
+    app.showToast = () => {};
+    app.atualizarEstadoAutomacao = () => {};
+    await feature.atualizarDashboardSebrae();
+    assert.equal(dialogos.length, 1);
+    assert.deepEqual(dialogos[0].blocos.map(b => b.id), ["UTIC-2026-1200"], "só o não encontrado ganha bloco");
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].finalizar_softexpert, true);
+    assert.deepEqual(posts[0].confirmar_outro_tecnico, esperado);
+  }
 });
