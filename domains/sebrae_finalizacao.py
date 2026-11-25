@@ -716,11 +716,12 @@ def preparar_envio(state_dir: Path, conteudo: bytes, *, pendente: Optional[Path]
         return envio
 
 
-def substituir_conteudo_envio(state_dir: Path, envio: str, conteudo: bytes) -> None:
-    """Troca o conteúdo de um envio ainda ``preparado`` (o arquivo gerado virou o mesclado com o SharePoint).
+def substituir_conteudo_envio(state_dir: Path, envio: str, conteudo: bytes, *, mesclado: bool = True) -> None:
+    """Troca o conteúdo de um envio ainda ``preparado`` (o arquivo gerado virou o montado sobre o Dashboard do SharePoint).
 
     A cópia privada e ``sha256`` passam a ser os do conteúdo novo; ``sha256_origem`` guarda o hash anterior para que a limpeza
-    reconheça as cópias pendentes que o envio cobre. Depois de ``marcar_envio_incerto`` nada mais pode mudar.
+    reconheça as cópias pendentes que o envio cobre. ``mesclado``: um terceiro mudou a CHAMADOS do SharePoint (False quando só as
+    outras abas foram preservadas). Depois de ``marcar_envio_incerto`` nada mais pode mudar.
     """
     with lock_paths([caminho_envio(state_dir), state_dir / "sebrae_dashboard_pendente.guard"]):
         registro = ler_envio(state_dir)
@@ -735,6 +736,7 @@ def substituir_conteudo_envio(state_dir: Path, envio: str, conteudo: bytes) -> N
             raise DomainBusyError("Não foi possível preservar a cópia privada mesclada antes do envio. Nada foi enviado.") from error
         registro["sha256_origem"] = registro.get("sha256_origem") or registro["sha256"]
         registro["sha256"] = sha
+        registro["mesclado"] = mesclado
         _gravar_envio(state_dir, registro)
 
 
@@ -754,6 +756,19 @@ def cancelar_envio_preparado(state_dir: Path, envio: str) -> None:
         if registro and registro["id"] == envio and registro["status"] == "preparado":
             registro.update(status="falhou", limpeza_pendente=False)
             _gravar_envio(state_dir, registro)
+
+
+def registrar_envio_nao_recebido(state_dir: Path, envio: str) -> None:
+    """``incerto`` -> ``falhou``: a rotina baixou o Dashboard depois do upload e ele ainda tinha os valores de antes do envio.
+
+    Sem ``recuperacao`` (a tela trata ``declarar_nao_enviado`` como declaração do usuário); um novo envio fica liberado."""
+    with lock_paths([caminho_envio(state_dir)]):
+        registro = ler_envio(state_dir)
+        if registro is None or registro["id"] != envio or registro["status"] != "incerto":
+            raise DomainConflictError("O pedido de envio mudou; confira o SharePoint manualmente.")
+        registro.update(status="falhou", limpeza_pendente=False)
+        registro["resolucoes"] = [*(registro.get("resolucoes") or []), {"acao": "conferido_nao_recebido", "em": agora_iso()}]
+        _gravar_envio(state_dir, registro)
 
 
 def confirmar_envio(state_dir: Path, envio: str) -> None:
@@ -803,7 +818,8 @@ def recuperar_envio(
             if confirmacao != frase:
                 raise DomainConflictError("Digite a declaração completa após conferir o conteúdo no SharePoint.")
             if acao == "confirmar_recebimento":
-                gravar_enviado(state_dir, registro["sha256"], conteudo, base_sha256=registro.get("base_sha256"), mesclado=bool(registro.get("sha256_origem")))
+                mesclado = registro.get("mesclado", bool(registro.get("sha256_origem")))  # registros antigos não têm "mesclado"
+                gravar_enviado(state_dir, registro["sha256"], conteudo, base_sha256=registro.get("base_sha256"), mesclado=mesclado is True, declarado=True)
             registro.update(status="confirmado" if acao == "confirmar_recebimento" else "falhou", limpeza_pendente=acao == "confirmar_recebimento")
         else:
             raise DomainValidationError("A ação de recuperação é inválida.", status_code=422)
@@ -820,12 +836,14 @@ def recuperar_envio(
 
 def gravar_enviado(
     state_dir: Path, sha256: str, conteudo: Optional[bytes] = None, *, base_sha256: Optional[str] = None, mesclado: bool = False,
+    declarado: bool = False,
 ) -> None:
     """Hash (and copy) of the Dashboard this site last put on SharePoint; the next ``enviar`` accepts exactly that file as "unchanged".
 
     The copy matters because SharePoint re-serializes the xlsx after an upload (new hash, same values): the next check compares values.
     ``base_sha256`` is the import the sent file was built on (the copy is a merge ancestor only for that import); ``mesclado`` marks a file
     that carries someone else's SharePoint edits, so the next check never takes it as "the site's own, unchanged" file.
+    ``declarado``: confirmed only by the user's "CONFIRMO APLICADO", never seen by the routine; such a copy is never a merge ancestor.
     """
     if conteudo is not None:
         atomic_write_bytes(caminho_copia_enviada(state_dir), conteudo)
@@ -834,6 +852,8 @@ def gravar_enviado(
         registro["base_sha256"] = base_sha256
     if mesclado:
         registro["mesclado"] = True
+    if declarado:
+        registro["declarado"] = True
     atomic_write_json(caminho_enviado(state_dir), registro)
 
 
@@ -841,10 +861,33 @@ def enviado_mesclado(state_dir: Path) -> bool:
     return (_ler_json(caminho_enviado(state_dir)) or {}).get("mesclado") is True
 
 
+def _enviado_so_declarado(state_dir: Path, enviado: Mapping[str, Any]) -> bool:
+    """The sent copy was confirmed only by "CONFIRMO APLICADO" (flag, or an older record found by its hash).
+
+    25/11/2026: a send without the completion notice was declared applied although nothing arrived; as a merge ancestor its
+    values were taken as "already sent" and the site's cells silently dropped from the next send."""
+    if enviado.get("declarado") is True:
+        return True
+    sha256 = str(enviado.get("sha256") or "")
+    try:
+        registros = list((state_dir / "sebrae_dashboard_envios").glob("*/registro.json"))
+    except OSError:
+        return True  # unknown: never trust it as ancestor
+    for caminho in registros:
+        registro = _ler_json(caminho) or {}
+        if registro.get("sha256") == sha256 and (registro.get("recuperacao") or {}).get("acao") == "confirmar_recebimento":
+            return True
+    return False
+
+
 def enviado_da_importacao(state_dir: Path) -> Optional[bytes]:
-    """The last sent copy, only when it was built on the import that is current now (otherwise it is not a valid merge ancestor)."""
-    base = str((_ler_json(caminho_enviado(state_dir)) or {}).get("base_sha256") or "")
-    return ler_copia_enviada(state_dir) if base and base == base_importada(state_dir) else None
+    """The last sent copy, only when it was built on the import that is current now (otherwise it is not a valid merge ancestor)
+    and the routine itself confirmed it (a copy only declared applied by the user may never have reached SharePoint)."""
+    enviado = _ler_json(caminho_enviado(state_dir)) or {}
+    base = str(enviado.get("base_sha256") or "")
+    if not base or base != base_importada(state_dir) or _enviado_so_declarado(state_dir, enviado):
+        return None
+    return ler_copia_enviada(state_dir)
 
 
 def ler_copia_enviada(state_dir: Path) -> Optional[bytes]:

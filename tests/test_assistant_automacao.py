@@ -230,6 +230,15 @@ class LogTests(unittest.TestCase):
             "O Dashboard no SharePoint mudou depois da importação; importe de novo.": "dashboard_sharepoint_mudou",
             "Conflito de edição: 2 célula(s) do Dashboard foram alteradas no SharePoint e no site (colunas H, J). Nada foi enviado nem guardado "
             "como cópia pendente; escolha na tela qual valor manter e envie de novo.": "dashboard_sharepoint_conflito",
+            "Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.":
+                "envio_sharepoint_nao_confirmado",
+            "O upload não começou: em 60 s não vi o diálogo Replace/Keep both nem o andamento do envio; não escolhi o arquivo de novo.":
+                "envio_sharepoint_nao_comecou",
+            "O SharePoint não recebeu o Dashboard: baixei o arquivo de novo, duas vezes, e ele ainda tem os valores de antes do envio. "
+            "Nada foi substituído; pode usar Enviar ao SharePoint de novo. (Não vi o aviso de envio concluído em 90 s; o Dashboard pode "
+            "ter sido enviado. Confira a pasta antes de repetir.)": "envio_sharepoint_nao_recebido",
+            "Não consegui aplicar as alterações do site sobre o Dashboard do SharePoint preservando as outras abas; nada foi substituído. "
+            "Use Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint.": "dashboard_sem_preservar_abas",
             "Gestão de solicitações: a tela não ficou pronta em 60 s (x).": "timeout",
             "TimeoutError: Page.click: Timeout 30000ms exceeded.": "timeout",
             "A busca de chamados novos não foi concluída.": "rotina_nao_concluida",
