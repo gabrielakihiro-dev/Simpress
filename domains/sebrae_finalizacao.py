@@ -143,9 +143,10 @@ def encerramento_valido(texto: Any) -> str:
     ``""`` when blank, in another format, an impossible date or a date without the time (``dd/MM/aaaa``, an old R typed in
     the Dashboard): column R is written only as ``dd/MM/aaaa HH:mm``, so a date alone would break the write after Finalizar."""
     try:
-        return datetime.strptime(" ".join(str(texto or "").split()), FORMATO_ENCERRAMENTO).strftime(FORMATO_ENCERRAMENTO)
+        momento = datetime.strptime(" ".join(str(texto or "").split()), FORMATO_ENCERRAMENTO)
     except ValueError:
         return ""
+    return momento.strftime(FORMATO_ENCERRAMENTO) if momento.year >= 2000 else ""  # 01/01/0001 passa no strptime
 
 
 # ---------------------------------------------------------------------------- validation

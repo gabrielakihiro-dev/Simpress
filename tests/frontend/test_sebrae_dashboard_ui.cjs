@@ -45,6 +45,9 @@ test("a data guardada no Dashboard volta para o campo de data e hora", () => {
   assert.equal(encerramentoParaCampo("28/10/2026 14:30"), "2026-10-28T14:30");
   assert.equal(encerramentoParaCampo("28/10/2026"), "", "só a data: nenhuma hora inventada (nunca T00:00)");
   assert.equal(encerramentoParaCampo(""), "");
+  for (const impossivel of ["31/11/2026 10:00", "1/11/2026 9:05", "05/11/2026 25:00", "05/11/2026 10:60", "05/11/1999 10:00"]) {
+    assert.equal(encerramentoParaCampo(impossivel), "", impossivel + ": o servidor recusaria, o campo fica editável");
+  }
 });
 
 test("a atualização dos antigos leva só os campos mudados e nunca em branco", () => {

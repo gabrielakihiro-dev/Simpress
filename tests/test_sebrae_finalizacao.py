@@ -465,7 +465,7 @@ class JobTest(unittest.TestCase):
         self.assertEqual(fin.encerramento_valido(" 05/11/2026   14:30 "), "05/11/2026 14:30")
         self.assertEqual(fin.encerramento_valido("1/11/2026 9:05"), "01/11/2026 09:05")  # zero à esquerda
         # Só a data (R antigo digitado no Dashboard) é recusado: a coluna R só é gravada com a hora, que nunca é inventada.
-        for ruim in ("05/11/2026", "5/1/2026", "2026-11-05", "", None, "31/02/2026 10:00", "31/02/2026", "05/11/2026 25:00", "05/11/26", "05/11/2026 14"):
+        for ruim in ("05/11/2026", "5/1/2026", "2026-11-05", "", None, "31/02/2026 10:00", "31/02/2026", "05/11/2026 25:00", "05/11/26", "05/11/2026 14", "05/11/0026 10:00", "05/11/1999 10:00"):
             with self.subTest(ruim=ruim):
                 self.assertEqual(fin.encerramento_valido(ruim), "")
 

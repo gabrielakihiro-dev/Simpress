@@ -227,6 +227,8 @@ def _valor_legivel(letra: str, bruto: str, compartilhadas: Sequence[str]) -> str
     if valor is None:
         return ""
     if letra in COLUNAS_DE_DATA and re.fullmatch(r"-?\d+(\.\d+)?", valor):
+        if letra == "R" and re.fullmatch(r"-?\d+(\.0+)?", valor):  # R só com data: sem hora inventada (00:00); encerramento_valido a trata como faltando
+            return (_EPOCA + timedelta(days=int(float(valor)))).strftime("%d/%m/%Y")
         return _serial_para_texto(valor)
     return " ".join(valor.split())
 

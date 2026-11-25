@@ -47,8 +47,12 @@ export function formatarEncerramento(valor: Qualquer): string {
 
 /** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). Só a data dá "": nenhuma hora inventada. */
 export function encerramentoParaCampo(texto: Qualquer): string {
-  const partes = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/.exec(String(texto || "").trim());
-  return partes ? `${partes[3]}-${partes[2]}-${partes[1]}T${partes[4]}` : "";
+  const partes = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(String(texto || "").trim());
+  if (!partes) return "";
+  const [, dia, mes, ano, hora, minuto] = partes;
+  const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+  const real = data.getUTCDate() === Number(dia) && data.getUTCMonth() === Number(mes) - 1 && Number(ano) >= 2000 && Number(hora) < 24 && Number(minuto) < 60;
+  return real ? `${ano}-${mes}-${dia}T${hora}:${minuto}` : ""; // data impossível: "" (o servidor recusaria com 422)
 }
 
 export const MAX_TITULO = 300; // mesmo limite de ChamadoManual.G no servidor (routers/sebrae_dashboard.py)

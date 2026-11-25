@@ -149,7 +149,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : padroesManuais(estado.formulario.find(item => item.numero === numero))[letra] ?? "";
     controle.value = valores[letra] ?? inicial;
     // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO e o R gravado só com a data (sem hora) é redigitado com a hora
-    if (antigo && atual && letra !== "D" && !(letra === "R" && !encerramentoInformado(atual))) controle.disabled = true;
+    if (antigo && atual && letra !== "D" && !(letra === "R" && !encerramentoParaCampo(atual))) controle.disabled = true;
     if (!antigo && !(letra in valores) && controle.value) guardados[numero] = { ...valores, [letra]: controle.value };
     controle.dataset.sebraeNumero = numero;
     controle.dataset.sebraeCampo = letra;
