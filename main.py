@@ -228,6 +228,7 @@ from domains.ux_chamados_browser import conectar_ux
 from routers.ux_ticket import create_ux_ticket_router
 from routers.outlook_mail import create_outlook_mail_router
 from routers.assinatura_tecnico import create_assinatura_tecnico_router
+from domains.lembretes import ler_resumo_agendados
 from routers.lembretes import create_lembretes_router
 from routers.modelos_chamado import create_modelos_chamado_router
 from domains.ux_ticket import TicketsUX
@@ -2088,6 +2089,8 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_softexpert_finalization_failures=_falhas_finalizacao_softexpert,
     # Independente do evento histórico: cada leitura é isolada (nunca 500) dentro de ``ler_painel_backups``.
     get_backups_regionais=lambda: ler_painel_backups(_backups_services),
+    # Só leitura: nunca cria nem repara o arquivo; devolve contagens, sem texto de lembrete.
+    get_lembretes_agendados=lambda: ler_resumo_agendados(STATE_DIR / "lembretes.json"),
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)

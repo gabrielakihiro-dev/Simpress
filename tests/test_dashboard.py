@@ -33,9 +33,10 @@ AGORA = datetime(2026, 11, 12, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
 REGIONAIS = ["Cascavel", "Londrina", "Pato Branco", "Maringá", "Ponta Grossa"]
 
 
-def make_client(equipment, events, stats=None, backups=None):
+def make_client(equipment, events, stats=None, backups=None, lembretes=None):
     router, _ = create_dashboard_router(DashboardServices(
         get_backups_regionais=backups,
+        get_lembretes_agendados=lembretes,
         get_equipment=lambda: equipment,
         get_stats=lambda: stats if stats is not None else {"total_unidades": 4, "ultima_atualizacao": "01/01/2026 10:00"},
         get_comparison_events=events if callable(events) else (lambda: events),
@@ -257,6 +258,32 @@ class DashboardBackupsRegionaisTests(unittest.TestCase):
         self.assertIs(dados["backups_regionais"]["indisponivel"], True)
         self.assertEqual(dados["backups_regionais"]["fontes"], {})
         self.assertTrue(dados["backups_regionais"]["limitacoes"])
+
+
+class LembretesAgendadosNoPainelTests(unittest.TestCase):
+    ZERO = {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False}
+
+    def test_com_servico_devolve_o_resumo(self):
+        resumo = {"total": 3, "atrasados": 2, "hoje": 1, "indisponivel": False}
+        dados = make_client([], [], lembretes=lambda: resumo).get("/api/painel").json()
+        self.assertEqual(dados["lembretes_agendados"], resumo)
+
+    def test_sem_servico_devolve_zeros_disponivel(self):
+        dados = make_client([], []).get("/api/painel").json()
+        self.assertEqual(dados["lembretes_agendados"], self.ZERO)
+
+    def test_servico_que_levanta_vira_indisponivel_e_o_painel_segue(self):
+        def quebrado():
+            raise RuntimeError("Zelda Ficticia")
+
+        with self.assertLogs("routers.dashboard", level="WARNING") as logs:
+            resposta = make_client([{"tipo": "Notebook"}], [], lembretes=quebrado).get("/api/painel")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertTrue(dados["base_importada"])
+        self.assertEqual(dados["lembretes_agendados"], {**self.ZERO, "indisponivel": True})
+        self.assertNotIn("Zelda", "\n".join(logs.output))
+        self.assertIn("RuntimeError", "\n".join(logs.output))
 
 
 class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
