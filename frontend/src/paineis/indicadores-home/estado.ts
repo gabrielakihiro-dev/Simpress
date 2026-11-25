@@ -101,6 +101,7 @@ interface DadosPainelHome {
   chamados_outro_tecnico?: DadosAlerta;
   falhas_finalizacao_softexpert?: DadosAlerta;
   backups_regionais?: DadosAlerta;
+  lembretes_agendados?: DadosAlerta;
 }
 interface ItemSemAcesso {
   serie?: string;
@@ -124,7 +125,7 @@ const PRONTIDAO_ESTADOS: Record<EstadoItemProntidao, string> = { ok: "Em dia", p
 // Chamados que saíram do Dashboard ou do SoftExpert sem finalização pelo site: o texto é fixo, o card some com total 0 ou leitura indisponível.
 const TEXTO_OUTRO_TECNICO = "Confira no SoftExpert e marque Conferido na aba OS (F6).";
 const MAX_SEM_ACESSO_60_LISTADOS = 5;
-const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-finalizacao-softexpert", "alerta-backups-regionais"];
+const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-finalizacao-softexpert", "alerta-backups-regionais", "alerta-lembretes-agendados"];
 
 export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   "use strict";
@@ -786,6 +787,35 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     lista.hidden = false;
   }
 
+  // Lembretes agendados (/api/painel): só contagens (atrasados e hoje); nunca descrição, termo, id nem nome.
+  const contagemLembrete = (valor: unknown): number => Math.max(0, Math.floor(Number(valor) || 0));
+
+  function textoLembretes(atrasados: number, hoje: number): string {
+    if (atrasados && hoje) return `${atrasados} ${pluralize(atrasados, "atrasado")} e ${hoje} para hoje.`;
+    if (atrasados) return `${atrasados} ${pluralize(atrasados, "lembrete")} ${pluralize(atrasados, "atrasado")}.`;
+    return `${hoje} ${pluralize(hoje, "lembrete")} para hoje.`;
+  }
+
+  function renderizarAlertaLembretes(dados: DadosAlerta | null | undefined): void {
+    const card = elemento("alerta-lembretes-agendados");
+    if (!card) return;
+    const valido = Boolean(dados) && typeof dados === "object" && !dados?.indisponivel;
+    const atrasados = valido ? contagemLembrete(dados?.atrasados) : 0;
+    const hoje = valido ? contagemLembrete(dados?.hoje) : 0;
+    if (!valido || contagemLembrete(dados?.total) <= 0) {
+      ocultarAlertaPainel(card, dados?.indisponivel ? "indisponivel" : "vazio");
+      return;
+    }
+    const urgente = atrasados >= 1;
+    card.dataset.gravidade = urgente ? "urgente" : "atencao";
+    const selo = elemento("alerta-lembretes-agendados-selo");
+    if (selo) {
+      selo.dataset.status = urgente ? "erro" : "alerta";
+      selo.textContent = urgente ? "Urgente" : "Atenção";
+    }
+    mostrarAlertaPainel(card, urgente ? "atrasados" : "hoje", textoLembretes(atrasados, hoje));
+  }
+
   function inicializarAlertasOsDivergencias(lerUltimoPainel?: () => DadosPainelHome | undefined): void {
     const renderizar = (detalhe: DadosPainelHome | undefined) => {
       renderizarAlertaSemAcesso60(detalhe?.sem_acesso_60_dias);
@@ -794,6 +824,7 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       renderizarAlertaChamadosOutroTecnico(detalhe?.chamados_outro_tecnico);
       renderizarAlertaFalhasFinalizacao(detalhe?.falhas_finalizacao_softexpert);
       renderizarAlertaBackupsRegionais(detalhe?.backups_regionais);
+      renderizarAlertaLembretes(detalhe?.lembretes_agendados);
     };
     document.addEventListener("simpress:painel-atualizado", evento => renderizar((evento as CustomEvent<DadosPainelHome | undefined>).detail));
     const anterior = lerUltimoPainel?.();
@@ -815,5 +846,6 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
     renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico, renderizarAlertaFalhasFinalizacao, renderizarAlertaBackupsRegionais,
+    renderizarAlertaLembretes,
   };
 }

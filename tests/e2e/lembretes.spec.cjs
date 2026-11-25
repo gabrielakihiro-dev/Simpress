@@ -1106,3 +1106,71 @@ test("320px: a janela aberta pelo link não causa rolagem horizontal", async ({ 
   expect(medidas.esquerda).toBeGreaterThanOrEqual(0);
   expect(medidas.direita).toBeLessThanOrEqual(medidas.janela);
 });
+
+// Cartão do sino #alerta-lembretes-agendados: só números, vindos do /api/painel sintético da fixture.
+async function abrirSinoLembretes(page, estado) {
+  expect((await page.request.get("/__fixture_lembretes?itens=0")).ok()).toBeTruthy();
+  expect((await page.request.get(`/__fixture_lembretes_agendados?estado=${estado}`)).ok()).toBeTruthy();
+  await page.goto("/");
+  await page.locator("#btn-notificacoes").click();
+  await expect(page.locator("#notification-center-panel")).toBeVisible();
+}
+
+test("sino: lembretes atrasados mostram o cartão urgente, contam 1 aviso e abrem os Lembretes", async ({ page }) => {
+  try {
+    await abrirSinoLembretes(page, "atrasados");
+    const cartao = page.locator("#alerta-lembretes-agendados");
+    await expect(cartao).toBeVisible();
+    await expect(cartao).toHaveAttribute("data-gravidade", "urgente");
+    await expect(page.locator("#alerta-lembretes-agendados-selo")).toHaveText("Urgente");
+    await expect(page.locator("#alerta-lembretes-agendados-titulo")).toHaveText("Lembretes agendados");
+    await expect(page.locator("#alerta-lembretes-agendados-texto")).toHaveText("2 lembretes atrasados.");
+    // Backups sintéticos já contam 1 aviso no padrão da fixture: com lembretes, são 2 (lembretes valem 1, não 2).
+    await expect(page.locator("#badge-notificacoes")).toHaveText("2");
+    await page.locator("#btn-alerta-lembretes-agendados").click();
+    await expect(page.locator("#notification-center-panel")).toBeHidden();
+    await expect(page.locator('[data-cockpit-tool-panel="lembretes"]')).toBeVisible();
+    await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("sino: só lembretes para hoje viram cartão de atenção", async ({ page }) => {
+  try {
+    await abrirSinoLembretes(page, "hoje");
+    await expect(page.locator("#alerta-lembretes-agendados")).toHaveAttribute("data-gravidade", "atencao");
+    await expect(page.locator("#alerta-lembretes-agendados-selo")).toHaveText("Atenção");
+    await expect(page.locator("#alerta-lembretes-agendados-texto")).toHaveText("1 lembrete para hoje.");
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("sino: sem lembretes agendados ou com leitura indisponível o cartão fica escondido", async ({ page }) => {
+  try {
+    for (const estado of ["zero", "indisponivel"]) {
+      await abrirSinoLembretes(page, estado);
+      await expect(page.locator("#alerta-lembretes-agendados")).toBeHidden();
+      await expect(page.locator("#alerta-lembretes-agendados")).toHaveAttribute("data-state", estado === "zero" ? "vazio" : "indisponivel");
+    }
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("mutação com sucesso pede o painel de novo; falha não pede", async ({ page }) => {
+  await abrirLembretes(page);
+  const pedidosPainel = [];
+  page.on("request", requisicao => { if (new URL(requisicao.url()).pathname === "/api/painel") pedidosPainel.push(requisicao.url()); });
+  await adicionarPelaTela(page, "Lembrete sintético sino");
+  await expect.poll(() => pedidosPainel.length).toBeGreaterThan(0);
+  await page.waitForTimeout(300);
+  const aposSucesso = pedidosPainel.length;
+  await page.route("**/api/lembretes", rota => (rota.request().method() === "POST" ? rota.fulfill({ status: 503, json: { detail: "Aviso de teste: gravação indisponível.", codigo: "lembretes_gravacao" } }) : rota.fallback()));
+  await campoNovo(page).fill("Lembrete sintético falha");
+  await campoNovo(page).press("Enter");
+  await expect(page.getByText("Aviso de teste: gravação indisponível.")).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(pedidosPainel.length).toBe(aposSucesso);
+});

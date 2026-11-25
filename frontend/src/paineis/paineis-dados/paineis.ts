@@ -241,9 +241,12 @@ export function criarPaineisDados() {
       const temRegional = (lista: Qualquer) => Array.isArray(lista) && lista.some(cidade => String(cidade ?? "").trim());
       const backupsAtivo = Boolean(backups) && typeof backups === "object" && !backups.indisponivel
         && (temRegional(backups.pendencias?.sem_backup) || temRegional(backups.pendencias?.conferir));
+      // Mesma regra do cartão #alerta-lembretes-agendados: serviço disponível e total > 0; conta 1 aviso, não a quantidade de lembretes.
+      const lembretes = data?.lembretes_agendados;
+      const lembretesAtivo = Boolean(lembretes) && typeof lembretes === "object" && !lembretes.indisponivel && Number(lembretes.total) > 0;
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
-        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo);
+        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo) + Number(lembretesAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";

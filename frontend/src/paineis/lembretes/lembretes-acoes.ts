@@ -28,6 +28,11 @@ const NOVO_VAZIO: Estado["novo"] = { descricao: "", data: "", hora: "", horaDesl
 const comLista = (lembretes: Lembrete[], extra: Partial<Estado> = {}): Partial<Estado> => ({ lembretes, renderizado: true, ...extra });
 const trocar = (id: IdLembrete, atualizado: Lembrete) => ler().lembretes.map(l => (String(l.id) === String(id) ? atualizado : l));
 
+// Depois de cada mutação bem-sucedida: o cartão do sino (#alerta-lembretes-agendados) e o badge pedem o painel de novo. Sem dado do lembrete no evento.
+function avisarSino() {
+  if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
+}
+
 // Item agendado para um dia fora da vista aberta: o toast diz para onde ele foi.
 function avisarSeFora(l: Lembrete | undefined) {
   const dia = l && !l.concluido ? dataDe(l) : null;
@@ -134,6 +139,7 @@ export async function adicionar(): Promise<void> {
       errorMessage: "Não foi possível adicionar o lembrete.",
     });
     mudar(comLista([...ler().lembretes, criado], { novo: NOVO_VAZIO }));
+    avisarSino();
     avisarSeFora(criado);
   } catch (erro) {
     avisarErro(erro, "Não foi possível adicionar o lembrete.");
@@ -155,6 +161,7 @@ export async function alternar(id: IdLembrete): Promise<void> {
   try {
     const atualizado = await atualizar(id, { concluido: !l.concluido }, "Não foi possível atualizar o lembrete.");
     mudarAgora(comLista(trocar(id, atualizado)));
+    avisarSino();
   } catch (erro) {
     avisarErro(erro, "Não foi possível atualizar o lembrete.");
   } finally {
@@ -213,6 +220,7 @@ export async function salvarEdicao(id: IdLembrete): Promise<void> {
   try {
     const atualizado = await atualizar(id, campos, "Não foi possível salvar o lembrete.");
     sairDaEdicao(id, comLista(trocar(id, atualizado)));
+    avisarSino();
     if ("data_agendada" in campos || "hora_agendada" in campos) avisarSeFora(achar(id));
   } catch (erro) {
     avisarErro(erro, "Não foi possível salvar o lembrete.");
@@ -265,6 +273,7 @@ export async function confirmarExclusao(): Promise<void> {
     appAntigo().fecharModalAcessivel?.("lembretes-confirmar");
   }
   if (!removido) return;
+  avisarSino();
   mudarAgora(comLista(ler().lembretes.filter(l => String(l.id) !== String(id))));
   // O foco volta ao item que ocupou o lugar do excluído; sem itens na lista, ao campo de adicionar.
   const itens = itensDaLista();
@@ -321,6 +330,7 @@ export async function confirmarCriar(): Promise<void> {
   }
   // Em erro o diálogo continua aberto, com o texto, para tentar de novo.
   if (!criado) return;
+  avisarSino();
   interno.criando = null;
   interno.copiaTermo = null;
   const { status } = ler();
@@ -385,6 +395,7 @@ export async function reagendarAtrasados(): Promise<void> {
     });
     movidos = Number(dados?.reagendados) || 0;
     mudarAgora(comLista(Array.isArray(dados?.lembretes) ? dados.lembretes : ler().lembretes));
+    avisarSino();
     if (movidos > 0) avisar(movidos === 1 ? "1 lembrete reagendado para hoje." : `${movidos} lembretes reagendados para hoje.`);
   } catch (erro) {
     avisarErro(erro, "Não foi possível reagendar os lembretes.");
