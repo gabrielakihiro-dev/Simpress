@@ -7,14 +7,18 @@ const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payload
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
   lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = sebraeDashboardModel;
 
-test("camposFaltando lista A, Status em FINALIZADO, J e a descrição (R é opcional) que faltam para finalizar", () => {
+test("camposFaltando lista A, Status em FINALIZADO, J, a DT ENCERRAMENTO (R) e a descrição que faltam para finalizar", () => {
   const completo = { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T10:10" };
   assert.deepEqual(camposFaltando(completo, "Troquei o teclado."), []);
+  assert.deepEqual(camposFaltando({ ...completo, R: "28/10/2026 10:10" }, "ok"), [], "R gravado no Dashboard vale");
   assert.deepEqual(camposFaltando({ ...completo, D: "EM ABERTO" }, "ok"), ["Status (D) em FINALIZADO (está EM ABERTO)"]);
   assert.deepEqual(camposFaltando({ ...completo, D: "" }, "ok"), ["Status (D) em FINALIZADO"]);
-  assert.deepEqual(camposFaltando({ ...completo, R: "  " }, "ok"), []); // R vazio não bloqueia: o SoftExpert grava o horário
+  // regra de 24/11/2026: sem R digitado não finaliza (nunca a hora atual)
+  assert.deepEqual(camposFaltando({ ...completo, R: "  " }, "ok"), ["DT ENCERRAMENTO (R)"]);
+  assert.deepEqual(camposFaltando({ ...completo, R: "28/10/2026" }, "ok"), ["DT ENCERRAMENTO (R)"], "R antigo só com a data: a coluna R só é gravada com a hora");
+  assert.deepEqual(camposFaltando({ ...completo, R: "28/10" }, "ok"), ["DT ENCERRAMENTO (R)"]);
   assert.deepEqual(camposFaltando(completo, "   "), ["Descrição para Finalizar o Chamado"]);
-  assert.deepEqual(camposFaltando(undefined, ""), ["Responsável (A)", "Status (D) em FINALIZADO", "Tipo do chamado (J)", "Descrição para Finalizar o Chamado"]);
+  assert.deepEqual(camposFaltando(undefined, ""), ["Responsável (A)", "Status (D) em FINALIZADO", "Tipo do chamado (J)", "DT ENCERRAMENTO (R)", "Descrição para Finalizar o Chamado"]);
 });
 
 test("converte o campo de data e hora para dd/MM/aaaa HH:mm e ignora valor inválido", () => {
@@ -39,8 +43,11 @@ test("a atualização leva todos os chamados novos, com vazios em branco e a dat
 
 test("a data guardada no Dashboard volta para o campo de data e hora", () => {
   assert.equal(encerramentoParaCampo("28/10/2026 14:30"), "2026-10-28T14:30");
-  assert.equal(encerramentoParaCampo("28/10/2026"), "2026-10-28T00:00");
+  assert.equal(encerramentoParaCampo("28/10/2026"), "", "só a data: nenhuma hora inventada (nunca T00:00)");
   assert.equal(encerramentoParaCampo(""), "");
+  for (const impossivel of ["31/11/2026 10:00", "1/11/2026 9:05", "05/11/2026 25:00", "05/11/2026 10:60", "05/11/1999 10:00"]) {
+    assert.equal(encerramentoParaCampo(impossivel), "", impossivel + ": o servidor recusaria, o campo fica editável");
+  }
 });
 
 test("a atualização dos antigos leva só os campos mudados e nunca em branco", () => {
@@ -258,6 +265,8 @@ test("textos de resultado e de chamado pulado ficam em português", () => {
   assert.equal(textoPulado({ numero: "UTIC-2026-9", motivo: "sem_descricao" }), "UTIC-2026-9: não será finalizado no SoftExpert (sem descrição para finalizar).");
   assert.match(textoPulado({ numero: "UTIC-2026-8", motivo: "ja_finalizado" }), /já finalizado no SoftExpert/);
   assert.match(textoPulado({ numero: "linha:3", motivo: "sem_numero" }), /sem número UTIC/);
+  assert.equal(textoPulado({ numero: "UTIC-2026-7", motivo: "sem_encerramento" }), "UTIC-2026-7: não será finalizado no SoftExpert (sem DT ENCERRAMENTO (R)).");
+  assert.equal(textoResultado({ status: "sem_encerramento" }), "Sem DT ENCERRAMENTO (R)");
 });
 
 test("resumos do início e do fim da finalização em massa contam cada resultado", () => {
@@ -757,7 +766,7 @@ test("PDF pendente de chamado finalizado também tem retry acessível após relo
   assert.deepEqual(pedidos, ["/api/sebrae/chamados/UTIC-2026-1100/anexo?somente_pendentes=true"]);
 });
 
-test("o cartão novo tem as três zonas na ordem, as quatro pendências e o R opcional", async () => {
+test("o cartão novo tem as três zonas na ordem, as quatro pendências e o R obrigatório", async () => {
   const { el } = await renderizarCartoes();
   const cartao = el["sebrae-novos-lista"].querySelector("article.sebrae-chamado--novo");
   assert.ok(cartao, "cartão novo renderizado");
@@ -767,7 +776,9 @@ test("o cartão novo tem as três zonas na ordem, as quatro pendências e o R op
   assert.match(cartao.querySelector(".sebrae-zona__aviso").textContent, /^Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada\.$/);
   assert.deepEqual(cartao.querySelectorAll("li.sebrae-pend[data-req]").map(no => no.dataset.req), ["A", "D", "J", "DESC"]);
   assert.equal(cartao.querySelector("li.sebrae-pendencias__rotulo").textContent, "Para finalizar:");
-  assert.equal(cartao.querySelector("li.sebrae-pend--opcional").textContent, "Encerramento (R): opcional");
+  const encerramento = cartao.querySelector("li.sebrae-pend--encerramento");
+  assert.equal(encerramento.textContent, "Encerramento (R): obrigatório");
+  assert.doesNotMatch(encerramento.title, /SoftExpert substitui/);
   // Cada requisito traz os dois ícones (o CSS mostra um) e o texto para leitor de tela.
   const itemA = cartao.querySelector('li.sebrae-pend[data-req="A"]');
   const icones = itemA.children.filter(no => no.tagName === "SVG").map(no => no.getAttribute("class"));
@@ -1125,7 +1136,7 @@ test("o API SEBRAE só com padrões não é tratado como trabalhado e finalizar 
   // o usuário finaliza o 1501 à mão; o 1500, que só tem os padrões, não vai no corpo
   const outro = cartaoDe(el, "UTIC-2026-1501");
   const editar = (letra, valor) => { const campo = outro.querySelector(`[data-sebrae-campo="${letra}"]`); campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
-  editar("A", "CLIENTE"); editar("J", "INCIDENTE"); editar("D", "FINALIZADO");
+  editar("A", "CLIENTE"); editar("J", "INCIDENTE"); editar("D", "FINALIZADO"); editar("R", "2026-10-30T14:05");
   const texto = outro.querySelector("textarea[data-sebrae-descricao]");
   texto.value = "Feito.";
   texto.dispatchEvent({ type: "change", currentTarget: texto });
@@ -1139,21 +1150,25 @@ test("o API SEBRAE só com padrões não é tratado como trabalhado e finalizar 
   assert.deepEqual(corpo.chamados.map(c => c.numero), ["UTIC-2026-1501"]);
 });
 
-test("API SEBRAE: trocar só D para FINALIZADO e clicar leva A, B, J e S padrão no corpo; recarregar com a descrição guardada não reaplica nem duplica o PUT", async () => {
+test("API SEBRAE: trocar D para FINALIZADO, digitar R e clicar leva A, B, J e S padrão e o R no corpo; recarregar com a descrição guardada não reaplica nem duplica o PUT", async () => {
   const chamadas = [];
-  const { el } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]), null, chamadas);
+  const { el, app } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]), null, chamadas);
   await esvaziarFila();
+  const dialogos = [];
+  app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return true; };
   const cartao = cartaoDe(el, "UTIC-2026-1500");
-  const d = cartao.querySelector('[data-sebrae-campo="D"]');
-  d.value = "FINALIZADO";
-  d.dispatchEvent({ type: "input", currentTarget: d });
+  const digitar = (letra, valor) => { const campo = cartao.querySelector(`[data-sebrae-campo="${letra}"]`); campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  digitar("D", "FINALIZADO");
+  digitar("R", "2026-10-30T14:05");
   const botao = cartao.querySelector("button[data-sebrae-finalizar]");
   botao.dispatchEvent({ type: "click", currentTarget: botao });
   const envios = () => chamadas.filter(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert"));
   for (let i = 0; i < 20 && !envios().length; i++) await esvaziarFila();
   assert.equal(envios().length, 1);
   const corpo = JSON.parse(envios()[0].corpo);
-  assert.deepEqual(corpo.chamados, [{ numero: "UTIC-2026-1500", A: "CLIENTE", B: "OUTRO", D: "FINALIZADO", J: "INCIDENTE", R: "", S: "DISPONIBILIDADE" }]);
+  assert.deepEqual(corpo.chamados, [{ numero: "UTIC-2026-1500", A: "CLIENTE", B: "OUTRO", D: "FINALIZADO", J: "INCIDENTE", R: "30/10/2026 14:05", S: "DISPONIBILIDADE" }]);
+  assert.equal(corpo.encerramento, "30/10/2026 14:05");
+  assert.match(dialogos[0].mensagem, /DT ENCERRAMENTO \(R\): 30\/10\/2026 14:05\./, "o diálogo mostra a data que vai ao servidor");
   assert.equal(puts(chamadas).length, 1); // só o "Revisado." inicial; salvar de novo no clique não repete o mesmo texto
   // nova carga já com "Revisado." guardado no servidor: nada é reaplicado nem reenviado
   const outras = [];
@@ -1182,9 +1197,12 @@ async function atualizarDashboardCom({ carga, resposta, retorno = {}, marcar = [
   await esvaziarFila();
   global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
   for (const numero of marcar) {
-    const campo = cartaoDe(el, numero).querySelector('[data-sebrae-campo="D"]');
-    campo.value = "FINALIZADO";
-    campo.dispatchEvent({ type: "input", currentTarget: campo });
+    // D=FINALIZADO sempre com a DT ENCERRAMENTO (R) digitada: sem ela o Atualizar fica bloqueado (regra de 24/11/2026)
+    for (const [letra, valor] of [["D", "FINALIZADO"], ["R", "2026-10-30T14:05"]]) {
+      const campo = cartaoDe(el, numero).querySelector(`[data-sebrae-campo="${letra}"]`);
+      campo.value = valor;
+      campo.dispatchEvent({ type: "input", currentTarget: campo });
+    }
   }
   // editar: [lista, número, letra, valor]; a lista é o id do painel ("sebrae-novos-lista" ou "sebrae-antigos-lista")
   for (const [lista, numero, letra, valor] of editar) {
@@ -2520,34 +2538,50 @@ test("escolher um valor à mão no antigo esconde o chip; esvaziar o campo o mos
   assert.equal(chip.hidden, false);
 });
 
-const { AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;
+const { AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;
 const NAO_ENCONTRADO = "UTIC-2026-1200";
 const LEITURA_ACHADA = { titulo: "Teclado", descricao: "", solicitante: "Camila", habilitada_em: "", atendimento: "", lido_em: "agora" };
 
-test("R obrigatório: só antigo não encontrado no SoftExpert, com D FINALIZADO (digitado) e sem R gravado", () => {
+test("R obrigatório (regra de 24/11/2026): todo chamado com D FINALIZADO e sem R gravado, lido ou não no SoftExpert", () => {
   const antigo = (extra = {}) => ({ numero: NAO_ENCONTRADO, nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" }, ...extra });
   assert.equal(encerramentoObrigatorio(antigo(), undefined), false, "D ainda EM ABERTO");
   assert.equal(encerramentoObrigatorio(antigo(), { D: "FINALIZADO" }), true);
   assert.equal(encerramentoObrigatorio(antigo(), { D: " FINALIZADO " }), true, "espaços não escondem a regra");
   assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026 09:00" } }), { D: "FINALIZADO" }), false, "R já gravado na linha");
-  assert.equal(encerramentoObrigatorio(antigo({ leitura_softexpert: LEITURA_ACHADA }), { D: "FINALIZADO" }), false, "lido no SoftExpert: a rotina traz o R");
-  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: false }), { D: "FINALIZADO" }), false, "nunca lido: finaliza pelo SoftExpert");
-  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: undefined }), { D: "FINALIZADO" }), false);
+  // a coluna R só é gravada com data e hora: R antigo só com a data conta como falta e precisa ser redigitado com a hora
+  assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026" } }), { D: "FINALIZADO" }), true, "R gravado só com a data conta como falta");
+  assert.equal(encerramentoInformado("20/10/2026"), "");
+  assert.equal(ajudaEncerramentoSemHora("20/10/2026"), "Informe também a hora (gravado: 20/10/2026).");
+  for (const sem of ["", "20/10/2026 09:00"]) assert.equal(ajudaEncerramentoSemHora(sem), "", sem);
+  assert.equal(encerramentoInformado("1/11/2026 9:05"), "1/11/2026 9:05", "o servidor normaliza os zeros");
+  assert.equal(encerramentoInformado("2026-10-30T14:05"), "30/10/2026 14:05");
+  for (const ruim of ["", "20/10", "2026-10-30", "20/10/2026 14", "ontem"]) assert.equal(encerramentoInformado(ruim), "", ruim);
+  assert.equal(encerramentoObrigatorio(antigo({ leitura_softexpert: LEITURA_ACHADA }), { D: "FINALIZADO" }), true, "lido no SoftExpert: a hora do SoftExpert não vira R");
+  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: false }), { D: "FINALIZADO" }), true, "nunca lido");
+  assert.equal(encerramentoObrigatorio(antigo({ nao_encontrado_softexpert: undefined }), { D: "FINALIZADO" }), true);
   assert.equal(encerramentoObrigatorio(null, { D: "FINALIZADO" }), false);
+  // chamado novo (item do formulário, sem `valores`): D FINALIZADO digitado e sem R também é obrigatório
+  const novo = { numero: "UTIC-2026-1500", linha: { I: "Camila" } };
+  assert.equal(encerramentoObrigatorio(novo, { D: "EM ABERTO" }), false);
+  assert.equal(encerramentoObrigatorio(novo, { D: "FINALIZADO" }), true);
+  assert.equal(encerramentoObrigatorio(novo, { D: "FINALIZADO", R: "2026-10-30T14:05" }), true, "o campo digitado não é R gravado; pendenciasEncerramento confere o campo");
 });
 
-test("pendenciasEncerramento só lista quem ainda não tem uma data válida e avisoEncerramento repete a frase do servidor no singular", () => {
+test("pendenciasEncerramento lista antigos e novos ainda sem uma data válida e avisoEncerramento repete a frase do servidor no singular", () => {
   const abertos = [
     { numero: "UTIC-2026-1200", nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
     { numero: "UTIC-2026-1201", nao_encontrado_softexpert: true, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
     { numero: "UTIC-2026-1202", nao_encontrado_softexpert: false, leitura_softexpert: null, valores: { D: "EM ABERTO", R: "" } },
   ];
   const edicoes = { "UTIC-2026-1200": { D: "FINALIZADO" }, "UTIC-2026-1201": { D: "FINALIZADO", R: "2026-10-30T14:05" }, "UTIC-2026-1202": { D: "FINALIZADO" } };
-  assert.deepEqual(pendenciasEncerramento(abertos, edicoes), ["UTIC-2026-1200"]);
-  assert.deepEqual(pendenciasEncerramento(abertos, { ...edicoes, "UTIC-2026-1201": { D: "FINALIZADO", R: "data inválida" } }), ["UTIC-2026-1200", "UTIC-2026-1201"]);
+  assert.deepEqual(pendenciasEncerramento(abertos, edicoes), ["UTIC-2026-1200", "UTIC-2026-1202"]);
+  assert.deepEqual(pendenciasEncerramento(abertos, { ...edicoes, "UTIC-2026-1201": { D: "FINALIZADO", R: "data inválida" } }), ["UTIC-2026-1200", "UTIC-2026-1201", "UTIC-2026-1202"]);
   assert.deepEqual(pendenciasEncerramento(abertos, {}), []);
-  assert.equal(avisoEncerramento(["UTIC-2026-1200"]), "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-1200: ele não foi encontrado no SoftExpert.");
-  assert.equal(avisoEncerramento(["UTIC-2026-1200", "UTIC-2026-1201"]), "Informe a DT ENCERRAMENTO (coluna R) dos chamados UTIC-2026-1200, UTIC-2026-1201: eles não foram encontrados no SoftExpert.");
+  const formulario = [{ numero: "UTIC-2026-1500" }, { numero: "UTIC-2026-1501" }, { numero: "UTIC-2026-1502" }];
+  const valores = { "UTIC-2026-1500": { D: "FINALIZADO" }, "UTIC-2026-1501": { D: "FINALIZADO", R: "2026-10-30T14:05" }, "UTIC-2026-1502": { D: "EM ABERTO" } };
+  assert.deepEqual(pendenciasEncerramento([], {}, formulario, valores), ["UTIC-2026-1500"], "novo com D FINALIZADO sem R");
+  assert.equal(avisoEncerramento(["UTIC-2026-1200"]), "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-1200 antes de finalizar.");
+  assert.equal(avisoEncerramento(["UTIC-2026-1200", "UTIC-2026-1201"]), "Informe a DT ENCERRAMENTO (coluna R) dos chamados UTIC-2026-1200, UTIC-2026-1201 antes de finalizar.");
 });
 
 async function telaNaoEncontrado(mudar = () => {}) {
@@ -2580,7 +2614,7 @@ test("antigo não encontrado: D FINALIZADO torna R obrigatório, bloqueia Atuali
   const d = cartao.querySelector('[data-sebrae-campo="D"]');
   const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
   assert.equal(ajuda.textContent, AJUDA_ENCERRAMENTO);
-  assert.equal(ajuda.textContent, "Obrigatório ao finalizar chamado não encontrado no SoftExpert");
+  assert.equal(ajuda.textContent, "Obrigatório ao finalizar o chamado");
   assert.equal(ajuda.hidden, true, "com D EM ABERTO a ajuda não aparece");
   assert.equal(r.required, false);
   assert.equal(r.getAttribute("aria-required"), "false");
@@ -2612,25 +2646,79 @@ test("antigo não encontrado: D FINALIZADO torna R obrigatório, bloqueia Atuali
   assert.equal(ajuda.hidden, true);
 });
 
-test("R não é obrigatório para antigo nunca lido, lido no SoftExpert nem com R já gravado, e Atualizar continua liberado", async () => {
+test("R também é obrigatório para antigo nunca lido e lido no SoftExpert; só R já gravado no Dashboard libera Atualizar", async () => {
   const casos = [
-    ["nunca lido (sem o selo Não encontrado)", () => {}, "linha:27", false],
-    ["lido no SoftExpert", antigo => { antigo.leitura_softexpert = LEITURA_ACHADA; }, NAO_ENCONTRADO, false],
-    ["R já gravado no Dashboard", antigo => { antigo.valores.R = "20/10/2026 09:00"; }, NAO_ENCONTRADO, true],
+    ["nunca lido (sem o selo Não encontrado)", () => {}, "linha:27", true],
+    ["lido no SoftExpert", antigo => { antigo.leitura_softexpert = LEITURA_ACHADA; }, NAO_ENCONTRADO, true],
+    ["R já gravado no Dashboard", antigo => { antigo.valores.R = "20/10/2026 09:00"; }, NAO_ENCONTRADO, false],
+    ["R gravado só com a data", antigo => { antigo.valores.R = "20/10/2026"; }, NAO_ENCONTRADO, true],
   ];
-  for (const [rotulo, mudar, numero, temAjuda] of casos) {
+  for (const [rotulo, mudar, numero, obrigatorio] of casos) {
     const { el, digitar, status, botao } = await telaNaoEncontrado(mudar);
     const cartao = cartaoAntigoDe(el, numero);
     const r = cartao.querySelector('[data-sebrae-campo="R"]');
     digitar(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
-    assert.notEqual(r.required, true, rotulo);
-    assert.notEqual(r.getAttribute("aria-required"), "true", rotulo);
-    assert.equal(botao.disabled, false, rotulo);
-    assert.doesNotMatch(status().textContent, /DT ENCERRAMENTO/, rotulo);
-    const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
-    if (temAjuda) assert.equal(ajuda.hidden, true, rotulo);
-    else assert.equal(ajuda, null, rotulo);
+    assert.equal(r.required, obrigatorio, rotulo);
+    assert.equal(r.getAttribute("aria-required"), String(obrigatorio), rotulo);
+    assert.equal(botao.disabled, obrigatorio, rotulo);
+    if (obrigatorio) assert.equal(status().textContent, avisoEncerramento([numero]), rotulo);
+    else assert.doesNotMatch(status().textContent, /DT ENCERRAMENTO/, rotulo);
+    assert.equal(cartao.querySelector(".sebrae-chamado__encerramento-ajuda").hidden, !obrigatorio, rotulo);
   }
+});
+
+test("R antigo gravado só com a data: o campo fica editável e vazio (sem T00:00), a ajuda mostra a data e o R com hora vai ao Atualizar", async () => {
+  const { el, digitar, status, botao, posts, feature } = await telaNaoEncontrado(antigo => { antigo.valores.R = "20/10/2026"; });
+  const cartao = cartaoAntigoDe(el, NAO_ENCONTRADO);
+  const r = cartao.querySelector('[data-sebrae-campo="R"]');
+  const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
+  assert.ok(!r.disabled, "R sem hora não fica travado");
+  assert.equal(cartao.querySelector('[data-sebrae-campo="A"]').disabled, true, "o resto do que já está gravado segue travado");
+  assert.equal(r.value, "", "nenhuma hora inventada");
+  assert.equal(ajuda.hidden, false, "a data gravada continua à vista mesmo com D EM ABERTO");
+  assert.equal(ajuda.textContent, "Informe também a hora (gravado: 20/10/2026).");
+  assert.equal(r.getAttribute("aria-describedby"), ajuda.id);
+  digitar(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
+  assert.equal(r.required, true);
+  assert.equal(botao.disabled, true);
+  assert.equal(status().textContent, avisoEncerramento([NAO_ENCONTRADO]));
+  digitar(r, "2026-10-20T09:30");
+  assert.equal(botao.disabled, false);
+  await feature.atualizarDashboardSebrae();
+  assert.deepEqual(posts[0].edicoes, [{ numero: NAO_ENCONTRADO, D: "FINALIZADO", R: "20/10/2026 09:30" }]);
+});
+
+test("rascunho: R digitado com hora sobre um R gravado só com a data volta ao recarregar; sobre R completo, não", () => {
+  const rascunho = { valores: {}, edicoes: { "UTIC-2026-1": { R: "2026-10-20T09:30" } }, salvoEm: "" };
+  const soData = aplicarRascunho(rascunho, [], [{ numero: "UTIC-2026-1", valores: { R: "20/10/2026" } }]);
+  assert.deepEqual(soData.edicoes, { "UTIC-2026-1": { R: "2026-10-20T09:30" } });
+  assert.deepEqual(soData.conflitos, []);
+  const completo = aplicarRascunho(rascunho, [], [{ numero: "UTIC-2026-1", valores: { R: "20/10/2026 08:00" } }]);
+  assert.deepEqual(completo.edicoes, {});
+});
+
+test("chamado novo com D FINALIZADO sem R: R obrigatório, Atualizar bloqueado com a frase do servidor e o botão por chamado não envia", async () => {
+  const chamadas = [];
+  const { el } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]), null, chamadas);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const r = cartao.querySelector('[data-sebrae-campo="R"]');
+  assert.equal(r.value, "", "o R nunca nasce com a hora atual");
+  const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
+  assert.equal(ajuda.hidden, true, "com D EM ABERTO a ajuda não aparece");
+  const digitar = (campo, valor) => { campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  digitar(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
+  assert.equal(r.required, true);
+  assert.equal(ajuda.hidden, false);
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true);
+  assert.equal(el["sebrae-atualizar-status"].textContent, "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-1500 antes de finalizar.");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.equal(chamadas.some(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert")), false, "sem R nada é finalizado");
+  digitar(r, "2026-10-30T14:05");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+  assert.equal(el["sebrae-atualizar-status"].textContent, "");
 });
 
 test("resultado antigo da finalização ao abrir a lista avisa, mas não pede GET /api/sebrae/novos de novo", async () => {
@@ -2646,4 +2734,25 @@ test("resultado antigo da finalização ao abrir a lista avisa, mas não pede GE
     await new Promise(r => setImmediate(r));
     assert.equal(urls.filter(u => u === "/api/sebrae/novos").length, esperado, terminado);
   }
+});
+
+test("quando a finalização acompanhada termina, a tela pede a atualização do sino uma vez (aviso de falha na hora)", async () => {
+  const eventos = [];
+  let consultas = 0;
+  await renderizarCartoes(structuredClone(CARGA_CARTOES), null, async url => {
+    if (url !== "/api/sebrae/finalizar-softexpert") return structuredClone(CARGA_CARTOES);
+    consultas += 1;
+    if (consultas === 1) {
+      // a rotina está rodando ao abrir a lista: o acompanhamento espera sem atraso e os eventos do documento ficam registrados
+      global.window.setTimeout = funcao => { setImmediate(funcao); return 0; };
+      const original = global.document.dispatchEvent.bind(global.document);
+      global.document.dispatchEvent = evento => { eventos.push(evento.type); return original(evento); };
+      return { em_andamento: true, resultado: { iniciado_em: "2026-11-24T10:00:00-03:00", em_andamento: true, resultados: [] } };
+    }
+    return { em_andamento: false, resultado: { iniciado_em: "2026-11-24T10:00:00-03:00", terminado_em: "2026-11-24T10:05:00-03:00",
+      resultados: [{ numero: "UTIC-2026-9", status: "erro", motivo: "erro_inesperado", mensagem: "" }] } };
+  });
+  for (let i = 0; i < 40 && !eventos.includes("simpress:atualizar-notificacoes"); i++) await new Promise(r => setImmediate(r));
+  assert.deepEqual(eventos.filter(tipo => tipo === "simpress:atualizar-notificacoes"), ["simpress:atualizar-notificacoes"]);
+  assert.ok(consultas >= 2, "acompanhou até o fim");
 });

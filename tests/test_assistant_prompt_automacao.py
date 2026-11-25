@@ -35,6 +35,15 @@ class PromptTests(unittest.TestCase):
             self.assertIn(nome, TOOLS)
             self.assertIn(nome, SYSTEM_PROMPT)
 
+    def test_finalization_asks_the_user_for_the_closing_date(self) -> None:
+        # Regra de 24/11/2026: a DT ENCERRAMENTO (R) vem do usuário, nunca da hora atual; prompt e ferramenta dizem o mesmo.
+        frase = "Peça ao usuário a data e a hora de encerramento (DT ENCERRAMENTO, coluna R) no formato dd/MM/aaaa HH:mm; nunca use a hora atual nem invente."
+        tool = TOOLS["finalizar_chamado_softexpert"]
+        self.assertIn(frase, tool.description)
+        self.assertIn("encerramento", tool.required)
+        self.assertIn(frase.split("; ", 1)[1], SYSTEM_PROMPT)
+        self.assertIn("dd/MM/aaaa HH:mm", SYSTEM_PROMPT)
+
 
 class CapacidadeTests(unittest.TestCase):
     def test_capability_question_with_text_only_model_runs_nothing(self) -> None:

@@ -87,6 +87,11 @@ interface DadosAlerta {
   por_secao?: unknown;
   indisponivel?: unknown;
   pendencias?: { sem_backup?: unknown; conferir?: unknown };
+  itens?: unknown;
+}
+interface FalhaFinalizacao {
+  numero?: unknown;
+  motivo?: unknown;
 }
 interface DadosPainelHome {
   base_desatualizada?: DadosAlerta;
@@ -94,6 +99,7 @@ interface DadosPainelHome {
   os_paradas?: DadosAlerta;
   divergencias_novas?: DadosAlerta;
   chamados_outro_tecnico?: DadosAlerta;
+  falhas_finalizacao_softexpert?: DadosAlerta;
   backups_regionais?: DadosAlerta;
 }
 interface ItemSemAcesso {
@@ -118,7 +124,7 @@ const PRONTIDAO_ESTADOS: Record<EstadoItemProntidao, string> = { ok: "Em dia", p
 // Chamados que saíram do Dashboard ou do SoftExpert sem finalização pelo site: o texto é fixo, o card some com total 0 ou leitura indisponível.
 const TEXTO_OUTRO_TECNICO = "Confira no SoftExpert e marque Conferido na aba OS (F6).";
 const MAX_SEM_ACESSO_60_LISTADOS = 5;
-const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-backups-regionais"];
+const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-finalizacao-softexpert", "alerta-backups-regionais"];
 
 export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   "use strict";
@@ -638,6 +644,46 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     mostrarAlertaPainel(card, "outro_tecnico", TEXTO_OUTRO_TECNICO);
   }
 
+  // Falhas da última finalização no SoftExpert (/api/painel): só número UTIC e código fixo, nunca a mensagem da rotina.
+  const MOTIVOS_FALHA_FINALIZACAO: Record<string, string> = { tempo_esgotado: "tempo esgotado", sessao_expirada: "sessão expirada" };
+
+  function textoFalhasFinalizacao(itens: FalhaFinalizacao[]): string {
+    const erros = itens.filter(item => !["interrompida", "sharepoint", "planilha"].includes(String(item.motivo)));
+    const semR = itens.filter(item => item.motivo === "planilha");
+    const partes: string[] = [];
+    if (erros.length) {
+      const numeros = erros.filter(item => item.numero).map(item => {
+        const motivo = MOTIVOS_FALHA_FINALIZACAO[String(item.motivo)];
+        return motivo ? `${String(item.numero)} (${motivo})` : String(item.numero);
+      });
+      const sujeito = erros.length === 1 ? "1 chamado não foi finalizado" : `${erros.length} chamados não foram finalizados`;
+      partes.push(`${sujeito} no SoftExpert${numeros.length ? `: ${numeros.join(", ")}` : ""}.`);
+    }
+    if (semR.length) {
+      // o chamado foi finalizado, mas a coluna R não: só o número UTIC, nunca a mensagem da rotina
+      const numeros = semR.filter(item => item.numero).map(item => String(item.numero));
+      partes.push(`${numeros.length ? `${numeros.join(", ")}: a` : "A"} DT ENCERRAMENTO não foi gravada no Dashboard.`);
+    }
+    if (itens.some(item => item.motivo === "interrompida")) partes.push("A finalização parou no meio (tempo esgotado ou rotina encerrada).");
+    if (itens.some(item => item.motivo === "sharepoint")) partes.push("O envio do Dashboard ao SharePoint falhou ou ficou incerto.");
+    // o erro pode ter vindo depois do clique irreversível em Finalizar: nunca mande só "tentar de novo"
+    partes.push("Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.");
+    return partes.join(" ");
+  }
+
+  function renderizarAlertaFalhasFinalizacao(info: DadosAlerta | null | undefined): void {
+    const card = elemento("alerta-finalizacao-softexpert");
+    if (!card) return;
+    const itens = info && typeof info === "object" && !info.indisponivel && Array.isArray(info.itens)
+      ? (info.itens as unknown[]).filter((item): item is FalhaFinalizacao => Boolean(item) && typeof item === "object")
+      : [];
+    if (!(Number(info?.total) > 0) || !itens.length) {
+      ocultarAlertaPainel(card, info?.indisponivel ? "indisponivel" : "vazio");
+      return;
+    }
+    mostrarAlertaPainel(card, "falhou", textoFalhasFinalizacao(itens));
+  }
+
   function textoSemAcesso60(info: DadosAlerta): string {
     const limit = Number(info.limite_dias);
     const warning = Number(info.limite_aviso_dias);
@@ -746,6 +792,7 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       renderizarAlertaOsParadas(detalhe?.os_paradas);
       renderizarAlertaDivergenciasNovas(detalhe?.divergencias_novas);
       renderizarAlertaChamadosOutroTecnico(detalhe?.chamados_outro_tecnico);
+      renderizarAlertaFalhasFinalizacao(detalhe?.falhas_finalizacao_softexpert);
       renderizarAlertaBackupsRegionais(detalhe?.backups_regionais);
     };
     document.addEventListener("simpress:painel-atualizado", evento => renderizar((evento as CustomEvent<DadosPainelHome | undefined>).detail));
@@ -767,6 +814,6 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     carregarEstatisticas, carregarProntidao, inicializarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
-    renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico, renderizarAlertaBackupsRegionais,
+    renderizarAlertaSemAcesso60, renderizarAlertaChamadosOutroTecnico, renderizarAlertaFalhasFinalizacao, renderizarAlertaBackupsRegionais,
   };
 }

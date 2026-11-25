@@ -407,7 +407,7 @@ class AtualizacaoDoIndiceNasRotasTest(RotasBase):
         self.importar(montar())
         self.arquivo().unlink(missing_ok=True)
         self.assertEqual(self.post("/api/sebrae/dashboard/atualizar", json={}).status_code, 422)  # nada para gravar
-        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "01/01/2026 09:00"}
         resposta = self.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertTrue(self.arquivo().exists())

@@ -494,7 +494,7 @@ def _aviso_pendente_seguro(aviso: Any) -> Optional[Dict[str, Any]]:
 
 
 _STATUS_FINALIZACAO = frozenset({fin.STATUS_OK, fin.STATUS_OUTRO_TECNICO, fin.STATUS_JA_FINALIZADO, fin.STATUS_NAO_ENCONTRADO, fin.STATUS_ERRO,
-                                 fin.STATUS_SEM_DESCRICAO, fin.STATUS_PRONTO})
+                                 fin.STATUS_SEM_DESCRICAO, fin.STATUS_SEM_ENCERRAMENTO, fin.STATUS_PRONTO})
 # Codes `sebrae_fechar`/`sebrae_softexpert` write in `motivo` (scripts/sebrae_softexpert.py MOTIVO_*); anything else is matched as text.
 _MOTIVOS_FINALIZACAO = frozenset({"numero_nao_confere", "titulo_nao_confere", "nao_encontrado_na_lista", "formulario_indisponivel",
                                   "confirmacao_inesperada", "erro_inesperado", "softexpert_indisponivel", "sessao_expirada"})
@@ -1983,8 +1983,10 @@ class SimpressApi:
             return {"erro": dados}
         return _leitura_antigos_segura(_dict(dados))
 
-    def chamado_para_finalizar(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
-        """The data the card and the action use. ValueError (shown to the user) when the ticket cannot be finalized."""
+    def chamado_para_finalizar(self, numero: Any, descricao: Any = "", encerramento: Any = "") -> Dict[str, Any]:
+        """The data the card and the action use. ValueError (shown to the user) when the ticket cannot be finalized.
+
+        ``encerramento`` = DT ENCERRAMENTO (R) "dd/MM/aaaa HH:mm" typed by the user (rule of 24/11/2026: never the current time)."""
         numero = str(numero or "").strip().upper()
         if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
             raise ValueError("Informe o número do chamado no formato UTIC-AAAA-NNNN.")
@@ -1997,7 +1999,13 @@ class SimpressApi:
         se = _dict(item.get("softexpert"))
         if _dict(se.get("finalizacao")).get("status") in fin.STATUS_FINALIZADOS:
             raise ValueError(f"{numero} já foi finalizado (no SoftExpert ou por outro técnico). Nada foi feito.")
-        texto = str(descricao or "").strip() or str(se.get("descricao_finalizacao") or "").strip()
+        quando = fin.encerramento_valido(encerramento)
+        if not quando:  # vazio, fora do formato ou só a data: a coluna R só é gravada com data e hora
+            raise ValueError(
+                f"Falta a DT ENCERRAMENTO (coluna R) de {numero}: peça ao usuário a data e a hora de encerramento no formato "
+                "dd/MM/aaaa HH:mm (nunca use a hora atual). Nada foi finalizado."
+            )
+        texto =str(descricao or "").strip() or str(se.get("descricao_finalizacao") or "").strip()
         if not texto:
             raise ValueError(f"Falta a descrição para finalizar {numero}: peça ao usuário o texto de \"Detalhes do Atendimento Realizado\".")
         if len(texto) > MAX_DESCRICAO_FINALIZACAO:
@@ -2006,7 +2014,7 @@ class SimpressApi:
             raise ValueError("A descrição tem dado ocultado pela privacidade (nome, e-mail ou telefone); peça ao usuário para escrevê-la no campo do chamado, na tela Chamados.")
         return {
             "versao_importacao": item.get("_versao_importacao", ""), "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
-            "pdf": str(_dict(se.get("pdf")).get("nome") or ""),
+            "pdf": str(_dict(se.get("pdf")).get("nome") or ""), "encerramento": quando,
         }
 
     def _localizar_chamado_sebrae(self, numero: Any) -> Tuple[str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -2343,10 +2351,14 @@ class SimpressApi:
         situacao = "em andamento" if rodando else "já não aparece em andamento (pode ter terminado de imediato ou falhado)"
         return {"sucesso": True, "em_andamento": rodando, "mensagem": f"{mensagem} Estado logo após iniciar: {situacao}."}
 
-    def finalizar_chamado_softexpert(self, numero: Any, descricao: Any = "", versao_importacao: Any = "") -> Dict[str, Any]:
-        """Finalize ONE ticket in SoftExpert (irreversible), the same call as the site's button; only after the card is confirmed."""
+    def finalizar_chamado_softexpert(
+        self, numero: Any, descricao: Any = "", versao_importacao: Any = "", encerramento: Any = "",
+    ) -> Dict[str, Any]:
+        """Finalize ONE ticket in SoftExpert (irreversible), the same call as the site's button; only after the card is confirmed.
+
+        ``encerramento`` (DT ENCERRAMENTO, "dd/MM/aaaa HH:mm") is required and checked before any PUT/POST."""
         try:
-            alvo = self.chamado_para_finalizar(numero, descricao)
+            alvo = self.chamado_para_finalizar(numero, descricao, encerramento)
         except ValueError as falha:
             return {"sucesso": False, "erro": str(falha)}
         if not versao_importacao or versao_importacao != alvo["versao_importacao"]:
@@ -2357,7 +2369,9 @@ class SimpressApi:
             )
             if not ok:
                 return {"sucesso": False, "erro": dados, "mensagem": "A descrição não foi salva; nada foi finalizado."}
-        ok, dados = self._chamar("POST", "/api/sebrae/finalizar-softexpert", corpo={"numero": alvo["numero"], "confirmado": True, "versao_importacao": versao_importacao})
+        ok, dados = self._chamar("POST", "/api/sebrae/finalizar-softexpert", corpo={
+            "numero": alvo["numero"], "confirmado": True, "versao_importacao": versao_importacao, "encerramento": alvo["encerramento"],
+        })
         if not ok:
             if "Erro 409" in str(dados):
                 return {"sucesso": False, "erro": "Já existe uma automação em andamento, ou o chamado já foi finalizado. Nada foi finalizado agora."}

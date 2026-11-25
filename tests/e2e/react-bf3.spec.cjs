@@ -1042,6 +1042,13 @@ test.describe("comportamento (só no desktop)", () => {
       texto: "Confira no SoftExpert e marque Conferido na aba OS (F6).", lista: [],
     },
     {
+      id: "alerta-finalizacao-softexpert",
+      extra: { falhas_finalizacao_softexpert: { total: 2, itens: [{ numero: "UTIC-2026-1380", motivo: "tempo_esgotado" }, { numero: "", motivo: "interrompida" }] } },
+      selo: "Urgente", titulo: "Falha ao finalizar no SoftExpert", acao: "Ver na aba Chamados",
+      texto: "1 chamado não foi finalizado no SoftExpert: UTIC-2026-1380 (tempo esgotado). A finalização parou no meio (tempo esgotado ou rotina encerrada). Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.",
+      lista: [],
+    },
+    {
       id: "alerta-backups-regionais", extra: { backups_regionais: { indisponivel: false, pendencias: { sem_backup: ["Londrina"], conferir: ["Maringá"] } } },
       selo: "Urgente", titulo: "Sem backup disponível", acao: "Ver backups no Resumo",
       texto: "1 regional está sem backup disponível. 1 regional tem possível backup para conferir.", lista: ["Londrina — sem backup disponível", "Maringá — conferir possível backup"],
@@ -1083,7 +1090,14 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#notification-center-summary")).toHaveText("5 avisos ativos.");
     await expect(page.locator("#notification-center-title")).toHaveText("Pendências · 5");
     await expect(page.locator("#badge-notificacoes")).toHaveText("5");
-    for (const { id } of ALERTAS_UNICOS) await expect(page.locator(`#${id}`)).toBeVisible();
+    // painelComAlertas fica sem falha de finalização (a foto central-avisos segue a mesma); ela entra só aqui e soma um aviso.
+    const FALHA = ALERTAS_UNICOS.find(alerta => alerta.id === "alerta-finalizacao-softexpert");
+    for (const { id } of ALERTAS_UNICOS.filter(alerta => alerta !== FALHA)) await expect(page.locator(`#${id}`)).toBeVisible();
+    await expect(page.locator(`#${FALHA.id}`)).toBeHidden();
+    await atualizarPainel(page, ambiente, painelComAlertas(FALHA.extra));
+    await expect(page.locator(`#${FALHA.id}`)).toBeVisible();
+    await expect(page.locator("#notification-center-summary")).toHaveText("6 avisos ativos.");
+    await expect(page.locator("#badge-notificacoes")).toHaveText("6");
 
     // Sem acesso: no limite (sem ninguém acima de 60 dias) vira Atenção.
     await atualizarPainel(page, ambiente, painelComAlertas({

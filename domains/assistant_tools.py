@@ -237,15 +237,23 @@ def _describe_vincular_os(api: SimpressApi, args: Args) -> str:
         acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')}{automatico} → {novo}."
     return f"{acao} Só este vínculo é gravado; os demais vínculos de OS ficam como estão."
 
+# Regra do usuário (24/11/2026): a DT ENCERRAMENTO (R) é sempre digitada pelo usuário; mesma frase na ferramenta e no SYSTEM_PROMPT.
+_INSTRUCAO_ENCERRAMENTO = (
+    "Peça ao usuário a data e a hora de encerramento (DT ENCERRAMENTO, coluna R) no formato dd/MM/aaaa HH:mm; "
+    "nunca use a hora atual nem invente."
+)
+
+
 def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
-    alvo = api.chamado_para_finalizar(args.get("numero"), args.get("descricao"))
+    alvo = api.chamado_para_finalizar(args.get("numero"), args.get("descricao"), args.get("encerramento"))
     args["_versao_importacao"] = alvo["versao_importacao"]
     pdf = f" Anexa o PDF \"{alvo['pdf']}\" (enviado de verdade)." if alvo["pdf"] else " Sem PDF anexado."
     return (
         f"FINALIZAR {alvo['numero']} NO SOFTEXPERT. É irreversível. No Chrome de automação: Atendimento - Chamados TI, "
         f"Infraestrutura / Rede e conectividade, equipe UTIC - N1, e-mail ao solicitante marcado (desmarcado se o solicitante for API SEBRAE).{pdf} "
         f"Texto de \"Detalhes do Atendimento Realizado\": \"{alvo['descricao']}\". "
-        "Se der certo, grava data e hora na coluna R do Dashboard e substitui o arquivo no SharePoint. "
+        f"DT ENCERRAMENTO informada: {alvo['encerramento']}. "
+        "Se der certo, grava essa DT ENCERRAMENTO na coluna R do Dashboard e substitui o arquivo no SharePoint. "
         "Rascunhos que estão só no navegador (A, B, J, S) não vão nesse envio."
     )
 
@@ -727,8 +735,12 @@ QUERY_TOOLS: List[Tool] = [
         "Painel geral do Simpress (visão resumida de inventário, chamados e pendências), com os ativos por cidade/regional: são os mesmos números do Resumo (F3). "
         "Para 'quantos ativos por regional', use esta ferramenta e diga que o usuário vê isso no Resumo (F3). "
         "Por categoria (notebook, macbook, monitor, fone) use `cidades_por_categoria`: é o filtro do cartão Ativos por regional no Resumo (F3). "
-        "Os avisos do sino (`os_paradas`, `divergencias_novas`, `sem_acesso_60_dias`, `chamados_outro_tecnico`) vêm aqui; `sem_acesso_60_dias` conta notebooks/MacBooks com mais de 55 dias sem acesso (limite) e com 60 dias ou mais (passaram, inclusive os que saíram da lista para Ausentes no Endpoint); `equipamentos` traz série, hostname e dias de cada um. "
-        "`chamados_outro_tecnico` (`total`, `itens` com chamado, série, OS e motivo; `indisponivel` se a leitura falhou) lista chamados que parecem finalizados por outro técnico e ainda não foram conferidos: avise o usuário para finalizar ou conferir no SoftExpert e marcar `Conferido` na aba OS (F6); o Assistente não marca, desfaz nem confere.",
+        "Os avisos do sino (`os_paradas`, `divergencias_novas`, `sem_acesso_60_dias`, `chamados_outro_tecnico`, `falhas_finalizacao_softexpert`) vêm aqui;`sem_acesso_60_dias` conta notebooks/MacBooks com mais de 55 dias sem acesso (limite) e com 60 dias ou mais (passaram, inclusive os que saíram da lista para Ausentes no Endpoint); `equipamentos` traz série, hostname e dias de cada um. "
+        "`chamados_outro_tecnico` (`total`, `itens` com chamado, série, OS e motivo; `indisponivel` se a leitura falhou) lista chamados que parecem finalizados por outro técnico e ainda não foram conferidos: avise o usuário para finalizar ou conferir no SoftExpert e marcar `Conferido` na aba OS (F6); o Assistente não marca, desfaz nem confere. "
+        "`falhas_finalizacao_softexpert` (`total`, `itens` com número UTIC e `motivo`: `erro`, `tempo_esgotado`, `sessao_expirada`, `interrompida`, "
+        "`planilha` (finalizado, mas a DT ENCERRAMENTO não foi gravada no Dashboard) ou `sharepoint`; "
+        "`indisponivel` se a leitura falhou) lista o que a última finalização no SoftExpert não concluiu: oriente o usuário a ver a aba Chamados (F5) e diga: "
+        "\"Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.\"; o Assistente não finaliza por conta própria.",
         lambda c, a: c.obter_painel(),
     ),
     _read(
@@ -1248,13 +1260,17 @@ CHANGE_TOOLS: List[Tool] = [
         "Só chamado antigo em aberto do Dashboard importado; use situacao_finalizacao_sebrae antes. A descrição (\"Detalhes do "
         "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
         "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "
-        "(\"Atualizar Dashboard\"). O usuário confirma antes.",
-        lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao"), a.get("_versao_importacao")),
+        "(\"Atualizar Dashboard\"). " + _INSTRUCAO_ENCERRAMENTO + " O usuário confirma antes.",
+        lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao"), a.get("_versao_importacao"), a.get("encerramento")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},
             "descricao": {"type": "string", "maxLength": 4000, "description": "Texto de Detalhes do Atendimento Realizado (opcional se já salvo no chamado)."},
+            "encerramento": {
+                "type": "string", "pattern": "^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}$",
+                "description": "DT ENCERRAMENTO (coluna R), dd/MM/aaaa HH:mm, ex.: 24/11/2026 14:30. " + _INSTRUCAO_ENCERRAMENTO,
+            },
         },
-        ["numero"],
+        ["numero", "encerramento"],
         changes_data=True,
         describe=_describe_finalizar_softexpert,
         describe_com_api=True,

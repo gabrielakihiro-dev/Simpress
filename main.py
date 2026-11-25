@@ -2056,6 +2056,19 @@ def _marcas_outro_tecnico_pendentes() -> List[Dict[str, str]]:
     )
 
 
+def _fechar_ativa() -> bool:
+    try:
+        estado = get_chrome_automation_runner().state()
+        return estado.get("estado") == "em_andamento" and estado.get("rotina") == "fechar"
+    except Exception:  # noqa: BLE001 - sem o estado do runner, nunca diga que a rotina parou no meio
+        return True
+
+
+def _falhas_finalizacao_softexpert() -> Dict[str, Any]:
+    # O runner só é consultado quando o resultado lido diz em_andamento (não em todo /api/painel).
+    return sebrae_finalizacao.falhas_da_finalizacao(STATE_DIR, _fechar_ativa)
+
+
 dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(
     get_equipment=_dashboard_equipment_snapshot,
     get_stats=_get_stats_snapshot,
@@ -2072,6 +2085,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     long_unused_days=LONG_UNUSED_LIMIT_DAYS,
     display_comparison=comparison_history_for_display,
     get_other_technician_marks=_marcas_outro_tecnico_pendentes,
+    get_softexpert_finalization_failures=_falhas_finalizacao_softexpert,
     # Independente do evento histórico: cada leitura é isolada (nunca 500) dentro de ``ler_painel_backups``.
     get_backups_regionais=lambda: ler_painel_backups(_backups_services),
 ))

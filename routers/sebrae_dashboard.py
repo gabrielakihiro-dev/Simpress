@@ -89,6 +89,8 @@ class FinalizarPayload(BaseModel):
     numero: str = Field(..., min_length=1, max_length=40)
     versao_importacao: str = Field("", max_length=128)
     confirmado: bool = False  # clique explícito após o diálogo "Confirmar finalização"; sem isso nada é disparado
+    # DT ENCERRAMENTO (R) "dd/MM/aaaa HH:mm" informada pelo usuário (Assistente); vazia, vale o R deste chamado em `chamados`/`edicoes` ou no Dashboard importado.
+    encerramento: str = Field("", max_length=40)
     # Mesmo corpo do "Atualizar Dashboard" (todos os novos em `chamados`, todos os antigos editados em `edicoes`): a cópia de saída é refeita da importada, então mandar só este chamado apagaria os demais.
     chamados: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
     edicoes: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
@@ -214,6 +216,25 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Old tickets missing from SoftExpert's task center on the last read and absent from the cached read (one rule for the screen badge and the 422)."""
         lidos = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or [])
         return {str(n) for n in lidos} - set(antigos)
+
+    def _falta_encerramento(numero: str) -> str:
+        """Mesma frase no 422 de Atualizar e do botão por chamado (o front repete no singular: ``avisoEncerramento``)."""
+        return f"Informe a DT ENCERRAMENTO (coluna R) do chamado {numero} antes de finalizar."
+
+    def _tem_encerramento(numero: str, r: Any) -> bool:
+        """R válido enviado/gravado, ou chamado já finalizado por este site (o R registrado volta pela ``_reaplicar_encerramentos``)."""
+        return bool(fin.encerramento_valido(r)) or fin.ja_finalizado(_pasta_estado(), numero)
+
+    def _encerramento_do_pedido(payload: FinalizarPayload, numero: str) -> str:
+        """R deste chamado: ``encerramento`` do corpo, senão o de ``edicoes``/``chamados``, senão o do Dashboard importado; ``""`` se faltar."""
+        if payload.encerramento.strip():
+            return fin.encerramento_valido(payload.encerramento)  # informado e fora do formato: não cai para outra fonte
+        enviado = next((i.R for i in [*payload.edicoes, *payload.chamados] if i.numero == numero and i.R.strip()), "")
+        if enviado:
+            return fin.encerramento_valido(enviado)
+        importado = sebrae_novos.ler_existentes(services.caminhos().existentes) or {}
+        guardado = next((str((a.get("valores") or {}).get("R") or "") for a in importado.get("abertos", []) if str(a.get("numero")) == numero), "")
+        return fin.encerramento_valido(guardado)
 
     def _automaticos_dos_abertos(
         abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
@@ -752,7 +773,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload, exigir_encerramento=True)
             fechar = (
                 _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
-                else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
+                else _finalizar_marcados({**{c.numero: {"D": c.D, "R": c.R} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
                 else _fechar_inativo("finalização no SoftExpert não confirmada")
             )
             return JSONResponse({
@@ -801,7 +822,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Monta a cópia atualizada e a grava em ``sebrae_dashboard_saida``; devolve (importado, resultado, conteudo, gravada, edicoes validadas).
 
         Com ``aceita_vazio`` e nada a gravar, devolve ``None`` em vez de 422. Com ``exigir_encerramento`` (só o "Atualizar"),
-        D=FINALIZADO à mão num antigo não encontrado no SoftExpert exige a coluna R (o ``finalizar-softexpert`` por cartão não exige)."""
+        D=FINALIZADO à mão (novo ou antigo) exige a coluna R (regra de 24/11/2026); o ``finalizar-softexpert`` por cartão confere só o
+        próprio chamado, antes de chamar esta função."""
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
@@ -812,6 +834,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "A cópia do Dashboard importado não está disponível ou mudou; importe o Dashboard de novo.", status_code=422,
             )
         try:
+            if exigir_encerramento:
+                for novo in payload.chamados:
+                    if novo.D.strip().upper() == sebrae_novos.STATUS_FINALIZADO and not _tem_encerramento(novo.numero, novo.R):
+                        raise sebrae_novos.ManuaisInvalidos(_falta_encerramento(novo.numero))
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"], exigir_encerramento)
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
@@ -861,7 +887,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {n: novo for n, (novo, atual) in textos.items() if novo and not sebrae_dashboard_gravacao.h_ja_gravado(novo, atual)}
 
     def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
-        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento já gravadas voltam à coluna R (o horário do SoftExpert substitui um R digitado à mão)."""
+        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento registradas ao finalizar (o R que o usuário informou) voltam à coluna R."""
         encerramentos = fin.encerramentos_registrados(_pasta_estado())
         if not encerramentos:
             return conteudo
@@ -900,14 +926,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 pulados.append({"numero": numero, "motivo": fin.STATUS_JA_FINALIZADO})
             elif not fin.dados_para_finalizar(pasta, numero)[0]:
                 pulados.append({"numero": numero, "motivo": fin.STATUS_SEM_DESCRICAO})
+            elif not fin.encerramento_valido(valores.get("R")):
+                pulados.append({"numero": numero, "motivo": fin.STATUS_SEM_ENCERRAMENTO})  # regra de 24/11/2026: sem R, não finaliza
             else:
                 numeros.append(numero)
-                if str(valores.get("R") or "").strip():
-                    com_r[numero] = str(valores["R"]).strip()
+                com_r[numero] = fin.encerramento_valido(valores.get("R"))
         if not numeros:
             return _fechar_inativo("", pulados)
         try:
-            _disparar(numeros, pulados, encerramentos_manuais=_encerramentos_manuais(com_r))
+            _disparar(numeros, pulados, encerramentos_manuais=_encerramentos_manuais(com_r), encerramentos=com_r)
         except DomainError as erro:
             return _fechar_inativo(str(erro.detail), pulados)
         return {"iniciado": True, "motivo": "", "numeros": numeros, "pulados": pulados}
@@ -932,7 +959,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _disparar(
         numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR, *, envio_id: str = "", sha256: str = "",
-        encerramentos_manuais: Mapping[str, str] = {},
+        encerramentos_manuais: Mapping[str, str] = {}, encerramentos: Mapping[str, str] = {},
     ) -> None:
         """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
 
@@ -956,7 +983,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             else:
                 if acao == fin.ACAO_FINALIZAR:
                     _congelar_os_vinculada(pasta, numeros)  # before the job: the link may change while the routine runs
-                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, encerramentos_manuais=encerramentos_manuais)
+                fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao, encerramentos_manuais=encerramentos_manuais, encerramentos=encerramentos)
             try:
                 runner.start("fechar")
             except BaseException:
@@ -1094,6 +1121,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 raise DomainConflictError(f"{numero} já está entre os chamados finalizados.")
             if not fin.dados_para_finalizar(pasta, numero)[0]:
                 raise DomainValidationError("Preencha a descrição para finalizar o chamado antes de finalizar.", status_code=422)
+            # Regra de 24/11/2026: o R vem do usuário, nunca da hora atual; conferido antes de gravar a cópia (D=FINALIZADO sem SoftExpert não vai à saída).
+            quando = _encerramento_do_pedido(payload, numero)
+            if not quando:
+                raise DomainValidationError(_falta_encerramento(numero), status_code=422)
             # Os campos manuais entram na cópia de saída antes da rotina, que depois só grava R e D: sem isso o Dashboard enviado ao SharePoint perderia A, B, J e S.
             manual = ""  # R do usuário com D=FINALIZADO neste cartão (só conta se a leitura do SoftExpert não achou o chamado)
             if payload.chamados or payload.edicoes:
@@ -1105,7 +1136,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 valores = gravacao[4].get(numero, {}) if gravacao is not None else {}
                 if str(valores.get("D") or "").strip().upper() == sebrae_novos.STATUS_FINALIZADO:
                     manual = str(valores.get("R") or "").strip()
-            _disparar([numero], encerramentos_manuais=_encerramentos_manuais({numero: manual} if manual else {}))
+            _disparar([numero], encerramentos_manuais=_encerramentos_manuais({numero: manual} if manual else {}), encerramentos={numero: quando})
             return JSONResponse({"iniciado": True, "numeros": [numero]}, status_code=202, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/finalizacao/desfazer-outro-tecnico")
@@ -1297,8 +1328,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay
         blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked.
 
-        With ``exigir_encerramento``: D=FINALIZADO without R (none sent, none stored) on a ticket not found in SoftExpert is
-        refused, since no read will ever supply the closing date for it."""
+        With ``exigir_encerramento``: D=FINALIZADO without a valid R (none sent, none stored) is refused (rule of 24/11/2026: the
+        closing date is always typed by the user, never the current time)."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1319,9 +1350,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                     validados["G"] = titulo
             except sebrae_novos.ManuaisInvalidos as erro:
                 raise sebrae_novos.ManuaisInvalidos(f"{item.numero}: {erro}") from None
-            if (exigir_encerramento and validados["D"] == sebrae_novos.STATUS_FINALIZADO and not validados["R"]
-                    and item.numero in _nao_encontrados(_leitura_antigos())):
-                raise sebrae_novos.ManuaisInvalidos(f"Informe a DT ENCERRAMENTO (coluna R) do chamado {item.numero}: ele não foi encontrado no SoftExpert.")
+            if exigir_encerramento and validados["D"] == sebrae_novos.STATUS_FINALIZADO and not _tem_encerramento(item.numero, validados["R"]):
+                raise sebrae_novos.ManuaisInvalidos(_falta_encerramento(item.numero))
             edicoes[item.numero] = validados
         return edicoes
 

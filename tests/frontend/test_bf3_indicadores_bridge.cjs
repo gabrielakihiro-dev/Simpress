@@ -11,7 +11,7 @@ const ASSINCRONAS = [
 const SINCRONAS = [
   "atualizarIndicadoresPosSalvamento", "renderizarAlertaBaseDesatualizada", "renderizarAlertaOsParadas",
   "renderizarAlertaDivergenciasNovas", "renderizarAlertaSemAcesso60", "renderizarAlertaChamadosOutroTecnico",
-  "renderizarAlertaBackupsRegionais",
+  "renderizarAlertaFalhasFinalizacao", "renderizarAlertaBackupsRegionais",
 ];
 
 function criarPontes() {

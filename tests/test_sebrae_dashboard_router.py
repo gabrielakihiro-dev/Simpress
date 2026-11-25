@@ -338,7 +338,7 @@ class RotasSebraeTest(RotasBase):
         self.importar(montar())
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
         guardada = sebrae_novos.caminho_planilha(self.caminhos).read_bytes()
-        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "30/10/2026 14:05"}
         resposta = self.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL], "edicoes": [edicao]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         corpo = resposta.json()
@@ -607,7 +607,7 @@ class RotasSebraeTest(RotasBase):
         self.importar(montar())
         url = "/api/sebrae/dashboard/atualizar"
         # A, D and J may stay blank after merging (the stored ticket has no J); a filled invalid value is still refused
-        sem_j = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO"}]})
+        sem_j = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO", "R": "30/10/2026 14:05"}]})
         self.assertEqual(sem_j.status_code, 200, sem_j.text)
         j_invalido = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "J": "OUTRO"}]})
         self.assertEqual(j_invalido.status_code, 422)
@@ -620,10 +620,10 @@ class RotasSebraeTest(RotasBase):
             self.caminhos.existentes, dados["numeros"], dados["arquivo"], sha256=dados["sha256"],
             listas={"A": ["CLIENTE"], "B": ["REDE"]}, abertos=dados["abertos"],
         )
-        fora = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "OUTRO", "D": "FINALIZADO", "J": "INCIDENTE"}]})
+        fora = self.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "OUTRO", "D": "FINALIZADO", "J": "INCIDENTE", "R": "30/10/2026 14:05"}]})
         self.assertEqual(fora.status_code, 422)
         self.assertIn("lista do Dashboard", fora.json()["detail"])
-        repetido = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        repetido = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "30/10/2026 14:05"}
         self.assertEqual(self.post(url, json={"edicoes": [repetido, repetido]}).status_code, 422)
 
     def test_atualizar_recusa_novo_que_nao_esta_na_lista_de_novos(self):
@@ -1199,11 +1199,11 @@ class SugestaoDeCategoriaNosNovosTest(RotasBase):
 
 
 class EncerramentoDeNaoEncontradoTest(RotasBase):
-    """D=FINALIZADO à mão num antigo não encontrado no SoftExpert exige a DT ENCERRAMENTO (R) no "Atualizar"."""
+    """D=FINALIZADO à mão exige a DT ENCERRAMENTO (R) digitada no "Atualizar" (regra de 24/11/2026; antes só valia para o não encontrado)."""
 
     ALVO = "UTIC-2026-0001"
     ATUALIZAR = "/api/sebrae/dashboard/atualizar"
-    MENSAGEM = "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-0001: ele não foi encontrado no SoftExpert."
+    MENSAGEM = "Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-0001 antes de finalizar."
     R_1405 = r'<c r="R\d+"[^>]*><v>46325\.586'
 
     def preparar(self, nao_encontrado=True, conteudo=None):
@@ -1242,24 +1242,28 @@ class EncerramentoDeNaoEncontradoTest(RotasBase):
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertRegex(self.linha_gravada(resposta), self.R_1405)
 
-    def test_aceita_sem_r_quando_a_leitura_do_softexpert_achou_o_chamado(self):
+    def test_recusa_sem_r_mesmo_quando_a_leitura_do_softexpert_achou_o_chamado(self):
         self.preparar()
         sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(self.ALVO, titulo="Achou"), "agora")
-        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 200)
+        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 422)
 
-    def test_aceita_sem_r_quando_o_chamado_nunca_foi_lido(self):
+    def test_recusa_sem_r_mesmo_quando_o_chamado_nunca_foi_lido(self):
         self.preparar(nao_encontrado=False)
-        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 200)
+        self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 422)
+
+    def test_recusa_r_fora_do_formato(self):
+        self.preparar(nao_encontrado=False)
+        self.assertEqual(self.atualizar(D="FINALIZADO", R="2026-11-05").status_code, 422)
 
     def test_aceita_sem_r_quando_d_nao_e_finalizado(self):
         self.preparar()
         self.assertEqual(self.atualizar(D="EM ABERTO", B="LENTIDÃO").status_code, 200)
 
-    def test_so_o_chamado_nao_encontrado_e_barrado_numa_lista_com_outros(self):
+    def test_todo_finalizado_sem_r_e_barrado_numa_lista_com_outros(self):
         self.assertEqual(self.importar(montar(("UTIC-2026-0001", "UTIC-2026-0002"), status=("EM ABERTO", "EM ABERTO"))).status_code, 200)
         sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {self.ALVO: "não está na lista"}, "nao_encontrados": [self.ALVO]})
         outro = self.post(self.ATUALIZAR, json={"edicoes": [{"numero": "UTIC-2026-0002", "D": "FINALIZADO"}]})
-        self.assertEqual(outro.status_code, 200, outro.text)
+        self.assertEqual(outro.status_code, 422, outro.text)
         self.assertEqual(self.atualizar(D="FINALIZADO").status_code, 422)
 
 

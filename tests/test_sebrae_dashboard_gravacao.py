@@ -983,6 +983,11 @@ class ReaplicarTest(unittest.TestCase):
         descartada = self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"})
         self.assertTrue(G.mesmos_valores(descartada, sp))
 
+    def test_r_com_serial_inteiro_e_so_data_sem_00_00(self):
+        self.assertEqual(G._valor_legivel("R", "<c r=\"R2\"><v>46331</v></c>", []), "05/11/2026")
+        self.assertEqual(G._valor_legivel("R", "<c r=\"R2\"><v>46331.5</v></c>", []), "05/11/2026 12:00")
+        self.assertEqual(G._valor_legivel("P", "<c r=\"P2\"><v>46331</v></c>", []), "05/11/2026 00:00")  # P fica como estava
+
     def test_ac7_h_com_varias_linhas_e_data_com_segundos_sobrevivem_byte_a_byte(self):
         base = tres()
         gerado = do_site(base, {"UTIC-2026-0001": {"H": "primeira linha segunda linha quarta", "R": "28/10/2026 14:30"}})

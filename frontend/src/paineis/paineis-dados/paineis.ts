@@ -232,6 +232,10 @@ export function criarPaineisDados() {
         || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
       const outroTecnico = data?.chamados_outro_tecnico;
       const outroTecnicoAtivo = !outroTecnico?.indisponivel && Number(outroTecnico?.total) > 0;
+      // Mesma regra do cartão #alerta-finalizacao-softexpert: leitura sem falha, total > 0 e ao menos um item.
+      const falhasFinalizacao = data?.falhas_finalizacao_softexpert;
+      const falhasFinalizacaoAtivo = !falhasFinalizacao?.indisponivel && Number(falhasFinalizacao?.total) > 0
+        && Array.isArray(falhasFinalizacao?.itens) && falhasFinalizacao.itens.some((item: Qualquer) => item && typeof item === "object");
       // Mesma regra do cartão #alerta-backups-regionais (frontend/src/paineis/indicadores-home/estado.ts): serviço ligado, sem falha e com regional pendente.
       const backups = data?.backups_regionais;
       const temRegional = (lista: Qualquer) => Array.isArray(lista) && lista.some(cidade => String(cidade ?? "").trim());
@@ -239,7 +243,7 @@ export function criarPaineisDados() {
         && (temRegional(backups.pendencias?.sem_backup) || temRegional(backups.pendencias?.conferir));
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
-        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(backupsAtivo);
+        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";

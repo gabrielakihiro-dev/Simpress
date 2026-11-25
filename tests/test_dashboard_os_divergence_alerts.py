@@ -290,6 +290,22 @@ class PanelAlertsTests(unittest.TestCase):
         self.assertEqual(response.json()["chamados_outro_tecnico"], {"total": 0, "itens": [], "indisponivel": True})
         self.assertNotIn("segredo", " ".join(logs.output))
 
+    def test_panel_carries_the_softexpert_finalization_failures(self):
+        falhas = {"total": 1, "itens": [{"numero": "UTIC-2026-8", "motivo": "tempo_esgotado"}], "iniciado_em": "", "terminado_em": ""}
+        data = self.client(get_softexpert_finalization_failures=lambda: falhas).get("/api/painel").json()
+        self.assertEqual(data["falhas_finalizacao_softexpert"], falhas)
+        self.assertEqual(self.client().get("/api/painel").json()["falhas_finalizacao_softexpert"], {"total": 0, "itens": []})
+
+    def test_failing_finalization_failures_provider_keeps_the_panel_and_flags_the_alert(self):
+        def quebrada():
+            raise RuntimeError("segredo do chamado")
+
+        with self.assertLogs("routers.dashboard", "WARNING") as logs:
+            response = self.client(get_softexpert_finalization_failures=quebrada).get("/api/painel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["falhas_finalizacao_softexpert"], {"total": 0, "itens": [], "indisponivel": True})
+        self.assertNotIn("segredo", " ".join(logs.output))
+
 
 if __name__ == "__main__":
     unittest.main()

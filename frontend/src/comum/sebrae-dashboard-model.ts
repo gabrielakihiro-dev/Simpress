@@ -45,10 +45,14 @@ export function formatarEncerramento(valor: Qualquer): string {
   return partes ? `${partes[3]}/${partes[2]}/${partes[1]} ${partes[4]}` : "";
 }
 
-/** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). */
+/** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). Só a data dá "": nenhuma hora inventada. */
 export function encerramentoParaCampo(texto: Qualquer): string {
-  const partes = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/.exec(String(texto || "").trim());
-  return partes ? `${partes[3]}-${partes[2]}-${partes[1]}T${partes[4] || "00:00"}` : "";
+  const partes = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(String(texto || "").trim());
+  if (!partes) return "";
+  const [, dia, mes, ano, hora, minuto] = partes;
+  const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+  const real = data.getUTCDate() === Number(dia) && data.getUTCMonth() === Number(mes) - 1 && Number(ano) >= 2000 && Number(hora) < 24 && Number(minuto) < 60;
+  return real ? `${ano}-${mes}-${dia}T${hora}:${minuto}` : ""; // data impossível: "" (o servidor recusaria com 422)
 }
 
 export const MAX_TITULO = 300; // mesmo limite de ChamadoManual.G no servidor (routers/sebrae_dashboard.py)
@@ -112,29 +116,47 @@ export function dadosAntigo(item: Qualquer): Qualquer {
   };
 }
 
-export const AJUDA_ENCERRAMENTO = "Obrigatório ao finalizar chamado não encontrado no SoftExpert";
+export const AJUDA_ENCERRAMENTO = "Obrigatório ao finalizar o chamado";
 
 /**
- * DT ENCERRAMENTO (R) é obrigatório: antigo "não encontrado" no SoftExpert com Status (D) FINALIZADO (digitado ou gravado) e sem R gravado.
- * Nenhuma leitura trará a data desse chamado. Espelha a recusa 422 do servidor em Atualizar Dashboard (`_edicoes`).
+ * R válido vindo do campo datetime-local ou do texto gravado no Dashboard, sempre com data e hora ("dd/MM/aaaa HH:mm"); mesmo formato
+ * que o servidor aceita (`encerramento_valido`, que normaliza os zeros). "" quando vazio, fora do formato ou só com a data
+ * (R antigo digitado sem hora: a coluna R só é gravada com a hora, então ele precisa ser redigitado).
+ */
+export function encerramentoInformado(valor: Qualquer): string {
+  const texto = umaLinha(valor);
+  return formatarEncerramento(texto) || (/^\d{1,2}\/\d{1,2}\/\d{4} \d{1,2}:\d{2}$/.test(texto) ? texto : "");
+}
+
+/** Ajuda do R gravado só com a data: o campo começa vazio (sem hora inventada) e a data antiga continua à vista. */
+export function ajudaEncerramentoSemHora(gravado: Qualquer): string {
+  const texto = umaLinha(gravado);
+  return texto && !encerramentoInformado(texto) ? `Informe também a hora (gravado: ${texto}).` : "";
+}
+
+/**
+ * DT ENCERRAMENTO (R) é obrigatório em todo chamado (novo ou antigo) com Status (D) FINALIZADO (digitado ou gravado) e sem R gravado:
+ * regra do usuário de 24/11/2026, a data é sempre digitada, nunca a hora atual. Espelha a recusa 422 do servidor em Atualizar Dashboard.
  */
 export function encerramentoObrigatorio(item: Qualquer, edicao: Qualquer): boolean {
-  const efetivo = (letra: string) => String(edicao?.[letra] ?? "").trim() || String(item?.valores?.[letra] ?? "").trim();
-  return dadosAntigo(item || {}).naoEncontrado && efetivo("D") === "FINALIZADO" && !String(item.valores?.R ?? "").trim();
+  if (!item) return false;
+  const efetivo = (letra: string) => String(edicao?.[letra] ?? "").trim() || String(item.valores?.[letra] ?? "").trim();
+  return efetivo("D") === "FINALIZADO" && !encerramentoInformado(item.valores?.R);
 }
 
-/** Números dos antigos com R obrigatório e ainda sem uma data válida no campo (é o que bloqueia Atualizar). */
-export function pendenciasEncerramento(abertos: Qualquer, edicoes: Qualquer): Qualquer[] {
-  return (abertos || [])
-    .filter((item: Qualquer) => encerramentoObrigatorio(item, edicoes?.[item.numero]) && !formatarEncerramento(edicoes?.[item.numero]?.R))
+/** Números dos chamados (antigos e, se passados, novos) com R obrigatório e ainda sem uma data válida no campo (é o que bloqueia Atualizar). */
+export function pendenciasEncerramento(abertos: Qualquer, edicoes: Qualquer, formulario: Qualquer[] = [], valores: Qualquer = {}): Qualquer[] {
+  const faltando = (lista: Qualquer, digitados: Qualquer) => (lista || [])
+    .filter((item: Qualquer) => encerramentoObrigatorio(item, digitados?.[item.numero]) && !formatarEncerramento(digitados?.[item.numero]?.R))
     .map((item: Qualquer) => item.numero);
+  return [...faltando(abertos, edicoes), ...faltando(formulario, valores)];
 }
 
-/** Mensagem de Atualizar bloqueado; no singular é a mesma frase que o servidor devolve em 422. */
+/** Mensagem de R faltando; no singular é a mesma frase que o servidor devolve em 422. */
 export function avisoEncerramento(numeros: Qualquer[]): string {
   return numeros.length === 1
-    ? `Informe a DT ENCERRAMENTO (coluna R) do chamado ${numeros[0]}: ele não foi encontrado no SoftExpert.`
-    : `Informe a DT ENCERRAMENTO (coluna R) dos chamados ${numeros.join(", ")}: eles não foram encontrados no SoftExpert.`;
+    ? `Informe a DT ENCERRAMENTO (coluna R) do chamado ${numeros[0]} antes de finalizar.`
+    : `Informe a DT ENCERRAMENTO (coluna R) dos chamados ${numeros.join(", ")} antes de finalizar.`;
 }
 
 /** Texto da leitura dos antigos: andamento (X de Y), resultado ou interrupção. `anteriorEm` ignora o resultado da execução anterior. */
@@ -178,10 +200,10 @@ export const STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"; // fora da centr
 export const STATUS_DESFEITOS: readonly string[] = Object.freeze(["ok", STATUS_OUTRO_TECNICO]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
 export const ROTULOS_RESULTADO: Readonly<Record<string, string>> = Object.freeze({
   ok: "Finalizado no SoftExpert", [STATUS_OUTRO_TECNICO]: "Finalizado por outro técnico: Dashboard atualizado com a DT ENCERRAMENTO informada", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
-  sem_descricao: "Sem descrição para finalizar", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
+  sem_descricao: "Sem descrição para finalizar", sem_encerramento: "Sem DT ENCERRAMENTO (R)", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
 });
 export const MOTIVOS_PULADO: Readonly<Record<string, string>> = Object.freeze({
-  sem_descricao: "sem descrição para finalizar", ja_finalizado: "já finalizado no SoftExpert", sem_numero: "sem número UTIC",
+  sem_descricao: "sem descrição para finalizar", sem_encerramento: "sem DT ENCERRAMENTO (R)", ja_finalizado: "já finalizado no SoftExpert", sem_numero: "sem número UTIC",
 });
 
 export function formatarTamanho(bytes: Qualquer): string {
@@ -207,10 +229,10 @@ export function podeFinalizar(descricao: Qualquer, finalizacao: Qualquer, emAnda
   return String(descricao || "").trim() !== "" && !emAndamento && !STATUS_DESFEITOS.includes(finalizacao?.status);
 }
 
-/** Rótulos dos campos que precisam estar preenchidos para finalizar (B, R e S ficam opcionais: o horário do SoftExpert substitui o R manual). */
-export const ROTULOS_FALTA = Object.freeze({ A: "Responsável (A)", J: "Tipo do chamado (J)" });
+/** Rótulos dos campos que precisam estar preenchidos para finalizar (B e S ficam opcionais; R é a DT ENCERRAMENTO digitada, regra de 24/11/2026). */
+export const ROTULOS_FALTA = Object.freeze({ A: "Responsável (A)", J: "Tipo do chamado (J)", R: "DT ENCERRAMENTO (R)" });
 
-/** O que falta preencher antes de finalizar no SoftExpert: A, J, Status (D) em FINALIZADO e a descrição. */
+/** O que falta preencher antes de finalizar no SoftExpert: A, J, Status (D) em FINALIZADO, a DT ENCERRAMENTO (R) e a descrição. */
 export function camposFaltando(valores: Qualquer, descricao: Qualquer): string[] {
   const vazio = (valor: Qualquer) => String(valor || "").trim() === "";
   const faltas: string[] = [];
@@ -218,6 +240,7 @@ export function camposFaltando(valores: Qualquer, descricao: Qualquer): string[]
   const status = String(valores?.D || "").trim().toUpperCase();
   if (status !== "FINALIZADO") faltas.push(status ? "Status (D) em FINALIZADO (está EM ABERTO)" : "Status (D) em FINALIZADO");
   if (vazio(valores?.J)) faltas.push(ROTULOS_FALTA.J);
+  if (!encerramentoInformado(valores?.R)) faltas.push(ROTULOS_FALTA.R);
   if (vazio(descricao)) faltas.push("Descrição para Finalizar o Chamado");
   return faltas;
 }
@@ -450,7 +473,8 @@ export function aplicarRascunho(rascunho: Qualquer, formulario: Qualquer, aberto
   (abertos || []).forEach((item: Qualquer) => {
     const campos = { ...rascunho.valores[item.numero], ...rascunho.edicoes[item.numero] };
     if (!campos) return;
-    const livres = Object.fromEntries(Object.entries(campos).filter(([letra, _valor]) => !String(item.valores?.[letra] || "").trim() || (letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)));
+    // R gravado só com a data conta como vazio: o campo fica editável e o R digitado com a hora não pode sumir ao recarregar
+    const livres = Object.fromEntries(Object.entries(campos).filter(([letra, _valor]) => !String(item.valores?.[letra] || "").trim() || (letra === "R" && !encerramentoInformado(item.valores?.R)) || (letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)));
     if (Object.keys(livres).length) edicoes[item.numero] = livres;
   });
   (abertos || []).forEach((item: Qualquer) => {
@@ -469,7 +493,7 @@ if (typeof window !== "undefined") {
   window.SimpressSebraeDashboardModel = Object.freeze({
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
     ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
-    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
     ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,
