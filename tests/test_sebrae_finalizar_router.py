@@ -22,6 +22,7 @@ from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
 
 A, B, C = "UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"
 PDF = b"%PDF-1.4\n%fake\n"
+R_USUARIO = "30/10/2026 14:05"
 R_1405 = r'<c r="R\d+"[^>]*><v>46325\.586'
 ATUALIZAR = "/api/sebrae/dashboard/atualizar"
 FINALIZAR = "/api/sebrae/finalizar-softexpert"
@@ -161,6 +162,8 @@ class FinalizarBase(unittest.TestCase):
         if url in ("/api/sebrae/dashboard/atualizar", "/api/sebrae/finalizar-softexpert", "/api/sebrae/dashboard/conflitos") and isinstance(kwargs.get("json"), dict):
             atual = sebrae_novos.ler_existentes(self.caminhos.existentes)
             kwargs["json"].setdefault("versao_importacao", atual["versao"] if atual else "")
+        if url == FINALIZAR and isinstance(kwargs.get("json"), dict) and "numero" in kwargs["json"]:
+            kwargs["json"].setdefault("encerramento", R_USUARIO)  # regra de 24/11/2026: sem R digitado não finaliza; "" pede o 422
         return self.cliente.post(url, **kwargs)
 
     def importar(self, conteudo=None):
@@ -349,7 +352,7 @@ class FinalizarUmTest(FinalizarBase):
             self.assertIn(valor, linha_xml(saida, 2))
         self.assertEqual(self.runner.iniciadas, ["fechar"])
 
-    def test_edicoes_de_outros_chamados_seguem_na_copia_e_o_horario_do_softexpert_substitui_o_r_manual(self):
+    def test_edicoes_de_outros_chamados_seguem_na_copia_e_o_r_das_edicoes_vai_a_ela(self):
         self.descrever(A)
         manuais = [
             {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "01/01/2026 09:00"},
@@ -359,10 +362,10 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(resposta.status_code, 202, resposta.text)
         saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
         self.assertIn("OUTRO CLIENTE", linha_xml(saida, 3))
-        self.assertIn("46023.375", linha_xml(saida, 2))  # 01/01/2026 09:00; a rotina fechar troca o R depois, aqui só a cópia antes dela
+        self.assertIn("46023.375", linha_xml(saida, 2))  # 01/01/2026 09:00; a rotina fechar grava o R do pedido depois, aqui só a cópia antes dela
 
     def test_chamado_nao_encontrado_no_softexpert_finaliza_pelo_cartao_sem_r_manual(self):
-        # a exigência do R vale só no "Atualizar"; o cartão é o caminho de nova tentativa e o R vem do SoftExpert
+        # o cartão não exige o R das edições, só o do pedido (corpo `encerramento`); o R digitado vale para o job
         sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
         self.descrever(A)
         manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
@@ -371,6 +374,32 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(self.runner.iniciadas, ["fechar"])
         atualizar = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "D": "FINALIZADO"}]})
         self.assertEqual(atualizar.status_code, 422, atualizar.text)  # o mesmo chamado, pelo Atualizar, exige o R
+
+    def test_sem_encerramento_valido_responde_422_sem_disparar(self):
+        self.descrever(A)
+        for ruim in ("", "2026-11-05", "31/02/2026 10:00"):
+            with self.subTest(r=ruim):
+                resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": ruim})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json()["detail"], f"Informe a DT ENCERRAMENTO (coluna R) do chamado {A} antes de finalizar.")
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+
+    def test_encerramento_do_corpo_vai_ao_job_e_manuais_so_tem_os_nao_encontrados(self):
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": "05/11/2026  14:30"})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        job = self.job()
+        self.assertEqual((job["encerramentos"], job["encerramentos_manuais"]), ({A: "05/11/2026 14:30"}, {}))  # A foi achado no SoftExpert
+
+    def test_encerramento_das_edicoes_vale_e_nao_encontrado_entra_tambem_em_manuais(self):
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
+        self.descrever(A)
+        manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "05/11/2026 14:30"}
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": "", "edicoes": [manuais]})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        job = self.job()
+        self.assertEqual((job["encerramentos"], job["encerramentos_manuais"]), ({A: "05/11/2026 14:30"}, {A: "05/11/2026 14:30"}))
 
     def test_campos_manuais_invalidos_recusam_sem_disparar(self):
         self.descrever(A)
@@ -501,7 +530,7 @@ class ChamadoNovoTest(FinalizarBase):
 
     def test_em_massa_chamado_novo_marcado_finalizado_com_descricao_vai_para_a_rotina(self):
         self.descrever(self.N)
-        novo = {"numero": self.N, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        novo = {"numero": self.N, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": R_USUARIO}
         resposta = self.post(ATUALIZAR, json={"chamados": [novo], "finalizar_softexpert": True})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(resposta.json()["fechar"]["numeros"], [self.N])
@@ -544,7 +573,8 @@ class AtualizarBase(FinalizarBase):
         self.importar()
 
     def edicao(self, numero, d="FINALIZADO", **extra):
-        return {"numero": numero, "A": "CLIENTE", "B": "REDE", "D": d, "J": "INCIDENTE", **extra}
+        r = {"R": R_USUARIO} if d == "FINALIZADO" else {}  # regra de 24/11/2026: D=FINALIZADO leva o R digitado
+        return {"numero": numero, "A": "CLIENTE", "B": "REDE", "D": d, "J": "INCIDENTE", **r, **extra}
 
     def atualizar(self, *edicoes, finalizar_softexpert=True, enviar_sharepoint=None):
         corpo = {"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert}
@@ -853,6 +883,22 @@ class AtualizarDispara(AtualizarBase):
         self.assertEqual(self.runner.iniciadas, [])
         self.assertFalse(fin.caminho_job(self.dir).exists())
 
+    def test_d_finalizado_sem_r_responde_422_e_nao_dispara_nem_grava_saida(self):
+        self.descrever(A)
+        for corpo in ({"edicoes": [self.edicao(A, R="")], "finalizar_softexpert": True},
+                      {"edicoes": [self.edicao(A, R="2026-11-05")], "finalizar_softexpert": True}):
+            resposta = self.post(ATUALIZAR, json=corpo)
+            self.assertEqual(resposta.status_code, 422, resposta.text)
+            self.assertIn("DT ENCERRAMENTO", resposta.json()["detail"])
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_r_das_edicoes_vai_ao_job_como_encerramento(self):
+        self.descrever(A)
+        self.atualizar(self.edicao(A, R="05/11/2026 14:30"))
+        job = self.job()
+        self.assertEqual((job["numeros"], job["encerramentos"], job["encerramentos_manuais"]), ([A], {A: "05/11/2026 14:30"}, {}))
+
     def test_so_dispara_quando_d_vira_finalizado(self):
         self.descrever(A)
         corpo = self.atualizar(self.edicao(A, d="EM ABERTO"))
@@ -868,7 +914,7 @@ class AtualizarDispara(AtualizarBase):
 
     def test_linha_sem_utic_nunca_chega_ao_softexpert(self):
         self.importar(montar(("Sem chamado", A), ultima=9, status=("EM ABERTO", "EM ABERTO")))
-        corpo = self.atualizar({"numero": "linha:2", "D": "FINALIZADO"})
+        corpo = self.atualizar({"numero": "linha:2", "D": "FINALIZADO", "R": R_USUARIO})
         self.assertEqual(corpo["fechar"]["pulados"], [{"numero": "linha:2", "motivo": "sem_numero"}])
         self.assertEqual(self.runner.iniciadas, [])
 
@@ -1001,7 +1047,7 @@ class OsVinculadaCongeladaTest(FinalizarBase):
         self.assertEqual(resposta.status_code, 202, resposta.text)
 
     def atualizar_finalizando(self):
-        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": R_USUARIO}
         resposta = self.post(ATUALIZAR, json={"edicoes": [edicao], "finalizar_softexpert": True})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertTrue(resposta.json()["fechar"]["iniciado"])
@@ -1026,7 +1072,7 @@ class OsVinculadaCongeladaTest(FinalizarBase):
 
     def test_atualizar_sem_finalizar_softexpert_nao_congela_nada(self):
         self.vinculos = [vinculo_manual(A, "1234")]
-        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        edicao = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": R_USUARIO}
         resposta = self.post(ATUALIZAR, json={"edicoes": [edicao], "finalizar_softexpert": False})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertNotIn("os_vinculada", fin.ler_estado(self.dir).get(A, {}))

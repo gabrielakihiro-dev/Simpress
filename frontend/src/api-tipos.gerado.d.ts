@@ -352,6 +352,7 @@ export type FinalizarPayload = {
   "numero": string;
   "versao_importacao"?: string;
   "confirmado"?: boolean;
+  "encerramento"?: string;
   "chamados"?: ChamadoManual[];
   "edicoes"?: ChamadoManual[];
 };

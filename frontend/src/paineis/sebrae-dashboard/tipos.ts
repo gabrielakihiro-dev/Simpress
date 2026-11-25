@@ -43,6 +43,7 @@ export interface ModeloSebrae {
   descricaoJaNoDashboard: Funcao;
   tituloAntigo: Funcao;
   dadosAntigo: Funcao;
+  encerramentoInformado: Funcao;
   encerramentoObrigatorio: Funcao;
   pendenciasEncerramento: Funcao;
   avisoEncerramento: Funcao;

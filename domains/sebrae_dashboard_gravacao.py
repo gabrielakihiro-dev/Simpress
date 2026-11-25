@@ -909,9 +909,9 @@ ENCERRAMENTO_AMBIGUO = "ambiguo"
 def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -> Tuple[Resultado, Dict[str, str]]:
     """Writes DT ENCERRAMENTO (column R) and status D = FINALIZADO of tickets closed in SoftExpert; the row is found by the UTIC in column C.
 
-    ``encerramentos``: ``{UTIC: "dd/MM/aaaa HH:mm"}``. Unlike ``atualizar`` this reaches rows of any status (the
-    ticket has just been finalized) but only columns D and R, and only when exactly one row holds the UTIC. The SoftExpert time
-    replaces a date typed by hand in R (the user chose this on 31/10/2026). Gives the new workbook (the same
+    ``encerramentos``: ``{UTIC: "dd/MM/aaaa HH:mm"}``, the date the user typed (rule of 24/11/2026; it replaced the SoftExpert
+    time chosen on 31/10/2026). Unlike ``atualizar`` this reaches rows of any status (the
+    ticket has just been finalized) but only columns D and R, and only when exactly one row holds the UTIC. Gives the new workbook (the same
     bytes when nothing changed) and, per UTIC, ``gravado`` / ``nao_encontrado`` / ``ambiguo``.
     """
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
@@ -936,7 +936,7 @@ def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -
         elif len(donas) > 1:
             estados[utic] = ENCERRAMENTO_AMBIGUO
         else:
-            # R vazia ou digitada à mão: o horário do SoftExpert substitui. D junto com R: a linha finalizada no SoftExpert não pode continuar "EM ABERTO".
+            # R vazia ou antiga: vale o R informado ao finalizar. D junto com R: a linha finalizada no SoftExpert não pode continuar "EM ABERTO".
             substituicoes[donas[0].numero] = _reescrever_linha(donas[0], {"D": STATUS_FINALIZADO, "R": quando}, estilos, "", True)
             gravadas.append(LinhaGravada(utic, donas[0].numero, "alterado", ("D", "R")))
             estados[utic] = ENCERRAMENTO_GRAVADO

@@ -13,7 +13,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
     ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
-    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
     camposFaltando, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     lerRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho,
@@ -63,9 +63,11 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     if (elemento) elemento.dataset.estado = situacao;
   }
 
-  /** Antigos em aberto (visíveis) com D FINALIZADO e "não encontrado no SoftExpert" que ainda não têm DT ENCERRAMENTO (R): o servidor recusaria Atualizar. */
+  /** Chamados em aberto (antigos visíveis e novos) com D FINALIZADO e ainda sem DT ENCERRAMENTO (R): o servidor recusaria Atualizar.
+   * O já finalizado por este site fica de fora, como no servidor (o R registrado volta à coluna R). */
   function pendentesEncerramento() {
-    return pendenciasEncerramento(estado.abertos.filter(item => !estado.finalizados.has(item.numero)), estado.edicoes);
+    const emAberto = (item: Registro) => !estado.finalizados.has(item.numero) && !STATUS_DESFEITOS.includes(estado.soft[item.numero]?.finalizacao?.status);
+    return pendenciasEncerramento(estado.abertos.filter(emAberto), estado.edicoes, estado.formulario.filter(emAberto), estado.valores);
   }
 
   // O aviso de "falta R" que está no status de Atualizar agora; só ele é apagado quando a falta some (nunca o resultado de um Atualizar).
@@ -184,20 +186,28 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   /**
-   * R (DT ENCERRAMENTO) do antigo "não encontrado no SoftExpert" vira obrigatório quando D é FINALIZADO: `required`, `aria-required` e a ajuda visível.
+   * R (DT ENCERRAMENTO) de qualquer chamado (novo ou antigo) vira obrigatório quando D é FINALIZADO: `required`, `aria-required` e a ajuda visível.
    * A ajuda fica fora do `<label>` (não entra no nome do campo) e só descreve o campo enquanto aparece.
    */
-  function sincronizarEncerramento(manuais: ElementoSebrae | null, numero: string) {
+  function sincronizarEncerramento(manuais: ElementoSebrae | null, numero: string, alvo = "antigo") {
     const ajuda = manuais?.querySelector<ElementoSebrae>(".sebrae-chamado__encerramento-ajuda");
     const controle = manuais?.querySelector<ElementoSebrae>('[data-sebrae-campo="R"]');
     if (!ajuda || !controle) return;
-    const item = estado.abertos.find(aberto => aberto.numero === numero);
-    const obrigatorio = Boolean(item) && encerramentoObrigatorio(item, estado.edicoes[numero]);
+    const item = (alvo === "antigo" ? estado.abertos : estado.formulario).find(aberto => aberto.numero === numero);
+    const obrigatorio = encerramentoObrigatorio(item, valoresDe(alvo)[numero]);
     controle.required = obrigatorio;
     controle.setAttribute("aria-required", String(obrigatorio));
     if (obrigatorio) controle.setAttribute("aria-describedby", ajuda.id);
     else controle.removeAttribute("aria-describedby");
     ajuda.hidden = !obrigatorio;
+  }
+
+  /** Ajuda "Obrigatório ao finalizar o chamado" do R: com D FINALIZADO a data de encerramento é sempre digitada (regra de 24/11/2026). */
+  function ajudaEncerramento(manuais: ElementoSebrae, numero: string, alvo: string) {
+    const ajuda = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__encerramento-ajuda", AJUDA_ENCERRAMENTO);
+    ajuda.id = `sebrae-encerramento-ajuda-${numero}`;
+    manuais.appendChild(ajuda);
+    sincronizarEncerramento(manuais, numero, alvo);
   }
 
   /** Status (D) em FINALIZADO fica verde, para ver de relance quais ainda faltam finalizar. */
@@ -458,12 +468,13 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const lista = document.createElement("ul");
     lista.className = "sebrae-pendencias";
     lista.setAttribute("aria-label", "O que falta para finalizar");
-    const opcional = dom.createTextElement("li", "sebrae-pend sebrae-pend--opcional", "Encerramento (R): opcional");
-    opcional.title = "O horário do SoftExpert substitui o Encerramento (R) digitado";
+    // Sem `data-req`: o CSS não sabe se um datetime-local está vazio; o clique em Finalizar confere o R (camposFaltando).
+    const encerramento = dom.createTextElement("li", "sebrae-pend sebrae-pend--encerramento", "Encerramento (R): obrigatório");
+    encerramento.title = "Informe a data e a hora de encerramento; o sistema nunca usa a hora atual";
     lista.append(
       dom.createTextElement("li", "sebrae-pendencias__rotulo", "Para finalizar:"),
       pendenciaItem("A", ROTULOS_FALTA.A), pendenciaItem("D", "Status (D) em FINALIZADO"), pendenciaItem("J", ROTULOS_FALTA.J), pendenciaItem("DESC", "Descrição"),
-      opcional,
+      encerramento,
     );
     return lista;
   }
@@ -897,13 +908,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     manuais.className = "sebrae-chamado__manuais";
     manuais.appendChild(campoTitulo(item.numero, "antigo"));
     ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualComSugestao(item, letra, "antigo")));
-    if (dados.naoEncontrado) {
-      // Não encontrado no SoftExpert: finalizar à mão (D) exige a data de encerramento (R), que nenhuma leitura trará.
-      const ajuda = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__encerramento-ajuda", AJUDA_ENCERRAMENTO);
-      ajuda.id = `sebrae-encerramento-ajuda-${item.numero}`;
-      manuais.appendChild(ajuda);
-      sincronizarEncerramento(manuais, item.numero);
-    }
+    ajudaEncerramento(manuais, item.numero, "antigo");
     const notas = [];
     const outra = [avisoOutraPessoa(item), avisoNomeDaDescricao(item)].filter(Boolean).join(" ");
     if (outra) notas.push(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
@@ -1035,6 +1040,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     manuais.className = "sebrae-chamado__manuais";
     manuais.appendChild(campoTitulo(item.numero));
     ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campoManualComSugestao(item, letra)));
+    ajudaEncerramento(manuais, item.numero, "novo");
     artigo.append(zonaSolicitacao(fatos, notas, detalhes), zonaClassificacao(manuais, blocoObservacao(item.numero, item.observacao), item.numero));
     if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
     return artigo;
@@ -1150,7 +1156,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const ref = estado.refs.get(numero);
     const soft = estado.soft[numero];
     if (!ref || !soft) return;
-    // Fica clicável com campos faltando: o clique avisa na tela o que preencher (descrição, A, D, J e R).
+    // Fica clicável com campos faltando: o clique avisa na tela o que preencher (descrição, A, D, J e R) e nada é enviado sem eles.
     ref.botao.disabled = estado.fechar.emAndamento || STATUS_DESFEITOS.includes(soft.finalizacao?.status);
     ref.cancelar.hidden = !soft.processando;
     ref.infoPdf.textContent = soft.pdf ? `PDF anexado: ${soft.pdf.nome} (${formatarTamanho(soft.pdf.tamanho)})` : "Nenhum PDF anexado.";
@@ -1898,15 +1904,18 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const ref = estado.refs.get(numero);
     const soft = estado.soft[numero];
     if (!ref || ref.botao.disabled) return;
-    const faltas = camposFaltando(valoresEfetivos(numero), ref.texto.value);
+    const valores = valoresEfetivos(numero);
+    const faltas = camposFaltando(valores, ref.texto.value);
     if (faltas.length) {
       app.showToast(`${numero}: antes de finalizar, preencha ${faltas.join(", ")}.`, "warning");
       return;
     }
+    // O R confirmado no diálogo é o mesmo enviado em `encerramento` (regra de 24/11/2026: digitado pelo usuário, nunca a hora atual).
+    const encerramento = encerramentoInformado(valores.R);
     const confirmado = await app.confirmarAcao({
       titulo: "Finalizar no SoftExpert",
       mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
-        + `${soft.pdf ? " e o PDF anexado será enviado" : ""}.`
+        + `${soft.pdf ? " e o PDF anexado será enviado" : ""}. DT ENCERRAMENTO (R): ${encerramento}.`
         + (soft.novo ? " Este chamado novo ainda não está no Dashboard: depois clique em Atualizar Dashboard para gravar o status FINALIZADO e a data de encerramento." : ""),
       confirmar: "Confirmar finalização", cancelar: "Cancelar",
     });
@@ -1921,7 +1930,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     try {
       await app.apiFetch("/api/sebrae/finalizar-softexpert", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero, confirmado: true, versao_importacao: estado.versaoImportacao, ...manuaisDoChamado(numero) }),
+        body: JSON.stringify({ numero, confirmado: true, versao_importacao: estado.versaoImportacao, encerramento, ...manuaisDoChamado(numero) }),
         errorMessage: "Não foi possível iniciar a finalização no SoftExpert.",
       });
     } catch (falha) { const error = falha as ErroApi;
@@ -2455,7 +2464,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const guardados = valoresDe(sebraeAlvo);
     guardados[sebraeNumero] = { ...(guardados[sebraeNumero] || {}), [sebraeCampo]: alvo.value };
     destacarFinalizado(alvo);
-    if (sebraeAlvo === "antigo" && (sebraeCampo === "D" || sebraeCampo === "R")) sincronizarEncerramento(alvo.closest<ElementoSebrae>(".sebrae-chamado__manuais"), sebraeNumero);
+    if (sebraeCampo === "D" || sebraeCampo === "R") sincronizarEncerramento(alvo.closest<ElementoSebrae>(".sebrae-chamado__manuais"), sebraeNumero, sebraeAlvo);
     if (sebraeCampo === "G") mostrarTituloDigitado(alvo);
     if (gravarCampoRascunho(armazenamento, estado.importadoEm, sebraeNumero, sebraeCampo, alvo.value, sebraeAlvo)) {
       const tipo = sebraeAlvo === "antigo" ? "edicoes" : "valores";

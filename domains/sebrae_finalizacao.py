@@ -48,6 +48,8 @@ STATUS_JA_FINALIZADO = "ja_finalizado"
 STATUS_NAO_ENCONTRADO = "nao_encontrado"  # fora da central de tarefas: não prova que está finalizado, então pode tentar de novo
 STATUS_ERRO = "erro"
 STATUS_SEM_DESCRICAO = "sem_descricao"
+# Regra do usuário (24/11/2026): todo chamado finalizado leva a DT ENCERRAMENTO (R) digitada pelo usuário; sem ela, nada é aberto no SoftExpert.
+STATUS_SEM_ENCERRAMENTO = "sem_encerramento"
 STATUS_PRONTO = "pronto"  # --sem-finalizar: the form was filled and checked, Finalizar was not clicked
 # Regra do usuário (12/11/2026): fora da central, com D=FINALIZADO e R informados pelo usuário, o chamado foi finalizado por outro técnico.
 STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"
@@ -133,6 +135,23 @@ def agora_iso() -> str:
 def texto_do_encerramento(momento: datetime) -> str:
     """Column R as the Dashboard shows it (``dd/MM/aaaa HH:mm``, Brasília time)."""
     return momento.astimezone(FUSO).strftime(FORMATO_ENCERRAMENTO)
+
+
+FORMATO_SO_DATA = "%d/%m/%Y"
+
+
+def encerramento_valido(texto: Any) -> str:
+    """R typed by the user, normalized to ``dd/MM/aaaa HH:mm`` (``1/11/2026 9:05`` -> ``01/11/2026 09:05``).
+
+    A date alone (``dd/MM/aaaa``, an old R typed in the Dashboard without the time) is accepted and returned without inventing a
+    time. ``""`` when blank, in another format or an impossible date."""
+    limpo = " ".join(str(texto or "").split())
+    for formato in (FORMATO_ENCERRAMENTO, FORMATO_SO_DATA):
+        try:
+            return datetime.strptime(limpo, formato).strftime(formato)
+        except ValueError:
+            continue
+    return ""
 
 
 # ---------------------------------------------------------------------------- validation
@@ -488,9 +507,12 @@ def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 def gravar_job(
     state_dir: Path, numeros: Sequence[str], *, confirmar_final: bool = True, pulados: Sequence[Mapping[str, str]] = (),
     acao: str = ACAO_FINALIZAR, envio_id: str = "", sha256: str = "", encerramentos_manuais: Mapping[str, str] = {},
+    encerramentos: Mapping[str, str] = {},
 ) -> None:
     """Request for the next ``fechar`` run; the routine consumes it. ``--sem-finalizar`` can still force a dry run.
 
+    ``encerramentos`` = ``{UTIC: "dd/MM/aaaa HH:mm"}``: the DT ENCERRAMENTO (R) the user typed for every ticket of the job (rule of
+    24/11/2026); ``fechar`` skips a ticket without it and writes exactly this value to column R, never the current time.
     ``encerramentos_manuais`` = ``{UTIC: "dd/MM/aaaa HH:mm"}`` of old tickets the user marked FINALIZADO with an Encerramento (R) and
     that the last SoftExpert read did not find: if ``fechar`` also does not find them, they count as finalized by another technician."""
     with lock_paths([state_dir / "sebrae_dashboard_base.guard", caminho_envio(state_dir), caminho_job(state_dir)]):
@@ -503,6 +525,7 @@ def gravar_job(
         atomic_write_json(caminho_job(state_dir), {
             "criado_em": agora_iso(), "acao": acao, "numeros": list(numeros), "confirmar_final": bool(confirmar_final),
             "pulados": [dict(p) for p in pulados], "encerramentos_manuais": dict(encerramentos_manuais),
+            "encerramentos": dict(encerramentos),
             **({"envio_id": envio_id, "sha256": sha256} if acao == ACAO_REENVIAR_SNAPSHOT else {}),
         })
 
@@ -529,12 +552,9 @@ def _encerramentos_validos(bruto: Any, numeros: Sequence[str]) -> Dict[str, str]
         return {}
     validos: Dict[str, str] = {}
     for numero, quando in bruto.items():
-        try:
-            datetime.strptime(str(quando), FORMATO_ENCERRAMENTO)
-        except ValueError:
-            continue
-        if numero in numeros:
-            validos[numero] = str(quando)
+        valido = encerramento_valido(quando)
+        if valido and numero in numeros:
+            validos[numero] = valido
     return validos
 
 
@@ -554,6 +574,7 @@ def consumir_job(state_dir: Path, agora: Optional[datetime] = None) -> Optional[
         "acao": job["acao"], "numeros": lista, "confirmar_final": job.get("confirmar_final") is not False,
         "pulados": [p for p in job.get("pulados") or [] if isinstance(p, dict)],
         "encerramentos_manuais": _encerramentos_validos(job.get("encerramentos_manuais"), lista),
+        "encerramentos": _encerramentos_validos(job.get("encerramentos"), lista),
         **({"envio_id": str(job.get("envio_id") or ""), "sha256": str(job.get("sha256") or "")} if job["acao"] == ACAO_REENVIAR_SNAPSHOT else {}),
     }
 

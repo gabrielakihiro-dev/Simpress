@@ -441,7 +441,7 @@ class JobTest(unittest.TestCase):
         job = fin.consumir_job(self.dir)
         self.assertEqual(job, {
             "acao": fin.ACAO_FINALIZAR, "numeros": [UTIC], "confirmar_final": False,
-            "pulados": [{"numero": "linha:2", "motivo": "sem_numero"}], "encerramentos_manuais": {},
+            "pulados": [{"numero": "linha:2", "motivo": "sem_numero"}], "encerramentos_manuais": {}, "encerramentos": {},
         })
         self.assertIsNone(fin.consumir_job(self.dir))
         self.assertFalse(fin.job_pendente(self.dir))
@@ -452,6 +452,23 @@ class JobTest(unittest.TestCase):
         })
         job = fin.consumir_job(self.dir)
         self.assertEqual(job["encerramentos_manuais"], {UTIC: "12/11/2026 09:30"})
+
+    def test_job_leva_encerramentos_validos_separados_dos_manuais(self):
+        fin.gravar_job(self.dir, [UTIC, "UTIC-2026-0002"], encerramentos={
+            UTIC: "05/11/2026  14:30", "UTIC-2026-0002": "2026-11-05", "UTIC-2026-0099": "05/11/2026 14:30",
+        })
+        job = fin.consumir_job(self.dir)
+        self.assertEqual((job["encerramentos"], job["encerramentos_manuais"]), ({UTIC: "05/11/2026 14:30"}, {}))
+
+    def test_encerramento_valido_aceita_dd_mm_aaaa_hh_mm_ou_so_a_data_real_e_normaliza(self):
+        self.assertEqual(fin.encerramento_valido("05/11/2026 14:30"), "05/11/2026 14:30")
+        self.assertEqual(fin.encerramento_valido(" 05/11/2026   14:30 "), "05/11/2026 14:30")
+        self.assertEqual(fin.encerramento_valido("1/11/2026 9:05"), "01/11/2026 09:05")  # zero à esquerda
+        self.assertEqual(fin.encerramento_valido("05/11/2026"), "05/11/2026")  # R antigo só com a data: nenhuma hora inventada
+        self.assertEqual(fin.encerramento_valido("5/1/2026"), "05/01/2026")
+        for ruim in ("2026-11-05", "", None, "31/02/2026 10:00", "31/02/2026", "05/11/2026 25:00", "05/11/26", "05/11/2026 14"):
+            with self.subTest(ruim=ruim):
+                self.assertEqual(fin.encerramento_valido(ruim), "")
 
     def test_job_com_encerramentos_manuais_de_tipo_errado_vira_vazio(self):
         for bruto in (["12/11/2026 09:30"], "12/11/2026 09:30", None, {UTIC: 5}):

@@ -1494,8 +1494,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__recolher svg { width: 16px; height: 16px; }
 /* Selos que se acendem sozinhos conforme o que a pessoa preenche ou o resultado da rotina (sem JS). */
 :is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked) .sebrae-selo--d { display: inline-flex; }
-:is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-selo--pronto { display: inline-flex; }
-:is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)) .sebrae-selo--d { display: none; }
+/* R obrigatório e vazio (o JS marca `required` com D FINALIZADO e sem R gravado) fica :invalid e impede o "pronto". */
+:is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)):not(:has(input[data-sebrae-campo="R"]:invalid)) .sebrae-selo--pronto { display: inline-flex; }
+:is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)):not(:has(input[data-sebrae-campo="R"]:invalid)) .sebrae-selo--d { display: none; }
 :is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado[data-estado="andamento"]) .sebrae-selo--andamento { display: inline-flex; }
 :is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado:is([data-estado="nao_encontrado"], [data-estado="sem_descricao"], [data-estado="cancelado"])) .sebrae-selo--atencao { display: inline-flex; }
 :is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado[data-estado="erro"]) .sebrae-selo--erro { display: inline-flex; }
@@ -1642,7 +1643,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-pendencias { grid-area: pend; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sebrae-pendencias__rotulo { margin-right: 2px; font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
 .sebrae-pend { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 0 8px 0 6px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-xs); font-weight: var(--peso-medio); transition: background-color var(--duracao) var(--curva), border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
-.sebrae-pend--opcional { border-style: dashed; font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
+.sebrae-pend--encerramento { border-style: dashed; font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
 .sebrae-pend .sebrae-pend__ok { display: none; }
 /* Pendente (valor ausente, detectado pelo próprio controle) */
 .sebrae-chamado:has([data-sebrae-campo="A"] > option[value=""]:checked) .sebrae-pend[data-req="A"],

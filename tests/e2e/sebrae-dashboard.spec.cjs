@@ -188,6 +188,7 @@ test("Título (G): o campo existe no novo e no antigo, vai só ao corpo do Atual
   await antigo.locator('[data-sebrae-campo="G"]').fill("Título corrigido do antigo");
   await expect(painel.locator("#sebrae-antigos-resumo")).toContainText("1 com alteração"); // só o título editado já conta como alteração
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO"); // sem descrição: o diálogo pergunta antes do SharePoint e "Atualizar sem enviar" só baixa a cópia
+  await antigo.locator('[data-sebrae-campo="R"]').fill("2026-10-28T09:05"); // D FINALIZADO sempre com a DT ENCERRAMENTO digitada (regra de 24/11/2026)
   const envio = page.waitForRequest(r => r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar"));
   const chamadasSoftExpert = [];
   page.on("request", r => { if (r.method() !== "GET" && /finalizar-softexpert|antigos\/ler/.test(r.url())) chamadasSoftExpert.push(r.url()); });
@@ -326,7 +327,7 @@ test("cada chamado em aberto tem o campo de descrição e o botão avisa na tela
   const aviso = page.locator(TOAST).filter({ hasText: "antes de finalizar, preencha" }).last();
   await expect(aviso).toContainText("Status (D) em FINALIZADO (está EM ABERTO)");
   await expect(aviso).toContainText("Descrição para Finalizar o Chamado");
-  await expect(aviso).not.toContainText("Encerramento (R)"); // R é opcional
+  await expect(aviso).toContainText("DT ENCERRAMENTO (R)"); // regra de 24/11/2026: R digitado é obrigatório
   await expect(aviso).not.toContainText("Responsável (A)"); // A e J já estão preenchidos
   await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
   expect(posts).toHaveLength(0);
@@ -385,6 +386,7 @@ test("Finalizar no SoftExpert pede confirmação explícita, mostra o andamento 
   await expect(modal).toBeVisible();
   await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("não tem volta");
   await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("PDF anexado será enviado");
+  await expect(modal.locator("#mensagem-confirmar-acao")).toContainText("DT ENCERRAMENTO (R): 27/10/2026 09:00.");
   await modal.locator("#btn-confirmar-acao-cancelar").click();
   await expect(modal).toBeHidden();
   expect(posts).toHaveLength(0); // cancelar não finaliza nada
@@ -400,18 +402,19 @@ test("Finalizar no SoftExpert pede confirmação explícita, mostra o andamento 
   await expect(item.locator(".sebrae-mestre__num")).toHaveText("UTIC-2026-1200");
   await expect(item.locator(".sebrae-mestre__titulo")).toHaveText("Teclado sem resposta");
   await expect(item.locator(".sebrae-mestre__quem")).toContainText("Camila Vitoria Lopes de Oliveira");
-  await expect(item.locator(".sebrae-mestre__quando")).toHaveText("28/10/2026 10:10");
+  await expect(item.locator(".sebrae-mestre__quando")).toHaveText("27/10/2026 09:00"); // a DT ENCERRAMENTO digitada, nunca a hora da rotina
   await expect(page.locator("#sebrae-antigos-lista .sebrae-chamado")).toHaveCount(0); // e sai dos antigos em aberto
   await expect(page.getByText("Finalização no SoftExpert terminada")).toHaveCount(0);
   expect(posts).toHaveLength(1);
   expect(posts[0].confirmado).toBe(true);
+  expect(posts[0].encerramento).toBe("27/10/2026 09:00");
   // O finalizar individual leva só as edições mudadas (B é novo, D e R vêm da edição) e nenhum novo em branco (só com os padrões D/S).
   expect(posts[0].edicoes).toEqual([expect.objectContaining({ numero: "UTIC-2026-1200", B: "REDE", D: "FINALIZADO" })]);
   expect(posts[0].chamados).toEqual([]);
   await abrirItemAntigo(cartao);
   await expect(cartao.locator('[data-sebrae-campo="B"]')).toHaveValue("REDE");
   await expect(cartao.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
-  await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("28/10/2026 10:10");
+  await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("27/10/2026 09:00");
   await expect(page.locator("#sebrae-sharepoint-aviso")).toBeHidden();
 });
 
@@ -476,10 +479,10 @@ test("Status FINALIZADO fica verde e volta ao normal em EM ABERTO", async ({ pag
   await expect(status).not.toHaveClass(/sebrae-status--finalizado/);
 });
 
-test("o horário do SoftExpert substitui o Encerramento (R) manual e o resultado traz título e solicitante", async ({ page, request }) => {
+test("a DT ENCERRAMENTO (R) digitada vai ao finalizado (nunca a hora da rotina) e o resultado traz título e solicitante", async ({ page, request }) => {
   const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
-  await completarCampos(antigo); // R manual 27/10/2026 09:00
+  await completarCampos(antigo); // R digitado 27/10/2026 09:00
   await expect(antigo.locator('[data-sebrae-campo="R"]')).toHaveValue("2026-10-27T09:00");
   await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
   await page.locator("#btn-confirmar-acao-ok").click();
@@ -487,16 +490,21 @@ test("o horário do SoftExpert substitui o Encerramento (R) manual e o resultado
   await expect(cartao.locator("> summary")).toContainText("UTIC-2026-1200 · Teclado sem resposta · Camila Vitoria Lopes de Oliveira", { timeout: 10000 });
   await painel.locator("#sebrae-aba-finalizados").click();
   await abrirItemAntigo(cartao);
-  await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("28/10/2026 10:10"); // horário do SoftExpert, não o manual 09:00
+  await expect(cartao.locator('[data-sebrae-campo="R"]')).toHaveValue("27/10/2026 09:00"); // regra de 24/11/2026: o R do usuário
 });
 
-test("finalizar sem Encerramento (R) manual não é bloqueado", async ({ page, request }) => {
-  const { antigo } = await abrirAntigo(page, request);
+test("finalizar sem Encerramento (R) é bloqueado: o aviso pede a DT ENCERRAMENTO e nada é enviado", async ({ page, request }) => {
+  const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO"); // R continua vazio
+  const posts = [];
+  page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/sebrae/finalizar-softexpert")) posts.push(r.url()); });
+  await expect(painel.locator("#btn-sebrae-atualizar")).toBeDisabled();
+  await expect(painel.locator("#sebrae-atualizar-status")).toHaveText("Informe a DT ENCERRAMENTO (coluna R) do chamado UTIC-2026-1200 antes de finalizar.");
   await antigo.getByRole("button", { name: BOTAO_FINALIZAR, exact: true }).click();
-  await expect(page.locator("#modal-confirmar-acao")).toBeVisible();
-  await page.locator("#btn-confirmar-acao-cancelar").click();
+  await expect(page.locator(TOAST).filter({ hasText: "antes de finalizar, preencha" }).last()).toContainText("DT ENCERRAMENTO (R)");
+  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  expect(posts).toHaveLength(0);
 });
 
 test("Atualizar Dashboard confirma, finaliza em massa e mostra o resultado por chamado", async ({ page, request }) => {
@@ -527,7 +535,7 @@ test("Atualizar Dashboard confirma, finaliza em massa e mostra o resultado por c
 test("Atualizar sem finalizar e Esc só atualizam e baixam: não finalizam nem enviam ao SharePoint", async ({ page, request }) => {
   const { painel, antigo } = await abrirAntigo(page, request);
   await descreverChamado(antigo);
-  await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
+  await completarCampos(antigo); // D FINALIZADO com a DT ENCERRAMENTO digitada: sem ela o Atualizar fica bloqueado
   const envios = [];
   page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar")) envios.push(r.postDataJSON()); });
   const modal = page.locator("#modal-confirmar-acao");
@@ -556,7 +564,7 @@ test("Atualizar sem finalizar e Esc só atualizam e baixam: não finalizam nem e
 
 test("chamado FINALIZADO sem descrição é pulado; o envio ao SharePoint pede confirmação e Esc só atualiza", async ({ page, request }) => {
   const { painel, antigo } = await abrirAntigo(page, request);
-  await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
+  await completarCampos(antigo); // D FINALIZADO com a DT ENCERRAMENTO digitada: sem ela o Atualizar fica bloqueado
   const envios = [];
   page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/sebrae/dashboard/atualizar")) envios.push(r.postDataJSON()); });
   const modal = page.locator("#modal-confirmar-acao");
@@ -807,7 +815,7 @@ test("o cartão tem três zonas e as pendências acendem ao escolher A, D FINALI
   await expect(novo.locator(".sebrae-zona--finalizacao .sebrae-zona__aviso")).toHaveText("Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada.");
   await expect(novo.locator(".sebrae-pendencias__rotulo")).toHaveText("Para finalizar:");
   await expect(novo.locator("li.sebrae-pend[data-req]")).toHaveCount(4);
-  await expect(novo.locator(".sebrae-pend--opcional")).toHaveText("Encerramento (R): opcional");
+  await expect(novo.locator(".sebrae-pend--encerramento")).toHaveText("Encerramento (R): obrigatório");
   // Quem decide pendente/ok é o CSS (:has nos campos); o ícone visível de cada requisito troca de "falta" para "ok".
   const ok = req => novo.locator(`li.sebrae-pend[data-req="${req}"] svg.sebrae-pend__ok`);
   const falta = req => novo.locator(`li.sebrae-pend[data-req="${req}"] svg.sebrae-pend__falta`);
@@ -865,6 +873,8 @@ test("o antigo nasce aberto no detalhe e o item da lista acende D: FINALIZADO e 
   const descricao = antigo.getByLabel(ROTULO_DESCRICAO);
   await descricao.fill("Troquei o teclado.");
   await descricao.blur(); // a lista se atualiza no `change` (ao sair do campo)
+  await expect(selo("pronto")).toHaveCount(0); // falta a DT ENCERRAMENTO (R), obrigatória desde 24/11/2026
+  await antigo.locator('[data-sebrae-campo="R"]').fill("2026-10-27T09:00");
   await expect(selo("pronto")).toHaveCount(1);
   await expect(selo("pronto")).toHaveText("Pronto para finalizar");
   await expect(selo("d")).toHaveCount(0); // as quatro condições valem: o selo "pronto" ocupa o lugar

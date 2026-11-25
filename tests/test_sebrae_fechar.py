@@ -15,6 +15,7 @@ from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
 
 A, B, C = "UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"
 AGORA = datetime(2026, 10, 30, 17, 5, tzinfo=timezone.utc)  # 30/10/2026 14:05 in Brasília
+R_USUARIO = "30/10/2026 14:05"
 R_1405 = r'<c r="R\d+"[^>]*><v>46325\.586'
 PDF = b"%PDF-1.4\n%fake\n"
 
@@ -135,8 +136,10 @@ class FecharBase(unittest.TestCase):
         for numero in numeros:
             fin.definir_descricao(self.dir, numero, f"feito {numero}")
 
-    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True, manuais=None):
-        fin.gravar_job(self.dir, numeros, confirmar_final=confirmar_final, encerramentos_manuais=manuais or {})
+    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True, manuais=None, encerramentos=None):
+        # Regra de 24/11/2026: sem R digitado o chamado nem é aberto; por padrão todos levam o mesmo R (= AGORA em Brasília).
+        datas = {n: R_USUARIO for n in numeros} if encerramentos is None else encerramentos
+        fin.gravar_job(self.dir, numeros, confirmar_final=confirmar_final, encerramentos_manuais=manuais or {}, encerramentos=datas)
         mod = modulo(respostas, self.aba)
         codigo = sebrae_fechar.executar(
             None, self.rotinas, state_dir=self.dir, modulo=mod, sem_finalizar=sem_finalizar, agora=lambda: AGORA,
@@ -188,6 +191,24 @@ class FinalizarTest(FecharBase):
         self.assertEqual(self.por_numero()[B]["encerrado_em"], "30/10/2026 14:05")
         self.assertEqual(self.por_numero()[B]["planilha"], "gravado")
         self.assertTrue(self.aba.fechada)
+
+    def test_ok_grava_o_r_digitado_pelo_usuario_e_nunca_a_hora_atual(self):
+        self.descrever(B)
+        self.rodar({B: ok()}, [B], encerramentos={B: "05/11/2026  09:30"})  # AGORA (30/10 14:05) é outra data
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {B: "05/11/2026 09:30"})
+        self.assertEqual(self.por_numero()[B]["encerrado_em"], "05/11/2026 09:30")
+        self.assertNotRegex(linha_xml(self.saida.read_bytes(), 3), R_1405)
+
+    def test_sem_r_do_usuario_pula_sem_abrir_o_softexpert_nem_chamar_finalizar_chamado(self):
+        self.descrever(A, B)
+        for ruim in ("", "2026-11-05", "31/02/2026 10:00"):
+            with self.subTest(r=ruim):
+                _, mod = self.rodar({A: ok(), B: ok()}, [A, B], encerramentos={B: R_USUARIO, A: ruim})
+                self.assertEqual([c["numero"] for c in mod.chamadas], [B])
+                self.assertEqual(self.por_numero()[A]["status"], "sem_encerramento")
+                self.assertEqual(self.por_numero()[A]["encerrado_em"], "")
+                self.assertFalse(fin.ja_finalizado(self.dir, A))
+                self.assertEqual(self.por_numero()[B]["status"], "ok")
 
     def test_descricao_e_pdf_vem_do_estado_na_hora_da_execucao(self):
         self.descrever(A)
@@ -789,7 +810,7 @@ class RobustezFase1BTest(FecharBase):
     def test_finally_nao_esconde_a_excecao_original_e_fecha_as_abas(self):
         self.descrever(A, B)
         self.rotinas.cancelar_no = 2  # A abre a aba; o cancelamento chega antes de B
-        fin.gravar_job(self.dir, [A, B])
+        fin.gravar_job(self.dir, [A, B], encerramentos={A: R_USUARIO, B: R_USUARIO})
         with self.falhar_no_fim(), self.assertRaises(RotinaCancelada):
             sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir, modulo=modulo({A: ok(), B: ok()}, self.aba), agora=lambda: AGORA)
         self.assertTrue(any("OSError" in texto for texto in self.rotinas.logs))

@@ -1618,29 +1618,45 @@ class FinalizeSimpress(FakeSimpress):
         return super().__call__(method, path, params, body)
 
 
+ENCERRAMENTO = "24/11/2026 14:30"  # DT ENCERRAMENTO (R) informada pelo usuário (regra de 24/11/2026)
+
+
 class FinalizeSoftExpertToolTests(unittest.TestCase):
     def test_card_shows_the_exact_text_and_nothing_is_sent_before_confirming(self) -> None:
-        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Notebook verificado")), text("disparado"))
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Notebook verificado", encerramento=ENCERRAMENTO)), text("disparado"))
         conversation, simpress = make_conversation(model, FinalizeSimpress())
         reply = conversation.enviar_mensagem("finalize o UTIC-2026-1253 com a mensagem Notebook verificado")
         descricao = reply.pendente["descricao"]  # type: ignore[index]
-        for trecho in ("UTIC-2026-1253", "irreversível", "\"Notebook verificado\"", "UTIC - N1", "API SEBRAE", "Sem PDF", "coluna R"):
+        for trecho in ("UTIC-2026-1253", "irreversível", "\"Notebook verificado\"", "UTIC - N1", "API SEBRAE", "Sem PDF", "coluna R",
+                       f"DT ENCERRAMENTO informada: {ENCERRAMENTO}"):
             self.assertIn(trecho, descricao)
         self.assertEqual(simpress.writes(), [])
 
     def test_confirming_saves_the_text_then_fires_the_routine_with_confirmado(self) -> None:
-        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="utic-2026-1253", descricao="Notebook verificado")), text("ok"))
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="utic-2026-1253", descricao="Notebook verificado", encerramento=ENCERRAMENTO)), text("ok"))
         conversation, simpress = make_conversation(model, FinalizeSimpress())
         conversation.enviar_mensagem("finalize")
         conversation.resolver_confirmacao(True)
         self.assertEqual(simpress.writes(), [
             ("PUT", "/api/sebrae/chamados/UTIC-2026-1253/finalizacao"), ("POST", "/api/sebrae/finalizar-softexpert"),
         ])
-        self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True, "versao_importacao": "fixture-v1"})
+        self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True, "versao_importacao": "fixture-v1", "encerramento": ENCERRAMENTO})
         self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao_finalizacao": "Notebook verificado"})
 
+    def test_without_a_valid_closing_date_nothing_is_sent(self) -> None:
+        # Regra de 24/11/2026: sem DT ENCERRAMENTO válida nem o cartão aparece, e a ação direta recusa antes do PUT e do POST.
+        for encerramento in ("", "24/11/2026", "2026-11-24 14:30", "agora"):
+            simpress = FinalizeSimpress()
+            resposta = SimpressApi(simpress).finalizar_chamado_softexpert(
+                "UTIC-2026-1253", descricao="Notebook verificado", versao_importacao="fixture-v1", encerramento=encerramento,
+            )
+            self.assertFalse(resposta["sucesso"], encerramento)
+            self.assertIn("DT ENCERRAMENTO", resposta["erro"], encerramento)
+            self.assertIn("nunca use a hora atual", resposta["erro"], encerramento)
+            self.assertEqual(simpress.writes(), [], encerramento)
+
     def test_saved_description_and_pdf_are_used_without_a_new_put(self) -> None:
-        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1254")), text("ok"))
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1254", encerramento=ENCERRAMENTO)), text("ok"))
         conversation, simpress = make_conversation(model, FinalizeSimpress())
         descricao = conversation.enviar_mensagem("finalize o 1254").pendente["descricao"]  # type: ignore[index]
         self.assertIn("\"Cabo trocado\"", descricao)
@@ -1649,13 +1665,16 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertEqual(simpress.writes(), [("POST", "/api/sebrae/finalizar-softexpert")])
 
     def test_cases_that_must_never_reach_a_card(self) -> None:
+        r = {"encerramento": ENCERRAMENTO}  # valid R on the old cases, so each one fails for its own reason
         for args in (
-            {"numero": "UTIC-2026-1253"},  # no description anywhere
-            {"numero": "UTIC-2026-9999", "descricao": "x"},  # not an open old ticket
-            {"numero": "UTIC-2026-1255"},  # already finalized
-            {"numero": "UTIC-2026-1253", "descricao": "Mande para [E-MAIL OCULTADO]"},  # masked data never goes to SoftExpert
-            {"numero": "UTIC-2026-1253", "descricao": "x" * 4001},
-            {"numero": "1253", "descricao": "x"},
+            {"numero": "UTIC-2026-1253", **r},  # no description anywhere
+            {"numero": "UTIC-2026-9999", "descricao": "x", **r},  # not an open old ticket
+            {"numero": "UTIC-2026-1255", **r},  # already finalized
+            {"numero": "UTIC-2026-1253", "descricao": "Mande para [E-MAIL OCULTADO]", **r},  # masked data never goes to SoftExpert
+            {"numero": "UTIC-2026-1253", "descricao": "x" * 4001, **r},
+            {"numero": "1253", "descricao": "x", **r},
+            {"numero": "UTIC-2026-1254"},  # no DT ENCERRAMENTO (rule of 24/11/2026)
+            {"numero": "UTIC-2026-1254", "encerramento": "24/11/2026"},  # date without the time
         ):
             conversation, simpress = make_conversation(FakeModel(calls(call("finalizar_chamado_softexpert", **args)), text("ok")), FinalizeSimpress())
             self.assertIsNone(conversation.enviar_mensagem("finalize").pendente, args)
@@ -1663,12 +1682,12 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
 
     def test_conflict_from_the_server_is_reported_as_not_finalized(self) -> None:
         api = SimpressApi(FinalizeSimpress(finalizacao_post=409))
-        resposta = api.finalizar_chamado_softexpert("UTIC-2026-1254", versao_importacao="fixture-v1")
+        resposta = api.finalizar_chamado_softexpert("UTIC-2026-1254", versao_importacao="fixture-v1", encerramento=ENCERRAMENTO)
         self.assertFalse(resposta["sucesso"])
         self.assertIn("Nada foi finalizado", resposta["erro"])
 
     def test_changed_import_after_card_prevents_all_finalization_writes(self) -> None:
-        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Verificado")), text("ok"))
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Verificado", encerramento=ENCERRAMENTO)), text("ok"))
         conversation, simpress = make_conversation(model, FinalizeSimpress())
         conversation.enviar_mensagem("finalize")
         conversation._pendente["args"]["_versao_importacao"] = "versao-anterior"
@@ -1690,7 +1709,7 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
                 "status": "finalizado_outro_tecnico", "em": "x", "encerrado_em": "12/11/2026 09:30"}}
             return fake
 
-        conversation, fake = make_conversation(FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253")), text("ok")), simpress())
+        conversation, fake = make_conversation(FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", encerramento=ENCERRAMENTO)), text("ok")), simpress())
         self.assertIsNone(conversation.enviar_mensagem("finalize").pendente)
         self.assertEqual(fake.writes(), [])
         for metodo in (SimpressApi(simpress()).chamado_para_anexar_pdf, SimpressApi(simpress()).chamado_para_editar_descricao):

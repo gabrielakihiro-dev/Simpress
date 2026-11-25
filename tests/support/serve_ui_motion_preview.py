@@ -479,7 +479,7 @@ def reset_finalizar(sharepoint_falha=False, outro_tecnico=False):
     finalizar_state.clear()
     finalizar_state.update(descricao="", pdf=None, finalizacao=None, polls=0, rodando=False, acao="finalizar",
                            numeros=[], resultado=None, sharepoint=None, sharepoint_falha=sharepoint_falha,
-                           ficha=None, manuais=None,
+                           ficha=None, manuais=None, encerramentos={},
                            # /__fixture_automacao?outro_tecnico=1: o finalizado da fixture vira "finalizado por outro técnico" (Desfazer finalização)
                            outro_tecnico="registrado" if outro_tecnico else "")
 
@@ -579,8 +579,9 @@ def sebrae_novos_payload():
     return dados
 
 
-def iniciar_finalizar(acao, numeros):
-    finalizar_state.update(rodando=True, polls=0, acao=acao, numeros=numeros)
+def iniciar_finalizar(acao, numeros, encerramentos=None):
+    # encerramentos = {UTIC: "dd/MM/aaaa HH:mm"} digitado pelo usuário: como no servidor real, é o R gravado (nunca a hora da rotina)
+    finalizar_state.update(rodando=True, polls=0, acao=acao, numeros=numeros, encerramentos=dict(encerramentos or {}))
 
 
 def finalizar_consulta():
@@ -596,9 +597,10 @@ def finalizar_consulta():
             st["sharepoint"] = None
             st["resultado"] = {"acao": st["acao"], "iniciado_em": "2026-10-28T10:20:00-03:00", "em_andamento": False, "resultados": [], "pulados": []}
         else:
-            resultados = [{"numero": n, "status": "ok", "em": "2026-10-28T10:10:00-03:00", "encerrado_em": "28/10/2026 10:10", "mensagem": ""}
+            resultados = [{"numero": n, "status": "ok", "em": "2026-10-28T10:10:00-03:00", "encerrado_em": st["encerramentos"].get(n, ""), "mensagem": ""}
                           for n in st["numeros"]]
-            st["finalizacao"] = {"status": "ok", "em": "2026-10-28T10:10:00-03:00", "encerrado_em": "28/10/2026 10:10"}
+            st["finalizacao"] = {"status": "ok", "em": "2026-10-28T10:10:00-03:00",
+                                 "encerrado_em": st["encerramentos"].get(st["numeros"][0], "") if st["numeros"] else ""}
             st["resultado"] = {"acao": "finalizar", "iniciado_em": "2026-10-28T10:10:00-03:00", "em_andamento": False,
                                "resultados": resultados, "pulados": []}
             st["sharepoint"] = FINALIZAR_SHAREPOINT if st["sharepoint_falha"] else None
@@ -1268,15 +1270,18 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             corpo = json.loads(self.rfile.read(size) or b"{}")
             numero = corpo.get("numero")
+            encerramento = str(corpo.get("encerramento") or "").strip()
             finalizar_state["manuais"] = {"chamados": corpo.get("chamados") or [], "edicoes": corpo.get("edicoes") or []}
             if not corpo.get("confirmado"):
                 self.send({"detail": "Confirme a finalização no SoftExpert antes de enviar."}, 422)
             elif not finalizar_state["descricao"].strip():
                 self.send({"detail": "Preencha a descrição para finalizar o chamado."}, 422)
+            elif not encerramento:  # mesma frase do servidor (regra de 24/11/2026)
+                self.send({"detail": f"Informe a DT ENCERRAMENTO (coluna R) do chamado {numero} antes de finalizar."}, 422)
             elif finalizar_state["rodando"]:
                 self.send({"detail": "Já há uma finalização em andamento."}, 409)
             else:
-                iniciar_finalizar("finalizar", [numero])
+                iniciar_finalizar("finalizar", [numero], {numero: encerramento})
                 self.send({"iniciado": True, "numeros": [numero]}, 202)
             return
         if path == "/api/sebrae/antigos/ler":
@@ -1317,7 +1322,7 @@ class Handler(BaseHTTPRequestHandler):
             finalizando = [c["numero"] for c in corpo.get("edicoes") or [] if c.get("D") == "FINALIZADO"]
             com_descricao = bool(finalizar_state["descricao"].strip())
             if finalizando and com_descricao and corpo.get("finalizar_softexpert") is True:
-                iniciar_finalizar("finalizar", finalizando)
+                iniciar_finalizar("finalizar", finalizando, {c["numero"]: c.get("R", "") for c in corpo.get("edicoes") or [] if c.get("D") == "FINALIZADO"})
                 fechar = {"iniciado": True, "motivo": "", "numeros": finalizando, "pulados": []}
             elif finalizando and com_descricao:
                 fechar = {"iniciado": False, "motivo": "finalização no SoftExpert não confirmada", "numeros": [], "pulados": []}
