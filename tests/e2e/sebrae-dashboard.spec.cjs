@@ -747,7 +747,7 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
 });
 
-test("antigo não encontrado no SoftExpert na última leitura fica vermelho, com selo e aviso para conferir depois", async ({ page, request }) => {
+test("antigo não encontrado no SoftExpert na última leitura fica laranja, com selo e aviso para conferir depois", async ({ page, request }) => {
   await page.route("**/api/sebrae/novos", async rota => {
     const resposta = await rota.fetch();
     const corpo = await resposta.json();
@@ -759,16 +759,69 @@ test("antigo não encontrado no SoftExpert na última leitura fica vermelho, com
   const lista = painel.locator("#sebrae-antigos-lista");
   // No Novo layout o realce vive no item da lista compacta (o resumo da linha fica escondido)
   const linha = numero => painel.locator(`#sebrae-antigos-mestre [data-sebrae-mestre="${numero}"]`);
-  const vermelho = await linha("UTIC-2026-1211").evaluate(no => getComputedStyle(no).borderLeftWidth);
-  expect(vermelho).toBe("4px");
+  const faixa = await linha("UTIC-2026-1211").evaluate(no => getComputedStyle(no).borderLeftWidth);
+  expect(faixa).toBe("4px");
   const seloLeitura = linha("UTIC-2026-1211").locator(".sebrae-selo:not(.sebrae-selo--auto):not(.sebrae-selo-obs):not(.sebrae-selo-os-nova)");
   await expect(seloLeitura).toHaveText("Não encontrado");
-  await expect(seloLeitura).toHaveAttribute("data-status", "erro");
+  await expect(seloLeitura).toHaveAttribute("data-status", "laranja");
   const cartao = lista.locator('.sebrae-chamado[data-numero="UTIC-2026-1211"]');
   await abrirItemAntigo(cartao);
   await expect(cartao.locator("[data-leitura='nao_encontrado']")).toContainText("pode ter sido finalizado por outro técnico");
   await expect(cartao.locator("[data-leitura='pendente']")).toHaveCount(0);
   expect(await linha("UTIC-2026-1210").evaluate(no => getComputedStyle(no).borderLeftWidth)).toBe("1px"); // o lido segue normal
+});
+
+test("Finalizar de antigo não encontrado: bloco laranja com A, B, D e R, caixa sempre desmarcada e confirmar_outro_tecnico só se marcada", async ({ page, request }) => {
+  await page.route("**/api/sebrae/novos", async rota => {
+    const resposta = await rota.fetch();
+    const corpo = await resposta.json();
+    corpo.importado.abertos.forEach(a => { if (a.numero === "UTIC-2026-1211") a.nao_encontrado_softexpert = true; });
+    await rota.fulfill({ response: resposta, json: corpo });
+  });
+  const { painel } = await abrirPainel(page, request, "", "leitura");
+  await painel.locator("#sebrae-aba-antigos").click();
+  const cartao = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1211"]');
+  await abrirItemAntigo(cartao);
+  await cartao.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE");
+  await cartao.locator('[data-sebrae-campo="B"]').selectOption({ index: 1 });
+  await cartao.locator('[data-sebrae-campo="J"]').selectOption("INCIDENTE");
+  await completarCampos(cartao);
+  // a fixture só guarda a descrição e a ficha do chamado da finalização (UTIC-2026-1200): o 1211 responde só nestas rotas
+  await page.route("**/api/sebrae/chamados/UTIC-2026-1211/**", rota => rota.request().method() === "GET" ? rota.fallback()
+    : rota.fulfill({ contentType: "application/json", body: JSON.stringify({ numero: "UTIC-2026-1211", descricao_finalizacao: "Teclado trocado.", pdf: null, finalizacao: null, ficha: null }) }));
+  const detalhe = "Para registrar UTIC-2026-1211 como finalizado por outro técnico, preencha B (Categoria).";
+  const posts = [];
+  await page.route("**/api/sebrae/finalizar-softexpert", rota => {
+    if (rota.request().method() !== "POST") return rota.fallback();
+    posts.push(rota.request().postDataJSON());
+    return rota.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ detail: detalhe }) });
+  });
+  await cartao.getByLabel(ROTULO_DESCRICAO).fill("Teclado trocado.");
+  const botao = cartao.getByRole("button", { name: BOTAO_FINALIZAR, exact: true });
+  const modal = page.locator("#modal-confirmar-acao");
+  const caixa = modal.getByRole("checkbox", { name: "Se o SoftExpert não encontrar o chamado, registrar como finalizado por outro técnico" });
+  await botao.click();
+  const bloco = modal.locator(".ck-confirmar__bloco");
+  await expect(bloco).toContainText("Este chamado não foi encontrado na última leitura do SoftExpert");
+  await expect(bloco).toContainText("Confira os campos que vão ao Dashboard e ao SharePoint se ele também não for encontrado agora:");
+  for (const rotulo of ["A · Cliente/Simpress", "B · Categoria", "D · Situação", "R · DT ENCERRAMENTO"]) await expect(bloco.locator("dt", { hasText: rotulo })).toBeVisible();
+  await expect(bloco.locator("dd").nth(3)).toHaveText("27/10/2026 09:00");
+  await expect(caixa).not.toBeChecked();
+  expect((await caixa.boundingBox()).height).toBeGreaterThanOrEqual(20); // alvo do rótulo (44px) abaixo
+  expect((await modal.locator(".ck-confirmar__caixa").boundingBox()).height).toBeGreaterThanOrEqual(44);
+  const ajuda = bloco.locator(".ck-confirmar__ajuda");
+  await expect(ajuda).toHaveText("Sem marcar: se achar, finaliza normalmente. Se não achar, fica “não encontrado”, D e R não vão ao SharePoint, e você pode tentar de novo.");
+  await caixa.check();
+  await expect(ajuda).toHaveText("Marcado: se não achar, fica “finalizado por outro técnico” e A, B, D e R vão ao Dashboard e ao SharePoint.");
+  await modal.locator("#btn-confirmar-acao-cancelar").click(); // cancelar não vaza a caixa marcada
+  await expect(modal).toBeHidden();
+  await botao.click();
+  await expect(caixa).not.toBeChecked();
+  await caixa.check();
+  await modal.locator("#btn-confirmar-acao-ok").click();
+  await expect(page.locator(TOAST).filter({ hasText: detalhe })).toHaveCount(1); // o 422 mostra o detail do servidor
+  expect(posts).toHaveLength(1); // o Cancelar de antes não enviou nada
+  expect(posts[0].confirmar_outro_tecnico).toBe(true);
 });
 
 test("o lápis da Descrição do antigo lido edita o texto (vai à coluna H em Atualizar Dashboard) e Restaurar original volta ao lido",async ({ page, request }) => {

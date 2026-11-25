@@ -1740,7 +1740,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__resultado[data-estado="ok"]::before, .sebrae-chamado__resultado[data-estado="ja_finalizado"]::before { content: "✓"; }
 .sebrae-chamado__resultado[data-estado="erro"] { --tom: var(--cor-erro-texto); --fundo: var(--cor-erro-fundo); }
 .sebrae-chamado__resultado[data-estado="erro"]::before { content: "×"; font-size: var(--fs-base); }
-.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"], .sebrae-chamado__resultado[data-estado="sem_encerramento"] { --tom: var(--cor-alerta-texto); --fundo: var(--cor-alerta-fundo); }
+.sebrae-chamado__resultado[data-estado="sem_descricao"], .sebrae-chamado__resultado[data-estado="sem_encerramento"] { --tom: var(--cor-alerta-texto); --fundo: var(--cor-alerta-fundo); }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"] { --tom: var(--cor-laranja-texto); --fundo: var(--cor-laranja-fundo); }
 .sebrae-chamado__resultado[data-estado="nao_encontrado"]::before, .sebrae-chamado__resultado[data-estado="sem_descricao"]::before, .sebrae-chamado__resultado[data-estado="sem_encerramento"]::before { content: "!"; }
 .sebrae-chamado__resultado[data-estado="pronto"], .sebrae-chamado__resultado[data-estado="andamento"] { --tom: var(--cor-destaque-texto); --fundo: var(--cor-destaque-fundo); }
 .sebrae-chamado__resultado[data-estado="pronto"]::before { content: "i"; }
@@ -1754,11 +1755,27 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-selo-destaque { border: 1px solid var(--cor-alerta-texto); } /* borda 1px no tom do texto: o selo se vê também sem distinguir o fundo âmbar */
 .sebrae-selo-destaque[hidden], .sebrae-selo-obs[hidden] { display: none; }
 .sebrae-selo-destaque__estrela { font-size: var(--fs-xs); line-height: 1; }
-/* Antigo não encontrado no SoftExpert na última leitura (ex.: finalizado por outro técnico): vermelho para conferir depois; vem antes do destaque, que é escolha manual e vence. */
-.sebrae-antigo:has([data-leitura="nao_encontrado"]) { border-left: 4px solid var(--cor-erro-texto); }
-.sebrae-antigo:has([data-leitura="nao_encontrado"]) > summary { background: var(--cor-erro-fundo); }
+/* Antigo não encontrado no SoftExpert na última leitura (ex.: finalizado por outro técnico): laranja para conferir depois (decisão de 25/11/2026; vermelho é só de falha); vem antes do destaque, que é escolha manual e vence. */
+.sebrae-antigo:has([data-leitura="nao_encontrado"]) { border-left: 4px solid var(--cor-laranja-borda); }
+.sebrae-antigo:has([data-leitura="nao_encontrado"]) > summary { background: var(--cor-laranja-fundo); }
 .sebrae-antigo:has([data-leitura="nao_encontrado"]) > summary .sebrae-antigo__quem { color: var(--cor-texto-suave); }
-.sebrae-chamado__dica[data-leitura="nao_encontrado"] { color: var(--cor-erro-texto); }
+.sebrae-chamado__dica[data-leitura="nao_encontrado"] { color: var(--cor-laranja-texto); }
+.ck-badge[data-status="laranja"] { border: 1px solid var(--cor-laranja-borda); background: var(--cor-laranja-fundo); color: var(--cor-laranja-texto); }
+/* Diálogo de confirmação: bloco laranja (chamado não encontrado) com A/B/D/R e a caixa de "outro técnico". */
+.ck-confirmar__blocos { display: grid; gap: 10px; padding-bottom: 12px; }
+.ck-confirmar__blocos[hidden] { display: none; }
+.ck-confirmar__bloco { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--cor-laranja-borda); border-left-width: 4px; border-radius: var(--raio-sm); background: var(--cor-laranja-fundo); color: var(--cor-laranja-texto); font-size: var(--fs-md); line-height: 1.45; }
+.ck-confirmar__bloco-titulo { margin: 0; font-size: var(--fs-md); font-weight: var(--peso-marca); }
+.ck-confirmar__bloco-texto, .ck-confirmar__ajuda, .ck-confirmar__bloqueio { margin: 0; }
+.ck-confirmar__linhas { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 0; }
+.ck-confirmar__linhas dt { font-weight: var(--peso-marca); }
+.ck-confirmar__linhas dd { margin: 0; overflow-wrap: anywhere; font-family: var(--fonte-mono); }
+.ck-confirmar__caixa { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: var(--peso-medio); }
+.ck-veu > .ck-dialogo .ck-confirmar__caixa, .ck-veu > .ck-dialogo .ck-confirmar__caixa span { color: var(--cor-laranja-texto); font-size: var(--fs-md); }
+.ck-veu > .ck-dialogo .ck-confirmar__caixa input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--cor-laranja-borda); cursor: inherit; }
+.ck-confirmar__caixa input:focus-visible { outline: 2px solid var(--cor-laranja-texto); outline-offset: 2px; }
+.ck-confirmar__caixa:has(input:disabled) { cursor: not-allowed; opacity: .7; }
+.ck-confirmar__bloqueio { font-weight: var(--peso-marca); }
 .sebrae-chamado--destaque { border-left: 4px solid var(--cor-alerta-texto); }
 :is(.sebrae-novo, .sebrae-antigo, .sebrae-finalizado):has(.sebrae-chamado--destaque) { border-left: 4px solid var(--cor-alerta-texto); }
 :is(.sebrae-novo, .sebrae-antigo, .sebrae-finalizado):has(.sebrae-chamado--destaque) > summary { background: var(--cor-alerta-fundo); }

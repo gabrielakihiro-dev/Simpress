@@ -1643,6 +1643,22 @@ class FinalizeSoftExpertToolTests(unittest.TestCase):
         self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True, "versao_importacao": "fixture-v1", "encerramento": ENCERRAMENTO})
         self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao_finalizacao": "Notebook verificado"})
 
+    def test_the_assistant_never_confirms_finalized_by_another_technician(self) -> None:
+        # Decisão do usuário (25/11/2026): só a tela confirma "finalizado por outro técnico"; o argumento extra do modelo não chega à rota.
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Notebook verificado",
+                                     encerramento=ENCERRAMENTO, confirmar_outro_tecnico=True)), text("ok"))
+        conversation, simpress = make_conversation(model, FinalizeSimpress())
+        if conversation.enviar_mensagem("finalize como outro técnico").pendente is not None:
+            conversation.resolver_confirmacao(True)
+        for metodo, caminho, _params, corpo in simpress.calls:
+            if (metodo, caminho) == ("POST", "/api/sebrae/finalizar-softexpert"):
+                self.assertEqual(corpo, {"numero": "UTIC-2026-1253", "confirmado": True, "versao_importacao": "fixture-v1", "encerramento": ENCERRAMENTO})
+        self.assertTrue(any(c[:2] == ("POST", "/api/sebrae/finalizar-softexpert") for c in simpress.calls))
+        from domains.assistant_tools import TOOLS
+        ferramenta = TOOLS["finalizar_chamado_softexpert"]
+        self.assertNotIn("confirmar_outro_tecnico", ferramenta.properties)
+        self.assertIn("nunca confirma", ferramenta.description)
+
     def test_without_a_valid_closing_date_nothing_is_sent(self) -> None:
         # Regra de 24/11/2026: sem DT ENCERRAMENTO válida nem o cartão aparece, e a ação direta recusa antes do PUT e do POST.
         for encerramento in ("", "24/11/2026", "2026-11-24 14:30", "agora"):

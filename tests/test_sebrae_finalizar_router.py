@@ -20,7 +20,7 @@ from domains import sebrae_dashboard_gravacao, sebrae_novos, sebrae_vinculos
 from domains.assistant_api import SimpressApi, asgi_transport
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import FichaPayload, SebraeDashboardServices, create_sebrae_dashboard_router
-from tests.test_sebrae_dashboard_gravacao import linha_xml, montar, partes_de
+from tests.test_sebrae_dashboard_gravacao import _trocar_na_folha, linha_xml, montar, partes_de
 
 A, B, C = "UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"
 PDF = b"%PDF-1.4\n%fake\n"
@@ -398,7 +398,7 @@ class FinalizarUmTest(FinalizarBase):
         sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
         self.descrever(A)
         manuais = {"numero": A, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE", "R": "05/11/2026 14:30"}
-        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": "", "edicoes": [manuais]})
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": "", "edicoes": [manuais], "confirmar_outro_tecnico": True})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         job = self.job()
         self.assertEqual((job["encerramentos"], job["encerramentos_manuais"]), ({A: "05/11/2026 14:30"}, {A: "05/11/2026 14:30"}))
@@ -633,8 +633,8 @@ class AtualizarBase(FinalizarBase):
         r = {"R": R_USUARIO} if d == "FINALIZADO" else {}  # regra de 24/11/2026: D=FINALIZADO leva o R digitado
         return {"numero": numero, "A": "CLIENTE", "B": "REDE", "D": d, "J": "INCIDENTE", **r, **extra}
 
-    def atualizar(self, *edicoes, finalizar_softexpert=True, enviar_sharepoint=None):
-        corpo = {"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert}
+    def atualizar(self, *edicoes, finalizar_softexpert=True, enviar_sharepoint=None, **extra):
+        corpo = {"edicoes": list(edicoes), "finalizar_softexpert": finalizar_softexpert, **extra}
         if enviar_sharepoint is not None:
             corpo["enviar_sharepoint"] = enviar_sharepoint
         resposta = self.post(ATUALIZAR, json=corpo)
@@ -735,51 +735,152 @@ class AtualizarEnviaSemRunnerTest(AtualizarBase):
 
 
 class FinalizadoPorOutroTecnicoTest(AtualizarBase):
-    """Regra do usuário (12/11/2026): D=FINALIZADO + R num antigo que a leitura do SoftExpert não achou vai no job como R manual."""
+    """Regra do usuário (12/11/2026): D=FINALIZADO + R num antigo que a leitura do SoftExpert não achou vai no job como R manual.
+    Decisão do usuário (25/11/2026): só com a confirmação explícita dele (`confirmar_outro_tecnico`) e A, B, D=FINALIZADO e R preenchidos."""
 
     R = "12/11/2026 09:30"
 
     def nao_encontrado(self):
         sebrae_novos.salvar_resultado_antigos(self.caminhos, {"falhas": {A: "não está na lista"}, "nao_encontrados": [A]})
 
-    def test_atualizar_com_d_finalizado_e_r_em_nao_encontrado_grava_o_r_manual_no_job(self):
+    def saida(self):
+        return sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").read_bytes()
+
+    def test_atualizar_com_d_finalizado_e_r_em_nao_encontrado_confirmado_grava_o_r_manual_no_job(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        corpo = self.atualizar(self.edicao(A, R=self.R), confirmar_outro_tecnico=[A])
+        self.assertEqual(corpo["fechar"]["numeros"], [A])
+        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+        self.assertIn("FINALIZADO", linha_xml(self.saida(), 2))  # confirmado: D e R vão à cópia
+
+    def test_atualizar_sem_confirmacao_finaliza_normal_sem_r_manual(self):
         self.nao_encontrado()
         self.descrever(A)
         corpo = self.atualizar(self.edicao(A, R=self.R))
-        self.assertEqual(corpo["fechar"]["numeros"], [A])
-        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+        self.assertEqual(corpo["fechar"]["numeros"], [A])  # a fechar ainda tenta: achou, ok; não achou, nao_encontrado
+        self.assertEqual(self.job()["encerramentos_manuais"], {})
 
     def test_atualizar_sem_r_ou_com_chamado_achado_ou_nunca_lido_nao_grava_r_manual(self):
         self.descrever(A)
-        self.assertEqual(self.atualizar(self.edicao(A, R=self.R))["fechar"]["numeros"], [A])  # nunca lido na central
+        self.assertEqual(self.atualizar(self.edicao(A, R=self.R), confirmar_outro_tecnico=[A])["fechar"]["numeros"], [A])  # nunca lido na central
         self.assertEqual(self.job()["encerramentos_manuais"], {})
         sebrae_novos.salvar_antigo(sebrae_novos.caminho_antigos(self.caminhos), ChamadoSoftExpert(A, titulo="Achou"), "agora")
-        self.assertEqual(self.atualizar(self.edicao(A, R=self.R))["fechar"]["numeros"], [A])  # a leitura achou o chamado
+        self.assertEqual(self.atualizar(self.edicao(A, R=self.R), confirmar_outro_tecnico=[A])["fechar"]["numeros"], [A])  # a leitura achou o chamado
         self.assertEqual(self.job()["encerramentos_manuais"], {})
 
     def test_so_o_chamado_nao_encontrado_leva_r_manual_numa_lista_com_outros(self):
         self.nao_encontrado()
         self.descrever(A, B)
-        self.atualizar(self.edicao(A, R=self.R), self.edicao(B, R="11/11/2026 10:00"))
+        self.atualizar(self.edicao(A, R=self.R), self.edicao(B, R="11/11/2026 10:00"), confirmar_outro_tecnico=[A, B])
         self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
 
-    def test_cartao_finalizar_com_d_finalizado_e_r_em_nao_encontrado_grava_o_r_manual_no_job(self):
+    def test_atualizar_confirmado_incompleto_responde_422_sem_gravar_nem_disparar(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        casos = (
+            (self.edicao(A, B="", R=self.R), "preencha B (Categoria)."),
+            (self.edicao(A, d="EM ABERTO", R=self.R), "preencha D (FINALIZADO)."),
+            (self.edicao(A, d="EM ABERTO"), "preencha D (FINALIZADO) e R (DT ENCERRAMENTO, dd/MM/aaaa HH:mm)."),
+        )
+        for edicao, falta in casos:
+            with self.subTest(falta=falta):
+                resposta = self.post(ATUALIZAR, json={"edicoes": [edicao], "finalizar_softexpert": True, "confirmar_outro_tecnico": [A]})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertEqual(resposta.json(), {"detail": f"Para registrar {A} como finalizado por outro técnico, {falta}"})
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+        self.assertFalse(sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").exists())
+
+    def test_um_confirmado_invalido_recusa_o_pedido_inteiro(self):
+        self.nao_encontrado()
+        self.descrever(A, B)
+        resposta = self.post(ATUALIZAR, json={
+            "edicoes": [self.edicao(A, R=self.R), self.edicao(B, B="")], "finalizar_softexpert": True, "confirmar_outro_tecnico": [A, B],
+        })
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertIn(B, resposta.json()["detail"])
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+
+    def test_confirmado_com_a_vazio_lista_todas_as_faltas(self):
+        vazio = '<c r="A2" s="60" t="inlineStr"><is><t>SIMPRESS</t></is></c>'
+        self.importar(_trocar_na_folha(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), vazio, ""))
+        self.nao_encontrado()
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={
+            "numero": A, "confirmado": True, "confirmar_outro_tecnico": True, "edicoes": [{"numero": A, "J": "INCIDENTE"}],
+        })
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["detail"], f"Para registrar {A} como finalizado por outro técnico, preencha A (Cliente/Simpress), B (Categoria) e D (FINALIZADO).")
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_cartao_finalizar_confirmado_grava_o_r_manual_no_job(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={
+            "numero": A, "confirmado": True, "encerramento": self.R, "edicoes": [self.edicao(A, R=self.R)], "confirmar_outro_tecnico": True,
+        })
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+
+    def test_cartao_finalizar_sem_confirmacao_sem_r_ou_sem_d_finalizado_nao_grava_r_manual(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        for corpo in ({}, {"edicoes": [self.edicao(A, R=self.R)]}, {"edicoes": [self.edicao(A, d="EM ABERTO", R=self.R)]}):
+            with self.subTest(corpo=corpo):
+                self.runner.iniciadas.clear()
+                resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, **corpo})
+                self.assertEqual(resposta.status_code, 202, resposta.text)
+                self.assertEqual(self.job()["encerramentos_manuais"], {})
+
+    def test_cartao_confirmado_incompleto_responde_422_sem_gravar_nem_disparar(self):
+        self.nao_encontrado()
+        self.descrever(A)
+        for corpo in ({}, {"edicoes": [self.edicao(A, d="EM ABERTO", R=self.R)]}, {"edicoes": [self.edicao(A, B="", R=self.R)]}):
+            with self.subTest(corpo=corpo):
+                resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "confirmar_outro_tecnico": True, **corpo})
+                self.assertEqual(resposta.status_code, 422, resposta.text)
+                self.assertTrue(resposta.json()["detail"].startswith(f"Para registrar {A} como finalizado por outro técnico, preencha "))
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+        self.assertFalse(sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx").exists())
+
+    def test_nao_encontrado_sem_confirmacao_nao_chega_a_copia_como_finalizado(self):
+        # Invariante: a fechar envia esta cópia ao SharePoint se algum chamado do pedido der ok; o não encontrado não confirmado não vai FINALIZADO.
+        self.nao_encontrado()
+        self.descrever(A, B)
+        self.atualizar(self.edicao(A, R=self.R), self.edicao(B, R="11/11/2026 10:00"))
+        self.assertEqual(self.job()["numeros"], [A, B])  # A ainda vai à fechar: se ela achar, a rotina grava D e R
+        saida = self.saida()
+        self.assertNotIn("FINALIZADO", linha_xml(saida, 2))
+        self.assertNotRegex(linha_xml(saida, 2), r'<c r="R2"')
+        self.assertIn("REDE", linha_xml(saida, 2))  # os outros campos manuais seguem
+        self.assertIn("FINALIZADO", linha_xml(saida, 3))  # B foi achado na leitura: segue como antes
+
+    def test_cartao_nao_encontrado_sem_confirmacao_nao_chega_a_copia_como_finalizado(self):
         self.nao_encontrado()
         self.descrever(A)
         resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [self.edicao(A, R=self.R)]})
         self.assertEqual(resposta.status_code, 202, resposta.text)
-        self.assertEqual(self.job()["encerramentos_manuais"], {A: self.R})
+        self.assertNotIn("FINALIZADO", linha_xml(self.saida(), 2))
+        self.assertIn("REDE", linha_xml(self.saida(), 2))
 
-    def test_cartao_finalizar_sem_r_ou_sem_d_finalizado_nao_grava_r_manual(self):
+    def test_sem_finalizar_no_softexpert_a_copia_segue_igual(self):
+        # Item 7 (só relatado): "Atualizar" sem finalizar mantém D=FINALIZADO na cópia, como antes.
+        self.nao_encontrado()
+        self.atualizar(self.edicao(A, R=self.R), finalizar_softexpert=False)
+        self.assertIn("FINALIZADO", linha_xml(self.saida(), 2))
+
+    def test_assistente_nunca_confirma_outro_tecnico_na_rota_real(self):
+        # Decisão do usuário (25/11/2026): o Assistente finaliza sem confirmar; um não encontrado termina em nao_encontrado na fechar.
         self.nao_encontrado()
         self.descrever(A)
-        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
-        self.assertEqual(resposta.status_code, 202, resposta.text)
-        self.assertEqual(self.job()["encerramentos_manuais"], {})
-        self.runner.iniciadas.clear()
-        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [self.edicao(A, d="EM ABERTO", R=self.R)]})
-        self.assertEqual(resposta.status_code, 202, resposta.text)
-        self.assertEqual(self.job()["encerramentos_manuais"], {})
+        api = SimpressApi(asgi_transport(lambda: self.app, 8000))
+        versao = sebrae_novos.ler_existentes(self.caminhos.existentes)["versao"]
+        self.assertTrue(api.finalizar_chamado_softexpert(A, versao_importacao=versao, encerramento=self.R)["sucesso"])
+        job = self.job()
+        self.assertEqual((job["numeros"], job["encerramentos"], job["encerramentos_manuais"]), ([A], {A: self.R}, {}))
 
 
 class DesfazerOutroTecnicoTest(AtualizarBase):
