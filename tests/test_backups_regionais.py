@@ -426,7 +426,7 @@ class ConfirmacaoTests(unittest.TestCase):
         self.assertEqual(londrina["contados"], 0)
         self.assertEqual(
             [(c["serie"], c["confirmacao"]) for c in londrina["candidatos"]],
-            [("NB1", {"estado": "invalidada", "motivo": "cidade_mudou"})],
+            [("NB1", {"estado": "invalidada", "motivo": "cidade_mudou", "cidade": "Cascavel"})],
         )
         self.assertEqual(todas_as_series(resultado), ["NB1"])  # nunca na cidade antiga
 
@@ -681,6 +681,21 @@ class ConfirmarBackupCalculoTests(unittest.TestCase):
         self.assertEqual(backup["confirmacao"], {"estado": "vigente", "tipo": "backup", "expira_em": None})
         self.assertIsNone(backup["confirmado_ate"])
 
+    def test_cidade_mudou_leva_a_cidade_gravada_e_desfazer_com_ela_limpa(self):
+        gravada = novo("NB1", "Londrina")
+        # Passo 1: cadastro em Cascavel; a confirmação de Londrina cai com a cidade gravada, sem usuario_ref.
+        resultado = calcular([notebook("NB1")], endpoint(), [gravada])
+        invalidada = regional(resultado, "Cascavel")["candidatos"][0]["confirmacao"]
+        self.assertEqual(invalidada, {"estado": "invalidada", "motivo": "cidade_mudou", "cidade": "Londrina"})
+        # Enquanto o registro existir, o cadastro voltar para Londrina o faz contar de novo (comportamento original).
+        volta = calcular([notebook("NB1", cidade="Londrina")], endpoint(), [gravada])
+        self.assertEqual([(b["serie"], b["origem"]) for b in regional(volta, "Londrina")["backups"]], [("NB1", "confirmacao")])
+        # Passo 2: Desfazer com a cidade gravada remove o registro; o candidato fica sem nota.
+        estado, removido = store.desfazer(estado_de(gravada), "NB1", invalidada["cidade"])
+        self.assertEqual(removido, gravada)
+        limpo = calcular([notebook("NB1")], endpoint(), estado["confirmacoes"])
+        self.assertIsNone(regional(limpo, "Cascavel")["candidatos"][0]["confirmacao"])
+
     def test_usuario_mudou_exclui(self):
         resultado = calcular([notebook("NB1")], endpoint(("NB1", "H1", antes(days=30), "maria")),
                              [novo("NB1", usuario_ref=ref("joao"))])
@@ -849,6 +864,13 @@ class StoreConfirmarBackupTests(unittest.TestCase):
             estado_de(novo(usuario_ref=ref("joao"))), "TSTBK002", "Cascavel", AGORA, ref("maria"))
         self.assertFalse(repetido)
         self.assertEqual([r["usuario_ref"] for r in estado["confirmacoes"]], [ref("maria")])
+
+    def test_confirmar_em_outra_cidade_tira_a_confirmacao_da_cidade_antiga(self):
+        inicial = estado_de(novo("TSTBK002", "Londrina"), novo("TSTBK003", "Londrina"))
+        estado, registro, repetido = store.confirmar(inicial, "TSTBK002", "Cascavel", AGORA, "")
+        self.assertFalse(repetido)
+        self.assertEqual([(r["serie"], r["cidade"]) for r in estado["confirmacoes"]], [("TSTBK003", "Londrina"), ("TSTBK002", "Cascavel")])
+        self.assertEqual(estado["confirmacoes"][-1], registro)
 
     def test_confirmar_substitui_registro_7_dias(self):
         estado, registro, repetido = store.confirmar(estado_de(antigo()), "TSTBK001", "Cascavel", AGORA, "")

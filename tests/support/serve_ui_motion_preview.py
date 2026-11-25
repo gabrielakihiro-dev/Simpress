@@ -318,6 +318,8 @@ def backups_reset(modo="padrao"):
         grupo("Cascavel", backups=cascavel, excluidos=[
             {"serie": "TSTBK0005", "motivo": "usuario_vigente"},
             {"serie": "TSTBK0011", "motivo": "usuario_mudou", "confirmacao": {"estado": "invalidada", "motivo": "usuario_mudou"}},
+            {"serie": "TSTBK0015", "motivo": "usuario_vigente",
+             "confirmacao": {"estado": "invalidada", "motivo": "cidade_mudou", "cidade": "Londrina"}},
         ]),
         grupo("Londrina", candidatos=[candidato("TSTBK0001", "Estacao Teste 1", "sem_verificacao_7_dias", 9)],
               conferencia=[{"serie": "TSTBK0002", "apelido": "Estacao Teste 2", "motivo": "cidade_divergente"}]),
@@ -390,9 +392,14 @@ def backups_acao(acao, corpo):
     if acao == "desfazer":
         achado = procurar("backups", lambda i: i.get("confirmacao"))
         if achado is None:
-            invalidado = procurar("excluidos", lambda i: (i.get("confirmacao") or {}).get("estado") == "invalidada")
-            if invalidado is not None:
-                grupo["excluidos"].remove(invalidado)
+            # cidade_mudou: o corpo traz a cidade gravada, e o item está na regional atual (outro grupo).
+            invalidado = None
+            for g in backups_state["cidades"].values():
+                invalidado = next((i for i in g["excluidos"] if backups_chave(i["serie"]) == serie
+                                   and (i.get("confirmacao") or {}).get("estado") == "invalidada"), None)
+                if invalidado is not None:
+                    g["excluidos"].remove(invalidado)
+                    break
             return 200, {"serie": corpo.get("serie"), "cidade": corpo.get("cidade"), "removido": invalidado is not None}
         grupo["backups"].remove(achado)
         grupo["candidatos"].append({"serie": achado["serie"], "apelido": achado["apelido"], "motivo": "ausente_no_endpoint",

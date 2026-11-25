@@ -267,6 +267,15 @@ class BackupsRegionaisRouterTests(unittest.TestCase):
         confirmacoes = self.arquivo()["confirmacoes"]
         self.assertEqual(confirmacoes, [{**resposta["confirmacao"], "usuario_ref": ""}])
 
+    def test_desfazer_com_a_cidade_gravada_remove_mesmo_com_o_cadastro_em_outra(self):
+        self.semear({"esquema": 1, "confirmacoes": [{
+            "serie": "NB1", "cidade": "Londrina", "confirmado_em": AGORA.isoformat(timespec="seconds"),
+            "tipo": "backup", "usuario_ref": "",
+        }]})
+        resposta = self.post(DESFAZER, cidade="Londrina")  # cadastro de NB1: Cascavel
+        self.assertEqual(resposta, {"serie": "NB1", "cidade": "Londrina", "removido": True})
+        self.assertEqual(self.arquivo(), {"esquema": 1, "confirmacoes": []})
+
     def test_desfazer_com_outra_grafia_remove_e_devolve_a_gravada(self):
         self.post(CONFIRMAR)
         resposta = self.post(DESFAZER, serie="nb1", cidade="CASCAVEL")

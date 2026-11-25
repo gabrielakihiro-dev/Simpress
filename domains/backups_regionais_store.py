@@ -173,7 +173,11 @@ def confirmar(
         "tipo": TIPO_BACKUP,
         "usuario_ref": usuario_ref,
     }
-    restantes = [r for r in estado["confirmacoes"] if not _mesma(r, serie, cidade)]
+    # Uma série tem uma confirmação por vez: a de outra cidade sai junto.
+    restantes = [
+        r for r in estado["confirmacoes"]
+        if normalize_reference_value(r["serie"]) != normalize_reference_value(serie)
+    ]
     return podar(_com_decisoes(estado, [*restantes, registro], estado.get("decisoes")), agora), registro, False
 
 

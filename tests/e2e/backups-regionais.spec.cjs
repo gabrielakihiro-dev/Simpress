@@ -318,6 +318,14 @@ test("confirmação nova mostra Confirmado como backup com Desfazer; excluído p
   await excluido.getByRole("button", { name: "Desfazer confirmação: série TSTBK0011, Cascavel" }).click();
   await expect(cascavel.locator("code", { hasText: "TSTBK0011" })).toHaveCount(0);
 
+  // cidade_mudou: o Desfazer aparece e leva a cidade gravada (Londrina), não a atual (Cascavel).
+  const outraCidade = cascavel.locator("li").filter({ has: page.locator("code", { hasText: "TSTBK0015" }) });
+  await expect(outraCidade).toContainText("Antes: a confirmação anterior era de outra cidade");
+  const pedido = page.waitForRequest(req => req.url().endsWith("/api/backups-regionais/desfazer") && req.postDataJSON().serie === "TSTBK0015");
+  await outraCidade.getByRole("button", { name: "Desfazer confirmação: série TSTBK0015, Londrina" }).click();
+  expect((await pedido).postDataJSON()).toEqual({ serie: "TSTBK0015", cidade: "Londrina" });
+  await expect(cascavel.locator("code", { hasText: "TSTBK0015" })).toHaveCount(0);
+
   // Confirmar mostra o toast novo, sem apelido nem cidade.
   await page.getByRole("button", { name: "Confirmar TSTBK0001 como backup de Londrina" }).click();
   await expect(page.locator("#toast-container")).toContainText("Backup confirmado: TSTBK0001");

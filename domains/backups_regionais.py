@@ -260,6 +260,8 @@ def build_backups_regionais(
             )
             if motivo_invalida:
                 confirmacao_invalidada = {"estado": "invalidada", "motivo": motivo_invalida}
+                if motivo_invalida == "cidade_mudou":  # o Desfazer precisa da cidade gravada
+                    confirmacao_invalidada["cidade"] = confirmada["cidade"]
             else:
                 confirmacao_vigente = {
                     "estado": "vigente", "tipo": confirmada["tipo"], "expira_em": expira.isoformat() if expira else None,

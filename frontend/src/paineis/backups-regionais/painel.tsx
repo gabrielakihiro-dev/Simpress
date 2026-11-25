@@ -137,9 +137,10 @@ function ItemConferencia({ item, cidade }: { item: Item; cidade: string }) {
 
 // Confirmação invalidada (ex.: usuário mudou) também pode ser desfeita, para limpar o registro.
 function ItemExcluido({ item, cidade }: { item: Item; cidade: string }) {
-  // cidade_mudou: o Desfazer enviaria a cidade atual e falharia.
-  const desfazer = item.confirmacao?.estado === "invalidada" && item.confirmacao?.motivo !== "cidade_mudou";
-  return <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} />{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidade} /> : null}</>;
+  const desfazer = item.confirmacao?.estado === "invalidada";
+  // cidade_mudou: o registro está na cidade gravada, não na atual.
+  const cidadeGravada = item.confirmacao?.motivo === "cidade_mudou" && item.confirmacao?.cidade ? texto(item.confirmacao.cidade) : cidade;
+  return <><Identificacao item={item} /><span className="ck-backups__detalhe">{traduzir(MOTIVOS, item.motivo)}</span><NotaConfirmacaoAnterior confirmacao={item.confirmacao} />{desfazer ? <Botao acao="desfazer" serie={texto(item.serie)} cidade={cidadeGravada} /> : null}</>;
 }
 
 // <details> não controlado: o React não mexe no `open`, que continua aberto entre um redesenho e outro.
