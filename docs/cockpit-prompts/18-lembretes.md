@@ -133,6 +133,18 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 - Editar a descrição ou concluir o lembrete não altera os dados do termo gravados.
 - Textos novos (`Dados do termo`, `Preencher no Termo`, `Substituir o termo?` e a mensagem, `Substituir`, `Termo preenchido com os dados do lembrete.`): aprovados pelo usuário em 12/11/2026. `Gerar PDF` é o mesmo texto do termo.
 
+## Sino: lembretes agendados (25/11/2026)
+
+Pedido do usuário (25/11/2026). Integração só de leitura com a Central de Notificações (sino): o cartão `#alerta-lembretes-agendados` mostra a contagem de lembretes atrasados e de hoje. Regra do cartão, gravidade, quando some e a fonte estão em `docs/operacao/alertas-os-divergencias.md`, seção 7.
+
+- Aparece quando há ao menos 1 lembrete pendente atrasado (selo `Urgente`) ou só de hoje (selo `Atenção`). Textos: `2 lembretes atrasados.`, `1 lembrete para hoje.`, `2 atrasados e 1 para hoje.`. Só números, nunca a descrição.
+- Botão `Ver Lembretes`: abre esta ferramenta (`abrirPainelCockpit("lembretes")`).
+- Datas: conta só pendentes com `data_agendada` válida. Atrasado é data anterior a hoje; hoje é a data de America/Sao_Paulo. A `hora_agendada` não muda a classificação (hora já passada hoje continua em "hoje"), a mesma regra de `Reagendar para hoje`. Concluídos, futuros e sem data não contam.
+- Atualização: criar, concluir ou reabrir, editar, excluir e reagendar disparam `simpress:atualizar-notificacoes`, e o sino mostra a contagem na hora.
+- O sino não dispara alarme nem aviso nativo do Windows. Mostra só a contagem no painel aberto pelo sino.
+- O Assistente não lê os lembretes do painel: `obter_painel` remove o campo antes de responder (regra 37 do prompt do Assistente, `docs/cockpit-prompts/15-assistente.md`).
+- Só leitura: o painel nunca grava, cria nem repara `data/state/lembretes.json`. Arquivo ilegível ou ocupado mostra o cartão como indisponível: não aparece e o resto do painel carrega.
+
 ## Dados e privacidade (LGPD)
 
 - Grava só `data/state/lembretes.json` (`{"version": 1, "lembretes": [...]}`), com `lock_paths` e `atomic_write_json`.
