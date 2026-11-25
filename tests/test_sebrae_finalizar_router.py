@@ -1,7 +1,9 @@
 import base64
+import io
 import json
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -14,11 +16,11 @@ from pydantic import ValidationError
 from core.errors import DomainBusyError, DomainConflictError, DomainError
 from domains import os_marcas_finalizacao as marcas
 from domains import sebrae_finalizacao as fin
-from domains import sebrae_novos, sebrae_vinculos
+from domains import sebrae_dashboard_gravacao, sebrae_novos, sebrae_vinculos
 from domains.assistant_api import SimpressApi, asgi_transport
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import FichaPayload, SebraeDashboardServices, create_sebrae_dashboard_router
-from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
+from tests.test_sebrae_dashboard_gravacao import linha_xml, montar, partes_de
 
 A, B, C = "UTIC-2026-0001", "UTIC-2026-0002", "UTIC-2026-0003"
 PDF = b"%PDF-1.4\n%fake\n"
@@ -565,6 +567,61 @@ class SemRunnerTest(FinalizarBase):
         self.descrever(A)
         self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 503)
         self.assertFalse(fin.caminho_job(self.dir).exists())
+
+
+def com_r_texto(conteudo, n, valor):
+    """Same workbook with column R of row ``n`` as a text cell (an old R typed in the Dashboard; a serial always reads with the time)."""
+    partes = partes_de(conteudo)
+    folha = partes["xl/worksheets/sheet4.xml"].decode()
+    partes["xl/worksheets/sheet4.xml"] = folha.replace(f'<c r="T{n}"', f'<c r="R{n}" s="5" t="inlineStr"><is><t>{valor}</t></is></c><c r="T{n}"', 1).encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome, dados in partes.items():
+            arquivo.writestr(nome, dados)
+    return saida.getvalue()
+
+
+class RGravadoNoDashboardTest(FinalizarBase):
+    """R lido do Dashboard importado (`_encerramento_do_pedido`): só vale com data e hora; só a data quebraria a gravação da coluna R."""
+
+    def importar_com_r(self, valor):
+        self.importar(com_r_texto(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), 2, valor))
+        self.descrever(A)
+
+    def test_r_gravado_com_data_e_hora_vale_sem_encerramento_no_corpo(self):
+        self.importar_com_r("05/11/2026 09:30")
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": ""})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["encerramentos"], {A: "05/11/2026 09:30"})
+
+    def test_r_gravado_so_com_a_data_responde_422_sem_disparar(self):
+        self.importar_com_r("05/11/2026")
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": ""})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["detail"], f"Informe a DT ENCERRAMENTO (coluna R) do chamado {A} antes de finalizar.")
+        self.assertEqual(self.runner.iniciadas, [])
+        self.assertIsNone(self.job())
+
+    def test_encerramento_so_com_a_data_no_corpo_responde_422(self):
+        self.importar()
+        self.descrever(A)
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "encerramento": "05/11/2026"})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_atualizar_com_d_finalizado_e_r_gravado_so_com_a_data_pede_o_r(self):
+        self.importar_com_r("05/11/2026")
+        resposta = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "D": "FINALIZADO"}], "finalizar_softexpert": True})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(self.runner.iniciadas, [])
+
+    def test_r_digitado_com_hora_sobrescreve_o_r_gravado_so_com_a_data(self):
+        self.importar_com_r("05/11/2026")
+        resposta = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "R": "05/11/2026 09:30"}], "finalizar_softexpert": False})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        saida = sebrae_novos.caminho_saida(self.caminhos, resposta.json()["arquivo"]).read_bytes()
+        lida = {c.numero: c.valores for c in sebrae_dashboard_gravacao.chamados_para_editar(saida)}
+        self.assertEqual(lida[A]["R"], "05/11/2026 09:30")
 
 
 class AtualizarBase(FinalizarBase):

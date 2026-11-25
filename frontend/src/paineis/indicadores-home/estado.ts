@@ -648,7 +648,8 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   const MOTIVOS_FALHA_FINALIZACAO: Record<string, string> = { tempo_esgotado: "tempo esgotado", sessao_expirada: "sessão expirada" };
 
   function textoFalhasFinalizacao(itens: FalhaFinalizacao[]): string {
-    const erros = itens.filter(item => item.motivo !== "interrompida" && item.motivo !== "sharepoint");
+    const erros = itens.filter(item => !["interrompida", "sharepoint", "planilha"].includes(String(item.motivo)));
+    const semR = itens.filter(item => item.motivo === "planilha");
     const partes: string[] = [];
     if (erros.length) {
       const numeros = erros.filter(item => item.numero).map(item => {
@@ -658,9 +659,15 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       const sujeito = erros.length === 1 ? "1 chamado não foi finalizado" : `${erros.length} chamados não foram finalizados`;
       partes.push(`${sujeito} no SoftExpert${numeros.length ? `: ${numeros.join(", ")}` : ""}.`);
     }
+    if (semR.length) {
+      // o chamado foi finalizado, mas a coluna R não: só o número UTIC, nunca a mensagem da rotina
+      const numeros = semR.filter(item => item.numero).map(item => String(item.numero));
+      partes.push(`${numeros.length ? `${numeros.join(", ")}: a` : "A"} DT ENCERRAMENTO não foi gravada no Dashboard.`);
+    }
     if (itens.some(item => item.motivo === "interrompida")) partes.push("A finalização parou no meio (tempo esgotado ou rotina encerrada).");
     if (itens.some(item => item.motivo === "sharepoint")) partes.push("O envio do Dashboard ao SharePoint falhou ou ficou incerto.");
-    partes.push("Confira na aba Chamados (F5) e tente de novo.");
+    // o erro pode ter vindo depois do clique irreversível em Finalizar: nunca mande só "tentar de novo"
+    partes.push("Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.");
     return partes.join(" ");
   }
 

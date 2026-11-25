@@ -8,7 +8,7 @@ const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
 const transferUtils = require("../../frontend/src/comum/transfer-utils.ts");
 
 const ID = "alerta-finalizacao-softexpert";
-const DICA = "Confira na aba Chamados (F5) e tente de novo.";
+const DICA = "Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.";
 
 function montar() {
   const texto = { textContent: "" };
@@ -45,6 +45,17 @@ test("rotina interrompida e um só chamado com sessão expirada", () => {
     assert.equal(cena.texto.textContent, `A finalização parou no meio (tempo esgotado ou rotina encerrada). ${DICA}`);
     cena.dashboard.renderizarAlertaFalhasFinalizacao({ total: 1, itens: [{ numero: "UTIC-2026-3", motivo: "sessao_expirada" }] });
     assert.equal(cena.texto.textContent, `1 chamado não foi finalizado no SoftExpert: UTIC-2026-3 (sessão expirada). ${DICA}`);
+  } finally { cena.restaurar(); }
+});
+
+test("R não gravado no Dashboard: finalizado, sem contar como falha de finalização", () => {
+  const cena = montar();
+  try {
+    cena.dashboard.renderizarAlertaFalhasFinalizacao({ total: 2, itens: [{ numero: "UTIC-2026-4", motivo: "planilha" }, { numero: "UTIC-2026-5", motivo: "planilha" }] });
+    assert.equal(cena.texto.textContent, `UTIC-2026-4, UTIC-2026-5: a DT ENCERRAMENTO não foi gravada no Dashboard. ${DICA}`);
+    cena.dashboard.renderizarAlertaFalhasFinalizacao({ total: 2, itens: [{ numero: "UTIC-2026-6", motivo: "erro" }, { numero: "", motivo: "planilha" }] });
+    assert.equal(cena.texto.textContent,
+      `1 chamado não foi finalizado no SoftExpert: UTIC-2026-6. A DT ENCERRAMENTO não foi gravada no Dashboard. ${DICA}`);
   } finally { cena.restaurar(); }
 });
 

@@ -9,6 +9,7 @@ from unittest.mock import patch
 from core.integrity import FileBusyError, FileTransactionError
 from core.errors import DomainBusyError, DomainConflictError
 from domains import sebrae_finalizacao as fin
+from domains import sebrae_dashboard_gravacao as gravacao
 from domains import sebrae_novos
 from scripts import sebrae_fechar
 from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
@@ -198,10 +199,13 @@ class FinalizarTest(FecharBase):
         self.assertEqual(fin.encerramentos_registrados(self.dir), {B: "05/11/2026 09:30"})
         self.assertEqual(self.por_numero()[B]["encerrado_em"], "05/11/2026 09:30")
         self.assertNotRegex(linha_xml(self.saida.read_bytes(), 3), R_1405)
+        # lido de volta pelo leitor da planilha: a coluna R guarda o serial de 05/11/2026 09:30, com a hora digitada
+        lida = dict(zip(gravacao.COLUNAS_DE_DADO, gravacao.valores_dos_chamados(self.saida.read_bytes())[3]))
+        self.assertEqual((lida["C"], lida["D"], lida["R"]), (B, "FINALIZADO", "05/11/2026 09:30"))
 
     def test_sem_r_do_usuario_pula_sem_abrir_o_softexpert_nem_chamar_finalizar_chamado(self):
         self.descrever(A, B)
-        for ruim in ("", "2026-11-05", "31/02/2026 10:00"):
+        for ruim in ("", "05/11/2026", "2026-11-05", "31/02/2026 10:00"):
             with self.subTest(r=ruim):
                 _, mod = self.rodar({A: ok(), B: ok()}, [A, B], encerramentos={B: R_USUARIO, A: ruim})
                 self.assertEqual([c["numero"] for c in mod.chamadas], [B])

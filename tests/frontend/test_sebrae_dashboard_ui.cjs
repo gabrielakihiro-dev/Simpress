@@ -15,7 +15,7 @@ test("camposFaltando lista A, Status em FINALIZADO, J, a DT ENCERRAMENTO (R) e a
   assert.deepEqual(camposFaltando({ ...completo, D: "" }, "ok"), ["Status (D) em FINALIZADO"]);
   // regra de 24/11/2026: sem R digitado não finaliza (nunca a hora atual)
   assert.deepEqual(camposFaltando({ ...completo, R: "  " }, "ok"), ["DT ENCERRAMENTO (R)"]);
-  assert.deepEqual(camposFaltando({ ...completo, R: "28/10/2026" }, "ok"), [], "R antigo do Dashboard só com a data vale (o servidor também aceita)");
+  assert.deepEqual(camposFaltando({ ...completo, R: "28/10/2026" }, "ok"), ["DT ENCERRAMENTO (R)"], "R antigo só com a data: a coluna R só é gravada com a hora");
   assert.deepEqual(camposFaltando({ ...completo, R: "28/10" }, "ok"), ["DT ENCERRAMENTO (R)"]);
   assert.deepEqual(camposFaltando(completo, "   "), ["Descrição para Finalizar o Chamado"]);
   assert.deepEqual(camposFaltando(undefined, ""), ["Responsável (A)", "Status (D) em FINALIZADO", "Tipo do chamado (J)", "DT ENCERRAMENTO (R)", "Descrição para Finalizar o Chamado"]);
@@ -43,7 +43,7 @@ test("a atualização leva todos os chamados novos, com vazios em branco e a dat
 
 test("a data guardada no Dashboard volta para o campo de data e hora", () => {
   assert.equal(encerramentoParaCampo("28/10/2026 14:30"), "2026-10-28T14:30");
-  assert.equal(encerramentoParaCampo("28/10/2026"), "2026-10-28T00:00");
+  assert.equal(encerramentoParaCampo("28/10/2026"), "", "só a data: nenhuma hora inventada (nunca T00:00)");
   assert.equal(encerramentoParaCampo(""), "");
 });
 
@@ -2531,7 +2531,7 @@ test("escolher um valor à mão no antigo esconde o chip; esvaziar o campo o mos
   assert.equal(chip.hidden, false);
 });
 
-const { AJUDA_ENCERRAMENTO, encerramentoInformado, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;
+const { AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento } = sebraeDashboardModel;
 const NAO_ENCONTRADO = "UTIC-2026-1200";
 const LEITURA_ACHADA = { titulo: "Teclado", descricao: "", solicitante: "Camila", habilitada_em: "", atendimento: "", lido_em: "agora" };
 
@@ -2541,8 +2541,11 @@ test("R obrigatório (regra de 24/11/2026): todo chamado com D FINALIZADO e sem 
   assert.equal(encerramentoObrigatorio(antigo(), { D: "FINALIZADO" }), true);
   assert.equal(encerramentoObrigatorio(antigo(), { D: " FINALIZADO " }), true, "espaços não escondem a regra");
   assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026 09:00" } }), { D: "FINALIZADO" }), false, "R já gravado na linha");
-  assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026" } }), { D: "FINALIZADO" }), false, "R gravado só com a data não trava o Atualizar");
-  assert.equal(encerramentoInformado("20/10/2026"), "20/10/2026");
+  // a coluna R só é gravada com data e hora: R antigo só com a data conta como falta e precisa ser redigitado com a hora
+  assert.equal(encerramentoObrigatorio(antigo({ valores: { D: "EM ABERTO", R: "20/10/2026" } }), { D: "FINALIZADO" }), true, "R gravado só com a data conta como falta");
+  assert.equal(encerramentoInformado("20/10/2026"), "");
+  assert.equal(ajudaEncerramentoSemHora("20/10/2026"), "Informe também a hora (gravado: 20/10/2026).");
+  for (const sem of ["", "20/10/2026 09:00"]) assert.equal(ajudaEncerramentoSemHora(sem), "", sem);
   assert.equal(encerramentoInformado("1/11/2026 9:05"), "1/11/2026 9:05", "o servidor normaliza os zeros");
   assert.equal(encerramentoInformado("2026-10-30T14:05"), "30/10/2026 14:05");
   for (const ruim of ["", "20/10", "2026-10-30", "20/10/2026 14", "ontem"]) assert.equal(encerramentoInformado(ruim), "", ruim);
@@ -2641,6 +2644,7 @@ test("R também é obrigatório para antigo nunca lido e lido no SoftExpert; só
     ["nunca lido (sem o selo Não encontrado)", () => {}, "linha:27", true],
     ["lido no SoftExpert", antigo => { antigo.leitura_softexpert = LEITURA_ACHADA; }, NAO_ENCONTRADO, true],
     ["R já gravado no Dashboard", antigo => { antigo.valores.R = "20/10/2026 09:00"; }, NAO_ENCONTRADO, false],
+    ["R gravado só com a data", antigo => { antigo.valores.R = "20/10/2026"; }, NAO_ENCONTRADO, true],
   ];
   for (const [rotulo, mudar, numero, obrigatorio] of casos) {
     const { el, digitar, status, botao } = await telaNaoEncontrado(mudar);
@@ -2654,6 +2658,36 @@ test("R também é obrigatório para antigo nunca lido e lido no SoftExpert; só
     else assert.doesNotMatch(status().textContent, /DT ENCERRAMENTO/, rotulo);
     assert.equal(cartao.querySelector(".sebrae-chamado__encerramento-ajuda").hidden, !obrigatorio, rotulo);
   }
+});
+
+test("R antigo gravado só com a data: o campo fica editável e vazio (sem T00:00), a ajuda mostra a data e o R com hora vai ao Atualizar", async () => {
+  const { el, digitar, status, botao, posts, feature } = await telaNaoEncontrado(antigo => { antigo.valores.R = "20/10/2026"; });
+  const cartao = cartaoAntigoDe(el, NAO_ENCONTRADO);
+  const r = cartao.querySelector('[data-sebrae-campo="R"]');
+  const ajuda = cartao.querySelector(".sebrae-chamado__encerramento-ajuda");
+  assert.ok(!r.disabled, "R sem hora não fica travado");
+  assert.equal(cartao.querySelector('[data-sebrae-campo="A"]').disabled, true, "o resto do que já está gravado segue travado");
+  assert.equal(r.value, "", "nenhuma hora inventada");
+  assert.equal(ajuda.hidden, false, "a data gravada continua à vista mesmo com D EM ABERTO");
+  assert.equal(ajuda.textContent, "Informe também a hora (gravado: 20/10/2026).");
+  assert.equal(r.getAttribute("aria-describedby"), ajuda.id);
+  digitar(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
+  assert.equal(r.required, true);
+  assert.equal(botao.disabled, true);
+  assert.equal(status().textContent, avisoEncerramento([NAO_ENCONTRADO]));
+  digitar(r, "2026-10-20T09:30");
+  assert.equal(botao.disabled, false);
+  await feature.atualizarDashboardSebrae();
+  assert.deepEqual(posts[0].edicoes, [{ numero: NAO_ENCONTRADO, D: "FINALIZADO", R: "20/10/2026 09:30" }]);
+});
+
+test("rascunho: R digitado com hora sobre um R gravado só com a data volta ao recarregar; sobre R completo, não", () => {
+  const rascunho = { valores: {}, edicoes: { "UTIC-2026-1": { R: "2026-10-20T09:30" } }, salvoEm: "" };
+  const soData = aplicarRascunho(rascunho, [], [{ numero: "UTIC-2026-1", valores: { R: "20/10/2026" } }]);
+  assert.deepEqual(soData.edicoes, { "UTIC-2026-1": { R: "2026-10-20T09:30" } });
+  assert.deepEqual(soData.conflitos, []);
+  const completo = aplicarRascunho(rascunho, [], [{ numero: "UTIC-2026-1", valores: { R: "20/10/2026 08:00" } }]);
+  assert.deepEqual(completo.edicoes, {});
 });
 
 test("chamado novo com D FINALIZADO sem R: R obrigatório, Atualizar bloqueado com a frase do servidor e o botão por chamado não envia", async () => {

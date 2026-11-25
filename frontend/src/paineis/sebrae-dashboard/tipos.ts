@@ -44,6 +44,7 @@ export interface ModeloSebrae {
   tituloAntigo: Funcao;
   dadosAntigo: Funcao;
   encerramentoInformado: Funcao;
+  ajudaEncerramentoSemHora: Funcao;
   encerramentoObrigatorio: Funcao;
   pendenciasEncerramento: Funcao;
   avisoEncerramento: Funcao;

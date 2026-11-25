@@ -2588,9 +2588,12 @@ class PanelRegionalToolTests(unittest.TestCase):
 
     def test_finalization_failures_alert_is_described_read_only_and_returned(self) -> None:
         descricao = TOOLS["obter_painel"].description
-        for termo in ("falhas_finalizacao_softexpert", "tempo_esgotado", "interrompida", "aba Chamados (F5)", "não finaliza por conta própria"):
+        cautela = "Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo."
+        for termo in ("falhas_finalizacao_softexpert", "tempo_esgotado", "interrompida", "planilha", "aba Chamados (F5)", "não finaliza por conta própria", cautela):
             self.assertIn(termo, descricao)
-        self.assertIn("falhas_finalizacao_softexpert", SYSTEM_PROMPT)
+        for termo in ("falhas_finalizacao_softexpert", cautela):
+            self.assertIn(termo, SYSTEM_PROMPT)
+        self.assertNotIn("pedir de novo", descricao + SYSTEM_PROMPT)
         painel = {"falhas_finalizacao_softexpert": {"total": 1, "itens": [{"numero": "UTIC-2026-2001", "motivo": "tempo_esgotado"}]}}
         dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
         self.assertEqual(dados["dados"]["falhas_finalizacao_softexpert"]["itens"], [{"numero": "UTIC-2026-2001", "motivo": "tempo_esgotado"}])

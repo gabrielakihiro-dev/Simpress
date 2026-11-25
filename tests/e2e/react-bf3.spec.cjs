@@ -1045,7 +1045,7 @@ test.describe("comportamento (só no desktop)", () => {
       id: "alerta-finalizacao-softexpert",
       extra: { falhas_finalizacao_softexpert: { total: 2, itens: [{ numero: "UTIC-2026-1380", motivo: "tempo_esgotado" }, { numero: "", motivo: "interrompida" }] } },
       selo: "Urgente", titulo: "Falha ao finalizar no SoftExpert", acao: "Ver na aba Chamados",
-      texto: "1 chamado não foi finalizado no SoftExpert: UTIC-2026-1380 (tempo esgotado). A finalização parou no meio (tempo esgotado ou rotina encerrada). Confira na aba Chamados (F5) e tente de novo.",
+      texto: "1 chamado não foi finalizado no SoftExpert: UTIC-2026-1380 (tempo esgotado). A finalização parou no meio (tempo esgotado ou rotina encerrada). Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.",
       lista: [],
     },
     {

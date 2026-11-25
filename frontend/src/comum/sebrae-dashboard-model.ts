@@ -45,10 +45,10 @@ export function formatarEncerramento(valor: Qualquer): string {
   return partes ? `${partes[3]}/${partes[2]}/${partes[1]} ${partes[4]}` : "";
 }
 
-/** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). */
+/** "28/10/2026 14:30" (como o Dashboard guarda a coluna R) → "2026-10-28T14:30" (campo datetime-local). Só a data dá "": nenhuma hora inventada. */
 export function encerramentoParaCampo(texto: Qualquer): string {
-  const partes = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}))?/.exec(String(texto || "").trim());
-  return partes ? `${partes[3]}-${partes[2]}-${partes[1]}T${partes[4] || "00:00"}` : "";
+  const partes = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/.exec(String(texto || "").trim());
+  return partes ? `${partes[3]}-${partes[2]}-${partes[1]}T${partes[4]}` : "";
 }
 
 export const MAX_TITULO = 300; // mesmo limite de ChamadoManual.G no servidor (routers/sebrae_dashboard.py)
@@ -115,13 +115,19 @@ export function dadosAntigo(item: Qualquer): Qualquer {
 export const AJUDA_ENCERRAMENTO = "Obrigatório ao finalizar o chamado";
 
 /**
- * R válido vindo do campo datetime-local ("dd/MM/aaaa HH:mm") ou do texto gravado no Dashboard, que pode ter só a data
- * ("dd/MM/aaaa", R antigo digitado sem hora); mesmo formato que o servidor aceita (`encerramento_valido`, que normaliza os zeros).
- * "" quando vazio ou fora do formato.
+ * R válido vindo do campo datetime-local ou do texto gravado no Dashboard, sempre com data e hora ("dd/MM/aaaa HH:mm"); mesmo formato
+ * que o servidor aceita (`encerramento_valido`, que normaliza os zeros). "" quando vazio, fora do formato ou só com a data
+ * (R antigo digitado sem hora: a coluna R só é gravada com a hora, então ele precisa ser redigitado).
  */
 export function encerramentoInformado(valor: Qualquer): string {
   const texto = umaLinha(valor);
-  return formatarEncerramento(texto) || (/^\d{1,2}\/\d{1,2}\/\d{4}(?: \d{1,2}:\d{2})?$/.test(texto) ? texto : "");
+  return formatarEncerramento(texto) || (/^\d{1,2}\/\d{1,2}\/\d{4} \d{1,2}:\d{2}$/.test(texto) ? texto : "");
+}
+
+/** Ajuda do R gravado só com a data: o campo começa vazio (sem hora inventada) e a data antiga continua à vista. */
+export function ajudaEncerramentoSemHora(gravado: Qualquer): string {
+  const texto = umaLinha(gravado);
+  return texto && !encerramentoInformado(texto) ? `Informe também a hora (gravado: ${texto}).` : "";
 }
 
 /**
@@ -463,7 +469,8 @@ export function aplicarRascunho(rascunho: Qualquer, formulario: Qualquer, aberto
   (abertos || []).forEach((item: Qualquer) => {
     const campos = { ...rascunho.valores[item.numero], ...rascunho.edicoes[item.numero] };
     if (!campos) return;
-    const livres = Object.fromEntries(Object.entries(campos).filter(([letra, _valor]) => !String(item.valores?.[letra] || "").trim() || (letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)));
+    // R gravado só com a data conta como vazio: o campo fica editável e o R digitado com a hora não pode sumir ao recarregar
+    const livres = Object.fromEntries(Object.entries(campos).filter(([letra, _valor]) => !String(item.valores?.[letra] || "").trim() || (letra === "R" && !encerramentoInformado(item.valores?.R)) || (letra === "D" && Boolean(importadoEm) && rascunho.origens?.[item.numero]?.D === importadoEm)));
     if (Object.keys(livres).length) edicoes[item.numero] = livres;
   });
   (abertos || []).forEach((item: Qualquer) => {
@@ -482,7 +489,7 @@ if (typeof window !== "undefined") {
   window.SimpressSebraeDashboardModel = Object.freeze({
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
     ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
-    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
     ROTULOS_FALTA, camposFaltando, marcadosFinalizado, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, MOTIVO_SEM_FINALIZACAO,

@@ -2014,13 +2014,17 @@ def _marcas_outro_tecnico_pendentes() -> List[Dict[str, str]]:
     )
 
 
-def _falhas_finalizacao_softexpert() -> Dict[str, Any]:
+def _fechar_ativa() -> bool:
     try:
         estado = get_chrome_automation_runner().state()
-        ativa = estado.get("estado") == "em_andamento" and estado.get("rotina") == "fechar"
+        return estado.get("estado") == "em_andamento" and estado.get("rotina") == "fechar"
     except Exception:  # noqa: BLE001 - sem o estado do runner, nunca diga que a rotina parou no meio
-        ativa = True
-    return sebrae_finalizacao.falhas_da_finalizacao(STATE_DIR, ativa)
+        return True
+
+
+def _falhas_finalizacao_softexpert() -> Dict[str, Any]:
+    # O runner só é consultado quando o resultado lido diz em_andamento (não em todo /api/painel).
+    return sebrae_finalizacao.falhas_da_finalizacao(STATE_DIR, _fechar_ativa)
 
 
 dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(

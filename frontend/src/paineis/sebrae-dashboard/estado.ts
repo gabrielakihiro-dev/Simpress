@@ -13,7 +13,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
     ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
-    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
+    tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
     camposFaltando, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
     lerRascunho, gravarCampoRascunho, apagarRascunho, aplicarRascunho,
@@ -148,7 +148,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     controle.className = "ck-entrada ck-entrada--sm";
     const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : padroesManuais(estado.formulario.find(item => item.numero === numero))[letra] ?? "";
     controle.value = valores[letra] ?? inicial;
-    if (antigo && atual && letra !== "D") controle.disabled = true; // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO
+    // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO e o R gravado só com a data (sem hora) é redigitado com a hora
+    if (antigo && atual && letra !== "D" && !(letra === "R" && !encerramentoInformado(atual))) controle.disabled = true;
     if (!antigo && !(letra in valores) && controle.value) guardados[numero] = { ...valores, [letra]: controle.value };
     controle.dataset.sebraeNumero = numero;
     controle.dataset.sebraeCampo = letra;
@@ -195,11 +196,14 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     if (!ajuda || !controle) return;
     const item = (alvo === "antigo" ? estado.abertos : estado.formulario).find(aberto => aberto.numero === numero);
     const obrigatorio = encerramentoObrigatorio(item, valoresDe(alvo)[numero]);
+    // R antigo gravado só com a data: o campo começa vazio (sem hora inventada) e a ajuda mostra a data gravada
+    const semHora = alvo === "antigo" ? ajudaEncerramentoSemHora(item?.valores?.R) : "";
     controle.required = obrigatorio;
     controle.setAttribute("aria-required", String(obrigatorio));
-    if (obrigatorio) controle.setAttribute("aria-describedby", ajuda.id);
+    ajuda.textContent = semHora || AJUDA_ENCERRAMENTO;
+    if (obrigatorio || semHora) controle.setAttribute("aria-describedby", ajuda.id);
     else controle.removeAttribute("aria-describedby");
-    ajuda.hidden = !obrigatorio;
+    ajuda.hidden = !(obrigatorio || semHora);
   }
 
   /** Ajuda "Obrigatório ao finalizar o chamado" do R: com D FINALIZADO a data de encerramento é sempre digitada (regra de 24/11/2026). */

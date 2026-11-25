@@ -1986,7 +1986,7 @@ class SimpressApi:
         if _dict(se.get("finalizacao")).get("status") in fin.STATUS_FINALIZADOS:
             raise ValueError(f"{numero} já foi finalizado (no SoftExpert ou por outro técnico). Nada foi feito.")
         quando = fin.encerramento_valido(encerramento)
-        if " " not in quando:  # só a data vale para R antigo do Dashboard; o que o usuário informa aqui leva a hora
+        if not quando:  # vazio, fora do formato ou só a data: a coluna R só é gravada com data e hora
             raise ValueError(
                 f"Falta a DT ENCERRAMENTO (coluna R) de {numero}: peça ao usuário a data e a hora de encerramento no formato "
                 "dd/MM/aaaa HH:mm (nunca use a hora atual). Nada foi finalizado."

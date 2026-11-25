@@ -1498,7 +1498,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 :is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)):not(:has(input[data-sebrae-campo="R"]:invalid)) .sebrae-selo--pronto { display: inline-flex; }
 :is(.sebrae-novo, .sebrae-antigo):has([data-sebrae-campo="A"] > option:not([value=""]):checked):has([data-sebrae-campo="J"] > option:not([value=""]):checked):has([data-sebrae-campo="D"] > option[value="FINALIZADO"]:checked):has(textarea[data-sebrae-descricao]:not(:placeholder-shown)):not(:has(input[data-sebrae-campo="R"]:invalid)) .sebrae-selo--d { display: none; }
 :is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado[data-estado="andamento"]) .sebrae-selo--andamento { display: inline-flex; }
-:is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado:is([data-estado="nao_encontrado"], [data-estado="sem_descricao"], [data-estado="cancelado"])) .sebrae-selo--atencao { display: inline-flex; }
+:is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado:is([data-estado="nao_encontrado"], [data-estado="sem_descricao"], [data-estado="sem_encerramento"], [data-estado="cancelado"])) .sebrae-selo--atencao { display: inline-flex; }
 :is(.sebrae-novo, .sebrae-antigo):has(.sebrae-chamado__resultado[data-estado="erro"]) .sebrae-selo--erro { display: inline-flex; }
 
 /* ---------- 4. Cartão do chamado em três zonas ---------- */
@@ -1713,8 +1713,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__resultado[data-estado="ok"]::before, .sebrae-chamado__resultado[data-estado="ja_finalizado"]::before { content: "✓"; }
 .sebrae-chamado__resultado[data-estado="erro"] { --tom: var(--cor-erro-texto); --fundo: var(--cor-erro-fundo); }
 .sebrae-chamado__resultado[data-estado="erro"]::before { content: "×"; font-size: var(--fs-base); }
-.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"] { --tom: var(--cor-alerta-texto); --fundo: var(--cor-alerta-fundo); }
-.sebrae-chamado__resultado[data-estado="nao_encontrado"]::before, .sebrae-chamado__resultado[data-estado="sem_descricao"]::before { content: "!"; }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"], .sebrae-chamado__resultado[data-estado="sem_encerramento"] { --tom: var(--cor-alerta-texto); --fundo: var(--cor-alerta-fundo); }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"]::before, .sebrae-chamado__resultado[data-estado="sem_descricao"]::before, .sebrae-chamado__resultado[data-estado="sem_encerramento"]::before { content: "!"; }
 .sebrae-chamado__resultado[data-estado="pronto"], .sebrae-chamado__resultado[data-estado="andamento"] { --tom: var(--cor-destaque-texto); --fundo: var(--cor-destaque-fundo); }
 .sebrae-chamado__resultado[data-estado="pronto"]::before { content: "i"; }
 .sebrae-chamado__resultado[data-estado="andamento"]::before { content: ""; width: 14px; height: 14px; margin-top: 2px; border: 2px solid var(--tom); border-right-color: transparent; background: transparent; animation: ck-girar .8s linear infinite; }

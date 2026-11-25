@@ -137,21 +137,15 @@ def texto_do_encerramento(momento: datetime) -> str:
     return momento.astimezone(FUSO).strftime(FORMATO_ENCERRAMENTO)
 
 
-FORMATO_SO_DATA = "%d/%m/%Y"
-
-
 def encerramento_valido(texto: Any) -> str:
     """R typed by the user, normalized to ``dd/MM/aaaa HH:mm`` (``1/11/2026 9:05`` -> ``01/11/2026 09:05``).
 
-    A date alone (``dd/MM/aaaa``, an old R typed in the Dashboard without the time) is accepted and returned without inventing a
-    time. ``""`` when blank, in another format or an impossible date."""
-    limpo = " ".join(str(texto or "").split())
-    for formato in (FORMATO_ENCERRAMENTO, FORMATO_SO_DATA):
-        try:
-            return datetime.strptime(limpo, formato).strftime(formato)
-        except ValueError:
-            continue
-    return ""
+    ``""`` when blank, in another format, an impossible date or a date without the time (``dd/MM/aaaa``, an old R typed in
+    the Dashboard): column R is written only as ``dd/MM/aaaa HH:mm``, so a date alone would break the write after Finalizar."""
+    try:
+        return datetime.strptime(" ".join(str(texto or "").split()), FORMATO_ENCERRAMENTO).strftime(FORMATO_ENCERRAMENTO)
+    except ValueError:
+        return ""
 
 
 # ---------------------------------------------------------------------------- validation
@@ -599,7 +593,9 @@ def ler_resultado(state_dir: Path) -> Optional[Dict[str, Any]]:
     return _ler_json(caminho_resultado(state_dir))
 
 
-_TIMEOUT = re.compile(r"(?i)timeout")  # Playwright: "TimeoutError: ..." / "Timeout 30000ms exceeded."
+# Playwright: "TimeoutError: ..." / "Timeout 30000ms exceeded."; rotina: "a tela não ficou pronta em 30 s" (acionar_quando_pronto),
+# "A central de tarefas não carregou em 60 s", "o envio de x.pdf não terminou em 120 s" (sebrae_softexpert.py).
+_TIMEOUT = re.compile(r"(?i)timeout|não (?:ficou pronta|carregou|terminou) em \d+ s\b")
 
 
 def _codigo_da_falha(item: Mapping[str, Any]) -> str:
@@ -612,12 +608,14 @@ def _codigo_da_falha(item: Mapping[str, Any]) -> str:
     return "erro"
 
 
-def falhas_da_finalizacao(state_dir: Path, rotina_ativa: bool) -> Dict[str, Any]:
+def falhas_da_finalizacao(state_dir: Path, rotina_ativa: Callable[[], bool]) -> Dict[str, Any]:
     """Aviso do sino (pedido do usuário, 24/11/2026): o que a última ``fechar`` não finalizou no SoftExpert.
 
     ``itens`` = ``[{numero, motivo}]`` com ``motivo`` em ``erro``, ``tempo_esgotado``, ``sessao_expirada``, ``interrompida``
-    (rotina parou no meio: ``em_andamento`` gravado e ``rotina_ativa`` falso) ou ``sharepoint`` (envio falhou ou é incerto).
-    Chamado que agora consta como finalizado sai do aviso. Só número UTIC e código: nunca ``mensagem``."""
+    (rotina parou no meio: ``em_andamento`` gravado e ``rotina_ativa()`` falso), ``planilha`` (finalizado, mas a DT ENCERRAMENTO
+    não foi gravada no Dashboard: o chamado não foi achado ou é ambíguo na coluna C, ou ``numero`` vazio quando o lote falhou) ou
+    ``sharepoint`` (envio falhou ou é incerto). ``rotina_ativa`` só é chamada com ``em_andamento`` gravado (o ``/api/painel`` não
+    consulta o runner à toa). Chamado que agora consta como finalizado sai do aviso de erro. Só número UTIC e código: nunca ``mensagem``."""
     resultado = ler_resultado(state_dir)
     if not resultado or resultado.get("acao") != ACAO_FINALIZAR:
         return {"total": 0, "itens": []}
@@ -625,8 +623,17 @@ def falhas_da_finalizacao(state_dir: Path, rotina_ativa: bool) -> Dict[str, Any]
                    if isinstance(item.get("finalizacao"), dict) and item["finalizacao"].get("status") in STATUS_FINALIZADOS}
     itens: List[Dict[str, str]] = []
     vistos: set[str] = set()
+    sem_r: List[Dict[str, str]] = []  # finalizados cuja coluna R não foi gravada: ficam fora do filtro dos finalizados
     for item in resultado.get("resultados") or []:
-        if not isinstance(item, dict) or item.get("status") != STATUS_ERRO:
+        if not isinstance(item, dict):
+            continue
+        if item.get("status") in STATUS_FINALIZADOS and str(item.get("planilha") or "") not in ("", "gravado"):
+            try:
+                sem_r.append({"numero": validar_numero(item.get("numero")), "motivo": "planilha"})
+            except DomainValidationError:
+                pass
+            continue
+        if item.get("status") != STATUS_ERRO:
             continue
         try:
             numero = validar_numero(item.get("numero"))
@@ -636,7 +643,10 @@ def falhas_da_finalizacao(state_dir: Path, rotina_ativa: bool) -> Dict[str, Any]
             continue
         vistos.add(numero)
         itens.append({"numero": numero, "motivo": _codigo_da_falha(item)})
-    if resultado.get("em_andamento") is True and not rotina_ativa:
+    itens.extend(sem_r)
+    if str(resultado.get("planilha") or "").strip():
+        itens.append({"numero": "", "motivo": "planilha"})  # erro do lote (Dashboard importado ausente, gravação recusada)
+    if resultado.get("em_andamento") is True and not rotina_ativa():
         # shortcut: o pedido é apagado ao ser lido e o resultado não guarda a lista, então não dá para dizer quais faltaram.
         itens.append({"numero": "", "motivo": "interrompida"})
     aviso = resultado.get("sharepoint")

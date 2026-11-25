@@ -221,19 +221,20 @@ O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`,
 
 ### Objetivo
 
-Avisar quando a última finalização no SoftExpert (rotina `fechar`, aba Chamados F5) não concluiu algum chamado: erro, tempo esgotado, sessão expirada, rotina que parou no meio ou envio ao SharePoint que falhou. Pedido do usuário, 24/11/2026.
+Avisar quando a última finalização no SoftExpert (rotina `fechar`, aba Chamados F5) não concluiu algum chamado: erro, tempo esgotado, sessão expirada, rotina que parou no meio, DT ENCERRAMENTO (coluna R) não gravada no Dashboard ou envio ao SharePoint que falhou. Pedido do usuário, 24/11/2026.
 
 ### Dados
 
 - Fonte: `falhas_finalizacao_softexpert` em `GET /api/painel`, montado por `_finalization_failures_summary` (`routers/dashboard.py`) com `falhas_da_finalizacao` (`domains/sebrae_finalizacao.py`), que lê só `data/state/sebrae_fechar_resultado.json` (o resultado da última `fechar`) e o histórico de finalização. Só vale resultado com `acao: "finalizar"`; um reenvio ao SharePoint grava outro resultado e o aviso some.
 - Cada item traz só `numero` (UTIC, ou vazio quando não se sabe) e `motivo`, um código fixo:
   - `erro`: o chamado terminou com status `erro`;
-  - `tempo_esgotado`: erro de tempo de espera do Playwright (`Timeout`) sem código próprio da rotina;
+  - `tempo_esgotado`: erro de tempo de espera sem código próprio da rotina: `Timeout` do Playwright ou as frases da rotina `não ficou pronta em N s`, `não carregou em N s` e `não terminou em N s`;
   - `sessao_expirada`: o SoftExpert pediu login de novo;
   - `interrompida`: o resultado ficou com `em_andamento: true` e a rotina `fechar` não está rodando (processo encerrado ou tempo estourado); o resultado não guarda a lista do pedido, então o item vem sem número;
+  - `planilha` (25/11/2026): o chamado foi finalizado (`ok` ou `finalizado_outro_tecnico`), mas a DT ENCERRAMENTO não foi gravada na coluna R do Dashboard: o número UTIC não foi achado ou está em mais de uma linha da coluna C (item com o número), ou a gravação do lote falhou, por exemplo sem Dashboard importado utilizável (item sem número). Esse item não sai do aviso quando o chamado consta como finalizado, porque o chamado está finalizado e só a coluna R falta; some na próxima `fechar`;
   - `sharepoint`: o envio do Dashboard ao SharePoint falhou ou ficou incerto.
 - A `mensagem` da rotina (que pode ter texto da página) nunca sai: ela só decide o código `tempo_esgotado`. O cancelamento pedido pelo usuário, sozinho, não cria item; o chamado que estava em andamento no momento do cancelamento pode aparecer como `erro`, porque não foi finalizado.
-- Chamado que agora consta como finalizado (`ok` ou `finalizado_outro_tecnico`) sai do aviso. Sem o estado do runner, a rotina é tratada como ativa (nunca se diz que parou no meio sem certeza).
+- Chamado que agora consta como finalizado (`ok` ou `finalizado_outro_tecnico`) sai do aviso de erro. O estado do runner só é consultado quando o resultado lido diz `em_andamento: true` (o `GET /api/painel` não o consulta à toa); sem o estado do runner, a rotina é tratada como ativa (nunca se diz que parou no meio sem certeza).
 - Só leitura: nada é gravado. Limite conhecido: vale só a última `fechar`; uma nova finalização ou reenvio substitui o resultado e apaga do aviso as falhas anteriores, e um chamado finalizado à mão no SoftExpert continua no aviso até a próxima finalização.
 
 ### Quando aparece e quando some
@@ -246,7 +247,7 @@ Avisar quando a última finalização no SoftExpert (rotina `fechar`, aba Chamad
 
 | Título | Texto | Botão |
 | --- | --- | --- |
-| Falha ao finalizar no SoftExpert | Partes, nesta ordem, conforme os itens: `N chamados não foram finalizados no SoftExpert: UTIC-…, UTIC-… (tempo esgotado).` (singular: `1 chamado não foi finalizado no SoftExpert: …`); `A finalização parou no meio (tempo esgotado ou rotina encerrada).`; `O envio do Dashboard ao SharePoint falhou ou ficou incerto.`; sempre termina com `Confira na aba Chamados (F5) e tente de novo.` | Ver na aba Chamados |
+| Falha ao finalizar no SoftExpert | Partes, nesta ordem, conforme os itens: `N chamados não foram finalizados no SoftExpert: UTIC-…, UTIC-… (tempo esgotado).` (singular: `1 chamado não foi finalizado no SoftExpert: …`); `UTIC-…, UTIC-…: a DT ENCERRAMENTO não foi gravada no Dashboard.` (sem número: `A DT ENCERRAMENTO não foi gravada no Dashboard.`); `A finalização parou no meio (tempo esgotado ou rotina encerrada).`; `O envio do Dashboard ao SharePoint falhou ou ficou incerto.`; sempre termina com `Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.` (25/11/2026: o erro pode ter vindo depois do clique irreversível em Finalizar, então o texto nunca manda só tentar de novo) | Ver na aba Chamados |
 
 O cartão é `#alerta-finalizacao-softexpert` (`data-state` `falhou`, `vazio` ou `indisponivel`; texto em `#alerta-finalizacao-softexpert-texto`). O botão `#btn-alerta-finalizacao-softexpert` abre a aba Chamados (`abrirPainelCockpit` com `["sebrae-chamados"]`). Implementação: `renderizarAlertaFalhasFinalizacao` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `frontend/src/aplicacao/dashboard.ts`).
 
