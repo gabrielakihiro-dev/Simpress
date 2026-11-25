@@ -2586,6 +2586,15 @@ class PanelRegionalToolTests(unittest.TestCase):
         dados = SimpressApi(lambda method, path, params, body: (200, falha)).obter_painel()
         self.assertTrue(dados["dados"]["chamados_outro_tecnico"]["indisponivel"])
 
+    def test_finalization_failures_alert_is_described_read_only_and_returned(self) -> None:
+        descricao = TOOLS["obter_painel"].description
+        for termo in ("falhas_finalizacao_softexpert", "tempo_esgotado", "interrompida", "aba Chamados (F5)", "não finaliza por conta própria"):
+            self.assertIn(termo, descricao)
+        self.assertIn("falhas_finalizacao_softexpert", SYSTEM_PROMPT)
+        painel = {"falhas_finalizacao_softexpert": {"total": 1, "itens": [{"numero": "UTIC-2026-2001", "motivo": "tempo_esgotado"}]}}
+        dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
+        self.assertEqual(dados["dados"]["falhas_finalizacao_softexpert"]["itens"], [{"numero": "UTIC-2026-2001", "motivo": "tempo_esgotado"}])
+
     def test_tool_returns_the_long_unused_alert(self) -> None:
         painel = {"sem_acesso_60_dias": {"estado": "passou_60", "total_passou": 2, "total_limite": 1}}
         dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()

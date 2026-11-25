@@ -2263,7 +2263,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       if (!dados.em_andamento && !comecou && ++esperas < 4) continue; // a rotina ainda não começou a responder
       f.mensagemInicio = "";
       aplicarFechar(dados);
-      if (!dados.em_andamento) return;
+      if (!dados.em_andamento) {
+        document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes")); // o sino mostra na hora a falha ao finalizar
+        return;
+      }
     }
   }
 

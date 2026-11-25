@@ -176,6 +176,15 @@ test("badge do sino: o cartão de backups entra no total e sai quando não há p
   assert.equal(seloSino.textContent, "3", "soma com os outros cartões");
   assert.equal(botaoSino.getAttribute("aria-label"), "Notificações, 3 avisos ativos");
 
+  // Falha ao finalizar no SoftExpert: um cartão a mais; indisponível ou sem itens não conta.
+  const falha = { total: 2, itens: [{ numero: "UTIC-2026-1", motivo: "erro" }, { numero: "", motivo: "sharepoint" }] };
+  await atualizar({ backups_regionais: painel({ sem_backup: ["Maringá"], conferir: [] }), falhas_finalizacao_softexpert: falha });
+  assert.equal(seloSino.textContent, "2", "falha ao finalizar soma um cartão");
+  for (const falhas of [{ total: 0, itens: [] }, { ...falha, indisponivel: true }, { total: 1, itens: [] }, null]) {
+    await atualizar({ falhas_finalizacao_softexpert: falhas });
+    assert.equal(seloSino.textContent, "0", JSON.stringify(falhas));
+  }
+
   for (const backups of [null, { indisponivel: true, pendencias: { sem_backup: ["Maringá"], conferir: [] } }, painel({ sem_backup: [], conferir: [] }), painel(null)]) {
     await atualizar({ backups_regionais: backups });
     assert.equal(seloSino.textContent, "0", JSON.stringify(backups));

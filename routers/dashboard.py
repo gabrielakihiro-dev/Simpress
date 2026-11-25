@@ -69,6 +69,8 @@ class DashboardServices:
     get_other_technician_marks: Optional[Callable[[], Sequence[Dict[str, Any]]]] = None
     # Backups regionais (Resumo F3): ``build_backups_regionais`` on its own inputs, independent of the history event.
     get_backups_regionais: Optional[Callable[[], Dict[str, Any]]] = None
+    # Tickets the last SoftExpert finalization did not finalize (``falhas_da_finalizacao``): UTIC number and fixed code only.
+    get_softexpert_finalization_failures: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 # Reapplying the display rules to the two newest events dominated the panel time; the result
@@ -182,6 +184,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "base_desatualizada": _stale_base_summary(services, history),
         "os_paradas": _stale_tickets_summary(services),
         "chamados_outro_tecnico": _other_technician_summary(services),
+        "falhas_finalizacao_softexpert": _finalization_failures_summary(services),
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
         "sem_acesso_60_dias": _long_unused_summary(services, history, history_signature),
         "backups_regionais": _backups_regionais_summary(services),
@@ -368,6 +371,17 @@ def _other_technician_summary(services: DashboardServices) -> Dict[str, Any]:
     except Exception as error:
         # The alert is optional; the inventory summary must still load. Only the class is logged (no ticket data).
         logger.warning("Falha ao calcular o aviso de chamados finalizados por outro técnico: %s.", type(error).__name__)
+        return {"total": 0, "itens": [], "indisponivel": True}
+
+
+def _finalization_failures_summary(services: DashboardServices) -> Dict[str, Any]:
+    if services.get_softexpert_finalization_failures is None:
+        return {"total": 0, "itens": []}
+    try:
+        return services.get_softexpert_finalization_failures()
+    except Exception as error:
+        # The alert is optional; the inventory summary must still load. Only the class is logged (no ticket data).
+        logger.warning("Falha ao calcular o aviso de falhas ao finalizar no SoftExpert: %s.", type(error).__name__)
         return {"total": 0, "itens": [], "indisponivel": True}
 
 

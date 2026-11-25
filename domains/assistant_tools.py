@@ -735,8 +735,10 @@ QUERY_TOOLS: List[Tool] = [
         "Painel geral do Simpress (visão resumida de inventário, chamados e pendências), com os ativos por cidade/regional: são os mesmos números do Resumo (F3). "
         "Para 'quantos ativos por regional', use esta ferramenta e diga que o usuário vê isso no Resumo (F3). "
         "Por categoria (notebook, macbook, monitor, fone) use `cidades_por_categoria`: é o filtro do cartão Ativos por regional no Resumo (F3). "
-        "Os avisos do sino (`os_paradas`, `divergencias_novas`, `sem_acesso_60_dias`, `chamados_outro_tecnico`) vêm aqui; `sem_acesso_60_dias` conta notebooks/MacBooks com mais de 55 dias sem acesso (limite) e com 60 dias ou mais (passaram, inclusive os que saíram da lista para Ausentes no Endpoint); `equipamentos` traz série, hostname e dias de cada um. "
-        "`chamados_outro_tecnico` (`total`, `itens` com chamado, série, OS e motivo; `indisponivel` se a leitura falhou) lista chamados que parecem finalizados por outro técnico e ainda não foram conferidos: avise o usuário para finalizar ou conferir no SoftExpert e marcar `Conferido` na aba OS (F6); o Assistente não marca, desfaz nem confere.",
+        "Os avisos do sino (`os_paradas`, `divergencias_novas`, `sem_acesso_60_dias`, `chamados_outro_tecnico`, `falhas_finalizacao_softexpert`) vêm aqui;`sem_acesso_60_dias` conta notebooks/MacBooks com mais de 55 dias sem acesso (limite) e com 60 dias ou mais (passaram, inclusive os que saíram da lista para Ausentes no Endpoint); `equipamentos` traz série, hostname e dias de cada um. "
+        "`chamados_outro_tecnico` (`total`, `itens` com chamado, série, OS e motivo; `indisponivel` se a leitura falhou) lista chamados que parecem finalizados por outro técnico e ainda não foram conferidos: avise o usuário para finalizar ou conferir no SoftExpert e marcar `Conferido` na aba OS (F6); o Assistente não marca, desfaz nem confere. "
+        "`falhas_finalizacao_softexpert` (`total`, `itens` com número UTIC e `motivo`: `erro`, `tempo_esgotado`, `sessao_expirada`, `interrompida` ou `sharepoint`; "
+        "`indisponivel` se a leitura falhou) lista o que a última finalização no SoftExpert não concluiu: oriente o usuário a conferir na aba Chamados (F5) e pedir de novo; o Assistente não finaliza por conta própria.",
         lambda c, a: c.obter_painel(),
     ),
     _read(

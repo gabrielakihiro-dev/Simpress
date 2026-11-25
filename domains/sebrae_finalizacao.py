@@ -599,6 +599,55 @@ def ler_resultado(state_dir: Path) -> Optional[Dict[str, Any]]:
     return _ler_json(caminho_resultado(state_dir))
 
 
+_TIMEOUT = re.compile(r"(?i)timeout")  # Playwright: "TimeoutError: ..." / "Timeout 30000ms exceeded."
+
+
+def _codigo_da_falha(item: Mapping[str, Any]) -> str:
+    """Código fixo do erro; a ``mensagem`` só decide o código e nunca sai daqui (pode trazer texto da página)."""
+    motivo = str(item.get("motivo") or "")
+    if motivo == "sessao_expirada":
+        return "sessao_expirada"
+    if motivo in ("", "erro_inesperado") and _TIMEOUT.search(str(item.get("mensagem") or "")):
+        return "tempo_esgotado"
+    return "erro"
+
+
+def falhas_da_finalizacao(state_dir: Path, rotina_ativa: bool) -> Dict[str, Any]:
+    """Aviso do sino (pedido do usuário, 24/11/2026): o que a última ``fechar`` não finalizou no SoftExpert.
+
+    ``itens`` = ``[{numero, motivo}]`` com ``motivo`` em ``erro``, ``tempo_esgotado``, ``sessao_expirada``, ``interrompida``
+    (rotina parou no meio: ``em_andamento`` gravado e ``rotina_ativa`` falso) ou ``sharepoint`` (envio falhou ou é incerto).
+    Chamado que agora consta como finalizado sai do aviso. Só número UTIC e código: nunca ``mensagem``."""
+    resultado = ler_resultado(state_dir)
+    if not resultado or resultado.get("acao") != ACAO_FINALIZAR:
+        return {"total": 0, "itens": []}
+    finalizados = {n for n, item in ler_estado(state_dir).items()
+                   if isinstance(item.get("finalizacao"), dict) and item["finalizacao"].get("status") in STATUS_FINALIZADOS}
+    itens: List[Dict[str, str]] = []
+    vistos: set[str] = set()
+    for item in resultado.get("resultados") or []:
+        if not isinstance(item, dict) or item.get("status") != STATUS_ERRO:
+            continue
+        try:
+            numero = validar_numero(item.get("numero"))
+        except DomainValidationError:
+            numero = ""  # número inválido do pedido: o aviso fica, sem repetir o texto bruto
+        if numero in finalizados or (numero and numero in vistos):
+            continue
+        vistos.add(numero)
+        itens.append({"numero": numero, "motivo": _codigo_da_falha(item)})
+    if resultado.get("em_andamento") is True and not rotina_ativa:
+        # shortcut: o pedido é apagado ao ser lido e o resultado não guarda a lista, então não dá para dizer quais faltaram.
+        itens.append({"numero": "", "motivo": "interrompida"})
+    aviso = resultado.get("sharepoint")
+    if isinstance(aviso, dict) and (aviso.get("falhou") or aviso.get("incerto")):
+        itens.append({"numero": "", "motivo": "sharepoint"})
+    return {
+        "total": len(itens), "itens": itens,
+        "iniciado_em": str(resultado.get("iniciado_em") or ""), "terminado_em": str(resultado.get("terminado_em") or ""),
+    }
+
+
 # ---------------------------------------------------------------------------- SharePoint: sent hash, pending copy, notice
 
 

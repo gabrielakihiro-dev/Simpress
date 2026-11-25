@@ -1,6 +1,6 @@
-# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias", "Chamados finalizados por outro técnico" e "Backups regionais"
+# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias", "Chamados finalizados por outro técnico", "Backups regionais" e "Falha ao finalizar no SoftExpert"
 
-Exibe cinco alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos cinco grava nada: os históricos de OS e de planilhas, as marcas de OS finalizada e as confirmações de backup são apenas lidos (confirmar e desfazer backup acontecem na sub-aba Backups do Resumo, não no sino).
+Exibe seis alertas no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos seis grava nada: os históricos de OS e de planilhas, as marcas de OS finalizada, as confirmações de backup e o resultado da última finalização no SoftExpert são apenas lidos (confirmar e desfazer backup acontecem na sub-aba Backups do Resumo, não no sino).
 
 ## 1. OS paradas
 
@@ -217,10 +217,59 @@ Avisar quando uma regional prioritária está sem notebook de backup disponível
 
 O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`, `vazio` ou `indisponivel`; lista `#alerta-backups-regionais-lista` com uma linha por cidade e situação, por exemplo `Cascavel — sem backup disponível`). O botão `#btn-alerta-backups-regionais` abre a sub-aba Backups do Resumo (`abrirPainelCockpit` com `["comparacao","backups"]`). O cartão nunca traz apelido nem série. Implementação: `renderizarAlertaBackupsRegionais` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `frontend/src/aplicacao/dashboard.ts`).
 
+## 6. Falha ao finalizar no SoftExpert
+
+### Objetivo
+
+Avisar quando a última finalização no SoftExpert (rotina `fechar`, aba Chamados F5) não concluiu algum chamado: erro, tempo esgotado, sessão expirada, rotina que parou no meio ou envio ao SharePoint que falhou. Pedido do usuário, 24/11/2026.
+
+### Dados
+
+- Fonte: `falhas_finalizacao_softexpert` em `GET /api/painel`, montado por `_finalization_failures_summary` (`routers/dashboard.py`) com `falhas_da_finalizacao` (`domains/sebrae_finalizacao.py`), que lê só `data/state/sebrae_fechar_resultado.json` (o resultado da última `fechar`) e o histórico de finalização. Só vale resultado com `acao: "finalizar"`; um reenvio ao SharePoint grava outro resultado e o aviso some.
+- Cada item traz só `numero` (UTIC, ou vazio quando não se sabe) e `motivo`, um código fixo:
+  - `erro`: o chamado terminou com status `erro`;
+  - `tempo_esgotado`: erro de tempo de espera do Playwright (`Timeout`) sem código próprio da rotina;
+  - `sessao_expirada`: o SoftExpert pediu login de novo;
+  - `interrompida`: o resultado ficou com `em_andamento: true` e a rotina `fechar` não está rodando (processo encerrado ou tempo estourado); o resultado não guarda a lista do pedido, então o item vem sem número;
+  - `sharepoint`: o envio do Dashboard ao SharePoint falhou ou ficou incerto.
+- A `mensagem` da rotina (que pode ter texto da página) nunca sai: ela só decide o código `tempo_esgotado`. O cancelamento pedido pelo usuário, sozinho, não cria item; o chamado que estava em andamento no momento do cancelamento pode aparecer como `erro`, porque não foi finalizado.
+- Chamado que agora consta como finalizado (`ok` ou `finalizado_outro_tecnico`) sai do aviso. Sem o estado do runner, a rotina é tratada como ativa (nunca se diz que parou no meio sem certeza).
+- Só leitura: nada é gravado. Limite conhecido: vale só a última `fechar`; uma nova finalização ou reenvio substitui o resultado e apaga do aviso as falhas anteriores, e um chamado finalizado à mão no SoftExpert continua no aviso até a próxima finalização.
+
+### Quando aparece e quando some
+
+- Aparece com `total` maior que zero e ao menos um item. Some com a lista vazia, quando o campo falta ou com `indisponivel: true` (falha ao ler o resultado ou o histórico); o resto do painel continua carregando.
+- Selo `Urgente` (`data-gravidade="urgente"`).
+- Ao terminar a rotina acompanhada na aba Chamados (F5), o front pede a atualização do painel (`simpress:atualizar-notificacoes`) e o sino mostra o aviso na hora.
+
+### Texto
+
+| Título | Texto | Botão |
+| --- | --- | --- |
+| Falha ao finalizar no SoftExpert | Partes, nesta ordem, conforme os itens: `N chamados não foram finalizados no SoftExpert: UTIC-…, UTIC-… (tempo esgotado).` (singular: `1 chamado não foi finalizado no SoftExpert: …`); `A finalização parou no meio (tempo esgotado ou rotina encerrada).`; `O envio do Dashboard ao SharePoint falhou ou ficou incerto.`; sempre termina com `Confira na aba Chamados (F5) e tente de novo.` | Ver na aba Chamados |
+
+O cartão é `#alerta-finalizacao-softexpert` (`data-state` `falhou`, `vazio` ou `indisponivel`; texto em `#alerta-finalizacao-softexpert-texto`). O botão `#btn-alerta-finalizacao-softexpert` abre a aba Chamados (`abrirPainelCockpit` com `["sebrae-chamados"]`). Implementação: `renderizarAlertaFalhasFinalizacao` em `frontend/src/paineis/indicadores-home/estado.ts` (ponte: `frontend/src/aplicacao/dashboard.ts`).
+
+### Contrato da API
+
+```json
+{
+  "total": 2,
+  "itens": [
+    {"numero": "UTIC-2026-1378", "motivo": "tempo_esgotado"},
+    {"numero": "", "motivo": "sharepoint"}
+  ],
+  "iniciado_em": "2026-11-24T10:00:00-03:00",
+  "terminado_em": "2026-11-24T10:05:00-03:00"
+}
+```
+
+Sem resultado de finalização: `{"total": 0, "itens": []}`. Com falha ao ler: `{"total": 0, "itens": [], "indisponivel": true}`. O Assistente lê o campo em `obter_painel` e só orienta a conferir na aba Chamados (F5).
+
 ## Interface
 
-- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 5 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
-- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas`, `#alerta-chamados-outro-tecnico` e `#alerta-backups-regionais` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 6 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas`, `#alerta-chamados-outro-tecnico`, `#alerta-finalizacao-softexpert` e `#alerta-backups-regionais` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
 - Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
@@ -237,3 +286,4 @@ O cartão é `#alerta-backups-regionais` (`data-state` `sem_backup`, `conferir`,
 10. Com equipamento com mais de 55 dias (e menos de 60) sem acesso, o sino mostra "Perto de 60 dias sem acesso"; com 60 dias ou mais, ou depois de sair para Ausentes no Endpoint, mostra "Passou de 60 dias sem acesso"; com tudo em dia, sem atualização ou histórico ilegível, o cartão fica oculto.
 11. Com pelo menos uma marca `Finalizado por outro técnico` ativa e sem `Conferido`, o sino mostra "Chamados finalizados por outro técnico" com `Atenção` e o botão "Ver na aba OS" abre a aba OS; depois de `Conferido` ou `Desfazer` na aba OS, ou com a lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso. Marcas de chamados finalizados pelo site nunca entram.
 12. Com pelo menos uma regional prioritária em `pendencias.sem_backup`, o sino mostra "Sem backup disponível" com `Urgente`; só com `pendencias.conferir`, mostra "Conferir possível backup" com `Atenção`; o botão "Ver backups no Resumo" abre a sub-aba Backups; com as listas vazias, `null` ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.
+13. Quando a última finalização no SoftExpert termina com chamado em `erro`, para no meio sem a rotina estar rodando ou falha no envio ao SharePoint, o sino mostra "Falha ao finalizar no SoftExpert" com `Urgente`, só números UTIC e códigos (nunca a mensagem da rotina), e o botão "Ver na aba Chamados" abre a aba Chamados (F5); depois que o chamado é finalizado, com resultado de outra ação, lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.

@@ -2694,3 +2694,24 @@ test("resultado antigo da finalização ao abrir a lista avisa, mas não pede GE
     assert.equal(urls.filter(u => u === "/api/sebrae/novos").length, esperado, terminado);
   }
 });
+
+test("quando a finalização acompanhada termina, a tela pede a atualização do sino uma vez (aviso de falha na hora)", async () => {
+  const eventos = [];
+  let consultas = 0;
+  await renderizarCartoes(structuredClone(CARGA_CARTOES), null, async url => {
+    if (url !== "/api/sebrae/finalizar-softexpert") return structuredClone(CARGA_CARTOES);
+    consultas += 1;
+    if (consultas === 1) {
+      // a rotina está rodando ao abrir a lista: o acompanhamento espera sem atraso e os eventos do documento ficam registrados
+      global.window.setTimeout = funcao => { setImmediate(funcao); return 0; };
+      const original = global.document.dispatchEvent.bind(global.document);
+      global.document.dispatchEvent = evento => { eventos.push(evento.type); return original(evento); };
+      return { em_andamento: true, resultado: { iniciado_em: "2026-11-24T10:00:00-03:00", em_andamento: true, resultados: [] } };
+    }
+    return { em_andamento: false, resultado: { iniciado_em: "2026-11-24T10:00:00-03:00", terminado_em: "2026-11-24T10:05:00-03:00",
+      resultados: [{ numero: "UTIC-2026-9", status: "erro", motivo: "erro_inesperado", mensagem: "" }] } };
+  });
+  for (let i = 0; i < 40 && !eventos.includes("simpress:atualizar-notificacoes"); i++) await new Promise(r => setImmediate(r));
+  assert.deepEqual(eventos.filter(tipo => tipo === "simpress:atualizar-notificacoes"), ["simpress:atualizar-notificacoes"]);
+  assert.ok(consultas >= 2, "acompanhou até o fim");
+});

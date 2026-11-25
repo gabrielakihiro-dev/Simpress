@@ -12,7 +12,7 @@ export function createDashboard(context: ContextoApp): Acoes {
   const ponteSincrona = context.ponteReactSincrona("indicadores-home", [
     "atualizarIndicadoresPosSalvamento", "renderizarAlertaBaseDesatualizada", "renderizarAlertaOsParadas",
     "renderizarAlertaDivergenciasNovas", "renderizarAlertaSemAcesso60", "renderizarAlertaChamadosOutroTecnico",
-    "renderizarAlertaBackupsRegionais",
+    "renderizarAlertaFalhasFinalizacao", "renderizarAlertaBackupsRegionais",
   ]);
   // Without the panel the Home keeps working, only without live indicators: the error goes to the console.
   const ponteRegistrada = registrarRejeicoes(ponte);
