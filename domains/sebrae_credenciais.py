@@ -3,7 +3,10 @@
 Só os valores que ``omitir_credenciais`` esconde são guardados, por chamado, em ``data/state/sebrae_credenciais.json``
 (nunca a descrição inteira). O resto do sistema continua mascarado: ``sebrae_novos.json``, cache dos antigos, coluna H
 do Dashboard, histórico, logs e Assistente. A tela só recebe o valor quando o usuário clica em "Mostrar senha"
-(``GET /api/sebrae/chamados/{numero}/credenciais``). A entrada é apagada quando o chamado é finalizado no SoftExpert.
+(``GET /api/sebrae/chamados/{numero}/credenciais``). A entrada é apagada quando a rotina ``fechar`` finaliza o chamado
+no SoftExpert (``ok``) e, na importação do Dashboard, quando o chamado vem com D ``FINALIZADO`` ou sai da coluna C depois
+de estar aberto (``remover_encerrados``). Finalizado por outro técnico não apaga (preserva o Desfazer finalização;
+decisão do usuário 25/11/2026). Chamado novo, ainda fora da coluna C, e chamado aberto mantêm a senha.
 """
 
 from __future__ import annotations
@@ -11,9 +14,10 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Sequence
 
 from core.integrity import atomic_write_json, lock_paths
+from domains.sebrae_arquivo import STATUS_FINALIZADO
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
 
 ARQUIVO = "sebrae_credenciais.json"
@@ -78,9 +82,23 @@ def numeros(state_dir: Path) -> frozenset:
     return frozenset(_ler_tudo(caminho(state_dir)))
 
 
-def remover(state_dir: Path, numero: str) -> None:
+def remover(state_dir: Path, *numeros: str) -> None:
     arquivo = caminho(state_dir)
     with lock_paths([arquivo]):
         dados = _ler_tudo(arquivo)
-        if dados.pop(numero, None) is not None:
+        removidos = [numero for numero in numeros if dados.pop(numero, None) is not None]
+        if removidos:
             atomic_write_json(arquivo, dados)
+
+
+def remover_encerrados(
+    state_dir: Path, mapa: Mapping[str, Mapping[str, str]], abertos_antes: Sequence[Mapping[str, Any]],
+) -> None:
+    """Na importação do Dashboard: apaga a senha de quem tem D ``FINALIZADO`` no ``mapa`` (número -> status do novo
+    Dashboard) ou estava em ``abertos_antes`` e sumiu da coluna C (mesma regra de ``sebrae_arquivo.registrar_saidas``).
+    Chamado ausente do ``mapa`` que não estava aberto antes é novo e mantém a senha."""
+    saiu = {str(a.get("numero") or "") for a in abertos_antes} - set(mapa)
+    encerrados = saiu | {numero for numero, atual in mapa.items() if atual.get("status") == STATUS_FINALIZADO}
+    alvo = sorted(encerrados & numeros(state_dir))
+    if alvo:
+        remover(state_dir, *alvo)
