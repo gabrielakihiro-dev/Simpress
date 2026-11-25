@@ -85,9 +85,39 @@ class AssinaturaConfigTests(unittest.TestCase):
         self.assertEqual(len(backups), 1)
         self.assertEqual(json.loads(backups[0].read_text(encoding="utf-8")), {"estilo": "sacramento", "nome": "Nome Secreto"})
 
-    def test_arquivo_corrompido_volta_ao_padrao(self):
-        (self.pasta / "assinatura_tecnico.json").write_text("{nao é json", encoding="utf-8")
-        self.assertEqual(self.client.get("/api/assinatura-tecnico/config").json(), {"estilo": "desenho", "nome": ""})
+    def ler_erro(self, conteudo):
+        (self.pasta / "assinatura_tecnico.json").write_text(conteudo, encoding="utf-8")
+        with self.assertLogs("routers.assinatura_tecnico", level="WARNING") as logs:
+            resposta = self.client.get("/api/assinatura-tecnico/config")
+        self.assertEqual(resposta.status_code, 500)
+        self.assertEqual(set(resposta.json()), {"detail", "codigo"})
+        self.assertEqual(resposta.json()["codigo"], "assinatura_config_ilegivel")
+        for segredo in ("Bruno", "allura"):
+            self.assertNotIn(segredo, resposta.text)
+            self.assertNotIn(segredo, "\n".join(logs.output))
+        self.assertIn("codigo=assinatura_config_ilegivel", "\n".join(logs.output))
+
+    def test_arquivo_corrompido_vira_erro_e_nunca_desenho(self):
+        self.ler_erro('{"estilo":"allura","nome":"Bru')
+
+    def test_json_valido_mas_invalido_vira_erro(self):
+        self.ler_erro('{"estilo":"allura","nome":""}')
+        self.ler_erro('{"estilo":"allura","nome":"Bruno 2"}')
+        self.ler_erro("[]")
+
+    def test_put_depois_de_corrompido_grava_e_faz_backup(self):
+        arquivo = self.pasta / "assinatura_tecnico.json"
+        arquivo.write_text('{"estilo":"allura","nome":"Bruno', encoding="utf-8")
+        self.assertEqual(self.put("allura", "Bruno").status_code, 200)
+        self.assertEqual(self.client.get("/api/assinatura-tecnico/config").json(), {"estilo": "allura", "nome": "Bruno"})
+        backups = list((self.pasta / "config_backups").glob("assinatura_tecnico.json.*.bak"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(encoding="utf-8"), '{"estilo":"allura","nome":"Bruno')
+
+    def test_tab_e_feff_no_nome_sao_recusados(self):
+        for nome in ("Ana	Lima", "Ana﻿", "﻿Ana"):
+            with self.subTest(nome=nome):
+                self.assertEqual(self.put("allura", nome).status_code, 422)
 
 
 if __name__ == "__main__":

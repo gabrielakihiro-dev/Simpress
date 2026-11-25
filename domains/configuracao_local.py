@@ -422,12 +422,17 @@ def validar_assinatura(estilo: Any, nome: Any) -> dict:
 
 
 def ler_assinatura(arquivo: Path) -> dict:
-    """Arquivo ausente ou ilegível devolve o padrão (desenho): o PDF segue com o SVG."""
-    guardado, _ = _ler_json(arquivo)
+    """Só arquivo ausente devolve o padrão (desenho). Ilegível ou inválido levanta ``assinatura_config_ilegivel``:
+    nunca vira desenho, que sairia no PDF com o SVG de outra pessoa. O PUT seguinte grava por cima, com backup."""
+    guardado, ilegivel = _ler_json(arquivo)
+    if not ilegivel and not Path(arquivo).exists():
+        return dict(ASSINATURA_PADRAO)
     try:
+        if ilegivel:
+            raise AssinaturaInvalida("", "")
         return validar_assinatura(guardado.get("estilo"), guardado.get("nome", ""))
     except AssinaturaInvalida:
-        return dict(ASSINATURA_PADRAO)
+        raise AssinaturaInvalida("assinatura_config_ilegivel", "A configuração da assinatura está ilegível. Salve de novo para substituí-la.") from None
 
 
 def gravar_assinatura(arquivo: Path, pasta_backups: Path, estilo: Any, nome: Any,

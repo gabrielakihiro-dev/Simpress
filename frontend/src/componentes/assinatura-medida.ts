@@ -50,6 +50,8 @@ export const MENSAGEM_NOME = "Use até 80 caracteres: só letras, espaço, ponto
 
 // Mesma normalização do servidor (domains/configuracao_local.py): o servidor é a autoridade.
 export function normalizarNome(valor: string): string {
+  // Cc/Cf (tab, U+FEFF) o servidor recusa antes de colapsar espaços; aqui ficam no texto e erroDoNome os recusa.
+  if (/\p{Cc}|\p{Cf}/u.test(valor)) return valor;
   return valor.normalize("NFC").replace(/[’‘]/g, "'").split(/\s+/).filter(Boolean).join(" ");
 }
 

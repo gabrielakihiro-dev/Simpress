@@ -38,7 +38,11 @@ def create_assinatura_tecnico_router(arquivo: Path, config: Optional[Path] = Non
     # Rotas fixas antes de qualquer rota com parâmetro; o nome nunca vai a log nem ao corpo de erro.
     @router.get("/config")
     def obter_config() -> Any:
-        return configuracao.ler_assinatura(config)
+        try:
+            return configuracao.ler_assinatura(config)
+        except configuracao.AssinaturaInvalida as erro:
+            # 500 (não 409): o arquivo local está quebrado, não é conflito de pedido. Só o código vai ao log.
+            return _recusa(500, erro.codigo, erro.detail)
 
     @router.put("/config")
     async def gravar_config(request: Request) -> Any:

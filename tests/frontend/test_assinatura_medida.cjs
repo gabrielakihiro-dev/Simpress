@@ -10,6 +10,10 @@ test("normalizarNome: NFC, apóstrofos tipográficos, espaços colapsados", () =
   assert.equal(normalizarNome("   "), "");
 });
 
+test("normalizarNome: tab e U+FEFF (Cc/Cf) não são colapsados e erroDoNome os recusa, como o servidor", () => {
+  for (const ruim of ["Ana	Lima", "Ana﻿", "﻿Ana"]) assert.notEqual(erroDoNome(normalizarNome(ruim)), "", JSON.stringify(ruim));
+});
+
 test("erroDoNome: só letras, espaço, ponto, apóstrofo e hífen, até 80", () => {
   for (const bom of ["Ana", "João Gonçalves-Pereira", "D'Ávila Jr.", ""]) assert.equal(erroDoNome(bom), "", bom);
   for (const ruim of ["Ana 2", "A@na", "...", "a".repeat(81), "Жанна Ana", "\u{1d4d0}na", "שלום Ana", "Việt", "Ana\u3164Lima"]) assert.notEqual(erroDoNome(ruim), "", ruim);
