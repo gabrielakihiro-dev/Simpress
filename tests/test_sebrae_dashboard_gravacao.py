@@ -865,6 +865,22 @@ class ReaplicarTest(unittest.TestCase):
         self.assertEqual(por_chamado(saida), esperado)
         self.assertEqual(linha_xml(saida, 3), linha_xml(sp, 3))  # the SharePoint edit of another row stays as it was
 
+    def test_e_esvaziada_pelo_remover_e_reaplicada_e_so_a_e_apaga(self):
+        # 25/11/2026: limpar_e (Remover) é a única operação de apagar; antes, o merge a perdia em silêncio.
+        base = _antes_da_coluna_p(tres(), 2, texto("E2", "7365311") + texto("F2", "feito"))
+        gerado = G.atualizar(base, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo
+        sp = _antes_da_coluna_p(base, 3, texto("I3", "Ana"))  # terceiro mexeu em outra linha
+        saida = self.ok(base, gerado, sp)
+        esperado = por_chamado(sp)
+        del esperado["UTIC-2026-0001"]["E"]
+        self.assertEqual(por_chamado(saida), esperado)  # só a E se apaga; a F e a edição do terceiro ficam
+        self.assertRegex(linha_xml(saida, 2), r'<c r="E2" s="\d+"\s*/>')
+        # SharePoint já mudou a E: conflito (o site queria apagar), nunca apaga por cima
+        sp_e = _trocar_na_folha(base, "<t>7365311</t>", "<t>999</t>")
+        resultado = G.reaplicar(base, gerado, sp_e)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("E", "999", "")])
+
     def test_ac2_mesma_celula_com_valores_diferentes_e_conflito_sem_conteudo(self):
         base = tres()
         gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})

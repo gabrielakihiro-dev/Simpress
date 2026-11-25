@@ -3585,6 +3585,39 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertNotEqual(self.manual_history.read_bytes(), history_before)
         self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-MANUAL (M)")
 
+    def test_backups_excluir_remove_o_apelido_manual_pelo_caminho_real(self):
+        from domains.regras_negocio import normalize_reference_value
+        make_details(
+            self.details,
+            [("SN-1", "HOST-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        make_endpoint(self.endpoint, [("SN-1", "HOST-ENDPOINT")])
+        self.overrides.write_text("{}", encoding="utf-8")
+        self.manual_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+        servicos = main._backups_services
+        manuais = lambda: {normalize_reference_value(s) for s in servicos.series_apelido_manual()}
+        self.assertNotIn("SN1", manuais())
+
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="HOST-MANUAL"))
+        self.assertIn("SN1", manuais())
+
+        servicos.remover_apelido_manual("SN-1")
+        self.assertEqual(
+            [k for k in json.loads(self.overrides.read_text(encoding="utf-8")) if normalize_reference_value(k) == "SN1"], [],
+        )
+        self.assertIs(inventory_state.equipamentos_cache["SN-1"]["_apelido_manual_override"], False)
+        evento = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertEqual((evento["acao"], evento["tinha_override"]), ("desfazer", True))
+        self.assertNotIn("SN1", manuais())
+
+        overrides_antes, historico_antes = self.overrides.read_bytes(), self.manual_history.read_bytes()
+        with self.assertRaises(DomainError) as erro:
+            servicos.remover_apelido_manual("NAOEXISTE")
+        self.assertEqual(erro.exception.status_code, 404)
+        self.assertEqual(self.overrides.read_bytes(), overrides_antes)
+        self.assertEqual(self.manual_history.read_bytes(), historico_antes)
+
     def test_manual_alias_can_be_removed_after_inventory_refresh_with_hostname_table(self):
         details_headers = ["NumeroSerie", "Hostname", "Modelo", "Cidade", "Tipo", "CEP"]
         make_details(

@@ -5,16 +5,18 @@ import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from domains.regras_negocio import (
     PREFIXOS_HOSTNAME_CURITIBA,
     e_serie_sebrae,
     hostname_de_curitiba,
+    cidade_do_apelido_backup,
     hostname_e_macbook,
     is_missing_cell_value,
     normalize_reference_value,
     predicado_serie_sebrae,
+    usuario_e_administrador,
 )
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
@@ -60,6 +62,23 @@ def endpoint_user_value(record: Dict[str, Any]) -> str:
     if normalize_reference_value(logged_users) in {"", "NA"}:
         return ""
     return str(logged_users).strip()
+
+
+def _endpoint_tem_administrador(record: Dict[str, Any]) -> bool:
+    """Administrador em qualquer coluna de último logon ou de usuários logados (mesmas colunas de `endpoint_user_value`)."""
+    return any(
+        usuario_e_administrador(_record_value(record, key))
+        for key in (
+            "USUARIODOULTIMOLOGON", "LASTLOGONUSER", "LASTLOGGEDONUSER",
+            "USUARIOSLOGADOS", "USUARIOLOGADO", "LOGGEDINUSERS", "USUARIO",
+        )
+    )
+
+
+def _marcar_administrador(item: Dict[str, Any], tem_administrador: bool) -> Dict[str, Any]:
+    if tem_administrador:
+        item["usuario_administrador"] = True
+    return item
 
 
 def _upload_serial_value(record: Dict[str, Any], role: str) -> Any:
@@ -278,6 +297,7 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
                 else str(_record_value(row, *user_headers) or "").strip()
             ),
             "ultima_verificacao": _upload_verification_value(row) if role == "endpoint" else None,
+            "administrador": role == "endpoint" and _endpoint_tem_administrador(row),
             "row": row,
         })
     return records
@@ -324,6 +344,51 @@ def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
         return []
     e_propria = predicado_serie_sebrae()  # conjunto resolvido uma vez, não a cada item
     return [item for item in items if not isinstance(item, dict) or not e_propria(item.get("serie"))]
+
+def filtrar_backup_e_administrador(
+    items: Any,
+    *,
+    apelidos_manuais: Optional[Dict[str, str]] = None,
+    series_com_usuario: Optional[Callable[[List[str]], Set[str]]] = None,
+    ausente_do_endpoint: bool = False,
+) -> List[Dict[str, Any]]:
+    """Tira da lista o equipamento com Administrador no Endpoint e o Backup <Cidade> identificado.
+
+    Backup identificado = apelido `Backup <Cidade>` com usuário (no item ou via ``series_com_usuario``) ou
+    presente no Endpoint; os que ficam recebem `local_previsto` = a cidade. Trabalha em cópias.
+
+    ``ausente_do_endpoint`` é verdadeiro só para a lista `ausentes_no_endpoint`: nela o `usuario` vem do
+    cadastro, então o texto dele não prova Administrador no Endpoint (só a flag `usuario_administrador`).
+    """
+    from domains.effective_alias import strip_manual_alias_marker  # import tardio: effective_alias importa este módulo
+
+    if not isinstance(items, list):
+        return []
+    apelidos = apelidos_manuais or {}
+    cidades = SERIE_LOCAL_MAP.values()
+    result: List[Dict[str, Any]] = []
+    candidatos: List[Tuple[Dict[str, Any], str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            result.append(item)
+            continue
+        if item.get("usuario_administrador") or (not ausente_do_endpoint and usuario_e_administrador(item.get("usuario"))):
+            continue
+        copia = dict(item)
+        chave = normalize_reference_value(item.get("serie"))
+        apelido = apelidos.get(chave) or item.get("computador")
+        cidade = cidade_do_apelido_backup(strip_manual_alias_marker(apelido), cidades)
+        if cidade:
+            copia["local_previsto"] = cidade
+            if str(item.get("usuario") or "").strip() or not ausente_do_endpoint:
+                continue
+            candidatos.append((copia, str(item.get("serie") or "")))
+        result.append(copia)
+    if candidatos and series_com_usuario is not None:
+        com_usuario = {normalize_reference_value(serie) for serie in series_com_usuario([s for _, s in candidatos])}
+        removidos = {id(copia) for copia, serie in candidatos if normalize_reference_value(serie) in com_usuario}
+        result = [item for item in result if id(item) not in removidos]
+    return result
 
 def filter_update_review_items(
     items: Any,
@@ -432,8 +497,19 @@ def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, A
         )
     ]
 
-def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
+def comparison_history_for_display(
+    evento: Dict[str, Any],
+    *,
+    apelidos_manuais: Optional[Dict[str, str]] = None,
+    series_com_usuario: Optional[Callable[[List[str]], Set[str]]] = None,
+) -> Dict[str, Any]:
     """Aplica a classificação atual às visualizações sem reescrever o histórico salvo."""
+    def backup_admin(items: Any, ausente_do_endpoint: bool = False) -> List[Dict[str, Any]]:
+        return filtrar_backup_e_administrador(
+            items, apelidos_manuais=apelidos_manuais, series_com_usuario=series_com_usuario,
+            ausente_do_endpoint=ausente_do_endpoint,
+        )
+
     event_view = dict(evento)
     comparison = evento.get("comparacao")
     if not isinstance(comparison, dict):
@@ -602,14 +678,16 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         }
         comparison_view["filtros_atualizacao_aplicados"] = True
     missing_lists = {
-        key: filter_sebrae_owned_unmatched_items(items)
+        key: backup_admin(filter_sebrae_owned_unmatched_items(items), key == "ausentes_no_endpoint")
         for key, items in missing_lists.items()
     }
     comparison_view.update(missing_lists)
     location_mismatches = filter_curitiba_hostname_location_mismatches(
         display_annotatable_items("divergencias_local", comparison.get("divergencias_local"))
     )
-    comparison_view["divergencias_local"] = location_mismatches
+    comparison_view["divergencias_local"] = backup_admin(location_mismatches)
+    if isinstance(comparison_view.get("sem_acesso_7_dias"), list):
+        comparison_view["sem_acesso_7_dias"] = backup_admin(comparison_view["sem_acesso_7_dias"])
     ambiguity_items = comparison.get("correspondencias_ambiguas")
     ambiguous_records = comparison.get("registros_ambiguos")
     if isinstance(ambiguity_items, list):
@@ -1307,6 +1385,7 @@ def _comparison_entity(
             if status == "ausente"
         ],
     }
+    _marcar_administrador(entity, any(record["administrador"] for record in endpoint_records))
     return entity, expected_location
 
 
@@ -1420,12 +1499,12 @@ def _location_mismatches(entities: List[_ComparisonEntity]) -> List[Dict[str, An
             ):
                 any_location_mismatch = True
             if any_location_mismatch:
-                location_mismatches.append({
+                location_mismatches.append(_marcar_administrador({
                     "computador": computer_name,
                     "serie": endpoint_record["serie"],
                     "local_previsto": expected_location,
                     **location_values,
-                })
+                }, endpoint_record["administrador"]))
     return location_mismatches
 
 
@@ -1437,13 +1516,13 @@ def _stale_verification_item(
     verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
     if verified_at is None or verified_at > stale_threshold:
         return None
-    return {
+    return _marcar_administrador({
         "computador": record["computador"],
         "serie": record["serie"],
         "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
         "dias_sem_verificacao": max(7, (as_of - verified_at).days),
         "linha_endpoint": record["row_number"],
-    }
+    }, record["administrador"])
 
 
 def _unmapped_series_code(computer_name: str) -> Optional[str]:
@@ -1475,7 +1554,7 @@ def _endpoint_stale_and_unmapped(
         stale_item = _stale_verification_item(record, as_of, stale_threshold)
         if stale_item is not None:
             no_recent_verification.append(stale_item)
-        series_code = _unmapped_series_code(record["computador"])
+        series_code = None if record["administrador"] else _unmapped_series_code(record["computador"])
         if series_code is not None:
             unmapped_series.setdefault(series_code, []).append(record["computador"])
     return no_recent_verification, unmapped_series

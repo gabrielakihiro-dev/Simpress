@@ -675,6 +675,10 @@ test("declaração de não enviado exige texto forte e nunca dispara upload auto
     return carga;
   });
   const aviso = el["sebrae-sharepoint-aviso"];
+  // 25/11/2026: "CONFIRMO APLICADO" digitado sem o arquivo ter chegado; a tela diz o que prova o envio
+  assert.match(aviso.textContent, /feche o Dashboard no Excel \(Online e desktop\)/);
+  assert.match(aviso.textContent, /linhas alteradas por este envio/);
+  assert.match(aviso.textContent, /não provam que o envio chegou/);
   const botao = aviso.querySelector('[data-sebrae-envio-acao="declarar_nao_enviado"]');
   const entrada = aviso.querySelector("input");
   assert.equal(botao.disabled, true);

@@ -35,7 +35,8 @@ def history_annotation_row_fingerprint(category: str, item: Dict[str, Any]) -> s
     """Hash the complete row data and section, excluding annotation metadata."""
     if not isinstance(item, dict):
         raise ValueError("A linha da anotação é inválida.")
-    ignored_keys = {"anotacao", "anotacao_id"}
+    # `usuario_administrador` é sinal da importação (some da lista), não identidade da linha.
+    ignored_keys = {"anotacao", "anotacao_id", "usuario_administrador"}
     if category == "registros_ambiguos":
         # Campos de apoio à conferência (última verificação e linhas do Endpoint) mudam a
         # cada atualização; ignorá-los mantém a anotação ligada à mesma ocorrência.

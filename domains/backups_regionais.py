@@ -9,9 +9,11 @@ Contrato de entrada:
   Campos: ``serial``, ``tipo``, ``modelo``, ``retirada_cidade``, ``apelido``, ``_apelido_base``,
   ``_apelido_manual_override`` (bool), ``serie_detalhes_duplicada`` (bool).
 * ``endpoint``: dict no formato de ``build_endpoint_alias_index`` mais ``manual_users`` (``{serial_key: login}``),
-  ``user_holds`` (``{serial_key: {tipo, estado, usuario_atual, ...}}``) e ``verified_by_serial``. ``available: False``
+  ``user_holds`` (``{serial_key: {tipo, estado, usuario_atual, ...}}``), ``verified_by_serial`` e ``series_apelido_manual``
+  (conjunto de chaves de séries com apelido manual; ausente = vazio). ``available: False``
   vira ``fontes.endpoint="indisponivel"``. Chaves por ``normalize_reference_value``.
-* ``confirmacoes``: lista de ``{serie, cidade, confirmado_em, expira_em}`` (ISO).
+* ``confirmacoes``: lista de ``{serie, cidade, confirmado_em, expira_em}`` (7 dias, ISO) ou ``{serie, cidade,
+  confirmado_em, tipo, usuario_ref}`` (``tipo: "backup"``, sem prazo); ``usuario_ref`` nunca sai na saída.
 * ``estado_cobertura``: estado da Cobertura ou ``None`` (ilegível: ``fontes.cobertura="ilegivel"``, sem bloqueio de
   cobertura). ``estado["disponibilidade"]`` usa a chave de ``chave_serie``.
 * ``manutencao``: ``coverage.Manutencao``; ``ilegivel=True`` vira limitação e não bloqueia.
@@ -20,6 +22,9 @@ Contrato de entrada:
 
 from __future__ import annotations
 
+import hashlib
+import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -27,7 +32,7 @@ from domains.coverage import Manutencao, chave_serie, disponibilidade_efetiva, m
 from domains.effective_alias import endpoint_user_for_serial, strip_manual_alias_marker
 from domains.equipment_search import categorize_equipment
 from domains.inventory_comparison import SERIE_LOCAL_MAP, _parse_verification_datetime
-from domains.regras_negocio import e_serie_sebrae, normalize_reference_value
+from domains.regras_negocio import e_serie_sebrae, normalize_reference_value, usuario_e_administrador
 from domains.user_holds import ACTIVE_STATES
 
 CIDADES_PRIORITARIAS = ("Cascavel", "Londrina", "Pato Branco", "Maringá", "Ponta Grossa")
@@ -105,8 +110,33 @@ def _bloqueio(estado: Optional[Mapping[str, Any]], serie: str, hoje: Any, manute
     return situacao if situacao in _MOTIVOS_DISPONIBILIDADE else None
 
 
+_SUFIXO_HORARIO = re.compile(r"Hor[aá]rio\s+da\s+[uú]ltima[^:,;]*:[^,;]*,\s*\d{4}[^,;/]*", re.IGNORECASE)
+
+
+def normalizar_usuario_endpoint(valor: Any) -> str:
+    """Usuários do Endpoint (lista, sufixo `Horário da última...`, domínio, `@...`, acento, caixa, Administrador) em texto único e estável."""
+    nomes = set()
+    # A data do sufixo (`out 22, 2026 12:21 PM`) tem vírgula: sai antes de dividir a lista.
+    texto = _SUFIXO_HORARIO.sub("", str(valor or ""))
+    for parte in re.split(r",|;| / ", texto):
+        if usuario_e_administrador(parte):
+            continue
+        sem_acento = "".join(c for c in unicodedata.normalize("NFKD", parte) if not unicodedata.combining(c)).casefold()
+        nome = sem_acento.split("horario da ultima")[0].split("(")[0].strip(" .:-")
+        nome = " ".join(nome.rsplit("\\", 1)[-1].split("@", 1)[0].split())
+        if nome:
+            nomes.add(nome)
+    return ",".join(sorted(nomes))
+
+
+def usuario_ref(valor: Any) -> str:
+    """Pseudônimo do usuário (hash sem segredo, não é anonimização); `""` sem usuário ou com Administrador."""
+    normalizado = normalizar_usuario_endpoint(valor)
+    return "sha256:" + hashlib.sha256(normalizado.encode("utf-8")).hexdigest() if normalizado else ""
+
+
 def _confirmacoes_por_serie(confirmacoes: Optional[Iterable[Any]], agora: datetime) -> Dict[str, List[Dict[str, Any]]]:
-    """Confirmações agrupadas por série; ``expira`` ilegível vale como expirada."""
+    """Confirmações agrupadas por série; 7 dias com ``expira`` ilegível vale como expirada, ``backup`` não tem prazo."""
     resultado: Dict[str, List[Dict[str, Any]]] = {}
     for confirmacao in confirmacoes or []:
         if not isinstance(confirmacao, Mapping):
@@ -114,8 +144,12 @@ def _confirmacoes_por_serie(confirmacoes: Optional[Iterable[Any]], agora: dateti
         chave = normalize_reference_value(confirmacao.get("serie"))
         if not chave:
             continue
-        expira = _parse_verification_datetime(confirmacao.get("expira_em"), agora.tzinfo)
-        resultado.setdefault(chave, []).append({"cidade": confirmacao.get("cidade"), "expira": expira})
+        tipo = "backup" if confirmacao.get("tipo") == "backup" else "7_dias"
+        expira = None if tipo == "backup" else _parse_verification_datetime(confirmacao.get("expira_em"), agora.tzinfo)
+        resultado.setdefault(chave, []).append({
+            "cidade": confirmacao.get("cidade"), "expira": expira, "tipo": tipo,
+            "usuario_ref": str(confirmacao.get("usuario_ref") or ""),
+        })
     return resultado
 
 
@@ -124,7 +158,9 @@ def _confirmacao_da_serie(lista: List[Dict[str, Any]], cidade_cadastro: str) -> 
     cidade = normalize_reference_value(cidade_cadastro)
     return max(
         lista,
-        key=lambda c: (normalize_reference_value(c["cidade"]) == cidade, c["expira"] is not None, c["expira"] or _DATA_MINIMA),
+        key=lambda c: (
+            normalize_reference_value(c["cidade"]) == cidade, c["tipo"] == "backup", c["expira"] is not None, c["expira"] or _DATA_MINIMA,
+        ),
         default=None,
     )
 
@@ -165,6 +201,7 @@ def build_backups_regionais(
     }
     confirmadas = _confirmacoes_por_serie(confirmacoes, agora)
     verificacoes = endpoint.get("verified_by_serial") or {}
+    apelido_manual = {normalize_reference_value(s) for s in endpoint.get("series_apelido_manual") or ()}
     grupos: Dict[str, Dict[str, Any]] = {
         chave: {"cidade": cidade, "backups": [], "candidatos": [], "conferencia": [], "excluidos": []}
         for chave, cidade in _PRIORITARIAS.items()
@@ -195,7 +232,10 @@ def build_backups_regionais(
         trava_ativa = bool(str(trava.get("usuario_atual") or "").strip()) and trava.get("estado") in ACTIVE_STATES.get(
             str(trava.get("tipo")), ()
         )
-        usuario_vigente = bool(usuario_manual) or trava_ativa or (recente and bool(endpoint_user_for_serial(endpoint, chave).strip()))
+        usuario_atual = endpoint_user_for_serial(endpoint, chave).strip() if presente else ""
+        usuario_pleno = bool(usuario_manual) or trava_ativa or (recente and bool(usuario_atual))
+        usuario_firme = bool(usuario_manual) or trava_ativa  # confirmação nova ignora o usuário recente do Endpoint
+        usuario_vigente = usuario_pleno
         bloqueio = _bloqueio(estado_cobertura, serie, hoje, manutencao)
         duplicada = bool(item.get("serie_detalhes_duplicada")) or chave in endpoint.get("duplicates", {})
 
@@ -205,21 +245,38 @@ def build_backups_regionais(
         confirmada = _confirmacao_da_serie(confirmadas.get(chave, []), cidade_cadastro)
         if confirmada is not None:
             expira = confirmada["expira"]
+            nova = confirmada["tipo"] == "backup"
+            ref_atual = usuario_ref(usuario_atual)
+            usuario_mudou = nova and presente and bool(ref_atual) and ref_atual != confirmada["usuario_ref"]
+            # Apelido manual + usuário real novo: a confirmação não cai, espera o Manter ou Excluir do usuário.
+            decisao_pendente = usuario_mudou and chave in apelido_manual
             motivo_invalida = (
-                "expirada" if expira is None or agora >= expira
+                "expirada" if not nova and (expira is None or agora >= expira)
                 else "cidade_mudou" if normalize_reference_value(confirmada["cidade"]) != normalize_reference_value(cidade_cadastro)
-                else "usuario_vigente" if usuario_vigente
+                else "usuario_vigente" if (usuario_firme if nova else usuario_pleno)
+                else "usuario_mudou" if usuario_mudou and not decisao_pendente
                 else "bloqueio" if bloqueio
                 else None
             )
             if motivo_invalida:
                 confirmacao_invalidada = {"estado": "invalidada", "motivo": motivo_invalida}
+                if motivo_invalida == "cidade_mudou":  # o Desfazer precisa da cidade gravada
+                    confirmacao_invalidada["cidade"] = confirmada["cidade"]
             else:
-                confirmacao_vigente = {"estado": "vigente", "expira_em": expira.isoformat()}
+                confirmacao_vigente = {
+                    "estado": "vigente", "tipo": confirmada["tipo"], "expira_em": expira.isoformat() if expira else None,
+                }
+                if decisao_pendente:
+                    confirmacao_vigente["decisao_pendente"] = True
+                usuario_vigente = usuario_firme if nova else usuario_pleno
 
         marca_valida = bool(cidade_lida) and motivo_marca is None
-        if usuario_vigente or bloqueio:
-            excluido: Dict[str, Any] = {"serie": serie, "motivo": "usuario_vigente" if usuario_vigente else f"bloqueio:{bloqueio}"}
+        mudou = confirmacao_invalidada is not None and confirmacao_invalidada["motivo"] == "usuario_mudou"
+        if usuario_vigente or bloqueio or mudou:
+            excluido: Dict[str, Any] = {
+                "serie": serie,
+                "motivo": "usuario_mudou" if mudou else "usuario_vigente" if usuario_vigente else f"bloqueio:{bloqueio}",
+            }
             if confirmacao_invalidada:
                 excluido["confirmacao"] = confirmacao_invalidada
             grupo["excluidos"].append(excluido)
@@ -282,8 +339,8 @@ def build_backups_regionais(
     sobras: List[Dict[str, Any]] = []
     outras_candidatos: List[Dict[str, Any]] = []
     for chave, grupo in grupos.items():
-        # ``itens`` acompanha ``series`` (mesma ordem) e diz como cada série contou; sem ``apelido``.
-        itens_sobra = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate")} for backup in grupo["backups"]]
+        # ``itens`` acompanha ``series`` (mesma ordem) e diz como cada série contou e se tem confirmação vigente; sem ``apelido``.
+        itens_sobra = [{k: backup[k] for k in ("serie", "origem", "confirmado_ate", "confirmacao")} for backup in grupo["backups"]]
         series = [item["serie"] for item in itens_sobra]
         if chave in _PRIORITARIAS:
             if len(series) > MINIMO:

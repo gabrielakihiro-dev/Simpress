@@ -74,6 +74,8 @@ _SECOES_ANOTAVEIS = {
     "mudancas_usuarios": "Mudanças de usuário logado",
 }
 _ID_ROTA = re.compile(r"^[^/?#\s]{1,128}$")
+# consultar_ultima_comparacao(): counts taken from the size of these lists in the history view, not from the stored summary.
+_LISTAS_CONTADAS_PELA_VISAO = ("ausentes_no_endpoint", "ausentes_em_detalhes", "sem_acesso_7_dias", "divergencias_local", "series_sem_mapeamento")
 
 # comparar_periodos(): examples per list and size of the answer. The chat cuts any result above
 # MAX_CARACTERES_RESPOSTA (6000, assistant_chat) in the middle, so the examples shrink first and the JSON stays whole.
@@ -358,7 +360,10 @@ _MOTIVOS: Tuple[Tuple["re.Pattern[str]", str], ...] = tuple((re.compile(p), c) f
     (r"google chrome nao encontrado", "chrome_nao_encontrado"),
     (r"chrome nao abriu a porta|nao expos nenhum contexto", "chrome_sem_conexao"),
     (r"playwright", "playwright_ausente"),
+    (r"sharepoint nao recebeu o dashboard", "envio_sharepoint_nao_recebido"),  # before the next one: the message quotes it
+    (r"o upload nao comecou", "envio_sharepoint_nao_comecou"),
     (r"nao vi o aviso de envio concluido", "envio_sharepoint_nao_confirmado"),
+    (r"preservando as outras abas", "dashboard_sem_preservar_abas"),  # before "mudou depois da importacao"
     (r"conflito de edicao", "dashboard_sharepoint_conflito"),  # before "copia pendente": the message also says "nem guardado como copia pendente"
     (r"mudou depois da importacao|nao consegui conferir o dashboard do sharepoint", "dashboard_sharepoint_mudou"),
     (r"duplicata", "duplicata_nao_criada"),
@@ -387,6 +392,12 @@ MOTIVOS_AUTOMACAO: Dict[str, str] = {
     "chrome_sem_conexao": "O Chrome de automação não abriu ou não aceitou a conexão da rotina.",
     "playwright_ausente": "O pacote Playwright não está instalado no ambiente Python do projeto.",
     "envio_sharepoint_nao_confirmado": "O aviso de envio concluído não apareceu; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.",
+    "envio_sharepoint_nao_recebido": "O SharePoint não recebeu o Dashboard: a rotina baixou o arquivo de novo e ele ainda tinha os valores de antes; "
+    "nada foi substituído e o envio pode ser repetido.",
+    "envio_sharepoint_nao_comecou": "O upload não começou (sem o diálogo de substituir nem o andamento) e a rotina não conseguiu confirmar pelo "
+    "download; confira a pasta antes de repetir.",
+    "dashboard_sem_preservar_abas": "A rotina não conseguiu aplicar as alterações do site sobre o Dashboard do SharePoint preservando as outras abas; "
+    "nada foi substituído. É preciso Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint.",
     "dashboard_sharepoint_mudou": "O Dashboard no SharePoint mudou depois da importação, então o envio parou sem substituir nada. É preciso importar de novo: "
     "Baixar, importar e buscar, depois Atualizar Dashboard e Enviar ao SharePoint (a cópia gerada antes fica guardada, nada é apagado).",
     "dashboard_sharepoint_conflito": "Há células do Dashboard alteradas no SharePoint e no site ao mesmo tempo, então o envio parou sem substituir nada. "
@@ -1193,17 +1204,20 @@ class SimpressApi:
         return _aparar(_status_automacao(_dict(dados)))
 
     def consultar_ultima_comparacao(self) -> Dict[str, Any]:
-        ok, dados = self._chamar("GET", "/api/historico-comparacoes")
-        if not ok:
-            return {"erro": dados}
-        eventos = _dict(dados).get("eventos", [])
-        if not eventos:
-            return {"mensagem": "Nenhum histórico de comparação registrado até o momento."}
-        ultimo = _dict(eventos[0])
+        ultimo, detalhe, problema = self._ultimo_evento()
+        if problema is not None:
+            return problema
+        visao = _dict(_dict(detalhe).get("evento"))
+        resumo = {**_dict(_dict(ultimo).get("resumo")), **_dict(visao.get("resumo"))}
+        comparacao = _dict(visao.get("comparacao"))
+        # The stored summary is the raw import count; the list tools read the filtered view, so count the same lists.
+        for chave in _LISTAS_CONTADAS_PELA_VISAO:
+            if isinstance(comparacao.get(chave), list):
+                resumo[chave] = len(comparacao[chave])
         return {
-            "horario": ultimo.get("horario", ""),
-            "tipo": ultimo.get("tipo", ""),
-            "resumo_divergencias": ultimo.get("resumo", {}),
+            "horario": _dict(ultimo).get("horario", ""),
+            "tipo": _dict(ultimo).get("tipo", ""),
+            "resumo_divergencias": resumo,
         }
 
     def obter_painel(self) -> Dict[str, Any]:
@@ -2593,7 +2607,12 @@ class SimpressApi:
 
         prioritarias = []
         for g in das_cidades:
-            backups, backups_omitidos = cortar(g.get("backups"), ("serie", "origem", "ultima_verificacao", "confirmado_ate"))
+            backups, backups_omitidos = cortar(g.get("backups"), ("serie", "origem", "ultima_verificacao", "confirmado_ate", "confirmacao"))
+            for b in backups:
+                # Confirmação nova não tem prazo (`confirmado_ate` None): quem diz se há confirmação é `confirmacao`; só flags saem.
+                conf = _dict(b.pop("confirmacao"))
+                b["confirmado"] = conf.get("estado") == "vigente"
+                b["decisao_pendente"] = bool(conf.get("decisao_pendente"))
             candidatos, candidatos_omitidos = cortar(g.get("candidatos"), ("serie", "motivo", "dias_sem_verificacao"))
             prioritarias.append({
                 **{k: g.get(k) for k in ("cidade", "status", "contados", "minimo", "excedente")},

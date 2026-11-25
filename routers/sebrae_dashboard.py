@@ -17,7 +17,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -32,7 +32,7 @@ from domains import (
 )
 from domains.assistant_lgpd import e_solicitante_sistema
 from domains.chrome_automation import ChromeAutomationRunner
-from domains.sebrae_chamados import chave_do_numero
+from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
@@ -1186,13 +1186,36 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "conflitos": len((fin.ler_conflitos(pasta) or {}).get("conflitos") or []),
         }, headers={"Cache-Control": "no-store"})
 
+    def _com_titulo_e_solicitante(conflitos: List[Any], atual: Optional[Mapping[str, Any]]) -> List[Any]:
+        """Cópia de cada conflito com ``titulo`` (G) e ``solicitante`` (I) do chamado, só para a tela: nunca gravados nem em log.
+
+        Fonte: a base importada (``abertos``, que já guarda G e I; a chave é o UTIC só quando ele é único na planilha) e, para
+        chamado novo ausente da base, ``sebrae_novos.json``. ``linha:<n>``, UTIC repetido ou não achado: vazio, sem adivinhar a linha."""
+        fontes: Dict[str, Tuple[str, str]] = {}
+        if atual:
+            novos = sebrae_novos.ler_novos(services.caminhos().novos) or {}
+            for chamado in novos.get("chamados") or []:
+                if chamado.numero not in atual["numeros"]:  # na base, só a linha da base vale (repetido fica vazio)
+                    fontes.setdefault(chamado.numero, (chamado.titulo, chamado.solicitante))
+            for aberto in atual["abertos"]:
+                numero = str(aberto.get("numero") or "")
+                if numero and not numero.startswith(sebrae_dashboard_gravacao.CHAVE_DE_LINHA):
+                    fontes[numero] = (str(aberto.get("titulo") or ""), str(aberto.get("usuario") or ""))
+        saida: List[Any] = []
+        for conflito in conflitos:
+            if isinstance(conflito, dict):
+                titulo, solicitante = fontes.get(str(conflito.get("chamado") or ""), ("", ""))
+                conflito = {**conflito, "titulo": mascarar_cpfs(titulo), "solicitante": mascarar_cpfs(solicitante)}
+            saida.append(conflito)
+        return saida
+
     @router.get("/api/sebrae/dashboard/conflitos")
     def listar_conflitos():
         """Células em conflito entre o SharePoint e o site (valores só aqui e na tela) e as escolhas já feitas; vazio sem conflito."""
         dados = fin.ler_conflitos(_pasta_estado()) or {}
         atual = sebrae_novos.ler_existentes(services.caminhos().existentes)
         return JSONResponse({
-            "conflitos": dados.get("conflitos") or [], "escolhas": fin.escolhas_dos_conflitos(_pasta_estado()),
+            "conflitos": _com_titulo_e_solicitante(dados.get("conflitos") or [], atual), "escolhas": fin.escolhas_dos_conflitos(_pasta_estado()),
             "criado_em": str(dados.get("criado_em") or ""), "versao_importacao": atual["versao"] if atual else "",
         }, headers={"Cache-Control": "no-store"})
 

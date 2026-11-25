@@ -63,6 +63,7 @@ Mostrar quantas linhas de divergência apareceram na comparação de planilhas m
 - Linhas de divergência são as das seções detalhadas do histórico: `Linhas mantidas para conferência`, `Sem acesso há 7 dias ou mais`, `Equipamentos sem correspondência por fonte` (Endpoint e Simpress), `Localidade divergente`, `Duplicidades e correspondências ambíguas` e `Séries sem local definido`.
 - Uma linha é **nova** quando sua chave (série ou hostname, com a ocorrência para repetições) não existe na mesma seção da atualização anterior. É a mesma regra de `compare_updates` (`GET /api/operacoes/evolucao`, que hoje só o assistente consulta; a tela "Evolução das atualizações" foi removida em 31/10/2026).
 - O histórico é apenas lido; nada é regravado.
+- Regra de 24/11/2026 (pedido do usuário) nas listas de divergência: (1) apelido `Backup <Cidade>` (inclusive o manual `(M)`) vira o Local previsto; (2) backup com usuário (Endpoint, cadastro ou manual) ou presente no Endpoint sai das listas, e sem usuário e fora do Endpoint continua aparecendo, agora com o Local previsto; (3) usuário Administrador no Endpoint (último logon ou usuários logados, com ou sem domínio) sai de `Sem correspondência`, `Sem acesso há 7 dias`, `Divergência de local` e `Séries sem mapeamento`, e continua em ambíguos e duplicados. Limites: vale na exibição (inclusive no evento fixado), sem regravar o histórico; `Séries sem mapeamento` só em importações novas; a contagem gravada na importação e o resumo do histórico não mudam; hostname que sumiu do Endpoint não traz Administrador; a aba Agentes (SoM) do Endpoint não é importada, então "fora do Endpoint" é fora da última planilha do Endpoint. Código: `cidade_do_apelido_backup` e `usuario_e_administrador` em `domains/regras_negocio.py`; filtro `filtrar_backup_e_administrador` em `domains/inventory_comparison.py`. Os apelidos e usuários de hoje valem também para eventos antigos; as contagens da Home (cartão de divergências e sem acesso) seguem a regra e acompanham as listas; a contagem da Home fica em cache até a próxima importação; editar apelido ou usuário só a atualiza depois dela (ou ao reiniciar o servidor); o resumo gravado do histórico e a contagem da importação não mudam; o Assistente (`consultar_ultima_comparacao`) conta pelas listas da visão (doc `docs/cockpit-prompts/15-assistente.md`).
 
 ### Quando aparece e quando some
 
@@ -199,7 +200,7 @@ Avisar quando uma regional prioritária está sem notebook de backup disponível
 ### Dados
 
 - Fonte: `backups_regionais.pendencias` em `GET /api/painel`, que o front recebe pelo evento `simpress:painel-atualizado` (`sem_backup` e `conferir` são listas de cidades).
-- Só leitura: o cartão não grava nada. `Confirmar disponível por 7 dias` e `Desfazer confirmação` ficam na sub-aba Backups do Resumo.
+- Só leitura: o cartão não grava nada. `Confirmar Backup`, `Desfazer confirmação`, `Manter` e `Excluir` ficam na sub-aba Backups do Resumo. Confirmação nova (24/11/2026) não tem prazo e cai com outro usuário real no Endpoint, e some do cartão como backup contado; a referência do usuário (`usuario_ref`) nunca chega ao cartão (`docs/cockpit-prompts/05-resumo-kpis.md`).
 
 ### Quando aparece e quando some
 

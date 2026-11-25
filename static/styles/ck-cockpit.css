@@ -1325,21 +1325,48 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-sharepoint .ck-campo__ajuda { color: inherit; }
 .sebrae-sharepoint__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Conflitos de edição do Dashboard: uma célula por grupo, escolha entre o valor do SharePoint e o do site. */
-.sebrae-conflitos { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+/* Conflitos de edição do Dashboard (layout C, 24/11/2026): lista de conflitos e, ao lado a partir de 1200px, o resumo do envio. */
+.sebrae-conflitos { display: flex; flex-direction: column; align-items: stretch; gap: 16px; min-width: 0; margin: 0; padding: 20px 24px; border: 1px solid var(--cor-alerta-texto); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .sebrae-conflitos[hidden] { display: none; }
+.sebrae-conflitos p { margin: 0; }
+.sebrae-conflitos__cabecalho { display: flex; flex-direction: column; gap: 4px; }
+.sebrae-conflitos__cabecalho .ck-rotulo-info { gap: 10px; }
+.sebrae-conflitos__icone { flex: none; width: 18px; height: 18px; color: var(--cor-alerta-texto); }
 .sebrae-conflitos__titulo { font-size: var(--fs-md); font-weight: var(--peso-marca); color: var(--cor-alerta-texto); }
-.sebrae-conflitos > p { margin: 0; }
-.sebrae-conflitos__lista { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.sebrae-conflito { min-width: 0; margin: 0; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-superficie); }
-.sebrae-conflito__texto { max-width: 100%; padding: 0 4px; white-space: pre-wrap; font-weight: 600; }
-.sebrae-conflito__opcoes { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
-.sebrae-conflito__opcao { display: inline-flex; align-items: center; gap: 6px; min-height: var(--altura-controle-sm); cursor: pointer; }
-.sebrae-conflito__opcao input { margin: 0; }
-.sebrae-conflito__aviso { margin: 4px 0 0; padding: 0 4px; color: var(--cor-texto); }
-.sebrae-conflitos__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-.sebrae-conflitos__acoes > p { margin: 0; color: var(--cor-texto); } /* o cinza de .ck-cartao__meta não alcança 4,5:1 sobre o fundo de alerta no tema escuro */
-@media (pointer: coarse) { .sebrae-conflito__opcao, .sebrae-conflitos .ck-btn { min-height: 44px; } }
+.sebrae-conflitos__cabecalho .ck-campo__ajuda { color: var(--cor-texto); }
+.sebrae-conflitos__corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+@media (min-width: 1200px) { .sebrae-conflitos__corpo { grid-template-columns: minmax(0, 1fr) 360px; } }
+.sebrae-conflitos__lista { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sebrae-conflito { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; padding: 14px 16px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+/* float tira a legenda da borda do fieldset: ela vira a primeira linha dentro do bloco */
+.sebrae-conflito__texto { float: left; width: 100%; max-width: 100%; padding: 0; white-space: pre-wrap; font-weight: 600; }
+.sebrae-conflito__dados { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; font-size: var(--fs-xs); }
+.sebrae-conflito__dados dt { color: var(--cor-texto-suave); }
+.sebrae-conflito__dados dd { margin: 0; color: var(--cor-texto); }
+.sebrae-conflito__opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
+/* A caixa inteira escolhe: o ::after do label a cobre, e o valor (irmão do label) fica fora do nome do rádio. */
+.sebrae-conflito__opcao { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; max-width: 100%; min-height: 44px; padding: 6px 14px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); font-weight: var(--peso-medio); cursor: pointer; transition: border-color var(--duracao) var(--curva), background-color var(--duracao) var(--curva); }
+.sebrae-conflito__opcao label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.sebrae-conflito__opcao label::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.sebrae-conflito__opcao input { position: relative; z-index: 1; margin: 0; accent-color: var(--cor-destaque); }
+.sebrae-conflito__opcao:hover { border-color: var(--cor-destaque); }
+.sebrae-conflito__opcao--escolhida { border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); font-weight: 600; }
+.sebrae-conflito__opcao:has(input:focus-visible) { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.sebrae-conflito__valor { min-width: 0; font-family: var(--fonte-mono); font-weight: 400; color: var(--cor-texto-suave); }
+.sebrae-conflito__aviso { padding: 0 4px; color: var(--cor-texto); }
+.sebrae-conflitos__resumo { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.sebrae-conflitos__resumo-titulo { font-size: var(--fs-sm); font-weight: 700; }
+.sebrae-conflitos__consequencias { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
+.sebrae-conflitos__consequencias li { position: relative; padding-left: 16px; }
+.sebrae-conflitos__consequencias li::before { content: ""; position: absolute; left: 0; top: .45em; width: 8px; height: 8px; box-sizing: border-box; border-radius: 999px; background: var(--cor-ok-texto); }
+.sebrae-conflitos__consequencias li[data-escolhido="nao"] { color: var(--cor-texto-suave); }
+.sebrae-conflitos__consequencias li[data-escolhido="nao"]::before { border: 1px solid currentColor; background: transparent; }
+.sebrae-conflitos__chamado { font-family: var(--fonte-mono); }
+.sebrae-conflitos__arquivo { padding-top: 10px; border-top: 1px solid var(--cor-borda-suave); font-size: var(--fs-xs); line-height: 1.5; color: var(--cor-texto-suave); }
+.sebrae-conflitos__arquivo strong { color: var(--cor-texto); font-weight: 600; }
+.sebrae-conflitos__acoes { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.sebrae-conflitos__acoes .ck-btn { min-height: 44px; justify-content: center; }
+.sebrae-conflitos__acoes > p { color: var(--cor-texto); text-align: center; } /* o cinza de .ck-cartao__meta não alcança 4,5:1 sobre o fundo de alerta no tema escuro */
 
 /* ---------- 2. Sub-abas, filtro, painéis e listas ---------- */
 /* .ck-det__corpo já separa os filhos com gap de 14px: as margens abaixo são a medida do wireframe menos 14px. */

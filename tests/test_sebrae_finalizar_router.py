@@ -1366,10 +1366,44 @@ class ConflitosRotasTest(FinalizarBase):
     def test_get_com_arquivo_devolve_conflitos_escolhas_e_data(self):
         self.gravar({"aaaaaaaaaaaa": "site"})
         corpo = self.cliente.get(self.URL).json()
-        self.assertEqual(corpo["conflitos"], self.CONFLITOS)
+        self.assertEqual([{k: v for k, v in c.items() if k not in ("titulo", "solicitante")} for c in corpo["conflitos"]], self.CONFLITOS)
         self.assertEqual(corpo["escolhas"], {"aaaaaaaaaaaa": "site"})
         self.assertTrue(corpo["criado_em"])
         self.assertEqual(corpo["versao_importacao"], self.versao)
+
+    def test_get_traz_titulo_e_solicitante_da_base_ou_dos_novos_mascarados_sem_gravar(self):
+        repetido, finalizado, novo, sumido = "UTIC-2026-0004", "UTIC-2026-0005", "UTIC-2026-0006", "UTIC-2026-0099"
+        # gravados crus, sem a máscara da importação: a resposta mascara de novo
+        existentes = json.loads(self.caminhos.existentes.read_text(encoding="utf-8"))
+        existentes.update(numeros=[A, B, repetido, finalizado], abertos=[
+            {"numero": A, "chamado": A, "titulo": "Troca de toner CPF 529.982.247-25", "usuario": "Pessoa Sintética 529.982.247-25"},
+            {"numero": "linha:2", "chamado": "Sem chamado", "titulo": "Sem UTIC", "usuario": "Outra"},
+            {"numero": "linha:5", "chamado": repetido, "titulo": "Primeira", "usuario": "X"},
+            {"numero": "linha:6", "chamado": repetido, "titulo": "Segunda", "usuario": "Y"},
+        ])
+        self.caminhos.existentes.write_text(json.dumps(existentes), encoding="utf-8")
+        self.caminhos.novos.write_text(json.dumps({"chamados": [
+            {"numero": novo, "titulo": "Novo 111.444.777-35", "solicitante": "Solicitante Novo"},
+            {"numero": finalizado, "titulo": "Do SoftExpert", "solicitante": "Não usar"},  # está na base: vale só a base
+        ]}), encoding="utf-8")
+        conflitos = [
+            {**self.CONFLITOS[0]},
+            {**self.CONFLITOS[2]},  # linha:2
+            {"id": "eeeeeeeeeeee", "chamado": repetido, "coluna": "J", "sharepoint": "a", "site": "b", "tipo": "celula", "aceita_site": False},
+            {"id": "ffffffffffff", "chamado": finalizado, "coluna": "J", "sharepoint": "a", "site": "b", "tipo": "celula", "aceita_site": True},
+            {"id": "111111111111", "chamado": novo, "coluna": "J", "sharepoint": "a", "site": "b", "tipo": "celula", "aceita_site": True},
+            {"id": "222222222222", "chamado": sumido, "coluna": "J", "sharepoint": "a", "site": "b", "tipo": "celula", "aceita_site": True},
+        ]
+        fin.gravar_conflitos(self.dir, base_sha256="a" * 64, sharepoint_sha256="b" * 64, gerado_sha256="c" * 64, conflitos=conflitos)
+        antes = fin.caminho_conflitos(self.dir).read_bytes()
+        corpo = self.cliente.get(self.URL).json()
+        self.assertEqual([(c["id"], c["titulo"], c["solicitante"]) for c in corpo["conflitos"]], [
+            ("aaaaaaaaaaaa", "Troca de toner CPF ***.***.***-**", "Pessoa Sintética ***.***.***-**"),
+            ("dddddddddddd", "", ""), ("eeeeeeeeeeee", "", ""), ("ffffffffffff", "", ""),
+            ("111111111111", "Novo ***.***.***-**", "Solicitante Novo"), ("222222222222", "", ""),
+        ])
+        self.assertNotIn("529.982.247-25", json.dumps(corpo))
+        self.assertEqual(fin.caminho_conflitos(self.dir).read_bytes(), antes)  # o GET não grava o arquivo
 
     def test_estado_da_finalizacao_traz_a_contagem_de_conflitos(self):
         self.assertEqual(self.cliente.get(FINALIZAR).json()["conflitos"], 0)
