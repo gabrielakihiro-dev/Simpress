@@ -41,7 +41,7 @@ test("iniciar usuarios envia só { rotina } por POST e avisa 'Verificar usuário
   const iniciar = acoes.slice(acoes.indexOf("export async function iniciarRotinaAutomacao"), acoes.indexOf("export async function cancelarRotinaAutomacao"));
   assert.match(iniciar, /"\/api\/automacao\/executar"/);
   assert.match(iniciar, /method: "POST"/);
-  assert.match(iniciar, /body: JSON\.stringify\(\{ rotina \}\)/);
+  assert.match(iniciar, /body: JSON\.stringify\(rotina === "enviar" \? \{ rotina, confirmado: true \} : \{ rotina \}\)/);
   assert.match(iniciar, /showToast\?\.\(`\$\{ROTINAS\[rotina\]\} iniciada\.`, "success"\)/);
 });
 
